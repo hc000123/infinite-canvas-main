@@ -7,6 +7,7 @@ import { persist } from "zustand/middleware";
 import { normalizeSeedanceImageRoleMode, type SeedanceImageRoleMode } from "@/services/api/video-reference";
 import { apiGet } from "@/services/api/request";
 import type { AdminPublicSettings } from "@/services/api/admin";
+import { resolveEffectiveChannelMode } from "@/services/api/ai-channel-boundary";
 
 export type AiModelKind = "image" | "video" | "text";
 
@@ -96,8 +97,8 @@ type ConfigStore = {
     clearPromptContinue: () => void;
 };
 
-function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null) {
-    const channelMode = modelChannel?.allowCustomChannel ? config.channelMode : "remote";
+export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null) {
+    const channelMode = modelChannel ? resolveEffectiveChannelMode(config.channelMode, modelChannel.allowCustomChannel) : "remote";
     if (channelMode === "local" || !modelChannel) {
         return { ...config, channelMode, videoModel: config.videoProtocol === "volcengine-ark" ? resolveSeedanceRequestModel(config) : config.videoModel };
     }

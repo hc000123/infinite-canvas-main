@@ -1,5 +1,6 @@
 import axios from "axios";
 
+import { shouldUseBrowserAIKey } from "@/services/api/ai-channel-boundary";
 import { buildApiUrl, defaultConfig, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
@@ -18,13 +19,13 @@ export function aiApiUrl(config: AiConfig, path: string, protocol: AiProviderPro
 export function aiHeaders(config: AiConfig, contentType?: string, protocol: AiProviderProtocol = "openai") {
     const token = useUserStore.getState().token;
     const apiKey = protocol === "volcengine-ark" ? config.volcengineApiKey : config.apiKey;
-    return config.channelMode === "remote"
+    return shouldUseBrowserAIKey(config.channelMode)
         ? {
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              Authorization: `Bearer ${apiKey}`,
               ...(contentType ? { "Content-Type": contentType } : {}),
           }
         : {
-              Authorization: `Bearer ${apiKey}`,
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
               ...(contentType ? { "Content-Type": contentType } : {}),
           };
 }

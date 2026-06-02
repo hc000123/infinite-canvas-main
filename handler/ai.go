@@ -60,8 +60,16 @@ func proxyAIGetRequest(w http.ResponseWriter, r *http.Request, path string) {
 	localAPIKey := r.Header.Get("X-Volcengine-Api-Key")
 	localBaseURL := r.Header.Get("X-Volcengine-Base-Url")
 	if localAPIKey != "" && localBaseURL != "" && strings.HasPrefix(path, "/videos/") {
-		proxyArkVideoGetByConfig(w, r.Context(), localBaseURL, localAPIKey, path)
-		return
+		allowCustomChannel, err := service.IsCustomChannelAllowed()
+		if err != nil {
+			log.Printf("AI proxy read custom channel setting failed: err=%v", err)
+			Fail(w, "AI 接口请求失败")
+			return
+		}
+		if allowCustomChannel {
+			proxyArkVideoGetByConfig(w, r.Context(), localBaseURL, localAPIKey, path)
+			return
+		}
 	}
 	if strings.TrimSpace(modelName) == "" {
 		modelName = "grok-imagine-video"
@@ -99,19 +107,27 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 	}
 	isArkLocalVideo := path == "/videos"
 	if isArkLocalVideo {
-		volcengineAPIKey, volcengineBaseURL, seedancePayload, err := service.ReadArkLocalVideoConfig(body, contentType)
-		if err == nil && volcengineAPIKey != "" {
-			arkBody, _ := json.Marshal(seedancePayload)
-			baseURL := strings.TrimRight(volcengineBaseURL, "/")
-			request, reqErr := http.NewRequest(http.MethodPost, baseURL+"/contents/generations/tasks", bytes.NewReader(arkBody))
-			if reqErr != nil {
-				Fail(w, "AI 接口请求失败")
+		allowCustomChannel, settingErr := service.IsCustomChannelAllowed()
+		if settingErr != nil {
+			log.Printf("AI proxy read custom channel setting failed: err=%v", settingErr)
+			Fail(w, "AI 接口请求失败")
+			return
+		}
+		if allowCustomChannel {
+			volcengineAPIKey, volcengineBaseURL, seedancePayload, err := service.ReadArkLocalVideoConfig(body, contentType)
+			if err == nil && volcengineAPIKey != "" {
+				arkBody, _ := json.Marshal(seedancePayload)
+				baseURL := strings.TrimRight(volcengineBaseURL, "/")
+				request, reqErr := http.NewRequest(http.MethodPost, baseURL+"/contents/generations/tasks", bytes.NewReader(arkBody))
+				if reqErr != nil {
+					Fail(w, "AI 接口请求失败")
+					return
+				}
+				request.Header.Set("Authorization", "Bearer "+volcengineAPIKey)
+				request.Header.Set("Content-Type", "application/json")
+				copyArkVideoTaskResponse(w, request, nil)
 				return
 			}
-			request.Header.Set("Authorization", "Bearer "+volcengineAPIKey)
-			request.Header.Set("Content-Type", "application/json")
-			copyArkVideoTaskResponse(w, request, nil)
-			return
 		}
 	}
 	credits, err := service.ModelCost(modelName)

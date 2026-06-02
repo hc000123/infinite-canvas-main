@@ -17,11 +17,21 @@ import (
 const (
 	modelProtocolOpenAI        = string(model.ModelProtocolOpenAI)
 	modelProtocolVolcengineArk = string(model.ModelProtocolVolcengineArk)
+	maskedAPIKey               = "********"
 )
 
 func PublicSettings() (model.PublicSetting, error) {
 	settings, err := repository.GetSettings()
 	return normalizeSettings(settings).Public, err
+}
+
+func IsCustomChannelAllowed() (bool, error) {
+	settings, err := repository.GetSettings()
+	if err != nil {
+		return false, err
+	}
+	public := normalizePublicSetting(settings.Public)
+	return public.ModelChannel.AllowCustomChannel != nil && *public.ModelChannel.AllowCustomChannel, nil
 }
 
 func AdminSettings() (model.Settings, error) {
@@ -127,7 +137,9 @@ func normalizePrivateSetting(setting model.PrivateSetting) model.PrivateSetting 
 
 func hidePrivateAPIKeys(settings model.Settings) model.Settings {
 	for i := range settings.Private.Channels {
-		settings.Private.Channels[i].APIKey = ""
+		if strings.TrimSpace(settings.Private.Channels[i].APIKey) != "" {
+			settings.Private.Channels[i].APIKey = maskedAPIKey
+		}
 	}
 	settings.Private.Auth.LinuxDo.ClientSecret = ""
 	settings.Private.VolcengineAsset.AccessKey = ""
@@ -137,13 +149,17 @@ func hidePrivateAPIKeys(settings model.Settings) model.Settings {
 
 func keepPrivateAPIKeys(settings *model.Settings, saved model.Settings) {
 	for i := range settings.Private.Channels {
-		if strings.TrimSpace(settings.Private.Channels[i].APIKey) != "" {
+		if apiKey := strings.TrimSpace(settings.Private.Channels[i].APIKey); apiKey != "" && !isMaskedAPIKey(apiKey) {
 			continue
 		}
 		if channel, ok := findSavedChannel(settings.Private.Channels[i], saved.Private.Channels, i); ok {
 			settings.Private.Channels[i].APIKey = channel.APIKey
 		}
 	}
+}
+
+func isMaskedAPIKey(value string) bool {
+	return strings.TrimSpace(value) == maskedAPIKey
 }
 
 func keepPrivateAuthSecrets(settings *model.Settings, saved model.Settings) {
@@ -248,6 +264,9 @@ func normalizeModelProtocol(protocol string) string {
 
 func resolveAdminChannel(index *int, channel model.ModelChannel) (model.ModelChannel, error) {
 	resolved := normalizeModelChannel(channel)
+	if isMaskedAPIKey(resolved.APIKey) {
+		resolved.APIKey = ""
+	}
 	if strings.TrimSpace(resolved.APIKey) == "" {
 		settings, err := repository.GetSettings()
 		if err != nil {

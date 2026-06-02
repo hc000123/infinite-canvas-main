@@ -3,6 +3,7 @@ import axios from "axios";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { imageToDataUrl } from "@/services/image-storage";
 import { resolveMediaUrl } from "@/services/file-storage";
+import { shouldAttachLocalVolcengineCredentials } from "@/services/api/ai-channel-boundary";
 import { AI_REQUEST_TIMEOUT_MS, AI_VIDEO_CONTENT_TIMEOUT_MS, AI_VIDEO_MAX_POLL_ATTEMPTS, AI_VIDEO_POLL_INTERVAL_MS, aiApiUrl, aiHeaders, delay, normalizeAiError, refreshRemoteUser } from "@/services/api/ai-provider";
 import { isRemoteOrInlineMediaUrl, normalizeSeedanceRatio, normalizeSeedanceResolution, normalizeSeedanceSeed, normalizeVideoResolution, normalizeVideoSeconds, normalizeVideoSize } from "@/services/api/video-normalizers";
 import { buildSeedanceVideoTaskPayload, seedanceAssetURIFromImageReference, type SeedanceImageReferenceInput, type SeedanceOrderedReferenceInput } from "@/services/api/video-reference";
@@ -187,8 +188,8 @@ async function pollVideoTask(initialTask: NormalizedVideoTask, queryTask: (taskI
     return task;
 }
 
-async function buildVideoPayload(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string) {
-    if (config.channelMode === "local" && config.videoProtocol === "volcengine-ark") {
+export async function buildVideoPayload(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string) {
+    if (shouldAttachLocalVolcengineCredentials(config.channelMode, config.videoProtocol)) {
         return {
             ...(await buildSeedanceVideoPayload(config, prompt, references)),
             _volcengine_api_key: config.volcengineApiKey,
@@ -209,7 +210,7 @@ async function buildVideoPayload(config: AiConfig, prompt: string, references: N
     body.append("watermark", String(config.videoWatermark === "true"));
     const seed = normalizeSeedanceSeed(config.videoSeed);
     if (seed !== undefined) body.append("seed", String(seed));
-    if (config.channelMode === "local" && config.videoProtocol === "volcengine-ark") {
+    if (shouldAttachLocalVolcengineCredentials(config.channelMode, config.videoProtocol)) {
         body.append("_volcengine_api_key", config.volcengineApiKey);
         body.append("_volcengine_base_url", config.volcengineBaseUrl);
     }
@@ -218,7 +219,7 @@ async function buildVideoPayload(config: AiConfig, prompt: string, references: N
     return body;
 }
 
-type NormalizedVideoReferences = {
+export type NormalizedVideoReferences = {
     images: ReferenceImage[];
     videos: ReferenceVideo[];
     audios: ReferenceAudio[];
@@ -329,10 +330,10 @@ async function fetchVideoContentDirect(config: AiConfig, model: string, taskId: 
     return content.data;
 }
 
-function localVideoHeaders(config: AiConfig, token: string) {
+export function localVideoHeaders(config: AiConfig, token: string) {
     return {
         Authorization: `Bearer ${token}`,
-        ...(config.videoProtocol === "volcengine-ark"
+        ...(shouldAttachLocalVolcengineCredentials(config.channelMode, config.videoProtocol)
             ? {
                   "X-Volcengine-Api-Key": config.volcengineApiKey,
                   "X-Volcengine-Base-Url": config.volcengineBaseUrl,
