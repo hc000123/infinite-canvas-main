@@ -8,7 +8,7 @@ import { AudioLines, Home, ImageIcon, Images, List, Menu, MessageSquare, Plus, R
 import { requestEdit, requestImageQuestion } from "@/services/api/image";
 import { defaultSeedanceImageRole, type SeedanceImageRoleMode } from "@/services/api/video-reference";
 import { fetchVolcengineAssetStatus, submitVolcengineImageAsset } from "@/services/api/volcengine-assets";
-import { fetchVideoTaskContent, refreshVideoTask, type VideoGenerationReferenceInput } from "@/services/api/video";
+import { refreshVideoTask, type VideoGenerationReferenceInput } from "@/services/api/video";
 import { defaultConfig, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { getImageBlob, resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { resolveMediaUrl, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
@@ -23,26 +23,19 @@ import { useUserStore } from "@/stores/use-user-store";
 import { applyAssistantCanvasActions, type AssistantCanvasAction } from "../utils/canvas-assistant-actions";
 import { removeVariantVideoConnections } from "../utils/canvas-connection-cleanup";
 import { buildGenerationConfig, buildRetryGenerationConfig } from "../utils/canvas-generation-config";
-import {
-    buildImageGenerationMetadata,
-    buildRetryImageGenerationMetadata,
-    buildVideoGenerationMetadata,
-    buildVideoReferenceInput,
-    directVideoReferenceInputs,
-    resolveVideoGenerationRelation,
-    storedReferenceImageRole,
-    videoTaskMetadata,
-} from "../utils/canvas-generation-metadata";
+import { buildImageGenerationMetadata, buildRetryImageGenerationMetadata, buildVideoGenerationMetadata, buildVideoReferenceInput, directVideoReferenceInputs, storedReferenceImageRole, videoTaskMetadata } from "../utils/canvas-generation-metadata";
 import { runCanvasImageGeneration, runCanvasVideoGeneration } from "../utils/canvas-generation-runner";
 import { createImageGenerationNodes, createTextGenerationChildNodes, createVideoGenerationNode } from "../utils/canvas-generation-nodes";
 import { buildContinuousVideoChain } from "../utils/canvas-video-chain";
 import { buildCapturedVideoFrameNode } from "../utils/canvas-video-frame";
+import { buildVideoGenerationPlan, shouldCreateVideoVariant } from "../utils/canvas-video-generation-plan";
 import { canvasNodeToAsset } from "../utils/canvas-assets";
 import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions";
-import { recoverableVideoTaskNodes, recoveredVideoTaskNodeStatus, resetInterruptedGeneration } from "../utils/canvas-video-task-recovery";
+import { resetInterruptedGeneration } from "../utils/canvas-video-task-recovery";
 import { cropDataUrl } from "../utils/canvas-image-data";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
 import { useCanvasMediaCache } from "../hooks/use-canvas-media-cache";
+import { useCanvasVideoTaskRecovery } from "../hooks/use-canvas-video-task-recovery";
 import { App, Button, Dropdown, Modal } from "antd";
 import { NODE_DEFAULT_SIZE, getNodeSpec } from "../constants";
 import { ActiveConnectionPath, ConnectionPath } from "../components/canvas-connections";
@@ -441,79 +434,15 @@ function InfiniteCanvasPage() {
         updateProject(projectId, { nodes, connections, chatSessions, activeChatId, backgroundMode, showImageInfo });
     }, [activeChatId, backgroundMode, chatSessions, connections, nodes, projectId, projectLoaded, showImageInfo, updateProject]);
 
-    useEffect(() => {
-        if (!projectLoaded) return;
-        recoverableVideoTaskNodes(nodesRef.current).forEach((node) => {
-            const taskId = node.metadata?.taskId;
-            if (!taskId || recoveringVideoTaskIdsRef.current.has(taskId)) return;
-            recoveringVideoTaskIdsRef.current.add(taskId);
-            void (async () => {
-                try {
-                    const generationConfig = buildGenerationConfig(canvasAiConfig, node, "video", defaultConfig);
-                    const task = await refreshVideoTask(generationConfig, taskId);
-                    const nextStatus = recoveredVideoTaskNodeStatus(task.status);
-                    if (nextStatus !== "success") {
-                        setNodes((prev) =>
-                            prev.map((item) =>
-                                item.id === node.id
-                                    ? {
-                                          ...item,
-                                          metadata: {
-                                              ...item.metadata,
-                                              ...videoTaskMetadata(task),
-                                              status: nextStatus,
-                                              errorDetails: nextStatus === "error" ? task.errorMessage || "视频生成失败" : task.errorMessage,
-                                          },
-                                      }
-                                    : item,
-                            ),
-                        );
-                        return;
-                    }
-
-                    const video = await uploadMediaFile(await fetchVideoTaskContent(generationConfig, task), "video");
-                    const cachedVideo = await cacheUploadedCanvasMedia(video, `${node.id}.mp4`);
-                    const videoSize = fitNodeSize(video.width || node.width, video.height || node.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
-                    setNodes((prev) =>
-                        prev.map((item) =>
-                            item.id === node.id
-                                ? {
-                                      ...item,
-                                      width: videoSize.width,
-                                      height: videoSize.height,
-                                      position: { x: item.position.x + item.width / 2 - videoSize.width / 2, y: item.position.y + item.height / 2 - videoSize.height / 2 },
-                                      metadata: {
-                                          ...item.metadata,
-                                          ...videoMetadata(video),
-                                          ...cachedVideo,
-                                          ...videoTaskMetadata(task),
-                                          status: NODE_STATUS_SUCCESS,
-                                          taskStatus: "succeeded",
-                                          errorDetails: undefined,
-                                      },
-                                  }
-                                : item,
-                        ),
-                    );
-                } catch (error) {
-                    setNodes((prev) =>
-                        prev.map((item) =>
-                            item.id === node.id
-                                ? {
-                                      ...item,
-                                      metadata: {
-                                          ...item.metadata,
-                                          status: NODE_STATUS_LOADING,
-                                          errorDetails: error instanceof Error ? error.message : "恢复视频任务失败",
-                                      },
-                                  }
-                                : item,
-                        ),
-                    );
-                }
-            })();
-        });
-    }, [cacheUploadedCanvasMedia, canvasAiConfig, projectLoaded]);
+    useCanvasVideoTaskRecovery({
+        projectLoaded,
+        nodesRef,
+        recoveringVideoTaskIdsRef,
+        canvasAiConfig,
+        cacheUploadedCanvasMedia,
+        setNodes,
+        toVideoMetadata: videoMetadata,
+    });
 
     useEffect(() => {
         if (!dialogNodeId) setNodeImageSettingsOpen(false);
@@ -2052,10 +1981,10 @@ function InfiniteCanvasPage() {
                 }
 
                 if (mode === "video") {
-                    const isVideoVariantGeneration = sourceNode?.type === CanvasNodeType.Video && Boolean(sourceNode.metadata?.content) && generationConfig.videoTaskMode !== "edit" && generationConfig.videoTaskMode !== "extend";
-                    const storedVariantImages = isVideoVariantGeneration ? await resolveStoredImageReferences(sourceNode.metadata || {}) : undefined;
-                    const storedVariantVideos = isVideoVariantGeneration ? await resolveStoredVideoReferences(sourceNode.metadata || {}) : undefined;
-                    const storedVariantAudios = isVideoVariantGeneration ? await resolveStoredAudioReferences(sourceNode.metadata || {}) : undefined;
+                    const isVideoVariantGeneration = shouldCreateVideoVariant(generationConfig, sourceNode);
+                    const storedVariantImages = isVideoVariantGeneration ? await resolveStoredImageReferences(sourceNode?.metadata || {}) : undefined;
+                    const storedVariantVideos = isVideoVariantGeneration ? await resolveStoredVideoReferences(sourceNode?.metadata || {}) : undefined;
+                    const storedVariantAudios = isVideoVariantGeneration ? await resolveStoredAudioReferences(sourceNode?.metadata || {}) : undefined;
                     if (storedVariantImages === null) throw new Error("参考图片已丢失，无法继续生成变体");
                     if (storedVariantVideos === null) throw new Error("参考视频已丢失，无法继续生成变体");
                     if (storedVariantAudios === null) throw new Error("参考音频已丢失，无法继续生成变体");
@@ -2066,12 +1995,15 @@ function InfiniteCanvasPage() {
                         isVideoVariantGeneration && sourceNode
                             ? storedVideoReferenceInputs(sourceNode.metadata || {}, sourceImageReferences, sourceVideoReferences, sourceAudioReferences) || directVideoReferenceInputs(sourceImageReferences, sourceVideoReferences, sourceAudioReferences)
                             : directVideoReferenceInputs(sourceImageReferences, sourceVideoReferences, sourceAudioReferences);
-                    const videoReferences = sourceReferenceInputs.length
-                        ? buildVideoReferenceInput(sourceImageReferences, sourceVideoReferences, sourceAudioReferences, sourceReferenceInputs, generationConfig.videoReferenceImageMode)
-                        : buildVideoReferenceInput(generationContext.referenceImages, generationContext.referenceVideos, generationContext.referenceAudios, generationContext.referenceInputs, generationConfig.videoReferenceImageMode);
-                    const videoRelation = resolveVideoGenerationRelation(generationConfig, sourceNode, videoReferences);
-                    if (generationConfig.videoProtocol === "volcengine-ark" && (generationConfig.videoTaskMode === "edit" || generationConfig.videoTaskMode === "extend") && !videoRelation?.sourceVideoNodeId) {
-                        const errorDetails = "请先连接一个上游视频节点作为源视频";
+                    const videoPlan = buildVideoGenerationPlan({
+                        config: generationConfig,
+                        sourceNode,
+                        sourceReferences: { images: sourceImageReferences, videos: sourceVideoReferences, audios: sourceAudioReferences, inputs: sourceReferenceInputs },
+                        contextReferences: { images: generationContext.referenceImages, videos: generationContext.referenceVideos, audios: generationContext.referenceAudios, inputs: generationContext.referenceInputs },
+                        storedVariantReferences: { images: storedVariantImages || [], videos: storedVariantVideos || [], audios: storedVariantAudios || [], inputs: sourceReferenceInputs },
+                    });
+                    if (videoPlan.sourceVideoRequiredError) {
+                        const errorDetails = videoPlan.sourceVideoRequiredError;
                         message.warning(errorDetails);
                         setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, errorDetails } } : node)));
                         return;
@@ -2083,7 +2015,7 @@ function InfiniteCanvasPage() {
                         sourceNode,
                         prompt: effectivePrompt,
                         spec,
-                        metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, generationStartedAt, ...buildVideoGenerationMetadata(generationConfig, videoReferences, videoRelation) },
+                        metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, generationStartedAt, ...buildVideoGenerationMetadata(generationConfig, videoPlan.references, videoPlan.relation) },
                     });
                     pendingChildIds = [videoId];
                     setNodes((prev) =>
@@ -2092,7 +2024,7 @@ function InfiniteCanvasPage() {
                             : [...prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), videoNode],
                     );
                     if (connection) setConnections((prev) => [...prev, connection]);
-                    const { video, completedTask } = await runCanvasVideoGeneration(generationConfig, effectivePrompt, videoReferences, (task) => {
+                    const { video, completedTask } = await runCanvasVideoGeneration(generationConfig, effectivePrompt, videoPlan.references, (task) => {
                         setNodes((prev) => prev.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, ...videoTaskMetadata(task), errorDetails: task.errorMessage } } : node)));
                     });
                     const cachedVideo = await cacheUploadedCanvasMedia(video, `${videoId}.mp4`);
@@ -2108,7 +2040,7 @@ function InfiniteCanvasPage() {
                             ...cachedVideo,
                             ...(completedTask ? videoTaskMetadata(completedTask) : {}),
                             prompt: effectivePrompt,
-                            ...buildVideoGenerationMetadata(generationConfig, videoReferences, videoRelation),
+                            ...buildVideoGenerationMetadata(generationConfig, videoPlan.references, videoPlan.relation),
                             taskStatus: "succeeded",
                             errorDetails: undefined,
                         },

@@ -305,7 +305,7 @@ func fetchAdminChannelModels(channel model.ModelChannel) ([]string, error) {
 		return nil, err
 	}
 	request.Header.Set("Authorization", "Bearer "+channel.APIKey)
-	response, err := http.DefaultClient.Do(request)
+	response, err := DoAIHTTPRequest(request)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +350,7 @@ func testAdminChannelModel(channel model.ModelChannel, modelName string) (string
 	}
 	request.Header.Set("Authorization", "Bearer "+channel.APIKey)
 	request.Header.Set("Content-Type", "application/json")
-	response, err := http.DefaultClient.Do(request)
+	response, err := DoAIHTTPRequest(request)
 	if err != nil {
 		return "", err
 	}

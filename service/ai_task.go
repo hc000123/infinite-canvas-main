@@ -161,7 +161,7 @@ func RefreshAdminAITask(id string) (model.AITask, error) {
 		return model.AITask{}, err
 	}
 	request.Header.Set("Authorization", "Bearer "+channel.APIKey)
-	response, err := http.DefaultClient.Do(request)
+	response, err := DoAIHTTPRequest(request)
 	if err != nil {
 		return model.AITask{}, safeMessageError{message: "刷新任务失败"}
 	}

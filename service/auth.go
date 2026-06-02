@@ -512,7 +512,7 @@ func linuxDoProfile(token string) (linuxDoUserResponse, error) {
 }
 
 func doLinuxDoJSON(req *http.Request, payload any) error {
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := DoAIHTTPRequest(req)
 	if err != nil {
 		return err
 	}

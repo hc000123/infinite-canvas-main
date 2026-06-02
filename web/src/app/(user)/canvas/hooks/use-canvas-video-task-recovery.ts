@@ -1,0 +1,123 @@
+import { useEffect, type Dispatch, type RefObject, type SetStateAction } from "react";
+
+import { fetchVideoTaskContent, refreshVideoTask } from "@/services/api/video";
+import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
+import { defaultConfig, type AiConfig } from "@/stores/use-config-store";
+
+import { NODE_DEFAULT_SIZE } from "../constants";
+import { buildGenerationConfig } from "../utils/canvas-generation-config";
+import { videoTaskMetadata } from "../utils/canvas-generation-metadata";
+import { fitNodeSize } from "../utils/canvas-node-size";
+import { recoverableVideoTaskNodes, recoveredVideoTaskNodeStatus } from "../utils/canvas-video-task-recovery";
+import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata } from "../types";
+
+const VIDEO_NODE_MAX_WIDTH = 420;
+const VIDEO_NODE_MAX_HEIGHT = 420;
+const NODE_STATUS_LOADING = "loading" as const;
+const NODE_STATUS_SUCCESS = "success" as const;
+
+type UseCanvasVideoTaskRecoveryOptions = {
+    projectLoaded: boolean;
+    nodesRef: RefObject<CanvasNodeData[]>;
+    recoveringVideoTaskIdsRef: RefObject<Set<string>>;
+    canvasAiConfig: AiConfig;
+    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string) => Promise<Partial<CanvasNodeMetadata>>;
+    setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
+    toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
+};
+
+export function useCanvasVideoTaskRecovery({ projectLoaded, nodesRef, recoveringVideoTaskIdsRef, canvasAiConfig, cacheUploadedCanvasMedia, setNodes, toVideoMetadata }: UseCanvasVideoTaskRecoveryOptions) {
+    useEffect(() => {
+        if (!projectLoaded) return;
+        recoverableVideoTaskNodes(nodesRef.current).forEach((node) => {
+            const taskId = node.metadata?.taskId;
+            if (!taskId || recoveringVideoTaskIdsRef.current.has(taskId)) return;
+            recoveringVideoTaskIdsRef.current.add(taskId);
+            void recoverVideoTaskNode({
+                node,
+                canvasAiConfig,
+                cacheUploadedCanvasMedia,
+                setNodes,
+                toVideoMetadata,
+            });
+        });
+    }, [cacheUploadedCanvasMedia, canvasAiConfig, nodesRef, projectLoaded, recoveringVideoTaskIdsRef, setNodes, toVideoMetadata]);
+}
+
+async function recoverVideoTaskNode({
+    node,
+    canvasAiConfig,
+    cacheUploadedCanvasMedia,
+    setNodes,
+    toVideoMetadata,
+}: {
+    node: CanvasNodeData;
+    canvasAiConfig: AiConfig;
+    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string) => Promise<Partial<CanvasNodeMetadata>>;
+    setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
+    toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
+}) {
+    try {
+        const generationConfig = buildGenerationConfig(canvasAiConfig, node, "video", defaultConfig);
+        const task = await refreshVideoTask(generationConfig, node.metadata?.taskId || "");
+        const nextStatus = recoveredVideoTaskNodeStatus(task.status);
+        if (nextStatus !== "success") {
+            setNodes((prev) =>
+                prev.map((item) =>
+                    item.id === node.id
+                        ? {
+                              ...item,
+                              metadata: {
+                                  ...item.metadata,
+                                  ...videoTaskMetadata(task),
+                                  status: nextStatus,
+                                  errorDetails: nextStatus === "error" ? task.errorMessage || "视频生成失败" : task.errorMessage,
+                              },
+                          }
+                        : item,
+                ),
+            );
+            return;
+        }
+
+        const video = await uploadMediaFile(await fetchVideoTaskContent(generationConfig, task), "video");
+        const cachedVideo = await cacheUploadedCanvasMedia(video, `${node.id}.mp4`);
+        const videoSize = fitNodeSize(video.width || node.width || NODE_DEFAULT_SIZE[CanvasNodeType.Video].width, video.height || node.height || NODE_DEFAULT_SIZE[CanvasNodeType.Video].height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
+        setNodes((prev) =>
+            prev.map((item) =>
+                item.id === node.id
+                    ? {
+                          ...item,
+                          width: videoSize.width,
+                          height: videoSize.height,
+                          position: { x: item.position.x + item.width / 2 - videoSize.width / 2, y: item.position.y + item.height / 2 - videoSize.height / 2 },
+                          metadata: {
+                              ...item.metadata,
+                              ...toVideoMetadata(video),
+                              ...cachedVideo,
+                              ...videoTaskMetadata(task),
+                              status: NODE_STATUS_SUCCESS,
+                              taskStatus: "succeeded",
+                              errorDetails: undefined,
+                          },
+                      }
+                    : item,
+            ),
+        );
+    } catch (error) {
+        setNodes((prev) =>
+            prev.map((item) =>
+                item.id === node.id
+                    ? {
+                          ...item,
+                          metadata: {
+                              ...item.metadata,
+                              status: NODE_STATUS_LOADING,
+                              errorDetails: error instanceof Error ? error.message : "恢复视频任务失败",
+                          },
+                      }
+                    : item,
+            ),
+        );
+    }
+}

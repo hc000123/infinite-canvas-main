@@ -174,7 +174,7 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 	}
 	request, err := http.NewRequest(http.MethodPost, service.BuildModelChannelURL(channel, upstreamPath), bytes.NewReader(upstreamBody))
 	if err != nil {
-		log.Printf("AI proxy build request failed: url=%s err=%v", service.BuildModelChannelURL(channel, upstreamPath), err)
+		log.Printf("AI proxy build request failed: url=%s err=%v", safeLogURL(service.BuildModelChannelURL(channel, upstreamPath)), err)
 		_ = service.MarkAITaskFailed(aiTask.ID, "AI 接口请求失败", nil, "")
 		Fail(w, "AI 接口请求失败")
 		return
@@ -225,22 +225,22 @@ func proxyArkVideoGetByConfig(w http.ResponseWriter, ctx context.Context, baseUR
 		return
 	}
 	request.Header.Set("Authorization", "Bearer "+apiKey)
-	response, err := http.DefaultClient.Do(request)
+	response, err := service.DoAIHTTPRequest(request)
 	if err != nil {
-		log.Printf("Ark video task query failed: url=%s err=%v", request.URL.String(), err)
+		log.Printf("Ark video task query failed: url=%s err=%v", safeLogRequestURL(request), err)
 		Fail(w, "AI 接口请求失败")
 		return
 	}
 	defer response.Body.Close()
 	body, _ := io.ReadAll(response.Body)
 	if response.StatusCode >= http.StatusBadRequest {
-		log.Printf("Ark video task query upstream error: url=%s status=%d body=%s", request.URL.String(), response.StatusCode, strings.TrimSpace(string(body)))
+		log.Printf("Ark video task query upstream error: url=%s status=%d body=%s", safeLogRequestURL(request), response.StatusCode, safeLogPayload(body, "application/json"))
 		Fail(w, upstreamErrorMessage(body, "AI 接口请求失败"))
 		return
 	}
 	normalized, err := service.NormalizeArkVideoTaskResponse(body)
 	if err != nil {
-		log.Printf("Ark video task normalize failed: body=%s err=%v", strings.TrimSpace(string(body)), err)
+		log.Printf("Ark video task normalize failed: body=%s err=%v", safeLogPayload(body, "application/json"), err)
 		if !contentRequest {
 			Fail(w, "AI 接口请求失败")
 			return
@@ -267,9 +267,9 @@ func proxyArkVideoGetByConfig(w http.ResponseWriter, ctx context.Context, baseUR
 }
 
 func copyArkVideoTaskResponse(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onSuccess ...func(int, []byte, []byte)) {
-	response, err := http.DefaultClient.Do(request)
+	response, err := service.DoAIHTTPRequest(request)
 	if err != nil {
-		log.Printf("Ark video task request failed: url=%s err=%v", request.URL.String(), err)
+		log.Printf("Ark video task request failed: url=%s err=%v", safeLogRequestURL(request), err)
 		if onFailure != nil {
 			onFailure("AI 接口请求失败", nil)
 		}
@@ -279,7 +279,7 @@ func copyArkVideoTaskResponse(w http.ResponseWriter, request *http.Request, onFa
 	defer response.Body.Close()
 	body, _ := io.ReadAll(response.Body)
 	if response.StatusCode >= http.StatusBadRequest {
-		log.Printf("Ark video task upstream error: url=%s status=%d body=%s", request.URL.String(), response.StatusCode, strings.TrimSpace(string(body)))
+		log.Printf("Ark video task upstream error: url=%s status=%d body=%s", safeLogRequestURL(request), response.StatusCode, safeLogPayload(body, "application/json"))
 		message := upstreamErrorMessage(body, "AI 接口请求失败")
 		if onFailure != nil {
 			onFailure(message, body)
@@ -289,7 +289,7 @@ func copyArkVideoTaskResponse(w http.ResponseWriter, request *http.Request, onFa
 	}
 	normalized, err := service.NormalizeArkVideoTaskResponse(body)
 	if err != nil {
-		log.Printf("Ark video task normalize failed: body=%s err=%v", strings.TrimSpace(string(body)), err)
+		log.Printf("Ark video task normalize failed: body=%s err=%v", safeLogPayload(body, "application/json"), err)
 		if onFailure != nil {
 			onFailure("AI 接口请求失败", body)
 		}
@@ -317,7 +317,7 @@ func parseVideoTaskPath(path string) (string, bool) {
 
 func proxyArkVideoContent(w http.ResponseWriter, ctx context.Context, videoURL string) bool {
 	if err := validateProxyDownloadURL(ctx, videoURL); err != nil {
-		log.Printf("Ark video content rejected: url=%s err=%v", videoURL, err)
+		log.Printf("Ark video content rejected: url=%s err=%v", safeLogURL(videoURL), err)
 		Fail(w, "视频下载地址无效")
 		return false
 	}
@@ -326,23 +326,23 @@ func proxyArkVideoContent(w http.ResponseWriter, ctx context.Context, videoURL s
 		Fail(w, "视频下载地址无效")
 		return false
 	}
-	client := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	client := service.NewAIVideoContentHTTPClient(
+		func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return http.ErrUseLastResponse
 			}
 			return validateProxyDownloadURL(ctx, req.URL.String())
 		},
-	}
+	)
 	response, err := client.Do(request)
 	if err != nil {
-		log.Printf("Ark video content download failed: url=%s err=%v", videoURL, err)
+		log.Printf("Ark video content download failed: url=%s err=%v", safeLogURL(videoURL), err)
 		Fail(w, "视频下载失败")
 		return false
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= http.StatusBadRequest {
-		log.Printf("Ark video content upstream error: url=%s status=%d", videoURL, response.StatusCode)
+		log.Printf("Ark video content upstream error: url=%s status=%d", safeLogURL(videoURL), response.StatusCode)
 		Fail(w, "视频下载失败")
 		return false
 	}
@@ -399,9 +399,9 @@ func validatePublicProxyIP(ip net.IP) error {
 }
 
 func copyAIResponse(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onSuccess ...func(int, []byte, string)) {
-	response, err := http.DefaultClient.Do(request)
+	response, err := service.DoAIHTTPRequest(request)
 	if err != nil {
-		log.Printf("AI proxy request failed: url=%s err=%v", request.URL.String(), err)
+		log.Printf("AI proxy request failed: url=%s err=%v", safeLogRequestURL(request), err)
 		if onFailure != nil {
 			onFailure("AI 接口请求失败", nil)
 		}
@@ -412,7 +412,7 @@ func copyAIResponse(w http.ResponseWriter, request *http.Request, onFailure func
 
 	if response.StatusCode >= http.StatusBadRequest {
 		payload, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		log.Printf("AI upstream error: url=%s status=%d body=%s", request.URL.String(), response.StatusCode, strings.TrimSpace(string(payload)))
+		log.Printf("AI upstream error: url=%s status=%d body=%s", safeLogRequestURL(request), response.StatusCode, safeLogPayload(payload, response.Header.Get("Content-Type")))
 		message := upstreamErrorMessage(payload, "AI 接口请求失败")
 		if onFailure != nil {
 			onFailure(message, payload)
@@ -435,6 +435,39 @@ func copyAIResponse(w http.ResponseWriter, request *http.Request, onFailure func
 	}
 	w.WriteHeader(response.StatusCode)
 	_, _ = w.Write(payload)
+}
+
+func safeLogRequestURL(request *http.Request) string {
+	if request == nil || request.URL == nil {
+		return ""
+	}
+	return safeLogURL(request.URL.String())
+}
+
+func safeLogURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "[invalid-url]"
+	}
+	if parsed.User != nil {
+		parsed.User = url.User("[redacted]")
+	}
+	if parsed.RawQuery != "" {
+		parsed.RawQuery = "redacted=1"
+	}
+	parsed.Fragment = ""
+	return parsed.String()
+}
+
+func safeLogPayload(body []byte, contentType string) string {
+	text := strings.TrimSpace(service.SanitizeAIJSON(body, contentType))
+	if text == "" {
+		return ""
+	}
+	if len([]rune(text)) > 1000 {
+		return string([]rune(text)[:1000]) + "...[truncated]"
+	}
+	return text
 }
 
 func upstreamErrorMessage(body []byte, fallback string) string {
