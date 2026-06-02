@@ -72,6 +72,7 @@ type VolcengineAssetSetting struct {
 	SecretKey          string `json:"secretKey"`
 	ProjectName        string `json:"projectName"`
 	Region             string `json:"region"`
+	AssetGroupID       string `json:"assetGroupId"`
 	PublicAssetBaseURL string `json:"publicAssetBaseUrl"`
 }
 

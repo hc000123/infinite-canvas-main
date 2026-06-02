@@ -57,6 +57,22 @@ func SaveAsset(item model.Asset) (model.Asset, error) {
 	return item, db.Save(&item).Error
 }
 
+// GetAsset 根据 ID 返回素材。
+func GetAsset(id string) (model.Asset, error) {
+	db, err := DB()
+	if err != nil {
+		return model.Asset{}, err
+	}
+	item, ok, err := findAsset(db, id)
+	if err != nil {
+		return model.Asset{}, err
+	}
+	if !ok {
+		return model.Asset{}, gorm.ErrRecordNotFound
+	}
+	return item, nil
+}
+
 // DeleteAsset 删除指定素材。
 func DeleteAsset(id string) error {
 	db, err := DB()

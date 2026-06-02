@@ -81,6 +81,7 @@
 
 - 发版本时，先把 `CHANGELOG.md` 的 `Unreleased` 变更整理成新的版本记录，并保留空的 `Unreleased` 标题。
 - 按当前版本号提升一个版本，更新根目录 `VERSION`。
+- 后续重新封装或发布 Windows/macOS 桌面安装包时，也要先提升版本号，并同步更新 `web/package.json` 与 `web/desktop/app/package.json`，避免新安装包继续使用旧版本文件名。
 - 将当前未提交的代码全部提交到 Git。
 - 提交完成后，给当前提交打最新版本号对应的 tag，例如 `v0.0.5`。
 - 发版本流程中不要执行编译、测试或构建，除非用户明确要求。

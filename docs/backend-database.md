@@ -16,6 +16,7 @@
 
 - `users`
 - `credit_logs`
+- `ai_tasks`
 - `prompts`
 - `assets`
 - `settings`
@@ -74,13 +75,21 @@
 |------------------|--------|-------------------------------|
 | `id`             | string | 主键                            |
 | `title`          | string | 标题                            |
-| `type`           | string | 素材类型：`text`、`image`、`video` 等 |
+| `type`           | string | 素材类型：`text`、`image`、`video`、`audio` 等 |
 | `cover_url`      | string | 封面图                           |
 | `tags`           | json   | 标签列表                          |
 | `category`       | string | 分类标识                          |
 | `description`    | string | 描述                            |
 | `content`        | text   | 文本或 Markdown 内容               |
 | `url`            | string | 图片、视频等媒体地址                    |
+| `volcengine_asset_id` | string | 火山素材 Asset ID，可为空             |
+| `volcengine_group_id` | string | 火山素材组 ID，可为空                  |
+| `volcengine_project_name` | string | 火山 ProjectName，可为空             |
+| `volcengine_status` | string | 火山审核状态：`Processing`、`Active`、`Failed` 等 |
+| `volcengine_error` | string | 火山审核失败原因，可为空                 |
+| `volcengine_public_url` | string | 提交给火山的公网素材 URL，可为空          |
+| `volcengine_submitted_at` | string | 提交火山审核时间，可为空                |
+| `volcengine_updated_at` | string | 最近刷新火山审核状态时间，可为空           |
 | `created_at`     | string | 创建时间                          |
 | `updated_at`     | string | 更新时间                          |
 
@@ -106,6 +115,7 @@
 |-------------------|----------|----------------|
 | `modelChannel` | object | 模型渠道公开配置组 |
 | `auth` | object | 公开登录配置 |
+| `volcengineAsset` | object | 火山素材审核公开开关 |
 
 `modelChannel` 当前字段：
 
@@ -140,12 +150,13 @@
 | `channels` | object[] | 模型渠道配置列表 |
 | `promptSync` | object | GitHub 远程提示词定时同步配置 |
 | `auth` | object | 私有登录配置 |
+| `volcengineAsset` | object | 火山素材审核私有配置 |
 
 `channels` 每项字段：
 
 | 字段       | 类型       | 说明       |
 |----------|----------|----------|
-| `protocol` | string | 协议，当前支持 `openai` |
+| `protocol` | string | 协议，当前支持 `openai`、`volcengine-ark` |
 | `name`   | string   | 渠道名称     |
 | `baseUrl` | string  | 渠道接口地址   |
 | `apiKey` | string   | 渠道密钥     |
@@ -168,7 +179,59 @@
 | `clientId` | string | Linux.do OAuth App Client ID |
 | `clientSecret` | string | Linux.do OAuth App Client Secret，后台返回时隐藏 |
 
+`volcengineAsset` 当前字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `enabled` | bool | 是否开启火山素材审核 |
+| `accessKey` | string | 火山 Access Key，后台返回时隐藏 |
+| `secretKey` | string | 火山 Secret Key，后台返回时隐藏 |
+| `projectName` | string | 火山 ProjectName，默认 `default` |
+| `region` | string | 火山地域，默认 `cn-beijing` |
+| `assetGroupId` | string | 火山 Asset Group ID，配置后作为 `CreateAsset` 的 `GroupId` |
+| `publicAssetBaseUrl` | string | 可被火山访问的公网素材基础地址 |
+
 后端请求模型时，先按模型名筛选启用且包含该模型的渠道，再按 `weight` 加权随机选择一个渠道。
+
+### ai_tasks
+
+后端云端 AI 代理任务账本表。当前记录生图、图生图、聊天和视频创建请求，用于把请求、扣费流水、上游任务 ID 和失败返还串起来。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | string | 主键 |
+| `user_id` | string | 发起用户 ID |
+| `kind` | string | 任务大类：`image`、`chat`、`video` |
+| `task_type` | string | 任务类型：`image_generation`、`image_edit`、`chat`、`video_create` |
+| `action_type` | string | 任务动作：`generate`、`edit`、`extend`、`chat` 等 |
+| `provider` | string | 命中的后台渠道名称 |
+| `protocol` | string | 渠道协议：`openai`、`volcengine-ark` |
+| `model` | string | 请求模型 |
+| `path` | string | 前端调用的 AI 代理路径 |
+| `status` | string | 任务状态：`created`、`queued`、`running`、`succeeded`、`failed`、`cancelled` |
+| `credits` | number | 本次预扣算力点 |
+| `credits_refunded` | number | 已返还算力点数量 |
+| `upstream_task_id` | string | 上游任务 ID，当前主要用于 Ark 视频任务 |
+| `raw_status` | string | 上游原始状态，当前主要用于 Ark 视频任务 |
+| `video_url` | text | 上游返回的视频地址，当前主要用于 Ark 视频任务 |
+| `video_url_expires_at` | number | 视频地址过期时间戳 |
+| `error_code` | string | 上游失败错误码 |
+| `request_json` | text | 脱敏后的请求 JSON；不会保存 API Key、base64、blob URL 或文件内容 |
+| `response_json` | text | 脱敏后的响应 JSON；不会保存 base64 或 blob URL |
+| `error_message` | text | 失败原因 |
+| `finished_at` | string | 结果内容成功下载或回填完成时间 |
+| `refunded_at` | string | 失败/取消任务完成返还时间，用于避免重复返还 |
+| `created_at` | string | 创建时间 |
+| `updated_at` | string | 更新时间 |
+
+后台管理接口：
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /api/admin/ai-tasks` | 管理员分页查询 AI 任务，支持用户、状态、类型、动作、模型、渠道、上游 taskId、时间范围和关键词筛选 |
+| `GET /api/admin/ai-tasks/:id` | 管理员查看任务详情、用户简要信息、关联算力点流水和脱敏请求/响应 |
+| `POST /api/admin/ai-tasks/:id/refresh` | 管理员手动刷新 Ark 视频任务状态，并复用失败/取消幂等返还逻辑 |
+| `POST /api/admin/ai-tasks/:id/refund` | 管理员对失败/取消或异常任务手动返还，已返还任务会拒绝重复返还 |
 
 ### credit_logs
 
@@ -181,7 +244,7 @@
 | `type`       | string | 类型：`admin_adjust`、`ai_consume`、`ai_refund` |
 | `amount`     | number | 本次变动数量，增加为正，扣减为负         |
 | `balance`    | number | 变动后的用户算力点余额              |
-| `related_id` | string | 关联业务 ID，可为空                |
+| `related_id` | string | 关联业务 ID；后端 AI 代理扣费和返还时指向 `ai_tasks.id` |
 | `remark`     | string | 备注                       |
 | `extra`      | json   | 扩展信息                     |
 | `created_at` | string | 创建时间                     |

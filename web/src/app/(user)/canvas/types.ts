@@ -1,3 +1,6 @@
+import type { SeedanceImageRoleMode } from "@/services/api/video-reference";
+import type { AssistantCanvasAction } from "./utils/canvas-assistant-actions";
+
 export type Position = {
     x: number;
     y: number;
@@ -14,11 +17,17 @@ export enum CanvasNodeType {
     Text = "text",
     Config = "config",
     Video = "video",
+    Audio = "audio",
 }
 
 export type CanvasNodeStatus = "idle" | "success" | "loading" | "error";
 export type CanvasGenerationMode = "text" | "image" | "video";
 export type CanvasImageGenerationType = "generation" | "edit";
+export type CanvasVideoActionType = "generate" | "regenerate" | "variant" | "continue" | "edit" | "extend";
+export type CanvasVideoRelationType = "variant" | "continuation" | "derivative";
+export type CanvasVideoTaskMode = "generate" | "edit" | "extend";
+export type CanvasVideoEditType = "replace" | "add" | "remove" | "inpaint";
+export type CanvasVideoExtendDirection = "forward" | "backward";
 
 export type CanvasNodeMetadata = {
     content?: string;
@@ -40,12 +49,36 @@ export type CanvasNodeMetadata = {
     generateAudio?: string;
     watermark?: string;
     seed?: string;
+    returnLastFrame?: string;
     provider?: "openai" | "volcengine-ark";
+    actionType?: CanvasVideoActionType;
+    videoActionType?: CanvasVideoActionType;
+    relationType?: CanvasVideoRelationType;
+    videoTaskMode?: CanvasVideoTaskMode;
+    videoEditType?: CanvasVideoEditType;
+    videoExtendDirection?: CanvasVideoExtendDirection;
+    videoReferenceImageMode?: SeedanceImageRoleMode;
+    sourceVideoNodeId?: string;
+    capturedFrameSourceVideoNodeId?: string;
+    capturedFrameTime?: number;
+    capturedFrameAt?: string;
+    capturedFrameSource?: "current_frame";
+    variantOfNodeId?: string;
+    continuationOfNodeId?: string;
     videoReferences?: string[];
+    audioReferences?: string[];
+    referenceOrder?: Array<{ nodeId?: string; kind: "image" | "video" | "audio"; index: number }>;
+    referenceRoles?: Array<{ nodeId: string; kind: "image" | "video" | "audio"; role: string; index?: number }>;
     taskId?: string;
     taskStatus?: string;
     rawTaskStatus?: string;
+    generationStartedAt?: number;
     videoUrl?: string;
+    cacheUrl?: string;
+    cachePath?: string;
+    cacheFilename?: string;
+    lastFrameUrl?: string;
+    lastFrameStorageKey?: string;
     taskCreatedAt?: number;
     taskUpdatedAt?: number;
     executionExpiresAfter?: number;
@@ -65,6 +98,16 @@ export type CanvasNodeMetadata = {
     storageKey?: string;
     mimeType?: string;
     bytes?: number;
+    volcengineAsset?: {
+        assetId: string;
+        groupId: string;
+        projectName: string;
+        status: "Processing" | "Active" | "Failed" | string;
+        error?: string;
+        publicUrl: string;
+        submittedAt: string;
+        updatedAt: string;
+    };
 };
 
 export type CanvasNodeData = {
@@ -97,6 +140,7 @@ export type CanvasAssistantImage = {
     dataUrl: string;
     storageKey?: string;
     prompt: string;
+    volcengineAsset?: CanvasNodeMetadata["volcengineAsset"];
 };
 
 export type CanvasAssistantMessage = {
@@ -107,6 +151,9 @@ export type CanvasAssistantMessage = {
     isLoading?: boolean;
     references?: CanvasAssistantReference[];
     images?: CanvasAssistantImage[];
+    assistantActions?: AssistantCanvasAction[];
+    assistantActionStatus?: "pending" | "applied" | "cancelled";
+    assistantActionAppliedAt?: string;
 };
 
 export type CanvasAssistantSession = {

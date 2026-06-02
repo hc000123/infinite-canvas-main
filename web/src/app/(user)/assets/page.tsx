@@ -8,9 +8,11 @@ import { saveAs } from "file-saver";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { formatBytes, readFileAsDataUrl } from "@/lib/image-utils";
 import { fetchVolcengineAssetStatus, submitVolcengineImageAsset } from "@/services/api/volcengine-assets";
+import { uploadMediaFile } from "@/services/file-storage";
 import { getImageBlob, uploadImage } from "@/services/image-storage";
+import { buildVolcengineImageFilename, isVolcengineReviewProcessing, mergeVolcengineReviewStatus, shouldShowVolcengineReviewAction, volcengineReviewMetadataFromSubmission, volcengineReviewPollingKey } from "@/services/volcengine-asset-metadata";
 import { cn } from "@/lib/utils";
-import { useAssetStore, type Asset, type AssetKind, type ImageAsset, type VolcengineAssetMetadata } from "@/stores/use-asset-store";
+import { useAssetStore, type Asset, type AssetKind, type AudioAsset, type ImageAsset, type VideoAsset, type VolcengineAssetMetadata } from "@/stores/use-asset-store";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { exportAssets, readAssetPackage } from "./asset-transfer";
@@ -26,12 +28,14 @@ type AssetFormValues = {
 };
 
 type ImageDraft = ImageAsset["data"] | null;
+type MediaDraft = VideoAsset["data"] | AudioAsset["data"] | null;
 
 const kindOptions = [
     { label: "全部", value: "all" },
     { label: "文本", value: "text" },
     { label: "图片", value: "image" },
     { label: "视频", value: "video" },
+    { label: "音频", value: "audio" },
 ];
 
 export default function AssetsPage() {
@@ -40,6 +44,7 @@ export default function AssetsPage() {
     const [form] = Form.useForm<AssetFormValues>();
     const coverInputRef = useRef<HTMLInputElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
+    const mediaInputRef = useRef<HTMLInputElement>(null);
     const assetInputRef = useRef<HTMLInputElement>(null);
     const assets = useAssetStore((state) => state.assets);
     const addAsset = useAssetStore((state) => state.addAsset);
@@ -55,17 +60,16 @@ export default function AssetsPage() {
     const [isAssetOpen, setIsAssetOpen] = useState(false);
     const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
     const [deletingAsset, setDeletingAsset] = useState<Asset | null>(null);
-    const [reviewingAsset, setReviewingAsset] = useState<ImageAsset | null>(null);
-    const [reviewGroupName, setReviewGroupName] = useState("");
-    const [submittingReview, setSubmittingReview] = useState(false);
+    const [submittingReviewId, setSubmittingReviewId] = useState<string | null>(null);
     const [refreshingReviewId, setRefreshingReviewId] = useState<string | null>(null);
     const [formKind, setFormKind] = useState<AssetKind>("text");
     const [imageDraft, setImageDraft] = useState<ImageDraft>(null);
+    const [mediaDraft, setMediaDraft] = useState<MediaDraft>(null);
     const coverUrl = Form.useWatch("coverUrl", form) || "";
     const title = Form.useWatch("title", form) || "";
     const tags = Form.useWatch("tags", form) || [];
     const content = Form.useWatch("content", form) || "";
-    const validAssets = useMemo(() => assets.filter((asset) => asset.kind === "text" || asset.kind === "image" || asset.kind === "video"), [assets]);
+    const validAssets = useMemo(() => assets.filter((asset) => asset.kind === "text" || asset.kind === "image" || asset.kind === "video" || asset.kind === "audio"), [assets]);
 
     const filteredAssets = useMemo(() => {
         const query = keyword.trim().toLowerCase();
@@ -80,6 +84,7 @@ export default function AssetsPage() {
         const start = (page - 1) * pageSize;
         return filteredAssets.slice(start, start + pageSize);
     }, [filteredAssets, page, pageSize]);
+    const processingReviewIds = useMemo(() => volcengineReviewPollingKey(validAssets), [validAssets]);
 
     useEffect(() => {
         const maxPage = Math.max(1, Math.ceil(filteredAssets.length / pageSize));
@@ -89,6 +94,7 @@ export default function AssetsPage() {
     const openCreate = () => {
         setEditingAsset(null);
         setImageDraft(null);
+        setMediaDraft(null);
         setFormKind("text");
         form.setFieldsValue({ kind: "text", title: "", coverUrl: "", tags: [], source: "手动添加", note: "", content: "" });
         setIsAssetOpen(true);
@@ -98,6 +104,7 @@ export default function AssetsPage() {
         setEditingAsset(asset);
         setFormKind(asset.kind);
         setImageDraft(asset.kind === "image" ? asset.data : null);
+        setMediaDraft(asset.kind === "video" || asset.kind === "audio" ? asset.data : null);
         form.setFieldsValue({
             kind: asset.kind,
             title: asset.title,
@@ -124,12 +131,19 @@ export default function AssetsPage() {
         if (values.kind === "text") {
             const asset = { ...base, kind: "text" as const, data: { content: (values.content || "").trim() } };
             editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
-        } else {
+        } else if (values.kind === "image") {
             if (!imageDraft) {
                 message.error("请选择图片文件");
                 return;
             }
             const asset = { ...base, kind: "image" as const, data: imageDraft };
+            editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
+        } else {
+            if (!mediaDraft) {
+                message.error(values.kind === "video" ? "请选择视频文件" : "请选择音频文件");
+                return;
+            }
+            const asset = { ...base, kind: values.kind, data: mediaDraft } as Parameters<typeof addAsset>[0];
             editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
         }
 
@@ -152,14 +166,28 @@ export default function AssetsPage() {
         if (!form.getFieldValue("title")) form.setFieldValue("title", file.name);
     };
 
+    const readMediaFile = async (file?: File) => {
+        if (!file || (!file.type.startsWith("video/") && !file.type.startsWith("audio/"))) return;
+        const kind = file.type.startsWith("video/") ? "video" : "audio";
+        const media = await uploadMediaFile(file, kind);
+        const draft =
+            kind === "video"
+                ? { url: media.url, storageKey: media.storageKey, width: media.width || 1280, height: media.height || 720, bytes: media.bytes, mimeType: media.mimeType }
+                : { url: media.url, storageKey: media.storageKey, bytes: media.bytes, mimeType: media.mimeType };
+        setMediaDraft(draft);
+        setFormKind(kind);
+        form.setFieldValue("kind", kind);
+        if (!form.getFieldValue("title")) form.setFieldValue("title", file.name);
+    };
+
     const copyAssetText = async (asset: Asset) => {
         if (asset.kind !== "text") return;
         copyText(asset.data.content, "文本已复制");
     };
 
-    const downloadImage = (asset: Asset) => {
-        if (asset.kind !== "image" && asset.kind !== "video") return;
-        saveAs(asset.kind === "video" ? asset.data.url : asset.data.dataUrl, `${asset.title || "asset"}.${asset.data.mimeType.split("/")[1] || "png"}`);
+    const downloadMedia = (asset: Asset) => {
+        if (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio") return;
+        saveAs(asset.kind === "image" ? asset.data.dataUrl : asset.data.url, `${asset.title || "asset"}.${asset.data.mimeType.split("/")[1] || "bin"}`);
     };
 
     const exportAllAssets = async () => {
@@ -170,9 +198,72 @@ export default function AssetsPage() {
         await exportAssets(validAssets);
     };
 
-    const importAssetZip = async (file?: File) => {
+    const importAssetFile = async (file?: File) => {
         if (!file) return;
         try {
+            if (file.type.startsWith("image/")) {
+                const image = await uploadImage(file);
+                addAsset({
+                    kind: "image",
+                    title: fileTitle(file.name),
+                    coverUrl: image.url,
+                    tags: [],
+                    source: "本地导入",
+                    note: "",
+                    metadata: { source: "import" },
+                    data: {
+                        dataUrl: image.url,
+                        storageKey: image.storageKey,
+                        width: image.width,
+                        height: image.height,
+                        bytes: image.bytes,
+                        mimeType: image.mimeType,
+                    },
+                });
+                message.success("图片已导入");
+                return;
+            }
+            if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
+                const kind = file.type.startsWith("video/") ? "video" : "audio";
+                const media = await uploadMediaFile(file, kind);
+                const asset =
+                    kind === "video"
+                        ? {
+                              kind,
+                              title: fileTitle(file.name),
+                              coverUrl: "",
+                              tags: [],
+                              source: "本地导入",
+                              note: "",
+                              metadata: { source: "import" },
+                              data: {
+                                  url: media.url,
+                                  storageKey: media.storageKey,
+                                  width: media.width || 1280,
+                                  height: media.height || 720,
+                                  bytes: media.bytes,
+                                  mimeType: media.mimeType,
+                              },
+                          }
+                        : {
+                              kind,
+                              title: fileTitle(file.name),
+                              coverUrl: "",
+                              tags: [],
+                              source: "本地导入",
+                              note: "",
+                              metadata: { source: "import" },
+                              data: {
+                                  url: media.url,
+                                  storageKey: media.storageKey,
+                                  bytes: media.bytes,
+                                  mimeType: media.mimeType,
+                              },
+                          };
+                addAsset(asset as Parameters<typeof addAsset>[0]);
+                message.success(kind === "video" ? "视频已导入" : "音频已导入");
+                return;
+            }
             const importedAssets = await readAssetPackage(file);
             importedAssets.forEach((asset) => {
                 const payload = { ...asset } as Record<string, unknown>;
@@ -183,7 +274,7 @@ export default function AssetsPage() {
             });
             message.success(`已导入 ${importedAssets.length} 个素材`);
         } catch {
-            message.error("导入失败，请选择有效的素材压缩包");
+            message.error("导入失败，请选择有效的素材压缩包或媒体文件");
         } finally {
             if (assetInputRef.current) assetInputRef.current.value = "";
         }
@@ -205,76 +296,91 @@ export default function AssetsPage() {
         setPreviewAsset((current) => (current?.id === asset.id ? ({ ...current, metadata } as Asset) : current));
     };
 
-    const openReviewDialog = (asset: Asset) => {
+    const submitImageReview = async (asset: Asset) => {
         if (asset.kind !== "image") return;
-        setReviewingAsset(asset);
-        setReviewGroupName(asset.title || "我的素材");
-    };
-
-    const submitImageReview = async () => {
-        if (!reviewingAsset) return;
+        if (!volcengineAssetEnabled) {
+            message.warning("请先在配置里开启火山人像加白");
+            return;
+        }
         if (!token) {
             message.error("请先登录");
             return;
         }
-        setSubmittingReview(true);
+        setSubmittingReviewId(asset.id);
         try {
-            const storedBlob = reviewingAsset.data.storageKey ? await getImageBlob(reviewingAsset.data.storageKey) : null;
-            const blob = storedBlob || (await fetchImageBlob(reviewingAsset.data.dataUrl));
+            const storedBlob = asset.data.storageKey ? await getImageBlob(asset.data.storageKey) : null;
+            const blob = storedBlob || (await fetchImageBlob(asset.data.dataUrl));
             if (!blob) {
                 message.error("没有找到图片文件");
                 return;
             }
-            const saved = reviewingAsset.metadata?.volcengineAsset;
-            const ext = reviewingAsset.data.mimeType.split("/")[1] || "png";
-            const filename = `${(reviewingAsset.title || reviewingAsset.id).replace(/[\\/:*?"<>|]+/g, "_")}.${ext}`;
+            const saved = asset.metadata?.volcengineAsset;
             const result = await submitVolcengineImageAsset(token, {
                 file: blob,
-                filename,
-                assetTitle: reviewingAsset.title,
+                filename: buildVolcengineImageFilename(asset.title, asset.id, asset.data.mimeType),
+                assetTitle: asset.title,
                 groupId: saved?.groupId,
-                groupName: reviewGroupName.trim() || reviewingAsset.title || "我的素材",
+                groupName: asset.title || "我的素材",
             });
-            updateVolcengineMetadata(reviewingAsset, result);
+            updateVolcengineMetadata(asset, volcengineReviewMetadataFromSubmission(result));
             message.success("已提交火山审核");
-            setReviewingAsset(null);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "提交失败");
         } finally {
-            setSubmittingReview(false);
+            setSubmittingReviewId(null);
         }
     };
 
-    const refreshImageReview = async (asset: Asset) => {
+    const refreshImageReview = async (asset: Asset, options: { silent?: boolean; showProgress?: boolean } = {}) => {
         if (asset.kind !== "image" || !asset.metadata?.volcengineAsset?.assetId) return;
         if (!token) {
-            message.error("请先登录");
+            if (!options.silent) message.error("请先登录");
             return;
         }
-        setRefreshingReviewId(asset.id);
+        const showProgress = options.showProgress || !options.silent;
+        if (showProgress) setRefreshingReviewId(asset.id);
         try {
             const saved = asset.metadata.volcengineAsset;
             const status = await fetchVolcengineAssetStatus(token, {
                 assetId: saved.assetId,
                 projectName: saved.projectName,
             });
-            const next: VolcengineAssetMetadata = {
-                ...saved,
-                assetId: status.assetId || saved.assetId,
-                groupId: status.groupId || saved.groupId,
-                projectName: status.projectName || saved.projectName,
-                status: status.status || saved.status,
-                publicUrl: status.publicUrl || saved.publicUrl,
-                updatedAt: status.updatedAt || new Date().toISOString(),
-            };
+            const next: VolcengineAssetMetadata = mergeVolcengineReviewStatus(saved, status);
             updateVolcengineMetadata(asset, next);
-            message.success(`当前状态：${volcengineStatusLabel(next.status)}`);
+            const statusText = `当前状态：${volcengineStatusLabel(next.status)}${next.error ? `：${next.error}` : ""}`;
+            if (!options.silent) {
+                if (next.status === "Failed") message.error(statusText);
+                else message.success(statusText);
+            }
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "刷新失败");
+            if (!options.silent) message.error(error instanceof Error ? error.message : "刷新失败");
         } finally {
-            setRefreshingReviewId(null);
+            if (showProgress) setRefreshingReviewId((current) => (current === asset.id ? null : current));
         }
     };
+
+    useEffect(() => {
+        if (!token || !volcengineAssetEnabled || !processingReviewIds) return;
+        let cancelled = false;
+        let polling = false;
+        const pollProcessingReviews = async () => {
+            if (polling || cancelled) return;
+            polling = true;
+            for (const asset of validAssets) {
+                if (cancelled) break;
+                if (asset.kind === "image" && isVolcengineReviewProcessing(asset.metadata?.volcengineAsset)) {
+                    await refreshImageReview(asset, { silent: true, showProgress: true });
+                }
+            }
+            polling = false;
+        };
+        void pollProcessingReviews();
+        const timer = window.setInterval(() => void pollProcessingReviews(), 3000);
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, [processingReviewIds, token, volcengineAssetEnabled, validAssets]);
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-background text-stone-900 dark:text-stone-100">
@@ -282,7 +388,7 @@ export default function AssetsPage() {
                 <div className="pb-8">
                     <div className="mx-auto max-w-5xl text-center">
                         <h1 className="text-4xl font-semibold tracking-tight text-stone-950 dark:text-stone-100">我的素材</h1>
-                        <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">收藏常用文本和图片，按类型、标题和标签快速查找。</p>
+                        <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">收藏常用文本、图片、视频和音频，按类型、标题和标签快速查找。</p>
                     </div>
 
                     <div className="mx-auto mt-8 w-full max-w-2xl">
@@ -353,14 +459,14 @@ export default function AssetsPage() {
                             <AssetCard
                                 key={asset.id}
                                 asset={asset}
-                                volcengineAssetEnabled={volcengineAssetEnabled}
                                 refreshingReview={refreshingReviewId === asset.id}
                                 onOpen={() => setPreviewAsset(asset)}
                                 onEdit={() => openEdit(asset)}
                                 onCopy={copyAssetText}
-                                onDownload={downloadImage}
+                                onDownload={downloadMedia}
                                 onDelete={() => setDeletingAsset(asset)}
-                                onReview={() => openReviewDialog(asset)}
+                                submittingReview={submittingReviewId === asset.id}
+                                onReview={() => void submitImageReview(asset)}
                                 onRefreshReview={() => void refreshImageReview(asset)}
                             />
                         ))}
@@ -392,8 +498,21 @@ export default function AssetsPage() {
                                 options={[
                                     { label: "文本", value: "text" },
                                     { label: "图片", value: "image" },
+                                    { label: "视频", value: "video" },
+                                    { label: "音频", value: "audio" },
                                 ]}
-                                onChange={(value) => setFormKind(value)}
+                                onChange={(value) => {
+                                    setFormKind(value);
+                                    if (value === "text") {
+                                        setImageDraft(null);
+                                        setMediaDraft(null);
+                                    }
+                                    if (value === "image") setMediaDraft(null);
+                                    if (value === "video" || value === "audio") {
+                                        setImageDraft(null);
+                                        setMediaDraft(null);
+                                    }
+                                }}
                             />
                         </Form.Item>
                         <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
@@ -422,7 +541,7 @@ export default function AssetsPage() {
                             <Form.Item name="content" label="文本内容" rules={[{ required: true, message: "请输入文本内容" }]}>
                                 <Input.TextArea rows={8} placeholder="保存提示词、说明文案、参考描述等文本素材" />
                             </Form.Item>
-                        ) : (
+                        ) : formKind === "image" ? (
                             <Form.Item label="图片内容" required>
                                 <div className="rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700">
                                     <Button icon={<Upload className="size-4" />} onClick={() => imageInputRef.current?.click()}>
@@ -439,12 +558,35 @@ export default function AssetsPage() {
                                     )}
                                 </div>
                             </Form.Item>
+                        ) : (
+                            <Form.Item label={formKind === "video" ? "视频内容" : "音频内容"} required>
+                                <div className="rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700">
+                                    <Button icon={<Upload className="size-4" />} onClick={() => mediaInputRef.current?.click()}>
+                                        {formKind === "video" ? "选择视频文件" : "选择音频文件"}
+                                    </Button>
+                                    {mediaDraft ? (
+                                        <Typography.Text type="secondary" className="ml-3 text-xs">
+                                            {formatBytes(mediaDraft.bytes)} · {mediaDraft.mimeType}
+                                        </Typography.Text>
+                                    ) : (
+                                        <Typography.Text type="secondary" className="ml-3 text-xs">
+                                            {formKind === "video" ? "未选择视频" : "未选择音频"}
+                                        </Typography.Text>
+                                    )}
+                                </div>
+                            </Form.Item>
                         )}
                     </Form>
                     <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 dark:border-stone-800 dark:bg-stone-950">
                         <Typography.Text strong>预览</Typography.Text>
                         <div className="mt-3 overflow-hidden rounded-lg border border-stone-200 bg-background dark:border-stone-800">
-                            {coverUrl || imageDraft?.dataUrl ? (
+                            {formKind === "video" && mediaDraft ? (
+                                <video src={mediaDraft.url} controls className="aspect-[4/3] w-full bg-black object-contain" />
+                            ) : formKind === "audio" && mediaDraft ? (
+                                <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 dark:bg-stone-900">
+                                    <audio src={mediaDraft.url} controls className="w-full" />
+                                </div>
+                            ) : coverUrl || imageDraft?.dataUrl ? (
                                 <img src={coverUrl || imageDraft?.dataUrl} alt="" className="aspect-[4/3] w-full object-cover" />
                             ) : (
                                 <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm text-stone-500 dark:bg-stone-900">{content || "暂无封面"}</div>
@@ -488,41 +630,30 @@ export default function AssetsPage() {
                         event.target.value = "";
                     }}
                 />
+                <input
+                    ref={mediaInputRef}
+                    type="file"
+                    accept={formKind === "audio" ? "audio/*" : "video/*"}
+                    className="hidden"
+                    onChange={(event) => {
+                        void readMediaFile(event.target.files?.[0]);
+                        event.target.value = "";
+                    }}
+                />
             </Modal>
 
             <AssetDrawer
                 asset={previewAsset}
-                volcengineAssetEnabled={volcengineAssetEnabled}
                 refreshingReview={previewAsset ? refreshingReviewId === previewAsset.id : false}
                 onClose={() => setPreviewAsset(null)}
                 onCopy={copyAssetText}
-                onDownload={downloadImage}
-                onReview={openReviewDialog}
+                onDownload={downloadMedia}
+                submittingReview={previewAsset ? submittingReviewId === previewAsset.id : false}
+                onReview={(asset) => void submitImageReview(asset)}
                 onRefreshReview={(asset) => void refreshImageReview(asset)}
             />
 
-            <input ref={assetInputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importAssetZip(event.target.files?.[0])} />
-
-            <Modal title="提交火山人像加白" open={Boolean(reviewingAsset)} onCancel={() => setReviewingAsset(null)} onOk={() => void submitImageReview()} confirmLoading={submittingReview} okText="提交审核" cancelText="取消" destroyOnHidden>
-                <div className="space-y-4">
-                    <Typography.Paragraph type="secondary" className="!mb-0">
-                        仅提交你合法拥有并有权使用的虚拟人像素材。提交后素材会进入火山方舟私域虚拟人像素材资产库，状态变为 Active 后才可用于视频生成。
-                    </Typography.Paragraph>
-                    <Form layout="vertical" requiredMark={false}>
-                        <Form.Item label="素材组名称">
-                            <Input value={reviewGroupName} placeholder="我的素材" onChange={(event) => setReviewGroupName(event.target.value)} />
-                        </Form.Item>
-                    </Form>
-                    {reviewingAsset ? (
-                        <div className="rounded-lg border border-stone-200 p-3 text-sm dark:border-stone-800">
-                            <Typography.Text strong>{reviewingAsset.title}</Typography.Text>
-                            <Typography.Text type="secondary" className="block text-xs">
-                                {reviewingAsset.data.width}x{reviewingAsset.data.height} · {formatBytes(reviewingAsset.data.bytes)}
-                            </Typography.Text>
-                        </div>
-                    ) : null}
-                </div>
-            </Modal>
+            <input ref={assetInputRef} type="file" accept="application/zip,.zip,image/*,video/*,audio/*" className="hidden" onChange={(event) => void importAssetFile(event.target.files?.[0])} />
 
             <Modal title="删除素材" open={Boolean(deletingAsset)} onCancel={() => setDeletingAsset(null)} onOk={confirmDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
                 确定删除「{deletingAsset?.title}」吗？删除后会从我的素材中移除。
@@ -533,24 +664,24 @@ export default function AssetsPage() {
 
 function AssetCard({
     asset,
-    volcengineAssetEnabled,
     refreshingReview,
     onOpen,
     onEdit,
     onCopy,
     onDownload,
     onDelete,
+    submittingReview,
     onReview,
     onRefreshReview,
 }: {
     asset: Asset;
-    volcengineAssetEnabled: boolean;
     refreshingReview: boolean;
     onOpen: () => void;
     onEdit: () => void;
     onCopy: (asset: Asset) => void;
     onDownload: (asset: Asset) => void;
     onDelete: () => void;
+    submittingReview: boolean;
     onReview: () => void;
     onRefreshReview: () => void;
 }) {
@@ -586,7 +717,7 @@ function AssetCard({
                             </Typography.Text>
                         </div>
                         <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-                            <Tag className="m-0 text-[11px]">{asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : "文本"}</Tag>
+                            <Tag className="m-0 text-[11px]">{assetKindLabel(asset.kind)}</Tag>
                             {asset.kind === "image" && asset.metadata?.volcengineAsset ? <VolcengineAssetTag status={asset.metadata.volcengineAsset.status} /> : null}
                         </div>
                     </div>
@@ -607,28 +738,26 @@ function AssetCard({
                 <Button size="small" onClick={onOpen}>
                     查看
                 </Button>
-                {asset.kind !== "video" ? (
-                    <Button size="small" icon={<PencilLine className="size-3.5" />} onClick={onEdit}>
-                        编辑
-                    </Button>
-                ) : null}
+                <Button size="small" icon={<PencilLine className="size-3.5" />} onClick={onEdit}>
+                    编辑
+                </Button>
                 {asset.kind === "text" ? (
                     <Button size="small" icon={<Copy className="size-3.5" />} onClick={() => void onCopy(asset)}>
                         复制
                     </Button>
                 ) : null}
-                {asset.kind === "image" || asset.kind === "video" ? (
+                {asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" ? (
                     <Button size="small" icon={<Download className="size-3.5" />} onClick={() => onDownload(asset)}>
                         下载
                     </Button>
                 ) : null}
-                {asset.kind === "image" && volcengineAssetEnabled ? (
+                {shouldShowVolcengineReviewAction(asset.kind) ? (
                     asset.metadata?.volcengineAsset?.assetId ? (
-                        <Button size="small" icon={<RefreshCw className="size-3.5" />} loading={refreshingReview} onClick={onRefreshReview}>
-                            刷新
+                        <Button size="small" icon={<RefreshCw className={`size-3.5 ${isVolcengineReviewProcessing(asset.metadata.volcengineAsset) && !refreshingReview ? "animate-spin" : ""}`} />} loading={refreshingReview} onClick={onRefreshReview}>
+                            {volcengineReviewActionLabel(asset.metadata.volcengineAsset.status)}
                         </Button>
                     ) : (
-                        <Button size="small" icon={<ShieldCheck className="size-3.5" />} onClick={onReview}>
+                        <Button size="small" icon={<ShieldCheck className="size-3.5" />} loading={submittingReview} onClick={onReview}>
                             加白
                         </Button>
                     )
@@ -643,20 +772,20 @@ function AssetCard({
 
 function AssetDrawer({
     asset,
-    volcengineAssetEnabled,
     refreshingReview,
     onClose,
     onCopy,
     onDownload,
+    submittingReview,
     onReview,
     onRefreshReview,
 }: {
     asset: Asset | null;
-    volcengineAssetEnabled: boolean;
     refreshingReview: boolean;
     onClose: () => void;
     onCopy: (asset: Asset) => void;
     onDownload: (asset: Asset) => void;
+    submittingReview: boolean;
     onReview: (asset: Asset) => void;
     onRefreshReview: (asset: Asset) => void;
 }) {
@@ -675,7 +804,7 @@ function AssetDrawer({
                             {asset.title}
                         </Typography.Title>
                         <Space size={[4, 4]} wrap>
-                            <Tag>{asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : "文本"}</Tag>
+                            <Tag>{assetKindLabel(asset.kind)}</Tag>
                             {(asset.tags || []).map((tag) => (
                                 <Tag key={tag}>{tag}</Tag>
                             ))}
@@ -690,6 +819,8 @@ function AssetDrawer({
                             <Typography.Paragraph className="mt-2 whitespace-pre-wrap">{asset.data.content}</Typography.Paragraph>
                         ) : asset.kind === "video" ? (
                             <video src={asset.data.url} controls className="mt-2 aspect-video w-full rounded-lg bg-black" />
+                        ) : asset.kind === "audio" ? (
+                            <audio src={asset.data.url} controls className="mt-2 w-full" />
                         ) : (
                             <Typography.Text className="mt-2 block">
                                 {asset.data.width}x{asset.data.height} · {formatBytes(asset.data.bytes)} · {asset.data.mimeType}
@@ -708,18 +839,18 @@ function AssetDrawer({
                                 复制文本
                             </Button>
                         ) : null}
-                        {asset.kind === "image" || asset.kind === "video" ? (
+                        {asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" ? (
                             <Button type="primary" icon={<Download className="size-4" />} onClick={() => onDownload(asset)}>
-                                {asset.kind === "video" ? "下载视频" : "下载图片"}
+                                {assetKindDownloadLabel(asset.kind)}
                             </Button>
                         ) : null}
-                        {asset.kind === "image" && volcengineAssetEnabled ? (
+                        {shouldShowVolcengineReviewAction(asset.kind) ? (
                             asset.metadata?.volcengineAsset?.assetId ? (
-                                <Button icon={<RefreshCw className="size-4" />} loading={refreshingReview} onClick={() => onRefreshReview(asset)}>
-                                    刷新审核状态
+                                <Button icon={<RefreshCw className={`size-4 ${isVolcengineReviewProcessing(asset.metadata.volcengineAsset) && !refreshingReview ? "animate-spin" : ""}`} />} loading={refreshingReview} onClick={() => onRefreshReview(asset)}>
+                                    {volcengineReviewActionLabel(asset.metadata.volcengineAsset.status)}
                                 </Button>
                             ) : (
-                                <Button icon={<ShieldCheck className="size-4" />} onClick={() => onReview(asset)}>
+                                <Button icon={<ShieldCheck className="size-4" />} loading={submittingReview} onClick={() => onReview(asset)}>
                                     提交加白
                                 </Button>
                             )
@@ -736,6 +867,11 @@ function AssetDrawer({
                             <Typography.Text type="secondary" className="block text-xs">
                                 素材组：{asset.metadata.volcengineAsset.groupId} · 项目：{asset.metadata.volcengineAsset.projectName}
                             </Typography.Text>
+                            {asset.metadata.volcengineAsset.error ? (
+                                <Typography.Text type="danger" className="mt-2 block break-words text-xs">
+                                    失败原因：{asset.metadata.volcengineAsset.error}
+                                </Typography.Text>
+                            ) : null}
                         </div>
                     ) : null}
                 </div>
@@ -771,6 +907,13 @@ function volcengineStatusLabel(status: string) {
     return status || "未知";
 }
 
+function volcengineReviewActionLabel(status: string) {
+    if (status === "Processing") return "自动刷新中";
+    if (status === "Active") return "已加白";
+    if (status === "Failed") return "审核失败";
+    return "查看状态";
+}
+
 async function fetchImageBlob(url: string) {
     if (!url) return null;
     const response = await fetch(url);
@@ -779,9 +922,27 @@ async function fetchImageBlob(url: string) {
 
 function assetSummary(asset: Asset) {
     if (asset.kind === "text") return asset.data.content;
+    if (asset.kind === "audio") return `${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
     return `${asset.data.width}x${asset.data.height} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
 }
 
 function assetSearchText(asset: Asset) {
     return [asset.title, asset.source || "", asset.note || "", (asset.tags || []).join(" "), asset.kind === "text" ? asset.data.content : asset.data.mimeType].join(" ").toLowerCase();
+}
+
+function assetKindLabel(kind: AssetKind) {
+    if (kind === "image") return "图片";
+    if (kind === "video") return "视频";
+    if (kind === "audio") return "音频";
+    return "文本";
+}
+
+function assetKindDownloadLabel(kind: AssetKind) {
+    if (kind === "video") return "下载视频";
+    if (kind === "audio") return "下载音频";
+    return "下载图片";
+}
+
+function fileTitle(filename: string) {
+    return filename.replace(/\.[^.]+$/, "") || "未命名素材";
 }

@@ -4,9 +4,12 @@ import { dataUrlToFile } from "@/lib/image-utils";
 import { imageToDataUrl } from "@/services/image-storage";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { AI_REQUEST_TIMEOUT_MS, AI_VIDEO_CONTENT_TIMEOUT_MS, AI_VIDEO_MAX_POLL_ATTEMPTS, AI_VIDEO_POLL_INTERVAL_MS, aiApiUrl, aiHeaders, delay, normalizeAiError, refreshRemoteUser } from "@/services/api/ai-provider";
-import { buildSeedanceVideoTaskPayload } from "@/services/api/video-reference";
+import { isRemoteOrInlineMediaUrl, normalizeSeedanceRatio, normalizeSeedanceResolution, normalizeSeedanceSeed, normalizeVideoResolution, normalizeVideoSeconds, normalizeVideoSize } from "@/services/api/video-normalizers";
+import { buildSeedanceVideoTaskPayload, seedanceAssetURIFromImageReference, type SeedanceImageReferenceInput, type SeedanceOrderedReferenceInput } from "@/services/api/video-reference";
 import { type AiConfig } from "@/stores/use-config-store";
+import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
+import type { ReferenceAudio } from "@/types/audio";
 import type { ReferenceVideo } from "@/types/video";
 
 export type NormalizedVideoTaskStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
@@ -16,6 +19,7 @@ export type NormalizedVideoTask = {
     status: NormalizedVideoTaskStatus;
     rawStatus?: string;
     videoUrl?: string;
+    lastFrameUrl?: string;
     errorMessage?: string;
     createdAt?: number;
     updatedAt?: number;
@@ -33,7 +37,9 @@ type VideoGenerationOptions = {
     onStatus?: (task: NormalizedVideoTask) => void;
 };
 
-export type VideoGenerationReferences = ReferenceImage[] | { images?: ReferenceImage[]; videos?: ReferenceVideo[] };
+export type VideoGenerationReferenceInput = { type: "image"; nodeId?: string; image: ReferenceImage } | { type: "video"; nodeId?: string; video: ReferenceVideo } | { type: "audio"; nodeId?: string; audio: ReferenceAudio };
+
+export type VideoGenerationReferences = ReferenceImage[] | { images?: ReferenceImage[]; videos?: ReferenceVideo[]; audios?: ReferenceAudio[]; inputs?: VideoGenerationReferenceInput[] };
 
 type VideoResponse = {
     id: string;
@@ -55,89 +61,21 @@ type VideoResponse = {
 };
 type ApiVideoResponse = VideoResponse | { code?: number; data?: VideoResponse | null; msg?: string };
 
-type ArkVideoResponse = {
-    id?: string;
-    task_id?: string;
-    status?: string;
-    video_url?: string;
-    url?: string;
-    content?: { video_url?: string; url?: string } | Array<{ video_url?: string; url?: string }>;
-    output?: { video_url?: string; url?: string } | Array<{ video_url?: string; url?: string }>;
-    result?: { video_url?: string; url?: string } | Array<{ video_url?: string; url?: string }>;
-    error?: { code?: string; message?: string };
-    message?: string;
-    msg?: string;
-    fail_reason?: string;
-    error_code?: string;
-    created_at?: number;
-    updated_at?: number;
-    execution_expires_after?: number;
-    video_url_expires_at?: number;
-    seed?: number;
-    resolution?: string;
-    ratio?: string;
-    duration?: number;
-    generate_audio?: boolean;
-    watermark?: boolean;
-    data?: ArkVideoResponse;
-    task?: ArkVideoResponse;
-};
-
 export async function requestVideoGeneration(config: AiConfig, prompt: string, references: VideoGenerationReferences = [], options: VideoGenerationOptions = {}) {
-    if (config.channelMode === "local" && config.videoProtocol === "volcengine-ark") {
-        return requestSeedanceVideoGeneration(config, prompt, references, options);
-    }
     return requestOpenAICompatibleVideoGeneration(config, prompt, references, options);
 }
 
-export async function createSeedanceVideoTask(config: AiConfig, prompt: string, references: VideoGenerationReferences = []) {
-    try {
-        const response = await axios.post<ArkVideoResponse>(aiApiUrl(config, "/contents/generations/tasks", "volcengine-ark"), await buildSeedanceVideoPayload(config, prompt, references), {
-            headers: aiHeaders(config, "application/json", "volcengine-ark"),
-            timeout: AI_REQUEST_TIMEOUT_MS,
-        });
-        return normalizeSeedanceVideoTask(response.data);
-    } catch (error) {
-        throw new Error(normalizeAiError(error, "视频任务创建失败"));
-    }
+export async function refreshVideoTask(config: AiConfig, taskId: string) {
+    return queryVideoTask(config, taskId, config.model || config.videoModel);
 }
 
-export async function querySeedanceVideoTask(config: AiConfig, taskId: string) {
-    try {
-        const response = await axios.get<ArkVideoResponse>(aiApiUrl(config, `/contents/generations/tasks/${encodeURIComponent(taskId)}`, "volcengine-ark"), {
-            headers: aiHeaders(config, undefined, "volcengine-ark"),
-            timeout: AI_REQUEST_TIMEOUT_MS,
-        });
-        return normalizeSeedanceVideoTask(response.data);
-    } catch (error) {
-        throw new Error(normalizeAiError(error, "视频任务查询失败"));
-    }
+export async function fetchVideoTaskContent(config: AiConfig, task: NormalizedVideoTask) {
+    const blob = await fetchVideoContent(config, config.model || config.videoModel, task);
+    await assertVideoBlob(blob);
+    return blob;
 }
 
-export function normalizeSeedanceVideoTask(payload: ArkVideoResponse): NormalizedVideoTask {
-    const task = payload.data || payload.task || payload;
-    const id = task.id || task.task_id || "";
-    if (!id) throw new Error("视频接口没有返回任务 ID");
-    return {
-        id,
-        status: normalizeVideoTaskStatus(task.status),
-        rawStatus: task.status,
-        videoUrl: readTaskVideoUrl(task),
-        errorMessage: formatTaskError(task.error?.message || task.message || task.msg || task.fail_reason, task.error?.code || task.error_code),
-        createdAt: task.created_at,
-        updatedAt: task.updated_at,
-        executionExpiresAfter: task.execution_expires_after,
-        videoUrlExpiresAt: task.video_url_expires_at || calculateVideoUrlExpiresAt(task.updated_at || task.created_at, task.execution_expires_after),
-        seed: task.seed,
-        resolution: task.resolution,
-        ratio: task.ratio,
-        duration: task.duration,
-        generateAudio: task.generate_audio,
-        watermark: task.watermark,
-    };
-}
-
-function normalizeOpenAICompatibleVideoTask(payload: VideoResponse): NormalizedVideoTask {
+function normalizeVideoTask(payload: VideoResponse): NormalizedVideoTask {
     return {
         id: payload.id,
         status: normalizeVideoTaskStatus(payload.status),
@@ -191,16 +129,12 @@ function calculateVideoUrlExpiresAt(base?: number, expiresAfter?: number) {
     return base && expiresAfter ? base + expiresAfter : undefined;
 }
 
-function isSeedanceProtocol(config: AiConfig) {
-    return config.videoProtocol === "volcengine-ark";
-}
-
 async function requestOpenAICompatibleVideoGeneration(config: AiConfig, prompt: string, references: VideoGenerationReferences, options: VideoGenerationOptions) {
     const model = config.model || config.videoModel;
-    const { images } = normalizeVideoGenerationReferences(references);
+    const normalizedReferences = normalizeVideoGenerationReferences(references);
     try {
-        const task = await pollVideoTask(await createOpenAICompatibleVideoTask(config, prompt, images, model), (taskId) => queryOpenAICompatibleVideoTask(config, taskId, model), options);
-        const blob = await fetchOpenAICompatibleVideoContent(config, model, task);
+        const task = await pollVideoTask(await createVideoTask(config, prompt, normalizedReferences, model), (taskId) => queryVideoTask(config, taskId, model), options);
+        const blob = await fetchVideoContent(config, model, task);
         await assertVideoBlob(blob);
         refreshRemoteUser(config);
         return blob;
@@ -209,35 +143,35 @@ async function requestOpenAICompatibleVideoGeneration(config: AiConfig, prompt: 
     }
 }
 
-async function requestSeedanceVideoGeneration(config: AiConfig, prompt: string, references: VideoGenerationReferences, options: VideoGenerationOptions) {
-    try {
-        const task = await pollVideoTask(await createSeedanceVideoTask(config, prompt, references), (taskId) => querySeedanceVideoTask(config, taskId), options);
-        const blob = await fetchSeedanceVideoContent(task);
-        await assertVideoBlob(blob);
-        return blob;
-    } catch (error) {
-        throw new Error(normalizeAiError(error, "视频生成失败"));
-    }
-}
-
-async function createOpenAICompatibleVideoTask(config: AiConfig, prompt: string, references: ReferenceImage[], model: string) {
-    const body = await buildOpenAICompatibleVideoPayload(config, prompt, references, model);
-    const response = await axios.post<ApiVideoResponse>(aiApiUrl(config, "/videos"), body, {
-        headers: aiHeaders(config),
+async function createVideoTask(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string) {
+    const body = await buildVideoPayload(config, prompt, references, model);
+    const url = config.channelMode === "local" ? `/api/v1/videos` : aiApiUrl(config, "/videos");
+    const localToken = useUserStore.getState().token;
+    const response = await axios.post<ApiVideoResponse>(url, body, {
+        headers:
+            config.channelMode === "local"
+                ? { Authorization: `Bearer ${localToken}`, ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }) }
+                : { ...aiHeaders(config), ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }) },
         timeout: AI_REQUEST_TIMEOUT_MS,
     });
-    const task = normalizeOpenAICompatibleVideoTask(unwrapVideoResponse(response.data));
+    const task = normalizeVideoTask(unwrapVideoResponse(response.data));
     if (!task.id) throw new Error("视频接口没有返回任务 ID");
     return task;
 }
 
-async function queryOpenAICompatibleVideoTask(config: AiConfig, taskId: string, model: string) {
-    const response = await axios.get<ApiVideoResponse>(aiApiUrl(config, `/videos/${taskId}`), {
-        headers: aiHeaders(config),
-        params: config.channelMode === "remote" ? { model } : undefined,
+async function queryVideoTask(config: AiConfig, taskId: string, model: string) {
+    const url = config.channelMode === "local" ? `/api/v1/videos/${taskId}` : aiApiUrl(config, `/videos/${taskId}`);
+    const params: Record<string, string> = {};
+    if (config.channelMode === "remote") {
+        params.model = model;
+    }
+    const localToken = useUserStore.getState().token;
+    const response = await axios.get<ApiVideoResponse>(url, {
+        headers: config.channelMode === "local" ? localVideoHeaders(config, localToken) : aiHeaders(config),
+        params,
         timeout: AI_REQUEST_TIMEOUT_MS,
     });
-    return normalizeOpenAICompatibleVideoTask(unwrapVideoResponse(response.data));
+    return normalizeVideoTask(unwrapVideoResponse(response.data));
 }
 
 async function pollVideoTask(initialTask: NormalizedVideoTask, queryTask: (taskId: string) => Promise<NormalizedVideoTask>, options: VideoGenerationOptions) {
@@ -253,7 +187,14 @@ async function pollVideoTask(initialTask: NormalizedVideoTask, queryTask: (taskI
     return task;
 }
 
-async function buildOpenAICompatibleVideoPayload(config: AiConfig, prompt: string, references: ReferenceImage[], model: string) {
+async function buildVideoPayload(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string) {
+    if (config.channelMode === "local" && config.videoProtocol === "volcengine-ark") {
+        return {
+            ...(await buildSeedanceVideoPayload(config, prompt, references)),
+            _volcengine_api_key: config.volcengineApiKey,
+            _volcengine_base_url: config.volcengineBaseUrl,
+        };
+    }
     const body = new FormData();
     body.append("model", model);
     body.append("prompt", prompt);
@@ -261,31 +202,94 @@ async function buildOpenAICompatibleVideoPayload(config: AiConfig, prompt: strin
     if (normalizeVideoSize(config.size)) body.append("size", normalizeVideoSize(config.size)!);
     body.append("resolution_name", normalizeVideoResolution(config.vquality));
     body.append("preset", "normal");
-    if (isSeedanceProtocol(config)) {
-        body.append("duration", String(normalizeSeedanceDuration(config.videoSeconds)));
-        body.append("ratio", normalizeSeedanceRatio(config.size));
-        body.append("resolution", normalizeSeedanceResolution(config.vquality));
-        appendSeedanceControls(body, config);
+    body.append("duration", normalizeVideoSeconds(config.videoSeconds));
+    body.append("ratio", normalizeSeedanceRatio(config.size));
+    body.append("resolution", normalizeSeedanceResolution(config.vquality));
+    body.append("generate_audio", String(config.videoGenerateAudio === "true"));
+    body.append("watermark", String(config.videoWatermark === "true"));
+    const seed = normalizeSeedanceSeed(config.videoSeed);
+    if (seed !== undefined) body.append("seed", String(seed));
+    if (config.channelMode === "local" && config.videoProtocol === "volcengine-ark") {
+        body.append("_volcengine_api_key", config.volcengineApiKey);
+        body.append("_volcengine_base_url", config.volcengineBaseUrl);
     }
-    const files = await Promise.all(references.slice(0, 7).map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
+    const files = await Promise.all(references.images.slice(0, 7).map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
     files.forEach((file) => body.append("input_reference[]", file));
     return body;
 }
 
-async function buildSeedanceVideoPayload(config: AiConfig, prompt: string, references: VideoGenerationReferences) {
-    const { images, videos } = normalizeVideoGenerationReferences(references);
-    const imageUrls = (await Promise.all(images.slice(0, 9).map((image) => imageToDataUrl(image)))).filter((url): url is string => Boolean(url));
-    const videoUrls = (await Promise.all(videos.slice(0, 3).map((video) => videoToDataUrl(video)))).filter((url): url is string => Boolean(url));
-    return buildSeedanceVideoTaskPayload(config, prompt, imageUrls, videoUrls);
+type NormalizedVideoReferences = {
+    images: ReferenceImage[];
+    videos: ReferenceVideo[];
+    audios: ReferenceAudio[];
+    inputs: VideoGenerationReferenceInput[];
+};
+
+function normalizeVideoGenerationReferences(references: VideoGenerationReferences): NormalizedVideoReferences {
+    if (Array.isArray(references)) {
+        return {
+            images: references,
+            videos: [],
+            audios: [],
+            inputs: references.map((image) => ({ type: "image", nodeId: image.id, image })),
+        };
+    }
+    const images = references.images || [];
+    const videos = references.videos || [];
+    const audios = references.audios || [];
+    return {
+        images,
+        videos,
+        audios,
+        inputs: references.inputs?.length
+            ? references.inputs
+            : [
+                  ...images.map((image) => ({ type: "image" as const, nodeId: image.id, image })),
+                  ...videos.map((video) => ({ type: "video" as const, nodeId: video.id, video })),
+                  ...audios.map((audio) => ({ type: "audio" as const, nodeId: audio.id, audio })),
+              ],
+    };
 }
 
-function normalizeVideoGenerationReferences(references: VideoGenerationReferences) {
-    return Array.isArray(references) ? { images: references, videos: [] } : { images: references.images || [], videos: references.videos || [] };
+async function buildSeedanceVideoPayload(config: AiConfig, prompt: string, references: NormalizedVideoReferences) {
+    if (references.inputs.length) {
+        const orderedReferences = (await Promise.all(references.inputs.slice(0, 12).map(seedanceOrderedReferenceInput))).filter((item): item is SeedanceOrderedReferenceInput => Boolean(item));
+        return buildSeedanceVideoTaskPayload(config, prompt, orderedReferences);
+    }
+    const imageUrls = (await Promise.all(references.images.slice(0, 9).map(seedanceImageReferenceInput))).filter((image): image is SeedanceImageReferenceInput => Boolean(image));
+    const videoUrls = (await Promise.all(references.videos.slice(0, 3).map(videoToDataUrl))).filter((url): url is string => Boolean(url));
+    const audioUrls = (await Promise.all(references.audios.slice(0, 3).map(audioToDataUrl))).filter((url): url is string => Boolean(url));
+    return buildSeedanceVideoTaskPayload(config, prompt, imageUrls, videoUrls, audioUrls);
+}
+
+async function seedanceImageReferenceInput(image: ReferenceImage): Promise<SeedanceImageReferenceInput | null> {
+    const assetUri = seedanceAssetURIFromImageReference(image);
+    const url = assetUri || (await imageToDataUrl(image));
+    return url ? { url, role: image.seedanceRole || "reference_image" } : null;
+}
+
+async function seedanceOrderedReferenceInput(input: VideoGenerationReferenceInput): Promise<SeedanceOrderedReferenceInput | null> {
+    if (input.type === "image") {
+        const image = await seedanceImageReferenceInput(input.image);
+        return image && typeof image !== "string" ? { type: "image", url: image.url, role: image.role } : null;
+    }
+    if (input.type === "video") {
+        const url = await videoToDataUrl(input.video);
+        return url ? { type: "video", url } : null;
+    }
+    const url = await audioToDataUrl(input.audio);
+    return url ? { type: "audio", url } : null;
 }
 
 async function videoToDataUrl(video: ReferenceVideo) {
     const url = video.url || (await resolveMediaUrl(video.storageKey, ""));
-    if (!url || url.startsWith("data:")) return url;
+    if (!url || isRemoteOrInlineMediaUrl(url)) return url;
+    return blobToDataUrl(await (await fetch(url)).blob());
+}
+
+async function audioToDataUrl(audio: ReferenceAudio) {
+    const url = audio.url || (await resolveMediaUrl(audio.storageKey, ""));
+    if (!url || isRemoteOrInlineMediaUrl(url)) return url;
     return blobToDataUrl(await (await fetch(url)).blob());
 }
 
@@ -293,42 +297,29 @@ function blobToDataUrl(blob: Blob) {
     return new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result || ""));
-        reader.onerror = () => reject(new Error("读取视频失败"));
+        reader.onerror = () => reject(new Error("读取媒体失败"));
         reader.readAsDataURL(blob);
     });
 }
 
-function readTaskVideoUrl(task: ArkVideoResponse): string | undefined {
-    if (task.video_url || task.url) return task.video_url || task.url;
-    for (const value of [task.content, task.output, task.result]) {
-        if (!value) continue;
-        if (Array.isArray(value)) {
-            const item = value.find((entry) => entry.video_url || entry.url);
-            if (item) return item.video_url || item.url;
-        } else if (value.video_url || value.url) {
-            return value.video_url || value.url;
-        }
+async function fetchVideoContent(config: AiConfig, model: string, task: NormalizedVideoTask) {
+    if (config.channelMode === "local" && task.videoUrl) {
+        return fetchVideoViaProxy(config, task.id);
     }
-    return undefined;
+    return fetchVideoContentDirect(config, model, task.id);
 }
 
-function appendSeedanceControls(body: FormData, config: AiConfig) {
-    body.append("generate_audio", String(config.videoGenerateAudio === "true"));
-    body.append("watermark", String(config.videoWatermark === "true"));
-    const seed = normalizeSeedanceSeed(config.videoSeed);
-    if (seed !== undefined) body.append("seed", String(seed));
+async function fetchVideoViaProxy(config: AiConfig, taskId: string) {
+    const localToken = useUserStore.getState().token;
+    const content = await axios.get<Blob>(`/api/v1/videos/${taskId}/content`, {
+        headers: localVideoHeaders(config, localToken),
+        responseType: "blob",
+        timeout: AI_VIDEO_CONTENT_TIMEOUT_MS,
+    });
+    return content.data;
 }
 
-async function fetchOpenAICompatibleVideoContent(config: AiConfig, model: string, task: NormalizedVideoTask) {
-    return config.channelMode === "local" && task.videoUrl ? fetchVideoBlob(task.videoUrl) : fetchVideoContent(config, model, task.id);
-}
-
-async function fetchSeedanceVideoContent(task: NormalizedVideoTask) {
-    if (!task.videoUrl) throw new Error("视频任务没有返回可下载地址");
-    return fetchVideoBlob(task.videoUrl);
-}
-
-async function fetchVideoContent(config: AiConfig, model: string, taskId: string) {
+async function fetchVideoContentDirect(config: AiConfig, model: string, taskId: string) {
     const content = await axios.get<Blob>(aiApiUrl(config, `/videos/${taskId}/content`), {
         headers: aiHeaders(config),
         params: config.channelMode === "remote" ? { model } : undefined,
@@ -338,57 +329,16 @@ async function fetchVideoContent(config: AiConfig, model: string, taskId: string
     return content.data;
 }
 
-async function fetchVideoBlob(url: string) {
-    const content = await axios.get<Blob>(url, { responseType: "blob", timeout: AI_VIDEO_CONTENT_TIMEOUT_MS });
-    return content.data;
-}
-
-function normalizeVideoSeconds(value: string) {
-    const seconds = Math.floor(Number(value) || 6);
-    return String(Math.max(1, Math.min(20, seconds)));
-}
-
-function normalizeVideoSize(value: string) {
-    if (value === "auto") return null;
-    const size = value || "1280x720";
-    if (/^\d+x\d+$/.test(size)) return size;
-    return ["9:16", "2:3", "3:4"].includes(size) ? "720x1280" : "1280x720";
-}
-
-function normalizeVideoResolution(value: string) {
-    if (value === "low") return "480p";
-    if (value === "auto" || value === "high" || value === "medium") return "720p";
-    const resolution = value.replace(/p$/i, "") || "720";
-    return `${resolution}p`;
-}
-
-function normalizeSeedanceDuration(value: string) {
-    const seconds = Math.floor(Number(value) || 5);
-    if (seconds <= 5) return 5;
-    if (seconds <= 10) return 10;
-    return 15;
-}
-
-function normalizeSeedanceRatio(value: string) {
-    if (value === "auto" || value === "adaptive") return "adaptive";
-    if (["16:9", "9:16", "1:1", "4:3", "3:4"].includes(value)) return value;
-    const size = normalizeVideoSize(value);
-    if (!size) return "16:9";
-    if (["16:9", "9:16", "1:1", "4:3", "3:4"].includes(size)) return size;
-    if (size === "1024x1024") return "1:1";
-    if (size === "720x1280" || size === "1024x1792") return "9:16";
-    if (size === "1280x720" || size === "1792x1024") return "16:9";
-    return size.includes("x") && Number(size.split("x")[0]) < Number(size.split("x")[1]) ? "9:16" : "16:9";
-}
-
-function normalizeSeedanceResolution(value: string) {
-    const resolution = Number(normalizeVideoResolution(value).replace(/p$/i, "")) || 720;
-    return resolution >= 1080 ? "1080p" : "720p";
-}
-
-function normalizeSeedanceSeed(value: string) {
-    const seed = Math.floor(Number(value));
-    return Number.isFinite(seed) && value.trim() ? seed : undefined;
+function localVideoHeaders(config: AiConfig, token: string) {
+    return {
+        Authorization: `Bearer ${token}`,
+        ...(config.videoProtocol === "volcengine-ark"
+            ? {
+                  "X-Volcengine-Api-Key": config.volcengineApiKey,
+                  "X-Volcengine-Base-Url": config.volcengineBaseUrl,
+              }
+            : {}),
+    };
 }
 
 function unwrapVideoResponse(payload: ApiVideoResponse): VideoResponse {

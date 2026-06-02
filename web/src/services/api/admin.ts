@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, compactApiParams } from "@/services/api/request";
+import { apiDelete, apiGet, apiPost, apiPostForm, compactApiParams } from "@/services/api/request";
 import type { Prompt, PromptListResponse } from "@/services/api/prompts";
 
 export type AdminPromptCategory = {
@@ -50,10 +50,60 @@ export type AdminCreditLogListResponse = {
     total: number;
 };
 
+export type AdminAITask = {
+    id: string;
+    userId: string;
+    kind: string;
+    taskType: string;
+    actionType: string;
+    provider: string;
+    protocol: string;
+    model: string;
+    path: string;
+    status: string;
+    credits: number;
+    creditsRefunded: number;
+    upstreamTaskId: string;
+    rawStatus: string;
+    videoUrl: string;
+    videoUrlExpiresAt: number;
+    errorCode: string;
+    requestJson: string;
+    responseJson: string;
+    errorMessage: string;
+    finishedAt: string;
+    refundedAt: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type AdminAITaskListResponse = {
+    items: AdminAITask[];
+    total: number;
+};
+
+export type AdminAITaskDetailResponse = {
+    task: AdminAITask;
+    user: AdminUser;
+    creditLogs: AdminCreditLog[];
+};
+
 export type AdminUserQuery = {
     keyword?: string;
     page?: number;
     pageSize?: number;
+};
+
+export type AdminAITaskQuery = AdminUserQuery & {
+    user?: string;
+    status?: string;
+    kind?: string;
+    actionType?: string;
+    model?: string;
+    provider?: string;
+    upstreamTaskId?: string;
+    startAt?: string;
+    endAt?: string;
 };
 
 export async function fetchAdminUsers(token: string, query: AdminUserQuery = {}) {
@@ -84,6 +134,22 @@ export async function deleteAdminCreditLog(token: string, id: string) {
     return apiDelete<boolean>(`/api/admin/credit-logs/${encodeURIComponent(id)}`, token);
 }
 
+export async function fetchAdminAITasks(token: string, query: AdminAITaskQuery = {}) {
+    return apiGet<AdminAITaskListResponse>("/api/admin/ai-tasks", compactApiParams(query), token);
+}
+
+export async function fetchAdminAITask(token: string, id: string) {
+    return apiGet<AdminAITaskDetailResponse>(`/api/admin/ai-tasks/${encodeURIComponent(id)}`, undefined, token);
+}
+
+export async function refreshAdminAITask(token: string, id: string) {
+    return apiPost<AdminAITask>(`/api/admin/ai-tasks/${encodeURIComponent(id)}/refresh`, {}, token);
+}
+
+export async function refundAdminAITask(token: string, id: string) {
+    return apiPost<AdminAITask>(`/api/admin/ai-tasks/${encodeURIComponent(id)}/refund`, {}, token);
+}
+
 export async function fetchAdminPromptCategories(token: string) {
     return apiGet<AdminPromptCategory[]>("/api/admin/prompt-categories", undefined, token);
 }
@@ -103,15 +169,32 @@ export type AdminPromptQuery = {
 export type AdminAsset = {
     id: string;
     title: string;
-    type: "text" | "image" | "video";
+    type: "text" | "image" | "video" | "audio";
     coverUrl: string;
     tags: string[];
     category: string;
     description: string;
     content: string;
     url: string;
+    volcengineAssetId?: string;
+    volcengineGroupId?: string;
+    volcengineProjectName?: string;
+    volcengineStatus?: string;
+    volcengineError?: string;
+    volcenginePublicUrl?: string;
+    volcengineSubmittedAt?: string;
+    volcengineUpdatedAt?: string;
     createdAt: string;
     updatedAt: string;
+};
+
+export type AdminAssetUploadResult = {
+    type: AdminAsset["type"];
+    url: string;
+    coverUrl: string;
+    mimeType: string;
+    bytes: number;
+    filename: string;
 };
 
 export type AdminAssetListResponse = {
@@ -150,6 +233,20 @@ export async function fetchAdminAssets(token: string, query: AdminAssetQuery = {
 
 export async function saveAdminAsset(token: string, asset: Partial<AdminAsset>) {
     return apiPost<AdminAsset>("/api/admin/assets", asset, token);
+}
+
+export async function uploadAdminAssetMedia(token: string, file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return apiPostForm<AdminAssetUploadResult>("/api/admin/assets/upload", form, token);
+}
+
+export async function submitAdminAssetVolcengineReview(token: string, id: string) {
+    return apiPost<AdminAsset>(`/api/admin/assets/${encodeURIComponent(id)}/volcengine-review`, {}, token);
+}
+
+export async function refreshAdminAssetVolcengineReview(token: string, id: string) {
+    return apiPost<AdminAsset>(`/api/admin/assets/${encodeURIComponent(id)}/volcengine-review/refresh`, {}, token);
 }
 
 export async function deleteAdminAsset(token: string, id: string) {
@@ -191,6 +288,7 @@ export type AdminPrivateVolcengineAssetSettings = {
     secretKey: string;
     projectName: string;
     region: string;
+    assetGroupId: string;
     publicAssetBaseUrl: string;
 };
 

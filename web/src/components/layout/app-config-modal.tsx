@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { ModelPicker } from "@/components/model-picker";
 import { fetchAdminSettings, saveAdminSettings, type AdminPrivateVolcengineAssetSettings, type AdminSettings } from "@/services/api/admin";
 import { fetchImageModels } from "@/services/api/image";
-import { classifyAiModels, defaultConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { classifyAiModels, defaultConfig, resolveSeedanceRequestModel, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
 export function AppConfigModal() {
@@ -31,7 +31,8 @@ export function AppConfigModal() {
     const allowCustomChannel = modelChannel?.allowCustomChannel === true;
     const effectiveMode = allowCustomChannel ? config.channelMode : "remote";
     const modelConfig = effectiveMode === "remote" ? effectiveConfig : config;
-    const videoModel = effectiveMode === "local" && config.videoProtocol === "volcengine-ark" ? config.seedanceModel : modelConfig.videoModel;
+    const videoModel = effectiveMode === "local" && config.videoProtocol === "volcengine-ark" ? config.seedanceModel || config.seedanceEndpointId : modelConfig.videoModel;
+    const seedanceRequestModel = resolveSeedanceRequestModel(config);
     const isAdmin = user?.role === "admin";
 
     useEffect(() => {
@@ -72,7 +73,7 @@ export function AppConfigModal() {
 
     const finishConfig = async () => {
         const hasOpenAIConfig = Boolean(config.baseUrl.trim() && config.apiKey.trim());
-        const hasSeedanceConfig = Boolean(config.volcengineApiKey.trim() && config.seedanceModel.trim());
+        const hasSeedanceConfig = Boolean(config.volcengineApiKey.trim() && seedanceRequestModel);
         const hasProviderConfig = effectiveMode !== "local" || (config.videoProtocol === "volcengine-ark" ? hasSeedanceConfig : hasOpenAIConfig);
         const hasModelConfig = Boolean(modelConfig.imageModel.trim() && videoModel.trim() && modelConfig.textModel.trim());
         let savedVolcengineAsset = false;
@@ -215,11 +216,14 @@ export function AppConfigModal() {
                             <div className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
                                 <div className="mb-3">
                                     <div className="text-sm font-medium">火山方舟 Ark</div>
-                                    <div className="mt-1 text-xs text-stone-500">已预设 Seedance 任务地址，只需要填写 Ark API Key。</div>
+                                    <div className="mt-1 text-xs text-stone-500">已预设 Seedance 任务地址，调用时优先使用 Endpoint ID。</div>
                                 </div>
                                 <div className="mb-3 rounded-md bg-stone-100 px-2 py-1.5 text-xs text-stone-500 dark:bg-stone-900">{config.volcengineBaseUrl || defaultConfig.volcengineBaseUrl}</div>
-                                <Form.Item label="Ark API Key" className="mb-0">
+                                <Form.Item label="Ark API Key" className="mb-3">
                                     <Input.Password value={config.volcengineApiKey} placeholder="填写火山方舟 API Key" onChange={(event) => updateConfig("volcengineApiKey", event.target.value)} />
+                                </Form.Item>
+                                <Form.Item label="Seedance Endpoint ID" className="mb-0">
+                                    <Input value={config.seedanceEndpointId} placeholder="ep-20260524233518-kxgt4" onChange={(event) => updateConfig("seedanceEndpointId", event.target.value)} />
                                 </Form.Item>
                             </div>
                         </div>
@@ -255,8 +259,15 @@ export function AppConfigModal() {
                                 <Form.Item label="地域" className="mb-3">
                                     <Input value={volcengineAssetDraft.region} placeholder="cn-beijing" onChange={(event) => updateVolcengineAssetDraft("region", event.target.value)} />
                                 </Form.Item>
-                                <Form.Item label="公网素材访问地址" className="mb-0 md:col-span-2">
-                                    <Input value={volcengineAssetDraft.publicAssetBaseUrl} placeholder="https://example.com/uploaded-assets" onChange={(event) => updateVolcengineAssetDraft("publicAssetBaseUrl", event.target.value)} />
+                                <Form.Item label="素材组 ID" className="mb-3 md:col-span-2">
+                                    <Input value={volcengineAssetDraft.assetGroupId} placeholder="group-20260318033332-xxxxx" onChange={(event) => updateVolcengineAssetDraft("assetGroupId", event.target.value)} />
+                                </Form.Item>
+                                <Form.Item label="公网素材访问地址" className="mb-0 md:col-span-2" extra="填写火山 TOS 公网前缀时，提交加白前会自动上传到对应桶路径。">
+                                    <Input
+                                        value={volcengineAssetDraft.publicAssetBaseUrl}
+                                        placeholder="https://jiabaitong.tos-cn-beijing.volces.com/volcengine-assets"
+                                        onChange={(event) => updateVolcengineAssetDraft("publicAssetBaseUrl", event.target.value)}
+                                    />
                                 </Form.Item>
                             </div>
                         ) : (
@@ -282,7 +293,10 @@ export function AppConfigModal() {
                                     />
                                 ) : null}
                                 {effectiveMode === "local" && config.videoProtocol === "volcengine-ark" ? (
-                                    <Input value={config.seedanceModel} placeholder="doubao-seedance-2-0-260128" onChange={(event) => updateConfig("seedanceModel", event.target.value)} />
+                                    <div className="space-y-1.5">
+                                        <Input value={config.seedanceModel} placeholder="doubao-seedance-2-0-260128" onChange={(event) => updateConfig("seedanceModel", event.target.value)} />
+                                        <div className="text-[11px] leading-4 text-stone-500">此处用于显示名称，真实请求使用 Ark 区块里的 Endpoint ID。</div>
+                                    </div>
                                 ) : (
                                     <ModelPicker config={modelConfig} modelType="video" value={modelConfig.videoModel} onChange={(model) => updateConfig("videoModel", model)} fullWidth />
                                 )}
@@ -309,6 +323,7 @@ const defaultVolcengineAssetSettings: AdminPrivateVolcengineAssetSettings = {
     secretKey: "",
     projectName: "default",
     region: "cn-beijing",
+    assetGroupId: "",
     publicAssetBaseUrl: "",
 };
 
@@ -319,6 +334,7 @@ function normalizeVolcengineAssetSettings(setting: Partial<AdminPrivateVolcengin
         secretKey: setting.secretKey || "",
         projectName: setting.projectName || "default",
         region: setting.region || "cn-beijing",
+        assetGroupId: setting.assetGroupId || "",
         publicAssetBaseUrl: setting.publicAssetBaseUrl || "",
     };
 }

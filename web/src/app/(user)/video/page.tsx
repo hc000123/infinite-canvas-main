@@ -10,7 +10,7 @@ import { saveAs } from "file-saver";
 import { AssetPickerModal, type InsertAssetPayload } from "@/app/(user)/canvas/components/asset-picker-modal";
 import { ModelPicker } from "@/components/model-picker";
 import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
-import { VideoSettingsPanel, normalizeVideoResolutionValue, normalizeVideoSizeValue, videoSizeLabel } from "@/components/video-settings-panel";
+import { VideoSettingsPanel, normalizeVideoResolutionValue, normalizeVideoSecondsValue, normalizeVideoSizeValue, videoRatioLabel, videoSecondsLabel } from "@/components/video-settings-panel";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes, formatDuration } from "@/lib/image-utils";
 import { deleteStoredMedia, resolveMediaUrl, uploadMediaFile } from "@/services/file-storage";
@@ -57,7 +57,7 @@ type GenerationLog = {
     error?: string;
 };
 
-type GenerationLogConfig = Pick<AiConfig, "model" | "videoModel" | "seedanceModel" | "videoProtocol" | "size" | "vquality" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoSeed">;
+type GenerationLogConfig = Pick<AiConfig, "model" | "videoModel" | "seedanceModel" | "seedanceEndpointId" | "videoProtocol" | "size" | "vquality" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoSeed">;
 
 type UpdateAiConfig = <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
 
@@ -253,6 +253,7 @@ export default function VideoPage() {
         if (log.config.videoProtocol) updateConfig("videoProtocol", log.config.videoProtocol);
         if (log.config.videoProtocol === "volcengine-ark" && (log.config.seedanceModel || log.model)) {
             updateConfig("seedanceModel", log.config.seedanceModel || log.model);
+            updateConfig("seedanceEndpointId", log.config.seedanceEndpointId || "");
         } else if (log.config.videoModel || log.model) {
             updateConfig("videoModel", log.config.videoModel || log.model);
         }
@@ -342,7 +343,7 @@ export default function VideoPage() {
 
                             <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm dark:border-stone-800 dark:bg-stone-900 sm:hidden">
                                 <span className="truncate text-stone-500 dark:text-stone-400">
-                                    {model} · {normalizeResolution(effectiveConfig.vquality)}p · {videoSizeLabel(effectiveConfig.size)} · {normalizeVideoSeconds(effectiveConfig.videoSeconds)}s
+                                    {model} · {normalizeResolution(effectiveConfig.vquality)}p · {videoRatioLabel(effectiveConfig.size)} · {videoSecondsLabel(effectiveConfig.videoSeconds, effectiveConfig)}
                                 </span>
                                 <Button size="small" type="text" icon={<SlidersHorizontal className="size-4" />} onClick={() => setSettingsOpen(true)}>
                                     调整
@@ -409,7 +410,7 @@ export default function VideoPage() {
                     onPreviewLog={previewGenerationLog}
                 />
             </Drawer>
-            <Drawer title="参数" placement="bottom" height="82vh" open={settingsOpen} onClose={() => setSettingsOpen(false)}>
+            <Drawer title="参数" placement="bottom" size="82vh" open={settingsOpen} onClose={() => setSettingsOpen(false)}>
                 <div className="grid grid-cols-2 gap-3 pb-4">
                     <GenerationSettings config={effectiveConfig} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} />
                 </div>
@@ -445,7 +446,10 @@ function GenerationSettings({ config, model, updateConfig, openConfigDialog }: {
                         />
                     ) : null}
                     {isSeedance ? (
-                        <Input value={config.seedanceModel || model} placeholder="doubao-seedance-2-0-260128" onChange={(event) => updateConfig("seedanceModel", event.target.value)} />
+                        <div className="space-y-2">
+                            <Input addonBefore="显示名" value={config.seedanceModel || model} placeholder="doubao-seedance-2-0-260128" onChange={(event) => updateConfig("seedanceModel", event.target.value)} />
+                            <Input addonBefore="Endpoint ID" value={config.seedanceEndpointId} placeholder="ep-20260524233518-kxgt4" onChange={(event) => updateConfig("seedanceEndpointId", event.target.value)} />
+                        </div>
                     ) : (
                         <ModelPicker config={config} modelType="video" value={model} onChange={(value) => updateConfig("videoModel", value)} fullWidth onMissingConfig={() => openConfigDialog(false)} />
                     )}
@@ -650,6 +654,7 @@ function normalizeLogConfig(log: Partial<GenerationLog>): GenerationLogConfig {
         model: log.config?.model || log.model || "",
         videoModel: log.config?.videoModel || log.model || "",
         seedanceModel: log.config?.seedanceModel || (log.config?.videoProtocol === "volcengine-ark" ? log.model || "" : ""),
+        seedanceEndpointId: log.config?.seedanceEndpointId || "",
         videoProtocol: log.config?.videoProtocol || "openai",
         size: log.config?.size || log.size || "",
         vquality: normalizeResolution(log.config?.vquality || log.resolution || ""),
@@ -683,6 +688,7 @@ function buildLog({
         model: config.model,
         videoModel: config.videoModel,
         seedanceModel: config.seedanceModel,
+        seedanceEndpointId: config.seedanceEndpointId,
         videoProtocol: config.videoProtocol,
         size: config.size,
         vquality: normalizeResolution(config.vquality),
@@ -717,7 +723,7 @@ function buildVideoConfig(config: AiConfig, model: string): AiConfig {
         videoModel: model,
         seedanceModel: config.videoProtocol === "volcengine-ark" ? model : config.seedanceModel,
         size: normalizeVideoSize(config.size),
-        videoSeconds: normalizeVideoSeconds(config.videoSeconds),
+        videoSeconds: normalizeVideoSeconds(config.videoSeconds, config),
         vquality: normalizeResolution(config.vquality),
         videoGenerateAudio: config.videoGenerateAudio,
         videoWatermark: config.videoWatermark,
@@ -725,9 +731,8 @@ function buildVideoConfig(config: AiConfig, model: string): AiConfig {
     };
 }
 
-function normalizeVideoSeconds(value: string) {
-    const seconds = Math.floor(Number(value) || 6);
-    return String(Math.max(1, Math.min(20, seconds)));
+function normalizeVideoSeconds(value: string, config?: AiConfig) {
+    return normalizeVideoSecondsValue(value, config);
 }
 
 function normalizeVideoSize(value: string) {

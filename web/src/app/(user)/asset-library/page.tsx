@@ -10,6 +10,7 @@ import { useCopyText } from "@/hooks/use-copy-text";
 import { cn } from "@/lib/utils";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { fetchAssetLibrary, type AssetLibraryItem } from "@/services/api/assets";
+import { uploadMediaFile } from "@/services/file-storage";
 import { uploadImage } from "@/services/image-storage";
 
 const PAGE_SIZE = 12;
@@ -60,6 +61,22 @@ export default function AssetLibraryPage() {
                     data: { dataUrl: image.url, storageKey: image.storageKey, width: image.width, height: image.height, bytes: image.bytes, mimeType: image.mimeType },
                     metadata: { source: "asset-library", assetId: asset.id },
                 });
+            } else if (asset.type === "video" || asset.type === "audio") {
+                const blob = await remoteAssetBlob(asset.url);
+                const media = await uploadMediaFile(blob, asset.type);
+                addAsset({
+                    kind: asset.type,
+                    title: asset.title,
+                    coverUrl: asset.coverUrl,
+                    tags: asset.tags,
+                    source: asset.category,
+                    note: asset.description,
+                    data:
+                        asset.type === "video"
+                            ? { url: media.url, storageKey: media.storageKey, width: media.width || 1280, height: media.height || 720, bytes: media.bytes, mimeType: media.mimeType }
+                            : { url: media.url, storageKey: media.storageKey, bytes: media.bytes, mimeType: media.mimeType },
+                    metadata: { source: "asset-library", assetId: asset.id },
+                } as Parameters<typeof addAsset>[0]);
             } else {
                 addAsset({
                     kind: "text",
@@ -115,6 +132,8 @@ export default function AssetLibraryPage() {
                                     { label: "全部", value: "" },
                                     { label: "文本", value: "text" },
                                     { label: "图片", value: "image" },
+                                    { label: "视频", value: "video" },
+                                    { label: "音频", value: "audio" },
                                 ].map((item) => (
                                     <Tag.CheckableTag
                                         key={item.value || "all"}
@@ -189,7 +208,7 @@ export default function AssetLibraryPage() {
                                 {selectedAsset.title}
                             </Typography.Title>
                             <div className="flex flex-wrap gap-1.5">
-                                <Tag>{selectedAsset.type === "image" ? "图片" : "文本"}</Tag>
+                                <Tag>{assetTypeLabel(selectedAsset.type)}</Tag>
                                 {selectedAsset.tags.map((tag) => (
                                     <Tag key={tag}>{tag}</Tag>
                                 ))}
@@ -199,7 +218,15 @@ export default function AssetLibraryPage() {
                             <Typography.Text type="secondary" className="block text-xs">
                                 内容
                             </Typography.Text>
-                            {selectedAsset.type === "text" ? <Typography.Paragraph className="mt-2 whitespace-pre-wrap">{selectedAsset.content}</Typography.Paragraph> : <Typography.Text className="mt-2 block">{selectedAsset.url}</Typography.Text>}
+                            {selectedAsset.type === "text" ? (
+                                <Typography.Paragraph className="mt-2 whitespace-pre-wrap">{selectedAsset.content}</Typography.Paragraph>
+                            ) : selectedAsset.type === "video" ? (
+                                <video src={selectedAsset.url} controls className="mt-2 aspect-video w-full rounded-lg bg-black" />
+                            ) : selectedAsset.type === "audio" ? (
+                                <audio src={selectedAsset.url} controls className="mt-2 w-full" />
+                            ) : (
+                                <Typography.Text className="mt-2 block">{selectedAsset.url}</Typography.Text>
+                            )}
                         </div>
                         {selectedAsset.description ? <Typography.Paragraph type="secondary">{selectedAsset.description}</Typography.Paragraph> : null}
                         <div className="flex flex-wrap gap-2">
@@ -208,7 +235,7 @@ export default function AssetLibraryPage() {
                                     复制文本
                                 </Button>
                             ) : null}
-                            {selectedAsset.type === "image" ? (
+                            {selectedAsset.type !== "text" ? (
                                 <Button type="primary" icon={<Copy className="size-4" />} onClick={() => copyText(selectedAsset.url)}>
                                     复制链接
                                 </Button>
@@ -245,7 +272,7 @@ function LibraryCard({ asset, onOpen, onAdd }: { asset: AssetLibraryItem; onOpen
                 <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
                         <h2 className="line-clamp-1 text-sm font-semibold text-stone-950 dark:text-stone-100">{asset.title}</h2>
-                        <Tag className="m-0 shrink-0 text-[11px]">{asset.type === "image" ? "图片" : "文本"}</Tag>
+                        <Tag className="m-0 shrink-0 text-[11px]">{assetTypeLabel(asset.type)}</Tag>
                     </div>
                     <Typography.Paragraph type="secondary" ellipsis={{ rows: 3 }} className="!mb-0 !mt-2 !text-xs !leading-5">
                         {asset.type === "text" ? asset.content : asset.url}
@@ -276,6 +303,18 @@ async function remoteImageToDataUrl(url: string) {
     const response = await axios.get(url, { responseType: "blob" });
     const blob = response.data as Blob;
     return await blobToDataUrl(blob);
+}
+
+async function remoteAssetBlob(url: string) {
+    const response = await axios.get(url, { responseType: "blob" });
+    return response.data as Blob;
+}
+
+function assetTypeLabel(type: string) {
+    if (type === "image") return "图片";
+    if (type === "video") return "视频";
+    if (type === "audio") return "音频";
+    return "文本";
 }
 
 function blobToDataUrl(blob: Blob) {

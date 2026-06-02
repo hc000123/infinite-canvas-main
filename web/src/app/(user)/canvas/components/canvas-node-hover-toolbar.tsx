@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Modal, Segmented, Tooltip } from "antd";
-import { Camera, Download, FolderPlus, Image as ImageIcon, Info, Lock, LockOpen, Maximize2, MessageSquare, Minus, Pencil, Plus, RefreshCw, Scissors, Settings2, Trash2, Upload, Video } from "lucide-react";
+import { AudioLines, Camera, Download, FolderPlus, Image as ImageIcon, Info, Lock, LockOpen, Maximize2, MessageSquare, Minus, Pencil, Plus, RefreshCw, Scissors, Settings2, ShieldCheck, Trash2, Upload, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes, getDataUrlByteSize } from "@/lib/image-utils";
@@ -23,12 +23,18 @@ type CanvasNodeHoverToolbarProps = {
     onUpload: (node: CanvasNodeData) => void;
     onDownload: (node: CanvasNodeData) => void;
     onSaveAsset: (node: CanvasNodeData) => void;
+    onContinueVideo: (node: CanvasNodeData) => void;
+    onCaptureVideoFrame: (node: CanvasNodeData) => void;
+    onReviewAsset: (node: CanvasNodeData) => void;
+    onRefreshReview: (node: CanvasNodeData) => void;
     onCrop: (node: CanvasNodeData) => void;
     onAngle: (node: CanvasNodeData) => void;
     onViewImage: (node: CanvasNodeData) => void;
     onRetry: (node: CanvasNodeData) => void;
     onToggleFreeResize: (node: CanvasNodeData) => void;
     onDelete: (node: CanvasNodeData) => void;
+    submittingReview: boolean;
+    refreshingReview: boolean;
 };
 
 export function CanvasNodeHoverToolbar({
@@ -45,12 +51,18 @@ export function CanvasNodeHoverToolbar({
     onUpload,
     onDownload,
     onSaveAsset,
+    onContinueVideo,
+    onCaptureVideoFrame,
+    onReviewAsset,
+    onRefreshReview,
     onCrop,
     onAngle,
     onViewImage,
     onRetry,
     onToggleFreeResize,
     onDelete,
+    submittingReview,
+    refreshingReview,
 }: CanvasNodeHoverToolbarProps) {
     if (!node) return null;
 
@@ -58,13 +70,17 @@ export function CanvasNodeHoverToolbar({
     const top = viewport.y + node.position.y * viewport.k - 14;
     const isImage = node.type === CanvasNodeType.Image;
     const isVideo = node.type === CanvasNodeType.Video;
+    const isAudio = node.type === CanvasNodeType.Audio;
     const hasImage = isImage && Boolean(node.metadata?.content);
     const hasVideo = isVideo && Boolean(node.metadata?.content);
+    const hasAudio = isAudio && Boolean(node.metadata?.content);
     const isText = node.type === CanvasNodeType.Text;
     const isConfig = node.type === CanvasNodeType.Config;
     const canOpenDialog = isText || hasImage || isVideo;
     const canRetry = node.metadata?.status === "error";
-    const hasSpecificTools = canRetry || isText || isImage || isVideo || isConfig;
+    const hasSpecificTools = canRetry || isText || isImage || isVideo || isAudio || isConfig;
+    const review = node.metadata?.volcengineAsset;
+    const reviewProcessing = review?.status === "Processing";
 
     return (
         <div
@@ -79,8 +95,22 @@ export function CanvasNodeHoverToolbar({
             <ToolbarAction title="移除节点" label="删除" icon={<Trash2 className="size-4" />} onClick={() => onDelete(node)} danger />
             {hasSpecificTools ? <ToolbarDivider /> : null}
             {canRetry ? <ToolbarAction title="重新生成" label="重试" icon={<RefreshCw className="size-4" />} onClick={() => onRetry(node)} /> : null}
-            {hasImage || hasVideo || isText ? <ToolbarAction title="加入我的素材" label="存素材" icon={<FolderPlus className="size-4" />} onClick={() => onSaveAsset(node)} /> : null}
-            {hasImage || hasVideo ? <IconAction title={hasVideo ? "下载视频" : "下载图片"} icon={<Download className="size-5" />} onClick={() => onDownload(node)} /> : null}
+            {hasImage || hasVideo || hasAudio || isText ? <ToolbarAction title="加入我的素材" label="存素材" icon={<FolderPlus className="size-4" />} onClick={() => onSaveAsset(node)} /> : null}
+            {hasImage ? (
+                review?.assetId ? (
+                    <ToolbarAction
+                        title={reviewProcessing ? "火山加白审核中，状态会自动刷新" : `火山加白状态：${volcengineStatusLabel(review.status)}`}
+                        label={volcengineReviewActionLabel(review.status)}
+                        icon={<RefreshCw className={`size-4 ${reviewProcessing || refreshingReview ? "animate-spin" : ""}`} />}
+                        onClick={() => onRefreshReview(node)}
+                    />
+                ) : (
+                    <ToolbarAction title="提交火山人像加白" label={submittingReview ? "提交中" : "加白"} icon={<ShieldCheck className="size-4" />} onClick={() => onReviewAsset(node)} />
+                )
+            ) : null}
+            {hasImage || hasVideo || hasAudio ? <IconAction title={hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片"} icon={<Download className="size-5" />} onClick={() => onDownload(node)} /> : null}
+            {hasVideo ? <ToolbarAction title="截取当前预览帧" label="截帧" icon={<ImageIcon className="size-4" />} onClick={() => onCaptureVideoFrame(node)} /> : null}
+            {hasVideo && node.metadata?.lastFrameUrl ? <ToolbarAction title="续写下一段" label="续写" icon={<Video className="size-4" />} onClick={() => onContinueVideo(node)} /> : null}
             {canOpenDialog ? <ToolbarAction title="编辑" label="编辑" icon={<MessageSquare className="size-4" />} onClick={() => onToggleDialog(node)} /> : null}
             {isText ? <ToolbarAction title="编辑文本" label="编辑文字" icon={<Pencil className="size-4" />} onClick={() => onEditText(node)} /> : null}
             {isText ? <ToolbarAction title="用文本生图" label="生图" icon={<ImageIcon className="size-4" />} onClick={() => onGenerateImage(node)} /> : null}
@@ -89,6 +119,7 @@ export function CanvasNodeHoverToolbar({
             {isText ? <ToolbarAction title="增大字号" label="放大" icon={<Plus className="size-4" />} onClick={() => onIncreaseFont(node)} /> : null}
             {isImage ? <ToolbarAction title={hasImage ? "替换图片" : "上传图片"} label={hasImage ? "替换图片" : "上传图片"} icon={<Upload className="size-4" />} onClick={() => onUpload(node)} /> : null}
             {isVideo ? <ToolbarAction title={hasVideo ? "替换视频" : "上传视频"} label={hasVideo ? "替换视频" : "上传视频"} icon={<Video className="size-4" />} onClick={() => onUpload(node)} /> : null}
+            {isAudio ? <ToolbarAction title={hasAudio ? "替换音频" : "上传音频"} label={hasAudio ? "替换音频" : "上传音频"} icon={<AudioLines className="size-4" />} onClick={() => onUpload(node)} /> : null}
             {hasImage ? (
                 <ToolbarAction
                     title={node.metadata?.freeResize ? "切换为等比缩放" : "切换为自由比例"}
@@ -103,6 +134,20 @@ export function CanvasNodeHoverToolbar({
             {hasImage ? <ToolbarAction title="查看图片详情" label="查看大图" icon={<Maximize2 className="size-4" />} onClick={() => onViewImage(node)} /> : null}
         </div>
     );
+}
+
+function volcengineStatusLabel(status?: string) {
+    if (status === "Active") return "已加白";
+    if (status === "Failed") return "审核失败";
+    if (status === "Processing") return "审核中";
+    return status || "未知";
+}
+
+function volcengineReviewActionLabel(status?: string) {
+    if (status === "Processing") return "审核中";
+    if (status === "Active") return "已加白";
+    if (status === "Failed") return "审核失败";
+    return "加白状态";
 }
 
 export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeData | null; open: boolean; onClose: () => void }) {
@@ -154,7 +199,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                     {view === "info" ? (
                         <div className="thin-scrollbar h-full space-y-3 overflow-auto pr-1">
                             <InfoRow label="ID" value={node.id} />
-                            <InfoRow label="类型" value={node.type === CanvasNodeType.Text ? "文本" : node.type === CanvasNodeType.Image ? "图片" : node.type === CanvasNodeType.Video ? "视频" : "生成配置"} />
+                            <InfoRow label="类型" value={node.type === CanvasNodeType.Text ? "文本" : node.type === CanvasNodeType.Image ? "图片" : node.type === CanvasNodeType.Video ? "视频" : node.type === CanvasNodeType.Audio ? "音频" : "生成配置"} />
                             <InfoRow label="尺寸" value={`${Math.round(node.width)} x ${Math.round(node.height)}`} />
                             <InfoRow label="位置" value={`${Math.round(node.position.x)}, ${Math.round(node.position.y)}`} />
                             <InfoRow label="状态" value={node.metadata?.status || "idle"} />
@@ -177,10 +222,31 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                             {isVideoNode && node.metadata?.storageKey ? (
                                 <InfoRow label="本地转存" value={`${node.metadata.storageKey}${node.metadata.bytes ? ` · ${formatBytes(node.metadata.bytes)}` : ""}${node.metadata.mimeType ? ` · ${node.metadata.mimeType}` : ""}`} />
                             ) : null}
+                            {isVideoNode && node.metadata?.cachePath ? <InfoRow label="缓存文件" value={node.metadata.cachePath} /> : null}
+                            {isVideoNode && node.metadata?.cacheUrl ? (
+                                <InfoRow
+                                    label="缓存地址"
+                                    value={
+                                        <a className="text-blue-500 underline underline-offset-2" href={node.metadata.cacheUrl} target="_blank" rel="noreferrer">
+                                            打开缓存文件
+                                        </a>
+                                    }
+                                />
+                            ) : null}
                             {isVideoNode && node.metadata?.localStoredAt ? <InfoRow label="转存时间" value={formatLocalTime(node.metadata.localStoredAt)} /> : null}
                             {batchCount > 1 ? <InfoRow label="图片组" value={`${batchCount} 张`} /> : null}
+                            {node.type === CanvasNodeType.Image && node.metadata?.capturedFrameSourceVideoNodeId ? <InfoRow label="来源视频" value={node.metadata.capturedFrameSourceVideoNodeId} /> : null}
+                            {node.type === CanvasNodeType.Image && node.metadata?.capturedFrameTime !== undefined ? <InfoRow label="截取时间" value={`${node.metadata.capturedFrameTime}s`} /> : null}
                             {node.metadata?.prompt ? <InfoRow label="提示词" value={node.metadata.prompt} /> : null}
                             {imageBytes ? <InfoRow label="图片大小" value={formatBytes(imageBytes)} /> : null}
+                            {node.type === CanvasNodeType.Image && node.metadata?.volcengineAsset ? (
+                                <>
+                                    <InfoRow label="火山状态" value={volcengineStatusLabel(node.metadata.volcengineAsset.status)} />
+                                    <InfoRow label="Asset ID" value={node.metadata.volcengineAsset.assetId} />
+                                    <InfoRow label="素材组" value={node.metadata.volcengineAsset.groupId} />
+                                    {node.metadata.volcengineAsset.error ? <InfoRow label="失败原因" value={node.metadata.volcengineAsset.error} /> : null}
+                                </>
+                            ) : null}
                             {node.metadata?.errorDetails ? (
                                 <div className="rounded-lg border p-3 text-red-400" style={{ borderColor: theme.node.stroke }}>
                                     {node.metadata.errorDetails}

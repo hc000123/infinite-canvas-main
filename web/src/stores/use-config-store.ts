@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import { normalizeSeedanceImageRoleMode, type SeedanceImageRoleMode } from "@/services/api/video-reference";
 import { apiGet } from "@/services/api/request";
 import type { AdminPublicSettings } from "@/services/api/admin";
 
@@ -20,12 +21,18 @@ export type AiConfig = {
     imageModel: string;
     videoModel: string;
     seedanceModel: string;
+    seedanceEndpointId: string;
     textModel: string;
     videoSeconds: string;
     vquality: string;
     videoGenerateAudio: string;
     videoWatermark: string;
     videoSeed: string;
+    returnLastFrame: string;
+    videoTaskMode: "generate" | "edit" | "extend";
+    videoEditType: "replace" | "add" | "remove" | "inpaint";
+    videoExtendDirection: "forward" | "backward";
+    videoReferenceImageMode: SeedanceImageRoleMode;
     systemPrompt: string;
     models: string[];
     imageModels: string[];
@@ -38,23 +45,33 @@ export type AiConfig = {
 
 export const CONFIG_STORE_KEY = "infinite-canvas:ai_config_store";
 
+const useDevDefaults = process.env.NODE_ENV === "development";
+const devChannelMode: AiConfig["channelMode"] | "" = useDevDefaults && process.env.NEXT_PUBLIC_DEV_AI_CHANNEL_MODE === "remote" ? "remote" : useDevDefaults && process.env.NEXT_PUBLIC_DEV_AI_CHANNEL_MODE === "local" ? "local" : "";
+const devVideoProtocol: AiConfig["videoProtocol"] | "" = useDevDefaults && process.env.NEXT_PUBLIC_DEV_AI_VIDEO_PROTOCOL === "volcengine-ark" ? "volcengine-ark" : "";
+
 export const defaultConfig: AiConfig = {
-    channelMode: "local",
-    videoProtocol: "openai",
-    baseUrl: "https://api.openai.com",
-    apiKey: "",
-    volcengineBaseUrl: "https://ark.cn-beijing.volces.com/api/v3",
-    volcengineApiKey: "",
-    model: "gpt-image-2",
-    imageModel: "gpt-image-2",
-    videoModel: "grok-imagine-video",
-    seedanceModel: "doubao-seedance-2-0-260128",
-    textModel: "gpt-5.5",
+    channelMode: devChannelMode || "local",
+    videoProtocol: devVideoProtocol || "openai",
+    baseUrl: (useDevDefaults && process.env.NEXT_PUBLIC_DEV_AI_BASE_URL) || "https://api.openai.com",
+    apiKey: (useDevDefaults && process.env.NEXT_PUBLIC_DEV_AI_API_KEY) || "",
+    volcengineBaseUrl: (useDevDefaults && process.env.NEXT_PUBLIC_DEV_VOLCENGINE_BASE_URL) || "https://ark.cn-beijing.volces.com/api/v3",
+    volcengineApiKey: (useDevDefaults && process.env.NEXT_PUBLIC_DEV_VOLCENGINE_API_KEY) || "",
+    model: (useDevDefaults && process.env.NEXT_PUBLIC_DEV_AI_MODEL) || "gpt-image-2",
+    imageModel: (useDevDefaults && (process.env.NEXT_PUBLIC_DEV_AI_IMAGE_MODEL || process.env.NEXT_PUBLIC_DEV_AI_MODEL)) || "gpt-image-2",
+    videoModel: (useDevDefaults && process.env.NEXT_PUBLIC_DEV_AI_VIDEO_MODEL) || "grok-imagine-video",
+    seedanceModel: (useDevDefaults && process.env.NEXT_PUBLIC_DEV_SEEDANCE_MODEL) || "doubao-seedance-2-0-260128",
+    seedanceEndpointId: (useDevDefaults && process.env.NEXT_PUBLIC_DEV_SEEDANCE_ENDPOINT_ID) || "",
+    textModel: (useDevDefaults && (process.env.NEXT_PUBLIC_DEV_AI_TEXT_MODEL || process.env.NEXT_PUBLIC_DEV_AI_MODEL)) || "gpt-5.5",
     videoSeconds: "6",
     vquality: "720",
     videoGenerateAudio: "false",
     videoWatermark: "false",
     videoSeed: "",
+    returnLastFrame: "true",
+    videoTaskMode: "generate",
+    videoEditType: "replace",
+    videoExtendDirection: "forward",
+    videoReferenceImageMode: "reference",
     systemPrompt: "",
     models: [],
     imageModels: [],
@@ -82,7 +99,7 @@ type ConfigStore = {
 function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null) {
     const channelMode = modelChannel?.allowCustomChannel ? config.channelMode : "remote";
     if (channelMode === "local" || !modelChannel) {
-        return { ...config, channelMode, videoModel: config.videoProtocol === "volcengine-ark" ? config.seedanceModel : config.videoModel };
+        return { ...config, channelMode, videoModel: config.videoProtocol === "volcengine-ark" ? resolveSeedanceRequestModel(config) : config.videoModel };
     }
     const models = modelChannel.availableModels;
     const classifiedModels = classifyAiModels(models);
@@ -105,10 +122,13 @@ function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSetti
 function isAiConfigReady(config: AiConfig, model: string) {
     const modelName = model.trim();
     if (!modelName) return false;
+    if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_DEV_SKIP_AI_CONFIG !== "false") return true;
     if (config.channelMode === "remote") return true;
     const seedanceModel = (config.seedanceModel || config.videoModel).trim();
-    const isSeedanceModel = config.videoProtocol === "volcengine-ark" && (modelName === seedanceModel || modelName.toLowerCase().includes("seedance"));
-    return isSeedanceModel ? Boolean(config.volcengineApiKey.trim() && seedanceModel) : Boolean(config.baseUrl.trim() && config.apiKey.trim());
+    const seedanceEndpointId = config.seedanceEndpointId.trim();
+    const seedanceRequestModel = resolveSeedanceRequestModel(config);
+    const isSeedanceModel = config.videoProtocol === "volcengine-ark" && (modelName === seedanceModel || modelName === seedanceEndpointId || modelName.toLowerCase().includes("seedance") || modelName.toLowerCase().startsWith("ep-"));
+    return isSeedanceModel ? Boolean(config.volcengineApiKey.trim() && seedanceRequestModel) : Boolean(config.baseUrl.trim() && config.apiKey.trim());
 }
 
 export const useConfigStore = create<ConfigStore>()(
@@ -150,14 +170,18 @@ export const useConfigStore = create<ConfigStore>()(
                     ...current,
                     config: {
                         ...config,
-                        channelMode: config.channelMode || "remote",
-                        videoProtocol: config.videoProtocol || "openai",
+                        channelMode: config.channelMode || defaultConfig.channelMode,
+                        videoProtocol: config.videoProtocol || defaultConfig.videoProtocol,
+                        baseUrl: config.baseUrl || defaultConfig.baseUrl,
+                        apiKey: config.apiKey || defaultConfig.apiKey,
                         volcengineBaseUrl: config.volcengineBaseUrl || defaultConfig.volcengineBaseUrl,
-                        volcengineApiKey: config.volcengineApiKey || "",
-                        imageModel: config.imageModel || config.model,
-                        videoModel: config.videoModel || "grok-imagine-video",
+                        volcengineApiKey: config.volcengineApiKey || defaultConfig.volcengineApiKey,
+                        model: config.model || defaultConfig.model,
+                        imageModel: config.imageModel || config.model || defaultConfig.imageModel,
+                        videoModel: config.videoModel || defaultConfig.videoModel,
                         seedanceModel: config.seedanceModel || defaultConfig.seedanceModel,
-                        textModel: config.textModel || config.model,
+                        seedanceEndpointId: config.seedanceEndpointId || defaultConfig.seedanceEndpointId,
+                        textModel: config.textModel || config.model || defaultConfig.textModel,
                         imageModels: Array.isArray(config.imageModels) && config.imageModels.length ? config.imageModels : classifiedModels.imageModels,
                         videoModels: Array.isArray(config.videoModels) && config.videoModels.length ? config.videoModels : classifiedModels.videoModels,
                         textModels: Array.isArray(config.textModels) && config.textModels.length ? config.textModels : classifiedModels.textModels,
@@ -166,6 +190,11 @@ export const useConfigStore = create<ConfigStore>()(
                         videoGenerateAudio: config.videoGenerateAudio || "false",
                         videoWatermark: config.videoWatermark || "false",
                         videoSeed: config.videoSeed || "",
+                        returnLastFrame: config.returnLastFrame || defaultConfig.returnLastFrame,
+                        videoTaskMode: normalizeVideoTaskMode(config.videoTaskMode),
+                        videoEditType: normalizeVideoEditType(config.videoEditType),
+                        videoExtendDirection: normalizeVideoExtendDirection(config.videoExtendDirection),
+                        videoReferenceImageMode: normalizeSeedanceImageRoleMode(config.videoReferenceImageMode),
                     },
                 };
             },
@@ -179,10 +208,26 @@ export function useEffectiveConfig() {
     return useMemo(() => resolveEffectiveConfig(config, modelChannel), [config, modelChannel]);
 }
 
+function normalizeVideoTaskMode(value?: string): AiConfig["videoTaskMode"] {
+    return value === "edit" || value === "extend" ? value : "generate";
+}
+
+function normalizeVideoEditType(value?: string): AiConfig["videoEditType"] {
+    return value === "add" || value === "remove" || value === "inpaint" ? value : "replace";
+}
+
+function normalizeVideoExtendDirection(value?: string): AiConfig["videoExtendDirection"] {
+    return value === "backward" ? "backward" : "forward";
+}
+
 export function buildApiUrl(baseUrl: string, path: string, protocol: AiConfig["videoProtocol"] = "openai") {
     const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, "");
     const apiBaseUrl = protocol === "openai" && !normalizedBaseUrl.endsWith("/v1") ? `${normalizedBaseUrl}/v1` : normalizedBaseUrl;
     return `${apiBaseUrl}${path}`;
+}
+
+export function resolveSeedanceRequestModel(config: Pick<AiConfig, "seedanceEndpointId" | "seedanceModel" | "videoModel" | "model">) {
+    return (config.seedanceEndpointId || config.seedanceModel || config.videoModel || config.model).trim();
 }
 
 export function classifyAiModels(models: string[]) {

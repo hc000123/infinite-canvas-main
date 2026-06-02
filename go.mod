@@ -9,6 +9,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/joho/godotenv v1.5.1
 	github.com/robfig/cron/v3 v3.0.1
+	github.com/volcengine/ve-tos-golang-sdk/v2 v2.9.4
 	github.com/volcengine/volcengine-go-sdk v1.2.26
 	golang.org/x/crypto v0.50.0
 	golang.org/x/image v0.41.0

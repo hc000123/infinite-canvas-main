@@ -43,7 +43,7 @@ const emptySettings: AdminSettings = {
         channels: [],
         promptSync: { enabled: true, cron: "*/5 * * * *" },
         auth: { linuxDo: { clientId: "", clientSecret: "" } },
-        volcengineAsset: { enabled: false, accessKey: "", secretKey: "", projectName: "default", region: "cn-beijing", publicAssetBaseUrl: "" },
+        volcengineAsset: { enabled: false, accessKey: "", secretKey: "", projectName: "default", region: "cn-beijing", assetGroupId: "", publicAssetBaseUrl: "" },
     },
 };
 const emptyChannel: AdminModelChannel = { protocol: "openai", name: "", baseUrl: "", apiKey: "", models: [], weight: 1, enabled: true, remark: "" };
@@ -531,7 +531,7 @@ export default function AdminSettingsPage() {
                                 </Card>
                                 <Card size="small" title="火山私域人像素材审核">
                                     <Flex vertical gap={14}>
-                                        <Typography.Text type="secondary">图片会先保存到后端公开静态目录，再提交到火山方舟私域虚拟人像素材资产库。公网素材访问地址必须能被火山服务器访问。</Typography.Text>
+                                        <Typography.Text type="secondary">图片会先保存到后端公开静态目录；如果公网素材访问地址是火山 TOS 前缀，会在提交前自动上传到对应桶路径，再提交到火山方舟私域虚拟人像素材资产库。</Typography.Text>
                                         <Row gutter={16}>
                                             <Col xs={24} md={6}>
                                                 <Form.Item name={["private", "volcengineAsset", "enabled"]} label="开启素材审核" valuePropName="checked">
@@ -558,9 +558,14 @@ export default function AdminSettingsPage() {
                                                     <Input placeholder="cn-beijing" />
                                                 </Form.Item>
                                             </Col>
-                                            <Col xs={24} md={8}>
-                                                <Form.Item name={["private", "volcengineAsset", "publicAssetBaseUrl"]} label="公网素材访问地址">
-                                                    <Input placeholder="https://example.com/static/assets" />
+                                            <Col xs={24} md={12}>
+                                                <Form.Item name={["private", "volcengineAsset", "assetGroupId"]} label="素材组 ID">
+                                                    <Input placeholder="group-20260318033332-xxxxx" />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={12}>
+                                                <Form.Item name={["private", "volcengineAsset", "publicAssetBaseUrl"]} label="公网素材访问地址" extra="TOS 地址示例：https://jiabaitong.tos-cn-beijing.volces.com/volcengine-assets">
+                                                    <Input placeholder="https://jiabaitong.tos-cn-beijing.volces.com/volcengine-assets" />
                                                 </Form.Item>
                                             </Col>
                                         </Row>
@@ -914,6 +919,7 @@ function normalizePrivateVolcengineAssetSetting(setting: Partial<AdminSettings["
         secretKey: setting.secretKey || "",
         projectName: setting.projectName || "default",
         region: setting.region || "cn-beijing",
+        assetGroupId: setting.assetGroupId || "",
         publicAssetBaseUrl: setting.publicAssetBaseUrl || "",
     };
 }

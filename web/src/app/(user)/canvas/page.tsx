@@ -13,6 +13,8 @@ import { CanvasProjectCard } from "./components/canvas-project-card";
 import type { CanvasExportFile } from "./export-types";
 import { useCanvasStore } from "./stores/use-canvas-store";
 import { useCanvasUiStore } from "./stores/use-canvas-ui-store";
+import { useAssetStore } from "@/stores/use-asset-store";
+import { canvasNodeToAsset, hydrateCanvasNodeAssetUrls } from "./utils/canvas-assets";
 import { exportCanvasProjects } from "./utils/canvas-export";
 
 export default function CanvasPage() {
@@ -23,6 +25,7 @@ export default function CanvasPage() {
     const projects = useCanvasStore((state) => state.projects);
     const createProject = useCanvasStore((state) => state.createProject);
     const importProject = useCanvasStore((state) => state.importProject);
+    const addAsset = useAssetStore((state) => state.addAsset);
     const selectedIds = useCanvasUiStore((state) => state.selectedProjectIds);
     const setDeleteIds = useCanvasUiStore((state) => state.setDeleteProjectIds);
 
@@ -37,18 +40,30 @@ export default function CanvasPage() {
             const projectFile = zip.get("projects.json");
             if (!projectFile) throw new Error("missing projects.json");
             const data = JSON.parse(await projectFile.text()) as CanvasExportFile;
+            const restoredUrls = new Map<string, string>();
             await Promise.all(
                 data.projects.flatMap((project) =>
                     project.files.map(async (item) => {
                         const blob = zip.get(item.path);
                         if (!blob) return;
                         const typedBlob = blob.type ? blob : blob.slice(0, blob.size, item.mimeType);
-                        await (item.storageKey.startsWith("image:") ? setImageBlob(item.storageKey, typedBlob) : setMediaBlob(item.storageKey, typedBlob));
+                        const url = await (item.storageKey.startsWith("image:") ? setImageBlob(item.storageKey, typedBlob) : setMediaBlob(item.storageKey, typedBlob));
+                        restoredUrls.set(item.storageKey, url);
                     }),
                 ),
             );
-            data.projects.forEach((item) => importProject(item.project));
-            message.success(`已导入 ${data.projects.length} 个画布`);
+            let assetCount = 0;
+            data.projects.forEach((item) => {
+                const project = { ...item.project, nodes: (item.project.nodes || []).map((node) => hydrateCanvasNodeAssetUrls(node, restoredUrls)) };
+                importProject(project);
+                project.nodes.forEach((node) => {
+                    const asset = canvasNodeToAsset(node);
+                    if (!asset) return;
+                    addAsset(asset);
+                    assetCount += 1;
+                });
+            });
+            message.success(`已导入 ${data.projects.length} 个画布${assetCount ? `，${assetCount} 个素材已加入我的素材` : ""}`);
         } catch {
             message.error("导入失败，请选择有效的画布压缩包");
         } finally {
@@ -67,7 +82,16 @@ export default function CanvasPage() {
                     <div className="flex items-center gap-2">
                         {selectedIds.length ? (
                             <>
-                                <Button disabled={!hydrated} icon={<Download className="size-4" />} onClick={() => void exportCanvasProjects(projects.filter((project) => selectedIds.includes(project.id)), `无限画布-${selectedIds.length}个项目`)}>
+                                <Button
+                                    disabled={!hydrated}
+                                    icon={<Download className="size-4" />}
+                                    onClick={() =>
+                                        void exportCanvasProjects(
+                                            projects.filter((project) => selectedIds.includes(project.id)),
+                                            `无限画布-${selectedIds.length}个项目`,
+                                        )
+                                    }
+                                >
                                     导出选中
                                 </Button>
                                 <Button disabled={!hydrated} onClick={() => setDeleteIds(selectedIds)}>

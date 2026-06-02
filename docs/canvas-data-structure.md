@@ -51,7 +51,7 @@ type CanvasProject = {
 ```ts
 type CanvasNodeData = {
   id: string;
-  type: "image" | "text" | "config" | "video";
+  type: "image" | "text" | "config" | "video" | "audio";
   title: string;
   position: { x: number; y: number };
   width: number;
@@ -63,7 +63,7 @@ type CanvasNodeData = {
 通用字段：
 
 - `id`：节点 ID。
-- `type`：节点类型，当前有图片、文本、生成配置、视频四类。
+- `type`：节点类型，当前有图片、文本、生成配置、视频、音频五类。
 - `title`：节点标题。
 - `position`：画布世界坐标，不是屏幕坐标。
 - `width` / `height`：画布世界坐标下的节点尺寸。
@@ -90,13 +90,19 @@ type CanvasNodeMetadata = {
   generateAudio?: string;
   watermark?: string;
   seed?: string;
+  returnLastFrame?: string;
   provider?: "openai" | "volcengine-ark";
   references?: string[];
   videoReferences?: string[];
+  audioReferences?: string[];
+  referenceOrder?: Array<{ nodeId?: string; kind: "image" | "video" | "audio"; index: number }>;
+  referenceRoles?: Array<{ nodeId: string; kind: "image" | "video" | "audio"; role: string; index?: number }>;
   taskId?: string;
   taskStatus?: string;
   rawTaskStatus?: string;
   videoUrl?: string;
+  lastFrameUrl?: string;
+  lastFrameStorageKey?: string;
   taskCreatedAt?: number;
   taskUpdatedAt?: number;
   executionExpiresAfter?: number;
@@ -120,7 +126,8 @@ type CanvasNodeMetadata = {
 不同节点的使用方式：
 
 - 图片节点：`content` 是当前可展示的图片 URL，通常是 `blob:` URL；`storageKey` 指向本地图片 Blob；`naturalWidth/naturalHeight/bytes/mimeType` 保存原图信息。
-- 视频节点：`content` 是当前可播放的视频 URL，通常是 `blob:` URL；`storageKey` 指向本地视频 Blob；`bytes/mimeType/localStoredAt` 保存本地转存信息；`provider/taskId/taskStatus/rawTaskStatus/videoUrl/videoUrlExpiresAt/errorDetails` 保存视频任务状态、临时地址有效期和失败原因；`duration/ratio/resolution/generateAudio/watermark/seed` 保存 Ark 视频生成参数快照；`references/videoReferences` 保存本次 Seedance 图片参考和视频参考。
+- 视频节点：`content` 是当前可播放的视频 URL，通常是 `blob:` URL；`storageKey` 指向本地视频 Blob；`bytes/mimeType/localStoredAt` 保存本地转存信息；`provider/taskId/taskStatus/rawTaskStatus/videoUrl/videoUrlExpiresAt/errorDetails` 保存视频任务状态、临时地址有效期和失败原因；`duration/ratio/resolution/generateAudio/watermark/seed/returnLastFrame` 保存 Ark 视频生成参数快照；`references/videoReferences/audioReferences/referenceRoles/referenceOrder` 保存本次 Seedance 图片、视频、音频参考、图片角色和混合输入顺序；`lastFrameUrl/lastFrameStorageKey` 保存 Ark 返回尾帧的临时地址和本地转存结果。
+- 音频节点：`content` 是当前可播放的音频 URL，通常是 `blob:` URL；`storageKey` 指向本地音频 Blob；`bytes/mimeType/localStoredAt` 保存本地转存信息。音频节点可连接到视频生成配置节点，作为 Seedance `reference_audio` 输入。
 - 文本节点：`content` 保存文本内容；`fontSize` 保存字体大小；`prompt/status/errorDetails` 保存生成状态。
 - 生成配置节点：`generationMode/model/size/count/inputOrder` 保存生成配置；`generationMode` 可选择文本、图片或视频；上游输入通过 `connections` 计算。
 - 图片组节点：根节点用 `isBatchRoot/batchChildIds/primaryImageId/imageBatchExpanded` 记录批量生成结果；子图节点用 `batchRootId` 指回根节点。

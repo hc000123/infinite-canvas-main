@@ -1,5 +1,7 @@
-import type { ReferenceImage } from "@/types/image";
+import type { ReferenceAudio } from "@/types/audio";
+import type { ReferenceImage, ReferenceImageRole } from "@/types/image";
 import type { ReferenceVideo } from "@/types/video";
+import { defaultSeedanceImageRole, normalizeSeedanceImageRole, type SeedanceImageRoleMode } from "../../../../services/api/video-reference.ts";
 
 export type CanvasGenerationNodeLike = {
     id: string;
@@ -10,7 +12,16 @@ export type CanvasGenerationNodeLike = {
         prompt?: string;
         mimeType?: string;
         storageKey?: string;
+        videoUrl?: string;
+        cacheUrl?: string;
+        generationMode?: string;
         inputOrder?: string[];
+        videoReferenceImageMode?: SeedanceImageRoleMode;
+        referenceRoles?: Array<{ nodeId: string; kind: "image" | "video" | "audio"; role: string; index?: number }>;
+        volcengineAsset?: {
+            assetId: string;
+            status: string;
+        };
     };
 };
 
@@ -23,18 +34,22 @@ export type NodeGenerationContext = {
     prompt: string;
     referenceImages: ReferenceImage[];
     referenceVideos: ReferenceVideo[];
+    referenceAudios: ReferenceAudio[];
+    referenceInputs: NodeGenerationInput[];
     textCount: number;
     imageCount: number;
     videoCount: number;
+    audioCount: number;
 };
 
 export type NodeGenerationInput = {
     nodeId: string;
-    type: "text" | "image" | "video";
+    type: "text" | "image" | "video" | "audio";
     title: string;
     text?: string;
     image?: ReferenceImage;
     video?: ReferenceVideo;
+    audio?: ReferenceAudio;
 };
 
 export function buildCanvasGenerationContext(nodeId: string, nodes: CanvasGenerationNodeLike[], connections: CanvasGenerationConnectionLike[], prompt: string): NodeGenerationContext {
@@ -45,27 +60,36 @@ export function buildCanvasGenerationContext(nodeId: string, nodes: CanvasGenera
         .join("\n\n");
     const referenceImages = inputs.map((input) => input.image).filter((image): image is ReferenceImage => Boolean(image));
     const referenceVideos = inputs.map((input) => input.video).filter((video): video is ReferenceVideo => Boolean(video));
+    const referenceAudios = inputs.map((input) => input.audio).filter((audio): audio is ReferenceAudio => Boolean(audio));
+    const referenceInputs = inputs.filter((input) => input.type === "image" || input.type === "video" || input.type === "audio");
 
     return {
         prompt: upstreamText ? `${prompt}\n\n${upstreamText}` : prompt,
         referenceImages,
         referenceVideos,
+        referenceAudios,
+        referenceInputs,
         textCount: inputs.filter((input) => input.type === "text").length,
         imageCount: referenceImages.length,
         videoCount: referenceVideos.length,
+        audioCount: referenceAudios.length,
     };
 }
 
 export function buildCanvasGenerationInputs(nodeId: string, nodes: CanvasGenerationNodeLike[], connections: CanvasGenerationConnectionLike[]): NodeGenerationInput[] {
-    return getOrderedUpstreamNodes(nodeId, nodes, connections).flatMap((node): NodeGenerationInput[] => {
+    const target = nodes.find((node) => node.id === nodeId);
+    const inputs = getOrderedUpstreamNodes(nodeId, nodes, connections).flatMap((node): NodeGenerationInput[] => {
         const image = readReferenceImage(node);
         if (image) return [{ nodeId: node.id, type: "image", title: node.title, image }];
         const video = readReferenceVideo(node);
         if (video) return [{ nodeId: node.id, type: "video", title: node.title, video }];
+        const audio = readReferenceAudio(node);
+        if (audio) return [{ nodeId: node.id, type: "audio", title: node.title, audio }];
         const text = readNodeTextInput(node);
         if (text) return [{ nodeId: node.id, type: "text", title: node.title, text }];
         return [];
     });
+    return applySeedanceImageRoles(inputs, target);
 }
 
 function readNodeTextInput(node: CanvasGenerationNodeLike) {
@@ -81,6 +105,7 @@ function readReferenceImage(node: CanvasGenerationNodeLike): ReferenceImage | nu
         type: node.metadata.mimeType || "image/png",
         dataUrl: node.metadata.content,
         storageKey: node.metadata.storageKey,
+        assetUri: activeVolcengineAssetURI(node.metadata.volcengineAsset),
     };
 }
 
@@ -90,9 +115,52 @@ function readReferenceVideo(node: CanvasGenerationNodeLike): ReferenceVideo | nu
         id: node.id,
         name: `${node.title || node.id}.mp4`,
         type: node.metadata.mimeType || "video/mp4",
+        url: node.metadata.videoUrl || node.metadata.cacheUrl || node.metadata.content,
+        storageKey: node.metadata.videoUrl || node.metadata.cacheUrl ? undefined : node.metadata.storageKey,
+    };
+}
+
+function readReferenceAudio(node: CanvasGenerationNodeLike): ReferenceAudio | null {
+    if (node.type !== "audio" || !node.metadata?.content) return null;
+    return {
+        id: node.id,
+        name: `${node.title || node.id}.${audioExtension(node.metadata.mimeType)}`,
+        type: node.metadata.mimeType || "audio/mpeg",
         url: node.metadata.content,
         storageKey: node.metadata.storageKey,
     };
+}
+
+function audioExtension(mimeType?: string) {
+    const subtype = mimeType?.split(";")[0]?.split("/")[1]?.toLowerCase();
+    if (!subtype || subtype === "mpeg") return "mp3";
+    if (subtype === "x-wav") return "wav";
+    return subtype;
+}
+
+function activeVolcengineAssetURI(metadata?: { assetId?: string; status?: string }) {
+    const assetId = metadata?.assetId?.trim();
+    return metadata?.status === "Active" && assetId ? `asset://${assetId}` : "";
+}
+
+function applySeedanceImageRoles(inputs: NodeGenerationInput[], target?: CanvasGenerationNodeLike) {
+    let imageIndex = 0;
+    return inputs.map((input) => {
+        if (!input.image) return input;
+        const index = imageIndex++;
+        return {
+            ...input,
+            image: {
+                ...input.image,
+                seedanceRole: resolveSeedanceImageRole(target, input.nodeId, index),
+            },
+        };
+    });
+}
+
+function resolveSeedanceImageRole(target: CanvasGenerationNodeLike | undefined, nodeId: string, index: number): ReferenceImageRole {
+    const configuredRole = target?.metadata?.referenceRoles?.find((item) => item.kind === "image" && item.nodeId === nodeId)?.role;
+    return normalizeSeedanceImageRole(configuredRole) || defaultSeedanceImageRole(index, target?.metadata?.videoReferenceImageMode);
 }
 
 function getOrderedUpstreamNodes(nodeId: string, nodes: CanvasGenerationNodeLike[], connections: CanvasGenerationConnectionLike[]) {

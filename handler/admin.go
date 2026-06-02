@@ -72,3 +72,66 @@ func AdminSyncPromptCategories(w http.ResponseWriter, r *http.Request) {
 	log.Printf("sync prompt category done category=%s", request.Category)
 	OK(w, categories)
 }
+
+func AdminAITasks(w http.ResponseWriter, r *http.Request) {
+	result, err := service.ListAdminAITasks(parseAITaskQuery(r))
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func AdminAITask(w http.ResponseWriter, r *http.Request, id string) {
+	result, err := service.GetAdminAITaskDetail(id)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func AdminRefreshAITask(w http.ResponseWriter, r *http.Request, id string) {
+	result, err := service.RefreshAdminAITask(id)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func AdminRefundAITask(w http.ResponseWriter, r *http.Request, id string) {
+	result, err := service.RefundAdminAITask(id)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func parseAITaskQuery(r *http.Request) model.AITaskQuery {
+	q := parseQuery(r)
+	values := r.URL.Query()
+	user := values.Get("user")
+	if user == "" {
+		user = values.Get("userId")
+	}
+	provider := values.Get("provider")
+	if provider == "" {
+		provider = values.Get("channel")
+	}
+	return model.AITaskQuery{
+		Keyword:        q.Keyword,
+		User:           user,
+		Status:         values.Get("status"),
+		Kind:           values.Get("kind"),
+		ActionType:     values.Get("actionType"),
+		Model:          values.Get("model"),
+		Provider:       provider,
+		UpstreamTaskID: values.Get("upstreamTaskId"),
+		StartAt:        values.Get("startAt"),
+		EndAt:          values.Get("endAt"),
+		Page:           q.Page,
+		PageSize:       q.PageSize,
+	}
+}

@@ -1,22 +1,63 @@
 # 待测试
 
-- Seedance 2.0 视频节点新增“全能参考”首版能力：视频模式会收集上游图片节点作为 `reference_image`、上游视频节点作为 `reference_video`，并在生成配置节点显示参考视频数量；OpenAI 兼容模式仍保持图片参考路径。
+- M4.3.2 管理后台页面主体不渲染问题已修复并完成页面验收：根因定位为 Next.js standalone 启动时缺少 `.next/static`，导致 `/_next/static/chunks/...` 的 JS/CSS chunk 返回 404，页面只能渲染服务端页头和 `v0.1.8`，登录页/后台页主体无法完成客户端 hydration。已新增 standalone 资源准备脚本，并把 `npm start` 改为先复制 `.next/static` 和 `public` 到 `.next/standalone` 后再启动 `server.js`；版本提升到 `v0.1.9`。重新 `npm run build` 通过，已重启 3000 standalone 和 8080 后端；`3000 /api/health`、`8080 /api/health` 均返回 `ok`，关键 JS/CSS chunk 从 404 恢复为 200，页面可见版本 `v0.1.9`。真实页面复测通过：登录页主体可见；管理员登录后 `/admin/ai-tasks` 后台侧栏可见，侧栏包含“AI 任务日志”；列表、分页、关键词、用户、状态、类型、动作、模型、渠道、上游 taskId 和时间范围筛选入口可见并可用，其中关键词/用户/模型/渠道/上游 taskId/状态/类型/动作已逐项页面查询返回正确任务。详情抽屉可见任务基础信息、用户、请求/响应 JSON、额度流水、错误、视频 URL 过期时间、完成时间、返还时间；刷新状态按钮可见并在无匹配 Ark 渠道时提示“未找到可刷新该任务的 Ark 渠道”；新增独立页面验收任务 `aitask-m432-refund` 后，手动返还按钮可点，确认后返还数从 0 变为 2，重复返还按钮变为禁用。安全复测通过：详情中未发现真实 API Key、token、secret、完整 base64、`data:` 或 `blob:` 长内容，只显示 `[redacted]` / `[media redacted]`。仍需后续用真实 Ark 渠道任务复测“刷新状态”成功路径。
+- M4.3.1 管理后台 AI 任务日志验收记录：已重新 `npm run build`，并先后重启 3000，最终按项目 standalone 方式运行；由于 8080 旧进程仍是 M4.2 前代码，验收中同步重启了后端，启动日志确认 `/api/admin/ai-tasks`、`/api/admin/ai-tasks/:id`、`refresh`、`refund` 路由已注册。`3000 /api/health` 和 `8080 /api/health` 均返回 `ok`，页面页头可见版本 `v0.1.8`。默认管理员账号登录接口可用。真实库原本没有 `ai_tasks`，为验收插入了独立测试用户 `user-m431-acceptance`、任务 `aitask-m431-acceptance` 和关联消费流水；后台接口验证通过：列表加载、分页、用户/状态/类型/动作/模型/渠道/上游 taskId/时间范围/关键词筛选均返回正确结果；详情接口返回任务基础信息、用户简要信息、脱敏 `request_json/response_json`、关联 `credit_logs`、错误信息、视频 URL、过期时间、`finishedAt/refundedAt`；安全检查未发现真实 API Key、token、secret、完整 base64、`data:` 或 `blob:` 长内容。手动返还第一次成功写入 `ai_refund`，测试用户余额从 7 回到 10；第二次返还返回“任务已返还，不能重复返还”。这条验收任务没有匹配的真实 Ark 渠道，点击/调用刷新状态返回“未找到可刷新该任务的 Ark 渠道”，真实 Ark 刷新仍需后续用实际任务复测。
+- M4.3.1 页面可见 UI 未通过：在 Chrome 和 Codex 内置浏览器打开 `localhost:3000/login?redirect=/admin/ai-tasks` 时，页头和 `v0.1.8` 能显示，但登录/后台主体区域未挂载，只看到顶部导航，无法完成侧栏“AI 任务日志”、`/admin/ai-tasks` 列表、详情抽屉、筛选控件和按钮的真实可见 UI 操作验收。当前结论是接口和数据链路已通过，但管理后台页面主体渲染需要单独排查后再做页面级复测。
+- M4.3 管理后台 AI 任务日志已实现：新增管理员接口 `GET /api/admin/ai-tasks`、`GET /api/admin/ai-tasks/:id`、`POST /api/admin/ai-tasks/:id/refresh`、`POST /api/admin/ai-tasks/:id/refund`；列表支持用户、状态、类型、动作、模型、渠道、上游 taskId、时间范围、关键词和分页筛选；详情返回任务、用户简要信息、关联 `credit_logs`、脱敏请求/响应、错误、视频 URL、过期时间、返还和完成时间；刷新仅对 Ark 视频上游任务开放并复用 M4.2 状态同步和幂等返还；手动返还会检查 `refunded_at`、`credits_refunded` 和已有返还流水避免重复。后台新增 `/admin/ai-tasks` 页面和导航入口，可查看列表、详情抽屉、刷新状态和手动返还。后端测试已覆盖列表筛选、详情、视频刷新、失败手动返还和重复返还拦截，仍需后续在真实管理后台页面用管理员账号确认筛选、详情抽屉和按钮交互。
+- M4.2 视频异步任务生命周期与失败返还已实现：查询 `/api/v1/videos/:id` 时会按 `upstream_task_id` 同步更新 `ai_tasks` 的 `status/raw_status/response_json/video_url/video_url_expires_at/error_code/error_message`；`queued/running/succeeded` 不返还，`failed/cancelled` 会把任务标失败并按 `refunded_at` 幂等返还一次；重复刷新失败任务不会重复加回算力点；`/api/v1/videos/:id/content` 成功下载后会记录 `finished_at`。后端测试已覆盖 running 不返还、failed 返还一次、重复 failed 不重复返还、succeeded 不返还和 content finished_at，仍需后续用真实 Ark 长任务页面确认数据库状态随轮询变化。
+- M4.1 AI 任务账本基础已实现：新增 `ai_tasks` 表，后端云端 AI 代理的生图、图生图、聊天和视频创建会创建任务记录；扣费和失败返还的 `credit_logs.related_id` 会指向 `ai_tasks.id`；上游同步失败会把任务标记为失败并返还；Ark 视频创建成功会写入 `upstream_task_id` 和上游初始状态；请求/响应账本会脱敏 API Key、base64、blob URL 和文件内容。后端单元测试已覆盖成功记录、失败返还关联和脱敏，仍需后续在真实后台云端渠道页面触发一次生图/聊天/Ark 视频创建，确认管理端数据库记录与实际扣费流水一致。
+- 新增 Windows x64 桌面安装包封装：`web` 目录下可通过 `npm run desktop:dist:win` 构建 NSIS `.exe` 安装器；Electron 启动后会自动拉起内置 Go 后端和 Next.js standalone 服务，并把 SQLite、素材、提示词缓存和 JWT Secret 放到系统用户数据目录。
+- 新增 macOS 桌面安装包封装：`web` 目录下可通过 `npm run desktop:dist:mac` 构建当前机器架构的 `.dmg`，也支持 `desktop:dist:mac:arm64` 和 `desktop:dist:mac:x64` 指定架构；运行数据同样放到系统用户数据目录。
+- 修复 macOS 桌面端启动超时：打包后显式补回 Next.js standalone 的 `node_modules`，避免 Electron 内置 Node 启动 `server.js` 时找不到 `next`；桌面启动失败时会把后端和前端子进程日志写入 `desktop.log` 便于定位。
+- macOS 桌面包改为 ad-hoc 签名，避免本地资源未封签导致的“应用已损坏”问题；通过微信或浏览器分发后仍可能被 Gatekeeper 隔离，正式对外分发需 Apple Developer ID 签名和公证。
+- AI 代理接口会透传上游错误原因：火山 Ark、OpenAI 兼容图片/聊天/视频接口返回 4xx/5xx 时，节点失败提示优先显示上游 `error.code` / `error.message`，避免只看到笼统的“AI 接口请求失败”。
+- 画布音视频服务端缓存接口改为登录后可用；未登录时只保留浏览器本地缓存，不再允许匿名上传文件到公开缓存目录。视频下载代理会拒绝非 HTTP(S)、localhost、内网 IP、链路本地地址等目标，避免服务端代拉内部地址。
+- 开发环境新增本地测试免输入：无 token、token 失效或停留在登录页时会自动尝试使用默认测试账号登录；AI 配置检查在开发环境默认放行，并支持通过 `NEXT_PUBLIC_DEV_*` 环境变量预填测试接口配置或关闭临时放行。
+- Seedance 2.0 视频节点支持 P1 连续视频工作流：图片参考可在输入预览中指定为首帧、尾帧或普通参考图；火山请求会传入 `first_frame`、`last_frame` 和 `return_last_frame`；生成完成后如果 Ark 返回尾帧，会保存尾帧地址，只有在视频节点悬浮工具栏明确点击“续写”时，才创建“上一段尾帧”图片节点，并连接到一个空的“下一段视频”节点作为下一段首帧输入。
+- 画布视频节点新增 M1 关系语义：已生成视频节点修改提示词后点击生成，会创建平行变体视频节点，不再自动创建串行下一段；变体节点 metadata 会标记 `actionType/videoActionType=variant`、`variantOfNodeId`，续写节点会标记 `actionType/videoActionType=continue`、`continuationOfNodeId`。
+- 修复已完成视频节点重新生成变体时被错误画成串行下一段的问题：平行变体节点不再创建 `原视频 -> 新视频` 画布连线，位置改为原视频下方偏右；变体会继续记录 `relationType=variant`、`variantOfNodeId/sourceVideoNodeId`，但普通生成模式不会把原视频作为 `source_video` 提交，只有编辑和延长模式才使用源视频关系。
+- 画布 Seedance 视频设置新增 M2 任务模式：生成、编辑、延长；编辑支持 `replace/add/remove/inpaint` 类型，延长支持向后/向前方向。编辑和延长会以上游视频节点作为源视频创建新的派生视频节点，metadata 标记 `actionType/videoActionType=edit|extend`、`relationType=derivative`、`sourceVideoNodeId`，Ark payload 会把源视频写为 `source_video` content，并分别带上 `task_mode/edit_type/extend_direction`。
+- 修复 M2 编辑/延长引用已生成视频时优先拿本地 `blob:` 播放地址的问题；现在上游视频节点如果保存了 Ark 返回的 `videoUrl`，会优先作为 `source_video` 引用，避免把仅浏览器可访问的本地缓存地址传给 Seedance。
+- M2.1 视频节点新增任务可观测界面：生成中、失败和已完成视频节点会在节点内展示阶段式进度、耗时、taskId、任务详情；有 taskId 时支持手动刷新任务状态并回填最新 Ark 查询结果，方便观察 Seedance 长任务处于创建、排队、生成、回填或完成阶段。
+- 修复视频生成中切换页面再回来被误判失败的问题：进入画布时，带 `taskId` 的 loading 视频节点会保留任务进度并自动刷新 Ark 状态；任务仍 queued/running 时继续显示进度，succeeded 时会继续下载视频、写入本地缓存并更新为 success，failed/cancelled 才标记为 error；没有 `taskId` 的 loading 视频节点会显示“任务创建未完成，请重新生成。”。
+- 视频节点新增“截帧”入口，可对任意已加载视频截取播放器当前时间点画面，不依赖 Ark `last_frame_url`；截取结果会作为“当前帧”图片节点创建在视频节点旁，写入本地图片存储并记录来源视频节点 ID、截取时间点和来源关系，可继续作为普通图片参考连接到视频配置节点。
+- 视频节点提示词输入/预览体验优化：视频模式下提示词区域字号和行高提高，设置最大高度并支持长提示词纵向滚动；提示词区域标记为画布 no-zoom，滚轮只滚动提示词内容，不触发画布缩放或拖拽。
+- M2.2 页面收口验收记录：已重新 `npm run build` 并重启 3000，3000/8080 健康检查均返回 `ok`；真实画布页面可见视频任务进度、耗时、任务详情、已完成视频的 URL 有效期和本地缓存大小。长提示词预览在页面中已确认固定高度、可滚动、`data-canvas-no-zoom` 生效，计算样式为 15px 字号和 24px 行高；M2.4 已通过真实滚轮复测确认“滚轮只滚动提示词、不缩放画布”。
+- M2.2 仍需人工复测：当前页面已有 3 个视频节点加载为本地 `blob:` 播放源并达到 `readyState=4`，但浏览器自动化未能稳定唤出视频节点 hover 工具条，因此“截帧”按钮的播放中截取、暂停截取、接近结尾截取、生成图片节点、本地存储，以及截取图片连接到视频配置节点并设置为 `first_frame/last_frame/reference_image` 仍需人工在页面完成；平行变体、显式续写、编辑派生、延长派生的关系隔离已由单元测试覆盖，真实 Ark 页面生成链路仍需继续按实际素材复测。
+- M2.3 页面关系回归验收记录：已重新 `npm run build` 并重启 3000，3000/8080 健康检查均返回 `ok`。真实画布 `rFZdaeZun7HyFTgGRnGiJ` 中，视频节点 `video-1780378747723-9k9cr` 只有图片参考连入，未发现 `video-1780378747723-9k9cr -> 新视频` 的直接画布连线，符合平行变体不创建 `CanvasConnection` 的规则；选中该视频后，长提示词面板仍为 15px / 24px、固定高度、可滚动并带 `data-canvas-no-zoom`。页面当前还存在两条旧的 `视频 -> 视频` 连线（`video-1780380595167-6-405in -> NbruQ1sKHwFdHPzcoSecA -> LzvdlQLmkoUFB_VpDBNtm`），浏览器自动化只能从 DOM 推断连接拓扑，无法直接读取这些旧节点 metadata 判定是显式续写还是历史旧数据，需人工打开节点信息确认 `relationType`。
+- M2.3 仍需人工复测：需要人工在真实页面执行一次“已完成视频改提示词后生成”，确认新 B 节点 metadata 为 `relationType=variant` 且连接数不增加；需要人工点击“续写”确认只有该入口创建 `视频 -> 尾帧图 -> 下一段视频`；编辑 / 延长需要人工确认节点 metadata 为 `derivative` 且不覆盖源视频；截取当前帧、配置节点连接上游视频后作为 `source_video` 的页面操作仍需人工复测。
+- M2.4 视频能力人工验收记录：真实画布 `rFZdaeZun7HyFTgGRnGiJ` 中，任务详情已能读到两个变体节点：`NbruQ1sKHwFdHPzcoSecA` 显示 `模式 generate / 关系 variant / 源视频 video-1780380595167-6-405in`，`LzvdlQLmkoUFB_VpDBNtm` 显示 `模式 generate / 关系 variant / 源视频 NbruQ1sKHwFdHPzcoSecA`，说明页面可观测层能展示 variant 关系和源视频 ID。长提示词滚轮已复测通过：提示词 textarea 带 `data-canvas-no-zoom`，滚轮后 `scrollTop` 从 0 变为 420，画布缩放仍保持 31%。
+- M2.4 仍需人工复测/保留项：当前画布未发现可见的编辑/延长 `derivative` 完成节点，仍需确认 `relationType=derivative / sourceVideoNodeId`；本轮未发新的真实 Ark 最小 `source_video` 任务，配置节点连接上游视频后的 `source_video` 路径可用性仍保留；截取当前帧的播放中、暂停、接近结尾三种截取，以及截取图片连接到视频配置节点并设置为 `reference_image / first_frame / last_frame` 仍需人工页面复测。
+- M2.5 历史变体连线清理已验收：新增加载时清理逻辑后，真实画布 `rFZdaeZun7HyFTgGRnGiJ` 里历史错误连线 `video-1780380595167-6-405in -> NbruQ1sKHwFdHPzcoSecA` 和 `NbruQ1sKHwFdHPzcoSecA -> LzvdlQLmkoUFB_VpDBNtm` 已被移除；页面连接数从 16 降到 13，`video -> video` 直连为 0，图片参考连到视频的连接仍保留。
+- M2.5 当前新规则已验证：在 `v0.1.1` 真实页面选中已完成视频节点 `video-1780378747723-9k9cr`，修改提示词后点击“生成”，创建了新的变体视频节点 `pBuAlSmQQEtWDkfIWcZ9B`；节点数从 16 增加到 17，但连接数仍保持 13，`video -> video` 直连仍为 0，确认当前重新生成变体不会再新增 `源视频 -> 变体视频` CanvasConnection。该真实 Ark 任务已进入生成中，后续仅需按普通长任务继续观察最终回填。
+- M3.1 画布助手动作协议基础纯函数已实现并进入页面链路：新增动作类型、validator、preview builder 和 apply helper，第一版仅允许 `canvas.read / canvas.summarize / node.explain_context / node.create_text / node.create_config / connection.create`；会拒绝删除节点、删除连线、覆盖结果、自动触发 AI 生成，`connection.create` 会校验节点存在、不能自连、不能重复连线。
+- M3.2 画布助手动作预览已接入 `CanvasAssistantPanel` 并完成页面验收：助手消息可展示受控 `AssistantCanvasAction` 预览卡片，显示动作原因、将创建的节点/连线数量、影响节点/连线和风险校验；写入动作不会自动应用，用户点击“应用到画布”后才通过 `applyAssistantCanvasActions` 返回新的 nodes/connections 并触发现有画布历史，支持撤销；点击“取消”只更新助手消息状态，不修改画布。第一版只提供开发调试固定 action 入口，不允许模型自由生成任意 action。
+- M3.3 画布助手只读能力已接入并完成页面验收：`CanvasAssistantPanel` 的“总结当前画布”可在真实页面生成中文摘要，读取节点类型、标题、提示词/内容、任务状态和连线关系；“解释选中节点”可列出当前节点、上游节点、下游节点，并标记参考、变体、续写、派生或普通连线。只读动作不会修改 nodes/connections，并通过跳过画布历史的 session 更新避免污染撤销栈。
+- M3.4 画布助手自然语言转受控动作建议已接入并完成页面验收：助手输入会先用本地规则解析“创建文本节点”“创建视频/图片生成配置节点”“连接当前选中节点到新配置节点”“连接两个已选节点”等请求，解析结果统一转成 `AssistantCanvasAction`，顺序经过 validator 和 preview builder；页面只显示动作预览，用户确认后才应用，无法解析时回退到原有助手流程，不允许模型自由执行动作。
+- M3.5 页面验收记录：已重新 `npm run build` 并重启 3000，真实页面显示 `v0.1.5`，3000/8080 健康检查均返回 `ok`。在画布 `rFZdaeZun7HyFTgGRnGiJ` 上验证通过：“总结当前画布”输出真实画布摘要；“解释选中节点”在多选两个图片节点后输出当前节点、上游/下游和普通连线关系；“创建一个文本节点，内容是M3.5 确认应用文本”先显示 1 个节点/0 条连线预览，取消不改变画布，确认后重新总结显示节点数从 26 增加到 27、连线仍为 13，点击撤销后恢复为 26/13；“帮我创建一个视频配置节点”和“帮我创建一个图片生成配置节点”均只显示 1 个配置节点预览，取消后仍为 26/13；“把选中的图片连到视频配置”在选中图片节点后显示 1 个配置节点/1 条连线预览，取消后仍为 26/13；“连接两个已选节点”在 shift 多选两个图片节点后显示 0 个节点/1 条连线预览，取消后仍为 26/13；无法解析的“你觉得这个故事怎么样”没有产生动作预览，重新总结仍为 26/13。页面未开放删除节点、覆盖节点或真实 AI 生成动作。
+- M2 页面验收记录：当前 3000 重新 build 后，视频节点设置面板能显示“生成 / 编辑 / 延长”，编辑模式能显示 `替换 / 添加 / 移除 / 重绘`；在已完成视频节点自身的 prompt 面板上选择“编辑 + 替换”并生成，会创建新的派生视频节点，源视频节点保持已完成且未被覆盖，也没有自动创建“上一段尾帧 / 下一段视频”连续链路。浏览器自动化未能可靠拖拽完成“视频节点连接到配置节点”的连线场景，该路径仍需人工页面复测。当前 Ark 编辑任务页面轮询超过 5 分钟仍停留在“生成中”，因此最终视频回填、本地缓存、刷新后播放、失败态展示，以及 `add`、向后/向前延长的真实页面生成仍需复测；代码路径 payload 已确认会输出 `task_mode=edit|extend`、`edit_type` / `extend_direction` 和 `source_video`。
+- 画布助手打开时不再显示“未开发”标记；选中生成配置等画布节点后，助手会根据连线自动把上游图片和文本节点纳入引用，引用顺序尊重节点的输入顺序设置。
+- Seedance 2.0 视频节点新增 P2 多模态参考能力：视频生成配置节点会收集上游图片、视频、音频节点，输入预览中统一展示所有参考素材并允许跨类型调整顺序；图片参考可指定 `reference_image / first_frame / last_frame`，视频按 `reference_video`、音频按 `reference_audio` 提交；Ark 请求会按输入顺序生成 `content` 数组，并继续兼容 `return_last_frame` 和连续视频链路；视频提示词输入框支持输入 `@` 通过预览选择已连接的图片、视频或音频参考并插入 `图片 1 / 视频 1 / 音频 1` 官方标签。
+- Seedance 视频节点新增“参考图用途模式”：默认“普通参考”会把所有图片作为 `reference_image`；用户在视频设置中明确选择“首帧”“首尾帧”或连续视频链路创建的“续写”时，才会自动生成 `first_frame / last_frame` 角色；输入预览中每张图片的角色下拉仍可作为高级手动覆盖。
 - 画布视频节点和生成配置节点新增本地视频供应商切换，可在“OpenAI 兼容”和“火山 Seedance”之间按节点选择；切换时会使用对应默认视频模型，生成和重试会沿用节点保存的供应商与模型。
 - 默认模型选择器改为可搜索弹窗，支持按模型名或厂商别名筛选；本地渠道可直接输入自定义模型 ID，管理后台公开配置里的默认模型下拉也按模型名检索。
-- API 配置弹窗将 OpenAI 兼容和火山 Seedance 的 Base URL/API Key 拆开保存；默认视频模型可在“OpenAI 兼容视频”和“火山 Seedance”之间切换，Seedance 使用独立模型名。
-- 火山方舟 Ark 配置改为预设 Seedance 接口地址，界面只需要填写 Ark API Key；OpenAI 兼容和火山方舟配置在视觉上分成两个独立区块。
+- API 配置弹窗将 OpenAI 兼容和火山 Seedance 的 Base URL/API Key 拆开保存；默认视频模型可在“OpenAI 兼容视频”和“火山 Seedance”之间切换，Seedance 区分显示模型名和实际调用的 Endpoint ID。
+- 火山方舟 Ark 配置改为预设 Seedance 接口地址，界面需要填写 Ark API Key 和 Seedance Endpoint ID；OpenAI 兼容和火山方舟配置在视觉上分成两个独立区块。
 - OpenAI 兼容模型拉取后会按图片、视频、语言模型分类，生图/视频/文本选择器只展示对应类别，仍支持本地直连时手动输入模型 ID。
-- Seedance 视频设置新增 Ark 参数：`duration/ratio/resolution` 继续由秒数、尺寸、清晰度映射，并新增生成音频、水印和 seed；本地火山方舟请求和后端 Ark 代理都会传入 `generate_audio/watermark/seed`。
+- Seedance 视频设置新增 Ark 参数：`duration/ratio/resolution`，其中 `duration` 按 Seedance 2.0 要求以 4~15 秒整数提交，不再压成 5/10/15 档位；本地火山方舟请求和后端 Ark 代理都会传入 `generate_audio/watermark/seed`。
 - 画布视频节点会展示更完整的任务信息：生成中/完成/失败状态、失败原因、`video_url` 有效期，以及视频转存到本地后的 `storageKey`、大小、类型和转存时间。
 - 画布项目导出改为下载 `.zip` 压缩包，包内包含 `projects.json` 和当前画布引用到的本地图片、视频文件，避免只导出 JSON 时丢失媒体内容。
 - 画布库支持多选后一键导出多个画布项目，导出的压缩包可一次恢复多个项目。
 - 画布项目导入改为读取新版 `.zip` 压缩包，会先按 `projects.json` 中的文件映射恢复图片、视频到本地存储，再插入画布项目，导入成功后仍停留在画布库。
+- 画布中通过菜单上传、拖拽、剪贴板粘贴或替换节点导入的图片、视频和音频，会自动加入“我的素材”；导入画布压缩包时也会把画布里的可保存节点同步加入“我的素材”。
 - 修复删除画布图片节点或清空画布后撤销时，节点信息恢复但本地图片数据已被清理导致图片丢失的问题。
-- “我的素材”类型筛选区右侧新增文本样式的导出素材和导入素材入口，可将全部素材导出为包含 `assets.json` 与图片、视频文件的压缩包，并从压缩包恢复素材。
+- “我的素材”类型筛选区右侧新增文本样式的导出素材和导入素材入口，可将全部素材导出为包含 `assets.json` 与图片、视频、音频文件的压缩包，并从压缩包恢复素材；导入入口也支持直接选择本地图片、视频和音频文件创建素材。
+- “我的素材”新增本地视频、音频上传与预览，导入导出会一并保存音视频文件。
 - 未登录状态下，画布右上角不再显示用户头像菜单、用户名称、算力点余额和退出登录入口，改为显示登录入口；快捷键入口仍可直接打开。
 - 生图工作台的图片参数区复用画布里的紧凑版图像设置面板，尺寸、质量、生成张数的交互保持一致；工作台仍保留独立的模型选择。
 - 生图工作台新增生成记录配置持久化：每次生成会保存提示词、参考图、模型、质量、尺寸和张数，结果图写入本地图片存储后记录只保存 `storageKey`；点击历史记录会回填本次生成配置并预览结果。
 - 视频设置抽成画布和视频创作台共用的紧凑面板，清晰度、尺寸、秒数按固定网格选择并支持手动输入；尺寸选择 `auto` 时请求不传 `size`。
+- 视频设置面板将“尺寸”改为 Seedance/Ark 实际使用的“画幅比例”，按钮摘要显示 `resolution + ratio + 秒数`；旧的 `1280x720/720x1280/1024x1024` 会自动映射为 `16:9/9:16/1:1`，旧的 `480p/low` 会按 Ark 能力提交为 `720p`，避免界面显示与 payload 不一致。
 - 修复画布和生图工作台选择图片尺寸后，请求图片生成/编辑接口未携带 `size` 参数的问题；`auto` 不传，其余比例或像素尺寸会随请求发送。
 - 修复生图工作台和画布生图请求中 `quality` 参数可能传入上游不支持值导致 400 的问题；请求前会归一化质量枚举，`auto` 或异常值不再发送给上游。
 - 管理后台新增/编辑渠道时，渠道可用模型支持通过弹窗按“新获取、已有”分组选择，并可在弹窗内手动增加模型或拉取模型列表后再写回表单。
@@ -29,11 +70,25 @@
 - 视频生成前端会识别后端 `{ code, msg }` 错误响应，创建失败不再继续轮询 `undefined`。
 - 新增 `/video` 视频创作台页面，参考生图工作台布局，支持提示词、参考图、视频参数、生成结果、保存素材、下载和本地生成记录；清晰度和秒数均支持常用值选择与手动输入，生成记录只保存媒体 `storageKey` 并可回填本次提示词、参考图和参数。
 - 视频创作台生成前会把模型、尺寸、秒数、清晰度归一化为视频接口支持的参数，并展示后端返回的错误信息，避免页面侧残留的生图参数影响视频请求。
+- 后台“素材管理”新增图片、视频、音频文件上传，文件保存到后端公开静态目录并自动回填素材 URL；前台“素材库”支持筛选、预览并加入这些媒体素材。
 
 ## 火山私域人像素材加白
 
 - “我的素材”的图片素材支持提交到火山私域虚拟人像素材资产库。
+- “我的素材”图片卡片和详情抽屉中的“加白”按钮改为点击后直接提交审核，不再弹出二次确认。
+- “我的素材”和画布图片节点的加白入口对图片始终可见；未开启火山人像加白配置时，点击会提示先开启配置。
+- 画布图片节点悬浮工具条新增“加白/刷新加白”入口，可把节点图片直接提交到火山素材库，并把 Asset ID、素材组和审核状态写回节点信息。
+- 画布 Seedance 视频生成会优先把已校验成功的图片参考作为 `asset://<Asset ID>` 提交，避免加白素材在生成视频时仍被当成普通图片 URL。
 - 后端会先把本地图片保存为公开静态文件，再使用后台配置的 AK/SK、ProjectName 调用火山素材接口。
-- 前台右上角“配置”弹窗新增“火山人像加白”配置区，管理员可在同一入口配置启用状态、AK/SK、ProjectName、Region 和公网素材访问地址。
+- 前台右上角“配置”弹窗新增“火山人像加白”配置区，管理员可在同一入口配置启用状态、AK/SK、ProjectName、Region、素材组 ID 和公网素材访问地址。
+- 后台“素材管理”页新增“火山素材审核”配置入口，可在管理素材时直接调整加白开关、AK/SK、ProjectName、Region、素材组 ID 和公网素材访问地址。
+- 后台“素材管理”图片素材列表新增加白/刷新按钮，上传生成的 `/api/uploaded-assets/...` 地址会按公网素材访问地址转换后提交火山。
 - 图片素材详情中可查看火山 Asset ID、素材组 ID、ProjectName，并可手动刷新审核状态。
 - 需要配置公网可访问的素材地址；本地开发地址无法被火山服务拉取。
+- 公网素材访问地址为火山 TOS 域名时，后端会在提交 `CreateAsset` 前把图片自动上传到对应桶路径，避免只拼出 TOS URL 但桶内对象不存在。
+- 上传调用对齐火山官方 demo：配置素材组 ID 后会作为 `CreateAsset` 的 `GroupId` 直接传入；留空才自动新建素材组，上传和查询都使用配置中的 ProjectName。
+- 素材本身已经是 `https://...` 公网地址时会直接提交；只有 `/uploaded-assets/...` 本地上传路径才需要通过公网素材访问地址转换。
+- 提交审核或刷新状态时，如果火山返回接口错误或素材处理失败原因，会在页面提示和素材详情中显示具体错误。
+- 公网素材访问地址会拒绝 `localhost`、`.local` 和内网 IP，避免把火山无法访问的本地地址提交给素材库。
+- 图片格式校验对齐火山 `CreateAsset` 文档，除 jpeg/png/webp/bmp/tiff/gif 外，也允许 heic/heif，并会读取 HEIF 尺寸后再提交。
+- 提交后的 `Processing` 火山素材会在“我的素材”和画布图片节点中自动轮询 `GetAsset`，按钮显示“自动刷新中/审核中”，状态变为 `Active` 或 `Failed` 后会自动更新素材标签、详情和节点信息，不需要手动点刷新。

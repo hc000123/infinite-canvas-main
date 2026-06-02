@@ -23,11 +23,13 @@ func New() *gin.Engine {
 	api.GET("/auth/linux-do/callback", gin.WrapF(handler.LinuxDoCallback))
 	api.GET("/auth/me", middleware.OptionalAuth, gin.WrapF(handler.CurrentUser))
 	api.GET("/settings", gin.WrapF(handler.Settings))
+	api.Static("/uploaded-assets", config.Cfg.PublicAssetDir)
 	v1 := api.Group("/v1", middleware.UserAuth)
 	v1.POST("/images/generations", gin.WrapF(handler.AIImagesGenerations))
 	v1.POST("/images/edits", gin.WrapF(handler.AIImagesEdits))
 	v1.POST("/chat/completions", gin.WrapF(handler.AIChatCompletions))
 	v1.POST("/videos", gin.WrapF(handler.AIVideos))
+	v1.POST("/canvas/media-cache", gin.WrapF(handler.CacheCanvasMedia))
 	v1.POST("/volcengine/assets/image-review", gin.WrapF(handler.SubmitVolcengineImageAsset))
 	v1.POST("/volcengine/assets/status", gin.WrapF(handler.VolcengineAssetStatus))
 	v1.GET("/videos/:id", func(c *gin.Context) {
@@ -36,6 +38,7 @@ func New() *gin.Engine {
 	v1.GET("/videos/:id/content", func(c *gin.Context) {
 		handler.AIVideoContent(c.Writer, c.Request, c.Param("id"))
 	})
+	v1.POST("/proxy/video-download", gin.WrapF(handler.AIProxyVideoDownload))
 	api.GET("/prompts", middleware.OptionalAuth, gin.WrapF(handler.Prompts))
 	api.GET("/assets", middleware.OptionalAuth, gin.WrapF(handler.Assets))
 	api.POST("/admin/login", gin.WrapF(handler.AdminLogin))
@@ -54,6 +57,16 @@ func New() *gin.Engine {
 	admin.DELETE("/credit-logs/:id", func(c *gin.Context) {
 		handler.AdminDeleteCreditLog(c.Writer, c.Request, c.Param("id"))
 	})
+	admin.GET("/ai-tasks", gin.WrapF(handler.AdminAITasks))
+	admin.GET("/ai-tasks/:id", func(c *gin.Context) {
+		handler.AdminAITask(c.Writer, c.Request, c.Param("id"))
+	})
+	admin.POST("/ai-tasks/:id/refresh", func(c *gin.Context) {
+		handler.AdminRefreshAITask(c.Writer, c.Request, c.Param("id"))
+	})
+	admin.POST("/ai-tasks/:id/refund", func(c *gin.Context) {
+		handler.AdminRefundAITask(c.Writer, c.Request, c.Param("id"))
+	})
 	admin.GET("/settings", gin.WrapF(handler.AdminSettings))
 	admin.POST("/settings", gin.WrapF(handler.AdminSaveSettings))
 	admin.POST("/settings/channel-models", gin.WrapF(handler.AdminChannelModels))
@@ -68,6 +81,13 @@ func New() *gin.Engine {
 	})
 	admin.GET("/assets", gin.WrapF(handler.AdminAssets))
 	admin.POST("/assets", gin.WrapF(handler.AdminSaveAsset))
+	admin.POST("/assets/upload", gin.WrapF(handler.AdminUploadAssetMedia))
+	admin.POST("/assets/:id/volcengine-review", func(c *gin.Context) {
+		handler.AdminSubmitAssetVolcengineReview(c.Writer, c.Request, c.Param("id"))
+	})
+	admin.POST("/assets/:id/volcengine-review/refresh", func(c *gin.Context) {
+		handler.AdminRefreshAssetVolcengineReview(c.Writer, c.Request, c.Param("id"))
+	})
 	admin.DELETE("/assets/:id", func(c *gin.Context) {
 		handler.AdminDeleteAsset(c.Writer, c.Request, c.Param("id"))
 	})

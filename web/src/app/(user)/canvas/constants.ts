@@ -1,5 +1,4 @@
-import { CanvasNodeType } from "./types";
-import type { CanvasNodeMetadata } from "./types";
+import type { CanvasNodeMetadata, CanvasNodeType } from "./types.ts";
 
 type CanvasNodeSpec = {
     width: number;
@@ -9,27 +8,32 @@ type CanvasNodeSpec = {
 };
 
 export const NODE_DEFAULT_SIZE = {
-    [CanvasNodeType.Image]: { width: 340, height: 240, title: "New Generation" },
-    [CanvasNodeType.Text]: { width: 340, height: 240, title: "Note" },
-    [CanvasNodeType.Config]: { width: 340, height: 240, title: "生成配置" },
-    [CanvasNodeType.Video]: { width: 420, height: 236, title: "Video" },
+    image: { width: 340, height: 240, title: "New Generation" },
+    text: { width: 340, height: 240, title: "Note" },
+    config: { width: 340, height: 240, title: "生成配置" },
+    video: { width: 420, height: 236, title: "Video" },
+    audio: { width: 340, height: 120, title: "Audio" },
 } satisfies Record<CanvasNodeType, { width: number; height: number; title: string }>;
 
 export const NODE_SPECS = {
-    [CanvasNodeType.Image]: {
-        ...NODE_DEFAULT_SIZE[CanvasNodeType.Image],
+    image: {
+        ...NODE_DEFAULT_SIZE.image,
         metadata: { content: "", status: "idle" },
     },
-    [CanvasNodeType.Text]: {
-        ...NODE_DEFAULT_SIZE[CanvasNodeType.Text],
+    text: {
+        ...NODE_DEFAULT_SIZE.text,
         metadata: { content: "", status: "idle", fontSize: 14 },
     },
-    [CanvasNodeType.Config]: {
-        ...NODE_DEFAULT_SIZE[CanvasNodeType.Config],
+    config: {
+        ...NODE_DEFAULT_SIZE.config,
         metadata: { content: "", status: "idle", generationMode: "image" },
     },
-    [CanvasNodeType.Video]: {
-        ...NODE_DEFAULT_SIZE[CanvasNodeType.Video],
+    video: {
+        ...NODE_DEFAULT_SIZE.video,
+        metadata: { content: "", status: "idle" },
+    },
+    audio: {
+        ...NODE_DEFAULT_SIZE.audio,
         metadata: { content: "", status: "idle" },
     },
 } satisfies Record<CanvasNodeType, CanvasNodeSpec>;

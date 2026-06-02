@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ArrowUp, History, ImageIcon, LoaderCircle, MessageSquare, PanelRightClose, Plus, RotateCcw, Settings2, Sparkles, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowUp, FileText, History, ImageIcon, LoaderCircle, MessageSquare, Network, PanelRightClose, Plus, RotateCcw, Settings2, Sparkles, Trash2, X } from "lucide-react";
 import { Button, Modal, Tooltip } from "antd";
 import { motion } from "motion/react";
 
@@ -20,7 +20,17 @@ import type { ReferenceImage } from "@/types/image";
 import { DiaTextReveal } from "@/components/ui/dia-text-reveal";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasPromptLibrary } from "./canvas-prompt-library";
-import { CanvasNodeType, type CanvasAssistantImage, type CanvasAssistantMessage, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasNodeData } from "../types";
+import { type CanvasAssistantImage, type CanvasAssistantMessage, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData } from "../types";
+import {
+    buildAssistantCanvasActionPreview,
+    executeAssistantCanvasReadAction,
+    parseAssistantCanvasActionSuggestion,
+    validateAssistantCanvasAction,
+    validateAssistantCanvasActions,
+    type AssistantCanvasAction,
+    type AssistantCanvasReadAction,
+} from "../utils/canvas-assistant-actions";
+import { buildAssistantReferences } from "../utils/canvas-assistant-references";
 
 type AssistantMode = "ask" | "image";
 const PANEL_MOTION_MS = 500;
@@ -28,19 +38,35 @@ const PANEL_MOTION_SECONDS = PANEL_MOTION_MS / 1000;
 
 type CanvasAssistantPanelProps = {
     nodes: CanvasNodeData[];
+    connections: CanvasConnection[];
     selectedNodeIds: Set<string>;
     sessions: CanvasAssistantSession[];
     activeSessionId: string | null;
     onSelectNodeIds: (ids: Set<string>) => void;
-    onSessionsChange: (sessions: CanvasAssistantSession[], activeSessionId: string | null) => void;
+    onSessionsChange: (sessions: CanvasAssistantSession[], activeSessionId: string | null, options?: { skipCanvasHistory?: boolean }) => void;
     onInsertImage: (image: CanvasAssistantImage) => void;
     onInsertText: (text: string) => void;
     onPasteImage: (file: File) => void;
+    onApplyAssistantActions: (actions: AssistantCanvasAction[]) => boolean;
     onCollapseStart: () => void;
     onCollapse: () => void;
 };
 
-export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeSessionId, onSelectNodeIds, onSessionsChange, onInsertImage, onInsertText, onPasteImage, onCollapseStart, onCollapse }: CanvasAssistantPanelProps) {
+export function CanvasAssistantPanel({
+    nodes,
+    connections,
+    selectedNodeIds,
+    sessions,
+    activeSessionId,
+    onSelectNodeIds,
+    onSessionsChange,
+    onInsertImage,
+    onInsertText,
+    onPasteImage,
+    onApplyAssistantActions,
+    onCollapseStart,
+    onCollapse,
+}: CanvasAssistantPanelProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const effectiveConfig = useEffectiveConfig();
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
@@ -60,6 +86,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
     const [removedReferenceIds, setRemovedReferenceIds] = useState<Set<string>>(new Set());
     const [localSessions, setLocalSessions] = useState<CanvasAssistantSession[]>(() => (sessions.length ? sessions : [createSession()]));
     const [localActiveSessionId, setLocalActiveSessionId] = useState<string | null>(activeSessionId);
+    const skipNextSessionsHistoryRef = useRef(false);
 
     useEffect(() => {
         if (!sessions.length) return;
@@ -68,7 +95,8 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
     }, [activeSessionId, sessions]);
 
     useEffect(() => {
-        onSessionsChange(localSessions, localActiveSessionId);
+        onSessionsChange(localSessions, localActiveSessionId, { skipCanvasHistory: skipNextSessionsHistoryRef.current });
+        skipNextSessionsHistoryRef.current = false;
     }, [localActiveSessionId, localSessions, onSessionsChange]);
 
     const safeSessions = localSessions.length ? localSessions : [createSession()];
@@ -77,7 +105,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
     const messages = activeSession?.messages || [];
     const hasMessages = messages.length > 0;
     const selectedNodeKey = useMemo(() => Array.from(selectedNodeIds).sort().join(","), [selectedNodeIds]);
-    const allSelectedReferences = useMemo(() => buildAssistantReferences(nodes, selectedNodeIds), [nodes, selectedNodeIds]);
+    const allSelectedReferences = useMemo(() => buildAssistantReferences(nodes, selectedNodeIds, connections), [connections, nodes, selectedNodeIds]);
     const selectedReferences = useMemo(() => allSelectedReferences.filter((item) => !removedReferenceIds.has(item.id)), [allSelectedReferences, removedReferenceIds]);
     const iconButtonStyle = { color: theme.node.muted };
 
@@ -96,6 +124,26 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
             messages: [...session.messages, message],
             updatedAt: new Date().toISOString(),
         }));
+    };
+
+    const appendAssistantMessage = (message: CanvasAssistantMessage, options?: { skipCanvasHistory?: boolean }) => {
+        if (options?.skipCanvasHistory) skipNextSessionsHistoryRef.current = true;
+        const session = activeSession || createSession();
+        setLocalActiveSessionId(session.id);
+        setView("chat");
+        setLocalSessions((prev) => {
+            const base = prev.some((item) => item.id === session.id) ? prev : [session, ...prev];
+            return base.map((item) =>
+                item.id === session.id
+                    ? {
+                          ...item,
+                          title: item.messages.length ? item.title : message.text.slice(0, 18) || "助手消息",
+                          messages: [...item.messages, message],
+                          updatedAt: new Date().toISOString(),
+                      }
+                    : item,
+            );
+        });
     };
 
     const updateMessage = (sessionId: string, messageId: string, patch: Partial<CanvasAssistantMessage>) => {
@@ -188,6 +236,19 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
     const submit = async () => {
         const text = prompt.trim();
         if (!text || isRunning) return;
+        const suggestion = parseAssistantCanvasActionSuggestion({ text, nodes, connections, selectedNodeIds: Array.from(selectedNodeIds) });
+        if (suggestion?.actions.length) {
+            setPrompt("");
+            appendAssistantMessage({
+                id: nanoid(),
+                role: "assistant",
+                mode: "ask",
+                text: `${suggestion.reason}。确认前不会修改画布。`,
+                assistantActions: suggestion.actions,
+                assistantActionStatus: "pending",
+            });
+            return;
+        }
         await sendMessage(text, mode, messages);
     };
 
@@ -196,6 +257,23 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
         const userIndex = messages.slice(0, index).findLastIndex((item) => item.role === "user");
         const user = messages[userIndex];
         if (user) void sendMessage(user.text, user.mode, messages.slice(0, userIndex), user.references);
+    };
+
+    const createDebugActionPreview = () => {
+        const actions = buildDebugAssistantActions(nodes, connections, Array.from(selectedNodeIds));
+        appendAssistantMessage({
+            id: nanoid(),
+            role: "assistant",
+            mode: "ask",
+            text: "已生成一个画布动作预览。确认前不会修改画布。",
+            assistantActions: actions,
+            assistantActionStatus: "pending",
+        });
+    };
+
+    const runReadAction = (action: AssistantCanvasReadAction) => {
+        const result = executeAssistantCanvasReadAction(action, nodes, connections);
+        appendAssistantMessage({ id: nanoid(), role: "assistant", mode: "ask", text: result.text }, { skipCanvasHistory: true });
     };
 
     const startResize = () => {
@@ -239,7 +317,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                 <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
                     <div className="flex items-center gap-2 text-sm font-medium">
                         <Sparkles className="size-4" />
-                        {view === "history" ? "历史记录" : "画布助手(未开发)"}
+                        {view === "history" ? "历史记录" : "画布助手"}
                     </div>
                     <div className="flex items-center gap-1">
                         {view === "history" ? (
@@ -300,7 +378,20 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                             onDelete={(id) => setDeleteChatIds([id])}
                         />
                     ) : messages.length ? (
-                        <AssistantMessages messages={messages} onRetry={retryMessage} onInsertImage={onInsertImage} onInsertText={onInsertText} />
+                        <AssistantMessages
+                            messages={messages}
+                            nodes={nodes}
+                            connections={connections}
+                            onRetry={retryMessage}
+                            onInsertImage={onInsertImage}
+                            onInsertText={onInsertText}
+                            onApplyAssistantActions={(message) => {
+                                if (!message.assistantActions?.length) return;
+                                const applied = onApplyAssistantActions(message.assistantActions);
+                                if (applied) updateMessage(activeSession?.id || "", message.id, { assistantActionStatus: "applied", assistantActionAppliedAt: new Date().toISOString() });
+                            }}
+                            onCancelAssistantActions={(message) => updateMessage(activeSession?.id || "", message.id, { assistantActionStatus: "cancelled" })}
+                        />
                     ) : (
                         <div className="flex h-full flex-col items-center justify-center px-1 text-center">
                             <div className="relative font-serif text-4xl font-bold italic tracking-normal" style={{ color: theme.node.text }}>
@@ -324,6 +415,16 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                         onSubmit={submit}
                         onConfigChange={updateConfig}
                         onMissingConfig={() => openConfigDialog(true)}
+                        onCreateDebugActionPreview={createDebugActionPreview}
+                        onSummarizeCanvas={() => runReadAction({ id: nanoid(), kind: "read", type: "canvas.summarize", reason: "总结当前画布" })}
+                        onExplainSelectedNodes={() => {
+                            const nodeIds = Array.from(selectedNodeIds);
+                            if (!nodeIds.length) {
+                                appendAssistantMessage({ id: nanoid(), role: "assistant", mode: "ask", text: "请先选中一个节点，我再解释它的上下游关系。" }, { skipCanvasHistory: true });
+                                return;
+                            }
+                            runReadAction({ id: nanoid(), kind: "read", type: "node.explain_context", reason: "解释选中节点上下游", payload: { nodeIds } });
+                        }}
                         onRemoveReference={(id) => {
                             setRemovedReferenceIds((prev) => new Set(prev).add(id));
                             if (selectedNodeIds.has(id)) onSelectNodeIds(new Set(Array.from(selectedNodeIds).filter((nodeId) => nodeId !== id)));
@@ -372,6 +473,9 @@ function AssistantComposer({
     onSubmit,
     onConfigChange,
     onMissingConfig,
+    onCreateDebugActionPreview,
+    onSummarizeCanvas,
+    onExplainSelectedNodes,
     onRemoveReference,
     onPasteImage,
     modelCosts,
@@ -386,6 +490,9 @@ function AssistantComposer({
     onSubmit: () => void;
     onConfigChange: (key: keyof AiConfig, value: string) => void;
     onMissingConfig: () => void;
+    onCreateDebugActionPreview: () => void;
+    onSummarizeCanvas: () => void;
+    onExplainSelectedNodes: () => void;
     onRemoveReference: (id: string) => void;
     onPasteImage: (file: File) => void;
     modelCosts?: { model: string; credits: number }[];
@@ -425,6 +532,15 @@ function AssistantComposer({
                 <div className="mt-2 flex items-center justify-between gap-2">
                     <div className="canvas-composer-tools flex min-w-0 flex-1 items-center gap-1">
                         <CanvasPromptLibrary onSelect={onPromptChange} />
+                        <Tooltip title="总结当前画布">
+                            <Button type="text" shape="circle" className="canvas-composer-icon !h-8 !min-w-8 !rounded-full !px-2" icon={<FileText className="size-4" />} onClick={onSummarizeCanvas} />
+                        </Tooltip>
+                        <Tooltip title="解释选中节点">
+                            <Button type="text" shape="circle" className="canvas-composer-icon !h-8 !min-w-8 !rounded-full !px-2" icon={<Network className="size-4" />} onClick={onExplainSelectedNodes} />
+                        </Tooltip>
+                        <Tooltip title="开发调试：生成动作预览">
+                            <Button type="text" shape="circle" className="canvas-composer-icon !h-8 !min-w-8 !rounded-full !px-2" icon={<Sparkles className="size-4" />} onClick={onCreateDebugActionPreview} />
+                        </Tooltip>
                         <AssistantModeSwitch mode={mode} theme={theme} onChange={onModeChange} />
                         {mode === "image" ? (
                             <>
@@ -495,14 +611,22 @@ function qualityLabel(value: string) {
 
 function AssistantMessages({
     messages,
+    nodes,
+    connections,
     onRetry,
     onInsertImage,
     onInsertText,
+    onApplyAssistantActions,
+    onCancelAssistantActions,
 }: {
     messages: CanvasAssistantMessage[];
+    nodes: CanvasNodeData[];
+    connections: CanvasConnection[];
     onRetry: (message: CanvasAssistantMessage) => void;
     onInsertImage: (image: CanvasAssistantImage) => void;
     onInsertText: (text: string) => void;
+    onApplyAssistantActions: (message: CanvasAssistantMessage) => void;
+    onCancelAssistantActions: (message: CanvasAssistantMessage) => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
 
@@ -523,6 +647,7 @@ function AssistantMessages({
                         {message.text}
                     </div>
                     {message.references?.length ? <MessageReferences message={message} /> : null}
+                    {message.assistantActions?.length ? <AssistantActionPreviewCard message={message} nodes={nodes} connections={connections} onApply={() => onApplyAssistantActions(message)} onCancel={() => onCancelAssistantActions(message)} /> : null}
                     {message.isLoading ? <ImageGenerationPending compact label={message.mode === "image" ? "正在生成图片" : "正在回答"} className="w-[250px] rounded-2xl border" /> : null}
                     {message.role === "assistant" && !message.isLoading ? (
                         <div className="flex gap-1">
@@ -546,6 +671,60 @@ function AssistantMessages({
                 </div>
             ))}
         </>
+    );
+}
+
+function AssistantActionPreviewCard({ message, nodes, connections, onApply, onCancel }: { message: CanvasAssistantMessage; nodes: CanvasNodeData[]; connections: CanvasConnection[]; onApply: () => void; onCancel: () => void }) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const actions = message.assistantActions || [];
+    const status = message.assistantActionStatus || "pending";
+    const validationErrors = status === "pending" ? validateAssistantCanvasActions(actions, nodes, connections) : [];
+    const missingPreviewCount = status === "pending" ? actions.filter((action) => action.kind === "write" && !action.preview).length : 0;
+    const previews = actions.flatMap((action) => (action.kind === "write" && action.preview ? [action.preview] : []));
+    const createdNodeCount = previews.reduce((count, preview) => count + (preview.createdNodes?.length || 0), 0);
+    const createdConnectionCount = previews.reduce((count, preview) => count + (preview.createdConnections?.length || 0), 0);
+    const affectedNodeIds = unique(previews.flatMap((preview) => preview.affectedNodeIds));
+    const affectedConnectionIds = unique(previews.flatMap((preview) => preview.affectedConnectionIds));
+    const reasons = actions.map((action) => action.reason).filter(Boolean);
+    const risk = [...validationErrors, ...(missingPreviewCount ? [`${missingPreviewCount} 个动作缺少预览`] : [])];
+    const canApply = status === "pending" && actions.length > 0 && risk.length === 0;
+
+    return (
+        <div className="w-[290px] rounded-2xl border p-3 text-sm" style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}>
+            <div className="mb-2 text-xs font-medium opacity-60">动作预览</div>
+            <div className="space-y-1.5 leading-5">
+                <div>
+                    <span className="opacity-60">原因：</span>
+                    {reasons.length ? reasons.join("；") : "助手建议修改画布"}
+                </div>
+                <div>
+                    <span className="opacity-60">将创建：</span>
+                    {createdNodeCount} 个节点，{createdConnectionCount} 条连线
+                </div>
+                <div>
+                    <span className="opacity-60">影响节点：</span>
+                    {affectedNodeIds.length ? affectedNodeIds.join("、") : "无"}
+                </div>
+                <div>
+                    <span className="opacity-60">影响连线：</span>
+                    {affectedConnectionIds.length ? affectedConnectionIds.join("、") : "无"}
+                </div>
+                <div style={{ color: risk.length ? "#dc2626" : theme.node.muted }}>
+                    <span className="opacity-60">风险/校验：</span>
+                    {risk.length ? unique(risk).join("；") : status === "pending" ? "校验通过，等待确认" : status === "applied" ? "已应用到画布" : "已取消"}
+                </div>
+            </div>
+            {status === "pending" ? (
+                <div className="mt-3 flex gap-2">
+                    <Button size="small" type="primary" disabled={!canApply} onClick={onApply}>
+                        应用到画布
+                    </Button>
+                    <Button size="small" onClick={onCancel}>
+                        取消
+                    </Button>
+                </div>
+            ) : null}
+        </div>
     );
 }
 
@@ -619,23 +798,46 @@ function AssistantReferenceChip({ item, onRemove }: { item: CanvasAssistantRefer
     );
 }
 
-function nodeToReference(node: CanvasNodeData): CanvasAssistantReference | null {
-    if (node.type === CanvasNodeType.Image && node.metadata?.content) {
-        return { id: node.id, type: node.type, title: node.title, dataUrl: node.metadata.content, storageKey: node.metadata.storageKey };
-    }
-    if (node.type === CanvasNodeType.Text && node.metadata?.content) {
-        return { id: node.id, type: node.type, title: node.title, text: node.metadata.content };
-    }
-    return null;
+function buildDebugAssistantActions(nodes: CanvasNodeData[], connections: CanvasConnection[], selectedNodeIds: string[]): AssistantCanvasAction[] {
+    const selectedIds = selectedNodeIds.filter((id) => nodes.some((node) => node.id === id));
+    const anchor = nodes.find((node) => node.id === selectedIds[0]) || nodes[0];
+    const base = anchor ? { x: anchor.position.x + anchor.width + 96, y: anchor.position.y } : undefined;
+    const drafts: AssistantCanvasAction[] =
+        selectedIds.length >= 2
+            ? [
+                  {
+                      id: nanoid(),
+                      kind: "write",
+                      type: "connection.create",
+                      reason: "开发调试：连接两个已选节点，验证连线预览和确认应用流程",
+                      payload: { fromNodeId: selectedIds[0], toNodeId: selectedIds[1] },
+                  },
+              ]
+            : [
+                  {
+                      id: nanoid(),
+                      kind: "write",
+                      type: "node.create_text",
+                      reason: "开发调试：创建文本节点，验证动作预览不会自动修改画布",
+                      payload: { title: "助手文本预览", content: "这是助手动作预览创建的文本节点。", position: base },
+                  },
+                  {
+                      id: nanoid(),
+                      kind: "write",
+                      type: "node.create_config",
+                      reason: "开发调试：创建视频配置节点，验证配置节点预览",
+                      payload: { mode: "video", title: "助手配置预览", position: base ? { x: base.x, y: base.y + 280 } : undefined },
+                  },
+              ];
+
+    return drafts.map((action) => {
+        const validation = validateAssistantCanvasAction(action, nodes, connections);
+        return validation.ok ? { ...validation.action, preview: buildAssistantCanvasActionPreview(validation.action, nodes, connections) } : action;
+    });
 }
 
-function buildAssistantReferences(nodes: CanvasNodeData[], selectedNodeIds: Set<string>) {
-    const nodeById = new Map(nodes.map((node) => [node.id, node]));
-    return Array.from(selectedNodeIds)
-        .map((id) => nodeById.get(id))
-        .filter((node): node is CanvasNodeData => Boolean(node))
-        .map(nodeToReference)
-        .filter((item): item is CanvasAssistantReference => Boolean(item));
+function unique<T>(items: T[]) {
+    return Array.from(new Set(items));
 }
 
 async function buildChatMessages(messages: CanvasAssistantMessage[]): Promise<ChatCompletionMessage[]> {

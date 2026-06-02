@@ -2,12 +2,13 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { ChevronRight, Image as ImageIcon, RefreshCw, Star, Video } from "lucide-react";
+import { AlertTriangle, AudioLines, ChevronRight, Download, Image as ImageIcon, RefreshCw, Star, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type Position } from "../types";
+import { buildCanvasVideoProgress, videoElapsedSeconds } from "../utils/canvas-video-progress";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 const selectionBlue = "#2f80ff";
@@ -40,7 +41,9 @@ type CanvasNodeProps = {
     onToggleBatch?: (nodeId: string) => void;
     onSetBatchPrimary?: (node: CanvasNodeData) => void;
     onRetry?: (node: CanvasNodeData) => void;
+    onRefreshVideoTask?: (node: CanvasNodeData) => void;
     onGenerateImage?: (node: CanvasNodeData) => void;
+    onDownload?: (node: CanvasNodeData) => void;
     onContextMenu: (event: React.MouseEvent, nodeId: string) => void;
 };
 
@@ -58,7 +61,9 @@ type NodeContentRendererProps = {
     onContentChange: (nodeId: string, content: string) => void;
     onStopEditing: () => void;
     onRetry?: (node: CanvasNodeData) => void;
+    onRefreshVideoTask?: (node: CanvasNodeData) => void;
     onGenerateImage?: (node: CanvasNodeData) => void;
+    onDownload?: (node: CanvasNodeData) => void;
     onToggleBatch?: () => void;
     onSetBatchPrimary?: () => void;
 };
@@ -91,7 +96,9 @@ export const CanvasNode = React.memo(function CanvasNode({
     onToggleBatch,
     onSetBatchPrimary,
     onRetry,
+    onRefreshVideoTask,
     onGenerateImage,
+    onDownload,
     onContextMenu,
 }: CanvasNodeProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -99,6 +106,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const [isEditingContent, setIsEditingContent] = useState(false);
     const hasImageContent = data.type === CanvasNodeType.Image && Boolean(data.metadata?.content);
     const hasVideoContent = data.type === CanvasNodeType.Video && Boolean(data.metadata?.content);
+    const hasAudioContent = data.type === CanvasNodeType.Audio && Boolean(data.metadata?.content);
     const isBatchRoot = data.type === CanvasNodeType.Image && Boolean(data.metadata?.isBatchRoot) && batchCount > 1;
     const isBatchChild = data.type === CanvasNodeType.Image && Boolean(data.metadata?.batchRootId);
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
@@ -250,7 +258,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             <div
                 className="relative h-full w-full overflow-visible rounded-3xl border-2"
                 style={{
-                    background: hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,
+                    background: hasImageContent || hasVideoContent || hasAudioContent ? "transparent" : theme.node.fill,
                     borderColor: hasImageContent ? imageBorderColor : isActive ? selectionBlue : isRelated ? theme.node.muted : theme.node.stroke,
                     boxShadow: isActive ? `0 0 0 1px ${selectionBlue}55` : isRelated && !isBatchChild ? `0 0 0 1px ${theme.node.muted}55, 0 18px 48px rgba(0,0,0,.14)` : undefined,
                 }}
@@ -270,7 +278,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                     className={`relative flex h-full w-full items-center justify-center rounded-[inherit] ${isBatchRoot ? "overflow-visible" : "overflow-hidden"}`}
                     style={
                         {
-                            background: hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,
+                            background: hasImageContent || hasVideoContent || hasAudioContent ? "transparent" : theme.node.fill,
                             "--batch-from-x": `${batchMotion?.x || 0}px`,
                             "--batch-from-y": `${batchMotion?.y || 0}px`,
                             "--batch-from-rotate": `${6 + (batchMotion?.index || 0) * 4}deg`,
@@ -293,7 +301,9 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onContentChange={onContentChange}
                         onStopEditing={() => setIsEditingContent(false)}
                         onRetry={onRetry}
+                        onRefreshVideoTask={onRefreshVideoTask}
                         onGenerateImage={onGenerateImage}
+                        onDownload={onDownload}
                         onToggleBatch={() => onToggleBatch?.(data.id)}
                         onSetBatchPrimary={() => onSetBatchPrimary?.(data)}
                     />
@@ -301,7 +311,7 @@ export const CanvasNode = React.memo(function CanvasNode({
 
                 {showImageInfo && hasImageContent ? <ImageInfoBar node={data} /> : null}
 
-                {!hasImageContent && !hasVideoContent ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12" style={{ background: `linear-gradient(to top, ${theme.canvas.background}66, transparent)` }} /> : null}
+                {!hasImageContent && !hasVideoContent && !hasAudioContent ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12" style={{ background: `linear-gradient(to top, ${theme.canvas.background}66, transparent)` }} /> : null}
 
                 <ResizeHandle corner="top-left" onMouseDown={handleResizeMouseDown} />
                 <ResizeHandle corner="top-right" onMouseDown={handleResizeMouseDown} />
@@ -312,7 +322,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             <ConnectionHandleDot side="left" visible={hovered || isSelected || isConnecting} onMouseDown={(event) => onConnectStart(event, data.id, "target")} />
             <ConnectionHandleDot side="right" visible={data.type !== CanvasNodeType.Config && (hovered || isSelected || isConnecting)} onMouseDown={(event) => onConnectStart(event, data.id, "source")} />
 
-            {showPanel && renderPanel && data.type !== CanvasNodeType.Config ? <div className="absolute left-1/2 top-full z-[70] w-[500px] -translate-x-1/2 pt-4">{renderPanel(data)}</div> : null}
+            {showPanel && renderPanel && data.type !== CanvasNodeType.Config && data.type !== CanvasNodeType.Audio ? <div className="absolute left-1/2 top-full z-[70] w-[500px] -translate-x-1/2 pt-4">{renderPanel(data)}</div> : null}
         </div>
     );
 });
@@ -320,8 +330,8 @@ export const CanvasNode = React.memo(function CanvasNode({
 function NodeContent(props: NodeContentRendererProps) {
     if (props.node.type === CanvasNodeType.Config && props.renderNodeContent) return props.renderNodeContent(props.node);
     if (props.isBatchRoot) return <ImageNodeContent {...props} />;
-    if (props.node.metadata?.status === "loading") return <LoadingContent node={props.node} theme={props.theme} />;
-    if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} />;
+    if (props.node.metadata?.status === "loading") return <LoadingContent node={props.node} theme={props.theme} onRefreshVideoTask={props.onRefreshVideoTask} />;
+    if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} onRefreshVideoTask={props.onRefreshVideoTask} />;
 
     const Renderer = nodeContentRenderers[props.node.type];
     return <Renderer {...props} />;
@@ -332,20 +342,76 @@ const nodeContentRenderers = {
     [CanvasNodeType.Image]: ImageNodeContent,
     [CanvasNodeType.Config]: EmptyImageContent,
     [CanvasNodeType.Video]: VideoNodeContent,
+    [CanvasNodeType.Audio]: AudioNodeContent,
 } satisfies Record<CanvasNodeType, (props: NodeContentRendererProps) => ReactNode>;
 
-function LoadingContent({ node, theme }: Pick<NodeContentRendererProps, "node" | "theme">) {
-    const taskStatus = node.type === CanvasNodeType.Video ? videoStatusLabel(node.metadata?.taskStatus || node.metadata?.rawTaskStatus) : "";
+function LoadingContent({ node, theme, onRefreshVideoTask }: Pick<NodeContentRendererProps, "node" | "theme" | "onRefreshVideoTask">) {
+    if (node.type === CanvasNodeType.Video) return <VideoTaskProgressPanel node={node} theme={theme} onRefreshVideoTask={onRefreshVideoTask} />;
     return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.activeStroke }}>
             <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />
             <span className="text-[10px] tracking-[0.2em]">生成中</span>
-            {taskStatus ? <span className="max-w-[220px] truncate text-xs opacity-65">任务 {taskStatus}</span> : null}
         </div>
     );
 }
 
-function ErrorContent({ node, theme, onRetry }: Pick<NodeContentRendererProps, "node" | "theme" | "onRetry">) {
+function useElapsedSeconds(startedAt?: number) {
+    const [now, setNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        if (!startedAt) return;
+        setNow(Date.now());
+        const timer = window.setInterval(() => setNow(Date.now()), 1000);
+        return () => window.clearInterval(timer);
+    }, [startedAt]);
+
+    if (!startedAt) return 0;
+    return Math.max(0, Math.floor((now - startedAt) / 1000));
+}
+
+function videoGenerationStartedAt(node: CanvasNodeData) {
+    const startedAt = normalizeTimestamp(node.metadata?.generationStartedAt);
+    if (startedAt) return startedAt;
+    return normalizeTimestamp(node.metadata?.taskCreatedAt);
+}
+
+function normalizeTimestamp(value?: number) {
+    if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+    return value > 1_000_000_000_000 ? value : value * 1000;
+}
+
+function formatElapsedTime(seconds: number) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const rest = seconds % 60;
+    if (hours > 0) return `${hours}:${padTime(minutes)}:${padTime(rest)}`;
+    return `${padTime(minutes)}:${padTime(rest)}`;
+}
+
+function padTime(value: number) {
+    return String(value).padStart(2, "0");
+}
+
+function ErrorContent({ node, theme, onRetry, onRefreshVideoTask }: Pick<NodeContentRendererProps, "node" | "theme" | "onRetry" | "onRefreshVideoTask">) {
+    if (node.type === CanvasNodeType.Video) {
+        return (
+            <VideoTaskProgressPanel node={node} theme={theme} onRefreshVideoTask={onRefreshVideoTask}>
+                <button
+                    type="button"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition hover:scale-[1.02]"
+                    style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onRetry?.(node);
+                    }}
+                    onMouseDown={(event) => event.stopPropagation()}
+                >
+                    <RefreshCw className="size-3.5" />
+                    重试
+                </button>
+            </VideoTaskProgressPanel>
+        );
+    }
     return (
         <div className="flex max-w-[260px] flex-col items-center gap-3 px-5 text-center">
             <div className="text-xs leading-5 text-red-300">{node.metadata?.errorDetails || "生成失败"}</div>
@@ -364,6 +430,102 @@ function ErrorContent({ node, theme, onRetry }: Pick<NodeContentRendererProps, "
             </button>
         </div>
     );
+}
+
+function VideoTaskProgressPanel({ node, theme, onRefreshVideoTask, children, compact = false }: Pick<NodeContentRendererProps, "node" | "theme" | "onRefreshVideoTask"> & { children?: ReactNode; compact?: boolean }) {
+    const [detailsOpen, setDetailsOpen] = useState(false);
+    const generationStartedAt = videoGenerationStartedAt(node);
+    const elapsedSeconds = useElapsedSeconds(generationStartedAt);
+    const progress = buildCanvasVideoProgress(node.metadata, node.metadata?.status);
+    const taskId = node.metadata?.taskId || "";
+    const rows = videoTaskDetailRows(node, elapsedSeconds);
+    const isFailed = progress.stage === "failed";
+    return (
+        <div
+            className={`${compact ? "w-[min(360px,calc(100%-16px))]" : "w-[min(340px,calc(100%-28px))]"} flex max-h-[calc(100%-20px)] flex-col rounded-2xl border p-3 text-left shadow-[0_18px_42px_rgba(0,0,0,.18)] backdrop-blur-md`}
+            style={{ background: `${theme.node.fill}ee`, borderColor: theme.node.stroke, color: theme.node.text }}
+        >
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 text-sm font-semibold">
+                        {isFailed ? <AlertTriangle className="size-4 text-red-300" /> : null}
+                        <span>{progress.label}</span>
+                    </div>
+                    <div className="mt-1 flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-[11px] opacity-65">
+                        <span className="tabular-nums">已用 {formatElapsedTime(elapsedSeconds)}</span>
+                        {taskId ? <span className="max-w-[180px] truncate tabular-nums">task {shortTaskId(taskId)}</span> : <span>{isFailed ? "未创建任务" : "等待 taskId"}</span>}
+                    </div>
+                </div>
+                <div className="shrink-0 rounded-full border px-2 py-1 text-[11px] font-medium tabular-nums" style={{ borderColor: isFailed ? "#ef4444aa" : theme.node.stroke, color: isFailed ? "#fca5a5" : theme.node.text }}>
+                    {isFailed ? "失败" : `${progress.percent}%`}
+                </div>
+            </div>
+            {!isFailed ? (
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full" style={{ background: theme.toolbar.activeBg }}>
+                    <div className="h-full rounded-full bg-[#2f80ff] transition-all duration-500" style={{ width: `${progress.percent}%` }} />
+                </div>
+            ) : null}
+            <div className="mt-3 grid grid-cols-5 gap-1.5">
+                {progress.steps.map((step, index) => (
+                    <div key={step} className="min-w-0">
+                        <div className="mb-1 h-1 rounded-full" style={{ background: videoProgressStepColor({ index, progress, theme }) }} />
+                        <div className="truncate text-center text-[10px] opacity-65">{step}</div>
+                    </div>
+                ))}
+            </div>
+            {node.metadata?.errorDetails ? (
+                <div className="mt-3 line-clamp-2 rounded-lg border px-2.5 py-2 text-xs leading-5 text-red-300" style={{ borderColor: theme.node.stroke }}>
+                    {node.metadata.errorDetails}
+                </div>
+            ) : null}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+                {taskId ? (
+                    <button
+                        type="button"
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition hover:scale-[1.02]"
+                        style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onRefreshVideoTask?.(node);
+                        }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                    >
+                        <RefreshCw className="size-3.5" />
+                        刷新
+                    </button>
+                ) : null}
+                <button
+                    type="button"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition hover:scale-[1.02]"
+                    style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        setDetailsOpen((value) => !value);
+                    }}
+                    onMouseDown={(event) => event.stopPropagation()}
+                >
+                    详情
+                </button>
+                {children}
+            </div>
+            {detailsOpen ? (
+                <div className="thin-scrollbar mt-3 max-h-32 space-y-1.5 overflow-auto rounded-lg border p-2 text-[11px] leading-4" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
+                    {rows.map((row) => (
+                        <div key={row.label} className="grid grid-cols-[58px_minmax(0,1fr)] gap-2">
+                            <span className="opacity-45">{row.label}</span>
+                            <span className="min-w-0 break-all tabular-nums">{row.value}</span>
+                        </div>
+                    ))}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function videoProgressStepColor({ index, progress, theme }: { index: number; progress: ReturnType<typeof buildCanvasVideoProgress>; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    const step = index + 1;
+    if (progress.stage === "failed") return step === progress.currentStep ? "#ef4444" : theme.node.stroke;
+    return step <= progress.currentStep ? "#2f80ff" : theme.node.stroke;
 }
 
 function TextContent({ node, theme, isEditingContent, textareaRef, onContentChange, onStopEditing, onGenerateImage }: NodeContentRendererProps) {
@@ -417,9 +579,9 @@ function ImageNodeContent(props: NodeContentRendererProps) {
     if (!props.node.metadata?.content && props.isBatchRoot) {
         const content =
             props.node.metadata?.status === "loading" ? (
-                <LoadingContent node={props.node} theme={props.theme} />
+                <LoadingContent node={props.node} theme={props.theme} onRefreshVideoTask={props.onRefreshVideoTask} />
             ) : props.node.metadata?.status === "error" ? (
-                <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} />
+                <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} onRefreshVideoTask={props.onRefreshVideoTask} />
             ) : (
                 <EmptyImageContent {...props} isBatchRoot={false} />
             );
@@ -463,7 +625,8 @@ function EmptyImageContent({ theme, isBatchRoot, batchCount, batchExpanded, batc
     return content;
 }
 
-function VideoNodeContent({ node, theme }: NodeContentRendererProps) {
+function VideoNodeContent({ node, theme, onDownload, onRefreshVideoTask }: NodeContentRendererProps) {
+    const [detailsOpen, setDetailsOpen] = useState(false);
     if (!node.metadata?.content)
         return (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.placeholder }}>
@@ -474,7 +637,65 @@ function VideoNodeContent({ node, theme }: NodeContentRendererProps) {
     return (
         <div className="relative h-full w-full rounded-[18px] bg-black">
             <video src={node.metadata.content} controls className="h-full w-full rounded-[18px] object-contain" data-canvas-no-zoom />
+            <button
+                type="button"
+                className="absolute right-2.5 top-2.5 z-30 grid size-9 place-items-center rounded-lg border text-white shadow-[0_8px_24px_rgba(0,0,0,.24)] backdrop-blur-md transition hover:scale-[1.03]"
+                style={{ background: "rgba(0,0,0,.5)", borderColor: "rgba(255,255,255,.22)" }}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    onDownload?.(node);
+                }}
+                onMouseDown={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+                title="下载视频"
+                aria-label="下载视频"
+            >
+                <Download className="size-4" />
+            </button>
             <VideoNodeBadges node={node} />
+            {node.metadata?.taskId ? (
+                <div className="absolute left-2.5 top-2.5 z-30">
+                    <button
+                        type="button"
+                        className="rounded-lg border px-2.5 py-1.5 text-[11px] font-medium text-white shadow-[0_8px_24px_rgba(0,0,0,.24)] backdrop-blur-md transition hover:scale-[1.03]"
+                        style={{ background: "rgba(0,0,0,.5)", borderColor: "rgba(255,255,255,.22)" }}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setDetailsOpen((value) => !value);
+                        }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        title="任务详情"
+                        aria-label="任务详情"
+                    >
+                        任务详情
+                    </button>
+                </div>
+            ) : null}
+            {detailsOpen ? (
+                <div className="absolute left-2.5 top-12 z-40">
+                    <VideoTaskProgressPanel node={node} theme={theme} onRefreshVideoTask={onRefreshVideoTask} compact />
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function AudioNodeContent({ node, theme }: NodeContentRendererProps) {
+    if (!node.metadata?.content)
+        return (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-2" style={{ color: theme.node.placeholder }}>
+                <AudioLines className="size-6 opacity-35" />
+                <span className="text-sm">空音频节点</span>
+            </div>
+        );
+    return (
+        <div className="flex h-full w-full flex-col justify-center gap-2 rounded-[18px] px-4" style={{ background: theme.node.fill }}>
+            <div className="flex min-w-0 items-center gap-2 text-xs opacity-65">
+                <AudioLines className="size-4 shrink-0" />
+                <span className="truncate">{node.title}</span>
+            </div>
+            <audio src={node.metadata.content} controls className="w-full" data-canvas-no-zoom />
         </div>
     );
 }
@@ -493,6 +714,29 @@ function VideoNodeBadges({ node }: { node: CanvasNodeData }) {
             ))}
         </div>
     );
+}
+
+function videoTaskDetailRows(node: CanvasNodeData, elapsedSeconds: number) {
+    const metadata = node.metadata;
+    return [
+        { label: "taskId", value: metadata?.taskId },
+        { label: "阶段", value: buildCanvasVideoProgress(metadata, metadata?.status).label },
+        { label: "状态", value: videoStatusLabel(metadata?.taskStatus || metadata?.rawTaskStatus) },
+        { label: "原始", value: metadata?.rawTaskStatus },
+        { label: "耗时", value: formatElapsedTime(elapsedSeconds) },
+        { label: "模型", value: metadata?.model },
+        { label: "模式", value: metadata?.videoTaskMode },
+        { label: "关系", value: metadata?.relationType || metadata?.videoActionType },
+        { label: "源视频", value: metadata?.sourceVideoNodeId },
+        { label: "参数", value: [metadata?.resolution || metadata?.vquality, metadata?.ratio || metadata?.size, metadata?.duration || metadata?.seconds ? `${metadata.duration || metadata.seconds}s` : ""].filter(Boolean).join(" · ") },
+        { label: "seed", value: metadata?.seed },
+        { label: "URL", value: metadata?.videoUrlExpiresAt ? videoUrlExpiryLabel(node) : "" },
+    ].filter((row): row is { label: string; value: string } => Boolean(row.value));
+}
+
+function shortTaskId(taskId: string) {
+    if (taskId.length <= 18) return taskId;
+    return `${taskId.slice(0, 10)}…${taskId.slice(-6)}`;
 }
 
 function ImageContent({

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowUp, LoaderCircle } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowUp, AudioLines, Image as ImageIcon, LoaderCircle, Video } from "lucide-react";
 import { Button, Segmented } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -10,6 +10,8 @@ import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { buildCanvasVideoConfig, buildCanvasVideoProviderPatch } from "../utils/canvas-video-config";
+import { promptPreviewNoZoomProps, promptPreviewTextareaClass, promptPreviewTextareaStyle } from "../utils/canvas-prompt-preview";
+import { applyReferenceMention, filterReferenceMentions, findReferenceMentionTrigger, type CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
@@ -24,9 +26,10 @@ type CanvasNodePromptPanelProps = {
     onConfigChange: (nodeId: string, patch: Partial<CanvasNodeMetadata>) => void;
     onGenerate: (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => void;
     onImageSettingsOpenChange?: (open: boolean) => void;
+    referenceMentionOptions?: CanvasReferenceMentionOption[];
 };
 
-export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfigChange, onGenerate, onImageSettingsOpenChange }: CanvasNodePromptPanelProps) {
+export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfigChange, onGenerate, onImageSettingsOpenChange, referenceMentionOptions = [] }: CanvasNodePromptPanelProps) {
     const localConfig = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
@@ -39,7 +42,11 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const hasImageContent = node.type === CanvasNodeType.Image && Boolean(node.metadata?.content);
     const isEditingExistingContent = hasTextContent || hasImageContent;
     const [prompt, setPrompt] = useState(isEditingExistingContent ? "" : node.metadata?.prompt || "");
+    const [caret, setCaret] = useState(0);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, count: mode === "image" ? config.count : 1 });
+    const mentionTrigger = mode === "video" ? findReferenceMentionTrigger(prompt, caret) : null;
+    const mentionMatches = useMemo(() => (mentionTrigger ? filterReferenceMentions(referenceMentionOptions, mentionTrigger.query).slice(0, 6) : []), [mentionTrigger?.query, mentionTrigger?.start, referenceMentionOptions]);
 
     useEffect(() => {
         setPrompt(isEditingExistingContent ? "" : node.metadata?.prompt || "");
@@ -48,6 +55,16 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const updatePrompt = (value: string) => {
         setPrompt(value);
         if (!isEditingExistingContent) onPromptChange(node.id, value);
+    };
+    const updateCaret = () => setCaret(textareaRef.current?.selectionStart ?? 0);
+    const insertReferenceMention = (option: CanvasReferenceMentionOption) => {
+        const next = applyReferenceMention(prompt, caret, option.label);
+        updatePrompt(next.text);
+        setCaret(next.caret);
+        requestAnimationFrame(() => {
+            textareaRef.current?.focus();
+            textareaRef.current?.setSelectionRange(next.caret, next.caret);
+        });
     };
 
     const submit = () => {
@@ -65,18 +82,62 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
             onPointerDown={(event) => event.stopPropagation()}
             onWheel={(event) => event.stopPropagation()}
         >
-            <textarea
-                value={prompt}
-                onChange={(event) => updatePrompt(event.target.value)}
-                onKeyDown={(event) => {
-                    if (event.key !== "Enter" || event.ctrlKey || event.metaKey || event.shiftKey) return;
-                    event.preventDefault();
-                    submit();
-                }}
-                className="thin-scrollbar h-24 w-full resize-none rounded-xl border px-3 py-2 text-sm leading-5 outline-none"
-                style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }}
-                placeholder={mode === "video" ? "描述要生成的视频内容" : mode === "image" ? (hasImageContent ? "请输入你想要把这张图修改成什么" : "描述要生成的图片内容") : hasTextContent ? "请输入你想要将本段文本修改成什么" : "请输入你想要生成的文本内容"}
-            />
+            <div className="relative">
+                <textarea
+                    ref={textareaRef}
+                    {...promptPreviewNoZoomProps()}
+                    value={prompt}
+                    onChange={(event) => {
+                        updatePrompt(event.target.value);
+                        setCaret(event.target.selectionStart);
+                    }}
+                    onClick={updateCaret}
+                    onKeyUp={updateCaret}
+                    onSelect={updateCaret}
+                    onKeyDown={(event) => {
+                        if (event.key !== "Enter" || event.ctrlKey || event.metaKey || event.shiftKey) return;
+                        event.preventDefault();
+                        submit();
+                    }}
+                    className={promptPreviewTextareaClass(mode)}
+                    style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text, ...promptPreviewTextareaStyle(mode) }}
+                    onWheelCapture={(event) => event.stopPropagation()}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    placeholder={
+                        mode === "video"
+                            ? "输入 @ 选择图片、视频或音频参考素材"
+                            : mode === "image"
+                              ? hasImageContent
+                                  ? "请输入你想要把这张图修改成什么"
+                                  : "描述要生成的图片内容"
+                              : hasTextContent
+                                ? "请输入你想要将本段文本修改成什么"
+                                : "请输入你想要生成的文本内容"
+                    }
+                />
+                {mentionTrigger && mentionMatches.length ? (
+                    <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-lg border p-1 shadow-xl" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }}>
+                        {mentionMatches.map((option) => (
+                            <button
+                                key={option.id}
+                                type="button"
+                                className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-white/10"
+                                onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    insertReferenceMention(option);
+                                }}
+                            >
+                                <ReferenceMentionPreview option={option} />
+                                <span className="min-w-0 flex-1">
+                                    <span className="block font-medium">{option.label}</span>
+                                    {option.detail ? <span className="block truncate opacity-55">{option.detail}</span> : null}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                ) : null}
+            </div>
 
             {mode === "video" && config.channelMode === "local" ? (
                 <div className="mt-2" onMouseDown={(event) => event.stopPropagation()}>
@@ -111,7 +172,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     ) : mode === "video" ? (
                         <>
                             <ModelPicker config={config} modelType="video" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />
-                            <CanvasVideoSettingsPopover config={config} buttonClassName="!h-10 !max-w-[170px] !justify-start !rounded-full !px-3" onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
+                            <CanvasVideoSettingsPopover config={config} showTaskMode buttonClassName="!h-10 !max-w-[170px] !justify-start !rounded-full !px-3" onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
                         </>
                     ) : (
                         <ModelPicker config={config} modelType="text" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />
@@ -129,6 +190,22 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
             </div>
         </div>
     );
+}
+
+function ReferenceMentionPreview({ option }: { option: CanvasReferenceMentionOption }) {
+    const content =
+        option.previewUrl && option.previewType === "image" ? (
+            <img src={option.previewUrl} alt={option.label} className="h-full w-full object-cover" />
+        ) : option.previewUrl && option.previewType === "video" ? (
+            <video src={option.previewUrl} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+        ) : option.previewType === "video" ? (
+            <Video className="size-4 opacity-70" />
+        ) : option.previewType === "audio" ? (
+            <AudioLines className="size-4 opacity-70" />
+        ) : (
+            <ImageIcon className="size-4 opacity-70" />
+        );
+    return <span className="flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-black/25">{content}</span>;
 }
 
 function defaultMode(type: CanvasNodeData["type"]): CanvasNodeGenerationMode {

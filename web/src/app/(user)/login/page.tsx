@@ -30,6 +30,9 @@ function LoginContent() {
     const login = useUserStore((state) => state.login);
     const register = useUserStore((state) => state.register);
     const setSession = useUserStore((state) => state.setSession);
+    const hydrateUser = useUserStore((state) => state.hydrateUser);
+    const user = useUserStore((state) => state.user);
+    const isReady = useUserStore((state) => state.isReady);
     const isLoading = useUserStore((state) => state.isLoading);
     const linuxDoEnabled = useConfigStore((state) => state.publicSettings?.auth?.linuxDo?.enabled === true);
     const allowRegister = useConfigStore((state) => state.publicSettings?.auth?.allowRegister !== false);
@@ -48,6 +51,18 @@ function LoginContent() {
             router.refresh();
         });
     }, [message, redirect, router, searchParams, setSession]);
+
+    useEffect(() => {
+        if (searchParams.get("token") || searchParams.get("error")) return;
+        if (process.env.NODE_ENV !== "development" || process.env.NEXT_PUBLIC_DEV_AUTO_LOGIN === "false") return;
+        void hydrateUser();
+    }, [hydrateUser, searchParams]);
+
+    useEffect(() => {
+        if (!isReady || !user) return;
+        router.replace(redirect.startsWith("/") ? redirect : "/");
+        router.refresh();
+    }, [isReady, redirect, router, user]);
 
     useEffect(() => {
         if (!allowRegister && mode === "register") setMode("login");
@@ -96,7 +111,14 @@ function LoginContent() {
                             block
                             value={mode}
                             onChange={(value) => setMode(value as "login" | "register")}
-                            options={allowRegister ? [{ label: "登录", value: "login" }, { label: "注册", value: "register" }] : [{ label: "登录", value: "login" }]}
+                            options={
+                                allowRegister
+                                    ? [
+                                          { label: "登录", value: "login" },
+                                          { label: "注册", value: "register" },
+                                      ]
+                                    : [{ label: "登录", value: "login" }]
+                            }
                         />
                     </Form.Item>
                     <Form.Item name="username" label={<span className="font-medium text-stone-800 dark:text-stone-200">用户名</span>} rules={[{ required: true, message: "请输入用户名" }]}>

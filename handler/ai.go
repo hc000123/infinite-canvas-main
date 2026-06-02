@@ -2,7 +2,7 @@ package handler
 
 import (
 	"bytes"
-	"encoding/base64"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,9 +10,11 @@ import (
 	"log"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/service"
@@ -42,8 +44,25 @@ func AIVideoContent(w http.ResponseWriter, r *http.Request, id string) {
 	proxyAIGetRequest(w, r, "/videos/"+id+"/content")
 }
 
+func AIProxyVideoDownload(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		VideoURL string `json:"video_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload.VideoURL == "" {
+		Fail(w, "缺少 video_url 参数")
+		return
+	}
+	proxyArkVideoContent(w, r.Context(), payload.VideoURL)
+}
+
 func proxyAIGetRequest(w http.ResponseWriter, r *http.Request, path string) {
 	modelName := r.URL.Query().Get("model")
+	localAPIKey := r.Header.Get("X-Volcengine-Api-Key")
+	localBaseURL := r.Header.Get("X-Volcengine-Base-Url")
+	if localAPIKey != "" && localBaseURL != "" && strings.HasPrefix(path, "/videos/") {
+		proxyArkVideoGetByConfig(w, r.Context(), localBaseURL, localAPIKey, path)
+		return
+	}
 	if strings.TrimSpace(modelName) == "" {
 		modelName = "grok-imagine-video"
 	}
@@ -54,7 +73,7 @@ func proxyAIGetRequest(w http.ResponseWriter, r *http.Request, path string) {
 		return
 	}
 	if service.IsVolcengineArkProtocol(channel.Protocol) && strings.HasPrefix(path, "/videos/") {
-		proxyArkVideoGetRequest(w, channel, path)
+		proxyArkVideoGetRequest(w, r.Context(), channel, path)
 		return
 	}
 	request, err := http.NewRequest(http.MethodGet, service.BuildModelChannelURL(channel, path), nil)
@@ -78,6 +97,23 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		Fail(w, "未登录或权限不足")
 		return
 	}
+	isArkLocalVideo := path == "/videos"
+	if isArkLocalVideo {
+		volcengineAPIKey, volcengineBaseURL, seedancePayload, err := service.ReadArkLocalVideoConfig(body, contentType)
+		if err == nil && volcengineAPIKey != "" {
+			arkBody, _ := json.Marshal(seedancePayload)
+			baseURL := strings.TrimRight(volcengineBaseURL, "/")
+			request, reqErr := http.NewRequest(http.MethodPost, baseURL+"/contents/generations/tasks", bytes.NewReader(arkBody))
+			if reqErr != nil {
+				Fail(w, "AI 接口请求失败")
+				return
+			}
+			request.Header.Set("Authorization", "Bearer "+volcengineAPIKey)
+			request.Header.Set("Content-Type", "application/json")
+			copyArkVideoTaskResponse(w, request, nil)
+			return
+		}
+	}
 	credits, err := service.ModelCost(modelName)
 	if err != nil {
 		log.Printf("AI proxy read model cost failed: model=%s err=%v", modelName, err)
@@ -97,16 +133,33 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 	isArkVideoTask := service.IsVolcengineArkProtocol(channel.Protocol) && path == "/videos"
 	if isArkVideoTask {
 		upstreamPath = "/contents/generations/tasks"
-		upstreamBody, upstreamContentType, err = buildArkVideoCreateRequest(body, contentType)
+		upstreamBody, upstreamContentType, err = service.BuildArkVideoCreateRequest(body, contentType)
 		if err != nil {
 			log.Printf("AI proxy build ark video request failed: model=%s err=%v", modelName, err)
 			Fail(w, err.Error())
 			return
 		}
 	}
+	aiTask, err := service.CreateAITask(service.CreateAITaskInput{
+		UserID:      user.ID,
+		TaskType:    service.AITaskTypeForPath(path),
+		Provider:    channel.Name,
+		Protocol:    channel.Protocol,
+		Model:       modelName,
+		Path:        path,
+		Credits:     credits,
+		RequestBody: upstreamBody,
+		ContentType: upstreamContentType,
+	})
+	if err != nil {
+		log.Printf("AI proxy create task failed: user=%s model=%s path=%s err=%v", user.ID, modelName, path, err)
+		Fail(w, "AI 接口请求失败")
+		return
+	}
 	request, err := http.NewRequest(http.MethodPost, service.BuildModelChannelURL(channel, upstreamPath), bytes.NewReader(upstreamBody))
 	if err != nil {
 		log.Printf("AI proxy build request failed: url=%s err=%v", service.BuildModelChannelURL(channel, upstreamPath), err)
+		_ = service.MarkAITaskFailed(aiTask.ID, "AI 接口请求失败", nil, "")
 		Fail(w, "AI 接口请求失败")
 		return
 	}
@@ -114,37 +167,48 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 	if upstreamContentType != "" {
 		request.Header.Set("Content-Type", upstreamContentType)
 	}
-	if err := service.ConsumeUserCredits(user.ID, modelName, credits, path); err != nil {
+	if err := service.ConsumeUserCreditsForTask(user.ID, modelName, credits, path, aiTask.ID); err != nil {
+		_ = service.MarkAITaskFailed(aiTask.ID, err.Error(), nil, "")
 		FailError(w, err)
 		return
 	}
+	refundAndFailTask := func(message string, payload []byte) {
+		_ = service.MarkAITaskFailed(aiTask.ID, message, payload, "application/json")
+		if err := service.RefundUserCreditsForTask(user.ID, modelName, credits, path, aiTask.ID); err != nil {
+			log.Printf("AI proxy refund credits failed: user=%s model=%s credits=%d err=%v", user.ID, modelName, credits, err)
+		}
+	}
 	if isArkVideoTask {
-		copyArkVideoTaskResponse(w, request, func() {
-			if err := service.RefundUserCredits(user.ID, modelName, credits, path); err != nil {
-				log.Printf("AI proxy refund credits failed: user=%s model=%s credits=%d err=%v", user.ID, modelName, credits, err)
+		copyArkVideoTaskResponse(w, request, refundAndFailTask, func(_ int, _ []byte, normalized []byte) {
+			if err := service.MarkAITaskArkCreated(aiTask.ID, normalized); err != nil {
+				log.Printf("AI proxy mark ark task created failed: task=%s err=%v", aiTask.ID, err)
 			}
 		})
 		return
 	}
-	copyAIResponse(w, request, func() {
-		if err := service.RefundUserCredits(user.ID, modelName, credits, path); err != nil {
-			log.Printf("AI proxy refund credits failed: user=%s model=%s credits=%d err=%v", user.ID, modelName, credits, err)
+	copyAIResponse(w, request, refundAndFailTask, func(_ int, payload []byte, responseContentType string) {
+		if err := service.MarkAITaskSucceeded(aiTask.ID, payload, responseContentType); err != nil {
+			log.Printf("AI proxy mark task succeeded failed: task=%s err=%v", aiTask.ID, err)
 		}
 	})
 }
 
-func proxyArkVideoGetRequest(w http.ResponseWriter, channel model.ModelChannel, path string) {
+func proxyArkVideoGetRequest(w http.ResponseWriter, ctx context.Context, channel model.ModelChannel, path string) {
+	proxyArkVideoGetByConfig(w, ctx, channel.BaseURL, channel.APIKey, path)
+}
+
+func proxyArkVideoGetByConfig(w http.ResponseWriter, ctx context.Context, baseURL string, apiKey string, path string) {
 	taskID, contentRequest := parseVideoTaskPath(path)
 	if taskID == "" {
 		Fail(w, "缺少视频任务 ID")
 		return
 	}
-	request, err := http.NewRequest(http.MethodGet, service.BuildModelChannelURL(channel, "/contents/generations/tasks/"+url.PathEscape(taskID)), nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/contents/generations/tasks/"+url.PathEscape(taskID), nil)
 	if err != nil {
 		Fail(w, "AI 接口请求失败")
 		return
 	}
-	request.Header.Set("Authorization", "Bearer "+channel.APIKey)
+	request.Header.Set("Authorization", "Bearer "+apiKey)
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		log.Printf("Ark video task query failed: url=%s err=%v", request.URL.String(), err)
@@ -155,22 +219,30 @@ func proxyArkVideoGetRequest(w http.ResponseWriter, channel model.ModelChannel, 
 	body, _ := io.ReadAll(response.Body)
 	if response.StatusCode >= http.StatusBadRequest {
 		log.Printf("Ark video task query upstream error: url=%s status=%d body=%s", request.URL.String(), response.StatusCode, strings.TrimSpace(string(body)))
-		Fail(w, "AI 接口请求失败")
+		Fail(w, upstreamErrorMessage(body, "AI 接口请求失败"))
 		return
 	}
+	normalized, err := service.NormalizeArkVideoTaskResponse(body)
+	if err != nil {
+		log.Printf("Ark video task normalize failed: body=%s err=%v", strings.TrimSpace(string(body)), err)
+		if !contentRequest {
+			Fail(w, "AI 接口请求失败")
+			return
+		}
+	} else if err := service.SyncArkVideoAITaskStatus(taskID, normalized); err != nil {
+		log.Printf("Ark video task sync ai task failed: task=%s err=%v", taskID, err)
+	}
 	if contentRequest {
-		videoURL := arkTaskVideoURL(body)
+		videoURL := service.ArkTaskVideoURL(body)
 		if videoURL == "" {
 			Fail(w, "视频任务尚未返回可下载地址")
 			return
 		}
-		proxyArkVideoContent(w, videoURL)
-		return
-	}
-	normalized, err := normalizeArkVideoTaskResponse(body)
-	if err != nil {
-		log.Printf("Ark video task normalize failed: body=%s err=%v", strings.TrimSpace(string(body)), err)
-		Fail(w, "AI 接口请求失败")
+		if proxyArkVideoContent(w, ctx, videoURL) {
+			if err := service.MarkArkVideoAITaskContentFetched(taskID); err != nil {
+				log.Printf("Ark video task mark content fetched failed: task=%s err=%v", taskID, err)
+			}
+		}
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -178,12 +250,12 @@ func proxyArkVideoGetRequest(w http.ResponseWriter, channel model.ModelChannel, 
 	_, _ = w.Write(normalized)
 }
 
-func copyArkVideoTaskResponse(w http.ResponseWriter, request *http.Request, onFailure func()) {
+func copyArkVideoTaskResponse(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onSuccess ...func(int, []byte, []byte)) {
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		log.Printf("Ark video task request failed: url=%s err=%v", request.URL.String(), err)
 		if onFailure != nil {
-			onFailure()
+			onFailure("AI 接口请求失败", nil)
 		}
 		Fail(w, "AI 接口请求失败")
 		return
@@ -192,120 +264,28 @@ func copyArkVideoTaskResponse(w http.ResponseWriter, request *http.Request, onFa
 	body, _ := io.ReadAll(response.Body)
 	if response.StatusCode >= http.StatusBadRequest {
 		log.Printf("Ark video task upstream error: url=%s status=%d body=%s", request.URL.String(), response.StatusCode, strings.TrimSpace(string(body)))
+		message := upstreamErrorMessage(body, "AI 接口请求失败")
 		if onFailure != nil {
-			onFailure()
+			onFailure(message, body)
+		}
+		Fail(w, message)
+		return
+	}
+	normalized, err := service.NormalizeArkVideoTaskResponse(body)
+	if err != nil {
+		log.Printf("Ark video task normalize failed: body=%s err=%v", strings.TrimSpace(string(body)), err)
+		if onFailure != nil {
+			onFailure("AI 接口请求失败", body)
 		}
 		Fail(w, "AI 接口请求失败")
 		return
 	}
-	normalized, err := normalizeArkVideoTaskResponse(body)
-	if err != nil {
-		log.Printf("Ark video task normalize failed: body=%s err=%v", strings.TrimSpace(string(body)), err)
-		if onFailure != nil {
-			onFailure()
-		}
-		Fail(w, "AI 接口请求失败")
-		return
+	if len(onSuccess) > 0 && onSuccess[0] != nil {
+		onSuccess[0](response.StatusCode, body, normalized)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(response.StatusCode)
 	_, _ = w.Write(normalized)
-}
-
-func buildArkVideoCreateRequest(body []byte, contentType string) ([]byte, string, error) {
-	modelName := ""
-	prompt := ""
-	seconds := ""
-	size := ""
-	resolution := ""
-	generateAudio := ""
-	watermark := ""
-	seed := ""
-	content := []any{}
-	if strings.HasPrefix(contentType, "multipart/form-data") {
-		_, params, err := mime.ParseMediaType(contentType)
-		if err != nil {
-			return nil, "", err
-		}
-		form, err := multipart.NewReader(bytes.NewReader(body), params["boundary"]).ReadForm(32 << 20)
-		if err != nil {
-			return nil, "", err
-		}
-		defer form.RemoveAll()
-		modelName = firstFormValue(form.Value, "model")
-		prompt = firstFormValue(form.Value, "prompt")
-		seconds = firstFormValue(form.Value, "duration")
-		if seconds == "" {
-			seconds = firstFormValue(form.Value, "seconds")
-		}
-		size = firstFormValue(form.Value, "ratio")
-		if size == "" {
-			size = firstFormValue(form.Value, "size")
-		}
-		resolution = firstFormValue(form.Value, "resolution")
-		if resolution == "" {
-			resolution = firstFormValue(form.Value, "resolution_name")
-		}
-		generateAudio = firstFormValue(form.Value, "generate_audio")
-		watermark = firstFormValue(form.Value, "watermark")
-		seed = firstFormValue(form.Value, "seed")
-		for _, header := range form.File["input_reference[]"] {
-			dataURL, err := multipartFileDataURL(header)
-			if err != nil {
-				return nil, "", err
-			}
-			content = append(content, arkImageContent(dataURL))
-		}
-	} else {
-		var payload map[string]any
-		if err := json.Unmarshal(body, &payload); err != nil {
-			return nil, "", err
-		}
-		modelName = stringMapValue(payload, "model")
-		prompt = stringMapValue(payload, "prompt")
-		seconds = stringMapValue(payload, "duration", "seconds")
-		size = stringMapValue(payload, "ratio", "size")
-		resolution = stringMapValue(payload, "resolution", "resolution_name")
-		generateAudio = stringMapValue(payload, "generate_audio")
-		watermark = stringMapValue(payload, "watermark")
-		seed = stringMapValue(payload, "seed")
-		if rawContent, ok := payload["content"].([]any); ok {
-			content = rawContent
-		}
-	}
-	if strings.TrimSpace(prompt) != "" {
-		content = append([]any{map[string]any{"type": "text", "text": prompt}}, content...)
-	}
-	if strings.TrimSpace(modelName) == "" {
-		return nil, "", errors.New("缺少模型名称")
-	}
-	if len(content) == 0 {
-		return nil, "", errors.New("缺少视频提示词")
-	}
-	payload := map[string]any{
-		"model":   modelName,
-		"content": content,
-	}
-	if duration := normalizeArkVideoDuration(seconds); duration > 0 {
-		payload["duration"] = duration
-	}
-	if ratio := normalizeArkVideoRatio(size); ratio != "" {
-		payload["ratio"] = ratio
-	}
-	if normalizedResolution := normalizeArkVideoResolution(resolution); normalizedResolution != "" {
-		payload["resolution"] = normalizedResolution
-	}
-	if value, ok := parseOptionalBool(generateAudio); ok {
-		payload["generate_audio"] = value
-	}
-	if value, ok := parseOptionalBool(watermark); ok {
-		payload["watermark"] = value
-	}
-	if value, ok := parseOptionalInt(seed); ok {
-		payload["seed"] = value
-	}
-	nextBody, _ := json.Marshal(payload)
-	return nextBody, "application/json", nil
 }
 
 func parseVideoTaskPath(path string) (string, bool) {
@@ -319,23 +299,36 @@ func parseVideoTaskPath(path string) (string, bool) {
 	return strings.Trim(taskPath, "/"), false
 }
 
-func proxyArkVideoContent(w http.ResponseWriter, videoURL string) {
-	request, err := http.NewRequest(http.MethodGet, videoURL, nil)
+func proxyArkVideoContent(w http.ResponseWriter, ctx context.Context, videoURL string) bool {
+	if err := validateProxyDownloadURL(ctx, videoURL); err != nil {
+		log.Printf("Ark video content rejected: url=%s err=%v", videoURL, err)
+		Fail(w, "视频下载地址无效")
+		return false
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, videoURL, nil)
 	if err != nil {
 		Fail(w, "视频下载地址无效")
-		return
+		return false
 	}
-	response, err := http.DefaultClient.Do(request)
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return http.ErrUseLastResponse
+			}
+			return validateProxyDownloadURL(ctx, req.URL.String())
+		},
+	}
+	response, err := client.Do(request)
 	if err != nil {
 		log.Printf("Ark video content download failed: url=%s err=%v", videoURL, err)
 		Fail(w, "视频下载失败")
-		return
+		return false
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= http.StatusBadRequest {
 		log.Printf("Ark video content upstream error: url=%s status=%d", videoURL, response.StatusCode)
 		Fail(w, "视频下载失败")
-		return
+		return false
 	}
 	for key, values := range response.Header {
 		if strings.EqualFold(key, "Content-Length") {
@@ -347,334 +340,54 @@ func proxyArkVideoContent(w http.ResponseWriter, videoURL string) {
 	}
 	w.WriteHeader(response.StatusCode)
 	_, _ = io.Copy(w, response.Body)
+	return true
 }
 
-func normalizeArkVideoTaskResponse(body []byte) ([]byte, error) {
-	task, err := readArkTaskObject(body)
+func validateProxyDownloadURL(ctx context.Context, rawURL string) error {
+	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	id := stringMapValue(task, "id", "task_id")
-	if id == "" {
-		return nil, errors.New("视频任务没有返回任务 ID")
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return errors.New("unsupported video url scheme")
 	}
-	status := normalizeArkTaskStatus(stringMapValue(task, "status"))
-	payload := map[string]any{
-		"id":         id,
-		"status":     status,
-		"raw_status": stringMapValue(task, "status"),
+	host := strings.TrimSpace(parsed.Hostname())
+	if host == "" {
+		return errors.New("missing video url host")
 	}
-	copyArkTaskStringFields(payload, task, "model", "resolution", "ratio", "service_tier")
-	copyArkTaskNumberFields(payload, task, "created_at", "updated_at", "execution_expires_after", "seed", "duration", "framespersecond", "priority")
-	copyArkTaskBoolFields(payload, task, "generate_audio", "watermark", "draft")
-	if expiresAfter, ok := numberMapValue(task, "execution_expires_after"); ok {
-		if updatedAt, ok := numberMapValue(task, "updated_at"); ok && updatedAt > 0 {
-			payload["video_url_expires_at"] = updatedAt + expiresAfter
-		} else if createdAt, ok := numberMapValue(task, "created_at"); ok && createdAt > 0 {
-			payload["video_url_expires_at"] = createdAt + expiresAfter
-		}
+	if ip := net.ParseIP(host); ip != nil {
+		return validatePublicProxyIP(ip)
 	}
-	if videoURL := arkVideoURLFromTask(task); videoURL != "" {
-		payload["video_url"] = videoURL
-		payload["content"] = map[string]string{"video_url": videoURL}
-	}
-	if errorDetails := arkTaskErrorDetails(task); len(errorDetails) > 0 {
-		payload["error"] = errorDetails
-	}
-	return json.Marshal(payload)
-}
-
-func arkTaskVideoURL(body []byte) string {
-	task, err := readArkTaskObject(body)
+	lookupCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	addresses, err := net.DefaultResolver.LookupIPAddr(lookupCtx, host)
 	if err != nil {
-		return ""
+		return err
 	}
-	return arkVideoURLFromTask(task)
-}
-
-func readArkTaskObject(body []byte) (map[string]any, error) {
-	var payload map[string]any
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, err
+	if len(addresses) == 0 {
+		return errors.New("video url host has no address")
 	}
-	for _, key := range []string{"data", "task", "result"} {
-		if value, ok := payload[key].(map[string]any); ok {
-			return value, nil
+	for _, address := range addresses {
+		if err := validatePublicProxyIP(address.IP); err != nil {
+			return err
 		}
 	}
-	return payload, nil
+	return nil
 }
 
-func arkVideoURLFromTask(task map[string]any) string {
-	if value := stringMapValue(task, "video_url", "url"); value != "" {
-		return value
+func validatePublicProxyIP(ip net.IP) error {
+	if ip == nil || ip.IsUnspecified() || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() {
+		return errors.New("video url host is not public")
 	}
-	for _, key := range []string{"content", "output", "result"} {
-		if value := nestedStringMapValue(task, key, "video_url"); value != "" {
-			return value
-		}
-		if items, ok := task[key].([]any); ok {
-			for _, item := range items {
-				if object, ok := item.(map[string]any); ok {
-					if value := stringMapValue(object, "video_url", "url"); value != "" {
-						return value
-					}
-				}
-			}
-		}
-	}
-	return ""
+	return nil
 }
 
-func arkTaskErrorDetails(task map[string]any) map[string]string {
-	message := stringMapValue(task, "message", "msg", "error_message", "fail_reason", "error")
-	code := stringMapValue(task, "code", "error_code")
-	if details, ok := task["error"].(map[string]any); ok {
-		if message == "" {
-			message = stringMapValue(details, "message", "msg")
-		}
-		if code == "" {
-			code = stringMapValue(details, "code", "error_code")
-		}
-	}
-	if message == "" && code != "" {
-		message = code
-	}
-	if message == "" {
-		return nil
-	}
-	result := map[string]string{"message": message}
-	if code != "" {
-		result["code"] = code
-	}
-	return result
-}
-
-func normalizeArkTaskStatus(status string) string {
-	switch strings.ToLower(strings.TrimSpace(status)) {
-	case "succeeded", "success", "completed":
-		return "completed"
-	case "queued", "pending", "created":
-		return "queued"
-	case "running", "processing", "in_progress":
-		return "running"
-	case "cancelled", "canceled":
-		return "cancelled"
-	case "failed", "error", "expired":
-		return "failed"
-	default:
-		return "queued"
-	}
-}
-
-func firstFormValue(values map[string][]string, key string) string {
-	if items := values[key]; len(items) > 0 {
-		return items[0]
-	}
-	return ""
-}
-
-func multipartFileDataURL(header *multipart.FileHeader) (string, error) {
-	file, err := header.Open()
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-	body, err := io.ReadAll(file)
-	if err != nil {
-		return "", err
-	}
-	contentType := header.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = http.DetectContentType(body)
-	}
-	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(body), nil
-}
-
-func arkImageContent(imageURL string) map[string]any {
-	return map[string]any{
-		"type": "image_url",
-		"image_url": map[string]string{
-			"url": imageURL,
-		},
-	}
-}
-
-func normalizeArkVideoDuration(value string) int {
-	var seconds int
-	_, _ = fmt.Sscan(value, &seconds)
-	if seconds <= 0 {
-		return 5
-	}
-	if seconds <= 5 {
-		return 5
-	}
-	if seconds <= 10 {
-		return 10
-	}
-	return 15
-}
-
-func normalizeArkVideoRatio(value string) string {
-	trimmed := strings.TrimSpace(value)
-	switch trimmed {
-	case "16:9", "9:16", "1:1", "4:3", "3:4", "adaptive":
-		return trimmed
-	case "auto":
-		return "adaptive"
-	case "1280x720", "1792x1024":
-		return "16:9"
-	case "720x1280", "1024x1792":
-		return "9:16"
-	case "1024x1024":
-		return "1:1"
-	}
-	var width, height int
-	if _, err := fmt.Sscanf(trimmed, "%dx%d", &width, &height); err != nil || width <= 0 || height <= 0 {
-		return ""
-	}
-	if width == height {
-		return "1:1"
-	}
-	if width*9 == height*16 {
-		return "16:9"
-	}
-	if width*3 == height*4 {
-		return "4:3"
-	}
-	if width < height {
-		if width*16 == height*9 {
-			return "9:16"
-		}
-		if width*4 == height*3 {
-			return "3:4"
-		}
-	}
-	return ""
-}
-
-func normalizeArkVideoResolution(value string) string {
-	trimmed := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(value)), "p")
-	var resolution int
-	_, _ = fmt.Sscan(trimmed, &resolution)
-	if resolution >= 1080 {
-		return "1080p"
-	}
-	return "720p"
-}
-
-func parseOptionalBool(value string) (bool, bool) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "true", "1", "yes", "on":
-		return true, true
-	case "false", "0", "no", "off":
-		return false, true
-	default:
-		return false, false
-	}
-}
-
-func parseOptionalInt(value string) (int, bool) {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return 0, false
-	}
-	var number int
-	if _, err := fmt.Sscan(trimmed, &number); err != nil {
-		return 0, false
-	}
-	return number, true
-}
-
-func stringMapValue(values map[string]any, keys ...string) string {
-	for _, key := range keys {
-		switch value := values[key].(type) {
-		case string:
-			if strings.TrimSpace(value) != "" {
-				return value
-			}
-		case float64:
-			return fmt.Sprintf("%.0f", value)
-		case int:
-			return fmt.Sprintf("%d", value)
-		case bool:
-			return fmt.Sprintf("%t", value)
-		}
-	}
-	return ""
-}
-
-func numberMapValue(values map[string]any, keys ...string) (int64, bool) {
-	for _, key := range keys {
-		switch value := values[key].(type) {
-		case float64:
-			return int64(value), true
-		case int:
-			return int64(value), true
-		case int64:
-			return value, true
-		case string:
-			var number int64
-			if _, err := fmt.Sscan(strings.TrimSpace(value), &number); err == nil {
-				return number, true
-			}
-		}
-	}
-	return 0, false
-}
-
-func boolMapValue(values map[string]any, keys ...string) (bool, bool) {
-	for _, key := range keys {
-		switch value := values[key].(type) {
-		case bool:
-			return value, true
-		case string:
-			if parsed, ok := parseOptionalBool(value); ok {
-				return parsed, true
-			}
-		}
-	}
-	return false, false
-}
-
-func copyArkTaskStringFields(payload map[string]any, task map[string]any, keys ...string) {
-	for _, key := range keys {
-		if value := stringMapValue(task, key); value != "" {
-			payload[key] = value
-		}
-	}
-}
-
-func copyArkTaskNumberFields(payload map[string]any, task map[string]any, keys ...string) {
-	for _, key := range keys {
-		if value, ok := numberMapValue(task, key); ok {
-			payload[key] = value
-		}
-	}
-}
-
-func copyArkTaskBoolFields(payload map[string]any, task map[string]any, keys ...string) {
-	for _, key := range keys {
-		if value, ok := boolMapValue(task, key); ok {
-			payload[key] = value
-		}
-	}
-}
-
-func nestedStringMapValue(values map[string]any, key string, nestedKey string) string {
-	nested, ok := values[key].(map[string]any)
-	if !ok {
-		return ""
-	}
-	return stringMapValue(nested, nestedKey)
-}
-
-func copyAIResponse(w http.ResponseWriter, request *http.Request, onFailure func()) {
+func copyAIResponse(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onSuccess ...func(int, []byte, string)) {
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		log.Printf("AI proxy request failed: url=%s err=%v", request.URL.String(), err)
 		if onFailure != nil {
-			onFailure()
+			onFailure("AI 接口请求失败", nil)
 		}
 		Fail(w, "AI 接口请求失败")
 		return
@@ -684,13 +397,18 @@ func copyAIResponse(w http.ResponseWriter, request *http.Request, onFailure func
 	if response.StatusCode >= http.StatusBadRequest {
 		payload, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
 		log.Printf("AI upstream error: url=%s status=%d body=%s", request.URL.String(), response.StatusCode, strings.TrimSpace(string(payload)))
+		message := upstreamErrorMessage(payload, "AI 接口请求失败")
 		if onFailure != nil {
-			onFailure()
+			onFailure(message, payload)
 		}
-		Fail(w, "AI 接口请求失败")
+		Fail(w, message)
 		return
 	}
 
+	payload, _ := io.ReadAll(response.Body)
+	if len(onSuccess) > 0 && onSuccess[0] != nil {
+		onSuccess[0](response.StatusCode, payload, response.Header.Get("Content-Type"))
+	}
 	for key, values := range response.Header {
 		if strings.EqualFold(key, "Content-Length") {
 			continue
@@ -700,7 +418,71 @@ func copyAIResponse(w http.ResponseWriter, request *http.Request, onFailure func
 		}
 	}
 	w.WriteHeader(response.StatusCode)
-	_, _ = io.Copy(w, response.Body)
+	_, _ = w.Write(payload)
+}
+
+func upstreamErrorMessage(body []byte, fallback string) string {
+	var payload any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		message := strings.TrimSpace(string(body))
+		if message == "" || len([]rune(message)) > 300 {
+			return fallback
+		}
+		return message
+	}
+
+	code, message := upstreamErrorParts(payload)
+	code = strings.TrimSpace(code)
+	message = strings.TrimSpace(message)
+	if code == "InputImageSensitiveContentDetected.PrivacyInformation" {
+		return "输入图片疑似包含真人或隐私信息，火山 Ark 已拒绝本次生成。请更换参考图，或先完成素材加白后再试。（" + code + "）"
+	}
+	if code != "" && message != "" {
+		return code + "：" + message
+	}
+	if message != "" {
+		return message
+	}
+	if code != "" {
+		return code
+	}
+	return fallback
+}
+
+func upstreamErrorParts(value any) (string, string) {
+	payload, ok := value.(map[string]any)
+	if !ok {
+		return "", ""
+	}
+	code := ""
+	message := ""
+	if nested, ok := payload["error"].(map[string]any); ok {
+		code = readUpstreamString(nested, "code", "type")
+		message = readUpstreamString(nested, "message", "msg")
+	} else if text, ok := payload["error"].(string); ok {
+		message = text
+	}
+	if code == "" {
+		code = readUpstreamString(payload, "code")
+	}
+	if message == "" {
+		message = readUpstreamString(payload, "message", "msg")
+	}
+	return code, message
+}
+
+func readUpstreamString(payload map[string]any, keys ...string) string {
+	for _, key := range keys {
+		value, ok := payload[key]
+		if !ok || value == nil {
+			continue
+		}
+		if text, ok := value.(string); ok {
+			return text
+		}
+		return fmt.Sprint(value)
+	}
+	return ""
 }
 
 func readAIRequest(r *http.Request) ([]byte, string, string, error) {

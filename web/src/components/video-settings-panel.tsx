@@ -4,77 +4,136 @@ import { type ReactNode } from "react";
 
 import { ImageSettingsTheme } from "@/components/image-settings-panel";
 import { type CanvasTheme } from "@/lib/canvas-theme";
+import { normalizeSeedanceImageRoleMode } from "@/services/api/video-reference";
 import type { AiConfig } from "@/stores/use-config-store";
 
 const resolutionOptions = [
     { value: "720", label: "720p" },
-    { value: "480", label: "480p" },
+    { value: "1080", label: "1080p" },
 ];
 
-const sizeOptions = [
-    { value: "1280x720", label: "横屏", width: 1280, height: 720 },
-    { value: "720x1280", label: "竖屏", width: 720, height: 1280 },
-    { value: "1024x1024", label: "方形", width: 1024, height: 1024 },
-    { value: "1792x1024", label: "宽屏", width: 1792, height: 1024 },
-    { value: "1024x1792", label: "长图", width: 1024, height: 1792 },
-    { value: "auto", label: "auto", width: 0, height: 0 },
+const ratioOptions = [
+    { value: "16:9", label: "横屏", width: 16, height: 9 },
+    { value: "9:16", label: "竖屏", width: 9, height: 16 },
+    { value: "1:1", label: "方形", width: 1, height: 1 },
+    { value: "4:3", label: "经典横屏", width: 4, height: 3 },
+    { value: "3:4", label: "经典竖屏", width: 3, height: 4 },
+    { value: "adaptive", label: "自适应", width: 0, height: 0 },
 ];
 
-const secondOptions = [5, 6, 10, 15, 20];
+const openAISecondOptions = [5, 6, 10, 15, 20];
+const seedanceSecondOptions = [4, 6, 8, 10, 12, 15];
+const taskModeOptions = [
+    { value: "generate", label: "生成" },
+    { value: "edit", label: "编辑" },
+    { value: "extend", label: "延长" },
+] as const;
+const editTypeOptions = [
+    { value: "replace", label: "替换" },
+    { value: "add", label: "添加" },
+    { value: "remove", label: "移除" },
+    { value: "inpaint", label: "重绘" },
+] as const;
+const extendDirectionOptions = [
+    { value: "forward", label: "向后" },
+    { value: "backward", label: "向前" },
+] as const;
+const referenceImageModeOptions = [
+    { value: "reference", label: "普通参考" },
+    { value: "first_frame", label: "首帧" },
+    { value: "first_last_frame", label: "首尾帧" },
+    { value: "continue", label: "续写" },
+] as const;
+
+type VideoSettingsKey = "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoSeed" | "videoTaskMode" | "videoEditType" | "videoExtendDirection" | "videoReferenceImageMode";
 
 type VideoSettingsPanelProps = {
     config: AiConfig;
-    onConfigChange: (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoSeed", value: string) => void;
+    onConfigChange: (key: VideoSettingsKey, value: string) => void;
     theme: CanvasTheme;
     showTitle?: boolean;
+    showTaskMode?: boolean;
     className?: string;
 };
 
-export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = true, className = "w-[320px] space-y-4 rounded-2xl px-1 py-0.5" }: VideoSettingsPanelProps) {
-    const seconds = config.videoSeconds || "6";
-    const size = normalizeVideoSizeValue(config.size);
-    const dimensions = readSizeDimensions(size);
+export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = true, showTaskMode = false, className = "w-[320px] space-y-4 rounded-2xl px-1 py-0.5" }: VideoSettingsPanelProps) {
+    const isSeedance = isSeedanceVideoConfig(config);
+    const secondOptions = isSeedance ? seedanceSecondOptions : openAISecondOptions;
+    const secondLimits = videoSecondsLimits(config);
+    const seconds = normalizeVideoSecondsValue(config.videoSeconds, config);
+    const ratio = normalizeVideoRatioValue(config.size);
     const resolution = normalizeVideoResolutionValue(config.vquality);
     const generateAudio = config.videoGenerateAudio === "true";
     const watermark = config.videoWatermark === "true";
-    const updateDimension = (key: "width" | "height", value: number | null) => {
-        const next = Math.max(1, Math.floor(value || dimensions[key] || 720));
-        onConfigChange("size", `${key === "width" ? next : dimensions.width}x${key === "height" ? next : dimensions.height}`);
-    };
+    const referenceImageMode = normalizeSeedanceImageRoleMode(config.videoReferenceImageMode);
 
     return (
         <ImageSettingsTheme theme={theme}>
             <div className={className} style={{ color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()}>
                 {showTitle ? <div className="text-lg font-semibold">视频设置</div> : null}
+                {showTaskMode && isSeedance ? (
+                    <SettingGroup title="任务模式" color={theme.node.muted}>
+                        <div className="grid grid-cols-3 gap-2.5">
+                            {taskModeOptions.map((item) => (
+                                <OptionPill key={item.value} selected={config.videoTaskMode === item.value} theme={theme} onClick={() => onConfigChange("videoTaskMode", item.value)}>
+                                    {item.label}
+                                </OptionPill>
+                            ))}
+                        </div>
+                        {config.videoTaskMode === "edit" ? (
+                            <div className="grid grid-cols-4 gap-2.5">
+                                {editTypeOptions.map((item) => (
+                                    <OptionPill key={item.value} selected={config.videoEditType === item.value} theme={theme} onClick={() => onConfigChange("videoEditType", item.value)}>
+                                        {item.label}
+                                    </OptionPill>
+                                ))}
+                            </div>
+                        ) : null}
+                        {config.videoTaskMode === "extend" ? (
+                            <div className="grid grid-cols-2 gap-2.5">
+                                {extendDirectionOptions.map((item) => (
+                                    <OptionPill key={item.value} selected={config.videoExtendDirection === item.value} theme={theme} onClick={() => onConfigChange("videoExtendDirection", item.value)}>
+                                        {item.label}
+                                    </OptionPill>
+                                ))}
+                            </div>
+                        ) : null}
+                    </SettingGroup>
+                ) : null}
+                {isSeedance ? (
+                    <SettingGroup title="参考图用途" color={theme.node.muted}>
+                        <div className="grid grid-cols-2 gap-2.5">
+                            {referenceImageModeOptions.map((item) => (
+                                <OptionPill key={item.value} selected={referenceImageMode === item.value} theme={theme} onClick={() => onConfigChange("videoReferenceImageMode", item.value)}>
+                                    {item.label}
+                                </OptionPill>
+                            ))}
+                        </div>
+                    </SettingGroup>
+                ) : null}
                 <SettingGroup title="清晰度" color={theme.node.muted}>
-                    <div className="grid grid-cols-3 gap-2.5">
+                    <div className="grid grid-cols-2 gap-2.5">
                         {resolutionOptions.map((item) => (
                             <OptionPill key={item.value} selected={resolution === item.value} theme={theme} onClick={() => onConfigChange("vquality", item.value)}>
                                 {item.label}
                             </OptionPill>
                         ))}
-                        <ResolutionInput value={resolution} theme={theme} onChange={(value) => onConfigChange("vquality", value)} />
                     </div>
                 </SettingGroup>
-                <SettingGroup title="尺寸" color={theme.node.muted}>
-                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2.5">
-                        <DimensionInput prefix="W" value={dimensions.width} disabled={size === "auto"} theme={theme} onChange={(value) => updateDimension("width", value)} />
-                        <span className="text-lg opacity-45">↔</span>
-                        <DimensionInput prefix="H" value={dimensions.height} disabled={size === "auto"} theme={theme} onChange={(value) => updateDimension("height", value)} />
-                    </div>
+                <SettingGroup title="画幅比例" color={theme.node.muted}>
                     <div className="grid grid-cols-3 gap-2.5">
-                        {sizeOptions.map((item) => (
+                        {ratioOptions.map((item) => (
                             <button
                                 key={item.value}
                                 type="button"
                                 className="flex h-[78px] cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border bg-transparent text-sm transition hover:opacity-80"
-                                style={{ borderColor: size === item.value ? theme.node.text : theme.node.stroke, color: theme.node.text }}
+                                style={{ borderColor: ratio === item.value ? theme.node.text : theme.node.stroke, color: theme.node.text }}
                                 onMouseDown={(event) => event.stopPropagation()}
                                 onClick={() => onConfigChange("size", item.value)}
                             >
                                 <SizePreview width={item.width} height={item.height} color={theme.node.text} />
                                 <span>{item.label}</span>
-                                {item.value === "auto" ? null : <span className="text-[11px] leading-none opacity-55">{item.value}</span>}
+                                {item.value === "adaptive" ? null : <span className="text-[11px] leading-none opacity-55">{item.value}</span>}
                             </button>
                         ))}
                     </div>
@@ -86,7 +145,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                                 {value}s
                             </OptionPill>
                         ))}
-                        <NumberInput value={seconds} min={1} max={20} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
+                        <NumberInput value={seconds} min={secondLimits.min} max={secondLimits.max} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
                     </div>
                 </SettingGroup>
                 <SettingGroup title="Ark 参数" color={theme.node.muted}>
@@ -117,25 +176,48 @@ export function videoResolutionLabel(value: string) {
     return `${normalizeVideoResolutionValue(value)}p`;
 }
 
-export function videoSizeLabel(value: string) {
-    const size = normalizeVideoSizeValue(value);
-    return sizeOptions.find((item) => item.value === size)?.label || size;
+export function videoRatioLabel(value: string) {
+    return normalizeVideoRatioValue(value);
 }
 
-export function videoSecondsLabel(value: string) {
-    return `${value || "6"}s`;
+export function videoSecondsLabel(value: string, config?: VideoSecondsConfig) {
+    return `${normalizeVideoSecondsValue(value, config)}s`;
+}
+
+export type VideoSecondsConfig = Pick<AiConfig, "channelMode" | "videoProtocol"> | boolean;
+
+export function normalizeVideoSecondsValue(value: string, config?: VideoSecondsConfig) {
+    const limits = videoSecondsLimits(config);
+    const fallback = isSeedanceVideoConfig(config) ? 5 : 6;
+    const seconds = Math.floor(Number(value) || fallback);
+    return String(Math.max(limits.min, Math.min(limits.max, seconds)));
+}
+
+function videoSecondsLimits(config?: VideoSecondsConfig) {
+    return isSeedanceVideoConfig(config) ? { min: 4, max: 15 } : { min: 1, max: 20 };
+}
+
+function isSeedanceVideoConfig(config?: VideoSecondsConfig) {
+    if (typeof config === "boolean") return config;
+    return config?.channelMode === "local" && config.videoProtocol === "volcengine-ark";
 }
 
 export function normalizeVideoSizeValue(value: string) {
-    if (value === "auto") return "auto";
-    if (/^\d+x\d+$/.test(value || "")) return value;
-    return ["9:16", "2:3", "3:4"].includes(value) ? "720x1280" : "1280x720";
+    return normalizeVideoRatioValue(value);
+}
+
+export function normalizeVideoRatioValue(value: string) {
+    if (value === "auto" || value === "adaptive") return "adaptive";
+    if (["16:9", "9:16", "1:1", "4:3", "3:4"].includes(value)) return value;
+    if (/^\d+x\d+$/.test(value || "")) return ratioFromDimensions(value);
+    if (value === "2:3") return "9:16";
+    if (value === "3:2") return "16:9";
+    return "16:9";
 }
 
 export function normalizeVideoResolutionValue(value: string) {
-    if (value === "480p" || value === "low") return "480";
-    if (value === "720p" || value === "auto" || value === "high" || value === "medium") return "720";
-    return value.replace(/p$/i, "") || "720";
+    const resolution = Number(String(value || "").replace(/p$/i, ""));
+    return resolution >= 1080 ? "1080" : "720";
 }
 
 function OptionPill({ selected, theme, onClick, children }: { selected: boolean; theme: CanvasTheme; onClick: () => void; children: ReactNode }) {
@@ -175,43 +257,6 @@ function ToggleSwitch({ checked, label, theme, onChange }: { checked: boolean; l
     );
 }
 
-function ResolutionInput({ value, theme, onChange }: { value: string; theme: CanvasTheme; onChange: (value: string) => void }) {
-    return (
-        <label className="flex h-9 overflow-hidden rounded-full border text-sm" style={{ borderColor: theme.node.stroke, color: theme.node.text }}>
-            <input
-                type="number"
-                min={1}
-                className="min-w-0 flex-1 bg-transparent px-3 text-center outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                value={value}
-                onChange={(event) => onChange(event.target.value)}
-                onMouseDown={(event) => event.stopPropagation()}
-            />
-            <span className="grid w-7 place-items-center pr-1" style={{ color: theme.node.muted }}>
-                p
-            </span>
-        </label>
-    );
-}
-
-function DimensionInput({ prefix, value, disabled, theme, onChange }: { prefix: string; value: number; disabled: boolean; theme: CanvasTheme; onChange: (value: number | null) => void }) {
-    return (
-        <label className="flex h-9 overflow-hidden rounded-xl text-sm" style={{ background: theme.node.fill, color: theme.node.text, opacity: disabled ? 0.55 : 1 }}>
-            <span className="grid w-9 place-items-center" style={{ color: theme.node.muted }}>
-                {prefix}
-            </span>
-            <input
-                type="number"
-                min={1}
-                disabled={disabled}
-                className="min-w-0 flex-1 bg-transparent px-2 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                value={value || ""}
-                onChange={(event) => onChange(Number(event.target.value) || null)}
-                onMouseDown={(event) => event.stopPropagation()}
-            />
-        </label>
-    );
-}
-
 function NumberInput({ value, min, max, placeholder, theme, className, onChange }: { value: string; min: number; max?: number; placeholder?: string; theme: CanvasTheme; className?: string; onChange: (value: string) => void }) {
     return (
         <input
@@ -236,8 +281,17 @@ function SizePreview({ width, height, color }: { width: number; height: number; 
     return <span className="rounded-[3px] border-2" style={{ width: previewWidth, height: previewHeight, borderColor: color }} />;
 }
 
-function readSizeDimensions(size: string) {
-    if (size === "auto") return { width: 0, height: 0 };
-    const match = size.match(/^(\d+)x(\d+)$/);
-    return { width: Number(match?.[1]) || 1280, height: Number(match?.[2]) || 720 };
+function ratioFromDimensions(value: string) {
+    const match = value.match(/^(\d+)x(\d+)$/);
+    const width = Number(match?.[1]) || 16;
+    const height = Number(match?.[2]) || 9;
+    const ratio = width / Math.max(1, height);
+    const candidates = [
+        { value: "16:9", ratio: 16 / 9 },
+        { value: "9:16", ratio: 9 / 16 },
+        { value: "1:1", ratio: 1 },
+        { value: "4:3", ratio: 4 / 3 },
+        { value: "3:4", ratio: 3 / 4 },
+    ];
+    return candidates.reduce((best, item) => (Math.abs(item.ratio - ratio) < Math.abs(best.ratio - ratio) ? item : best)).value;
 }

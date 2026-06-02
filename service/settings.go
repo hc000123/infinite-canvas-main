@@ -172,6 +172,7 @@ func normalizeVolcengineAssetSetting(setting model.VolcengineAssetSetting) model
 	if setting.Region == "" {
 		setting.Region = "cn-beijing"
 	}
+	setting.AssetGroupID = strings.TrimSpace(setting.AssetGroupID)
 	setting.PublicAssetBaseURL = strings.TrimRight(strings.TrimSpace(setting.PublicAssetBaseURL), "/")
 	return setting
 }

@@ -7,12 +7,18 @@ import { Search } from "lucide-react";
 import axios from "axios";
 
 import { cn } from "@/lib/utils";
+import { uploadMediaFile } from "@/services/file-storage";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { fetchAssetLibrary, type AssetLibraryItem } from "@/services/api/assets";
+import type { CanvasNodeMetadata } from "../types";
 
 export type AssetPickerTab = "my-assets" | "library";
 
-export type InsertAssetPayload = { kind: "text"; content: string; title: string } | { kind: "image"; dataUrl: string; title: string; storageKey?: string } | { kind: "video"; url: string; title: string; storageKey?: string; width?: number; height?: number };
+export type InsertAssetPayload =
+    | { kind: "text"; content: string; title: string }
+    | { kind: "image"; dataUrl: string; title: string; storageKey?: string; volcengineAsset?: CanvasNodeMetadata["volcengineAsset"] }
+    | { kind: "video"; url: string; title: string; storageKey?: string; width?: number; height?: number }
+    | { kind: "audio"; url: string; title: string; storageKey?: string; bytes?: number; mimeType?: string };
 
 type Props = {
     open: boolean;
@@ -49,6 +55,7 @@ const kindOptions = [
     { label: "文本", value: "text" },
     { label: "图片", value: "image" },
     { label: "视频", value: "video" },
+    { label: "音频", value: "audio" },
 ];
 
 function LibraryTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => void }) {
@@ -72,9 +79,19 @@ function LibraryTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => v
             setInserting(asset.id);
             if (asset.type === "text") {
                 onInsert({ kind: "text", content: asset.content, title: asset.title });
-            } else {
+            } else if (asset.type === "image") {
                 const dataUrl = await remoteImageToDataUrl(asset.url);
-                onInsert({ kind: "image", dataUrl, title: asset.title });
+                onInsert({ kind: "image", dataUrl, title: asset.title, volcengineAsset: assetLibraryVolcengineMetadata(asset) });
+            } else if (asset.type === "video") {
+                const blob = await remoteAssetBlob(asset.url);
+                const media = await uploadMediaFile(blob, "video");
+                onInsert({ kind: "video", url: media.url, storageKey: media.storageKey, title: asset.title, width: media.width, height: media.height });
+            } else if (asset.type === "audio") {
+                const blob = await remoteAssetBlob(asset.url);
+                const media = await uploadMediaFile(blob, "audio");
+                onInsert({ kind: "audio", url: media.url, storageKey: media.storageKey, title: asset.title, bytes: media.bytes, mimeType: media.mimeType });
+            } else {
+                message.warning("暂不支持该素材类型");
             }
         } catch {
             message.error("插入失败");
@@ -103,6 +120,8 @@ function LibraryTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => v
                         { label: "全部", value: "" },
                         { label: "文本", value: "text" },
                         { label: "图片", value: "image" },
+                        { label: "视频", value: "video" },
+                        { label: "音频", value: "audio" },
                     ].map((opt) => (
                         <Tag.CheckableTag
                             key={opt.value || "all"}
@@ -158,7 +177,7 @@ function PickerCard({ title, kind, cover, loading, onClick }: { title: string; k
             <div className="p-2.5">
                 <div className="flex items-center justify-between gap-2">
                     <span className="line-clamp-1 text-xs font-medium text-stone-800 dark:text-stone-200">{title}</span>
-                    <Tag className="m-0 shrink-0 text-[10px]">{kind === "image" ? "图片" : kind === "video" ? "视频" : "文本"}</Tag>
+                    <Tag className="m-0 shrink-0 text-[10px]">{assetTypeLabel(kind)}</Tag>
                 </div>
             </div>
             {loading && (
@@ -182,6 +201,18 @@ async function remoteImageToDataUrl(url: string) {
     });
 }
 
+async function remoteAssetBlob(url: string) {
+    const response = await axios.get(url, { responseType: "blob" });
+    return response.data as Blob;
+}
+
+function assetTypeLabel(type: string) {
+    if (type === "image") return "图片";
+    if (type === "video") return "视频";
+    if (type === "audio") return "音频";
+    return "文本";
+}
+
 function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => void }) {
     const assets = useAssetStore((state) => state.assets);
     const [keyword, setKeyword] = useState("");
@@ -191,7 +222,7 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
     const filtered = useMemo(() => {
         const query = keyword.trim().toLowerCase();
         return assets
-            .filter((a) => a.kind === "text" || a.kind === "image" || a.kind === "video")
+            .filter((a) => a.kind === "text" || a.kind === "image" || a.kind === "video" || a.kind === "audio")
             .filter((a) => kindFilter === "all" || a.kind === kindFilter)
             .filter((a) => !query || [a.title, ...(a.tags || [])].join(" ").toLowerCase().includes(query));
     }, [assets, keyword, kindFilter]);
@@ -206,8 +237,12 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
     const handleInsert = (asset: Asset) => {
         if (asset.kind === "text") {
             onInsert({ kind: "text", content: asset.data.content, title: asset.title });
-        } else {
-            onInsert(asset.kind === "video" ? { kind: "video", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, width: asset.data.width, height: asset.data.height } : { kind: "image", dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, title: asset.title });
+        } else if (asset.kind === "image") {
+            onInsert({ kind: "image", dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, title: asset.title, volcengineAsset: asset.metadata?.volcengineAsset });
+        } else if (asset.kind === "video") {
+            onInsert({ kind: "video", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, width: asset.data.width, height: asset.data.height });
+        } else if (asset.kind === "audio") {
+            onInsert({ kind: "audio", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, bytes: asset.data.bytes, mimeType: asset.data.mimeType });
         }
     };
 
@@ -260,4 +295,18 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
             )}
         </div>
     );
+}
+
+function assetLibraryVolcengineMetadata(asset: AssetLibraryItem): CanvasNodeMetadata["volcengineAsset"] {
+    if (!asset.volcengineAssetId) return undefined;
+    return {
+        assetId: asset.volcengineAssetId,
+        groupId: asset.volcengineGroupId || "",
+        projectName: asset.volcengineProjectName || "default",
+        status: asset.volcengineStatus || "Processing",
+        error: asset.volcengineError || "",
+        publicUrl: asset.volcenginePublicUrl || asset.url,
+        submittedAt: asset.volcengineSubmittedAt || "",
+        updatedAt: asset.volcengineUpdatedAt || "",
+    };
 }

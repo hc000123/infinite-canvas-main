@@ -17,6 +17,7 @@ export type VolcengineAssetStatus = {
     groupId: string;
     projectName: string;
     status: VolcengineAssetStatusValue;
+    error?: string;
     publicUrl: string;
     assetType: string;
     updatedAt: string;

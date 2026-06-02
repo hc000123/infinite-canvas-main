@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
+
+	"github.com/basketikun/infinite-canvas/service"
 )
 
 func TestBuildArkVideoCreateRequestKeepsSeedanceControls(t *testing.T) {
@@ -17,7 +20,7 @@ func TestBuildArkVideoCreateRequestKeepsSeedanceControls(t *testing.T) {
 		"seed": 42
 	}`)
 
-	body, contentType, err := buildArkVideoCreateRequest(source, "application/json")
+	body, contentType, err := service.BuildArkVideoCreateRequest(source, "application/json")
 	if err != nil {
 		t.Fatalf("buildArkVideoCreateRequest returned error: %v", err)
 	}
@@ -63,7 +66,7 @@ func TestNormalizeArkVideoTaskResponseKeepsTaskDetails(t *testing.T) {
 		"watermark": false
 	}`)
 
-	body, err := normalizeArkVideoTaskResponse(source)
+	body, err := service.NormalizeArkVideoTaskResponse(source)
 	if err != nil {
 		t.Fatalf("normalizeArkVideoTaskResponse returned error: %v", err)
 	}
@@ -97,6 +100,45 @@ func TestNormalizeArkVideoTaskResponseKeepsTaskDetails(t *testing.T) {
 	}
 	if taskError["code"] != "TaskFailed" || taskError["message"] != "生成失败原因" {
 		t.Fatalf("error payload = %#v", taskError)
+	}
+}
+
+func TestUpstreamErrorMessageKeepsArkPrivacyError(t *testing.T) {
+	body := []byte(`{"error":{"code":"InputImageSensitiveContentDetected.PrivacyInformation","message":"The request failed because the input image may contain real person."}}`)
+
+	message := upstreamErrorMessage(body, "AI 接口请求失败")
+	if message != "输入图片疑似包含真人或隐私信息，火山 Ark 已拒绝本次生成。请更换参考图，或先完成素材加白后再试。（InputImageSensitiveContentDetected.PrivacyInformation）" {
+		t.Fatalf("message = %q", message)
+	}
+}
+
+func TestUpstreamErrorMessageKeepsGenericErrorMessage(t *testing.T) {
+	body := []byte(`{"error":{"code":"BadRequest","message":"invalid prompt"}}`)
+
+	message := upstreamErrorMessage(body, "AI 接口请求失败")
+	if message != "BadRequest：invalid prompt" {
+		t.Fatalf("message = %q", message)
+	}
+}
+
+func TestValidateProxyDownloadURLRejectsUnsafeTargets(t *testing.T) {
+	tests := []string{
+		"file:///etc/passwd",
+		"http://127.0.0.1/video.mp4",
+		"http://localhost/video.mp4",
+		"http://10.0.0.1/video.mp4",
+		"http://169.254.169.254/latest/meta-data/",
+	}
+	for _, rawURL := range tests {
+		if err := validateProxyDownloadURL(context.Background(), rawURL); err == nil {
+			t.Fatalf("validateProxyDownloadURL(%q) returned nil", rawURL)
+		}
+	}
+}
+
+func TestValidateProxyDownloadURLAllowsPublicIP(t *testing.T) {
+	if err := validateProxyDownloadURL(context.Background(), "https://8.8.8.8/video.mp4"); err != nil {
+		t.Fatalf("validateProxyDownloadURL returned error: %v", err)
 	}
 }
 

@@ -37,6 +37,36 @@ func AdminSaveAsset(w http.ResponseWriter, r *http.Request) {
 	OK(w, result)
 }
 
+func AdminUploadAssetMedia(w http.ResponseWriter, r *http.Request) {
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		Fail(w, "请选择素材文件")
+		return
+	}
+	defer file.Close()
+	result, err := service.SaveAssetMedia(file, header)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func CacheCanvasMedia(w http.ResponseWriter, r *http.Request) {
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		Fail(w, "请选择缓存文件")
+		return
+	}
+	defer file.Close()
+	result, err := service.SaveCanvasMediaCache(file, header)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
 func AdminDeleteAsset(w http.ResponseWriter, r *http.Request, id string) {
 	if err := service.DeleteAsset(id); err != nil {
 		FailError(w, err)
