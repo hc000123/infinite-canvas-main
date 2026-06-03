@@ -27,6 +27,8 @@ export function shouldCreateVideoVariant(config: Pick<AiConfig, "videoTaskMode">
     return sourceNode?.type === "video" && Boolean(sourceNode.metadata?.content) && config.videoTaskMode !== "edit" && config.videoTaskMode !== "extend";
 }
 
+export type VideoGenerationPlan = ReturnType<typeof buildVideoGenerationPlan>;
+
 export function buildVideoGenerationPlan({ config, sourceNode, sourceReferences, contextReferences, storedVariantReferences }: BuildVideoGenerationPlanInput) {
     const isVariant = shouldCreateVideoVariant(config, sourceNode);
     const selectedReferences = isVariant ? storedVariantReferences || emptyReferences() : sourceReferences;

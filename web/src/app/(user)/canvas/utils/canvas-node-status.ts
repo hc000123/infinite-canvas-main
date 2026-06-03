@@ -101,3 +101,38 @@ export function applyImageGenerationFinalStatus({ nodes, nodeId, rootId, isConfi
                 : node,
     );
 }
+
+export function buildCompletedVideoNode({
+    videoNode,
+    videoSize,
+    videoMetadata,
+    cachedVideoMetadata,
+    taskMetadata,
+    generationMetadata,
+    prompt,
+}: {
+    videoNode: CanvasNodeData;
+    videoSize: { width: number; height: number };
+    videoMetadata: CanvasNodeMetadata;
+    cachedVideoMetadata: Partial<CanvasNodeMetadata>;
+    taskMetadata?: CanvasNodeMetadata;
+    generationMetadata: CanvasNodeMetadata;
+    prompt: string;
+}): CanvasNodeData {
+    return {
+        ...videoNode,
+        width: videoSize.width,
+        height: videoSize.height,
+        position: { x: videoNode.position.x + videoNode.width / 2 - videoSize.width / 2, y: videoNode.position.y + videoNode.height / 2 - videoSize.height / 2 },
+        metadata: {
+            ...videoNode.metadata,
+            ...videoMetadata,
+            ...cachedVideoMetadata,
+            ...(taskMetadata || {}),
+            prompt,
+            ...generationMetadata,
+            taskStatus: "succeeded",
+            errorDetails: undefined,
+        },
+    };
+}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyGeneratedImageToNodes, applyImageGenerationFinalStatus, applyImageGenerationStartNodes, applyImageTargetError } from "./canvas-node-status.ts";
+import { applyGeneratedImageToNodes, applyImageGenerationFinalStatus, applyImageGenerationStartNodes, applyImageTargetError, buildCompletedVideoNode } from "./canvas-node-status.ts";
 import type { CanvasNodeData } from "../types.ts";
 
 const node = (id: string, type: CanvasNodeData["type"], metadata: CanvasNodeData["metadata"] = {}): CanvasNodeData => ({
@@ -69,4 +69,29 @@ test("marks failed image target and final batch status without touching unrelate
     });
     assert.equal(finalNodes[0].metadata?.status, "error");
     assert.equal(finalNodes[0].metadata?.errorDetails, "全部图片生成失败");
+});
+
+test("builds completed video node with centered size and merged metadata", () => {
+    const videoNode = { ...node("video", "video", { status: "loading", taskStatus: "running" }), width: 420, height: 236 };
+    const result = buildCompletedVideoNode({
+        videoNode,
+        videoSize: { width: 320, height: 180 },
+        videoMetadata: { content: "blob:video", storageKey: "video:1", status: "success", mimeType: "video/mp4" },
+        cachedVideoMetadata: { cacheUrl: "/api/canvas/media-cache/video.mp4", cacheFilename: "video.mp4" },
+        taskMetadata: { taskId: "task-1", taskStatus: "succeeded", videoUrl: "https://example.com/video.mp4" },
+        generationMetadata: { model: "seedance", provider: "volcengine-ark", relationType: "variant", videoActionType: "variant" },
+        prompt: "新的提示词",
+    });
+
+    assert.equal(result.width, 320);
+    assert.equal(result.height, 180);
+    assert.equal(result.position.x, 60);
+    assert.equal(result.position.y, 48);
+    assert.equal(result.metadata?.content, "blob:video");
+    assert.equal(result.metadata?.cacheFilename, "video.mp4");
+    assert.equal(result.metadata?.taskId, "task-1");
+    assert.equal(result.metadata?.taskStatus, "succeeded");
+    assert.equal(result.metadata?.prompt, "新的提示词");
+    assert.equal(result.metadata?.relationType, "variant");
+    assert.equal(result.metadata?.errorDetails, undefined);
 });

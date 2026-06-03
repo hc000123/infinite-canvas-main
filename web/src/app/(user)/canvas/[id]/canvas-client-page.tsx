@@ -25,7 +25,7 @@ import { removeVariantVideoConnections } from "../utils/canvas-connection-cleanu
 import { buildGenerationConfig, buildRetryGenerationConfig } from "../utils/canvas-generation-config";
 import { buildImageGenerationMetadata, buildRetryImageGenerationMetadata, buildVideoGenerationMetadata, buildVideoReferenceInput, directVideoReferenceInputs, storedReferenceImageRole, videoTaskMetadata } from "../utils/canvas-generation-metadata";
 import { runCanvasImageGeneration, runCanvasVideoGeneration } from "../utils/canvas-generation-runner";
-import { createTextGenerationChildNodes, createVideoGenerationNode } from "../utils/canvas-generation-nodes";
+import { createTextGenerationChildNodes } from "../utils/canvas-generation-nodes";
 import { buildContinuousVideoChain } from "../utils/canvas-video-chain";
 import { buildCapturedVideoFrameNode } from "../utils/canvas-video-frame";
 import { buildVideoGenerationPlan, shouldCreateVideoVariant } from "../utils/canvas-video-generation-plan";
@@ -36,6 +36,7 @@ import { cropDataUrl } from "../utils/canvas-image-data";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
 import { useCanvasMediaCache } from "../hooks/use-canvas-media-cache";
 import { useCanvasImageGenerationActions } from "../hooks/use-canvas-image-generation-actions";
+import { useCanvasVideoGenerationActions } from "../hooks/use-canvas-video-generation-actions";
 import { useCanvasVideoTaskRecovery } from "../hooks/use-canvas-video-task-recovery";
 import { App, Button, Dropdown, Modal } from "antd";
 import { NODE_DEFAULT_SIZE, getNodeSpec } from "../constants";
@@ -328,6 +329,7 @@ function InfiniteCanvasPage() {
     const selectionBoxRef = useRef(selectionBox);
     const pendingConnectionCreateRef = useRef(pendingConnectionCreate);
     const showImageGenerationError = useCallback((text: string) => message.error(text), [message]);
+    const showVideoGenerationWarning = useCallback((text: string) => message.warning(text), [message]);
     const { generateImageNode } = useCanvasImageGenerationActions({
         setNodes,
         setConnections,
@@ -336,6 +338,13 @@ function InfiniteCanvasPage() {
         setDialogNodeId,
         showError: showImageGenerationError,
         toImageMetadata: imageMetadata,
+    });
+    const { generateVideoNode } = useCanvasVideoGenerationActions({
+        setNodes,
+        setConnections,
+        cacheUploadedCanvasMedia,
+        showWarning: showVideoGenerationWarning,
+        toVideoMetadata: videoMetadata,
     });
 
     const createHistoryEntry = useCallback(
@@ -1890,50 +1899,17 @@ function InfiniteCanvasPage() {
                         contextReferences: { images: generationContext.referenceImages, videos: generationContext.referenceVideos, audios: generationContext.referenceAudios, inputs: generationContext.referenceInputs },
                         storedVariantReferences: { images: storedVariantImages || [], videos: storedVariantVideos || [], audios: storedVariantAudios || [], inputs: sourceReferenceInputs },
                     });
-                    if (videoPlan.sourceVideoRequiredError) {
-                        const errorDetails = videoPlan.sourceVideoRequiredError;
-                        message.warning(errorDetails);
-                        setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, errorDetails } } : node)));
-                        return;
-                    }
-                    const spec = nodeSizeFromRatio(generationConfig.size, NODE_DEFAULT_SIZE[CanvasNodeType.Video].width, NODE_DEFAULT_SIZE[CanvasNodeType.Video].height) || NODE_DEFAULT_SIZE[CanvasNodeType.Video];
-                    const generationStartedAt = Date.now();
-                    const { videoId, videoNode, isEmptyVideoNode, connection } = createVideoGenerationNode({
+                    const videoResult = await generateVideoNode({
                         nodeId,
                         sourceNode,
-                        prompt: effectivePrompt,
-                        spec,
-                        metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, generationStartedAt, ...buildVideoGenerationMetadata(generationConfig, videoPlan.references, videoPlan.relation) },
-                    });
-                    pendingChildIds = [videoId];
-                    setNodes((prev) =>
-                        isEmptyVideoNode
-                            ? prev.map((node) => (node.id === nodeId ? { ...node, ...videoNode } : node))
-                            : [...prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), videoNode],
-                    );
-                    if (connection) setConnections((prev) => [...prev, connection]);
-                    const { video, completedTask } = await runCanvasVideoGeneration(generationConfig, effectivePrompt, videoPlan.references, (task) => {
-                        setNodes((prev) => prev.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, ...videoTaskMetadata(task), errorDetails: task.errorMessage } } : node)));
-                    });
-                    const cachedVideo = await cacheUploadedCanvasMedia(video, `${videoId}.mp4`);
-                    const videoSize = fitNodeSize(video.width || spec.width, video.height || spec.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
-                    const finalVideoNode: CanvasNodeData = {
-                        ...videoNode,
-                        width: videoSize.width,
-                        height: videoSize.height,
-                        position: { x: videoNode.position.x + videoNode.width / 2 - videoSize.width / 2, y: videoNode.position.y + videoNode.height / 2 - videoSize.height / 2 },
-                        metadata: {
-                            ...videoNode.metadata,
-                            ...videoMetadata(video),
-                            ...cachedVideo,
-                            ...(completedTask ? videoTaskMetadata(completedTask) : {}),
-                            prompt: effectivePrompt,
-                            ...buildVideoGenerationMetadata(generationConfig, videoPlan.references, videoPlan.relation),
-                            taskStatus: "succeeded",
-                            errorDetails: undefined,
+                        effectivePrompt,
+                        generationConfig,
+                        videoPlan,
+                        setPendingChildIds: (ids) => {
+                            pendingChildIds = ids;
                         },
-                    };
-                    setNodes((prev) => prev.map((node) => (node.id === videoId ? finalVideoNode : node)));
+                    });
+                    pendingChildIds = videoResult.pendingChildIds;
                     return;
                 }
 
@@ -2007,7 +1983,7 @@ function InfiniteCanvasPage() {
                 setRunningNodeId(null);
             }
         },
-        [cacheUploadedCanvasMedia, canvasAiConfig, generateImageNode, isAiConfigReady, message, openConfigDialog],
+        [canvasAiConfig, generateImageNode, generateVideoNode, isAiConfigReady, message, openConfigDialog],
     );
 
     const handleRefreshVideoTask = useCallback(
