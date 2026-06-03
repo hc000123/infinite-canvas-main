@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent as ReactChangeEvent, DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
+import type { ChangeEvent as ReactChangeEvent, DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AudioLines, Home, ImageIcon, Images, List, Menu, MessageSquare, Plus, Redo2, Settings2, Trash2, Undo2, Upload, Video } from "lucide-react";
 
@@ -36,6 +36,7 @@ import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
 import { useCanvasHistory } from "../hooks/use-canvas-history";
 import { useCanvasMediaCache } from "../hooks/use-canvas-media-cache";
 import { useCanvasNodeDrag } from "../hooks/use-canvas-node-drag";
+import { useCanvasSelectionBox } from "../hooks/use-canvas-selection-box";
 import { useCanvasImageGenerationActions } from "../hooks/use-canvas-image-generation-actions";
 import { useCanvasTextGenerationActions } from "../hooks/use-canvas-text-generation-actions";
 import { useCanvasVideoGenerationActions } from "../hooks/use-canvas-video-generation-actions";
@@ -58,19 +59,7 @@ import { CanvasToolbar } from "../components/canvas-toolbar";
 import { AssetPickerModal, type AssetPickerTab, type InsertAssetPayload } from "../components/asset-picker-modal";
 import { CanvasZoomControls } from "../components/canvas-zoom-controls";
 import { useCanvasStore } from "../stores/use-canvas-store";
-import {
-    CanvasNodeType,
-    type CanvasAssistantImage,
-    type CanvasAssistantSession,
-    type CanvasConnection,
-    type CanvasNodeData,
-    type CanvasNodeMetadata,
-    type ConnectionHandle,
-    type ContextMenuState,
-    type Position,
-    type SelectionBox,
-    type ViewportTransform,
-} from "../types";
+import { CanvasNodeType, type CanvasAssistantImage, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type ConnectionHandle, type ContextMenuState, type Position, type ViewportTransform } from "../types";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio } from "@/types/audio";
 import type { ReferenceVideo } from "@/types/video";
@@ -261,7 +250,6 @@ function InfiniteCanvasPage() {
     const [connectionTargetNodeId, setConnectionTargetNodeId] = useState<string | null>(null);
     const [pendingConnectionCreate, setPendingConnectionCreate] = useState<PendingConnectionCreate | null>(null);
     const [mouseWorld, setMouseWorld] = useState<Position>({ x: 0, y: 0 });
-    const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null);
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const [runningNodeId, setRunningNodeId] = useState<string | null>(null);
     const [isMiniMapOpen, setIsMiniMapOpen] = useState(false);
@@ -297,7 +285,6 @@ function InfiniteCanvasPage() {
     const viewportRef = useRef(viewport);
     const connectingParamsRef = useRef(connectingParams);
     const connectionTargetNodeIdRef = useRef(connectionTargetNodeId);
-    const selectionBoxRef = useRef(selectionBox);
     const pendingConnectionCreateRef = useRef(pendingConnectionCreate);
     const showImageGenerationError = useCallback((text: string) => message.error(text), [message]);
     const showVideoGenerationWarning = useCallback((text: string) => message.warning(text), [message]);
@@ -421,10 +408,6 @@ function InfiniteCanvasPage() {
         pendingConnectionCreateRef.current = pendingConnectionCreate;
     }, [nodes, connections, selectedNodeIds, viewport, connectingParams, connectionTargetNodeId, pendingConnectionCreate]);
 
-    useLayoutEffect(() => {
-        selectionBoxRef.current = selectionBox;
-    }, [selectionBox]);
-
     useEffect(() => {
         const el = containerRef.current;
         if (!el) return;
@@ -533,6 +516,18 @@ function InfiniteCanvasPage() {
         setPendingConnectionCreate(null);
         setConnecting(null);
     }, [setConnecting]);
+
+    const { selectionBox, handleCanvasMouseDown, moveSelectionBox, clearSelectionBox } = useCanvasSelectionBox({
+        nodesRef,
+        selectedNodeIdsRef,
+        pendingConnectionCreateRef,
+        screenToCanvas,
+        isNodeHidden: isHiddenBatchChild,
+        cancelPendingConnectionCreate,
+        setSelectedNodeIds,
+        setSelectedConnectionId,
+        setContextMenu,
+    });
 
     const getConnectableNodeAtPoint = useCallback(
         (clientX: number, clientY: number, current: ConnectionHandle) => {
@@ -693,12 +688,12 @@ function InfiniteCanvasPage() {
         setSelectedNodeIds(new Set());
         setSelectedConnectionId(null);
         setContextMenu(null);
-        setSelectionBox(null);
+        clearSelectionBox();
         setHoveredNodeId(null);
         setToolbarNodeId(null);
         setDialogNodeId(null);
         setEditingNodeId(null);
-    }, [cancelPendingConnectionCreate]);
+    }, [cancelPendingConnectionCreate, clearSelectionBox]);
 
     const clearCanvas = useCallback(() => {
         setNodes([]);
@@ -835,39 +830,6 @@ function InfiniteCanvasPage() {
         router.push("/canvas");
     }, [cleanupAssetImages, deleteProjects, projectId, router]);
 
-    const handleCanvasMouseDown = useCallback(
-        (event: ReactPointerEvent<HTMLDivElement>) => {
-            setContextMenu(null);
-            if (pendingConnectionCreateRef.current) cancelPendingConnectionCreate();
-            if (event.button !== 0) return;
-
-            if (!event.ctrlKey && !event.metaKey) {
-                setSelectionBox(null);
-                setSelectedNodeIds(new Set());
-                setSelectedConnectionId(null);
-                return;
-            }
-
-            const world = screenToCanvas(event.clientX, event.clientY);
-            const nextSelectionBox = {
-                startWorldX: world.x,
-                startWorldY: world.y,
-                currentWorldX: world.x,
-                currentWorldY: world.y,
-                additive: event.shiftKey,
-                initialSelectedNodeIds: event.shiftKey ? Array.from(selectedNodeIdsRef.current) : [],
-            };
-            selectionBoxRef.current = nextSelectionBox;
-            setSelectionBox(nextSelectionBox);
-            if (!event.shiftKey) {
-                setSelectedNodeIds(new Set());
-            }
-
-            setSelectedConnectionId(null);
-        },
-        [cancelPendingConnectionCreate, screenToCanvas],
-    );
-
     const handleGlobalMouseMove = useCallback(
         (event: MouseEvent) => {
             if (moveNodeDrag(event)) return;
@@ -882,46 +844,11 @@ function InfiniteCanvasPage() {
         [getConnectableNodeAtPoint, moveNodeDrag, screenToCanvas],
     );
 
-    const handleGlobalPointerMove = useCallback(
-        (event: PointerEvent) => {
-            const currentSelection = selectionBoxRef.current;
-            if (!currentSelection) return;
-
-            if (event.buttons === 0) {
-                selectionBoxRef.current = null;
-                setSelectionBox(null);
-                return;
-            }
-
-            const world = screenToCanvas(event.clientX, event.clientY);
-            const rectX = Math.min(currentSelection.startWorldX, world.x);
-            const rectY = Math.min(currentSelection.startWorldY, world.y);
-            const rectW = Math.abs(world.x - currentSelection.startWorldX);
-            const rectH = Math.abs(world.y - currentSelection.startWorldY);
-            const nextSelected = new Set<string>(currentSelection.additive ? currentSelection.initialSelectedNodeIds : []);
-
-            nodesRef.current
-                .filter((node) => !isHiddenBatchChild(node, nodesRef.current))
-                .forEach((node) => {
-                    const intersects = rectX < node.position.x + node.width && rectX + rectW > node.position.x && rectY < node.position.y + node.height && rectY + rectH > node.position.y;
-
-                    if (intersects) nextSelected.add(node.id);
-                });
-
-            const nextSelectionBox = { ...currentSelection, currentWorldX: world.x, currentWorldY: world.y };
-            selectionBoxRef.current = nextSelectionBox;
-            setSelectionBox(nextSelectionBox);
-            setSelectedNodeIds(nextSelected);
-        },
-        [screenToCanvas],
-    );
-
     const handleGlobalMouseUp = useCallback(
         (event: MouseEvent) => {
             finishNodeDrag(event.clientX, event.clientY);
 
-            selectionBoxRef.current = null;
-            setSelectionBox(null);
+            clearSelectionBox();
 
             if (pendingConnectionCreateRef.current) return;
 
@@ -937,7 +864,7 @@ function InfiniteCanvasPage() {
                 }
             }
         },
-        [connectNodes, finishNodeDrag, getConnectableNodeAtPoint, screenToCanvas, setConnecting],
+        [clearSelectionBox, connectNodes, finishNodeDrag, getConnectableNodeAtPoint, screenToCanvas, setConnecting],
     );
 
     useEffect(() => {
@@ -948,16 +875,16 @@ function InfiniteCanvasPage() {
         window.addEventListener("pointerup", handlePointerUp);
         window.addEventListener("pointercancel", cancelNodeDrag);
         window.addEventListener("blur", cancelNodeDrag);
-        window.addEventListener("pointermove", handleGlobalPointerMove);
+        window.addEventListener("pointermove", moveSelectionBox);
         return () => {
             window.removeEventListener("mousemove", handleGlobalMouseMove);
             window.removeEventListener("mouseup", handleGlobalMouseUp);
             window.removeEventListener("pointerup", handlePointerUp);
             window.removeEventListener("pointercancel", cancelNodeDrag);
             window.removeEventListener("blur", cancelNodeDrag);
-            window.removeEventListener("pointermove", handleGlobalPointerMove);
+            window.removeEventListener("pointermove", moveSelectionBox);
         };
-    }, [finishNodeDrag, handleGlobalMouseMove, handleGlobalMouseUp, handleGlobalPointerMove]);
+    }, [finishNodeDrag, handleGlobalMouseMove, handleGlobalMouseUp, moveSelectionBox]);
 
     const addCanvasNodeToAssets = useCallback(
         (node: CanvasNodeData) => {
@@ -1102,7 +1029,7 @@ function InfiniteCanvasPage() {
                 setSelectedNodeIds(new Set(nodesRef.current.map((node) => node.id)));
                 setSelectedConnectionId(null);
                 setContextMenu(null);
-                setSelectionBox(null);
+                clearSelectionBox();
                 return;
             }
 
@@ -1131,7 +1058,7 @@ function InfiniteCanvasPage() {
                 setSelectedNodeIds(new Set());
                 setSelectedConnectionId(null);
                 setContextMenu(null);
-                setSelectionBox(null);
+                clearSelectionBox();
                 setConnecting(null);
                 setHoveredNodeId(null);
                 setToolbarNodeId(null);
@@ -1145,7 +1072,7 @@ function InfiniteCanvasPage() {
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [copySelectedNodes, deleteNodes, pasteCopiedNodes, pasteSystemClipboard, redoCanvas, selectedConnectionId, setConnecting, undoCanvas]);
+    }, [clearSelectionBox, copySelectedNodes, deleteNodes, pasteCopiedNodes, pasteSystemClipboard, redoCanvas, selectedConnectionId, setConnecting, undoCanvas]);
 
     const handleConnectStart = useCallback(
         (event: ReactMouseEvent, nodeId: string, handleType: "source" | "target") => {
