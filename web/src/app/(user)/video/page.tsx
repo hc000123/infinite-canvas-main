@@ -2,7 +2,7 @@
 
 import { BookOpen, CheckSquare, ClipboardPaste, Download, FolderPlus, History, LoaderCircle, Plus, SlidersHorizontal, Sparkles, Trash2, Upload, VideoIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { App, Button, Checkbox, Drawer, Empty, Input, Modal, Segmented, Tag, Typography } from "antd";
+import { App, Button, Checkbox, Drawer, Empty, Input, Modal, Segmented, Space, Tag, Typography } from "antd";
 import localforage from "localforage";
 import { nanoid } from "nanoid";
 import { saveAs } from "file-saver";
@@ -282,80 +282,82 @@ export default function VideoPage() {
                 </aside>
 
                 <section className="grid gap-3 lg:min-h-0 lg:overflow-hidden xl:grid-cols-[420px_minmax(0,1fr)]">
-                    <div className="thin-scrollbar flex flex-col rounded-lg border border-stone-200 bg-card p-4 shadow-sm dark:border-stone-800 lg:min-h-0 lg:overflow-y-auto">
-                        <div className="flex items-start justify-between gap-3">
-                            <h1 className="text-2xl font-semibold text-stone-950 dark:text-stone-100">视频创作台</h1>
-                            <div className="flex shrink-0 gap-2 lg:hidden">
-                                <Button icon={<History className="size-4" />} onClick={() => setLogsOpen(true)}>
-                                    记录
-                                </Button>
-                                <Button icon={<SlidersHorizontal className="size-4" />} onClick={() => setSettingsOpen(true)}>
-                                    参数
-                                </Button>
-                            </div>
-                        </div>
-
-                        <div className="mt-6 space-y-5">
-                            <div>
-                                <div className="mb-2 flex items-center justify-between gap-3">
-                                    <span className="text-base font-semibold">提示词</span>
-                                    <div className="flex gap-2">
-                                        <Button size="small" icon={<BookOpen className="size-3.5" />} onClick={() => setPromptDialogOpen(true)}>
-                                            查看提示词库
-                                        </Button>
-                                        <Button size="small" icon={<FolderPlus className="size-3.5" />} onClick={() => setAssetPickerOpen(true)}>
-                                            查看我的素材
-                                        </Button>
-                                    </div>
+                    <div className="flex min-h-[560px] flex-col overflow-hidden rounded-lg border border-stone-200 bg-card shadow-sm dark:border-stone-800 lg:min-h-0">
+                        <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <h1 className="text-2xl font-semibold text-stone-950 dark:text-stone-100">视频创作台</h1>
+                                <div className="flex shrink-0 gap-2 lg:hidden">
+                                    <Button icon={<History className="size-4" />} onClick={() => setLogsOpen(true)}>
+                                        记录
+                                    </Button>
+                                    <Button icon={<SlidersHorizontal className="size-4" />} onClick={() => setSettingsOpen(true)}>
+                                        参数
+                                    </Button>
                                 </div>
-                                <Input.TextArea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={7} placeholder="描述镜头运动、主体动作、场景氛围和画面风格" />
                             </div>
 
-                            <div className="min-w-0">
-                                <div className="mb-2 flex items-center justify-between gap-3">
-                                    <span className="text-base font-semibold">参考图</span>
-                                    <div className="flex gap-2">
-                                        <Button size="small" icon={<ClipboardPaste className="size-3.5" />} onClick={() => void addReferencesFromClipboard()}>
-                                            剪切板
-                                        </Button>
-                                        <Button size="small" icon={<Upload className="size-3.5" />} onClick={() => fileInputRef.current?.click()}>
-                                            上传
-                                        </Button>
-                                    </div>
-                                </div>
-                                <div className="hover-scrollbar hover-scrollbar-hint flex min-h-24 w-full min-w-0 max-w-full gap-2 overflow-x-scroll overflow-y-hidden rounded-lg border border-dashed border-stone-300 p-2 pb-3 overscroll-x-contain dark:border-stone-700">
-                                    {references.map((item) => (
-                                        <div key={item.id} className="group relative size-20 shrink-0 overflow-hidden rounded-md border border-stone-200 dark:border-stone-800">
-                                            <img src={item.dataUrl} alt={item.name} className="size-full object-cover" />
-                                            <button
-                                                type="button"
-                                                className="absolute right-1 top-1 hidden size-6 items-center justify-center rounded bg-black/60 text-white group-hover:flex"
-                                                onClick={() => setReferences((value) => value.filter((ref) => ref.id !== item.id))}
-                                                aria-label="移除参考图"
-                                            >
-                                                <Trash2 className="size-3.5" />
-                                            </button>
+                            <div className="mt-6 space-y-5">
+                                <div>
+                                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                        <span className="text-base font-semibold">提示词</span>
+                                        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex">
+                                            <Button className="!justify-center !px-2.5" size="small" icon={<BookOpen className="size-3.5" />} onClick={() => setPromptDialogOpen(true)}>
+                                                查看提示词库
+                                            </Button>
+                                            <Button className="!justify-center !px-2.5" size="small" icon={<FolderPlus className="size-3.5" />} onClick={() => setAssetPickerOpen(true)}>
+                                                查看我的素材
+                                            </Button>
                                         </div>
-                                    ))}
-                                    {!references.length ? <div className="flex min-w-full items-center justify-center text-sm text-stone-500">暂无参考图，最多 7 张</div> : null}
+                                    </div>
+                                    <Input.TextArea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={7} placeholder="描述镜头运动、主体动作、场景氛围和画面风格" />
                                 </div>
-                            </div>
 
-                            <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm dark:border-stone-800 dark:bg-stone-900 sm:hidden">
-                                <span className="truncate text-stone-500 dark:text-stone-400">
-                                    {model} · {normalizeResolution(effectiveConfig.vquality)}p · {videoRatioLabel(effectiveConfig.size)} · {videoSecondsLabel(effectiveConfig.videoSeconds, effectiveConfig)}
-                                </span>
-                                <Button size="small" type="text" icon={<SlidersHorizontal className="size-4" />} onClick={() => setSettingsOpen(true)}>
-                                    调整
-                                </Button>
-                            </div>
+                                <div className="min-w-0">
+                                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                        <span className="text-base font-semibold">参考图</span>
+                                        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex">
+                                            <Button className="!justify-center !px-2.5" size="small" icon={<ClipboardPaste className="size-3.5" />} onClick={() => void addReferencesFromClipboard()}>
+                                                剪切板
+                                            </Button>
+                                            <Button className="!justify-center !px-2.5" size="small" icon={<Upload className="size-3.5" />} onClick={() => fileInputRef.current?.click()}>
+                                                上传
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="hover-scrollbar hover-scrollbar-hint flex min-h-24 w-full min-w-0 max-w-full gap-2 overflow-x-scroll overflow-y-hidden rounded-lg border border-dashed border-stone-300 p-2 pb-3 overscroll-x-contain dark:border-stone-700">
+                                        {references.map((item) => (
+                                            <div key={item.id} className="group relative size-20 shrink-0 overflow-hidden rounded-md border border-stone-200 dark:border-stone-800">
+                                                <img src={item.dataUrl} alt={item.name} className="size-full object-cover" />
+                                                <button
+                                                    type="button"
+                                                    className="absolute right-1 top-1 hidden size-6 items-center justify-center rounded bg-black/60 text-white group-hover:flex"
+                                                    onClick={() => setReferences((value) => value.filter((ref) => ref.id !== item.id))}
+                                                    aria-label="移除参考图"
+                                                >
+                                                    <Trash2 className="size-3.5" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {!references.length ? <div className="flex min-w-full items-center justify-center text-sm text-stone-500">暂无参考图，最多 7 张</div> : null}
+                                    </div>
+                                </div>
 
-                            <div className="hidden gap-4 sm:grid sm:grid-cols-2">
-                                <GenerationSettings config={effectiveConfig} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} />
+                                <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm dark:border-stone-800 dark:bg-stone-900 sm:hidden">
+                                    <span className="truncate text-stone-500 dark:text-stone-400">
+                                        {model} · {normalizeResolution(effectiveConfig.vquality)}p · {videoRatioLabel(effectiveConfig.size)} · {videoSecondsLabel(effectiveConfig.videoSeconds, effectiveConfig)}
+                                    </span>
+                                    <Button size="small" type="text" icon={<SlidersHorizontal className="size-4" />} onClick={() => setSettingsOpen(true)}>
+                                        调整
+                                    </Button>
+                                </div>
+
+                                <div className="hidden sm:block">
+                                    <GenerationSettings config={effectiveConfig} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} />
+                                </div>
                             </div>
                         </div>
 
-                        <div className="mt-auto pt-6">
+                        <div className="shrink-0 border-t border-stone-200 p-4 dark:border-stone-800">
                             <Button type="primary" size="large" block icon={<Sparkles className="size-4" />} loading={running} disabled={!canGenerate || running} onClick={() => void generate()}>
                                 开始生成
                             </Button>
@@ -411,7 +413,7 @@ export default function VideoPage() {
                 />
             </Drawer>
             <Drawer title="参数" placement="bottom" size="82vh" open={settingsOpen} onClose={() => setSettingsOpen(false)}>
-                <div className="grid grid-cols-2 gap-3 pb-4">
+                <div className="pb-4">
                     <GenerationSettings config={effectiveConfig} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} />
                 </div>
             </Drawer>
@@ -429,8 +431,8 @@ function GenerationSettings({ config, model, updateConfig, openConfigDialog }: {
     const isSeedance = config.channelMode === "local" && config.videoProtocol === "volcengine-ark";
 
     return (
-        <>
-            <label className="col-span-2 block min-w-0 sm:col-span-1">
+        <div className="grid min-w-0 gap-4">
+            <label className="block min-w-0">
                 <span className="mb-1.5 block text-sm font-semibold sm:mb-2 sm:text-base">模型</span>
                 <div className="space-y-2">
                     {config.channelMode === "local" ? (
@@ -447,18 +449,28 @@ function GenerationSettings({ config, model, updateConfig, openConfigDialog }: {
                     ) : null}
                     {isSeedance ? (
                         <div className="space-y-2">
-                            <Input addonBefore="显示名" value={config.seedanceModel || model} placeholder="doubao-seedance-2-0-260128" onChange={(event) => updateConfig("seedanceModel", event.target.value)} />
-                            <Input addonBefore="Endpoint ID" value={config.seedanceEndpointId} placeholder="ep-20260524233518-kxgt4" onChange={(event) => updateConfig("seedanceEndpointId", event.target.value)} />
+                            <Space.Compact className="w-full">
+                                <span className="inline-flex w-24 shrink-0 items-center justify-center rounded-l-md border border-r-0 border-stone-200 bg-stone-50 px-3 text-sm text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300">
+                                    显示名
+                                </span>
+                                <Input value={config.seedanceModel || model} placeholder="doubao-seedance-2-0-260128" onChange={(event) => updateConfig("seedanceModel", event.target.value)} />
+                            </Space.Compact>
+                            <Space.Compact className="w-full">
+                                <span className="inline-flex w-24 shrink-0 items-center justify-center rounded-l-md border border-r-0 border-stone-200 bg-stone-50 px-3 text-sm text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300">
+                                    Endpoint
+                                </span>
+                                <Input value={config.seedanceEndpointId} placeholder="ep-20260524233518-kxgt4" onChange={(event) => updateConfig("seedanceEndpointId", event.target.value)} />
+                            </Space.Compact>
                         </div>
                     ) : (
                         <ModelPicker config={config} modelType="video" value={model} onChange={(value) => updateConfig("videoModel", value)} fullWidth onMissingConfig={() => openConfigDialog(false)} />
                     )}
                 </div>
             </label>
-            <div className="col-span-2">
+            <div className="min-w-0">
                 <VideoSettingsPanel config={config} onConfigChange={(key, value) => updateConfig(key, value)} theme={theme} showTitle={false} className="space-y-4" />
             </div>
-        </>
+        </div>
     );
 }
 

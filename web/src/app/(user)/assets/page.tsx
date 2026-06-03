@@ -1,8 +1,8 @@
 "use client";
 
-import { CheckCircle, Copy, Download, PencilLine, RefreshCw, Search, ShieldCheck, Trash2, Upload } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { App, Button, Card, Drawer, Empty, Form, Image, Input, Modal, Pagination, Select, Space, Tag, Typography } from "antd";
+import { CheckCircle, Copy, Download, Eye, PencilLine, RefreshCw, Search, ShieldCheck, Trash2, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { App, Button, Card, Drawer, Empty, Form, Image, Input, Modal, Pagination, Select, Space, Tag, Tooltip, Typography } from "antd";
 import { saveAs } from "file-saver";
 
 import { useCopyText } from "@/hooks/use-copy-text";
@@ -734,39 +734,38 @@ function AssetCard({
                     </div>
                 </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 px-4 pb-4">
-                <Button size="small" onClick={onOpen}>
-                    查看
-                </Button>
-                <Button size="small" icon={<PencilLine className="size-3.5" />} onClick={onEdit}>
-                    编辑
-                </Button>
-                {asset.kind === "text" ? (
-                    <Button size="small" icon={<Copy className="size-3.5" />} onClick={() => void onCopy(asset)}>
-                        复制
-                    </Button>
-                ) : null}
-                {asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" ? (
-                    <Button size="small" icon={<Download className="size-3.5" />} onClick={() => onDownload(asset)}>
-                        下载
-                    </Button>
-                ) : null}
-                {shouldShowVolcengineReviewAction(asset.kind) ? (
-                    asset.metadata?.volcengineAsset?.assetId ? (
-                        <Button size="small" icon={<RefreshCw className={`size-3.5 ${isVolcengineReviewProcessing(asset.metadata.volcengineAsset) && !refreshingReview ? "animate-spin" : ""}`} />} loading={refreshingReview} onClick={onRefreshReview}>
-                            {volcengineReviewActionLabel(asset.metadata.volcengineAsset.status)}
-                        </Button>
-                    ) : (
-                        <Button size="small" icon={<ShieldCheck className="size-3.5" />} loading={submittingReview} onClick={onReview}>
-                            加白
-                        </Button>
-                    )
-                ) : null}
-                <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={onDelete}>
-                    删除
-                </Button>
+            <div className="flex items-center justify-between gap-2 px-4 pb-4">
+                <div className="flex min-w-0 items-center gap-1">
+                    <AssetIconButton title="查看" icon={<Eye className="size-3.5" />} onClick={onOpen} />
+                    <AssetIconButton title="编辑" icon={<PencilLine className="size-3.5" />} onClick={onEdit} />
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                    {asset.kind === "text" ? <AssetIconButton title="复制" icon={<Copy className="size-3.5" />} onClick={() => void onCopy(asset)} /> : null}
+                    {asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" ? <AssetIconButton title="下载" icon={<Download className="size-3.5" />} onClick={() => onDownload(asset)} /> : null}
+                    {shouldShowVolcengineReviewAction(asset.kind) ? (
+                        asset.metadata?.volcengineAsset?.assetId ? (
+                            <AssetIconButton
+                                title={volcengineReviewActionLabel(asset.metadata.volcengineAsset.status)}
+                                icon={<RefreshCw className={`size-3.5 ${isVolcengineReviewProcessing(asset.metadata.volcengineAsset) && !refreshingReview ? "animate-spin" : ""}`} />}
+                                loading={refreshingReview}
+                                onClick={onRefreshReview}
+                            />
+                        ) : (
+                            <AssetIconButton title="加白" icon={<ShieldCheck className="size-3.5" />} loading={submittingReview} onClick={onReview} />
+                        )
+                    ) : null}
+                    <AssetIconButton title="删除" icon={<Trash2 className="size-3.5" />} danger onClick={onDelete} />
+                </div>
             </div>
         </Card>
+    );
+}
+
+function AssetIconButton({ title, icon, danger, loading, onClick }: { title: string; icon: ReactNode; danger?: boolean; loading?: boolean; onClick: () => void }) {
+    return (
+        <Tooltip title={title}>
+            <Button type="text" size="small" className="!h-8 !w-8 !min-w-8 !p-0" danger={danger} icon={icon} loading={loading} onClick={onClick} aria-label={title} />
+        </Tooltip>
     );
 }
 

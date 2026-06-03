@@ -29,12 +29,15 @@ export function VersionReleaseModal({ className, style }: VersionReleaseModalPro
         <>
             <button
                 type="button"
-                className={className || "shrink-0 cursor-pointer text-xs font-medium text-stone-500 transition hover:text-stone-950 dark:text-stone-400 dark:hover:text-white"}
+                className={
+                    className ||
+                    "inline-flex h-8 min-w-[52px] shrink-0 cursor-pointer items-center justify-center rounded-md px-1.5 text-center text-xs font-medium leading-none text-stone-500 transition hover:text-stone-950 dark:text-stone-400 dark:hover:text-white"
+                }
                 style={style}
                 onClick={openReleaseModal}
                 title="查看版本更新"
             >
-                <span className="relative inline-flex">
+                <span className="relative inline-flex max-w-full items-center whitespace-nowrap">
                     {APP_VERSION}
                     {hasNewVersion ? <span className="absolute -right-1.5 -top-1 size-1.5 rounded-full bg-green-500" /> : null}
                 </span>
