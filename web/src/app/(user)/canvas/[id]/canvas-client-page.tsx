@@ -35,6 +35,7 @@ import { cropDataUrl } from "../utils/canvas-image-data";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
 import { useCanvasConnections, type CanvasPendingConnectionCreate } from "../hooks/use-canvas-connections";
 import { useCanvasHistory } from "../hooks/use-canvas-history";
+import { useCanvasKeyboardShortcuts } from "../hooks/use-canvas-keyboard-shortcuts";
 import { useCanvasMediaCache } from "../hooks/use-canvas-media-cache";
 import { useCanvasNodeDrag } from "../hooks/use-canvas-node-drag";
 import { useCanvasSelectionBox } from "../hooks/use-canvas-selection-box";
@@ -916,74 +917,29 @@ function InfiniteCanvasPage() {
         if (createTextNodeFromClipboard(text)) message.success("已从剪切板添加文本");
     }, [createImageFileNode, createTextNodeFromClipboard, getCanvasCenter, message]);
 
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) return;
-
-            const key = event.key.toLowerCase();
-            const isModifierShortcut = event.metaKey || event.ctrlKey;
-
-            if (isModifierShortcut && !event.altKey && key === "z") {
-                event.preventDefault();
-                if (event.shiftKey) redoCanvas();
-                else undoCanvas();
-                return;
-            }
-
-            if (isModifierShortcut && !event.altKey && key === "y") {
-                event.preventDefault();
-                redoCanvas();
-                return;
-            }
-
-            if (isModifierShortcut && !event.altKey && key === "a") {
-                event.preventDefault();
-                setSelectedNodeIds(new Set(nodesRef.current.map((node) => node.id)));
-                setSelectedConnectionId(null);
-                setContextMenu(null);
-                clearSelectionBox();
-                return;
-            }
-
-            if (isModifierShortcut && !event.altKey && key === "c") {
-                event.preventDefault();
-                copySelectedNodes();
-                return;
-            }
-
-            if (isModifierShortcut && !event.altKey && key === "v") {
-                event.preventDefault();
-                if (!pasteCopiedNodes()) void pasteSystemClipboard();
-                return;
-            }
-
-            if (event.key === "Delete" || event.key === "Backspace") {
-                if (selectedNodeIdsRef.current.size) {
-                    deleteNodes(new Set(selectedNodeIdsRef.current));
-                } else if (selectedConnectionId) {
-                    setConnections((prev) => prev.filter((conn) => conn.id !== selectedConnectionId));
-                    setSelectedConnectionId(null);
-                }
-            }
-
-            if (event.key === "Escape") {
-                setSelectedNodeIds(new Set());
-                setSelectedConnectionId(null);
-                setContextMenu(null);
-                clearSelectionBox();
-                cancelPendingConnectionCreate();
-                setHoveredNodeId(null);
-                setToolbarNodeId(null);
-                setDialogNodeId(null);
-                setEditingNodeId(null);
-                setInfoNodeId(null);
-                setCropNodeId(null);
-            }
-        };
-
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [cancelPendingConnectionCreate, clearSelectionBox, copySelectedNodes, deleteNodes, pasteCopiedNodes, pasteSystemClipboard, redoCanvas, selectedConnectionId, undoCanvas]);
+    useCanvasKeyboardShortcuts({
+        nodesRef,
+        selectedNodeIdsRef,
+        selectedConnectionId,
+        setConnections,
+        setSelectedNodeIds,
+        setSelectedConnectionId,
+        setContextMenu,
+        setHoveredNodeId,
+        setToolbarNodeId,
+        setDialogNodeId,
+        setEditingNodeId,
+        setInfoNodeId,
+        setCropNodeId,
+        clearSelectionBox,
+        cancelPendingConnectionCreate,
+        undoCanvas,
+        redoCanvas,
+        copySelectedNodes,
+        pasteCopiedNodes,
+        pasteSystemClipboard,
+        deleteNodes,
+    });
 
     const handleNodeResize = useCallback((nodeId: string, width: number, height: number, position?: Position) => {
         setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, width, height, position: position || node.position } : node)));
