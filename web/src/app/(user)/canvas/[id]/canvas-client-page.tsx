@@ -5,7 +5,7 @@ import type { ChangeEvent as ReactChangeEvent, DragEvent as ReactDragEvent, Mous
 import { useParams, useRouter } from "next/navigation";
 import { AudioLines, Home, ImageIcon, Images, List, Menu, MessageSquare, Plus, Redo2, Settings2, Trash2, Undo2, Upload, Video } from "lucide-react";
 
-import { requestEdit, requestImageQuestion } from "@/services/api/image";
+import { requestEdit } from "@/services/api/image";
 import { defaultSeedanceImageRole, type SeedanceImageRoleMode } from "@/services/api/video-reference";
 import { fetchVolcengineAssetStatus, submitVolcengineImageAsset } from "@/services/api/volcengine-assets";
 import { refreshVideoTask, type VideoGenerationReferenceInput } from "@/services/api/video";
@@ -25,7 +25,6 @@ import { removeVariantVideoConnections } from "../utils/canvas-connection-cleanu
 import { buildGenerationConfig, buildRetryGenerationConfig } from "../utils/canvas-generation-config";
 import { buildImageGenerationMetadata, buildRetryImageGenerationMetadata, buildVideoGenerationMetadata, buildVideoReferenceInput, directVideoReferenceInputs, storedReferenceImageRole, videoTaskMetadata } from "../utils/canvas-generation-metadata";
 import { runCanvasImageGeneration, runCanvasVideoGeneration } from "../utils/canvas-generation-runner";
-import { createTextGenerationChildNodes } from "../utils/canvas-generation-nodes";
 import { buildContinuousVideoChain } from "../utils/canvas-video-chain";
 import { buildCapturedVideoFrameNode } from "../utils/canvas-video-frame";
 import { buildVideoGenerationPlan, shouldCreateVideoVariant } from "../utils/canvas-video-generation-plan";
@@ -36,6 +35,7 @@ import { cropDataUrl } from "../utils/canvas-image-data";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
 import { useCanvasMediaCache } from "../hooks/use-canvas-media-cache";
 import { useCanvasImageGenerationActions } from "../hooks/use-canvas-image-generation-actions";
+import { useCanvasTextGenerationActions } from "../hooks/use-canvas-text-generation-actions";
 import { useCanvasVideoGenerationActions } from "../hooks/use-canvas-video-generation-actions";
 import { useCanvasVideoTaskRecovery } from "../hooks/use-canvas-video-task-recovery";
 import { App, Button, Dropdown, Modal } from "antd";
@@ -46,7 +46,7 @@ import { CanvasAssistantPanel } from "../components/canvas-assistant-panel";
 import { CanvasNodeContextMenu } from "../components/canvas-context-menu";
 import { CanvasNodeAngleDialog, type CanvasImageAngleParams } from "../components/canvas-node-angle-dialog";
 import { CanvasNodeCropDialog, type CanvasImageCropRect } from "../components/canvas-node-crop-dialog";
-import { buildNodeChatMessages, buildNodeGenerationContext, buildNodeGenerationInputs, hydrateNodeGenerationContext, type NodeGenerationInput } from "../components/canvas-node-generation";
+import { buildNodeGenerationContext, buildNodeGenerationInputs, hydrateNodeGenerationContext, type NodeGenerationInput } from "../components/canvas-node-generation";
 import { CanvasNodeHoverToolbar, CanvasNodeInfoModal } from "../components/canvas-node-hover-toolbar";
 import { InfiniteCanvas } from "../components/infinite-canvas";
 import { Minimap } from "../components/canvas-mini-map";
@@ -338,6 +338,10 @@ function InfiniteCanvasPage() {
         setDialogNodeId,
         showError: showImageGenerationError,
         toImageMetadata: imageMetadata,
+    });
+    const { generateTextNode, retryTextNode } = useCanvasTextGenerationActions({
+        setNodes,
+        setConnections,
     });
     const { generateVideoNode } = useCanvasVideoGenerationActions({
         setNodes,
@@ -1913,39 +1917,16 @@ function InfiniteCanvasPage() {
                     return;
                 }
 
-                let streamed = "";
-                const isConfigNode = sourceNode?.type === CanvasNodeType.Config;
-                const textCount = isConfigNode ? getGenerationCount(generationConfig.count) : 1;
-                const { childIds, childNodes, connections } = createTextGenerationChildNodes({ nodeId, sourceNode, prompt, textCount, editingTextNode });
-                pendingChildIds = childIds;
-                if (isConfigNode || editingTextNode) {
-                    setNodes((prev) => [...prev.map((node) => (node.id === nodeId && isConfigNode ? { ...node, metadata: { ...node.metadata, prompt, status: NODE_STATUS_LOADING, errorDetails: undefined } } : node)), ...childNodes]);
-                    setConnections((prev) => [...prev, ...connections]);
-                }
-
-                const answers = await Promise.all(
-                    (childIds.length ? childIds : [nodeId]).map((targetNodeId) => {
-                        let localStreamed = "";
-                        return requestImageQuestion(generationConfig, buildNodeChatMessages({ ...generationContext, prompt: effectivePrompt }), (text) => {
-                            localStreamed = text;
-                            streamed = text;
-                            if (isConfigNode) return;
-                            setNodes((prev) => prev.map((node) => (node.id === targetNodeId ? { ...node, type: CanvasNodeType.Text, metadata: { ...node.metadata, content: text, status: NODE_STATUS_LOADING } } : node)));
-                        }).then((answer) => ({ nodeId: targetNodeId, content: answer || localStreamed }));
-                    }),
-                );
-                const answerByNodeId = new Map(answers.map((item) => [item.nodeId, item.content]));
-                setNodes((prev) =>
-                    prev.map((node) =>
-                        childIds.includes(node.id)
-                            ? { ...node, metadata: { ...node.metadata, content: answerByNodeId.get(node.id) || streamed, status: NODE_STATUS_SUCCESS } }
-                            : node.id === nodeId && isConfigNode
-                              ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } }
-                              : node.id === nodeId && !editingTextNode
-                                ? { ...node, type: CanvasNodeType.Text, title: prompt.slice(0, 32) || "Generated Text", metadata: { ...node.metadata, content: answerByNodeId.get(node.id) || streamed, status: NODE_STATUS_SUCCESS } }
-                                : node,
-                    ),
-                );
+                const textResult = await generateTextNode({
+                    nodeId,
+                    sourceNode,
+                    prompt,
+                    effectivePrompt,
+                    generationConfig,
+                    generationContext,
+                    editingTextNode,
+                });
+                pendingChildIds = textResult.pendingChildIds;
             } catch (error) {
                 const errorDetails = error instanceof Error ? error.message : "生成失败";
                 if (mode === "video") {
@@ -1983,7 +1964,7 @@ function InfiniteCanvasPage() {
                 setRunningNodeId(null);
             }
         },
-        [canvasAiConfig, generateImageNode, generateVideoNode, isAiConfigReady, message, openConfigDialog],
+        [canvasAiConfig, generateImageNode, generateTextNode, generateVideoNode, isAiConfigReady, message, openConfigDialog],
     );
 
     const handleRefreshVideoTask = useCallback(
@@ -2068,12 +2049,7 @@ function InfiniteCanvasPage() {
             try {
                 if (node.type === CanvasNodeType.Text) {
                     if (!context) return;
-                    let streamed = "";
-                    const answer = await requestImageQuestion(generationConfig, buildNodeChatMessages({ ...context, prompt }), (text) => {
-                        streamed = text;
-                        setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, type: CanvasNodeType.Text, metadata: { ...item.metadata, content: text, status: NODE_STATUS_LOADING } } : item)));
-                    });
-                    setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, type: CanvasNodeType.Text, metadata: { ...item.metadata, content: answer || streamed, prompt, status: NODE_STATUS_SUCCESS } } : item)));
+                    await retryTextNode({ node, prompt, generationConfig, generationContext: context });
                     return;
                 }
                 if (node.type === CanvasNodeType.Video) {
@@ -2131,7 +2107,7 @@ function InfiniteCanvasPage() {
                 setRunningNodeId(null);
             }
         },
-        [canvasAiConfig, message, openConfigDialog, token],
+        [canvasAiConfig, message, openConfigDialog, retryTextNode, token],
     );
 
     const generateImageFromTextNode = useCallback(
@@ -2937,10 +2913,6 @@ async function hydrateAssistantImages(sessions: CanvasAssistantSession[]) {
             ),
         })),
     );
-}
-
-function getGenerationCount(count: string) {
-    return Math.max(1, Math.min(15, Math.floor(Math.abs(Number(count)) || 1)));
 }
 
 function applyNodeConfigPatch(node: CanvasNodeData, patch: Partial<CanvasNodeMetadata>) {
