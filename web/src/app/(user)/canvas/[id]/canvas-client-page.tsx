@@ -25,7 +25,7 @@ import { removeVariantVideoConnections } from "../utils/canvas-connection-cleanu
 import { buildGenerationConfig, buildRetryGenerationConfig } from "../utils/canvas-generation-config";
 import { buildImageGenerationMetadata, buildRetryImageGenerationMetadata, buildVideoGenerationMetadata, buildVideoReferenceInput, directVideoReferenceInputs, storedReferenceImageRole, videoTaskMetadata } from "../utils/canvas-generation-metadata";
 import { runCanvasImageGeneration, runCanvasVideoGeneration } from "../utils/canvas-generation-runner";
-import { createImageGenerationNodes, createTextGenerationChildNodes, createVideoGenerationNode } from "../utils/canvas-generation-nodes";
+import { createTextGenerationChildNodes, createVideoGenerationNode } from "../utils/canvas-generation-nodes";
 import { buildContinuousVideoChain } from "../utils/canvas-video-chain";
 import { buildCapturedVideoFrameNode } from "../utils/canvas-video-frame";
 import { buildVideoGenerationPlan, shouldCreateVideoVariant } from "../utils/canvas-video-generation-plan";
@@ -35,6 +35,7 @@ import { resetInterruptedGeneration } from "../utils/canvas-video-task-recovery"
 import { cropDataUrl } from "../utils/canvas-image-data";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
 import { useCanvasMediaCache } from "../hooks/use-canvas-media-cache";
+import { useCanvasImageGenerationActions } from "../hooks/use-canvas-image-generation-actions";
 import { useCanvasVideoTaskRecovery } from "../hooks/use-canvas-video-task-recovery";
 import { App, Button, Dropdown, Modal } from "antd";
 import { NODE_DEFAULT_SIZE, getNodeSpec } from "../constants";
@@ -326,6 +327,16 @@ function InfiniteCanvasPage() {
     const connectionTargetNodeIdRef = useRef(connectionTargetNodeId);
     const selectionBoxRef = useRef(selectionBox);
     const pendingConnectionCreateRef = useRef(pendingConnectionCreate);
+    const showImageGenerationError = useCallback((text: string) => message.error(text), [message]);
+    const { generateImageNode } = useCanvasImageGenerationActions({
+        setNodes,
+        setConnections,
+        setSelectedNodeIds,
+        setSelectedConnectionId,
+        setDialogNodeId,
+        showError: showImageGenerationError,
+        toImageMetadata: imageMetadata,
+    });
 
     const createHistoryEntry = useCallback(
         (): CanvasHistoryEntry => ({
@@ -1845,138 +1856,15 @@ function InfiniteCanvasPage() {
 
             try {
                 if (mode === "image") {
-                    const count = getGenerationCount(generationConfig.count);
-                    const isImageNode = sourceNode?.type === CanvasNodeType.Image;
-                    const sourceReference =
-                        isImageNode && sourceNode?.metadata?.content
-                            ? [
-                                  {
-                                      id: sourceNode.id,
-                                      name: `${sourceNode.title || sourceNode.id}.png`,
-                                      type: sourceNode.metadata.mimeType || "image/png",
-                                      dataUrl: sourceNode.metadata.content,
-                                      storageKey: sourceNode.metadata.storageKey,
-                                      assetUri: activeVolcengineAssetURI(sourceNode.metadata.volcengineAsset),
-                                  },
-                              ]
-                            : [];
-                    const referenceImages = sourceReference.length ? sourceReference : generationContext.referenceImages;
-                    const generationType = referenceImages.length ? ("edit" as const) : ("generation" as const);
-                    const generationMetadata = buildImageGenerationMetadata(generationType, generationConfig, count, referenceImages);
-                    const {
-                        isConfigNode,
-                        isEmptyImageNode,
-                        parentConfig,
-                        imageConfig,
-                        rootId,
-                        targetIds,
-                        pendingChildIds: imagePendingChildIds,
-                        rootNode,
-                        childNodes,
-                        connections,
-                    } = createImageGenerationNodes({
+                    const imageResult = await generateImageNode({
                         nodeId,
                         sourceNode,
-                        prompt: effectivePrompt,
-                        count,
-                        metadata: { ...generationMetadata, batchUsesReferenceImages: referenceImages.length > 0 },
+                        prompt,
+                        effectivePrompt,
+                        generationConfig,
+                        contextReferenceImages: generationContext.referenceImages,
                     });
-                    pendingChildIds = imagePendingChildIds;
-
-                    setNodes((prev) => [
-                        ...prev.map((node) =>
-                            node.id === nodeId
-                                ? isConfigNode
-                                    ? {
-                                          ...node,
-                                          metadata: { ...node.metadata, prompt, status: NODE_STATUS_LOADING, errorDetails: undefined },
-                                      }
-                                    : isEmptyImageNode
-                                      ? {
-                                            ...node,
-                                            position: rootNode.position,
-                                            width: rootNode.width,
-                                            height: rootNode.height,
-                                            title: rootNode.title,
-                                            metadata: { ...node.metadata, ...rootNode.metadata, errorDetails: undefined },
-                                        }
-                                      : isImageNode
-                                        ? {
-                                              ...node,
-                                              metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined },
-                                          }
-                                        : {
-                                              ...node,
-                                              type: CanvasNodeType.Text,
-                                              title: prompt.slice(0, 32) || "Prompt",
-                                              width: parentConfig.width,
-                                              height: parentConfig.height,
-                                              metadata: { ...node.metadata, content: prompt, prompt, status: NODE_STATUS_SUCCESS, fontSize: 14, errorDetails: undefined },
-                                          }
-                                : node,
-                        ),
-                        ...(isEmptyImageNode ? [] : [rootNode]),
-                        ...childNodes,
-                    ]);
-                    setConnections((prev) => [...prev, ...connections]);
-                    setSelectedNodeIds(new Set([nodeId]));
-                    setSelectedConnectionId(null);
-                    setDialogNodeId(nodeId);
-
-                    let hasSuccess = false;
-                    let hasFailure = false;
-                    await Promise.all(
-                        targetIds.map(async (targetId) => {
-                            try {
-                                const uploaded = await runCanvasImageGeneration({ ...generationConfig, count: "1" }, effectivePrompt, referenceImages);
-                                const imageSize = fitNodeSize(uploaded.width, uploaded.height, imageConfig.width, imageConfig.height);
-                                setNodes((prev) => {
-                                    const root = prev.find((node) => node.id === rootId);
-                                    return prev.map((node) => {
-                                        if (node.id !== targetId && node.id !== rootId) return node;
-                                        const center = { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 };
-                                        if (node.id === rootId && (targetId === rootId || !root?.metadata?.primaryImageId))
-                                            return {
-                                                ...node,
-                                                position: { x: center.x - imageSize.width / 2, y: center.y - imageSize.height / 2 },
-                                                width: imageSize.width,
-                                                height: imageSize.height,
-                                                metadata: { ...node.metadata, ...imageMetadata(uploaded), primaryImageId: targetId },
-                                            };
-                                        if (node.id === targetId)
-                                            return {
-                                                ...node,
-                                                position: { x: center.x - imageSize.width / 2, y: center.y - imageSize.height / 2 },
-                                                width: imageSize.width,
-                                                height: imageSize.height,
-                                                metadata: { ...node.metadata, ...imageMetadata(uploaded) },
-                                            };
-                                        return node;
-                                    });
-                                });
-                                hasSuccess = true;
-                                if (isConfigNode) setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined } } : node)));
-                                return true;
-                            } catch (error) {
-                                const errorDetails = error instanceof Error ? error.message : "生成失败";
-                                hasFailure = true;
-                                setNodes((prev) => prev.map((node) => (node.id === targetId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, errorDetails } } : node)));
-                                return false;
-                            }
-                        }),
-                    );
-                    if (hasFailure) message.error(hasSuccess ? "部分图片生成失败" : "全部图片生成失败");
-                    setNodes((prev) =>
-                        prev.map((node) =>
-                            node.id === nodeId && isConfigNode
-                                ? { ...node, metadata: { ...node.metadata, status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR, errorDetails: hasSuccess ? undefined : "全部图片生成失败" } }
-                                : node.id === nodeId && isEmptyImageNode
-                                  ? { ...node, metadata: { ...node.metadata, status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR, errorDetails: hasSuccess ? undefined : "全部图片生成失败" } }
-                                  : node.id === rootId && !hasSuccess
-                                    ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, errorDetails: "全部图片生成失败" } }
-                                    : node,
-                        ),
-                    );
+                    pendingChildIds = imageResult.pendingChildIds;
                     return;
                 }
 
@@ -2119,7 +2007,7 @@ function InfiniteCanvasPage() {
                 setRunningNodeId(null);
             }
         },
-        [canvasAiConfig, openConfigDialog],
+        [cacheUploadedCanvasMedia, canvasAiConfig, generateImageNode, isAiConfigReady, message, openConfigDialog],
     );
 
     const handleRefreshVideoTask = useCallback(

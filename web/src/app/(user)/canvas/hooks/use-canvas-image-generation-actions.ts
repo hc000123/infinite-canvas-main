@@ -1,0 +1,113 @@
+import { useCallback, type Dispatch, type SetStateAction } from "react";
+
+import type { AiConfig } from "@/stores/use-config-store";
+import type { UploadedImage } from "@/services/image-storage";
+import { activeVolcengineAssetURI } from "@/services/volcengine-asset-metadata";
+import type { ReferenceImage } from "@/types/image";
+
+import { buildImageGenerationMetadata } from "../utils/canvas-generation-metadata";
+import { createImageGenerationNodes } from "../utils/canvas-generation-nodes";
+import { runCanvasImageGeneration } from "../utils/canvas-generation-runner";
+import { fitNodeSize } from "../utils/canvas-node-size";
+import { applyGeneratedImageToNodes, applyImageGenerationFinalStatus, applyImageGenerationStartNodes, applyImageTargetError } from "../utils/canvas-node-status";
+import type { CanvasConnection, CanvasNodeData, CanvasNodeMetadata } from "../types";
+
+type UseCanvasImageGenerationActionsOptions = {
+    setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
+    setConnections: Dispatch<SetStateAction<CanvasConnection[]>>;
+    setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
+    setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
+    setDialogNodeId: Dispatch<SetStateAction<string | null>>;
+    showError: (message: string) => void;
+    toImageMetadata: (image: UploadedImage) => CanvasNodeMetadata;
+};
+
+type GenerateImageNodeInput = {
+    nodeId: string;
+    sourceNode?: CanvasNodeData;
+    prompt: string;
+    effectivePrompt: string;
+    generationConfig: AiConfig;
+    contextReferenceImages: ReferenceImage[];
+};
+
+export function useCanvasImageGenerationActions({ setNodes, setConnections, setSelectedNodeIds, setSelectedConnectionId, setDialogNodeId, showError, toImageMetadata }: UseCanvasImageGenerationActionsOptions) {
+    const generateImageNode = useCallback(
+        async ({ nodeId, sourceNode, prompt, effectivePrompt, generationConfig, contextReferenceImages }: GenerateImageNodeInput) => {
+            const count = imageGenerationCount(generationConfig.count);
+            const isImageNode = sourceNode?.type === "image";
+            const sourceReference =
+                isImageNode && sourceNode?.metadata?.content
+                    ? [
+                          {
+                              id: sourceNode.id,
+                              name: `${sourceNode.title || sourceNode.id}.png`,
+                              type: sourceNode.metadata.mimeType || "image/png",
+                              dataUrl: sourceNode.metadata.content,
+                              storageKey: sourceNode.metadata.storageKey,
+                              assetUri: activeVolcengineAssetURI(sourceNode.metadata.volcengineAsset),
+                          },
+                      ]
+                    : [];
+            const referenceImages = sourceReference.length ? sourceReference : contextReferenceImages;
+            const generationType = referenceImages.length ? ("edit" as const) : ("generation" as const);
+            const generationMetadata = buildImageGenerationMetadata(generationType, generationConfig, count, referenceImages);
+            const { isConfigNode, isEmptyImageNode, parentConfig, imageConfig, rootId, targetIds, pendingChildIds, rootNode, childNodes, connections } = createImageGenerationNodes({
+                nodeId,
+                sourceNode,
+                prompt: effectivePrompt,
+                count,
+                metadata: { ...generationMetadata, batchUsesReferenceImages: referenceImages.length > 0 },
+            });
+
+            setNodes((prev) =>
+                applyImageGenerationStartNodes({
+                    nodes: prev,
+                    nodeId,
+                    prompt,
+                    isConfigNode,
+                    isEmptyImageNode,
+                    isImageNode,
+                    parentConfig,
+                    rootNode,
+                    childNodes,
+                }),
+            );
+            setConnections((prev) => [...prev, ...connections]);
+            setSelectedNodeIds(new Set([nodeId]));
+            setSelectedConnectionId(null);
+            setDialogNodeId(nodeId);
+
+            let hasSuccess = false;
+            let hasFailure = false;
+            await Promise.all(
+                targetIds.map(async (targetId) => {
+                    try {
+                        const uploaded = await runCanvasImageGeneration({ ...generationConfig, count: "1" }, effectivePrompt, referenceImages);
+                        const imageSize = fitNodeSize(uploaded.width, uploaded.height, imageConfig.width, imageConfig.height);
+                        const metadata = toImageMetadata(uploaded);
+                        setNodes((prev) => applyGeneratedImageToNodes({ nodes: prev, rootId, targetId, imageSize, imageMetadata: metadata }));
+                        hasSuccess = true;
+                        if (isConfigNode) setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: "success", errorDetails: undefined } } : node)));
+                        return true;
+                    } catch (error) {
+                        const errorDetails = error instanceof Error ? error.message : "生成失败";
+                        hasFailure = true;
+                        setNodes((prev) => applyImageTargetError(prev, targetId, errorDetails));
+                        return false;
+                    }
+                }),
+            );
+            if (hasFailure) showError(hasSuccess ? "部分图片生成失败" : "全部图片生成失败");
+            setNodes((prev) => applyImageGenerationFinalStatus({ nodes: prev, nodeId, rootId, isConfigNode, isEmptyImageNode, hasSuccess }));
+            return { pendingChildIds };
+        },
+        [setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, showError, toImageMetadata],
+    );
+
+    return { generateImageNode };
+}
+
+function imageGenerationCount(count: string) {
+    return Math.max(1, Math.min(15, Math.floor(Math.abs(Number(count)) || 1)));
+}
