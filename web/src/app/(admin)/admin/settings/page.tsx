@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { EditorView } from "@uiw/react-codemirror";
 
 import { fetchAdminSettings, fetchChannelModels, saveAdminSettings, testChannelModel, type AdminModelChannel, type AdminModelCost, type AdminSettings } from "@/services/api/admin";
+import { VOLCENGINE_ASSET_CONFIG_NOTICE } from "@/services/volcengine-asset-config";
 import { useUserStore } from "@/stores/use-user-store";
 
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), { ssr: false });
@@ -41,7 +42,7 @@ const emptySettings: AdminSettings = {
     },
     private: {
         channels: [],
-        promptSync: { enabled: true, cron: "*/5 * * * *" },
+        promptSync: { enabled: false, cron: "*/5 * * * *" },
         auth: { linuxDo: { clientId: "", clientSecret: "" } },
         volcengineAsset: { enabled: false, accessKey: "", secretKey: "", projectName: "default", region: "cn-beijing", assetGroupId: "", publicAssetBaseUrl: "" },
     },
@@ -529,9 +530,13 @@ export default function AdminSettingsPage() {
                                         </Row>
                                     </Flex>
                                 </Card>
-                                <Card size="small" title="火山私域人像素材审核">
+                                <Card size="small" title="火山素材审核（唯一配置入口）">
                                     <Flex vertical gap={14}>
-                                        <Typography.Text type="secondary">图片会先保存到后端公开静态目录；如果公网素材访问地址是火山 TOS 前缀，会在提交前自动上传到对应桶路径，再提交到火山方舟私域虚拟人像素材资产库。</Typography.Text>
+                                        <Typography.Text type="secondary">
+                                            {VOLCENGINE_ASSET_CONFIG_NOTICE}
+                                            此处是唯一编辑入口，用来填写 AK/SK、ProjectName、Region、素材组 ID 和公网素材访问地址。图片会先保存到后端公开静态目录；如果公网素材访问地址是火山 TOS
+                                            前缀，会在提交前自动上传到对应桶路径，再提交到火山方舟私域虚拟人像素材资产库。
+                                        </Typography.Text>
                                         <Row gutter={16}>
                                             <Col xs={24} md={6}>
                                                 <Form.Item name={["private", "volcengineAsset", "enabled"]} label="开启素材审核" valuePropName="checked">
@@ -579,7 +584,7 @@ export default function AdminSettingsPage() {
                                             </Form.Item>
                                         </Col>
                                         <Col xs={24} md={16}>
-                                            <Form.Item name={["private", "promptSync", "cron"]} label="Cron 表达式" extra="默认每 5 分钟同步内置 GitHub 远程提示词源">
+                                            <Form.Item name={["private", "promptSync", "cron"]} label="Cron 表达式" extra="历史配置项：当前没有内置远程提示词源，开启后也不会同步内置内容">
                                                 <Input placeholder="*/5 * * * *" />
                                             </Form.Item>
                                         </Col>
@@ -899,7 +904,7 @@ function normalizePrivateSetting(setting: Partial<AdminSettings["private"]> = {}
     return {
         channels: (setting.channels || []).map(normalizeChannel),
         promptSync: {
-            enabled: setting.promptSync?.enabled !== false,
+            enabled: setting.promptSync?.enabled === true,
             cron: setting.promptSync?.cron || "*/5 * * * *",
         },
         auth: {

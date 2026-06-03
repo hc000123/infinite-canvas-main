@@ -2,12 +2,12 @@
 
 import { CopyOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, SafetyCertificateOutlined, SearchOutlined, SettingOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { App, Button, Card, Col, Flex, Form, Image, Input, Modal, Row, Select, Space, Switch, Tag, Tooltip, Typography } from "antd";
+import { App, Button, Card, Col, Flex, Form, Image, Input, Modal, Row, Select, Space, Tag, Tooltip, Typography } from "antd";
 import { useEffect, useRef, useState } from "react";
 
 import { useCopyText } from "@/hooks/use-copy-text";
-import { fetchAdminSettings, refreshAdminAssetVolcengineReview, saveAdminSettings, submitAdminAssetVolcengineReview, type AdminAsset, type AdminPrivateVolcengineAssetSettings, type AdminSettings, uploadAdminAssetMedia } from "@/services/api/admin";
-import { useConfigStore } from "@/stores/use-config-store";
+import { fetchAdminSettings, refreshAdminAssetVolcengineReview, submitAdminAssetVolcengineReview, type AdminAsset, type AdminSettings, uploadAdminAssetMedia } from "@/services/api/admin";
+import { summarizeVolcengineAssetConfig, VOLCENGINE_ASSET_CONFIG_NOTICE } from "@/services/volcengine-asset-config";
 import { useUserStore } from "@/stores/use-user-store";
 import { useAdminAssets } from "./use-admin-assets";
 
@@ -23,40 +23,27 @@ const typeOptions = [
 
 const editTypeOptions = typeOptions.slice(1);
 
-const defaultVolcengineAssetSettings: AdminPrivateVolcengineAssetSettings = {
-    enabled: false,
-    accessKey: "",
-    secretKey: "",
-    projectName: "default",
-    region: "cn-beijing",
-    assetGroupId: "",
-    publicAssetBaseUrl: "",
-};
-
 export default function AdminAssetsPage() {
     const { message } = App.useApp();
     const { assets, tags, keyword, kind, tag, page, pageSize, total, isLoading, searchAssets, changeKind, changeTag, changePage, changePageSize, resetFilters, refreshAssets, saveAsset: saveAdminAsset, deleteAsset } = useAdminAssets();
     const copyText = useCopyText();
     const token = useUserStore((state) => state.token);
-    const loadPublicSettings = useConfigStore((state) => state.loadPublicSettings);
     const [form] = Form.useForm<AssetFormValues>();
-    const [settingsForm] = Form.useForm<AdminPrivateVolcengineAssetSettings>();
     const mediaInputRef = useRef<HTMLInputElement>(null);
     const [keywordText, setKeywordText] = useState(keyword);
     const [editingAsset, setEditingAsset] = useState<Partial<AdminAsset> | null>(null);
     const [detailAsset, setDetailAsset] = useState<AdminAsset | null>(null);
     const [deletingAsset, setDeletingAsset] = useState<AdminAsset | null>(null);
     const [reviewSettings, setReviewSettings] = useState<AdminSettings | null>(null);
-    const [isReviewSettingsOpen, setIsReviewSettingsOpen] = useState(false);
     const [isReviewSettingsLoading, setIsReviewSettingsLoading] = useState(false);
-    const [isReviewSettingsSaving, setIsReviewSettingsSaving] = useState(false);
     const [isUploadingMedia, setIsUploadingMedia] = useState(false);
     const [reviewingAssetId, setReviewingAssetId] = useState<string | null>(null);
     const formType = Form.useWatch("type", form) || editingAsset?.type || "text";
     const tagOptions = tags.map((item) => ({ label: item, value: item }));
     const reviewEnabled = reviewSettings?.private.volcengineAsset.enabled === true;
-    const reviewStatusText = !reviewSettings ? "未读取" : reviewEnabled ? "已开启" : "未开启";
-    const reviewStatusColor = !reviewSettings ? "processing" : reviewEnabled ? "success" : "default";
+    const reviewSummary = summarizeVolcengineAssetConfig(reviewSettings?.private.volcengineAsset, { showDetails: Boolean(reviewSettings) });
+    const reviewStatusText = isReviewSettingsLoading ? "读取中" : reviewSettings ? reviewSummary.statusText : "未读取";
+    const reviewStatusColor = isReviewSettingsLoading || !reviewSettings ? "processing" : reviewSummary.statusColor;
 
     useEffect(() => {
         if (editingAsset) form.setFieldsValue({ ...editingAsset, tagText: editingAsset.tags?.join(", ") || "" });
@@ -69,9 +56,7 @@ export default function AdminAssetsPage() {
         setIsReviewSettingsLoading(true);
         try {
             const settings = await fetchAdminSettings(token);
-            const volcengineAsset = normalizeVolcengineAssetSettings(settings.private.volcengineAsset);
             setReviewSettings(settings);
-            settingsForm.setFieldsValue(volcengineAsset);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取素材审核配置失败");
         } finally {
@@ -82,45 +67,6 @@ export default function AdminAssetsPage() {
     useEffect(() => {
         void loadReviewSettings();
     }, [token]);
-
-    const openReviewSettings = () => {
-        setIsReviewSettingsOpen(true);
-        if (!reviewSettings) void loadReviewSettings();
-    };
-
-    const saveReviewSettings = async () => {
-        if (!token || !reviewSettings) {
-            message.error("请先读取素材审核配置");
-            return;
-        }
-        const values = normalizeVolcengineAssetSettings(await settingsForm.validateFields());
-        setIsReviewSettingsSaving(true);
-        try {
-            const saved = await saveAdminSettings(token, {
-                ...reviewSettings,
-                private: {
-                    ...reviewSettings.private,
-                    volcengineAsset: values,
-                },
-            });
-            const savedVolcengineAsset = normalizeVolcengineAssetSettings(saved.private.volcengineAsset);
-            setReviewSettings(saved);
-            settingsForm.setFieldsValue(savedVolcengineAsset);
-            let publicSettingsRefreshFailed = false;
-            try {
-                await loadPublicSettings();
-            } catch {
-                publicSettingsRefreshFailed = true;
-            }
-            if (publicSettingsRefreshFailed) message.warning("素材审核配置已保存，公开配置刷新失败，请刷新页面");
-            else message.success("素材审核配置已保存");
-            setIsReviewSettingsOpen(false);
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存素材审核配置失败");
-        } finally {
-            setIsReviewSettingsSaving(false);
-        }
-    };
 
     const saveAsset = async () => {
         const value = await form.validateFields();
@@ -167,7 +113,7 @@ export default function AdminAssetsPage() {
     const submitVolcengineReview = async (asset: AdminAsset) => {
         if (!token) return;
         if (!reviewEnabled) {
-            message.warning("请先在审核配置中开启素材审核");
+            message.warning("请先到系统设置开启火山素材审核");
             return;
         }
         setReviewingAssetId(asset.id);
@@ -283,12 +229,12 @@ export default function AdminAssetsPage() {
                     <Flex justify="space-between" align="center" gap={16} wrap>
                         <Flex vertical gap={4} style={{ minWidth: 280 }}>
                             <Typography.Text strong>火山素材审核</Typography.Text>
-                            <Typography.Text type="secondary">在素材管理中调整图片加白提交所需的 AK/SK、ProjectName 和公网素材访问地址。</Typography.Text>
+                            <Typography.Text type="secondary">{VOLCENGINE_ASSET_CONFIG_NOTICE} 加白配置填一次即可，素材管理页只负责提交和刷新审核。</Typography.Text>
                         </Flex>
                         <Space wrap>
                             <Tag color={reviewStatusColor}>{reviewStatusText}</Tag>
-                            <Button icon={<SettingOutlined />} loading={isReviewSettingsLoading} onClick={openReviewSettings}>
-                                审核配置
+                            <Button icon={<SettingOutlined />} loading={isReviewSettingsLoading} href="/admin/settings">
+                                去系统设置
                             </Button>
                         </Space>
                     </Flex>
@@ -453,61 +399,6 @@ export default function AdminAssetsPage() {
             </Modal>
 
             <Modal
-                title="火山素材审核配置"
-                open={isReviewSettingsOpen}
-                width={760}
-                onCancel={() => setIsReviewSettingsOpen(false)}
-                onOk={() => void saveReviewSettings()}
-                confirmLoading={isReviewSettingsSaving}
-                okText="保存"
-                cancelText="取消"
-                destroyOnHidden
-            >
-                <Form form={settingsForm} layout="vertical" requiredMark={false} initialValues={defaultVolcengineAssetSettings}>
-                    <Flex vertical gap={12}>
-                        <Typography.Text type="secondary">按 Upload_Asset_Get_Info.go 配置素材组 ID 后，图片素材会直接传入该 Asset Group；留空时才自动创建素材组。完整公网 URL 会直接提交，本地上传路径才会按公网素材访问地址转换。</Typography.Text>
-                        <Row gutter={16}>
-                            <Col xs={24} md={6}>
-                                <Form.Item name="enabled" label="开启素材审核" valuePropName="checked">
-                                    <Switch />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={9}>
-                                <Form.Item name="accessKey" label="Access Key">
-                                    <Input.Password placeholder="留空则沿用已保存的 Access Key" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={9}>
-                                <Form.Item name="secretKey" label="Secret Key">
-                                    <Input.Password placeholder="留空则沿用已保存的 Secret Key" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={8}>
-                                <Form.Item name="projectName" label="项目名称">
-                                    <Input placeholder="default" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={8}>
-                                <Form.Item name="region" label="地域">
-                                    <Input placeholder="cn-beijing" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <Form.Item name="assetGroupId" label="素材组 ID">
-                                    <Input placeholder="group-20260318033332-xxxxx" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} md={12}>
-                                <Form.Item name="publicAssetBaseUrl" label="公网素材访问地址" extra="TOS 地址会在提交前自动上传到对应桶路径。">
-                                    <Input placeholder="https://jiabaitong.tos-cn-beijing.volces.com/volcengine-assets" />
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                    </Flex>
-                </Form>
-            </Modal>
-
-            <Modal
                 title="删除素材"
                 open={Boolean(deletingAsset)}
                 onCancel={() => setDeletingAsset(null)}
@@ -524,18 +415,6 @@ export default function AdminAssetsPage() {
             </Modal>
         </main>
     );
-}
-
-function normalizeVolcengineAssetSettings(setting: Partial<AdminPrivateVolcengineAssetSettings> = {}): AdminPrivateVolcengineAssetSettings {
-    return {
-        enabled: setting.enabled === true,
-        accessKey: setting.accessKey || "",
-        secretKey: setting.secretKey || "",
-        projectName: setting.projectName || "default",
-        region: setting.region || "cn-beijing",
-        assetGroupId: setting.assetGroupId || "",
-        publicAssetBaseUrl: setting.publicAssetBaseUrl || "",
-    };
 }
 
 function assetTypeLabel(type: string) {

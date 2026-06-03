@@ -16,12 +16,19 @@ export type ImageAsset = AssetBase<"image"> & { data: { dataUrl: string; storage
 export type VideoAsset = AssetBase<"video"> & { data: { url: string; storageKey?: string; width: number; height: number; bytes: number; mimeType: string } };
 export type AudioAsset = AssetBase<"audio"> & { data: { url: string; storageKey?: string; bytes: number; mimeType: string } };
 export type Asset = TextAsset | ImageAsset | VideoAsset | AudioAsset;
+export type AssetFolder = {
+    id: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+};
 
 type AssetBase<T extends AssetKind> = {
     id: string;
     kind: T;
     title: string;
     coverUrl: string;
+    folderId?: string;
     tags: string[];
     source?: string;
     note?: string;
@@ -32,9 +39,13 @@ type AssetBase<T extends AssetKind> = {
 
 type AssetStore = {
     assets: Asset[];
+    folders: AssetFolder[];
     addAsset: (asset: Omit<Asset, "id" | "createdAt" | "updatedAt">) => string;
     updateAsset: (id: string, patch: Partial<Omit<Asset, "id" | "createdAt">>) => void;
     removeAsset: (id: string) => void;
+    addFolder: (name: string) => string;
+    updateFolder: (id: string, name: string) => void;
+    removeFolder: (id: string) => void;
     cleanupImages: (extra?: unknown) => void;
 };
 
@@ -45,6 +56,7 @@ const assetStorage: PersistStorage<AssetStore> = {
         const value = await localForageStorage.getItem(name);
         if (!value) return null;
         const parsed = JSON.parse(value) as StorageValue<AssetStore>;
+        parsed.state.folders = parsed.state.folders || [];
         parsed.state.assets = await Promise.all(
             parsed.state.assets.map(async (asset) => {
                 if (asset.kind === "video" && asset.data.storageKey) return { ...asset, data: { ...asset.data, url: await resolveMediaUrl(asset.data.storageKey, asset.data.url) } };
@@ -71,6 +83,7 @@ export const useAssetStore = create<AssetStore>()(
     persist(
         (set, get) => ({
             assets: [],
+            folders: [],
             addAsset: (asset) => {
                 const now = new Date().toISOString();
                 const id = nanoid();
@@ -87,6 +100,21 @@ export const useAssetStore = create<AssetStore>()(
                     get().cleanupImages({ assets });
                     return { assets };
                 }),
+            addFolder: (name) => {
+                const now = new Date().toISOString();
+                const id = nanoid();
+                set((state) => ({ folders: [...state.folders, { id, name: name.trim(), createdAt: now, updatedAt: now }] }));
+                return id;
+            },
+            updateFolder: (id, name) =>
+                set((state) => ({
+                    folders: state.folders.map((folder) => (folder.id === id ? { ...folder, name: name.trim(), updatedAt: new Date().toISOString() } : folder)),
+                })),
+            removeFolder: (id) =>
+                set((state) => ({
+                    folders: state.folders.filter((folder) => folder.id !== id),
+                    assets: state.assets.map((asset) => (asset.folderId === id ? ({ ...asset, folderId: undefined, updatedAt: new Date().toISOString() } as Asset) : asset)),
+                })),
             cleanupImages: (extra) => {
                 window.setTimeout(async () => {
                     const { useCanvasStore } = await import("@/app/(user)/canvas/stores/use-canvas-store");
@@ -98,7 +126,7 @@ export const useAssetStore = create<AssetStore>()(
         {
             name: ASSET_STORE_KEY,
             storage: assetStorage,
-            partialize: (state) => ({ assets: state.assets }) as StorageValue<AssetStore>["state"],
+            partialize: (state) => ({ assets: state.assets, folders: state.folders }) as StorageValue<AssetStore>["state"],
         },
     ),
 );

@@ -29,6 +29,14 @@ func ListPromptCategories() ([]model.PromptCategory, error) {
 	return PromptCategories(), nil
 }
 
+// cleanupLegacyBuiltinPrompts removes old bundled remote prompt records while keeping manually maintained system prompts.
+func cleanupLegacyBuiltinPrompts(db *gorm.DB) error {
+	if len(legacyBuiltinPromptCategories) == 0 {
+		return nil
+	}
+	return db.Where("category IN ?", legacyBuiltinPromptCategories).Delete(&model.Prompt{}).Error
+}
+
 // ListPrompts 按查询条件返回提示词分页列表。
 func ListPrompts(q model.Query) ([]model.Prompt, int64, error) {
 	db, err := DB()

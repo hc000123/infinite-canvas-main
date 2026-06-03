@@ -1,5 +1,7 @@
 # 待测试
 
+- 提示词管理已移除全部内置远程提示词源：后端分类列表只保留“系统”分类，启动时会清理旧版 GPT Image / GPT-4o / Nano Banana Pro 等远程内置分类下的提示词记录，后台“同步”按钮在没有远程分类时不再显示；管理员后续仍可手动新增、编辑、删除 `system` 分类提示词。当前本地 `data/infinite-canvas.db` 的 `prompts` 表已重建为空表，完整性检查为 `ok`，旧损坏库已备份到 `data/backups/infinite-canvas.db.malformed-prompts-20260603-143622`，另有操作前备份 `data/backups/infinite-canvas.db.before-remove-builtin-prompts-20260603-143400`。仍需重启后端并打开后台“提示词管理”和前台“提示词中心”确认内置提示词为空、同步入口不可见、手动新增提示词可正常保存和展示。
+- 品牌展示已从“无限画布”调整为“眨眼之间工作台”，并替换 `web/public/logo.svg` 为眼睛与瞬间闪光风格的图标；已同步 Web 标题、顶部导航、首页、登录页、管理后台侧栏、画布库标题、默认画布项目名、导出文件名，以及桌面端窗口标题、安装包产品名和快捷方式名。内部 localforage key、数据库名、GitHub 仓库名等兼容性标识未改。仍需重新 build/restart 后在真实页面复测 logo 显示、导航宽度、首页标题、登录页图标、管理后台侧栏和桌面安装包文件名。
 - v0.2.2 工具布局收口：视频创作台 `/video` 的参数区改为单列稳定布局，Seedance 显示名/Endpoint 输入使用 `Space.Compact` 替代已废弃的 `Input addonBefore`，底部“开始生成”固定在参数面板底部；提示词库/素材、剪切板/上传按钮在窄列中保持两列稳定布局。我的素材 `/assets` 卡片底部操作改成图标按钮，避免查看/编辑/下载/加白/删除挤成碎行；顶部版本按钮增加固定高度、最小宽度和 nowrap，避免版本文字轻微溢出。仍需在真实页面复测 `/video`、`/assets` 和顶部导航。
 - Gemini 图片模型的图像编辑请求已改为走 `/chat/completions` 多模态消息，不再走 `/images/edits`；返回解析支持 chat completion 中的 `image_url`、`b64_json`、data URL 和 markdown 图片地址，需用 `gemini-*-image-preview` 带参考图复测。
 - Windows 11 x64 本地版 v0.2.0 安装包已重新打包：`desktop:prepare:win`、`desktop:dir:win`、`desktop:dist:win` 脚本已固定使用 `--x64`，避免 Apple Silicon 上误用 `arm64` 导致 Windows 打包失败；已执行 `cd web && npm run desktop:dist:win`，生成 `web/release/无限画布-0.2.0-Setup-x64.exe`，SHA256 为 `be521c6375bbecabc4616f1aaf8bff513257611b84aff229f46e2ef5e30825b4`。本机包体检查通过：安装器为 NSIS Windows 可执行文件，`win-unpacked/无限画布.exe` 和内置后端 `resources/bin/server.exe` 均为 Windows x64 PE；`resources/manifest.json` 指向 `web/server.js` 与 `bin/server.exe`，默认端口为 `3130/8180`；`resources/web/node_modules/next/package.json`、`resources/web/server.js` 和 `resources/web/.next/static` 均存在，避免此前 Next standalone 依赖缺失导致启动失败。当前是在 macOS 上构建和静态验包，未在真实 Windows 11 机器上执行安装/启动，仍需后续在 Win 11 上确认安装、启动、登录、页面打开、数据目录和退出清理。
@@ -36,6 +38,7 @@
 - M2.4 仍需人工复测/保留项：当前画布未发现可见的编辑/延长 `derivative` 完成节点，仍需确认 `relationType=derivative / sourceVideoNodeId`；本轮未发新的真实 Ark 最小 `source_video` 任务，配置节点连接上游视频后的 `source_video` 路径可用性仍保留；截取当前帧的播放中、暂停、接近结尾三种截取，以及截取图片连接到视频配置节点并设置为 `reference_image / first_frame / last_frame` 仍需人工页面复测。
 - M2.5 历史变体连线清理已验收：新增加载时清理逻辑后，真实画布 `rFZdaeZun7HyFTgGRnGiJ` 里历史错误连线 `video-1780380595167-6-405in -> NbruQ1sKHwFdHPzcoSecA` 和 `NbruQ1sKHwFdHPzcoSecA -> LzvdlQLmkoUFB_VpDBNtm` 已被移除；页面连接数从 16 降到 13，`video -> video` 直连为 0，图片参考连到视频的连接仍保留。
 - M2.5 当前新规则已验证：在 `v0.1.1` 真实页面选中已完成视频节点 `video-1780378747723-9k9cr`，修改提示词后点击“生成”，创建了新的变体视频节点 `pBuAlSmQQEtWDkfIWcZ9B`；节点数从 16 增加到 17，但连接数仍保持 13，`video -> video` 直连仍为 0，确认当前重新生成变体不会再新增 `源视频 -> 变体视频` CanvasConnection。该真实 Ark 任务已进入生成中，后续仅需按普通长任务继续观察最终回填。
+- M2.6 Seedance 视频设置 UI 已收口，版本提升到 `v0.2.1`：视频设置中“任务模式”改为“生成方式”，选项改为“生成新视频 / 编辑视频 / 延长视频”；没有源视频时只展示“生成新视频”，有已完成视频节点自身或配置节点上游视频输入时才展示编辑/延长；旧配置如果在无源视频上下文中保留 edit/extend，会自动回落到 generate。原“参考图用途”改为“图片控制”，UI 中移除“续写”选项，仅保留“普通参考 / 作为首帧 / 首尾帧”；编辑/延长模式下隐藏图片控制。底层仍保留 `videoReferenceImageMode=continue` 兼容显式续写链路，未改 Seedance payload、source_video 请求逻辑或视频节点悬浮工具栏“续写”入口。已通过前端类型检查、全量单元测试和格式检查，仍需在真实页面复测上述显示条件。
 - M3.1 画布助手动作协议基础纯函数已实现并进入页面链路：新增动作类型、validator、preview builder 和 apply helper，第一版仅允许 `canvas.read / canvas.summarize / node.explain_context / node.create_text / node.create_config / connection.create`；会拒绝删除节点、删除连线、覆盖结果、自动触发 AI 生成，`connection.create` 会校验节点存在、不能自连、不能重复连线。
 - M3.2 画布助手动作预览已接入 `CanvasAssistantPanel` 并完成页面验收：助手消息可展示受控 `AssistantCanvasAction` 预览卡片，显示动作原因、将创建的节点/连线数量、影响节点/连线和风险校验；写入动作不会自动应用，用户点击“应用到画布”后才通过 `applyAssistantCanvasActions` 返回新的 nodes/connections 并触发现有画布历史，支持撤销；点击“取消”只更新助手消息状态，不修改画布。第一版只提供开发调试固定 action 入口，不允许模型自由生成任意 action。
 - M3.3 画布助手只读能力已接入并完成页面验收：`CanvasAssistantPanel` 的“总结当前画布”可在真实页面生成中文摘要，读取节点类型、标题、提示词/内容、任务状态和连线关系；“解释选中节点”可列出当前节点、上游节点、下游节点，并标记参考、变体、续写、派生或普通连线。只读动作不会修改 nodes/connections，并通过跳过画布历史的 session 更新避免污染撤销栈。
@@ -45,6 +48,7 @@
 - 画布助手打开时不再显示“未开发”标记；选中生成配置等画布节点后，助手会根据连线自动把上游图片和文本节点纳入引用，引用顺序尊重节点的输入顺序设置。
 - Seedance 2.0 视频节点新增 P2 多模态参考能力：视频生成配置节点会收集上游图片、视频、音频节点，输入预览中统一展示所有参考素材并允许跨类型调整顺序；图片参考可指定 `reference_image / first_frame / last_frame`，视频按 `reference_video`、音频按 `reference_audio` 提交；Ark 请求会按输入顺序生成 `content` 数组，并继续兼容 `return_last_frame` 和连续视频链路；视频提示词输入框支持输入 `@` 通过预览选择已连接的图片、视频或音频参考并插入 `图片 1 / 视频 1 / 音频 1` 官方标签。
 - Seedance 视频节点新增“参考图用途模式”：默认“普通参考”会把所有图片作为 `reference_image`；用户在视频设置中明确选择“首帧”“首尾帧”或连续视频链路创建的“续写”时，才会自动生成 `first_frame / last_frame` 角色；输入预览中每张图片的角色下拉仍可作为高级手动覆盖。
+- Seedance 视频设置的秒数改为连续 4~15 秒区间控件；画布视频配置节点调整供应商、模型、画幅比例、秒数、清晰度、音频、水印、seed 和图片控制后，会同步成为下一次新建视频配置节点的默认值，避免每次新建都重新调整。
 - 画布视频节点和生成配置节点新增本地视频供应商切换，可在“OpenAI 兼容”和“火山 Seedance”之间按节点选择；切换时会使用对应默认视频模型，生成和重试会沿用节点保存的供应商与模型。
 - 默认模型选择器改为可搜索弹窗，支持按模型名或厂商别名筛选；本地渠道可直接输入自定义模型 ID，管理后台公开配置里的默认模型下拉也按模型名检索。
 - API 配置弹窗将 OpenAI 兼容和火山 Seedance 的 Base URL/API Key 拆开保存；默认视频模型可在“OpenAI 兼容视频”和“火山 Seedance”之间切换，Seedance 区分显示模型名和实际调用的 Endpoint ID。
@@ -58,6 +62,8 @@
 - 画布中通过菜单上传、拖拽、剪贴板粘贴或替换节点导入的图片、视频和音频，会自动加入“我的素材”；导入画布压缩包时也会把画布里的可保存节点同步加入“我的素材”。
 - 修复删除画布图片节点或清空画布后撤销时，节点信息恢复但本地图片数据已被清理导致图片丢失的问题。
 - “我的素材”类型筛选区右侧新增文本样式的导出素材和导入素材入口，可将全部素材导出为包含 `assets.json` 与图片、视频、音频文件的压缩包，并从压缩包恢复素材；导入入口也支持直接选择本地图片、视频和音频文件创建素材。
+- “我的素材”新增直接拖拽上传图片、视频、音频和素材压缩包；当前选中文件夹会作为上传目标。
+- “我的素材”新增本地文件夹管理，可新建、重命名、删除文件夹，按文件夹筛选素材，并在新增/编辑素材时选择所属文件夹；删除文件夹时素材会回到未分组。
 - “我的素材”新增本地视频、音频上传与预览，导入导出会一并保存音视频文件。
 - 未登录状态下，画布右上角不再显示用户头像菜单、用户名称、算力点余额和退出登录入口，改为显示登录入口；快捷键入口仍可直接打开。
 - 生图工作台的图片参数区复用画布里的紧凑版图像设置面板，尺寸、质量、生成张数的交互保持一致；工作台仍保留独立的模型选择。
@@ -86,8 +92,9 @@
 - 画布图片节点悬浮工具条新增“加白/刷新加白”入口，可把节点图片直接提交到火山素材库，并把 Asset ID、素材组和审核状态写回节点信息。
 - 画布 Seedance 视频生成会优先把已校验成功的图片参考作为 `asset://<Asset ID>` 提交，避免加白素材在生成视频时仍被当成普通图片 URL。
 - 后端会先把本地图片保存为公开静态文件，再使用后台配置的 AK/SK、ProjectName 调用火山素材接口。
-- 前台右上角“配置”弹窗新增“火山人像加白”配置区，管理员可在同一入口配置启用状态、AK/SK、ProjectName、Region、素材组 ID 和公网素材访问地址。
-- 后台“素材管理”页新增“火山素材审核”配置入口，可在管理素材时直接调整加白开关、AK/SK、ProjectName、Region、素材组 ID 和公网素材访问地址。
+- 火山人像加白配置入口收口到后台“系统设置”的“火山素材审核（唯一配置入口）”；加白配置不同于 Seedance 生成渠道，填一次即可，本地直连/云端渠道只影响视频生成 Key。
+- 前台右上角“配置”弹窗中的“火山人像加白”只读展示当前是否开启、ProjectName、Region、素材组 ID 摘要，并提供“去后台设置”提示，不再显示 AK/SK 输入。
+- 后台“素材管理”页的“火山素材审核”只显示状态和“去系统设置”按钮，不再重复填写 AK/SK；素材列表仍只保留图片加白/刷新加白操作。
 - 后台“素材管理”图片素材列表新增加白/刷新按钮，上传生成的 `/api/uploaded-assets/...` 地址会按公网素材访问地址转换后提交火山。
 - 图片素材详情中可查看火山 Asset ID、素材组 ID、ProjectName，并可手动刷新审核状态。
 - 需要配置公网可访问的素材地址；本地开发地址无法被火山服务拉取。

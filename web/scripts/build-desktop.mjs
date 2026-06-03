@@ -139,7 +139,7 @@ async function prepareElectronAppPackage() {
 }
 
 async function cleanTargetRelease() {
-    const productName = "无限画布";
+    const productName = "眨眼之间工作台";
     const version = JSON.parse(await fs.readFile(path.join(desktopAppDir, "package.json"), "utf8")).version;
     await fs.mkdir(releaseDir, { recursive: true });
     await fs.rm(path.join(releaseDir, "builder-debug.yml"), { recursive: true, force: true });
@@ -158,7 +158,7 @@ async function cleanTargetRelease() {
 }
 
 async function createMacDmg() {
-    const productName = "无限画布";
+    const productName = "眨眼之间工作台";
     const version = JSON.parse(await fs.readFile(path.join(desktopAppDir, "package.json"), "utf8")).version;
     const appParentDir = path.join(releaseDir, `mac-${arch}`);
     const appPath = path.join(appParentDir, `${productName}.app`);

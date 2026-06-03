@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AudioLines, Edit3, Eye, Image as ImageIcon, LoaderCircle, MessageSquare, Play, Video } from "lucide-react";
 import { App, Button, Empty, Input, Modal, Segmented } from "antd";
 
@@ -49,6 +49,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
     const videoInputs = inputs.filter((input) => input.type === "video");
     const audioInputs = inputs.filter((input) => input.type === "audio");
     const mediaInputs = inputs.filter((input) => input.type === "image" || input.type === "video" || input.type === "audio");
+    const hasSourceVideo = videoInputs.some((input) => Boolean(input.video?.url));
     const imageReferenceValue = mode === "video" && imageInputs.length ? seedanceReferenceLabelRange("image", imageInputs.length) : `${inputSummary.imageCount} 张`;
     const videoReferenceValue = videoInputs.length ? seedanceReferenceLabelRange("video", videoInputs.length) : `${inputSummary.videoCount} 个`;
     const audioReferenceValue = audioInputs.length ? seedanceReferenceLabelRange("audio", audioInputs.length) : `${inputSummary.audioCount} 个`;
@@ -86,6 +87,12 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
         setEditingTextId(input.nodeId);
         setEditingText(input.text || "");
     };
+
+    useEffect(() => {
+        if (mode !== "video" || config.videoProtocol !== "volcengine-ark" || hasSourceVideo || (config.videoTaskMode !== "edit" && config.videoTaskMode !== "extend")) return;
+        onConfigChange(node.id, { videoTaskMode: "generate" });
+    }, [config.videoProtocol, config.videoTaskMode, hasSourceVideo, mode, node.id, onConfigChange]);
+
     const saveTextEdit = () => {
         if (!editingTextId) return;
         onTextInputChange(editingTextId, editingText);
@@ -170,6 +177,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
                         config={config}
                         placement="topRight"
                         showTaskMode
+                        hasSourceVideo={hasSourceVideo}
                         buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2"
                         onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))}
                     />

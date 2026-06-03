@@ -3,6 +3,7 @@ import { normalizeSeedanceImageRoleMode } from "../../../../services/api/video-r
 import type { CanvasNodeMetadata } from "../types";
 
 export type CanvasVideoProvider = AiConfig["videoProtocol"];
+type CanvasVideoDefaultKey = "videoProtocol" | "videoModel" | "seedanceModel" | "seedanceEndpointId" | "size" | "videoSeconds" | "vquality" | "videoGenerateAudio" | "videoWatermark" | "videoSeed" | "returnLastFrame" | "videoReferenceImageMode";
 
 export function buildCanvasVideoConfig(config: AiConfig, metadata?: CanvasNodeMetadata): AiConfig {
     const provider = resolveCanvasVideoProvider(config, metadata);
@@ -34,13 +35,47 @@ export function buildCanvasVideoProviderPatch(config: AiConfig, provider: Canvas
     };
 }
 
-export function buildCanvasVideoModePatch(config: AiConfig): Pick<CanvasNodeMetadata, "generationMode" | "provider" | "model"> {
+export function buildCanvasVideoModePatch(config: AiConfig): Partial<CanvasNodeMetadata> {
     const provider = config.channelMode === "local" ? resolveCanvasVideoProvider(config) : "openai";
     return {
         generationMode: "video",
         provider,
         model: config.channelMode === "local" ? resolveCanvasVideoModel(config, provider) : config.videoModel || config.model,
+        size: config.size,
+        seconds: normalizeCanvasVideoSeconds(config.videoSeconds, provider),
+        vquality: config.vquality,
+        generateAudio: config.videoGenerateAudio,
+        watermark: config.videoWatermark,
+        seed: config.videoSeed,
+        returnLastFrame: config.returnLastFrame,
+        videoTaskMode: "generate",
+        videoEditType: config.videoEditType || "replace",
+        videoExtendDirection: config.videoExtendDirection || "forward",
+        videoReferenceImageMode: normalizeSeedanceImageRoleMode(config.videoReferenceImageMode),
     };
+}
+
+export function buildCanvasVideoDefaultsPatch(config: AiConfig, metadata: Partial<CanvasNodeMetadata>) {
+    const provider = metadata.provider || config.videoProtocol || "openai";
+    const patch: Partial<Pick<AiConfig, CanvasVideoDefaultKey>> = {};
+    if (metadata.provider) patch.videoProtocol = metadata.provider;
+    if (metadata.model) {
+        if (provider === "volcengine-ark") {
+            if (metadata.model.toLowerCase().startsWith("ep-")) patch.seedanceEndpointId = metadata.model;
+            else patch.seedanceModel = metadata.model;
+        } else {
+            patch.videoModel = metadata.model;
+        }
+    }
+    if (metadata.size) patch.size = metadata.size;
+    if (metadata.seconds) patch.videoSeconds = normalizeCanvasVideoSeconds(metadata.seconds, provider);
+    if (metadata.vquality) patch.vquality = metadata.vquality;
+    if (metadata.generateAudio) patch.videoGenerateAudio = metadata.generateAudio;
+    if (metadata.watermark) patch.videoWatermark = metadata.watermark;
+    if (metadata.seed !== undefined) patch.videoSeed = metadata.seed;
+    if (metadata.returnLastFrame) patch.returnLastFrame = metadata.returnLastFrame;
+    if (metadata.videoReferenceImageMode) patch.videoReferenceImageMode = normalizeSeedanceImageRoleMode(metadata.videoReferenceImageMode);
+    return patch;
 }
 
 function resolveCanvasVideoProvider(config: AiConfig, metadata?: CanvasNodeMetadata): CanvasVideoProvider {

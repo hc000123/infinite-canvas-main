@@ -23,6 +23,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import { applyAssistantCanvasActions, type AssistantCanvasAction } from "../utils/canvas-assistant-actions";
 import { removeVariantVideoConnections } from "../utils/canvas-connection-cleanup";
 import { buildGenerationConfig, buildRetryGenerationConfig } from "../utils/canvas-generation-config";
+import { buildCanvasVideoDefaultsPatch } from "../utils/canvas-video-config";
 import { buildImageGenerationMetadata, buildRetryImageGenerationMetadata, buildVideoGenerationMetadata, buildVideoReferenceInput, directVideoReferenceInputs, storedReferenceImageRole, videoTaskMetadata } from "../utils/canvas-generation-metadata";
 import { runCanvasImageGeneration, runCanvasVideoGeneration } from "../utils/canvas-generation-runner";
 import { buildContinuousVideoChain } from "../utils/canvas-video-chain";
@@ -221,6 +222,7 @@ function InfiniteCanvasPage() {
     const effectiveConfig = useEffectiveConfig();
     const canvasAiConfig = effectiveConfig.channelMode === "local" ? config : effectiveConfig;
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
+    const updateConfig = useConfigStore((state) => state.updateConfig);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const volcengineAssetEnabled = useConfigStore((state) => state.publicSettings?.volcengineAsset?.enabled === true);
     const token = useUserStore((state) => state.token);
@@ -754,7 +756,7 @@ function InfiniteCanvasPage() {
     );
 
     const createAndOpenProject = useCallback(() => {
-        const id = createProject(`无限画布 ${useCanvasStore.getState().projects.length + 1}`);
+        const id = createProject(`眨眼之间工作台 ${useCanvasStore.getState().projects.length + 1}`);
         router.push(`/canvas/${id}`);
     }, [createProject, router]);
 
@@ -979,9 +981,17 @@ function InfiniteCanvasPage() {
         setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, prompt } } : node)));
     }, []);
 
-    const handleConfigNodeChange = useCallback((nodeId: string, patch: Partial<CanvasNodeMetadata>) => {
-        setNodes((prev) => prev.map((node) => (node.id === nodeId ? applyNodeConfigPatch(node, patch) : node)));
-    }, []);
+    const handleConfigNodeChange = useCallback(
+        (nodeId: string, patch: Partial<CanvasNodeMetadata>) => {
+            const node = nodesRef.current.find((item) => item.id === nodeId);
+            if (shouldRememberVideoDefaults(node, patch)) {
+                const defaults = buildCanvasVideoDefaultsPatch(canvasAiConfig, patch);
+                Object.entries(defaults).forEach(([key, value]) => updateConfig(key as keyof AiConfig, value as AiConfig[keyof AiConfig]));
+            }
+            setNodes((prev) => prev.map((node) => (node.id === nodeId ? applyNodeConfigPatch(node, patch) : node)));
+        },
+        [canvasAiConfig, updateConfig],
+    );
 
     const saveNodeAsset = useCallback(
         async (node: CanvasNodeData) => {
@@ -2325,6 +2335,13 @@ function applyNodeConfigPatch(node: CanvasNodeData, patch: Partial<CanvasNodeMet
     const spec = node.type === CanvasNodeType.Video ? NODE_DEFAULT_SIZE[CanvasNodeType.Video] : NODE_DEFAULT_SIZE[CanvasNodeType.Image];
     const size = typeof patch.size === "string" && !node.metadata?.content ? nodeSizeFromRatio(patch.size, spec.width, spec.height) : null;
     return size && (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video) ? { ...next, ...size, position: { x: node.position.x + node.width / 2 - size.width / 2, y: node.position.y + node.height / 2 - size.height / 2 } } : next;
+}
+
+function shouldRememberVideoDefaults(node: CanvasNodeData | undefined, patch: Partial<CanvasNodeMetadata>) {
+    if (node?.type !== CanvasNodeType.Config) return false;
+    if (patch.generationMode === "video") return true;
+    if (node.metadata?.generationMode !== "video") return false;
+    return ["provider", "model", "size", "seconds", "vquality", "generateAudio", "watermark", "seed", "returnLastFrame", "videoReferenceImageMode"].some((key) => key in patch);
 }
 
 function normalizeConnection(firstNodeId: string, secondNodeId: string, nodes: CanvasNodeData[], firstHandleType: "source" | "target") {

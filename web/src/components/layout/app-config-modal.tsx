@@ -1,11 +1,12 @@
 "use client";
 
-import { App, Button, Form, Input, Modal, Segmented, Switch } from "antd";
+import { App, Button, Form, Input, Modal, Segmented, Tag } from "antd";
 import { useEffect, useState } from "react";
 
 import { ModelPicker } from "@/components/model-picker";
-import { fetchAdminSettings, saveAdminSettings, type AdminPrivateVolcengineAssetSettings, type AdminSettings } from "@/services/api/admin";
+import { fetchAdminSettings, type AdminSettings } from "@/services/api/admin";
 import { fetchImageModels } from "@/services/api/image";
+import { summarizeVolcengineAssetConfig, VOLCENGINE_ASSET_CONFIG_NOTICE } from "@/services/volcengine-asset-config";
 import { defaultConfig, resolveSeedanceRequestModel, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
@@ -13,9 +14,7 @@ export function AppConfigModal() {
     const { message } = App.useApp();
     const [loadingModels, setLoadingModels] = useState(false);
     const [loadingVolcengineAsset, setLoadingVolcengineAsset] = useState(false);
-    const [savingSettings, setSavingSettings] = useState(false);
     const [adminSettings, setAdminSettings] = useState<AdminSettings | null>(null);
-    const [volcengineAssetDraft, setVolcengineAssetDraft] = useState<AdminPrivateVolcengineAssetSettings>(defaultVolcengineAssetSettings);
     const config = useConfigStore((state) => state.config);
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const isConfigOpen = useConfigStore((state) => state.isConfigOpen);
@@ -23,7 +22,6 @@ export function AppConfigModal() {
     const setConfigDialogOpen = useConfigStore((state) => state.setConfigDialogOpen);
     const clearPromptContinue = useConfigStore((state) => state.clearPromptContinue);
     const publicSettings = useConfigStore((state) => state.publicSettings);
-    const loadPublicSettings = useConfigStore((state) => state.loadPublicSettings);
     const token = useUserStore((state) => state.token);
     const user = useUserStore((state) => state.user);
     const effectiveConfig = useEffectiveConfig();
@@ -42,7 +40,6 @@ export function AppConfigModal() {
         }
         if (!token || !isAdmin) {
             setAdminSettings(null);
-            setVolcengineAssetDraft(defaultVolcengineAssetSettings);
             setLoadingVolcengineAsset(false);
             return;
         }
@@ -53,7 +50,6 @@ export function AppConfigModal() {
             .then((settings) => {
                 if (ignored) return;
                 setAdminSettings(settings);
-                setVolcengineAssetDraft(normalizeVolcengineAssetSettings(settings.private.volcengineAsset));
             })
             .catch((error) => {
                 if (ignored) return;
@@ -67,60 +63,15 @@ export function AppConfigModal() {
         };
     }, [isConfigOpen, isAdmin, message, token]);
 
-    const updateVolcengineAssetDraft = <K extends keyof AdminPrivateVolcengineAssetSettings>(key: K, value: AdminPrivateVolcengineAssetSettings[K]) => {
-        setVolcengineAssetDraft((current) => ({ ...current, [key]: value }));
-    };
-
-    const finishConfig = async () => {
+    const finishConfig = () => {
         const hasOpenAIConfig = Boolean(config.baseUrl.trim() && config.apiKey.trim());
         const hasSeedanceConfig = Boolean(config.volcengineApiKey.trim() && seedanceRequestModel);
         const hasProviderConfig = effectiveMode !== "local" || (config.videoProtocol === "volcengine-ark" ? hasSeedanceConfig : hasOpenAIConfig);
         const hasModelConfig = Boolean(modelConfig.imageModel.trim() && videoModel.trim() && modelConfig.textModel.trim());
-        let savedVolcengineAsset = false;
-        let publicSettingsRefreshFailed = false;
-        setSavingSettings(true);
-        try {
-            if (token && isAdmin && adminSettings) {
-                const nextSettings: AdminSettings = {
-                    ...adminSettings,
-                    private: {
-                        ...adminSettings.private,
-                        volcengineAsset: normalizeVolcengineAssetSettings(volcengineAssetDraft),
-                    },
-                };
-                const saved = await saveAdminSettings(token, nextSettings);
-                setAdminSettings(saved);
-                setVolcengineAssetDraft(normalizeVolcengineAssetSettings(saved.private.volcengineAsset));
-                savedVolcengineAsset = true;
-                try {
-                    await loadPublicSettings();
-                } catch {
-                    publicSettingsRefreshFailed = true;
-                }
-            }
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存加白配置失败");
-            setSavingSettings(false);
-            return;
-        }
         setConfigDialogOpen(false);
-        setSavingSettings(false);
-        if (!hasProviderConfig || !hasModelConfig) {
-            if (savedVolcengineAsset) {
-                if (publicSettingsRefreshFailed) {
-                    message.warning("加白配置已保存，公开配置刷新失败，请刷新页面");
-                } else {
-                    message.success("加白配置已保存");
-                }
-            }
-            return;
-        }
+        if (!hasProviderConfig || !hasModelConfig) return;
         if (!allowCustomChannel && config.channelMode !== "remote") updateConfig("channelMode", "remote");
-        if (publicSettingsRefreshFailed) {
-            message.warning("配置已保存，公开配置刷新失败，请刷新页面");
-        } else {
-            message.success(shouldPromptContinue ? "配置已保存，请继续刚才的请求" : "配置已保存");
-        }
+        message.success(shouldPromptContinue ? "配置已保存，请继续刚才的请求" : "配置已保存");
         clearPromptContinue();
     };
 
@@ -146,6 +97,9 @@ export function AppConfigModal() {
         }
     };
 
+    const volcengineAssetDetails = adminSettings?.private.volcengineAsset;
+    const volcengineAssetSummary = summarizeVolcengineAssetConfig(volcengineAssetDetails || publicSettings?.volcengineAsset, { showDetails: Boolean(volcengineAssetDetails) });
+
     return (
         <Modal
             title={
@@ -159,7 +113,7 @@ export function AppConfigModal() {
             centered
             onCancel={() => setConfigDialogOpen(false)}
             footer={
-                <Button type="primary" loading={savingSettings} disabled={loadingVolcengineAsset} onClick={() => void finishConfig()}>
+                <Button type="primary" onClick={finishConfig}>
                     完成
                 </Button>
             }
@@ -229,41 +183,36 @@ export function AppConfigModal() {
                         <div className="mb-3 flex items-center justify-between gap-3">
                             <div className="min-w-0">
                                 <div className="text-sm font-medium">火山人像加白</div>
-                                <div className="mt-1 text-xs text-stone-500">用于“我的素材”图片提交审核。</div>
+                                <div className="mt-1 text-xs text-stone-500">用于“我的素材”和画布图片提交人像素材审核。</div>
                             </div>
-                            {isAdmin && adminSettings ? <Switch checked={volcengineAssetDraft.enabled} disabled={loadingVolcengineAsset} onChange={(checked) => updateVolcengineAssetDraft("enabled", checked)} /> : null}
+                            <Tag color={volcengineAssetSummary.statusColor}>{volcengineAssetSummary.statusText}</Tag>
                         </div>
-                        {!isAdmin ? (
-                            <div className="text-xs text-stone-500">需要管理员登录后配置。</div>
-                        ) : loadingVolcengineAsset ? (
+                        <div className="mb-3 rounded-md bg-stone-100 px-3 py-2 text-xs leading-5 text-stone-600 dark:bg-stone-900 dark:text-stone-300">{VOLCENGINE_ASSET_CONFIG_NOTICE}</div>
+                        {loadingVolcengineAsset ? (
                             <div className="text-xs text-stone-500">正在读取加白配置...</div>
-                        ) : adminSettings ? (
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <Form.Item label="Access Key" className="mb-3">
-                                    <Input.Password value={volcengineAssetDraft.accessKey} placeholder="留空则沿用已保存的 Access Key" onChange={(event) => updateVolcengineAssetDraft("accessKey", event.target.value)} />
-                                </Form.Item>
-                                <Form.Item label="Secret Key" className="mb-3">
-                                    <Input.Password value={volcengineAssetDraft.secretKey} placeholder="留空则沿用已保存的 Secret Key" onChange={(event) => updateVolcengineAssetDraft("secretKey", event.target.value)} />
-                                </Form.Item>
-                                <Form.Item label="项目名称" className="mb-3">
-                                    <Input value={volcengineAssetDraft.projectName} placeholder="default" onChange={(event) => updateVolcengineAssetDraft("projectName", event.target.value)} />
-                                </Form.Item>
-                                <Form.Item label="地域" className="mb-3">
-                                    <Input value={volcengineAssetDraft.region} placeholder="cn-beijing" onChange={(event) => updateVolcengineAssetDraft("region", event.target.value)} />
-                                </Form.Item>
-                                <Form.Item label="素材组 ID" className="mb-3 md:col-span-2">
-                                    <Input value={volcengineAssetDraft.assetGroupId} placeholder="group-20260318033332-xxxxx" onChange={(event) => updateVolcengineAssetDraft("assetGroupId", event.target.value)} />
-                                </Form.Item>
-                                <Form.Item label="公网素材访问地址" className="mb-0 md:col-span-2" extra="填写火山 TOS 公网前缀时，提交加白前会自动上传到对应桶路径。">
-                                    <Input
-                                        value={volcengineAssetDraft.publicAssetBaseUrl}
-                                        placeholder="https://jiabaitong.tos-cn-beijing.volces.com/volcengine-assets"
-                                        onChange={(event) => updateVolcengineAssetDraft("publicAssetBaseUrl", event.target.value)}
-                                    />
-                                </Form.Item>
-                            </div>
                         ) : (
-                            <div className="text-xs text-stone-500">未读取到加白配置，请稍后重试。</div>
+                            <div className="space-y-3">
+                                <div className="grid gap-2 text-xs text-stone-600 dark:text-stone-300 md:grid-cols-3">
+                                    <div>
+                                        <div className="text-stone-400">ProjectName</div>
+                                        <div className="mt-1 font-medium">{volcengineAssetSummary.projectName}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-stone-400">Region</div>
+                                        <div className="mt-1 font-medium">{volcengineAssetSummary.region}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-stone-400">素材组 ID</div>
+                                        <div className="mt-1 break-all font-medium">{volcengineAssetSummary.assetGroupId}</div>
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-stone-500">
+                                    <span>加白密钥只在后台系统设置中维护，前台配置弹窗只读展示。</span>
+                                    <Button size="small" href="/admin/settings">
+                                        去后台设置
+                                    </Button>
+                                </div>
+                            </div>
                         )}
                     </div>
                     <div className="grid gap-4 md:grid-cols-3">
@@ -307,26 +256,4 @@ export function AppConfigModal() {
             </div>
         </Modal>
     );
-}
-
-const defaultVolcengineAssetSettings: AdminPrivateVolcengineAssetSettings = {
-    enabled: false,
-    accessKey: "",
-    secretKey: "",
-    projectName: "default",
-    region: "cn-beijing",
-    assetGroupId: "",
-    publicAssetBaseUrl: "",
-};
-
-function normalizeVolcengineAssetSettings(setting: Partial<AdminPrivateVolcengineAssetSettings> = {}): AdminPrivateVolcengineAssetSettings {
-    return {
-        enabled: setting.enabled === true,
-        accessKey: setting.accessKey || "",
-        secretKey: setting.secretKey || "",
-        projectName: setting.projectName || "default",
-        region: setting.region || "cn-beijing",
-        assetGroupId: setting.assetGroupId || "",
-        publicAssetBaseUrl: setting.publicAssetBaseUrl || "",
-    };
 }

@@ -46,6 +46,7 @@ export default function AdminPromptsPage() {
     const defaultCategory = categories[0]?.category || "";
     const categoryName = (category: string) => categories.find((item) => item.category === category)?.name || category;
     const categoryOptions = [{ label: "全部分类", value: "" }, ...categories.map((item) => ({ label: item.name, value: item.category }))];
+    const remoteCategories = categories.filter((item) => item.remote);
     const tagOptions = tags.map((item) => ({ label: item, value: item }));
 
     useEffect(() => {
@@ -192,9 +193,11 @@ export default function AdminPromptsPage() {
                         <Button key="batch-delete" danger icon={<DeleteOutlined />} disabled={!selectedPromptIds.length} onClick={() => setIsBatchDeleteOpen(true)}>
                             批量删除{selectedPromptIds.length ? ` ${selectedPromptIds.length}` : ""}
                         </Button>,
-                        <Button key="sync" icon={<SyncOutlined />} onClick={() => setIsSyncOpen(true)}>
-                            同步
-                        </Button>,
+                        remoteCategories.length ? (
+                            <Button key="sync" icon={<SyncOutlined />} onClick={() => setIsSyncOpen(true)}>
+                                同步
+                            </Button>
+                        ) : null,
                         <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => setEditingPrompt({ category: defaultCategory, tags: [] })}>
                             新增
                         </Button>,
@@ -282,7 +285,7 @@ export default function AdminPromptsPage() {
             >
                 <Table
                     rowKey="category"
-                    dataSource={categories.filter((item) => item.remote)}
+                    dataSource={remoteCategories}
                     pagination={false}
                     columns={[
                         {

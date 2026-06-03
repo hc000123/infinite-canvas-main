@@ -1,5 +1,5 @@
 appId: com.basketikun.infinitecanvas
-productName: 无限画布
+productName: 眨眼之间工作台
 copyright: Copyright © 2026 infinite-canvas contributors
 electronVersion: 42.3.1
 asar: true
@@ -46,4 +46,4 @@ nsis:
     allowToChangeInstallationDirectory: true
     createDesktopShortcut: true
     createStartMenuShortcut: true
-    shortcutName: 无限画布
+    shortcutName: 眨眼之间工作台

@@ -193,7 +193,7 @@ function createWindow(url) {
         height: 960,
         minWidth: 1100,
         minHeight: 720,
-        title: "无限画布",
+        title: "眨眼之间工作台",
         backgroundColor: "#f6f7fb",
         webPreferences: {
             contextIsolation: true,
@@ -215,7 +215,7 @@ app.whenReady().then(async () => {
         const frontendUrl = await startServices();
         createWindow(frontendUrl);
     } catch (error) {
-        dialog.showErrorBox("无限画布启动失败", error instanceof Error ? error.message : String(error));
+        dialog.showErrorBox("眨眼之间工作台启动失败", error instanceof Error ? error.message : String(error));
         app.quit();
     }
 });

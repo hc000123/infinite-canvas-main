@@ -67,7 +67,7 @@ func normalizePromptSyncSetting(setting model.PromptSyncSetting) model.PromptSyn
 		setting.Cron = defaultPromptSyncCron
 	}
 	if setting.Enabled == nil {
-		enabled := true
+		enabled := false
 		setting.Enabled = &enabled
 	}
 	return setting

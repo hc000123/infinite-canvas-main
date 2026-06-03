@@ -1,10 +1,10 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { ImageSettingsTheme } from "@/components/image-settings-panel";
+import { resolveSeedanceTaskModeForSource, seedanceReferenceImageModeOptions, shouldShowSeedanceImageControl, visibleSeedanceReferenceImageMode, visibleSeedanceTaskModeOptions } from "@/components/video-settings-options";
 import { type CanvasTheme } from "@/lib/canvas-theme";
-import { normalizeSeedanceImageRoleMode } from "@/services/api/video-reference";
 import type { AiConfig } from "@/stores/use-config-store";
 
 const resolutionOptions = [
@@ -22,12 +22,6 @@ const ratioOptions = [
 ];
 
 const openAISecondOptions = [5, 6, 10, 15, 20];
-const seedanceSecondOptions = [4, 6, 8, 10, 12, 15];
-const taskModeOptions = [
-    { value: "generate", label: "生成" },
-    { value: "edit", label: "编辑" },
-    { value: "extend", label: "延长" },
-] as const;
 const editTypeOptions = [
     { value: "replace", label: "替换" },
     { value: "add", label: "添加" },
@@ -38,12 +32,6 @@ const extendDirectionOptions = [
     { value: "forward", label: "向后" },
     { value: "backward", label: "向前" },
 ] as const;
-const referenceImageModeOptions = [
-    { value: "reference", label: "普通参考" },
-    { value: "first_frame", label: "首帧" },
-    { value: "first_last_frame", label: "首尾帧" },
-    { value: "continue", label: "续写" },
-] as const;
 
 type VideoSettingsKey = "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoSeed" | "videoTaskMode" | "videoEditType" | "videoExtendDirection" | "videoReferenceImageMode";
 
@@ -53,34 +41,44 @@ type VideoSettingsPanelProps = {
     theme: CanvasTheme;
     showTitle?: boolean;
     showTaskMode?: boolean;
+    hasSourceVideo?: boolean;
     className?: string;
 };
 
-export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = true, showTaskMode = false, className = "w-[320px] space-y-4 rounded-2xl px-1 py-0.5" }: VideoSettingsPanelProps) {
+export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = true, showTaskMode = false, hasSourceVideo = false, className = "w-[320px] space-y-4 rounded-2xl px-1 py-0.5" }: VideoSettingsPanelProps) {
     const isSeedance = isSeedanceVideoConfig(config);
-    const secondOptions = isSeedance ? seedanceSecondOptions : openAISecondOptions;
+    const secondOptions = openAISecondOptions;
     const secondLimits = videoSecondsLimits(config);
     const seconds = normalizeVideoSecondsValue(config.videoSeconds, config);
     const ratio = normalizeVideoRatioValue(config.size);
     const resolution = normalizeVideoResolutionValue(config.vquality);
     const generateAudio = config.videoGenerateAudio === "true";
     const watermark = config.videoWatermark === "true";
-    const referenceImageMode = normalizeSeedanceImageRoleMode(config.videoReferenceImageMode);
+    const taskMode = resolveSeedanceTaskModeForSource(config.videoTaskMode, hasSourceVideo);
+    const taskOptions = visibleSeedanceTaskModeOptions(hasSourceVideo);
+    const showImageControl = shouldShowSeedanceImageControl(config.videoTaskMode, hasSourceVideo);
+    const referenceImageMode = visibleSeedanceReferenceImageMode(config.videoReferenceImageMode);
+
+    useEffect(() => {
+        if (!isSeedance || !showTaskMode || hasSourceVideo || (config.videoTaskMode !== "edit" && config.videoTaskMode !== "extend")) return;
+        onConfigChange("videoTaskMode", "generate");
+    }, [config.videoTaskMode, hasSourceVideo, isSeedance, onConfigChange, showTaskMode]);
 
     return (
         <ImageSettingsTheme theme={theme}>
             <div className={className} style={{ color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()}>
                 {showTitle ? <div className="text-lg font-semibold">视频设置</div> : null}
+                {isSeedance ? <div className="text-xs leading-5 opacity-55">生成新视频时可用图片控制首帧/首尾帧。续写请从已完成视频节点的“续写”按钮进入。</div> : null}
                 {showTaskMode && isSeedance ? (
-                    <SettingGroup title="任务模式" color={theme.node.muted}>
-                        <div className="grid grid-cols-3 gap-2.5">
-                            {taskModeOptions.map((item) => (
-                                <OptionPill key={item.value} selected={config.videoTaskMode === item.value} theme={theme} onClick={() => onConfigChange("videoTaskMode", item.value)}>
+                    <SettingGroup title="生成方式" color={theme.node.muted}>
+                        <div className={`grid gap-2.5 ${hasSourceVideo ? "grid-cols-3" : "grid-cols-1"}`}>
+                            {taskOptions.map((item) => (
+                                <OptionPill key={item.value} selected={taskMode === item.value} theme={theme} onClick={() => onConfigChange("videoTaskMode", item.value)}>
                                     {item.label}
                                 </OptionPill>
                             ))}
                         </div>
-                        {config.videoTaskMode === "edit" ? (
+                        {taskMode === "edit" ? (
                             <div className="grid grid-cols-4 gap-2.5">
                                 {editTypeOptions.map((item) => (
                                     <OptionPill key={item.value} selected={config.videoEditType === item.value} theme={theme} onClick={() => onConfigChange("videoEditType", item.value)}>
@@ -89,7 +87,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                                 ))}
                             </div>
                         ) : null}
-                        {config.videoTaskMode === "extend" ? (
+                        {taskMode === "extend" ? (
                             <div className="grid grid-cols-2 gap-2.5">
                                 {extendDirectionOptions.map((item) => (
                                     <OptionPill key={item.value} selected={config.videoExtendDirection === item.value} theme={theme} onClick={() => onConfigChange("videoExtendDirection", item.value)}>
@@ -100,10 +98,10 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                         ) : null}
                     </SettingGroup>
                 ) : null}
-                {isSeedance ? (
-                    <SettingGroup title="参考图用途" color={theme.node.muted}>
-                        <div className="grid grid-cols-2 gap-2.5">
-                            {referenceImageModeOptions.map((item) => (
+                {isSeedance && showImageControl ? (
+                    <SettingGroup title="图片控制" color={theme.node.muted}>
+                        <div className="grid grid-cols-3 gap-2.5">
+                            {seedanceReferenceImageModeOptions.map((item) => (
                                 <OptionPill key={item.value} selected={referenceImageMode === item.value} theme={theme} onClick={() => onConfigChange("videoReferenceImageMode", item.value)}>
                                     {item.label}
                                 </OptionPill>
@@ -139,14 +137,18 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     </div>
                 </SettingGroup>
                 <SettingGroup title="秒数" color={theme.node.muted}>
-                    <div className="grid grid-cols-3 gap-2.5">
-                        {secondOptions.map((value) => (
-                            <OptionPill key={value} selected={seconds === String(value)} theme={theme} onClick={() => onConfigChange("videoSeconds", String(value))}>
-                                {value}s
-                            </OptionPill>
-                        ))}
-                        <NumberInput value={seconds} min={secondLimits.min} max={secondLimits.max} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
-                    </div>
+                    {isSeedance ? (
+                        <SecondRangeControl value={seconds} min={secondLimits.min} max={secondLimits.max} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
+                    ) : (
+                        <div className="grid grid-cols-3 gap-2.5">
+                            {secondOptions.map((value) => (
+                                <OptionPill key={value} selected={seconds === String(value)} theme={theme} onClick={() => onConfigChange("videoSeconds", String(value))}>
+                                    {value}s
+                                </OptionPill>
+                            ))}
+                            <NumberInput value={seconds} min={secondLimits.min} max={secondLimits.max} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
+                        </div>
+                    )}
                 </SettingGroup>
                 <SettingGroup title="Ark 参数" color={theme.node.muted}>
                     <div className="grid grid-cols-2 gap-2.5">
@@ -254,6 +256,31 @@ function ToggleSwitch({ checked, label, theme, onChange }: { checked: boolean; l
                 <span className="absolute top-0.5 size-4 rounded-full bg-white transition" style={{ left: checked ? 18 : 2 }} />
             </span>
         </label>
+    );
+}
+
+function SecondRangeControl({ value, min, max, theme, onChange }: { value: string; min: number; max: number; theme: CanvasTheme; onChange: (value: string) => void }) {
+    return (
+        <div className="space-y-2 rounded-xl border px-3 py-2.5" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}>
+            <div className="flex items-center justify-between text-xs tabular-nums" style={{ color: theme.node.muted }}>
+                <span>{min}s</span>
+                <span className="text-sm font-medium" style={{ color: theme.node.text }}>
+                    {value}s
+                </span>
+                <span>{max}s</span>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_72px] items-center gap-3">
+                <input type="range" min={min} max={max} step={1} value={value} className="h-8 w-full cursor-pointer accent-[#2f80ff]" onChange={(event) => onChange(event.target.value)} onMouseDown={(event) => event.stopPropagation()} />
+                <NumberInput
+                    value={value}
+                    min={min}
+                    max={max}
+                    theme={theme}
+                    className="h-8 rounded-lg border bg-transparent px-2 text-center text-sm outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    onChange={onChange}
+                />
+            </div>
+        </div>
     );
 }
 

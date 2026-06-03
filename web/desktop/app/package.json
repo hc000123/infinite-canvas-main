@@ -1,7 +1,7 @@
 {
     "name": "infinite-canvas-desktop",
     "version": "0.2.2",
-    "description": "无限画布桌面端",
+    "description": "眨眼之间工作台桌面端",
     "author": "infinite-canvas contributors",
     "private": true,
     "main": "main.cjs"
