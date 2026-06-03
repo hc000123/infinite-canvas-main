@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent as ReactChangeEvent, DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AudioLines, Home, ImageIcon, Images, List, Menu, MessageSquare, Plus, Redo2, Settings2, Trash2, Undo2, Upload, Video } from "lucide-react";
 
@@ -11,7 +11,7 @@ import { fetchVolcengineAssetStatus, submitVolcengineImageAsset } from "@/servic
 import { refreshVideoTask, type VideoGenerationReferenceInput } from "@/services/api/video";
 import { defaultConfig, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { getImageBlob, resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
-import { resolveMediaUrl, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
+import { resolveMediaUrl, type UploadedFile } from "@/services/file-storage";
 import { activeVolcengineAssetURI, buildVolcengineImageFilename, isVolcengineReviewProcessing, mergeVolcengineReviewStatus, volcengineReviewMetadataFromSubmission, volcengineReviewPollingKey } from "@/services/volcengine-asset-metadata";
 import { nanoid } from "nanoid";
 import { readImageMeta } from "@/lib/image-utils";
@@ -34,6 +34,7 @@ import { resetInterruptedGeneration } from "../utils/canvas-video-task-recovery"
 import { cropDataUrl } from "../utils/canvas-image-data";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
 import { useCanvasConnections, type CanvasPendingConnectionCreate } from "../hooks/use-canvas-connections";
+import { useCanvasFileNodeActions } from "../hooks/use-canvas-file-node-actions";
 import { useCanvasHistory } from "../hooks/use-canvas-history";
 import { useCanvasKeyboardShortcuts } from "../hooks/use-canvas-keyboard-shortcuts";
 import { useCanvasMediaCache } from "../hooks/use-canvas-media-cache";
@@ -278,6 +279,7 @@ function InfiniteCanvasPage() {
     const viewportRef = useRef(viewport);
     const showImageGenerationError = useCallback((text: string) => message.error(text), [message]);
     const showVideoGenerationWarning = useCallback((text: string) => message.warning(text), [message]);
+    const showCanvasSuccess = useCallback((text: string) => message.success(text), [message]);
     const { generateImageNode } = useCanvasImageGenerationActions({
         setNodes,
         setConnections,
@@ -809,74 +811,23 @@ function InfiniteCanvasPage() {
         [addAsset],
     );
 
-    const createImageFileNode = useCallback(
-        async (file: File, position: Position) => {
-            const image = await uploadImage(file);
-            const size = fitNodeSize(image.width, image.height);
-            const id = `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            const newNode: CanvasNodeData = {
-                id,
-                type: CanvasNodeType.Image,
-                title: file.name,
-                position: { x: position.x - size.width / 2, y: position.y - size.height / 2 },
-                width: size.width,
-                height: size.height,
-                metadata: imageMetadata(image),
-            };
-
-            setNodes((prev) => [...prev, newNode]);
-            addCanvasNodeToAssets(newNode);
-            setSelectedNodeIds(new Set([id]));
-            setSelectedConnectionId(null);
-            setDialogNodeId(id);
-        },
-        [addCanvasNodeToAssets],
-    );
-
-    const createVideoFileNode = useCallback(
-        async (file: File, position: Position) => {
-            const video = await uploadMediaFile(file, "video");
-            const size = fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
-            const id = `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            const newNode: CanvasNodeData = {
-                id,
-                type: CanvasNodeType.Video,
-                title: file.name,
-                position: { x: position.x - size.width / 2, y: position.y - size.height / 2 },
-                width: size.width,
-                height: size.height,
-                metadata: videoMetadata(video),
-            };
-            setNodes((prev) => [...prev, newNode]);
-            addCanvasNodeToAssets(newNode);
-            setSelectedNodeIds(new Set([id]));
-            setSelectedConnectionId(null);
-            setDialogNodeId(id);
-        },
-        [addCanvasNodeToAssets],
-    );
-
-    const createAudioFileNode = useCallback(
-        async (file: File, position: Position) => {
-            const audio = await uploadMediaFile(file, "audio");
-            const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Audio];
-            const id = `audio-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            const newNode: CanvasNodeData = {
-                id,
-                type: CanvasNodeType.Audio,
-                title: file.name,
-                position: { x: position.x - spec.width / 2, y: position.y - spec.height / 2 },
-                width: spec.width,
-                height: spec.height,
-                metadata: audioMetadata(audio),
-            };
-            setNodes((prev) => [...prev, newNode]);
-            addCanvasNodeToAssets(newNode);
-            setSelectedNodeIds(new Set([id]));
-            setSelectedConnectionId(null);
-        },
-        [addCanvasNodeToAssets],
-    );
+    const { createImageFileNode, handleUploadRequest, handleImageInputChange, handleDrop, pasteAssistantImage } = useCanvasFileNodeActions({
+        containerRef,
+        imageInputRef,
+        uploadTargetRef,
+        nodesRef,
+        size,
+        screenToCanvas,
+        setNodes,
+        setSelectedNodeIds,
+        setSelectedConnectionId,
+        setDialogNodeId,
+        showSuccess: showCanvasSuccess,
+        addCanvasNodeToAssets,
+        toImageMetadata: imageMetadata,
+        toVideoMetadata: videoMetadata,
+        toAudioMetadata: audioMetadata,
+    });
 
     const createTextNodeFromClipboard = useCallback(
         (text: string) => {
@@ -1210,126 +1161,6 @@ function InfiniteCanvasPage() {
     const handleFontSizeChange = useCallback((nodeId: string, fontSize: number) => {
         setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, fontSize } } : node)));
     }, []);
-
-    const handleUploadRequest = useCallback((nodeId?: string, position?: Position) => {
-        uploadTargetRef.current = { nodeId, position };
-        imageInputRef.current?.click();
-    }, []);
-
-    const handleImageInputChange = useCallback(
-        async (event: ReactChangeEvent<HTMLInputElement>) => {
-            const file = event.target.files?.[0];
-            const target = uploadTargetRef.current;
-            if (!file || (!file.type.startsWith("image/") && !file.type.startsWith("video/") && !file.type.startsWith("audio/"))) return;
-
-            if (target?.nodeId) {
-                const currentNode = nodesRef.current.find((node) => node.id === target.nodeId);
-                if (!currentNode) return;
-                if (file.type.startsWith("audio/")) {
-                    const audio = await uploadMediaFile(file, "audio");
-                    const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Audio];
-                    const nextNode: CanvasNodeData = {
-                        ...currentNode,
-                        type: CanvasNodeType.Audio,
-                        title: file.name,
-                        position: { x: currentNode.position.x + currentNode.width / 2 - spec.width / 2, y: currentNode.position.y + currentNode.height / 2 - spec.height / 2 },
-                        width: spec.width,
-                        height: spec.height,
-                        metadata: { ...currentNode.metadata, ...audioMetadata(audio), errorDetails: undefined },
-                    };
-                    setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? nextNode : node)));
-                    addCanvasNodeToAssets(nextNode);
-                    setSelectedNodeIds(new Set([target.nodeId]));
-                    setSelectedConnectionId(null);
-                    setDialogNodeId(null);
-                    uploadTargetRef.current = null;
-                    event.target.value = "";
-                    return;
-                }
-                if (file.type.startsWith("video/")) {
-                    const video = await uploadMediaFile(file, "video");
-                    const nextSize = fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
-                    const nextNode: CanvasNodeData = {
-                        ...currentNode,
-                        type: CanvasNodeType.Video,
-                        title: file.name,
-                        position: { x: currentNode.position.x + currentNode.width / 2 - nextSize.width / 2, y: currentNode.position.y + currentNode.height / 2 - nextSize.height / 2 },
-                        width: nextSize.width,
-                        height: nextSize.height,
-                        metadata: { ...currentNode.metadata, ...videoMetadata(video), errorDetails: undefined },
-                    };
-                    setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? nextNode : node)));
-                    addCanvasNodeToAssets(nextNode);
-                    setSelectedNodeIds(new Set([target.nodeId]));
-                    setSelectedConnectionId(null);
-                    setDialogNodeId(target.nodeId);
-                    uploadTargetRef.current = null;
-                    event.target.value = "";
-                    return;
-                }
-                const image = await uploadImage(file);
-                const size = fitNodeSize(image.width, image.height);
-                const nextNode: CanvasNodeData = {
-                    ...currentNode,
-                    type: CanvasNodeType.Image,
-                    title: file.name,
-                    width: size.width,
-                    height: size.height,
-                    metadata: {
-                        ...currentNode.metadata,
-                        ...imageMetadata(image),
-                        errorDetails: undefined,
-                        freeResize: false,
-                        isBatchRoot: undefined,
-                        batchRootId: undefined,
-                        batchChildIds: undefined,
-                        batchUsesReferenceImages: undefined,
-                        generationType: undefined,
-                        model: undefined,
-                        size: undefined,
-                        quality: undefined,
-                        count: undefined,
-                        references: undefined,
-                        primaryImageId: undefined,
-                        imageBatchExpanded: undefined,
-                    },
-                };
-                setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? nextNode : node)));
-                addCanvasNodeToAssets(nextNode);
-                setSelectedNodeIds(new Set([target.nodeId]));
-                setSelectedConnectionId(null);
-                setDialogNodeId(target.nodeId);
-            } else {
-                const position = target?.position || screenToCanvas((containerRef.current?.getBoundingClientRect().left || 0) + size.width / 2, (containerRef.current?.getBoundingClientRect().top || 0) + size.height / 2);
-                void (file.type.startsWith("audio/") ? createAudioFileNode(file, position) : file.type.startsWith("video/") ? createVideoFileNode(file, position) : createImageFileNode(file, position));
-            }
-
-            uploadTargetRef.current = null;
-            event.target.value = "";
-        },
-        [addCanvasNodeToAssets, createAudioFileNode, createImageFileNode, createVideoFileNode, screenToCanvas, size.height, size.width],
-    );
-
-    const handleDrop = useCallback(
-        (event: ReactDragEvent<HTMLDivElement>) => {
-            event.preventDefault();
-            const file = Array.from(event.dataTransfer.files).find((item) => item.type.startsWith("image/") || item.type.startsWith("video/") || item.type.startsWith("audio/"));
-            if (!file) return;
-
-            const pos = screenToCanvas(event.clientX, event.clientY);
-            void (file.type.startsWith("audio/") ? createAudioFileNode(file, pos) : file.type.startsWith("video/") ? createVideoFileNode(file, pos) : createImageFileNode(file, pos));
-        },
-        [createAudioFileNode, createImageFileNode, createVideoFileNode, screenToCanvas],
-    );
-
-    const pasteAssistantImage = useCallback(
-        (file: File) => {
-            const position = screenToCanvas((containerRef.current?.getBoundingClientRect().left || 0) + size.width / 2, (containerRef.current?.getBoundingClientRect().top || 0) + size.height / 2);
-            void createImageFileNode(file, position);
-            message.success("已从剪切板添加图片");
-        },
-        [createImageFileNode, message, screenToCanvas, size.height, size.width],
-    );
 
     const handleAssistantSessionsChange = useCallback(
         (sessions: CanvasAssistantSession[], activeId: string | null, options?: { skipCanvasHistory?: boolean }) => {
