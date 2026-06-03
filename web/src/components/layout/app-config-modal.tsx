@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { ModelPicker } from "@/components/model-picker";
 import { fetchAdminSettings, saveAdminSettings, type AdminPrivateVolcengineAssetSettings, type AdminSettings } from "@/services/api/admin";
 import { fetchImageModels } from "@/services/api/image";
-import { classifyAiModels, defaultConfig, resolveSeedanceRequestModel, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { defaultConfig, resolveSeedanceRequestModel, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
 export function AppConfigModal() {
@@ -133,17 +133,11 @@ export function AppConfigModal() {
         setLoadingModels(true);
         try {
             const models = await fetchImageModels(config);
-            const classifiedModels = classifyAiModels(models);
             updateConfig("models", models);
-            updateConfig("imageModels", classifiedModels.imageModels);
-            updateConfig("videoModels", classifiedModels.videoModels);
-            updateConfig("textModels", classifiedModels.textModels);
-            const [imageModel] = classifiedModels.imageModels;
-            const [videoModel] = classifiedModels.videoModels;
-            const [textModel] = classifiedModels.textModels;
-            if (imageModel && !classifiedModels.imageModels.includes(config.imageModel)) updateConfig("imageModel", imageModel);
-            if (videoModel && !classifiedModels.videoModels.includes(config.videoModel)) updateConfig("videoModel", videoModel);
-            if (textModel && !classifiedModels.textModels.includes(config.textModel)) updateConfig("textModel", textModel);
+            const [fallbackModel] = models;
+            if (fallbackModel && !models.includes(config.imageModel)) updateConfig("imageModel", fallbackModel);
+            if (fallbackModel && !models.includes(config.videoModel)) updateConfig("videoModel", fallbackModel);
+            if (fallbackModel && !models.includes(config.textModel)) updateConfig("textModel", fallbackModel);
             message.success("模型列表已更新");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取模型失败");
@@ -204,9 +198,7 @@ export function AppConfigModal() {
                                 <div className="flex items-center justify-between gap-3">
                                     <div className="min-w-0">
                                         <div className="text-sm font-medium">模型列表</div>
-                                        <div className="mt-1 text-xs text-stone-500">
-                                            图片 {config.imageModels.length} / 视频 {config.videoModels.length} / 语言 {config.textModels.length}
-                                        </div>
+                                        <div className="mt-1 text-xs text-stone-500">当前已保存 {config.models.length} 个模型，所有模型选择器都可检索</div>
                                     </div>
                                     <Button size="small" loading={loadingModels} onClick={() => void refreshModels()}>
                                         拉取模型列表

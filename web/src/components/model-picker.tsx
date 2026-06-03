@@ -153,9 +153,7 @@ export function ModelPicker({ config, value, onChange, className, fullWidth = fa
 }
 
 function resolveModelOptions(config: AiConfig, modelType?: AiModelKind) {
-    if (modelType === "image") return config.imageModels || [];
-    if (modelType === "video") return config.videoModels || [];
-    if (modelType === "text") return config.textModels || [];
+    void modelType;
     return config.models || [];
 }
 

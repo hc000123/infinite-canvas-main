@@ -14,6 +14,7 @@ export type ChatCompletionMessage = {
 
 type ImageApiResponse = {
     data?: Array<Record<string, unknown>>;
+    choices?: Array<Record<string, unknown>>;
     error?: { message?: string };
     code?: number;
     msg?: string;
@@ -84,21 +85,77 @@ function normalizeImageDataUrl(value: string) {
     return value.startsWith("data:") ? value : `data:image/png;base64,${value}`;
 }
 
-function parseImagePayload(payload: ImageApiResponse) {
+export function parseImagePayload(payload: ImageApiResponse) {
     if (typeof payload.code === "number" && payload.code !== 0) {
         throw new Error(payload.msg || "请求失败");
     }
-    const images =
-        payload.data
-            ?.map(resolveImageDataUrl)
-            .filter((value): value is string => Boolean(value))
-            .map((dataUrl) => ({ id: nanoid(), dataUrl })) || [];
+    const imageUrls = uniqueImageUrls([...(payload.data?.map(resolveImageDataUrl).filter((value): value is string => Boolean(value)) || []), ...collectChatImageUrls(payload.choices)]);
+    const images = imageUrls.map((dataUrl) => ({ id: nanoid(), dataUrl }));
 
     if (images.length === 0) {
         throw new Error("接口没有返回图片");
     }
 
     return images;
+}
+
+function collectChatImageUrls(value: unknown) {
+    const output: string[] = [];
+    collectImageUrls(value, output);
+    return output;
+}
+
+function collectImageUrls(value: unknown, output: string[]) {
+    if (!value) return;
+    if (typeof value === "string") {
+        extractImageUrlsFromText(value).forEach((url) => output.push(url));
+        return;
+    }
+    if (Array.isArray(value)) {
+        value.forEach((item) => collectImageUrls(item, output));
+        return;
+    }
+    if (typeof value !== "object") return;
+    const payload = value as Record<string, unknown>;
+    const directUrl = resolveImageDataUrl(payload);
+    if (directUrl) output.push(directUrl);
+    for (const key of ["message", "content", "images", "image", "image_url", "output", "result"]) {
+        collectImageUrls(payload[key], output);
+    }
+}
+
+function extractImageUrlsFromText(value: string) {
+    const text = value.trim();
+    if (!text) return [];
+    try {
+        if ((text.startsWith("{") && text.endsWith("}")) || (text.startsWith("[") && text.endsWith("]"))) {
+            return collectChatImageUrls(JSON.parse(text));
+        }
+    } catch {
+        // plain text content
+    }
+    const urls: string[] = [];
+    if (text.startsWith("data:image/") || /^https?:\/\//i.test(text)) urls.push(text);
+    for (const match of text.matchAll(/!\[[^\]]*]\(([^)]+)\)/g)) {
+        const url = match[1]?.trim();
+        if (url) urls.push(url);
+    }
+    for (const match of text.matchAll(/https?:\/\/[^\s"'`)]+\.(?:png|jpe?g|webp|gif)(?:\?[^\s"'`)]+)?/gi)) {
+        urls.push(match[0]);
+    }
+    for (const match of text.matchAll(/data:image\/[^;\s]+;base64,[^\s"'`)]+/g)) {
+        urls.push(match[0]);
+    }
+    return urls;
+}
+
+function uniqueImageUrls(urls: string[]) {
+    const seen = new Set<string>();
+    return urls.filter((url) => {
+        if (seen.has(url)) return false;
+        seen.add(url);
+        return true;
+    });
 }
 
 function parseStreamChunk(chunk: string, onDelta: (value: string) => void) {
@@ -157,6 +214,16 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const quality = normalizeQuality(config.quality);
     const requestSize = resolveRequestSize(quality, config.size);
+    if (shouldUseGeminiImageChatAdapter(config.model)) {
+        try {
+            const response = await postGeminiImageEdit(config, prompt, references, { n, quality, size: requestSize });
+            const images = parseImagePayload(response.data);
+            refreshRemoteUser(config);
+            return images;
+        } catch (error) {
+            throw new Error(normalizeAiError(error, "请求失败"));
+        }
+    }
     const formData = new FormData();
     formData.set("model", config.model);
     formData.set("prompt", withSystemPrompt(config, prompt));
@@ -179,6 +246,31 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     } catch (error) {
         throw new Error(normalizeAiError(error, "请求失败"));
     }
+}
+
+export function shouldUseGeminiImageChatAdapter(model: string) {
+    return model.toLowerCase().includes("gemini");
+}
+
+async function postGeminiImageEdit(config: AiConfig, prompt: string, references: ReferenceImage[], options: { n: number; quality?: string; size?: string }) {
+    return axios.post<ImageApiResponse>(aiApiUrl(config, "/chat/completions"), await buildGeminiImageEditPayload(config, prompt, references, options), {
+        headers: aiHeaders(config, "application/json"),
+        timeout: AI_REQUEST_TIMEOUT_MS,
+    });
+}
+
+async function buildGeminiImageEditPayload(config: AiConfig, prompt: string, references: ReferenceImage[], options: { n: number; quality?: string; size?: string }) {
+    const content: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }> = [{ type: "text", text: prompt }];
+    const images = await Promise.all(references.map((image) => imageToDataUrl(image)));
+    images.filter((url): url is string => Boolean(url)).forEach((url) => content.push({ type: "image_url", image_url: { url } }));
+    return {
+        model: config.model,
+        messages: withSystemMessage(config, [{ role: "user" as const, content }]),
+        stream: false,
+        n: options.n,
+        ...(options.quality ? { quality: options.quality } : {}),
+        ...(options.size ? { size: options.size } : {}),
+    };
 }
 
 function postImageEdit(config: AiConfig, body: FormData) {
