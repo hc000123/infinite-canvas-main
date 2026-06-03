@@ -1,0 +1,190 @@
+import { useCallback, useRef, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction } from "react";
+import { nanoid } from "nanoid";
+
+import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type ConnectionHandle, type ContextMenuState, type Position } from "../types";
+
+export type CanvasPendingConnectionCreate = {
+    connection: ConnectionHandle;
+    position: Position;
+};
+
+type ConnectionDraft = {
+    fromNodeId: string;
+    toNodeId: string;
+};
+
+type UseCanvasConnectionsOptions = {
+    nodesRef: RefObject<CanvasNodeData[]>;
+    connectionsRef: RefObject<CanvasConnection[]>;
+    screenToCanvas: (clientX: number, clientY: number) => Position;
+    normalizeConnection: (firstNodeId: string, secondNodeId: string, nodes: CanvasNodeData[], firstHandleType: "source" | "target") => ConnectionDraft | null;
+    isNodeHidden: (node: CanvasNodeData, nodes: CanvasNodeData[]) => boolean;
+    createNode: (type: CanvasNodeType, position: Position, metadata?: CanvasNodeMetadata) => CanvasNodeData;
+    configNodeMetadata: CanvasNodeMetadata;
+    showWarning: (message: string) => void;
+    setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
+    setConnections: Dispatch<SetStateAction<CanvasConnection[]>>;
+    setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
+    setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
+    setContextMenu: Dispatch<SetStateAction<ContextMenuState | null>>;
+    setDialogNodeId: Dispatch<SetStateAction<string | null>>;
+};
+
+export function useCanvasConnections({
+    nodesRef,
+    connectionsRef,
+    screenToCanvas,
+    normalizeConnection,
+    isNodeHidden,
+    createNode,
+    configNodeMetadata,
+    showWarning,
+    setNodes,
+    setConnections,
+    setSelectedNodeIds,
+    setSelectedConnectionId,
+    setContextMenu,
+    setDialogNodeId,
+}: UseCanvasConnectionsOptions) {
+    const [connectingParams, setConnectingParams] = useState<ConnectionHandle | null>(null);
+    const [connectionTargetNodeId, setConnectionTargetNodeId] = useState<string | null>(null);
+    const [pendingConnectionCreate, setPendingConnectionCreate] = useState<CanvasPendingConnectionCreate | null>(null);
+    const [mouseWorld, setMouseWorld] = useState<Position>({ x: 0, y: 0 });
+    const connectingParamsRef = useRef<ConnectionHandle | null>(null);
+    const connectionTargetNodeIdRef = useRef<string | null>(null);
+    const pendingConnectionCreateRef = useRef<CanvasPendingConnectionCreate | null>(null);
+
+    const setConnecting = useCallback((next: ConnectionHandle | null) => {
+        connectingParamsRef.current = next;
+        setConnectingParams(next);
+        if (!next) {
+            connectionTargetNodeIdRef.current = null;
+            setConnectionTargetNodeId(null);
+        }
+    }, []);
+
+    const cancelPendingConnectionCreate = useCallback(() => {
+        pendingConnectionCreateRef.current = null;
+        setPendingConnectionCreate(null);
+        setConnecting(null);
+    }, [setConnecting]);
+
+    const connectNodes = useCallback(
+        (current: ConnectionHandle, targetNodeId: string) => {
+            if (current.nodeId === targetNodeId) return;
+
+            const connection = normalizeConnection(current.nodeId, targetNodeId, nodesRef.current, current.handleType);
+            if (!connection) {
+                showWarning("配置节点之间不能连接");
+                return;
+            }
+            const { fromNodeId, toNodeId } = connection;
+            const exists = connectionsRef.current.some((conn) => conn.fromNodeId === fromNodeId && conn.toNodeId === toNodeId);
+            if (!exists) {
+                setConnections((prev) => [...prev, { id: `conn-${Date.now()}`, fromNodeId, toNodeId }]);
+            }
+            setContextMenu(null);
+        },
+        [connectionsRef, normalizeConnection, nodesRef, setConnections, setContextMenu, showWarning],
+    );
+
+    const createConnectedNode = useCallback(
+        (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Config | CanvasNodeType.Video | CanvasNodeType.Audio, pending: CanvasPendingConnectionCreate) => {
+            const metadata = type === CanvasNodeType.Config ? configNodeMetadata : undefined;
+            const newNode = createNode(type, pending.position, metadata);
+            const connection = normalizeConnection(pending.connection.nodeId, newNode.id, [...nodesRef.current, newNode], pending.connection.handleType);
+            if (!connection) {
+                showWarning("配置节点之间不能连接");
+                return;
+            }
+            setNodes((prev) => [...prev, newNode]);
+            setConnections((prev) => [...prev, { id: nanoid(), ...connection }]);
+            setSelectedNodeIds(new Set([newNode.id]));
+            setSelectedConnectionId(null);
+            if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Audio) setDialogNodeId(newNode.id);
+            pendingConnectionCreateRef.current = null;
+            setPendingConnectionCreate(null);
+            setConnecting(null);
+        },
+        [configNodeMetadata, createNode, normalizeConnection, nodesRef, setConnecting, setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, showWarning],
+    );
+
+    const getConnectableNodeAtPoint = useCallback(
+        (clientX: number, clientY: number, current: ConnectionHandle) => {
+            const world = screenToCanvas(clientX, clientY);
+            return (
+                [...nodesRef.current]
+                    .filter((node) => !isNodeHidden(node, nodesRef.current))
+                    .reverse()
+                    .find(
+                        (node) =>
+                            node.id !== current.nodeId &&
+                            Boolean(normalizeConnection(current.nodeId, node.id, nodesRef.current, current.handleType)) &&
+                            world.x >= node.position.x &&
+                            world.x <= node.position.x + node.width &&
+                            world.y >= node.position.y &&
+                            world.y <= node.position.y + node.height,
+                    )?.id || null
+            );
+        },
+        [isNodeHidden, nodesRef, normalizeConnection, screenToCanvas],
+    );
+
+    const moveConnectionTarget = useCallback(
+        (clientX: number, clientY: number) => {
+            const current = connectingParamsRef.current;
+            if (!current || pendingConnectionCreateRef.current) return;
+            const targetNodeId = getConnectableNodeAtPoint(clientX, clientY, current);
+            connectionTargetNodeIdRef.current = targetNodeId;
+            setConnectionTargetNodeId(targetNodeId);
+            setMouseWorld(screenToCanvas(clientX, clientY));
+        },
+        [getConnectableNodeAtPoint, screenToCanvas],
+    );
+
+    const finishConnection = useCallback(
+        (clientX: number, clientY: number) => {
+            if (pendingConnectionCreateRef.current) return;
+
+            const currentConnection = connectingParamsRef.current;
+            if (!currentConnection) return;
+            const targetNodeId = getConnectableNodeAtPoint(clientX, clientY, currentConnection) || connectionTargetNodeIdRef.current;
+            if (targetNodeId) {
+                connectNodes(currentConnection, targetNodeId);
+                setConnecting(null);
+                return;
+            }
+            const position = screenToCanvas(clientX, clientY);
+            setMouseWorld(position);
+            const pending = { connection: currentConnection, position };
+            pendingConnectionCreateRef.current = pending;
+            setPendingConnectionCreate(pending);
+        },
+        [connectNodes, getConnectableNodeAtPoint, screenToCanvas, setConnecting],
+    );
+
+    const handleConnectStart = useCallback(
+        (event: ReactMouseEvent, nodeId: string, handleType: "source" | "target") => {
+            event.stopPropagation();
+            setMouseWorld(screenToCanvas(event.clientX, event.clientY));
+            setConnecting({ nodeId, handleType });
+            connectionTargetNodeIdRef.current = null;
+            setConnectionTargetNodeId(null);
+            setSelectedConnectionId(null);
+        },
+        [screenToCanvas, setConnecting, setSelectedConnectionId],
+    );
+
+    return {
+        connectingParams,
+        connectionTargetNodeId,
+        pendingConnectionCreate,
+        pendingConnectionCreateRef,
+        mouseWorld,
+        cancelPendingConnectionCreate,
+        createConnectedNode,
+        finishConnection,
+        handleConnectStart,
+        moveConnectionTarget,
+    };
+}
