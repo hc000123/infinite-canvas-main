@@ -33,6 +33,7 @@ import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions
 import { resetInterruptedGeneration } from "../utils/canvas-video-task-recovery";
 import { cropDataUrl } from "../utils/canvas-image-data";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
+import { useCanvasHistory } from "../hooks/use-canvas-history";
 import { useCanvasMediaCache } from "../hooks/use-canvas-media-cache";
 import { useCanvasImageGenerationActions } from "../hooks/use-canvas-image-generation-actions";
 import { useCanvasTextGenerationActions } from "../hooks/use-canvas-text-generation-actions";
@@ -81,13 +82,6 @@ type CanvasClipboard = {
 type PendingConnectionCreate = {
     connection: ConnectionHandle;
     position: Position;
-};
-
-type CanvasHistoryEntry = Pick<CanvasClipboard, "nodes" | "connections"> & {
-    chatSessions: CanvasAssistantSession[];
-    activeChatId: string | null;
-    backgroundMode: CanvasBackgroundMode;
-    showImageInfo: boolean;
 };
 
 const VIDEO_NODE_MAX_WIDTH = 420;
@@ -232,13 +226,6 @@ function InfiniteCanvasPage() {
     const imageInputRef = useRef<HTMLInputElement>(null);
     const uploadTargetRef = useRef<{ nodeId?: string; position?: Position } | null>(null);
     const clipboardRef = useRef<CanvasClipboard | null>(null);
-    const historyRef = useRef<{ past: CanvasHistoryEntry[]; future: CanvasHistoryEntry[] }>({ past: [], future: [] });
-    const lastHistoryRef = useRef<CanvasHistoryEntry | null>(null);
-    const historyCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const viewportSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const applyingHistoryRef = useRef(false);
-    const historyPausedRef = useRef(false);
-    const skipNextHistoryCommitRef = useRef(false);
     const didInitialCenterRef = useRef(false);
     const rafRef = useRef<number | null>(null);
     const toolbarHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -311,7 +298,6 @@ function InfiniteCanvasPage() {
     const [assistantMounted, setAssistantMounted] = useState(false);
     const [titleEditing, setTitleEditing] = useState(false);
     const [titleDraft, setTitleDraft] = useState("");
-    const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
     const [collapsingBatchIds, setCollapsingBatchIds] = useState<Set<string>>(new Set());
     const [openingBatchIds, setOpeningBatchIds] = useState<Set<string>>(new Set());
     const [isNodeDragging, setIsNodeDragging] = useState(false);
@@ -350,24 +336,33 @@ function InfiniteCanvasPage() {
         showWarning: showVideoGenerationWarning,
         toVideoMetadata: videoMetadata,
     });
-
-    const createHistoryEntry = useCallback(
-        (): CanvasHistoryEntry => ({
-            nodes: nodesRef.current,
-            connections: connectionsRef.current,
-            chatSessions,
-            activeChatId,
-            backgroundMode,
-            showImageInfo,
-        }),
-        [activeChatId, backgroundMode, chatSessions, showImageInfo],
-    );
+    const { historyState, resetHistory, undoCanvas, redoCanvas, pauseHistory, resumeHistory, skipNextHistoryCommit, getCleanupHistory } = useCanvasHistory({
+        projectId,
+        projectLoaded,
+        nodes,
+        connections,
+        chatSessions,
+        activeChatId,
+        backgroundMode,
+        showImageInfo,
+        viewport,
+        updateProject,
+        setNodes,
+        setConnections,
+        setChatSessions,
+        setActiveChatId,
+        setBackgroundMode,
+        setShowImageInfo,
+        setSelectedNodeIds,
+        setSelectedConnectionId,
+        setContextMenu,
+    });
 
     const cleanupCanvasFiles = useCallback(
         (extra?: unknown) => {
-            cleanupAssetImages({ extra, history: historyRef.current, lastHistory: lastHistoryRef.current });
+            cleanupAssetImages({ extra, ...getCleanupHistory() });
         },
-        [cleanupAssetImages],
+        [cleanupAssetImages, getCleanupHistory],
     );
 
     useEffect(() => {
@@ -390,73 +385,18 @@ function InfiniteCanvasPage() {
             setBackgroundMode(project.backgroundMode);
             setShowImageInfo(project.showImageInfo || false);
             setViewport(project.viewport);
-            historyRef.current = { past: [], future: [] };
-            if (historyCommitTimerRef.current) {
-                clearTimeout(historyCommitTimerRef.current);
-                historyCommitTimerRef.current = null;
-            }
-            lastHistoryRef.current = {
+            resetHistory({
                 nodes: restoredNodes,
                 connections: restoredConnections,
                 chatSessions: restoredSessions,
                 activeChatId: project.activeChatId || null,
                 backgroundMode: project.backgroundMode,
                 showImageInfo: project.showImageInfo || false,
-            };
-            setHistoryState({ canUndo: false, canRedo: false });
+            });
             setProjectLoaded(true);
         };
         void restore();
-    }, [hydrated, openProject, projectId, router]);
-
-    useEffect(() => {
-        if (!projectLoaded || applyingHistoryRef.current || historyPausedRef.current) return;
-        const next = createHistoryEntry();
-        const previous = lastHistoryRef.current;
-        if (
-            previous?.nodes === next.nodes &&
-            previous.connections === next.connections &&
-            previous.chatSessions === next.chatSessions &&
-            previous.activeChatId === next.activeChatId &&
-            previous.backgroundMode === next.backgroundMode &&
-            previous.showImageInfo === next.showImageInfo
-        )
-            return;
-
-        if (skipNextHistoryCommitRef.current) {
-            skipNextHistoryCommitRef.current = false;
-            lastHistoryRef.current = next;
-            if (historyCommitTimerRef.current) {
-                clearTimeout(historyCommitTimerRef.current);
-                historyCommitTimerRef.current = null;
-            }
-            return;
-        }
-
-        if (historyCommitTimerRef.current) clearTimeout(historyCommitTimerRef.current);
-        historyCommitTimerRef.current = setTimeout(() => {
-            const current = createHistoryEntry();
-            const last = lastHistoryRef.current;
-            if (!last) return;
-            historyRef.current.past = [...historyRef.current.past.slice(-49), last];
-            historyRef.current.future = [];
-            setHistoryState({ canUndo: true, canRedo: false });
-            lastHistoryRef.current = current;
-            historyCommitTimerRef.current = null;
-        }, 180);
-
-        return () => {
-            if (historyCommitTimerRef.current) {
-                clearTimeout(historyCommitTimerRef.current);
-                historyCommitTimerRef.current = null;
-            }
-        };
-    }, [activeChatId, backgroundMode, chatSessions, connections, createHistoryEntry, nodes, projectLoaded, showImageInfo]);
-
-    useEffect(() => {
-        if (!projectLoaded || historyPausedRef.current) return;
-        updateProject(projectId, { nodes, connections, chatSessions, activeChatId, backgroundMode, showImageInfo });
-    }, [activeChatId, backgroundMode, chatSessions, connections, nodes, projectId, projectLoaded, showImageInfo, updateProject]);
+    }, [hydrated, openProject, projectId, resetHistory, router]);
 
     useCanvasVideoTaskRecovery({
         projectLoaded,
@@ -471,18 +411,6 @@ function InfiniteCanvasPage() {
     useEffect(() => {
         if (!dialogNodeId) setNodeImageSettingsOpen(false);
     }, [dialogNodeId]);
-
-    useEffect(() => {
-        if (!projectLoaded) return;
-        if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
-        viewportSaveTimerRef.current = setTimeout(() => {
-            updateProject(projectId, { viewport: viewportRef.current });
-            viewportSaveTimerRef.current = null;
-        }, 500);
-        return () => {
-            if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
-        };
-    }, [projectId, projectLoaded, updateProject, viewport]);
 
     useLayoutEffect(() => {
         nodesRef.current = nodes;
@@ -897,44 +825,6 @@ function InfiniteCanvasPage() {
         [size.height, size.width],
     );
 
-    const applyHistory = useCallback((entry: CanvasHistoryEntry) => {
-        if (historyCommitTimerRef.current) {
-            clearTimeout(historyCommitTimerRef.current);
-            historyCommitTimerRef.current = null;
-        }
-        applyingHistoryRef.current = true;
-        setNodes(entry.nodes);
-        setConnections(entry.connections);
-        setChatSessions(entry.chatSessions);
-        setActiveChatId(entry.activeChatId);
-        setBackgroundMode(entry.backgroundMode);
-        setShowImageInfo(entry.showImageInfo);
-        setSelectedNodeIds(new Set());
-        setSelectedConnectionId(null);
-        setContextMenu(null);
-        setTimeout(() => {
-            lastHistoryRef.current = entry;
-            applyingHistoryRef.current = false;
-            setHistoryState({ canUndo: historyRef.current.past.length > 0, canRedo: historyRef.current.future.length > 0 });
-        });
-    }, []);
-
-    const undoCanvas = useCallback(() => {
-        const previous = historyRef.current.past.pop();
-        const current = lastHistoryRef.current;
-        if (!previous || !current) return;
-        historyRef.current.future.push(current);
-        applyHistory(previous);
-    }, [applyHistory]);
-
-    const redoCanvas = useCallback(() => {
-        const next = historyRef.current.future.pop();
-        const current = lastHistoryRef.current;
-        if (!next || !current) return;
-        historyRef.current.past.push(current);
-        applyHistory(next);
-    }, [applyHistory]);
-
     const createAndOpenProject = useCallback(() => {
         const id = createProject(`无限画布 ${useCanvasStore.getState().projects.length + 1}`);
         router.push(`/canvas/${id}`);
@@ -979,84 +869,90 @@ function InfiniteCanvasPage() {
         [cancelPendingConnectionCreate, screenToCanvas],
     );
 
-    const handleNodeMouseDown = useCallback((event: ReactMouseEvent, nodeId: string) => {
-        event.stopPropagation();
-        setContextMenu(null);
-        setHoveredNodeId(null);
-        setToolbarNodeId(null);
-        setSelectedConnectionId(null);
+    const handleNodeMouseDown = useCallback(
+        (event: ReactMouseEvent, nodeId: string) => {
+            event.stopPropagation();
+            setContextMenu(null);
+            setHoveredNodeId(null);
+            setToolbarNodeId(null);
+            setSelectedConnectionId(null);
 
-        const currentSelected = selectedNodeIdsRef.current;
-        const currentNodes = nodesRef.current;
-        const nextSelected = new Set(currentSelected);
+            const currentSelected = selectedNodeIdsRef.current;
+            const currentNodes = nodesRef.current;
+            const nextSelected = new Set(currentSelected);
 
-        if (event.shiftKey || event.metaKey || event.ctrlKey) {
-            if (nextSelected.has(nodeId)) {
-                nextSelected.delete(nodeId);
-            } else {
+            if (event.shiftKey || event.metaKey || event.ctrlKey) {
+                if (nextSelected.has(nodeId)) {
+                    nextSelected.delete(nodeId);
+                } else {
+                    nextSelected.add(nodeId);
+                }
+            } else if (!nextSelected.has(nodeId)) {
+                nextSelected.clear();
                 nextSelected.add(nodeId);
             }
-        } else if (!nextSelected.has(nodeId)) {
-            nextSelected.clear();
-            nextSelected.add(nodeId);
-        }
 
-        setSelectedNodeIds(nextSelected);
-        const dragIds = new Set(nextSelected);
-        currentNodes.forEach((node) => {
-            if (nextSelected.has(node.id)) node.metadata?.batchChildIds?.forEach((childId) => dragIds.add(childId));
-        });
-        dragRef.current = {
-            isDraggingNode: true,
-            hasMoved: false,
-            startX: event.clientX,
-            startY: event.clientY,
-            initialSelectedNodes: currentNodes.filter((node) => dragIds.has(node.id)).map((node) => ({ id: node.id, x: node.position.x, y: node.position.y })),
-        };
-        historyPausedRef.current = true;
-        nodeDraggingRef.current = true;
-        setIsNodeDragging(true);
-    }, []);
+            setSelectedNodeIds(nextSelected);
+            const dragIds = new Set(nextSelected);
+            currentNodes.forEach((node) => {
+                if (nextSelected.has(node.id)) node.metadata?.batchChildIds?.forEach((childId) => dragIds.add(childId));
+            });
+            dragRef.current = {
+                isDraggingNode: true,
+                hasMoved: false,
+                startX: event.clientX,
+                startY: event.clientY,
+                initialSelectedNodes: currentNodes.filter((node) => dragIds.has(node.id)).map((node) => ({ id: node.id, x: node.position.x, y: node.position.y })),
+            };
+            pauseHistory();
+            nodeDraggingRef.current = true;
+            setIsNodeDragging(true);
+        },
+        [pauseHistory],
+    );
 
-    const finishNodeDrag = useCallback((clientX?: number, clientY?: number) => {
-        if (rafRef.current) {
-            cancelAnimationFrame(rafRef.current);
-            rafRef.current = null;
-        }
-        if (!dragRef.current.isDraggingNode) return;
-
-        const wasClick = !dragRef.current.hasMoved && dragRef.current.initialSelectedNodes.length === 1;
-        const clickedNodeId = dragRef.current.initialSelectedNodes[0]?.id;
-        const currentViewport = viewportRef.current;
-        const dx = clientX == null ? 0 : (clientX - dragRef.current.startX) / currentViewport.k;
-        const dy = clientY == null ? 0 : (clientY - dragRef.current.startY) / currentViewport.k;
-        const initialPositions = dragRef.current.initialSelectedNodes;
-
-        historyPausedRef.current = false;
-        nodeDraggingRef.current = false;
-        setIsNodeDragging(false);
-        if (dragRef.current.hasMoved && clientX != null && clientY != null) {
-            setNodes((prev) =>
-                prev.map((node) => {
-                    const initial = initialPositions.find((item) => item.id === node.id);
-                    if (!initial) return node;
-                    return { ...node, position: { x: initial.x + dx, y: initial.y + dy } };
-                }),
-            );
-        }
-
-        dragRef.current.isDraggingNode = false;
-        dragRef.current.hasMoved = false;
-        dragRef.current.initialSelectedNodes = [];
-        if (wasClick && clickedNodeId) {
-            const clickedNode = nodesRef.current.find((node) => node.id === clickedNodeId);
-            if (clickedNode?.type === CanvasNodeType.Text) {
-                setDialogNodeId((current) => (current === clickedNodeId ? current : null));
-            } else {
-                setDialogNodeId(clickedNodeId);
+    const finishNodeDrag = useCallback(
+        (clientX?: number, clientY?: number) => {
+            if (rafRef.current) {
+                cancelAnimationFrame(rafRef.current);
+                rafRef.current = null;
             }
-        }
-    }, []);
+            if (!dragRef.current.isDraggingNode) return;
+
+            const wasClick = !dragRef.current.hasMoved && dragRef.current.initialSelectedNodes.length === 1;
+            const clickedNodeId = dragRef.current.initialSelectedNodes[0]?.id;
+            const currentViewport = viewportRef.current;
+            const dx = clientX == null ? 0 : (clientX - dragRef.current.startX) / currentViewport.k;
+            const dy = clientY == null ? 0 : (clientY - dragRef.current.startY) / currentViewport.k;
+            const initialPositions = dragRef.current.initialSelectedNodes;
+
+            resumeHistory();
+            nodeDraggingRef.current = false;
+            setIsNodeDragging(false);
+            if (dragRef.current.hasMoved && clientX != null && clientY != null) {
+                setNodes((prev) =>
+                    prev.map((node) => {
+                        const initial = initialPositions.find((item) => item.id === node.id);
+                        if (!initial) return node;
+                        return { ...node, position: { x: initial.x + dx, y: initial.y + dy } };
+                    }),
+                );
+            }
+
+            dragRef.current.isDraggingNode = false;
+            dragRef.current.hasMoved = false;
+            dragRef.current.initialSelectedNodes = [];
+            if (wasClick && clickedNodeId) {
+                const clickedNode = nodesRef.current.find((node) => node.id === clickedNodeId);
+                if (clickedNode?.type === CanvasNodeType.Text) {
+                    setDialogNodeId((current) => (current === clickedNodeId ? current : null));
+                } else {
+                    setDialogNodeId(clickedNodeId);
+                }
+            }
+        },
+        [resumeHistory],
+    );
 
     const handleGlobalMouseMove = useCallback(
         (event: MouseEvent) => {
@@ -1760,11 +1656,14 @@ function InfiniteCanvasPage() {
         [createImageFileNode, message, screenToCanvas, size.height, size.width],
     );
 
-    const handleAssistantSessionsChange = useCallback((sessions: CanvasAssistantSession[], activeId: string | null, options?: { skipCanvasHistory?: boolean }) => {
-        if (options?.skipCanvasHistory) skipNextHistoryCommitRef.current = true;
-        setChatSessions(sessions);
-        setActiveChatId(activeId);
-    }, []);
+    const handleAssistantSessionsChange = useCallback(
+        (sessions: CanvasAssistantSession[], activeId: string | null, options?: { skipCanvasHistory?: boolean }) => {
+            if (options?.skipCanvasHistory) skipNextHistoryCommit();
+            setChatSessions(sessions);
+            setActiveChatId(activeId);
+        },
+        [skipNextHistoryCommit],
+    );
 
     const startTitleEditing = useCallback(() => {
         setTitleDraft(currentProject?.title || "未命名画布");
