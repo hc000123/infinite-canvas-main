@@ -29,3 +29,8 @@ export function shouldShowSeedanceImageControl(mode: string | undefined, hasSour
 export function visibleSeedanceReferenceImageMode(mode: string | undefined): VideoReferenceImageModeOption {
     return mode === "first_frame" || mode === "first_last_frame" ? mode : "reference";
 }
+
+export function isSeedanceVideoProtocol(config?: { videoProtocol?: string } | boolean) {
+    if (typeof config === "boolean") return config;
+    return config?.videoProtocol === "volcengine-ark";
+}

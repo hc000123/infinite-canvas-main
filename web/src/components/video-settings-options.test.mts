@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveSeedanceTaskModeForSource, seedanceReferenceImageModeOptions, shouldShowSeedanceImageControl, visibleSeedanceReferenceImageMode, visibleSeedanceTaskModeOptions } from "./video-settings-options.ts";
+import { isSeedanceVideoProtocol, resolveSeedanceTaskModeForSource, seedanceReferenceImageModeOptions, shouldShowSeedanceImageControl, visibleSeedanceReferenceImageMode, visibleSeedanceTaskModeOptions } from "./video-settings-options.ts";
 
 test("only exposes generate mode when there is no source video", () => {
     assert.deepEqual(
@@ -33,4 +33,10 @@ test("keeps continue compatible but out of visible image control options", () =>
         ["普通参考", "作为首帧", "首尾帧"],
     );
     assert.equal(visibleSeedanceReferenceImageMode("continue"), "reference");
+});
+
+test("detects Seedance settings by video protocol regardless of channel mode", () => {
+    assert.equal(isSeedanceVideoProtocol({ videoProtocol: "volcengine-ark" }), true);
+    assert.equal(isSeedanceVideoProtocol({ videoProtocol: "openai" }), false);
+    assert.equal(isSeedanceVideoProtocol(true), true);
 });

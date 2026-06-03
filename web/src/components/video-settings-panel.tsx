@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 
 import { ImageSettingsTheme } from "@/components/image-settings-panel";
-import { resolveSeedanceTaskModeForSource, seedanceReferenceImageModeOptions, shouldShowSeedanceImageControl, visibleSeedanceReferenceImageMode, visibleSeedanceTaskModeOptions } from "@/components/video-settings-options";
+import { isSeedanceVideoProtocol, resolveSeedanceTaskModeForSource, seedanceReferenceImageModeOptions, shouldShowSeedanceImageControl, visibleSeedanceReferenceImageMode, visibleSeedanceTaskModeOptions } from "@/components/video-settings-options";
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import type { AiConfig } from "@/stores/use-config-store";
 
@@ -150,25 +150,27 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                         </div>
                     )}
                 </SettingGroup>
-                <SettingGroup title="Ark 参数" color={theme.node.muted}>
-                    <div className="grid grid-cols-2 gap-2.5">
-                        <ToggleSwitch checked={generateAudio} label="生成音频" theme={theme} onChange={(checked) => onConfigChange("videoGenerateAudio", String(checked))} />
-                        <ToggleSwitch checked={watermark} label="水印" theme={theme} onChange={(checked) => onConfigChange("videoWatermark", String(checked))} />
-                    </div>
-                    <label className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm" style={{ background: theme.node.fill, color: theme.node.text }}>
-                        <span className="shrink-0" style={{ color: theme.node.muted }}>
-                            seed
-                        </span>
-                        <NumberInput
-                            value={config.videoSeed || ""}
-                            min={0}
-                            placeholder="随机"
-                            theme={theme}
-                            className="h-8 flex-1 rounded-lg border bg-transparent px-3 text-left text-sm outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                            onChange={(value) => onConfigChange("videoSeed", value)}
-                        />
-                    </label>
-                </SettingGroup>
+                {isSeedance ? (
+                    <SettingGroup title="Ark 参数" color={theme.node.muted}>
+                        <div className="grid grid-cols-2 gap-2.5">
+                            <ToggleSwitch checked={generateAudio} label="生成音频" theme={theme} onChange={(checked) => onConfigChange("videoGenerateAudio", String(checked))} />
+                            <ToggleSwitch checked={watermark} label="水印" theme={theme} onChange={(checked) => onConfigChange("videoWatermark", String(checked))} />
+                        </div>
+                        <label className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm" style={{ background: theme.node.fill, color: theme.node.text }}>
+                            <span className="shrink-0" style={{ color: theme.node.muted }}>
+                                seed
+                            </span>
+                            <NumberInput
+                                value={config.videoSeed || ""}
+                                min={0}
+                                placeholder="随机"
+                                theme={theme}
+                                className="h-8 flex-1 rounded-lg border bg-transparent px-3 text-left text-sm outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                onChange={(value) => onConfigChange("videoSeed", value)}
+                            />
+                        </label>
+                    </SettingGroup>
+                ) : null}
             </div>
         </ImageSettingsTheme>
     );
@@ -200,8 +202,7 @@ function videoSecondsLimits(config?: VideoSecondsConfig) {
 }
 
 function isSeedanceVideoConfig(config?: VideoSecondsConfig) {
-    if (typeof config === "boolean") return config;
-    return config?.channelMode === "local" && config.videoProtocol === "volcengine-ark";
+    return isSeedanceVideoProtocol(config);
 }
 
 export function normalizeVideoSizeValue(value: string) {
