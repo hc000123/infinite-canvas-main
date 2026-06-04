@@ -1,7 +1,8 @@
 services:
   app:
-    image: ghcr.io/basketikun/infinite-canvas:latest
-    container_name: infinite-canvas
+    build: .
+    image: blink-workbench:local
+    container_name: blink-workbench
     env_file:
       - .env
     volumes:

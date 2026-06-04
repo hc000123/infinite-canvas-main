@@ -5,9 +5,10 @@ import { persist, type PersistStorage, type StorageValue } from "zustand/middlew
 
 import { nanoid } from "nanoid";
 import { localForageStorage } from "@/lib/localforage-storage";
-import { cleanupUnusedImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
-import { cleanupUnusedMedia, resolveMediaUrl } from "@/services/file-storage";
+import { cleanupUnusedImages, getImageBlob, resolveImageUrl, uploadImage } from "@/services/image-storage";
+import { cleanupUnusedMedia, getMediaBlob, resolveMediaUrl } from "@/services/file-storage";
 import type { VolcengineReviewMetadata } from "@/services/volcengine-asset-metadata";
+import { assetFingerprintCandidates, buildBlobFingerprint, fallbackAssetFingerprint, mergeAssetMetadata, mergeDuplicateAsset } from "./asset-dedupe";
 
 export type AssetKind = "text" | "image" | "video" | "audio";
 export type VolcengineAssetMetadata = VolcengineReviewMetadata;
@@ -16,6 +17,7 @@ export type ImageAsset = AssetBase<"image"> & { data: { dataUrl: string; storage
 export type VideoAsset = AssetBase<"video"> & { data: { url: string; storageKey?: string; width: number; height: number; bytes: number; mimeType: string } };
 export type AudioAsset = AssetBase<"audio"> & { data: { url: string; storageKey?: string; bytes: number; mimeType: string } };
 export type Asset = TextAsset | ImageAsset | VideoAsset | AudioAsset;
+export type AssetWriteInput = Asset extends infer T ? (T extends Asset ? Omit<T, "id" | "createdAt" | "updatedAt"> : never) : never;
 export type AssetFolder = {
     id: string;
     name: string;
@@ -40,7 +42,8 @@ type AssetBase<T extends AssetKind> = {
 type AssetStore = {
     assets: Asset[];
     folders: AssetFolder[];
-    addAsset: (asset: Omit<Asset, "id" | "createdAt" | "updatedAt">) => string;
+    addAsset: (asset: AssetWriteInput) => string;
+    addAssetOnce: (asset: AssetWriteInput, options?: { blob?: Blob }) => Promise<string>;
     updateAsset: (id: string, patch: Partial<Omit<Asset, "id" | "createdAt">>) => void;
     removeAsset: (id: string) => void;
     addFolder: (name: string) => string;
@@ -90,6 +93,26 @@ export const useAssetStore = create<AssetStore>()(
                 set((state) => ({ assets: [{ ...asset, id, createdAt: now, updatedAt: now } as Asset, ...state.assets] }));
                 return id;
             },
+            addAssetOnce: async (asset, options) => {
+                if (asset.kind === "text") return get().addAsset(asset);
+                const fingerprint = await buildAssetFingerprint(asset, options?.blob);
+                if (!fingerprint) return get().addAsset(asset);
+                const fallback = fallbackAssetFingerprint(asset);
+                let id = "";
+                set((state) => {
+                    const matched = state.assets.find((item) => item.kind === asset.kind && assetFingerprintCandidates(item).some((value) => value === fingerprint || value === fallback));
+                    if (!matched) {
+                        id = nanoid();
+                        const now = new Date().toISOString();
+                        return { assets: [{ ...asset, id, createdAt: now, updatedAt: now, metadata: mergeAssetMetadata(undefined, asset.metadata, fingerprint) } as Asset, ...state.assets] };
+                    }
+                    id = matched.id;
+                    return {
+                        assets: state.assets.map((item) => (item.id === matched.id ? mergeDuplicateAsset(item, asset, fingerprint) : item)),
+                    };
+                });
+                return id;
+            },
             updateAsset: (id, patch) =>
                 set((state) => ({
                     assets: state.assets.map((asset) => (asset.id === id ? ({ ...asset, ...patch, updatedAt: new Date().toISOString() } as Asset) : asset)),
@@ -130,3 +153,26 @@ export const useAssetStore = create<AssetStore>()(
         },
     ),
 );
+
+export async function buildAssetFingerprint(asset: AssetWriteInput | Asset, blob?: Blob | null) {
+    if (asset.kind === "text") return "";
+    const sourceBlob = blob || (await readAssetBlob(asset));
+    const blobFingerprint = await buildBlobFingerprint(sourceBlob);
+    if (blobFingerprint) return blobFingerprint;
+    return fallbackAssetFingerprint(asset);
+}
+
+async function readAssetBlob(asset: AssetWriteInput | Asset) {
+    try {
+        if (asset.kind === "image") return asset.data.storageKey ? getImageBlob(asset.data.storageKey) : fetchAssetBlob(asset.data.dataUrl);
+        if (asset.kind === "video" || asset.kind === "audio") return asset.data.storageKey ? getMediaBlob(asset.data.storageKey) : fetchAssetBlob(asset.data.url);
+    } catch {
+        return null;
+    }
+    return null;
+}
+
+async function fetchAssetBlob(url: string) {
+    if (!url || (!url.startsWith("data:") && !url.startsWith("blob:"))) return null;
+    return fetch(url).then((response) => response.blob());
+}

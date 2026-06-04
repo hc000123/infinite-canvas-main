@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { localForageStorage } from "@/lib/localforage-storage";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "../types";
+import type { CanvasProjectPreset } from "../utils/canvas-project-preset";
 
 export type CanvasProject = {
     id: string;
@@ -18,17 +19,18 @@ export type CanvasProject = {
     backgroundMode: CanvasBackgroundMode;
     showImageInfo: boolean;
     viewport: ViewportTransform;
+    preset?: CanvasProjectPreset;
 };
 
 type CanvasStore = {
     hydrated: boolean;
     projects: CanvasProject[];
-    createProject: (title?: string) => string;
+    createProject: (title?: string, preset?: CanvasProjectPreset) => string;
     importProject: (project: Partial<CanvasProject>) => string;
     openProject: (id: string) => CanvasProject | null;
     renameProject: (id: string, title: string) => void;
     deleteProjects: (ids: string[]) => void;
-    updateProject: (id: string, patch: Partial<Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport">>) => void;
+    updateProject: (id: string, patch: Partial<Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport" | "preset">>) => void;
 };
 
 const initialViewport: ViewportTransform = { x: 0, y: 0, k: 1 };
@@ -63,7 +65,7 @@ export const useCanvasStore = create<CanvasStore>()(
         (set, get) => ({
             hydrated: false,
             projects: [],
-            createProject: (title = "未命名画布") => {
+            createProject: (title = "未命名画布", preset) => {
                 const now = new Date().toISOString();
                 const id = nanoid();
                 const project: CanvasProject = {
@@ -78,6 +80,7 @@ export const useCanvasStore = create<CanvasStore>()(
                     backgroundMode: "lines",
                     showImageInfo: false,
                     viewport: initialViewport,
+                    preset,
                 };
                 set((state) => ({ projects: [project, ...state.projects] }));
                 return id;
@@ -96,6 +99,7 @@ export const useCanvasStore = create<CanvasStore>()(
                     backgroundMode: source.backgroundMode || "lines",
                     showImageInfo: source.showImageInfo || false,
                     viewport: source.viewport || initialViewport,
+                    preset: source.preset,
                 };
                 set((state) => ({ projects: [project, ...state.projects] }));
                 return project.id;

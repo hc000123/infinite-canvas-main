@@ -1,8 +1,8 @@
 import { getDataUrlByteSize } from "@/lib/image-utils";
-import type { Asset } from "@/stores/use-asset-store";
+import type { AssetWriteInput } from "@/stores/use-asset-store";
 import { CanvasNodeType, type CanvasNodeData } from "../types";
 
-export type CanvasAssetPayload = Omit<Asset, "id" | "createdAt" | "updatedAt">;
+export type CanvasAssetPayload = AssetWriteInput;
 
 export function canvasNodeToAsset(node: CanvasNodeData): CanvasAssetPayload | null {
     if (node.type === CanvasNodeType.Text) {

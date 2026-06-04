@@ -139,7 +139,7 @@ async function startServices() {
 
     const userDataDir = app.getPath("userData");
     logFilePath = path.join(userDataDir, "desktop.log");
-    fs.writeFileSync(logFilePath, `[${new Date().toISOString()}] infinite-canvas desktop starting\n`);
+    fs.writeFileSync(logFilePath, `[${new Date().toISOString()}] blink-workbench desktop starting\n`);
     const dataDir = path.join(userDataDir, "data");
     const promptDir = path.join(dataDir, "prompts");
     const publicAssetDir = path.join(dataDir, "public-assets");
@@ -156,7 +156,7 @@ async function startServices() {
         env: {
             ...process.env,
             PORT: String(backendPort),
-            DATABASE_DSN: path.join(dataDir, "infinite-canvas.db"),
+            DATABASE_DSN: path.join(dataDir, "blink-workbench.db"),
             PUBLIC_ASSET_DIR: publicAssetDir,
             PROMPT_DATA_DIR: promptDir,
             JWT_SECRET: process.env.JWT_SECRET || readOrCreateSecret(path.join(userDataDir, "jwt-secret")),
@@ -193,7 +193,7 @@ function createWindow(url) {
         height: 960,
         minWidth: 1100,
         minHeight: 720,
-        title: "眨眼之间工作台",
+        title: "眨眼之间",
         backgroundColor: "#f6f7fb",
         webPreferences: {
             contextIsolation: true,
@@ -215,7 +215,7 @@ app.whenReady().then(async () => {
         const frontendUrl = await startServices();
         createWindow(frontendUrl);
     } catch (error) {
-        dialog.showErrorBox("眨眼之间工作台启动失败", error instanceof Error ? error.message : String(error));
+        dialog.showErrorBox("眨眼之间启动失败", error instanceof Error ? error.message : String(error));
         app.quit();
     }
 });

@@ -1,6 +1,6 @@
-appId: com.basketikun.infinitecanvas
-productName: 眨眼之间工作台
-copyright: Copyright © 2026 infinite-canvas contributors
+appId: com.blinkworkbench.desktop
+productName: 眨眼之间
+copyright: Copyright © 2026 眨眼之间 contributors
 electronVersion: 42.3.1
 asar: true
 npmRebuild: false
@@ -46,4 +46,4 @@ nsis:
     allowToChangeInstallationDirectory: true
     createDesktopShortcut: true
     createStartMenuShortcut: true
-    shortcutName: 眨眼之间工作台
+    shortcutName: 眨眼之间

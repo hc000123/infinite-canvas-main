@@ -1,8 +1,8 @@
 {
-    "name": "infinite-canvas-desktop",
-    "version": "0.2.2",
-    "description": "眨眼之间工作台桌面端",
-    "author": "infinite-canvas contributors",
+    "name": "blink-workbench-desktop",
+    "version": "0.2.7",
+    "description": "眨眼之间桌面端",
+    "author": "眨眼之间 contributors",
     "private": true,
     "main": "main.cjs"
 }

@@ -72,7 +72,7 @@ export default function VideoPage() {
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
-    const addAsset = useAssetStore((state) => state.addAsset);
+    const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
     const [prompt, setPrompt] = useState("");
     const [references, setReferences] = useState<ReferenceImage[]>([]);
     const [results, setResults] = useState<GenerationResult[]>([]);
@@ -192,15 +192,15 @@ export default function VideoPage() {
         saveAs(video.url, "video.mp4");
     };
 
-    const saveResultToAssets = (video: GeneratedVideo) => {
-        addAsset({
+    const saveResultToAssets = async (video: GeneratedVideo) => {
+        await addAssetOnce({
             kind: "video",
             title: "生成视频",
             coverUrl: "",
             tags: [],
             source: "视频创作台",
             data: { url: video.url, storageKey: video.storageKey, width: video.width, height: video.height, bytes: video.bytes, mimeType: video.mimeType },
-            metadata: { source: "video-page", prompt },
+            metadata: { source: "video-page", generation: { prompt } },
         });
         message.success("已加入我的素材");
     };

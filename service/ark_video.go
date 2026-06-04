@@ -161,28 +161,40 @@ func ReadArkLocalVideoConfig(body []byte, contentType string) (apiKey string, ba
 }
 
 func NormalizeArkVideoTaskResponse(body []byte) ([]byte, error) {
-	task, err := readArkTaskObject(body)
+	task, err := readArkTaskResponse(body)
 	if err != nil {
 		return nil, err
 	}
-	id := arkStringMapValue(task, "id", "task_id")
+	id := firstArkTaskString(task.ID, task.TaskID)
 	if id == "" {
 		return nil, errors.New("视频任务没有返回任务 ID")
 	}
-	status := normalizeArkTaskStatus(arkStringMapValue(task, "status"))
+	rawStatus := task.Status.String()
+	status := normalizeArkTaskStatus(rawStatus)
 	payload := map[string]any{
 		"id":         id,
 		"status":     status,
-		"raw_status": arkStringMapValue(task, "status"),
+		"raw_status": rawStatus,
 	}
-	copyArkTaskStringFields(payload, task, "model", "resolution", "ratio", "service_tier")
-	copyArkTaskNumberFields(payload, task, "created_at", "updated_at", "execution_expires_after", "seed", "duration", "framespersecond", "priority")
-	copyArkTaskBoolFields(payload, task, "generate_audio", "watermark", "draft")
-	if expiresAfter, ok := arkNumberMapValue(task, "execution_expires_after"); ok {
-		if updatedAt, ok := arkNumberMapValue(task, "updated_at"); ok && updatedAt > 0 {
-			payload["video_url_expires_at"] = updatedAt + expiresAfter
-		} else if createdAt, ok := arkNumberMapValue(task, "created_at"); ok && createdAt > 0 {
-			payload["video_url_expires_at"] = createdAt + expiresAfter
+	putArkTaskString(payload, "model", task.Model)
+	putArkTaskString(payload, "resolution", task.Resolution)
+	putArkTaskString(payload, "ratio", task.Ratio)
+	putArkTaskString(payload, "service_tier", task.ServiceTier)
+	putArkTaskNumber(payload, "created_at", task.CreatedAt)
+	putArkTaskNumber(payload, "updated_at", task.UpdatedAt)
+	putArkTaskNumber(payload, "execution_expires_after", task.ExecutionExpiresAfter)
+	putArkTaskNumber(payload, "seed", task.Seed)
+	putArkTaskNumber(payload, "duration", task.Duration)
+	putArkTaskNumber(payload, "framespersecond", task.FramesPerSecond)
+	putArkTaskNumber(payload, "priority", task.Priority)
+	putArkTaskBool(payload, "generate_audio", task.GenerateAudio)
+	putArkTaskBool(payload, "watermark", task.Watermark)
+	putArkTaskBool(payload, "draft", task.Draft)
+	if task.ExecutionExpiresAfter.Valid {
+		if task.UpdatedAt.Valid && task.UpdatedAt.Value > 0 {
+			payload["video_url_expires_at"] = task.UpdatedAt.Value + task.ExecutionExpiresAfter.Value
+		} else if task.CreatedAt.Valid && task.CreatedAt.Value > 0 {
+			payload["video_url_expires_at"] = task.CreatedAt.Value + task.ExecutionExpiresAfter.Value
 		}
 	}
 	if videoURL := arkVideoURLFromTask(task); videoURL != "" {
@@ -199,63 +211,184 @@ func NormalizeArkVideoTaskResponse(body []byte) ([]byte, error) {
 }
 
 func ArkTaskVideoURL(body []byte) string {
-	task, err := readArkTaskObject(body)
+	task, err := readArkTaskResponse(body)
 	if err != nil {
 		return ""
 	}
 	return arkVideoURLFromTask(task)
 }
 
-func readArkTaskObject(body []byte) (map[string]any, error) {
-	var payload map[string]any
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, err
-	}
-	for _, key := range []string{"data", "task", "result"} {
-		if value, ok := payload[key].(map[string]any); ok {
-			return value, nil
-		}
-	}
-	return payload, nil
+type arkVideoTask struct {
+	ID                    arkFlexibleString `json:"id"`
+	TaskID                arkFlexibleString `json:"task_id"`
+	Status                arkFlexibleString `json:"status"`
+	Model                 arkFlexibleString `json:"model"`
+	Resolution            arkFlexibleString `json:"resolution"`
+	Ratio                 arkFlexibleString `json:"ratio"`
+	ServiceTier           arkFlexibleString `json:"service_tier"`
+	CreatedAt             arkFlexibleInt64  `json:"created_at"`
+	UpdatedAt             arkFlexibleInt64  `json:"updated_at"`
+	ExecutionExpiresAfter arkFlexibleInt64  `json:"execution_expires_after"`
+	Seed                  arkFlexibleInt64  `json:"seed"`
+	Duration              arkFlexibleInt64  `json:"duration"`
+	FramesPerSecond       arkFlexibleInt64  `json:"framespersecond"`
+	Priority              arkFlexibleInt64  `json:"priority"`
+	GenerateAudio         arkFlexibleBool   `json:"generate_audio"`
+	Watermark             arkFlexibleBool   `json:"watermark"`
+	Draft                 arkFlexibleBool   `json:"draft"`
+	VideoURL              arkFlexibleString `json:"video_url"`
+	URL                   arkFlexibleString `json:"url"`
+	LastFrameURL          arkFlexibleString `json:"last_frame_url"`
+	LastFrame             arkFlexibleString `json:"last_frame"`
+	LastFrameImageURL     arkFlexibleString `json:"last_frame_image_url"`
+	ImageURL              arkFlexibleString `json:"image_url"`
+	Message               arkFlexibleString `json:"message"`
+	Msg                   arkFlexibleString `json:"msg"`
+	ErrorMessage          arkFlexibleString `json:"error_message"`
+	FailReason            arkFlexibleString `json:"fail_reason"`
+	Code                  arkFlexibleString `json:"code"`
+	ErrorCode             arkFlexibleString `json:"error_code"`
+	Content               json.RawMessage   `json:"content"`
+	Output                json.RawMessage   `json:"output"`
+	Result                json.RawMessage   `json:"result"`
+	Error                 json.RawMessage   `json:"error"`
 }
 
-func arkVideoURLFromTask(task map[string]any) string {
-	if value := arkStringMapValue(task, "video_url", "url"); value != "" {
+type arkFlexibleString string
+
+func (value *arkFlexibleString) UnmarshalJSON(body []byte) error {
+	var raw any
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return err
+	}
+	switch item := raw.(type) {
+	case string:
+		*value = arkFlexibleString(strings.TrimSpace(item))
+	case float64:
+		*value = arkFlexibleString(fmt.Sprintf("%.0f", item))
+	case bool:
+		*value = arkFlexibleString(fmt.Sprintf("%t", item))
+	}
+	return nil
+}
+
+func (value arkFlexibleString) String() string {
+	return strings.TrimSpace(string(value))
+}
+
+type arkFlexibleInt64 struct {
+	Value int64
+	Valid bool
+}
+
+func (value *arkFlexibleInt64) UnmarshalJSON(body []byte) error {
+	var raw any
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return err
+	}
+	switch item := raw.(type) {
+	case float64:
+		value.Value = int64(item)
+		value.Valid = true
+	case string:
+		var number int64
+		if _, err := fmt.Sscan(strings.TrimSpace(item), &number); err == nil {
+			value.Value = number
+			value.Valid = true
+		}
+	}
+	return nil
+}
+
+type arkFlexibleBool struct {
+	Value bool
+	Valid bool
+}
+
+func (value *arkFlexibleBool) UnmarshalJSON(body []byte) error {
+	var raw any
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return err
+	}
+	switch item := raw.(type) {
+	case bool:
+		value.Value = item
+		value.Valid = true
+	case string:
+		if parsed, ok := arkOptionalBool(item); ok {
+			value.Value = parsed
+			value.Valid = true
+		}
+	}
+	return nil
+}
+
+func readArkTaskResponse(body []byte) (arkVideoTask, error) {
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return arkVideoTask{}, err
+	}
+	taskBody := body
+	for _, key := range []string{"data", "task", "result"} {
+		if value, ok := envelope[key]; ok && isArkJSONObject(value) {
+			taskBody = value
+			break
+		}
+	}
+	var task arkVideoTask
+	if err := json.Unmarshal(taskBody, &task); err != nil {
+		return arkVideoTask{}, err
+	}
+	return task, nil
+}
+
+func isArkJSONObject(value json.RawMessage) bool {
+	trimmed := strings.TrimSpace(string(value))
+	return strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")
+}
+
+func arkVideoURLFromTask(task arkVideoTask) string {
+	if value := firstArkTaskString(task.VideoURL, task.URL); value != "" {
 		return value
 	}
-	for _, key := range []string{"content", "output", "result"} {
-		if value := arkNestedStringMapValue(task, key, "video_url"); value != "" {
+	for _, item := range []json.RawMessage{task.Content, task.Output, task.Result} {
+		if value := arkURLFromRawContent(item, "video_url", "url"); value != "" {
 			return value
-		}
-		if items, ok := task[key].([]any); ok {
-			for _, item := range items {
-				if object, ok := item.(map[string]any); ok {
-					if value := arkStringMapValue(object, "video_url", "url"); value != "" {
-						return value
-					}
-				}
-			}
 		}
 	}
 	return ""
 }
 
-func arkLastFrameURLFromTask(task map[string]any) string {
-	if value := arkStringMapValue(task, "last_frame_url", "last_frame", "last_frame_image_url", "image_url"); value != "" {
+func arkLastFrameURLFromTask(task arkVideoTask) string {
+	if value := firstArkTaskString(task.LastFrameURL, task.LastFrame, task.LastFrameImageURL, task.ImageURL); value != "" {
 		return value
 	}
-	for _, key := range []string{"content", "output", "result"} {
-		for _, field := range []string{"last_frame_url", "last_frame", "last_frame_image_url", "image_url"} {
-			if value := arkNestedStringMapValue(task, key, field); value != "" {
+	for _, item := range []json.RawMessage{task.Content, task.Output, task.Result} {
+		if value := arkURLFromRawContent(item, "last_frame_url", "last_frame", "last_frame_image_url", "image_url"); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func arkURLFromRawContent(raw json.RawMessage, keys ...string) string {
+	if len(raw) == 0 || strings.TrimSpace(string(raw)) == "null" {
+		return ""
+	}
+	var object map[string]arkFlexibleString
+	if err := json.Unmarshal(raw, &object); err == nil {
+		for _, key := range keys {
+			if value := object[key].String(); value != "" {
 				return value
 			}
 		}
-		if items, ok := task[key].([]any); ok {
-			for _, item := range items {
-				if object, ok := item.(map[string]any); ok {
-					if value := arkStringMapValue(object, "last_frame_url", "last_frame", "last_frame_image_url", "image_url"); value != "" {
-						return value
-					}
+	}
+	var items []map[string]arkFlexibleString
+	if err := json.Unmarshal(raw, &items); err == nil {
+		for _, item := range items {
+			for _, key := range keys {
+				if value := item[key].String(); value != "" {
+					return value
 				}
 			}
 		}
@@ -263,15 +396,28 @@ func arkLastFrameURLFromTask(task map[string]any) string {
 	return ""
 }
 
-func arkTaskErrorDetails(task map[string]any) map[string]string {
-	message := arkStringMapValue(task, "message", "msg", "error_message", "fail_reason", "error")
-	code := arkStringMapValue(task, "code", "error_code")
-	if details, ok := task["error"].(map[string]any); ok {
-		if message == "" {
-			message = arkStringMapValue(details, "message", "msg")
+func arkTaskErrorDetails(task arkVideoTask) map[string]string {
+	message := firstArkTaskString(task.Message, task.Msg, task.ErrorMessage, task.FailReason)
+	code := firstArkTaskString(task.Code, task.ErrorCode)
+	if len(task.Error) > 0 && strings.TrimSpace(string(task.Error)) != "null" {
+		var details struct {
+			Message   arkFlexibleString `json:"message"`
+			Msg       arkFlexibleString `json:"msg"`
+			Code      arkFlexibleString `json:"code"`
+			ErrorCode arkFlexibleString `json:"error_code"`
 		}
-		if code == "" {
-			code = arkStringMapValue(details, "code", "error_code")
+		if err := json.Unmarshal(task.Error, &details); err == nil {
+			if message == "" {
+				message = firstArkTaskString(details.Message, details.Msg)
+			}
+			if code == "" {
+				code = firstArkTaskString(details.Code, details.ErrorCode)
+			}
+		} else if message == "" {
+			var text arkFlexibleString
+			if textErr := json.Unmarshal(task.Error, &text); textErr == nil {
+				message = text.String()
+			}
 		}
 	}
 	if message == "" && code != "" {
@@ -285,6 +431,33 @@ func arkTaskErrorDetails(task map[string]any) map[string]string {
 		result["code"] = code
 	}
 	return result
+}
+
+func firstArkTaskString(values ...arkFlexibleString) string {
+	for _, value := range values {
+		if text := value.String(); text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
+func putArkTaskString(payload map[string]any, key string, value arkFlexibleString) {
+	if text := value.String(); text != "" {
+		payload[key] = text
+	}
+}
+
+func putArkTaskNumber(payload map[string]any, key string, value arkFlexibleInt64) {
+	if value.Valid {
+		payload[key] = value.Value
+	}
+}
+
+func putArkTaskBool(payload map[string]any, key string, value arkFlexibleBool) {
+	if value.Valid {
+		payload[key] = value.Value
+	}
 }
 
 func normalizeArkTaskStatus(status string) string {
@@ -322,39 +495,6 @@ func arkStringMapValue(values map[string]any, keys ...string) string {
 	return ""
 }
 
-func arkNumberMapValue(values map[string]any, keys ...string) (int64, bool) {
-	for _, key := range keys {
-		switch value := values[key].(type) {
-		case float64:
-			return int64(value), true
-		case int:
-			return int64(value), true
-		case int64:
-			return value, true
-		case string:
-			var number int64
-			if _, err := fmt.Sscan(strings.TrimSpace(value), &number); err == nil {
-				return number, true
-			}
-		}
-	}
-	return 0, false
-}
-
-func arkBoolMapValue(values map[string]any, keys ...string) (bool, bool) {
-	for _, key := range keys {
-		switch value := values[key].(type) {
-		case bool:
-			return value, true
-		case string:
-			if parsed, ok := arkOptionalBool(value); ok {
-				return parsed, true
-			}
-		}
-	}
-	return false, false
-}
-
 func arkOptionalBool(value string) (bool, bool) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "true", "1", "yes", "on":
@@ -364,38 +504,6 @@ func arkOptionalBool(value string) (bool, bool) {
 	default:
 		return false, false
 	}
-}
-
-func copyArkTaskStringFields(payload map[string]any, task map[string]any, keys ...string) {
-	for _, key := range keys {
-		if value := arkStringMapValue(task, key); value != "" {
-			payload[key] = value
-		}
-	}
-}
-
-func copyArkTaskNumberFields(payload map[string]any, task map[string]any, keys ...string) {
-	for _, key := range keys {
-		if value, ok := arkNumberMapValue(task, key); ok {
-			payload[key] = value
-		}
-	}
-}
-
-func copyArkTaskBoolFields(payload map[string]any, task map[string]any, keys ...string) {
-	for _, key := range keys {
-		if value, ok := arkBoolMapValue(task, key); ok {
-			payload[key] = value
-		}
-	}
-}
-
-func arkNestedStringMapValue(values map[string]any, key string, nestedKey string) string {
-	nested, ok := values[key].(map[string]any)
-	if !ok {
-		return ""
-	}
-	return arkStringMapValue(nested, nestedKey)
 }
 
 func firstArkFormValue(values map[string][]string, key string) string {

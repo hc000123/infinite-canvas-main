@@ -157,6 +157,43 @@ func TestNormalizeArkVideoTaskResponseKeepsTaskDetails(t *testing.T) {
 	}
 }
 
+func TestNormalizeArkVideoTaskResponseReadsNestedEnvelope(t *testing.T) {
+	source := []byte(`{
+		"data": {
+			"task_id": "cgt-nested",
+			"status": "succeeded",
+			"output": [
+				{
+					"url": "https://example.com/nested.mp4",
+					"last_frame_url": "https://example.com/last.png"
+				}
+			],
+			"created_at": "1700000000",
+			"execution_expires_after": "3600",
+			"generate_audio": "true"
+		}
+	}`)
+
+	body, err := service.NormalizeArkVideoTaskResponse(source)
+	if err != nil {
+		t.Fatalf("normalizeArkVideoTaskResponse returned error: %v", err)
+	}
+
+	payload := readJSONMap(t, body)
+	if payload["id"] != "cgt-nested" || payload["status"] != "completed" || payload["raw_status"] != "succeeded" {
+		t.Fatalf("task identity/status = %#v", payload)
+	}
+	if payload["video_url"] != "https://example.com/nested.mp4" || payload["last_frame_url"] != "https://example.com/last.png" {
+		t.Fatalf("task media urls = %#v", payload)
+	}
+	if payload["video_url_expires_at"] != float64(1700003600) || payload["generate_audio"] != true {
+		t.Fatalf("task typed fields = %#v", payload)
+	}
+	if url := service.ArkTaskVideoURL(source); url != "https://example.com/nested.mp4" {
+		t.Fatalf("ArkTaskVideoURL = %q", url)
+	}
+}
+
 func TestUpstreamErrorMessageKeepsArkPrivacyError(t *testing.T) {
 	body := []byte(`{"error":{"code":"InputImageSensitiveContentDetected.PrivacyInformation","message":"The request failed because the input image may contain real person."}}`)
 

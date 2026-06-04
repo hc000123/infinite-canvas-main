@@ -8,6 +8,7 @@
 
 - 画布项目 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:canvas_store`。
 - 我的素材 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:asset_store`。
+- 项目设定库 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:production_bible_store`。
 - 图片 Blob：单独存到 `localForage` 实例，数据库名 `infinite-canvas`，storeName `image_files`。
 - 视频等媒体 Blob：单独存到 `localForage` 实例，数据库名 `infinite-canvas`，storeName `media_files`。
 
@@ -28,7 +29,20 @@ type CanvasProject = {
   chatSessions: CanvasAssistantSession[];
   activeChatId: string | null;
   backgroundMode: "lines" | "dots" | "blank";
+  showImageInfo: boolean;
   viewport: { x: number; y: number; k: number };
+  preset?: CanvasProjectPreset;
+};
+
+type CanvasProjectPreset = {
+  resolution?: string;
+  ratio?: string;
+  fps?: string;
+  defaultDuration?: string;
+  defaultImageModel?: string;
+  defaultVideoModel?: string;
+  defaultTextModel?: string;
+  defaultVideoProvider?: "openai" | "volcengine-ark";
 };
 ```
 
@@ -42,7 +56,44 @@ type CanvasProject = {
 - `chatSessions`：右侧画布助手会话。
 - `activeChatId`：当前选中的助手会话 ID。
 - `backgroundMode`：画布背景模式。
+- `showImageInfo`：是否在画布中显示图片信息。
 - `viewport`：视口变换，`x/y` 是屏幕平移，`k` 是缩放比例。
+- `preset`：项目级创作预设，可选字段。旧画布没有该字段时继续使用全局 AI 配置。新建画布时可写入分辨率、画幅、帧率、默认时长、默认图片/视频/文本模型和默认视频供应商；新建生成配置节点、视频生成默认值和生成素材归档会读取该预设。
+
+## 项目设定库结构
+
+项目设定库独立于画布项目 JSON 保存，不强制绑定到节点或生成流程。每个设定项是一个 `ProductionBibleItem`：
+
+```ts
+type ProductionBibleItem = {
+  id: string;
+  projectId: string;
+  kind: "character" | "scene" | "prop";
+  name: string;
+  description: string;
+  tags: string[];
+  assetRefs: Array<{
+    assetId: string;
+    role: string;
+  }>;
+  promptSnippets: {
+    positive?: string;
+    negative?: string;
+    consistency?: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+```
+
+字段说明：
+
+- `projectId`：所属画布项目 ID，用于在当前画布中筛选角色、场景、道具设定。
+- `kind`：设定类型，当前支持角色、场景、道具三类。
+- `assetRefs`：绑定到“我的素材”的引用，只保存素材 ID 和本设定中的用途角色，不复制素材内容，也不改变 `infinite-canvas:asset_store`。
+- `promptSnippets`：可复用提示词片段，当前包含正向、反向和一致性三类。本阶段只做管理与记录，不自动拼接到生成请求。
+
+生成素材的 `metadata.generation.productionBibleRefs` 已预留为空数组，后续接入生成流程时可记录使用过的设定项 ID 和角色。
 
 ## 节点结构
 
@@ -95,8 +146,17 @@ type CanvasNodeMetadata = {
   references?: string[];
   videoReferences?: string[];
   audioReferences?: string[];
-  referenceOrder?: Array<{ nodeId?: string; kind: "image" | "video" | "audio"; index: number }>;
-  referenceRoles?: Array<{ nodeId: string; kind: "image" | "video" | "audio"; role: string; index?: number }>;
+  referenceOrder?: Array<{
+    nodeId?: string;
+    kind: "image" | "video" | "audio";
+    index: number;
+  }>;
+  referenceRoles?: Array<{
+    nodeId: string;
+    kind: "image" | "video" | "audio";
+    role: string;
+    index?: number;
+  }>;
   taskId?: string;
   taskStatus?: string;
   rawTaskStatus?: string;

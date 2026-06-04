@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { App, Button } from "antd";
 import { Download, FileUp, Plus } from "lucide-react";
@@ -9,30 +9,39 @@ import { readZip } from "@/lib/zip";
 import { setMediaBlob } from "@/services/file-storage";
 import { setImageBlob } from "@/services/image-storage";
 import { CanvasDeleteProjectsDialog } from "./components/canvas-delete-projects-dialog";
+import { CanvasCreateProjectModal } from "./components/canvas-create-project-modal";
 import { CanvasProjectCard } from "./components/canvas-project-card";
 import type { CanvasExportFile } from "./export-types";
 import { useCanvasStore } from "./stores/use-canvas-store";
 import { useCanvasUiStore } from "./stores/use-canvas-ui-store";
 import { useAssetStore } from "@/stores/use-asset-store";
+import { useEffectiveConfig } from "@/stores/use-config-store";
 import { canvasNodeToAsset, hydrateCanvasNodeAssetUrls } from "./utils/canvas-assets";
 import { exportCanvasProjects } from "./utils/canvas-export";
+import type { CanvasProjectPreset } from "./utils/canvas-project-preset";
 
 export default function CanvasPage() {
     const { message } = App.useApp();
     const router = useRouter();
     const inputRef = useRef<HTMLInputElement>(null);
+    const effectiveConfig = useEffectiveConfig();
+    const [createOpen, setCreateOpen] = useState(false);
     const hydrated = useCanvasStore((state) => state.hydrated);
     const projects = useCanvasStore((state) => state.projects);
     const createProject = useCanvasStore((state) => state.createProject);
     const importProject = useCanvasStore((state) => state.importProject);
-    const addAsset = useAssetStore((state) => state.addAsset);
+    const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
     const selectedIds = useCanvasUiStore((state) => state.selectedProjectIds);
     const setDeleteIds = useCanvasUiStore((state) => state.setDeleteProjectIds);
 
     const enterProject = (id: string) => {
         router.push(`/canvas/${id}`);
     };
-    const createAndEnter = () => enterProject(createProject(`眨眼之间工作台 ${projects.length + 1}`));
+    const defaultProjectTitle = `眨眼之间 ${projects.length + 1}`;
+    const createAndEnter = (title: string, preset: CanvasProjectPreset) => {
+        setCreateOpen(false);
+        enterProject(createProject(title, preset));
+    };
     const importCanvas = async (file?: File) => {
         if (!file) return;
         try {
@@ -53,16 +62,16 @@ export default function CanvasPage() {
                 ),
             );
             let assetCount = 0;
-            data.projects.forEach((item) => {
+            for (const item of data.projects) {
                 const project = { ...item.project, nodes: (item.project.nodes || []).map((node) => hydrateCanvasNodeAssetUrls(node, restoredUrls)) };
                 importProject(project);
-                project.nodes.forEach((node) => {
+                for (const node of project.nodes) {
                     const asset = canvasNodeToAsset(node);
-                    if (!asset) return;
-                    addAsset(asset);
+                    if (!asset) continue;
+                    await addAssetOnce(asset);
                     assetCount += 1;
-                });
-            });
+                }
+            }
             message.success(`已导入 ${data.projects.length} 个画布${assetCount ? `，${assetCount} 个素材已加入我的素材` : ""}`);
         } catch {
             message.error("导入失败，请选择有效的画布压缩包");
@@ -77,7 +86,7 @@ export default function CanvasPage() {
                 <header className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-200 pb-6 dark:border-stone-800">
                     <div>
                         <p className="text-xs text-stone-500">画布库</p>
-                        <h1 className="mt-3 text-3xl font-semibold">眨眼之间工作台</h1>
+                        <h1 className="mt-3 text-3xl font-semibold">眨眼之间</h1>
                     </div>
                     <div className="flex items-center gap-2">
                         {selectedIds.length ? (
@@ -88,7 +97,7 @@ export default function CanvasPage() {
                                     onClick={() =>
                                         void exportCanvasProjects(
                                             projects.filter((project) => selectedIds.includes(project.id)),
-                                            `眨眼之间工作台-${selectedIds.length}个项目`,
+                                            `眨眼之间-${selectedIds.length}个项目`,
                                         )
                                     }
                                 >
@@ -107,7 +116,7 @@ export default function CanvasPage() {
                         <Button disabled={!hydrated} icon={<FileUp className="size-4" />} onClick={() => inputRef.current?.click()}>
                             导入画布
                         </Button>
-                        <Button disabled={!hydrated} type="primary" icon={<Plus className="size-4" />} onClick={createAndEnter}>
+                        <Button disabled={!hydrated} type="primary" icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
                             新建画布
                         </Button>
                     </div>
@@ -125,7 +134,7 @@ export default function CanvasPage() {
                     <section className="flex min-h-[360px] flex-col items-center justify-center border-y border-stone-200 text-center dark:border-stone-800">
                         <h2 className="text-xl font-medium">还没有画布</h2>
                         <p className="mt-3 text-sm text-stone-500">新建一个画布后，就可以独立保存节点、连线和画布外观。</p>
-                        <Button type="primary" className="mt-6" icon={<Plus className="size-4" />} onClick={createAndEnter}>
+                        <Button type="primary" className="mt-6" icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
                             新建画布
                         </Button>
                     </section>
@@ -134,6 +143,7 @@ export default function CanvasPage() {
 
             <input ref={inputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importCanvas(event.target.files?.[0])} />
             <CanvasDeleteProjectsDialog />
+            <CanvasCreateProjectModal open={createOpen} defaultTitle={defaultProjectTitle} config={effectiveConfig} onCancel={() => setCreateOpen(false)} onCreate={createAndEnter} />
         </main>
     );
 }

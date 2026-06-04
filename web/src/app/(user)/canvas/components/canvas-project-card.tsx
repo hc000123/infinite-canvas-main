@@ -7,6 +7,7 @@ import { Button, Input } from "antd";
 import { useCanvasStore, type CanvasProject } from "../stores/use-canvas-store";
 import { useCanvasUiStore } from "../stores/use-canvas-ui-store";
 import { exportCanvasProjects } from "../utils/canvas-export";
+import { canvasProjectPresetSummary } from "../utils/canvas-project-preset";
 
 export function CanvasProjectCard({ project }: { project: CanvasProject }) {
     const router = useRouter();
@@ -53,6 +54,7 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
                         <p className="mt-3 text-sm leading-6 text-stone-600 dark:text-stone-400">
                             {project.nodes.length} 个节点 · {project.connections.length} 条连线
                         </p>
+                        {project.preset ? <p className="mt-1 truncate text-xs text-stone-500">{canvasProjectPresetSummary(project.preset)}</p> : null}
                     </button>
                 )}
             </div>
@@ -66,7 +68,7 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
                         </>
                     ) : (
                         <>
-                            <Button type="text" size="small" shape="circle" icon={<Download className="size-4" />} onClick={() => void exportCanvasProjects([project], project.title || "眨眼之间工作台")} aria-label="导出" />
+                            <Button type="text" size="small" shape="circle" icon={<Download className="size-4" />} onClick={() => void exportCanvasProjects([project], project.title || "眨眼之间")} aria-label="导出" />
                             <Button type="text" size="small" shape="circle" icon={<Pencil className="size-4" />} onClick={() => startEditing(project.id, project.title)} aria-label="重命名" />
                             <Button type="text" size="small" shape="circle" icon={<Trash2 className="size-4" />} onClick={() => setDeleteIds([project.id])} aria-label="删除" />
                         </>

@@ -73,7 +73,7 @@ export default function ImagePage() {
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
-    const addAsset = useAssetStore((state) => state.addAsset);
+    const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
     const [prompt, setPrompt] = useState("");
     const [references, setReferences] = useState<ReferenceImage[]>([]);
     const [results, setResults] = useState<GenerationResult[]>([]);
@@ -203,14 +203,14 @@ export default function ImagePage() {
 
     const saveResultToAssets = async (image: GeneratedImage, index: number) => {
         const stored = await uploadImage(image.dataUrl);
-        addAsset({
+        await addAssetOnce({
             kind: "image",
             title: `生成结果 ${index + 1}`,
             coverUrl: stored.url,
             tags: [],
             source: "生图工作台",
             data: { dataUrl: stored.url, storageKey: stored.storageKey, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType },
-            metadata: { source: "image-page", prompt },
+            metadata: { source: "image-page", generation: { prompt, index: index + 1 } },
         });
         message.success("已加入我的素材");
     };

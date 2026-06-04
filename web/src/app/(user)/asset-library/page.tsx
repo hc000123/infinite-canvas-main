@@ -24,6 +24,7 @@ export default function AssetLibraryPage() {
     const [page, setPage] = useState(1);
     const [selectedAsset, setSelectedAsset] = useState<AssetLibraryItem | null>(null);
     const addAsset = useAssetStore((state) => state.addAsset);
+    const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
 
     const query = useQuery({
         queryKey: ["asset-library", keyword, selectedType, selectedTags, page],
@@ -51,7 +52,7 @@ export default function AssetLibraryPage() {
             if (asset.type === "image") {
                 const dataUrl = await remoteImageToDataUrl(asset.url);
                 const image = await uploadImage(dataUrl);
-                addAsset({
+                await addAssetOnce({
                     kind: "image",
                     title: asset.title,
                     coverUrl: asset.coverUrl,
@@ -59,12 +60,12 @@ export default function AssetLibraryPage() {
                     source: asset.category,
                     note: asset.description,
                     data: { dataUrl: image.url, storageKey: image.storageKey, width: image.width, height: image.height, bytes: image.bytes, mimeType: image.mimeType },
-                    metadata: { source: "asset-library", assetId: asset.id },
+                    metadata: { source: "asset-library", sourceRefs: [asset.id] },
                 });
             } else if (asset.type === "video" || asset.type === "audio") {
                 const blob = await remoteAssetBlob(asset.url);
                 const media = await uploadMediaFile(blob, asset.type);
-                addAsset({
+                await addAssetOnce({
                     kind: asset.type,
                     title: asset.title,
                     coverUrl: asset.coverUrl,
@@ -75,8 +76,8 @@ export default function AssetLibraryPage() {
                         asset.type === "video"
                             ? { url: media.url, storageKey: media.storageKey, width: media.width || 1280, height: media.height || 720, bytes: media.bytes, mimeType: media.mimeType }
                             : { url: media.url, storageKey: media.storageKey, bytes: media.bytes, mimeType: media.mimeType },
-                    metadata: { source: "asset-library", assetId: asset.id },
-                } as Parameters<typeof addAsset>[0]);
+                    metadata: { source: "asset-library", sourceRefs: [asset.id] },
+                } as Parameters<typeof addAssetOnce>[0]);
             } else {
                 addAsset({
                     kind: "text",

@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="web/public/logo.svg" width="96" alt="眨眼之间工作台 logo">
+  <img src="web/public/logo.svg" width="96" alt="眨眼之间 logo">
 </p>
 
-<h1 align="center">眨眼之间工作台</h1>
+<h1 align="center">眨眼之间</h1>
 
-眨眼之间工作台是一款面向 AI 视频与画布编排的创作工作台。它把画布编排、AI 图片/视频生成、参考素材、对话助手、提示词库和素材沉淀放在同一个界面里，适合用来探索视觉方案并连续迭代生成结果。
+眨眼之间是一款面向 AI 视频与画布编排的创作工作台。它把画布编排、AI 图片/视频生成、参考素材、对话助手、提示词库和素材沉淀放在同一个界面里，适合用来探索视觉方案并连续迭代生成结果。
 
 > [!CAUTION]
 > 项目目前处于开发阶段，不保证历史数据兼容。各种数据库结构和存储格式都可能直接调整，欢迎关注后续更新，当前更适合个人/本地部署，不建议直接公网多人共用。
@@ -13,14 +13,12 @@
 
 ## 核心功能
 
-- 眨眼之间工作台：多画布项目、节点拖拽缩放、连线、小地图、撤销重做、导入导出。
+- 眨眼之间画布：多画布项目、节点拖拽缩放、连线、小地图、撤销重做、导入导出。
 - AI 创作：支持 OpenAI 兼容接口的文生图、图生图、参考图编辑和文本问答。
 - 画布助手：围绕选中节点和上游节点对话、生图，并把结果插回画布。
 - 提示词库：抓取多个 GitHub 开源项目，按案例整理数百个图片提示词。
 
 完整功能说明见 [docs/features.md](docs/features.md)。
-
-如果你在为担心没有合适的生图API来发愁，可以查看该免费生图项目：[chatgpt2api](https://github.com/basketikun/chatgpt2api)
 
 ## 技术栈
 
@@ -30,13 +28,11 @@
 
 ## 快速开始
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/basketikun/infinite-canvas)
-
 ```bash
-git clone git@github.com:basketikun/infinite-canvas.git
-cd infinite-canvas
+git clone <your-repo-url>
+cd <your-repo-directory>
 cp .env.example .env
-# 修改默认账号密码等信息
+# 修改 ADMIN_PASSWORD、JWT_SECRET 等信息
 docker-compose up -d
 ```
 
@@ -88,13 +84,3 @@ docker compose -f docker-compose.local.yml up -d --build
 ## 开源协议
 
 本项目使用 GNU Affero General Public License v3.0，见 [LICENSE](LICENSE)。
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=basketikun%2Finfinite-canvas&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=basketikun/infinite-canvas&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=basketikun/infinite-canvas&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=basketikun/infinite-canvas&type=date&legend=top-left" />
- </picture>
-</a>

@@ -42,7 +42,7 @@ export function AppTopNav() {
                                         WebkitMask: "url(/logo.svg) center / contain no-repeat",
                                     }}
                                 />
-                                <span className="text-base font-medium">眨眼之间工作台</span>
+                                <span className="text-base font-medium">眨眼之间</span>
                             </Link>
 
                             <button

@@ -20,7 +20,7 @@ type UseCanvasFileNodeActionsOptions = {
     setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
     setDialogNodeId: Dispatch<SetStateAction<string | null>>;
     showSuccess: (text: string) => void;
-    addCanvasNodeToAssets: (node: CanvasNodeData) => boolean;
+    addCanvasNodeToAssets: (node: CanvasNodeData) => Promise<boolean>;
     toImageMetadata: (image: UploadedImage) => CanvasNodeMetadata;
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
     toAudioMetadata: (audio: UploadedFile) => CanvasNodeMetadata;
@@ -62,7 +62,7 @@ export function useCanvasFileNodeActions({
             };
 
             setNodes((prev) => [...prev, newNode]);
-            addCanvasNodeToAssets(newNode);
+            await addCanvasNodeToAssets(newNode);
             setSelectedNodeIds(new Set([id]));
             setSelectedConnectionId(null);
             setDialogNodeId(id);
@@ -85,7 +85,7 @@ export function useCanvasFileNodeActions({
                 metadata: toVideoMetadata(video),
             };
             setNodes((prev) => [...prev, newNode]);
-            addCanvasNodeToAssets(newNode);
+            await addCanvasNodeToAssets(newNode);
             setSelectedNodeIds(new Set([id]));
             setSelectedConnectionId(null);
             setDialogNodeId(id);
@@ -108,7 +108,7 @@ export function useCanvasFileNodeActions({
                 metadata: toAudioMetadata(audio),
             };
             setNodes((prev) => [...prev, newNode]);
-            addCanvasNodeToAssets(newNode);
+            await addCanvasNodeToAssets(newNode);
             setSelectedNodeIds(new Set([id]));
             setSelectedConnectionId(null);
         },
@@ -155,7 +155,7 @@ export function useCanvasFileNodeActions({
                         metadata: { ...currentNode.metadata, ...toAudioMetadata(audio), errorDetails: undefined },
                     };
                     setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? nextNode : node)));
-                    addCanvasNodeToAssets(nextNode);
+                    await addCanvasNodeToAssets(nextNode);
                     setSelectedNodeIds(new Set([target.nodeId]));
                     setSelectedConnectionId(null);
                     setDialogNodeId(null);
@@ -177,7 +177,7 @@ export function useCanvasFileNodeActions({
                         metadata: { ...currentNode.metadata, ...toVideoMetadata(video), errorDetails: undefined },
                     };
                     setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? nextNode : node)));
-                    addCanvasNodeToAssets(nextNode);
+                    await addCanvasNodeToAssets(nextNode);
                     setSelectedNodeIds(new Set([target.nodeId]));
                     setSelectedConnectionId(null);
                     setDialogNodeId(target.nodeId);
@@ -214,7 +214,7 @@ export function useCanvasFileNodeActions({
                     },
                 };
                 setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? nextNode : node)));
-                addCanvasNodeToAssets(nextNode);
+                await addCanvasNodeToAssets(nextNode);
                 setSelectedNodeIds(new Set([target.nodeId]));
                 setSelectedConnectionId(null);
                 setDialogNodeId(target.nodeId);

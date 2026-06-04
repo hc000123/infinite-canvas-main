@@ -1,9 +1,12 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 
 import type { AiConfig } from "@/stores/use-config-store";
+import type { AssetWriteInput } from "@/stores/use-asset-store";
 import type { UploadedFile } from "@/services/file-storage";
 
 import { NODE_DEFAULT_SIZE } from "../constants";
+import { buildGeneratedVideoAsset } from "../utils/canvas-generated-asset";
+import type { CanvasProjectPreset } from "../utils/canvas-project-preset";
 import { buildVideoGenerationMetadata, videoTaskMetadata } from "../utils/canvas-generation-metadata";
 import { createVideoGenerationNode } from "../utils/canvas-generation-nodes";
 import { runCanvasVideoGeneration } from "../utils/canvas-generation-runner";
@@ -24,6 +27,10 @@ type UseCanvasVideoGenerationActionsOptions = {
     cacheUploadedCanvasMedia: (file: UploadedFile, filename: string) => Promise<Partial<CanvasNodeMetadata>>;
     showWarning: (message: string) => void;
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
+    projectId: string;
+    projectTitle: string;
+    projectPreset?: CanvasProjectPreset;
+    archiveGeneratedAsset: (asset: AssetWriteInput) => Promise<void>;
 };
 
 type GenerateVideoNodeInput = {
@@ -35,7 +42,7 @@ type GenerateVideoNodeInput = {
     setPendingChildIds: (ids: string[]) => void;
 };
 
-export function useCanvasVideoGenerationActions({ setNodes, setConnections, cacheUploadedCanvasMedia, showWarning, toVideoMetadata }: UseCanvasVideoGenerationActionsOptions) {
+export function useCanvasVideoGenerationActions({ setNodes, setConnections, cacheUploadedCanvasMedia, showWarning, toVideoMetadata, projectId, projectTitle, projectPreset, archiveGeneratedAsset }: UseCanvasVideoGenerationActionsOptions) {
     const generateVideoNode = useCallback(
         async ({ nodeId, sourceNode, effectivePrompt, generationConfig, videoPlan, setPendingChildIds }: GenerateVideoNodeInput) => {
             if (videoPlan.sourceVideoRequiredError) {
@@ -47,6 +54,7 @@ export function useCanvasVideoGenerationActions({ setNodes, setConnections, cach
 
             const spec = nodeSizeFromRatio(generationConfig.size, NODE_DEFAULT_SIZE[CanvasNodeType.Video].width, NODE_DEFAULT_SIZE[CanvasNodeType.Video].height) || NODE_DEFAULT_SIZE[CanvasNodeType.Video];
             const generationStartedAt = Date.now();
+            const createdAt = new Date(generationStartedAt).toISOString();
             const generationMetadata = buildVideoGenerationMetadata(generationConfig, videoPlan.references, videoPlan.relation);
             const { videoId, videoNode, isEmptyVideoNode, connection } = createVideoGenerationNode({
                 nodeId,
@@ -76,9 +84,11 @@ export function useCanvasVideoGenerationActions({ setNodes, setConnections, cach
                 prompt: effectivePrompt,
             });
             setNodes((prev) => prev.map((node) => (node.id === videoId ? finalVideoNode : node)));
+            const asset = buildGeneratedVideoAsset(finalVideoNode, { projectId, projectTitle, projectPreset, prompt: effectivePrompt, effectivePrompt, config: generationConfig, createdAt });
+            if (asset) void archiveGeneratedAsset(asset).catch(() => undefined);
             return { pendingChildIds: [videoId] };
         },
-        [cacheUploadedCanvasMedia, setConnections, setNodes, showWarning, toVideoMetadata],
+        [archiveGeneratedAsset, cacheUploadedCanvasMedia, projectId, projectPreset, projectTitle, setConnections, setNodes, showWarning, toVideoMetadata],
     );
 
     return { generateVideoNode };

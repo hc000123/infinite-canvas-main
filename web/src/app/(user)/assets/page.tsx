@@ -1,8 +1,8 @@
 "use client";
 
-import { CheckCircle, Copy, Download, Eye, Folder, FolderPlus, PencilLine, RefreshCw, Search, ShieldCheck, Trash2, Upload } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type ReactNode } from "react";
-import { App, Button, Card, Drawer, Empty, Form, Image, Input, Modal, Pagination, Select, Space, Tag, Tooltip, Typography } from "antd";
+import { FolderPlus, PencilLine, Search, Trash2, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from "react";
+import { App, Button, Empty, Form, Input, Modal, Pagination, Select, Space, Tag, Typography } from "antd";
 import { saveAs } from "file-saver";
 
 import { useCopyText } from "@/hooks/use-copy-text";
@@ -10,12 +10,16 @@ import { formatBytes, readFileAsDataUrl } from "@/lib/image-utils";
 import { fetchVolcengineAssetStatus, submitVolcengineImageAsset } from "@/services/api/volcengine-assets";
 import { uploadMediaFile } from "@/services/file-storage";
 import { getImageBlob, uploadImage } from "@/services/image-storage";
-import { buildVolcengineImageFilename, isVolcengineReviewProcessing, mergeVolcengineReviewStatus, shouldShowVolcengineReviewAction, volcengineReviewMetadataFromSubmission, volcengineReviewPollingKey } from "@/services/volcengine-asset-metadata";
+import { buildVolcengineImageFilename, isVolcengineReviewProcessing, mergeVolcengineReviewStatus, volcengineReviewMetadataFromSubmission, volcengineReviewPollingKey } from "@/services/volcengine-asset-metadata";
 import { cn } from "@/lib/utils";
 import { useAssetStore, type Asset, type AssetFolder, type AssetKind, type AudioAsset, type ImageAsset, type VideoAsset, type VolcengineAssetMetadata } from "@/stores/use-asset-store";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { assetGenerationFilterOptions, assetMatchesGenerationFilters } from "./asset-generation";
+import { assetFileKind, assetSearchText, countFolderAssets, fetchImageBlob, fileTitle, hasImportableDragItems, isImportableAssetFile, volcengineStatusLabel } from "./asset-utils";
 import { exportAssets, readAssetPackage } from "./asset-transfer";
+import { AssetCard, AssetIconButton } from "./components/asset-card";
+import { AssetDrawer } from "./components/asset-drawer";
 
 type AssetFormValues = {
     kind: AssetKind;
@@ -51,6 +55,7 @@ export default function AssetsPage() {
     const assets = useAssetStore((state) => state.assets);
     const folders = useAssetStore((state) => state.folders);
     const addAsset = useAssetStore((state) => state.addAsset);
+    const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
     const updateAsset = useAssetStore((state) => state.updateAsset);
     const removeAsset = useAssetStore((state) => state.removeAsset);
     const addFolder = useAssetStore((state) => state.addFolder);
@@ -61,6 +66,10 @@ export default function AssetsPage() {
     const [keyword, setKeyword] = useState("");
     const [kindFilter, setKindFilter] = useState<AssetKind | "all">("all");
     const [folderFilter, setFolderFilter] = useState<string | "all" | "root">("all");
+    const [generationSourceFilter, setGenerationSourceFilter] = useState<string>();
+    const [generationActionFilter, setGenerationActionFilter] = useState<string>();
+    const [generationModelProviderFilter, setGenerationModelProviderFilter] = useState<string>();
+    const [generationTaskFilter, setGenerationTaskFilter] = useState<"all" | "with" | "without">("all");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
@@ -84,13 +93,8 @@ export default function AssetsPage() {
     const validAssets = useMemo(() => assets.filter((asset) => asset.kind === "text" || asset.kind === "image" || asset.kind === "video" || asset.kind === "audio"), [assets]);
     const folderMap = useMemo(() => new Map(folders.map((folder) => [folder.id, folder])), [folders]);
     const folderCounts = useMemo(() => countFolderAssets(validAssets), [validAssets]);
-    const folderOptions = useMemo(
-        () => [
-            { label: "未分组", value: "" },
-            ...folders.map((folder) => ({ label: folder.name, value: folder.id })),
-        ],
-        [folders],
-    );
+    const folderOptions = useMemo(() => [{ label: "未分组", value: "" }, ...folders.map((folder) => ({ label: folder.name, value: folder.id }))], [folders]);
+    const generationFilterOptions = useMemo(() => assetGenerationFilterOptions(validAssets), [validAssets]);
 
     const filteredAssets = useMemo(() => {
         const query = keyword.trim().toLowerCase();
@@ -98,10 +102,19 @@ export default function AssetsPage() {
             if (kindFilter !== "all" && asset.kind !== kindFilter) return false;
             if (folderFilter === "root" && asset.folderId) return false;
             if (activeFolderId && asset.folderId !== activeFolderId) return false;
+            if (
+                !assetMatchesGenerationFilters(asset, {
+                    source: generationSourceFilter,
+                    action: generationActionFilter,
+                    modelProvider: generationModelProviderFilter,
+                    taskId: generationTaskFilter,
+                })
+            )
+                return false;
             if (!query) return true;
             return assetSearchText(asset).includes(query);
         });
-    }, [validAssets, keyword, kindFilter, folderFilter, activeFolderId]);
+    }, [validAssets, keyword, kindFilter, folderFilter, activeFolderId, generationSourceFilter, generationActionFilter, generationModelProviderFilter, generationTaskFilter]);
 
     const visibleAssets = useMemo(() => {
         const start = (page - 1) * pageSize;
@@ -166,14 +179,14 @@ export default function AssetsPage() {
                 return;
             }
             const asset = { ...base, kind: "image" as const, data: imageDraft };
-            editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
+            editingAsset ? updateAsset(editingAsset.id, asset) : await addAssetOnce(asset);
         } else {
             if (!mediaDraft) {
                 message.error(values.kind === "video" ? "请选择视频文件" : "请选择音频文件");
                 return;
             }
             const asset = { ...base, kind: values.kind, data: mediaDraft } as Parameters<typeof addAsset>[0];
-            editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
+            editingAsset ? updateAsset(editingAsset.id, asset) : await addAssetOnce(asset);
         }
 
         message.success(editingAsset ? "素材已更新" : "素材已保存");
@@ -251,7 +264,7 @@ export default function AssetsPage() {
         const fileKind = assetFileKind(file);
         if (fileKind === "image") {
             const image = await uploadImage(file);
-            addAsset({
+            await addAssetOnce({
                 kind: "image",
                 title: fileTitle(file.name),
                 coverUrl: image.url,
@@ -309,19 +322,19 @@ export default function AssetsPage() {
                               mimeType: media.mimeType,
                           },
                       };
-            addAsset(asset as Parameters<typeof addAsset>[0]);
+            await addAssetOnce(asset as Parameters<typeof addAssetOnce>[0]);
             return 1;
         }
         const importedAssets = await readAssetPackage(file);
-        importedAssets.forEach((asset) => {
+        for (const asset of importedAssets) {
             const payload = { ...asset } as Record<string, unknown>;
             delete payload.id;
             delete payload.createdAt;
             delete payload.updatedAt;
             if (folderId) payload.folderId = folderId;
             else delete payload.folderId;
-            addAsset(payload as Parameters<typeof addAsset>[0]);
-        });
+            await addAssetOnce(payload as Parameters<typeof addAssetOnce>[0]);
+        }
         return importedAssets.length;
     };
 
@@ -503,9 +516,7 @@ export default function AssetsPage() {
                         <div className="grid min-h-40 w-[min(420px,calc(100vw-48px))] place-items-center rounded-xl border-2 border-dashed border-stone-400 bg-background/95 p-8 text-center shadow-2xl dark:border-stone-600">
                             <div>
                                 <Upload className="mx-auto size-8 text-stone-500" />
-                                <div className="mt-3 text-sm font-medium text-stone-900 dark:text-stone-100">
-                                    松开上传{activeFolderId ? `到「${folderMap.get(activeFolderId)?.name || "当前文件夹"}」` : ""}
-                                </div>
+                                <div className="mt-3 text-sm font-medium text-stone-900 dark:text-stone-100">松开上传{activeFolderId ? `到「${folderMap.get(activeFolderId)?.name || "当前文件夹"}」` : ""}</div>
                             </div>
                         </div>
                     </div>
@@ -620,6 +631,59 @@ export default function AssetsPage() {
                                         <AssetIconButton title="删除文件夹" icon={<Trash2 className="size-3.5" />} danger onClick={() => deleteFolder(folderMap.get(activeFolderId)!)} />
                                     </>
                                 ) : null}
+                            </div>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
+                            <div className="pt-1 text-xs font-medium text-stone-500 dark:text-stone-400">生成</div>
+                            <div className="grid gap-2 md:grid-cols-4">
+                                <Select
+                                    size="small"
+                                    allowClear
+                                    placeholder="来源"
+                                    value={generationSourceFilter}
+                                    options={generationFilterOptions.sources}
+                                    onChange={(value) => {
+                                        setPage(1);
+                                        setGenerationSourceFilter(value);
+                                    }}
+                                />
+                                <Select
+                                    size="small"
+                                    allowClear
+                                    placeholder="生成方式"
+                                    value={generationActionFilter}
+                                    options={generationFilterOptions.actions}
+                                    onChange={(value) => {
+                                        setPage(1);
+                                        setGenerationActionFilter(value);
+                                    }}
+                                />
+                                <Select
+                                    size="small"
+                                    allowClear
+                                    showSearch
+                                    placeholder="模型 / 供应商"
+                                    value={generationModelProviderFilter}
+                                    options={generationFilterOptions.modelProviders}
+                                    optionFilterProp="label"
+                                    onChange={(value) => {
+                                        setPage(1);
+                                        setGenerationModelProviderFilter(value);
+                                    }}
+                                />
+                                <Select
+                                    size="small"
+                                    value={generationTaskFilter}
+                                    options={[
+                                        { label: "全部任务", value: "all" },
+                                        { label: "有 taskId", value: "with" },
+                                        { label: "无 taskId", value: "without" },
+                                    ]}
+                                    onChange={(value) => {
+                                        setPage(1);
+                                        setGenerationTaskFilter(value);
+                                    }}
+                                />
                             </div>
                         </div>
                     </div>
@@ -841,338 +905,4 @@ export default function AssetsPage() {
             </Modal>
         </div>
     );
-}
-
-function AssetCard({
-    asset,
-    folderName,
-    refreshingReview,
-    onOpen,
-    onEdit,
-    onCopy,
-    onDownload,
-    onDelete,
-    submittingReview,
-    onReview,
-    onRefreshReview,
-}: {
-    asset: Asset;
-    folderName?: string;
-    refreshingReview: boolean;
-    onOpen: () => void;
-    onEdit: () => void;
-    onCopy: (asset: Asset) => void;
-    onDownload: (asset: Asset) => void;
-    onDelete: () => void;
-    submittingReview: boolean;
-    onReview: () => void;
-    onRefreshReview: () => void;
-}) {
-    const cover = asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "");
-    const summary = assetSummary(asset);
-    const openOnKeyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        onOpen();
-    };
-    return (
-        <Card
-            hoverable
-            className="overflow-hidden"
-            styles={{ body: { padding: 0 } }}
-            cover={
-                <div role="button" tabIndex={0} className="block w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400" onClick={onOpen} onKeyDown={openOnKeyboard}>
-                    {cover ? (
-                        <img src={cover} alt={asset.title} className="aspect-[4/3] w-full object-cover" />
-                    ) : (
-                        <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm leading-6 text-stone-600 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>
-                    )}
-                </div>
-            }
-        >
-            <div role="button" tabIndex={0} className="block w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400" onClick={onOpen} onKeyDown={openOnKeyboard}>
-                <div className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                            <h2 className="line-clamp-1 text-sm font-semibold text-stone-950 dark:text-stone-100">{asset.title}</h2>
-                            <Typography.Text type="secondary" className="mt-1 block text-xs">
-                                {asset.source || "未标注来源"}
-                            </Typography.Text>
-                        </div>
-                        <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-                            <Tag className="m-0 text-[11px]">{assetKindLabel(asset.kind)}</Tag>
-                            {folderName ? (
-                                <Tag className="m-0 text-[11px]" icon={<Folder className="size-3" />}>
-                                    {folderName}
-                                </Tag>
-                            ) : null}
-                            {asset.kind === "image" && asset.metadata?.volcengineAsset ? <VolcengineAssetTag status={asset.metadata.volcengineAsset.status} /> : null}
-                        </div>
-                    </div>
-                    <Typography.Paragraph type="secondary" ellipsis={{ rows: 3 }} className="!mb-0 !mt-2 !text-xs !leading-5">
-                        {summary}
-                    </Typography.Paragraph>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                        {(asset.tags || []).slice(0, 3).map((tag) => (
-                            <Tag key={tag} className="m-0 text-[11px]">
-                                {tag}
-                            </Tag>
-                        ))}
-                        {!asset.tags?.length ? <Tag className="m-0 text-[11px]">无标签</Tag> : null}
-                    </div>
-                </div>
-            </div>
-            <div className="flex items-center justify-between gap-2 px-4 pb-4">
-                <div className="flex min-w-0 items-center gap-1">
-                    <AssetIconButton title="查看" icon={<Eye className="size-3.5" />} onClick={onOpen} />
-                    <AssetIconButton title="编辑" icon={<PencilLine className="size-3.5" />} onClick={onEdit} />
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                    {asset.kind === "text" ? <AssetIconButton title="复制" icon={<Copy className="size-3.5" />} onClick={() => void onCopy(asset)} /> : null}
-                    {asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" ? <AssetIconButton title="下载" icon={<Download className="size-3.5" />} onClick={() => onDownload(asset)} /> : null}
-                    {shouldShowVolcengineReviewAction(asset.kind) ? (
-                        asset.metadata?.volcengineAsset?.assetId ? (
-                            <AssetIconButton
-                                title={volcengineReviewActionLabel(asset.metadata.volcengineAsset.status)}
-                                icon={<RefreshCw className={`size-3.5 ${isVolcengineReviewProcessing(asset.metadata.volcengineAsset) && !refreshingReview ? "animate-spin" : ""}`} />}
-                                loading={refreshingReview}
-                                onClick={onRefreshReview}
-                            />
-                        ) : (
-                            <AssetIconButton title="加白" icon={<ShieldCheck className="size-3.5" />} loading={submittingReview} onClick={onReview} />
-                        )
-                    ) : null}
-                    <AssetIconButton title="删除" icon={<Trash2 className="size-3.5" />} danger onClick={onDelete} />
-                </div>
-            </div>
-        </Card>
-    );
-}
-
-function AssetIconButton({ title, icon, danger, loading, onClick }: { title: string; icon: ReactNode; danger?: boolean; loading?: boolean; onClick: () => void }) {
-    return (
-        <Tooltip title={title}>
-            <Button type="text" size="small" className="!h-8 !w-8 !min-w-8 !p-0" danger={danger} icon={icon} loading={loading} onClick={onClick} aria-label={title} />
-        </Tooltip>
-    );
-}
-
-function AssetDrawer({
-    asset,
-    folderName,
-    refreshingReview,
-    onClose,
-    onCopy,
-    onDownload,
-    submittingReview,
-    onReview,
-    onRefreshReview,
-}: {
-    asset: Asset | null;
-    folderName?: string;
-    refreshingReview: boolean;
-    onClose: () => void;
-    onCopy: (asset: Asset) => void;
-    onDownload: (asset: Asset) => void;
-    submittingReview: boolean;
-    onReview: (asset: Asset) => void;
-    onRefreshReview: (asset: Asset) => void;
-}) {
-    const cover = asset ? asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "") : "";
-    return (
-        <Drawer title="素材详情" open={Boolean(asset)} size="large" onClose={onClose}>
-            {asset ? (
-                <div className="space-y-5">
-                    {cover ? (
-                        <Image src={cover} alt={asset.title} className="rounded-lg" />
-                    ) : (
-                        <div className="rounded-lg border border-stone-200 bg-stone-50 p-5 text-sm leading-6 text-stone-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>
-                    )}
-                    <div>
-                        <Typography.Title level={4} className="!mb-2">
-                            {asset.title}
-                        </Typography.Title>
-                        <Space size={[4, 4]} wrap>
-                            <Tag>{assetKindLabel(asset.kind)}</Tag>
-                            {folderName ? (
-                                <Tag icon={<Folder className="size-3" />}>
-                                    {folderName}
-                                </Tag>
-                            ) : null}
-                            {(asset.tags || []).map((tag) => (
-                                <Tag key={tag}>{tag}</Tag>
-                            ))}
-                            {asset.kind === "image" && asset.metadata?.volcengineAsset ? <VolcengineAssetTag status={asset.metadata.volcengineAsset.status} /> : null}
-                        </Space>
-                    </div>
-                    <div className="rounded-lg border border-stone-200 p-4 dark:border-stone-800">
-                        <Typography.Text type="secondary" className="block text-xs">
-                            内容
-                        </Typography.Text>
-                        {asset.kind === "text" ? (
-                            <Typography.Paragraph className="mt-2 whitespace-pre-wrap">{asset.data.content}</Typography.Paragraph>
-                        ) : asset.kind === "video" ? (
-                            <video src={asset.data.url} controls className="mt-2 aspect-video w-full rounded-lg bg-black" />
-                        ) : asset.kind === "audio" ? (
-                            <audio src={asset.data.url} controls className="mt-2 w-full" />
-                        ) : (
-                            <Typography.Text className="mt-2 block">
-                                {asset.data.width}x{asset.data.height} · {formatBytes(asset.data.bytes)} · {asset.data.mimeType}
-                            </Typography.Text>
-                        )}
-                    </div>
-                    {asset.note ? (
-                        <div>
-                            <Typography.Text type="secondary">备注</Typography.Text>
-                            <Typography.Paragraph className="mt-1">{asset.note}</Typography.Paragraph>
-                        </div>
-                    ) : null}
-                    <Space wrap>
-                        {asset.kind === "text" ? (
-                            <Button type="primary" icon={<Copy className="size-4" />} onClick={() => onCopy(asset)}>
-                                复制文本
-                            </Button>
-                        ) : null}
-                        {asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" ? (
-                            <Button type="primary" icon={<Download className="size-4" />} onClick={() => onDownload(asset)}>
-                                {assetKindDownloadLabel(asset.kind)}
-                            </Button>
-                        ) : null}
-                        {shouldShowVolcengineReviewAction(asset.kind) ? (
-                            asset.metadata?.volcengineAsset?.assetId ? (
-                                <Button icon={<RefreshCw className={`size-4 ${isVolcengineReviewProcessing(asset.metadata.volcengineAsset) && !refreshingReview ? "animate-spin" : ""}`} />} loading={refreshingReview} onClick={() => onRefreshReview(asset)}>
-                                    {volcengineReviewActionLabel(asset.metadata.volcengineAsset.status)}
-                                </Button>
-                            ) : (
-                                <Button icon={<ShieldCheck className="size-4" />} loading={submittingReview} onClick={() => onReview(asset)}>
-                                    提交加白
-                                </Button>
-                            )
-                        ) : null}
-                    </Space>
-                    {asset.kind === "image" && asset.metadata?.volcengineAsset ? (
-                        <div className="rounded-lg border border-stone-200 p-4 text-sm dark:border-stone-800">
-                            <Typography.Text type="secondary" className="block text-xs">
-                                火山素材
-                            </Typography.Text>
-                            <Typography.Paragraph copyable className="!mb-0 !mt-2">
-                                {asset.metadata.volcengineAsset.assetId}
-                            </Typography.Paragraph>
-                            <Typography.Text type="secondary" className="block text-xs">
-                                素材组：{asset.metadata.volcengineAsset.groupId} · 项目：{asset.metadata.volcengineAsset.projectName}
-                            </Typography.Text>
-                            {asset.metadata.volcengineAsset.error ? (
-                                <Typography.Text type="danger" className="mt-2 block break-words text-xs">
-                                    失败原因：{asset.metadata.volcengineAsset.error}
-                                </Typography.Text>
-                            ) : null}
-                        </div>
-                    ) : null}
-                </div>
-            ) : null}
-        </Drawer>
-    );
-}
-
-function VolcengineAssetTag({ status }: { status: string }) {
-    if (status === "Active")
-        return (
-            <Tag color="success" className="m-0 shrink-0 text-[11px]" icon={<CheckCircle className="size-3" />}>
-                已加白
-            </Tag>
-        );
-    if (status === "Failed")
-        return (
-            <Tag color="error" className="m-0 shrink-0 text-[11px]">
-                审核失败
-            </Tag>
-        );
-    return (
-        <Tag color="processing" className="m-0 shrink-0 text-[11px]">
-            审核中
-        </Tag>
-    );
-}
-
-function volcengineStatusLabel(status: string) {
-    if (status === "Active") return "已加白";
-    if (status === "Failed") return "审核失败";
-    if (status === "Processing") return "审核中";
-    return status || "未知";
-}
-
-function volcengineReviewActionLabel(status: string) {
-    if (status === "Processing") return "自动刷新中";
-    if (status === "Active") return "已加白";
-    if (status === "Failed") return "审核失败";
-    return "查看状态";
-}
-
-async function fetchImageBlob(url: string) {
-    if (!url) return null;
-    const response = await fetch(url);
-    return response.blob();
-}
-
-function assetSummary(asset: Asset) {
-    if (asset.kind === "text") return asset.data.content;
-    if (asset.kind === "audio") return `${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
-    return `${asset.data.width}x${asset.data.height} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
-}
-
-function assetSearchText(asset: Asset) {
-    return [asset.title, asset.source || "", asset.note || "", (asset.tags || []).join(" "), asset.kind === "text" ? asset.data.content : asset.data.mimeType].join(" ").toLowerCase();
-}
-
-function assetKindLabel(kind: AssetKind) {
-    if (kind === "image") return "图片";
-    if (kind === "video") return "视频";
-    if (kind === "audio") return "音频";
-    return "文本";
-}
-
-function assetKindDownloadLabel(kind: AssetKind) {
-    if (kind === "video") return "下载视频";
-    if (kind === "audio") return "下载音频";
-    return "下载图片";
-}
-
-function fileTitle(filename: string) {
-    return filename.replace(/\.[^.]+$/, "") || "未命名素材";
-}
-
-function countFolderAssets(assets: Asset[]) {
-    return assets.reduce<Record<string, number>>(
-        (counts, asset) => {
-            const key = asset.folderId || "root";
-            counts[key] = (counts[key] || 0) + 1;
-            return counts;
-        },
-        { root: 0 },
-    );
-}
-
-function isImportableAssetFile(file: File) {
-    return Boolean(assetFileKind(file)) || isZipFile(file);
-}
-
-function assetFileKind(file: File): "image" | "video" | "audio" | null {
-    if (file.type.startsWith("image/")) return "image";
-    if (file.type.startsWith("video/")) return "video";
-    if (file.type.startsWith("audio/")) return "audio";
-    const ext = file.name.toLowerCase().split(".").pop();
-    if (ext && ["png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif"].includes(ext)) return "image";
-    if (ext && ["mp4", "m4v", "mov", "webm"].includes(ext)) return "video";
-    if (ext && ["mp3", "wav", "m4a", "ogg", "aac", "flac"].includes(ext)) return "audio";
-    return null;
-}
-
-function isZipFile(file: File) {
-    return file.type === "application/zip" || file.name.toLowerCase().endsWith(".zip");
-}
-
-function hasImportableDragItems(dataTransfer: DataTransfer) {
-    const items = Array.from(dataTransfer.items || []);
-    if (!items.length) return Boolean(dataTransfer.files?.length);
-    return items.some((item) => item.kind === "file" && (item.type.startsWith("image/") || item.type.startsWith("video/") || item.type.startsWith("audio/") || item.type === "application/zip" || !item.type));
 }
