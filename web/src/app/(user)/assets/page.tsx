@@ -3,17 +3,17 @@
 import { BookOpen, Download, FolderPlus, PencilLine, Search, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import { App, Button, Empty, Form, Input, Modal, Pagination, Select, Space, Tag, Typography } from "antd";
+import { App, Button, Empty, Form, Input, Modal, Pagination, Select, Tag } from "antd";
 import { saveAs } from "file-saver";
 
 import { useCopyText } from "@/hooks/use-copy-text";
-import { formatBytes, readFileAsDataUrl } from "@/lib/image-utils";
+import { readFileAsDataUrl } from "@/lib/image-utils";
 import { fetchVolcengineAssetStatus, submitVolcengineMediaAsset } from "@/services/api/volcengine-assets";
 import { getMediaBlob, uploadMediaFile } from "@/services/file-storage";
 import { getImageBlob, uploadImage } from "@/services/image-storage";
 import { buildVolcengineMediaFilename, isVolcengineReviewProcessing, mergeVolcengineReviewStatus, volcengineReviewMetadataFromSubmission, volcengineReviewPollingKey } from "@/services/volcengine-asset-metadata";
 import { cn } from "@/lib/utils";
-import { useAssetStore, type Asset, type AssetFolder, type AssetKind, type AudioAsset, type ImageAsset, type VideoAsset, type VolcengineAssetMetadata } from "@/stores/use-asset-store";
+import { useAssetStore, type Asset, type AssetFolder, type AssetKind, type ImageAsset, type VideoAsset, type VolcengineAssetMetadata } from "@/stores/use-asset-store";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { ProductionBibleDrawer } from "../canvas/components/production-bible-drawer";
@@ -38,20 +38,7 @@ import { assetFileKind, assetSearchText, countFolderAssets, fetchImageBlob, file
 import { exportAssets, readAssetPackage } from "./asset-transfer";
 import { AssetCard, AssetIconButton } from "./components/asset-card";
 import { AssetDrawer } from "./components/asset-drawer";
-
-type AssetFormValues = {
-    kind: AssetKind;
-    title: string;
-    coverUrl: string;
-    folderId?: string;
-    tags: string[];
-    source?: string;
-    note?: string;
-    content?: string;
-};
-
-type ImageDraft = ImageAsset["data"] | null;
-type MediaDraft = VideoAsset["data"] | AudioAsset["data"] | null;
+import { AssetEditorModal, type AssetFormValues, type ImageDraft, type MediaDraft } from "./components/asset-editor-modal";
 
 const kindOptions = [
     { label: "全部", value: "all" },
@@ -252,6 +239,19 @@ export default function AssetsPage() {
 
         message.success(editingAsset ? "素材已更新" : "素材已保存");
         setIsAssetOpen(false);
+    };
+
+    const updateFormKind = (value: AssetKind) => {
+        setFormKind(value);
+        if (value === "text") {
+            setImageDraft(null);
+            setMediaDraft(null);
+        }
+        if (value === "image") setMediaDraft(null);
+        if (value === "video" || value === "audio") {
+            setImageDraft(null);
+            setMediaDraft(null);
+        }
     };
 
     const readCoverFile = async (file?: File) => {
@@ -855,160 +855,28 @@ export default function AssetsPage() {
                 </div>
             </main>
 
-            <Modal title={editingAsset ? "编辑素材" : "新增素材"} open={isAssetOpen} width={980} onCancel={() => setIsAssetOpen(false)} onOk={() => void saveAsset()} okText="保存" cancelText="取消" destroyOnHidden>
-                <div className="grid gap-6 pt-1 lg:grid-cols-[minmax(0,1fr)_320px]">
-                    <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", tags: [] }}>
-                        <Form.Item name="kind" label="类型">
-                            <Select
-                                options={[
-                                    { label: "文本", value: "text" },
-                                    { label: "图片", value: "image" },
-                                    { label: "视频", value: "video" },
-                                    { label: "音频", value: "audio" },
-                                ]}
-                                onChange={(value) => {
-                                    setFormKind(value);
-                                    if (value === "text") {
-                                        setImageDraft(null);
-                                        setMediaDraft(null);
-                                    }
-                                    if (value === "image") setMediaDraft(null);
-                                    if (value === "video" || value === "audio") {
-                                        setImageDraft(null);
-                                        setMediaDraft(null);
-                                    }
-                                }}
-                            />
-                        </Form.Item>
-                        <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
-                            <Input size="large" placeholder="给素材起一个容易检索的名字" />
-                        </Form.Item>
-                        <Form.Item name="folderId" label="文件夹">
-                            <Select options={folderOptions} />
-                        </Form.Item>
-                        <Form.Item name="coverUrl" label="封面 URL">
-                            <Space.Compact className="w-full">
-                                <Input placeholder="可粘贴图片 URL，也可以上传本地封面" />
-                                <Button icon={<Upload className="size-3.5" />} onClick={() => coverInputRef.current?.click()}>
-                                    上传
-                                </Button>
-                            </Space.Compact>
-                        </Form.Item>
-                        <Form.Item name="tags" label="标签">
-                            <Select mode="tags" tokenSeparators={[",", "，"]} placeholder="输入标签后回车" />
-                        </Form.Item>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <Form.Item name="source" label="来源">
-                                <Input placeholder="手动添加 / 画布 / 提示词库" />
-                            </Form.Item>
-                            <Form.Item name="note" label="备注">
-                                <Input placeholder="可选" />
-                            </Form.Item>
-                        </div>
-                        {formKind === "text" ? (
-                            <Form.Item name="content" label="文本内容" rules={[{ required: true, message: "请输入文本内容" }]}>
-                                <Input.TextArea rows={8} placeholder="保存提示词、说明文案、参考描述等文本素材" />
-                            </Form.Item>
-                        ) : formKind === "image" ? (
-                            <Form.Item label="图片内容" required>
-                                <div className="rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700">
-                                    <Button icon={<Upload className="size-4" />} onClick={() => imageInputRef.current?.click()}>
-                                        选择图片文件
-                                    </Button>
-                                    {imageDraft ? (
-                                        <Typography.Text type="secondary" className="ml-3 text-xs">
-                                            {imageDraft.width}x{imageDraft.height} · {formatBytes(imageDraft.bytes)}
-                                        </Typography.Text>
-                                    ) : (
-                                        <Typography.Text type="secondary" className="ml-3 text-xs">
-                                            未选择图片
-                                        </Typography.Text>
-                                    )}
-                                </div>
-                            </Form.Item>
-                        ) : (
-                            <Form.Item label={formKind === "video" ? "视频内容" : "音频内容"} required>
-                                <div className="rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700">
-                                    <Button icon={<Upload className="size-4" />} onClick={() => mediaInputRef.current?.click()}>
-                                        {formKind === "video" ? "选择视频文件" : "选择音频文件"}
-                                    </Button>
-                                    {mediaDraft ? (
-                                        <Typography.Text type="secondary" className="ml-3 text-xs">
-                                            {formatBytes(mediaDraft.bytes)} · {mediaDraft.mimeType}
-                                        </Typography.Text>
-                                    ) : (
-                                        <Typography.Text type="secondary" className="ml-3 text-xs">
-                                            {formKind === "video" ? "未选择视频" : "未选择音频"}
-                                        </Typography.Text>
-                                    )}
-                                </div>
-                            </Form.Item>
-                        )}
-                    </Form>
-                    <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 dark:border-stone-800 dark:bg-stone-950">
-                        <Typography.Text strong>预览</Typography.Text>
-                        <div className="mt-3 overflow-hidden rounded-lg border border-stone-200 bg-background dark:border-stone-800">
-                            {formKind === "video" && mediaDraft ? (
-                                <video src={mediaDraft.url} controls className="aspect-[4/3] w-full bg-black object-contain" />
-                            ) : formKind === "audio" && mediaDraft ? (
-                                <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 dark:bg-stone-900">
-                                    <audio src={mediaDraft.url} controls className="w-full" />
-                                </div>
-                            ) : coverUrl || imageDraft?.dataUrl ? (
-                                <img src={coverUrl || imageDraft?.dataUrl} alt="" className="aspect-[4/3] w-full object-cover" />
-                            ) : (
-                                <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm text-stone-500 dark:bg-stone-900">{content || "暂无封面"}</div>
-                            )}
-                            <div className="p-4">
-                                <Typography.Text strong ellipsis className="block">
-                                    {title || "未命名素材"}
-                                </Typography.Text>
-                                <div className="mt-2 flex flex-wrap gap-1.5">
-                                    {tags.length ? (
-                                        tags.map((tag) => (
-                                            <Tag key={tag} className="m-0">
-                                                {tag}
-                                            </Tag>
-                                        ))
-                                    ) : (
-                                        <Tag className="m-0">未打标签</Tag>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <input
-                    ref={coverInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => {
-                        void readCoverFile(event.target.files?.[0]);
-                        event.target.value = "";
-                    }}
-                />
-                <input
-                    ref={imageInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => {
-                        void readImageFile(event.target.files?.[0]);
-                        event.target.value = "";
-                    }}
-                />
-                <input
-                    ref={mediaInputRef}
-                    type="file"
-                    accept={formKind === "audio" ? "audio/*" : "video/*"}
-                    className="hidden"
-                    onChange={(event) => {
-                        void readMediaFile(event.target.files?.[0]);
-                        event.target.value = "";
-                    }}
-                />
-            </Modal>
+            <AssetEditorModal
+                open={isAssetOpen}
+                editingAsset={editingAsset}
+                form={form}
+                formKind={formKind}
+                folderOptions={folderOptions}
+                coverUrl={coverUrl}
+                title={title}
+                tags={tags}
+                content={content}
+                imageDraft={imageDraft}
+                mediaDraft={mediaDraft}
+                coverInputRef={coverInputRef}
+                imageInputRef={imageInputRef}
+                mediaInputRef={mediaInputRef}
+                onCancel={() => setIsAssetOpen(false)}
+                onSave={saveAsset}
+                onKindChange={updateFormKind}
+                onReadCoverFile={readCoverFile}
+                onReadImageFile={readImageFile}
+                onReadMediaFile={readMediaFile}
+            />
 
             <AssetDrawer
                 asset={previewAsset}
