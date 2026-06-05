@@ -40,6 +40,7 @@ import { buildInsertedMediaAssetNode } from "../utils/canvas-inserted-media-node
 import { resetInterruptedGeneration } from "../utils/canvas-video-task-recovery";
 import { buildCompletedImageNode, buildCompletedVideoNode } from "../utils/canvas-node-status";
 import { buildAngleImageNode, buildAnglePrompt, buildAngleReferenceImage, buildCroppedImageNode, type CanvasImageAngleParams, type CanvasImageCropRect } from "../utils/canvas-image-derivatives";
+import { collectBatchAwareDeletedNodeIds, isHiddenBatchChild, isHiddenBatchConnectionEndpoint, removeDeletedNodesFromBatches, setBatchPrimaryInNodes, toggleBatchExpandedInNodes } from "../utils/canvas-batch-nodes";
 import { applyCanvasProjectPresetToConfig } from "../utils/canvas-project-preset";
 import { planStoryboardGroupCanvasInsert } from "../utils/storyboard-management";
 import { reviewVideoPromptBeforeGeneration, shouldRunVideoPromptReview, type PromptReviewResult } from "../utils/canvas-prompt-review";
@@ -620,30 +621,8 @@ function InfiniteCanvasPage() {
     const deleteNodes = useCallback(
         (ids: Set<string>) => {
             if (!ids.size) return;
-            const allIds = new Set(ids);
-            nodesRef.current.forEach((node) => {
-                if (ids.has(node.id)) node.metadata?.batchChildIds?.forEach((childId) => allIds.add(childId));
-            });
-            setNodes((prev) => {
-                const next = prev.filter((node) => !allIds.has(node.id));
-                return next.map((node) => {
-                    const childIds = node.metadata?.batchChildIds?.filter((childId) => !allIds.has(childId));
-                    if (!node.metadata?.isBatchRoot || childIds?.length === node.metadata.batchChildIds?.length) return node;
-                    const primaryImageId = childIds?.includes(node.metadata.primaryImageId || "") ? node.metadata.primaryImageId : childIds?.[0];
-                    const primaryNode = next.find((item) => item.id === primaryImageId);
-                    return {
-                        ...node,
-                        metadata: {
-                            ...node.metadata,
-                            batchChildIds: childIds,
-                            primaryImageId,
-                            content: primaryNode?.metadata?.content || node.metadata.content,
-                            naturalWidth: primaryNode?.metadata?.naturalWidth || node.metadata.naturalWidth,
-                            naturalHeight: primaryNode?.metadata?.naturalHeight || node.metadata.naturalHeight,
-                        },
-                    };
-                });
-            });
+            const allIds = collectBatchAwareDeletedNodeIds(nodesRef.current, ids);
+            setNodes((prev) => removeDeletedNodesFromBatches(prev, allIds));
             setConnections((prev) => prev.filter((conn) => !allIds.has(conn.fromNodeId) && !allIds.has(conn.toNodeId)));
             setSelectedNodeIds(new Set());
             setSelectedConnectionId(null);
@@ -897,36 +876,11 @@ function InfiniteCanvasPage() {
                 });
             }, 260);
         }
-        setNodes((prev) =>
-            prev.map((node) => {
-                if (node.id !== nodeId) return node;
-                return { ...node, metadata: { ...node.metadata, imageBatchExpanded: !node.metadata?.imageBatchExpanded } };
-            }),
-        );
+        setNodes((prev) => toggleBatchExpandedInNodes(prev, nodeId));
     }, []);
 
     const setBatchPrimary = useCallback((child: CanvasNodeData) => {
-        const rootId = child.metadata?.batchRootId;
-        if (!rootId || !child.metadata?.content) return;
-        setNodes((prev) =>
-            prev.map((node) =>
-                node.id === rootId
-                    ? {
-                          ...node,
-                          width: child.width,
-                          height: child.height,
-                          metadata: {
-                              ...node.metadata,
-                              content: child.metadata?.content,
-                              primaryImageId: child.id,
-                              naturalWidth: child.metadata?.naturalWidth,
-                              naturalHeight: child.metadata?.naturalHeight,
-                              freeResize: child.metadata?.freeResize,
-                          },
-                      }
-                    : node,
-            ),
-        );
+        setNodes((prev) => setBatchPrimaryInNodes(prev, child));
     }, []);
 
     const openTextEditor = useCallback((node: CanvasNodeData) => {
@@ -2585,19 +2539,4 @@ function confirmVideoPromptReview(review: PromptReviewResult) {
             onCancel: () => resolve(false),
         });
     });
-}
-
-function isHiddenBatchChild(node: CanvasNodeData, nodes: CanvasNodeData[], collapsingBatchIds?: Set<string>) {
-    const rootId = node.metadata?.batchRootId;
-    if (!rootId) return false;
-    const root = nodes.find((item) => item.id === rootId);
-    if (root && collapsingBatchIds?.has(rootId)) return false;
-    return Boolean(root && !root.metadata?.imageBatchExpanded);
-}
-
-function isHiddenBatchConnectionEndpoint(node: CanvasNodeData, nodes: CanvasNodeData[]) {
-    const rootId = node.metadata?.batchRootId;
-    if (!rootId) return false;
-    const root = nodes.find((item) => item.id === rootId);
-    return Boolean(root && !root.metadata?.imageBatchExpanded);
 }
