@@ -1,7 +1,7 @@
 "use client";
 
 import { BookOpen, Download, FolderPlus, PencilLine, Search, Trash2, Upload } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { App, Button, Empty, Form, Input, Modal, Pagination, Select, Tag } from "antd";
 import { saveAs } from "file-saver";
@@ -51,6 +51,14 @@ const kindOptions = [
 ];
 
 export default function AssetsPage() {
+    return (
+        <Suspense fallback={null}>
+            <AssetsPageContent />
+        </Suspense>
+    );
+}
+
+function AssetsPageContent() {
     const { message } = App.useApp();
     const copyText = useCopyText();
     const searchParams = useSearchParams();

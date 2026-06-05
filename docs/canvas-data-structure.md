@@ -660,3 +660,85 @@ type ImageRef = {
 - 新增图片引用字段时，应保留 `storageKey` 兼容旧本地数据。
 - 新增清理入口时，要把仍需保留的画布、素材、助手数据传给 `cleanupUnusedImages`。
 - 后端同步完成前，文档和 UI 不要写成已支持云同步。
+
+## 分镜剪辑包导出
+
+M6.5 第一版剪辑交接包不新增本地持久化字段，而是根据当前 `StoryboardGroup`、`StoryboardShot` 和“我的素材”实时生成 zip。导出包用于人工剪辑交接，不是剪辑工程文件。
+
+```text
+剪辑包_分镜组标题.zip
+  shots.json
+  shots.csv
+  videos/
+    001_开场钩子.mp4
+  references/
+    001_开场钩子/
+      01_角色参考.png
+  prompts/
+    001_开场钩子_prompt.txt
+```
+
+`shots.json` 的核心结构：
+
+```ts
+type StoryboardClipExportManifest = {
+  app: "infinite-canvas";
+  version: 1;
+  kind: "storyboard-clip-package";
+  exportedAt: string;
+  projectId: string;
+  group: {
+    id: string;
+    title: string;
+    description: string;
+    preset: Record<string, unknown>;
+  };
+  shots: Array<{
+    order: number;
+    shotId: string;
+    title: string;
+    description: string;
+    status: string;
+    prompt: string;
+    effectivePrompt: string;
+    primaryAssetId?: string;
+    primaryVideoPath?: string;
+    durationSeconds?: number;
+    model?: string;
+    provider?: string;
+    taskId?: string;
+    actionType?: string;
+    config?: Record<string, unknown>;
+    references: Array<{
+      assetId: string;
+      kind: "image" | "video" | "audio";
+      role: string;
+      title?: string;
+      path?: string;
+      storageKey?: string;
+    }>;
+    warnings: Array<{
+      shotId: string;
+      type:
+        | "missing_primary_asset"
+        | "primary_asset_not_video"
+        | "failed_shot"
+        | "missing_video_storage"
+        | "duration_anomaly";
+      message: string;
+    }>;
+  }>;
+  warnings: Array<{
+    shotId: string;
+    type: string;
+    message: string;
+  }>;
+};
+```
+
+导出规则：
+
+- 主版本视频来自 `StoryboardShot.primaryAssetId` 指向的视频素材。
+- 分镜参考素材来自 `StoryboardShot.assetRefs`。
+- 模型、供应商、taskId、生成方式和参数优先读取主版本素材的 `metadata.generation/generations`。
+- 缺少主版本、失败分镜、主版本不是视频、主版本缺少本地文件或时长明显异常时，会写入 `warnings`，并在页面导出前提示用户。

@@ -2,9 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { App, Button, Card, Drawer, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Tag } from "antd";
-import { ArrowDown, ArrowUp, Clapperboard, Film, Pencil, Play, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Clapperboard, Download, Film, Pencil, Play, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { saveAs } from "file-saver";
 
 import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
+import { createZip } from "@/lib/zip";
+import { getMediaBlob } from "@/services/file-storage";
+import { getImageBlob } from "@/services/image-storage";
 import { useAssetStore, type Asset, type AssetKind } from "@/stores/use-asset-store";
 import { useGenerationQueueStore } from "../stores/use-generation-queue-store";
 import { useProductionBibleStore } from "../stores/use-production-bible-store";
@@ -12,6 +16,7 @@ import { useStoryboardStore } from "../stores/use-storyboard-store";
 import type { CanvasNodeData } from "../types";
 import { buildGenerationQueuePlan, summarizeGenerationQueue, type GenerationQueueItem, type GenerationQueueMissingItem, type GenerationQueueSummary } from "../utils/generation-queue";
 import { itemsForProductionBibleProject, productionBibleKindLabel, type ProductionBibleItem } from "../utils/production-bible";
+import { buildStoryboardClipExportPlan, type StoryboardClipExportPlan } from "../utils/storyboard-clip-export";
 import { orderedStoryboardGroups, orderedStoryboardShots, type StoryboardAssetKind, type StoryboardAssetRef, type StoryboardGroup, type StoryboardProductionBibleRef, type StoryboardShot } from "../utils/storyboard-management";
 
 type Props = {
@@ -75,6 +80,7 @@ export function StoryboardManagerDrawer({ open, projectId, projectTitle, initial
     const [groupFormOpen, setGroupFormOpen] = useState(false);
     const [editingShot, setEditingShot] = useState<StoryboardShot | null>(null);
     const [shotFormOpen, setShotFormOpen] = useState(false);
+    const [exportingClipPackage, setExportingClipPackage] = useState(false);
     const activeGroup = projectGroups.find((group) => group.id === activeGroupId) || projectGroups[0] || null;
     const activeShots = useMemo(() => (activeGroup ? orderedStoryboardShots(shots, activeGroup.id) : []), [activeGroup, shots]);
     const queuePlan = useMemo(
@@ -98,6 +104,53 @@ export function StoryboardManagerDrawer({ open, projectId, projectTitle, initial
         if (!activeGroup) return message.warning("请先创建分镜组");
         setEditingShot(null);
         setShotFormOpen(true);
+    };
+
+    const exportClipPackage = async () => {
+        if (!activeGroup || !activeShots.length) return message.warning("请先选择包含分镜条目的分镜组");
+        const plan = buildStoryboardClipExportPlan({ group: activeGroup, shots: activeShots, assets });
+        if (plan.manifest.warnings.length) {
+            Modal.confirm({
+                title: "导出前检查",
+                content: (
+                    <div className="max-h-72 overflow-auto text-sm leading-6">
+                        <div className="mb-2 text-stone-500">发现 {plan.manifest.warnings.length} 个需要注意的问题。继续导出会保留清单，但缺失的媒体文件不会进入压缩包。</div>
+                        {plan.manifest.warnings.map((item, index) => (
+                            <div key={`${item.shotId}:${item.type}:${index}`}>- {item.message}</div>
+                        ))}
+                    </div>
+                ),
+                okText: "继续导出",
+                cancelText: "返回检查",
+                onOk: () => runClipPackageExport(plan),
+            });
+            return;
+        }
+        await runClipPackageExport(plan);
+    };
+
+    const runClipPackageExport = async (plan: StoryboardClipExportPlan) => {
+        setExportingClipPackage(true);
+        try {
+            const files: { name: string; data: BlobPart }[] = [{ name: "shots.json", data: JSON.stringify(plan.manifest, null, 2) }, { name: "shots.csv", data: plan.csv }, ...plan.promptFiles];
+            const fileNames = new Set(files.map((file) => file.name));
+            let attachedMediaCount = 0;
+            for (const request of plan.mediaRequests) {
+                if (fileNames.has(request.path)) continue;
+                const blob = request.kind === "image" ? await getImageBlob(request.storageKey) : await getMediaBlob(request.storageKey);
+                if (!blob) continue;
+                files.push({ name: request.path, data: blob });
+                fileNames.add(request.path);
+                attachedMediaCount += 1;
+            }
+            const zip = await createZip(files);
+            saveAs(zip, plan.fileName);
+            message.success(`已导出剪辑包，包含 ${plan.manifest.shots.length} 条分镜和 ${attachedMediaCount} 个媒体文件`);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "导出剪辑包失败");
+        } finally {
+            setExportingClipPackage(false);
+        }
     };
 
     return (
@@ -140,6 +193,9 @@ export function StoryboardManagerDrawer({ open, projectId, projectTitle, initial
                     title={activeGroup ? `${activeGroup.title} · 分镜条目` : "分镜条目"}
                     extra={
                         <Space size={6}>
+                            <Button size="small" icon={<Download className="size-3.5" />} disabled={!activeGroup || !activeShots.length} loading={exportingClipPackage} onClick={() => void exportClipPackage()}>
+                                导出剪辑包
+                            </Button>
                             <Button size="small" icon={<Film className="size-3.5" />} disabled={!activeGroup || !activeShots.length} onClick={() => activeGroup && onAddGroupToCanvas(activeGroup.id)}>
                                 打组加入画布
                             </Button>
