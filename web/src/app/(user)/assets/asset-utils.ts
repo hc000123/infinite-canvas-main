@@ -50,10 +50,6 @@ export function assetKindDownloadLabel(kind: AssetKind) {
     return "下载图片";
 }
 
-export function fileTitle(filename: string) {
-    return filename.replace(/\.[^.]+$/, "") || "未命名素材";
-}
-
 export function countFolderAssets(assets: Asset[]) {
     return assets.reduce<Record<string, number>>(
         (counts, asset) => {

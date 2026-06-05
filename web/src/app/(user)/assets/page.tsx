@@ -22,6 +22,8 @@ import { useStoryboardStore } from "../canvas/stores/use-storyboard-store";
 import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { useCreativeProjectStore } from "../projects/use-creative-project-store";
 import { assetGenerationFilterOptions } from "./asset-generation";
+import { importableAssetFiles, importAssetFileList } from "./asset-import-actions";
+import { assetImportSuccessMessage } from "./asset-import-payloads";
 import {
     activeAssetFolderId,
     areAllAssetsSelected,
@@ -34,8 +36,8 @@ import {
     selectedCountInAssets,
     supportedAssetList,
 } from "./asset-page-filters";
-import { assetFileKind, assetSearchText, countFolderAssets, fetchImageBlob, fileTitle, hasImportableDragItems, isImportableAssetFile, volcengineStatusLabel } from "./asset-utils";
-import { exportAssets, readAssetPackage } from "./asset-transfer";
+import { assetSearchText, countFolderAssets, fetchImageBlob, hasImportableDragItems, volcengineStatusLabel } from "./asset-utils";
+import { exportAssets } from "./asset-transfer";
 import { AssetCard, AssetIconButton } from "./components/asset-card";
 import { AssetDrawer } from "./components/asset-drawer";
 import { AssetEditorModal, type AssetFormValues, type ImageDraft, type MediaDraft } from "./components/asset-editor-modal";
@@ -332,101 +334,20 @@ export default function AssetsPage() {
     };
 
     const importAssetFiles = async (files?: FileList | File[]) => {
-        const fileList = Array.from(files || []).filter((file) => isImportableAssetFile(file));
+        const fileList = importableAssetFiles(files);
         if (!fileList.length) {
             message.warning("请选择图片、视频、音频或素材压缩包");
             return;
         }
         try {
-            let count = 0;
-            for (const file of fileList) {
-                count += await importAssetFile(file, activeFolderId);
-            }
+            const count = await importAssetFileList(fileList, { folderId: activeFolderId, addAssetOnce });
             setPage(1);
-            message.success(`已导入 ${count} 个素材${activeFolderId ? `到「${folderMap.get(activeFolderId)?.name || "当前文件夹"}」` : ""}`);
+            message.success(assetImportSuccessMessage(count, activeFolderId ? folderMap.get(activeFolderId)?.name || "当前文件夹" : ""));
         } catch {
             message.error("导入失败，请选择有效的素材压缩包或媒体文件");
         } finally {
             if (assetInputRef.current) assetInputRef.current.value = "";
         }
-    };
-
-    const importAssetFile = async (file: File, folderId?: string) => {
-        const fileKind = assetFileKind(file);
-        if (fileKind === "image") {
-            const image = await uploadImage(file);
-            await addAssetOnce({
-                kind: "image",
-                title: fileTitle(file.name),
-                coverUrl: image.url,
-                folderId,
-                tags: [],
-                source: "本地导入",
-                note: "",
-                metadata: { source: "import" },
-                data: {
-                    dataUrl: image.url,
-                    storageKey: image.storageKey,
-                    width: image.width,
-                    height: image.height,
-                    bytes: image.bytes,
-                    mimeType: image.mimeType,
-                },
-            });
-            return 1;
-        }
-        if (fileKind === "video" || fileKind === "audio") {
-            const media = await uploadMediaFile(file, fileKind);
-            const asset =
-                fileKind === "video"
-                    ? {
-                          kind: fileKind,
-                          title: fileTitle(file.name),
-                          coverUrl: "",
-                          folderId,
-                          tags: [],
-                          source: "本地导入",
-                          note: "",
-                          metadata: { source: "import" },
-                          data: {
-                              url: media.url,
-                              storageKey: media.storageKey,
-                              width: media.width || 1280,
-                              height: media.height || 720,
-                              bytes: media.bytes,
-                              mimeType: media.mimeType,
-                          },
-                      }
-                    : {
-                          kind: fileKind,
-                          title: fileTitle(file.name),
-                          coverUrl: "",
-                          folderId,
-                          tags: [],
-                          source: "本地导入",
-                          note: "",
-                          metadata: { source: "import" },
-                          data: {
-                              url: media.url,
-                              storageKey: media.storageKey,
-                              bytes: media.bytes,
-                              mimeType: media.mimeType,
-                          },
-                      };
-            await addAssetOnce(asset as Parameters<typeof addAssetOnce>[0]);
-            return 1;
-        }
-        const importedAssets = await readAssetPackage(file);
-        for (const asset of importedAssets) {
-            const payload = { ...asset } as Record<string, unknown>;
-            delete payload.id;
-            delete payload.createdAt;
-            delete payload.updatedAt;
-            if (folderId) payload.folderId = folderId;
-            else delete payload.folderId;
-            await addAssetOnce(payload as Parameters<typeof addAssetOnce>[0]);
-        }
-        return importedAssets.length;
     };
 
     const openCreateFolder = () => {
