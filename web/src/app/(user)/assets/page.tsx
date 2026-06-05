@@ -21,7 +21,19 @@ import { useProductionBibleStore } from "../canvas/stores/use-production-bible-s
 import { useStoryboardStore } from "../canvas/stores/use-storyboard-store";
 import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { useCreativeProjectStore } from "../projects/use-creative-project-store";
-import { assetGenerationFilterOptions, assetMatchesGenerationFilters } from "./asset-generation";
+import { assetGenerationFilterOptions } from "./asset-generation";
+import {
+    activeAssetFolderId,
+    areAllAssetsSelected,
+    buildAssetProjectContexts,
+    filterAssetList,
+    paginateAssetList,
+    projectReferencedAssetIds as collectProjectReferencedAssetIds,
+    selectedAssetSummary as formatSelectedAssetSummary,
+    selectedAssetsFromIds,
+    selectedCountInAssets,
+    supportedAssetList,
+} from "./asset-page-filters";
 import { assetFileKind, assetSearchText, countFolderAssets, fetchImageBlob, fileTitle, hasImportableDragItems, isImportableAssetFile, volcengineStatusLabel } from "./asset-utils";
 import { exportAssets, readAssetPackage } from "./asset-transfer";
 import { AssetCard, AssetIconButton } from "./components/asset-card";
@@ -101,22 +113,16 @@ export default function AssetsPage() {
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(() => new Set());
     const [productionBibleProjectId, setProductionBibleProjectId] = useState("");
     const [productionBibleOpen, setProductionBibleOpen] = useState(false);
-    const activeFolderId = folderFilter !== "all" && folderFilter !== "root" ? folderFilter : undefined;
+    const activeFolderId = activeAssetFolderId(folderFilter);
     const coverUrl = Form.useWatch("coverUrl", form) || "";
     const title = Form.useWatch("title", form) || "";
     const tags = Form.useWatch("tags", form) || [];
     const content = Form.useWatch("content", form) || "";
-    const validAssets = useMemo(() => assets.filter((asset) => asset.kind === "text" || asset.kind === "image" || asset.kind === "video" || asset.kind === "audio"), [assets]);
+    const validAssets = useMemo(() => supportedAssetList(assets), [assets]);
     const folderMap = useMemo(() => new Map(folders.map((folder) => [folder.id, folder])), [folders]);
     const folderCounts = useMemo(() => countFolderAssets(validAssets), [validAssets]);
     const folderOptions = useMemo(() => [{ label: "未分组", value: "" }, ...folders.map((folder) => ({ label: folder.name, value: folder.id }))], [folders]);
-    const projectContexts = useMemo(() => {
-        const creativeIds = new Set(creativeProjects.map((project) => project.id));
-        return [
-            ...creativeProjects.map((project) => ({ id: project.id, title: project.title || "未命名项目" })),
-            ...projects.filter((project) => !creativeIds.has(project.id)).map((project) => ({ id: project.id, title: `${project.title || "未命名画布"}（旧画布）` })),
-        ];
-    }, [creativeProjects, projects]);
+    const projectContexts = useMemo(() => buildAssetProjectContexts(creativeProjects, projects), [creativeProjects, projects]);
     const projectOptions = useMemo(() => projectContexts.map((project) => ({ label: project.title, value: project.id })), [projectContexts]);
     const selectedProductionBibleProject = useMemo(
         () => projectContexts.find((project) => project.id === (projectContextFilter || productionBibleProjectId)) || projectContexts[0] || null,
@@ -124,51 +130,29 @@ export default function AssetsPage() {
     );
     const generationFilterOptions = useMemo(() => assetGenerationFilterOptions(validAssets), [validAssets]);
     const projectReferencedAssetIds = useMemo(() => {
-        if (!projectContextFilter) return new Set<string>();
-        const groupIds = new Set(storyboardGroups.filter((group) => group.projectId === projectContextFilter).map((group) => group.id));
-        return new Set<string>([
-            ...productionBibleItems.filter((item) => item.projectId === projectContextFilter).flatMap((item) => item.assetRefs.map((ref) => ref.assetId)),
-            ...storyboardShots.filter((shot) => groupIds.has(shot.groupId)).flatMap((shot) => shot.assetRefs.map((ref) => ref.assetId)),
-        ]);
+        return collectProjectReferencedAssetIds(projectContextFilter, productionBibleItems, storyboardGroups, storyboardShots);
     }, [productionBibleItems, projectContextFilter, storyboardGroups, storyboardShots]);
 
     const filteredAssets = useMemo(() => {
-        const query = keyword.trim().toLowerCase();
-        return validAssets.filter((asset) => {
-            if (kindFilter !== "all" && asset.kind !== kindFilter) return false;
-            if (folderFilter === "root" && asset.folderId) return false;
-            if (activeFolderId && asset.folderId !== activeFolderId) return false;
-            if (
-                !assetMatchesGenerationFilters(asset, {
-                    source: generationSourceFilter,
-                    action: generationActionFilter,
-                    modelProvider: generationModelProviderFilter,
-                    taskId: generationTaskFilter,
-                    projectId: projectContextFilter || undefined,
-                    referencedAssetIds: projectReferencedAssetIds,
-                })
-            )
-                return false;
-            if (!query) return true;
-            return assetSearchText(asset).includes(query);
+        return filterAssetList(validAssets, {
+            keyword,
+            kindFilter,
+            folderFilter,
+            generationSourceFilter,
+            generationActionFilter,
+            generationModelProviderFilter,
+            generationTaskFilter,
+            projectContextFilter,
+            projectReferencedAssetIds,
+            searchText: assetSearchText,
         });
-    }, [validAssets, keyword, kindFilter, folderFilter, activeFolderId, generationSourceFilter, generationActionFilter, generationModelProviderFilter, generationTaskFilter, projectContextFilter, projectReferencedAssetIds]);
+    }, [validAssets, keyword, kindFilter, folderFilter, generationSourceFilter, generationActionFilter, generationModelProviderFilter, generationTaskFilter, projectContextFilter, projectReferencedAssetIds]);
 
-    const visibleAssets = useMemo(() => {
-        const start = (page - 1) * pageSize;
-        return filteredAssets.slice(start, start + pageSize);
-    }, [filteredAssets, page, pageSize]);
-    const selectedAssets = useMemo(() => validAssets.filter((asset) => selectedAssetIds.has(asset.id)), [validAssets, selectedAssetIds]);
-    const selectedInFilteredCount = useMemo(() => filteredAssets.filter((asset) => selectedAssetIds.has(asset.id)).length, [filteredAssets, selectedAssetIds]);
-    const allFilteredSelected = filteredAssets.length > 0 && selectedInFilteredCount === filteredAssets.length;
-    const selectedAssetSummary = useMemo(() => {
-        if (!selectedAssets.length) return "未选择素材";
-        const names = selectedAssets
-            .slice(0, 3)
-            .map((asset) => asset.title || "未命名素材")
-            .join("、");
-        return selectedAssets.length > 3 ? `${names} 等 ${selectedAssets.length} 个` : names;
-    }, [selectedAssets]);
+    const visibleAssets = useMemo(() => paginateAssetList(filteredAssets, page, pageSize), [filteredAssets, page, pageSize]);
+    const selectedAssets = useMemo(() => selectedAssetsFromIds(validAssets, selectedAssetIds), [validAssets, selectedAssetIds]);
+    const selectedInFilteredCount = useMemo(() => selectedCountInAssets(filteredAssets, selectedAssetIds), [filteredAssets, selectedAssetIds]);
+    const allFilteredSelected = useMemo(() => areAllAssetsSelected(filteredAssets, selectedAssetIds), [filteredAssets, selectedAssetIds]);
+    const selectedAssetSummary = useMemo(() => formatSelectedAssetSummary(selectedAssets), [selectedAssets]);
     const processingReviewIds = useMemo(() => volcengineReviewPollingKey(validAssets), [validAssets]);
 
     useEffect(() => {
