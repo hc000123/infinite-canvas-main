@@ -1,7 +1,7 @@
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from "react";
 import { useRef, useState } from "react";
 import { Button, Segmented, Switch } from "antd";
-import { AudioLines, CircleDot, Clapperboard, Eraser, FolderOpen, Grid2x2, Hand, Image as ImageIcon, Info, Library, Moon, Palette, Redo2, ScrollText, Settings2, Square, Sun, Trash2, Type, Undo2, Upload, Video } from "lucide-react";
+import { AudioLines, CircleDot, Clapperboard, Eraser, FolderOpen, Grid2x2, Hand, Image as ImageIcon, Info, Moon, Palette, Redo2, ScrollText, Settings2, Square, Sun, Trash2, Type, Undo2, Upload, Video } from "lucide-react";
 
 import { canvasThemes, type CanvasBackgroundMode, type CanvasColorTheme, type CanvasTheme } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -26,8 +26,7 @@ export function CanvasToolbar({
     onDeselect,
     onBackgroundModeChange,
     onShowImageInfoChange,
-    onOpenAssetLibrary,
-    onOpenMyAssets,
+    onOpenAssets,
     onOpenScriptManager,
     onOpenStoryboardManager,
 }: {
@@ -49,8 +48,7 @@ export function CanvasToolbar({
     onDeselect: () => void;
     onBackgroundModeChange: (mode: CanvasBackgroundMode) => void;
     onShowImageInfoChange: (show: boolean) => void;
-    onOpenAssetLibrary: () => void;
-    onOpenMyAssets: () => void;
+    onOpenAssets: () => void;
     onOpenScriptManager: () => void;
     onOpenStoryboardManager: () => void;
 }) {
@@ -100,10 +98,7 @@ export function CanvasToolbar({
                     <Upload className="size-4.5" />
                 </ToolbarButton>
                 <Divider theme={theme} />
-                <ToolbarButton id="tool-library" label="素材库" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onOpenAssetLibrary}>
-                    <Library className="size-4.5" />
-                </ToolbarButton>
-                <ToolbarButton id="tool-assets" label="我的素材" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onOpenMyAssets}>
+                <ToolbarButton id="tool-assets" label="素材" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onOpenAssets}>
                     <FolderOpen className="size-4.5" />
                 </ToolbarButton>
                 <ToolbarButton id="tool-script-manager" label="剧本" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onOpenScriptManager}>
@@ -296,8 +291,7 @@ function toolLabel(id: string) {
     if (id === "tool-video") return "视频";
     if (id === "tool-config") return "生成配置";
     if (id === "tool-upload") return "上传图片";
-    if (id === "tool-library") return "素材库";
-    if (id === "tool-assets") return "我的素材";
+    if (id === "tool-assets") return "素材";
     if (id === "tool-script-manager") return "剧本";
     if (id === "tool-storyboard-manager") return "分镜";
     if (id === "tool-style") return "画布外观";

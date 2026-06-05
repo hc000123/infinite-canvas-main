@@ -1934,11 +1934,7 @@ function InfiniteCanvasPage() {
                     onDeselect={deselectCanvas}
                     onBackgroundModeChange={setBackgroundMode}
                     onShowImageInfoChange={setShowImageInfo}
-                    onOpenAssetLibrary={() => {
-                        setAssetPickerTab("library");
-                        setAssetPickerOpen(true);
-                    }}
-                    onOpenMyAssets={() => {
+                    onOpenAssets={() => {
                         setAssetPickerTab("my-assets");
                         setAssetPickerOpen(true);
                     }}
