@@ -22,7 +22,7 @@ import { useStoryboardStore } from "../canvas/stores/use-storyboard-store";
 import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { useCreativeProjectStore } from "../projects/use-creative-project-store";
 import { assetGenerationFilterOptions } from "./asset-generation";
-import { buildBulkMoveAssetPatches, buildBulkTagAssetPatches, normalizeTags } from "./asset-bulk-actions";
+import { assetsForVolcengineRefresh, assetsForVolcengineSubmit, buildBulkMoveAssetPatches, buildBulkTagAssetPatches, normalizeTags } from "./asset-bulk-actions";
 import { importableAssetFiles, importAssetFileList } from "./asset-import-actions";
 import { assetImportSuccessMessage } from "./asset-import-payloads";
 import {
@@ -121,6 +121,7 @@ function AssetsPageContent() {
     const [bulkTagOpen, setBulkTagOpen] = useState(false);
     const [bulkTags, setBulkTags] = useState<string[]>([]);
     const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+    const [bulkReviewAction, setBulkReviewAction] = useState<"submit" | "refresh" | "">("");
     const activeFolderId = activeAssetFolderId(folderFilter);
     const coverUrl = Form.useWatch("coverUrl", form) || "";
     const title = Form.useWatch("title", form) || "";
@@ -186,6 +187,8 @@ function AssetsPageContent() {
 
     const visibleAssets = useMemo(() => paginateAssetList(filteredAssets, page, pageSize), [filteredAssets, page, pageSize]);
     const selectedAssets = useMemo(() => selectedAssetsFromIds(validAssets, selectedAssetIds), [validAssets, selectedAssetIds]);
+    const selectedVolcengineSubmitAssets = useMemo(() => assetsForVolcengineSubmit(selectedAssets), [selectedAssets]);
+    const selectedVolcengineRefreshAssets = useMemo(() => assetsForVolcengineRefresh(selectedAssets), [selectedAssets]);
     const selectedInFilteredCount = useMemo(() => selectedCountInAssets(filteredAssets, selectedAssetIds), [filteredAssets, selectedAssetIds]);
     const allFilteredSelected = useMemo(() => areAllAssetsSelected(filteredAssets, selectedAssetIds), [filteredAssets, selectedAssetIds]);
     const selectedAssetSummary = useMemo(() => formatSelectedAssetSummary(selectedAssets), [selectedAssets]);
@@ -518,6 +521,21 @@ function AssetsPageContent() {
         setPreviewAsset((current) => (current?.id === asset.id ? ({ ...current, metadata } as Asset) : current));
     };
 
+    const submitVolcengineReviewAsset = async (asset: ImageAsset | VideoAsset) => {
+        const storedBlob = asset.data.storageKey ? (asset.kind === "image" ? await getImageBlob(asset.data.storageKey) : await getMediaBlob(asset.data.storageKey)) : null;
+        const blob = storedBlob || (await fetchImageBlob(asset.kind === "image" ? asset.data.dataUrl : asset.data.url));
+        if (!blob) throw new Error(asset.kind === "image" ? "没有找到图片文件" : "没有找到视频文件");
+        const saved = asset.metadata?.volcengineAsset;
+        const result = await submitVolcengineMediaAsset(token!, {
+            file: blob,
+            filename: buildVolcengineMediaFilename(asset.title, asset.id, asset.data.mimeType, asset.kind),
+            assetTitle: asset.title,
+            groupId: saved?.groupId,
+            groupName: asset.title || "我的素材",
+        });
+        updateVolcengineMetadata(asset, volcengineReviewMetadataFromSubmission(result));
+    };
+
     const submitImageReview = async (asset: Asset) => {
         if (asset.kind !== "image" && asset.kind !== "video") return;
         if (!volcengineAssetEnabled) {
@@ -530,26 +548,59 @@ function AssetsPageContent() {
         }
         setSubmittingReviewId(asset.id);
         try {
-            const storedBlob = asset.data.storageKey ? (asset.kind === "image" ? await getImageBlob(asset.data.storageKey) : await getMediaBlob(asset.data.storageKey)) : null;
-            const blob = storedBlob || (await fetchImageBlob(asset.kind === "image" ? asset.data.dataUrl : asset.data.url));
-            if (!blob) {
-                message.error(asset.kind === "image" ? "没有找到图片文件" : "没有找到视频文件");
-                return;
-            }
-            const saved = asset.metadata?.volcengineAsset;
-            const result = await submitVolcengineMediaAsset(token, {
-                file: blob,
-                filename: buildVolcengineMediaFilename(asset.title, asset.id, asset.data.mimeType, asset.kind),
-                assetTitle: asset.title,
-                groupId: saved?.groupId,
-                groupName: asset.title || "我的素材",
-            });
-            updateVolcengineMetadata(asset, volcengineReviewMetadataFromSubmission(result));
+            await submitVolcengineReviewAsset(asset);
             message.success("已提交火山审核");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "提交失败");
         } finally {
             setSubmittingReviewId(null);
+        }
+    };
+
+    const submitSelectedVolcengineReviews = async () => {
+        if (!volcengineAssetEnabled) return message.warning("请先在配置里开启火山人像加白");
+        if (!token) return message.error("请先登录");
+        if (!selectedVolcengineSubmitAssets.length) return message.warning("当前选择中没有可提交加白的图片或视频");
+        setBulkReviewAction("submit");
+        let success = 0;
+        let failed = 0;
+        try {
+            for (const asset of selectedVolcengineSubmitAssets) {
+                setSubmittingReviewId(asset.id);
+                try {
+                    await submitVolcengineReviewAsset(asset);
+                    success += 1;
+                } catch {
+                    failed += 1;
+                }
+            }
+            if (failed) message.warning(`已提交 ${success} 个，失败 ${failed} 个`);
+            else message.success(`已提交 ${success} 个素材加白`);
+        } finally {
+            setSubmittingReviewId(null);
+            setBulkReviewAction("");
+        }
+    };
+
+    const refreshSelectedVolcengineReviews = async () => {
+        if (!token) return message.error("请先登录");
+        if (!selectedVolcengineRefreshAssets.length) return message.warning("当前选择中没有可刷新的火山素材");
+        setBulkReviewAction("refresh");
+        let success = 0;
+        let failed = 0;
+        try {
+            for (const asset of selectedVolcengineRefreshAssets) {
+                try {
+                    await refreshImageReview(asset, { silent: true, showProgress: true });
+                    success += 1;
+                } catch {
+                    failed += 1;
+                }
+            }
+            if (failed) message.warning(`已刷新 ${success} 个，失败 ${failed} 个`);
+            else message.success(`已刷新 ${success} 个火山素材状态`);
+        } finally {
+            setBulkReviewAction("");
         }
     };
 
@@ -858,6 +909,12 @@ function AssetsPageContent() {
                             </Button>
                             <Button size="small" disabled={!selectedAssets.length} onClick={openBulkTag}>
                                 添加标签
+                            </Button>
+                            <Button size="small" disabled={!selectedVolcengineSubmitAssets.length || bulkReviewAction !== ""} loading={bulkReviewAction === "submit"} onClick={() => void submitSelectedVolcengineReviews()}>
+                                批量加白{selectedVolcengineSubmitAssets.length ? ` ${selectedVolcengineSubmitAssets.length}` : ""}
+                            </Button>
+                            <Button size="small" disabled={!selectedVolcengineRefreshAssets.length || bulkReviewAction !== ""} loading={bulkReviewAction === "refresh"} onClick={() => void refreshSelectedVolcengineReviews()}>
+                                批量刷新{selectedVolcengineRefreshAssets.length ? ` ${selectedVolcengineRefreshAssets.length}` : ""}
                             </Button>
                             <Button size="small" danger icon={<Trash2 className="size-3.5" />} disabled={!selectedAssets.length} onClick={openBulkDelete}>
                                 删除选中

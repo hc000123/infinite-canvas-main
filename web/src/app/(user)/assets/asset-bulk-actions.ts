@@ -1,5 +1,7 @@
 import type { Asset } from "@/stores/use-asset-store";
 
+type VolcengineReviewableAsset = Extract<Asset, { kind: "image" | "video" }>;
+
 export function buildBulkMoveAssetPatches(assets: Asset[], folderId?: string) {
     return assets.map((asset) => ({
         id: asset.id,
@@ -30,4 +32,16 @@ export function normalizeTags(tags: string[]) {
 
 function mergeTags(current: string[], incoming: string[]) {
     return normalizeTags([...current, ...incoming]);
+}
+
+export function assetsForVolcengineSubmit(assets: Asset[]): VolcengineReviewableAsset[] {
+    return assets.filter((asset) => {
+        if (asset.kind !== "image" && asset.kind !== "video") return false;
+        const status = asset.metadata?.volcengineAsset?.status;
+        return status !== "Active" && status !== "Processing";
+    }) as VolcengineReviewableAsset[];
+}
+
+export function assetsForVolcengineRefresh(assets: Asset[]): VolcengineReviewableAsset[] {
+    return assets.filter((asset) => (asset.kind === "image" || asset.kind === "video") && Boolean(asset.metadata?.volcengineAsset?.assetId)) as VolcengineReviewableAsset[];
 }
