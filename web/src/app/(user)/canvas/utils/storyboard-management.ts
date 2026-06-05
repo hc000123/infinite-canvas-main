@@ -1,5 +1,6 @@
 import type { CanvasConnection, CanvasNodeData, CanvasNodeMetadata, Position } from "../types.ts";
 import { buildAssetVersionReference, type AssetVersionReference } from "../../assets/asset-version-references.ts";
+import { canvasAssetReferenceMetadata } from "./canvas-asset-reference.ts";
 import type { ProductionBibleKind } from "./production-bible.ts";
 import type { ScriptEpisode, ScriptScene } from "./script-management.ts";
 
@@ -341,9 +342,7 @@ function assetToCanvasNode(asset: StoryboardAssetLike, ref: StoryboardAssetRef, 
             mimeType: typeof data.mimeType === "string" ? data.mimeType : undefined,
             naturalWidth: typeof data.width === "number" ? data.width : undefined,
             naturalHeight: typeof data.height === "number" ? data.height : undefined,
-            sourceAssetId: ref.assetId,
-            assetVersion,
-            assetReferenceMode: "fixed-version",
+            ...canvasAssetReferenceMetadata({ sourceAssetId: ref.assetId, assetVersion }),
             storyboardAssetRole: ref.role || "reference",
             storyboardRole: ref.role || "reference",
         }),

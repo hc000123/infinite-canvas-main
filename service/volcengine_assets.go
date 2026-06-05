@@ -184,15 +184,7 @@ func SubmitAdminAssetVolcengineReview(ctx context.Context, assetID string) (mode
 	if err != nil {
 		return model.Asset{}, err
 	}
-	asset.VolcengineAssetID = submission.AssetID
-	asset.VolcengineGroupID = submission.GroupID
-	asset.VolcengineProjectName = submission.ProjectName
-	asset.VolcengineStatus = submission.Status
-	asset.VolcengineError = ""
-	asset.VolcenginePublicURL = submission.PublicURL
-	asset.VolcengineSubmittedAt = submission.SubmittedAt
-	asset.VolcengineUpdatedAt = submission.UpdatedAt
-	return repository.SaveAsset(asset)
+	return repository.SaveAsset(assetWithVolcengineSubmission(asset, submission))
 }
 
 func RefreshAdminAssetVolcengineReview(ctx context.Context, assetID string) (model.Asset, error) {
@@ -207,6 +199,22 @@ func RefreshAdminAssetVolcengineReview(ctx context.Context, assetID string) (mod
 	if err != nil {
 		return model.Asset{}, err
 	}
+	return repository.SaveAsset(assetWithVolcengineStatus(asset, status))
+}
+
+func assetWithVolcengineSubmission(asset model.Asset, submission VolcengineAssetSubmission) model.Asset {
+	asset.VolcengineAssetID = submission.AssetID
+	asset.VolcengineGroupID = submission.GroupID
+	asset.VolcengineProjectName = submission.ProjectName
+	asset.VolcengineStatus = submission.Status
+	asset.VolcengineError = ""
+	asset.VolcenginePublicURL = submission.PublicURL
+	asset.VolcengineSubmittedAt = submission.SubmittedAt
+	asset.VolcengineUpdatedAt = submission.UpdatedAt
+	return asset
+}
+
+func assetWithVolcengineStatus(asset model.Asset, status VolcengineAssetStatus) model.Asset {
 	asset.VolcengineAssetID = firstNonEmpty(status.AssetID, asset.VolcengineAssetID)
 	asset.VolcengineGroupID = firstNonEmpty(status.GroupID, asset.VolcengineGroupID)
 	asset.VolcengineProjectName = firstNonEmpty(status.ProjectName, asset.VolcengineProjectName)
@@ -214,7 +222,7 @@ func RefreshAdminAssetVolcengineReview(ctx context.Context, assetID string) (mod
 	asset.VolcengineError = status.Error
 	asset.VolcenginePublicURL = firstNonEmpty(status.PublicURL, asset.VolcenginePublicURL)
 	asset.VolcengineUpdatedAt = firstNonEmpty(status.UpdatedAt, now())
-	return repository.SaveAsset(asset)
+	return asset
 }
 
 func currentVolcengineAssetSetting() (model.VolcengineAssetSetting, error) {

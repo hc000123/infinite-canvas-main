@@ -31,6 +31,7 @@ import { buildContinuousVideoChain } from "../utils/canvas-video-chain";
 import { buildCapturedVideoFrameNode } from "../utils/canvas-video-frame";
 import { buildVideoGenerationPlan, shouldCreateVideoVariant } from "../utils/canvas-video-generation-plan";
 import { canvasNodeToAsset } from "../utils/canvas-assets";
+import { canvasAssetReferenceMetadata } from "../utils/canvas-asset-reference";
 import { syncCanvasVolcengineAssetsFromLibrary } from "../utils/canvas-volcengine-asset-sync";
 import { buildGeneratedVideoAsset } from "../utils/canvas-generated-asset";
 import { nextQueuedItem } from "../utils/generation-queue";
@@ -1646,9 +1647,7 @@ function InfiniteCanvasPage() {
                 metadata: {
                     ...imageMetadata({ ...storedImage, width: meta.width, height: meta.height }),
                     prompt: image.prompt,
-                    sourceAssetId: image.sourceAssetId,
-                    assetVersion: image.assetVersion,
-                    assetReferenceMode: image.assetVersion ? "fixed-version" : undefined,
+                    ...canvasAssetReferenceMetadata(image),
                     volcengineAsset: image.volcengineAsset,
                 },
             };
@@ -1752,7 +1751,7 @@ function InfiniteCanvasPage() {
     const handleAssetInsert = useCallback(
         (payload: InsertAssetPayload) => {
             if (payload.kind === "text") {
-                insertAssistantText(payload.content, { sourceAssetId: payload.sourceAssetId, assetVersion: payload.assetVersion, assetReferenceMode: payload.assetVersion ? "fixed-version" : undefined });
+                insertAssistantText(payload.content, canvasAssetReferenceMetadata(payload));
             } else if (payload.kind === "video") {
                 const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Video];
                 const center = screenToCanvas((containerRef.current?.getBoundingClientRect().left || 0) + size.width / 2, (containerRef.current?.getBoundingClientRect().top || 0) + size.height / 2);
@@ -1773,9 +1772,7 @@ function InfiniteCanvasPage() {
                             status: NODE_STATUS_SUCCESS,
                             naturalWidth: payload.width,
                             naturalHeight: payload.height,
-                            sourceAssetId: payload.sourceAssetId,
-                            assetVersion: payload.assetVersion,
-                            assetReferenceMode: payload.assetVersion ? "fixed-version" : undefined,
+                            ...canvasAssetReferenceMetadata(payload),
                             volcengineAsset: payload.volcengineAsset,
                         },
                     },
@@ -1800,9 +1797,7 @@ function InfiniteCanvasPage() {
                             bytes: payload.bytes,
                             mimeType: payload.mimeType || "audio/mpeg",
                             status: NODE_STATUS_SUCCESS,
-                            sourceAssetId: payload.sourceAssetId,
-                            assetVersion: payload.assetVersion,
-                            assetReferenceMode: payload.assetVersion ? "fixed-version" : undefined,
+                            ...canvasAssetReferenceMetadata(payload),
                         },
                     },
                 ]);
@@ -1829,7 +1824,7 @@ function InfiniteCanvasPage() {
             const asset = assetId ? assetById.get(assetId) : undefined;
             if (!asset || !node.metadata?.assetVersion) return message.warning("没有可更新的素材引用");
             const nextVersion = updateAssetReferenceToLatest(node.metadata.assetVersion, asset);
-            setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, assetVersion: nextVersion, assetReferenceMode: "fixed-version" } } : item)));
+            setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, ...canvasAssetReferenceMetadata({ sourceAssetId: assetId, assetVersion: nextVersion }) } } : item)));
             message.success("已更新当前节点的素材引用版本");
         },
         [assetById, message],
