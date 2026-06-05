@@ -4,21 +4,7 @@ import { createZip, readZip } from "@/lib/zip";
 import { getMediaBlob, setMediaBlob } from "@/services/file-storage";
 import { getImageBlob, setImageBlob } from "@/services/image-storage";
 import type { Asset } from "@/stores/use-asset-store";
-
-type AssetExportFile = {
-    app: "infinite-canvas";
-    version: 1;
-    exportedAt: string;
-    assets: Asset[];
-    files: AssetExportItem[];
-};
-
-type AssetExportItem = {
-    storageKey: string;
-    path: string;
-    mimeType: string;
-    bytes: number;
-};
+import { validateAssetPackageData, type AssetExportFile, type AssetExportItem } from "./asset-transfer-validation";
 
 export async function exportAssets(assets: Asset[]) {
     const files: AssetExportItem[] = [];
@@ -45,8 +31,8 @@ export async function exportAssets(assets: Asset[]) {
 export async function readAssetPackage(file: File) {
     const zip = await readZip(file);
     const assetFile = zip.get("assets.json");
-    if (!assetFile) throw new Error("missing assets.json");
-    const data = JSON.parse(await assetFile.text()) as AssetExportFile;
+    if (!assetFile) throw new Error("素材包缺少 assets.json");
+    const data = validateAssetPackageData(JSON.parse(await assetFile.text()));
     await Promise.all(
         data.files.map(async (item) => {
             const blob = zip.get(item.path);

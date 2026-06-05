@@ -120,6 +120,7 @@ function AssetsPageContent() {
     const [bulkMoveFolderId, setBulkMoveFolderId] = useState<string | undefined>();
     const [bulkTagOpen, setBulkTagOpen] = useState(false);
     const [bulkTags, setBulkTags] = useState<string[]>([]);
+    const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
     const activeFolderId = activeAssetFolderId(folderFilter);
     const coverUrl = Form.useWatch("coverUrl", form) || "";
     const title = Form.useWatch("title", form) || "";
@@ -409,6 +410,19 @@ function AssetsPageContent() {
         setBulkTagOpen(false);
     };
 
+    const openBulkDelete = () => {
+        if (!selectedAssets.length) return message.warning("请先选择素材");
+        setBulkDeleteOpen(true);
+    };
+
+    const applyBulkDelete = () => {
+        const count = selectedAssets.length;
+        selectedAssets.forEach((asset) => removeAsset(asset.id));
+        clearSelectedAssets();
+        setBulkDeleteOpen(false);
+        message.success(`已删除 ${count} 个素材`);
+    };
+
     const importAssetFiles = async (files?: FileList | File[]) => {
         const fileList = importableAssetFiles(files);
         if (!fileList.length) {
@@ -419,8 +433,8 @@ function AssetsPageContent() {
             const count = await importAssetFileList(fileList, { folderId: activeFolderId, addAssetOnce });
             setPage(1);
             message.success(assetImportSuccessMessage(count, activeFolderId ? folderMap.get(activeFolderId)?.name || "当前文件夹" : ""));
-        } catch {
-            message.error("导入失败，请选择有效的素材压缩包或媒体文件");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "导入失败，请选择有效的素材压缩包或媒体文件");
         } finally {
             if (assetInputRef.current) assetInputRef.current.value = "";
         }
@@ -845,6 +859,9 @@ function AssetsPageContent() {
                             <Button size="small" disabled={!selectedAssets.length} onClick={openBulkTag}>
                                 添加标签
                             </Button>
+                            <Button size="small" danger icon={<Trash2 className="size-3.5" />} disabled={!selectedAssets.length} onClick={openBulkDelete}>
+                                删除选中
+                            </Button>
                             <Button size="small" disabled={!selectedAssets.length} onClick={clearSelectedAssets}>
                                 清空选择
                             </Button>
@@ -946,6 +963,10 @@ function AssetsPageContent() {
                     <div className="text-sm text-stone-500">为 {selectedAssets.length} 个素材追加标签，已有标签会保留并自动去重。</div>
                     <Select mode="tags" className="w-full" placeholder="输入标签后回车" value={bulkTags} onChange={(value) => setBulkTags(value)} />
                 </div>
+            </Modal>
+
+            <Modal title="批量删除素材" open={bulkDeleteOpen} onCancel={() => setBulkDeleteOpen(false)} onOk={applyBulkDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消" destroyOnHidden>
+                确定删除已选择的 {selectedAssets.length} 个素材吗？删除后会从我的素材中移除。
             </Modal>
 
             <Modal title="删除素材" open={Boolean(deletingAsset)} onCancel={() => setDeletingAsset(null)} onOk={confirmDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
