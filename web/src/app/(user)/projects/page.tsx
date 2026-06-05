@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
+import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { App, Button, Empty, Input, Modal, Tag } from "antd";
 import { Archive, Box, FolderOpen, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
@@ -11,6 +10,7 @@ import { CanvasCreateProjectModal } from "../canvas/components/canvas-create-pro
 import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../canvas/utils/canvas-project-preset";
 import { UNFILED_CREATIVE_PROJECT_TITLE, canvasIdsForCreativeProject, unfiledCanvasProjects, type CreativeProject } from "./creative-projects";
+import { shouldOpenProjectCardFromTarget } from "./project-card-navigation";
 import { useCreativeProjectStore } from "./use-creative-project-store";
 
 export default function ProjectsPage() {
@@ -91,6 +91,7 @@ export default function ProjectsPage() {
                                 onCancel={() => setEditingId("")}
                                 onArchive={() => archiveProject(project.id)}
                                 onDelete={() => removeProject(project)}
+                                onOpen={() => router.push(`/projects/${project.id}`)}
                             />
                         ))}
                         {unfiledCanvases.length ? <UnfiledProjectCard count={unfiledCanvases.length} /> : null}
@@ -155,6 +156,7 @@ function ProjectCard({
     onCancel,
     onArchive,
     onDelete,
+    onOpen,
 }: {
     project: CreativeProject;
     canvasCount: number;
@@ -166,18 +168,35 @@ function ProjectCard({
     onCancel: () => void;
     onArchive: () => void;
     onDelete: () => void;
+    onOpen: () => void;
 }) {
+    const openable = !editing;
+    const handleCardClick = (event: ReactMouseEvent<HTMLElement>) => {
+        if (openable && shouldOpenProjectCardFromTarget(event.target)) onOpen();
+    };
+    const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+        if (!openable || !shouldOpenProjectCardFromTarget(event.target)) return;
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        onOpen();
+    };
+
     return (
-        <article className="flex min-h-52 flex-col justify-between rounded-2xl bg-[#f1eee8] p-5 transition hover:bg-[#ebe6dc] dark:bg-white/5 dark:hover:bg-white/10">
+        <article
+            className={`flex min-h-52 flex-col justify-between rounded-2xl bg-[#f1eee8] p-5 transition hover:bg-[#ebe6dc] dark:bg-white/5 dark:hover:bg-white/10 ${openable ? "cursor-pointer" : ""}`}
+            role={openable ? "link" : undefined}
+            tabIndex={openable ? 0 : undefined}
+            aria-label={openable ? `打开项目 ${project.title}` : undefined}
+            onClick={handleCardClick}
+            onKeyDown={handleCardKeyDown}
+        >
             <div>
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                         {editing ? (
                             <Input value={editingTitle} autoFocus onChange={(event) => onEditingTitleChange(event.target.value)} onPressEnter={onSave} />
                         ) : (
-                            <Link href={`/projects/${project.id}`} className="block min-w-0 text-stone-950 dark:text-stone-100">
-                                <h2 className="truncate text-xl font-semibold">{project.title}</h2>
-                            </Link>
+                            <h2 className="truncate text-xl font-semibold text-stone-950 dark:text-stone-100">{project.title}</h2>
                         )}
                         <p className="mt-3 text-sm leading-6 text-stone-600 dark:text-stone-400">
                             {canvasCount} 个画布 · {canvasProjectPresetSummary(project.preset)}
