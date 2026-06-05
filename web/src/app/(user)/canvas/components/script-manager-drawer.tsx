@@ -9,6 +9,7 @@ import { useScriptStore } from "../stores/use-script-store";
 import { useStoryboardStore } from "../stores/use-storyboard-store";
 import { itemsForProductionBibleProject, productionBibleKindLabel, type ProductionBibleItem } from "../utils/production-bible";
 import { orderedScriptEpisodes, orderedScriptScenes, type ScriptEpisode, type ScriptScene } from "../utils/script-management";
+import { buildScriptWorkflowSteps, scriptWorkflowNextAction, type ScriptWorkflowStep } from "../utils/script-workflow";
 
 type Props = {
     open: boolean;
@@ -71,6 +72,9 @@ export function ScriptManagerDrawer({ open, projectId, projectTitle, onClose, on
     const characterItems = projectBibleItems.filter((item) => item.kind === "character");
     const sceneSettingItems = projectBibleItems.filter((item) => item.kind === "scene");
     const bibleById = useMemo(() => new Map(projectBibleItems.map((item) => [item.id, item])), [projectBibleItems]);
+    const workflowInput = { hasOutline: Boolean(outlineDraft.trim()), episodeCount: projectEpisodes.length, activeSceneCount: activeScenes.length };
+    const workflowSteps = buildScriptWorkflowSteps(workflowInput);
+    const nextAction = scriptWorkflowNextAction(workflowInput);
 
     useEffect(() => {
         if (!open) return;
@@ -122,6 +126,7 @@ export function ScriptManagerDrawer({ open, projectId, projectTitle, onClose, on
     return (
         <Drawer title="剧本管理" open={open} onClose={onClose} size={980} destroyOnHidden>
             <div className="mb-4 text-sm text-stone-500 dark:text-stone-400">当前画布：{projectTitle}</div>
+            <ScriptWorkflowGuide steps={workflowSteps} nextAction={nextAction} />
             <div className="grid h-full min-h-[680px] gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
                 <div className="space-y-4">
                     <Card size="small" title="故事大纲">
@@ -159,7 +164,7 @@ export function ScriptManagerDrawer({ open, projectId, projectTitle, onClose, on
                                 ))}
                             </div>
                         ) : (
-                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无分集" className="py-8" />
+                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="先新增第一个分集，再为这一集拆场次" className="py-8" />
                         )}
                     </Card>
                 </div>
@@ -208,7 +213,7 @@ export function ScriptManagerDrawer({ open, projectId, projectTitle, onClose, on
                             ))}
                         </div>
                     ) : (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={activeEpisode ? "暂无场次" : "请先创建分集"} className="py-16" />
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={activeEpisode ? "新增场次，或用文本导入批量生成场次草稿" : "先在左侧创建分集"} className="py-16" />
                     )}
                 </Card>
             </div>
@@ -259,6 +264,37 @@ export function ScriptManagerDrawer({ open, projectId, projectTitle, onClose, on
                 <Input.TextArea value={importText} rows={10} placeholder={"按空行分段，每段会生成一个场次草稿。\n可写：地点：、情绪：、对白：、时长："} onChange={(event) => setImportText(event.target.value)} />
             </Modal>
         </Drawer>
+    );
+}
+
+function ScriptWorkflowGuide({ steps, nextAction }: { steps: ScriptWorkflowStep[]; nextAction: string }) {
+    return (
+        <div className="mb-4 rounded-xl border border-stone-200 bg-stone-50/70 p-3 dark:border-stone-800 dark:bg-stone-900/70">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm font-medium text-stone-900 dark:text-stone-100">推荐流程</div>
+                <Tag className="m-0">下一步：{nextAction}</Tag>
+            </div>
+            <div className="grid gap-2 md:grid-cols-4">
+                {steps.map((step, index) => (
+                    <div key={step.key} className={`rounded-lg border p-3 ${step.status === "current" ? "border-stone-900 bg-white dark:border-stone-200 dark:bg-stone-800" : "border-stone-200 bg-white/60 dark:border-stone-800 dark:bg-stone-950/40"}`}>
+                        <div className="flex items-center gap-2">
+                            <span
+                                className={`inline-flex size-5 items-center justify-center rounded-full text-xs ${step.status === "done" ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-950" : "bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"}`}
+                            >
+                                {index + 1}
+                            </span>
+                            <span className="text-sm font-medium">{step.title}</span>
+                            {step.status === "current" ? (
+                                <Tag className="m-0 ml-auto" color="blue">
+                                    当前
+                                </Tag>
+                            ) : null}
+                        </div>
+                        <p className="mt-2 text-xs leading-5 text-stone-500">{step.detail}</p>
+                    </div>
+                ))}
+            </div>
+        </div>
     );
 }
 
