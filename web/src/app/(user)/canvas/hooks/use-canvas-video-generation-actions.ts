@@ -5,7 +5,7 @@ import type { AssetWriteInput } from "@/stores/use-asset-store";
 import { isRecoverableVideoTaskError } from "@/services/api/video";
 import type { UploadedFile } from "@/services/file-storage";
 
-import { NODE_DEFAULT_SIZE } from "../constants";
+import { NODE_DEFAULT_SIZE, VIDEO_NODE_MAX_HEIGHT, VIDEO_NODE_MAX_WIDTH } from "../constants";
 import { buildGeneratedVideoAsset } from "../utils/canvas-generated-asset";
 import type { CanvasProjectPreset } from "../utils/canvas-project-preset";
 import { buildVideoGenerationMetadata, videoTaskMetadata } from "../utils/canvas-generation-metadata";
@@ -18,8 +18,6 @@ import type { VideoGenerationPlan } from "../utils/canvas-video-generation-plan"
 import { useStoryboardStore } from "../stores/use-storyboard-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "../types";
 
-const VIDEO_NODE_MAX_WIDTH = 420;
-const VIDEO_NODE_MAX_HEIGHT = 420;
 const NODE_STATUS_ERROR = "error" as const;
 const NODE_STATUS_LOADING = "loading" as const;
 const NODE_STATUS_SUCCESS = "success" as const;

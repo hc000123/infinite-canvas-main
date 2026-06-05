@@ -2,7 +2,7 @@ import { useCallback, type ChangeEvent as ReactChangeEvent, type Dispatch, type 
 import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { uploadImage, type UploadedImage } from "@/services/image-storage";
 
-import { NODE_DEFAULT_SIZE } from "../constants";
+import { NODE_DEFAULT_SIZE, VIDEO_NODE_MAX_HEIGHT, VIDEO_NODE_MAX_WIDTH } from "../constants";
 import { fitNodeSize } from "../utils/canvas-node-size";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type Position } from "../types";
 
@@ -25,9 +25,6 @@ type UseCanvasFileNodeActionsOptions = {
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
     toAudioMetadata: (audio: UploadedFile) => CanvasNodeMetadata;
 };
-
-const VIDEO_NODE_MAX_WIDTH = 420;
-const VIDEO_NODE_MAX_HEIGHT = 420;
 
 export function useCanvasFileNodeActions({
     containerRef,

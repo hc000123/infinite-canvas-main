@@ -36,6 +36,7 @@ import { syncCanvasVolcengineAssetsFromLibrary } from "../utils/canvas-volcengin
 import { buildGeneratedVideoAsset } from "../utils/canvas-generated-asset";
 import { nextQueuedItem } from "../utils/generation-queue";
 import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions";
+import { buildInsertedMediaAssetNode } from "../utils/canvas-inserted-media-node";
 import { resetInterruptedGeneration } from "../utils/canvas-video-task-recovery";
 import { applyCanvasProjectPresetToConfig } from "../utils/canvas-project-preset";
 import { planStoryboardGroupCanvasInsert } from "../utils/storyboard-management";
@@ -55,7 +56,7 @@ import { useCanvasTextGenerationActions } from "../hooks/use-canvas-text-generat
 import { useCanvasVideoGenerationActions } from "../hooks/use-canvas-video-generation-actions";
 import { useCanvasVideoTaskRecovery } from "../hooks/use-canvas-video-task-recovery";
 import { App, Button, Dropdown, Modal } from "antd";
-import { NODE_DEFAULT_SIZE, getNodeSpec } from "../constants";
+import { NODE_DEFAULT_SIZE, VIDEO_NODE_MAX_HEIGHT, VIDEO_NODE_MAX_WIDTH, getNodeSpec } from "../constants";
 import { ActiveConnectionPath, ConnectionPath } from "../components/canvas-connections";
 import { CanvasConfigNodePanel } from "../components/canvas-config-node-panel";
 import { CanvasAssistantPanel } from "../components/canvas-assistant-panel";
@@ -83,8 +84,6 @@ import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio } from "@/types/audio";
 import type { ReferenceVideo } from "@/types/video";
 
-const VIDEO_NODE_MAX_WIDTH = 420;
-const VIDEO_NODE_MAX_HEIGHT = 420;
 const NODE_STATUS_LOADING = "loading" as const;
 const NODE_STATUS_SUCCESS = "success" as const;
 const NODE_STATUS_ERROR = "error" as const;
@@ -1752,55 +1751,10 @@ function InfiniteCanvasPage() {
         (payload: InsertAssetPayload) => {
             if (payload.kind === "text") {
                 insertAssistantText(payload.content, canvasAssetReferenceMetadata(payload));
-            } else if (payload.kind === "video") {
-                const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Video];
+            } else if (payload.kind === "video" || payload.kind === "audio") {
                 const center = screenToCanvas((containerRef.current?.getBoundingClientRect().left || 0) + size.width / 2, (containerRef.current?.getBoundingClientRect().top || 0) + size.height / 2);
-                const id = `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-                const nextSize = fitNodeSize(payload.width || spec.width, payload.height || spec.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
-                setNodes((prev) => [
-                    ...prev,
-                    {
-                        id,
-                        type: CanvasNodeType.Video,
-                        title: payload.title,
-                        position: { x: center.x - nextSize.width / 2, y: center.y - nextSize.height / 2 },
-                        width: nextSize.width,
-                        height: nextSize.height,
-                        metadata: {
-                            content: payload.url,
-                            storageKey: payload.storageKey,
-                            status: NODE_STATUS_SUCCESS,
-                            naturalWidth: payload.width,
-                            naturalHeight: payload.height,
-                            ...canvasAssetReferenceMetadata(payload),
-                            volcengineAsset: payload.volcengineAsset,
-                        },
-                    },
-                ]);
-                setSelectedNodeIds(new Set([id]));
-            } else if (payload.kind === "audio") {
-                const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Audio];
-                const center = screenToCanvas((containerRef.current?.getBoundingClientRect().left || 0) + size.width / 2, (containerRef.current?.getBoundingClientRect().top || 0) + size.height / 2);
-                const id = `audio-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-                setNodes((prev) => [
-                    ...prev,
-                    {
-                        id,
-                        type: CanvasNodeType.Audio,
-                        title: payload.title,
-                        position: { x: center.x - spec.width / 2, y: center.y - spec.height / 2 },
-                        width: spec.width,
-                        height: spec.height,
-                        metadata: {
-                            content: payload.url,
-                            storageKey: payload.storageKey,
-                            bytes: payload.bytes,
-                            mimeType: payload.mimeType || "audio/mpeg",
-                            status: NODE_STATUS_SUCCESS,
-                            ...canvasAssetReferenceMetadata(payload),
-                        },
-                    },
-                ]);
+                const id = `${payload.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+                setNodes((prev) => [...prev, buildInsertedMediaAssetNode(payload, id, center)]);
                 setSelectedNodeIds(new Set([id]));
             } else {
                 insertAssistantImage({

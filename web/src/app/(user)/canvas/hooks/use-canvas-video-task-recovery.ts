@@ -5,15 +5,13 @@ import { fetchVideoTaskContent, refreshVideoTask } from "@/services/api/video";
 import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { defaultConfig, type AiConfig } from "@/stores/use-config-store";
 
-import { NODE_DEFAULT_SIZE } from "../constants";
+import { NODE_DEFAULT_SIZE, VIDEO_NODE_MAX_HEIGHT, VIDEO_NODE_MAX_WIDTH } from "../constants";
 import { buildGenerationConfig } from "../utils/canvas-generation-config";
 import { videoTaskMetadata } from "../utils/canvas-generation-metadata";
 import { fitNodeSize } from "../utils/canvas-node-size";
 import { recoverableVideoTaskNodes, recoveredVideoTaskNodeStatus } from "../utils/canvas-video-task-recovery";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata } from "../types";
 
-const VIDEO_NODE_MAX_WIDTH = 420;
-const VIDEO_NODE_MAX_HEIGHT = 420;
 const NODE_STATUS_LOADING = "loading" as const;
 const NODE_STATUS_SUCCESS = "success" as const;
 

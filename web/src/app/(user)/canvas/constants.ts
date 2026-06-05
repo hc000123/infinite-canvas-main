@@ -15,6 +15,9 @@ export const NODE_DEFAULT_SIZE = {
     audio: { width: 340, height: 120, title: "Audio" },
 } satisfies Record<CanvasNodeType, { width: number; height: number; title: string }>;
 
+export const VIDEO_NODE_MAX_WIDTH = 420;
+export const VIDEO_NODE_MAX_HEIGHT = 420;
+
 export const NODE_SPECS = {
     image: {
         ...NODE_DEFAULT_SIZE.image,
