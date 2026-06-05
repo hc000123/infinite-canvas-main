@@ -2,9 +2,8 @@ import { useCallback, type ChangeEvent as ReactChangeEvent, type Dispatch, type 
 import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { uploadImage, type UploadedImage } from "@/services/image-storage";
 
-import { NODE_DEFAULT_SIZE, VIDEO_NODE_MAX_HEIGHT, VIDEO_NODE_MAX_WIDTH } from "../constants";
-import { fitNodeSize } from "../utils/canvas-node-size";
-import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type Position } from "../types";
+import { buildUploadedAudioFileNode, buildUploadedImageFileNode, buildUploadedVideoFileNode, replaceNodeWithUploadedAudioFile, replaceNodeWithUploadedImageFile, replaceNodeWithUploadedVideoFile } from "../utils/canvas-uploaded-file-node";
+import type { CanvasNodeData, CanvasNodeMetadata, Position } from "../types";
 
 type UploadTarget = { nodeId?: string; position?: Position } | null;
 
@@ -46,17 +45,14 @@ export function useCanvasFileNodeActions({
     const createImageFileNode = useCallback(
         async (file: File, position: Position) => {
             const image = await uploadImage(file);
-            const size = fitNodeSize(image.width, image.height);
             const id = `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            const newNode: CanvasNodeData = {
+            const newNode = buildUploadedImageFileNode({
                 id,
-                type: CanvasNodeType.Image,
                 title: file.name,
-                position: { x: position.x - size.width / 2, y: position.y - size.height / 2 },
-                width: size.width,
-                height: size.height,
+                center: position,
+                file: image,
                 metadata: toImageMetadata(image),
-            };
+            });
 
             setNodes((prev) => [...prev, newNode]);
             await addCanvasNodeToAssets(newNode);
@@ -70,17 +66,14 @@ export function useCanvasFileNodeActions({
     const createVideoFileNode = useCallback(
         async (file: File, position: Position) => {
             const video = await uploadMediaFile(file, "video");
-            const size = fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
             const id = `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            const newNode: CanvasNodeData = {
+            const newNode = buildUploadedVideoFileNode({
                 id,
-                type: CanvasNodeType.Video,
                 title: file.name,
-                position: { x: position.x - size.width / 2, y: position.y - size.height / 2 },
-                width: size.width,
-                height: size.height,
+                center: position,
+                file: video,
                 metadata: toVideoMetadata(video),
-            };
+            });
             setNodes((prev) => [...prev, newNode]);
             await addCanvasNodeToAssets(newNode);
             setSelectedNodeIds(new Set([id]));
@@ -93,17 +86,14 @@ export function useCanvasFileNodeActions({
     const createAudioFileNode = useCallback(
         async (file: File, position: Position) => {
             const audio = await uploadMediaFile(file, "audio");
-            const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Audio];
             const id = `audio-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            const newNode: CanvasNodeData = {
+            const newNode = buildUploadedAudioFileNode({
                 id,
-                type: CanvasNodeType.Audio,
                 title: file.name,
-                position: { x: position.x - spec.width / 2, y: position.y - spec.height / 2 },
-                width: spec.width,
-                height: spec.height,
+                center: position,
+                file: audio,
                 metadata: toAudioMetadata(audio),
-            };
+            });
             setNodes((prev) => [...prev, newNode]);
             await addCanvasNodeToAssets(newNode);
             setSelectedNodeIds(new Set([id]));
@@ -141,16 +131,12 @@ export function useCanvasFileNodeActions({
 
                 if (file.type.startsWith("audio/")) {
                     const audio = await uploadMediaFile(file, "audio");
-                    const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Audio];
-                    const nextNode: CanvasNodeData = {
-                        ...currentNode,
-                        type: CanvasNodeType.Audio,
+                    const nextNode = replaceNodeWithUploadedAudioFile({
+                        currentNode,
                         title: file.name,
-                        position: { x: currentNode.position.x + currentNode.width / 2 - spec.width / 2, y: currentNode.position.y + currentNode.height / 2 - spec.height / 2 },
-                        width: spec.width,
-                        height: spec.height,
-                        metadata: { ...currentNode.metadata, ...toAudioMetadata(audio), errorDetails: undefined },
-                    };
+                        file: audio,
+                        metadata: toAudioMetadata(audio),
+                    });
                     setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? nextNode : node)));
                     await addCanvasNodeToAssets(nextNode);
                     setSelectedNodeIds(new Set([target.nodeId]));
@@ -163,16 +149,12 @@ export function useCanvasFileNodeActions({
 
                 if (file.type.startsWith("video/")) {
                     const video = await uploadMediaFile(file, "video");
-                    const nextSize = fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
-                    const nextNode: CanvasNodeData = {
-                        ...currentNode,
-                        type: CanvasNodeType.Video,
+                    const nextNode = replaceNodeWithUploadedVideoFile({
+                        currentNode,
                         title: file.name,
-                        position: { x: currentNode.position.x + currentNode.width / 2 - nextSize.width / 2, y: currentNode.position.y + currentNode.height / 2 - nextSize.height / 2 },
-                        width: nextSize.width,
-                        height: nextSize.height,
-                        metadata: { ...currentNode.metadata, ...toVideoMetadata(video), errorDetails: undefined },
-                    };
+                        file: video,
+                        metadata: toVideoMetadata(video),
+                    });
                     setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? nextNode : node)));
                     await addCanvasNodeToAssets(nextNode);
                     setSelectedNodeIds(new Set([target.nodeId]));
@@ -184,32 +166,12 @@ export function useCanvasFileNodeActions({
                 }
 
                 const image = await uploadImage(file);
-                const size = fitNodeSize(image.width, image.height);
-                const nextNode: CanvasNodeData = {
-                    ...currentNode,
-                    type: CanvasNodeType.Image,
+                const nextNode = replaceNodeWithUploadedImageFile({
+                    currentNode,
                     title: file.name,
-                    width: size.width,
-                    height: size.height,
-                    metadata: {
-                        ...currentNode.metadata,
-                        ...toImageMetadata(image),
-                        errorDetails: undefined,
-                        freeResize: false,
-                        isBatchRoot: undefined,
-                        batchRootId: undefined,
-                        batchChildIds: undefined,
-                        batchUsesReferenceImages: undefined,
-                        generationType: undefined,
-                        model: undefined,
-                        size: undefined,
-                        quality: undefined,
-                        count: undefined,
-                        references: undefined,
-                        primaryImageId: undefined,
-                        imageBatchExpanded: undefined,
-                    },
-                };
+                    file: image,
+                    metadata: toImageMetadata(image),
+                });
                 setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? nextNode : node)));
                 await addCanvasNodeToAssets(nextNode);
                 setSelectedNodeIds(new Set([target.nodeId]));
