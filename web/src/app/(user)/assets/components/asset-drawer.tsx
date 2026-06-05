@@ -5,6 +5,7 @@ import { isVolcengineReviewProcessing, shouldShowVolcengineReviewAction } from "
 import type { Asset } from "@/stores/use-asset-store";
 import { assetProjectLibraryEntries, projectLibraryRoleLabel, projectLibrarySyncStatusLabel } from "../asset-project-library";
 import { assetVersionMediaSummary, assetVersionRecords, type AssetVersionRecord } from "../asset-version-history";
+import type { AssetVersionUsageReference } from "../asset-version-references";
 import { assetKindDownloadLabel, assetKindLabel, assetMediaInfo, volcengineReviewActionLabel } from "../asset-utils";
 import { VolcengineAssetTag } from "./asset-card";
 import { AssetGenerationSection } from "./asset-generation-section";
@@ -20,6 +21,7 @@ export function AssetDrawer({
     onReview,
     onRefreshReview,
     projectLibraryProjectTitles,
+    usageReferences,
     onRestoreVersion,
 }: {
     asset: Asset | null;
@@ -32,6 +34,7 @@ export function AssetDrawer({
     onReview: (asset: Asset) => void;
     onRefreshReview: (asset: Asset) => void;
     projectLibraryProjectTitles?: Record<string, string>;
+    usageReferences?: AssetVersionUsageReference[];
     onRestoreVersion: (asset: Asset, versionId: string) => void;
 }) {
     const cover = asset ? asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "") : "";
@@ -107,7 +110,7 @@ export function AssetDrawer({
                             </div>
                         </div>
                     ) : null}
-                    <AssetVersionHistory asset={asset} versions={versionRecords} onRestoreVersion={onRestoreVersion} />
+                    <AssetVersionHistory asset={asset} versions={versionRecords} usageReferences={usageReferences || []} onRestoreVersion={onRestoreVersion} />
                     <AssetGenerationSection asset={asset} />
                     <Space wrap>
                         {asset.kind === "text" ? (
@@ -161,42 +164,125 @@ function videoCoverUrl(url: string) {
     return `${url}#t=0.1`;
 }
 
-function AssetVersionHistory({ asset, versions, onRestoreVersion }: { asset: Asset; versions: AssetVersionRecord[]; onRestoreVersion: (asset: Asset, versionId: string) => void }) {
-    if (!versions.length) return null;
+function AssetVersionHistory({ asset, versions, usageReferences, onRestoreVersion }: { asset: Asset; versions: AssetVersionRecord[]; usageReferences: AssetVersionUsageReference[]; onRestoreVersion: (asset: Asset, versionId: string) => void }) {
+    if (!versions.length && !usageReferences.length) return null;
     return (
         <div className="rounded-lg border border-stone-200 p-4 text-sm dark:border-stone-800">
             <div className="flex items-center justify-between gap-3">
                 <Typography.Text type="secondary" className="block text-xs">
                     版本历史
                 </Typography.Text>
-                <Tag className="m-0">{versions.length} 个版本</Tag>
+                <Space size={4} wrap>
+                    {versions.length ? <Tag className="m-0">{versions.length} 个版本</Tag> : null}
+                    {usageReferences.length ? <Tag className="m-0">{usageReferences.length} 处引用</Tag> : null}
+                </Space>
             </div>
-            <div className="mt-3 space-y-2">
-                {[...versions]
-                    .sort((a, b) => b.versionNumber - a.versionNumber)
-                    .map((version) => (
-                        <div key={version.id} className="flex flex-col gap-2 rounded-md bg-stone-50 px-3 py-2 dark:bg-stone-900/70 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <Typography.Text strong className="text-sm">
-                                        v{version.versionNumber}
-                                    </Typography.Text>
-                                    {version.isCurrent ? <Tag color="blue">当前版本</Tag> : null}
-                                    <Typography.Text type="secondary" className="text-xs">
-                                        {version.changeNote || "版本更新"}
+            {versions.length ? (
+                <div className="mt-3 space-y-2">
+                    {[...versions]
+                        .sort((a, b) => b.versionNumber - a.versionNumber)
+                        .map((version) => (
+                            <div key={version.id} className="flex flex-col gap-2 rounded-md bg-stone-50 px-3 py-2 dark:bg-stone-900/70 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Typography.Text strong className="text-sm">
+                                            v{version.versionNumber}
+                                        </Typography.Text>
+                                        {version.isCurrent ? <Tag color="blue">当前版本</Tag> : null}
+                                        <Typography.Text type="secondary" className="text-xs">
+                                            {version.changeNote || "版本更新"}
+                                        </Typography.Text>
+                                    </div>
+                                    <Typography.Text type="secondary" className="mt-1 block break-words text-xs">
+                                        {assetVersionMediaSummary(version)}
+                                        {version.createdAt ? ` · ${version.createdAt}` : ""}
                                     </Typography.Text>
                                 </div>
+                                <Button size="small" icon={<RotateCcw className="size-3.5" />} disabled={version.isCurrent} onClick={() => onRestoreVersion(asset, version.id)}>
+                                    恢复
+                                </Button>
+                            </div>
+                        ))}
+                </div>
+            ) : null}
+            {usageReferences.length ? (
+                <div className="mt-4 border-t border-stone-200 pt-3 dark:border-stone-800">
+                    <Typography.Text type="secondary" className="block text-xs">
+                        被引用对象
+                    </Typography.Text>
+                    <div className="mt-2 space-y-2">
+                        {usageReferences.map((usage) => (
+                            <div key={usage.id} className="rounded-md bg-stone-50 px-3 py-2 dark:bg-stone-900/70">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Tag className="m-0">{usageKindLabel(usage)}</Tag>
+                                    <Typography.Text strong className="min-w-0 text-sm">
+                                        {usage.objectTitle}
+                                    </Typography.Text>
+                                    {usage.hasNewVersion ? <Tag color="gold">有新版本可用</Tag> : null}
+                                </div>
                                 <Typography.Text type="secondary" className="mt-1 block break-words text-xs">
-                                    {assetVersionMediaSummary(version)}
-                                    {version.createdAt ? ` · ${version.createdAt}` : ""}
+                                    {[usage.projectTitle, usage.contextTitle, usageRoleLabel(usage), usageVersionLabel(usage)].filter(Boolean).join(" · ")}
                                 </Typography.Text>
                             </div>
-                            <Button size="small" icon={<RotateCcw className="size-3.5" />} disabled={version.isCurrent} onClick={() => onRestoreVersion(asset, version.id)}>
-                                恢复
-                            </Button>
-                        </div>
-                    ))}
-            </div>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
+}
+
+function usageKindLabel(usage: AssetVersionUsageReference) {
+    if (usage.kind === "canvas-node") return "画布节点";
+    if (usage.kind === "storyboard-shot") return "分镜条目";
+    return productionBibleKindLabel(usage.objectType);
+}
+
+function usageRoleLabel(usage: AssetVersionUsageReference) {
+    if (usage.kind === "canvas-node") return canvasNodeTypeLabel(usage.role || usage.objectType);
+    if (usage.kind === "storyboard-shot") return storyboardRefLabel(usage.role || usage.objectType);
+    return productionBibleRefLabel(usage.role);
+}
+
+function usageVersionLabel(usage: AssetVersionUsageReference) {
+    const reference = usage.assetVersion;
+    if (!reference) return "未记录版本";
+    const version = reference.versionNumber ? `锁定 v${reference.versionNumber}` : reference.assetVersionId ? `锁定 ${reference.assetVersionId}` : "锁定版本";
+    return reference.assetUpdatedAt ? `${version}，素材时间 ${reference.assetUpdatedAt}` : version;
+}
+
+function canvasNodeTypeLabel(type?: string) {
+    if (type === "image") return "图片节点";
+    if (type === "video") return "视频节点";
+    if (type === "audio") return "音频节点";
+    if (type === "text") return "文本节点";
+    if (type === "config") return "配置节点";
+    return "";
+}
+
+function storyboardRefLabel(role?: string) {
+    if (role === "reference_audio") return "音频参考";
+    if (role === "reference_video") return "视频参考";
+    if (role === "source_video") return "源视频";
+    if (role === "first_frame") return "首帧";
+    if (role === "last_frame") return "尾帧";
+    if (role === "reference_image") return "普通参考";
+    return role || "";
+}
+
+function productionBibleKindLabel(kind?: string) {
+    if (kind === "character") return "设定库角色";
+    if (kind === "scene") return "设定库场景";
+    if (kind === "prop") return "设定库道具";
+    return "设定库";
+}
+
+function productionBibleRefLabel(role?: string) {
+    if (role === "reference") return "参考";
+    if (role === "portrait") return "形象";
+    if (role === "environment") return "环境";
+    if (role === "style") return "风格";
+    if (role === "consistency") return "一致性";
+    if (role === "negative") return "反向";
+    return role || "";
 }

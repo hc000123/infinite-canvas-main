@@ -8,17 +8,12 @@ import axios from "axios";
 
 import { cn } from "@/lib/utils";
 import { uploadMediaFile } from "@/services/file-storage";
-import { useAssetStore, type Asset } from "@/stores/use-asset-store";
+import { useAssetStore, type VolcengineAssetMetadata } from "@/stores/use-asset-store";
 import { fetchAssetLibrary, type AssetLibraryItem } from "@/services/api/assets";
-import type { CanvasNodeMetadata } from "../types";
+import { buildInsertAssetPayload, type InsertAssetPayload } from "../utils/asset-insert-payload";
 
 export type AssetPickerTab = "my-assets" | "library";
-
-export type InsertAssetPayload =
-    | { kind: "text"; content: string; title: string }
-    | { kind: "image"; dataUrl: string; title: string; storageKey?: string; sourceAssetId?: string; volcengineAsset?: CanvasNodeMetadata["volcengineAsset"] }
-    | { kind: "video"; url: string; title: string; storageKey?: string; sourceAssetId?: string; width?: number; height?: number; volcengineAsset?: CanvasNodeMetadata["volcengineAsset"] }
-    | { kind: "audio"; url: string; title: string; storageKey?: string; bytes?: number; mimeType?: string };
+export type { InsertAssetPayload } from "../utils/asset-insert-payload";
 
 type Props = {
     open: boolean;
@@ -242,17 +237,7 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
         setPage((v) => Math.min(v, maxPage));
     }, [filtered.length]);
 
-    const handleInsert = (asset: Asset) => {
-        if (asset.kind === "text") {
-            onInsert({ kind: "text", content: asset.data.content, title: asset.title });
-        } else if (asset.kind === "image") {
-            onInsert({ kind: "image", dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, sourceAssetId: asset.id, title: asset.title, volcengineAsset: asset.metadata?.volcengineAsset });
-        } else if (asset.kind === "video") {
-            onInsert({ kind: "video", url: asset.data.url, storageKey: asset.data.storageKey, sourceAssetId: asset.id, title: asset.title, width: asset.data.width, height: asset.data.height, volcengineAsset: asset.metadata?.volcengineAsset });
-        } else if (asset.kind === "audio") {
-            onInsert({ kind: "audio", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, bytes: asset.data.bytes, mimeType: asset.data.mimeType });
-        }
-    };
+    const handleInsert = (asset: (typeof visible)[number]) => onInsert(buildInsertAssetPayload(asset));
 
     return (
         <div className="space-y-4">
@@ -312,7 +297,7 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
     );
 }
 
-function assetLibraryVolcengineMetadata(asset: AssetLibraryItem): CanvasNodeMetadata["volcengineAsset"] {
+function assetLibraryVolcengineMetadata(asset: AssetLibraryItem): VolcengineAssetMetadata | undefined {
     if (!asset.volcengineAssetId) return undefined;
     return {
         assetId: asset.volcengineAssetId,

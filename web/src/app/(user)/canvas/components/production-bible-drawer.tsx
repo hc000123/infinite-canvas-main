@@ -5,6 +5,7 @@ import { Button, Card, Drawer, Empty, Form, Input, Popconfirm, Select, Segmented
 import { Pencil, Plus, Trash2 } from "lucide-react";
 
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
+import { hasNewerAssetVersion, preserveOrCreateAssetVersionReferences, updateAssetRefListToLatest } from "../../assets/asset-version-references";
 import {
     itemsForProductionBibleProject,
     productionBibleAssetRoleLabel,
@@ -78,7 +79,18 @@ export function ProductionBibleDrawer({ open, projectId, projectTitle, onClose }
             {visibleItems.length ? (
                 <div className="space-y-3">
                     {visibleItems.map((item) => (
-                        <ProductionBibleCard key={item.id} item={item} assetsById={assetsById} onEdit={() => startEdit(item)} onDelete={() => removeItem(item.id)} />
+                        <ProductionBibleCard
+                            key={item.id}
+                            item={item}
+                            assetsById={assetsById}
+                            onUpdateAssetRef={(assetId) => {
+                                const asset = assetsById.get(assetId);
+                                if (!asset) return;
+                                updateItem(item.id, { assetRefs: updateAssetRefListToLatest(item.assetRefs, asset) });
+                            }}
+                            onEdit={() => startEdit(item)}
+                            onDelete={() => removeItem(item.id)}
+                        />
                     ))}
                 </div>
             ) : (
@@ -93,13 +105,14 @@ export function ProductionBibleDrawer({ open, projectId, projectTitle, onClose }
                 assets={assets}
                 onCancel={() => setFormOpen(false)}
                 onSubmit={(values, assetRefs) => {
+                    const versionedAssetRefs = preserveOrCreateAssetVersionReferences(assetRefs, assets, editingItem?.assetRefs || []);
                     const payload = {
                         projectId,
                         kind: values.kind,
                         name: values.name,
                         description: values.description || "",
                         tags: values.tags || [],
-                        assetRefs,
+                        assetRefs: versionedAssetRefs,
                         promptSnippets: {
                             positive: values.positive || "",
                             negative: values.negative || "",
@@ -119,7 +132,7 @@ export function ProductionBibleDrawer({ open, projectId, projectTitle, onClose }
     );
 }
 
-function ProductionBibleCard({ item, assetsById, onEdit, onDelete }: { item: ProductionBibleItem; assetsById: Map<string, Asset>; onEdit: () => void; onDelete: () => void }) {
+function ProductionBibleCard({ item, assetsById, onUpdateAssetRef, onEdit, onDelete }: { item: ProductionBibleItem; assetsById: Map<string, Asset>; onUpdateAssetRef: (assetId: string) => void; onEdit: () => void; onDelete: () => void }) {
     const snippets = [
         item.promptSnippets.positive ? `正向：${item.promptSnippets.positive}` : "",
         item.promptSnippets.negative ? `反向：${item.promptSnippets.negative}` : "",
@@ -157,11 +170,27 @@ function ProductionBibleCard({ item, assetsById, onEdit, onDelete }: { item: Pro
                 ) : null}
                 {item.assetRefs.length ? (
                     <div className="flex flex-wrap gap-1.5">
-                        {item.assetRefs.map((ref) => (
-                            <Tag key={ref.assetId} className="m-0">
-                                {assetsById.get(ref.assetId)?.title || ref.assetId} · {productionBibleAssetRoleLabel(ref.role)}
-                            </Tag>
-                        ))}
+                        {item.assetRefs.map((ref) => {
+                            const asset = assetsById.get(ref.assetId);
+                            const hasNewVersion = hasNewerAssetVersion(ref.assetVersion, asset);
+                            return (
+                                <Tag key={ref.assetId} color={hasNewVersion ? "gold" : undefined} className="m-0">
+                                    {asset?.title || ref.assetId} · {productionBibleAssetRoleLabel(ref.role)}
+                                    {hasNewVersion ? (
+                                        <button
+                                            type="button"
+                                            className="ml-1 text-amber-700 underline underline-offset-2 dark:text-amber-300"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                onUpdateAssetRef(ref.assetId);
+                                            }}
+                                        >
+                                            更新
+                                        </button>
+                                    ) : null}
+                                </Tag>
+                            );
+                        })}
                     </div>
                 ) : null}
                 {snippets.length ? <div className="line-clamp-3 text-xs leading-5 text-stone-500 dark:text-stone-400">{snippets.join(" / ")}</div> : null}

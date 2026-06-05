@@ -1,8 +1,11 @@
+import type { AssetVersionReference } from "../../assets/asset-version-references";
+
 export type ProductionBibleKind = "character" | "scene" | "prop";
 
 export type ProductionBibleAssetRef = {
     assetId: string;
     role: string;
+    assetVersion?: AssetVersionReference;
 };
 
 export type ProductionBiblePromptSnippets = {
@@ -75,7 +78,7 @@ function dedupeAssetRefs(refs: ProductionBibleAssetRef[]) {
         const assetId = ref.assetId.trim();
         if (!assetId || seen.has(assetId)) continue;
         seen.add(assetId);
-        result.push({ assetId, role: ref.role.trim() || "reference" });
+        result.push({ assetId, role: ref.role.trim() || "reference", ...(ref.assetVersion ? { assetVersion: ref.assetVersion } : {}) });
     }
     return result;
 }

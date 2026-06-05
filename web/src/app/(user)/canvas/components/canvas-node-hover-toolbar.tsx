@@ -23,6 +23,8 @@ type CanvasNodeHoverToolbarProps = {
     onUpload: (node: CanvasNodeData) => void;
     onDownload: (node: CanvasNodeData) => void;
     onSaveAsset: (node: CanvasNodeData) => void;
+    hasNewAssetVersion?: boolean;
+    onUpdateAssetReference: (node: CanvasNodeData) => void;
     onContinueVideo: (node: CanvasNodeData) => void;
     onCaptureVideoFrame: (node: CanvasNodeData) => void;
     onReviewAsset: (node: CanvasNodeData) => void;
@@ -51,6 +53,8 @@ export function CanvasNodeHoverToolbar({
     onUpload,
     onDownload,
     onSaveAsset,
+    hasNewAssetVersion,
+    onUpdateAssetReference,
     onContinueVideo,
     onCaptureVideoFrame,
     onReviewAsset,
@@ -96,6 +100,7 @@ export function CanvasNodeHoverToolbar({
             {hasSpecificTools ? <ToolbarDivider /> : null}
             {canRetry ? <ToolbarAction title="重新生成" label="重试" icon={<RefreshCw className="size-4" />} onClick={() => onRetry(node)} /> : null}
             {hasImage || hasVideo || hasAudio || isText ? <ToolbarAction title="加入我的素材" label="存素材" icon={<FolderPlus className="size-4" />} onClick={() => onSaveAsset(node)} /> : null}
+            {hasNewAssetVersion ? <ToolbarAction title="素材有新版本可用，仅更新当前节点的引用版本记录" label="有新版本" icon={<RefreshCw className="size-4" />} onClick={() => onUpdateAssetReference(node)} active /> : null}
             {hasImage || hasVideo ? (
                 review?.assetId ? (
                     <ToolbarAction

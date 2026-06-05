@@ -24,6 +24,7 @@ import { useCreativeProjectStore } from "../projects/use-creative-project-store"
 import { assetGenerationFilterOptions } from "./asset-generation";
 import { buildProjectLibraryAssetPatch, buildRemoveProjectLibraryAssetPatch } from "./asset-project-library";
 import { buildAssetVersionedUpdatePatch, buildRestoreAssetVersionPatch } from "./asset-version-history";
+import { collectAssetVersionUsageReferences } from "./asset-version-references";
 import { assetsForVolcengineRefresh, assetsForVolcengineSubmit, buildBulkMoveAssetPatches, buildBulkTagAssetPatches, normalizeTags } from "./asset-bulk-actions";
 import { importableAssetFiles, importAssetFileList } from "./asset-import-actions";
 import { assetImportSuccessMessage } from "./asset-import-payloads";
@@ -140,6 +141,16 @@ function AssetsPageContent() {
     const projectContexts = useMemo(() => buildAssetProjectContexts(creativeProjects, projects), [creativeProjects, projects]);
     const projectOptions = useMemo(() => projectContexts.map((project) => ({ label: project.title, value: project.id })), [projectContexts]);
     const projectLibraryProjectTitles = useMemo(() => Object.fromEntries(projectContexts.map((project) => [project.id, project.title])), [projectContexts]);
+    const previewAssetUsageReferences = useMemo(() => {
+        if (!previewAsset) return [];
+        return collectAssetVersionUsageReferences(previewAsset, {
+            canvasProjects: projects,
+            storyboardGroups,
+            storyboardShots,
+            productionBibleItems,
+            projectTitles: projectLibraryProjectTitles,
+        });
+    }, [previewAsset, productionBibleItems, projectLibraryProjectTitles, projects, storyboardGroups, storyboardShots]);
     const storyboardGroupOptions = useMemo(
         () =>
             storyboardGroups
@@ -1068,6 +1079,7 @@ function AssetsPageContent() {
                 onReview={(asset) => void submitImageReview(asset)}
                 onRefreshReview={(asset) => void refreshImageReview(asset)}
                 projectLibraryProjectTitles={projectLibraryProjectTitles}
+                usageReferences={previewAssetUsageReferences}
                 onRestoreVersion={(asset, versionId) => void restoreAssetVersion(asset, versionId)}
             />
 

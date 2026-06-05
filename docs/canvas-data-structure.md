@@ -19,6 +19,40 @@
 
 画布 JSON 不直接长期保存大体积 base64 图片或视频。图片节点、视频节点、助手图片和素材媒体只保存展示 URL、`storageKey` 和元信息，真实 Blob 通过 `storageKey` 读取。
 
+## 素材版本引用快照
+
+M7.2.2 起，画布节点、分镜参考素材和设定库绑定素材都会在引用方记录加入当时的素材版本快照。该结构只保存在本地引用方 JSON 中，不新增后端接口，不新增云端版本表，也不会修改素材本身。
+
+```ts
+type AssetVersionReference = {
+  assetId: string;
+  assetVersionId?: string;
+  versionNumber?: number;
+  assetUpdatedAt?: string;
+  lockedAt?: string;
+  updatedAt?: string;
+  mode: "fixed-version";
+  previousVersions?: Array<{
+    assetId: string;
+    assetVersionId?: string;
+    versionNumber?: number;
+    assetUpdatedAt?: string;
+    lockedAt?: string;
+    updatedAt?: string;
+  }>;
+};
+```
+
+字段说明：
+
+- `assetId`：被引用的素材 ID。
+- `assetVersionId` / `versionNumber`：引用创建或手动更新时锁定的素材当前版本。当前第一版优先使用素材本地 `metadata.currentAssetVersionId` 和版本号。
+- `assetUpdatedAt`：引用创建或手动更新时素材的更新时间，用于兼容没有显式版本 ID 的旧素材。
+- `lockedAt`：首次建立引用的时间。
+- `updatedAt`：手动把引用更新到最新版的时间。
+- `mode`：当前只支持 `fixed-version`，即默认锁定创建时版本，不自动跟随素材最新版。
+- `previousVersions`：手动更新引用时保留旧的引用版本快照，方便后续回溯或批量更新。
+
 ## 创作项目结构
 
 创作项目是 M5.3.5 新增的一级工作台入口，用于把多个画布、剧本、分镜、设定库、素材和队列收束到同一个项目上下文中。本地保存为 `CreativeProject`：
@@ -111,6 +145,7 @@ type ProductionBibleItem = {
   assetRefs: Array<{
     assetId: string;
     role: string;
+    assetVersion?: AssetVersionReference;
   }>;
   promptSnippets: {
     positive?: string;
@@ -126,7 +161,7 @@ type ProductionBibleItem = {
 
 - `projectId`：所属画布项目 ID，用于在当前画布中筛选角色、场景、道具设定。
 - `kind`：设定类型，当前支持角色、场景、道具三类。
-- `assetRefs`：绑定到“我的素材”的引用，只保存素材 ID 和本设定中的用途角色，不复制素材内容，也不改变 `infinite-canvas:asset_store`。
+- `assetRefs`：绑定到“我的素材”的引用，保存素材 ID、本设定中的用途角色和 `assetVersion` 版本快照；不复制素材内容，也不改变 `infinite-canvas:asset_store`。素材有新版本时，设定库卡片会提示并允许单独把该绑定更新到最新版。
 - `promptSnippets`：可复用提示词片段，当前包含正向、反向和一致性三类。本阶段只做管理与记录，不自动拼接到生成请求。
 
 生成素材的 `metadata.generation.productionBibleRefs` 已预留为空数组，后续接入生成流程时可记录使用过的设定项 ID 和角色。
@@ -211,6 +246,7 @@ type StoryboardShot = {
     assetId: string;
     kind: "image" | "video" | "audio";
     role: string;
+    assetVersion?: AssetVersionReference;
   }>;
   nodeRefs: Array<{
     nodeId: string;
@@ -242,7 +278,7 @@ type StoryboardShot = {
 
 - `StoryboardGroup.projectId`：所属画布项目 ID。
 - `StoryboardGroup.preset`：创建分镜组时可记录项目预设快照，第一版只保存，不强制参与生成请求。
-- `StoryboardShot.assetRefs`：引用“我的素材”的图片、视频或音频，只保存素材 ID、类型和在本镜头中的角色，不复制素材内容。
+- `StoryboardShot.assetRefs`：引用“我的素材”的图片、视频或音频，保存素材 ID、类型、镜头角色和 `assetVersion` 版本快照；不复制素材内容。素材有新版本时，分镜条目会提示并允许单独把该引用更新到最新版。
 - `StoryboardShot.productionBibleRefs`：引用 M5.4 设定库中的角色、场景或道具设定。
 - `StoryboardShot.nodeRefs`：执行“打组加入画布”后记录创建出来的提示词节点、参考素材节点和视频配置节点 ID。
 - `StoryboardShot.resultAssetIds` / `primaryAssetId`：记录已生成并自动入库到“我的素材”的视频素材 ID。首次成功生成时自动设置主版本；同一素材 ID 不重复写入。
@@ -447,6 +483,8 @@ type CanvasNodeMetadata = {
   storyboardRole?: string;
   storyboardAssetRole?: string;
   sourceAssetId?: string;
+  assetVersion?: AssetVersionReference;
+  assetReferenceMode?: "fixed-version";
   taskId?: string;
   taskStatus?: string;
   rawTaskStatus?: string;
@@ -481,7 +519,8 @@ type CanvasNodeMetadata = {
 - 文本节点：`content` 保存文本内容；`fontSize` 保存字体大小；`prompt/status/errorDetails` 保存生成状态。
 - 生成配置节点：`generationMode/model/size/count/inputOrder` 保存生成配置；`generationMode` 可选择文本、图片或视频；上游输入通过 `connections` 计算。
 - 图片组节点：根节点用 `isBatchRoot/batchChildIds/primaryImageId/imageBatchExpanded` 记录批量生成结果；子图节点用 `batchRootId` 指回根节点。
-- 分镜节点：由“打组加入画布”创建的文本、素材和视频配置节点会写入 `storyboardGroupId/storyboardShotId/storyboardRole`；参考素材节点额外写入 `sourceAssetId/storyboardAssetRole`，用于后续结果回流和追溯。
+- 素材来源节点：从“我的素材”加入画布时会写入 `sourceAssetId`、`assetVersion` 和 `assetReferenceMode: "fixed-version"`。节点默认锁定创建时的素材版本，素材后续更新不会自动改节点内容；节点悬浮工具栏只在发现新版本时提示，并由用户手动更新引用记录。
+- 分镜节点：由“打组加入画布”创建的文本、素材和视频配置节点会写入 `storyboardGroupId/storyboardShotId/storyboardRole`；参考素材节点额外写入 `sourceAssetId/storyboardAssetRole/assetVersion`，用于后续结果回流、版本锁定和追溯。
 
 ## 连线结构
 
@@ -525,12 +564,22 @@ type CanvasAssistantMessage = {
   references?: CanvasAssistantReference[];
   images?: CanvasAssistantImage[];
 };
+
+type CanvasAssistantImage = {
+  id: string;
+  dataUrl: string;
+  storageKey?: string;
+  sourceAssetId?: string;
+  assetVersion?: AssetVersionReference;
+  prompt: string;
+};
 ```
 
 图片引用和助手生成图片也遵循同一套图片存储规则：
 
 - `dataUrl` 字段当前可能是 `blob:` URL，也可能是旧数据中的 `data:image/...`。
 - `storageKey` 存在时，以 `storageKey` 为准读取图片 Blob。
+- `sourceAssetId/assetVersion` 只在图片来自“我的素材”时存在，用于插入画布节点时继续锁定同一素材版本。
 - 发送到 AI 接口前，如果接口需要 base64，会通过 `imageToDataUrl` 临时把 Blob URL 转成 data URL。
 
 ## 图片写入流程

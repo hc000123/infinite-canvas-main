@@ -117,6 +117,8 @@ test("plans storyboard group insertion into canvas nodes and connections", () =>
     assert.equal(result.nodes.length, 3);
     assert.equal(result.connections.length, 2);
     assert.equal(result.nodes[0].metadata?.storyboardGroupId, "g-1");
+    assert.equal(result.nodes[1].metadata?.assetVersion?.assetId, "asset-image");
+    assert.equal(result.nodes[1].metadata?.assetReferenceMode, "fixed-version");
     assert.equal(result.nodes[2].metadata?.generationMode, "video");
     assert.equal(result.nodes[2].metadata?.storyboardShotId, "s-1");
     assert.deepEqual(

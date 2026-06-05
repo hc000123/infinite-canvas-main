@@ -18,6 +18,7 @@ import { readImageMeta } from "@/lib/image-utils";
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { useAssetStore } from "@/stores/use-asset-store";
+import { hasNewerAssetVersion, updateAssetReferenceToLatest } from "../../assets/asset-version-references";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { applyAssistantCanvasActions, type AssistantCanvasAction } from "../utils/canvas-assistant-actions";
@@ -67,10 +68,11 @@ import { Minimap } from "../components/canvas-mini-map";
 import { CanvasNode } from "../components/canvas-node";
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "../components/canvas-node-prompt-panel";
 import { CanvasToolbar } from "../components/canvas-toolbar";
-import { AssetPickerModal, type AssetPickerTab, type InsertAssetPayload } from "../components/asset-picker-modal";
+import { AssetPickerModal, type AssetPickerTab } from "../components/asset-picker-modal";
 import { ScriptManagerDrawer } from "../components/script-manager-drawer";
 import { StoryboardManagerDrawer } from "../components/storyboard-manager-drawer";
 import { CanvasZoomControls } from "../components/canvas-zoom-controls";
+import type { InsertAssetPayload } from "../utils/asset-insert-payload";
 import { useCanvasStore } from "../stores/use-canvas-store";
 import { useStoryboardStore } from "../stores/use-storyboard-store";
 import { useGenerationQueueStore } from "../stores/use-generation-queue-store";
@@ -538,6 +540,7 @@ function InfiniteCanvasPage() {
     }, [collapsingBatchIds, nodes, size.height, size.width, viewport.k, viewport.x, viewport.y]);
 
     const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+    const assetById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
     const toolbarNode = toolbarNodeId ? nodeById.get(toolbarNodeId) || null : null;
     const infoNode = infoNodeId ? nodeById.get(infoNodeId) || null : null;
     const cropNode = cropNodeId ? nodeById.get(cropNodeId) || null : null;
@@ -1640,7 +1643,14 @@ function InfiniteCanvasPage() {
                 position: { x: center.x - config.width / 2, y: center.y - config.height / 2 },
                 width: config.width,
                 height: config.height,
-                metadata: { ...imageMetadata({ ...storedImage, width: meta.width, height: meta.height }), prompt: image.prompt, sourceAssetId: image.sourceAssetId, volcengineAsset: image.volcengineAsset },
+                metadata: {
+                    ...imageMetadata({ ...storedImage, width: meta.width, height: meta.height }),
+                    prompt: image.prompt,
+                    sourceAssetId: image.sourceAssetId,
+                    assetVersion: image.assetVersion,
+                    assetReferenceMode: image.assetVersion ? "fixed-version" : undefined,
+                    volcengineAsset: image.volcengineAsset,
+                },
             };
 
             setNodes((prev) => [...prev, node]);
@@ -1652,10 +1662,10 @@ function InfiniteCanvasPage() {
     );
 
     const insertAssistantText = useCallback(
-        (text: string) => {
+        (text: string, metadata: Partial<CanvasNodeMetadata> = {}) => {
             const center = screenToCanvas((containerRef.current?.getBoundingClientRect().left || 0) + size.width / 2, (containerRef.current?.getBoundingClientRect().top || 0) + size.height / 2);
             const node = {
-                ...createCanvasNode(CanvasNodeType.Text, center, { content: text, status: NODE_STATUS_SUCCESS }),
+                ...createCanvasNode(CanvasNodeType.Text, center, { content: text, status: NODE_STATUS_SUCCESS, ...metadata }),
                 title: text.slice(0, 32) || "Assistant Text",
             };
 
@@ -1742,7 +1752,7 @@ function InfiniteCanvasPage() {
     const handleAssetInsert = useCallback(
         (payload: InsertAssetPayload) => {
             if (payload.kind === "text") {
-                insertAssistantText(payload.content);
+                insertAssistantText(payload.content, { sourceAssetId: payload.sourceAssetId, assetVersion: payload.assetVersion, assetReferenceMode: payload.assetVersion ? "fixed-version" : undefined });
             } else if (payload.kind === "video") {
                 const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Video];
                 const center = screenToCanvas((containerRef.current?.getBoundingClientRect().left || 0) + size.width / 2, (containerRef.current?.getBoundingClientRect().top || 0) + size.height / 2);
@@ -1764,6 +1774,8 @@ function InfiniteCanvasPage() {
                             naturalWidth: payload.width,
                             naturalHeight: payload.height,
                             sourceAssetId: payload.sourceAssetId,
+                            assetVersion: payload.assetVersion,
+                            assetReferenceMode: payload.assetVersion ? "fixed-version" : undefined,
                             volcengineAsset: payload.volcengineAsset,
                         },
                     },
@@ -1782,16 +1794,45 @@ function InfiniteCanvasPage() {
                         position: { x: center.x - spec.width / 2, y: center.y - spec.height / 2 },
                         width: spec.width,
                         height: spec.height,
-                        metadata: { content: payload.url, storageKey: payload.storageKey, bytes: payload.bytes, mimeType: payload.mimeType || "audio/mpeg", status: NODE_STATUS_SUCCESS },
+                        metadata: {
+                            content: payload.url,
+                            storageKey: payload.storageKey,
+                            bytes: payload.bytes,
+                            mimeType: payload.mimeType || "audio/mpeg",
+                            status: NODE_STATUS_SUCCESS,
+                            sourceAssetId: payload.sourceAssetId,
+                            assetVersion: payload.assetVersion,
+                            assetReferenceMode: payload.assetVersion ? "fixed-version" : undefined,
+                        },
                     },
                 ]);
                 setSelectedNodeIds(new Set([id]));
             } else {
-                insertAssistantImage({ id: `asset-${Date.now()}`, prompt: payload.title, dataUrl: payload.dataUrl, storageKey: payload.storageKey, sourceAssetId: payload.sourceAssetId, volcengineAsset: payload.volcengineAsset });
+                insertAssistantImage({
+                    id: `asset-${Date.now()}`,
+                    prompt: payload.title,
+                    dataUrl: payload.dataUrl,
+                    storageKey: payload.storageKey,
+                    sourceAssetId: payload.sourceAssetId,
+                    assetVersion: payload.assetVersion,
+                    volcengineAsset: payload.volcengineAsset,
+                });
             }
             setAssetPickerOpen(false);
         },
         [insertAssistantImage, insertAssistantText, screenToCanvas, size.height, size.width],
+    );
+
+    const updateCanvasNodeAssetReference = useCallback(
+        (node: CanvasNodeData) => {
+            const assetId = node.metadata?.sourceAssetId;
+            const asset = assetId ? assetById.get(assetId) : undefined;
+            if (!asset || !node.metadata?.assetVersion) return message.warning("没有可更新的素材引用");
+            const nextVersion = updateAssetReferenceToLatest(node.metadata.assetVersion, asset);
+            setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, assetVersion: nextVersion, assetReferenceMode: "fixed-version" } } : item)));
+            message.success("已更新当前节点的素材引用版本");
+        },
+        [assetById, message],
     );
 
     if (!projectLoaded) return <CanvasRefreshShell />;
@@ -1971,6 +2012,8 @@ function InfiniteCanvasPage() {
                     onUpload={(node) => handleUploadRequest(node.id)}
                     onDownload={downloadNodeMedia}
                     onSaveAsset={(node) => void saveNodeAsset(node)}
+                    hasNewAssetVersion={Boolean(toolbarNode?.metadata?.assetVersion && hasNewerAssetVersion(toolbarNode.metadata.assetVersion, assetById.get(toolbarNode.metadata.sourceAssetId || "")))}
+                    onUpdateAssetReference={updateCanvasNodeAssetReference}
                     onContinueVideo={(node) => void handleContinueVideoNode(node)}
                     onCaptureVideoFrame={(node) => void captureVideoCurrentFrame(node)}
                     onReviewAsset={(node) => void submitNodeVolcengineReview(node)}

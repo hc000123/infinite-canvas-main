@@ -1,4 +1,5 @@
 import type { SeedanceImageRoleMode } from "@/services/api/video-reference";
+import type { AssetVersionReference } from "../assets/asset-version-references";
 import type { AssistantCanvasAction } from "./utils/canvas-assistant-actions";
 
 export type Position = {
@@ -69,6 +70,8 @@ export type CanvasNodeMetadata = {
     storyboardRole?: string;
     storyboardAssetRole?: string;
     sourceAssetId?: string;
+    assetVersion?: AssetVersionReference;
+    assetReferenceMode?: "fixed-version";
     variantOfNodeId?: string;
     continuationOfNodeId?: string;
     videoReferences?: string[];
@@ -146,6 +149,7 @@ export type CanvasAssistantImage = {
     dataUrl: string;
     storageKey?: string;
     sourceAssetId?: string;
+    assetVersion?: AssetVersionReference;
     prompt: string;
     volcengineAsset?: CanvasNodeMetadata["volcengineAsset"];
 };

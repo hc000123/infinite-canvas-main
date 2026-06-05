@@ -1,4 +1,5 @@
 import type { CanvasConnection, CanvasNodeData, CanvasNodeMetadata, Position } from "../types.ts";
+import { buildAssetVersionReference, type AssetVersionReference } from "../../assets/asset-version-references.ts";
 import type { ProductionBibleKind } from "./production-bible.ts";
 import type { ScriptEpisode, ScriptScene } from "./script-management.ts";
 
@@ -9,6 +10,7 @@ export type StoryboardAssetRef = {
     assetId: string;
     kind: StoryboardAssetKind;
     role: string;
+    assetVersion?: AssetVersionReference;
 };
 
 export type StoryboardNodeRef = {
@@ -62,6 +64,8 @@ type StoryboardAssetLike = {
     kind: string;
     title: string;
     coverUrl?: string;
+    updatedAt?: string;
+    metadata?: Record<string, unknown>;
     data?: Record<string, unknown>;
 };
 
@@ -321,6 +325,7 @@ function assetToCanvasNode(asset: StoryboardAssetLike, ref: StoryboardAssetRef, 
     const content = String(data.dataUrl || data.url || asset.coverUrl || "");
     const width = Number(data.width) || NODE_SIZE[type as keyof typeof NODE_SIZE]?.width || NODE_SIZE.image.width;
     const height = Number(data.height) || NODE_SIZE[type as keyof typeof NODE_SIZE]?.height || NODE_SIZE.image.height;
+    const assetVersion = ref.assetVersion || buildAssetVersionReference({ id: asset.id, updatedAt: asset.updatedAt || "", metadata: asset.metadata });
     return {
         id,
         type,
@@ -337,6 +342,8 @@ function assetToCanvasNode(asset: StoryboardAssetLike, ref: StoryboardAssetRef, 
             naturalWidth: typeof data.width === "number" ? data.width : undefined,
             naturalHeight: typeof data.height === "number" ? data.height : undefined,
             sourceAssetId: ref.assetId,
+            assetVersion,
+            assetReferenceMode: "fixed-version",
             storyboardAssetRole: ref.role || "reference",
             storyboardRole: ref.role || "reference",
         }),
@@ -354,7 +361,7 @@ function dedupeAssetRefs(refs: StoryboardAssetRef[]) {
         const assetId = ref.assetId.trim();
         if (!assetId || seen.has(assetId)) continue;
         seen.add(assetId);
-        result.push({ assetId, kind: ref.kind, role: ref.role.trim() || "reference" });
+        result.push({ assetId, kind: ref.kind, role: ref.role.trim() || "reference", ...(ref.assetVersion ? { assetVersion: ref.assetVersion } : {}) });
     }
     return result;
 }

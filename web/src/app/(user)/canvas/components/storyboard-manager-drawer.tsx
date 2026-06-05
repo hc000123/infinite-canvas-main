@@ -10,6 +10,7 @@ import { createZip } from "@/lib/zip";
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import { useAssetStore, type Asset, type AssetKind } from "@/stores/use-asset-store";
+import { hasNewerAssetVersion, preserveOrCreateAssetVersionReferences, updateAssetRefListToLatest } from "../../assets/asset-version-references";
 import { useGenerationQueueStore } from "../stores/use-generation-queue-store";
 import { useProductionBibleStore } from "../stores/use-production-bible-store";
 import { useStoryboardStore } from "../stores/use-storyboard-store";
@@ -241,6 +242,12 @@ export function StoryboardManagerDrawer({ open, projectId, projectTitle, initial
                                     shot={shot}
                                     assetsById={assetsById}
                                     bibleById={bibleById}
+                                    onUpdateAssetRef={(assetId) => {
+                                        const asset = assetsById.get(assetId);
+                                        if (!asset) return;
+                                        updateShot(shot.id, { assetRefs: updateAssetRefListToLatest(shot.assetRefs, asset) });
+                                        message.success("已更新分镜引用版本");
+                                    }}
                                     onEdit={() => {
                                         setEditingShot(shot);
                                         setShotFormOpen(true);
@@ -281,13 +288,14 @@ export function StoryboardManagerDrawer({ open, projectId, projectTitle, initial
                 onClose={() => setShotFormOpen(false)}
                 onSubmit={(values, assetRefs, productionBibleRefs) => {
                     if (!activeGroup) return;
+                    const versionedAssetRefs = preserveOrCreateAssetVersionReferences(assetRefs, assets, editingShot?.assetRefs || []);
                     const payload = {
                         groupId: activeGroup.id,
                         title: values.title,
                         description: values.description || "",
                         prompt: values.prompt || "",
                         effectivePrompt: values.effectivePrompt || "",
-                        assetRefs,
+                        assetRefs: versionedAssetRefs,
                         productionBibleRefs,
                         nodeRefs: editingShot?.nodeRefs || [],
                         resultAssetIds: editingShot?.resultAssetIds || [],
@@ -337,6 +345,7 @@ function StoryboardShotCard({
     shot,
     assetsById,
     bibleById,
+    onUpdateAssetRef,
     onEdit,
     onDelete,
     onMoveUp,
@@ -345,6 +354,7 @@ function StoryboardShotCard({
     shot: StoryboardShot;
     assetsById: Map<string, Asset>;
     bibleById: Map<string, ProductionBibleItem>;
+    onUpdateAssetRef: (assetId: string) => void;
     onEdit: () => void;
     onDelete: () => void;
     onMoveUp: () => void;
@@ -375,11 +385,27 @@ function StoryboardShotCard({
                 <Space size={[4, 4]} wrap>
                     <Tag className="m-0">{shotStatusLabel(shot.status)}</Tag>
                     {shot.primaryAssetId ? <Tag className="m-0">主版本：{assetsById.get(shot.primaryAssetId)?.title || shot.primaryAssetId}</Tag> : null}
-                    {shot.assetRefs.map((ref) => (
-                        <Tag key={ref.assetId} className="m-0">
-                            {assetsById.get(ref.assetId)?.title || ref.assetId} · {assetRoleLabel(ref.role)}
-                        </Tag>
-                    ))}
+                    {shot.assetRefs.map((ref) => {
+                        const asset = assetsById.get(ref.assetId);
+                        const hasNewVersion = hasNewerAssetVersion(ref.assetVersion, asset);
+                        return (
+                            <Tag key={ref.assetId} color={hasNewVersion ? "gold" : undefined} className="m-0">
+                                {asset?.title || ref.assetId} · {assetRoleLabel(ref.role)}
+                                {hasNewVersion ? (
+                                    <button
+                                        type="button"
+                                        className="ml-1 text-amber-700 underline underline-offset-2 dark:text-amber-300"
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            onUpdateAssetRef(ref.assetId);
+                                        }}
+                                    >
+                                        更新
+                                    </button>
+                                ) : null}
+                            </Tag>
+                        );
+                    })}
                     {(shot.productionBibleRefs || []).map((ref) => (
                         <Tag key={`${ref.kind}:${ref.itemId}`} className="m-0">
                             {productionBibleKindLabel(ref.kind)} · {bibleById.get(ref.itemId)?.name || ref.itemId}
