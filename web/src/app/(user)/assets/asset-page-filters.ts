@@ -1,5 +1,5 @@
 import type { Asset, AssetKind } from "../../../stores/use-asset-store.ts";
-import { assetMatchesGenerationFilters } from "./asset-generation.ts";
+import { assetGenerationRecords, assetMatchesGenerationFilters, readString } from "./asset-generation.ts";
 
 export type AssetProjectContext = {
     id: string;
@@ -29,7 +29,11 @@ type StoryboardGroupLike = {
 type StoryboardShotLike = {
     groupId: string;
     assetRefs: Array<{ assetId: string }>;
+    resultAssetIds?: string[];
+    primaryAssetId?: string;
 };
+
+export type AssetSortMode = "default" | "updated_desc" | "created_desc" | "generation_desc" | "title_asc";
 
 type AssetListFilters = {
     keyword: string;
@@ -41,6 +45,8 @@ type AssetListFilters = {
     generationTaskFilter: "all" | "with" | "without";
     projectContextFilter: string;
     projectReferencedAssetIds: Set<string>;
+    storyboardGroupFilter?: string;
+    storyboardGroupAssetIds?: Set<string>;
     searchText: (asset: Asset) => string;
 };
 
@@ -69,6 +75,16 @@ export function projectReferencedAssetIds(projectId: string, productionBibleItem
     ]);
 }
 
+export function storyboardGroupReferencedAssetIds(storyboardGroupId: string, storyboardShots: StoryboardShotLike[]) {
+    if (!storyboardGroupId) return new Set<string>();
+    return new Set<string>(
+        storyboardShots
+            .filter((shot) => shot.groupId === storyboardGroupId)
+            .flatMap((shot) => [...shot.assetRefs.map((ref) => ref.assetId), ...(shot.resultAssetIds || []), shot.primaryAssetId || ""])
+            .filter(Boolean),
+    );
+}
+
 export function filterAssetList(assets: Asset[], filters: AssetListFilters) {
     const query = filters.keyword.trim().toLowerCase();
     const activeFolderId = activeAssetFolderId(filters.folderFilter);
@@ -76,6 +92,7 @@ export function filterAssetList(assets: Asset[], filters: AssetListFilters) {
         if (filters.kindFilter !== "all" && asset.kind !== filters.kindFilter) return false;
         if (filters.folderFilter === "root" && asset.folderId) return false;
         if (activeFolderId && asset.folderId !== activeFolderId) return false;
+        if (filters.storyboardGroupFilter && !assetMatchesStoryboardGroup(asset, filters.storyboardGroupFilter, filters.storyboardGroupAssetIds)) return false;
         if (
             !assetMatchesGenerationFilters(asset, {
                 source: filters.generationSourceFilter,
@@ -89,6 +106,16 @@ export function filterAssetList(assets: Asset[], filters: AssetListFilters) {
             return false;
         if (!query) return true;
         return filters.searchText(asset).includes(query);
+    });
+}
+
+export function sortAssetList(assets: Asset[], sortMode: AssetSortMode) {
+    if (sortMode === "default") return assets;
+    return [...assets].sort((a, b) => {
+        if (sortMode === "title_asc") return (a.title || "").localeCompare(b.title || "", "zh-Hans-CN");
+        if (sortMode === "created_desc") return compareTimeDesc(a.createdAt, b.createdAt);
+        if (sortMode === "generation_desc") return compareTimeDesc(latestGenerationTime(a), latestGenerationTime(b));
+        return compareTimeDesc(a.updatedAt, b.updatedAt);
     });
 }
 
@@ -116,4 +143,21 @@ export function selectedAssetSummary(assets: Asset[]) {
         .map((asset) => asset.title || "未命名素材")
         .join("、");
     return assets.length > 3 ? `${names} 等 ${assets.length} 个` : names;
+}
+
+function assetMatchesStoryboardGroup(asset: Asset, storyboardGroupId: string, referencedAssetIds = new Set<string>()) {
+    if (referencedAssetIds.has(asset.id)) return true;
+    return assetGenerationRecords(asset).some((generation) => readString(generation.storyboardGroupId) === storyboardGroupId);
+}
+
+function latestGenerationTime(asset: Asset) {
+    return assetGenerationRecords(asset)
+        .map((generation) => readString(generation.createdAt))
+        .filter(Boolean)
+        .sort()
+        .at(-1);
+}
+
+function compareTimeDesc(a?: string, b?: string) {
+    return (b || "").localeCompare(a || "");
 }

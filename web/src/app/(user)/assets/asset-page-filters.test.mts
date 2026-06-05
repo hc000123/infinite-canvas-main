@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { Asset } from "../../../stores/use-asset-store.ts";
-import { buildAssetProjectContexts, filterAssetList, paginateAssetList, projectReferencedAssetIds, selectedAssetSummary, selectedAssetsFromIds } from "./asset-page-filters.ts";
+import { buildAssetProjectContexts, filterAssetList, paginateAssetList, projectReferencedAssetIds, selectedAssetSummary, selectedAssetsFromIds, sortAssetList, storyboardGroupReferencedAssetIds } from "./asset-page-filters.ts";
 
 const now = "2026-06-05T00:00:00.000Z";
 
@@ -57,6 +57,16 @@ test("collects project referenced asset ids from production bible and storyboard
     assert.deepEqual([...projectReferencedAssetIds("", [], [], [])], []);
 });
 
+test("collects storyboard group result and reference asset ids", () => {
+    const refs = storyboardGroupReferencedAssetIds("group-1", [
+        { groupId: "group-1", assetRefs: [{ assetId: "ref-a" }], resultAssetIds: ["result-a"], primaryAssetId: "primary-a" },
+        { groupId: "group-2", assetRefs: [{ assetId: "other" }], resultAssetIds: ["other-result"], primaryAssetId: "other-primary" },
+    ]);
+
+    assert.deepEqual([...refs].sort(), ["primary-a", "ref-a", "result-a"]);
+    assert.deepEqual([...storyboardGroupReferencedAssetIds("", [])], []);
+});
+
 test("filters assets by kind, folder, project references and keyword", () => {
     const assets = [textAsset("asset-a", "角色设定", undefined, { generation: { projectId: "project-1", source: "canvas" } }), textAsset("asset-b", "场景设定", "folder-1"), textAsset("asset-c", "镜头提示", "folder-2")];
     const searchText = (asset: Asset) => `${asset.title} ${(asset.tags || []).join(" ")}`.toLowerCase();
@@ -96,6 +106,46 @@ test("filters assets by kind, folder, project references and keyword", () => {
             searchText,
         }).map((asset) => asset.id),
         ["asset-a", "asset-b"],
+    );
+});
+
+test("filters assets by storyboard group references and generation metadata", () => {
+    const assets = [textAsset("ref-a", "分镜参考"), textAsset("generated-a", "分镜生成", undefined, { generation: { storyboardGroupId: "group-1", createdAt: "2026-01-02T00:00:00.000Z" } }), textAsset("other", "其他素材")];
+
+    assert.deepEqual(
+        filterAssetList(assets, {
+            keyword: "",
+            kindFilter: "all",
+            folderFilter: "all",
+            generationTaskFilter: "all",
+            projectContextFilter: "",
+            projectReferencedAssetIds: new Set(),
+            storyboardGroupFilter: "group-1",
+            storyboardGroupAssetIds: new Set(["ref-a"]),
+            searchText: (asset) => asset.title,
+        }).map((asset) => asset.id),
+        ["ref-a", "generated-a"],
+    );
+});
+
+test("sorts assets by update, generation time and title", () => {
+    const assets = [
+        { ...textAsset("b", "乙", undefined, { generation: { createdAt: "2026-01-01T00:00:00.000Z" } }), createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-03T00:00:00.000Z" },
+        { ...textAsset("a", "甲", undefined, { generation: { createdAt: "2026-01-04T00:00:00.000Z" } }), createdAt: "2026-01-02T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z" },
+        { ...textAsset("c", "丙"), createdAt: "2026-01-03T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" },
+    ];
+
+    assert.deepEqual(
+        sortAssetList(assets, "updated_desc").map((asset) => asset.id),
+        ["b", "a", "c"],
+    );
+    assert.deepEqual(
+        sortAssetList(assets, "generation_desc").map((asset) => asset.id),
+        ["a", "b", "c"],
+    );
+    assert.deepEqual(
+        sortAssetList(assets, "title_asc").map((asset) => asset.id),
+        ["c", "a", "b"],
     );
 });
 

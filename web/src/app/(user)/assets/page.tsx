@@ -34,7 +34,10 @@ import {
     selectedAssetSummary as formatSelectedAssetSummary,
     selectedAssetsFromIds,
     selectedCountInAssets,
+    sortAssetList,
+    storyboardGroupReferencedAssetIds as collectStoryboardGroupReferencedAssetIds,
     supportedAssetList,
+    type AssetSortMode,
 } from "./asset-page-filters";
 import { assetSearchText, countFolderAssets, fetchImageBlob, hasImportableDragItems, volcengineStatusLabel } from "./asset-utils";
 import { exportAssets } from "./asset-transfer";
@@ -92,6 +95,8 @@ function AssetsPageContent() {
     const [generationModelProviderFilter, setGenerationModelProviderFilter] = useState<string>();
     const [generationTaskFilter, setGenerationTaskFilter] = useState<"all" | "with" | "without">("all");
     const [projectContextFilter, setProjectContextFilter] = useState(searchParams.get("projectId") || "");
+    const [storyboardGroupFilter, setStoryboardGroupFilter] = useState("");
+    const [sortMode, setSortMode] = useState<AssetSortMode>("default");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
@@ -121,6 +126,14 @@ function AssetsPageContent() {
     const folderOptions = useMemo(() => [{ label: "未分组", value: "" }, ...folders.map((folder) => ({ label: folder.name, value: folder.id }))], [folders]);
     const projectContexts = useMemo(() => buildAssetProjectContexts(creativeProjects, projects), [creativeProjects, projects]);
     const projectOptions = useMemo(() => projectContexts.map((project) => ({ label: project.title, value: project.id })), [projectContexts]);
+    const storyboardGroupOptions = useMemo(
+        () =>
+            storyboardGroups
+                .filter((group) => !projectContextFilter || group.projectId === projectContextFilter)
+                .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, "zh-Hans-CN"))
+                .map((group) => ({ label: group.title || "未命名分镜组", value: group.id })),
+        [projectContextFilter, storyboardGroups],
+    );
     const selectedProductionBibleProject = useMemo(
         () => projectContexts.find((project) => project.id === (projectContextFilter || productionBibleProjectId)) || projectContexts[0] || null,
         [projectContexts, productionBibleProjectId, projectContextFilter],
@@ -129,21 +142,41 @@ function AssetsPageContent() {
     const projectReferencedAssetIds = useMemo(() => {
         return collectProjectReferencedAssetIds(projectContextFilter, productionBibleItems, storyboardGroups, storyboardShots);
     }, [productionBibleItems, projectContextFilter, storyboardGroups, storyboardShots]);
+    const storyboardGroupAssetIds = useMemo(() => collectStoryboardGroupReferencedAssetIds(storyboardGroupFilter, storyboardShots), [storyboardGroupFilter, storyboardShots]);
 
     const filteredAssets = useMemo(() => {
-        return filterAssetList(validAssets, {
-            keyword,
-            kindFilter,
-            folderFilter,
-            generationSourceFilter,
-            generationActionFilter,
-            generationModelProviderFilter,
-            generationTaskFilter,
-            projectContextFilter,
-            projectReferencedAssetIds,
-            searchText: assetSearchText,
-        });
-    }, [validAssets, keyword, kindFilter, folderFilter, generationSourceFilter, generationActionFilter, generationModelProviderFilter, generationTaskFilter, projectContextFilter, projectReferencedAssetIds]);
+        return sortAssetList(
+            filterAssetList(validAssets, {
+                keyword,
+                kindFilter,
+                folderFilter,
+                generationSourceFilter,
+                generationActionFilter,
+                generationModelProviderFilter,
+                generationTaskFilter,
+                projectContextFilter,
+                projectReferencedAssetIds,
+                storyboardGroupFilter,
+                storyboardGroupAssetIds,
+                searchText: assetSearchText,
+            }),
+            sortMode,
+        );
+    }, [
+        validAssets,
+        keyword,
+        kindFilter,
+        folderFilter,
+        generationSourceFilter,
+        generationActionFilter,
+        generationModelProviderFilter,
+        generationTaskFilter,
+        projectContextFilter,
+        projectReferencedAssetIds,
+        storyboardGroupFilter,
+        storyboardGroupAssetIds,
+        sortMode,
+    ]);
 
     const visibleAssets = useMemo(() => paginateAssetList(filteredAssets, page, pageSize), [filteredAssets, page, pageSize]);
     const selectedAssets = useMemo(() => selectedAssetsFromIds(validAssets, selectedAssetIds), [validAssets, selectedAssetIds]);
@@ -175,6 +208,10 @@ function AssetsPageContent() {
         }
         if (!productionBibleProjectId || !projectContexts.some((project) => project.id === productionBibleProjectId)) setProductionBibleProjectId(projectContexts[0]?.id || "");
     }, [projectContexts, productionBibleProjectId]);
+
+    useEffect(() => {
+        if (storyboardGroupFilter && !storyboardGroupOptions.some((option) => option.value === storyboardGroupFilter)) setStoryboardGroupFilter("");
+    }, [storyboardGroupFilter, storyboardGroupOptions]);
 
     useEffect(() => {
         const existingIds = new Set(validAssets.map((asset) => asset.id));
@@ -620,6 +657,21 @@ function AssetsPageContent() {
                                         if (value) setProductionBibleProjectId(value);
                                     }}
                                 />
+                                <Select
+                                    size="small"
+                                    allowClear
+                                    showSearch
+                                    className="min-w-48"
+                                    placeholder="分镜组筛选"
+                                    value={storyboardGroupFilter || undefined}
+                                    options={storyboardGroupOptions}
+                                    optionFilterProp="label"
+                                    disabled={!storyboardGroupOptions.length}
+                                    onChange={(value) => {
+                                        setPage(1);
+                                        setStoryboardGroupFilter(value || "");
+                                    }}
+                                />
                                 <Button size="small" icon={<BookOpen className="size-3.5" />} disabled={!selectedProductionBibleProject} onClick={() => setProductionBibleOpen(true)}>
                                     项目设定库
                                 </Button>
@@ -737,6 +789,22 @@ function AssetsPageContent() {
                             </div>
                         </div>
                         <div className="flex shrink-0 flex-wrap gap-2">
+                            <Select
+                                size="small"
+                                className="w-32"
+                                value={sortMode}
+                                options={[
+                                    { label: "默认排序", value: "default" },
+                                    { label: "最近更新", value: "updated_desc" },
+                                    { label: "最近生成", value: "generation_desc" },
+                                    { label: "创建时间", value: "created_desc" },
+                                    { label: "标题 A-Z", value: "title_asc" },
+                                ]}
+                                onChange={(value) => {
+                                    setPage(1);
+                                    setSortMode(value);
+                                }}
+                            />
                             <Button size="small" disabled={!filteredAssets.length || allFilteredSelected} onClick={selectFilteredAssets}>
                                 全选当前结果
                             </Button>
