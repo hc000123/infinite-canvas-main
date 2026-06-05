@@ -13,84 +13,47 @@ import (
 	"strings"
 )
 
+const (
+	arkLocalAPIKeyField  = "_volcengine_api_key"
+	arkLocalBaseURLField = "_volcengine_base_url"
+)
+
+type arkVideoCreateFields struct {
+	ModelName       string
+	Prompt          string
+	Duration        string
+	Ratio           string
+	Resolution      string
+	GenerateAudio   string
+	Watermark       string
+	Seed            string
+	ReturnLastFrame string
+	Content         []any
+}
+
 func BuildArkVideoCreateRequest(body []byte, contentType string) ([]byte, string, error) {
-	modelName := ""
-	prompt := ""
-	seconds := ""
-	size := ""
-	resolution := ""
-	generateAudio := ""
-	watermark := ""
-	seed := ""
-	returnLastFrame := ""
-	content := []any{}
+	fields := arkVideoCreateFields{}
 	if strings.HasPrefix(contentType, "multipart/form-data") {
-		_, params, err := mime.ParseMediaType(contentType)
-		if err != nil {
-			return nil, "", err
-		}
-		form, err := multipart.NewReader(bytes.NewReader(body), params["boundary"]).ReadForm(32 << 20)
+		form, err := readArkMultipartForm(body, contentType)
 		if err != nil {
 			return nil, "", err
 		}
 		defer form.RemoveAll()
-		modelName = firstArkFormValue(form.Value, "model")
-		prompt = firstArkFormValue(form.Value, "prompt")
-		seconds = firstArkFormValue(form.Value, "duration")
-		if seconds == "" {
-			seconds = firstArkFormValue(form.Value, "seconds")
-		}
-		size = firstArkFormValue(form.Value, "ratio")
-		if size == "" {
-			size = firstArkFormValue(form.Value, "size")
-		}
-		resolution = firstArkFormValue(form.Value, "resolution")
-		if resolution == "" {
-			resolution = firstArkFormValue(form.Value, "resolution_name")
-		}
-		generateAudio = firstArkFormValue(form.Value, "generate_audio")
-		watermark = firstArkFormValue(form.Value, "watermark")
-		seed = firstArkFormValue(form.Value, "seed")
-		returnLastFrame = firstArkFormValue(form.Value, "return_last_frame")
-		for _, header := range form.File["input_reference[]"] {
-			dataURL, err := multipartArkFileDataURL(header)
-			if err != nil {
-				return nil, "", err
-			}
-			content = append(content, arkImageContent(dataURL))
+		fields, err = arkVideoFieldsFromForm(form, true)
+		if err != nil {
+			return nil, "", err
 		}
 	} else {
 		var payload map[string]any
 		if err := json.Unmarshal(body, &payload); err != nil {
 			return nil, "", err
 		}
-		modelName = arkStringMapValue(payload, "model")
-		prompt = arkStringMapValue(payload, "prompt")
-		seconds = arkStringMapValue(payload, "duration", "seconds")
-		size = arkStringMapValue(payload, "ratio", "size")
-		resolution = arkStringMapValue(payload, "resolution", "resolution_name")
-		generateAudio = arkStringMapValue(payload, "generate_audio")
-		watermark = arkStringMapValue(payload, "watermark")
-		seed = arkStringMapValue(payload, "seed")
-		returnLastFrame = arkStringMapValue(payload, "return_last_frame")
-		if rawContent, ok := payload["content"].([]any); ok {
-			content = rawContent
-		}
+		fields = arkVideoFieldsFromMap(payload)
 	}
-	if strings.TrimSpace(prompt) != "" {
-		content = append([]any{map[string]any{"type": "text", "text": prompt}}, content...)
+	payload, err := buildArkVideoPayload(fields, true)
+	if err != nil {
+		return nil, "", err
 	}
-	if strings.TrimSpace(modelName) == "" {
-		return nil, "", errors.New("缺少模型名称")
-	}
-	if len(content) == 0 {
-		return nil, "", errors.New("缺少视频提示词")
-	}
-	payload := map[string]any{
-		"model":   modelName,
-		"content": content,
-	}
-	appendArkVideoControls(payload, seconds, size, resolution, generateAudio, watermark, seed, returnLastFrame)
 	nextBody, _ := json.Marshal(payload)
 	return nextBody, "application/json", nil
 }
@@ -100,64 +63,121 @@ func ReadArkLocalVideoConfig(body []byte, contentType string) (apiKey string, ba
 		if err := json.Unmarshal(body, &payload); err != nil {
 			return "", "", nil, err
 		}
-		apiKey = arkStringMapValue(payload, "_volcengine_api_key")
-		baseURL = arkStringMapValue(payload, "_volcengine_base_url")
-		if apiKey == "" || baseURL == "" {
-			return "", "", nil, errors.New("缺少火山引擎配置")
+		if apiKey, baseURL, err = arkLocalConfigFromMap(payload); err != nil {
+			return "", "", nil, err
 		}
-		delete(payload, "_volcengine_api_key")
-		delete(payload, "_volcengine_base_url")
+		removeArkLocalConfigFields(payload)
 		return apiKey, baseURL, payload, nil
 	}
-	_, params, parseErr := mime.ParseMediaType(contentType)
-	if parseErr != nil {
-		return "", "", nil, parseErr
-	}
-	reader := multipart.NewReader(bytes.NewReader(body), params["boundary"])
-	form, formErr := reader.ReadForm(32 << 20)
+	form, formErr := readArkMultipartForm(body, contentType)
 	if formErr != nil {
 		return "", "", nil, formErr
 	}
 	defer form.RemoveAll()
-	apiKey = firstArkFormValue(form.Value, "_volcengine_api_key")
-	baseURL = firstArkFormValue(form.Value, "_volcengine_base_url")
-	if apiKey == "" || baseURL == "" {
-		return "", "", nil, errors.New("缺少火山引擎配置")
+	if apiKey, baseURL, err = arkLocalConfigFromForm(form); err != nil {
+		return "", "", nil, err
 	}
-	modelName := firstArkFormValue(form.Value, "model")
-	prompt := firstArkFormValue(form.Value, "prompt")
-	seconds := firstArkFormValue(form.Value, "duration")
-	if seconds == "" {
-		seconds = firstArkFormValue(form.Value, "seconds")
+	fields, fieldsErr := arkVideoFieldsFromForm(form, false)
+	if fieldsErr != nil {
+		return "", "", nil, fieldsErr
 	}
-	size := firstArkFormValue(form.Value, "ratio")
-	if size == "" {
-		size = firstArkFormValue(form.Value, "size")
+	payload, err = buildArkVideoPayload(fields, false)
+	return apiKey, baseURL, payload, nil
+}
+
+func readArkMultipartForm(body []byte, contentType string) (*multipart.Form, error) {
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return nil, err
 	}
-	resolution := firstArkFormValue(form.Value, "resolution")
-	if resolution == "" {
-		resolution = firstArkFormValue(form.Value, "resolution_name")
+	return multipart.NewReader(bytes.NewReader(body), params["boundary"]).ReadForm(32 << 20)
+}
+
+func arkVideoFieldsFromMap(payload map[string]any) arkVideoCreateFields {
+	fields := arkVideoCreateFields{
+		ModelName:       arkStringMapValue(payload, "model"),
+		Prompt:          arkStringMapValue(payload, "prompt"),
+		Duration:        arkStringMapValue(payload, "duration", "seconds"),
+		Ratio:           arkStringMapValue(payload, "ratio", "size"),
+		Resolution:      arkStringMapValue(payload, "resolution", "resolution_name"),
+		GenerateAudio:   arkStringMapValue(payload, "generate_audio"),
+		Watermark:       arkStringMapValue(payload, "watermark"),
+		Seed:            arkStringMapValue(payload, "seed"),
+		ReturnLastFrame: arkStringMapValue(payload, "return_last_frame"),
 	}
-	generateAudio := firstArkFormValue(form.Value, "generate_audio")
-	watermark := firstArkFormValue(form.Value, "watermark")
-	seed := firstArkFormValue(form.Value, "seed")
-	returnLastFrame := firstArkFormValue(form.Value, "return_last_frame")
-	content := []any{}
+	if rawContent, ok := payload["content"].([]any); ok {
+		fields.Content = rawContent
+	}
+	return fields
+}
+
+func arkVideoFieldsFromForm(form *multipart.Form, failOnFileError bool) (arkVideoCreateFields, error) {
+	fields := arkVideoCreateFields{
+		ModelName:       firstArkFormValue(form.Value, "model"),
+		Prompt:          firstArkFormValue(form.Value, "prompt"),
+		Duration:        firstArkFormAliasValue(form.Value, "duration", "seconds"),
+		Ratio:           firstArkFormAliasValue(form.Value, "ratio", "size"),
+		Resolution:      firstArkFormAliasValue(form.Value, "resolution", "resolution_name"),
+		GenerateAudio:   firstArkFormValue(form.Value, "generate_audio"),
+		Watermark:       firstArkFormValue(form.Value, "watermark"),
+		Seed:            firstArkFormValue(form.Value, "seed"),
+		ReturnLastFrame: firstArkFormValue(form.Value, "return_last_frame"),
+	}
 	for _, header := range form.File["input_reference[]"] {
-		dataURL, dataErr := multipartArkFileDataURL(header)
-		if dataErr == nil {
-			content = append(content, arkImageContent(dataURL))
+		dataURL, err := multipartArkFileDataURL(header)
+		if err != nil {
+			if failOnFileError {
+				return arkVideoCreateFields{}, err
+			}
+			continue
+		}
+		fields.Content = append(fields.Content, arkImageContent(dataURL))
+	}
+	return fields, nil
+}
+
+func buildArkVideoPayload(fields arkVideoCreateFields, requirePrompt bool) (map[string]any, error) {
+	content := fields.Content
+	if content == nil {
+		content = []any{}
+	}
+	if strings.TrimSpace(fields.Prompt) != "" {
+		content = append([]any{map[string]any{"type": "text", "text": fields.Prompt}}, content...)
+	}
+	if requirePrompt {
+		if strings.TrimSpace(fields.ModelName) == "" {
+			return nil, errors.New("缺少模型名称")
+		}
+		if len(content) == 0 {
+			return nil, errors.New("缺少视频提示词")
 		}
 	}
-	if strings.TrimSpace(prompt) != "" {
-		content = append([]any{map[string]any{"type": "text", "text": prompt}}, content...)
-	}
-	payload = map[string]any{
-		"model":   modelName,
+	payload := map[string]any{
+		"model":   fields.ModelName,
 		"content": content,
 	}
-	appendArkVideoControls(payload, seconds, size, resolution, generateAudio, watermark, seed, returnLastFrame)
-	return apiKey, baseURL, payload, nil
+	appendArkVideoControls(payload, fields.Duration, fields.Ratio, fields.Resolution, fields.GenerateAudio, fields.Watermark, fields.Seed, fields.ReturnLastFrame)
+	return payload, nil
+}
+
+func arkLocalConfigFromMap(payload map[string]any) (string, string, error) {
+	return requireArkLocalConfig(arkStringMapValue(payload, arkLocalAPIKeyField), arkStringMapValue(payload, arkLocalBaseURLField))
+}
+
+func arkLocalConfigFromForm(form *multipart.Form) (string, string, error) {
+	return requireArkLocalConfig(firstArkFormValue(form.Value, arkLocalAPIKeyField), firstArkFormValue(form.Value, arkLocalBaseURLField))
+}
+
+func requireArkLocalConfig(apiKey string, baseURL string) (string, string, error) {
+	if apiKey == "" || baseURL == "" {
+		return "", "", errors.New("缺少火山引擎配置")
+	}
+	return apiKey, baseURL, nil
+}
+
+func removeArkLocalConfigFields(payload map[string]any) {
+	delete(payload, arkLocalAPIKeyField)
+	delete(payload, arkLocalBaseURLField)
 }
 
 func NormalizeArkVideoTaskResponse(body []byte) ([]byte, error) {
@@ -509,6 +529,15 @@ func arkOptionalBool(value string) (bool, bool) {
 func firstArkFormValue(values map[string][]string, key string) string {
 	if items := values[key]; len(items) > 0 {
 		return items[0]
+	}
+	return ""
+}
+
+func firstArkFormAliasValue(values map[string][]string, keys ...string) string {
+	for _, key := range keys {
+		if value := firstArkFormValue(values, key); value != "" {
+			return value
+		}
 	}
 	return ""
 }
