@@ -36,9 +36,10 @@ type ImageSettingsPanelProps = {
     className?: string;
     maxCount?: number;
     quickCount?: number;
+    compact?: boolean;
 };
 
-export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, className = "w-[320px] space-y-4 rounded-2xl px-1 py-0.5", maxCount = 15, quickCount = 10 }: ImageSettingsPanelProps) {
+export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, className = "w-[320px] space-y-4 rounded-2xl px-1 py-0.5", maxCount = 15, quickCount = 10, compact = false }: ImageSettingsPanelProps) {
     const quality = config.quality || "auto";
     const count = Math.max(1, Math.min(maxCount, Math.floor(Math.abs(Number(config.count)) || 1)));
     const activeSize = config.size || "auto";
@@ -57,9 +58,9 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
         <ImageSettingsTheme theme={theme}>
             <div className={className} style={{ color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()}>
                 {showTitle ? <div className="text-lg font-semibold">图像设置</div> : null}
-                <div className="space-y-2.5">
+                <div className={compact ? "space-y-2" : "space-y-2.5"}>
                     <SettingTitle color={theme.node.muted}>质量</SettingTitle>
-                    <div className="grid grid-cols-4 gap-2.5">
+                    <div className={compact ? "grid grid-cols-4 gap-1.5" : "grid grid-cols-4 gap-2.5"}>
                         {qualityOptions.map((item) => (
                             <OptionPill key={item.value} selected={quality === item.value} theme={theme} onClick={() => onConfigChange("quality", item.value)}>
                                 {item.label}
@@ -67,22 +68,22 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                         ))}
                     </div>
                 </div>
-                <div className="space-y-2.5">
+                <div className={compact ? "space-y-2" : "space-y-2.5"}>
                     <SettingTitle color={theme.node.muted}>尺寸</SettingTitle>
-                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2.5">
+                    <div className={compact ? "grid grid-cols-[1fr_auto_1fr] items-center gap-1.5" : "grid grid-cols-[1fr_auto_1fr] items-center gap-2.5"}>
                         <DimensionInput prefix="W" value={dimensions.width} disabled={activeSize === "auto"} theme={theme} onChange={(value) => updateDimension("width", value)} />
                         <span className="text-lg opacity-45">↔</span>
                         <DimensionInput prefix="H" value={dimensions.height} disabled={activeSize === "auto"} theme={theme} onChange={(value) => updateDimension("height", value)} />
                     </div>
                 </div>
-                <div className="space-y-2.5">
+                <div className={compact ? "space-y-2" : "space-y-2.5"}>
                     <SettingTitle color={theme.node.muted}>宽高比</SettingTitle>
-                    <div className="grid grid-cols-4 gap-2.5">
+                    <div className={compact ? "grid grid-cols-4 gap-1.5" : "grid grid-cols-4 gap-2.5"}>
                         {aspectOptions.map((item) => (
                             <button
                                 key={item.value}
                                 type="button"
-                                className="flex h-[72px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border bg-transparent text-sm transition hover:opacity-80"
+                                className={`flex cursor-pointer flex-col items-center justify-center border bg-transparent transition hover:opacity-80 ${compact ? "h-12 gap-0.5 rounded-lg text-xs" : "h-[72px] gap-1.5 rounded-xl text-sm"}`}
                                 style={{ borderColor: selectedAspect?.value === item.value ? theme.node.text : theme.node.stroke, background: "transparent", color: theme.node.text }}
                                 onMouseDown={(event) => event.stopPropagation()}
                                 onClick={() => selectAspect(item.value)}
@@ -93,9 +94,9 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                         ))}
                     </div>
                 </div>
-                <div className="space-y-2.5">
+                <div className={compact ? "space-y-2" : "space-y-2.5"}>
                     <SettingTitle color={theme.node.muted}>生成张数</SettingTitle>
-                    <div className="grid grid-cols-4 gap-2.5">
+                    <div className={compact ? "grid grid-cols-4 gap-1.5" : "grid grid-cols-4 gap-2.5"}>
                         {Array.from({ length: quickCount }, (_, index) => index + 1).map((value) => (
                             <OptionPill key={value} selected={count === value} theme={theme} onClick={() => onConfigChange("count", String(value))}>
                                 {value} 张
