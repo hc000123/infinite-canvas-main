@@ -2,6 +2,27 @@ import type { Asset } from "../../../stores/use-asset-store.ts";
 
 export type AssetGenerationRecord = Record<string, unknown>;
 
+export type AssetGenerationLineageItem = {
+    key: string;
+    label: string;
+    value: string;
+};
+
+export type AssetGenerationVersionRecord = {
+    id: string;
+    index: number;
+    label: string;
+    isLatest: boolean;
+    sourceLabel: string;
+    actionLabel: string;
+    modelProvider: string;
+    nodeId: string;
+    taskId: string;
+    storyboardGroupId: string;
+    storyboardShotId: string;
+    createdAt: string;
+};
+
 export function assetGenerationRecords(asset: Asset | null | undefined): AssetGenerationRecord[] {
     const metadata = asset?.metadata;
     if (!metadata) return [];
@@ -33,6 +54,50 @@ export function assetGenerationProjectId(generation: AssetGenerationRecord | und
 
 export function assetHasGenerationTaskId(generation: AssetGenerationRecord | undefined) {
     return Boolean(readString(generation?.taskId));
+}
+
+export function assetGenerationLineage(generation: AssetGenerationRecord | undefined): AssetGenerationLineageItem[] {
+    if (!generation) return [];
+    const source = assetGenerationSource(generation);
+    const projectTitle = readString(generation.projectTitle);
+    const projectId = readString(generation.projectId);
+    const storyboardGroupId = readString(generation.storyboardGroupId);
+    const storyboardShotId = readString(generation.storyboardShotId);
+    const nodeId = readString(generation.nodeId);
+    const taskId = readString(generation.taskId);
+    const action = assetGenerationAction(generation);
+    return [
+        source ? { key: "source", label: "来源", value: assetGenerationSourceLabel(source) } : null,
+        projectTitle || projectId ? { key: "project", label: "项目", value: [projectTitle, projectId].filter(Boolean).join(" · ") } : null,
+        storyboardGroupId ? { key: "storyboardGroupId", label: "分镜组", value: storyboardGroupId } : null,
+        storyboardShotId ? { key: "storyboardShotId", label: "分镜", value: storyboardShotId } : null,
+        nodeId ? { key: "nodeId", label: "节点", value: nodeId } : null,
+        taskId ? { key: "taskId", label: "任务", value: taskId } : null,
+        action ? { key: "actionType", label: "动作", value: assetGenerationActionLabel(action) } : null,
+    ].filter((item): item is AssetGenerationLineageItem => Boolean(item));
+}
+
+export function assetGenerationVersionRecords(asset: Asset | null | undefined): AssetGenerationVersionRecord[] {
+    const records = assetGenerationRecords(asset);
+    return records.map((generation, index) => {
+        const nodeId = readString(generation.nodeId);
+        const taskId = readString(generation.taskId);
+        const createdAt = readString(generation.createdAt);
+        return {
+            id: [nodeId, taskId, createdAt, index].filter(Boolean).join(":") || `version-${index + 1}`,
+            index,
+            label: `版本 ${index + 1}`,
+            isLatest: index === records.length - 1,
+            sourceLabel: assetGenerationSourceLabel(assetGenerationSource(generation)),
+            actionLabel: assetGenerationActionLabel(assetGenerationAction(generation)),
+            modelProvider: assetGenerationModelProvider(generation),
+            nodeId,
+            taskId,
+            storyboardGroupId: readString(generation.storyboardGroupId),
+            storyboardShotId: readString(generation.storyboardShotId),
+            createdAt,
+        };
+    });
 }
 
 export function assetGenerationActionLabel(action: string) {
@@ -95,6 +160,8 @@ export function assetGenerationSearchText(asset: Asset) {
             generation.projectId,
             generation.projectTitle,
             generation.nodeId,
+            generation.storyboardGroupId,
+            generation.storyboardShotId,
             generation.prompt,
             generation.effectivePrompt,
             generation.model,
@@ -102,6 +169,8 @@ export function assetGenerationSearchText(asset: Asset) {
             generation.taskId,
             generation.actionType,
             JSON.stringify(generation.references || ""),
+            JSON.stringify(generation.productionBibleRefs || ""),
+            JSON.stringify(generation.config || ""),
         ])
         .join(" ")
         .toLowerCase();

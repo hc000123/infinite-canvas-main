@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assetGenerationActionLabel, assetGenerationFilterOptions, assetGenerationRecords, assetGenerationSearchText, assetMatchesGenerationFilters, latestAssetGeneration } from "./asset-generation.ts";
+import {
+    assetGenerationActionLabel,
+    assetGenerationFilterOptions,
+    assetGenerationLineage,
+    assetGenerationRecords,
+    assetGenerationSearchText,
+    assetGenerationVersionRecords,
+    assetMatchesGenerationFilters,
+    latestAssetGeneration,
+} from "./asset-generation.ts";
 import type { Asset } from "../../../stores/use-asset-store.ts";
 
 const generatedVideo: Asset = {
@@ -25,6 +34,11 @@ const generatedVideo: Asset = {
             provider: "volcengine-ark",
             taskId: "task-1",
             actionType: "variant",
+            storyboardGroupId: "storyboard-group-1",
+            storyboardShotId: "storyboard-shot-1",
+            config: {
+                ratio: "16:9",
+            },
         },
         generations: [
             {
@@ -64,10 +78,40 @@ test("builds generation filter options and matches filters", () => {
     assert.equal(assetMatchesGenerationFilters(generatedVideo, { taskId: "without" }), false);
 });
 
-test("generation search text includes prompts and task id", () => {
+test("builds source lineage from generation metadata", () => {
+    const lineage = assetGenerationLineage(latestAssetGeneration(generatedVideo));
+
+    assert.deepEqual(
+        lineage.map((item) => [item.label, item.value]),
+        [
+            ["来源", "画布"],
+            ["项目", "毕业画布"],
+            ["分镜组", "storyboard-group-1"],
+            ["分镜", "storyboard-shot-1"],
+            ["节点", "video-node"],
+            ["任务", "task-1"],
+            ["动作", "平行变体"],
+        ],
+    );
+});
+
+test("builds inferred generation version records", () => {
+    const versions = assetGenerationVersionRecords(generatedVideo);
+
+    assert.equal(versions.length, 2);
+    assert.equal(versions[0]?.label, "版本 1");
+    assert.equal(versions[0]?.isLatest, false);
+    assert.equal(versions[1]?.label, "版本 2");
+    assert.equal(versions[1]?.isLatest, true);
+    assert.equal(versions[1]?.storyboardShotId, "storyboard-shot-1");
+});
+
+test("generation search text includes prompts, task id and storyboard ids", () => {
     const text = assetGenerationSearchText(generatedVideo);
 
     assert.ok(text.includes("实际提示词"));
     assert.ok(text.includes("task-1"));
     assert.ok(text.includes("video-node"));
+    assert.ok(text.includes("storyboard-group-1"));
+    assert.ok(text.includes("storyboard-shot-1"));
 });
