@@ -22,6 +22,7 @@ import { useStoryboardStore } from "../canvas/stores/use-storyboard-store";
 import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { useCreativeProjectStore } from "../projects/use-creative-project-store";
 import { assetGenerationFilterOptions } from "./asset-generation";
+import { buildBulkMoveAssetPatches, buildBulkTagAssetPatches, normalizeTags } from "./asset-bulk-actions";
 import { importableAssetFiles, importAssetFileList } from "./asset-import-actions";
 import { assetImportSuccessMessage } from "./asset-import-payloads";
 import {
@@ -115,6 +116,10 @@ function AssetsPageContent() {
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(() => new Set());
     const [productionBibleProjectId, setProductionBibleProjectId] = useState("");
     const [productionBibleOpen, setProductionBibleOpen] = useState(false);
+    const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
+    const [bulkMoveFolderId, setBulkMoveFolderId] = useState<string | undefined>();
+    const [bulkTagOpen, setBulkTagOpen] = useState(false);
+    const [bulkTags, setBulkTags] = useState<string[]>([]);
     const activeFolderId = activeAssetFolderId(folderFilter);
     const coverUrl = Form.useWatch("coverUrl", form) || "";
     const title = Form.useWatch("title", form) || "";
@@ -376,6 +381,32 @@ function AssetsPageContent() {
 
     const clearSelectedAssets = () => {
         setSelectedAssetIds(new Set());
+    };
+
+    const openBulkMove = () => {
+        if (!selectedAssets.length) return message.warning("请先选择素材");
+        setBulkMoveFolderId(activeFolderId || undefined);
+        setBulkMoveOpen(true);
+    };
+
+    const applyBulkMove = () => {
+        buildBulkMoveAssetPatches(selectedAssets, bulkMoveFolderId).forEach((item) => updateAsset(item.id, item.patch));
+        message.success(`已移动 ${selectedAssets.length} 个素材`);
+        setBulkMoveOpen(false);
+    };
+
+    const openBulkTag = () => {
+        if (!selectedAssets.length) return message.warning("请先选择素材");
+        setBulkTags([]);
+        setBulkTagOpen(true);
+    };
+
+    const applyBulkTags = () => {
+        const tags = normalizeTags(bulkTags);
+        if (!tags.length) return message.warning("请填写要添加的标签");
+        buildBulkTagAssetPatches(selectedAssets, tags).forEach((item) => updateAsset(item.id, item.patch));
+        message.success(`已为 ${selectedAssets.length} 个素材添加标签`);
+        setBulkTagOpen(false);
     };
 
     const importAssetFiles = async (files?: FileList | File[]) => {
@@ -808,6 +839,12 @@ function AssetsPageContent() {
                             <Button size="small" disabled={!filteredAssets.length || allFilteredSelected} onClick={selectFilteredAssets}>
                                 全选当前结果
                             </Button>
+                            <Button size="small" disabled={!selectedAssets.length} onClick={openBulkMove}>
+                                移动文件夹
+                            </Button>
+                            <Button size="small" disabled={!selectedAssets.length} onClick={openBulkTag}>
+                                添加标签
+                            </Button>
                             <Button size="small" disabled={!selectedAssets.length} onClick={clearSelectedAssets}>
                                 清空选择
                             </Button>
@@ -895,6 +932,20 @@ function AssetsPageContent() {
 
             <Modal title={editingFolder ? "重命名文件夹" : "新建文件夹"} open={folderDialogOpen} onCancel={() => setFolderDialogOpen(false)} onOk={saveFolder} okText="保存" cancelText="取消" destroyOnHidden>
                 <Input value={folderName} autoFocus placeholder="输入文件夹名称" onChange={(event) => setFolderName(event.target.value)} onPressEnter={saveFolder} />
+            </Modal>
+
+            <Modal title="批量移动文件夹" open={bulkMoveOpen} onCancel={() => setBulkMoveOpen(false)} onOk={applyBulkMove} okText="移动" cancelText="取消" destroyOnHidden>
+                <div className="space-y-3">
+                    <div className="text-sm text-stone-500">将 {selectedAssets.length} 个素材移动到：</div>
+                    <Select className="w-full" allowClear placeholder="未分组" value={bulkMoveFolderId} options={folderOptions} onChange={(value) => setBulkMoveFolderId(value || undefined)} />
+                </div>
+            </Modal>
+
+            <Modal title="批量添加标签" open={bulkTagOpen} onCancel={() => setBulkTagOpen(false)} onOk={applyBulkTags} okText="添加" cancelText="取消" destroyOnHidden>
+                <div className="space-y-3">
+                    <div className="text-sm text-stone-500">为 {selectedAssets.length} 个素材追加标签，已有标签会保留并自动去重。</div>
+                    <Select mode="tags" className="w-full" placeholder="输入标签后回车" value={bulkTags} onChange={(value) => setBulkTags(value)} />
+                </div>
             </Modal>
 
             <Modal title="删除素材" open={Boolean(deletingAsset)} onCancel={() => setDeletingAsset(null)} onOk={confirmDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
