@@ -1,6 +1,7 @@
 import { formatBytes } from "@/lib/image-utils";
 import type { Asset, AssetKind } from "@/stores/use-asset-store";
 import { assetGenerationSearchText } from "./asset-generation";
+import { projectLibrarySearchText } from "./asset-project-library";
 
 export function volcengineStatusLabel(status: string) {
     if (status === "Active") return "已加白";
@@ -34,7 +35,7 @@ export function assetMediaInfo(asset: Asset) {
 }
 
 export function assetSearchText(asset: Asset) {
-    return [asset.title, asset.source || "", asset.note || "", (asset.tags || []).join(" "), asset.kind === "text" ? asset.data.content : asset.data.mimeType, assetGenerationSearchText(asset)].join(" ").toLowerCase();
+    return [asset.title, asset.source || "", asset.note || "", (asset.tags || []).join(" "), asset.kind === "text" ? asset.data.content : asset.data.mimeType, assetGenerationSearchText(asset), projectLibrarySearchText(asset)].join(" ").toLowerCase();
 }
 
 export function assetKindLabel(kind: AssetKind) {

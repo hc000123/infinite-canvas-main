@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Download, FolderPlus, PencilLine, Search, Trash2, Upload } from "lucide-react";
+import { BookOpen, Download, FolderPlus, Library, PencilLine, Search, Trash2, Upload } from "lucide-react";
 import { Suspense, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { App, Button, Empty, Form, Input, Modal, Pagination, Select, Tag } from "antd";
@@ -22,6 +22,7 @@ import { useStoryboardStore } from "../canvas/stores/use-storyboard-store";
 import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { useCreativeProjectStore } from "../projects/use-creative-project-store";
 import { assetGenerationFilterOptions } from "./asset-generation";
+import { buildProjectLibraryAssetPatch, buildRemoveProjectLibraryAssetPatch } from "./asset-project-library";
 import { assetsForVolcengineRefresh, assetsForVolcengineSubmit, buildBulkMoveAssetPatches, buildBulkTagAssetPatches, normalizeTags } from "./asset-bulk-actions";
 import { importableAssetFiles, importAssetFileList } from "./asset-import-actions";
 import { assetImportSuccessMessage } from "./asset-import-payloads";
@@ -39,6 +40,7 @@ import {
     storyboardGroupReferencedAssetIds as collectStoryboardGroupReferencedAssetIds,
     supportedAssetList,
     type AssetSortMode,
+    type ProjectLibraryFilter,
 } from "./asset-page-filters";
 import { assetSearchText, countFolderAssets, fetchImageBlob, hasImportableDragItems, volcengineStatusLabel } from "./asset-utils";
 import { exportAssets } from "./asset-transfer";
@@ -96,6 +98,7 @@ function AssetsPageContent() {
     const [generationModelProviderFilter, setGenerationModelProviderFilter] = useState<string>();
     const [generationTaskFilter, setGenerationTaskFilter] = useState<"all" | "with" | "without">("all");
     const [projectContextFilter, setProjectContextFilter] = useState(searchParams.get("projectId") || "");
+    const [projectLibraryFilter, setProjectLibraryFilter] = useState<ProjectLibraryFilter>("all");
     const [storyboardGroupFilter, setStoryboardGroupFilter] = useState("");
     const [sortMode, setSortMode] = useState<AssetSortMode>("default");
     const [page, setPage] = useState(1);
@@ -133,6 +136,7 @@ function AssetsPageContent() {
     const folderOptions = useMemo(() => [{ label: "未分组", value: "" }, ...folders.map((folder) => ({ label: folder.name, value: folder.id }))], [folders]);
     const projectContexts = useMemo(() => buildAssetProjectContexts(creativeProjects, projects), [creativeProjects, projects]);
     const projectOptions = useMemo(() => projectContexts.map((project) => ({ label: project.title, value: project.id })), [projectContexts]);
+    const projectLibraryProjectTitles = useMemo(() => Object.fromEntries(projectContexts.map((project) => [project.id, project.title])), [projectContexts]);
     const storyboardGroupOptions = useMemo(
         () =>
             storyboardGroups
@@ -162,6 +166,7 @@ function AssetsPageContent() {
                 generationModelProviderFilter,
                 generationTaskFilter,
                 projectContextFilter,
+                projectLibraryFilter,
                 projectReferencedAssetIds,
                 storyboardGroupFilter,
                 storyboardGroupAssetIds,
@@ -179,6 +184,7 @@ function AssetsPageContent() {
         generationModelProviderFilter,
         generationTaskFilter,
         projectContextFilter,
+        projectLibraryFilter,
         projectReferencedAssetIds,
         storyboardGroupFilter,
         storyboardGroupAssetIds,
@@ -221,6 +227,10 @@ function AssetsPageContent() {
     useEffect(() => {
         if (storyboardGroupFilter && !storyboardGroupOptions.some((option) => option.value === storyboardGroupFilter)) setStoryboardGroupFilter("");
     }, [storyboardGroupFilter, storyboardGroupOptions]);
+
+    useEffect(() => {
+        if (!projectContextFilter && projectLibraryFilter !== "all") setProjectLibraryFilter("all");
+    }, [projectContextFilter, projectLibraryFilter]);
 
     useEffect(() => {
         const existingIds = new Set(validAssets.map((asset) => asset.id));
@@ -424,6 +434,21 @@ function AssetsPageContent() {
         clearSelectedAssets();
         setBulkDeleteOpen(false);
         message.success(`已删除 ${count} 个素材`);
+    };
+
+    const addSelectedToProjectLibrary = () => {
+        if (!projectContextFilter) return message.warning("请先选择项目上下文");
+        if (!selectedAssets.length) return message.warning("请先选择素材");
+        const now = new Date().toISOString();
+        selectedAssets.forEach((asset) => updateAsset(asset.id, buildProjectLibraryAssetPatch(asset, projectContextFilter, now)));
+        message.success(`已加入项目共享库：${selectedAssets.length} 个素材`);
+    };
+
+    const removeSelectedFromProjectLibrary = () => {
+        if (!projectContextFilter) return message.warning("请先选择项目上下文");
+        if (!selectedAssets.length) return message.warning("请先选择素材");
+        selectedAssets.forEach((asset) => updateAsset(asset.id, buildRemoveProjectLibraryAssetPatch(asset, projectContextFilter)));
+        message.success(`已移出项目共享库：${selectedAssets.length} 个素材`);
     };
 
     const importAssetFiles = async (files?: FileList | File[]) => {
@@ -768,6 +793,21 @@ function AssetsPageContent() {
                                         setStoryboardGroupFilter(value || "");
                                     }}
                                 />
+                                <Select
+                                    size="small"
+                                    className="min-w-36"
+                                    value={projectLibraryFilter}
+                                    disabled={!projectContextFilter}
+                                    options={[
+                                        { label: "项目库：全部", value: "all" },
+                                        { label: "仅项目库", value: "shared" },
+                                        { label: "未入项目库", value: "not_shared" },
+                                    ]}
+                                    onChange={(value) => {
+                                        setPage(1);
+                                        setProjectLibraryFilter(value as ProjectLibraryFilter);
+                                    }}
+                                />
                                 <Button size="small" icon={<BookOpen className="size-3.5" />} disabled={!selectedProductionBibleProject} onClick={() => setProductionBibleOpen(true)}>
                                     项目设定库
                                 </Button>
@@ -910,6 +950,16 @@ function AssetsPageContent() {
                             <Button size="small" disabled={!selectedAssets.length} onClick={openBulkTag}>
                                 添加标签
                             </Button>
+                            {projectContextFilter ? (
+                                <>
+                                    <Button size="small" icon={<Library className="size-3.5" />} disabled={!selectedAssets.length} onClick={addSelectedToProjectLibrary}>
+                                        加入项目库
+                                    </Button>
+                                    <Button size="small" disabled={!selectedAssets.length} onClick={removeSelectedFromProjectLibrary}>
+                                        移出项目库
+                                    </Button>
+                                </>
+                            ) : null}
                             <Button size="small" disabled={!selectedVolcengineSubmitAssets.length || bulkReviewAction !== ""} loading={bulkReviewAction === "submit"} onClick={() => void submitSelectedVolcengineReviews()}>
                                 批量加白{selectedVolcengineSubmitAssets.length ? ` ${selectedVolcengineSubmitAssets.length}` : ""}
                             </Button>
@@ -941,6 +991,7 @@ function AssetsPageContent() {
                                 submittingReview={submittingReviewId === asset.id}
                                 onReview={() => void submitImageReview(asset)}
                                 onRefreshReview={() => void refreshImageReview(asset)}
+                                projectLibraryProjectId={projectContextFilter}
                             />
                         ))}
                     </div>
@@ -996,6 +1047,7 @@ function AssetsPageContent() {
                 submittingReview={previewAsset ? submittingReviewId === previewAsset.id : false}
                 onReview={(asset) => void submitImageReview(asset)}
                 onRefreshReview={(asset) => void refreshImageReview(asset)}
+                projectLibraryProjectTitles={projectLibraryProjectTitles}
             />
 
             {selectedProductionBibleProject ? (

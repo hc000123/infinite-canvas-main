@@ -1,5 +1,6 @@
 import type { Asset, AssetKind } from "../../../stores/use-asset-store.ts";
 import { assetGenerationRecords, assetMatchesGenerationFilters, readString } from "./asset-generation.ts";
+import { assetInProjectLibrary } from "./asset-project-library.ts";
 
 export type AssetProjectContext = {
     id: string;
@@ -34,6 +35,7 @@ type StoryboardShotLike = {
 };
 
 export type AssetSortMode = "default" | "updated_desc" | "created_desc" | "generation_desc" | "title_asc";
+export type ProjectLibraryFilter = "all" | "shared" | "not_shared";
 
 type AssetListFilters = {
     keyword: string;
@@ -44,6 +46,7 @@ type AssetListFilters = {
     generationModelProviderFilter?: string;
     generationTaskFilter: "all" | "with" | "without";
     projectContextFilter: string;
+    projectLibraryFilter: ProjectLibraryFilter;
     projectReferencedAssetIds: Set<string>;
     storyboardGroupFilter?: string;
     storyboardGroupAssetIds?: Set<string>;
@@ -92,6 +95,9 @@ export function filterAssetList(assets: Asset[], filters: AssetListFilters) {
         if (filters.kindFilter !== "all" && asset.kind !== filters.kindFilter) return false;
         if (filters.folderFilter === "root" && asset.folderId) return false;
         if (activeFolderId && asset.folderId !== activeFolderId) return false;
+        const inProjectLibrary = assetInProjectLibrary(asset, filters.projectContextFilter);
+        if (filters.projectLibraryFilter === "shared" && !inProjectLibrary) return false;
+        if (filters.projectLibraryFilter === "not_shared" && inProjectLibrary) return false;
         if (filters.storyboardGroupFilter && !assetMatchesStoryboardGroup(asset, filters.storyboardGroupFilter, filters.storyboardGroupAssetIds)) return false;
         if (
             !assetMatchesGenerationFilters(asset, {
@@ -99,7 +105,7 @@ export function filterAssetList(assets: Asset[], filters: AssetListFilters) {
                 action: filters.generationActionFilter,
                 modelProvider: filters.generationModelProviderFilter,
                 taskId: filters.generationTaskFilter,
-                projectId: filters.projectContextFilter || undefined,
+                projectId: filters.projectContextFilter && !inProjectLibrary ? filters.projectContextFilter : undefined,
                 referencedAssetIds: filters.projectReferencedAssetIds,
             })
         )

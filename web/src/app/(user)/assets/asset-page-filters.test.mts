@@ -78,6 +78,7 @@ test("filters assets by kind, folder, project references and keyword", () => {
             folderFilter: "all",
             generationTaskFilter: "all",
             projectContextFilter: "",
+            projectLibraryFilter: "all",
             projectReferencedAssetIds: new Set(),
             searchText,
         }).map((asset) => asset.id),
@@ -90,6 +91,7 @@ test("filters assets by kind, folder, project references and keyword", () => {
             folderFilter: "root",
             generationTaskFilter: "all",
             projectContextFilter: "",
+            projectLibraryFilter: "all",
             projectReferencedAssetIds: new Set(),
             searchText,
         }).map((asset) => asset.id),
@@ -102,6 +104,7 @@ test("filters assets by kind, folder, project references and keyword", () => {
             folderFilter: "all",
             generationTaskFilter: "all",
             projectContextFilter: "project-1",
+            projectLibraryFilter: "all",
             projectReferencedAssetIds: new Set(["asset-b"]),
             searchText,
         }).map((asset) => asset.id),
@@ -119,12 +122,61 @@ test("filters assets by storyboard group references and generation metadata", ()
             folderFilter: "all",
             generationTaskFilter: "all",
             projectContextFilter: "",
+            projectLibraryFilter: "all",
             projectReferencedAssetIds: new Set(),
             storyboardGroupFilter: "group-1",
             storyboardGroupAssetIds: new Set(["ref-a"]),
             searchText: (asset) => asset.title,
         }).map((asset) => asset.id),
         ["ref-a", "generated-a"],
+    );
+});
+
+test("filters project context assets by shared project library membership", () => {
+    const assets = [
+        textAsset("manual-shared", "手动共享", undefined, { projectLibraries: [{ projectId: "project-1", visibility: "project", role: "editor", syncStatus: "local", addedAt: now, updatedAt: now }] }),
+        textAsset("generated", "项目生成", undefined, { generation: { projectId: "project-1", source: "canvas" } }),
+        textAsset("other", "其他素材"),
+    ];
+
+    assert.deepEqual(
+        filterAssetList(assets, {
+            keyword: "",
+            kindFilter: "all",
+            folderFilter: "all",
+            generationTaskFilter: "all",
+            projectContextFilter: "project-1",
+            projectLibraryFilter: "all",
+            projectReferencedAssetIds: new Set(),
+            searchText: (asset) => asset.title,
+        }).map((asset) => asset.id),
+        ["manual-shared", "generated"],
+    );
+    assert.deepEqual(
+        filterAssetList(assets, {
+            keyword: "",
+            kindFilter: "all",
+            folderFilter: "all",
+            generationTaskFilter: "all",
+            projectContextFilter: "project-1",
+            projectLibraryFilter: "shared",
+            projectReferencedAssetIds: new Set(),
+            searchText: (asset) => asset.title,
+        }).map((asset) => asset.id),
+        ["manual-shared"],
+    );
+    assert.deepEqual(
+        filterAssetList(assets, {
+            keyword: "",
+            kindFilter: "all",
+            folderFilter: "all",
+            generationTaskFilter: "all",
+            projectContextFilter: "project-1",
+            projectLibraryFilter: "not_shared",
+            projectReferencedAssetIds: new Set(),
+            searchText: (asset) => asset.title,
+        }).map((asset) => asset.id),
+        ["generated"],
     );
 });
 

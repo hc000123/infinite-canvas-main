@@ -3,6 +3,7 @@ import { Button, Drawer, Image, Space, Tag, Typography } from "antd";
 
 import { isVolcengineReviewProcessing, shouldShowVolcengineReviewAction } from "@/services/volcengine-asset-metadata";
 import type { Asset } from "@/stores/use-asset-store";
+import { assetProjectLibraryEntries, projectLibraryRoleLabel, projectLibrarySyncStatusLabel } from "../asset-project-library";
 import { assetKindDownloadLabel, assetKindLabel, assetMediaInfo, volcengineReviewActionLabel } from "../asset-utils";
 import { VolcengineAssetTag } from "./asset-card";
 import { AssetGenerationSection } from "./asset-generation-section";
@@ -17,6 +18,7 @@ export function AssetDrawer({
     submittingReview,
     onReview,
     onRefreshReview,
+    projectLibraryProjectTitles,
 }: {
     asset: Asset | null;
     folderName?: string;
@@ -27,10 +29,12 @@ export function AssetDrawer({
     submittingReview: boolean;
     onReview: (asset: Asset) => void;
     onRefreshReview: (asset: Asset) => void;
+    projectLibraryProjectTitles?: Record<string, string>;
 }) {
     const cover = asset ? asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "") : "";
     const videoPreviewUrl = asset?.kind === "video" ? videoCoverUrl(asset.data.url) : "";
     const mediaInfo = asset ? assetMediaInfo(asset) : "";
+    const projectLibraryEntries = assetProjectLibraryEntries(asset);
     return (
         <Drawer title="素材详情" open={Boolean(asset)} size="large" onClose={onClose}>
             {asset ? (
@@ -79,6 +83,24 @@ export function AssetDrawer({
                         <div>
                             <Typography.Text type="secondary">备注</Typography.Text>
                             <Typography.Paragraph className="mt-1">{asset.note}</Typography.Paragraph>
+                        </div>
+                    ) : null}
+                    {projectLibraryEntries.length ? (
+                        <div className="rounded-lg border border-stone-200 p-4 text-sm dark:border-stone-800">
+                            <Typography.Text type="secondary" className="block text-xs">
+                                项目共享库
+                            </Typography.Text>
+                            <div className="mt-2 space-y-2">
+                                {projectLibraryEntries.map((entry) => (
+                                    <div key={entry.projectId} className="rounded-md bg-stone-50 px-3 py-2 dark:bg-stone-900/70">
+                                        <div className="font-medium text-stone-900 dark:text-stone-100">{projectLibraryProjectTitles?.[entry.projectId] || entry.projectId}</div>
+                                        <div className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                                            {projectLibraryRoleLabel(entry.role)} · {projectLibrarySyncStatusLabel(entry.syncStatus)}
+                                            {entry.remoteAssetId ? ` · 远端素材 ${entry.remoteAssetId}` : ""}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     ) : null}
                     <AssetGenerationSection asset={asset} />
