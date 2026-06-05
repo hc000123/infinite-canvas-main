@@ -13,6 +13,7 @@
 - 项目剧本 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:script_store`。
 - 项目分镜 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:storyboard_store`。
 - 本地生成队列 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:generation_queue_store`。
+- Agent 任务 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:agent_task_store`。
 - 图片 Blob：单独存到 `localForage` 实例，数据库名 `infinite-canvas`，storeName `image_files`。
 - 视频等媒体 Blob：单独存到 `localForage` 实例，数据库名 `infinite-canvas`，storeName `media_files`。
 
@@ -287,6 +288,97 @@ type GenerationQueueItem = {
 - `estimatedCredits` / `estimatedDurationSeconds`：第一版按视频时长做轻量估算，用于开始前展示预算，不代表最终扣费凭证。
 - `taskId` / `resultAssetId` / `error`：执行后记录上游任务、生成后自动入库素材和失败原因。
 
+## Agent 任务结构
+
+Agent 任务独立于画布节点保存，用于记录短剧 Agent 工作台产生的本地建议和用户确认后的写入结果。第一版不接入真实 LLM，不自动生成视频，不自动扣费，也不绕过用户确认写入画布。
+
+```ts
+type AgentTask = {
+  id: string;
+  projectId: string;
+  kind: "asset_manager" | "prompt_engineer" | "storyboard_director";
+  title: string;
+  status: "pending" | "applied" | "cancelled";
+  targetRefs: Array<{
+    kind:
+      | "asset"
+      | "production_bible"
+      | "prompt"
+      | "script_episode"
+      | "script_scene"
+      | "storyboard_group"
+      | "storyboard_shot";
+    id: string;
+    label?: string;
+  }>;
+  summary: string;
+  riskLevel: "low" | "medium" | "high";
+  skillId?: string;
+  skillName?: string;
+  skillVersion?: string;
+  proposedActions: Array<
+    | {
+        type: "asset.add_tags";
+        assetId: string;
+        tags: string[];
+        reason: string;
+      }
+    | {
+        type: "storyboard.update_shot_prompt";
+        shotId: string;
+        prompt: string;
+        effectivePrompt: string;
+        reason: string;
+      }
+    | {
+        type: "storyboard.create_group_from_scenes";
+        episodeId: string;
+        sceneIds: string[];
+        title: string;
+        description: string;
+        reason: string;
+      }
+  >;
+  createdAt: string;
+  updatedAt: string;
+};
+```
+
+字段说明：
+
+- `kind`：当前只支持资产管理员、提示词工程和分镜导演三个本地规则 Agent。
+- `status`：任务默认待确认；用户点击确认后进入 `applied`，点击取消后进入 `cancelled`。取消不会修改素材、提示词、分镜或画布。
+- `targetRefs`：任务影响对象，只保存轻量引用，便于任务卡片展示和后续追溯。
+- `skillId` / `skillName` / `skillVersion`：M5.10 新增的 Skill 追踪字段。M5.9 旧任务可能没有这些字段，新任务会由本地 skill registry 写入。
+- `proposedActions`：确认后才执行的写入预览。第一版只允许补素材标签、补分镜提示词、从剧本场次创建分镜组。
+- 写入追溯：资产标签写入会在素材 metadata 中追加 `agentTaskRefs`；分镜提示词和分镜组创建通过对应 store 的更新时间和任务 ID 预设信息追溯。
+
+内置 Agent Skill 不单独持久化，当前以代码内 registry 形式注册。每个 `AgentSkill` 包含：
+
+```ts
+type AgentSkill = {
+  id: string;
+  name: string;
+  agentKind: "asset_manager" | "prompt_engineer" | "storyboard_director";
+  description: string;
+  version: string;
+  inputSchema: Record<string, unknown>;
+  outputSchema: Record<string, unknown>;
+  riskLevel: "low" | "medium" | "high";
+  run: (input: AgentWorkbenchInput) => AgentSkillOutput;
+  apply: (task: AgentTask, context: AgentSkillApplyContext) => void;
+};
+```
+
+第一版内置 Skill：
+
+- `asset.gap_check`：资产缺口检查。
+- `asset.reuse_duplicate_scan`：素材复用/重复检测。
+- `prompt.storyboard_completion`：分镜提示词补全。
+- `storyboard.scene_to_draft`：剧本场次转分镜草案。
+
+Skill 的 `run` 只能输出结构化 `summary/targetRefs/proposedActions`；`apply` 只在用户确认任务后执行，不允许自动删除素材、覆盖主版本、触发真实生成或扣费。
+
 ## 节点结构
 
 每个节点是一个 `CanvasNodeData`：
@@ -333,6 +425,7 @@ type CanvasNodeMetadata = {
   generateAudio?: string;
   watermark?: string;
   seed?: string;
+  videoPromptReviewEnabled?: string;
   returnLastFrame?: string;
   provider?: "openai" | "volcengine-ark";
   references?: string[];
@@ -383,7 +476,7 @@ type CanvasNodeMetadata = {
 不同节点的使用方式：
 
 - 图片节点：`content` 是当前可展示的图片 URL，通常是 `blob:` URL；`storageKey` 指向本地图片 Blob；`naturalWidth/naturalHeight/bytes/mimeType` 保存原图信息。
-- 视频节点：`content` 是当前可播放的视频 URL，通常是 `blob:` URL；`storageKey` 指向本地视频 Blob；`bytes/mimeType/localStoredAt` 保存本地转存信息；`provider/taskId/taskStatus/rawTaskStatus/videoUrl/videoUrlExpiresAt/errorDetails` 保存视频任务状态、临时地址有效期和失败原因；`duration/ratio/resolution/generateAudio/watermark/seed/returnLastFrame` 保存 Ark 视频生成参数快照；`references/videoReferences/audioReferences/referenceRoles/referenceOrder` 保存本次 Seedance 图片、视频、音频参考、图片角色和混合输入顺序；`lastFrameUrl/lastFrameStorageKey` 保存 Ark 返回尾帧的临时地址和本地转存结果。
+- 视频节点：`content` 是当前可播放的视频 URL，通常是 `blob:` URL；`storageKey` 指向本地视频 Blob；`bytes/mimeType/localStoredAt` 保存本地转存信息；`provider/taskId/taskStatus/rawTaskStatus/videoUrl/videoUrlExpiresAt/errorDetails` 保存视频任务状态、临时地址有效期和失败原因；`duration/ratio/resolution/generateAudio/watermark/seed/videoPromptReviewEnabled/returnLastFrame` 保存 Ark 视频生成参数快照；`references/videoReferences/audioReferences/referenceRoles/referenceOrder` 保存本次 Seedance 图片、视频、音频参考、图片角色和混合输入顺序；`lastFrameUrl/lastFrameStorageKey` 保存 Ark 返回尾帧的临时地址和本地转存结果。
 - 音频节点：`content` 是当前可播放的音频 URL，通常是 `blob:` URL；`storageKey` 指向本地音频 Blob；`bytes/mimeType/localStoredAt` 保存本地转存信息。音频节点可连接到视频生成配置节点，作为 Seedance `reference_audio` 输入。
 - 文本节点：`content` 保存文本内容；`fontSize` 保存字体大小；`prompt/status/errorDetails` 保存生成状态。
 - 生成配置节点：`generationMode/model/size/count/inputOrder` 保存生成配置；`generationMode` 可选择文本、图片或视频；上游输入通过 `connections` 计算。

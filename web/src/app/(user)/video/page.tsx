@@ -2,7 +2,7 @@
 
 import { BookOpen, CheckSquare, ClipboardPaste, Download, FolderPlus, History, LoaderCircle, Plus, SlidersHorizontal, Sparkles, Trash2, Upload, VideoIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { App, Button, Checkbox, Drawer, Empty, Input, Modal, Segmented, Space, Tag, Typography } from "antd";
+import { App, Button, Checkbox, Drawer, Empty, Input, Modal, Tag, Typography } from "antd";
 import localforage from "localforage";
 import { nanoid } from "nanoid";
 import { saveAs } from "file-saver";
@@ -250,8 +250,8 @@ export default function VideoPage() {
         setLogsOpen(false);
         setPrompt(log.prompt);
         setReferences(log.references || []);
-        if (log.config.videoProtocol) updateConfig("videoProtocol", log.config.videoProtocol);
-        if (log.config.videoProtocol === "volcengine-ark" && (log.config.seedanceModel || log.model)) {
+        if (log.config.videoProtocol && effectiveConfig.channelMode !== "local") updateConfig("videoProtocol", log.config.videoProtocol);
+        if (effectiveConfig.channelMode !== "local" && log.config.videoProtocol === "volcengine-ark" && (log.config.seedanceModel || log.model)) {
             updateConfig("seedanceModel", log.config.seedanceModel || log.model);
             updateConfig("seedanceEndpointId", log.config.seedanceEndpointId || "");
         } else if (log.config.videoModel || log.model) {
@@ -428,44 +428,12 @@ export default function VideoPage() {
 
 function GenerationSettings({ config, model, updateConfig, openConfigDialog }: { config: AiConfig; model: string; updateConfig: UpdateAiConfig; openConfigDialog: (shouldPromptContinue?: boolean) => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const isSeedance = config.channelMode === "local" && config.videoProtocol === "volcengine-ark";
 
     return (
         <div className="grid min-w-0 gap-4">
             <label className="block min-w-0">
                 <span className="mb-1.5 block text-sm font-semibold sm:mb-2 sm:text-base">模型</span>
-                <div className="space-y-2">
-                    {config.channelMode === "local" ? (
-                        <Segmented
-                            block
-                            size="small"
-                            value={config.videoProtocol}
-                            onChange={(value) => updateConfig("videoProtocol", value as AiConfig["videoProtocol"])}
-                            options={[
-                                { label: "OpenAI 兼容视频", value: "openai" },
-                                { label: "火山 Seedance", value: "volcengine-ark" },
-                            ]}
-                        />
-                    ) : null}
-                    {isSeedance ? (
-                        <div className="space-y-2">
-                            <Space.Compact className="w-full">
-                                <span className="inline-flex w-24 shrink-0 items-center justify-center rounded-l-md border border-r-0 border-stone-200 bg-stone-50 px-3 text-sm text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300">
-                                    显示名
-                                </span>
-                                <Input value={config.seedanceModel || model} placeholder="doubao-seedance-2-0-260128" onChange={(event) => updateConfig("seedanceModel", event.target.value)} />
-                            </Space.Compact>
-                            <Space.Compact className="w-full">
-                                <span className="inline-flex w-24 shrink-0 items-center justify-center rounded-l-md border border-r-0 border-stone-200 bg-stone-50 px-3 text-sm text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300">
-                                    Endpoint
-                                </span>
-                                <Input value={config.seedanceEndpointId} placeholder="ep-20260524233518-kxgt4" onChange={(event) => updateConfig("seedanceEndpointId", event.target.value)} />
-                            </Space.Compact>
-                        </div>
-                    ) : (
-                        <ModelPicker config={config} modelType="video" value={model} onChange={(value) => updateConfig("videoModel", value)} fullWidth onMissingConfig={() => openConfigDialog(false)} />
-                    )}
-                </div>
+                <ModelPicker config={config} modelType="video" value={model} onChange={(value) => updateConfig("videoModel", value)} fullWidth onMissingConfig={() => openConfigDialog(false)} />
             </label>
             <div className="min-w-0">
                 <VideoSettingsPanel config={config} onConfigChange={(key, value) => updateConfig(key, value)} theme={theme} showTitle={false} className="space-y-4" />
@@ -733,7 +701,7 @@ function buildVideoConfig(config: AiConfig, model: string): AiConfig {
         ...config,
         model,
         videoModel: model,
-        seedanceModel: config.videoProtocol === "volcengine-ark" ? model : config.seedanceModel,
+        seedanceModel: config.seedanceModel,
         size: normalizeVideoSize(config.size),
         videoSeconds: normalizeVideoSeconds(config.videoSeconds, config),
         vquality: normalizeResolution(config.vquality),

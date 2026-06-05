@@ -33,7 +33,7 @@ const extendDirectionOptions = [
     { value: "backward", label: "向前" },
 ] as const;
 
-type VideoSettingsKey = "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoSeed" | "videoTaskMode" | "videoEditType" | "videoExtendDirection" | "videoReferenceImageMode";
+type VideoSettingsKey = "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoSeed" | "videoPromptReviewEnabled" | "videoTaskMode" | "videoEditType" | "videoExtendDirection" | "videoReferenceImageMode";
 
 type VideoSettingsPanelProps = {
     config: AiConfig;
@@ -54,6 +54,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const resolution = normalizeVideoResolutionValue(config.vquality);
     const generateAudio = config.videoGenerateAudio === "true";
     const watermark = config.videoWatermark === "true";
+    const promptReviewEnabled = config.videoPromptReviewEnabled !== "false";
     const taskMode = resolveSeedanceTaskModeForSource(config.videoTaskMode, hasSourceVideo);
     const taskOptions = visibleSeedanceTaskModeOptions(hasSourceVideo);
     const showImageControl = shouldShowSeedanceImageControl(config.videoTaskMode, hasSourceVideo);
@@ -171,6 +172,9 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                         </label>
                     </SettingGroup>
                 ) : null}
+                <SettingGroup title="生成辅助" color={theme.node.muted}>
+                    <ToggleSwitch checked={promptReviewEnabled} label="生成前提示词自审" theme={theme} onChange={(checked) => onConfigChange("videoPromptReviewEnabled", String(checked))} />
+                </SettingGroup>
             </div>
         </ImageSettingsTheme>
     );

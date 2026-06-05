@@ -49,6 +49,7 @@ export type CanvasNodeMetadata = {
     generateAudio?: string;
     watermark?: string;
     seed?: string;
+    videoPromptReviewEnabled?: string;
     returnLastFrame?: string;
     provider?: "openai" | "volcengine-ark";
     actionType?: CanvasVideoActionType;

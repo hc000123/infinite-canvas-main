@@ -52,6 +52,20 @@ test("applies project preset to effective AI config", () => {
     assert.equal(next.seedanceEndpointId, "ep-seedance");
 });
 
+test("local project presets keep video provider OpenAI compatible", () => {
+    const next = applyCanvasProjectPresetToConfig(
+        { ...config, channelMode: "local", videoProtocol: "openai" },
+        {
+            defaultVideoModel: "doubao-seedance-2-0-260128",
+            defaultVideoProvider: "volcengine-ark",
+        },
+    );
+
+    assert.equal(next.videoProtocol, "openai");
+    assert.equal(next.videoModel, "doubao-seedance-2-0-260128");
+    assert.equal(next.seedanceModel, "seedance-model");
+});
+
 test("normalizes legacy pixel sizes into aspect ratios", () => {
     assert.equal(normalizeCanvasProjectPresetRatio("3840x2160"), "16:9");
     assert.equal(normalizeCanvasProjectPresetRatio("2160x3840"), "9:16");

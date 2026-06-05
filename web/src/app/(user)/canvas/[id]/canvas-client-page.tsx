@@ -37,6 +37,7 @@ import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions
 import { resetInterruptedGeneration } from "../utils/canvas-video-task-recovery";
 import { applyCanvasProjectPresetToConfig } from "../utils/canvas-project-preset";
 import { planStoryboardGroupCanvasInsert } from "../utils/storyboard-management";
+import { reviewVideoPromptBeforeGeneration, shouldRunVideoPromptReview, type PromptReviewResult } from "../utils/canvas-prompt-review";
 import { cropDataUrl } from "../utils/canvas-image-data";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
 import { useCanvasConnections, type CanvasPendingConnectionCreate } from "../hooks/use-canvas-connections";
@@ -1281,6 +1282,23 @@ function InfiniteCanvasPage() {
                         contextReferences: { images: generationContext.referenceImages, videos: generationContext.referenceVideos, audios: generationContext.referenceAudios, inputs: generationContext.referenceInputs },
                         storedVariantReferences: { images: storedVariantImages || [], videos: storedVariantVideos || [], audios: storedVariantAudios || [], inputs: sourceReferenceInputs },
                     });
+                    if (shouldRunVideoPromptReview(generationConfig)) {
+                        const review = reviewVideoPromptBeforeGeneration({
+                            prompt: effectivePrompt,
+                            seconds: generationConfig.videoSeconds,
+                            taskMode: generationConfig.videoTaskMode,
+                            referenceImageMode: generationConfig.videoReferenceImageMode,
+                            imageReferenceCount: videoPlan.references.images.length,
+                            videoReferenceCount: videoPlan.references.videos.length,
+                            audioReferenceCount: videoPlan.references.audios.length,
+                        });
+                        if (review.level !== "pass" && !(await confirmVideoPromptReview(review))) {
+                            if (markSourceStatus && sourceNode) {
+                                setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: sourceNode.metadata } : node)));
+                            }
+                            return { ok: false, errorDetails: "已取消生成，等待修改提示词" };
+                        }
+                    }
                     const videoResult = await generateVideoNode({
                         nodeId,
                         sourceNode,
@@ -2563,6 +2581,34 @@ function audioExtension(mimeType?: string) {
     if (!subtype || subtype === "mpeg") return "mp3";
     if (subtype === "x-wav") return "wav";
     return subtype;
+}
+
+function confirmVideoPromptReview(review: PromptReviewResult) {
+    return new Promise<boolean>((resolve) => {
+        Modal.confirm({
+            title: review.level === "risk" ? "提示词自审发现高风险" : "提示词自审提醒",
+            centered: true,
+            okText: "仍然生成",
+            cancelText: "返回修改",
+            width: 620,
+            content: (
+                <div className="space-y-3">
+                    <p className="text-sm leading-6 text-stone-600 dark:text-stone-300">{review.summary}</p>
+                    <div className="max-h-[340px] space-y-2 overflow-y-auto pr-1">
+                        {review.issues.map((issue, index) => (
+                            <div key={`${issue.type}-${index}`} className="rounded-lg border border-stone-200 p-3 text-sm dark:border-stone-700">
+                                <div className="font-medium">{issue.title}</div>
+                                <div className="mt-1 leading-6 text-stone-600 dark:text-stone-300">{issue.description}</div>
+                                {issue.suggestion ? <div className="mt-1 leading-6 text-stone-500">建议：{issue.suggestion}</div> : null}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ),
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false),
+        });
+    });
 }
 
 function isHiddenBatchChild(node: CanvasNodeData, nodes: CanvasNodeData[], collapsingBatchIds?: Set<string>) {

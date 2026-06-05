@@ -11,7 +11,7 @@ import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { defaultSeedanceImageRole, normalizeSeedanceImageRole, seedanceReferenceLabel, seedanceReferenceLabelRange } from "@/services/api/video-reference";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { buildCanvasVideoConfig, buildCanvasVideoModePatch, buildCanvasVideoProviderPatch } from "../utils/canvas-video-config";
+import { buildCanvasVideoConfig, buildCanvasVideoModePatch } from "../utils/canvas-video-config";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import type { NodeGenerationInput } from "./canvas-node-generation";
@@ -154,21 +154,6 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
                     预览
                 </button>
             </div>
-
-            {mode === "video" && config.channelMode === "local" ? (
-                <div className="mb-2 cursor-default" onMouseDown={(event) => event.stopPropagation()}>
-                    <Segmented
-                        block
-                        size="small"
-                        value={config.videoProtocol}
-                        onChange={(value) => onConfigChange(node.id, buildCanvasVideoProviderPatch(globalConfig, value as AiConfig["videoProtocol"]))}
-                        options={[
-                            { label: "OpenAI 兼容", value: "openai" },
-                            { label: "火山 Seedance", value: "volcengine-ark" },
-                        ]}
-                    />
-                </div>
-            ) : null}
 
             <div className={`mb-2 grid min-w-0 cursor-default items-center gap-2 ${mode === "text" ? "grid-cols-1" : "grid-cols-[minmax(0,1fr)_148px]"}`} onMouseDown={(event) => event.stopPropagation()}>
                 <ModelPicker className="canvas-compact-control h-10" config={config} modelType={mode} value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} fullWidth />
@@ -541,6 +526,7 @@ function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: Can
         videoGenerateAudio: node.metadata?.generateAudio || globalConfig.videoGenerateAudio || defaultConfig.videoGenerateAudio,
         videoWatermark: node.metadata?.watermark || globalConfig.videoWatermark || defaultConfig.videoWatermark,
         videoSeed: node.metadata?.seed || globalConfig.videoSeed || defaultConfig.videoSeed,
+        videoPromptReviewEnabled: node.metadata?.videoPromptReviewEnabled || globalConfig.videoPromptReviewEnabled || defaultConfig.videoPromptReviewEnabled,
         count: String(node.metadata?.count || (mode === "image" ? 3 : globalConfig.count) || defaultConfig.count),
     };
 }
@@ -558,6 +544,7 @@ function videoConfigPatch(key: keyof AiConfig, value: string): Partial<CanvasNod
     if (key === "videoGenerateAudio") return { generateAudio: value };
     if (key === "videoWatermark") return { watermark: value };
     if (key === "videoSeed") return { seed: value };
+    if (key === "videoPromptReviewEnabled") return { videoPromptReviewEnabled: value };
     if (key === "videoReferenceImageMode") return { videoReferenceImageMode: value as CanvasNodeMetadata["videoReferenceImageMode"] };
     return { [key]: value } as Partial<CanvasNodeMetadata>;
 }

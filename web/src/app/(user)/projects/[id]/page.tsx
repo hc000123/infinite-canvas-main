@@ -199,7 +199,7 @@ export default function CreativeProjectDetailPage() {
                                     <EntryLink icon={<Images className="size-5" />} title="素材" description="查看当前项目生成和引用素材" href={`/assets?projectId=${project.id}`} />
                                     <EntryLink icon={<FileText className="size-5" />} title="提示词" description="进入提示词仓库复用模板" href="/prompts" />
                                     <EntryCard icon={<ListVideo className="size-5" />} title="队列" description={`${stats.queueItems} 个本地队列项`} onOpen={openPrimaryCanvas} />
-                                    <EntryCard icon={<Bot className="size-5" />} title="Agent" description="预留入口，暂不自动执行生成" disabled />
+                                    <EntryLink icon={<Bot className="size-5" />} title="Agent" description="进入短剧 Agent 任务中心" href={`/projects/${project.id}/agent`} />
                                 </div>
                             ),
                         },

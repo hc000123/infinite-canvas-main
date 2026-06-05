@@ -22,7 +22,7 @@ export const canvasProjectPresetOptions = [
 ] satisfies Array<{ key: string; label: string; preset: CanvasProjectPreset }>;
 
 export function buildCanvasProjectPresetFromConfig(config: AiConfig, patch: CanvasProjectPreset = {}): CanvasProjectPreset {
-    const provider = patch.defaultVideoProvider || config.videoProtocol || "openai";
+    const provider = config.channelMode === "local" ? "openai" : patch.defaultVideoProvider || config.videoProtocol || "openai";
     return {
         resolution: patch.resolution || config.vquality || "720",
         ratio: normalizeCanvasProjectPresetRatio(patch.ratio || config.size || "16:9"),
@@ -37,7 +37,7 @@ export function buildCanvasProjectPresetFromConfig(config: AiConfig, patch: Canv
 
 export function applyCanvasProjectPresetToConfig(config: AiConfig, preset?: CanvasProjectPreset): AiConfig {
     if (!preset) return config;
-    const provider = preset.defaultVideoProvider || config.videoProtocol;
+    const provider = config.channelMode === "local" ? "openai" : preset.defaultVideoProvider || config.videoProtocol;
     const videoModel = preset.defaultVideoModel || (provider === "volcengine-ark" ? config.seedanceEndpointId || config.seedanceModel : config.videoModel);
     return {
         ...config,

@@ -220,12 +220,8 @@ function isTransientVideoRequestError(error: unknown) {
 }
 
 export async function buildVideoPayload(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string) {
-    if (shouldAttachLocalVolcengineCredentials(config.channelMode, config.videoProtocol)) {
-        return {
-            ...(await buildSeedanceVideoPayload(config, prompt, references)),
-            _volcengine_api_key: config.volcengineApiKey,
-            _volcengine_base_url: config.volcengineBaseUrl,
-        };
+    if (config.videoProtocol === "volcengine-ark") {
+        return buildSeedanceVideoPayload(config, prompt, references);
     }
     const body = new FormData();
     body.append("model", model);
@@ -241,10 +237,6 @@ export async function buildVideoPayload(config: AiConfig, prompt: string, refere
     body.append("watermark", String(config.videoWatermark === "true"));
     const seed = normalizeSeedanceSeed(config.videoSeed);
     if (seed !== undefined) body.append("seed", String(seed));
-    if (shouldAttachLocalVolcengineCredentials(config.channelMode, config.videoProtocol)) {
-        body.append("_volcengine_api_key", config.volcengineApiKey);
-        body.append("_volcengine_base_url", config.volcengineBaseUrl);
-    }
     const files = await Promise.all(references.images.slice(0, 7).map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
     files.forEach((file) => body.append("input_reference[]", file));
     return body;

@@ -7,7 +7,7 @@ import { persist } from "zustand/middleware";
 import { normalizeSeedanceImageRoleMode, type SeedanceImageRoleMode } from "@/services/api/video-reference";
 import { apiGet } from "@/services/api/request";
 import type { AdminPublicSettings } from "@/services/api/admin";
-import { resolveEffectiveChannelMode } from "@/services/api/ai-channel-boundary";
+import { inferRemoteVideoProtocol, resolveAllowedVideoProtocol, resolveEffectiveChannelMode } from "@/services/api/ai-channel-boundary";
 
 export type AiModelKind = "image" | "video" | "text";
 
@@ -29,6 +29,7 @@ export type AiConfig = {
     videoGenerateAudio: string;
     videoWatermark: string;
     videoSeed: string;
+    videoPromptReviewEnabled: string;
     returnLastFrame: string;
     videoTaskMode: "generate" | "edit" | "extend";
     videoEditType: "replace" | "add" | "remove" | "inpaint";
@@ -68,6 +69,7 @@ export const defaultConfig: AiConfig = {
     videoGenerateAudio: "false",
     videoWatermark: "false",
     videoSeed: "",
+    videoPromptReviewEnabled: "true",
     returnLastFrame: "true",
     videoTaskMode: "generate",
     videoEditType: "replace",
@@ -99,22 +101,25 @@ type ConfigStore = {
 
 export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null) {
     const channelMode = modelChannel ? resolveEffectiveChannelMode(config.channelMode, modelChannel.allowCustomChannel) : "remote";
+    const localVideoProtocol = resolveAllowedVideoProtocol("local", config.videoProtocol);
     if (channelMode === "local" || !modelChannel) {
-        return { ...config, channelMode, videoModel: config.videoProtocol === "volcengine-ark" ? resolveSeedanceRequestModel(config) : config.videoModel };
+        return { ...config, channelMode, videoProtocol: localVideoProtocol, videoModel: config.videoModel };
     }
     const models = modelChannel.availableModels;
     const classifiedModels = classifyAiModels(models);
     const fallbackModel = modelChannel.defaultModel || models[0] || "";
+    const videoModel = models.includes(config.videoModel) ? config.videoModel : modelChannel.defaultVideoModel || fallbackModel;
     return {
         ...config,
         channelMode,
+        videoProtocol: inferRemoteVideoProtocol(videoModel, config.videoProtocol),
         models,
         imageModels: classifiedModels.imageModels,
         videoModels: classifiedModels.videoModels,
         textModels: classifiedModels.textModels,
         model: models.includes(config.model) ? config.model : fallbackModel,
         imageModel: models.includes(config.imageModel) ? config.imageModel : modelChannel.defaultImageModel || fallbackModel,
-        videoModel: models.includes(config.videoModel) ? config.videoModel : modelChannel.defaultVideoModel || fallbackModel,
+        videoModel,
         textModel: models.includes(config.textModel) ? config.textModel : modelChannel.defaultTextModel || fallbackModel,
         systemPrompt: modelChannel.systemPrompt,
     };
@@ -125,11 +130,7 @@ function isAiConfigReady(config: AiConfig, model: string) {
     if (!modelName) return false;
     if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_DEV_SKIP_AI_CONFIG !== "false") return true;
     if (config.channelMode === "remote") return true;
-    const seedanceModel = (config.seedanceModel || config.videoModel).trim();
-    const seedanceEndpointId = config.seedanceEndpointId.trim();
-    const seedanceRequestModel = resolveSeedanceRequestModel(config);
-    const isSeedanceModel = config.videoProtocol === "volcengine-ark" && (modelName === seedanceModel || modelName === seedanceEndpointId || modelName.toLowerCase().includes("seedance") || modelName.toLowerCase().startsWith("ep-"));
-    return isSeedanceModel ? Boolean(config.volcengineApiKey.trim() && seedanceRequestModel) : Boolean(config.baseUrl.trim() && config.apiKey.trim());
+    return Boolean(config.baseUrl.trim() && config.apiKey.trim());
 }
 
 export const useConfigStore = create<ConfigStore>()(
@@ -172,7 +173,7 @@ export const useConfigStore = create<ConfigStore>()(
                     config: {
                         ...config,
                         channelMode: config.channelMode || defaultConfig.channelMode,
-                        videoProtocol: config.videoProtocol || defaultConfig.videoProtocol,
+                        videoProtocol: config.channelMode === "local" ? "openai" : config.videoProtocol || defaultConfig.videoProtocol,
                         baseUrl: config.baseUrl || defaultConfig.baseUrl,
                         apiKey: config.apiKey || defaultConfig.apiKey,
                         volcengineBaseUrl: config.volcengineBaseUrl || defaultConfig.volcengineBaseUrl,
@@ -191,6 +192,7 @@ export const useConfigStore = create<ConfigStore>()(
                         videoGenerateAudio: config.videoGenerateAudio || "false",
                         videoWatermark: config.videoWatermark || "false",
                         videoSeed: config.videoSeed || "",
+                        videoPromptReviewEnabled: config.videoPromptReviewEnabled === "false" ? "false" : "true",
                         returnLastFrame: config.returnLastFrame || defaultConfig.returnLastFrame,
                         videoTaskMode: normalizeVideoTaskMode(config.videoTaskMode),
                         videoEditType: normalizeVideoEditType(config.videoEditType),

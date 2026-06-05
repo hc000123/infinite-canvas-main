@@ -10,5 +10,15 @@ export function shouldUseBrowserAIKey(channelMode: AiChannelMode) {
 }
 
 export function shouldAttachLocalVolcengineCredentials(channelMode: AiChannelMode, protocol: AiProviderProtocol) {
-    return shouldUseBrowserAIKey(channelMode) && protocol === "volcengine-ark";
+    return false;
+}
+
+export function resolveAllowedVideoProtocol(channelMode: AiChannelMode, protocol: AiProviderProtocol) {
+    return channelMode === "local" ? "openai" : protocol;
+}
+
+export function inferRemoteVideoProtocol(model: string, fallback: AiProviderProtocol = "openai"): AiProviderProtocol {
+    const normalized = model.trim().toLowerCase();
+    if (!normalized) return fallback;
+    return normalized.includes("seedance") || normalized.startsWith("ep-") ? "volcengine-ark" : fallback;
 }

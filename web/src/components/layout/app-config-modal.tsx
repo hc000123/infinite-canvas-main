@@ -7,7 +7,7 @@ import { ModelPicker } from "@/components/model-picker";
 import { fetchAdminSettings, type AdminSettings } from "@/services/api/admin";
 import { fetchImageModels } from "@/services/api/image";
 import { summarizeVolcengineAssetConfig, VOLCENGINE_ASSET_CONFIG_NOTICE } from "@/services/volcengine-asset-config";
-import { defaultConfig, resolveSeedanceRequestModel, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
 export function AppConfigModal() {
@@ -29,8 +29,7 @@ export function AppConfigModal() {
     const allowCustomChannel = modelChannel?.allowCustomChannel === true;
     const effectiveMode = allowCustomChannel ? config.channelMode : "remote";
     const modelConfig = effectiveMode === "remote" ? effectiveConfig : config;
-    const videoModel = effectiveMode === "local" && config.videoProtocol === "volcengine-ark" ? config.seedanceModel || config.seedanceEndpointId : modelConfig.videoModel;
-    const seedanceRequestModel = resolveSeedanceRequestModel(config);
+    const videoModel = modelConfig.videoModel;
     const isAdmin = user?.role === "admin";
 
     useEffect(() => {
@@ -65,8 +64,7 @@ export function AppConfigModal() {
 
     const finishConfig = () => {
         const hasOpenAIConfig = Boolean(config.baseUrl.trim() && config.apiKey.trim());
-        const hasSeedanceConfig = Boolean(config.volcengineApiKey.trim() && seedanceRequestModel);
-        const hasProviderConfig = effectiveMode !== "local" || (config.videoProtocol === "volcengine-ark" ? hasSeedanceConfig : hasOpenAIConfig);
+        const hasProviderConfig = effectiveMode !== "local" || hasOpenAIConfig;
         const hasModelConfig = Boolean(modelConfig.imageModel.trim() && videoModel.trim() && modelConfig.textModel.trim());
         setConfigDialogOpen(false);
         if (!hasProviderConfig || !hasModelConfig) return;
@@ -135,48 +133,33 @@ export function AppConfigModal() {
                         </Form.Item>
                     ) : null}
                     {effectiveMode === "local" ? (
-                        <div className="mb-4 grid gap-3 md:grid-cols-2">
-                            <div className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
-                                <div className="mb-3">
-                                    <div className="text-sm font-medium">OpenAI 兼容 API</div>
-                                    <div className="mt-1 text-xs text-stone-500">用于生图、语言模型和兼容视频模型。</div>
-                                </div>
-                                <div className="grid gap-3">
-                                    <Form.Item label="Base URL" className="mb-3">
-                                        <Input value={config.baseUrl} placeholder="https://api.openai.com" onChange={(event) => updateConfig("baseUrl", event.target.value)} />
-                                    </Form.Item>
-                                    <Form.Item label="API Key" className="mb-3">
-                                        <Input.Password value={config.apiKey} onChange={(event) => updateConfig("apiKey", event.target.value)} />
-                                    </Form.Item>
-                                </div>
-                                <div className="flex items-center justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <div className="text-sm font-medium">模型列表</div>
-                                        <div className="mt-1 text-xs text-stone-500">当前已保存 {config.models.length} 个模型，所有模型选择器都可检索</div>
-                                    </div>
-                                    <Button size="small" loading={loadingModels} onClick={() => void refreshModels()}>
-                                        拉取模型列表
-                                    </Button>
-                                </div>
+                        <div className="mb-4 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+                            <div className="mb-3">
+                                <div className="text-sm font-medium">OpenAI 兼容 API</div>
+                                <div className="mt-1 text-xs text-stone-500">本地直连只用于个人 OpenAI 兼容 Base URL / API Key / 模型 ID。火山 Seedance 企业能力请使用云端渠道。</div>
                             </div>
-                            <div className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
-                                <div className="mb-3">
-                                    <div className="text-sm font-medium">火山方舟 Ark</div>
-                                    <div className="mt-1 text-xs text-stone-500">已预设 Seedance 任务地址，调用时优先使用 Endpoint ID。</div>
+                            <div className="grid gap-3">
+                                <Form.Item label="Base URL" className="mb-3">
+                                    <Input value={config.baseUrl} placeholder="https://api.openai.com" onChange={(event) => updateConfig("baseUrl", event.target.value)} />
+                                </Form.Item>
+                                <Form.Item label="API Key" className="mb-3">
+                                    <Input.Password value={config.apiKey} onChange={(event) => updateConfig("apiKey", event.target.value)} />
+                                </Form.Item>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                    <div className="text-sm font-medium">模型列表</div>
+                                    <div className="mt-1 text-xs text-stone-500">当前已保存 {config.models.length} 个模型，所有模型选择器都可检索</div>
                                 </div>
-                                <div className="mb-3 rounded-md bg-stone-100 px-2 py-1.5 text-xs text-stone-500 dark:bg-stone-900">{config.volcengineBaseUrl || defaultConfig.volcengineBaseUrl}</div>
-                                <Form.Item label="Ark API Key" className="mb-3">
-                                    <Input.Password value={config.volcengineApiKey} placeholder="填写火山方舟 API Key" onChange={(event) => updateConfig("volcengineApiKey", event.target.value)} />
-                                </Form.Item>
-                                <Form.Item label="Seedance Endpoint ID" className="mb-0">
-                                    <Input value={config.seedanceEndpointId} placeholder="ep-20260524233518-kxgt4" onChange={(event) => updateConfig("seedanceEndpointId", event.target.value)} />
-                                </Form.Item>
+                                <Button size="small" loading={loadingModels} onClick={() => void refreshModels()}>
+                                    拉取模型列表
+                                </Button>
                             </div>
                         </div>
                     ) : (
                         <div className="mb-4 rounded-lg border border-stone-200 p-3 text-sm text-stone-500 dark:border-stone-800">
                             <div className="font-medium text-stone-900 dark:text-stone-100">云端渠道</div>
-                            <div className="mt-1">由系统后台渠道转发请求，当前可用 {modelChannel?.availableModels.length || 0} 个模型。</div>
+                            <div className="mt-1">由系统后台渠道转发请求，当前可用 {modelChannel?.availableModels.length || 0} 个模型。火山方舟、Seedance Endpoint、额度和任务日志都在后台渠道中维护。</div>
                         </div>
                     )}
                     <div className="mb-4 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
@@ -220,28 +203,7 @@ export function AppConfigModal() {
                             <ModelPicker config={modelConfig} modelType="image" value={modelConfig.imageModel} onChange={(model) => updateConfig("imageModel", model)} fullWidth />
                         </Form.Item>
                         <Form.Item label="默认视频模型" className="mb-4">
-                            <div className="space-y-2">
-                                {effectiveMode === "local" ? (
-                                    <Segmented
-                                        block
-                                        size="small"
-                                        value={config.videoProtocol}
-                                        onChange={(value) => updateConfig("videoProtocol", value as AiConfig["videoProtocol"])}
-                                        options={[
-                                            { label: "OpenAI 兼容视频", value: "openai" },
-                                            { label: "火山 Seedance", value: "volcengine-ark" },
-                                        ]}
-                                    />
-                                ) : null}
-                                {effectiveMode === "local" && config.videoProtocol === "volcengine-ark" ? (
-                                    <div className="space-y-1.5">
-                                        <Input value={config.seedanceModel} placeholder="doubao-seedance-2-0-260128" onChange={(event) => updateConfig("seedanceModel", event.target.value)} />
-                                        <div className="text-[11px] leading-4 text-stone-500">此处用于显示名称，真实请求使用 Ark 区块里的 Endpoint ID。</div>
-                                    </div>
-                                ) : (
-                                    <ModelPicker config={modelConfig} modelType="video" value={modelConfig.videoModel} onChange={(model) => updateConfig("videoModel", model)} fullWidth />
-                                )}
-                            </div>
+                            <ModelPicker config={modelConfig} modelType="video" value={modelConfig.videoModel} onChange={(model) => updateConfig("videoModel", model)} fullWidth />
                         </Form.Item>
                         <Form.Item label="默认文本模型" className="mb-4">
                             <ModelPicker config={modelConfig} modelType="text" value={modelConfig.textModel} onChange={(model) => updateConfig("textModel", model)} fullWidth />

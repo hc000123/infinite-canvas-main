@@ -9,7 +9,7 @@ import { defaultConfig, useConfigStore, useEffectiveConfig, type AiConfig } from
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { buildCanvasVideoConfig, buildCanvasVideoProviderPatch } from "../utils/canvas-video-config";
+import { buildCanvasVideoConfig } from "../utils/canvas-video-config";
 import { promptPreviewNoZoomProps, promptPreviewTextareaClass, promptPreviewTextareaStyle } from "../utils/canvas-prompt-preview";
 import { applyReferenceMention, filterReferenceMentions, findReferenceMentionTrigger, type CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
@@ -146,21 +146,6 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                 ) : null}
             </div>
 
-            {mode === "video" && config.channelMode === "local" ? (
-                <div className="mt-2" onMouseDown={(event) => event.stopPropagation()}>
-                    <Segmented
-                        block
-                        size="small"
-                        value={config.videoProtocol}
-                        onChange={(value) => onConfigChange(node.id, buildCanvasVideoProviderPatch(globalConfig, value as AiConfig["videoProtocol"]))}
-                        options={[
-                            { label: "OpenAI 兼容", value: "openai" },
-                            { label: "火山 Seedance", value: "volcengine-ark" },
-                        ]}
-                    />
-                </div>
-            ) : null}
-
             <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
                 <div className={`grid min-w-0 items-center gap-2 ${mode === "text" ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-[auto_minmax(0,1fr)_156px]"}`}>
                     <CanvasPromptLibrary projectId={projectId} nodeGroup={mode} onSelect={updatePrompt} />
@@ -243,6 +228,7 @@ function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: Can
         videoGenerateAudio: node.metadata?.generateAudio || globalConfig.videoGenerateAudio || defaultConfig.videoGenerateAudio,
         videoWatermark: node.metadata?.watermark || globalConfig.videoWatermark || defaultConfig.videoWatermark,
         videoSeed: node.metadata?.seed || globalConfig.videoSeed || defaultConfig.videoSeed,
+        videoPromptReviewEnabled: node.metadata?.videoPromptReviewEnabled || globalConfig.videoPromptReviewEnabled || defaultConfig.videoPromptReviewEnabled,
         count: String(node.metadata?.count || (mode === "image" ? 3 : globalConfig.count) || defaultConfig.count),
     };
 }
@@ -252,5 +238,6 @@ function videoConfigPatch(key: keyof AiConfig, value: string): Partial<CanvasNod
     if (key === "videoGenerateAudio") return { generateAudio: value };
     if (key === "videoWatermark") return { watermark: value };
     if (key === "videoSeed") return { seed: value };
+    if (key === "videoPromptReviewEnabled") return { videoPromptReviewEnabled: value };
     return { [key]: value } as Partial<CanvasNodeMetadata>;
 }
