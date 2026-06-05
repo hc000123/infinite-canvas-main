@@ -1939,10 +1939,6 @@ function InfiniteCanvasPage() {
                         setAssetPickerOpen(true);
                     }}
                     onOpenScriptManager={() => setScriptManagerOpen(true)}
-                    onOpenStoryboardManager={() => {
-                        setStoryboardInitialGroupId("");
-                        setStoryboardManagerOpen(true);
-                    }}
                 />
 
                 {isMiniMapOpen ? <Minimap nodes={nodes} viewport={viewport} viewportSize={size} onViewportChange={setViewport} /> : null}

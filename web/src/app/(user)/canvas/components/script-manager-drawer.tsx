@@ -124,8 +124,8 @@ export function ScriptManagerDrawer({ open, projectId, projectTitle, onClose, on
     };
 
     return (
-        <Drawer title="剧本管理" open={open} onClose={onClose} size={980} destroyOnHidden>
-            <div className="mb-4 text-sm text-stone-500 dark:text-stone-400">当前画布：{projectTitle}</div>
+        <Drawer title="剧本分镜工作台" open={open} onClose={onClose} size={980} destroyOnHidden>
+            <div className="mb-4 text-sm text-stone-500 dark:text-stone-400">当前画布：{projectTitle} · 按故事大纲、分集、场次到分镜草案推进</div>
             <ScriptWorkflowGuide steps={workflowSteps} nextAction={nextAction} />
             <div className="grid h-full min-h-[680px] gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
                 <div className="space-y-4">

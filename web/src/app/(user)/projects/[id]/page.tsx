@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { App, Button, Empty, Input, Select, Tabs, Tag } from "antd";
-import { Bot, BookOpen, Clapperboard, FileText, Images, ListVideo, Maximize2, Plus, ScrollText, Save, SlidersHorizontal } from "lucide-react";
+import { Bot, BookOpen, FileText, Images, ListVideo, Maximize2, Plus, ScrollText, Save, SlidersHorizontal } from "lucide-react";
 
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useEffectiveConfig } from "@/stores/use-config-store";
@@ -205,8 +205,12 @@ export default function CreativeProjectDetailPage() {
                             label: "工作流",
                             children: (
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                    <EntryCard icon={<ScrollText className="size-5" />} title="剧本" description={`${stats.episodes} 个分集，${stats.scenes} 个场次`} onOpen={openPrimaryCanvas} />
-                                    <EntryCard icon={<Clapperboard className="size-5" />} title="分镜" description={`${stats.storyboardGroups} 个分镜组，${stats.storyboardShots} 条分镜`} onOpen={openPrimaryCanvas} />
+                                    <EntryCard
+                                        icon={<ScrollText className="size-5" />}
+                                        title="剧本分镜"
+                                        description={`${stats.episodes} 个分集，${stats.scenes} 个场次，${stats.storyboardGroups} 个分镜组，${stats.storyboardShots} 条分镜`}
+                                        onOpen={openPrimaryCanvas}
+                                    />
                                     <EntryCard icon={<BookOpen className="size-5" />} title="设定库" description={`${stats.bibleItems} 个角色 / 场景 / 道具设定`} onOpen={openPrimaryCanvas} />
                                     <EntryLink icon={<Images className="size-5" />} title="素材" description="查看当前项目生成和引用素材" href={`/assets?projectId=${project.id}`} />
                                     <EntryLink icon={<FileText className="size-5" />} title="提示词" description="进入提示词仓库复用模板" href="/prompts" />
