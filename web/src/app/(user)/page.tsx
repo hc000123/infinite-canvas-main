@@ -57,8 +57,8 @@ export default function IndexPage() {
                         <Button type="primary" size="large" href={`/${primaryTool.slug}`} icon={<ArrowRight className="size-4" />} iconPlacement="end">
                             开始使用
                         </Button>
-                        <Button size="large" href="/canvas">
-                            打开画布
+                        <Button size="large" href="/projects">
+                            管理项目
                         </Button>
                     </div>
                 </div>
