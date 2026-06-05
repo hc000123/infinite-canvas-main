@@ -38,6 +38,7 @@ import { nextQueuedItem } from "../utils/generation-queue";
 import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions";
 import { buildInsertedMediaAssetNode } from "../utils/canvas-inserted-media-node";
 import { resetInterruptedGeneration } from "../utils/canvas-video-task-recovery";
+import { buildCompletedImageNode, buildCompletedVideoNode } from "../utils/canvas-node-status";
 import { applyCanvasProjectPresetToConfig } from "../utils/canvas-project-preset";
 import { planStoryboardGroupCanvasInsert } from "../utils/storyboard-management";
 import { reviewVideoPromptBeforeGeneration, shouldRunVideoPromptReview, type PromptReviewResult } from "../utils/canvas-prompt-review";
@@ -1118,7 +1119,7 @@ function InfiniteCanvasPage() {
                 );
                 const uploaded = await uploadImage(image.dataUrl);
                 const size = fitNodeSize(uploaded.width, uploaded.height, imageConfig.width, imageConfig.height);
-                setNodes((prev) => prev.map((item) => (item.id === childId ? { ...item, width: size.width, height: size.height, metadata: { ...item.metadata, ...imageMetadata(uploaded), prompt, ...generationMetadata } } : item)));
+                setNodes((prev) => prev.map((item) => (item.id === childId ? buildCompletedImageNode({ imageNode: item, imageSize: size, imageMetadata: imageMetadata(uploaded), generationMetadata, prompt }) : item)));
             } catch (error) {
                 const errorDetails = error instanceof Error ? error.message : "生成失败";
                 setNodes((prev) => prev.map((item) => (item.id === childId ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails } } : item)));
@@ -1506,23 +1507,19 @@ function InfiniteCanvasPage() {
                     const cachedVideo = await cacheUploadedCanvasMedia(video, `${node.id}.mp4`);
                     const videoSize = fitNodeSize(video.width || node.width, video.height || node.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
                     const latestVideoNode = nodesRef.current.find((item) => item.id === node.id) || node;
-                    const finalVideoNode: CanvasNodeData = {
-                        ...latestVideoNode,
-                        width: videoSize.width,
-                        height: videoSize.height,
-                        position: { x: latestVideoNode.position.x + latestVideoNode.width / 2 - videoSize.width / 2, y: latestVideoNode.position.y + latestVideoNode.height / 2 - videoSize.height / 2 },
-                        metadata: {
-                            ...latestVideoNode.metadata,
-                            ...videoMetadata(video),
-                            ...cachedVideo,
-                            prompt,
+                    const finalVideoNode = buildCompletedVideoNode({
+                        videoNode: latestVideoNode,
+                        videoSize,
+                        videoMetadata: videoMetadata(video),
+                        cachedVideoMetadata: cachedVideo,
+                        taskMetadata: completedTask ? videoTaskMetadata(completedTask) : undefined,
+                        generationMetadata: {
                             ...buildVideoGenerationMetadata(generationConfig, videoReferences),
                             storyboardGroupId: latestVideoNode.metadata?.storyboardGroupId,
                             storyboardShotId: latestVideoNode.metadata?.storyboardShotId,
-                            ...(completedTask ? videoTaskMetadata(completedTask) : { taskStatus: "succeeded" }),
-                            errorDetails: undefined,
                         },
-                    };
+                        prompt,
+                    });
                     setNodes((prev) => prev.map((item) => (item.id === node.id ? finalVideoNode : item)));
                     if (finalVideoNode) {
                         const asset = buildGeneratedVideoAsset(finalVideoNode, {
@@ -1548,13 +1545,13 @@ function InfiniteCanvasPage() {
                 setNodes((prev) =>
                     prev.map((item) =>
                         item.id === node.id
-                            ? {
-                                  ...item,
-                                  type: CanvasNodeType.Image,
-                                  width: imageSize.width,
-                                  height: imageSize.height,
-                                  metadata: { ...item.metadata, ...imageMetadata(uploadedImage), prompt, ...generationMetadata },
-                              }
+                            ? buildCompletedImageNode({
+                                  imageNode: item,
+                                  imageSize,
+                                  imageMetadata: imageMetadata(uploadedImage),
+                                  generationMetadata,
+                                  prompt,
+                              })
                             : item,
                     ),
                 );

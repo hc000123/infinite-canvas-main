@@ -102,6 +102,34 @@ export function applyImageGenerationFinalStatus({ nodes, nodeId, rootId, isConfi
     );
 }
 
+export function buildCompletedImageNode({
+    imageNode,
+    imageSize,
+    imageMetadata,
+    generationMetadata,
+    prompt,
+}: {
+    imageNode: CanvasNodeData;
+    imageSize: { width: number; height: number };
+    imageMetadata: CanvasNodeMetadata;
+    generationMetadata?: CanvasNodeMetadata;
+    prompt: string;
+}): CanvasNodeData {
+    return {
+        ...imageNode,
+        type: "image" as CanvasNodeData["type"],
+        width: imageSize.width,
+        height: imageSize.height,
+        metadata: {
+            ...imageNode.metadata,
+            ...imageMetadata,
+            prompt,
+            ...(generationMetadata || {}),
+            errorDetails: undefined,
+        },
+    };
+}
+
 export function buildCompletedVideoNode({
     videoNode,
     videoSize,

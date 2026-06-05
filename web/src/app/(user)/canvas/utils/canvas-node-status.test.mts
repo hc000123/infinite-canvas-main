@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyGeneratedImageToNodes, applyImageGenerationFinalStatus, applyImageGenerationStartNodes, applyImageTargetError, buildCompletedVideoNode } from "./canvas-node-status.ts";
+import { applyGeneratedImageToNodes, applyImageGenerationFinalStatus, applyImageGenerationStartNodes, applyImageTargetError, buildCompletedImageNode, buildCompletedVideoNode } from "./canvas-node-status.ts";
 import type { CanvasNodeData } from "../types.ts";
 
 const node = (id: string, type: CanvasNodeData["type"], metadata: CanvasNodeData["metadata"] = {}): CanvasNodeData => ({
@@ -69,6 +69,26 @@ test("marks failed image target and final batch status without touching unrelate
     });
     assert.equal(finalNodes[0].metadata?.status, "error");
     assert.equal(finalNodes[0].metadata?.errorDetails, "全部图片生成失败");
+});
+
+test("builds completed image node with merged generation metadata", () => {
+    const imageNode = node("image", "text", { status: "loading", errorDetails: "旧错误", prompt: "旧提示词" });
+    const result = buildCompletedImageNode({
+        imageNode,
+        imageSize: { width: 320, height: 180 },
+        imageMetadata: { content: "blob:image", storageKey: "image:1", status: "success", mimeType: "image/png" },
+        generationMetadata: { model: "gpt-image", generationType: "edit", references: [{ id: "ref-1", name: "ref.png" }] },
+        prompt: "新的提示词",
+    });
+
+    assert.equal(result.type, "image");
+    assert.equal(result.width, 320);
+    assert.equal(result.height, 180);
+    assert.deepEqual(result.position, imageNode.position);
+    assert.equal(result.metadata?.content, "blob:image");
+    assert.equal(result.metadata?.prompt, "新的提示词");
+    assert.equal(result.metadata?.generationType, "edit");
+    assert.equal(result.metadata?.errorDetails, undefined);
 });
 
 test("builds completed video node with centered size and merged metadata", () => {
