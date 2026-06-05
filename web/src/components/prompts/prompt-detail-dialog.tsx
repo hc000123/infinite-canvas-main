@@ -7,7 +7,7 @@ import { Button, Divider, Input, Modal, Select, Space, Tag } from "antd";
 import { formatPromptDate, type Prompt } from "@/services/api/prompts";
 import { useProductionBibleStore } from "@/app/(user)/canvas/stores/use-production-bible-store";
 import { itemsForProductionBibleProject, productionBibleKindLabel } from "@/app/(user)/canvas/utils/production-bible";
-import { inputOutputKindLabel, productionBibleValueForVariable, promptTypeLabel, promptVariablesFromTemplate, renderPromptTemplate } from "./prompt-template";
+import { inputOutputKindLabel, productionBibleValueForVariable, promptNodeGroupLabel, promptTypeLabel, promptVariablesFromTemplate, renderPromptTemplate } from "./prompt-template";
 
 export function PromptDetailDialog({
     prompt,
@@ -52,6 +52,11 @@ export function PromptDetailDialog({
                             </div>
                             <div className="min-w-0">
                                 <div className="flex flex-wrap gap-1.5">
+                                    {prompt.metadata?.nodeGroup ? (
+                                        <Tag color="purple" className="m-0">
+                                            {promptNodeGroupLabel(prompt.metadata.nodeGroup)}
+                                        </Tag>
+                                    ) : null}
                                     {prompt.metadata?.type ? (
                                         <Tag color="blue" className="m-0">
                                             {promptTypeLabel(prompt.metadata.type)}

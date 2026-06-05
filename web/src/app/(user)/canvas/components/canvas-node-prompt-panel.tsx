@@ -163,7 +163,7 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
 
             <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
                 <div className={`grid min-w-0 items-center gap-2 ${mode === "text" ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-[auto_minmax(0,1fr)_156px]"}`}>
-                    <CanvasPromptLibrary projectId={projectId} allowedTypes={mode === "video" ? ["video", "positive", "negative", "workflow"] : undefined} onSelect={updatePrompt} />
+                    <CanvasPromptLibrary projectId={projectId} nodeGroup={mode} onSelect={updatePrompt} />
                     {mode === "image" ? (
                         <>
                             <ModelPicker className="h-10 !min-w-0" fullWidth config={config} modelType="image" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />

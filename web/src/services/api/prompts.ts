@@ -15,6 +15,7 @@ export type Prompt = {
 };
 
 export type PromptTemplateType = "asset" | "image" | "video" | "grid" | "positive" | "negative" | "workflow";
+export type PromptNodeGroup = "text" | "image" | "video";
 
 export type PromptVariable = {
     name: string;
@@ -23,6 +24,7 @@ export type PromptVariable = {
 };
 
 export type PromptMetadata = {
+    nodeGroup?: PromptNodeGroup | string;
     type?: PromptTemplateType | string;
     scenario?: string;
     provider?: string;
@@ -39,6 +41,7 @@ export type PromptListResponse = {
     items: Prompt[];
     tags: string[];
     categories: string[];
+    nodeGroups?: string[];
     types?: string[];
     scenarios?: string[];
     total: number;
@@ -48,18 +51,20 @@ export async function fetchPrompts({
     keyword = "",
     tag = [],
     category = ALL_PROMPTS_OPTION,
+    nodeGroup = ALL_PROMPTS_OPTION,
     type = ALL_PROMPTS_OPTION,
     scenario = ALL_PROMPTS_OPTION,
     favorite = false,
     page,
     pageSize,
-}: { keyword?: string; tag?: string[]; category?: string; type?: string; scenario?: string; favorite?: boolean; page?: number; pageSize?: number } = {}) {
+}: { keyword?: string; tag?: string[]; category?: string; nodeGroup?: string; type?: string; scenario?: string; favorite?: boolean; page?: number; pageSize?: number } = {}) {
     return apiGet<PromptListResponse>(
         "/api/prompts",
         compactApiParams({
             ...(keyword ? { keyword } : {}),
             ...(tag.length ? { tag } : {}),
             ...(category !== ALL_PROMPTS_OPTION ? { category } : {}),
+            ...(nodeGroup !== ALL_PROMPTS_OPTION ? { nodeGroup } : {}),
             ...(type !== ALL_PROMPTS_OPTION ? { type } : {}),
             ...(scenario !== ALL_PROMPTS_OPTION ? { scenario } : {}),
             ...(favorite ? { favorite: "true" } : {}),

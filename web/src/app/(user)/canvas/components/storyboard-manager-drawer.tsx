@@ -608,6 +608,7 @@ function ShotFormDrawer({
             <PromptSelectDialog
                 open={promptOpen}
                 projectId={projectId}
+                nodeGroup="video"
                 allowedTypes={["video", "positive", "workflow"]}
                 onOpenChange={setPromptOpen}
                 onSelect={(prompt) => {

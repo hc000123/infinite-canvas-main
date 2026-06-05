@@ -531,7 +531,7 @@ function AssistantComposer({
                 />
                 <div className="mt-2 flex items-center justify-between gap-2">
                     <div className="canvas-composer-tools flex min-w-0 flex-1 items-center gap-1">
-                        <CanvasPromptLibrary onSelect={onPromptChange} />
+                        <CanvasPromptLibrary nodeGroup={mode === "image" ? "image" : "text"} onSelect={onPromptChange} />
                         <Tooltip title="总结当前画布">
                             <Button type="text" shape="circle" className="canvas-composer-icon !h-8 !min-w-8 !rounded-full !px-2" icon={<FileText className="size-4" />} onClick={onSummarizeCanvas} />
                         </Tooltip>

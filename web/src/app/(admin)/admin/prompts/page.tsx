@@ -5,7 +5,17 @@ import { ProTable, type ProColumns } from "@ant-design/pro-components";
 import { Button, Card, Checkbox, Col, Flex, Form, Image, Input, Modal, Row, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
 import { useEffect, useState } from "react";
 
-import { formatPromptVariablesText, inputOutputKindLabel, parsePromptVariablesText, promptInputKindOptions, promptOutputKindOptions, promptTypeLabel, promptTypeOptions } from "@/components/prompts/prompt-template";
+import {
+    formatPromptVariablesText,
+    inputOutputKindLabel,
+    parsePromptVariablesText,
+    promptInputKindOptions,
+    promptNodeGroupLabel,
+    promptNodeGroupOptions,
+    promptOutputKindOptions,
+    promptTypeLabel,
+    promptTypeOptions,
+} from "@/components/prompts/prompt-template";
 import { useCopyText } from "@/hooks/use-copy-text";
 import type { Prompt } from "@/services/api/prompts";
 import { useAdminPrompts } from "./use-admin-prompts";
@@ -124,6 +134,7 @@ export default function AdminPromptsPage() {
             width: 180,
             render: (_, item) => (
                 <Space size={[4, 4]} wrap>
+                    {item.metadata?.nodeGroup ? <Tag color="purple">{promptNodeGroupLabel(item.metadata.nodeGroup)}</Tag> : null}
                     {item.metadata?.type ? <Tag color="blue">{promptTypeLabel(item.metadata.type)}</Tag> : <Tag>普通</Tag>}
                     {item.metadata?.scenario ? <Tag>{item.metadata.scenario}</Tag> : null}
                     {item.metadata?.favorite ? <Tag color="gold">常用</Tag> : null}
@@ -218,7 +229,7 @@ export default function AdminPromptsPage() {
                                 同步
                             </Button>
                         ) : null,
-                        <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => setEditingPrompt({ category: defaultCategory, tags: [] })}>
+                        <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => setEditingPrompt({ category: defaultCategory, tags: [], metadata: { nodeGroup: "image", type: "image" } })}>
                             新增
                         </Button>,
                     ]}
@@ -249,17 +260,22 @@ export default function AdminPromptsPage() {
                         <Input />
                     </Form.Item>
                     <Row gutter={12}>
-                        <Col span={8}>
-                            <Form.Item name={["metadata", "type"]} label="类型">
+                        <Col span={6}>
+                            <Form.Item name={["metadata", "nodeGroup"]} label="节点分组">
+                                <Select allowClear options={promptNodeGroupOptions} />
+                            </Form.Item>
+                        </Col>
+                        <Col span={6}>
+                            <Form.Item name={["metadata", "type"]} label="用途">
                                 <Select allowClear options={promptTypeOptions} />
                             </Form.Item>
                         </Col>
-                        <Col span={8}>
+                        <Col span={6}>
                             <Form.Item name={["metadata", "scenario"]} label="场景">
                                 <Input placeholder="例如：短剧 / 分镜 / 人物设定" />
                             </Form.Item>
                         </Col>
-                        <Col span={8}>
+                        <Col span={6}>
                             <Form.Item name={["metadata", "favorite"]} label="常用" valuePropName="checked">
                                 <Checkbox>加入常用</Checkbox>
                             </Form.Item>
@@ -307,6 +323,7 @@ export default function AdminPromptsPage() {
                                 </Typography.Title>
                                 <Space wrap>
                                     <Tag>{categoryName(detailPrompt.category)}</Tag>
+                                    {detailPrompt.metadata?.nodeGroup ? <Tag color="purple">{promptNodeGroupLabel(detailPrompt.metadata.nodeGroup)}</Tag> : null}
                                     {detailPrompt.metadata?.type ? <Tag color="blue">{promptTypeLabel(detailPrompt.metadata.type)}</Tag> : null}
                                     {detailPrompt.metadata?.scenario ? <Tag>场景：{detailPrompt.metadata.scenario}</Tag> : null}
                                     {detailPrompt.metadata?.provider ? <Tag>供应商：{detailPrompt.metadata.provider}</Tag> : null}

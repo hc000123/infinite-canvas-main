@@ -84,11 +84,11 @@ func ListPromptTags(q model.Query) ([]string, error) {
 	return promptTagsFromItems(items), nil
 }
 
-// ListPromptMetadataOptions 返回当前查询条件下可用的模板类型和场景。
-func ListPromptMetadataOptions(q model.Query) ([]string, []string, error) {
+// ListPromptMetadataOptions 返回当前查询条件下可用的节点分组、模板类型和场景。
+func ListPromptMetadataOptions(q model.Query) ([]string, []string, []string, error) {
 	db, err := DB()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	q.Normalize()
 	q.Type = ""
@@ -98,13 +98,19 @@ func ListPromptMetadataOptions(q model.Query) ([]string, []string, error) {
 
 	var items []model.Prompt
 	if err := tx.Select("metadata").Find(&items).Error; err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
+	nodeGroups := []string{}
 	types := []string{}
 	scenarios := []string{}
+	seenNodeGroups := map[string]bool{}
 	seenTypes := map[string]bool{}
 	seenScenarios := map[string]bool{}
 	for _, item := range items {
+		if value, ok := promptMetadataString(item.Metadata, "nodeGroup"); ok && !seenNodeGroups[value] {
+			seenNodeGroups[value] = true
+			nodeGroups = append(nodeGroups, value)
+		}
 		if value, ok := promptMetadataString(item.Metadata, "type"); ok && !seenTypes[value] {
 			seenTypes[value] = true
 			types = append(types, value)
@@ -114,7 +120,7 @@ func ListPromptMetadataOptions(q model.Query) ([]string, []string, error) {
 			scenarios = append(scenarios, value)
 		}
 	}
-	return types, scenarios, nil
+	return nodeGroups, types, scenarios, nil
 }
 
 // SavePrompt 保存提示词，并在更新时保留原创建时间。
@@ -181,6 +187,7 @@ func applyPromptFilters(tx *gorm.DB, q model.Query) *gorm.DB {
 		tx = tx.Where("category = ?", q.Category)
 	}
 	tx = applyPromptTagsFilter(tx, q.Tags)
+	tx = applyPromptNodeGroupFilter(tx, q.NodeGroup)
 	if isActivePromptOption(q.Type) {
 		tx = tx.Where(promptJSONMetadataValue(tx, "type")+" = ?", q.Type)
 	}
@@ -213,6 +220,33 @@ func applyPromptTagsFilter(tx *gorm.DB, tags []string) *gorm.DB {
 		condition = condition.Or(promptJSONTagsContains(tx), tag)
 	}
 	return tx.Where(condition)
+}
+
+func applyPromptNodeGroupFilter(tx *gorm.DB, nodeGroup string) *gorm.DB {
+	if !isActivePromptOption(nodeGroup) {
+		return tx
+	}
+	fallbackTypes := promptNodeGroupFallbackTypes(nodeGroup)
+	nodeField := promptJSONMetadataValue(tx, "nodeGroup")
+	outputField := promptJSONMetadataValue(tx, "outputKind")
+	typeField := promptJSONMetadataValue(tx, "type")
+	if len(fallbackTypes) == 0 {
+		return tx.Where(nodeField+" = ? OR (("+nodeField+" IS NULL OR "+nodeField+" = '') AND "+outputField+" = ?)", nodeGroup, nodeGroup)
+	}
+	return tx.Where(nodeField+" = ? OR (("+nodeField+" IS NULL OR "+nodeField+" = '') AND ("+outputField+" = ? OR "+typeField+" IN ?))", nodeGroup, nodeGroup, fallbackTypes)
+}
+
+func promptNodeGroupFallbackTypes(nodeGroup string) []string {
+	switch nodeGroup {
+	case "image":
+		return []string{"image", "asset", "grid", "positive", "negative"}
+	case "video":
+		return []string{"video", "workflow", "positive", "negative"}
+	case "text":
+		return []string{"workflow"}
+	default:
+		return nil
+	}
 }
 
 func promptTagsFromItems(items []model.Prompt) []string {

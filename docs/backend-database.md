@@ -72,7 +72,8 @@
 
 | 字段         | 类型     | 说明                                                                                 |
 | ------------ | -------- | ------------------------------------------------------------------------------------ |
-| `type`       | string   | 模板类型：`asset`、`image`、`video`、`grid`、`positive`、`negative`、`workflow` 等    |
+| `nodeGroup`  | string   | 节点分组：`text`、`image`、`video`，用于按画布节点筛选提示词                         |
+| `type`       | string   | 模板用途：`asset`、`image`、`video`、`grid`、`positive`、`negative`、`workflow` 等    |
 | `scenario`   | string   | 使用场景，例如短剧、人物设定、镜头模板、分镜等                                       |
 | `provider`   | string   | 推荐供应商，例如 `openai`、`volcengine-ark`，可为空                                  |
 | `model`      | string   | 推荐模型或 Endpoint ID，可为空                                                       |

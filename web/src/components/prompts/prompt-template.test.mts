@@ -34,7 +34,7 @@ test("parses and formats variable description text", () => {
 });
 
 test("labels prompt types and fills variables from production bible items", () => {
-    assert.equal(promptTypeLabel("video"), "视频");
+    assert.equal(promptTypeLabel("video"), "视频模板");
     assert.equal(
         productionBibleValueForVariable("角色", {
             id: "pb-1",

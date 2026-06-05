@@ -1,6 +1,11 @@
-import { FileText, ImagePlus, Images, Maximize2, Video } from "lucide-react";
+import { BriefcaseBusiness, FileText, ImagePlus, Images, Maximize2, Video } from "lucide-react";
 
 export const navigationTools = [
+    {
+        slug: "projects",
+        label: "项目工作台",
+        icon: BriefcaseBusiness,
+    },
     {
         slug: "canvas",
         label: "我的画布",

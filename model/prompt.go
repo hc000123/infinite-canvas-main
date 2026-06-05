@@ -20,6 +20,7 @@ type PromptList struct {
 	Items      []Prompt `json:"items"`
 	Tags       []string `json:"tags"`
 	Categories []string `json:"categories"`
+	NodeGroups []string `json:"nodeGroups"`
 	Types      []string `json:"types"`
 	Scenarios  []string `json:"scenarios"`
 	Total      int      `json:"total"`

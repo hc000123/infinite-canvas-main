@@ -1,7 +1,8 @@
 "use client";
 
-import { Download, FolderPlus, PencilLine, Search, Trash2, Upload } from "lucide-react";
+import { BookOpen, Download, FolderPlus, PencilLine, Search, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { App, Button, Empty, Form, Input, Modal, Pagination, Select, Space, Tag, Typography } from "antd";
 import { saveAs } from "file-saver";
 
@@ -15,6 +16,11 @@ import { cn } from "@/lib/utils";
 import { useAssetStore, type Asset, type AssetFolder, type AssetKind, type AudioAsset, type ImageAsset, type VideoAsset, type VolcengineAssetMetadata } from "@/stores/use-asset-store";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { ProductionBibleDrawer } from "../canvas/components/production-bible-drawer";
+import { useProductionBibleStore } from "../canvas/stores/use-production-bible-store";
+import { useStoryboardStore } from "../canvas/stores/use-storyboard-store";
+import { useCanvasStore } from "../canvas/stores/use-canvas-store";
+import { useCreativeProjectStore } from "../projects/use-creative-project-store";
 import { assetGenerationFilterOptions, assetMatchesGenerationFilters } from "./asset-generation";
 import { assetFileKind, assetSearchText, countFolderAssets, fetchImageBlob, fileTitle, hasImportableDragItems, isImportableAssetFile, volcengineStatusLabel } from "./asset-utils";
 import { exportAssets, readAssetPackage } from "./asset-transfer";
@@ -46,6 +52,7 @@ const kindOptions = [
 export default function AssetsPage() {
     const { message } = App.useApp();
     const copyText = useCopyText();
+    const searchParams = useSearchParams();
     const [form] = Form.useForm<AssetFormValues>();
     const coverInputRef = useRef<HTMLInputElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
@@ -54,6 +61,11 @@ export default function AssetsPage() {
     const dragDepthRef = useRef(0);
     const assets = useAssetStore((state) => state.assets);
     const folders = useAssetStore((state) => state.folders);
+    const projects = useCanvasStore((state) => state.projects);
+    const creativeProjects = useCreativeProjectStore((state) => state.projects);
+    const productionBibleItems = useProductionBibleStore((state) => state.items);
+    const storyboardGroups = useStoryboardStore((state) => state.groups);
+    const storyboardShots = useStoryboardStore((state) => state.shots);
     const addAsset = useAssetStore((state) => state.addAsset);
     const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
     const updateAsset = useAssetStore((state) => state.updateAsset);
@@ -70,6 +82,7 @@ export default function AssetsPage() {
     const [generationActionFilter, setGenerationActionFilter] = useState<string>();
     const [generationModelProviderFilter, setGenerationModelProviderFilter] = useState<string>();
     const [generationTaskFilter, setGenerationTaskFilter] = useState<"all" | "with" | "without">("all");
+    const [projectContextFilter, setProjectContextFilter] = useState(searchParams.get("projectId") || "");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
@@ -86,6 +99,8 @@ export default function AssetsPage() {
     const [folderName, setFolderName] = useState("");
     const [isDraggingUpload, setIsDraggingUpload] = useState(false);
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(() => new Set());
+    const [productionBibleProjectId, setProductionBibleProjectId] = useState("");
+    const [productionBibleOpen, setProductionBibleOpen] = useState(false);
     const activeFolderId = folderFilter !== "all" && folderFilter !== "root" ? folderFilter : undefined;
     const coverUrl = Form.useWatch("coverUrl", form) || "";
     const title = Form.useWatch("title", form) || "";
@@ -95,7 +110,27 @@ export default function AssetsPage() {
     const folderMap = useMemo(() => new Map(folders.map((folder) => [folder.id, folder])), [folders]);
     const folderCounts = useMemo(() => countFolderAssets(validAssets), [validAssets]);
     const folderOptions = useMemo(() => [{ label: "未分组", value: "" }, ...folders.map((folder) => ({ label: folder.name, value: folder.id }))], [folders]);
+    const projectContexts = useMemo(() => {
+        const creativeIds = new Set(creativeProjects.map((project) => project.id));
+        return [
+            ...creativeProjects.map((project) => ({ id: project.id, title: project.title || "未命名项目" })),
+            ...projects.filter((project) => !creativeIds.has(project.id)).map((project) => ({ id: project.id, title: `${project.title || "未命名画布"}（旧画布）` })),
+        ];
+    }, [creativeProjects, projects]);
+    const projectOptions = useMemo(() => projectContexts.map((project) => ({ label: project.title, value: project.id })), [projectContexts]);
+    const selectedProductionBibleProject = useMemo(
+        () => projectContexts.find((project) => project.id === (projectContextFilter || productionBibleProjectId)) || projectContexts[0] || null,
+        [projectContexts, productionBibleProjectId, projectContextFilter],
+    );
     const generationFilterOptions = useMemo(() => assetGenerationFilterOptions(validAssets), [validAssets]);
+    const projectReferencedAssetIds = useMemo(() => {
+        if (!projectContextFilter) return new Set<string>();
+        const groupIds = new Set(storyboardGroups.filter((group) => group.projectId === projectContextFilter).map((group) => group.id));
+        return new Set<string>([
+            ...productionBibleItems.filter((item) => item.projectId === projectContextFilter).flatMap((item) => item.assetRefs.map((ref) => ref.assetId)),
+            ...storyboardShots.filter((shot) => groupIds.has(shot.groupId)).flatMap((shot) => shot.assetRefs.map((ref) => ref.assetId)),
+        ]);
+    }, [productionBibleItems, projectContextFilter, storyboardGroups, storyboardShots]);
 
     const filteredAssets = useMemo(() => {
         const query = keyword.trim().toLowerCase();
@@ -109,13 +144,15 @@ export default function AssetsPage() {
                     action: generationActionFilter,
                     modelProvider: generationModelProviderFilter,
                     taskId: generationTaskFilter,
+                    projectId: projectContextFilter || undefined,
+                    referencedAssetIds: projectReferencedAssetIds,
                 })
             )
                 return false;
             if (!query) return true;
             return assetSearchText(asset).includes(query);
         });
-    }, [validAssets, keyword, kindFilter, folderFilter, activeFolderId, generationSourceFilter, generationActionFilter, generationModelProviderFilter, generationTaskFilter]);
+    }, [validAssets, keyword, kindFilter, folderFilter, activeFolderId, generationSourceFilter, generationActionFilter, generationModelProviderFilter, generationTaskFilter, projectContextFilter, projectReferencedAssetIds]);
 
     const visibleAssets = useMemo(() => {
         const start = (page - 1) * pageSize;
@@ -142,6 +179,21 @@ export default function AssetsPage() {
     useEffect(() => {
         if (activeFolderId && !folderMap.has(activeFolderId)) setFolderFilter("all");
     }, [activeFolderId, folderMap]);
+
+    useEffect(() => {
+        const nextProjectId = searchParams.get("projectId") || "";
+        if (!nextProjectId) return;
+        setProjectContextFilter(nextProjectId);
+        setProductionBibleProjectId(nextProjectId);
+    }, [searchParams]);
+
+    useEffect(() => {
+        if (!projectContexts.length) {
+            if (productionBibleProjectId) setProductionBibleProjectId("");
+            return;
+        }
+        if (!productionBibleProjectId || !projectContexts.some((project) => project.id === productionBibleProjectId)) setProductionBibleProjectId(projectContexts[0]?.id || "");
+    }, [projectContexts, productionBibleProjectId]);
 
     useEffect(() => {
         const existingIds = new Set(validAssets.map((asset) => asset.id));
@@ -636,6 +688,30 @@ export default function AssetsPage() {
                                 </Button>
                             </div>
                         </div>
+                        <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-center">
+                            <div className="text-xs font-medium text-stone-500 dark:text-stone-400">项目</div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Select
+                                    size="small"
+                                    allowClear
+                                    showSearch
+                                    className="min-w-48"
+                                    placeholder="项目上下文筛选"
+                                    value={projectContextFilter || undefined}
+                                    options={projectOptions}
+                                    optionFilterProp="label"
+                                    disabled={!projectOptions.length}
+                                    onChange={(value) => {
+                                        setPage(1);
+                                        setProjectContextFilter(value || "");
+                                        if (value) setProductionBibleProjectId(value);
+                                    }}
+                                />
+                                <Button size="small" icon={<BookOpen className="size-3.5" />} disabled={!selectedProductionBibleProject} onClick={() => setProductionBibleOpen(true)}>
+                                    项目设定库
+                                </Button>
+                            </div>
+                        </div>
                         <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
                             <div className="pt-1 text-xs font-medium text-stone-500 dark:text-stone-400">文件夹</div>
                             <div className="flex flex-wrap items-center gap-2">
@@ -961,6 +1037,10 @@ export default function AssetsPage() {
                 onReview={(asset) => void submitImageReview(asset)}
                 onRefreshReview={(asset) => void refreshImageReview(asset)}
             />
+
+            {selectedProductionBibleProject ? (
+                <ProductionBibleDrawer open={productionBibleOpen} projectId={selectedProductionBibleProject.id} projectTitle={selectedProductionBibleProject.title || "未命名画布"} onClose={() => setProductionBibleOpen(false)} />
+            ) : null}
 
             <input ref={assetInputRef} type="file" multiple accept="application/zip,.zip,image/*,video/*,audio/*" className="hidden" onChange={(event) => void importAssetFiles(event.target.files || undefined)} />
 

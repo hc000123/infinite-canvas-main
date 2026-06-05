@@ -16,6 +16,7 @@ import { useCanvasStore } from "./stores/use-canvas-store";
 import { useCanvasUiStore } from "./stores/use-canvas-ui-store";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useEffectiveConfig } from "@/stores/use-config-store";
+import { useCreativeProjectStore } from "../projects/use-creative-project-store";
 import { canvasNodeToAsset, hydrateCanvasNodeAssetUrls } from "./utils/canvas-assets";
 import { exportCanvasProjects } from "./utils/canvas-export";
 import type { CanvasProjectPreset } from "./utils/canvas-project-preset";
@@ -30,6 +31,8 @@ export default function CanvasPage() {
     const projects = useCanvasStore((state) => state.projects);
     const createProject = useCanvasStore((state) => state.createProject);
     const importProject = useCanvasStore((state) => state.importProject);
+    const ensureUnfiledProject = useCreativeProjectStore((state) => state.ensureUnfiledProject);
+    const attachCanvasToCreativeProject = useCreativeProjectStore((state) => state.attachCanvas);
     const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
     const selectedIds = useCanvasUiStore((state) => state.selectedProjectIds);
     const setDeleteIds = useCanvasUiStore((state) => state.setDeleteProjectIds);
@@ -40,7 +43,10 @@ export default function CanvasPage() {
     const defaultProjectTitle = `眨眼之间 ${projects.length + 1}`;
     const createAndEnter = (title: string, preset: CanvasProjectPreset) => {
         setCreateOpen(false);
-        enterProject(createProject(title, preset));
+        const creativeProjectId = ensureUnfiledProject(preset);
+        const canvasId = createProject(title, preset, { projectId: creativeProjectId });
+        attachCanvasToCreativeProject(creativeProjectId, canvasId);
+        enterProject(canvasId);
     };
     const importCanvas = async (file?: File) => {
         if (!file) return;
@@ -64,7 +70,8 @@ export default function CanvasPage() {
             let assetCount = 0;
             for (const item of data.projects) {
                 const project = { ...item.project, nodes: (item.project.nodes || []).map((node) => hydrateCanvasNodeAssetUrls(node, restoredUrls)) };
-                importProject(project);
+                const canvasId = importProject(project);
+                if (project.projectId) attachCanvasToCreativeProject(project.projectId, canvasId);
                 for (const node of project.nodes) {
                     const asset = canvasNodeToAsset(node);
                     if (!asset) continue;

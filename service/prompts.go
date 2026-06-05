@@ -16,12 +16,12 @@ func ListPrompts(q model.Query) (model.PromptList, error) {
 	if err != nil {
 		return model.PromptList{}, err
 	}
-	types, scenarios, err := repository.ListPromptMetadataOptions(q)
+	nodeGroups, types, scenarios, err := repository.ListPromptMetadataOptions(q)
 	if err != nil {
 		return model.PromptList{}, err
 	}
 	categories := promptCategoryCodes(ListPromptCategories())
-	return model.PromptList{Items: items, Tags: tags, Categories: categories, Types: types, Scenarios: scenarios, Total: int(total)}, nil
+	return model.PromptList{Items: items, Tags: tags, Categories: categories, NodeGroups: nodeGroups, Types: types, Scenarios: scenarios, Total: int(total)}, nil
 }
 
 func ListPromptCategories() []model.PromptCategory {

@@ -27,6 +27,10 @@ export function assetGenerationModelProvider(generation: AssetGenerationRecord |
     return [provider, model].filter(Boolean).join(" / ");
 }
 
+export function assetGenerationProjectId(generation: AssetGenerationRecord | undefined) {
+    return readString(generation?.projectId);
+}
+
 export function assetHasGenerationTaskId(generation: AssetGenerationRecord | undefined) {
     return Boolean(readString(generation?.taskId));
 }
@@ -69,11 +73,12 @@ export function assetGenerationFilterOptions(assets: Asset[]) {
     };
 }
 
-export function assetMatchesGenerationFilters(asset: Asset, filters: { source?: string; action?: string; modelProvider?: string; taskId?: "all" | "with" | "without" }) {
+export function assetMatchesGenerationFilters(asset: Asset, filters: { source?: string; action?: string; modelProvider?: string; taskId?: "all" | "with" | "without"; projectId?: string; referencedAssetIds?: Set<string> }) {
     const records = assetGenerationRecords(asset);
     const hasTaskId = records.some(assetHasGenerationTaskId);
     if (filters.taskId === "with" && !hasTaskId) return false;
     if (filters.taskId === "without" && hasTaskId) return false;
+    if (filters.projectId && !filters.referencedAssetIds?.has(asset.id) && !records.some((generation) => assetGenerationProjectId(generation) === filters.projectId)) return false;
     if (!filters.source && !filters.action && !filters.modelProvider) return true;
     return records.some((generation) => {
         if (filters.source && assetGenerationSource(generation) !== filters.source) return false;

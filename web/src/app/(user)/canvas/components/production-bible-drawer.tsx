@@ -72,7 +72,7 @@ export function ProductionBibleDrawer({ open, projectId, projectTitle, onClose }
                 </Button>
             }
         >
-            <div className="mb-4 text-sm text-stone-500 dark:text-stone-400">当前画布：{projectTitle}</div>
+            <div className="mb-4 text-sm text-stone-500 dark:text-stone-400">当前项目：{projectTitle}</div>
             <Segmented className="mb-4" value={kind} onChange={(value) => setKind(value as ProductionBibleKind)} options={productionBibleKindOptions.map((option) => ({ label: option.label, value: option.value }))} />
 
             {visibleItems.length ? (

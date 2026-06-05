@@ -67,13 +67,13 @@ import { CanvasNode } from "../components/canvas-node";
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "../components/canvas-node-prompt-panel";
 import { CanvasToolbar } from "../components/canvas-toolbar";
 import { AssetPickerModal, type AssetPickerTab, type InsertAssetPayload } from "../components/asset-picker-modal";
-import { ProductionBibleDrawer } from "../components/production-bible-drawer";
 import { ScriptManagerDrawer } from "../components/script-manager-drawer";
 import { StoryboardManagerDrawer } from "../components/storyboard-manager-drawer";
 import { CanvasZoomControls } from "../components/canvas-zoom-controls";
 import { useCanvasStore } from "../stores/use-canvas-store";
 import { useStoryboardStore } from "../stores/use-storyboard-store";
 import { useGenerationQueueStore } from "../stores/use-generation-queue-store";
+import { useCreativeProjectStore } from "../../projects/use-creative-project-store";
 import { CanvasNodeType, type CanvasAssistantImage, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type ConnectionHandle, type ContextMenuState, type Position, type ViewportTransform } from "../types";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio } from "@/types/audio";
@@ -216,7 +216,7 @@ function InfiniteCanvasPage() {
     const { message } = App.useApp();
     const params = useParams<{ id: string }>();
     const router = useRouter();
-    const projectId = params.id;
+    const canvasId = params.id;
     const containerRef = useRef<HTMLDivElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
     const uploadTargetRef = useRef<{ nodeId?: string; position?: Position } | null>(null);
@@ -247,7 +247,12 @@ function InfiniteCanvasPage() {
     const updateProject = useCanvasStore((state) => state.updateProject);
     const renameProject = useCanvasStore((state) => state.renameProject);
     const deleteProjects = useCanvasStore((state) => state.deleteProjects);
-    const currentProject = useCanvasStore((state) => state.projects.find((project) => project.id === projectId));
+    const currentProject = useCanvasStore((state) => state.projects.find((project) => project.id === canvasId));
+    const creativeProject = useCreativeProjectStore((state) => state.projects.find((project) => project.id === currentProject?.projectId));
+    const attachCanvasToCreativeProject = useCreativeProjectStore((state) => state.attachCanvas);
+    const ensureUnfiledProject = useCreativeProjectStore((state) => state.ensureUnfiledProject);
+    const workspaceProjectId = currentProject?.projectId || canvasId;
+    const workspaceProjectTitle = creativeProject?.title || currentProject?.title || "未命名画布";
     const canvasAiConfig = useMemo(() => applyCanvasProjectPresetToConfig(effectiveConfig.channelMode === "local" ? config : effectiveConfig, currentProject?.preset), [config, currentProject?.preset, effectiveConfig]);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [nodes, setNodes] = useState<CanvasNodeData[]>([]);
@@ -268,7 +273,6 @@ function InfiniteCanvasPage() {
     const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
     const [assetPickerOpen, setAssetPickerOpen] = useState(false);
     const [assetPickerTab, setAssetPickerTab] = useState<AssetPickerTab>("my-assets");
-    const [productionBibleOpen, setProductionBibleOpen] = useState(false);
     const [scriptManagerOpen, setScriptManagerOpen] = useState(false);
     const [storyboardManagerOpen, setStoryboardManagerOpen] = useState(false);
     const [storyboardInitialGroupId, setStoryboardInitialGroupId] = useState("");
@@ -315,8 +319,8 @@ function InfiniteCanvasPage() {
         setDialogNodeId,
         showError: showImageGenerationError,
         toImageMetadata: imageMetadata,
-        projectId,
-        projectTitle: currentProject?.title || "未命名画布",
+        projectId: workspaceProjectId,
+        projectTitle: workspaceProjectTitle,
         projectPreset: currentProject?.preset,
         archiveGeneratedAsset,
     });
@@ -330,13 +334,13 @@ function InfiniteCanvasPage() {
         cacheUploadedCanvasMedia,
         showWarning: showVideoGenerationWarning,
         toVideoMetadata: videoMetadata,
-        projectId,
-        projectTitle: currentProject?.title || "未命名画布",
+        projectId: workspaceProjectId,
+        projectTitle: workspaceProjectTitle,
         projectPreset: currentProject?.preset,
         archiveGeneratedAsset,
     });
     const { historyState, resetHistory, undoCanvas, redoCanvas, pauseHistory, resumeHistory, skipNextHistoryCommit, getCleanupHistory } = useCanvasHistory({
-        projectId,
+        projectId: canvasId,
         projectLoaded,
         nodes,
         connections,
@@ -381,7 +385,7 @@ function InfiniteCanvasPage() {
     useEffect(() => {
         if (!hydrated) return;
         setProjectLoaded(false);
-        const project = openProject(projectId);
+        const project = openProject(canvasId);
         if (!project) {
             router.replace("/canvas");
             return;
@@ -409,7 +413,7 @@ function InfiniteCanvasPage() {
             setProjectLoaded(true);
         };
         void restore();
-    }, [hydrated, openProject, projectId, resetHistory, router]);
+    }, [canvasId, hydrated, openProject, resetHistory, router]);
 
     useCanvasVideoTaskRecovery({
         projectLoaded,
@@ -647,9 +651,9 @@ function InfiniteCanvasPage() {
             setPreviewNodeId((current) => (current && allIds.has(current) ? null : current));
             setRunningNodeId((current) => (current && allIds.has(current) ? null : current));
             setContextMenu((current) => (current && allIds.has(current.nodeId) ? null : current));
-            cleanupCanvasFiles({ projectId, nodes: nodesRef.current.filter((node) => !allIds.has(node.id)), chatSessions });
+            cleanupCanvasFiles({ projectId: canvasId, nodes: nodesRef.current.filter((node) => !allIds.has(node.id)), chatSessions });
         },
-        [chatSessions, cleanupCanvasFiles, projectId],
+        [canvasId, chatSessions, cleanupCanvasFiles],
     );
 
     const deselectCanvas = useCallback(() => {
@@ -674,8 +678,8 @@ function InfiniteCanvasPage() {
         setRunningNodeId(null);
         deselectCanvas();
         setClearConfirmOpen(false);
-        cleanupCanvasFiles({ projectId, nodes: [], chatSessions: [] });
-    }, [cleanupCanvasFiles, deselectCanvas, projectId]);
+        cleanupCanvasFiles({ projectId: canvasId, nodes: [], chatSessions: [] });
+    }, [canvasId, cleanupCanvasFiles, deselectCanvas]);
 
     const duplicateNode = useCallback((nodeId: string) => {
         const source = nodesRef.current.find((node) => node.id === nodeId);
@@ -714,15 +718,17 @@ function InfiniteCanvasPage() {
     );
 
     const createAndOpenProject = useCallback(() => {
-        const id = createProject(`眨眼之间 ${useCanvasStore.getState().projects.length + 1}`, currentProject?.preset);
+        const targetProjectId = currentProject?.projectId || ensureUnfiledProject(currentProject?.preset);
+        const id = createProject(`眨眼之间 ${useCanvasStore.getState().projects.length + 1}`, currentProject?.preset, { projectId: targetProjectId });
+        attachCanvasToCreativeProject(targetProjectId, id);
         router.push(`/canvas/${id}`);
-    }, [createProject, currentProject?.preset, router]);
+    }, [attachCanvasToCreativeProject, createProject, currentProject?.preset, currentProject?.projectId, ensureUnfiledProject, router]);
 
     const deleteCurrentProject = useCallback(() => {
-        deleteProjects([projectId]);
+        deleteProjects([canvasId]);
         cleanupAssetImages();
         router.push("/canvas");
-    }, [cleanupAssetImages, deleteProjects, projectId, router]);
+    }, [canvasId, cleanupAssetImages, deleteProjects, router]);
 
     const handleGlobalMouseMove = useCallback(
         (event: MouseEvent) => {
@@ -1139,9 +1145,9 @@ function InfiniteCanvasPage() {
 
     const finishTitleEditing = useCallback(() => {
         const nextTitle = titleDraft.trim();
-        if (nextTitle) renameProject(projectId, nextTitle);
+        if (nextTitle) renameProject(canvasId, nextTitle);
         setTitleEditing(false);
-    }, [projectId, renameProject, titleDraft]);
+    }, [canvasId, renameProject, titleDraft]);
 
     const preventCanvasContextMenu = useCallback((event: ReactMouseEvent) => {
         if ((event.target as HTMLElement).closest("[data-node-id]")) return;
@@ -1350,7 +1356,7 @@ function InfiniteCanvasPage() {
 
     useEffect(() => {
         if (!projectLoaded || queuePaused) return;
-        const item = nextQueuedItem(queueItems, projectId, queueConcurrency);
+        const item = nextQueuedItem(queueItems, workspaceProjectId, queueConcurrency);
         if (!item || processingQueueItemIdsRef.current.has(item.id)) return;
         processingQueueItemIdsRef.current.add(item.id);
         markQueueItemRunning(item.id, item.taskId);
@@ -1376,7 +1382,7 @@ function InfiniteCanvasPage() {
                 processingQueueItemIdsRef.current.delete(item.id);
             }
         })();
-    }, [handleGenerateNode, markQueueItemFailed, markQueueItemRunning, markQueueItemSucceeded, projectId, projectLoaded, queueConcurrency, queueItems, queuePaused]);
+    }, [handleGenerateNode, markQueueItemFailed, markQueueItemRunning, markQueueItemSucceeded, projectLoaded, queueConcurrency, queueItems, queuePaused, workspaceProjectId]);
 
     const handleRefreshVideoTask = useCallback(
         async (node: CanvasNodeData) => {
@@ -1499,8 +1505,8 @@ function InfiniteCanvasPage() {
                     setNodes((prev) => prev.map((item) => (item.id === node.id ? finalVideoNode : item)));
                     if (finalVideoNode) {
                         const asset = buildGeneratedVideoAsset(finalVideoNode, {
-                            projectId,
-                            projectTitle: currentProject?.title || "未命名画布",
+                            projectId: workspaceProjectId,
+                            projectTitle: workspaceProjectTitle,
                             projectPreset: currentProject?.preset,
                             prompt,
                             effectivePrompt: prompt,
@@ -1562,7 +1568,7 @@ function InfiniteCanvasPage() {
                 setRunningNodeId(null);
             }
         },
-        [archiveGeneratedAsset, canvasAiConfig, currentProject?.preset, currentProject?.title, message, openConfigDialog, projectId, retryTextNode, token],
+        [archiveGeneratedAsset, canvasAiConfig, currentProject?.preset, message, openConfigDialog, retryTextNode, token, workspaceProjectId, workspaceProjectTitle],
     );
 
     const generateImageFromTextNode = useCallback(
@@ -1865,7 +1871,7 @@ function InfiniteCanvasPage() {
                                 <CanvasNodePromptPanel
                                     node={panelNode}
                                     isRunning={runningNodeId === panelNode.id}
-                                    projectId={projectId}
+                                    projectId={workspaceProjectId}
                                     onPromptChange={handleNodePromptChange}
                                     onConfigChange={handleConfigNodeChange}
                                     onGenerate={handleGenerateNode}
@@ -1988,7 +1994,6 @@ function InfiniteCanvasPage() {
                         setAssetPickerTab("my-assets");
                         setAssetPickerOpen(true);
                     }}
-                    onOpenProductionBible={() => setProductionBibleOpen(true)}
                     onOpenScriptManager={() => setScriptManagerOpen(true)}
                     onOpenStoryboardManager={() => {
                         setStoryboardInitialGroupId("");
@@ -2053,11 +2058,10 @@ function InfiniteCanvasPage() {
                 </Modal>
 
                 <AssetPickerModal open={assetPickerOpen} defaultTab={assetPickerTab} onInsert={handleAssetInsert} onClose={() => setAssetPickerOpen(false)} />
-                <ProductionBibleDrawer open={productionBibleOpen} projectId={projectId} projectTitle={currentProject?.title || "未命名画布"} onClose={() => setProductionBibleOpen(false)} />
                 <ScriptManagerDrawer
                     open={scriptManagerOpen}
-                    projectId={projectId}
-                    projectTitle={currentProject?.title || "未命名画布"}
+                    projectId={workspaceProjectId}
+                    projectTitle={workspaceProjectTitle}
                     onClose={() => setScriptManagerOpen(false)}
                     onOpenStoryboardGroup={(groupId) => {
                         setStoryboardInitialGroupId(groupId);
@@ -2066,8 +2070,8 @@ function InfiniteCanvasPage() {
                 />
                 <StoryboardManagerDrawer
                     open={storyboardManagerOpen}
-                    projectId={projectId}
-                    projectTitle={currentProject?.title || "未命名画布"}
+                    projectId={workspaceProjectId}
+                    projectTitle={workspaceProjectTitle}
                     initialGroupId={storyboardInitialGroupId}
                     canvasNodes={nodes}
                     onClose={() => setStoryboardManagerOpen(false)}

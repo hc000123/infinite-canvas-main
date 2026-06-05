@@ -1,23 +1,56 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Form, Input, InputNumber, Modal, Select, Typography } from "antd";
 
 import type { AiConfig } from "@/stores/use-config-store";
-import { buildCanvasProjectPresetFromConfig, canvasProjectPresetOptions, type CanvasProjectPreset } from "../utils/canvas-project-preset";
+import { buildCanvasProjectPresetFromConfig, canvasProjectPresetModelOptions, canvasProjectPresetOptions, type CanvasProjectPreset } from "../utils/canvas-project-preset";
 
 type CanvasCreateProjectValues = CanvasProjectPreset & {
     title: string;
     presetKey?: string;
 };
 
-export function CanvasCreateProjectModal({ open, defaultTitle, config, onCancel, onCreate }: { open: boolean; defaultTitle: string; config: AiConfig; onCancel: () => void; onCreate: (title: string, preset: CanvasProjectPreset) => void }) {
+export function CanvasCreateProjectModal({
+    open,
+    defaultTitle,
+    config,
+    modalTitle = "新建画布",
+    nameLabel = "画布名称",
+    namePlaceholder = "例如：毕业典礼短剧",
+    okText = "创建并进入",
+    helperText = "预设会作为本画布后续生成配置节点和视频生成的默认值；旧画布没有预设时继续使用全局配置。",
+    onCancel,
+    onCreate,
+}: {
+    open: boolean;
+    defaultTitle: string;
+    config: AiConfig;
+    modalTitle?: string;
+    nameLabel?: string;
+    namePlaceholder?: string;
+    okText?: string;
+    helperText?: string;
+    onCancel: () => void;
+    onCreate: (title: string, preset: CanvasProjectPreset) => void;
+}) {
     const [form] = Form.useForm<CanvasCreateProjectValues>();
+    const videoProvider = Form.useWatch("defaultVideoProvider", form) || config.videoProtocol || "openai";
+    const imageModelOptions = useMemo(() => modelSelectOptions(canvasProjectPresetModelOptions(config, "image")), [config]);
+    const videoModelOptions = useMemo(() => modelSelectOptions(canvasProjectPresetModelOptions(config, "video", videoProvider)), [config, videoProvider]);
+    const textModelOptions = useMemo(() => modelSelectOptions(canvasProjectPresetModelOptions(config, "text")), [config]);
 
     useEffect(() => {
         if (!open) return;
         form.setFieldsValue({ title: defaultTitle, presetKey: undefined, ...buildCanvasProjectPresetFromConfig(config) });
     }, [config, defaultTitle, form, open]);
+
+    useEffect(() => {
+        if (!open) return;
+        const selected = form.getFieldValue("defaultVideoModel");
+        const first = videoModelOptions[0]?.value;
+        if (first && !videoModelOptions.some((item) => item.value === selected)) form.setFieldValue("defaultVideoModel", first);
+    }, [form, open, videoModelOptions]);
 
     const submit = async () => {
         const values = await form.validateFields();
@@ -25,10 +58,10 @@ export function CanvasCreateProjectModal({ open, defaultTitle, config, onCancel,
     };
 
     return (
-        <Modal title="新建画布" open={open} width={720} onCancel={onCancel} onOk={() => void submit()} okText="创建并进入" cancelText="取消" destroyOnHidden>
+        <Modal title={modalTitle} open={open} width={720} onCancel={onCancel} onOk={() => void submit()} okText={okText} cancelText="取消" destroyOnHidden>
             <Form form={form} layout="vertical" requiredMark={false} className="pt-2">
-                <Form.Item name="title" label="画布名称" rules={[{ required: true, message: "请输入画布名称" }]}>
-                    <Input placeholder="例如：毕业典礼短剧" />
+                <Form.Item name="title" label={nameLabel} rules={[{ required: true, message: `请输入${nameLabel}` }]}>
+                    <Input placeholder={namePlaceholder} />
                 </Form.Item>
                 <Form.Item name="presetKey" label="常用预设">
                     <Select
@@ -50,12 +83,14 @@ export function CanvasCreateProjectModal({ open, defaultTitle, config, onCancel,
                             ]}
                         />
                     </Form.Item>
-                    <Form.Item name="ratio" label="画幅">
+                    <Form.Item name="ratio" label="画幅比例">
                         <Select
                             options={[
-                                { label: "16:9", value: "16:9" },
-                                { label: "9:16", value: "9:16" },
-                                { label: "1:1", value: "1:1" },
+                                { label: "横屏 16:9", value: "16:9" },
+                                { label: "竖屏 9:16", value: "9:16" },
+                                { label: "方形 1:1", value: "1:1" },
+                                { label: "横屏 4:3", value: "4:3" },
+                                { label: "竖屏 3:4", value: "3:4" },
                             ]}
                         />
                     </Form.Item>
@@ -75,6 +110,10 @@ export function CanvasCreateProjectModal({ open, defaultTitle, config, onCancel,
                 <div className="grid gap-3 sm:grid-cols-2">
                     <Form.Item name="defaultVideoProvider" label="默认视频供应商">
                         <Select
+                            onChange={(provider) => {
+                                const firstModel = canvasProjectPresetModelOptions(config, "video", provider)[0];
+                                if (firstModel) form.setFieldValue("defaultVideoModel", firstModel);
+                            }}
                             options={[
                                 { label: "OpenAI 兼容", value: "openai" },
                                 { label: "火山 Seedance", value: "volcengine-ark" },
@@ -82,19 +121,23 @@ export function CanvasCreateProjectModal({ open, defaultTitle, config, onCancel,
                         />
                     </Form.Item>
                     <Form.Item name="defaultImageModel" label="默认图片模型">
-                        <Input placeholder="图片模型 ID" />
+                        <Select showSearch optionFilterProp="label" placeholder="选择图片模型" options={imageModelOptions} />
                     </Form.Item>
                     <Form.Item name="defaultVideoModel" label="默认视频模型">
-                        <Input placeholder="视频模型或 Seedance Endpoint ID" />
+                        <Select showSearch optionFilterProp="label" placeholder="选择视频模型" options={videoModelOptions} />
                     </Form.Item>
                     <Form.Item name="defaultTextModel" label="默认文本模型">
-                        <Input placeholder="文本模型 ID" />
+                        <Select showSearch optionFilterProp="label" placeholder="选择文本模型" options={textModelOptions} />
                     </Form.Item>
                 </div>
                 <Typography.Text type="secondary" className="text-xs">
-                    预设会作为本画布后续生成配置节点和视频生成的默认值；旧画布没有预设时继续使用全局配置。
+                    {helperText}
                 </Typography.Text>
             </Form>
         </Modal>
     );
+}
+
+function modelSelectOptions(models: string[]) {
+    return models.map((model) => ({ label: model, value: model }));
 }

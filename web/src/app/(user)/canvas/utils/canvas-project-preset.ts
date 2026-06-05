@@ -11,6 +11,8 @@ export type CanvasProjectPreset = {
     defaultVideoProvider?: AiConfig["videoProtocol"];
 };
 
+export type CanvasProjectPresetModelKind = "image" | "video" | "text";
+
 export const canvasProjectPresetOptions = [
     { key: "vertical-drama", label: "竖屏短剧", preset: { resolution: "720", ratio: "9:16", fps: "24", defaultDuration: "8", defaultVideoProvider: "volcengine-ark" } },
     { key: "landscape-film", label: "横屏短片", preset: { resolution: "720", ratio: "16:9", fps: "24", defaultDuration: "8", defaultVideoProvider: "volcengine-ark" } },
@@ -20,16 +22,16 @@ export const canvasProjectPresetOptions = [
 ] satisfies Array<{ key: string; label: string; preset: CanvasProjectPreset }>;
 
 export function buildCanvasProjectPresetFromConfig(config: AiConfig, patch: CanvasProjectPreset = {}): CanvasProjectPreset {
+    const provider = patch.defaultVideoProvider || config.videoProtocol || "openai";
     return {
         resolution: patch.resolution || config.vquality || "720",
-        ratio: patch.ratio || config.size || "1:1",
+        ratio: normalizeCanvasProjectPresetRatio(patch.ratio || config.size || "16:9"),
         fps: patch.fps || "24",
         defaultDuration: patch.defaultDuration || config.videoSeconds || "6",
         defaultImageModel: patch.defaultImageModel || config.imageModel || config.model,
-        defaultVideoModel:
-            patch.defaultVideoModel || (patch.defaultVideoProvider === "volcengine-ark" || config.videoProtocol === "volcengine-ark" ? config.seedanceEndpointId || config.seedanceModel || config.videoModel : config.videoModel) || config.model,
+        defaultVideoModel: normalizeVisibleVideoModel(patch.defaultVideoModel) || (provider === "volcengine-ark" ? normalizeVisibleVideoModel(config.seedanceModel) || firstVisibleSeedanceModel(config) : config.videoModel) || config.model,
         defaultTextModel: patch.defaultTextModel || config.textModel || config.model,
-        defaultVideoProvider: patch.defaultVideoProvider || config.videoProtocol || "openai",
+        defaultVideoProvider: provider,
     };
 }
 
@@ -39,15 +41,15 @@ export function applyCanvasProjectPresetToConfig(config: AiConfig, preset?: Canv
     const videoModel = preset.defaultVideoModel || (provider === "volcengine-ark" ? config.seedanceEndpointId || config.seedanceModel : config.videoModel);
     return {
         ...config,
-        size: preset.ratio || config.size,
+        size: normalizeCanvasProjectPresetRatio(preset.ratio || config.size),
         vquality: preset.resolution || config.vquality,
         videoSeconds: preset.defaultDuration || config.videoSeconds,
         imageModel: preset.defaultImageModel || config.imageModel,
         textModel: preset.defaultTextModel || config.textModel,
         videoProtocol: provider,
         videoModel: provider === "openai" ? videoModel || config.videoModel : config.videoModel,
-        seedanceModel: provider === "volcengine-ark" ? videoModel || config.seedanceModel : config.seedanceModel,
-        seedanceEndpointId: provider === "volcengine-ark" && videoModel?.toLowerCase().startsWith("ep-") ? videoModel : config.seedanceEndpointId,
+        seedanceModel: provider === "volcengine-ark" && !isSeedanceEndpointModel(videoModel) ? videoModel || config.seedanceModel : config.seedanceModel,
+        seedanceEndpointId: provider === "volcengine-ark" && isSeedanceEndpointModel(videoModel) ? videoModel : config.seedanceEndpointId,
     };
 }
 
@@ -70,4 +72,57 @@ export function canvasProjectPresetConfig(preset?: CanvasProjectPreset) {
             defaultVideoProvider: preset.defaultVideoProvider,
         }).filter(([, value]) => value !== undefined && value !== ""),
     );
+}
+
+export function normalizeCanvasProjectPresetRatio(value?: string) {
+    const ratio = (value || "").trim();
+    if (ratio === "16:9" || ratio === "9:16" || ratio === "1:1" || ratio === "4:3" || ratio === "3:4") return ratio;
+    const match = ratio.match(/^(\d+)\s*x\s*(\d+)$/i);
+    if (!match) return "16:9";
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    if (!width || !height) return "16:9";
+    const actual = width / height;
+    const candidates = [
+        { ratio: "16:9", value: 16 / 9 },
+        { ratio: "9:16", value: 9 / 16 },
+        { ratio: "1:1", value: 1 },
+        { ratio: "4:3", value: 4 / 3 },
+        { ratio: "3:4", value: 3 / 4 },
+    ];
+    return candidates.reduce((best, item) => (Math.abs(item.value - actual) < Math.abs(best.value - actual) ? item : best), candidates[0]).ratio;
+}
+
+export function canvasProjectPresetModelOptions(config: AiConfig, kind: CanvasProjectPresetModelKind, provider: AiConfig["videoProtocol"] = "openai") {
+    if (kind === "image") return uniqueStrings(config.imageModels?.length ? [...config.imageModels, config.imageModel] : [config.imageModel, config.model]).filter(Boolean);
+    if (kind === "text") return uniqueStrings(config.textModels?.length ? [...config.textModels, config.textModel] : [config.textModel, config.model]).filter(Boolean);
+    if (provider === "volcengine-ark") {
+        const visible = uniqueStrings([...(config.videoModels || []), config.seedanceModel]).filter((model) => Boolean(model) && !isSeedanceEndpointModel(model));
+        const seedanceModels = visible.filter((model) => model.toLowerCase().includes("seedance") || model === config.seedanceModel);
+        return seedanceModels.length ? seedanceModels : visible;
+    }
+    return uniqueStrings([...(config.videoModels || []), config.videoModel, config.model]).filter((model) => Boolean(model) && !isSeedanceEndpointModel(model));
+}
+
+export function isSeedanceEndpointModel(model?: string) {
+    return model?.trim().toLowerCase().startsWith("ep-") || false;
+}
+
+function normalizeVisibleVideoModel(model?: string) {
+    return isSeedanceEndpointModel(model) ? "" : (model || "").trim();
+}
+
+function firstVisibleSeedanceModel(config: AiConfig) {
+    return canvasProjectPresetModelOptions(config, "video", "volcengine-ark")[0] || config.seedanceModel || config.videoModel || config.model;
+}
+
+function uniqueStrings(values: string[]) {
+    const seen = new Set<string>();
+    return values
+        .map((value) => (value || "").trim())
+        .filter((value) => {
+            if (!value || seen.has(value)) return false;
+            seen.add(value);
+            return true;
+        });
 }

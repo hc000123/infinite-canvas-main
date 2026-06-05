@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyCanvasProjectPresetToConfig, buildCanvasProjectPresetFromConfig, canvasProjectPresetConfig, canvasProjectPresetSummary } from "./canvas-project-preset.ts";
+import { applyCanvasProjectPresetToConfig, buildCanvasProjectPresetFromConfig, canvasProjectPresetConfig, canvasProjectPresetSummary, canvasProjectPresetModelOptions, normalizeCanvasProjectPresetRatio } from "./canvas-project-preset.ts";
 
 const config = {
     videoProtocol: "openai",
@@ -11,6 +11,10 @@ const config = {
     seedanceModel: "seedance-model",
     seedanceEndpointId: "ep-seedance",
     textModel: "text-model",
+    imageModels: ["image-model", "gpt-image-2"],
+    videoModels: ["video-model", "doubao-seedance-2-0-260128", "ep-seedance"],
+    textModels: ["text-model", "gpt-5.5"],
+    models: ["image-model", "video-model", "doubao-seedance-2-0-260128", "ep-seedance", "text-model"],
     size: "1:1",
     vquality: "720",
     videoSeconds: "6",
@@ -22,7 +26,7 @@ test("builds project preset from current config and patch", () => {
     assert.equal(preset.ratio, "9:16");
     assert.equal(preset.defaultDuration, "8");
     assert.equal(preset.defaultImageModel, "image-model");
-    assert.equal(preset.defaultVideoModel, "ep-seedance");
+    assert.equal(preset.defaultVideoModel, "seedance-model");
     assert.equal(preset.defaultTextModel, "text-model");
     assert.equal(preset.defaultVideoProvider, "volcengine-ark");
 });
@@ -33,7 +37,7 @@ test("applies project preset to effective AI config", () => {
         ratio: "16:9",
         defaultDuration: "10",
         defaultImageModel: "preset-image",
-        defaultVideoModel: "ep-project",
+        defaultVideoModel: "doubao-seedance-2-0-260128",
         defaultTextModel: "preset-text",
         defaultVideoProvider: "volcengine-ark",
     });
@@ -44,7 +48,19 @@ test("applies project preset to effective AI config", () => {
     assert.equal(next.imageModel, "preset-image");
     assert.equal(next.textModel, "preset-text");
     assert.equal(next.videoProtocol, "volcengine-ark");
-    assert.equal(next.seedanceEndpointId, "ep-project");
+    assert.equal(next.seedanceModel, "doubao-seedance-2-0-260128");
+    assert.equal(next.seedanceEndpointId, "ep-seedance");
+});
+
+test("normalizes legacy pixel sizes into aspect ratios", () => {
+    assert.equal(normalizeCanvasProjectPresetRatio("3840x2160"), "16:9");
+    assert.equal(normalizeCanvasProjectPresetRatio("2160x3840"), "9:16");
+    assert.equal(normalizeCanvasProjectPresetRatio("1024x1024"), "1:1");
+});
+
+test("builds model options without exposing Seedance endpoint ids", () => {
+    assert.deepEqual(canvasProjectPresetModelOptions(config, "video", "volcengine-ark"), ["doubao-seedance-2-0-260128", "seedance-model"]);
+    assert.deepEqual(canvasProjectPresetModelOptions(config, "image", "openai"), ["image-model", "gpt-image-2"]);
 });
 
 test("summarizes and serializes project preset", () => {

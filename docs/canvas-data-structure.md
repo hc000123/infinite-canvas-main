@@ -7,6 +7,7 @@
 当前画布项目主要保存在浏览器本地：
 
 - 画布项目 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:canvas_store`。
+- 创作项目 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:creative_project_store`。
 - 我的素材 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:asset_store`。
 - 项目设定库 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:production_bible_store`。
 - 项目剧本 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:script_store`。
@@ -17,6 +18,35 @@
 
 画布 JSON 不直接长期保存大体积 base64 图片或视频。图片节点、视频节点、助手图片和素材媒体只保存展示 URL、`storageKey` 和元信息，真实 Blob 通过 `storageKey` 读取。
 
+## 创作项目结构
+
+创作项目是 M5.3.5 新增的一级工作台入口，用于把多个画布、剧本、分镜、设定库、素材和队列收束到同一个项目上下文中。本地保存为 `CreativeProject`：
+
+```ts
+type CreativeProject = {
+  id: string;
+  title: string;
+  description: string;
+  status: "active" | "archived";
+  preset?: CanvasProjectPreset;
+  coverAssetId?: string;
+  canvasIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+```
+
+字段说明：
+
+- `id`：创作项目 ID，当前前端生成。
+- `title` / `description`：项目名称和说明。
+- `status`：项目状态，第一版支持活跃和归档；删除项目只删除项目入口和关联关系，不删除画布、素材、剧本或分镜数据。
+- `preset`：项目默认创作预设。从项目详情新建画布时会传递给 `CanvasProject.preset`。
+- `coverAssetId`：预留项目封面素材 ID，第一版暂不强制使用。
+- `canvasIds`：项目关联的画布 ID 列表。画布自身也会写入可选 `projectId`，两侧任一处存在关联都可被识别。
+
+旧画布没有 `projectId` 时仍可直接从 `/canvas/:id` 打开；项目工作台会展示“未归档项目”提示，项目详情提供轻量绑定入口，可把旧画布绑定到某个创作项目。
+
 ## 画布项目结构
 
 每个画布项目是一个 `CanvasProject`：
@@ -24,6 +54,7 @@
 ```ts
 type CanvasProject = {
   id: string;
+  projectId?: string;
   title: string;
   createdAt: string;
   updatedAt: string;
@@ -52,6 +83,7 @@ type CanvasProjectPreset = {
 字段说明：
 
 - `id`：画布项目 ID，当前前端生成。
+- `projectId`：可选的创作项目 ID。新建画布会写入该字段；旧画布没有该字段时继续按画布自身 ID 作为剧本、分镜、设定库和队列的兼容项目上下文。
 - `title`：画布名称。
 - `createdAt` / `updatedAt`：ISO 字符串。
 - `nodes`：画布节点列表。

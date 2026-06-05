@@ -162,6 +162,7 @@ export type AdminPromptQuery = {
     keyword?: string;
     category?: string;
     tag?: string[];
+    nodeGroup?: string;
     type?: string;
     scenario?: string;
     favorite?: boolean;

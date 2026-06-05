@@ -69,12 +69,20 @@ func TestListPromptsFiltersPromptMetadata(t *testing.T) {
 		t.Fatalf("items=%#v total=%d, want only video-fav", items, total)
 	}
 
-	types, scenarios, err := ListPromptMetadataOptions(model.Query{Category: "system"})
+	items, total, err = ListPrompts(model.Query{NodeGroup: "video"})
+	if err != nil {
+		t.Fatalf("ListPrompts returned error: %v", err)
+	}
+	if total != 1 || len(items) != 1 || items[0].ID != "video-fav" {
+		t.Fatalf("items=%#v total=%d, want video node group to include legacy video template", items, total)
+	}
+
+	nodeGroups, types, scenarios, err := ListPromptMetadataOptions(model.Query{Category: "system"})
 	if err != nil {
 		t.Fatalf("ListPromptMetadataOptions returned error: %v", err)
 	}
-	if len(types) != 2 || len(scenarios) != 2 {
-		t.Fatalf("types=%v scenarios=%v, want metadata options without legacy prompt", types, scenarios)
+	if len(nodeGroups) != 0 || len(types) != 2 || len(scenarios) != 2 {
+		t.Fatalf("nodeGroups=%v types=%v scenarios=%v, want metadata options without legacy prompt", nodeGroups, types, scenarios)
 	}
 }
 

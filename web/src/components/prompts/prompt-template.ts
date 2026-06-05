@@ -1,11 +1,17 @@
-import type { Prompt, PromptMetadata, PromptTemplateType, PromptVariable } from "../../services/api/prompts";
+import type { Prompt, PromptMetadata, PromptNodeGroup, PromptTemplateType, PromptVariable } from "../../services/api/prompts";
 import type { ProductionBibleItem } from "../../app/(user)/canvas/utils/production-bible";
 
+export const promptNodeGroupOptions: Array<{ label: string; value: PromptNodeGroup }> = [
+    { label: "文本节点", value: "text" },
+    { label: "图片节点", value: "image" },
+    { label: "视频节点", value: "video" },
+];
+
 export const promptTypeOptions: Array<{ label: string; value: PromptTemplateType }> = [
-    { label: "素材", value: "asset" },
-    { label: "图片", value: "image" },
-    { label: "视频", value: "video" },
-    { label: "宫格", value: "grid" },
+    { label: "素材片段", value: "asset" },
+    { label: "图片模板", value: "image" },
+    { label: "视频模板", value: "video" },
+    { label: "宫格模板", value: "grid" },
     { label: "正向词", value: "positive" },
     { label: "负向词", value: "negative" },
     { label: "工作流", value: "workflow" },
@@ -16,6 +22,23 @@ export const promptOutputKindOptions = ["text", "image", "video", "asset", "work
 
 export function promptTypeLabel(type?: string) {
     return promptTypeOptions.find((item) => item.value === type)?.label || type || "普通";
+}
+
+export function promptNodeGroupLabel(nodeGroup?: string) {
+    return promptNodeGroupOptions.find((item) => item.value === nodeGroup)?.label || nodeGroup || "未分组";
+}
+
+export function promptTypesForNodeGroup(nodeGroup?: string) {
+    if (nodeGroup === "image") return ["image", "asset", "grid", "positive", "negative", "workflow"];
+    if (nodeGroup === "video") return ["video", "positive", "negative", "workflow", "asset"];
+    if (nodeGroup === "text") return ["workflow", "asset", "positive", "negative"];
+    return promptTypeOptions.map((item) => item.value);
+}
+
+export function defaultPromptTypeForNodeGroup(nodeGroup?: string) {
+    if (nodeGroup === "video") return "video";
+    if (nodeGroup === "image") return "image";
+    return "workflow";
 }
 
 export function inputOutputKindLabel(kind?: string) {
@@ -31,6 +54,7 @@ export function inputOutputKindLabel(kind?: string) {
 
 export function normalizePromptMetadata(metadata?: PromptMetadata): PromptMetadata {
     return {
+        nodeGroup: metadata?.nodeGroup || "",
         type: metadata?.type || "",
         scenario: metadata?.scenario || "",
         provider: metadata?.provider || "",
@@ -105,6 +129,7 @@ export function promptSearchText(prompt: Prompt) {
         prompt.prompt,
         prompt.preview,
         ...(prompt.tags || []),
+        metadata.nodeGroup,
         metadata.type,
         metadata.scenario,
         metadata.provider,

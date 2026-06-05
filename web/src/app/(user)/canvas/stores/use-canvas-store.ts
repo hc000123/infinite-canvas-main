@@ -9,6 +9,7 @@ import type { CanvasProjectPreset } from "../utils/canvas-project-preset";
 
 export type CanvasProject = {
     id: string;
+    projectId?: string;
     title: string;
     createdAt: string;
     updatedAt: string;
@@ -25,12 +26,12 @@ export type CanvasProject = {
 type CanvasStore = {
     hydrated: boolean;
     projects: CanvasProject[];
-    createProject: (title?: string, preset?: CanvasProjectPreset) => string;
+    createProject: (title?: string, preset?: CanvasProjectPreset, options?: { projectId?: string }) => string;
     importProject: (project: Partial<CanvasProject>) => string;
     openProject: (id: string) => CanvasProject | null;
     renameProject: (id: string, title: string) => void;
     deleteProjects: (ids: string[]) => void;
-    updateProject: (id: string, patch: Partial<Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport" | "preset">>) => void;
+    updateProject: (id: string, patch: Partial<Pick<CanvasProject, "projectId" | "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport" | "preset">>) => void;
 };
 
 const initialViewport: ViewportTransform = { x: 0, y: 0, k: 1 };
@@ -65,11 +66,12 @@ export const useCanvasStore = create<CanvasStore>()(
         (set, get) => ({
             hydrated: false,
             projects: [],
-            createProject: (title = "未命名画布", preset) => {
+            createProject: (title = "未命名画布", preset, options) => {
                 const now = new Date().toISOString();
                 const id = nanoid();
                 const project: CanvasProject = {
                     id,
+                    projectId: options?.projectId,
                     title,
                     createdAt: now,
                     updatedAt: now,
@@ -89,6 +91,7 @@ export const useCanvasStore = create<CanvasStore>()(
                 const now = new Date().toISOString();
                 const project: CanvasProject = {
                     id: nanoid(),
+                    projectId: source.projectId,
                     title: source.title || "导入画布",
                     createdAt: source.createdAt || now,
                     updatedAt: now,

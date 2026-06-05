@@ -11,6 +11,7 @@ export function usePromptList({
     keyword,
     tags,
     category,
+    nodeGroup = ALL_PROMPTS_OPTION,
     type = ALL_PROMPTS_OPTION,
     scenario = ALL_PROMPTS_OPTION,
     favorite = false,
@@ -19,14 +20,15 @@ export function usePromptList({
     keyword: string;
     tags: string[];
     category: string;
+    nodeGroup?: string;
     type?: string;
     scenario?: string;
     favorite?: boolean;
     enabled?: boolean;
 }) {
     const query = useInfiniteQuery({
-        queryKey: ["prompts", keyword, tags, category, type, scenario, favorite],
-        queryFn: ({ pageParam }) => fetchPrompts({ keyword, tag: tags, category, type, scenario, favorite, page: pageParam, pageSize: PROMPT_PAGE_SIZE }),
+        queryKey: ["prompts", keyword, tags, category, nodeGroup, type, scenario, favorite],
+        queryFn: ({ pageParam }) => fetchPrompts({ keyword, tag: tags, category, nodeGroup, type, scenario, favorite, page: pageParam, pageSize: PROMPT_PAGE_SIZE }),
         initialPageParam: 1,
         getNextPageParam: (lastPage, pages) => (pages.reduce((total, page) => total + page.items.length, 0) < lastPage.total ? pages.length + 1 : undefined),
         enabled,
@@ -37,6 +39,7 @@ export function usePromptList({
         items: useMemo(() => query.data?.pages.flatMap((page) => page.items) || [], [query.data?.pages]),
         tags: useMemo(() => [ALL_PROMPTS_OPTION, ...(firstPage?.tags || [])], [firstPage?.tags]),
         categories: useMemo(() => [ALL_PROMPTS_OPTION, ...(firstPage?.categories || [])], [firstPage?.categories]),
+        nodeGroups: useMemo(() => [ALL_PROMPTS_OPTION, ...(firstPage?.nodeGroups || [])], [firstPage?.nodeGroups]),
         types: useMemo(() => [ALL_PROMPTS_OPTION, ...(firstPage?.types || [])], [firstPage?.types]),
         scenarios: useMemo(() => [ALL_PROMPTS_OPTION, ...(firstPage?.scenarios || [])], [firstPage?.scenarios]),
         total: firstPage?.total || 0,
