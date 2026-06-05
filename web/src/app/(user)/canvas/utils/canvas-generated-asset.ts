@@ -70,8 +70,8 @@ export function buildGeneratedVideoAsset(node: CanvasNodeData, context: CanvasGe
             prompt: context.prompt,
             generation: {
                 ...buildGeneratedAssetMetadata(node, context, videoActionType(metadata)),
-                storyboardGroupId: null,
-                storyboardShotId: null,
+                storyboardGroupId: metadata.storyboardGroupId || null,
+                storyboardShotId: metadata.storyboardShotId || null,
                 taskId: metadata.taskId,
             },
             sourceRefs: [node.id],

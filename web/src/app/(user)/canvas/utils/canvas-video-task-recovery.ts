@@ -1,4 +1,4 @@
-import type { CanvasNodeData } from "../types.ts";
+import type { CanvasNodeData, CanvasNodeMetadata } from "../types.ts";
 
 export function resetInterruptedGeneration(nodes: CanvasNodeData[]) {
     return nodes.map((node) => {
@@ -16,7 +16,15 @@ export function resetInterruptedGeneration(nodes: CanvasNodeData[]) {
 }
 
 export function recoverableVideoTaskNodes(nodes: CanvasNodeData[]) {
-    return nodes.filter((node) => node.type === "video" && Boolean(node.metadata?.taskId) && node.metadata?.status === "loading");
+    return nodes.filter(isRecoverableVideoTaskNode);
+}
+
+export function isRecoverableVideoTaskNode(node: CanvasNodeData) {
+    const metadata = node.metadata;
+    if (node.type !== "video" || !metadata?.taskId || metadata.content) return false;
+    const taskStatus = normalizedTaskStatus(metadata);
+    if (taskStatus === "failed" || taskStatus === "cancelled") return false;
+    return metadata.status === "loading" || metadata.status === "error";
 }
 
 export function recoveredVideoTaskNodeStatus(taskStatus?: string) {
@@ -24,4 +32,8 @@ export function recoveredVideoTaskNodeStatus(taskStatus?: string) {
     if (status === "failed" || status === "cancelled" || status === "canceled") return "error";
     if (status === "succeeded" || status === "completed" || status === "success") return "success";
     return "loading";
+}
+
+function normalizedTaskStatus(metadata: CanvasNodeMetadata) {
+    return (metadata.taskStatus || metadata.rawTaskStatus || "").toLowerCase();
 }

@@ -9,6 +9,9 @@
 - 画布项目 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:canvas_store`。
 - 我的素材 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:asset_store`。
 - 项目设定库 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:production_bible_store`。
+- 项目剧本 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:script_store`。
+- 项目分镜 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:storyboard_store`。
+- 本地生成队列 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:generation_queue_store`。
 - 图片 Blob：单独存到 `localForage` 实例，数据库名 `infinite-canvas`，storeName `image_files`。
 - 视频等媒体 Blob：单独存到 `localForage` 实例，数据库名 `infinite-canvas`，storeName `media_files`。
 
@@ -95,6 +98,163 @@ type ProductionBibleItem = {
 
 生成素材的 `metadata.generation.productionBibleRefs` 已预留为空数组，后续接入生成流程时可记录使用过的设定项 ID 和角色。
 
+## 项目剧本结构
+
+项目剧本独立于画布节点保存，用于在分镜管理之前沉淀故事大纲、分集和场次。本地 store 保存三类数据：
+
+```ts
+type ScriptProject = {
+  projectId: string;
+  outline: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type ScriptEpisode = {
+  id: string;
+  projectId: string;
+  order: number;
+  title: string;
+  summary: string;
+  hook: string;
+  turningPoint: string;
+  cliffhanger: string;
+  sceneIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+type ScriptScene = {
+  id: string;
+  episodeId: string;
+  order: number;
+  location: string;
+  characterIds: string[];
+  sceneSettingId?: string;
+  beat: string;
+  dialogue: string;
+  emotion: string;
+  durationHint: string;
+  storyboardGroupId?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+```
+
+字段说明：
+
+- `ScriptProject.outline`：当前画布项目的故事大纲，不直接参与生成请求。
+- `ScriptEpisode.sceneIds`：分集下场次 ID 列表；场次详情仍以 `ScriptScene.episodeId` 关联为准。
+- `ScriptScene.characterIds`：引用 M5.4 设定库中的角色设定 ID。
+- `ScriptScene.sceneSettingId`：可选引用 M5.4 设定库中的场景设定 ID；`location` 保存当前可读地点名。
+- `ScriptScene.storyboardGroupId`：关联 M5.7 分镜组。用户从剧本场次或分集进入分镜管理时，如果该字段已有值则打开已有分镜组；没有值则创建分镜组并回写。
+
+## 项目分镜结构
+
+项目分镜独立保存，用于把剧本场次、提示词模板、设定库和素材引用组织成可加入画布的镜头组。本地 store 保存分镜组和分镜条目：
+
+```ts
+type StoryboardGroup = {
+  id: string;
+  projectId: string;
+  order: number;
+  title: string;
+  description: string;
+  preset: Record<string, unknown>;
+  shotIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+type StoryboardShot = {
+  id: string;
+  groupId: string;
+  order: number;
+  title: string;
+  description: string;
+  prompt: string;
+  effectivePrompt: string;
+  assetRefs: Array<{
+    assetId: string;
+    kind: "image" | "video" | "audio";
+    role: string;
+  }>;
+  nodeRefs: Array<{
+    nodeId: string;
+    role: string;
+  }>;
+  resultAssetIds: string[];
+  primaryAssetId?: string;
+  lastResultNodeId?: string;
+  lastTaskId?: string;
+  errorMessage?: string;
+  productionBibleRefs?: Array<{
+    itemId: string;
+    kind: "character" | "scene" | "prop";
+  }>;
+  status:
+    | "draft"
+    | "ready"
+    | "in_canvas"
+    | "generating"
+    | "review"
+    | "done"
+    | "error";
+  createdAt: string;
+  updatedAt: string;
+};
+```
+
+字段说明：
+
+- `StoryboardGroup.projectId`：所属画布项目 ID。
+- `StoryboardGroup.preset`：创建分镜组时可记录项目预设快照，第一版只保存，不强制参与生成请求。
+- `StoryboardShot.assetRefs`：引用“我的素材”的图片、视频或音频，只保存素材 ID、类型和在本镜头中的角色，不复制素材内容。
+- `StoryboardShot.productionBibleRefs`：引用 M5.4 设定库中的角色、场景或道具设定。
+- `StoryboardShot.nodeRefs`：执行“打组加入画布”后记录创建出来的提示词节点、参考素材节点和视频配置节点 ID。
+- `StoryboardShot.resultAssetIds` / `primaryAssetId`：记录已生成并自动入库到“我的素材”的视频素材 ID。首次成功生成时自动设置主版本；同一素材 ID 不重复写入。
+- `StoryboardShot.lastResultNodeId` / `lastTaskId`：当暂时拿不到素材 ID 时，至少保留画布视频节点和上游任务 ID，方便后续补齐。
+- `StoryboardShot.errorMessage`：视频生成失败时保存失败原因；`status` 会进入 `error`，页面中显示失败提示。
+
+## 本地生成队列结构
+
+生成队列独立于分镜和画布保存，第一版只从分镜组创建视频生成队列。队列执行仍复用画布单个视频配置节点的生成逻辑，不直接调用后端或绕过用户确认。
+
+```ts
+type GenerationQueueItem = {
+  id: string;
+  projectId: string;
+  storyboardGroupId: string;
+  storyboardShotId: string;
+  nodeId: string;
+  kind: "video" | "image" | "chat";
+  status:
+    | "queued"
+    | "running"
+    | "succeeded"
+    | "failed"
+    | "cancelled"
+    | "paused";
+  priority: number;
+  estimatedCredits: number;
+  estimatedDurationSeconds?: number;
+  taskId?: string;
+  resultAssetId?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+```
+
+字段说明：
+
+- `storyboardGroupId` / `storyboardShotId`：队列项所属分镜组和分镜条目。
+- `nodeId`：M5.7 “打组加入画布”创建的视频生成配置节点 ID。执行队列时会调用该节点的现有视频生成流程。
+- `kind`：当前只实际支持 `video`，`image` 和 `chat` 作为后续扩展预留。
+- `status`：队列项状态。暂停只阻止继续启动未运行的项，不强制中断已经提交到上游的视频任务。
+- `estimatedCredits` / `estimatedDurationSeconds`：第一版按视频时长做轻量估算，用于开始前展示预算，不代表最终扣费凭证。
+- `taskId` / `resultAssetId` / `error`：执行后记录上游任务、生成后自动入库素材和失败原因。
+
 ## 节点结构
 
 每个节点是一个 `CanvasNodeData`：
@@ -157,6 +317,11 @@ type CanvasNodeMetadata = {
     role: string;
     index?: number;
   }>;
+  storyboardGroupId?: string;
+  storyboardShotId?: string;
+  storyboardRole?: string;
+  storyboardAssetRole?: string;
+  sourceAssetId?: string;
   taskId?: string;
   taskStatus?: string;
   rawTaskStatus?: string;
@@ -191,6 +356,7 @@ type CanvasNodeMetadata = {
 - 文本节点：`content` 保存文本内容；`fontSize` 保存字体大小；`prompt/status/errorDetails` 保存生成状态。
 - 生成配置节点：`generationMode/model/size/count/inputOrder` 保存生成配置；`generationMode` 可选择文本、图片或视频；上游输入通过 `connections` 计算。
 - 图片组节点：根节点用 `isBatchRoot/batchChildIds/primaryImageId/imageBatchExpanded` 记录批量生成结果；子图节点用 `batchRootId` 指回根节点。
+- 分镜节点：由“打组加入画布”创建的文本、素材和视频配置节点会写入 `storyboardGroupId/storyboardShotId/storyboardRole`；参考素材节点额外写入 `sourceAssetId/storyboardAssetRole`，用于后续结果回流和追溯。
 
 ## 连线结构
 

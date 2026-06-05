@@ -16,8 +16,8 @@ export type AssetPickerTab = "my-assets" | "library";
 
 export type InsertAssetPayload =
     | { kind: "text"; content: string; title: string }
-    | { kind: "image"; dataUrl: string; title: string; storageKey?: string; volcengineAsset?: CanvasNodeMetadata["volcengineAsset"] }
-    | { kind: "video"; url: string; title: string; storageKey?: string; width?: number; height?: number }
+    | { kind: "image"; dataUrl: string; title: string; storageKey?: string; sourceAssetId?: string; volcengineAsset?: CanvasNodeMetadata["volcengineAsset"] }
+    | { kind: "video"; url: string; title: string; storageKey?: string; sourceAssetId?: string; width?: number; height?: number; volcengineAsset?: CanvasNodeMetadata["volcengineAsset"] }
     | { kind: "audio"; url: string; title: string; storageKey?: string; bytes?: number; mimeType?: string };
 
 type Props = {
@@ -85,7 +85,7 @@ function LibraryTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => v
             } else if (asset.type === "video") {
                 const blob = await remoteAssetBlob(asset.url);
                 const media = await uploadMediaFile(blob, "video");
-                onInsert({ kind: "video", url: media.url, storageKey: media.storageKey, title: asset.title, width: media.width, height: media.height });
+                onInsert({ kind: "video", url: media.url, storageKey: media.storageKey, title: asset.title, width: media.width, height: media.height, volcengineAsset: assetLibraryVolcengineMetadata(asset) });
             } else if (asset.type === "audio") {
                 const blob = await remoteAssetBlob(asset.url);
                 const media = await uploadMediaFile(blob, "audio");
@@ -238,9 +238,9 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
         if (asset.kind === "text") {
             onInsert({ kind: "text", content: asset.data.content, title: asset.title });
         } else if (asset.kind === "image") {
-            onInsert({ kind: "image", dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, title: asset.title, volcengineAsset: asset.metadata?.volcengineAsset });
+            onInsert({ kind: "image", dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, sourceAssetId: asset.id, title: asset.title, volcengineAsset: asset.metadata?.volcengineAsset });
         } else if (asset.kind === "video") {
-            onInsert({ kind: "video", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, width: asset.data.width, height: asset.data.height });
+            onInsert({ kind: "video", url: asset.data.url, storageKey: asset.data.storageKey, sourceAssetId: asset.id, title: asset.title, width: asset.data.width, height: asset.data.height, volcengineAsset: asset.metadata?.volcengineAsset });
         } else if (asset.kind === "audio") {
             onInsert({ kind: "audio", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, bytes: asset.data.bytes, mimeType: asset.data.mimeType });
         }

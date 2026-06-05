@@ -6,7 +6,7 @@ import { resolveMediaUrl } from "@/services/file-storage";
 import { shouldAttachLocalVolcengineCredentials } from "@/services/api/ai-channel-boundary";
 import { AI_REQUEST_TIMEOUT_MS, AI_VIDEO_CONTENT_TIMEOUT_MS, AI_VIDEO_MAX_POLL_ATTEMPTS, AI_VIDEO_POLL_INTERVAL_MS, aiApiUrl, aiHeaders, delay, normalizeAiError, refreshRemoteUser } from "@/services/api/ai-provider";
 import { isRemoteOrInlineMediaUrl, normalizeSeedanceRatio, normalizeSeedanceResolution, normalizeSeedanceSeed, normalizeVideoResolution, normalizeVideoSeconds, normalizeVideoSize } from "@/services/api/video-normalizers";
-import { buildSeedanceVideoTaskPayload, seedanceAssetURIFromImageReference, type SeedanceImageReferenceInput, type SeedanceOrderedReferenceInput } from "@/services/api/video-reference";
+import { buildSeedanceVideoTaskPayload, seedanceAssetURIFromImageReference, seedanceAssetURIFromVideoReference, type SeedanceImageReferenceInput, type SeedanceOrderedReferenceInput } from "@/services/api/video-reference";
 import { type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
@@ -33,6 +33,22 @@ export type NormalizedVideoTask = {
     generateAudio?: boolean;
     watermark?: boolean;
 };
+
+export class RecoverableVideoTaskError extends Error {
+    task: NormalizedVideoTask;
+    cause?: unknown;
+
+    constructor(message: string, task: NormalizedVideoTask, cause?: unknown) {
+        super(message);
+        this.name = "RecoverableVideoTaskError";
+        this.task = task;
+        this.cause = cause;
+    }
+}
+
+export function isRecoverableVideoTaskError(error: unknown): error is RecoverableVideoTaskError {
+    return error instanceof RecoverableVideoTaskError;
+}
 
 type VideoGenerationOptions = {
     onStatus?: (task: NormalizedVideoTask) => void;
@@ -135,11 +151,15 @@ async function requestOpenAICompatibleVideoGeneration(config: AiConfig, prompt: 
     const normalizedReferences = normalizeVideoGenerationReferences(references);
     try {
         const task = await pollVideoTask(await createVideoTask(config, prompt, normalizedReferences, model), (taskId) => queryVideoTask(config, taskId, model), options);
-        const blob = await fetchVideoContent(config, model, task);
+        const blob = await fetchVideoContent(config, model, task).catch((error) => {
+            if (isTransientVideoRequestError(error)) throw new RecoverableVideoTaskError("网络中断，视频已生成，恢复连接后会继续回填。", task, error);
+            throw error;
+        });
         await assertVideoBlob(blob);
         refreshRemoteUser(config);
         return blob;
     } catch (error) {
+        if (isRecoverableVideoTaskError(error)) throw error;
         throw new Error(normalizeAiError(error, "视频生成失败"));
     }
 }
@@ -182,10 +202,21 @@ async function pollVideoTask(initialTask: NormalizedVideoTask, queryTask: (taskI
         if (task.status === "failed" || task.status === "cancelled") throw new Error(task.errorMessage || "视频生成失败");
         if (attempts >= AI_VIDEO_MAX_POLL_ATTEMPTS) throw new Error("视频生成超时，请稍后重试");
         await delay(AI_VIDEO_POLL_INTERVAL_MS);
-        task = await queryTask(task.id);
+        try {
+            task = await queryTask(task.id);
+        } catch (error) {
+            if (isTransientVideoRequestError(error)) throw new RecoverableVideoTaskError("网络中断，视频任务仍在生成，恢复连接后会继续同步。", task, error);
+            throw error;
+        }
         options.onStatus?.(task);
     }
     return task;
+}
+
+function isTransientVideoRequestError(error: unknown) {
+    if (!axios.isAxiosError(error)) return false;
+    if (!error.response) return true;
+    return [408, 429, 500, 502, 503, 504].includes(error.response.status || 0);
 }
 
 export async function buildVideoPayload(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string) {
@@ -283,6 +314,8 @@ async function seedanceOrderedReferenceInput(input: VideoGenerationReferenceInpu
 }
 
 async function videoToDataUrl(video: ReferenceVideo) {
+    const assetUri = seedanceAssetURIFromVideoReference(video);
+    if (assetUri) return assetUri;
     const url = video.url || (await resolveMediaUrl(video.storageKey, ""));
     if (!url || isRemoteOrInlineMediaUrl(url)) return url;
     return blobToDataUrl(await (await fetch(url)).blob());

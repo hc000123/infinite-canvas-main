@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/basketikun/infinite-canvas/model"
 	"gorm.io/gorm"
@@ -83,6 +84,39 @@ func ListPromptTags(q model.Query) ([]string, error) {
 	return promptTagsFromItems(items), nil
 }
 
+// ListPromptMetadataOptions 返回当前查询条件下可用的模板类型和场景。
+func ListPromptMetadataOptions(q model.Query) ([]string, []string, error) {
+	db, err := DB()
+	if err != nil {
+		return nil, nil, err
+	}
+	q.Normalize()
+	q.Type = ""
+	q.Scenario = ""
+	q.Favorite = ""
+	tx := applyPromptFilters(db.Model(&model.Prompt{}), q)
+
+	var items []model.Prompt
+	if err := tx.Select("metadata").Find(&items).Error; err != nil {
+		return nil, nil, err
+	}
+	types := []string{}
+	scenarios := []string{}
+	seenTypes := map[string]bool{}
+	seenScenarios := map[string]bool{}
+	for _, item := range items {
+		if value, ok := promptMetadataString(item.Metadata, "type"); ok && !seenTypes[value] {
+			seenTypes[value] = true
+			types = append(types, value)
+		}
+		if value, ok := promptMetadataString(item.Metadata, "scenario"); ok && !seenScenarios[value] {
+			seenScenarios[value] = true
+			scenarios = append(scenarios, value)
+		}
+	}
+	return types, scenarios, nil
+}
+
 // SavePrompt 保存提示词，并在更新时保留原创建时间。
 func SavePrompt(item model.Prompt) (model.Prompt, error) {
 	db, err := DB()
@@ -141,12 +175,22 @@ func ReplacePromptCategory(category model.PromptCategory, items []model.Prompt) 
 func applyPromptFilters(tx *gorm.DB, q model.Query) *gorm.DB {
 	if q.Keyword != "" {
 		like := "%" + q.Keyword + "%"
-		tx = tx.Where("title LIKE ? OR prompt LIKE ?", like, like)
+		tx = tx.Where("title LIKE ? OR prompt LIKE ? OR preview LIKE ?", like, like, like)
 	}
 	if isActivePromptOption(q.Category) {
 		tx = tx.Where("category = ?", q.Category)
 	}
-	return applyPromptTagsFilter(tx, q.Tags)
+	tx = applyPromptTagsFilter(tx, q.Tags)
+	if isActivePromptOption(q.Type) {
+		tx = tx.Where(promptJSONMetadataValue(tx, "type")+" = ?", q.Type)
+	}
+	if isActivePromptOption(q.Scenario) {
+		tx = tx.Where(promptJSONMetadataValue(tx, "scenario")+" = ?", q.Scenario)
+	}
+	if q.Favorite == "true" || q.Favorite == "1" {
+		tx = tx.Where(promptJSONMetadataBool(tx, "favorite"))
+	}
+	return tx
 }
 
 // findPrompt 根据 ID 查询提示词。
@@ -195,6 +239,33 @@ func promptJSONTagsContains(tx *gorm.DB) string {
 	default:
 		return "EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)"
 	}
+}
+
+func promptJSONMetadataValue(tx *gorm.DB, key string) string {
+	switch tx.Dialector.Name() {
+	case "mysql":
+		return fmt.Sprintf("JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.%s'))", key)
+	case "postgres":
+		return fmt.Sprintf("metadata::jsonb ->> '%s'", key)
+	default:
+		return fmt.Sprintf("json_extract(metadata, '$.%s')", key)
+	}
+}
+
+func promptJSONMetadataBool(tx *gorm.DB, key string) string {
+	switch tx.Dialector.Name() {
+	case "mysql":
+		return fmt.Sprintf("JSON_EXTRACT(metadata, '$.%s') = true", key)
+	case "postgres":
+		return fmt.Sprintf("(metadata::jsonb ->> '%s')::boolean = true", key)
+	default:
+		return fmt.Sprintf("json_extract(metadata, '$.%s') = 1", key)
+	}
+}
+
+func promptMetadataString(metadata map[string]any, key string) (string, bool) {
+	value, ok := metadata[key].(string)
+	return value, ok && value != ""
 }
 
 // isActivePromptOption 判断提示词筛选项有效状态。

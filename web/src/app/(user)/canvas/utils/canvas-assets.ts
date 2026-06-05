@@ -56,7 +56,7 @@ export function canvasNodeToAsset(node: CanvasNodeData): CanvasAssetPayload | nu
                 bytes: node.metadata.bytes || 0,
                 mimeType: node.metadata.mimeType || "video/mp4",
             },
-            metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt },
+            metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt, volcengineAsset: node.metadata?.volcengineAsset },
         };
     }
 

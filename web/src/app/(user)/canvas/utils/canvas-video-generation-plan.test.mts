@@ -55,6 +55,38 @@ test("requires a source video for Ark edit and extend tasks", () => {
     assert.equal(plan.sourceVideoRequiredError, "请先连接一个上游视频节点作为源视频");
 });
 
+test("reports pending image review before sending Ark video generation", () => {
+    const plan = buildVideoGenerationPlan({
+        config: baseConfig,
+        sourceNode: { ...sourceVideoNode, type: "config", metadata: {} },
+        sourceReferences: {
+            images: [{ id: "image-pending", name: "角色.png", type: "image/png", dataUrl: "blob:image", volcengineAssetId: "asset-pending", volcengineAssetStatus: "Processing" }],
+            videos: [],
+            audios: [],
+        },
+        contextReferences: { images: [], videos: [], audios: [] },
+    });
+
+    assert.match(plan.imageReviewRequiredError, /角色\.png/);
+    assert.match(plan.imageReviewRequiredError, /Processing/);
+});
+
+test("reports pending video review before sending Ark video generation", () => {
+    const plan = buildVideoGenerationPlan({
+        config: baseConfig,
+        sourceNode: { ...sourceVideoNode, type: "config", metadata: {} },
+        sourceReferences: {
+            images: [],
+            videos: [{ id: "video-pending", name: "人物参考.mp4", type: "video/mp4", url: "blob:video", volcengineAssetId: "asset-pending", volcengineAssetStatus: "Processing" }],
+            audios: [],
+        },
+        contextReferences: { images: [], videos: [], audios: [] },
+    });
+
+    assert.match(plan.imageReviewRequiredError, /人物参考\.mp4/);
+    assert.match(plan.imageReviewRequiredError, /Processing/);
+});
+
 test("plans Ark edit tasks with an upstream context video as source", () => {
     const plan = buildVideoGenerationPlan({
         config: { ...baseConfig, videoTaskMode: "edit" },

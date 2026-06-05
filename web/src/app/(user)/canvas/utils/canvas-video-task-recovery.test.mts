@@ -19,16 +19,20 @@ test("keeps loading video nodes with task id resumable after returning to canvas
     assert.equal(restored[2].metadata?.status, "error");
 });
 
-test("finds only loading video task nodes for automatic recovery refresh", () => {
+test("finds unfinished video task nodes for automatic recovery refresh", () => {
     const nodes = [
         { id: "video-task", type: "video", title: "生成中视频", position: { x: 0, y: 0 }, width: 420, height: 236, metadata: { status: "loading", taskId: "task-1", taskStatus: "running" } },
+        { id: "video-interrupted", type: "video", title: "断网视频", position: { x: 0, y: 0 }, width: 420, height: 236, metadata: { status: "error", taskId: "task-interrupted", taskStatus: "running" } },
+        { id: "video-caching", type: "video", title: "待回填视频", position: { x: 0, y: 0 }, width: 420, height: 236, metadata: { status: "error", taskId: "task-caching", taskStatus: "succeeded", videoUrl: "https://example.com/video.mp4" } },
+        { id: "video-failed", type: "video", title: "失败视频", position: { x: 0, y: 0 }, width: 420, height: 236, metadata: { status: "error", taskId: "task-failed", taskStatus: "failed" } },
+        { id: "video-has-content", type: "video", title: "已有视频", position: { x: 0, y: 0 }, width: 420, height: 236, metadata: { status: "error", taskId: "task-content", taskStatus: "running", content: "blob:video" } },
         { id: "video-done", type: "video", title: "完成视频", position: { x: 0, y: 0 }, width: 420, height: 236, metadata: { status: "success", taskId: "task-2" } },
         { id: "image-task", type: "image", title: "图片", position: { x: 0, y: 0 }, width: 340, height: 240, metadata: { status: "loading", taskId: "task-3" } },
     ];
 
     assert.deepEqual(
         recoverableVideoTaskNodes(nodes).map((node) => node.id),
-        ["video-task"],
+        ["video-task", "video-interrupted", "video-caching"],
     );
 });
 

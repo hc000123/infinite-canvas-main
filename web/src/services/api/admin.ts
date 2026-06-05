@@ -162,6 +162,9 @@ export type AdminPromptQuery = {
     keyword?: string;
     category?: string;
     tag?: string[];
+    type?: string;
+    scenario?: string;
+    favorite?: boolean;
     page?: number;
     pageSize?: number;
 };
@@ -204,7 +207,7 @@ export type AdminAssetListResponse = {
 };
 
 export async function fetchAdminPrompts(token: string, query: AdminPromptQuery = {}) {
-    return apiGet<PromptListResponse>("/api/admin/prompts", compactApiParams(query), token);
+    return apiGet<PromptListResponse>("/api/admin/prompts", compactApiParams({ ...query, favorite: query.favorite ? "true" : undefined }), token);
 }
 
 export async function saveAdminPrompt(token: string, prompt: Partial<Prompt>) {

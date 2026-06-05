@@ -67,6 +67,12 @@ export function seedanceAssetURIFromImageReference(image: { assetUri?: string; u
     return "";
 }
 
+export function seedanceAssetURIFromVideoReference(video: { assetUri?: string; url?: string }) {
+    if (video.assetUri) return video.assetUri;
+    if (video.url?.startsWith("asset://")) return video.url;
+    return "";
+}
+
 export function defaultSeedanceImageRole(index: number, mode?: string): SeedanceImageRole {
     const imageIndex = Math.max(0, Math.floor(index) || 0);
     const roleMode = normalizeSeedanceImageRoleMode(mode);

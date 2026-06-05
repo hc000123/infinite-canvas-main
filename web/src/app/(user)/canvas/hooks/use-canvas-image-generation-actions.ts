@@ -26,7 +26,7 @@ type UseCanvasImageGenerationActionsOptions = {
     projectId: string;
     projectTitle: string;
     projectPreset?: CanvasProjectPreset;
-    archiveGeneratedAsset: (asset: AssetWriteInput) => Promise<void>;
+    archiveGeneratedAsset: (asset: AssetWriteInput) => Promise<unknown>;
 };
 
 type GenerateImageNodeInput = {

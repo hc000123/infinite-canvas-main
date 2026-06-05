@@ -1,0 +1,676 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { App, Button, Card, Drawer, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Tag } from "antd";
+import { ArrowDown, ArrowUp, Clapperboard, Film, Pencil, Play, Plus, RotateCcw, Trash2 } from "lucide-react";
+
+import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
+import { useAssetStore, type Asset, type AssetKind } from "@/stores/use-asset-store";
+import { useGenerationQueueStore } from "../stores/use-generation-queue-store";
+import { useProductionBibleStore } from "../stores/use-production-bible-store";
+import { useStoryboardStore } from "../stores/use-storyboard-store";
+import type { CanvasNodeData } from "../types";
+import { buildGenerationQueuePlan, summarizeGenerationQueue, type GenerationQueueItem, type GenerationQueueMissingItem, type GenerationQueueSummary } from "../utils/generation-queue";
+import { itemsForProductionBibleProject, productionBibleKindLabel, type ProductionBibleItem } from "../utils/production-bible";
+import { orderedStoryboardGroups, orderedStoryboardShots, type StoryboardAssetKind, type StoryboardAssetRef, type StoryboardGroup, type StoryboardProductionBibleRef, type StoryboardShot } from "../utils/storyboard-management";
+
+type Props = {
+    open: boolean;
+    projectId: string;
+    projectTitle: string;
+    initialGroupId?: string;
+    canvasNodes: CanvasNodeData[];
+    onClose: () => void;
+    onAddGroupToCanvas: (groupId: string) => void;
+};
+
+type GroupFormValues = {
+    title: string;
+    description?: string;
+};
+
+type ShotFormValues = {
+    title: string;
+    description?: string;
+    prompt?: string;
+    effectivePrompt?: string;
+    assetIds?: string[];
+    productionBibleIds?: string[];
+};
+
+const mediaKinds = new Set<AssetKind>(["image", "video", "audio"]);
+const emptySelection: string[] = [];
+
+export function StoryboardManagerDrawer({ open, projectId, projectTitle, initialGroupId, canvasNodes, onClose, onAddGroupToCanvas }: Props) {
+    const { message } = App.useApp();
+    const groups = useStoryboardStore((state) => state.groups);
+    const shots = useStoryboardStore((state) => state.shots);
+    const addGroup = useStoryboardStore((state) => state.addGroup);
+    const updateGroup = useStoryboardStore((state) => state.updateGroup);
+    const removeGroup = useStoryboardStore((state) => state.removeGroup);
+    const addShot = useStoryboardStore((state) => state.addShot);
+    const updateShot = useStoryboardStore((state) => state.updateShot);
+    const removeShot = useStoryboardStore((state) => state.removeShot);
+    const moveShot = useStoryboardStore((state) => state.moveShot);
+    const queueItems = useGenerationQueueStore((state) => state.items);
+    const queuePaused = useGenerationQueueStore((state) => state.paused);
+    const queueConcurrency = useGenerationQueueStore((state) => state.concurrency);
+    const setQueueConcurrency = useGenerationQueueStore((state) => state.setConcurrency);
+    const replaceGroupQueueItems = useGenerationQueueStore((state) => state.replaceGroupItems);
+    const startQueue = useGenerationQueueStore((state) => state.startQueue);
+    const pauseQueue = useGenerationQueueStore((state) => state.pauseQueue);
+    const resumeQueue = useGenerationQueueStore((state) => state.resumeQueue);
+    const cancelQueue = useGenerationQueueStore((state) => state.cancelQueue);
+    const retryQueueItem = useGenerationQueueStore((state) => state.retryItem);
+    const retryFailedQueue = useGenerationQueueStore((state) => state.retryFailed);
+    const assets = useAssetStore((state) => state.assets);
+    const bibleItems = useProductionBibleStore((state) => state.items);
+    const projectGroups = useMemo(() => orderedStoryboardGroups(groups, projectId), [groups, projectId]);
+    const projectBibleItems = useMemo(() => itemsForProductionBibleProject(bibleItems, projectId), [bibleItems, projectId]);
+    const mediaAssets = useMemo(() => assets.filter((asset) => mediaKinds.has(asset.kind)), [assets]);
+    const assetsById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
+    const bibleById = useMemo(() => new Map(projectBibleItems.map((item) => [item.id, item])), [projectBibleItems]);
+    const [activeGroupId, setActiveGroupId] = useState("");
+    const [editingGroup, setEditingGroup] = useState<StoryboardGroup | null>(null);
+    const [groupFormOpen, setGroupFormOpen] = useState(false);
+    const [editingShot, setEditingShot] = useState<StoryboardShot | null>(null);
+    const [shotFormOpen, setShotFormOpen] = useState(false);
+    const activeGroup = projectGroups.find((group) => group.id === activeGroupId) || projectGroups[0] || null;
+    const activeShots = useMemo(() => (activeGroup ? orderedStoryboardShots(shots, activeGroup.id) : []), [activeGroup, shots]);
+    const queuePlan = useMemo(
+        () => (activeGroup ? buildGenerationQueuePlan({ projectId, group: activeGroup, shots: activeShots, nodes: canvasNodes, idFactory: (index) => `queue-${activeGroup.id}-${Date.now()}-${index}` }) : null),
+        [activeGroup, activeShots, canvasNodes, projectId],
+    );
+    const activeQueueItems = useMemo(() => (activeGroup ? queueItems.filter((item) => item.projectId === projectId && item.storyboardGroupId === activeGroup.id).sort((a, b) => a.priority - b.priority) : []), [activeGroup, projectId, queueItems]);
+    const activeQueueSummary = useMemo(() => summarizeGenerationQueue(activeQueueItems.length ? activeQueueItems : queuePlan?.items || [], queuePlan?.missing || []), [activeQueueItems, queuePlan]);
+
+    useEffect(() => {
+        if (!open) return;
+        setActiveGroupId((current) => (initialGroupId && projectGroups.some((group) => group.id === initialGroupId) ? initialGroupId : current && projectGroups.some((group) => group.id === current) ? current : projectGroups[0]?.id || ""));
+    }, [initialGroupId, open, projectGroups]);
+
+    const startCreateGroup = () => {
+        setEditingGroup(null);
+        setGroupFormOpen(true);
+    };
+
+    const startCreateShot = () => {
+        if (!activeGroup) return message.warning("请先创建分镜组");
+        setEditingShot(null);
+        setShotFormOpen(true);
+    };
+
+    return (
+        <Drawer title="分镜管理" open={open} onClose={onClose} size={1080} destroyOnHidden>
+            <div className="mb-4 text-sm text-stone-500 dark:text-stone-400">当前画布：{projectTitle}</div>
+            <div className="grid h-full min-h-[680px] gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+                <Card
+                    size="small"
+                    title="分镜组"
+                    extra={
+                        <Button size="small" icon={<Plus className="size-3.5" />} onClick={startCreateGroup}>
+                            新增
+                        </Button>
+                    }
+                >
+                    {projectGroups.length ? (
+                        <div className="space-y-2">
+                            {projectGroups.map((group) => (
+                                <StoryboardGroupCard
+                                    key={group.id}
+                                    group={group}
+                                    active={group.id === activeGroup?.id}
+                                    shotCount={orderedStoryboardShots(shots, group.id).length}
+                                    onSelect={() => setActiveGroupId(group.id)}
+                                    onEdit={() => {
+                                        setEditingGroup(group);
+                                        setGroupFormOpen(true);
+                                    }}
+                                    onDelete={() => removeGroup(group.id)}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无分镜组" className="py-16" />
+                    )}
+                </Card>
+
+                <Card
+                    size="small"
+                    title={activeGroup ? `${activeGroup.title} · 分镜条目` : "分镜条目"}
+                    extra={
+                        <Space size={6}>
+                            <Button size="small" icon={<Film className="size-3.5" />} disabled={!activeGroup || !activeShots.length} onClick={() => activeGroup && onAddGroupToCanvas(activeGroup.id)}>
+                                打组加入画布
+                            </Button>
+                            <Button size="small" type="primary" icon={<Plus className="size-3.5" />} disabled={!activeGroup} onClick={startCreateShot}>
+                                新增分镜
+                            </Button>
+                        </Space>
+                    }
+                >
+                    {activeGroup ? (
+                        <div className="mb-4 rounded-lg bg-stone-50 p-3 text-sm leading-6 text-stone-600 dark:bg-stone-900 dark:text-stone-300">
+                            {activeGroup.description || "暂无分镜组说明"}
+                            {Object.keys(activeGroup.preset || {}).length ? <div className="mt-1 text-xs text-stone-400">已记录项目预设参数</div> : null}
+                        </div>
+                    ) : null}
+                    {activeGroup && queuePlan ? (
+                        <GenerationQueuePanel
+                            group={activeGroup}
+                            items={activeQueueItems}
+                            planItems={queuePlan.items}
+                            missing={queuePlan.missing}
+                            summary={activeQueueSummary}
+                            paused={queuePaused}
+                            concurrency={queueConcurrency}
+                            onConcurrencyChange={setQueueConcurrency}
+                            onCreateQueue={() => {
+                                replaceGroupQueueItems(projectId, activeGroup.id, queuePlan.items);
+                                message.success(`已创建 ${queuePlan.items.length} 个队列项`);
+                            }}
+                            onStart={() => startQueue(projectId, activeGroup.id)}
+                            onPause={() => pauseQueue(projectId, activeGroup.id)}
+                            onResume={() => resumeQueue(projectId, activeGroup.id)}
+                            onCancel={() => cancelQueue(projectId, activeGroup.id)}
+                            onRetryFailed={() => retryFailedQueue(projectId, activeGroup.id)}
+                            onRetryItem={retryQueueItem}
+                        />
+                    ) : null}
+                    {activeShots.length ? (
+                        <div className="space-y-3">
+                            {activeShots.map((shot) => (
+                                <StoryboardShotCard
+                                    key={shot.id}
+                                    shot={shot}
+                                    assetsById={assetsById}
+                                    bibleById={bibleById}
+                                    onEdit={() => {
+                                        setEditingShot(shot);
+                                        setShotFormOpen(true);
+                                    }}
+                                    onDelete={() => removeShot(shot.id)}
+                                    onMoveUp={() => moveShot(shot.id, "up")}
+                                    onMoveDown={() => moveShot(shot.id, "down")}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={activeGroup ? "暂无分镜条目" : "请先创建分镜组"} className="py-16" />
+                    )}
+                </Card>
+            </div>
+
+            <GroupFormModal
+                open={groupFormOpen}
+                editingGroup={editingGroup}
+                onCancel={() => setGroupFormOpen(false)}
+                onSubmit={(values) => {
+                    const payload = { projectId, title: values.title, description: values.description || "", preset: {} };
+                    if (editingGroup) {
+                        updateGroup(editingGroup.id, { ...payload, order: editingGroup.order });
+                    } else {
+                        const id = addGroup(payload);
+                        setActiveGroupId(id);
+                    }
+                    setGroupFormOpen(false);
+                }}
+            />
+            <ShotFormDrawer
+                open={shotFormOpen}
+                projectId={projectId}
+                editingShot={editingShot}
+                assets={mediaAssets}
+                bibleItems={projectBibleItems}
+                onClose={() => setShotFormOpen(false)}
+                onSubmit={(values, assetRefs, productionBibleRefs) => {
+                    if (!activeGroup) return;
+                    const payload = {
+                        groupId: activeGroup.id,
+                        title: values.title,
+                        description: values.description || "",
+                        prompt: values.prompt || "",
+                        effectivePrompt: values.effectivePrompt || "",
+                        assetRefs,
+                        productionBibleRefs,
+                        nodeRefs: editingShot?.nodeRefs || [],
+                        resultAssetIds: editingShot?.resultAssetIds || [],
+                        primaryAssetId: editingShot?.primaryAssetId,
+                        status: editingShot?.status || "draft",
+                    };
+                    if (editingShot) {
+                        updateShot(editingShot.id, { ...payload, order: editingShot.order });
+                    } else {
+                        addShot(payload);
+                    }
+                    setShotFormOpen(false);
+                }}
+            />
+        </Drawer>
+    );
+}
+
+function StoryboardGroupCard({ group, active, shotCount, onSelect, onEdit, onDelete }: { group: StoryboardGroup; active: boolean; shotCount: number; onSelect: () => void; onEdit: () => void; onDelete: () => void }) {
+    return (
+        <button
+            type="button"
+            className={`block w-full rounded-lg border p-3 text-left transition ${active ? "border-stone-900 bg-stone-100 dark:border-stone-200 dark:bg-stone-800" : "border-stone-200 hover:border-stone-400 dark:border-stone-700"}`}
+            onClick={onSelect}
+        >
+            <div className="flex items-start gap-2">
+                <Clapperboard className="mt-0.5 size-4 shrink-0 text-stone-500" />
+                <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold">{group.title}</div>
+                    <div className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500">{group.description || "暂无说明"}</div>
+                </div>
+            </div>
+            <div className="mt-2 flex items-center justify-between">
+                <span className="text-xs text-stone-400">{shotCount} 条分镜</span>
+                <Space size={2} onClick={(event) => event.stopPropagation()}>
+                    <Button size="small" type="text" icon={<Pencil className="size-3.5" />} onClick={onEdit} />
+                    <Popconfirm title="删除这个分镜组？" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={onDelete}>
+                        <Button size="small" type="text" danger icon={<Trash2 className="size-3.5" />} />
+                    </Popconfirm>
+                </Space>
+            </div>
+        </button>
+    );
+}
+
+function StoryboardShotCard({
+    shot,
+    assetsById,
+    bibleById,
+    onEdit,
+    onDelete,
+    onMoveUp,
+    onMoveDown,
+}: {
+    shot: StoryboardShot;
+    assetsById: Map<string, Asset>;
+    bibleById: Map<string, ProductionBibleItem>;
+    onEdit: () => void;
+    onDelete: () => void;
+    onMoveUp: () => void;
+    onMoveDown: () => void;
+}) {
+    return (
+        <Card
+            size="small"
+            title={
+                <div className="flex min-w-0 items-center gap-2">
+                    <Tag className="m-0">镜 {shot.order}</Tag>
+                    <span className="truncate">{shot.title}</span>
+                </div>
+            }
+            extra={
+                <Space size={2}>
+                    <Button size="small" type="text" icon={<ArrowUp className="size-3.5" />} onClick={onMoveUp} />
+                    <Button size="small" type="text" icon={<ArrowDown className="size-3.5" />} onClick={onMoveDown} />
+                    <Button size="small" type="text" icon={<Pencil className="size-3.5" />} onClick={onEdit} />
+                    <Popconfirm title="删除这个分镜？" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={onDelete}>
+                        <Button size="small" type="text" danger icon={<Trash2 className="size-3.5" />} />
+                    </Popconfirm>
+                </Space>
+            }
+        >
+            <div className="space-y-2 text-sm">
+                <div className="line-clamp-3 whitespace-pre-wrap leading-6 text-stone-700 dark:text-stone-300">{shot.prompt || shot.description || "暂无提示词"}</div>
+                <Space size={[4, 4]} wrap>
+                    <Tag className="m-0">{shotStatusLabel(shot.status)}</Tag>
+                    {shot.primaryAssetId ? <Tag className="m-0">主版本：{assetsById.get(shot.primaryAssetId)?.title || shot.primaryAssetId}</Tag> : null}
+                    {shot.assetRefs.map((ref) => (
+                        <Tag key={ref.assetId} className="m-0">
+                            {assetsById.get(ref.assetId)?.title || ref.assetId} · {assetRoleLabel(ref.role)}
+                        </Tag>
+                    ))}
+                    {(shot.productionBibleRefs || []).map((ref) => (
+                        <Tag key={`${ref.kind}:${ref.itemId}`} className="m-0">
+                            {productionBibleKindLabel(ref.kind)} · {bibleById.get(ref.itemId)?.name || ref.itemId}
+                        </Tag>
+                    ))}
+                    {shot.nodeRefs.length ? <Tag className="m-0">已加入画布</Tag> : null}
+                </Space>
+                {shot.resultAssetIds.length ? (
+                    <div className="rounded-lg bg-stone-50 p-2 text-xs leading-5 text-stone-500 dark:bg-stone-900 dark:text-stone-400">
+                        <div className="mb-1 font-medium text-stone-600 dark:text-stone-300">生成结果</div>
+                        <div className="flex flex-wrap gap-1.5">
+                            {shot.resultAssetIds.map((assetId) => (
+                                <Tag key={assetId} className="m-0">
+                                    {assetsById.get(assetId)?.title || assetId}
+                                    {assetId === shot.primaryAssetId ? " · 主版本" : ""}
+                                </Tag>
+                            ))}
+                        </div>
+                    </div>
+                ) : null}
+                {shot.errorMessage ? <div className="rounded-lg bg-red-50 p-2 text-xs leading-5 text-red-600 dark:bg-red-950/30 dark:text-red-300">失败原因：{shot.errorMessage}</div> : null}
+            </div>
+        </Card>
+    );
+}
+
+function GenerationQueuePanel({
+    group,
+    items,
+    planItems,
+    missing,
+    summary,
+    paused,
+    concurrency,
+    onConcurrencyChange,
+    onCreateQueue,
+    onStart,
+    onPause,
+    onResume,
+    onCancel,
+    onRetryFailed,
+    onRetryItem,
+}: {
+    group: StoryboardGroup;
+    items: GenerationQueueItem[];
+    planItems: GenerationQueueItem[];
+    missing: GenerationQueueMissingItem[];
+    summary: GenerationQueueSummary;
+    paused: boolean;
+    concurrency: number;
+    onConcurrencyChange: (value: number) => void;
+    onCreateQueue: () => void;
+    onStart: () => void;
+    onPause: () => void;
+    onResume: () => void;
+    onCancel: () => void;
+    onRetryFailed: () => void;
+    onRetryItem: (id: string) => void;
+}) {
+    const visibleItems = items.length ? items : planItems;
+    const hasFailed = items.some((item) => item.status === "failed");
+    const hasRunnable = items.some((item) => item.status === "queued" || item.status === "paused" || item.status === "cancelled");
+    return (
+        <Card size="small" className="mb-4" title="生成队列">
+            <div className="space-y-3">
+                <div className="grid gap-2 text-xs text-stone-500 sm:grid-cols-4">
+                    <QueueMetric label="视频数" value={`${summary.videoCount}`} />
+                    <QueueMetric label="预计时长" value={`${summary.totalDurationSeconds}s`} />
+                    <QueueMetric label="预计点数" value={`${summary.totalEstimatedCredits}`} />
+                    <QueueMetric label="缺失项" value={`${summary.missingCount}`} />
+                </div>
+                {missing.length ? (
+                    <div className="rounded-lg bg-amber-50 p-2 text-xs leading-5 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                        {missing.map((item) => (
+                            <div key={`${item.storyboardShotId}:${item.reason}`}>
+                                {item.storyboardShotId}：{item.reason}
+                            </div>
+                        ))}
+                    </div>
+                ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button size="small" onClick={onCreateQueue} disabled={!planItems.length}>
+                        创建队列
+                    </Button>
+                    <Button size="small" type="primary" icon={<Play className="size-3.5" />} onClick={onStart} disabled={!items.length || !hasRunnable}>
+                        开始队列
+                    </Button>
+                    <Button size="small" onClick={onPause} disabled={!items.some((item) => item.status === "queued")}>
+                        暂停
+                    </Button>
+                    <Button size="small" onClick={onResume} disabled={!paused && !items.some((item) => item.status === "paused")}>
+                        继续
+                    </Button>
+                    <Button size="small" danger onClick={onCancel} disabled={!items.some((item) => item.status === "queued" || item.status === "paused")}>
+                        取消
+                    </Button>
+                    <Button size="small" icon={<RotateCcw className="size-3.5" />} onClick={onRetryFailed} disabled={!hasFailed}>
+                        重试失败项
+                    </Button>
+                    <span className="ml-auto inline-flex items-center gap-2 text-xs text-stone-500">
+                        并发
+                        <InputNumber size="small" min={1} max={4} value={concurrency} onChange={(value) => onConcurrencyChange(Number(value) || 1)} className="w-16" />
+                    </span>
+                </div>
+                {visibleItems.length ? (
+                    <div className="space-y-1.5">
+                        {visibleItems.map((item) => (
+                            <div key={item.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-stone-50 px-2 py-1.5 text-xs dark:bg-stone-900">
+                                <Tag className="m-0">{queueStatusLabel(item.status)}</Tag>
+                                <span className="min-w-0 flex-1 truncate">
+                                    {group.title} / {item.storyboardShotId}
+                                </span>
+                                <span className="text-stone-400">{item.estimatedDurationSeconds || item.estimatedCredits}s</span>
+                                <span className="text-stone-400">{item.estimatedCredits} 点</span>
+                                {item.error ? <span className="text-red-500">{item.error}</span> : null}
+                                {item.status === "failed" || item.status === "cancelled" ? (
+                                    <Button size="small" type="text" onClick={() => onRetryItem(item.id)}>
+                                        重试
+                                    </Button>
+                                ) : null}
+                            </div>
+                        ))}
+                    </div>
+                ) : null}
+            </div>
+        </Card>
+    );
+}
+
+function QueueMetric({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="rounded-lg bg-stone-50 p-2 dark:bg-stone-900">
+            <div>{label}</div>
+            <div className="mt-1 text-base font-semibold text-stone-800 dark:text-stone-100">{value}</div>
+        </div>
+    );
+}
+
+function GroupFormModal({ open, editingGroup, onCancel, onSubmit }: { open: boolean; editingGroup: StoryboardGroup | null; onCancel: () => void; onSubmit: (values: GroupFormValues) => void }) {
+    const [form] = Form.useForm<GroupFormValues>();
+    useEffect(() => {
+        if (!open) return;
+        form.setFieldsValue({ title: editingGroup?.title || "", description: editingGroup?.description || "" });
+    }, [editingGroup, form, open]);
+    return (
+        <Modal title={editingGroup ? "编辑分镜组" : "新增分镜组"} open={open} onCancel={onCancel} onOk={() => form.submit()} okText="保存" cancelText="取消" destroyOnHidden>
+            <Form form={form} layout="vertical" onFinish={onSubmit}>
+                <Form.Item name="title" label="标题" rules={[{ required: true, message: "请填写标题" }]}>
+                    <Input placeholder="例如：第一集操场毕业典礼" />
+                </Form.Item>
+                <Form.Item name="description" label="说明">
+                    <Input.TextArea rows={4} placeholder="记录本组分镜目标、节奏和关键画面" />
+                </Form.Item>
+            </Form>
+        </Modal>
+    );
+}
+
+function ShotFormDrawer({
+    open,
+    projectId,
+    editingShot,
+    assets,
+    bibleItems,
+    onClose,
+    onSubmit,
+}: {
+    open: boolean;
+    projectId: string;
+    editingShot: StoryboardShot | null;
+    assets: Asset[];
+    bibleItems: ProductionBibleItem[];
+    onClose: () => void;
+    onSubmit: (values: ShotFormValues, assetRefs: StoryboardAssetRef[], productionBibleRefs: StoryboardProductionBibleRef[]) => void;
+}) {
+    const [form] = Form.useForm<ShotFormValues>();
+    const [assetRoles, setAssetRoles] = useState<Record<string, string>>({});
+    const [promptOpen, setPromptOpen] = useState(false);
+    const watchedAssetIds = Form.useWatch("assetIds", form);
+    const watchedBibleIds = Form.useWatch("productionBibleIds", form);
+    const selectedAssetIdsKey = Array.isArray(watchedAssetIds) ? watchedAssetIds.join("\u0000") : "";
+    const selectedBibleIdsKey = Array.isArray(watchedBibleIds) ? watchedBibleIds.join("\u0000") : "";
+    const selectedAssetIds = useMemo(() => (Array.isArray(watchedAssetIds) ? watchedAssetIds : emptySelection), [selectedAssetIdsKey]);
+    const selectedBibleIds = useMemo(() => (Array.isArray(watchedBibleIds) ? watchedBibleIds : emptySelection), [selectedBibleIdsKey]);
+    const assetsById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
+    const bibleById = useMemo(() => new Map(bibleItems.map((item) => [item.id, item])), [bibleItems]);
+
+    useEffect(() => {
+        if (!open) return;
+        form.setFieldsValue({
+            title: editingShot?.title || "",
+            description: editingShot?.description || "",
+            prompt: editingShot?.prompt || "",
+            effectivePrompt: editingShot?.effectivePrompt || "",
+            assetIds: editingShot?.assetRefs.map((ref) => ref.assetId) || [],
+            productionBibleIds: editingShot?.productionBibleRefs?.map((ref) => ref.itemId) || [],
+        });
+        setAssetRoles(Object.fromEntries((editingShot?.assetRefs || []).map((ref) => [ref.assetId, ref.role])));
+    }, [editingShot, form, open]);
+
+    useEffect(() => {
+        if (!open) return;
+        setAssetRoles((current) => {
+            const next: Record<string, string> = {};
+            for (const assetId of selectedAssetIds) next[assetId] = current[assetId] || defaultAssetRole(assetsById.get(assetId)?.kind);
+            if (sameAssetRoles(current, next)) return current;
+            return next;
+        });
+    }, [assetsById, open, selectedAssetIds]);
+
+    return (
+        <Drawer
+            title={editingShot ? "编辑分镜" : "新增分镜"}
+            open={open}
+            onClose={onClose}
+            size={680}
+            destroyOnHidden
+            extra={
+                <Button type="primary" onClick={() => form.submit()}>
+                    保存
+                </Button>
+            }
+        >
+            <Form
+                form={form}
+                layout="vertical"
+                onFinish={(values) => {
+                    const assetRefs = (values.assetIds || []).flatMap((assetId): StoryboardAssetRef[] => {
+                        const asset = assetsById.get(assetId);
+                        if (!asset || !mediaKinds.has(asset.kind)) return [];
+                        return [{ assetId, kind: asset.kind as StoryboardAssetKind, role: assetRoles[assetId] || defaultAssetRole(asset.kind) }];
+                    });
+                    const productionBibleRefs = (values.productionBibleIds || []).flatMap((itemId): StoryboardProductionBibleRef[] => {
+                        const item = bibleById.get(itemId);
+                        return item ? [{ itemId, kind: item.kind }] : [];
+                    });
+                    onSubmit(values, assetRefs, productionBibleRefs);
+                }}
+            >
+                <Form.Item name="title" label="标题" rules={[{ required: true, message: "请填写标题" }]}>
+                    <Input placeholder="例如：魏梁走上主席台" />
+                </Form.Item>
+                <Form.Item name="description" label="描述">
+                    <Input.TextArea rows={3} placeholder="分镜画面、构图、运动或情绪说明" />
+                </Form.Item>
+                <Form.Item label="提示词">
+                    <div className="space-y-2">
+                        <Form.Item name="prompt" noStyle>
+                            <Input.TextArea rows={6} placeholder="写入用于生成视频的分镜提示词" />
+                        </Form.Item>
+                        <Button size="small" onClick={() => setPromptOpen(true)}>
+                            从提示词库插入
+                        </Button>
+                    </div>
+                </Form.Item>
+                <Form.Item name="effectivePrompt" label="实际提交提示词">
+                    <Input.TextArea rows={4} placeholder="可选。留空时使用提示词" />
+                </Form.Item>
+                <Form.Item name="assetIds" label="参考素材">
+                    <Select mode="multiple" placeholder="选择图片、视频或音频素材" options={assets.map((asset) => ({ label: `${asset.title} · ${assetKindLabel(asset.kind)}`, value: asset.id }))} />
+                </Form.Item>
+                {selectedAssetIds.length ? (
+                    <div className="mb-4 space-y-2">
+                        {selectedAssetIds.map((assetId) => (
+                            <div key={assetId} className="grid gap-2 rounded-lg bg-stone-50 p-2 text-sm dark:bg-stone-900 sm:grid-cols-[minmax(0,1fr)_160px]">
+                                <span className="truncate">{assetsById.get(assetId)?.title || assetId}</span>
+                                <Select
+                                    size="small"
+                                    value={assetRoles[assetId] || defaultAssetRole(assetsById.get(assetId)?.kind)}
+                                    options={assetRoleOptions(assetsById.get(assetId)?.kind)}
+                                    onChange={(role) => setAssetRoles((current) => ({ ...current, [assetId]: role }))}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                ) : null}
+                <Form.Item name="productionBibleIds" label="引用设定">
+                    <Select mode="multiple" placeholder="选择角色、场景、道具设定" options={bibleItems.map((item) => ({ label: `${productionBibleKindLabel(item.kind)} · ${item.name}`, value: item.id }))} />
+                </Form.Item>
+                {selectedBibleIds.length ? <div className="mb-4 text-xs text-stone-500">提示词库变量填写时也可以选择这些设定项。</div> : null}
+            </Form>
+            <PromptSelectDialog
+                open={promptOpen}
+                projectId={projectId}
+                allowedTypes={["video", "positive", "workflow"]}
+                onOpenChange={setPromptOpen}
+                onSelect={(prompt) => {
+                    const current = form.getFieldValue("prompt") || "";
+                    form.setFieldValue("prompt", [current.trim(), prompt.trim()].filter(Boolean).join("\n\n"));
+                }}
+            />
+        </Drawer>
+    );
+}
+
+function defaultAssetRole(kind?: string) {
+    if (kind === "audio") return "reference_audio";
+    if (kind === "video") return "reference_video";
+    return "reference_image";
+}
+
+function sameAssetRoles(left: Record<string, string>, right: Record<string, string>) {
+    const leftKeys = Object.keys(left);
+    const rightKeys = Object.keys(right);
+    return leftKeys.length === rightKeys.length && leftKeys.every((key) => left[key] === right[key]);
+}
+
+function assetRoleOptions(kind?: string) {
+    if (kind === "audio") return [{ label: "音频参考", value: "reference_audio" }];
+    if (kind === "video")
+        return [
+            { label: "视频参考", value: "reference_video" },
+            { label: "源视频", value: "source_video" },
+        ];
+    return [
+        { label: "普通参考", value: "reference_image" },
+        { label: "首帧", value: "first_frame" },
+        { label: "尾帧", value: "last_frame" },
+    ];
+}
+
+function assetRoleLabel(role: string) {
+    return assetRoleOptions(role.includes("audio") ? "audio" : role.includes("video") || role === "source_video" ? "video" : "image").find((item) => item.value === role)?.label || role || "参考";
+}
+
+function assetKindLabel(kind: string) {
+    if (kind === "image") return "图片";
+    if (kind === "video") return "视频";
+    if (kind === "audio") return "音频";
+    return "素材";
+}
+
+function shotStatusLabel(status: string) {
+    if (status === "ready") return "待生成";
+    if (status === "in_canvas") return "已加入画布";
+    if (status === "generating") return "生成中";
+    if (status === "review") return "待复核";
+    if (status === "done") return "已完成";
+    if (status === "error") return "失败";
+    return "草稿";
+}
+
+function queueStatusLabel(status: string) {
+    if (status === "running") return "运行中";
+    if (status === "succeeded") return "已完成";
+    if (status === "failed") return "失败";
+    if (status === "cancelled") return "已取消";
+    if (status === "paused") return "已暂停";
+    return "排队中";
+}

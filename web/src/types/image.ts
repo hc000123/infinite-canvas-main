@@ -8,5 +8,7 @@ export type ReferenceImage = {
     url?: string;
     storageKey?: string;
     assetUri?: string;
+    volcengineAssetId?: string;
+    volcengineAssetStatus?: string;
     seedanceRole?: ReferenceImageRole;
 };

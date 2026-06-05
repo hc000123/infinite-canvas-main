@@ -46,6 +46,38 @@ func TestPromptCategoriesOnlyExposeManualSystemCategory(t *testing.T) {
 	}
 }
 
+func TestListPromptsFiltersPromptMetadata(t *testing.T) {
+	setupPromptTestDB(t)
+	db, err := DB()
+	if err != nil {
+		t.Fatalf("DB returned error: %v", err)
+	}
+	prompts := []model.Prompt{
+		{ID: "video-fav", Title: "视频常用", Prompt: "让 {角色} 走进 {场景}", Category: "system", Tags: []string{"短剧"}, Metadata: map[string]any{"type": "video", "scenario": "短剧", "favorite": true}},
+		{ID: "image-one", Title: "图片模板", Prompt: "画一张图", Category: "system", Tags: []string{"图片"}, Metadata: map[string]any{"type": "image", "scenario": "海报"}},
+		{ID: "legacy", Title: "旧提示词", Prompt: "普通提示词", Category: "system", Tags: []string{"普通"}},
+	}
+	if err := db.Create(&prompts).Error; err != nil {
+		t.Fatalf("Create prompts returned error: %v", err)
+	}
+
+	items, total, err := ListPrompts(model.Query{Type: "video", Scenario: "短剧", Favorite: "true"})
+	if err != nil {
+		t.Fatalf("ListPrompts returned error: %v", err)
+	}
+	if total != 1 || len(items) != 1 || items[0].ID != "video-fav" {
+		t.Fatalf("items=%#v total=%d, want only video-fav", items, total)
+	}
+
+	types, scenarios, err := ListPromptMetadataOptions(model.Query{Category: "system"})
+	if err != nil {
+		t.Fatalf("ListPromptMetadataOptions returned error: %v", err)
+	}
+	if len(types) != 2 || len(scenarios) != 2 {
+		t.Fatalf("types=%v scenarios=%v, want metadata options without legacy prompt", types, scenarios)
+	}
+}
+
 func setupPromptTestDB(t *testing.T) {
 	t.Helper()
 	tmp := t.TempDir()

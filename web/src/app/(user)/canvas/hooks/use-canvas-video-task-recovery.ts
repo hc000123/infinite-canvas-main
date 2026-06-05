@@ -1,5 +1,6 @@
 import { useEffect, type Dispatch, type RefObject, type SetStateAction } from "react";
 
+import { AI_VIDEO_POLL_INTERVAL_MS } from "@/services/api/ai-provider";
 import { fetchVideoTaskContent, refreshVideoTask } from "@/services/api/video";
 import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { defaultConfig, type AiConfig } from "@/stores/use-config-store";
@@ -29,18 +30,38 @@ type UseCanvasVideoTaskRecoveryOptions = {
 export function useCanvasVideoTaskRecovery({ projectLoaded, nodesRef, recoveringVideoTaskIdsRef, canvasAiConfig, cacheUploadedCanvasMedia, setNodes, toVideoMetadata }: UseCanvasVideoTaskRecoveryOptions) {
     useEffect(() => {
         if (!projectLoaded) return;
-        recoverableVideoTaskNodes(nodesRef.current).forEach((node) => {
-            const taskId = node.metadata?.taskId;
-            if (!taskId || recoveringVideoTaskIdsRef.current.has(taskId)) return;
-            recoveringVideoTaskIdsRef.current.add(taskId);
-            void recoverVideoTaskNode({
-                node,
-                canvasAiConfig,
-                cacheUploadedCanvasMedia,
-                setNodes,
-                toVideoMetadata,
+        const recoveryTaskIds = new Set(
+            recoverableVideoTaskNodes(nodesRef.current)
+                .map((node) => node.metadata?.taskId)
+                .filter((taskId): taskId is string => Boolean(taskId)),
+        );
+
+        const recoverNodes = () => {
+            recoverableVideoTaskNodes(nodesRef.current).forEach((node) => {
+                const taskId = node.metadata?.taskId;
+                if (!taskId || recoveringVideoTaskIdsRef.current.has(taskId)) return;
+                if (node.metadata?.status === "error" || node.metadata?.errorDetails) recoveryTaskIds.add(taskId);
+                if (!recoveryTaskIds.has(taskId)) return;
+                recoveringVideoTaskIdsRef.current.add(taskId);
+                void recoverVideoTaskNode({
+                    node,
+                    canvasAiConfig,
+                    cacheUploadedCanvasMedia,
+                    setNodes,
+                    toVideoMetadata,
+                }).finally(() => {
+                    recoveringVideoTaskIdsRef.current.delete(taskId);
+                });
             });
-        });
+        };
+
+        recoverNodes();
+        const timer = window.setInterval(recoverNodes, AI_VIDEO_POLL_INTERVAL_MS);
+        window.addEventListener("online", recoverNodes);
+        return () => {
+            window.clearInterval(timer);
+            window.removeEventListener("online", recoverNodes);
+        };
     }, [cacheUploadedCanvasMedia, canvasAiConfig, nodesRef, projectLoaded, recoveringVideoTaskIdsRef, setNodes, toVideoMetadata]);
 }
 

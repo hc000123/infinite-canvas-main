@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"image/png"
 	"mime/multipart"
+	"net/textproto"
 	"os"
 	"path/filepath"
 	"strings"
@@ -201,6 +202,59 @@ func TestSubmitVolcengineImageAssetUsesConfiguredGroupID(t *testing.T) {
 	}
 	if fake.groupID != "group-configured" || result.GroupID != "group-configured" {
 		t.Fatalf("fake.groupID = %q, result.GroupID = %q", fake.groupID, result.GroupID)
+	}
+}
+
+func TestSubmitVolcengineMediaAssetAcceptsVideo(t *testing.T) {
+	tmp := t.TempDir()
+	oldStorageDriver := config.Cfg.StorageDriver
+	oldDatabaseDSN := config.Cfg.DatabaseDSN
+	oldPublicAssetDir := config.Cfg.PublicAssetDir
+	t.Cleanup(func() {
+		config.Cfg.StorageDriver = oldStorageDriver
+		config.Cfg.DatabaseDSN = oldDatabaseDSN
+		config.Cfg.PublicAssetDir = oldPublicAssetDir
+		repository.ResetForTest()
+	})
+
+	config.Cfg.StorageDriver = "sqlite"
+	config.Cfg.DatabaseDSN = filepath.Join(tmp, "test.db")
+	config.Cfg.PublicAssetDir = filepath.Join(tmp, "public-assets")
+	repository.ResetForTest()
+
+	_, err := repository.SaveSettings(model.Settings{
+		Private: model.PrivateSetting{
+			VolcengineAsset: model.VolcengineAssetSetting{
+				Enabled:            true,
+				AccessKey:          "ak-test",
+				SecretKey:          "sk-test",
+				ProjectName:        "project-test",
+				Region:             "cn-beijing",
+				PublicAssetBaseURL: "https://example.com/uploaded-assets",
+			},
+		},
+	}, now())
+	if err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+
+	fake := &fakeVolcengineAssetClient{createGroupID: "group-test", createAssetID: "asset-video"}
+	setVolcengineAssetClientForTest(t, fake)
+	header := &multipart.FileHeader{Filename: "reference.mp4", Size: int64(len("video-bytes"))}
+	header.Header = textproto.MIMEHeader{"Content-Type": {"video/mp4"}}
+
+	result, err := SubmitVolcengineMediaAsset(context.Background(), testMultipartFile{Reader: bytes.NewReader([]byte("video-bytes"))}, header, "视频参考", "", "")
+	if err != nil {
+		t.Fatalf("SubmitVolcengineMediaAsset returned error: %v", err)
+	}
+	if result.AssetID != "asset-video" || result.Status != "Processing" {
+		t.Fatalf("result = %#v", result)
+	}
+	if fake.assetType != "Video" {
+		t.Fatalf("assetType = %q", fake.assetType)
+	}
+	if !strings.HasPrefix(result.PublicURL, "https://example.com/uploaded-assets/videos/") {
+		t.Fatalf("PublicURL = %q", result.PublicURL)
 	}
 }
 
@@ -460,6 +514,63 @@ func TestSubmitAdminAssetVolcengineReviewSavesMetadata(t *testing.T) {
 	}
 }
 
+func TestSubmitAdminAssetVolcengineReviewAcceptsVideo(t *testing.T) {
+	tmp := t.TempDir()
+	oldStorageDriver := config.Cfg.StorageDriver
+	oldDatabaseDSN := config.Cfg.DatabaseDSN
+	t.Cleanup(func() {
+		config.Cfg.StorageDriver = oldStorageDriver
+		config.Cfg.DatabaseDSN = oldDatabaseDSN
+		repository.ResetForTest()
+	})
+
+	config.Cfg.StorageDriver = "sqlite"
+	config.Cfg.DatabaseDSN = filepath.Join(tmp, "test.db")
+	repository.ResetForTest()
+
+	_, err := repository.SaveSettings(model.Settings{
+		Private: model.PrivateSetting{
+			VolcengineAsset: model.VolcengineAssetSetting{
+				Enabled:            true,
+				AccessKey:          "ak-test",
+				SecretKey:          "sk-test",
+				ProjectName:        "project-test",
+				Region:             "cn-beijing",
+				PublicAssetBaseURL: "https://example.com/uploaded-assets",
+			},
+		},
+	}, now())
+	if err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+	_, err = repository.SaveAsset(model.Asset{
+		ID:    "asset-admin-video",
+		Title: "后台视频",
+		Type:  model.AssetTypeVideo,
+		URL:   "/api/uploaded-assets/library/video/reference.mp4",
+	})
+	if err != nil {
+		t.Fatalf("save asset: %v", err)
+	}
+
+	fake := &fakeVolcengineAssetClient{createGroupID: "group-test", createAssetID: "asset-video"}
+	setVolcengineAssetClientForTest(t, fake)
+
+	result, err := SubmitAdminAssetVolcengineReview(context.Background(), "asset-admin-video")
+	if err != nil {
+		t.Fatalf("SubmitAdminAssetVolcengineReview returned error: %v", err)
+	}
+	if result.VolcengineAssetID != "asset-video" || result.VolcengineStatus != "Processing" {
+		t.Fatalf("result = %#v", result)
+	}
+	if fake.assetType != "Video" {
+		t.Fatalf("assetType = %q", fake.assetType)
+	}
+	if result.VolcenginePublicURL != "https://example.com/uploaded-assets/library/video/reference.mp4" {
+		t.Fatalf("VolcenginePublicURL = %q", result.VolcenginePublicURL)
+	}
+}
+
 func TestNormalizeVolcengineResponseUnwrapsNestedResultAsset(t *testing.T) {
 	result, err := normalizeVolcengineResponse("GetAsset", map[string]interface{}{
 		"Result": map[string]interface{}{
@@ -564,6 +675,7 @@ type fakeVolcengineAssetClient struct {
 	groupName        string
 	groupID          string
 	assetURL         string
+	assetType        string
 }
 
 type fakeVolcengineObjectUploader struct {
@@ -604,10 +716,11 @@ func (fake *fakeVolcengineAssetClient) CreateAssetGroup(ctx context.Context, set
 	return fake.createGroupID, nil
 }
 
-func (fake *fakeVolcengineAssetClient) CreateAsset(ctx context.Context, setting model.VolcengineAssetSetting, groupID string, publicURL string, name string) (string, error) {
+func (fake *fakeVolcengineAssetClient) CreateAsset(ctx context.Context, setting model.VolcengineAssetSetting, groupID string, publicURL string, name string, assetType string) (string, error) {
 	fake.createAssetCalls++
 	fake.groupID = groupID
 	fake.assetURL = publicURL
+	fake.assetType = assetType
 	return fake.createAssetID, nil
 }
 

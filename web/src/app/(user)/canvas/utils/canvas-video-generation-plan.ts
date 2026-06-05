@@ -4,6 +4,7 @@ import type { ReferenceImage } from "@/types/image";
 import type { ReferenceVideo } from "@/types/video";
 
 import { buildVideoReferenceInput, directVideoReferenceInputs, resolveVideoGenerationRelation } from "./canvas-generation-metadata.ts";
+import { seedanceMediaReviewBlockingError } from "./canvas-volcengine-review-diagnostics.ts";
 import type { CanvasNodeData } from "../types.ts";
 
 type VideoReferenceInputLike = Parameters<typeof buildVideoReferenceInput>[3];
@@ -42,6 +43,7 @@ export function buildVideoGenerationPlan({ config, sourceNode, sourceReferences,
         relation,
         isVariant,
         sourceVideoRequiredError: config.videoProtocol === "volcengine-ark" && (config.videoTaskMode === "edit" || config.videoTaskMode === "extend") && !relation?.sourceVideoNodeId ? "请先连接一个上游视频节点作为源视频" : "",
+        imageReviewRequiredError: config.videoProtocol === "volcengine-ark" ? seedanceMediaReviewBlockingError(references.images, references.videos) : "",
     };
 }
 

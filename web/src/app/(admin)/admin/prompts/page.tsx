@@ -2,12 +2,15 @@
 
 import { CopyOutlined, DeleteOutlined, EditOutlined, ExportOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SyncOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { Button, Card, Col, Flex, Form, Image, Input, Modal, Row, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { Button, Card, Checkbox, Col, Flex, Form, Image, Input, Modal, Row, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
 import { useEffect, useState } from "react";
 
+import { formatPromptVariablesText, inputOutputKindLabel, parsePromptVariablesText, promptInputKindOptions, promptOutputKindOptions, promptTypeLabel, promptTypeOptions } from "@/components/prompts/prompt-template";
 import { useCopyText } from "@/hooks/use-copy-text";
 import type { Prompt } from "@/services/api/prompts";
 import { useAdminPrompts } from "./use-admin-prompts";
+
+type PromptFormValues = Partial<Prompt> & { tagText?: string; variableText?: string };
 
 export default function AdminPromptsPage() {
     const {
@@ -35,7 +38,7 @@ export default function AdminPromptsPage() {
         deletePrompts,
     } = useAdminPrompts();
     const copyText = useCopyText();
-    const [form] = Form.useForm<Partial<Prompt> & { tagText?: string }>();
+    const [form] = Form.useForm<PromptFormValues>();
     const [keywordText, setKeywordText] = useState(keyword);
     const [editingPrompt, setEditingPrompt] = useState<Partial<Prompt> | null>(null);
     const [detailPrompt, setDetailPrompt] = useState<Prompt | null>(null);
@@ -50,7 +53,7 @@ export default function AdminPromptsPage() {
     const tagOptions = tags.map((item) => ({ label: item, value: item }));
 
     useEffect(() => {
-        if (editingPrompt) form.setFieldsValue({ ...editingPrompt, tagText: editingPrompt.tags?.join(", ") || "" });
+        if (editingPrompt) form.setFieldsValue({ ...editingPrompt, metadata: { ...editingPrompt.metadata }, tagText: editingPrompt.tags?.join(", ") || "", variableText: formatPromptVariablesText(editingPrompt.metadata?.variables) });
     }, [editingPrompt, form]);
 
     useEffect(() => setKeywordText(keyword), [keyword]);
@@ -65,6 +68,11 @@ export default function AdminPromptsPage() {
                 .split(",")
                 .map((item) => item.trim())
                 .filter(Boolean),
+            metadata: {
+                ...(value.metadata || {}),
+                variables: parsePromptVariablesText(value.variableText || ""),
+                favorite: value.metadata?.favorite === true,
+            },
         });
         setEditingPrompt(null);
     };
@@ -107,6 +115,18 @@ export default function AdminPromptsPage() {
                     {(item.tags || []).slice(0, 3).map((tag) => (
                         <Tag key={tag}>{tag}</Tag>
                     ))}
+                </Space>
+            ),
+        },
+        {
+            title: "模板",
+            dataIndex: "metadata",
+            width: 180,
+            render: (_, item) => (
+                <Space size={[4, 4]} wrap>
+                    {item.metadata?.type ? <Tag color="blue">{promptTypeLabel(item.metadata.type)}</Tag> : <Tag>普通</Tag>}
+                    {item.metadata?.scenario ? <Tag>{item.metadata.scenario}</Tag> : null}
+                    {item.metadata?.favorite ? <Tag color="gold">常用</Tag> : null}
                 </Space>
             ),
         },
@@ -228,6 +248,48 @@ export default function AdminPromptsPage() {
                     <Form.Item name="tagText" label="标签，用逗号分隔">
                         <Input />
                     </Form.Item>
+                    <Row gutter={12}>
+                        <Col span={8}>
+                            <Form.Item name={["metadata", "type"]} label="类型">
+                                <Select allowClear options={promptTypeOptions} />
+                            </Form.Item>
+                        </Col>
+                        <Col span={8}>
+                            <Form.Item name={["metadata", "scenario"]} label="场景">
+                                <Input placeholder="例如：短剧 / 分镜 / 人物设定" />
+                            </Form.Item>
+                        </Col>
+                        <Col span={8}>
+                            <Form.Item name={["metadata", "favorite"]} label="常用" valuePropName="checked">
+                                <Checkbox>加入常用</Checkbox>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Row gutter={12}>
+                        <Col span={6}>
+                            <Form.Item name={["metadata", "provider"]} label="供应商">
+                                <Input placeholder="openai / volcengine-ark" />
+                            </Form.Item>
+                        </Col>
+                        <Col span={6}>
+                            <Form.Item name={["metadata", "model"]} label="模型">
+                                <Input placeholder="模型或 Endpoint" />
+                            </Form.Item>
+                        </Col>
+                        <Col span={6}>
+                            <Form.Item name={["metadata", "inputKind"]} label="输入">
+                                <Select allowClear options={promptInputKindOptions} />
+                            </Form.Item>
+                        </Col>
+                        <Col span={6}>
+                            <Form.Item name={["metadata", "outputKind"]} label="输出">
+                                <Select allowClear options={promptOutputKindOptions} />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Form.Item name="variableText" label="变量说明">
+                        <Input.TextArea rows={3} placeholder={"每行一个变量：变量名 | 说明 | 默认值\n例如：角色 | 主角设定 | 魏梁"} />
+                    </Form.Item>
                     <Form.Item name="prompt" label="提示词" rules={[{ required: true, message: "请输入提示词" }]}>
                         <Input.TextArea rows={6} />
                     </Form.Item>
@@ -245,6 +307,13 @@ export default function AdminPromptsPage() {
                                 </Typography.Title>
                                 <Space wrap>
                                     <Tag>{categoryName(detailPrompt.category)}</Tag>
+                                    {detailPrompt.metadata?.type ? <Tag color="blue">{promptTypeLabel(detailPrompt.metadata.type)}</Tag> : null}
+                                    {detailPrompt.metadata?.scenario ? <Tag>场景：{detailPrompt.metadata.scenario}</Tag> : null}
+                                    {detailPrompt.metadata?.provider ? <Tag>供应商：{detailPrompt.metadata.provider}</Tag> : null}
+                                    {detailPrompt.metadata?.model ? <Tag>模型：{detailPrompt.metadata.model}</Tag> : null}
+                                    {detailPrompt.metadata?.inputKind ? <Tag>输入：{inputOutputKindLabel(detailPrompt.metadata.inputKind)}</Tag> : null}
+                                    {detailPrompt.metadata?.outputKind ? <Tag>输出：{inputOutputKindLabel(detailPrompt.metadata.outputKind)}</Tag> : null}
+                                    {detailPrompt.metadata?.favorite ? <Tag color="gold">常用</Tag> : null}
                                     {(detailPrompt.tags || []).map((tag) => (
                                         <Tag key={tag}>{tag}</Tag>
                                     ))}
@@ -255,6 +324,22 @@ export default function AdminPromptsPage() {
                             <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
                                 {detailPrompt.preview}
                             </Typography.Paragraph>
+                        ) : null}
+                        {detailPrompt.metadata?.variables?.length ? (
+                            <div>
+                                <Typography.Text strong>变量说明</Typography.Text>
+                                <div style={{ marginTop: 8 }}>
+                                    <Space size={[6, 6]} wrap>
+                                        {detailPrompt.metadata.variables.map((variable) => (
+                                            <Tag key={variable.name}>
+                                                {variable.name}
+                                                {variable.description ? `：${variable.description}` : ""}
+                                                {variable.defaultValue ? `（默认 ${variable.defaultValue}）` : ""}
+                                            </Tag>
+                                        ))}
+                                    </Space>
+                                </div>
+                            </div>
                         ) : null}
                         <Input.TextArea value={detailPrompt.prompt} rows={8} readOnly />
                         <Space>

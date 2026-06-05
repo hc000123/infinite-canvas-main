@@ -63,6 +63,11 @@ export type CanvasNodeMetadata = {
     capturedFrameTime?: number;
     capturedFrameAt?: string;
     capturedFrameSource?: "current_frame";
+    storyboardGroupId?: string;
+    storyboardShotId?: string;
+    storyboardRole?: string;
+    storyboardAssetRole?: string;
+    sourceAssetId?: string;
     variantOfNodeId?: string;
     continuationOfNodeId?: string;
     videoReferences?: string[];
@@ -139,6 +144,7 @@ export type CanvasAssistantImage = {
     id: string;
     dataUrl: string;
     storageKey?: string;
+    sourceAssetId?: string;
     prompt: string;
     volcengineAsset?: CanvasNodeMetadata["volcengineAsset"];
 };

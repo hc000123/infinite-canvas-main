@@ -52,6 +52,7 @@ const emptyChannel: AdminModelChannel = { protocol: "openai", name: "", baseUrl:
 type SettingsTabKey = "public" | "private";
 type EditorMode = "visual" | "json";
 type ModelSelectTabKey = "new" | "current";
+type ChannelFormValues = AdminModelChannel & { endpointId?: string };
 
 export default function AdminSettingsPage() {
     const token = useUserStore((state) => state.token);
@@ -61,7 +62,7 @@ export default function AdminSettingsPage() {
     const [editorMode, setEditorMode] = useState<Record<SettingsTabKey, EditorMode>>({ public: "visual", private: "visual" });
     const [jsonText, setJsonText] = useState<Record<SettingsTabKey, string>>({ public: "", private: "" });
     const [channels, setChannels] = useState<AdminModelChannel[]>([]);
-    const [channelForm] = Form.useForm<AdminModelChannel>();
+    const [channelForm] = Form.useForm<ChannelFormValues>();
     const [editingChannelIndex, setEditingChannelIndex] = useState<number | null>(null);
     const [isChannelDrawerOpen, setIsChannelDrawerOpen] = useState(false);
     const [testChannelIndex, setTestChannelIndex] = useState<number | null>(null);
@@ -94,6 +95,7 @@ export default function AdminSettingsPage() {
         return modelSelectGroups[modelSelectTab].filter((model) => model.toLowerCase().includes(keyword));
     }, [modelSelectGroups, modelSelectKeyword, modelSelectTab]);
     const activeSelectedCount = activeModelSelectModels.filter((model) => modelSelectSelected.includes(model)).length;
+    const channelProtocol = Form.useWatch("protocol", channelForm);
 
     const loadSettings = async () => {
         if (!token) return;
@@ -187,7 +189,7 @@ export default function AdminSettingsPage() {
         setEditingChannelIndex(index);
         setIsChannelDrawerOpen(true);
         const channel = index === null ? emptyChannel : normalizeChannel(channels[index]);
-        channelForm.setFieldsValue(channel);
+        channelForm.setFieldsValue({ ...channel, endpointId: arkEndpointFromModels(channel.models) });
         rememberModels(channel.models);
     };
 
@@ -198,7 +200,11 @@ export default function AdminSettingsPage() {
     };
 
     const saveChannel = async () => {
-        const channel = normalizeChannel(await channelForm.validateFields());
+        const values = await channelForm.validateFields();
+        const channel = normalizeChannel({
+            ...values,
+            models: mergeEndpointModel(values.models || [], values.protocol === "volcengine-ark" ? values.endpointId : ""),
+        });
         rememberModels(channel.models);
         const nextChannels = [...channels];
         if (editingChannelIndex === null) nextChannels.push(channel);
@@ -702,6 +708,27 @@ export default function AdminSettingsPage() {
                                     <Input />
                                 </Form.Item>
                             </Col>
+                            {channelProtocol === "volcengine-ark" ? (
+                                <Col span={24}>
+                                    <Form.Item
+                                        name="endpointId"
+                                        label="Seedance Endpoint / EP"
+                                        extra="企业 API 视频生成要填写实际 Endpoint，例如 ep-2026xxxx；保存后会自动加入渠道可用模型。"
+                                        rules={[
+                                            {
+                                                validator: (_, value) => {
+                                                    const endpoint = normalizeEndpointModel(value);
+                                                    const models = channelForm.getFieldValue("models") || [];
+                                                    if (endpoint || arkEndpointFromModels(models)) return Promise.resolve();
+                                                    return Promise.reject(new Error("请输入 Seedance Endpoint / EP"));
+                                                },
+                                            },
+                                        ]}
+                                    >
+                                        <Input placeholder="ep-xxxxxxxxxxxxxxxx" />
+                                    </Form.Item>
+                                </Col>
+                            ) : null}
                             <Col span={24}>
                                 <Form.Item name="apiKey" label="API Key" rules={editingChannelIndex === null ? [{ required: true, message: "请输入 API Key" }] : []}>
                                     <Input.Password placeholder={editingChannelIndex === null ? "" : "留空则沿用已保存的 API Key"} />
@@ -940,6 +967,20 @@ function normalizeChannel(item: Partial<AdminModelChannel> = {}): AdminModelChan
         enabled: item.enabled !== false,
         remark: item.remark || "",
     };
+}
+
+function normalizeEndpointModel(value?: string) {
+    return (value || "").trim();
+}
+
+function arkEndpointFromModels(models: string[] = []) {
+    return models.find((model) => normalizeEndpointModel(model).toLowerCase().startsWith("ep-")) || "";
+}
+
+function mergeEndpointModel(models: string[], endpoint?: string) {
+    const normalizedEndpoint = normalizeEndpointModel(endpoint);
+    if (!normalizedEndpoint) return uniqueModels(models);
+    return uniqueModels([normalizedEndpoint, ...models]);
 }
 
 function modelCostCredits(items: AdminSettings["public"]["modelChannel"]["modelCosts"], model: string) {

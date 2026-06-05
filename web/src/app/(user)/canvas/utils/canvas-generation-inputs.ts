@@ -1,6 +1,7 @@
 import type { ReferenceAudio } from "@/types/audio";
 import type { ReferenceImage, ReferenceImageRole } from "@/types/image";
 import type { ReferenceVideo } from "@/types/video";
+import { activeVolcengineAssetURI } from "../../../../services/volcengine-asset-metadata.ts";
 import { defaultSeedanceImageRole, normalizeSeedanceImageRole, type SeedanceImageRoleMode } from "../../../../services/api/video-reference.ts";
 
 export type CanvasGenerationNodeLike = {
@@ -106,17 +107,24 @@ function readReferenceImage(node: CanvasGenerationNodeLike): ReferenceImage | nu
         dataUrl: node.metadata.content,
         storageKey: node.metadata.storageKey,
         assetUri: activeVolcengineAssetURI(node.metadata.volcengineAsset),
+        volcengineAssetId: node.metadata.volcengineAsset?.assetId,
+        volcengineAssetStatus: node.metadata.volcengineAsset?.status,
     };
 }
 
 function readReferenceVideo(node: CanvasGenerationNodeLike): ReferenceVideo | null {
     if (node.type !== "video" || !node.metadata?.content) return null;
+    const assetUri = activeVolcengineAssetURI(node.metadata.volcengineAsset);
+    const volcengineAssetId = node.metadata.volcengineAsset?.assetId;
+    const volcengineAssetStatus = node.metadata.volcengineAsset?.status;
     return {
         id: node.id,
         name: `${node.title || node.id}.mp4`,
         type: node.metadata.mimeType || "video/mp4",
         url: node.metadata.videoUrl || node.metadata.cacheUrl || node.metadata.content,
         storageKey: node.metadata.videoUrl || node.metadata.cacheUrl ? undefined : node.metadata.storageKey,
+        ...(assetUri ? { assetUri } : {}),
+        ...(volcengineAssetId ? { volcengineAssetId, volcengineAssetStatus } : {}),
     };
 }
 
@@ -136,11 +144,6 @@ function audioExtension(mimeType?: string) {
     if (!subtype || subtype === "mpeg") return "mp3";
     if (subtype === "x-wav") return "wav";
     return subtype;
-}
-
-function activeVolcengineAssetURI(metadata?: { assetId?: string; status?: string }) {
-    const assetId = metadata?.assetId?.trim();
-    return metadata?.status === "Active" && assetId ? `asset://${assetId}` : "";
 }
 
 function applySeedanceImageRoles(inputs: NodeGenerationInput[], target?: CanvasGenerationNodeLike) {

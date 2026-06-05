@@ -14,7 +14,7 @@ const steps = ["创建任务", "排队", "生成", "回填", "完成"];
 
 export function buildCanvasVideoProgress(metadata: CanvasNodeMetadata | undefined, nodeStatus?: CanvasNodeStatus): CanvasVideoProgress {
     const taskStatus = normalizeVideoTaskStatus(metadata?.taskStatus || metadata?.rawTaskStatus);
-    const elapsedSeconds = videoElapsedSeconds(metadata, Date.now());
+    const elapsedSeconds = videoElapsedSeconds(metadata, Date.now(), nodeStatus);
     if (nodeStatus === "error" || taskStatus === "failed") return failedProgress(metadata);
     if (taskStatus === "cancelled") return progress("cancelled", "已取消", 100, 4);
     if (nodeStatus === "success" || taskStatus === "succeeded") return progress(nodeStatus === "success" ? "succeeded" : "caching", nodeStatus === "success" ? "完成" : "回填视频", nodeStatus === "success" ? 100 : 92, nodeStatus === "success" ? 5 : 4);
@@ -23,10 +23,21 @@ export function buildCanvasVideoProgress(metadata: CanvasNodeMetadata | undefine
     return progress("creating", "创建任务", 8, 1);
 }
 
-export function videoElapsedSeconds(metadata: CanvasNodeMetadata | undefined, now: number) {
+export function videoElapsedSeconds(metadata: CanvasNodeMetadata | undefined, now: number, nodeStatus?: CanvasNodeStatus) {
     const startedAt = normalizeTimestamp(metadata?.generationStartedAt) || normalizeTimestamp(metadata?.taskCreatedAt);
     if (!startedAt) return 0;
-    return Math.max(0, Math.floor((now - startedAt) / 1000));
+    const endedAt = videoElapsedEndAt(metadata, nodeStatus);
+    return Math.max(0, Math.floor(((endedAt || now) - startedAt) / 1000));
+}
+
+export function isVideoElapsedTerminal(metadata: CanvasNodeMetadata | undefined, nodeStatus?: CanvasNodeStatus) {
+    const taskStatus = normalizeVideoTaskStatus(metadata?.taskStatus || metadata?.rawTaskStatus);
+    return nodeStatus === "error" || nodeStatus === "success" || taskStatus === "failed" || taskStatus === "cancelled" || taskStatus === "succeeded";
+}
+
+export function videoElapsedEndAt(metadata: CanvasNodeMetadata | undefined, nodeStatus?: CanvasNodeStatus) {
+    if (!isVideoElapsedTerminal(metadata, nodeStatus)) return undefined;
+    return normalizeTimestamp(metadata?.taskUpdatedAt) || normalizeTimestamp(metadata?.videoUrlExpiresAt) || parseTimestamp(metadata?.localStoredAt);
 }
 
 function failedProgress(metadata: CanvasNodeMetadata | undefined) {
@@ -70,4 +81,10 @@ function normalizeVideoTaskStatus(status?: string) {
 function normalizeTimestamp(value?: number) {
     if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
     return value > 1_000_000_000_000 ? value : value * 1000;
+}
+
+function parseTimestamp(value?: string) {
+    if (!value) return undefined;
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp) ? timestamp : undefined;
 }

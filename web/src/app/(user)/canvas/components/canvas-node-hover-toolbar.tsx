@@ -96,7 +96,7 @@ export function CanvasNodeHoverToolbar({
             {hasSpecificTools ? <ToolbarDivider /> : null}
             {canRetry ? <ToolbarAction title="重新生成" label="重试" icon={<RefreshCw className="size-4" />} onClick={() => onRetry(node)} /> : null}
             {hasImage || hasVideo || hasAudio || isText ? <ToolbarAction title="加入我的素材" label="存素材" icon={<FolderPlus className="size-4" />} onClick={() => onSaveAsset(node)} /> : null}
-            {hasImage ? (
+            {hasImage || hasVideo ? (
                 review?.assetId ? (
                     <ToolbarAction
                         title={reviewProcessing ? "火山加白审核中，状态会自动刷新" : `火山加白状态：${volcengineStatusLabel(review.status)}`}
@@ -239,7 +239,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                             {node.type === CanvasNodeType.Image && node.metadata?.capturedFrameTime !== undefined ? <InfoRow label="截取时间" value={`${node.metadata.capturedFrameTime}s`} /> : null}
                             {node.metadata?.prompt ? <InfoRow label="提示词" value={node.metadata.prompt} /> : null}
                             {imageBytes ? <InfoRow label="图片大小" value={formatBytes(imageBytes)} /> : null}
-                            {node.type === CanvasNodeType.Image && node.metadata?.volcengineAsset ? (
+                            {(node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video) && node.metadata?.volcengineAsset ? (
                                 <>
                                     <InfoRow label="火山状态" value={volcengineStatusLabel(node.metadata.volcengineAsset.status)} />
                                     <InfoRow label="Asset ID" value={node.metadata.volcengineAsset.assetId} />

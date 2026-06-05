@@ -1,16 +1,16 @@
 "use client";
 
-import { FolderPlus, PencilLine, Search, Trash2, Upload } from "lucide-react";
+import { Download, FolderPlus, PencilLine, Search, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from "react";
 import { App, Button, Empty, Form, Input, Modal, Pagination, Select, Space, Tag, Typography } from "antd";
 import { saveAs } from "file-saver";
 
 import { useCopyText } from "@/hooks/use-copy-text";
 import { formatBytes, readFileAsDataUrl } from "@/lib/image-utils";
-import { fetchVolcengineAssetStatus, submitVolcengineImageAsset } from "@/services/api/volcengine-assets";
-import { uploadMediaFile } from "@/services/file-storage";
+import { fetchVolcengineAssetStatus, submitVolcengineMediaAsset } from "@/services/api/volcengine-assets";
+import { getMediaBlob, uploadMediaFile } from "@/services/file-storage";
 import { getImageBlob, uploadImage } from "@/services/image-storage";
-import { buildVolcengineImageFilename, isVolcengineReviewProcessing, mergeVolcengineReviewStatus, volcengineReviewMetadataFromSubmission, volcengineReviewPollingKey } from "@/services/volcengine-asset-metadata";
+import { buildVolcengineMediaFilename, isVolcengineReviewProcessing, mergeVolcengineReviewStatus, volcengineReviewMetadataFromSubmission, volcengineReviewPollingKey } from "@/services/volcengine-asset-metadata";
 import { cn } from "@/lib/utils";
 import { useAssetStore, type Asset, type AssetFolder, type AssetKind, type AudioAsset, type ImageAsset, type VideoAsset, type VolcengineAssetMetadata } from "@/stores/use-asset-store";
 import { useConfigStore } from "@/stores/use-config-store";
@@ -85,6 +85,7 @@ export default function AssetsPage() {
     const [editingFolder, setEditingFolder] = useState<AssetFolder | null>(null);
     const [folderName, setFolderName] = useState("");
     const [isDraggingUpload, setIsDraggingUpload] = useState(false);
+    const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(() => new Set());
     const activeFolderId = folderFilter !== "all" && folderFilter !== "root" ? folderFilter : undefined;
     const coverUrl = Form.useWatch("coverUrl", form) || "";
     const title = Form.useWatch("title", form) || "";
@@ -120,6 +121,17 @@ export default function AssetsPage() {
         const start = (page - 1) * pageSize;
         return filteredAssets.slice(start, start + pageSize);
     }, [filteredAssets, page, pageSize]);
+    const selectedAssets = useMemo(() => validAssets.filter((asset) => selectedAssetIds.has(asset.id)), [validAssets, selectedAssetIds]);
+    const selectedInFilteredCount = useMemo(() => filteredAssets.filter((asset) => selectedAssetIds.has(asset.id)).length, [filteredAssets, selectedAssetIds]);
+    const allFilteredSelected = filteredAssets.length > 0 && selectedInFilteredCount === filteredAssets.length;
+    const selectedAssetSummary = useMemo(() => {
+        if (!selectedAssets.length) return "未选择素材";
+        const names = selectedAssets
+            .slice(0, 3)
+            .map((asset) => asset.title || "未命名素材")
+            .join("、");
+        return selectedAssets.length > 3 ? `${names} 等 ${selectedAssets.length} 个` : names;
+    }, [selectedAssets]);
     const processingReviewIds = useMemo(() => volcengineReviewPollingKey(validAssets), [validAssets]);
 
     useEffect(() => {
@@ -130,6 +142,19 @@ export default function AssetsPage() {
     useEffect(() => {
         if (activeFolderId && !folderMap.has(activeFolderId)) setFolderFilter("all");
     }, [activeFolderId, folderMap]);
+
+    useEffect(() => {
+        const existingIds = new Set(validAssets.map((asset) => asset.id));
+        setSelectedAssetIds((current) => {
+            let changed = false;
+            const next = new Set<string>();
+            current.forEach((id) => {
+                if (existingIds.has(id)) next.add(id);
+                else changed = true;
+            });
+            return changed ? next : current;
+        });
+    }, [validAssets]);
 
     const openCreate = () => {
         setEditingAsset(null);
@@ -232,12 +257,42 @@ export default function AssetsPage() {
         saveAs(asset.kind === "image" ? asset.data.dataUrl : asset.data.url, `${asset.title || "asset"}.${asset.data.mimeType.split("/")[1] || "bin"}`);
     };
 
+    const exportSelectedAssets = async () => {
+        if (!selectedAssets.length) {
+            message.warning("请先选择要导出的素材");
+            return;
+        }
+        await exportAssets(selectedAssets);
+    };
+
     const exportAllAssets = async () => {
         if (!validAssets.length) {
             message.warning("暂无素材可导出");
             return;
         }
         await exportAssets(validAssets);
+    };
+
+    const toggleAssetSelected = (assetId: string) => {
+        setSelectedAssetIds((current) => {
+            const next = new Set(current);
+            if (next.has(assetId)) next.delete(assetId);
+            else next.add(assetId);
+            return next;
+        });
+    };
+
+    const selectFilteredAssets = () => {
+        if (!filteredAssets.length) return;
+        setSelectedAssetIds((current) => {
+            const next = new Set(current);
+            filteredAssets.forEach((asset) => next.add(asset.id));
+            return next;
+        });
+    };
+
+    const clearSelectedAssets = () => {
+        setSelectedAssetIds(new Set());
     };
 
     const importAssetFiles = async (files?: FileList | File[]) => {
@@ -407,7 +462,7 @@ export default function AssetsPage() {
         setDeletingAsset(null);
     };
 
-    const updateVolcengineMetadata = (asset: ImageAsset, volcengineAsset: VolcengineAssetMetadata) => {
+    const updateVolcengineMetadata = (asset: ImageAsset | VideoAsset, volcengineAsset: VolcengineAssetMetadata) => {
         const metadata = {
             ...(asset.metadata || {}),
             volcengineAsset,
@@ -417,7 +472,7 @@ export default function AssetsPage() {
     };
 
     const submitImageReview = async (asset: Asset) => {
-        if (asset.kind !== "image") return;
+        if (asset.kind !== "image" && asset.kind !== "video") return;
         if (!volcengineAssetEnabled) {
             message.warning("请先在配置里开启火山人像加白");
             return;
@@ -428,16 +483,16 @@ export default function AssetsPage() {
         }
         setSubmittingReviewId(asset.id);
         try {
-            const storedBlob = asset.data.storageKey ? await getImageBlob(asset.data.storageKey) : null;
-            const blob = storedBlob || (await fetchImageBlob(asset.data.dataUrl));
+            const storedBlob = asset.data.storageKey ? (asset.kind === "image" ? await getImageBlob(asset.data.storageKey) : await getMediaBlob(asset.data.storageKey)) : null;
+            const blob = storedBlob || (await fetchImageBlob(asset.kind === "image" ? asset.data.dataUrl : asset.data.url));
             if (!blob) {
-                message.error("没有找到图片文件");
+                message.error(asset.kind === "image" ? "没有找到图片文件" : "没有找到视频文件");
                 return;
             }
             const saved = asset.metadata?.volcengineAsset;
-            const result = await submitVolcengineImageAsset(token, {
+            const result = await submitVolcengineMediaAsset(token, {
                 file: blob,
-                filename: buildVolcengineImageFilename(asset.title, asset.id, asset.data.mimeType),
+                filename: buildVolcengineMediaFilename(asset.title, asset.id, asset.data.mimeType, asset.kind),
                 assetTitle: asset.title,
                 groupId: saved?.groupId,
                 groupName: asset.title || "我的素材",
@@ -452,7 +507,7 @@ export default function AssetsPage() {
     };
 
     const refreshImageReview = async (asset: Asset, options: { silent?: boolean; showProgress?: boolean } = {}) => {
-        if (asset.kind !== "image" || !asset.metadata?.volcengineAsset?.assetId) return;
+        if ((asset.kind !== "image" && asset.kind !== "video") || !asset.metadata?.volcengineAsset?.assetId) return;
         if (!token) {
             if (!options.silent) message.error("请先登录");
             return;
@@ -488,7 +543,7 @@ export default function AssetsPage() {
             polling = true;
             for (const asset of validAssets) {
                 if (cancelled) break;
-                if (asset.kind === "image" && isVolcengineReviewProcessing(asset.metadata?.volcengineAsset)) {
+                if ((asset.kind === "image" || asset.kind === "video") && isVolcengineReviewProcessing(asset.metadata?.volcengineAsset)) {
                     await refreshImageReview(asset, { silent: true, showProgress: true });
                 }
             }
@@ -566,24 +621,19 @@ export default function AssetsPage() {
                                     ))}
                                 </div>
                             </div>
-                            <div className="flex flex-wrap gap-4">
-                                <button
-                                    type="button"
-                                    className="cursor-pointer text-sm font-medium text-stone-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline dark:text-stone-300"
-                                    onClick={() => void exportAllAssets()}
-                                >
-                                    导出素材
-                                </button>
-                                <button
-                                    type="button"
-                                    className="cursor-pointer text-sm font-medium text-stone-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline dark:text-stone-300"
-                                    onClick={() => assetInputRef.current?.click()}
-                                >
+                            <div className="flex flex-wrap gap-2">
+                                <Button size="small" icon={<Download className="size-3.5" />} disabled={!selectedAssets.length} onClick={() => void exportSelectedAssets()}>
+                                    导出选中{selectedAssets.length ? ` ${selectedAssets.length}` : ""}
+                                </Button>
+                                <Button size="small" icon={<Download className="size-3.5" />} onClick={() => void exportAllAssets()}>
+                                    导出全部
+                                </Button>
+                                <Button size="small" icon={<Upload className="size-3.5" />} onClick={() => assetInputRef.current?.click()}>
                                     导入素材
-                                </button>
-                                <button type="button" className="cursor-pointer text-sm font-medium text-stone-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline dark:text-stone-300" onClick={openCreate}>
+                                </Button>
+                                <Button size="small" type="primary" onClick={openCreate}>
                                     新增素材
-                                </button>
+                                </Button>
                             </div>
                         </div>
                         <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
@@ -690,13 +740,31 @@ export default function AssetsPage() {
                 </div>
 
                 <div className="mx-auto flex max-w-7xl flex-col gap-5">
+                    <div className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-background/95 px-4 py-3 shadow-sm dark:border-stone-800 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                            <div className="text-sm font-medium text-stone-900 dark:text-stone-100">已选择 {selectedAssets.length} 个</div>
+                            <div className="mt-1 truncate text-xs text-stone-500 dark:text-stone-400">
+                                {selectedAssetSummary} · 当前筛选 {filteredAssets.length} 个，已选 {selectedInFilteredCount} 个
+                            </div>
+                        </div>
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                            <Button size="small" disabled={!filteredAssets.length || allFilteredSelected} onClick={selectFilteredAssets}>
+                                全选当前结果
+                            </Button>
+                            <Button size="small" disabled={!selectedAssets.length} onClick={clearSelectedAssets}>
+                                清空选择
+                            </Button>
+                        </div>
+                    </div>
                     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                         {visibleAssets.map((asset) => (
                             <AssetCard
                                 key={asset.id}
                                 asset={asset}
                                 folderName={asset.folderId ? folderMap.get(asset.folderId)?.name : ""}
+                                selected={selectedAssetIds.has(asset.id)}
                                 refreshingReview={refreshingReviewId === asset.id}
+                                onSelect={() => toggleAssetSelected(asset.id)}
                                 onOpen={() => setPreviewAsset(asset)}
                                 onEdit={() => openEdit(asset)}
                                 onCopy={copyAssetText}

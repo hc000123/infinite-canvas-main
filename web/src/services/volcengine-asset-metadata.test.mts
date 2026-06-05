@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildVolcengineImageFilename, isVolcengineReviewProcessing, mergeVolcengineReviewStatus, shouldShowVolcengineReviewAction, volcengineReviewMetadataFromSubmission, volcengineReviewPollingKey } from "./volcengine-asset-metadata.ts";
+import {
+    buildVolcengineImageFilename,
+    buildVolcengineMediaFilename,
+    isVolcengineReviewProcessing,
+    mergeVolcengineReviewStatus,
+    shouldShowVolcengineReviewAction,
+    volcengineReviewMetadataFromSubmission,
+    volcengineReviewPollingKey,
+} from "./volcengine-asset-metadata.ts";
 
 test("creates review metadata from CreateAsset submission", () => {
     const metadata = volcengineReviewMetadataFromSubmission({
@@ -64,11 +72,12 @@ test("merges GetAsset status without losing existing submission fields", () => {
 test("builds a safe image filename for review upload", () => {
     assert.equal(buildVolcengineImageFilename("角色/头像:测试", "node-1", "image/jpeg"), "角色_头像_测试.jpeg");
     assert.equal(buildVolcengineImageFilename("", "node-1", ""), "node-1.png");
+    assert.equal(buildVolcengineMediaFilename("参考视频/片段", "node-2", "video/mp4", "video"), "参考视频_片段.mp4");
 });
 
-test("shows the review action for image assets regardless of config state", () => {
+test("shows the review action for image and video assets", () => {
     assert.equal(shouldShowVolcengineReviewAction("image"), true);
-    assert.equal(shouldShowVolcengineReviewAction("video"), false);
+    assert.equal(shouldShowVolcengineReviewAction("video"), true);
     assert.equal(shouldShowVolcengineReviewAction("audio"), false);
     assert.equal(shouldShowVolcengineReviewAction("text"), false);
 });

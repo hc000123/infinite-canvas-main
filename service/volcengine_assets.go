@@ -39,6 +39,7 @@ import (
 )
 
 const maxVolcengineAssetImageBytes = 30 * 1024 * 1024
+const maxVolcengineAssetMediaBytes = 200 * 1024 * 1024
 
 var errVolcengineEmptyResponse = errors.New("empty response")
 
@@ -72,6 +73,14 @@ type volcengineImageFile struct {
 	PublicURL string
 }
 
+type volcengineMediaFile struct {
+	Bytes     []byte
+	Ext       string
+	MimeType  string
+	AssetType string
+	PublicURL string
+}
+
 type volcengineImageConfig struct {
 	Ext    string
 	Width  int
@@ -80,7 +89,7 @@ type volcengineImageConfig struct {
 
 type volcengineAssetClient interface {
 	CreateAssetGroup(context.Context, model.VolcengineAssetSetting, string, string) (string, error)
-	CreateAsset(context.Context, model.VolcengineAssetSetting, string, string, string) (string, error)
+	CreateAsset(context.Context, model.VolcengineAssetSetting, string, string, string, string) (string, error)
 	GetAsset(context.Context, model.VolcengineAssetSetting, string, string) (VolcengineAssetStatus, error)
 }
 
@@ -114,72 +123,45 @@ func SubmitVolcengineImageAsset(ctx context.Context, file multipart.File, header
 	if err != nil {
 		return VolcengineAssetSubmission{}, err
 	}
-
-	assetTitle = strings.TrimSpace(assetTitle)
-	groupID = firstNonEmpty(strings.TrimSpace(groupID), setting.AssetGroupID)
-	groupName = strings.TrimSpace(groupName)
-	if groupID == "" {
-		if groupName == "" {
-			groupName = firstNonEmpty(assetTitle, "我的素材")
-		}
-		groupID, err = activeVolcengineAssetClient.CreateAssetGroup(ctx, setting, groupName, "我的素材人像素材审核")
-		if err != nil {
-			return VolcengineAssetSubmission{}, err
-		}
-		groupID = strings.TrimSpace(groupID)
-		if groupID == "" {
-			return VolcengineAssetSubmission{}, safeMessageError{message: "火山接口没有返回素材组 ID"}
-		}
-	}
-
-	assetID, err := activeVolcengineAssetClient.CreateAsset(ctx, setting, groupID, imageFile.PublicURL, assetTitle)
-	if err != nil {
-		return VolcengineAssetSubmission{}, err
-	}
-	assetID = strings.TrimSpace(assetID)
-	if assetID == "" {
-		return VolcengineAssetSubmission{}, safeMessageError{message: "火山接口没有返回素材 ID"}
-	}
-	timestamp := now()
-	return VolcengineAssetSubmission{
-		AssetID:     assetID,
-		GroupID:     groupID,
-		ProjectName: setting.ProjectName,
-		Status:      "Processing",
-		PublicURL:   imageFile.PublicURL,
-		SubmittedAt: timestamp,
-		UpdatedAt:   timestamp,
-	}, nil
+	return submitVolcenginePublicAsset(ctx, setting, imageFile.PublicURL, assetTitle, groupID, groupName, "我的素材", "我的素材人像素材审核", "Image")
 }
 
-func SubmitVolcengineImageAssetURL(ctx context.Context, rawURL string, assetTitle string, groupID string, groupName string) (VolcengineAssetSubmission, error) {
+func SubmitVolcengineMediaAsset(ctx context.Context, file multipart.File, header *multipart.FileHeader, assetTitle string, groupID string, groupName string) (VolcengineAssetSubmission, error) {
 	setting, err := currentVolcengineAssetSetting()
 	if err != nil {
 		return VolcengineAssetSubmission{}, err
 	}
-	publicURL, err := resolveVolcengineAssetURL(ctx, setting, rawURL)
+	mediaFile, err := validateVolcengineMedia(file, header)
 	if err != nil {
 		return VolcengineAssetSubmission{}, err
 	}
+	mediaFile, err = saveVolcenginePublicMedia(ctx, setting, mediaFile)
+	if err != nil {
+		return VolcengineAssetSubmission{}, err
+	}
+	return submitVolcenginePublicAsset(ctx, setting, mediaFile.PublicURL, assetTitle, groupID, groupName, "我的素材", "我的素材人像素材审核", mediaFile.AssetType)
+}
+
+func submitVolcenginePublicAsset(ctx context.Context, setting model.VolcengineAssetSetting, publicURL string, assetTitle string, groupID string, groupName string, defaultGroupName string, description string, assetType string) (VolcengineAssetSubmission, error) {
 
 	assetTitle = strings.TrimSpace(assetTitle)
 	groupID = firstNonEmpty(strings.TrimSpace(groupID), setting.AssetGroupID)
 	groupName = strings.TrimSpace(groupName)
 	if groupID == "" {
 		if groupName == "" {
-			groupName = firstNonEmpty(assetTitle, "素材管理")
+			groupName = firstNonEmpty(assetTitle, defaultGroupName)
 		}
-		groupID, err = activeVolcengineAssetClient.CreateAssetGroup(ctx, setting, groupName, "素材管理人像素材审核")
+		createdGroupID, err := activeVolcengineAssetClient.CreateAssetGroup(ctx, setting, groupName, description)
 		if err != nil {
 			return VolcengineAssetSubmission{}, err
 		}
-		groupID = strings.TrimSpace(groupID)
+		groupID = strings.TrimSpace(createdGroupID)
 		if groupID == "" {
 			return VolcengineAssetSubmission{}, safeMessageError{message: "火山接口没有返回素材组 ID"}
 		}
 	}
 
-	assetID, err := activeVolcengineAssetClient.CreateAsset(ctx, setting, groupID, publicURL, assetTitle)
+	assetID, err := activeVolcengineAssetClient.CreateAsset(ctx, setting, groupID, publicURL, assetTitle, assetType)
 	if err != nil {
 		return VolcengineAssetSubmission{}, err
 	}
@@ -197,6 +179,22 @@ func SubmitVolcengineImageAssetURL(ctx context.Context, rawURL string, assetTitl
 		SubmittedAt: timestamp,
 		UpdatedAt:   timestamp,
 	}, nil
+}
+
+func SubmitVolcengineImageAssetURL(ctx context.Context, rawURL string, assetTitle string, groupID string, groupName string) (VolcengineAssetSubmission, error) {
+	return SubmitVolcengineMediaAssetURL(ctx, rawURL, assetTitle, groupID, groupName, model.AssetTypeImage)
+}
+
+func SubmitVolcengineMediaAssetURL(ctx context.Context, rawURL string, assetTitle string, groupID string, groupName string, mediaType model.AssetType) (VolcengineAssetSubmission, error) {
+	setting, err := currentVolcengineAssetSetting()
+	if err != nil {
+		return VolcengineAssetSubmission{}, err
+	}
+	publicURL, err := resolveVolcengineAssetURL(ctx, setting, rawURL)
+	if err != nil {
+		return VolcengineAssetSubmission{}, err
+	}
+	return submitVolcenginePublicAsset(ctx, setting, publicURL, assetTitle, groupID, groupName, "素材管理", "素材管理人像素材审核", volcengineCreateAssetType(mediaType))
 }
 
 func GetVolcengineAssetStatus(ctx context.Context, assetID string, projectName string) (VolcengineAssetStatus, error) {
@@ -233,10 +231,10 @@ func SubmitAdminAssetVolcengineReview(ctx context.Context, assetID string) (mode
 	if err != nil {
 		return model.Asset{}, err
 	}
-	if asset.Type != model.AssetTypeImage {
-		return model.Asset{}, safeMessageError{message: "只有图片素材可以提交加白"}
+	if asset.Type != model.AssetTypeImage && asset.Type != model.AssetTypeVideo {
+		return model.Asset{}, safeMessageError{message: "只有图片或视频素材可以提交加白"}
 	}
-	submission, err := SubmitVolcengineImageAssetURL(ctx, firstNonEmpty(asset.URL, asset.CoverURL), asset.Title, asset.VolcengineGroupID, asset.Title)
+	submission, err := SubmitVolcengineMediaAssetURL(ctx, firstNonEmpty(asset.URL, asset.CoverURL), asset.Title, asset.VolcengineGroupID, asset.Title, asset.Type)
 	if err != nil {
 		return model.Asset{}, err
 	}
@@ -313,11 +311,11 @@ func (realVolcengineAssetClient) CreateAssetGroup(ctx context.Context, setting m
 	), nil
 }
 
-func (realVolcengineAssetClient) CreateAsset(ctx context.Context, setting model.VolcengineAssetSetting, groupID string, publicURL string, name string) (string, error) {
+func (realVolcengineAssetClient) CreateAsset(ctx context.Context, setting model.VolcengineAssetSetting, groupID string, publicURL string, name string, assetType string) (string, error) {
 	payload := map[string]interface{}{
 		"GroupId":     strings.TrimSpace(groupID),
 		"URL":         strings.TrimSpace(publicURL),
-		"AssetType":   "Image",
+		"AssetType":   firstNonEmpty(strings.TrimSpace(assetType), "Image"),
 		"ProjectName": setting.ProjectName,
 	}
 	if strings.TrimSpace(name) != "" {
@@ -554,6 +552,10 @@ func validateVolcengineImage(file multipart.File, header *multipart.FileHeader) 
 	if err != nil {
 		return volcengineImageFile{}, err
 	}
+	return validateVolcengineImageBytes(data, header)
+}
+
+func validateVolcengineImageBytes(data []byte, header *multipart.FileHeader) (volcengineImageFile, error) {
 	if len(data) == 0 {
 		return volcengineImageFile{}, safeMessageError{message: "图片文件不能为空"}
 	}
@@ -583,6 +585,43 @@ func validateVolcengineImage(file multipart.File, header *multipart.FileHeader) 
 		return volcengineImageFile{}, safeMessageError{message: "图片宽高比需在 0.4 到 2.5 之间"}
 	}
 	return volcengineImageFile{Bytes: data, Ext: ext, MimeType: mimeType, Width: cfg.Width, Height: cfg.Height}, nil
+}
+
+func validateVolcengineMedia(file multipart.File, header *multipart.FileHeader) (volcengineMediaFile, error) {
+	data, err := io.ReadAll(io.LimitReader(file, maxVolcengineAssetMediaBytes+1))
+	if err != nil {
+		return volcengineMediaFile{}, err
+	}
+	if len(data) == 0 {
+		return volcengineMediaFile{}, safeMessageError{message: "素材文件不能为空"}
+	}
+	if len(data) > maxVolcengineAssetMediaBytes {
+		return volcengineMediaFile{}, safeMessageError{message: "视频素材大小需小于 200 MB"}
+	}
+	mimeType := assetUploadMimeType(data, header)
+	assetType := assetUploadType(mimeType)
+	if assetType == model.AssetTypeImage {
+		imageFile, err := validateVolcengineImageBytes(data, header)
+		if err != nil {
+			return volcengineMediaFile{}, err
+		}
+		return volcengineMediaFile{Bytes: imageFile.Bytes, Ext: imageFile.Ext, MimeType: imageFile.MimeType, AssetType: "Image"}, nil
+	}
+	if assetType != model.AssetTypeVideo {
+		return volcengineMediaFile{}, safeMessageError{message: "仅支持图片或视频素材加白"}
+	}
+	ext := strings.TrimPrefix(assetUploadExt(mimeType, header.Filename), ".")
+	if ext == "" || ext == "bin" {
+		return volcengineMediaFile{}, safeMessageError{message: "视频格式需为 mp4、mov、m4v 或 webm"}
+	}
+	return volcengineMediaFile{Bytes: data, Ext: ext, MimeType: mimeType, AssetType: "Video"}, nil
+}
+
+func volcengineCreateAssetType(mediaType model.AssetType) string {
+	if mediaType == model.AssetTypeVideo {
+		return "Video"
+	}
+	return "Image"
 }
 
 func normalizeImageFormat(format string) string {
@@ -696,26 +735,39 @@ func isoBoxSize(data []byte, offset int, end int) (int, int, bool) {
 }
 
 func saveVolcenginePublicImage(ctx context.Context, setting model.VolcengineAssetSetting, imageFile volcengineImageFile) (volcengineImageFile, error) {
-	if setting.PublicAssetBaseURL == "" {
-		return imageFile, safeMessageError{message: "请先配置公网素材访问地址"}
-	}
-	id, err := randomHexID()
+	mediaFile, err := saveVolcenginePublicMedia(ctx, setting, volcengineMediaFile{Bytes: imageFile.Bytes, Ext: imageFile.Ext, MimeType: imageFile.MimeType, AssetType: "Image"})
 	if err != nil {
 		return imageFile, err
 	}
-	dir := filepath.Join(config.Cfg.PublicAssetDir, "images")
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return imageFile, err
-	}
-	filename := id + "." + imageFile.Ext
-	if err := os.WriteFile(filepath.Join(dir, filename), imageFile.Bytes, 0644); err != nil {
-		return imageFile, err
-	}
-	imageFile.PublicURL = volcenginePublicAssetURL(setting, "images/"+filename)
-	if err := activeVolcengineObjectUploader.UploadObject(ctx, setting, imageFile.PublicURL, imageFile.Bytes, imageFile.MimeType); err != nil {
-		return imageFile, err
-	}
+	imageFile.PublicURL = mediaFile.PublicURL
 	return imageFile, nil
+}
+
+func saveVolcenginePublicMedia(ctx context.Context, setting model.VolcengineAssetSetting, mediaFile volcengineMediaFile) (volcengineMediaFile, error) {
+	if setting.PublicAssetBaseURL == "" {
+		return mediaFile, safeMessageError{message: "请先配置公网素材访问地址"}
+	}
+	id, err := randomHexID()
+	if err != nil {
+		return mediaFile, err
+	}
+	dirName := "images"
+	if mediaFile.AssetType == "Video" {
+		dirName = "videos"
+	}
+	dir := filepath.Join(config.Cfg.PublicAssetDir, dirName)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return mediaFile, err
+	}
+	filename := id + "." + mediaFile.Ext
+	if err := os.WriteFile(filepath.Join(dir, filename), mediaFile.Bytes, 0644); err != nil {
+		return mediaFile, err
+	}
+	mediaFile.PublicURL = volcenginePublicAssetURL(setting, dirName+"/"+filename)
+	if err := activeVolcengineObjectUploader.UploadObject(ctx, setting, mediaFile.PublicURL, mediaFile.Bytes, mediaFile.MimeType); err != nil {
+		return mediaFile, err
+	}
+	return mediaFile, nil
 }
 
 func volcenginePublicAssetURL(setting model.VolcengineAssetSetting, relativePath string) string {

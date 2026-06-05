@@ -38,8 +38,13 @@ export function mergeVolcengineReviewStatus(saved: VolcengineReviewMetadata, sta
 }
 
 export function buildVolcengineImageFilename(title: string, fallbackId: string, mimeType?: string) {
-    const safeBase = (title || fallbackId || "image").trim().replace(/[\\/:*?"<>|]+/g, "_") || "image";
-    const ext = mimeType?.split("/")[1] || "png";
+    return buildVolcengineMediaFilename(title, fallbackId, mimeType, "image");
+}
+
+export function buildVolcengineMediaFilename(title: string, fallbackId: string, mimeType?: string, kind: "image" | "video" = "image") {
+    const fallback = kind === "video" ? "video" : "image";
+    const safeBase = (title || fallbackId || fallback).trim().replace(/[\\/:*?"<>|]+/g, "_") || fallback;
+    const ext = mediaExtension(mimeType, kind);
     return `${safeBase}.${ext}`;
 }
 
@@ -64,5 +69,14 @@ export function volcengineReviewPollingKey(items: Array<{ id: string; metadata?:
 }
 
 export function shouldShowVolcengineReviewAction(kind: string) {
-    return kind === "image";
+    return kind === "image" || kind === "video";
+}
+
+function mediaExtension(mimeType?: string, kind: "image" | "video" = "image") {
+    const subtype = mimeType?.split(";")[0]?.split("/")[1]?.toLowerCase();
+    if (!subtype) return kind === "video" ? "mp4" : "png";
+    if (subtype === "jpeg") return "jpeg";
+    if (subtype === "quicktime") return "mov";
+    if (subtype === "x-m4v") return "m4v";
+    return subtype.replace(/[^a-z0-9]+/g, "") || (kind === "video" ? "mp4" : "png");
 }

@@ -6,11 +6,31 @@ export type Prompt = {
     coverUrl: string;
     prompt: string;
     tags: string[];
+    metadata?: PromptMetadata;
     category: string;
     githubUrl: string;
     preview: string;
     createdAt: string;
     updatedAt: string;
+};
+
+export type PromptTemplateType = "asset" | "image" | "video" | "grid" | "positive" | "negative" | "workflow";
+
+export type PromptVariable = {
+    name: string;
+    description?: string;
+    defaultValue?: string;
+};
+
+export type PromptMetadata = {
+    type?: PromptTemplateType | string;
+    scenario?: string;
+    provider?: string;
+    model?: string;
+    inputKind?: string;
+    outputKind?: string;
+    variables?: PromptVariable[];
+    favorite?: boolean;
 };
 
 export const ALL_PROMPTS_OPTION = "全部";
@@ -19,16 +39,30 @@ export type PromptListResponse = {
     items: Prompt[];
     tags: string[];
     categories: string[];
+    types?: string[];
+    scenarios?: string[];
     total: number;
 };
 
-export async function fetchPrompts({ keyword = "", tag = [], category = ALL_PROMPTS_OPTION, page, pageSize }: { keyword?: string; tag?: string[]; category?: string; page?: number; pageSize?: number } = {}) {
+export async function fetchPrompts({
+    keyword = "",
+    tag = [],
+    category = ALL_PROMPTS_OPTION,
+    type = ALL_PROMPTS_OPTION,
+    scenario = ALL_PROMPTS_OPTION,
+    favorite = false,
+    page,
+    pageSize,
+}: { keyword?: string; tag?: string[]; category?: string; type?: string; scenario?: string; favorite?: boolean; page?: number; pageSize?: number } = {}) {
     return apiGet<PromptListResponse>(
         "/api/prompts",
         compactApiParams({
             ...(keyword ? { keyword } : {}),
             ...(tag.length ? { tag } : {}),
             ...(category !== ALL_PROMPTS_OPTION ? { category } : {}),
+            ...(type !== ALL_PROMPTS_OPTION ? { type } : {}),
+            ...(scenario !== ALL_PROMPTS_OPTION ? { scenario } : {}),
+            ...(favorite ? { favorite: "true" } : {}),
             ...(page ? { page } : {}),
             ...(pageSize ? { pageSize } : {}),
         }),

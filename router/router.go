@@ -31,6 +31,7 @@ func New() *gin.Engine {
 	v1.POST("/videos", gin.WrapF(handler.AIVideos))
 	v1.POST("/canvas/media-cache", gin.WrapF(handler.CacheCanvasMedia))
 	v1.POST("/volcengine/assets/image-review", gin.WrapF(handler.SubmitVolcengineImageAsset))
+	v1.POST("/volcengine/assets/media-review", gin.WrapF(handler.SubmitVolcengineMediaAsset))
 	v1.POST("/volcengine/assets/status", gin.WrapF(handler.VolcengineAssetStatus))
 	v1.GET("/videos/:id", func(c *gin.Context) {
 		handler.AIVideo(c.Writer, c.Request, c.Param("id"))

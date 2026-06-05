@@ -7,6 +7,7 @@ import { App, Button, Empty, Input, Spin, Tag } from "antd";
 import { PromptCard } from "@/components/prompts/prompt-card";
 import { PromptDetailDialog } from "@/components/prompts/prompt-detail-dialog";
 import { usePromptList } from "@/components/prompts/use-prompt-list";
+import { promptTypeLabel, promptTypeOptions } from "@/components/prompts/prompt-template";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { cn } from "@/lib/utils";
 import { useAssetStore } from "@/stores/use-asset-store";
@@ -17,10 +18,22 @@ export default function PromptsPage() {
     const [titleKeyword, setTitleKeyword] = useState("");
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [selectedCategory, setSelectedCategory] = useState(ALL_PROMPTS_OPTION);
+    const [selectedType, setSelectedType] = useState(ALL_PROMPTS_OPTION);
+    const [selectedScenario, setSelectedScenario] = useState(ALL_PROMPTS_OPTION);
+    const [favoriteOnly, setFavoriteOnly] = useState(false);
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const addAsset = useAssetStore((state) => state.addAsset);
     const copyText = useCopyText();
-    const { query, items: promptItems, tags: promptTags, categories: promptCategoryOptions, total: totalPrompts } = usePromptList({ keyword: titleKeyword, tags: selectedTags, category: selectedCategory });
+    const {
+        query,
+        items: promptItems,
+        tags: promptTags,
+        categories: promptCategoryOptions,
+        types: promptTypes,
+        scenarios: promptScenarios,
+        total: totalPrompts,
+    } = usePromptList({ keyword: titleKeyword, tags: selectedTags, category: selectedCategory, type: selectedType, scenario: selectedScenario, favorite: favoriteOnly });
+    const typeOptions = [ALL_PROMPTS_OPTION, ...promptTypeOptions.map((item) => item.value), ...promptTypes.filter((type) => type !== ALL_PROMPTS_OPTION && !promptTypeOptions.some((item) => item.value === type))];
 
     useEffect(() => {
         if (query.isError) {
@@ -73,6 +86,37 @@ export default function PromptsPage() {
                                         {promptCategoryOptions.map((category) => (
                                             <Tag.CheckableTag key={category} checked={selectedCategory === category} className={cn("prompt-filter-tag", selectedCategory === category && "is-active")} onChange={() => setSelectedCategory(category)}>
                                                 {category}
+                                            </Tag.CheckableTag>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
+                                    <div className="pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">类型</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {typeOptions.map((type) => (
+                                            <Tag.CheckableTag
+                                                key={type}
+                                                checked={selectedType === type}
+                                                className={cn("prompt-filter-tag", selectedType === type && "is-active")}
+                                                onChange={() => {
+                                                    setSelectedType(type);
+                                                    setSelectedScenario(ALL_PROMPTS_OPTION);
+                                                }}
+                                            >
+                                                {type === ALL_PROMPTS_OPTION ? "全部" : promptTypeLabel(type)}
+                                            </Tag.CheckableTag>
+                                        ))}
+                                        <Tag.CheckableTag checked={favoriteOnly} className={cn("prompt-filter-tag", favoriteOnly && "is-active")} onChange={() => setFavoriteOnly((value) => !value)}>
+                                            常用
+                                        </Tag.CheckableTag>
+                                    </div>
+                                </div>
+                                <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
+                                    <div className="pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">场景</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {promptScenarios.map((scenario) => (
+                                            <Tag.CheckableTag key={scenario} checked={selectedScenario === scenario} className={cn("prompt-filter-tag", selectedScenario === scenario && "is-active")} onChange={() => setSelectedScenario(scenario)}>
+                                                {scenario}
                                             </Tag.CheckableTag>
                                         ))}
                                     </div>

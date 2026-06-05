@@ -59,13 +59,29 @@
 | `title`      | string | 标题                                            |
 | `cover_url`  | string | 封面图                                          |
 | `prompt`     | string | 提示词内容                                      |
-| `tags`       | json   | 标签列表                                        |
-| `category`   | string | 分类标识                                        |
-| `preview`    | text   | Markdown 展示内容，可包含文本、图片、视频链接等 |
-| `created_at` | string | 创建时间                                        |
-| `updated_at` | string | 更新时间                                        |
+| `tags`       | json   | 标签列表                                                                      |
+| `metadata`   | json   | 提示词模板结构化信息，可为空；旧提示词没有该字段时按普通提示词展示            |
+| `category`   | string | 分类标识                                                                      |
+| `preview`    | text   | Markdown 展示内容，可包含文本、图片、视频链接等                               |
+| `created_at` | string | 创建时间                                                                      |
+| `updated_at` | string | 更新时间                                                                      |
 
 `github_url` 仅用于接口返回，不写入数据库。
+
+`metadata` 当前用于把提示词仓库升级为可复用模板库：
+
+| 字段         | 类型     | 说明                                                                                 |
+| ------------ | -------- | ------------------------------------------------------------------------------------ |
+| `type`       | string   | 模板类型：`asset`、`image`、`video`、`grid`、`positive`、`negative`、`workflow` 等    |
+| `scenario`   | string   | 使用场景，例如短剧、人物设定、镜头模板、分镜等                                       |
+| `provider`   | string   | 推荐供应商，例如 `openai`、`volcengine-ark`，可为空                                  |
+| `model`      | string   | 推荐模型或 Endpoint ID，可为空                                                       |
+| `inputKind`  | string   | 输入类型，例如 `text`、`image`、`video`、`audio`、`multimodal`                        |
+| `outputKind` | string   | 输出类型，例如 `text`、`image`、`video`、`asset`、`workflow`                          |
+| `variables`  | object[] | 模板变量说明，每项包含 `name`、`description`、`defaultValue`                          |
+| `favorite`   | bool     | 是否常用                                                                             |
+
+模板变量使用 `{变量名}` 形式写在 `prompt` 中，前端会按 `metadata.variables` 展示说明并替换为最终提示词。
 
 ### assets
 

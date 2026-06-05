@@ -24,6 +24,11 @@ export async function fetchImageBlob(url: string) {
 
 export function assetSummary(asset: Asset) {
     if (asset.kind === "text") return asset.data.content;
+    return assetMediaInfo(asset);
+}
+
+export function assetMediaInfo(asset: Asset) {
+    if (asset.kind === "text") return "";
     if (asset.kind === "audio") return `${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
     return `${asset.data.width}x${asset.data.height} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
 }

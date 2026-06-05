@@ -35,6 +35,8 @@ type FormValues = {
     consistency?: string;
 };
 
+const emptySelection: string[] = [];
+
 export function ProductionBibleDrawer({ open, projectId, projectTitle, onClose }: Props) {
     const [kind, setKind] = useState<ProductionBibleKind>("character");
     const [editingItem, setEditingItem] = useState<ProductionBibleItem | null>(null);
@@ -62,7 +64,7 @@ export function ProductionBibleDrawer({ open, projectId, projectTitle, onClose }
             title="项目设定库"
             open={open}
             onClose={onClose}
-            width={680}
+            size={680}
             destroyOnHidden
             extra={
                 <Button icon={<Plus className="size-4" />} type="primary" onClick={startCreate}>
@@ -187,7 +189,9 @@ function ProductionBibleFormModal({
 }) {
     const [form] = Form.useForm<FormValues>();
     const [assetRoles, setAssetRoles] = useState<Record<string, string>>({});
-    const selectedAssetIds = Form.useWatch("assetIds", form) || [];
+    const watchedAssetIds = Form.useWatch("assetIds", form);
+    const selectedAssetIdsKey = Array.isArray(watchedAssetIds) ? watchedAssetIds.join("\u0000") : "";
+    const selectedAssetIds = useMemo(() => (Array.isArray(watchedAssetIds) ? watchedAssetIds : emptySelection), [selectedAssetIdsKey]);
     const assetsById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
     const assetOptions = useMemo(() => assets.map((asset) => ({ label: `${asset.title} · ${assetKindLabel(asset.kind)}`, value: asset.id })), [assets]);
 
@@ -208,19 +212,21 @@ function ProductionBibleFormModal({
     }, [defaultKind, editingItem, form, open]);
 
     useEffect(() => {
+        if (!open) return;
         setAssetRoles((current) => {
             const next: Record<string, string> = {};
             for (const assetId of selectedAssetIds) next[assetId] = current[assetId] || "reference";
+            if (sameAssetRoles(current, next)) return current;
             return next;
         });
-    }, [selectedAssetIds]);
+    }, [open, selectedAssetIds]);
 
     return (
         <Drawer
             title={editingItem ? "编辑设定" : "新增设定"}
             open={open}
             onClose={onCancel}
-            width={560}
+            size={560}
             destroyOnHidden
             extra={
                 <Button type="primary" onClick={() => form.submit()}>
@@ -287,4 +293,10 @@ function assetKindLabel(kind?: Asset["kind"]) {
     if (kind === "audio") return "音频";
     if (kind === "text") return "文本";
     return "素材";
+}
+
+function sameAssetRoles(left: Record<string, string>, right: Record<string, string>) {
+    const leftKeys = Object.keys(left);
+    const rightKeys = Object.keys(right);
+    return leftKeys.length === rightKeys.length && leftKeys.every((key) => left[key] === right[key]);
 }

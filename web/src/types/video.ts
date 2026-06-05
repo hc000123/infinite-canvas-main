@@ -4,4 +4,7 @@ export type ReferenceVideo = {
     url: string;
     storageKey?: string;
     type?: string;
+    assetUri?: string;
+    volcengineAssetId?: string;
+    volcengineAssetStatus?: string;
 };

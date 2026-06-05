@@ -2,13 +2,13 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertTriangle, AudioLines, ChevronRight, Download, Image as ImageIcon, RefreshCw, Star, Video } from "lucide-react";
+import { AlertTriangle, AudioLines, ChevronRight, Download, FileText, Image as ImageIcon, RefreshCw, Settings2, Star, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type Position } from "../types";
-import { buildCanvasVideoProgress, videoElapsedSeconds } from "../utils/canvas-video-progress";
+import { buildCanvasVideoProgress, isVideoElapsedTerminal, videoElapsedEndAt, videoElapsedSeconds } from "../utils/canvas-video-progress";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 const selectionBlue = "#2f80ff";
@@ -57,6 +57,7 @@ type NodeContentRendererProps = {
     batchExpanded: boolean;
     batchOpening: boolean;
     batchRecovering: boolean;
+    showPanel: boolean;
     renderNodeContent?: (node: CanvasNodeData) => ReactNode;
     onContentChange: (nodeId: string, content: string) => void;
     onStopEditing: () => void;
@@ -297,6 +298,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                         batchExpanded={batchExpanded}
                         batchOpening={batchOpening}
                         batchRecovering={batchRecovering}
+                        showPanel={showPanel}
                         renderNodeContent={renderNodeContent}
                         onContentChange={onContentChange}
                         onStopEditing={() => setIsEditingContent(false)}
@@ -330,8 +332,8 @@ export const CanvasNode = React.memo(function CanvasNode({
 function NodeContent(props: NodeContentRendererProps) {
     if (props.node.type === CanvasNodeType.Config && props.renderNodeContent) return props.renderNodeContent(props.node);
     if (props.isBatchRoot) return <ImageNodeContent {...props} />;
-    if (props.node.metadata?.status === "loading") return <LoadingContent node={props.node} theme={props.theme} onRefreshVideoTask={props.onRefreshVideoTask} />;
-    if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} onRefreshVideoTask={props.onRefreshVideoTask} />;
+    if (props.node.metadata?.status === "loading") return <LoadingContent node={props.node} theme={props.theme} onRefreshVideoTask={props.onRefreshVideoTask} showPanel={props.showPanel} />;
+    if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} onRefreshVideoTask={props.onRefreshVideoTask} showPanel={props.showPanel} />;
 
     const Renderer = nodeContentRenderers[props.node.type];
     return <Renderer {...props} />;
@@ -345,8 +347,8 @@ const nodeContentRenderers = {
     [CanvasNodeType.Audio]: AudioNodeContent,
 } satisfies Record<CanvasNodeType, (props: NodeContentRendererProps) => ReactNode>;
 
-function LoadingContent({ node, theme, onRefreshVideoTask }: Pick<NodeContentRendererProps, "node" | "theme" | "onRefreshVideoTask">) {
-    if (node.type === CanvasNodeType.Video) return <VideoTaskProgressPanel node={node} theme={theme} onRefreshVideoTask={onRefreshVideoTask} />;
+function LoadingContent({ node, theme, onRefreshVideoTask, showPanel }: Pick<NodeContentRendererProps, "node" | "theme" | "onRefreshVideoTask" | "showPanel">) {
+    if (node.type === CanvasNodeType.Video) return <VideoTaskProgressPanel node={node} theme={theme} onRefreshVideoTask={onRefreshVideoTask} showPanel={showPanel} />;
     return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.activeStroke }}>
             <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />
@@ -355,18 +357,30 @@ function LoadingContent({ node, theme, onRefreshVideoTask }: Pick<NodeContentRen
     );
 }
 
-function useElapsedSeconds(startedAt?: number) {
+function useVideoElapsedSeconds(node: CanvasNodeData) {
     const [now, setNow] = useState(() => Date.now());
+    const [fallbackEndedAt, setFallbackEndedAt] = useState<number>();
+    const startedAt = videoGenerationStartedAt(node);
+    const terminal = isVideoElapsedTerminal(node.metadata, node.metadata?.status);
+    const endedAt = videoElapsedEndAt(node.metadata, node.metadata?.status);
+
+    useEffect(() => {
+        if (terminal) {
+            setFallbackEndedAt((current) => endedAt || current || Date.now());
+            return;
+        }
+        setFallbackEndedAt(undefined);
+    }, [endedAt, node.id, terminal]);
 
     useEffect(() => {
         if (!startedAt) return;
+        if (terminal) return;
         setNow(Date.now());
         const timer = window.setInterval(() => setNow(Date.now()), 1000);
         return () => window.clearInterval(timer);
-    }, [startedAt]);
+    }, [node.id, startedAt, terminal]);
 
-    if (!startedAt) return 0;
-    return Math.max(0, Math.floor((now - startedAt) / 1000));
+    return videoElapsedSeconds(node.metadata, endedAt || fallbackEndedAt || now, node.metadata?.status);
 }
 
 function videoGenerationStartedAt(node: CanvasNodeData) {
@@ -392,10 +406,10 @@ function padTime(value: number) {
     return String(value).padStart(2, "0");
 }
 
-function ErrorContent({ node, theme, onRetry, onRefreshVideoTask }: Pick<NodeContentRendererProps, "node" | "theme" | "onRetry" | "onRefreshVideoTask">) {
+function ErrorContent({ node, theme, onRetry, onRefreshVideoTask, showPanel }: Pick<NodeContentRendererProps, "node" | "theme" | "onRetry" | "onRefreshVideoTask" | "showPanel">) {
     if (node.type === CanvasNodeType.Video) {
         return (
-            <VideoTaskProgressPanel node={node} theme={theme} onRefreshVideoTask={onRefreshVideoTask}>
+            <VideoTaskProgressPanel node={node} theme={theme} onRefreshVideoTask={onRefreshVideoTask} showPanel={showPanel}>
                 <button
                     type="button"
                     className="inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition hover:scale-[1.02]"
@@ -432,17 +446,17 @@ function ErrorContent({ node, theme, onRetry, onRefreshVideoTask }: Pick<NodeCon
     );
 }
 
-function VideoTaskProgressPanel({ node, theme, onRefreshVideoTask, children, compact = false }: Pick<NodeContentRendererProps, "node" | "theme" | "onRefreshVideoTask"> & { children?: ReactNode; compact?: boolean }) {
+function VideoTaskProgressPanel({ node, theme, onRefreshVideoTask, children, compact = false, showPanel = false }: Pick<NodeContentRendererProps, "node" | "theme" | "onRefreshVideoTask" | "showPanel"> & { children?: ReactNode; compact?: boolean }) {
     const [detailsOpen, setDetailsOpen] = useState(false);
-    const generationStartedAt = videoGenerationStartedAt(node);
-    const elapsedSeconds = useElapsedSeconds(generationStartedAt);
+    const elapsedSeconds = useVideoElapsedSeconds(node);
     const progress = buildCanvasVideoProgress(node.metadata, node.metadata?.status);
     const taskId = node.metadata?.taskId || "";
     const rows = videoTaskDetailRows(node, elapsedSeconds);
     const isFailed = progress.stage === "failed";
+    const prompt = node.metadata?.prompt?.trim();
     return (
         <div
-            className={`${compact ? "w-[min(360px,calc(100%-16px))]" : "w-[min(340px,calc(100%-28px))]"} flex max-h-[calc(100%-20px)] flex-col rounded-2xl border p-3 text-left shadow-[0_18px_42px_rgba(0,0,0,.18)] backdrop-blur-md`}
+            className={`${compact ? "w-[min(420px,calc(100%-16px))]" : "w-[min(420px,calc(100%-20px))]"} flex max-h-[calc(100%-16px)] flex-col rounded-2xl border p-3 text-left shadow-[0_18px_42px_rgba(0,0,0,.18)] backdrop-blur-md`}
             style={{ background: `${theme.node.fill}ee`, borderColor: theme.node.stroke, color: theme.node.text }}
         >
             <div className="flex items-start justify-between gap-3">
@@ -474,8 +488,24 @@ function VideoTaskProgressPanel({ node, theme, onRefreshVideoTask, children, com
                 ))}
             </div>
             {node.metadata?.errorDetails ? (
-                <div className="mt-3 line-clamp-2 rounded-lg border px-2.5 py-2 text-xs leading-5 text-red-300" style={{ borderColor: theme.node.stroke }}>
+                <div
+                    className={`${isFailed ? "thin-scrollbar max-h-28 overflow-auto whitespace-pre-wrap break-words text-[13px] leading-5" : "line-clamp-2 text-xs leading-5"} mt-3 rounded-lg border px-2.5 py-2 text-red-300`}
+                    style={{ borderColor: theme.node.stroke, background: isFailed ? "rgba(127,29,29,.18)" : undefined }}
+                    data-canvas-no-zoom
+                    onWheel={(event) => event.stopPropagation()}
+                >
                     {node.metadata.errorDetails}
+                </div>
+            ) : null}
+            {isFailed && prompt && !showPanel ? (
+                <div
+                    className="thin-scrollbar mt-3 max-h-24 overflow-auto whitespace-pre-wrap break-words rounded-lg border px-2.5 py-2 text-xs leading-5"
+                    style={{ borderColor: theme.node.stroke, background: theme.node.panel }}
+                    data-canvas-no-zoom
+                    onWheel={(event) => event.stopPropagation()}
+                >
+                    <div className="mb-1 text-[11px] opacity-45">提示词</div>
+                    {prompt}
                 </div>
             ) : null}
             <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -509,9 +539,14 @@ function VideoTaskProgressPanel({ node, theme, onRefreshVideoTask, children, com
                 {children}
             </div>
             {detailsOpen ? (
-                <div className="thin-scrollbar mt-3 max-h-32 space-y-1.5 overflow-auto rounded-lg border p-2 text-[11px] leading-4" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
+                <div
+                    className={`${isFailed ? "max-h-56 text-xs leading-5" : "max-h-40 text-[11px] leading-4"} thin-scrollbar mt-3 space-y-2 overflow-auto rounded-lg border p-2.5`}
+                    style={{ borderColor: theme.node.stroke, background: theme.node.panel }}
+                    data-canvas-no-zoom
+                    onWheel={(event) => event.stopPropagation()}
+                >
                     {rows.map((row) => (
-                        <div key={row.label} className="grid grid-cols-[58px_minmax(0,1fr)] gap-2">
+                        <div key={row.label} className={`${isFailed ? "grid-cols-[68px_minmax(0,1fr)]" : "grid-cols-[58px_minmax(0,1fr)]"} grid gap-2`}>
                             <span className="opacity-45">{row.label}</span>
                             <span className="min-w-0 break-all tabular-nums">{row.value}</span>
                         </div>
@@ -579,9 +614,9 @@ function ImageNodeContent(props: NodeContentRendererProps) {
     if (!props.node.metadata?.content && props.isBatchRoot) {
         const content =
             props.node.metadata?.status === "loading" ? (
-                <LoadingContent node={props.node} theme={props.theme} onRefreshVideoTask={props.onRefreshVideoTask} />
+                <LoadingContent node={props.node} theme={props.theme} onRefreshVideoTask={props.onRefreshVideoTask} showPanel={props.showPanel} />
             ) : props.node.metadata?.status === "error" ? (
-                <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} onRefreshVideoTask={props.onRefreshVideoTask} />
+                <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} onRefreshVideoTask={props.onRefreshVideoTask} showPanel={props.showPanel} />
             ) : (
                 <EmptyImageContent {...props} isBatchRoot={false} />
             );
@@ -652,29 +687,32 @@ function VideoNodeContent({ node, theme, onDownload, onRefreshVideoTask }: NodeC
             >
                 <Download className="size-4" />
             </button>
-            <VideoNodeBadges node={node} />
-            {node.metadata?.taskId ? (
-                <div className="absolute left-2.5 top-2.5 z-30">
-                    <button
-                        type="button"
-                        className="rounded-lg border px-2.5 py-1.5 text-[11px] font-medium text-white shadow-[0_8px_24px_rgba(0,0,0,.24)] backdrop-blur-md transition hover:scale-[1.03]"
-                        style={{ background: "rgba(0,0,0,.5)", borderColor: "rgba(255,255,255,.22)" }}
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            setDetailsOpen((value) => !value);
-                        }}
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        title="任务详情"
-                        aria-label="任务详情"
-                    >
-                        任务详情
-                    </button>
+            {node.metadata?.taskId || node.metadata?.prompt ? (
+                <div className="absolute left-2.5 top-2.5 z-30 flex flex-wrap gap-1.5">
+                    {node.metadata?.taskId ? (
+                        <button
+                            type="button"
+                            className="grid size-8 place-items-center rounded-lg border text-white shadow-[0_8px_24px_rgba(0,0,0,.24)] backdrop-blur-md transition hover:scale-[1.03]"
+                            style={{ background: "rgba(0,0,0,.5)", borderColor: "rgba(255,255,255,.22)" }}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                setDetailsOpen((value) => !value);
+                            }}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            title="任务详情"
+                            aria-label="任务详情"
+                        >
+                            <Settings2 className="size-4" />
+                        </button>
+                    ) : null}
+                    <GeneratedPromptToggle node={node} theme={theme} variant="dark" />
                 </div>
             ) : null}
+            <VideoNodeStatusPill node={node} offsetTop={node.metadata?.taskId || node.metadata?.prompt ? 46 : 10} />
             {detailsOpen ? (
                 <div className="absolute left-2.5 top-12 z-40">
-                    <VideoTaskProgressPanel node={node} theme={theme} onRefreshVideoTask={onRefreshVideoTask} compact />
+                    <VideoTaskProgressPanel node={node} theme={theme} onRefreshVideoTask={onRefreshVideoTask} showPanel={false} compact />
                 </div>
             ) : null}
         </div>
@@ -700,20 +738,19 @@ function AudioNodeContent({ node, theme }: NodeContentRendererProps) {
     );
 }
 
-function VideoNodeBadges({ node }: { node: CanvasNodeData }) {
-    const badges = [node.metadata?.taskStatus ? `任务 ${videoStatusLabel(node.metadata.taskStatus)}` : "", videoUrlExpiryLabel(node), node.metadata?.storageKey ? `本地 ${formatBytes(node.metadata.bytes || 0)}` : ""].filter((badge): badge is string =>
-        Boolean(badge),
-    );
-    if (!badges.length) return null;
+function VideoNodeStatusPill({ node, offsetTop }: { node: CanvasNodeData; offsetTop: number }) {
+    const text = videoNodeCompactStatus(node);
+    if (!text) return null;
     return (
-        <div className="pointer-events-none absolute bottom-2 left-2 right-2 flex flex-wrap gap-1.5">
-            {badges.map((badge) => (
-                <span key={badge} className="max-w-full truncate rounded bg-black/55 px-2 py-1 text-[11px] font-medium leading-none text-white backdrop-blur-sm">
-                    {badge}
-                </span>
-            ))}
+        <div className="pointer-events-none absolute left-2.5 right-12 z-20 flex" style={{ top: offsetTop }}>
+            <span className="max-w-full truncate rounded bg-black/50 px-2 py-1 text-[10px] font-medium leading-none text-white/90 backdrop-blur-sm">{text}</span>
         </div>
     );
+}
+
+function videoNodeCompactStatus(node: CanvasNodeData) {
+    const parts = [node.metadata?.taskStatus ? videoStatusLabel(node.metadata.taskStatus) : "", node.metadata?.storageKey ? `本地 ${formatBytes(node.metadata.bytes || 0)}` : ""].filter(Boolean);
+    return parts.join(" · ");
 }
 
 function videoTaskDetailRows(node: CanvasNodeData, elapsedSeconds: number) {
@@ -731,6 +768,8 @@ function videoTaskDetailRows(node: CanvasNodeData, elapsedSeconds: number) {
         { label: "参数", value: [metadata?.resolution || metadata?.vquality, metadata?.ratio || metadata?.size, metadata?.duration || metadata?.seconds ? `${metadata.duration || metadata.seconds}s` : ""].filter(Boolean).join(" · ") },
         { label: "seed", value: metadata?.seed },
         { label: "URL", value: metadata?.videoUrlExpiresAt ? videoUrlExpiryLabel(node) : "" },
+        { label: "提示词", value: metadata?.prompt },
+        { label: "错误", value: metadata?.errorDetails },
     ].filter((row): row is { label: string; value: string } => Boolean(row.value));
 }
 
@@ -772,6 +811,9 @@ function ImageContent({
                     className={`pointer-events-none block h-full w-full select-none ${node.metadata?.freeResize ? "object-fill" : "object-contain"}`}
                 />
             </div>
+            <div className="absolute left-2.5 top-2.5 z-30">
+                <GeneratedPromptToggle node={node} theme={theme} />
+            </div>
             {isBatchRoot ? (
                 <button
                     type="button"
@@ -806,6 +848,45 @@ function ImageContent({
                 </button>
             ) : null}
         </BatchFrame>
+    );
+}
+
+function GeneratedPromptToggle({ node, theme, variant = "panel" }: { node: CanvasNodeData; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; variant?: "panel" | "dark" }) {
+    const [open, setOpen] = useState(false);
+    const prompt = node.metadata?.prompt?.trim();
+    if (!prompt) return null;
+    const dark = variant === "dark";
+    return (
+        <div className="relative">
+            <button
+                type="button"
+                className={`${dark ? "grid size-8 place-items-center px-0 text-white" : "inline-flex h-8 items-center gap-1.5 px-2.5"} rounded-lg border text-[11px] font-medium shadow-[0_8px_24px_rgba(0,0,0,.18)] backdrop-blur-md transition hover:scale-[1.03]`}
+                style={{ background: dark ? "rgba(0,0,0,.5)" : `${theme.toolbar.panel}d9`, borderColor: dark ? "rgba(255,255,255,.22)" : `${theme.toolbar.border}cc`, color: dark ? "#fff" : theme.node.text }}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    setOpen((value) => !value);
+                }}
+                onMouseDown={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+                title="查看生成提示词"
+                aria-label="查看生成提示词"
+            >
+                <FileText className={dark ? "size-4" : "size-3.5"} />
+                {dark ? null : "提示词"}
+            </button>
+            {open ? (
+                <div
+                    className="thin-scrollbar absolute left-0 top-10 z-50 max-h-44 w-[min(320px,calc(100vw-32px))] overflow-auto whitespace-pre-wrap break-words rounded-xl border p-3 text-xs leading-5 shadow-[0_18px_42px_rgba(0,0,0,.22)] backdrop-blur-md"
+                    style={{ background: dark ? "rgba(0,0,0,.72)" : `${theme.node.fill}f2`, borderColor: dark ? "rgba(255,255,255,.22)" : theme.node.stroke, color: dark ? "#fff" : theme.node.text }}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onWheel={(event) => event.stopPropagation()}
+                    data-canvas-no-zoom
+                >
+                    {prompt}
+                </div>
+            ) : null}
+        </div>
     );
 }
 
