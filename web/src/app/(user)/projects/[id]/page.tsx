@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { App, Button, Empty, Input, Select, Tabs, Tag } from "antd";
-import { Bot, BookOpen, Clapperboard, FileText, Images, ListVideo, Maximize2, Plus, ScrollText, Save } from "lucide-react";
+import { Bot, BookOpen, Clapperboard, FileText, Images, ListVideo, Maximize2, Plus, ScrollText, Save, SlidersHorizontal } from "lucide-react";
 
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useEffectiveConfig } from "@/stores/use-config-store";
@@ -18,6 +18,7 @@ import { useStoryboardStore } from "../../canvas/stores/use-storyboard-store";
 import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../../canvas/utils/canvas-project-preset";
 import { assetGenerationRecords } from "../../assets/asset-generation";
 import { canvasIdsForCreativeProject, unfiledCanvasProjects } from "../creative-projects";
+import { editableCanvasPreset } from "../project-canvas-preset";
 import { useCreativeProjectStore } from "../use-creative-project-store";
 
 export default function CreativeProjectDetailPage() {
@@ -41,10 +42,12 @@ export default function CreativeProjectDetailPage() {
     const queueItems = useGenerationQueueStore((state) => state.items);
     const assets = useAssetStore((state) => state.assets);
     const [createCanvasOpen, setCreateCanvasOpen] = useState(false);
+    const [editingCanvasPresetId, setEditingCanvasPresetId] = useState("");
     const [descriptionDraft, setDescriptionDraft] = useState(project?.description || "");
     const [bindingCanvasId, setBindingCanvasId] = useState("");
     const canvasIds = useMemo(() => (project ? canvasIdsForCreativeProject(project, canvases) : []), [canvases, project]);
     const projectCanvases = useMemo(() => canvases.filter((canvas) => canvasIds.includes(canvas.id)), [canvasIds, canvases]);
+    const editingCanvasPreset = useMemo(() => projectCanvases.find((canvas) => canvas.id === editingCanvasPresetId), [editingCanvasPresetId, projectCanvases]);
     const unboundCanvases = useMemo(() => unfiledCanvasProjects(canvases, project ? [project] : []), [canvases, project]);
     const projectAssets = useMemo(() => assets.filter((asset) => assetGenerationRecords(asset).some((generation) => generation.projectId === projectId || canvasIds.includes(String(generation.projectId || "")))), [assets, canvasIds, projectId]);
     const stats = {
@@ -98,6 +101,13 @@ export default function CreativeProjectDetailPage() {
         const first = projectCanvases[0];
         if (first) router.push(`/canvas/${first.id}`);
         else setCreateCanvasOpen(true);
+    };
+
+    const saveCanvasPreset = (_title: string, preset: CanvasProjectPreset) => {
+        if (!editingCanvasPreset) return;
+        updateCanvas(editingCanvasPreset.id, { preset });
+        setEditingCanvasPresetId("");
+        message.success("画布预设已保存");
     };
 
     return (
@@ -170,16 +180,18 @@ export default function CreativeProjectDetailPage() {
                                     {projectCanvases.length ? (
                                         <div className="grid gap-3 md:grid-cols-2">
                                             {projectCanvases.map((canvas) => (
-                                                <Link
-                                                    key={canvas.id}
-                                                    href={`/canvas/${canvas.id}`}
-                                                    className="rounded-xl border border-stone-200 p-4 text-stone-950 transition hover:bg-stone-50 dark:border-stone-800 dark:text-stone-100 dark:hover:bg-white/5"
-                                                >
-                                                    <div className="flex items-center justify-between gap-3">
-                                                        <span className="truncate font-medium">{canvas.title}</span>
-                                                        <Tag className="m-0">{canvas.nodes.length} 节点</Tag>
-                                                    </div>
-                                                </Link>
+                                                <div key={canvas.id} className="flex items-center gap-3 rounded-xl border border-stone-200 p-4 transition hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-white/5">
+                                                    <Link href={`/canvas/${canvas.id}`} className="min-w-0 flex-1 text-stone-950 dark:text-stone-100">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="truncate font-medium">{canvas.title}</span>
+                                                            <Tag className="m-0 shrink-0">{canvas.nodes.length} 节点</Tag>
+                                                        </div>
+                                                        <p className="mt-2 truncate text-xs text-stone-500">{canvasProjectPresetSummary(editableCanvasPreset(canvas.preset, project.preset))}</p>
+                                                    </Link>
+                                                    <Button size="small" icon={<SlidersHorizontal className="size-3.5" />} onClick={() => setEditingCanvasPresetId(canvas.id)}>
+                                                        预设
+                                                    </Button>
+                                                </div>
                                             ))}
                                         </div>
                                     ) : (
@@ -208,6 +220,18 @@ export default function CreativeProjectDetailPage() {
             </div>
 
             <CanvasCreateProjectModal open={createCanvasOpen} defaultTitle={`${project.title} 画布 ${projectCanvases.length + 1}`} config={effectiveConfig} onCancel={() => setCreateCanvasOpen(false)} onCreate={createCanvasAndOpen} />
+            <CanvasCreateProjectModal
+                open={Boolean(editingCanvasPreset)}
+                defaultTitle={editingCanvasPreset?.title || project.title}
+                initialPreset={editableCanvasPreset(editingCanvasPreset?.preset, project.preset)}
+                config={effectiveConfig}
+                modalTitle="修改画布预设"
+                showTitleField={false}
+                okText="保存预设"
+                helperText="预设会更新这个画布后续生成配置节点和视频生成的默认值；不会改动已经生成的节点。"
+                onCancel={() => setEditingCanvasPresetId("")}
+                onCreate={saveCanvasPreset}
+            />
         </main>
     );
 }

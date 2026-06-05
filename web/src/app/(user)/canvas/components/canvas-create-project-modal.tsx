@@ -14,10 +14,12 @@ type CanvasCreateProjectValues = CanvasProjectPreset & {
 export function CanvasCreateProjectModal({
     open,
     defaultTitle,
+    initialPreset,
     config,
     modalTitle = "新建画布",
     nameLabel = "画布名称",
     namePlaceholder = "例如：毕业典礼短剧",
+    showTitleField = true,
     okText = "创建并进入",
     helperText = "预设会作为本画布后续生成配置节点和视频生成的默认值；旧画布没有预设时继续使用全局配置。",
     onCancel,
@@ -25,10 +27,12 @@ export function CanvasCreateProjectModal({
 }: {
     open: boolean;
     defaultTitle: string;
+    initialPreset?: CanvasProjectPreset;
     config: AiConfig;
     modalTitle?: string;
     nameLabel?: string;
     namePlaceholder?: string;
+    showTitleField?: boolean;
     okText?: string;
     helperText?: string;
     onCancel: () => void;
@@ -42,8 +46,8 @@ export function CanvasCreateProjectModal({
 
     useEffect(() => {
         if (!open) return;
-        form.setFieldsValue({ title: defaultTitle, presetKey: undefined, ...buildCanvasProjectPresetFromConfig(config) });
-    }, [config, defaultTitle, form, open]);
+        form.setFieldsValue({ title: defaultTitle, presetKey: undefined, ...buildCanvasProjectPresetFromConfig(config, initialPreset) });
+    }, [config, defaultTitle, form, initialPreset, open]);
 
     useEffect(() => {
         if (!open) return;
@@ -54,15 +58,17 @@ export function CanvasCreateProjectModal({
 
     const submit = async () => {
         const values = await form.validateFields();
-        onCreate(values.title.trim() || defaultTitle, buildCanvasProjectPresetFromConfig(config, values));
+        onCreate((values.title || defaultTitle).trim() || defaultTitle, buildCanvasProjectPresetFromConfig(config, values));
     };
 
     return (
         <Modal title={modalTitle} open={open} width={720} onCancel={onCancel} onOk={() => void submit()} okText={okText} cancelText="取消" destroyOnHidden>
             <Form form={form} layout="vertical" requiredMark={false} className="pt-2">
-                <Form.Item name="title" label={nameLabel} rules={[{ required: true, message: `请输入${nameLabel}` }]}>
-                    <Input placeholder={namePlaceholder} />
-                </Form.Item>
+                {showTitleField ? (
+                    <Form.Item name="title" label={nameLabel} rules={[{ required: true, message: `请输入${nameLabel}` }]}>
+                        <Input placeholder={namePlaceholder} />
+                    </Form.Item>
+                ) : null}
                 <Form.Item name="presetKey" label="常用预设">
                     <Select
                         allowClear
