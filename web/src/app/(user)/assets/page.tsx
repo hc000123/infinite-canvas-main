@@ -9,8 +9,8 @@ import { saveAs } from "file-saver";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { readFileAsDataUrl } from "@/lib/image-utils";
 import { fetchVolcengineAssetStatus, submitVolcengineMediaAsset } from "@/services/api/volcengine-assets";
-import { getMediaBlob, uploadMediaFile } from "@/services/file-storage";
-import { getImageBlob, uploadImage } from "@/services/image-storage";
+import { getMediaBlob, resolveMediaUrl, uploadMediaFile } from "@/services/file-storage";
+import { getImageBlob, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { buildVolcengineMediaFilename, isVolcengineReviewProcessing, mergeVolcengineReviewStatus, volcengineReviewMetadataFromSubmission, volcengineReviewPollingKey } from "@/services/volcengine-asset-metadata";
 import { cn } from "@/lib/utils";
 import { useAssetStore, type Asset, type AssetFolder, type AssetKind, type ImageAsset, type VideoAsset, type VolcengineAssetMetadata } from "@/stores/use-asset-store";
@@ -23,6 +23,7 @@ import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { useCreativeProjectStore } from "../projects/use-creative-project-store";
 import { assetGenerationFilterOptions } from "./asset-generation";
 import { buildProjectLibraryAssetPatch, buildRemoveProjectLibraryAssetPatch } from "./asset-project-library";
+import { buildAssetVersionedUpdatePatch, buildRestoreAssetVersionPatch } from "./asset-version-history";
 import { assetsForVolcengineRefresh, assetsForVolcengineSubmit, buildBulkMoveAssetPatches, buildBulkTagAssetPatches, normalizeTags } from "./asset-bulk-actions";
 import { importableAssetFiles, importAssetFileList } from "./asset-import-actions";
 import { assetImportSuccessMessage } from "./asset-import-payloads";
@@ -55,6 +56,8 @@ const kindOptions = [
     { label: "视频", value: "video" },
     { label: "音频", value: "audio" },
 ];
+
+type AssetPatch = Partial<Omit<Asset, "id" | "createdAt">>;
 
 export default function AssetsPage() {
     return (
@@ -286,25 +289,42 @@ function AssetsPageContent() {
 
         if (values.kind === "text") {
             const asset = { ...base, kind: "text" as const, data: { content: (values.content || "").trim() } };
-            editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
+            editingAsset ? updateEditedAsset(editingAsset, asset) : addAsset(asset);
         } else if (values.kind === "image") {
             if (!imageDraft) {
                 message.error("请选择图片文件");
                 return;
             }
             const asset = { ...base, kind: "image" as const, data: imageDraft };
-            editingAsset ? updateAsset(editingAsset.id, asset) : await addAssetOnce(asset);
+            editingAsset ? updateEditedAsset(editingAsset, asset) : await addAssetOnce(asset);
         } else {
             if (!mediaDraft) {
                 message.error(values.kind === "video" ? "请选择视频文件" : "请选择音频文件");
                 return;
             }
             const asset = { ...base, kind: values.kind, data: mediaDraft } as Parameters<typeof addAsset>[0];
-            editingAsset ? updateAsset(editingAsset.id, asset) : await addAssetOnce(asset);
+            editingAsset ? updateEditedAsset(editingAsset, asset) : await addAssetOnce(asset);
         }
 
         message.success(editingAsset ? "素材已更新" : "素材已保存");
         setIsAssetOpen(false);
+    };
+
+    const updateEditedAsset = (current: Asset, patch: Parameters<typeof addAsset>[0]) => {
+        updateAsset(current.id, buildAssetVersionedUpdatePatch(current, patch, new Date().toISOString()));
+    };
+
+    const restoreAssetVersion = async (asset: Asset, versionId: string) => {
+        const now = new Date().toISOString();
+        const patch = buildRestoreAssetVersionPatch(asset, versionId, now);
+        if (!patch) {
+            message.error("无法恢复该版本");
+            return;
+        }
+        const resolvedPatch = await resolveRestoredAssetPatch(patch);
+        updateAsset(asset.id, resolvedPatch);
+        setPreviewAsset((current) => (current?.id === asset.id ? ({ ...current, ...resolvedPatch, metadata: { ...(current.metadata || {}), ...(resolvedPatch.metadata || {}) }, updatedAt: now } as Asset) : current));
+        message.success("已恢复素材版本");
     };
 
     const updateFormKind = (value: AssetKind) => {
@@ -1048,6 +1068,7 @@ function AssetsPageContent() {
                 onReview={(asset) => void submitImageReview(asset)}
                 onRefreshReview={(asset) => void refreshImageReview(asset)}
                 projectLibraryProjectTitles={projectLibraryProjectTitles}
+                onRestoreVersion={(asset, versionId) => void restoreAssetVersion(asset, versionId)}
             />
 
             {selectedProductionBibleProject ? (
@@ -1083,4 +1104,18 @@ function AssetsPageContent() {
             </Modal>
         </div>
     );
+}
+
+async function resolveRestoredAssetPatch(patch: AssetPatch): Promise<AssetPatch> {
+    const data = patch.data as Record<string, unknown> | undefined;
+    const storageKey = typeof data?.storageKey === "string" ? data.storageKey : "";
+    if (patch.kind === "image" && storageKey) {
+        const dataUrl = await resolveImageUrl(storageKey, typeof data?.dataUrl === "string" ? data.dataUrl : "");
+        return { ...patch, coverUrl: patch.coverUrl || dataUrl, data: { ...data, dataUrl } } as AssetPatch;
+    }
+    if ((patch.kind === "video" || patch.kind === "audio") && storageKey) {
+        const url = await resolveMediaUrl(storageKey, typeof data?.url === "string" ? data.url : "");
+        return { ...patch, data: { ...data, url } } as AssetPatch;
+    }
+    return patch;
 }

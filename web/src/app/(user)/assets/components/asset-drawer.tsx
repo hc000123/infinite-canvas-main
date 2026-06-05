@@ -1,9 +1,10 @@
-import { Copy, Download, Folder, RefreshCw, ShieldCheck } from "lucide-react";
+import { Copy, Download, Folder, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 import { Button, Drawer, Image, Space, Tag, Typography } from "antd";
 
 import { isVolcengineReviewProcessing, shouldShowVolcengineReviewAction } from "@/services/volcengine-asset-metadata";
 import type { Asset } from "@/stores/use-asset-store";
 import { assetProjectLibraryEntries, projectLibraryRoleLabel, projectLibrarySyncStatusLabel } from "../asset-project-library";
+import { assetVersionMediaSummary, assetVersionRecords, type AssetVersionRecord } from "../asset-version-history";
 import { assetKindDownloadLabel, assetKindLabel, assetMediaInfo, volcengineReviewActionLabel } from "../asset-utils";
 import { VolcengineAssetTag } from "./asset-card";
 import { AssetGenerationSection } from "./asset-generation-section";
@@ -19,6 +20,7 @@ export function AssetDrawer({
     onReview,
     onRefreshReview,
     projectLibraryProjectTitles,
+    onRestoreVersion,
 }: {
     asset: Asset | null;
     folderName?: string;
@@ -30,11 +32,13 @@ export function AssetDrawer({
     onReview: (asset: Asset) => void;
     onRefreshReview: (asset: Asset) => void;
     projectLibraryProjectTitles?: Record<string, string>;
+    onRestoreVersion: (asset: Asset, versionId: string) => void;
 }) {
     const cover = asset ? asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "") : "";
     const videoPreviewUrl = asset?.kind === "video" ? videoCoverUrl(asset.data.url) : "";
     const mediaInfo = asset ? assetMediaInfo(asset) : "";
     const projectLibraryEntries = assetProjectLibraryEntries(asset);
+    const versionRecords = assetVersionRecords(asset);
     return (
         <Drawer title="素材详情" open={Boolean(asset)} size="large" onClose={onClose}>
             {asset ? (
@@ -103,6 +107,7 @@ export function AssetDrawer({
                             </div>
                         </div>
                     ) : null}
+                    <AssetVersionHistory asset={asset} versions={versionRecords} onRestoreVersion={onRestoreVersion} />
                     <AssetGenerationSection asset={asset} />
                     <Space wrap>
                         {asset.kind === "text" ? (
@@ -154,4 +159,44 @@ export function AssetDrawer({
 function videoCoverUrl(url: string) {
     if (!url || url.includes("#")) return url;
     return `${url}#t=0.1`;
+}
+
+function AssetVersionHistory({ asset, versions, onRestoreVersion }: { asset: Asset; versions: AssetVersionRecord[]; onRestoreVersion: (asset: Asset, versionId: string) => void }) {
+    if (!versions.length) return null;
+    return (
+        <div className="rounded-lg border border-stone-200 p-4 text-sm dark:border-stone-800">
+            <div className="flex items-center justify-between gap-3">
+                <Typography.Text type="secondary" className="block text-xs">
+                    版本历史
+                </Typography.Text>
+                <Tag className="m-0">{versions.length} 个版本</Tag>
+            </div>
+            <div className="mt-3 space-y-2">
+                {[...versions]
+                    .sort((a, b) => b.versionNumber - a.versionNumber)
+                    .map((version) => (
+                        <div key={version.id} className="flex flex-col gap-2 rounded-md bg-stone-50 px-3 py-2 dark:bg-stone-900/70 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Typography.Text strong className="text-sm">
+                                        v{version.versionNumber}
+                                    </Typography.Text>
+                                    {version.isCurrent ? <Tag color="blue">当前版本</Tag> : null}
+                                    <Typography.Text type="secondary" className="text-xs">
+                                        {version.changeNote || "版本更新"}
+                                    </Typography.Text>
+                                </div>
+                                <Typography.Text type="secondary" className="mt-1 block break-words text-xs">
+                                    {assetVersionMediaSummary(version)}
+                                    {version.createdAt ? ` · ${version.createdAt}` : ""}
+                                </Typography.Text>
+                            </div>
+                            <Button size="small" icon={<RotateCcw className="size-3.5" />} disabled={version.isCurrent} onClick={() => onRestoreVersion(asset, version.id)}>
+                                恢复
+                            </Button>
+                        </div>
+                    ))}
+            </div>
+        </div>
+    );
 }

@@ -2,6 +2,7 @@ import { formatBytes } from "@/lib/image-utils";
 import type { Asset, AssetKind } from "@/stores/use-asset-store";
 import { assetGenerationSearchText } from "./asset-generation";
 import { projectLibrarySearchText } from "./asset-project-library";
+import { assetVersionRecords } from "./asset-version-history";
 
 export function volcengineStatusLabel(status: string) {
     if (status === "Active") return "已加白";
@@ -35,7 +36,25 @@ export function assetMediaInfo(asset: Asset) {
 }
 
 export function assetSearchText(asset: Asset) {
-    return [asset.title, asset.source || "", asset.note || "", (asset.tags || []).join(" "), asset.kind === "text" ? asset.data.content : asset.data.mimeType, assetGenerationSearchText(asset), projectLibrarySearchText(asset)].join(" ").toLowerCase();
+    return [
+        asset.title,
+        asset.source || "",
+        asset.note || "",
+        (asset.tags || []).join(" "),
+        asset.kind === "text" ? asset.data.content : asset.data.mimeType,
+        assetGenerationSearchText(asset),
+        projectLibrarySearchText(asset),
+        assetVersionSearchText(asset),
+    ]
+        .join(" ")
+        .toLowerCase();
+}
+
+function assetVersionSearchText(asset: Asset) {
+    return assetVersionRecords(asset)
+        .flatMap((version) => [version.id, `v${version.versionNumber}`, version.changeNote, version.createdAt, version.data.storageKey])
+        .filter(Boolean)
+        .join(" ");
 }
 
 export function assetKindLabel(kind: AssetKind) {
