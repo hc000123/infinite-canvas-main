@@ -62,11 +62,9 @@ export function buildEpisodeWorkbenchStats({
     const scopedTableShots = episodeId ? tableShots.filter((shot) => shot.canvasId === canvas?.id && shot.episodeId === episodeId) : [];
     const scopedShotGroups = episodeId ? shotGroups.filter((group) => group.canvasId === canvas?.id && group.episodeId === episodeId) : [];
     const scopedAssets = episodeId ? assetBreakdownItems.filter((item) => item.episodeId === episodeId && (!canvas?.id || item.canvasId === canvas.id)) : [];
-    const generatedVideoCount = nodes.filter((node) => node.type === "video" && node.metadata?.status === "success" && (node.metadata.episodeId === episodeId || node.metadata.shotGroupId)).length;
-    const failedCount =
-        nodes.filter((node) => node.type === "video" && node.metadata?.status === "error" && (node.metadata.episodeId === episodeId || node.metadata.shotGroupId)).length + scopedShotGroups.filter((group) => group.status === "error").length;
-    const generatingCount =
-        nodes.filter((node) => node.type === "video" && node.metadata?.status === "loading" && (node.metadata.episodeId === episodeId || node.metadata.shotGroupId)).length + scopedShotGroups.filter((group) => group.status === "generating").length;
+    const generatedVideoCount = countScopedVideoNodes(nodes, scopedShotGroups, episodeId, "success");
+    const failedCount = countScopedVideoNodes(nodes, scopedShotGroups, episodeId, "error") + scopedShotGroups.filter((group) => group.status === "error").length;
+    const generatingCount = countScopedVideoNodes(nodes, scopedShotGroups, episodeId, "loading") + scopedShotGroups.filter((group) => group.status === "generating").length;
     return {
         hasScript,
         scriptStatus: hasScript ? "ready" : "unbound",
@@ -79,6 +77,17 @@ export function buildEpisodeWorkbenchStats({
         generatingCount,
         hasShotGroupsInCanvas: scopedShotGroups.some((group) => group.status !== "draft" && group.status !== "prompt_ready"),
     };
+}
+
+function countScopedVideoNodes(nodes: CanvasNodeData[], shotGroups: ShotGroup[], episodeId: string, status: string) {
+    if (!episodeId) return 0;
+    return nodes.filter((node) => node.type === "video" && node.metadata?.status === status && isScopedToEpisode(node, shotGroups, episodeId)).length;
+}
+
+function isScopedToEpisode(node: CanvasNodeData, shotGroups: ShotGroup[], episodeId: string) {
+    if (node.metadata?.episodeId === episodeId) return true;
+    const shotGroupId = node.metadata?.shotGroupId || node.metadata?.storyboardShotGroupId;
+    return Boolean(shotGroupId && shotGroups.some((group) => group.id === shotGroupId && group.episodeId === episodeId));
 }
 
 export function deriveEpisodeProductionStatus(stats: EpisodeWorkbenchStats): EpisodeProductionStatus {

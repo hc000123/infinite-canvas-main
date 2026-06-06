@@ -93,6 +93,23 @@ test("builds episode workbench stats and production status", () => {
     assert.equal(productionStatusLabel("failed"), "待处理失败");
 });
 
+test("scopes video node stats to the active episode", () => {
+    const stats = buildEpisodeWorkbenchStats({
+        canvas,
+        tableShots: [shot("s-1", 1), shot("s-2", 2)],
+        shotGroups: [group(), group({ id: "sg-other", episodeId: "ep-other", shotIds: [] })],
+        assetBreakdownItems: [],
+        nodes: [
+            { id: "video-1", type: "video", title: "本集视频", position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { shotGroupId: "sg-1", status: "success" } },
+            { id: "video-2", type: "video", title: "其他集视频", position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { shotGroupId: "sg-other", status: "success" } },
+            { id: "video-3", type: "video", title: "其他集失败", position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { episodeId: "ep-other", status: "error" } },
+        ],
+    });
+
+    assert.equal(stats.generatedVideoCount, 1);
+    assert.equal(stats.failedCount, 0);
+});
+
 test("returns workbench modes without disabling free canvas", () => {
     const modes = workbenchModes({
         hasScript: false,

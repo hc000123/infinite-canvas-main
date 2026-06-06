@@ -1346,7 +1346,15 @@ function AssetsPageContent() {
                 确定删除已选择的 {selectedAssets.length} 个素材吗？删除后会从我的素材中移除。
             </Modal>
 
-            <Modal title={bulkCanvasMode === "add" ? "归类到画布" : "移出画布归类"} open={bulkCanvasOpen} onCancel={() => setBulkCanvasOpen(false)} onOk={applyBulkCanvasLibrary} okText={bulkCanvasMode === "add" ? "归类" : "移出"} cancelText="取消" destroyOnHidden>
+            <Modal
+                title={bulkCanvasMode === "add" ? "归类到画布" : "移出画布归类"}
+                open={bulkCanvasOpen}
+                onCancel={() => setBulkCanvasOpen(false)}
+                onOk={applyBulkCanvasLibrary}
+                okText={bulkCanvasMode === "add" ? "归类" : "移出"}
+                cancelText="取消"
+                destroyOnHidden
+            >
                 <div className="space-y-3">
                     <div className="text-sm text-stone-500">
                         将 {selectedAssets.length} 个素材{bulkCanvasMode === "add" ? "归类到以下画布。素材只保存一份，可同时属于多个画布。" : "从以下画布归类中移出，不会删除素材本体。"}
