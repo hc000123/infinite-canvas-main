@@ -41,6 +41,7 @@ export type ShotGroupGenerationSummary = {
     errorMessage?: string;
     resultAssetIds: string[];
     primaryAssetId?: string;
+    referenceAssetCount: number;
     isFreeCanvas: boolean;
 };
 
@@ -159,6 +160,7 @@ export function buildShotGroupGenerationSummaries({ shotGroups, tableShots, node
             errorMessage: videoNode?.metadata?.errorDetails || row.group.errorMessage,
             resultAssetIds: row.group.resultAssetIds,
             primaryAssetId: row.group.primaryAssetId,
+            referenceAssetCount: Array.isArray(videoNode?.metadata?.referenceAssets) ? videoNode.metadata.referenceAssets.length : 0,
             isFreeCanvas: row.group.shotIds.length === 0 || row.shots.length === 0,
         };
     });

@@ -5,10 +5,12 @@ import { approveAgentRun, createAgentRunRecord, markAgentRunApplied, normalizeAg
 import { defaultAgentConfig } from "../../projects/agent-settings.ts";
 import {
     buildLocalStoryboardDirectorDraftOutput,
+    buildStoryboardDraftTraceMetadata,
     buildStoryboardDirectorRunInput,
     buildStoryboardTableShotInputsFromAgentRun,
     canRunStoryboardDirector,
     shouldAllowStoryboardDirectorRun,
+    summarizeStoryboardDraftRun,
     storyboardDraftWriteModeRequired,
     validateStoryboardDraftWriteMode,
 } from "./agent-storyboard-director.ts";
@@ -100,6 +102,19 @@ test("approved storyboard run converts drafts into traceable table shot writes",
     assert.equal(inputs[0].sourceType, "agent_storyboard_director");
     assert.ok(inputs[0].inputScriptSnapshotHash);
     assert.match(inputs[0].visualDescription, /魏梁/);
+    assert.deepEqual(buildStoryboardDraftTraceMetadata(run, run.input.scriptSnapshot || ""), {
+        agentRunId: "run-3",
+        agentConfigId: "storyboard-agent",
+        agentConfigVersion: "2",
+        inputScriptSnapshotHash: inputs[0].inputScriptSnapshotHash,
+        sourceType: "agent_storyboard_director",
+    });
+    assert.deepEqual(summarizeStoryboardDraftRun(run), {
+        status: "approved",
+        itemCount: 2,
+        warningCount: 0,
+        summary: run.draftOutput.summary,
+    });
     assert.equal(markAgentRunApplied(run, "applied").status, "applied");
 });
 

@@ -85,6 +85,37 @@ export function normalizeAgentDraftOutput(value: unknown, schemaVersion = "1.0.0
     };
 }
 
+export function validateAgentDraftOutputShape(value: unknown) {
+    const output = normalizeAgentDraftOutput(value);
+    return {
+        valid: Boolean(output.summary && Array.isArray(output.items) && Array.isArray(output.warnings) && output.schemaVersion),
+        output,
+    };
+}
+
+export function buildAgentTraceMetadata(run: Pick<AgentRunRecord, "id" | "agentConfigId" | "agentConfigVersion" | "agentKind">) {
+    return {
+        agentRunId: run.id,
+        agentKind: run.agentKind,
+        agentConfigId: run.agentConfigId,
+        agentConfigVersion: run.agentConfigVersion,
+    };
+}
+
+export function canWriteAgentRun(run: Pick<AgentRunRecord, "status">) {
+    return run.status === "approved";
+}
+
+export function summarizeAgentRunDraft(run: Pick<AgentRunRecord, "status" | "draftOutput" | "agentConfigVersion">) {
+    return {
+        status: run.status,
+        itemCount: run.draftOutput.items.length,
+        warningCount: run.draftOutput.warnings.length,
+        configVersionLabel: `配置 v${run.agentConfigVersion}`,
+        summary: run.draftOutput.summary,
+    };
+}
+
 export function buildAgentRunProposedActions(kind: AgentRunKind, output: AgentDraftOutput): AgentRunProposedAction[] {
     return output.items.map((item, index) => {
         const record = item && typeof item === "object" ? (item as Record<string, unknown>) : {};

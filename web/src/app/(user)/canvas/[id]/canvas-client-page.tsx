@@ -48,7 +48,7 @@ import { aiTaskIdFromGeneration, aiTaskLedgerNodeMetadata, buildCanvasAiTaskTrac
 import { buildAngleImageNode, buildAnglePrompt, buildAngleReferenceImage, buildCroppedImageNode, type CanvasImageAngleParams, type CanvasImageCropRect } from "../utils/canvas-image-derivatives";
 import { collectBatchAwareDeletedNodeIds, isHiddenBatchChild, isHiddenBatchConnectionEndpoint, removeDeletedNodesFromBatches, setBatchPrimaryInNodes, toggleBatchExpandedInNodes } from "../utils/canvas-batch-nodes";
 import { applyCanvasProjectPresetToConfig } from "../utils/canvas-project-preset";
-import { planShotGroupCanvasInsert, planStoryboardGroupCanvasInsert } from "../utils/storyboard-management";
+import { planShotGroupCanvasInsert, planStoryboardGroupCanvasInsert, type StoryboardAssetRef } from "../utils/storyboard-management";
 import { buildEpisodeWorkbenchStats, deriveEpisodeProductionStatus, productionStatusLabel } from "../utils/episode-workbench";
 import { reviewVideoPromptBeforeGeneration, shouldRunVideoPromptReview, type PromptReviewResult } from "../utils/canvas-prompt-review";
 import { cropDataUrl } from "../utils/canvas-image-data";
@@ -1780,7 +1780,7 @@ function InfiniteCanvasPage() {
     );
 
     const addStoryboardGroupToCanvas = useCallback(
-        (groupId: string) => {
+        (groupId: string, autoAssetRefs: StoryboardAssetRef[] = []) => {
             const storyboardState = useStoryboardStore.getState();
             const group = storyboardState.groups.find((item) => item.id === groupId);
             const shots = storyboardState.shots.filter((shot) => shot.groupId === groupId);
@@ -1834,7 +1834,7 @@ function InfiniteCanvasPage() {
     );
 
     const addShotGroupToCanvas = useCallback(
-        (groupId: string) => {
+        (groupId: string, autoAssetRefs: StoryboardAssetRef[] = []) => {
             const storyboardState = useStoryboardStore.getState();
             const group = storyboardState.shotGroups.find((item) => item.id === groupId);
             const shots = storyboardState.tableShots.filter((shot) => group?.shotIds.includes(shot.id));
@@ -1847,6 +1847,7 @@ function InfiniteCanvasPage() {
                 group,
                 shots,
                 assets,
+                autoAssetRefs,
                 position: { x: center.x - 520, y: center.y - 160 },
                 config: {
                     provider: canvasAiConfig.videoProtocol === "volcengine-ark" ? "volcengine-ark" : "openai",

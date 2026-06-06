@@ -47,6 +47,7 @@ import {
     EpisodeImageNeedsSection,
     EpisodeTableSection,
     GenerationManagementSection,
+    ShotGroupReferencePreview,
     ShotGroupFormModal,
     ShotGroupSection,
     TableShotFormModal,
@@ -59,6 +60,7 @@ import {
 import type { ShotGroup, StoryboardTableShot } from "../utils/storyboard-management";
 import { findImageBriefForAssetBreakdown } from "../utils/episode-image-needs";
 import type { AssetBreakdownItem } from "../utils/asset-breakdown";
+import { buildShotGroupEpisodeReferenceCandidates, selectedEpisodeReferenceRefs, summarizeEpisodeReferenceCandidates } from "../utils/shot-group-episode-references";
 
 type Props = {
     open: boolean;
@@ -69,7 +71,7 @@ type Props = {
     canvasNodes: CanvasNodeData[];
     onClose: () => void;
     onUpdateCanvasEpisode: (canvasId: string, patch: Pick<Partial<CanvasProject>, "episodeId" | "episodeTitle" | "scriptId" | "scriptSnapshot">) => void;
-    onAddShotGroupToCanvas?: (groupId: string) => void;
+    onAddShotGroupToCanvas?: (groupId: string, autoAssetRefs?: StoryboardAssetRef[]) => void;
     onOpenAsset?: (asset: Asset) => void;
     onOpenImageBrief?: (briefId: string) => void;
     onLocateNode?: (nodeId: string) => void;
@@ -153,6 +155,27 @@ export function EpisodeWorkbenchDrawer({
     const activeShotGroups = useMemo(() => activeEpisodeShotGroups(shotGroups, activeCanvas), [activeCanvas, shotGroups]);
     const projectBibleItems = useMemo(() => itemsForProductionBibleProject(productionBibleItems, projectId), [productionBibleItems, projectId]);
     const mediaAssets = useMemo(() => assets.filter((asset) => mediaKinds.has(asset.kind)), [assets]);
+    const assetsById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
+    const episodeReferenceCandidatesByGroupId = useMemo(
+        () =>
+            Object.fromEntries(
+                activeShotGroups.map((group) => [
+                    group.id,
+                    buildShotGroupEpisodeReferenceCandidates({
+                        group,
+                        shots: activeShots,
+                        imageNeeds: breakdownItems,
+                        briefs: imageBriefs,
+                        assets,
+                    }),
+                ]),
+            ),
+        [activeShotGroups, activeShots, assets, breakdownItems, imageBriefs],
+    );
+    const episodeReferenceLabelsByGroupId = useMemo(
+        () => Object.fromEntries(Object.entries(episodeReferenceCandidatesByGroupId).map(([groupId, candidates]) => [groupId, summarizeEpisodeReferenceCandidates(candidates).label])),
+        [episodeReferenceCandidatesByGroupId],
+    );
     const stats = useMemo(() => buildEpisodeWorkbenchStats({ canvas: activeCanvas, tableShots, shotGroups, assetBreakdownItems: breakdownItems, nodes: canvasNodes }), [activeCanvas, breakdownItems, canvasNodes, shotGroups, tableShots]);
     const status = deriveEpisodeProductionStatus(stats);
     const modes = workbenchModes(stats);
@@ -409,7 +432,23 @@ export function EpisodeWorkbenchDrawer({
 
     const addGroupToCanvas = (groupId: string) => {
         if (!onAddShotGroupToCanvas) return message.warning("请在具体画布中执行打组加入画布");
-        Modal.confirm({ title: "确认打组加入画布？", content: "将创建文本提示词节点、参考素材节点和视频生成配置节点，不会自动开始生成或扣费。", okText: "加入画布", cancelText: "取消", onOk: () => onAddShotGroupToCanvas(groupId) });
+        const candidates = episodeReferenceCandidatesByGroupId[groupId] || [];
+        let selectedIds = candidates.filter((candidate) => candidate.defaultSelected).map((candidate) => candidate.assetId);
+        Modal.confirm({
+            title: "确认打组加入画布？",
+            content: candidates.length ? (
+                <ShotGroupReferencePreview candidates={candidates} assetsById={assetsById} defaultSelectedIds={selectedIds} onSelectionChange={(ids) => (selectedIds = ids)} />
+            ) : (
+                "将创建文本提示词节点、参考素材节点和视频生成配置节点，不会自动开始生成或扣费。"
+            ),
+            okText: "加入画布",
+            cancelText: "取消",
+            width: 720,
+            onOk: () => {
+                const confirmed = candidates.map((candidate) => ({ ...candidate, defaultSelected: selectedIds.includes(candidate.assetId) }));
+                onAddShotGroupToCanvas(groupId, selectedEpisodeReferenceRefs(confirmed));
+            },
+        });
     };
 
     const retryNode = (nodeId: string) => {
@@ -507,6 +546,7 @@ export function EpisodeWorkbenchDrawer({
                                     shotGroups={activeShotGroups}
                                     tableShots={activeShots}
                                     assets={mediaAssets}
+                                    autoReferenceLabels={episodeReferenceLabelsByGroupId}
                                     onEditGroup={(group) => {
                                         setEditingShotGroup(group);
                                         setShotGroupFormOpen(true);

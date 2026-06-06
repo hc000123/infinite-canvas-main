@@ -4,7 +4,9 @@ import test from "node:test";
 import { defaultAgentConfig, normalizeAgentConfig } from "./agent-settings.ts";
 import {
     approveAgentRun,
+    buildAgentTraceMetadata,
     buildAgentRunProposedActions,
+    canWriteAgentRun,
     createAgentRunRecord,
     listAgentRunsByAgentKind,
     listAgentRunsByEpisode,
@@ -12,7 +14,9 @@ import {
     markAgentRunApplied,
     normalizeAgentDraftOutput,
     rejectAgentRun,
+    summarizeAgentRunDraft,
     updateAgentRunDraft,
+    validateAgentDraftOutputShape,
 } from "./agent-runner.ts";
 
 const baseInput = {
@@ -60,6 +64,34 @@ test("normalizes JSON output into draft output", () => {
     assert.equal(output.items.length, 1);
     assert.deepEqual(output.warnings, ["需要人工确认"]);
     assert.equal(output.schemaVersion, "1.0.0");
+});
+
+test("validates draft output shape and builds write preview helpers", () => {
+    const run = createAgentRunRecord({
+        config: defaultAgentConfig("storyboard_director"),
+        input: baseInput,
+        id: "run-trace",
+        now: "2026-01-02T00:00:00.000Z",
+        draftOutput: { summary: "分镜草案", shots: [{ id: "shot-1" }], warnings: ["需要确认"], schemaVersion: "storyboard.v1" },
+    });
+    const validated = validateAgentDraftOutputShape(run.draftOutput);
+    assert.equal(validated.valid, true);
+    assert.equal(validated.output.schemaVersion, "storyboard.v1");
+    assert.deepEqual(buildAgentTraceMetadata(run), {
+        agentRunId: "run-trace",
+        agentKind: "storyboard_director",
+        agentConfigId: "agent-config-storyboard_director",
+        agentConfigVersion: "1.0.0",
+    });
+    assert.equal(canWriteAgentRun(run), false);
+    assert.equal(canWriteAgentRun(approveAgentRun(run, "now")), true);
+    assert.deepEqual(summarizeAgentRunDraft(run), {
+        status: "ready_for_review",
+        itemCount: 1,
+        warningCount: 1,
+        configVersionLabel: "配置 v1.0.0",
+        summary: "分镜草案",
+    });
 });
 
 test("builds proposed actions from draft items", () => {

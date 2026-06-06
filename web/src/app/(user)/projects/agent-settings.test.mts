@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { canInvokeAgentConfig, defaultAgentConfig, defaultAgentConfigs, formatInputVariablesText, mergeAgentConfigs, normalizeAgentConfig, parseInputVariablesText, validateAgentConfig } from "./agent-settings.ts";
+import { canInvokeAgentConfig, defaultAgentConfig, defaultAgentConfigs, fillAgentPromptTemplate, formatInputVariablesText, mergeAgentConfigs, normalizeAgentConfig, parseInputVariablesText, validateAgentConfig } from "./agent-settings.ts";
 
 test("builds default templates for all first-batch agent kinds", () => {
     const configs = defaultAgentConfigs("2026-01-01T00:00:00.000Z");
@@ -11,6 +11,7 @@ test("builds default templates for all first-batch agent kinds", () => {
     );
     assert.ok(configs.every((config) => config.enabled));
     assert.ok(configs.every((config) => config.writePolicy === "confirm_before_write"));
+    assert.ok(configs.every((config) => !config.kind.includes("seedance_workflow")));
 });
 
 test("merges global and project overrides by agent kind", () => {
@@ -59,4 +60,9 @@ test("input variable text round trips to structured variables", () => {
         { name: "场景", description: "场景描述" },
     ]);
     assert.equal(formatInputVariablesText(variables), "角色：角色名\n场景：场景描述");
+});
+
+test("fills agent prompt variables without hiding missing inputs", () => {
+    const rendered = fillAgentPromptTemplate("剧本：{scriptSnapshot}\n角色：{characters}\n缺失：{missing}", { scriptSnapshot: "第一幕", characters: ["魏梁", "周泽"] });
+    assert.equal(rendered, "剧本：第一幕\n角色：魏梁、周泽\n缺失：{missing}");
 });

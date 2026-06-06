@@ -390,6 +390,44 @@ test("plans shot group video config node with agent trace and fixed asset versio
     assert.equal(node?.metadata?.status, "idle");
 });
 
+test("plans shot group insertion with confirmed episode reference assets after manual refs", () => {
+    const result = planShotGroupCanvasInsert({
+        group: { ...shotGroup("sg-1", ["s-1"]), assetRefs: [{ assetId: "asset-manual", kind: "image", role: "first_frame" }] },
+        shots: [tableShot("s-1", 1, { scriptText: "魏梁上台" })],
+        assets: [
+            { id: "asset-manual", kind: "image", title: "手动角色图", data: { dataUrl: "blob:manual", width: 100, height: 100, bytes: 10, mimeType: "image/png" }, coverUrl: "blob:manual", updatedAt: "now" },
+            { id: "asset-auto", kind: "image", title: "自动场景图", data: { dataUrl: "blob:auto", width: 100, height: 100, bytes: 10, mimeType: "image/png" }, coverUrl: "blob:auto", updatedAt: "now" },
+        ],
+        autoAssetRefs: [
+            {
+                assetId: "asset-auto",
+                kind: "image",
+                role: "episode_reference",
+                source: "agent_asset_extractor",
+                sourceLabel: "Agent 提取",
+                isAutoMatched: true,
+                isPrimaryReference: true,
+                assetBreakdownItemId: "need-1",
+                imageBriefId: "brief-1",
+                matchReasons: ["名称命中：大学操场"],
+            },
+        ],
+        position: { x: 100, y: 200 },
+        config: { provider: "volcengine-ark", model: "ep-test", size: "16:9", seconds: "8", vquality: "720" },
+        episodeTitle: "第一集",
+        idFactory: (prefix) => `${prefix}-id`,
+        connectionIdFactory: (index) => `conn-${index}`,
+    });
+    const configNode = result.nodes.find((node) => node.type === "config");
+    assert.deepEqual(configNode?.metadata?.references, ["asset:asset-manual", "asset:asset-auto"]);
+    const refs = configNode?.metadata?.referenceAssets as Array<Record<string, unknown>>;
+    assert.equal(refs[0].assetId, "asset-manual");
+    assert.equal(refs[1].assetId, "asset-auto");
+    assert.equal(refs[1].sourceType, "agent_asset_extractor");
+    assert.equal(refs[1].isAutoMatched, true);
+    assert.deepEqual(refs[1].matchReasons, ["名称命中：大学操场"]);
+});
+
 function group(id: string, projectId: string, order: number): StoryboardGroup {
     return { id, projectId, order, title: id, description: "", preset: {}, shotIds: [], createdAt: "", updatedAt: "" };
 }

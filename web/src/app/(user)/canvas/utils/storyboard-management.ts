@@ -12,8 +12,14 @@ export type StoryboardAssetRef = {
     assetId: string;
     kind: StoryboardAssetKind;
     role: string;
-    source?: "asset_breakdown" | "independent";
+    source?: "asset_breakdown" | "independent" | "agent_asset_extractor" | "manual" | "independent_image_brief" | "production_bible" | "unknown";
+    sourceLabel?: string;
     assetVersion?: AssetVersionReference;
+    isAutoMatched?: boolean;
+    isPrimaryReference?: boolean;
+    assetBreakdownItemId?: string;
+    imageBriefId?: string;
+    matchReasons?: string[];
 };
 
 export type StoryboardNodeRef = {
@@ -626,6 +632,7 @@ export function planShotGroupCanvasInsert({
     group,
     shots,
     assets,
+    autoAssetRefs = [],
     position,
     config,
     episodeTitle,
@@ -635,6 +642,7 @@ export function planShotGroupCanvasInsert({
     group: ShotGroup;
     shots: StoryboardTableShot[];
     assets: StoryboardAssetLike[];
+    autoAssetRefs?: StoryboardAssetRef[];
     position: Position;
     config: { provider?: "openai" | "volcengine-ark"; model?: string; size?: string; seconds?: string; vquality?: string };
     episodeTitle?: string;
@@ -661,7 +669,7 @@ export function planShotGroupCanvasInsert({
     });
     groupNodeRefs.push({ nodeId: promptId, role: "prompt" });
 
-    const mediaRefs = dedupeAssetRefs([...group.assetRefs, ...group.audioRefs]);
+    const mediaRefs = dedupeAssetRefs([...group.assetRefs, ...group.audioRefs, ...autoAssetRefs]);
     const assetNodeIds = mediaRefs
         .map((ref, index) => {
             const asset = assetsById.get(ref.assetId);
@@ -722,6 +730,13 @@ function buildShotGroupReferenceAssets(refs: StoryboardAssetRef[], assetsById: M
             role: ref.role || "reference",
             nodeId: nodeIds[index],
             ...(assetVersion ? { assetVersion } : {}),
+            ...(ref.source ? { sourceType: ref.source } : {}),
+            ...(ref.sourceLabel ? { sourceLabel: ref.sourceLabel } : {}),
+            ...(ref.isAutoMatched ? { isAutoMatched: true } : {}),
+            ...(ref.isPrimaryReference ? { isPrimaryReference: true } : {}),
+            ...(ref.assetBreakdownItemId ? { assetBreakdownItemId: ref.assetBreakdownItemId } : {}),
+            ...(ref.imageBriefId ? { imageBriefId: ref.imageBriefId } : {}),
+            ...(ref.matchReasons?.length ? { matchReasons: ref.matchReasons } : {}),
         };
     });
 }
@@ -816,7 +831,19 @@ function dedupeAssetRefs(refs: StoryboardAssetRef[]) {
         const assetId = ref.assetId.trim();
         if (!assetId || seen.has(assetId)) continue;
         seen.add(assetId);
-        result.push({ assetId, kind: ref.kind, role: ref.role.trim() || "reference", source: ref.source, ...(ref.assetVersion ? { assetVersion: ref.assetVersion } : {}) });
+        result.push({
+            assetId,
+            kind: ref.kind,
+            role: ref.role.trim() || "reference",
+            source: ref.source,
+            sourceLabel: ref.sourceLabel,
+            ...(ref.assetVersion ? { assetVersion: ref.assetVersion } : {}),
+            ...(ref.isAutoMatched ? { isAutoMatched: true } : {}),
+            ...(ref.isPrimaryReference ? { isPrimaryReference: true } : {}),
+            ...(ref.assetBreakdownItemId ? { assetBreakdownItemId: ref.assetBreakdownItemId } : {}),
+            ...(ref.imageBriefId ? { imageBriefId: ref.imageBriefId } : {}),
+            ...(ref.matchReasons?.length ? { matchReasons: ref.matchReasons } : {}),
+        });
     }
     return result;
 }

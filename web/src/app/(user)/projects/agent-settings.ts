@@ -173,6 +173,15 @@ export function formatInputVariablesText(variables: AgentInputVariable[]) {
     return variables.map((item) => `${item.name}：${item.description}`).join("\n");
 }
 
+export function fillAgentPromptTemplate(template: string, variables: Record<string, unknown>) {
+    return template.replace(/\{([A-Za-z0-9_]+)\}/g, (match, key) => {
+        const value = variables[key];
+        if (value === undefined || value === null) return match;
+        if (Array.isArray(value)) return value.join("、");
+        return String(value);
+    });
+}
+
 function buildDefaultAgentConfig(input: Omit<AgentConfig, "id" | "enabled" | "modelPreference" | "temperature" | "maxOutputTokens" | "writePolicy" | "version" | "updatedAt"> & { now: string }): AgentConfig {
     return {
         ...input,

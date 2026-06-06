@@ -1,5 +1,5 @@
 import type { AgentConfig } from "../../projects/agent-settings.ts";
-import type { AgentDraftOutput, AgentRunInput, AgentRunRecord } from "../../projects/agent-runner.ts";
+import { buildAgentTraceMetadata, type AgentDraftOutput, type AgentRunInput, type AgentRunRecord } from "../../projects/agent-runner.ts";
 import type { EpisodeWorkbenchCanvas } from "./episode-workbench.ts";
 import { buildStoryboardTableDraftsFromScript, type StoryboardTableShotWriteInput } from "./storyboard-management.ts";
 
@@ -88,7 +88,7 @@ export function buildLocalStoryboardDirectorDraftOutput(context: { projectId: st
 
 export function buildStoryboardTableShotInputsFromAgentRun(run: AgentRunRecord, context: { projectId: string; canvas: EpisodeWorkbenchCanvas }): StoryboardTableShotWriteInput[] {
     if (run.status !== "approved") throw new Error("分镜导演 run 必须先批准，才能写入分镜头表");
-    const inputHash = inputScriptSnapshotHash(run.input.scriptSnapshot || context.canvas.scriptSnapshot || "");
+    const trace = buildStoryboardDraftTraceMetadata(run, run.input.scriptSnapshot || context.canvas.scriptSnapshot || "");
     return normalizeStoryboardDirectorDraftItems(run.draftOutput.items).map((item, index) => ({
         projectId: context.projectId,
         canvasId: context.canvas.id,
@@ -111,12 +111,28 @@ export function buildStoryboardTableShotInputsFromAgentRun(run: AgentRunRecord, 
         assetNeeds: item.assetNeeds,
         assetRefs: [],
         productionBibleRefs: [],
-        agentRunId: run.id,
-        agentConfigId: run.agentConfigId,
-        agentConfigVersion: run.agentConfigVersion,
-        inputScriptSnapshotHash: inputHash,
-        sourceType: "agent_storyboard_director",
+        ...trace,
     }));
+}
+
+export function buildStoryboardDraftTraceMetadata(run: AgentRunRecord, scriptSnapshot: string) {
+    const trace = buildAgentTraceMetadata(run);
+    return {
+        agentRunId: trace.agentRunId,
+        agentConfigId: trace.agentConfigId,
+        agentConfigVersion: trace.agentConfigVersion,
+        inputScriptSnapshotHash: inputScriptSnapshotHash(scriptSnapshot),
+        sourceType: "agent_storyboard_director",
+    };
+}
+
+export function summarizeStoryboardDraftRun(run: AgentRunRecord) {
+    return {
+        status: run.status,
+        itemCount: normalizeStoryboardDirectorDraftItems(run.draftOutput.items).length,
+        warningCount: run.draftOutput.warnings.length,
+        summary: run.draftOutput.summary,
+    };
 }
 
 export function normalizeStoryboardDirectorDraftItems(items: unknown[]): StoryboardDirectorDraftItem[] {

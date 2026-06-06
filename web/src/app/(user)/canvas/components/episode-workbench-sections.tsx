@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Alert, Button, Card, Collapse, Empty, Input, Select, Space, Tag } from "antd";
 import { Bot, Film, ImagePlus, Link2, Pencil, Play, RotateCcw, Sparkles } from "lucide-react";
 
@@ -14,6 +14,7 @@ import type { CanvasNodeData } from "../types";
 import { agentRunStatusLabel, type AgentRunRecord } from "../../projects/agent-runner.ts";
 import type { AssetBreakdownItem } from "../utils/asset-breakdown";
 import { imageBriefKindLabel, type ImageBrief } from "../utils/image-brief";
+import type { ShotGroupEpisodeReferenceCandidate } from "../utils/shot-group-episode-references";
 
 export function EpisodeOverviewSection({ stats, status }: { stats: EpisodeWorkbenchStats; status: EpisodeProductionStatus }) {
     return (
@@ -396,6 +397,7 @@ export function ShotGroupSection({
     shotGroups,
     tableShots,
     assets,
+    autoReferenceLabels,
     onEditGroup,
     onDeleteGroup,
     onAddToCanvas,
@@ -405,6 +407,7 @@ export function ShotGroupSection({
     shotGroups: ShotGroup[];
     tableShots: StoryboardTableShot[];
     assets: Asset[];
+    autoReferenceLabels?: Record<string, string>;
     onEditGroup: (group: ShotGroup) => void;
     onDeleteGroup: (id: string) => void;
     onAddToCanvas: (id: string) => void;
@@ -443,6 +446,7 @@ export function ShotGroupSection({
                                 <Tag className="m-0">音频资产 {row.group.audioRefs.length}</Tag>
                                 <Tag className="m-0">参考视频 {row.group.assetRefs.filter((ref) => ref.kind === "video").length}</Tag>
                                 <Tag className="m-0">设定引用 {row.group.productionBibleRefs?.length || 0}</Tag>
+                                {autoReferenceLabels?.[row.group.id] ? <Tag className="m-0">{autoReferenceLabels[row.group.id]}</Tag> : null}
                                 {row.group.assetRefs.some((ref) => ref.source === "independent") ? <Tag className="m-0">含独立素材</Tag> : null}
                             </Space>
                         </div>
@@ -509,6 +513,7 @@ export function GenerationManagementSection({
                                 {summary.aiTaskStatus ? <Tag className="m-0">账本：{summary.aiTaskStatus}</Tag> : null}
                                 {summary.credits ? <Tag className="m-0">扣费 {summary.credits}</Tag> : null}
                                 {summary.primaryAssetId ? <Tag className="m-0">主版本：{assetsById.get(summary.primaryAssetId)?.title || summary.primaryAssetId}</Tag> : null}
+                                {summary.referenceAssetCount ? <Tag className="m-0">参考资产 {summary.referenceAssetCount}</Tag> : null}
                             </Space>
                             {summary.errorMessage ? <div className="mt-2 rounded-lg bg-red-50 p-2 text-xs leading-5 text-red-600 dark:bg-red-950/30 dark:text-red-300">{summary.errorMessage}</div> : null}
                             <Space className="mt-3" size={6} wrap>
@@ -546,6 +551,48 @@ export function GenerationManagementSection({
     );
 }
 
+export function ShotGroupReferencePreview({
+    candidates,
+    assetsById,
+    defaultSelectedIds,
+    onSelectionChange,
+}: {
+    candidates: ShotGroupEpisodeReferenceCandidate[];
+    assetsById: Map<string, Asset>;
+    defaultSelectedIds: string[];
+    onSelectionChange: (ids: string[]) => void;
+}) {
+    if (!candidates.length) return <Alert type="info" showIcon message="暂无可自动带入的本集参考资产" description="仍会创建文本说明节点、参考素材节点和视频生成配置节点，不会自动生成视频。" />;
+    return (
+        <div className="space-y-3">
+            <Alert type="info" showIcon message="确认本集参考资产" description="仅勾选的素材会写入视频配置节点。取消全部勾选也可以继续加入画布，不会自动生成视频或扣费。" />
+            <CheckboxGroup defaultValue={defaultSelectedIds} onChange={(values) => onSelectionChange(values.map(String))}>
+                <div className="space-y-2">
+                    {candidates.map((candidate) => {
+                        const asset = assetsById.get(candidate.assetId);
+                        return (
+                            <label key={candidate.assetId} className="flex cursor-pointer gap-3 rounded-lg border border-stone-200 p-2 dark:border-stone-800">
+                                <input className="mt-5" type="checkbox" defaultChecked={defaultSelectedIds.includes(candidate.assetId)} value={candidate.assetId} onChange={noop} />
+                                <div className="h-14 w-20 shrink-0 overflow-hidden rounded-md bg-stone-100 dark:bg-stone-900">{asset?.coverUrl ? <img src={asset.coverUrl} alt={asset.title} className="h-full w-full object-cover" /> : null}</div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-medium">{candidate.assetTitle}</span>
+                                        <Tag className="m-0">{candidate.needKind || candidate.kind}</Tag>
+                                        <Tag className="m-0">{candidate.sourceLabel}</Tag>
+                                        {candidate.isPrimary ? <Tag className="m-0">主参考图</Tag> : null}
+                                        {candidate.assetVersion?.versionNumber ? <Tag className="m-0">v{candidate.assetVersion.versionNumber}</Tag> : null}
+                                    </div>
+                                    <div className="mt-1 text-xs leading-5 text-stone-500">{candidate.matchReasons.join("；")}</div>
+                                </div>
+                            </label>
+                        );
+                    })}
+                </div>
+            </CheckboxGroup>
+        </div>
+    );
+}
+
 function EpisodeStatCard({ label, value, tone = "default" }: { label: string; value: string | number; tone?: "default" | "warning" | "danger" }) {
     const toneClass =
         tone === "danger"
@@ -560,6 +607,25 @@ function EpisodeStatCard({ label, value, tone = "default" }: { label: string; va
         </div>
     );
 }
+
+function CheckboxGroup({ defaultValue, onChange, children }: { defaultValue: string[]; onChange: (values: string[]) => void; children: ReactNode }) {
+    const [values, setValues] = useState(defaultValue);
+    return (
+        <div
+            onChange={(event) => {
+                const target = event.target as HTMLInputElement;
+                if (target.type !== "checkbox") return;
+                const next = target.checked ? [...values, target.value] : values.filter((value) => value !== target.value);
+                setValues(next);
+                onChange(next);
+            }}
+        >
+            {children}
+        </div>
+    );
+}
+
+function noop() {}
 
 function generationStatusLabel(status: string) {
     if (status === "not_in_canvas") return "未入画布";

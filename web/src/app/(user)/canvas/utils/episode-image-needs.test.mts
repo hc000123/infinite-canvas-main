@@ -4,7 +4,7 @@ import test from "node:test";
 import type { Asset } from "@/stores/use-asset-store";
 import type { AssetBreakdownItem } from "./asset-breakdown.ts";
 import { buildImageBriefFromAssetBreakdown, type ImageBrief } from "./image-brief.ts";
-import { buildEpisodeImageNeedRows, episodeImageNeedKind, findImageBriefForAssetBreakdown } from "./episode-image-needs.ts";
+import { buildEpisodeImageNeedRows, episodeImageNeedKind, findImageBriefForAssetBreakdown, summarizeEpisodeImageNeed } from "./episode-image-needs.ts";
 
 test("resolves episode image need display kind from agent asset kind", () => {
     assert.equal(episodeImageNeedKind(item({ kind: "character" })), "character");
@@ -54,6 +54,12 @@ test("builds episode image need rows with correct empty and generated statuses",
     assert.equal(rows[2].resultAssetCount, 2);
     assert.equal(rows[2].primaryAsset?.id, "asset-1");
     assert.equal(rows[2].statusLabel, "已生成");
+    assert.deepEqual(summarizeEpisodeImageNeed(rows[2]), {
+        title: "角色 · 已生成",
+        sourceLabel: "资产拆解",
+        resultLabel: "结果素材 2",
+        primaryAssetTitle: "asset-1",
+    });
 });
 
 function item(patch: Partial<AssetBreakdownItem>): AssetBreakdownItem {

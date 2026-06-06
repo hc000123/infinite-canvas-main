@@ -70,6 +70,15 @@ export function episodeImageNeedStatusLabel(item: Pick<AssetBreakdownItem, "stat
     return "草稿";
 }
 
+export function summarizeEpisodeImageNeed(row: Pick<EpisodeImageNeedRow, "kindLabel" | "sourceLabel" | "resultAssetCount" | "statusLabel" | "primaryAsset">) {
+    return {
+        title: `${row.kindLabel} · ${row.statusLabel}`,
+        sourceLabel: row.sourceLabel,
+        resultLabel: row.resultAssetCount ? `结果素材 ${row.resultAssetCount}` : "暂无结果素材",
+        primaryAssetTitle: row.primaryAsset?.title || "",
+    };
+}
+
 export function episodeImageNeedKindLabel(kind: EpisodeImageNeedKind) {
     return episodeImageNeedKindLabels[kind];
 }

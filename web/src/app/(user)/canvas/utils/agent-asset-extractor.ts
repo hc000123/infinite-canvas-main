@@ -1,5 +1,5 @@
 import type { AgentConfig } from "../../projects/agent-settings.ts";
-import type { AgentDraftOutput, AgentRunInput, AgentRunRecord } from "../../projects/agent-runner.ts";
+import { buildAgentTraceMetadata, type AgentDraftOutput, type AgentRunInput, type AgentRunRecord } from "../../projects/agent-runner.ts";
 import type { AssetBreakdownKind, AssetBreakdownWriteInput } from "./asset-breakdown.ts";
 import type { EpisodeWorkbenchCanvas } from "./episode-workbench.ts";
 
@@ -64,6 +64,7 @@ export function buildLocalAssetExtractorDraftOutput(context: AgentAssetExtractor
 
 export function buildAssetBreakdownInputsFromAgentRun(run: AgentRunRecord, context: AgentAssetExtractorContext): AssetBreakdownWriteInput[] {
     if (run.status !== "approved") throw new Error("资产提取 run 必须先批准，才能写入本集生图需求");
+    const trace = buildAgentTraceMetadata(run);
     return normalizeAgentAssetDraftItems(run.draftOutput.items).map((item) => ({
         projectId: context.projectId,
         canvasId: context.canvas.id,
@@ -77,9 +78,9 @@ export function buildAssetBreakdownInputsFromAgentRun(run: AgentRunRecord, conte
         tags: uniqueStrings([...item.tags, agentAssetKindLabel(item.kind), importanceLabel(item.importance)]),
         assetIds: [],
         status: "draft",
-        agentRunId: run.id,
-        agentConfigId: run.agentConfigId,
-        agentConfigVersion: run.agentConfigVersion,
+        agentRunId: trace.agentRunId,
+        agentConfigId: trace.agentConfigId,
+        agentConfigVersion: trace.agentConfigVersion,
         sourceType: "agent_asset_extractor",
         agentAssetKind: item.kind,
         suggestedBriefKind: item.suggestedBriefKind,
