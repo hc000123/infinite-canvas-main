@@ -82,6 +82,11 @@ export type StoryboardTableShot = {
     assetNeeds?: string[];
     assetRefs: StoryboardAssetRef[];
     productionBibleRefs?: StoryboardProductionBibleRef[];
+    agentRunId?: string;
+    agentConfigId?: string;
+    agentConfigVersion?: string;
+    inputScriptSnapshotHash?: string;
+    sourceType?: string;
     createdAt: string;
     updatedAt: string;
 };
@@ -99,6 +104,10 @@ export type ShotGroup = {
     assetRefs: StoryboardAssetRef[];
     audioRefs: StoryboardAssetRef[];
     productionBibleRefs?: StoryboardProductionBibleRef[];
+    agentRunId?: string;
+    agentConfigId?: string;
+    agentConfigVersion?: string;
+    sourceType?: string;
     status: ShotGroupStatus;
     taskId?: string;
     resultAssetIds: string[];
@@ -179,6 +188,11 @@ export function normalizeStoryboardTableShot(input: StoryboardTableShotWriteInpu
         assetNeeds: uniqueStrings((input.assetNeeds || []).map((item) => item.trim()).filter(Boolean)),
         assetRefs: dedupeAssetRefs(input.assetRefs),
         productionBibleRefs: dedupeBibleRefs(input.productionBibleRefs || []),
+        agentRunId: input.agentRunId?.trim() || undefined,
+        agentConfigId: input.agentConfigId?.trim() || undefined,
+        agentConfigVersion: input.agentConfigVersion?.trim() || undefined,
+        inputScriptSnapshotHash: input.inputScriptSnapshotHash?.trim() || undefined,
+        sourceType: input.sourceType?.trim() || undefined,
     };
 }
 
@@ -193,6 +207,10 @@ export function normalizeShotGroup(input: ShotGroupWriteInput): ShotGroupWriteIn
         assetRefs: dedupeAssetRefs(input.assetRefs),
         audioRefs: dedupeAssetRefs(input.audioRefs.filter((ref) => ref.kind === "audio")),
         productionBibleRefs: dedupeBibleRefs(input.productionBibleRefs || []),
+        agentRunId: input.agentRunId?.trim() || undefined,
+        agentConfigId: input.agentConfigId?.trim() || undefined,
+        agentConfigVersion: input.agentConfigVersion?.trim() || undefined,
+        sourceType: input.sourceType?.trim() || undefined,
         taskId: input.taskId?.trim() || undefined,
         resultAssetIds: uniqueStrings(input.resultAssetIds.map((id) => id.trim()).filter(Boolean)),
         primaryAssetId: input.primaryAssetId?.trim() || undefined,
@@ -436,6 +454,10 @@ export function createShotGroupFromSelection({ shots, id, now = new Date().toISO
             assetRefs: dedupeAssetRefs(validation.shots.flatMap((shot) => shot.assetRefs)),
             audioRefs: [],
             productionBibleRefs: dedupeBibleRefs(validation.shots.flatMap((shot) => shot.productionBibleRefs || [])),
+            agentRunId: first.agentRunId,
+            agentConfigId: first.agentConfigId,
+            agentConfigVersion: first.agentConfigVersion,
+            sourceType: first.sourceType,
             status: prompt ? "prompt_ready" : "draft",
             resultAssetIds: [],
             createdAt: now,
@@ -470,6 +492,9 @@ export function buildShotGroupCanvasInsertMetadata(group: ShotGroup, metadata: C
         shotIds: group.shotIds,
         storyboardShotGroupId: group.id,
         storyboardTableShotIds: group.shotIds,
+        ...(group.agentRunId ? { agentRunId: group.agentRunId } : {}),
+        ...(group.agentConfigId ? { agentConfigId: group.agentConfigId } : {}),
+        ...(group.agentConfigVersion ? { agentConfigVersion: group.agentConfigVersion } : {}),
         ...(role ? { storyboardRole: role } : {}),
         ...rest,
     };
@@ -518,6 +543,7 @@ export function planStoryboardGroupCanvasInsert({
     assets,
     position,
     config,
+    episodeTitle,
     idFactory,
     connectionIdFactory,
 }: {
@@ -526,6 +552,7 @@ export function planStoryboardGroupCanvasInsert({
     assets: StoryboardAssetLike[];
     position: Position;
     config: { provider?: "openai" | "volcengine-ark"; model?: string; size?: string; seconds?: string; vquality?: string };
+    episodeTitle?: string;
     idFactory: (prefix: string) => string;
     connectionIdFactory: (index: number) => string;
 }) {
@@ -601,6 +628,7 @@ export function planShotGroupCanvasInsert({
     assets,
     position,
     config,
+    episodeTitle,
     idFactory,
     connectionIdFactory,
 }: {
@@ -609,6 +637,7 @@ export function planShotGroupCanvasInsert({
     assets: StoryboardAssetLike[];
     position: Position;
     config: { provider?: "openai" | "volcengine-ark"; model?: string; size?: string; seconds?: string; vquality?: string };
+    episodeTitle?: string;
     idFactory: (prefix: string) => string;
     connectionIdFactory: (index: number) => string;
 }) {
@@ -632,7 +661,7 @@ export function planShotGroupCanvasInsert({
     });
     groupNodeRefs.push({ nodeId: promptId, role: "prompt" });
 
-    const mediaRefs = [...group.assetRefs, ...group.audioRefs];
+    const mediaRefs = dedupeAssetRefs([...group.assetRefs, ...group.audioRefs]);
     const assetNodeIds = mediaRefs
         .map((ref, index) => {
             const asset = assetsById.get(ref.assetId);
@@ -656,14 +685,24 @@ export function planShotGroupCanvasInsert({
             status: "idle",
             generationMode: "video",
             prompt,
+            finalPrompt: prompt,
             provider: config.provider,
             model: config.model,
             size: config.size,
             seconds: config.seconds,
             vquality: config.vquality,
+            duration: String(group.totalDuration || config.seconds || ""),
+            ratio: config.size,
+            sourceType: "shot_group",
+            sourceId: group.id,
+            episodeTitle,
             role: "video_config",
-            references: mediaRefs.map((ref) => `asset:${ref.assetId}`),
+            references: mediaRefs.filter((ref) => ref.kind === "image").map((ref) => `asset:${ref.assetId}`),
+            videoReferences: mediaRefs.filter((ref) => ref.kind === "video").map((ref) => `asset:${ref.assetId}`),
+            audioReferences: mediaRefs.filter((ref) => ref.kind === "audio").map((ref) => `asset:${ref.assetId}`),
+            referenceAssets: buildShotGroupReferenceAssets(mediaRefs, assetsById, assetNodeIds),
             referenceRoles: mediaRefs.map((ref, index) => ({ nodeId: assetNodeIds[index] || ref.assetId, kind: ref.kind, role: ref.role || "reference", index: index + 1 })),
+            referenceOrder: mediaRefs.map((ref, index) => ({ nodeId: assetNodeIds[index] || ref.assetId, kind: ref.kind, index: index + 1 })),
         } as CanvasNodeMetadata & { role: string }),
     });
     groupNodeRefs.push({ nodeId: configId, role: "video_config" });
@@ -671,6 +710,20 @@ export function planShotGroupCanvasInsert({
     connections.push({ id: connectionIdFactory(connectionIndex++), fromNodeId: promptId, toNodeId: configId });
     assetNodeIds.forEach((nodeId) => connections.push({ id: connectionIdFactory(connectionIndex++), fromNodeId: nodeId, toNodeId: configId }));
     return { nodes, connections, groupNodeRefs };
+}
+
+function buildShotGroupReferenceAssets(refs: StoryboardAssetRef[], assetsById: Map<string, StoryboardAssetLike>, nodeIds: string[]) {
+    return refs.map((ref, index) => {
+        const asset = assetsById.get(ref.assetId);
+        const assetVersion = ref.assetVersion || (asset ? buildAssetVersionReference({ id: asset.id, updatedAt: asset.updatedAt || "", metadata: asset.metadata }) : undefined);
+        return {
+            assetId: ref.assetId,
+            kind: ref.kind,
+            role: ref.role || "reference",
+            nodeId: nodeIds[index],
+            ...(assetVersion ? { assetVersion } : {}),
+        };
+    });
 }
 
 function scriptSceneToShot(scene: ScriptScene, groupId: string, id: string, order: number): StoryboardShot {

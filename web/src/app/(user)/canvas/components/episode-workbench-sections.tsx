@@ -270,6 +270,12 @@ export function EpisodeTableSection({
     shots,
     selectedIds,
     onGenerateDrafts,
+    canGenerateDrafts,
+    disabledReason,
+    runs,
+    onApproveRun,
+    onRejectRun,
+    onApplyRun,
     onCreateShot,
     onToggleShot,
     onEditShot,
@@ -280,6 +286,12 @@ export function EpisodeTableSection({
     shots: StoryboardTableShot[];
     selectedIds: string[];
     onGenerateDrafts: () => void;
+    canGenerateDrafts: boolean;
+    disabledReason: string;
+    runs: AgentRunRecord[];
+    onApproveRun: (runId: string) => void;
+    onRejectRun: (runId: string) => void;
+    onApplyRun: (run: AgentRunRecord) => void;
     onCreateShot: () => void;
     onToggleShot: (id: string, checked: boolean) => void;
     onEditShot: (shot: StoryboardTableShot) => void;
@@ -294,8 +306,8 @@ export function EpisodeTableSection({
             title="分镜头表"
             extra={
                 <Space size={6} wrap>
-                    <Button size="small" onClick={onGenerateDrafts}>
-                        从剧本生成草案
+                    <Button size="small" icon={<Bot className="size-3.5" />} disabled={!canGenerateDrafts} onClick={onGenerateDrafts}>
+                        运行分镜导演
                     </Button>
                     <Button size="small" icon={<Pencil className="size-3.5" />} onClick={onCreateShot}>
                         新增镜头
@@ -306,7 +318,49 @@ export function EpisodeTableSection({
                 </Space>
             }
         >
-            <Alert className="mb-3" type="info" showIcon message="草案由本地规则生成，需要用户确认和编辑；重新导入剧本或重新生成草案前会要求确认。" />
+            <Alert
+                className="mb-3"
+                type={canGenerateDrafts ? "info" : "warning"}
+                showIcon
+                message={canGenerateDrafts ? "分镜草案由分镜导演 Agent 生成预览" : disabledReason}
+                description="第一版使用本地规则生成草案，并写入 Agent Runner 预览记录。必须批准后，才能手动写入分镜头表；不会自动生成视频或扣费。"
+            />
+            {runs.length ? (
+                <div className="mb-3 space-y-2">
+                    {runs.map((run) => (
+                        <Card key={run.id} size="small" className="bg-stone-50/70 dark:bg-white/5">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Tag className="m-0">{agentRunStatusLabel(run.status)}</Tag>
+                                        <Tag className="m-0">配置 v{run.agentConfigVersion}</Tag>
+                                        <Tag className="m-0">{run.draftOutput.items.length} 条草案</Tag>
+                                    </div>
+                                    <div className="mt-2 text-sm font-medium">{run.draftOutput.summary}</div>
+                                    {run.draftOutput.warnings.length ? <div className="mt-1 text-xs text-amber-600">{run.draftOutput.warnings.join("；")}</div> : null}
+                                </div>
+                                <Space size={6} wrap>
+                                    <Button size="small" disabled={run.status !== "ready_for_review"} onClick={() => onApproveRun(run.id)}>
+                                        批准
+                                    </Button>
+                                    <Button size="small" disabled={run.status !== "ready_for_review"} onClick={() => onRejectRun(run.id)}>
+                                        驳回
+                                    </Button>
+                                    <Button size="small" type="primary" disabled={run.status !== "approved"} onClick={() => onApplyRun(run)}>
+                                        写入分镜头表
+                                    </Button>
+                                </Space>
+                            </div>
+                            <details className="mt-3">
+                                <summary className="cursor-pointer text-xs text-stone-500">查看 items / rawJson / warnings / proposedActions</summary>
+                                <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-stone-950 p-3 text-xs text-stone-50">
+                                    {JSON.stringify({ items: run.draftOutput.items, rawJson: run.draftOutput.rawJson, warnings: run.draftOutput.warnings, proposedActions: run.proposedActions }, null, 2)}
+                                </pre>
+                            </details>
+                        </Card>
+                    ))}
+                </div>
+            ) : null}
             {sceneGroups.length ? (
                 <Collapse
                     defaultActiveKey={sceneGroups.map((group) => group.sceneName)}

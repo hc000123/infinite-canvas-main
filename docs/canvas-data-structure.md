@@ -374,6 +374,11 @@ type StoryboardTableShot = {
   assetNeeds?: string[];
   assetRefs: StoryboardAssetRef[];
   productionBibleRefs?: StoryboardProductionBibleRef[];
+  agentRunId?: string;
+  agentConfigId?: string;
+  agentConfigVersion?: string;
+  inputScriptSnapshotHash?: string;
+  sourceType?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -391,6 +396,10 @@ type ShotGroup = {
   assetRefs: StoryboardAssetRef[];
   audioRefs: StoryboardAssetRef[];
   productionBibleRefs?: StoryboardProductionBibleRef[];
+  agentRunId?: string;
+  agentConfigId?: string;
+  agentConfigVersion?: string;
+  sourceType?: string;
   status:
     | "draft"
     | "prompt_ready"
@@ -419,7 +428,9 @@ type ShotGroup = {
 - `StoryboardShot.errorMessage`：视频生成失败时保存失败原因；`status` 会进入 `error`，页面中显示失败提示。
 - `StoryboardTableShot`：M6.6.3 新增的本集分镜头表条目，按 `projectId + canvasId + episodeId` 保存。它来自本集 `scriptSnapshot` 的本地规则粗拆，也允许用户人工编辑、删除、排序和补充镜头信息。
 - `StoryboardTableShot.assetNeeds`：M6.8 起用于标记单镜头资产需求，第一版支持角色、场景、道具、服化道、音频、参考视频和特殊效果。它只服务本集工作台的生产提示，不会自动触发素材生成。
+- `StoryboardTableShot.agentRunId / agentConfigId / agentConfigVersion / inputScriptSnapshotHash / sourceType`：M6.9.5 起由分镜导演 Agent 草案写入时保留追溯。`sourceType` 第一版为 `agent_storyboard_director`，`inputScriptSnapshotHash` 用于锁定当次剧本快照，不保存额外剧本副本。
 - `ShotGroup`：M6.6.3 新增的生成镜头组，由连续 `StoryboardTableShot.shotIds` 组成。组合时要求同一个 `sceneName`、不能跳选、`totalDuration <= 15`；它只管理生成单元结构和提示词，不自动触发真实视频生成。
+- `ShotGroup.agentRunId / agentConfigId / agentConfigVersion / sourceType`：M6.9.5 起创建镜头组时继承所选分镜头表的 Agent 追溯字段，便于后续视频配置节点回查分镜草案来源。
 - `ShotGroup.assetRefs` / `audioRefs` / `productionBibleRefs`：记录生成镜头组可用的图片、参考视频、音频和设定库输入。引用素材时继续保存素材版本快照；M6.8 起素材引用可标记 `source: "asset_breakdown" | "independent"`，用于区分剧本拆解资产和独立生图工作台资产。
 - `ShotGroup.resultAssetIds` / `primaryAssetId`：记录生成结果回流到生成镜头组的素材 ID；同一素材 ID 不重复写入，首次成功结果可成为主版本。
 - `ShotGroup.status` / `taskId` / `errorMessage`：M6.8 起由画布视频生成链路回写生成状态。本集工作台只展示和管理状态，不自动触发真实视频生成或扣费。
@@ -839,6 +850,8 @@ M8 起，云端 AI 代理任务会把账本字段回填到图片 / 视频节点 
 - 图片组节点：根节点用 `isBatchRoot/batchChildIds/primaryImageId/imageBatchExpanded` 记录批量生成结果；子图节点用 `batchRootId` 指回根节点。
 - 素材来源节点：从“我的素材”加入画布时会写入 `sourceAssetId`、`assetVersion` 和 `assetReferenceMode: "fixed-version"`。节点默认锁定创建时的素材版本，素材后续更新不会自动改节点内容；节点悬浮工具栏只在发现新版本时提示，并由用户手动更新引用记录。
 - 分镜节点：由“打组加入画布”创建的文本、素材和视频配置节点会写入 `storyboardGroupId/storyboardShotId/storyboardRole`；参考素材节点额外写入 `sourceAssetId/storyboardAssetRole/assetVersion`，用于后续结果回流、版本锁定和追溯。M6.6.3 生成镜头组加入画布时，节点还会写入 `episodeId/shotGroupId/shotIds/storyboardShotGroupId/storyboardTableShotIds`，用于追溯本集分镜头表和生成镜头组。
+- 镜头组视频配置节点：M6.9.6 起，镜头组加入画布的主生成入口是 `generationMode: "video"` 的配置节点。metadata 写入 `prompt / finalPrompt / duration / seconds / ratio / size / provider / model`、`episodeId / episodeTitle`、`shotGroupId / shotIds`、`storyboardShotGroupId / storyboardTableShotIds`、`agentRunId / agentConfigId / agentConfigVersion`、`sourceType: "shot_group"`，并通过 `references / videoReferences / audioReferences` 区分图片、参考视频和音频槽位。
+- 镜头组参考素材：视频配置节点会同步保存 `referenceAssets / referenceRoles / referenceOrder`，参考素材节点和 `referenceAssets` 都继续保存 `assetVersion` 快照；同一素材不会重复写入。M6.9.6 只承接用户已绑定到镜头组的图片、视频和音频素材，不自动带入本集生图需求主参考图。
 
 ## 连线结构
 

@@ -56,6 +56,7 @@ type StoryboardStore = {
     markShotSucceeded: (input: { storyboardShotId?: string; assetId?: string; nodeId?: string; taskId?: string }) => void;
     markShotFailed: (input: { storyboardShotId?: string; nodeId?: string; taskId?: string; errorMessage?: string }) => void;
     generateTableShotsFromScript: (input: { projectId: string; canvasId: string; episodeId: string; scriptText: string }) => number;
+    applyAgentTableShots: (input: { projectId: string; canvasId: string; episodeId: string; shots: StoryboardTableShotWriteInput[]; mode: "append" | "replace" }) => number;
     addTableShot: (input: Omit<StoryboardTableShotWriteInput, "order"> & { order?: number }) => string;
     updateTableShot: (id: string, patch: Partial<StoryboardTableShotWriteInput>) => void;
     removeTableShot: (id: string) => void;
@@ -176,6 +177,22 @@ export const useStoryboardStore = create<StoryboardStore>()(
                 set((state) => ({
                     tableShots: [...state.tableShots.filter((shot) => !(shot.canvasId === input.canvasId && shot.episodeId === input.episodeId)), ...drafts],
                     shotGroups: state.shotGroups.filter((group) => !(group.canvasId === input.canvasId && group.episodeId === input.episodeId)),
+                }));
+                return drafts.length;
+            },
+            applyAgentTableShots: (input) => {
+                const now = new Date().toISOString();
+                const existing = orderedStoryboardTableShots(get().tableShots, input.canvasId, input.episodeId);
+                const orderOffset = input.mode === "append" ? existing.reduce((max, shot) => Math.max(max, shot.order), 0) : 0;
+                const drafts = input.shots.map((draft, index) => ({
+                    ...normalizeStoryboardTableShot({ ...draft, order: orderOffset + index + 1 }),
+                    id: nanoid(),
+                    createdAt: now,
+                    updatedAt: now,
+                }));
+                set((state) => ({
+                    tableShots: input.mode === "replace" ? [...state.tableShots.filter((shot) => !(shot.canvasId === input.canvasId && shot.episodeId === input.episodeId)), ...drafts] : [...state.tableShots, ...drafts],
+                    shotGroups: input.mode === "replace" ? state.shotGroups.filter((group) => !(group.canvasId === input.canvasId && group.episodeId === input.episodeId)) : state.shotGroups,
                 }));
                 return drafts.length;
             },

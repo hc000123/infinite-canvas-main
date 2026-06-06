@@ -29,6 +29,15 @@ import {
     workbenchModes,
 } from "../utils/episode-workbench";
 import { buildAssetBreakdownInputsFromAgentRun, buildAssetExtractorRunInput, buildLocalAssetExtractorDraftOutput, canRunAssetExtractor, shouldAllowAssetExtractorRun } from "../utils/agent-asset-extractor";
+import {
+    buildLocalStoryboardDirectorDraftOutput,
+    buildStoryboardDirectorRunInput,
+    buildStoryboardTableShotInputsFromAgentRun,
+    canRunStoryboardDirector,
+    shouldAllowStoryboardDirectorRun,
+    validateStoryboardDraftWriteMode,
+    type StoryboardDraftWriteMode,
+} from "../utils/agent-storyboard-director";
 import { itemsForProductionBibleProject } from "../utils/production-bible";
 import type { CanvasNodeData } from "../types";
 import {
@@ -107,7 +116,7 @@ export function EpisodeWorkbenchDrawer({
     const upsertScriptProject = useScriptStore((state) => state.upsertProject);
     const tableShots = useStoryboardStore((state) => state.tableShots);
     const shotGroups = useStoryboardStore((state) => state.shotGroups);
-    const generateTableShotsFromScript = useStoryboardStore((state) => state.generateTableShotsFromScript);
+    const applyAgentTableShots = useStoryboardStore((state) => state.applyAgentTableShots);
     const addTableShot = useStoryboardStore((state) => state.addTableShot);
     const updateTableShot = useStoryboardStore((state) => state.updateTableShot);
     const removeTableShot = useStoryboardStore((state) => state.removeTableShot);
@@ -150,8 +159,15 @@ export function EpisodeWorkbenchDrawer({
     const assetExtractorConfig = useMemo(() => resolvedAgentConfigs.find((config) => config.kind === "asset_extractor"), [resolvedAgentConfigs]);
     const assetExtractorAvailability = shouldAllowAssetExtractorRun(assetExtractorConfig);
     const assetExtractorRunReadiness = canRunAssetExtractor(activeCanvas);
+    const storyboardDirectorConfig = useMemo(() => resolvedAgentConfigs.find((config) => config.kind === "storyboard_director"), [resolvedAgentConfigs]);
+    const storyboardDirectorAvailability = shouldAllowStoryboardDirectorRun(storyboardDirectorConfig);
+    const storyboardDirectorRunReadiness = canRunStoryboardDirector(activeCanvas);
     const activeAssetExtractorRuns = useMemo(
         () => (activeCanvas?.episodeId ? listAgentRunsByEpisode(agentRuns, activeCanvas.episodeId).filter((run) => run.agentKind === "asset_extractor" && run.input.canvasId === activeCanvas.id) : []),
+        [activeCanvas?.episodeId, activeCanvas?.id, agentRuns],
+    );
+    const activeStoryboardDirectorRuns = useMemo(
+        () => (activeCanvas?.episodeId ? listAgentRunsByEpisode(agentRuns, activeCanvas.episodeId).filter((run) => run.agentKind === "storyboard_director" && run.input.canvasId === activeCanvas.id) : []),
         [activeCanvas?.episodeId, activeCanvas?.id, agentRuns],
     );
     const episodeOptions = useMemo(
@@ -193,7 +209,7 @@ export function EpisodeWorkbenchDrawer({
             message.success("本集剧本快照已保存");
         };
         if (activeShots.length) {
-            Modal.confirm({ title: "保存剧本快照？", content: "这不会自动覆盖已有分镜头表；如需重新生成草案，请手动点击“从剧本生成草案”。", okText: "保存", cancelText: "取消", onOk: apply });
+            Modal.confirm({ title: "保存剧本快照？", content: "这不会自动覆盖已有分镜头表；如需重新生成草案，请手动点击“运行分镜导演”。", okText: "保存", cancelText: "取消", onOk: apply });
         } else apply();
     };
 
@@ -233,15 +249,21 @@ export function EpisodeWorkbenchDrawer({
         else apply();
     };
 
-    const generateDrafts = () => {
-        if (!activeCanvas?.episodeId || !scriptDraft.trim()) return message.warning("请先绑定或导入本集剧本");
-        const run = () => {
-            const count = generateTableShotsFromScript({ projectId, canvasId: activeCanvas.id, episodeId: activeCanvas.episodeId!, scriptText: scriptDraft });
-            setSelectedShotIds([]);
-            message.success(`已生成 ${count} 条分镜头草案`);
-        };
-        if (activeShots.length || activeShotGroups.length) Modal.confirm({ title: "重新生成分镜头草案？", content: "这会替换当前本集分镜头表，并清空对应生成镜头组。", okText: "重新生成", cancelText: "取消", onOk: run });
-        else run();
+    const runStoryboardDirector = () => {
+        if (!activeCanvas) return message.warning("请先选择画布");
+        if (!storyboardDirectorRunReadiness.canRun) return message.warning(storyboardDirectorRunReadiness.reason);
+        if (!storyboardDirectorConfig || !storyboardDirectorAvailability.allowed) {
+            message.warning(storyboardDirectorAvailability.reason || "分镜导演 Agent 不可用");
+            onOpenAgentSettings?.();
+            return;
+        }
+        try {
+            const context = { projectId, canvas: { ...activeCanvas, scriptSnapshot: scriptDraft || activeCanvas.scriptSnapshot } };
+            createAgentRun(storyboardDirectorConfig, buildStoryboardDirectorRunInput(context), buildLocalStoryboardDirectorDraftOutput(context));
+            message.success("已创建分镜导演草案，请先审核再写入分镜头表");
+        } catch (error) {
+            message.warning(error instanceof Error ? error.message : "分镜导演 Agent 运行失败");
+        }
     };
 
     const runAssetExtraction = () => {
@@ -274,6 +296,46 @@ export function EpisodeWorkbenchDrawer({
             Modal.confirm({ title: "写入本集生图需求？", content: "将把已批准的资产草案写入资产拆解列表，不会自动创建 Brief、生成图片或扣费。重复资产会按同集同类同名合并。", okText: "写入", cancelText: "取消", onOk: apply });
         } catch (error) {
             message.warning(error instanceof Error ? error.message : "资产草案写入失败");
+        }
+    };
+
+    const applyStoryboardDirectorRun = (run: AgentRunRecord, mode?: StoryboardDraftWriteMode) => {
+        if (!activeCanvas?.episodeId) return message.warning("请先绑定或导入本集剧本");
+        const validation = validateStoryboardDraftWriteMode({ existingShotCount: activeShots.length, mode });
+        if (!validation.valid) {
+            Modal.confirm({
+                title: "写入分镜头表",
+                content: "当前已有分镜头表，请选择追加到现有分镜后面，或覆盖当前本集分镜头表并清空对应生成镜头组。",
+                okText: "追加",
+                cancelText: "取消",
+                onOk: () => applyStoryboardDirectorRun(run, "append"),
+                footer: (_, { OkBtn, CancelBtn }) => (
+                    <>
+                        <Button
+                            danger
+                            onClick={() => {
+                                Modal.destroyAll();
+                                applyStoryboardDirectorRun(run, "replace");
+                            }}
+                        >
+                            覆盖
+                        </Button>
+                        <CancelBtn />
+                        <OkBtn />
+                    </>
+                ),
+            });
+            return;
+        }
+        try {
+            const shots = buildStoryboardTableShotInputsFromAgentRun(run, { projectId, canvas: activeCanvas });
+            if (!shots.length) return message.warning("当前草案没有可写入的分镜头");
+            const count = applyAgentTableShots({ projectId, canvasId: activeCanvas.id, episodeId: activeCanvas.episodeId, shots, mode: mode || "replace" });
+            markAgentRunApplied(run.id);
+            setSelectedShotIds([]);
+            message.success(`已${mode === "append" ? "追加" : "写入"} ${count} 条分镜头草案`);
+        } catch (error) {
+            message.warning(error instanceof Error ? error.message : "分镜草案写入失败");
         }
     };
 
@@ -420,7 +482,13 @@ export function EpisodeWorkbenchDrawer({
                             <EpisodeTableSection
                                 shots={activeShots}
                                 selectedIds={selectedShotIds}
-                                onGenerateDrafts={generateDrafts}
+                                onGenerateDrafts={runStoryboardDirector}
+                                canGenerateDrafts={storyboardDirectorRunReadiness.canRun && storyboardDirectorAvailability.allowed}
+                                disabledReason={storyboardDirectorRunReadiness.reason || storyboardDirectorAvailability.reason}
+                                runs={activeStoryboardDirectorRuns}
+                                onApproveRun={approveAgentRun}
+                                onRejectRun={rejectAgentRun}
+                                onApplyRun={applyStoryboardDirectorRun}
                                 onCreateShot={() => {
                                     setEditingShot(null);
                                     setShotFormOpen(true);

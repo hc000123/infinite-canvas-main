@@ -87,7 +87,7 @@ export type CanvasNodeMetadata = {
     briefMode?: "standard" | "reminder" | "free";
     briefSnapshot?: Record<string, unknown>;
     finalPrompt?: string;
-    sourceType?: "asset_breakdown" | "production_bible" | "storyboard" | "manual";
+    sourceType?: "asset_breakdown" | "production_bible" | "storyboard" | "manual" | "shot_group";
     sourceId?: string;
     productionBibleItemId?: string;
     referenceAssets?: Array<Record<string, unknown>>;

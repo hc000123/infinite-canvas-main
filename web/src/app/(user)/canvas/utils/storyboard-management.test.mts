@@ -118,6 +118,7 @@ test("plans storyboard group insertion into canvas nodes and connections", () =>
         ],
         position: { x: 100, y: 200 },
         config: { provider: "volcengine-ark", model: "ep-test", size: "16:9", seconds: "8", vquality: "720" },
+        episodeTitle: "第一集",
         idFactory: (prefix) => `${prefix}-id`,
         connectionIdFactory: (index) => `conn-${index}`,
     });
@@ -279,24 +280,114 @@ test("builds shot group canvas insertion metadata", () => {
 test("plans shot group insertion into canvas with shot group metadata", () => {
     const group = shotGroup("sg-1", ["s-1", "s-2"]);
     const result = planShotGroupCanvasInsert({
-        group: { ...group, assetRefs: [{ assetId: "asset-image", kind: "image", role: "reference_image" }] },
+        group: { ...group, assetRefs: [{ assetId: "asset-image", kind: "image", role: "reference_image" }], audioRefs: [{ assetId: "asset-audio", kind: "audio", role: "music" }] },
         shots: [tableShot("s-1", 1, { scriptText: "魏梁上台" }), tableShot("s-2", 2, { scriptText: "台下反应" })],
-        assets: [{ id: "asset-image", kind: "image", title: "角色图", data: { dataUrl: "blob:image", storageKey: "img-1", width: 1000, height: 800, bytes: 12, mimeType: "image/png" }, coverUrl: "blob:image", updatedAt: "now" }],
+        assets: [
+            { id: "asset-image", kind: "image", title: "角色图", data: { dataUrl: "blob:image", storageKey: "img-1", width: 1000, height: 800, bytes: 12, mimeType: "image/png" }, coverUrl: "blob:image", updatedAt: "now" },
+            { id: "asset-audio", kind: "audio", title: "配乐", data: { url: "blob:audio", storageKey: "aud-1", bytes: 10, mimeType: "audio/mpeg" }, updatedAt: "now" },
+        ],
         position: { x: 100, y: 200 },
         config: { provider: "volcengine-ark", model: "ep-test", size: "16:9", seconds: "8", vquality: "720" },
+        episodeTitle: "第一集",
         idFactory: (prefix) => `${prefix}-id`,
         connectionIdFactory: (index) => `conn-${index}`,
     });
 
-    assert.equal(result.nodes.length, 3);
-    assert.equal(result.connections.length, 2);
+    assert.equal(result.nodes.length, 4);
+    assert.equal(result.connections.length, 3);
     assert.equal(result.nodes[0].metadata?.shotGroupId, "sg-1");
-    assert.deepEqual(result.nodes[2].metadata?.shotIds, ["s-1", "s-2"]);
-    assert.equal(result.nodes[2].metadata?.generationMode, "video");
+    assert.deepEqual(result.nodes[3].metadata?.shotIds, ["s-1", "s-2"]);
+    assert.equal(result.nodes[3].metadata?.generationMode, "video");
+    assert.equal(result.nodes[3].metadata?.sourceType, "shot_group");
+    assert.equal(result.nodes[3].metadata?.sourceId, "sg-1");
+    assert.equal(result.nodes[3].metadata?.prompt, "提示词");
+    assert.equal(result.nodes[3].metadata?.finalPrompt, "提示词");
+    assert.equal(result.nodes[3].metadata?.episodeTitle, "第一集");
+    assert.deepEqual(result.nodes[3].metadata?.references, ["asset:asset-image"]);
+    assert.deepEqual(result.nodes[3].metadata?.audioReferences, ["asset:asset-audio"]);
     assert.deepEqual(
         result.groupNodeRefs.map((ref) => ref.role),
-        ["prompt", "reference_image", "video_config"],
+        ["prompt", "reference_image", "music", "video_config"],
     );
+});
+
+test("plans shot group video config node with agent trace and fixed asset versions", () => {
+    const group = shotGroup("sg-1", ["s-1", "s-2"]);
+    const result = planShotGroupCanvasInsert({
+        group: {
+            ...group,
+            agentRunId: "run-1",
+            agentConfigId: "storyboard-agent",
+            agentConfigVersion: "2",
+            sourceType: "agent_storyboard_director",
+            assetRefs: [
+                { assetId: "asset-image", kind: "image", role: "first_frame" },
+                { assetId: "asset-video", kind: "video", role: "reference_video" },
+            ],
+            audioRefs: [{ assetId: "asset-audio", kind: "audio", role: "music" }],
+        },
+        shots: [tableShot("s-1", 1, { agentRunId: "run-1", agentConfigId: "storyboard-agent", agentConfigVersion: "2" }), tableShot("s-2", 2)],
+        assets: [
+            {
+                id: "asset-image",
+                kind: "image",
+                title: "角色图",
+                data: { dataUrl: "blob:image", storageKey: "img-1", width: 1000, height: 800, bytes: 12, mimeType: "image/png" },
+                coverUrl: "blob:image",
+                updatedAt: "2026-01-01T00:00:00.000Z",
+                metadata: {
+                    currentAssetVersionId: "ver-img",
+                    generations: [],
+                    assetVersions: [
+                        {
+                            id: "ver-img-old",
+                            versionNumber: 2,
+                            kind: "image",
+                            title: "角色图",
+                            coverUrl: "blob:image-old",
+                            data: { dataUrl: "blob:image-old", width: 800, height: 600, bytes: 10, mimeType: "image/png" },
+                            createdAt: "old",
+                            changeNote: "旧版本",
+                            source: "manual_edit",
+                        },
+                        {
+                            id: "ver-img",
+                            versionNumber: 3,
+                            kind: "image",
+                            title: "角色图",
+                            coverUrl: "blob:image",
+                            data: { dataUrl: "blob:image", width: 1000, height: 800, bytes: 12, mimeType: "image/png" },
+                            createdAt: "now",
+                            changeNote: "当前版本",
+                            source: "manual_edit",
+                        },
+                    ],
+                },
+            },
+            { id: "asset-video", kind: "video", title: "参考视频", data: { url: "blob:video", storageKey: "vid-1", width: 1280, height: 720, bytes: 20, mimeType: "video/mp4" }, updatedAt: "2026-01-02T00:00:00.000Z" },
+            { id: "asset-audio", kind: "audio", title: "配乐", data: { url: "blob:audio", storageKey: "aud-1", bytes: 10, mimeType: "audio/mpeg" }, updatedAt: "2026-01-03T00:00:00.000Z" },
+        ],
+        position: { x: 100, y: 200 },
+        config: { provider: "volcengine-ark", model: "ep-test", size: "16:9", seconds: "8", vquality: "720" },
+        episodeTitle: "第一集",
+        idFactory: (prefix) => `${prefix}-id`,
+        connectionIdFactory: (index) => `conn-${index}`,
+    });
+    const node = result.nodes.find((item) => item.type === "config");
+    assert.equal(node?.metadata?.generationMode, "video");
+    assert.equal(node?.metadata?.agentRunId, "run-1");
+    assert.equal(node?.metadata?.agentConfigId, "storyboard-agent");
+    assert.equal(node?.metadata?.agentConfigVersion, "2");
+    assert.equal(node?.metadata?.sourceType, "shot_group");
+    assert.equal(node?.metadata?.episodeTitle, "第一集");
+    assert.equal(node?.metadata?.shotGroupId, "sg-1");
+    assert.deepEqual(node?.metadata?.references, ["asset:asset-image"]);
+    assert.deepEqual(node?.metadata?.videoReferences, ["asset:asset-video"]);
+    assert.deepEqual(node?.metadata?.audioReferences, ["asset:asset-audio"]);
+    const imageNode = result.nodes.find((item) => item.id === "shot-group-image-id");
+    assert.equal(imageNode?.metadata?.assetVersion?.assetVersionId, "ver-img");
+    assert.equal(imageNode?.metadata?.assetVersion?.versionNumber, 3);
+    assert.equal(node?.metadata?.status, "idle");
 });
 
 function group(id: string, projectId: string, order: number): StoryboardGroup {

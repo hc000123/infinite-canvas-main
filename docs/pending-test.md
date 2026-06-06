@@ -4,9 +4,54 @@
 
 ## 当前版本验收清单
 
-当前版本：`v0.2.54`。需要优先验收的是 M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+当前版本：`v0.2.56`。需要优先验收的是 P3-B / M6.9.5 分镜草案 Agent 接入、M6.9.6 镜头组加入画布改为视频生成节点、M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
 
 ### 当前必须验收
+
+#### v0.2.56：P3-B / M6.9.5 分镜草案 Agent 接入
+
+- 入口：`/canvas/:id` 画布工具栏“本集工作台”中的“分镜头表”区域。
+- 操作步骤：
+  1. 准备已绑定本集剧本快照的画布，打开本集工作台，确认分镜头表入口显示为“运行分镜导演”或等价 Agent 入口。
+  2. 在 Agent 设置中心确认 `storyboard_director` 启用，并测试项目级覆盖优先于全局默认配置。
+  3. 点击“运行分镜导演”，确认只创建一条 `storyboard_director` Agent Runner 草案记录，状态为待审核，不直接写入分镜头表。
+  4. 展开 run 详情，确认 input 包含 `projectId / canvasId / episodeId / episodeTitle / scriptId / scriptSnapshot / sourceType: episode_script / variables`，run 记录包含 `agentKind / agentConfigId / agentConfigVersion`。
+  5. 检查草案输出包含 `shotNumber / sceneId / sceneName / location / scriptText / visualDescription / characterAction / dialogue / emotion / shotSize / estimatedDuration / assetNeeds / warnings`。
+  6. 不批准或点击“驳回”后，确认不会写入业务分镜头表。
+  7. 批准 run 后点击“写入分镜头表”；当前已有分镜头时，确认必须选择“追加”或“覆盖”，也可以取消。
+  8. 写入成功后，确认分镜头表条目保留 `agentRunId / agentConfigId / agentConfigVersion / inputScriptSnapshotHash / sourceType: agent_storyboard_director`，run 状态变为 `applied`。
+  9. 清空或解除剧本快照后再次运行，确认不能创建 run；禁用 `storyboard_director` 后再次运行，确认提示去 Agent 设置中心启用。
+- 预期结果：
+  - 第一版继续使用本地规则 / mock runner 生成结构化草案，不接真实 LLM。
+  - 草案必须先进入 Agent Runner 待审核状态，用户批准并确认写入前不改业务数据。
+  - 写入已有分镜头表前必须明确追加或覆盖，不静默覆盖用户编辑内容。
+  - 本轮不改后端、不自动生成图片或视频、不自动扣费。
+- 失败影响：
+  - 如果未批准 run 可以写入，Agent 化工作台会失去人工确认边界。
+  - 如果缺少 Agent 配置和剧本快照追溯，后续 M6.9.R1 无法回查草案来源。
+  - 如果禁用配置仍能运行，Agent 设置中心的项目级控制会失效。
+
+#### v0.2.56：P3-B / M6.9.6 镜头组加入画布改为视频生成节点
+
+- 入口：`/canvas/:id` 画布工具栏“本集工作台”中的“生成镜头组 / 生成管理”；或视频生产台里的生成镜头组列表。
+- 操作步骤：
+  1. 准备已创建的生成镜头组，并在镜头组中绑定图片、参考视频和音频素材。
+  2. 点击“加入画布”前，确认页面仍要求用户确认，不会自动创建节点。
+  3. 确认后检查画布，主生成入口应为视频生成配置节点；可以保留文本说明节点，但文本节点不能作为主生成入口。
+  4. 检查视频配置节点 metadata 是否包含 `prompt / finalPrompt / duration / seconds / ratio / size / provider / model`。
+  5. 检查同一节点 metadata 是否包含 `references / videoReferences / audioReferences / referenceAssets / referenceRoles / referenceOrder`，且重复素材不会重复写入。
+  6. 检查本集和镜头组追溯字段：`episodeId / episodeTitle / shotGroupId / shotIds / storyboardShotGroupId / storyboardTableShotIds / agentRunId / agentConfigId / agentConfigVersion / sourceType: shot_group`。
+  7. 检查来自“我的素材”的参考节点和 `referenceAssets` 继续保存 `assetVersion` 快照。
+  8. 加入画布后回到本集工作台“生成管理”，确认镜头组显示已入画布。
+  9. 确认节点创建后不会自动触发真实视频生成，只有用户手动点击生成才进入既有视频生成流程。
+- 预期结果：
+  - 镜头组加入画布只创建节点和连线，不接真实 LLM、不自动生成视频、不自动扣费。
+  - 视频配置节点承接图片、视频、音频参考槽位，并保持已有视频生成节点逻辑可用。
+  - 本轮不做自动带入本集资产参考图；该能力留到 P3-C / M6.9.7。
+- 失败影响：
+  - 如果仍以文本节点作为主入口，用户需要重新手工搭建视频生成配置，M6.9.7 无法自动落槽。
+  - 如果参考素材或版本快照丢失，生成结果无法追溯到正确素材版本。
+  - 如果节点创建即触发生成，可能造成误扣费。
 
 #### v0.2.54：M6.9.4 本集生图需求接入 Brief / 生图链路
 

@@ -1801,6 +1801,7 @@ function InfiniteCanvasPage() {
                     seconds: canvasAiConfig.videoSeconds,
                     vquality: canvasAiConfig.vquality,
                 },
+                episodeTitle: currentProject?.episodeTitle,
                 idFactory: (prefix) => `${prefix}-${Date.now()}-${nanoid(5)}`,
                 connectionIdFactory: () => nanoid(),
             });
@@ -1826,6 +1827,7 @@ function InfiniteCanvasPage() {
             canvasAiConfig.videoProtocol,
             canvasAiConfig.videoSeconds,
             canvasAiConfig.vquality,
+            currentProject?.episodeTitle,
             getCanvasCenter,
             message,
         ],
@@ -1853,6 +1855,7 @@ function InfiniteCanvasPage() {
                     seconds: canvasAiConfig.videoSeconds,
                     vquality: canvasAiConfig.vquality,
                 },
+                episodeTitle: currentProject?.episodeTitle,
                 idFactory: (prefix) => `${prefix}-${Date.now()}-${nanoid(5)}`,
                 connectionIdFactory: () => nanoid(),
             });
@@ -1878,6 +1881,7 @@ function InfiniteCanvasPage() {
             canvasAiConfig.videoProtocol,
             canvasAiConfig.videoSeconds,
             canvasAiConfig.vquality,
+            currentProject?.episodeTitle,
             getCanvasCenter,
             message,
         ],
