@@ -6,6 +6,7 @@ import type { ScriptEpisode, ScriptScene } from "./script-management.ts";
 
 export type StoryboardAssetKind = "image" | "video" | "audio";
 export type StoryboardShotStatus = "draft" | "ready" | "in_canvas" | "generating" | "review" | "done" | "error";
+export type ShotGroupStatus = "draft" | "prompt_ready" | "in_canvas" | "generating" | "done" | "error";
 
 export type StoryboardAssetRef = {
     assetId: string;
@@ -57,8 +58,58 @@ export type StoryboardShot = {
     updatedAt: string;
 };
 
+export type StoryboardTableShot = {
+    id: string;
+    projectId: string;
+    canvasId: string;
+    episodeId: string;
+    sceneId?: string;
+    sceneName: string;
+    location: string;
+    timeOfDay: string;
+    order: number;
+    title: string;
+    scriptText: string;
+    visualDescription: string;
+    characters: string[];
+    dialogue: string;
+    action: string;
+    emotion: string;
+    shotSize: string;
+    cameraMovement: string;
+    estimatedDuration: number;
+    assetRefs: StoryboardAssetRef[];
+    productionBibleRefs?: StoryboardProductionBibleRef[];
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type ShotGroup = {
+    id: string;
+    projectId: string;
+    canvasId: string;
+    episodeId: string;
+    sceneName: string;
+    shotIds: string[];
+    totalDuration: number;
+    prompt: string;
+    effectivePrompt: string;
+    assetRefs: StoryboardAssetRef[];
+    audioRefs: StoryboardAssetRef[];
+    productionBibleRefs?: StoryboardProductionBibleRef[];
+    status: ShotGroupStatus;
+    taskId?: string;
+    resultAssetIds: string[];
+    primaryAssetId?: string;
+    errorMessage?: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
 export type StoryboardGroupWriteInput = Omit<StoryboardGroup, "id" | "shotIds" | "createdAt" | "updatedAt">;
 export type StoryboardShotWriteInput = Omit<StoryboardShot, "id" | "createdAt" | "updatedAt">;
+export type StoryboardTableShotWriteInput = Omit<StoryboardTableShot, "id" | "createdAt" | "updatedAt">;
+export type ShotGroupWriteInput = Omit<ShotGroup, "id" | "createdAt" | "updatedAt">;
 
 type StoryboardAssetLike = {
     id: string;
@@ -102,6 +153,47 @@ export function normalizeStoryboardShot(input: StoryboardShotWriteInput): Storyb
         lastTaskId: input.lastTaskId?.trim() || undefined,
         errorMessage: input.errorMessage?.trim() || undefined,
         productionBibleRefs: dedupeBibleRefs(input.productionBibleRefs || []),
+        status: input.status || "draft",
+    };
+}
+
+export function normalizeStoryboardTableShot(input: StoryboardTableShotWriteInput): StoryboardTableShotWriteInput {
+    return {
+        ...input,
+        sceneId: input.sceneId?.trim() || undefined,
+        sceneName: input.sceneName.trim() || "未命名场次",
+        location: input.location.trim(),
+        timeOfDay: input.timeOfDay.trim(),
+        title: input.title.trim() || `镜头 ${input.order}`,
+        scriptText: input.scriptText.trim(),
+        visualDescription: input.visualDescription.trim(),
+        characters: uniqueStrings(input.characters.map((item) => item.trim()).filter(Boolean)),
+        dialogue: input.dialogue.trim(),
+        action: input.action.trim(),
+        emotion: input.emotion.trim(),
+        shotSize: input.shotSize.trim(),
+        cameraMovement: input.cameraMovement.trim(),
+        estimatedDuration: clampDuration(input.estimatedDuration),
+        assetRefs: dedupeAssetRefs(input.assetRefs),
+        productionBibleRefs: dedupeBibleRefs(input.productionBibleRefs || []),
+    };
+}
+
+export function normalizeShotGroup(input: ShotGroupWriteInput): ShotGroupWriteInput {
+    return {
+        ...input,
+        sceneName: input.sceneName.trim() || "未命名场次",
+        shotIds: uniqueStrings(input.shotIds.map((id) => id.trim()).filter(Boolean)),
+        totalDuration: clampDuration(input.totalDuration),
+        prompt: input.prompt.trim(),
+        effectivePrompt: input.effectivePrompt.trim(),
+        assetRefs: dedupeAssetRefs(input.assetRefs),
+        audioRefs: dedupeAssetRefs(input.audioRefs.filter((ref) => ref.kind === "audio")),
+        productionBibleRefs: dedupeBibleRefs(input.productionBibleRefs || []),
+        taskId: input.taskId?.trim() || undefined,
+        resultAssetIds: uniqueStrings(input.resultAssetIds.map((id) => id.trim()).filter(Boolean)),
+        primaryAssetId: input.primaryAssetId?.trim() || undefined,
+        errorMessage: input.errorMessage?.trim() || undefined,
         status: input.status || "draft",
     };
 }
@@ -165,6 +257,14 @@ export function orderedStoryboardShots(shots: StoryboardShot[], groupId: string)
     return shots.filter((shot) => shot.groupId === groupId).sort(compareOrder);
 }
 
+export function orderedStoryboardTableShots(shots: StoryboardTableShot[], canvasId: string, episodeId?: string) {
+    return shots.filter((shot) => shot.canvasId === canvasId && (!episodeId || shot.episodeId === episodeId)).sort(compareOrder);
+}
+
+export function orderedShotGroups(groups: ShotGroup[], canvasId: string, episodeId?: string) {
+    return groups.filter((group) => group.canvasId === canvasId && (!episodeId || group.episodeId === episodeId)).sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+}
+
 export function reorderStoryboardItems<T extends { id: string; order: number }>(items: T[], id: string, direction: "up" | "down", inScope: (item: T) => boolean = () => true) {
     const ordered = items.filter(inScope).sort(compareOrder);
     const index = ordered.findIndex((item) => item.id === id);
@@ -177,6 +277,151 @@ export function reorderStoryboardItems<T extends { id: string; order: number }>(
         if (item.id === target.id) return { ...item, order: current.order };
         return item;
     });
+}
+
+export function reorderStoryboardTableShots(shots: StoryboardTableShot[], id: string, direction: "up" | "down") {
+    const current = shots.find((shot) => shot.id === id);
+    if (!current) return shots;
+    return reorderStoryboardItems(shots, id, direction, (shot) => shot.projectId === current.projectId && shot.canvasId === current.canvasId && shot.episodeId === current.episodeId);
+}
+
+export function buildStoryboardTableDraftsFromScript({
+    projectId,
+    canvasId,
+    episodeId,
+    scriptText,
+    now = new Date().toISOString(),
+    idFactory = (index: number) => `storyboard-table-shot-${index}`,
+}: {
+    projectId: string;
+    canvasId: string;
+    episodeId: string;
+    scriptText: string;
+    now?: string;
+    idFactory?: (index: number) => string;
+}): StoryboardTableShot[] {
+    const paragraphs = scriptText
+        .split(/\n\s*\n+/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+    const parts = paragraphs.length
+        ? paragraphs
+        : scriptText
+              .split(/\n+/)
+              .map((part) => part.trim())
+              .filter(Boolean);
+    return parts.map((part, index) => {
+        const sceneInfo = parseSceneInfo(part);
+        return {
+            id: idFactory(index + 1),
+            projectId,
+            canvasId,
+            episodeId,
+            sceneName: sceneInfo.sceneName,
+            location: sceneInfo.location,
+            timeOfDay: sceneInfo.timeOfDay,
+            order: index + 1,
+            title: `镜头 ${index + 1} · ${sceneInfo.sceneName}`,
+            scriptText: part,
+            visualDescription: firstNonMetaLine(part),
+            characters: extractCharacters(part),
+            dialogue: extractDialogue(part),
+            action: extractAction(part),
+            emotion: extractField(part, "情绪"),
+            shotSize: extractField(part, "景别"),
+            cameraMovement: extractField(part, "运镜"),
+            estimatedDuration: estimateShotDuration(part),
+            assetRefs: [],
+            productionBibleRefs: [],
+            createdAt: now,
+            updatedAt: now,
+        };
+    });
+}
+
+export function validateShotGroupSelection(shots: StoryboardTableShot[], shotIds: string[]) {
+    const selected = shotIds
+        .map((id) => shots.find((shot) => shot.id === id))
+        .filter((shot): shot is StoryboardTableShot => Boolean(shot))
+        .sort(compareOrder);
+    const errors: string[] = [];
+    if (!selected.length) errors.push("请选择至少一个分镜头");
+    const sceneNames = uniqueStrings(selected.map((shot) => shot.sceneName));
+    if (sceneNames.length > 1) errors.push("生成镜头组必须属于同一个场次 / sceneName");
+    const totalDuration = selected.reduce((sum, shot) => sum + shot.estimatedDuration, 0);
+    if (totalDuration > 15) errors.push("生成镜头组总时长不能超过 15 秒");
+    if (selected.length > 1) {
+        const orders = selected.map((shot) => shot.order).sort((a, b) => a - b);
+        for (let index = 1; index < orders.length; index += 1) {
+            if (orders[index] !== orders[index - 1] + 1) {
+                errors.push("生成镜头组只能选择连续分镜头，不能跳选");
+                break;
+            }
+        }
+    }
+    return { valid: errors.length === 0, errors, shots: selected, totalDuration, sceneName: sceneNames[0] || "" };
+}
+
+export function createShotGroupFromSelection({ shots, id, now = new Date().toISOString() }: { shots: StoryboardTableShot[]; id: string; now?: string }): { ok: true; group: ShotGroup } | { ok: false; errors: string[] } {
+    const validation = validateShotGroupSelection(
+        shots,
+        shots.map((shot) => shot.id),
+    );
+    if (!validation.valid) return { ok: false, errors: validation.errors };
+    const prompt = buildShotGroupPrompt(validation.shots);
+    const first = validation.shots[0];
+    return {
+        ok: true,
+        group: {
+            id,
+            projectId: first.projectId,
+            canvasId: first.canvasId,
+            episodeId: first.episodeId,
+            sceneName: validation.sceneName,
+            shotIds: validation.shots.map((shot) => shot.id),
+            totalDuration: validation.totalDuration,
+            prompt,
+            effectivePrompt: "",
+            assetRefs: dedupeAssetRefs(validation.shots.flatMap((shot) => shot.assetRefs)),
+            audioRefs: [],
+            productionBibleRefs: dedupeBibleRefs(validation.shots.flatMap((shot) => shot.productionBibleRefs || [])),
+            status: prompt ? "prompt_ready" : "draft",
+            resultAssetIds: [],
+            createdAt: now,
+            updatedAt: now,
+        },
+    };
+}
+
+export function buildShotGroupGenerationTableRows(groups: ShotGroup[], shots: StoryboardTableShot[]) {
+    return groups.map((group) => {
+        const groupShots = group.shotIds
+            .map((id) => shots.find((shot) => shot.id === id))
+            .filter((shot): shot is StoryboardTableShot => Boolean(shot))
+            .sort(compareOrder);
+        const orders = groupShots.map((shot) => shot.order);
+        return {
+            group,
+            shots: groupShots,
+            shotRangeLabel: orders.length ? `${Math.min(...orders)}-${Math.max(...orders)}` : "-",
+            promptReady: Boolean((group.effectivePrompt || group.prompt).trim()),
+            assetReady: Boolean(group.assetRefs.length || group.audioRefs.length || group.productionBibleRefs?.length),
+            status: group.status,
+        };
+    });
+}
+
+export function buildShotGroupCanvasInsertMetadata(group: ShotGroup, metadata: CanvasNodeMetadata = {}): CanvasNodeMetadata {
+    const { role, ...rest } = metadata as CanvasNodeMetadata & { role?: string };
+    return {
+        episodeId: group.episodeId,
+        shotGroupId: group.id,
+        shotIds: group.shotIds,
+        storyboardShotGroupId: group.id,
+        storyboardTableShotIds: group.shotIds,
+        ...(role ? { storyboardRole: role } : {}),
+        ...rest,
+    };
 }
 
 export function buildStoryboardGroupFromScriptScene(scene: ScriptScene, options: { projectId: string; groupId: string; shotId: string; preset?: Record<string, unknown> }) {
@@ -299,6 +544,84 @@ export function planStoryboardGroupCanvasInsert({
     return { nodes, connections, shotNodeRefs };
 }
 
+export function planShotGroupCanvasInsert({
+    group,
+    shots,
+    assets,
+    position,
+    config,
+    idFactory,
+    connectionIdFactory,
+}: {
+    group: ShotGroup;
+    shots: StoryboardTableShot[];
+    assets: StoryboardAssetLike[];
+    position: Position;
+    config: { provider?: "openai" | "volcengine-ark"; model?: string; size?: string; seconds?: string; vquality?: string };
+    idFactory: (prefix: string) => string;
+    connectionIdFactory: (index: number) => string;
+}) {
+    const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
+    const prompt = group.effectivePrompt || group.prompt || buildShotGroupPrompt(group.shotIds.map((id) => shots.find((shot) => shot.id === id)).filter((shot): shot is StoryboardTableShot => Boolean(shot)));
+    const nodes: CanvasNodeData[] = [];
+    const connections: CanvasConnection[] = [];
+    const groupNodeRefs: StoryboardNodeRef[] = [];
+    let connectionIndex = 0;
+    const promptId = idFactory("shot-group-text");
+    const configId = idFactory("shot-group-config");
+
+    nodes.push({
+        id: promptId,
+        type: "text" as CanvasNodeData["type"],
+        title: `${group.sceneName} · 生成提示词`,
+        position,
+        width: NODE_SIZE.text.width,
+        height: NODE_SIZE.text.height,
+        metadata: buildShotGroupCanvasInsertMetadata(group, { content: prompt, prompt, status: "success", fontSize: 14, role: "prompt" } as CanvasNodeMetadata & { role: string }),
+    });
+    groupNodeRefs.push({ nodeId: promptId, role: "prompt" });
+
+    const mediaRefs = [...group.assetRefs, ...group.audioRefs];
+    const assetNodeIds = mediaRefs
+        .map((ref, index) => {
+            const asset = assetsById.get(ref.assetId);
+            if (!asset || (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio")) return null;
+            const nodeId = idFactory(`shot-group-${asset.kind}`);
+            groupNodeRefs.push({ nodeId, role: ref.role || "reference" });
+            nodes.push(assetToCanvasNodeForShotGroup(asset, ref, nodeId, { x: position.x + NODE_SIZE.text.width + 80, y: position.y + index * 160 }, group));
+            return nodeId;
+        })
+        .filter((id): id is string => Boolean(id));
+
+    nodes.push({
+        id: configId,
+        type: "config" as CanvasNodeData["type"],
+        title: "视频生成配置",
+        position: { x: position.x + NODE_SIZE.text.width + 80 + NODE_SIZE.image.width + 80, y: position.y },
+        width: NODE_SIZE.config.width,
+        height: NODE_SIZE.config.height,
+        metadata: buildShotGroupCanvasInsertMetadata(group, {
+            content: "",
+            status: "idle",
+            generationMode: "video",
+            prompt,
+            provider: config.provider,
+            model: config.model,
+            size: config.size,
+            seconds: config.seconds,
+            vquality: config.vquality,
+            role: "video_config",
+            references: mediaRefs.map((ref) => `asset:${ref.assetId}`),
+            referenceRoles: mediaRefs.map((ref, index) => ({ nodeId: assetNodeIds[index] || ref.assetId, kind: ref.kind, role: ref.role || "reference", index: index + 1 })),
+        } as CanvasNodeMetadata & { role: string }),
+    });
+    groupNodeRefs.push({ nodeId: configId, role: "video_config" });
+
+    connections.push({ id: connectionIdFactory(connectionIndex++), fromNodeId: promptId, toNodeId: configId });
+    assetNodeIds.forEach((nodeId) => connections.push({ id: connectionIdFactory(connectionIndex++), fromNodeId: nodeId, toNodeId: configId }));
+    return { nodes, connections, groupNodeRefs };
+}
+
 function scriptSceneToShot(scene: ScriptScene, groupId: string, id: string, order: number): StoryboardShot {
     return {
         id,
@@ -349,6 +672,35 @@ function assetToCanvasNode(asset: StoryboardAssetLike, ref: StoryboardAssetRef, 
     };
 }
 
+function assetToCanvasNodeForShotGroup(asset: StoryboardAssetLike, ref: StoryboardAssetRef, id: string, position: Position, group: ShotGroup): CanvasNodeData {
+    const data = asset.data || {};
+    const type = asset.kind as CanvasNodeData["type"];
+    const content = String(data.dataUrl || data.url || asset.coverUrl || "");
+    const width = Number(data.width) || NODE_SIZE[type as keyof typeof NODE_SIZE]?.width || NODE_SIZE.image.width;
+    const height = Number(data.height) || NODE_SIZE[type as keyof typeof NODE_SIZE]?.height || NODE_SIZE.image.height;
+    const assetVersion = ref.assetVersion || buildAssetVersionReference({ id: asset.id, updatedAt: asset.updatedAt || "", metadata: asset.metadata });
+    return {
+        id,
+        type,
+        title: asset.title,
+        position,
+        width: type === "audio" ? NODE_SIZE.audio.width : Math.min(width, type === "video" ? NODE_SIZE.video.width : NODE_SIZE.image.width),
+        height: type === "audio" ? NODE_SIZE.audio.height : Math.min(height, type === "video" ? NODE_SIZE.video.height : NODE_SIZE.image.height),
+        metadata: buildShotGroupCanvasInsertMetadata(group, {
+            content,
+            status: "success",
+            storageKey: typeof data.storageKey === "string" ? data.storageKey : undefined,
+            bytes: typeof data.bytes === "number" ? data.bytes : undefined,
+            mimeType: typeof data.mimeType === "string" ? data.mimeType : undefined,
+            naturalWidth: typeof data.width === "number" ? data.width : undefined,
+            naturalHeight: typeof data.height === "number" ? data.height : undefined,
+            ...canvasAssetReferenceMetadata({ sourceAssetId: ref.assetId, assetVersion }),
+            storyboardAssetRole: ref.role || "reference",
+            role: ref.role || "reference",
+        } as CanvasNodeMetadata & { role: string }),
+    };
+}
+
 function storyboardMetadata(shot: StoryboardShot, group: StoryboardGroup, metadata: CanvasNodeMetadata): CanvasNodeMetadata {
     return { ...metadata, storyboardGroupId: group.id, storyboardShotId: shot.id };
 }
@@ -396,6 +748,72 @@ function dedupeBibleRefs(refs: StoryboardProductionBibleRef[]) {
         result.push({ itemId, kind: ref.kind });
     }
     return result;
+}
+
+function parseSceneInfo(text: string) {
+    const sceneLine = text.match(/(?:场景|场次|地点|场地)[：:]\s*([^\n/／，,]+)/);
+    const location = (sceneLine?.[1] || text.match(/([\u4e00-\u9fa5A-Za-z0-9_]{2,18}(?:操场|教室|观礼区|主席台|办公室|街道|房间|现场))/)?.[1] || "未命名场次").trim();
+    const timeOfDay = text.match(/(白天|夜晚|清晨|傍晚|黄昏|深夜|午后)/)?.[1] || "";
+    return { sceneName: location, location, timeOfDay };
+}
+
+function extractField(text: string, label: string) {
+    return text.match(new RegExp(`${label}[：:]\\s*([^\\n]+)`))?.[1]?.trim() || "";
+}
+
+function firstNonMetaLine(text: string) {
+    return (
+        text
+            .split(/\n+/)
+            .map((line) => line.trim())
+            .find((line) => line && !/^(场景|场次|地点|对白|情绪|景别|运镜|时长)[：:]/.test(line)) || text.slice(0, 80).trim()
+    );
+}
+
+function extractDialogue(text: string) {
+    return extractField(text, "对白") || text.match(/[“"]([^”"]+)[”"]/)?.[1]?.trim() || "";
+}
+
+function extractCharacters(text: string) {
+    const names = new Set<string>();
+    for (const match of text.matchAll(/图片\s*\d+\s*([\u4e00-\u9fa5A-Za-z0-9_]{2,10})/g)) names.add(match[1]);
+    for (const name of ["魏梁", "周泽", "姚澈", "蒋文阔", "姚渊"]) {
+        if (text.includes(name)) names.add(name);
+    }
+    return Array.from(names);
+}
+
+function extractAction(text: string) {
+    const line = firstNonMetaLine(text);
+    return line.length > 80 ? `${line.slice(0, 80)}...` : line;
+}
+
+function estimateShotDuration(text: string) {
+    const value = Number(text.match(/(?:时长|持续)[：:]?\s*(\d+(?:\.\d+)?)\s*秒?/)?.[1]);
+    if (Number.isFinite(value) && value > 0) return clampDuration(value);
+    return 5;
+}
+
+function buildShotGroupPrompt(shots: StoryboardTableShot[]) {
+    return shots
+        .map((shot) =>
+            [
+                `镜头 ${shot.order}：${shot.visualDescription || shot.scriptText}`,
+                shot.scriptText && shot.scriptText !== shot.visualDescription ? `剧本：${shot.scriptText}` : "",
+                shot.dialogue ? `对白：${shot.dialogue}` : "",
+                shot.emotion ? `情绪：${shot.emotion}` : "",
+                shot.shotSize ? `景别：${shot.shotSize}` : "",
+                shot.cameraMovement ? `运镜：${shot.cameraMovement}` : "",
+            ]
+                .filter(Boolean)
+                .join("\n"),
+        )
+        .join("\n\n");
+}
+
+function clampDuration(value: number) {
+    if (!Number.isFinite(value)) return 5;
+    return Math.max(1, Math.min(15, Math.round(value)));
 }
 
 function compareOrder<T extends { order: number; createdAt?: string }>(a: T, b: T) {

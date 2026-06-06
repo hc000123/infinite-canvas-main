@@ -7,10 +7,12 @@ import type { AssetWriteInput } from "@/stores/use-asset-store";
 import type { ReferenceImage } from "@/types/image";
 
 import { buildGeneratedImageAsset } from "../utils/canvas-generated-asset";
+import { canvasEpisodeMetadata, type CanvasEpisodeContext } from "../utils/canvas-episode-context";
 import type { CanvasProjectPreset } from "../utils/canvas-project-preset";
 import { buildImageGenerationMetadata } from "../utils/canvas-generation-metadata";
 import { createImageGenerationNodes } from "../utils/canvas-generation-nodes";
 import { runCanvasImageGeneration } from "../utils/canvas-generation-runner";
+import { aiTaskLedgerNodeMetadata, buildCanvasAiTaskTrace } from "../utils/canvas-ai-task-trace";
 import { fitNodeSize } from "../utils/canvas-node-size";
 import { applyGeneratedImageToNodes, applyImageGenerationFinalStatus, applyImageGenerationStartNodes, applyImageTargetError } from "../utils/canvas-node-status";
 import type { CanvasConnection, CanvasNodeData, CanvasNodeMetadata } from "../types";
@@ -24,9 +26,11 @@ type UseCanvasImageGenerationActionsOptions = {
     showError: (message: string) => void;
     toImageMetadata: (image: UploadedImage) => CanvasNodeMetadata;
     projectId: string;
+    canvasId: string;
     projectTitle: string;
     projectPreset?: CanvasProjectPreset;
-    archiveGeneratedAsset: (asset: AssetWriteInput) => Promise<unknown>;
+    episodeContext?: CanvasEpisodeContext;
+    archiveGeneratedAsset: (asset: AssetWriteInput) => Promise<string | void>;
 };
 
 type GenerateImageNodeInput = {
@@ -47,8 +51,10 @@ export function useCanvasImageGenerationActions({
     showError,
     toImageMetadata,
     projectId,
+    canvasId,
     projectTitle,
     projectPreset,
+    episodeContext,
     archiveGeneratedAsset,
 }: UseCanvasImageGenerationActionsOptions) {
     const generateImageNode = useCallback(
@@ -77,7 +83,7 @@ export function useCanvasImageGenerationActions({
                 sourceNode,
                 prompt: effectivePrompt,
                 count,
-                metadata: { ...generationMetadata, batchUsesReferenceImages: referenceImages.length > 0 },
+                metadata: { ...generationMetadata, ...canvasEpisodeMetadata(episodeContext), batchUsesReferenceImages: referenceImages.length > 0 },
             });
 
             setNodes((prev) =>
@@ -103,9 +109,10 @@ export function useCanvasImageGenerationActions({
             await Promise.all(
                 targetIds.map(async (targetId) => {
                     try {
-                        const uploaded = await runCanvasImageGeneration({ ...generationConfig, count: "1" }, effectivePrompt, referenceImages);
+                        const trace = buildCanvasAiTaskTrace({ projectId, canvasId, nodeId: targetId, metadata: targetNodeMetadata(targetId, rootNode, childNodes) });
+                        const uploaded = await runCanvasImageGeneration({ ...generationConfig, count: "1" }, effectivePrompt, referenceImages, trace);
                         const imageSize = fitNodeSize(uploaded.width, uploaded.height, imageConfig.width, imageConfig.height);
-                        const metadata = toImageMetadata(uploaded);
+                        const metadata = { ...toImageMetadata(uploaded), ...aiTaskLedgerNodeMetadata(uploaded.aiTask) };
                         setNodes((prev) => applyGeneratedImageToNodes({ nodes: prev, rootId, targetId, imageSize, imageMetadata: metadata }));
                         const targetNode = [rootNode, ...childNodes].find((node) => node.id === targetId) || rootNode;
                         const asset = buildGeneratedImageAsset(
@@ -115,7 +122,7 @@ export function useCanvasImageGenerationActions({
                                 height: imageSize.height,
                                 metadata: { ...targetNode.metadata, ...metadata },
                             },
-                            { projectId, projectTitle, projectPreset, prompt, effectivePrompt, config: generationConfig, createdAt },
+                            { projectId, projectTitle, projectPreset, episodeContext, prompt, effectivePrompt, config: generationConfig, createdAt },
                         );
                         if (asset) void archiveGeneratedAsset(asset).catch(() => undefined);
                         hasSuccess = true;
@@ -133,10 +140,14 @@ export function useCanvasImageGenerationActions({
             setNodes((prev) => applyImageGenerationFinalStatus({ nodes: prev, nodeId, rootId, isConfigNode, isEmptyImageNode, hasSuccess }));
             return { pendingChildIds };
         },
-        [archiveGeneratedAsset, projectId, projectPreset, projectTitle, setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, showError, toImageMetadata],
+        [archiveGeneratedAsset, canvasId, episodeContext, projectId, projectPreset, projectTitle, setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, showError, toImageMetadata],
     );
 
     return { generateImageNode };
+}
+
+function targetNodeMetadata(targetId: string, rootNode: CanvasNodeData, childNodes: CanvasNodeData[]) {
+    return (targetId === rootNode.id ? rootNode : childNodes.find((node) => node.id === targetId))?.metadata;
 }
 
 function imageGenerationCount(count: string) {

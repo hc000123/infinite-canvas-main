@@ -4,11 +4,17 @@ import { useEffect, useMemo } from "react";
 import { Form, Input, InputNumber, Modal, Select, Typography } from "antd";
 
 import type { AiConfig } from "@/stores/use-config-store";
+import { canvasEpisodeContextFromEpisode, type CanvasCreateScriptBinding } from "../utils/canvas-episode-context";
 import { buildCanvasProjectPresetFromConfig, canvasProjectPresetModelOptions, canvasProjectPresetOptions, type CanvasProjectPreset } from "../utils/canvas-project-preset";
+import { orderedScriptEpisodes, orderedScriptScenes, type ScriptEpisode, type ScriptScene } from "../utils/script-management";
 
 type CanvasCreateProjectValues = CanvasProjectPreset & {
     title: string;
     presetKey?: string;
+    scriptSource?: "none" | "existing" | "import";
+    episodeId?: string;
+    importedEpisodeTitle?: string;
+    importedScriptText?: string;
 };
 
 export function CanvasCreateProjectModal({
@@ -22,6 +28,7 @@ export function CanvasCreateProjectModal({
     showTitleField = true,
     okText = "创建并进入",
     helperText = "预设会作为本画布后续生成配置节点和视频生成的默认值；旧画布没有预设时继续使用全局配置。",
+    scriptOptions,
     onCancel,
     onCreate,
 }: {
@@ -35,18 +42,21 @@ export function CanvasCreateProjectModal({
     showTitleField?: boolean;
     okText?: string;
     helperText?: string;
+    scriptOptions?: { projectId: string; episodes: ScriptEpisode[]; scenes: ScriptScene[] };
     onCancel: () => void;
-    onCreate: (title: string, preset: CanvasProjectPreset) => void;
+    onCreate: (title: string, preset: CanvasProjectPreset, scriptBinding?: CanvasCreateScriptBinding) => void;
 }) {
     const [form] = Form.useForm<CanvasCreateProjectValues>();
     const videoProvider = Form.useWatch("defaultVideoProvider", form) || config.videoProtocol || "openai";
+    const scriptSource = Form.useWatch("scriptSource", form) || "none";
     const imageModelOptions = useMemo(() => modelSelectOptions(canvasProjectPresetModelOptions(config, "image")), [config]);
     const videoModelOptions = useMemo(() => modelSelectOptions(canvasProjectPresetModelOptions(config, "video", videoProvider)), [config, videoProvider]);
     const textModelOptions = useMemo(() => modelSelectOptions(canvasProjectPresetModelOptions(config, "text")), [config]);
+    const projectEpisodes = useMemo(() => (scriptOptions ? orderedScriptEpisodes(scriptOptions.episodes, scriptOptions.projectId) : []), [scriptOptions]);
 
     useEffect(() => {
         if (!open) return;
-        form.setFieldsValue({ title: defaultTitle, presetKey: undefined, ...buildCanvasProjectPresetFromConfig(config, initialPreset) });
+        form.setFieldsValue({ title: defaultTitle, presetKey: undefined, scriptSource: "none", episodeId: undefined, importedEpisodeTitle: "", importedScriptText: "", ...buildCanvasProjectPresetFromConfig(config, initialPreset) });
     }, [config, defaultTitle, form, initialPreset, open]);
 
     useEffect(() => {
@@ -58,7 +68,7 @@ export function CanvasCreateProjectModal({
 
     const submit = async () => {
         const values = await form.validateFields();
-        onCreate((values.title || defaultTitle).trim() || defaultTitle, buildCanvasProjectPresetFromConfig(config, values));
+        onCreate((values.title || defaultTitle).trim() || defaultTitle, buildCanvasProjectPresetFromConfig(config, values), buildScriptBinding(values, scriptOptions));
     };
 
     return (
@@ -136,6 +146,41 @@ export function CanvasCreateProjectModal({
                         <Select showSearch optionFilterProp="label" placeholder="选择文本模型" options={textModelOptions} />
                     </Form.Item>
                 </div>
+                {scriptOptions ? (
+                    <div className="mb-4 rounded-xl border border-stone-200 p-3 dark:border-stone-800">
+                        <Typography.Text className="mb-3 block font-medium">剧本来源</Typography.Text>
+                        <Form.Item name="scriptSource" className="mb-3">
+                            <Select
+                                options={[
+                                    { label: "不绑定剧本", value: "none" },
+                                    { label: "从项目已有剧本分集选择", value: "existing" },
+                                    { label: "粘贴 / 导入本集剧本", value: "import" },
+                                ]}
+                            />
+                        </Form.Item>
+                        {scriptSource === "existing" ? (
+                            <Form.Item name="episodeId" label="选择本集" rules={[{ required: true, message: "请选择要绑定的分集" }]}>
+                                <Select
+                                    showSearch
+                                    placeholder={projectEpisodes.length ? "选择项目内已有分集" : "当前项目还没有分集"}
+                                    optionFilterProp="label"
+                                    disabled={!projectEpisodes.length}
+                                    options={projectEpisodes.map((episode) => ({ label: `第 ${episode.order} 集 · ${episode.title}`, value: episode.id }))}
+                                />
+                            </Form.Item>
+                        ) : null}
+                        {scriptSource === "import" ? (
+                            <>
+                                <Form.Item name="importedEpisodeTitle" label="本集标题" rules={[{ required: true, message: "请输入本集标题" }]}>
+                                    <Input placeholder="例如：第一集 毕业典礼" />
+                                </Form.Item>
+                                <Form.Item name="importedScriptText" label="本集剧本" rules={[{ required: true, message: "请粘贴本集剧本" }]}>
+                                    <Input.TextArea rows={7} placeholder="粘贴这一集的剧本正文。创建后会写入项目剧本分集，并保存一份画布快照。" />
+                                </Form.Item>
+                            </>
+                        ) : null}
+                    </div>
+                ) : null}
                 <Typography.Text type="secondary" className="text-xs">
                     {helperText}
                 </Typography.Text>
@@ -146,4 +191,22 @@ export function CanvasCreateProjectModal({
 
 function modelSelectOptions(models: string[]) {
     return models.map((model) => ({ label: model, value: model }));
+}
+
+function buildScriptBinding(values: CanvasCreateProjectValues, options?: { projectId: string; episodes: ScriptEpisode[]; scenes: ScriptScene[] }): CanvasCreateScriptBinding | undefined {
+    if (!options || values.scriptSource === "none" || !values.scriptSource) return { mode: "none" };
+    if (values.scriptSource === "import") {
+        return {
+            mode: "import",
+            title: values.importedEpisodeTitle?.trim() || "未命名集数",
+            scriptText: values.importedScriptText?.trim() || "",
+        };
+    }
+    const episode = options.episodes.find((item) => item.id === values.episodeId);
+    if (!episode) return { mode: "none" };
+    return {
+        mode: "existing",
+        episodeId: episode.id,
+        context: canvasEpisodeContextFromEpisode(options.projectId, episode, orderedScriptScenes(options.scenes, episode.id)),
+    };
 }

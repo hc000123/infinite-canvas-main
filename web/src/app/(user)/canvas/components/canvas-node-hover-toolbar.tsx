@@ -209,7 +209,12 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                             <InfoRow label="位置" value={`${Math.round(node.position.x)}, ${Math.round(node.position.y)}`} />
                             <InfoRow label="状态" value={node.metadata?.status || "idle"} />
                             {isVideoNode && node.metadata?.taskId ? <InfoRow label="任务 ID" value={node.metadata.taskId} /> : null}
+                            {node.metadata?.aiTaskId ? <InfoRow label="账本任务" value={node.metadata.aiTaskId} /> : null}
+                            {node.metadata?.upstreamTaskId ? <InfoRow label="上游任务" value={node.metadata.upstreamTaskId} /> : null}
                             {isVideoNode && (node.metadata?.taskStatus || node.metadata?.rawTaskStatus) ? <InfoRow label="任务状态" value={taskStatusLabel(node.metadata.taskStatus, node.metadata.rawTaskStatus)} /> : null}
+                            {node.metadata?.aiTaskStatus ? <InfoRow label="账本状态" value={node.metadata.aiTaskStatus} /> : null}
+                            {node.metadata?.aiTaskCredits || node.metadata?.creditsRefunded ? <InfoRow label="扣费 / 返还" value={`${node.metadata.aiTaskCredits || 0} / ${node.metadata.creditsRefunded || 0}`} /> : null}
+                            {node.metadata?.creditLogId ? <InfoRow label="Credit Log" value={node.metadata.creditLogId} /> : null}
                             {isVideoNode && node.metadata?.model ? <InfoRow label="模型" value={node.metadata.model} /> : null}
                             {isVideoNode && videoParams ? <InfoRow label="视频参数" value={videoParams} /> : null}
                             {isVideoNode && arkParams ? <InfoRow label="Ark 参数" value={arkParams} /> : null}

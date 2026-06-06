@@ -78,6 +78,19 @@ func CountCreditLogsByRelatedIDAndType(relatedID string, logType model.CreditLog
 	return total, err
 }
 
+func LatestCreditLogByRelatedIDAndType(relatedID string, logType model.CreditLogType) (model.CreditLog, bool, error) {
+	db, err := DB()
+	if err != nil {
+		return model.CreditLog{}, false, err
+	}
+	var log model.CreditLog
+	err = db.Where("related_id = ? AND type = ?", relatedID, logType).Order("created_at desc").First(&log).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return model.CreditLog{}, false, nil
+	}
+	return log, err == nil, err
+}
+
 func applyAITaskFilters(tx *gorm.DB, q model.AITaskQuery) *gorm.DB {
 	if value := strings.TrimSpace(q.User); value != "" {
 		like := "%" + value + "%"
@@ -109,7 +122,7 @@ func applyAITaskFilters(tx *gorm.DB, q model.AITaskQuery) *gorm.DB {
 	}
 	if keyword := strings.TrimSpace(q.Keyword); keyword != "" {
 		like := "%" + keyword + "%"
-		tx = tx.Where("id LIKE ? OR user_id LIKE ? OR kind LIKE ? OR task_type LIKE ? OR action_type LIKE ? OR model LIKE ? OR provider LIKE ? OR upstream_task_id LIKE ? OR error_code LIKE ? OR error_message LIKE ?", like, like, like, like, like, like, like, like, like, like)
+		tx = tx.Where("id LIKE ? OR user_id LIKE ? OR kind LIKE ? OR task_type LIKE ? OR action_type LIKE ? OR model LIKE ? OR provider LIKE ? OR upstream_task_id LIKE ? OR error_code LIKE ? OR error_message LIKE ? OR request_json LIKE ? OR response_json LIKE ?", like, like, like, like, like, like, like, like, like, like, like, like)
 	}
 	return tx
 }

@@ -1,8 +1,11 @@
 import { Copy } from "lucide-react";
 import { Button, Empty, Space, Tag, Typography } from "antd";
+import { useEffect, useState } from "react";
 
 import { useCopyText } from "@/hooks/use-copy-text";
 import type { Asset } from "@/stores/use-asset-store";
+import { aiTaskLedgerFromGeneration, buildGenerationTaskLedger, fetchUserAITaskDetail, generationTaskSummary } from "@/services/api/ai-task-trace";
+import type { AdminAITaskDetailResponse } from "@/services/api/admin";
 import {
     assetGenerationActionLabel,
     assetGenerationLineage,
@@ -40,10 +43,33 @@ export function AssetGenerationSection({ asset }: { asset: Asset }) {
 }
 
 function GenerationCard({ generation, index, copyText }: { generation: AssetGenerationRecord; index: number; copyText: (text: string, successText?: string) => void }) {
+    const [taskDetail, setTaskDetail] = useState<AdminAITaskDetailResponse | null>(null);
     const prompt = readString(generation.prompt);
     const effectivePrompt = readString(generation.effectivePrompt);
     const config = readRecord(generation.config);
     const lineage = assetGenerationLineage(generation);
+    const aiTaskId = readString(generation.aiTaskId);
+    const taskLedger = buildGenerationTaskLedger(aiTaskLedgerFromGeneration(generation), taskDetail);
+    const taskSummary = generationTaskSummary(generation, taskDetail?.creditLogs);
+
+    useEffect(() => {
+        let active = true;
+        if (!aiTaskId) {
+            setTaskDetail(null);
+            return;
+        }
+        void fetchUserAITaskDetail(aiTaskId)
+            .then((detail) => {
+                if (active) setTaskDetail(detail);
+            })
+            .catch(() => {
+                if (active) setTaskDetail(null);
+            });
+        return () => {
+            active = false;
+        };
+    }, [aiTaskId]);
+
     return (
         <div className="rounded-md bg-stone-50 p-3 text-sm dark:bg-stone-900/70">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -64,7 +90,15 @@ function GenerationCard({ generation, index, copyText }: { generation: AssetGene
                     ["分镜组", readString(generation.storyboardGroupId)],
                     ["分镜", readString(generation.storyboardShotId)],
                     ["来源节点", readString(generation.nodeId)],
-                    ["Task ID", readString(generation.taskId)],
+                    ["账本任务", taskLedger.aiTaskId || ""],
+                    ["上游任务", taskLedger.upstreamTaskId || ""],
+                    ["任务状态", taskLedger.aiTaskStatus || taskSummary.status],
+                    [
+                        "扣费 / 返还",
+                        taskLedger.aiTaskCredits || taskSummary.credits || taskLedger.creditsRefunded || taskSummary.refunded ? `${taskLedger.aiTaskCredits || taskSummary.credits || 0} / ${taskLedger.creditsRefunded || taskSummary.refunded || 0}` : "",
+                    ],
+                    ["Credit Log", taskLedger.creditLogId || taskSummary.creditLogId],
+                    ["完成 / 返还", [taskLedger.finishedAt, taskLedger.refundedAt].filter(Boolean).join(" / ")],
                     ["生成时间", readString(generation.createdAt)],
                 ]}
             />

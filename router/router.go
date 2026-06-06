@@ -40,6 +40,12 @@ func New() *gin.Engine {
 	v1.GET("/videos/:id/content", func(c *gin.Context) {
 		handler.AIVideoContent(c.Writer, c.Request, c.Param("id"))
 	})
+	v1.GET("/ai-tasks/:id", func(c *gin.Context) {
+		handler.UserAITask(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/ai-tasks/:id/frontend-artifact", func(c *gin.Context) {
+		handler.UserAITaskFrontendArtifact(c.Writer, c.Request, c.Param("id"))
+	})
 	v1.POST("/proxy/video-download", gin.WrapF(handler.AIProxyVideoDownload))
 	api.GET("/prompts", middleware.OptionalAuth, gin.WrapF(handler.Prompts))
 	api.GET("/assets", middleware.OptionalAuth, gin.WrapF(handler.Assets))

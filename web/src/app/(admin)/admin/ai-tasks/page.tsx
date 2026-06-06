@@ -6,7 +6,7 @@ import { App, Button, Card, Col, DatePicker, Descriptions, Drawer, Form, Input, 
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 
-import type { AdminAITask, AdminAITaskQuery, AdminCreditLog } from "@/services/api/admin";
+import type { AdminAITask, AdminAITaskFrontendArtifact, AdminAITaskQuery, AdminCreditLog } from "@/services/api/admin";
 import { useAdminAITasks } from "./use-admin-ai-tasks";
 
 const statusLabels: Record<string, string> = {
@@ -98,6 +98,13 @@ export default function AdminAITasksPage() {
             width: 190,
             ellipsis: true,
             render: (_, item) => (item.upstreamTaskId ? <Typography.Text copyable>{item.upstreamTaskId}</Typography.Text> : "-"),
+        },
+        {
+            title: "前台产物",
+            key: "frontend",
+            width: 180,
+            ellipsis: true,
+            render: (_, item) => <Typography.Text type="secondary">{frontendTaskSummary(item) || "-"}</Typography.Text>,
         },
         {
             title: "错误摘要",
@@ -262,6 +269,15 @@ export default function AdminAITasksPage() {
                             <Descriptions.Item label="上游 taskId" span={2}>
                                 {detail.task.upstreamTaskId ? <Typography.Text copyable>{detail.task.upstreamTaskId}</Typography.Text> : "-"}
                             </Descriptions.Item>
+                            <Descriptions.Item label="画布 / 节点" span={2}>
+                                {frontendTraceLine(detail.task, "canvas") || "-"}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="素材 / 分镜" span={2}>
+                                {frontendTraceLine(detail.task, "asset") || "-"}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="生成镜头组" span={2}>
+                                {frontendTraceLine(detail.task, "shotGroup") || "-"}
+                            </Descriptions.Item>
                             <Descriptions.Item label="视频地址过期">{detail.task.videoUrlExpiresAt ? String(detail.task.videoUrlExpiresAt) : "-"}</Descriptions.Item>
                             <Descriptions.Item label="返还时间">{formatTime(detail.task.refundedAt)}</Descriptions.Item>
                             <Descriptions.Item label="完成时间">{formatTime(detail.task.finishedAt)}</Descriptions.Item>
@@ -282,6 +298,23 @@ export default function AdminAITasksPage() {
                             额度流水
                         </Typography.Title>
                         <Table<AdminCreditLog> size="small" rowKey="id" columns={creditColumns} dataSource={detail.creditLogs || []} pagination={false} />
+                        <Typography.Title level={5} style={{ margin: 0 }}>
+                            前台产物反查
+                        </Typography.Title>
+                        <Table<AdminAITaskFrontendArtifact>
+                            size="small"
+                            rowKey={(item) => [item.assetId, item.nodeId, item.createdAt].filter(Boolean).join(":") || "artifact"}
+                            columns={[
+                                { title: "素材", dataIndex: "assetId", render: (value: string) => value || "-" },
+                                { title: "画布", dataIndex: "canvasId", render: (value: string) => value || "-" },
+                                { title: "节点", dataIndex: "nodeId", render: (value: string) => value || "-" },
+                                { title: "分镜", dataIndex: "storyboardShotId", render: (value: string, item: AdminAITaskFrontendArtifact) => [item.storyboardGroupId, value].filter(Boolean).join(" / ") || "-" },
+                                { title: "镜头组", dataIndex: "shotGroupId", render: (value: string, item: AdminAITaskFrontendArtifact) => [value, Array.isArray(item.shotIds) ? item.shotIds.join(",") : ""].filter(Boolean).join(" · ") || "-" },
+                                { title: "类型", dataIndex: "kind", render: (value: string) => value || "-" },
+                            ]}
+                            dataSource={detail.task.frontendArtifacts || []}
+                            pagination={false}
+                        />
                         <Typography.Title level={5} style={{ margin: 0 }}>
                             请求 JSON
                         </Typography.Title>
@@ -321,6 +354,48 @@ function statusColor(status: string) {
     if (status === "running") return "blue";
     if (status === "queued") return "gold";
     return "default";
+}
+
+function frontendTaskSummary(task: AdminAITask) {
+    const trace = task.frontendTrace;
+    const artifact = task.frontendArtifacts?.[0];
+    return [
+        artifact?.assetId ? `素材 ${shortId(artifact.assetId)}` : "",
+        artifact?.nodeId || trace?.nodeId ? `节点 ${shortId(artifact?.nodeId || trace?.nodeId || "")}` : "",
+        artifact?.canvasId || trace?.canvasId ? `画布 ${shortId(artifact?.canvasId || trace?.canvasId || "")}` : "",
+    ]
+        .filter(Boolean)
+        .join(" · ");
+}
+
+function frontendTraceLine(task: AdminAITask, kind: "canvas" | "asset" | "shotGroup") {
+    const trace = task.frontendTrace || {};
+    const artifact = task.frontendArtifacts?.[0] || {};
+    if (kind === "canvas") {
+        return [
+            artifact.projectId || trace.projectId ? `项目 ${artifact.projectId || trace.projectId}` : "",
+            artifact.canvasId || trace.canvasId ? `画布 ${artifact.canvasId || trace.canvasId}` : "",
+            artifact.nodeId || trace.nodeId ? `节点 ${artifact.nodeId || trace.nodeId}` : "",
+        ]
+            .filter(Boolean)
+            .join(" · ");
+    }
+    if (kind === "asset") {
+        return [
+            artifact.assetId || trace.assetId ? `素材 ${artifact.assetId || trace.assetId}` : "",
+            artifact.storyboardGroupId || trace.storyboardGroupId ? `分镜组 ${artifact.storyboardGroupId || trace.storyboardGroupId}` : "",
+            artifact.storyboardShotId || trace.storyboardShotId ? `分镜 ${artifact.storyboardShotId || trace.storyboardShotId}` : "",
+        ]
+            .filter(Boolean)
+            .join(" · ");
+    }
+    return [artifact.shotGroupId || trace.shotGroupId ? `生成镜头组 ${artifact.shotGroupId || trace.shotGroupId}` : "", (artifact.shotIds || trace.shotIds || []).length ? `分镜头 ${(artifact.shotIds || trace.shotIds || []).join(", ")}` : ""]
+        .filter(Boolean)
+        .join(" · ");
+}
+
+function shortId(value: string) {
+    return value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value;
 }
 
 function formatTime(value?: string) {

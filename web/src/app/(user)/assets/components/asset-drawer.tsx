@@ -22,6 +22,7 @@ export function AssetDrawer({
     onRefreshReview,
     projectLibraryProjectTitles,
     usageReferences,
+    onDownloadVersion,
     onRestoreVersion,
 }: {
     asset: Asset | null;
@@ -35,6 +36,7 @@ export function AssetDrawer({
     onRefreshReview: (asset: Asset) => void;
     projectLibraryProjectTitles?: Record<string, string>;
     usageReferences?: AssetVersionUsageReference[];
+    onDownloadVersion: (asset: Asset, versionId: string) => void;
     onRestoreVersion: (asset: Asset, versionId: string) => void;
 }) {
     const cover = asset ? asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "") : "";
@@ -110,7 +112,7 @@ export function AssetDrawer({
                             </div>
                         </div>
                     ) : null}
-                    <AssetVersionHistory asset={asset} versions={versionRecords} usageReferences={usageReferences || []} onRestoreVersion={onRestoreVersion} />
+                    <AssetVersionHistory asset={asset} versions={versionRecords} usageReferences={usageReferences || []} onDownloadVersion={onDownloadVersion} onRestoreVersion={onRestoreVersion} />
                     <AssetGenerationSection asset={asset} />
                     <Space wrap>
                         {asset.kind === "text" ? (
@@ -164,7 +166,19 @@ function videoCoverUrl(url: string) {
     return `${url}#t=0.1`;
 }
 
-function AssetVersionHistory({ asset, versions, usageReferences, onRestoreVersion }: { asset: Asset; versions: AssetVersionRecord[]; usageReferences: AssetVersionUsageReference[]; onRestoreVersion: (asset: Asset, versionId: string) => void }) {
+function AssetVersionHistory({
+    asset,
+    versions,
+    usageReferences,
+    onDownloadVersion,
+    onRestoreVersion,
+}: {
+    asset: Asset;
+    versions: AssetVersionRecord[];
+    usageReferences: AssetVersionUsageReference[];
+    onDownloadVersion: (asset: Asset, versionId: string) => void;
+    onRestoreVersion: (asset: Asset, versionId: string) => void;
+}) {
     if (!versions.length && !usageReferences.length) return null;
     return (
         <div className="rounded-lg border border-stone-200 p-4 text-sm dark:border-stone-800">
@@ -198,9 +212,16 @@ function AssetVersionHistory({ asset, versions, usageReferences, onRestoreVersio
                                         {version.createdAt ? ` · ${version.createdAt}` : ""}
                                     </Typography.Text>
                                 </div>
-                                <Button size="small" icon={<RotateCcw className="size-3.5" />} disabled={version.isCurrent} onClick={() => onRestoreVersion(asset, version.id)}>
-                                    恢复
-                                </Button>
+                                <Space size={4} wrap>
+                                    {!version.isCurrent ? (
+                                        <Button size="small" icon={<Download className="size-3.5" />} onClick={() => onDownloadVersion(asset, version.id)}>
+                                            下载
+                                        </Button>
+                                    ) : null}
+                                    <Button size="small" icon={<RotateCcw className="size-3.5" />} disabled={version.isCurrent} onClick={() => onRestoreVersion(asset, version.id)}>
+                                        恢复
+                                    </Button>
+                                </Space>
                             </div>
                         ))}
                 </div>

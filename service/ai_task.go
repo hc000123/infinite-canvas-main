@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -19,15 +20,16 @@ import (
 const redactedValue = "[redacted]"
 
 type CreateAITaskInput struct {
-	UserID      string
-	TaskType    string
-	Provider    string
-	Protocol    string
-	Model       string
-	Path        string
-	Credits     int
-	RequestBody []byte
-	ContentType string
+	UserID        string
+	TaskType      string
+	Provider      string
+	Protocol      string
+	Model         string
+	Path          string
+	Credits       int
+	RequestBody   []byte
+	ContentType   string
+	FrontendTrace string
 }
 
 func CreateAITask(input CreateAITaskInput) (model.AITask, error) {
@@ -44,7 +46,7 @@ func CreateAITask(input CreateAITaskInput) (model.AITask, error) {
 		Path:        input.Path,
 		Status:      model.AITaskStatusCreated,
 		Credits:     input.Credits,
-		RequestJSON: SanitizeAIJSON(input.RequestBody, input.ContentType),
+		RequestJSON: mergeAITaskFrontendTrace(SanitizeAIJSON(input.RequestBody, input.ContentType), input.FrontendTrace),
 		CreatedAt:   stamp,
 		UpdatedAt:   stamp,
 	}
@@ -57,7 +59,7 @@ func MarkAITaskSucceeded(id string, responseBody []byte, contentType string) err
 		return err
 	}
 	task.Status = model.AITaskStatusSucceeded
-	task.ResponseJSON = SanitizeAIJSON(responseBody, contentType)
+	task.ResponseJSON = preserveAITaskFrontendArtifacts(SanitizeAIJSON(responseBody, contentType), task.ResponseJSON)
 	task.ErrorMessage = ""
 	task.UpdatedAt = now()
 	_, err = repository.SaveAITask(task)
@@ -70,7 +72,7 @@ func MarkAITaskFailed(id string, message string, responseBody []byte, contentTyp
 		return err
 	}
 	task.Status = model.AITaskStatusFailed
-	task.ResponseJSON = SanitizeAIJSON(responseBody, contentType)
+	task.ResponseJSON = preserveAITaskFrontendArtifacts(SanitizeAIJSON(responseBody, contentType), task.ResponseJSON)
 	task.ErrorMessage = strings.TrimSpace(message)
 	task.UpdatedAt = now()
 	_, err = repository.SaveAITask(task)
@@ -116,6 +118,9 @@ func ListAdminAITasks(q model.AITaskQuery) (model.AITaskList, error) {
 	if err != nil {
 		return model.AITaskList{}, err
 	}
+	for i := range tasks {
+		tasks[i] = hydrateAITaskFrontendLinks(tasks[i])
+	}
 	return model.AITaskList{Items: tasks, Total: int(total)}, nil
 }
 
@@ -127,7 +132,7 @@ func GetAdminAITaskDetail(id string) (model.AITaskDetail, error) {
 	if !ok {
 		return model.AITaskDetail{}, safeMessageError{message: "任务不存在"}
 	}
-	detail := model.AITaskDetail{Task: task}
+	detail := model.AITaskDetail{Task: hydrateAITaskFrontendLinks(task)}
 	if user, ok, err := repository.GetUserByID(task.UserID); err == nil && ok {
 		detail.User = model.PublicUser(user)
 	} else if err != nil {
@@ -139,6 +144,43 @@ func GetAdminAITaskDetail(id string) (model.AITaskDetail, error) {
 	}
 	detail.CreditLogs = logs
 	return detail, nil
+}
+
+func GetUserAITaskDetail(id string, userID string) (model.AITaskDetail, error) {
+	task, ok, err := repository.GetAITask(strings.TrimSpace(id))
+	if err != nil {
+		return model.AITaskDetail{}, err
+	}
+	if !ok || task.UserID != strings.TrimSpace(userID) {
+		return model.AITaskDetail{}, safeMessageError{message: "任务不存在"}
+	}
+	logs, err := repository.ListCreditLogsByRelatedID(task.ID)
+	if err != nil {
+		return model.AITaskDetail{}, err
+	}
+	return model.AITaskDetail{Task: hydrateAITaskFrontendLinks(task), CreditLogs: logs}, nil
+}
+
+func RecordUserAITaskFrontendArtifact(id string, userID string, artifact model.AITaskFrontendArtifact) (model.AITask, error) {
+	task, ok, err := repository.GetAITask(strings.TrimSpace(id))
+	if err != nil {
+		return model.AITask{}, err
+	}
+	if !ok || task.UserID != strings.TrimSpace(userID) {
+		return model.AITask{}, safeMessageError{message: "任务不存在"}
+	}
+	artifact = normalizeAITaskFrontendArtifact(artifact)
+	if artifact.AssetID == "" && artifact.NodeID == "" {
+		return model.AITask{}, safeMessageError{message: "缺少前台产物 ID"}
+	}
+	task.ResponseJSON = mergeAITaskFrontendArtifact(task.ResponseJSON, artifact)
+	task.UpdatedAt = now()
+	task, err = repository.SaveAITask(task)
+	return hydrateAITaskFrontendLinks(task), err
+}
+
+func LatestAITaskConsumeCreditLog(id string) (model.CreditLog, bool, error) {
+	return repository.LatestCreditLogByRelatedIDAndType(strings.TrimSpace(id), model.CreditLogTypeAIConsume)
 }
 
 func RefreshAdminAITask(id string) (model.AITask, error) {
@@ -396,6 +438,141 @@ func marshalSanitized(value any) string {
 	return string(body)
 }
 
+func mergeAITaskFrontendTrace(requestJSON string, traceJSON string) string {
+	trace := sanitizeFrontendTraceJSON(traceJSON)
+	if len(trace) == 0 {
+		return requestJSON
+	}
+	payload := jsonObjectFromString(requestJSON)
+	payload["_frontend_trace"] = trace
+	return marshalSanitized(payload)
+}
+
+func mergeAITaskFrontendArtifact(responseJSON string, artifact model.AITaskFrontendArtifact) string {
+	payload := jsonObjectFromString(responseJSON)
+	artifacts := frontendArtifactsFromPayload(payload)
+	artifacts = appendOrReplaceFrontendArtifact(artifacts, artifact)
+	payload["frontendArtifacts"] = artifacts
+	return marshalSanitized(payload)
+}
+
+func preserveAITaskFrontendArtifacts(nextJSON string, previousJSON string) string {
+	artifacts := frontendArtifactsFromPayload(jsonObjectFromString(previousJSON))
+	if len(artifacts) == 0 {
+		return nextJSON
+	}
+	payload := jsonObjectFromString(nextJSON)
+	payload["frontendArtifacts"] = artifacts
+	return marshalSanitized(payload)
+}
+
+func hydrateAITaskFrontendLinks(task model.AITask) model.AITask {
+	request := jsonObjectFromString(task.RequestJSON)
+	response := jsonObjectFromString(task.ResponseJSON)
+	task.FrontendTrace = frontendTraceFromPayload(request)
+	task.FrontendArtifacts = frontendArtifactsFromPayload(response)
+	return task
+}
+
+func sanitizeFrontendTraceJSON(traceJSON string) map[string]any {
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(traceJSON)), &payload); err != nil {
+		return nil
+	}
+	clean := map[string]any{}
+	for _, key := range []string{"projectId", "canvasId", "nodeId", "assetId", "storyboardGroupId", "storyboardShotId", "shotGroupId", "source"} {
+		if value := strings.TrimSpace(aiTaskStringValue(payload, key)); value != "" {
+			clean[key] = sanitizeAIString(value)
+		}
+	}
+	if values := aiTaskStringSliceValue(payload["shotIds"]); len(values) > 0 {
+		clean["shotIds"] = values
+	}
+	if len(clean) == 0 {
+		return nil
+	}
+	return clean
+}
+
+func jsonObjectFromString(value string) map[string]any {
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(value)), &payload); err == nil && payload != nil {
+		return payload
+	}
+	if strings.TrimSpace(value) == "" {
+		return map[string]any{}
+	}
+	return map[string]any{"upstream": sanitizeAIString(value)}
+}
+
+func frontendTraceFromPayload(payload map[string]any) model.AITaskFrontendTrace {
+	trace, _ := payload["_frontend_trace"].(map[string]any)
+	return model.AITaskFrontendTrace{
+		ProjectID:         aiTaskStringValue(trace, "projectId"),
+		CanvasID:          aiTaskStringValue(trace, "canvasId"),
+		NodeID:            aiTaskStringValue(trace, "nodeId"),
+		AssetID:           aiTaskStringValue(trace, "assetId"),
+		StoryboardGroupID: aiTaskStringValue(trace, "storyboardGroupId"),
+		StoryboardShotID:  aiTaskStringValue(trace, "storyboardShotId"),
+		ShotGroupID:       aiTaskStringValue(trace, "shotGroupId"),
+		ShotIDs:           aiTaskStringSliceValue(trace["shotIds"]),
+		Source:            aiTaskStringValue(trace, "source"),
+	}
+}
+
+func frontendArtifactsFromPayload(payload map[string]any) []model.AITaskFrontendArtifact {
+	items, _ := payload["frontendArtifacts"].([]any)
+	result := make([]model.AITaskFrontendArtifact, 0, len(items))
+	for _, item := range items {
+		record, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		artifact := model.AITaskFrontendArtifact{
+			AssetID:           aiTaskStringValue(record, "assetId"),
+			CanvasID:          aiTaskStringValue(record, "canvasId"),
+			NodeID:            aiTaskStringValue(record, "nodeId"),
+			ProjectID:         aiTaskStringValue(record, "projectId"),
+			StoryboardGroupID: aiTaskStringValue(record, "storyboardGroupId"),
+			StoryboardShotID:  aiTaskStringValue(record, "storyboardShotId"),
+			ShotGroupID:       aiTaskStringValue(record, "shotGroupId"),
+			ShotIDs:           aiTaskStringSliceValue(record["shotIds"]),
+			Kind:              aiTaskStringValue(record, "kind"),
+			CreatedAt:         aiTaskStringValue(record, "createdAt"),
+		}
+		if artifact.AssetID != "" || artifact.NodeID != "" {
+			result = append(result, artifact)
+		}
+	}
+	return result
+}
+
+func normalizeAITaskFrontendArtifact(artifact model.AITaskFrontendArtifact) model.AITaskFrontendArtifact {
+	artifact.AssetID = strings.TrimSpace(sanitizeAIString(artifact.AssetID))
+	artifact.CanvasID = strings.TrimSpace(sanitizeAIString(artifact.CanvasID))
+	artifact.NodeID = strings.TrimSpace(sanitizeAIString(artifact.NodeID))
+	artifact.ProjectID = strings.TrimSpace(sanitizeAIString(artifact.ProjectID))
+	artifact.StoryboardGroupID = strings.TrimSpace(sanitizeAIString(artifact.StoryboardGroupID))
+	artifact.StoryboardShotID = strings.TrimSpace(sanitizeAIString(artifact.StoryboardShotID))
+	artifact.ShotGroupID = strings.TrimSpace(sanitizeAIString(artifact.ShotGroupID))
+	artifact.Kind = strings.TrimSpace(sanitizeAIString(artifact.Kind))
+	artifact.ShotIDs = aiTaskStringSliceValue(artifact.ShotIDs)
+	if strings.TrimSpace(artifact.CreatedAt) == "" {
+		artifact.CreatedAt = now()
+	}
+	return artifact
+}
+
+func appendOrReplaceFrontendArtifact(items []model.AITaskFrontendArtifact, artifact model.AITaskFrontendArtifact) []model.AITaskFrontendArtifact {
+	for i, item := range items {
+		if item.AssetID != "" && item.AssetID == artifact.AssetID {
+			items[i] = artifact
+			return items
+		}
+	}
+	return append(items, artifact)
+}
+
 func arkTaskIDFromNormalized(body []byte) string {
 	var payload map[string]any
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -433,7 +610,7 @@ func applyArkVideoTaskPayload(task *model.AITask, normalizedBody []byte) {
 		task.ErrorCode = ""
 		task.ErrorMessage = ""
 	}
-	task.ResponseJSON = SanitizeAIJSON(normalizedBody, "application/json")
+	task.ResponseJSON = preserveAITaskFrontendArtifacts(SanitizeAIJSON(normalizedBody, "application/json"), task.ResponseJSON)
 	task.UpdatedAt = now()
 }
 
@@ -539,6 +716,37 @@ func aiTaskStringValue(values map[string]any, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+func aiTaskStringSliceValue(value any) []string {
+	raw, ok := value.([]any)
+	if !ok {
+		if typed, ok := value.([]string); ok {
+			return cleanStringSlice(typed)
+		}
+		return nil
+	}
+	result := make([]string, 0, len(raw))
+	for _, item := range raw {
+		if text := strings.TrimSpace(fmt.Sprint(item)); text != "" {
+			result = append(result, sanitizeAIString(text))
+		}
+	}
+	return cleanStringSlice(result)
+}
+
+func cleanStringSlice(values []string) []string {
+	result := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, value := range values {
+		text := strings.TrimSpace(sanitizeAIString(value))
+		if text == "" || seen[text] {
+			continue
+		}
+		seen[text] = true
+		result = append(result, text)
+	}
+	return result
 }
 
 func aiTaskInt64Value(values map[string]any, keys ...string) int64 {

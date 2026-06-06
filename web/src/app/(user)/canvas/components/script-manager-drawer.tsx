@@ -15,6 +15,7 @@ type Props = {
     open: boolean;
     projectId: string;
     projectTitle: string;
+    initialEpisodeId?: string;
     onClose: () => void;
     onOpenStoryboardGroup?: (groupId: string) => void;
 };
@@ -37,7 +38,7 @@ type SceneFormValues = {
     durationHint?: string;
 };
 
-export function ScriptManagerDrawer({ open, projectId, projectTitle, onClose, onOpenStoryboardGroup }: Props) {
+export function ScriptManagerDrawer({ open, projectId, projectTitle, initialEpisodeId, onClose, onOpenStoryboardGroup }: Props) {
     const { message } = App.useApp();
     const scriptProjects = useScriptStore((state) => state.projects);
     const episodes = useScriptStore((state) => state.episodes);
@@ -79,8 +80,11 @@ export function ScriptManagerDrawer({ open, projectId, projectTitle, onClose, on
     useEffect(() => {
         if (!open) return;
         setOutlineDraft(projectScript?.outline || "");
-        setActiveEpisodeId((current) => (current && projectEpisodes.some((episode) => episode.id === current) ? current : projectEpisodes[0]?.id || ""));
-    }, [open, projectEpisodes, projectScript?.outline]);
+        setActiveEpisodeId((current) => {
+            if (initialEpisodeId && projectEpisodes.some((episode) => episode.id === initialEpisodeId)) return initialEpisodeId;
+            return current && projectEpisodes.some((episode) => episode.id === current) ? current : projectEpisodes[0]?.id || "";
+        });
+    }, [initialEpisodeId, open, projectEpisodes, projectScript?.outline]);
 
     const saveOutline = () => {
         upsertProject(projectId, outlineDraft);

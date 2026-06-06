@@ -5,14 +5,22 @@ import {
     applyStoryboardShotGenerationError,
     applyStoryboardShotGenerationStarted,
     applyStoryboardShotGenerationSuccess,
+    buildShotGroupCanvasInsertMetadata,
+    buildShotGroupGenerationTableRows,
+    buildStoryboardTableDraftsFromScript,
     buildStoryboardGroupFromScriptScene,
+    createShotGroupFromSelection,
     normalizeStoryboardShot,
     orderedStoryboardGroups,
     orderedStoryboardShots,
+    planShotGroupCanvasInsert,
+    reorderStoryboardTableShots,
     planStoryboardGroupCanvasInsert,
     reorderStoryboardItems,
+    validateShotGroupSelection,
     type StoryboardGroup,
     type StoryboardShot,
+    type StoryboardTableShot,
 } from "./storyboard-management.ts";
 
 test("orders storyboard groups and shots by order fields", () => {
@@ -200,6 +208,97 @@ test("records storyboard generation failure reason", () => {
     assert.equal(next[0].lastTaskId, "task-1");
 });
 
+test("builds storyboard table drafts from episode script paragraphs", () => {
+    const drafts = buildStoryboardTableDraftsFromScript({
+        projectId: "project-1",
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        scriptText: "场景：大学操场 / 白天\n魏梁走上主席台。\n对白：我毕业了。\n\n场景：观礼区\n周泽抬头看向台上。",
+        now: "now",
+        idFactory: (index) => `shot-${index}`,
+    });
+
+    assert.equal(drafts.length, 2);
+    assert.equal(drafts[0].sceneName, "大学操场");
+    assert.equal(drafts[0].timeOfDay, "白天");
+    assert.equal(drafts[0].dialogue, "我毕业了。");
+    assert.equal(drafts[0].estimatedDuration, 5);
+    assert.match(drafts[1].visualDescription, /周泽/);
+});
+
+test("reorders storyboard table shots inside one canvas episode scope", () => {
+    const next = reorderStoryboardTableShots([tableShot("a", 1), tableShot("b", 2), { ...tableShot("c", 1), canvasId: "other" }], "b", "up");
+    assert.deepEqual(
+        next
+            .filter((shot) => shot.canvasId === "canvas-1")
+            .sort((a, b) => a.order - b.order)
+            .map((shot) => shot.id),
+        ["b", "a"],
+    );
+    assert.equal(next.find((shot) => shot.id === "c")?.order, 1);
+});
+
+test("validates shot group selection continuity duration and scene boundary", () => {
+    const shots = [tableShot("s-1", 1, { sceneName: "操场", estimatedDuration: 5 }), tableShot("s-2", 2, { sceneName: "操场", estimatedDuration: 6 }), tableShot("s-3", 3, { sceneName: "观礼区", estimatedDuration: 5 })];
+    assert.equal(validateShotGroupSelection(shots, ["s-1", "s-2"]).valid, true);
+    assert.match(validateShotGroupSelection(shots, ["s-1", "s-3"]).errors.join("\n"), /同一个场次/);
+    assert.match(validateShotGroupSelection(shots, ["s-1", "s-2", "s-3"]).errors.join("\n"), /15 秒/);
+    assert.match(validateShotGroupSelection(shots, ["s-1", "s-3"]).errors.join("\n"), /连续/);
+});
+
+test("creates shot group from continuous shots and derives generation table status", () => {
+    const result = createShotGroupFromSelection({
+        shots: [tableShot("s-1", 1, { scriptText: "魏梁上台", visualDescription: "中景", estimatedDuration: 5 }), tableShot("s-2", 2, { scriptText: "台下反应", visualDescription: "近景", estimatedDuration: 6 })],
+        id: "shot-group-1",
+        now: "now",
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.group?.totalDuration, 11);
+    assert.equal(result.group?.status, "prompt_ready");
+    assert.match(result.group?.prompt || "", /魏梁上台/);
+
+    const rows = buildShotGroupGenerationTableRows([result.group!], [tableShot("s-1", 1), tableShot("s-2", 2)]);
+    assert.equal(rows[0].shotRangeLabel, "1-2");
+    assert.equal(rows[0].promptReady, true);
+    assert.equal(rows[0].assetReady, false);
+});
+
+test("builds shot group canvas insertion metadata", () => {
+    const metadata = buildShotGroupCanvasInsertMetadata(shotGroup("sg-1", ["s-1", "s-2"]), { role: "video_config" });
+    assert.deepEqual(metadata, {
+        episodeId: "episode-1",
+        shotGroupId: "sg-1",
+        shotIds: ["s-1", "s-2"],
+        storyboardShotGroupId: "sg-1",
+        storyboardTableShotIds: ["s-1", "s-2"],
+        storyboardRole: "video_config",
+    });
+});
+
+test("plans shot group insertion into canvas with shot group metadata", () => {
+    const group = shotGroup("sg-1", ["s-1", "s-2"]);
+    const result = planShotGroupCanvasInsert({
+        group: { ...group, assetRefs: [{ assetId: "asset-image", kind: "image", role: "reference_image" }] },
+        shots: [tableShot("s-1", 1, { scriptText: "魏梁上台" }), tableShot("s-2", 2, { scriptText: "台下反应" })],
+        assets: [{ id: "asset-image", kind: "image", title: "角色图", data: { dataUrl: "blob:image", storageKey: "img-1", width: 1000, height: 800, bytes: 12, mimeType: "image/png" }, coverUrl: "blob:image", updatedAt: "now" }],
+        position: { x: 100, y: 200 },
+        config: { provider: "volcengine-ark", model: "ep-test", size: "16:9", seconds: "8", vquality: "720" },
+        idFactory: (prefix) => `${prefix}-id`,
+        connectionIdFactory: (index) => `conn-${index}`,
+    });
+
+    assert.equal(result.nodes.length, 3);
+    assert.equal(result.connections.length, 2);
+    assert.equal(result.nodes[0].metadata?.shotGroupId, "sg-1");
+    assert.deepEqual(result.nodes[2].metadata?.shotIds, ["s-1", "s-2"]);
+    assert.equal(result.nodes[2].metadata?.generationMode, "video");
+    assert.deepEqual(
+        result.groupNodeRefs.map((ref) => ref.role),
+        ["prompt", "reference_image", "video_config"],
+    );
+});
+
 function group(id: string, projectId: string, order: number): StoryboardGroup {
     return { id, projectId, order, title: id, description: "", preset: {}, shotIds: [], createdAt: "", updatedAt: "" };
 }
@@ -219,5 +318,52 @@ function shot(id: string, groupId: string, order: number): StoryboardShot {
         status: "draft",
         createdAt: "",
         updatedAt: "",
+    };
+}
+
+function tableShot(id: string, order: number, patch: Partial<StoryboardTableShot> = {}): StoryboardTableShot {
+    return {
+        id,
+        projectId: "project-1",
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        sceneName: "操场",
+        location: "操场",
+        timeOfDay: "白天",
+        order,
+        title: `镜头 ${order}`,
+        scriptText: "",
+        visualDescription: "",
+        characters: [],
+        dialogue: "",
+        action: "",
+        emotion: "",
+        shotSize: "",
+        cameraMovement: "",
+        estimatedDuration: 5,
+        assetRefs: [],
+        createdAt: "now",
+        updatedAt: "now",
+        ...patch,
+    };
+}
+
+function shotGroup(id: string, shotIds: string[]) {
+    return {
+        id,
+        projectId: "project-1",
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        sceneName: "操场",
+        shotIds,
+        totalDuration: 10,
+        prompt: "提示词",
+        effectivePrompt: "",
+        assetRefs: [],
+        audioRefs: [],
+        status: "prompt_ready" as const,
+        resultAssetIds: [],
+        createdAt: "now",
+        updatedAt: "now",
     };
 }

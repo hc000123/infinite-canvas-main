@@ -7,10 +7,12 @@ import type { UploadedFile } from "@/services/file-storage";
 
 import { NODE_DEFAULT_SIZE, VIDEO_NODE_MAX_HEIGHT, VIDEO_NODE_MAX_WIDTH } from "../constants";
 import { buildGeneratedVideoAsset } from "../utils/canvas-generated-asset";
+import { canvasEpisodeMetadata, type CanvasEpisodeContext } from "../utils/canvas-episode-context";
 import type { CanvasProjectPreset } from "../utils/canvas-project-preset";
 import { buildVideoGenerationMetadata, videoTaskMetadata } from "../utils/canvas-generation-metadata";
 import { createVideoGenerationNode } from "../utils/canvas-generation-nodes";
 import { runCanvasVideoGeneration } from "../utils/canvas-generation-runner";
+import { buildCanvasAiTaskTrace } from "../utils/canvas-ai-task-trace";
 import { appendSeedanceMediaReviewDiagnostic } from "../utils/canvas-volcengine-review-diagnostics";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
 import { buildCompletedVideoNode } from "../utils/canvas-node-status";
@@ -29,8 +31,10 @@ type UseCanvasVideoGenerationActionsOptions = {
     showWarning: (message: string) => void;
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
     projectId: string;
+    canvasId: string;
     projectTitle: string;
     projectPreset?: CanvasProjectPreset;
+    episodeContext?: CanvasEpisodeContext;
     archiveGeneratedAsset: (asset: AssetWriteInput) => Promise<string | void>;
 };
 
@@ -43,7 +47,19 @@ type GenerateVideoNodeInput = {
     setPendingChildIds: (ids: string[]) => void;
 };
 
-export function useCanvasVideoGenerationActions({ setNodes, setConnections, cacheUploadedCanvasMedia, showWarning, toVideoMetadata, projectId, projectTitle, projectPreset, archiveGeneratedAsset }: UseCanvasVideoGenerationActionsOptions) {
+export function useCanvasVideoGenerationActions({
+    setNodes,
+    setConnections,
+    cacheUploadedCanvasMedia,
+    showWarning,
+    toVideoMetadata,
+    projectId,
+    canvasId,
+    projectTitle,
+    projectPreset,
+    episodeContext,
+    archiveGeneratedAsset,
+}: UseCanvasVideoGenerationActionsOptions) {
     const generateVideoNode = useCallback(
         async ({ nodeId, sourceNode, effectivePrompt, generationConfig, videoPlan, setPendingChildIds }: GenerateVideoNodeInput) => {
             if (videoPlan.sourceVideoRequiredError) {
@@ -66,6 +82,7 @@ export function useCanvasVideoGenerationActions({ setNodes, setConnections, cach
             const createdAt = new Date(generationStartedAt).toISOString();
             const generationMetadata = {
                 ...buildVideoGenerationMetadata(generationConfig, videoPlan.references, videoPlan.relation),
+                ...canvasEpisodeMetadata(episodeContext),
                 storyboardGroupId: sourceNode?.metadata?.storyboardGroupId,
                 storyboardShotId: sourceNode?.metadata?.storyboardShotId,
             };
@@ -84,10 +101,17 @@ export function useCanvasVideoGenerationActions({ setNodes, setConnections, cach
             if (connection) setConnections((prev) => [...prev, connection]);
 
             try {
-                const { video, completedTask } = await runCanvasVideoGeneration(generationConfig, effectivePrompt, videoPlan.references, (task) => {
-                    useStoryboardStore.getState().markShotGenerating({ storyboardShotId: generationMetadata.storyboardShotId, nodeId: videoId, taskId: task.id });
-                    setNodes((prev) => prev.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, ...videoTaskMetadata(task), errorDetails: task.errorMessage } } : node)));
-                });
+                const trace = buildCanvasAiTaskTrace({ projectId, canvasId, nodeId: videoId, metadata: generationMetadata });
+                const { video, completedTask } = await runCanvasVideoGeneration(
+                    generationConfig,
+                    effectivePrompt,
+                    videoPlan.references,
+                    (task) => {
+                        useStoryboardStore.getState().markShotGenerating({ storyboardShotId: generationMetadata.storyboardShotId, nodeId: videoId, taskId: task.id });
+                        setNodes((prev) => prev.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, ...videoTaskMetadata(task), errorDetails: task.errorMessage } } : node)));
+                    },
+                    trace,
+                );
                 const cachedVideo = await cacheUploadedCanvasMedia(video, `${videoId}.mp4`);
                 const videoSize = fitNodeSize(video.width || spec.width, video.height || spec.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
                 const finalVideoNode = buildCompletedVideoNode({
@@ -100,7 +124,7 @@ export function useCanvasVideoGenerationActions({ setNodes, setConnections, cach
                     prompt: effectivePrompt,
                 });
                 setNodes((prev) => prev.map((node) => (node.id === videoId ? finalVideoNode : node)));
-                const asset = buildGeneratedVideoAsset(finalVideoNode, { projectId, projectTitle, projectPreset, prompt: effectivePrompt, effectivePrompt, config: generationConfig, createdAt });
+                const asset = buildGeneratedVideoAsset(finalVideoNode, { projectId, projectTitle, projectPreset, episodeContext, prompt: effectivePrompt, effectivePrompt, config: generationConfig, createdAt });
                 const assetId = asset ? await archiveGeneratedAsset(asset).catch(() => undefined) : undefined;
                 useStoryboardStore.getState().markShotSucceeded({ storyboardShotId: generationMetadata.storyboardShotId, assetId: typeof assetId === "string" ? assetId : undefined, nodeId: videoId, taskId: finalVideoNode.metadata?.taskId });
                 return { pendingChildIds: [videoId], ok: true, taskId: finalVideoNode.metadata?.taskId, resultAssetId: typeof assetId === "string" ? assetId : undefined };
@@ -133,7 +157,7 @@ export function useCanvasVideoGenerationActions({ setNodes, setConnections, cach
                 throw new Error(errorMessage);
             }
         },
-        [archiveGeneratedAsset, cacheUploadedCanvasMedia, projectId, projectPreset, projectTitle, setConnections, setNodes, showWarning, toVideoMetadata],
+        [archiveGeneratedAsset, cacheUploadedCanvasMedia, canvasId, episodeContext, projectId, projectPreset, projectTitle, setConnections, setNodes, showWarning, toVideoMetadata],
     );
 
     return { generateVideoNode };

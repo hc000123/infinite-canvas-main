@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildGeneratedImageAsset, buildGeneratedVideoAsset } from "./canvas-generated-asset.ts";
+import { buildGeneratedImageAsset, buildGeneratedVideoAsset, buildGeneratedVideoStoryboardMetadata } from "./canvas-generated-asset.ts";
 import type { CanvasNodeData } from "../types.ts";
 
 const config = {
@@ -47,6 +47,11 @@ test("builds generated image asset with canvas generation metadata", () => {
                 prompt: "节点提示词",
                 model: "node-image-model",
                 generationType: "edit",
+                aiTaskId: "aitask-image",
+                upstreamTaskId: "upstream-image",
+                aiTaskStatus: "succeeded",
+                aiTaskCredits: 2,
+                creditLogId: "credit-image",
                 references: ["image:ref"],
                 naturalWidth: 640,
                 naturalHeight: 360,
@@ -69,6 +74,11 @@ test("builds generated image asset with canvas generation metadata", () => {
     assert.equal(generation.model, "node-image-model");
     assert.equal(generation.provider, "openai");
     assert.equal(generation.actionType, "edit");
+    assert.equal(generation.aiTaskId, "aitask-image");
+    assert.equal(generation.upstreamTaskId, "upstream-image");
+    assert.equal(generation.aiTaskStatus, "succeeded");
+    assert.equal(generation.aiTaskCredits, 2);
+    assert.equal(generation.creditLogId, "credit-image");
     assert.deepEqual(generation.references.images, ["image:ref"]);
     assert.deepEqual(generation.productionBibleRefs, []);
     assert.equal(generation.config.quality, "high");
@@ -101,6 +111,11 @@ test("builds generated video asset with task and relation metadata", () => {
             provider: "volcengine-ark",
             model: "seedance-endpoint",
             taskId: "task-1",
+            aiTaskId: "aitask-video",
+            upstreamTaskId: "upstream-video",
+            aiTaskStatus: "queued",
+            aiTaskCredits: 5,
+            creditLogId: "credit-video",
             references: ["image:ref"],
             videoReferences: ["media:video-ref"],
             audioReferences: ["media:audio-ref"],
@@ -114,6 +129,11 @@ test("builds generated video asset with task and relation metadata", () => {
     const generation = asset?.metadata?.generation as Record<string, any>;
     assert.equal(generation.actionType, "variant");
     assert.equal(generation.taskId, "task-1");
+    assert.equal(generation.aiTaskId, "aitask-video");
+    assert.equal(generation.upstreamTaskId, "upstream-video");
+    assert.equal(generation.aiTaskStatus, "queued");
+    assert.equal(generation.aiTaskCredits, 5);
+    assert.equal(generation.creditLogId, "credit-video");
     assert.equal(generation.storyboardGroupId, null);
     assert.equal(generation.storyboardShotId, null);
     assert.equal(generation.provider, "volcengine-ark");
@@ -122,6 +142,29 @@ test("builds generated video asset with task and relation metadata", () => {
     assert.deepEqual(generation.references.videos, ["media:video-ref"]);
     assert.deepEqual(generation.references.audios, ["media:audio-ref"]);
     assert.deepEqual(generation.references.order, [{ kind: "image", index: 1, nodeId: "image-ref" }]);
+});
+
+test("builds generated video storyboard and shot group metadata extension", () => {
+    assert.deepEqual(
+        buildGeneratedVideoStoryboardMetadata({
+            storyboardGroupId: "storyboard-group-1",
+            storyboardShotId: "storyboard-shot-1",
+            shotGroupId: "shot-group-1",
+            shotIds: ["shot-1", "shot-2"],
+        }),
+        {
+            storyboardGroupId: "storyboard-group-1",
+            storyboardShotId: "storyboard-shot-1",
+            shotGroupId: "shot-group-1",
+            shotIds: ["shot-1", "shot-2"],
+        },
+    );
+    assert.deepEqual(buildGeneratedVideoStoryboardMetadata({}), {
+        storyboardGroupId: null,
+        storyboardShotId: null,
+        shotGroupId: null,
+        shotIds: [],
+    });
 });
 
 test("maps video action type from edit, extend and continuation metadata", () => {

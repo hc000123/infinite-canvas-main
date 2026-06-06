@@ -3,7 +3,7 @@
 import { BookOpen, Download, FolderPlus, Library, PencilLine, Search, Trash2, Upload } from "lucide-react";
 import { Suspense, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import { App, Button, Empty, Form, Input, Modal, Pagination, Select, Tag } from "antd";
+import { App, Button, Checkbox, Empty, Form, Input, Modal, Pagination, Select, Tag } from "antd";
 import { saveAs } from "file-saver";
 
 import { useCopyText } from "@/hooks/use-copy-text";
@@ -23,7 +23,16 @@ import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { useCreativeProjectStore } from "../projects/use-creative-project-store";
 import { assetGenerationFilterOptions } from "./asset-generation";
 import { buildProjectLibraryAssetPatch, buildRemoveProjectLibraryAssetPatch } from "./asset-project-library";
-import { buildAssetVersionedUpdatePatch, buildRestoreAssetVersionPatch } from "./asset-version-history";
+import { assetVersionRecords, buildAssetVersionedUpdatePatch, buildRestoreAssetVersionPatch, type AssetVersionRecord } from "./asset-version-history";
+import {
+    collectOutdatedAssetVersionUsages,
+    outdatedUsageLabel,
+    selectedOutdatedUsageSummary,
+    updateCanvasProjectAssetReferenceToLatest,
+    updateProductionBibleAssetReferenceToLatest,
+    updateStoryboardShotAssetReferenceToLatest,
+    type OutdatedAssetVersionUsage,
+} from "./asset-version-outdated-references";
 import { collectAssetVersionUsageReferences } from "./asset-version-references";
 import { assetsForVolcengineRefresh, assetsForVolcengineSubmit, buildBulkMoveAssetPatches, buildBulkTagAssetPatches, normalizeTags } from "./asset-bulk-actions";
 import { importableAssetFiles, importAssetFileList } from "./asset-import-actions";
@@ -59,6 +68,7 @@ const kindOptions = [
 ];
 
 type AssetPatch = Partial<Omit<Asset, "id" | "createdAt">>;
+type ReferenceVersionFilter = "all" | "outdated";
 
 export default function AssetsPage() {
     return (
@@ -85,6 +95,9 @@ function AssetsPageContent() {
     const productionBibleItems = useProductionBibleStore((state) => state.items);
     const storyboardGroups = useStoryboardStore((state) => state.groups);
     const storyboardShots = useStoryboardStore((state) => state.shots);
+    const updateCanvasProject = useCanvasStore((state) => state.updateProject);
+    const updateStoryboardShot = useStoryboardStore((state) => state.updateShot);
+    const updateProductionBibleItem = useProductionBibleStore((state) => state.updateItem);
     const addAsset = useAssetStore((state) => state.addAsset);
     const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
     const updateAsset = useAssetStore((state) => state.updateAsset);
@@ -103,6 +116,7 @@ function AssetsPageContent() {
     const [generationTaskFilter, setGenerationTaskFilter] = useState<"all" | "with" | "without">("all");
     const [projectContextFilter, setProjectContextFilter] = useState(searchParams.get("projectId") || "");
     const [projectLibraryFilter, setProjectLibraryFilter] = useState<ProjectLibraryFilter>("all");
+    const [referenceVersionFilter, setReferenceVersionFilter] = useState<ReferenceVersionFilter>("all");
     const [storyboardGroupFilter, setStoryboardGroupFilter] = useState("");
     const [sortMode, setSortMode] = useState<AssetSortMode>("default");
     const [page, setPage] = useState(1);
@@ -129,6 +143,8 @@ function AssetsPageContent() {
     const [bulkTags, setBulkTags] = useState<string[]>([]);
     const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
     const [bulkReviewAction, setBulkReviewAction] = useState<"submit" | "refresh" | "">("");
+    const [selectedOutdatedUsageIds, setSelectedOutdatedUsageIds] = useState<Set<string>>(() => new Set());
+    const [bulkOutdatedOpen, setBulkOutdatedOpen] = useState(false);
     const activeFolderId = activeAssetFolderId(folderFilter);
     const coverUrl = Form.useWatch("coverUrl", form) || "";
     const title = Form.useWatch("title", form) || "";
@@ -168,6 +184,23 @@ function AssetsPageContent() {
         return collectProjectReferencedAssetIds(projectContextFilter, productionBibleItems, storyboardGroups, storyboardShots);
     }, [productionBibleItems, projectContextFilter, storyboardGroups, storyboardShots]);
     const storyboardGroupAssetIds = useMemo(() => collectStoryboardGroupReferencedAssetIds(storyboardGroupFilter, storyboardShots), [storyboardGroupFilter, storyboardShots]);
+    const outdatedAssetVersionUsages = useMemo(
+        () =>
+            collectOutdatedAssetVersionUsages(
+                validAssets,
+                {
+                    canvasProjects: projects,
+                    storyboardGroups,
+                    storyboardShots,
+                    productionBibleItems,
+                    projectTitles: projectLibraryProjectTitles,
+                },
+                projectContextFilter,
+            ),
+        [validAssets, projects, storyboardGroups, storyboardShots, productionBibleItems, projectLibraryProjectTitles, projectContextFilter],
+    );
+    const selectedOutdatedUsageItems = useMemo(() => outdatedAssetVersionUsages.filter((usage) => selectedOutdatedUsageIds.has(usage.id)), [outdatedAssetVersionUsages, selectedOutdatedUsageIds]);
+    const selectedOutdatedUsageConfirmItems = useMemo(() => selectedOutdatedUsageSummary(outdatedAssetVersionUsages, selectedOutdatedUsageIds), [outdatedAssetVersionUsages, selectedOutdatedUsageIds]);
 
     const filteredAssets = useMemo(() => {
         return sortAssetList(
@@ -247,6 +280,10 @@ function AssetsPageContent() {
     }, [projectContextFilter, projectLibraryFilter]);
 
     useEffect(() => {
+        if (!projectContextFilter && referenceVersionFilter !== "all") setReferenceVersionFilter("all");
+    }, [projectContextFilter, referenceVersionFilter]);
+
+    useEffect(() => {
         const existingIds = new Set(validAssets.map((asset) => asset.id));
         setSelectedAssetIds((current) => {
             let changed = false;
@@ -258,6 +295,19 @@ function AssetsPageContent() {
             return changed ? next : current;
         });
     }, [validAssets]);
+
+    useEffect(() => {
+        const existingIds = new Set(outdatedAssetVersionUsages.map((usage) => usage.id));
+        setSelectedOutdatedUsageIds((current) => {
+            let changed = false;
+            const next = new Set<string>();
+            current.forEach((id) => {
+                if (existingIds.has(id)) next.add(id);
+                else changed = true;
+            });
+            return changed ? next : current;
+        });
+    }, [outdatedAssetVersionUsages]);
 
     const openCreate = () => {
         setEditingAsset(null);
@@ -390,6 +440,20 @@ function AssetsPageContent() {
         saveAs(asset.kind === "image" ? asset.data.dataUrl : asset.data.url, `${asset.title || "asset"}.${asset.data.mimeType.split("/")[1] || "bin"}`);
     };
 
+    const downloadAssetVersion = async (asset: Asset, versionId: string) => {
+        const version = assetVersionRecords(asset).find((item) => item.id === versionId);
+        if (!version) {
+            message.error("没有找到该版本");
+            return;
+        }
+        const target = await resolveAssetVersionDownloadTarget(version);
+        if (!target) {
+            message.error("该版本没有可下载的本地文件");
+            return;
+        }
+        saveAs(target, assetVersionFileName(asset, version));
+    };
+
     const exportSelectedAssets = async () => {
         if (!selectedAssets.length) {
             message.warning("请先选择要导出的素材");
@@ -426,6 +490,23 @@ function AssetsPageContent() {
 
     const clearSelectedAssets = () => {
         setSelectedAssetIds(new Set());
+    };
+
+    const toggleOutdatedUsageSelected = (usageId: string) => {
+        setSelectedOutdatedUsageIds((current) => {
+            const next = new Set(current);
+            if (next.has(usageId)) next.delete(usageId);
+            else next.add(usageId);
+            return next;
+        });
+    };
+
+    const selectAllOutdatedUsages = () => {
+        setSelectedOutdatedUsageIds(new Set(outdatedAssetVersionUsages.map((usage) => usage.id)));
+    };
+
+    const clearSelectedOutdatedUsages = () => {
+        setSelectedOutdatedUsageIds(new Set());
     };
 
     const openBulkMove = () => {
@@ -480,6 +561,63 @@ function AssetsPageContent() {
         if (!selectedAssets.length) return message.warning("请先选择素材");
         selectedAssets.forEach((asset) => updateAsset(asset.id, buildRemoveProjectLibraryAssetPatch(asset, projectContextFilter)));
         message.success(`已移出项目共享库：${selectedAssets.length} 个素材`);
+    };
+
+    const updateOutdatedUsageToLatest = (usage: OutdatedAssetVersionUsage) => {
+        const updated = applyOutdatedUsageUpdates([usage]);
+        if (updated) message.success("已更新到素材最新版");
+        else message.warning("没有可更新的引用");
+    };
+
+    const applySelectedOutdatedUsages = () => {
+        const updated = applyOutdatedUsageUpdates(selectedOutdatedUsageItems);
+        setBulkOutdatedOpen(false);
+        if (updated) message.success(`已更新 ${updated} 处引用到最新版`);
+        else message.warning("没有可更新的引用");
+    };
+
+    const applyOutdatedUsageUpdates = (usages: OutdatedAssetVersionUsage[]) => {
+        const assetsById = new Map(validAssets.map((asset) => [asset.id, asset]));
+        const now = new Date().toISOString();
+        let updated = 0;
+        for (const usage of usages) {
+            const asset = assetsById.get(usage.assetId);
+            if (!asset) continue;
+            if (usage.kind === "canvas-node") {
+                const canvasId = canvasProjectIdFromUsage(usage);
+                const project = projects.find((item) => item.id === canvasId);
+                if (!project) continue;
+                const next = updateCanvasProjectAssetReferenceToLatest(project, usage, asset, now);
+                if (next !== project) {
+                    updateCanvasProject(project.id, { nodes: next.nodes });
+                    updated += 1;
+                }
+            } else if (usage.kind === "storyboard-shot") {
+                const shot = storyboardShots.find((item) => item.id === usage.objectId);
+                if (!shot) continue;
+                const next = updateStoryboardShotAssetReferenceToLatest(shot, usage, asset, now);
+                if (next !== shot) {
+                    updateStoryboardShot(shot.id, { assetRefs: next.assetRefs });
+                    updated += 1;
+                }
+            } else {
+                const item = productionBibleItems.find((entry) => entry.id === usage.objectId);
+                if (!item) continue;
+                const next = updateProductionBibleAssetReferenceToLatest(item, usage, asset, now);
+                if (next !== item) {
+                    updateProductionBibleItem(item.id, { assetRefs: next.assetRefs });
+                    updated += 1;
+                }
+            }
+        }
+        if (updated) {
+            setSelectedOutdatedUsageIds((current) => {
+                const next = new Set(current);
+                usages.forEach((usage) => next.delete(usage.id));
+                return next;
+            });
+        }
+        return updated;
     };
 
     const importAssetFiles = async (files?: FileList | File[]) => {
@@ -839,6 +977,21 @@ function AssetsPageContent() {
                                         setProjectLibraryFilter(value as ProjectLibraryFilter);
                                     }}
                                 />
+                                <Select
+                                    size="small"
+                                    className="min-w-36"
+                                    value={referenceVersionFilter}
+                                    disabled={!projectContextFilter}
+                                    options={[
+                                        { label: "引用：全部", value: "all" },
+                                        { label: `过期引用${outdatedAssetVersionUsages.length ? ` ${outdatedAssetVersionUsages.length}` : ""}`, value: "outdated" },
+                                    ]}
+                                    onChange={(value) => {
+                                        setPage(1);
+                                        setReferenceVersionFilter(value as ReferenceVersionFilter);
+                                        clearSelectedOutdatedUsages();
+                                    }}
+                                />
                                 <Button size="small" icon={<BookOpen className="size-3.5" />} disabled={!selectedProductionBibleProject} onClick={() => setProductionBibleOpen(true)}>
                                     项目设定库
                                 </Button>
@@ -948,100 +1101,117 @@ function AssetsPageContent() {
                 </div>
 
                 <div className="mx-auto flex max-w-7xl flex-col gap-5">
-                    <div className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-background/95 px-4 py-3 shadow-sm dark:border-stone-800 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0">
-                            <div className="text-sm font-medium text-stone-900 dark:text-stone-100">已选择 {selectedAssets.length} 个</div>
-                            <div className="mt-1 truncate text-xs text-stone-500 dark:text-stone-400">
-                                {selectedAssetSummary} · 当前筛选 {filteredAssets.length} 个，已选 {selectedInFilteredCount} 个
+                    {referenceVersionFilter === "outdated" ? (
+                        <OutdatedReferencesPanel
+                            usages={outdatedAssetVersionUsages}
+                            selectedIds={selectedOutdatedUsageIds}
+                            onToggle={toggleOutdatedUsageSelected}
+                            onSelectAll={selectAllOutdatedUsages}
+                            onClear={clearSelectedOutdatedUsages}
+                            onUpdateOne={updateOutdatedUsageToLatest}
+                            onOpenBatch={() => setBulkOutdatedOpen(true)}
+                        />
+                    ) : null}
+                    {referenceVersionFilter !== "outdated" ? (
+                        <div className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-background/95 px-4 py-3 shadow-sm dark:border-stone-800 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                                <div className="text-sm font-medium text-stone-900 dark:text-stone-100">已选择 {selectedAssets.length} 个</div>
+                                <div className="mt-1 truncate text-xs text-stone-500 dark:text-stone-400">
+                                    {selectedAssetSummary} · 当前筛选 {filteredAssets.length} 个，已选 {selectedInFilteredCount} 个
+                                </div>
+                            </div>
+                            <div className="flex shrink-0 flex-wrap gap-2">
+                                <Select
+                                    size="small"
+                                    className="w-32"
+                                    value={sortMode}
+                                    options={[
+                                        { label: "默认排序", value: "default" },
+                                        { label: "最近更新", value: "updated_desc" },
+                                        { label: "最近生成", value: "generation_desc" },
+                                        { label: "创建时间", value: "created_desc" },
+                                        { label: "标题 A-Z", value: "title_asc" },
+                                    ]}
+                                    onChange={(value) => {
+                                        setPage(1);
+                                        setSortMode(value);
+                                    }}
+                                />
+                                <Button size="small" disabled={!filteredAssets.length || allFilteredSelected} onClick={selectFilteredAssets}>
+                                    全选当前结果
+                                </Button>
+                                <Button size="small" disabled={!selectedAssets.length} onClick={openBulkMove}>
+                                    移动文件夹
+                                </Button>
+                                <Button size="small" disabled={!selectedAssets.length} onClick={openBulkTag}>
+                                    添加标签
+                                </Button>
+                                {projectContextFilter ? (
+                                    <>
+                                        <Button size="small" icon={<Library className="size-3.5" />} disabled={!selectedAssets.length} onClick={addSelectedToProjectLibrary}>
+                                            加入项目库
+                                        </Button>
+                                        <Button size="small" disabled={!selectedAssets.length} onClick={removeSelectedFromProjectLibrary}>
+                                            移出项目库
+                                        </Button>
+                                    </>
+                                ) : null}
+                                <Button size="small" disabled={!selectedVolcengineSubmitAssets.length || bulkReviewAction !== ""} loading={bulkReviewAction === "submit"} onClick={() => void submitSelectedVolcengineReviews()}>
+                                    批量加白{selectedVolcengineSubmitAssets.length ? ` ${selectedVolcengineSubmitAssets.length}` : ""}
+                                </Button>
+                                <Button size="small" disabled={!selectedVolcengineRefreshAssets.length || bulkReviewAction !== ""} loading={bulkReviewAction === "refresh"} onClick={() => void refreshSelectedVolcengineReviews()}>
+                                    批量刷新{selectedVolcengineRefreshAssets.length ? ` ${selectedVolcengineRefreshAssets.length}` : ""}
+                                </Button>
+                                <Button size="small" danger icon={<Trash2 className="size-3.5" />} disabled={!selectedAssets.length} onClick={openBulkDelete}>
+                                    删除选中
+                                </Button>
+                                <Button size="small" disabled={!selectedAssets.length} onClick={clearSelectedAssets}>
+                                    清空选择
+                                </Button>
                             </div>
                         </div>
-                        <div className="flex shrink-0 flex-wrap gap-2">
-                            <Select
-                                size="small"
-                                className="w-32"
-                                value={sortMode}
-                                options={[
-                                    { label: "默认排序", value: "default" },
-                                    { label: "最近更新", value: "updated_desc" },
-                                    { label: "最近生成", value: "generation_desc" },
-                                    { label: "创建时间", value: "created_desc" },
-                                    { label: "标题 A-Z", value: "title_asc" },
-                                ]}
-                                onChange={(value) => {
-                                    setPage(1);
-                                    setSortMode(value);
-                                }}
-                            />
-                            <Button size="small" disabled={!filteredAssets.length || allFilteredSelected} onClick={selectFilteredAssets}>
-                                全选当前结果
-                            </Button>
-                            <Button size="small" disabled={!selectedAssets.length} onClick={openBulkMove}>
-                                移动文件夹
-                            </Button>
-                            <Button size="small" disabled={!selectedAssets.length} onClick={openBulkTag}>
-                                添加标签
-                            </Button>
-                            {projectContextFilter ? (
-                                <>
-                                    <Button size="small" icon={<Library className="size-3.5" />} disabled={!selectedAssets.length} onClick={addSelectedToProjectLibrary}>
-                                        加入项目库
-                                    </Button>
-                                    <Button size="small" disabled={!selectedAssets.length} onClick={removeSelectedFromProjectLibrary}>
-                                        移出项目库
-                                    </Button>
-                                </>
-                            ) : null}
-                            <Button size="small" disabled={!selectedVolcengineSubmitAssets.length || bulkReviewAction !== ""} loading={bulkReviewAction === "submit"} onClick={() => void submitSelectedVolcengineReviews()}>
-                                批量加白{selectedVolcengineSubmitAssets.length ? ` ${selectedVolcengineSubmitAssets.length}` : ""}
-                            </Button>
-                            <Button size="small" disabled={!selectedVolcengineRefreshAssets.length || bulkReviewAction !== ""} loading={bulkReviewAction === "refresh"} onClick={() => void refreshSelectedVolcengineReviews()}>
-                                批量刷新{selectedVolcengineRefreshAssets.length ? ` ${selectedVolcengineRefreshAssets.length}` : ""}
-                            </Button>
-                            <Button size="small" danger icon={<Trash2 className="size-3.5" />} disabled={!selectedAssets.length} onClick={openBulkDelete}>
-                                删除选中
-                            </Button>
-                            <Button size="small" disabled={!selectedAssets.length} onClick={clearSelectedAssets}>
-                                清空选择
-                            </Button>
-                        </div>
-                    </div>
-                    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                        {visibleAssets.map((asset) => (
-                            <AssetCard
-                                key={asset.id}
-                                asset={asset}
-                                folderName={asset.folderId ? folderMap.get(asset.folderId)?.name : ""}
-                                selected={selectedAssetIds.has(asset.id)}
-                                refreshingReview={refreshingReviewId === asset.id}
-                                onSelect={() => toggleAssetSelected(asset.id)}
-                                onOpen={() => setPreviewAsset(asset)}
-                                onEdit={() => openEdit(asset)}
-                                onCopy={copyAssetText}
-                                onDownload={downloadMedia}
-                                onDelete={() => setDeletingAsset(asset)}
-                                submittingReview={submittingReviewId === asset.id}
-                                onReview={() => void submitImageReview(asset)}
-                                onRefreshReview={() => void refreshImageReview(asset)}
-                                projectLibraryProjectId={projectContextFilter}
-                            />
-                        ))}
-                    </div>
+                    ) : null}
+                    {referenceVersionFilter !== "outdated" ? (
+                        <>
+                            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                                {visibleAssets.map((asset) => (
+                                    <AssetCard
+                                        key={asset.id}
+                                        asset={asset}
+                                        folderName={asset.folderId ? folderMap.get(asset.folderId)?.name : ""}
+                                        selected={selectedAssetIds.has(asset.id)}
+                                        refreshingReview={refreshingReviewId === asset.id}
+                                        onSelect={() => toggleAssetSelected(asset.id)}
+                                        onOpen={() => setPreviewAsset(asset)}
+                                        onEdit={() => openEdit(asset)}
+                                        onCopy={copyAssetText}
+                                        onDownload={downloadMedia}
+                                        onDelete={() => setDeletingAsset(asset)}
+                                        submittingReview={submittingReviewId === asset.id}
+                                        onReview={() => void submitImageReview(asset)}
+                                        onRefreshReview={() => void refreshImageReview(asset)}
+                                        projectLibraryProjectId={projectContextFilter}
+                                    />
+                                ))}
+                            </div>
 
-                    {!visibleAssets.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到素材" className="py-20" /> : null}
+                            {!visibleAssets.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到素材" className="py-20" /> : null}
 
-                    <div className="flex justify-center">
-                        <Pagination
-                            current={page}
-                            pageSize={pageSize}
-                            total={filteredAssets.length}
-                            showSizeChanger
-                            pageSizeOptions={[10, 20, 50, 100]}
-                            onChange={(nextPage, nextPageSize) => {
-                                setPage(nextPage);
-                                setPageSize(nextPageSize);
-                            }}
-                        />
-                    </div>
+                            <div className="flex justify-center">
+                                <Pagination
+                                    current={page}
+                                    pageSize={pageSize}
+                                    total={filteredAssets.length}
+                                    showSizeChanger
+                                    pageSizeOptions={[10, 20, 50, 100]}
+                                    onChange={(nextPage, nextPageSize) => {
+                                        setPage(nextPage);
+                                        setPageSize(nextPageSize);
+                                    }}
+                                />
+                            </div>
+                        </>
+                    ) : null}
                 </div>
             </main>
 
@@ -1080,6 +1250,7 @@ function AssetsPageContent() {
                 onRefreshReview={(asset) => void refreshImageReview(asset)}
                 projectLibraryProjectTitles={projectLibraryProjectTitles}
                 usageReferences={previewAssetUsageReferences}
+                onDownloadVersion={(asset, versionId) => void downloadAssetVersion(asset, versionId)}
                 onRestoreVersion={(asset, versionId) => void restoreAssetVersion(asset, versionId)}
             />
 
@@ -1111,6 +1282,22 @@ function AssetsPageContent() {
                 确定删除已选择的 {selectedAssets.length} 个素材吗？删除后会从我的素材中移除。
             </Modal>
 
+            <Modal title="批量更新过期引用" open={bulkOutdatedOpen} onCancel={() => setBulkOutdatedOpen(false)} onOk={applySelectedOutdatedUsages} okText="更新到最新版" cancelText="取消" destroyOnHidden>
+                <div className="space-y-3">
+                    <div className="text-sm text-stone-600 dark:text-stone-300">将更新以下 {selectedOutdatedUsageConfirmItems.length} 处引用。更新只修改引用方记录，不修改素材本体。</div>
+                    <div className="max-h-72 space-y-2 overflow-y-auto rounded-lg border border-stone-200 p-2 dark:border-stone-800">
+                        {selectedOutdatedUsageConfirmItems.map((usage) => (
+                            <div key={usage.id} className="rounded-md bg-stone-50 px-3 py-2 text-sm dark:bg-stone-900/70">
+                                <div className="font-medium text-stone-900 dark:text-stone-100">{usage.label}</div>
+                                <div className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                                    v{usage.currentVersionNumber || "?"} → v{usage.latestVersionNumber || "最新"}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </Modal>
+
             <Modal title="删除素材" open={Boolean(deletingAsset)} onCancel={() => setDeletingAsset(null)} onOk={confirmDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
                 确定删除「{deletingAsset?.title}」吗？删除后会从我的素材中移除。
             </Modal>
@@ -1130,4 +1317,114 @@ async function resolveRestoredAssetPatch(patch: AssetPatch): Promise<AssetPatch>
         return { ...patch, data: { ...data, url } } as AssetPatch;
     }
     return patch;
+}
+
+async function resolveAssetVersionDownloadTarget(version: AssetVersionRecord) {
+    if (version.kind === "text") return new Blob([readVersionString(version.data.content)], { type: "text/plain;charset=utf-8" });
+    const storageKey = readVersionString(version.data.storageKey);
+    if (version.kind === "image") {
+        if (storageKey) {
+            const blob = await getImageBlob(storageKey);
+            if (blob) return blob;
+        }
+        return readVersionString(version.data.dataUrl) || version.coverUrl;
+    }
+    if (storageKey) {
+        const blob = await getMediaBlob(storageKey);
+        if (blob) return blob;
+    }
+    return readVersionString(version.data.url);
+}
+
+function assetVersionFileName(asset: Asset, version: AssetVersionRecord) {
+    const mimeType = readVersionString(version.data.mimeType);
+    const extension = mimeType.split("/")[1] || (version.kind === "text" ? "txt" : "bin");
+    return `${safeFileName(asset.title || version.title || "asset")}-v${version.versionNumber}.${extension}`;
+}
+
+function canvasProjectIdFromUsage(usage: OutdatedAssetVersionUsage) {
+    return usage.id.startsWith("canvas:") ? usage.id.split(":")[1] || "" : "";
+}
+
+function readVersionString(value: unknown) {
+    return typeof value === "string" ? value : "";
+}
+
+function safeFileName(value: string) {
+    return value.replace(/[\\/:*?"<>|]+/g, "_").trim() || "asset";
+}
+
+function OutdatedReferencesPanel({
+    usages,
+    selectedIds,
+    onToggle,
+    onSelectAll,
+    onClear,
+    onUpdateOne,
+    onOpenBatch,
+}: {
+    usages: OutdatedAssetVersionUsage[];
+    selectedIds: Set<string>;
+    onToggle: (usageId: string) => void;
+    onSelectAll: () => void;
+    onClear: () => void;
+    onUpdateOne: (usage: OutdatedAssetVersionUsage) => void;
+    onOpenBatch: () => void;
+}) {
+    return (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/20">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <div className="text-sm font-medium text-stone-900 dark:text-stone-100">过期引用 {usages.length} 处</div>
+                    <div className="mt-1 text-xs text-stone-500 dark:text-stone-400">只会更新画布节点、分镜条目或设定库绑定中的版本引用，不修改素材本体。</div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <Button size="small" disabled={!usages.length || selectedIds.size === usages.length} onClick={onSelectAll}>
+                        全选
+                    </Button>
+                    <Button size="small" disabled={!selectedIds.size} onClick={onClear}>
+                        清空
+                    </Button>
+                    <Button size="small" type="primary" disabled={!selectedIds.size} onClick={onOpenBatch}>
+                        批量更新{selectedIds.size ? ` ${selectedIds.size}` : ""}
+                    </Button>
+                </div>
+            </div>
+            <div className="mt-3 space-y-2">
+                {usages.map((usage) => (
+                    <div key={usage.id} className="flex flex-col gap-3 rounded-md border border-stone-200 bg-background px-3 py-3 dark:border-stone-800 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Checkbox checked={selectedIds.has(usage.id)} onChange={() => onToggle(usage.id)} />
+                                <Tag className="m-0">{outdatedUsageKindLabel(usage)}</Tag>
+                                <span className="font-medium text-stone-900 dark:text-stone-100">{usage.objectTitle}</span>
+                                <Tag color="gold">
+                                    v{usage.assetVersion?.versionNumber || "?"} → v{usage.latestVersionNumber || "最新"}
+                                </Tag>
+                            </div>
+                            <div className="mt-1 break-words pl-7 text-xs text-stone-500 dark:text-stone-400">{[usage.projectTitle, usage.contextTitle, outdatedUsageRoleLabel(usage), `素材：${usage.assetTitle}`].filter(Boolean).join(" · ")}</div>
+                        </div>
+                        <Button size="small" onClick={() => onUpdateOne(usage)}>
+                            更新到最新版
+                        </Button>
+                    </div>
+                ))}
+                {!usages.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前项目没有过期素材引用" className="py-10" /> : null}
+            </div>
+        </div>
+    );
+}
+
+function outdatedUsageKindLabel(usage: OutdatedAssetVersionUsage) {
+    if (usage.kind === "canvas-node") return "画布节点";
+    if (usage.kind === "storyboard-shot") return "分镜条目";
+    if (usage.objectType === "character") return "设定库角色";
+    if (usage.objectType === "scene") return "设定库场景";
+    if (usage.objectType === "prop") return "设定库道具";
+    return "设定库";
+}
+
+function outdatedUsageRoleLabel(usage: OutdatedAssetVersionUsage) {
+    if (usage.kind === "canvas-node") return usage.role ? `${usage.role} 节点` : "";
+    return usage.role || usage.objectType || "";
 }

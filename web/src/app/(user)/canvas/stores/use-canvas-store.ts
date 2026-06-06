@@ -5,12 +5,17 @@ import { nanoid } from "nanoid";
 import { localForageStorage } from "@/lib/localforage-storage";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "../types";
+import type { CanvasEpisodeContext } from "../utils/canvas-episode-context";
 import type { CanvasProjectPreset } from "../utils/canvas-project-preset";
 
 export type CanvasProject = {
     id: string;
     projectId?: string;
     title: string;
+    episodeId?: string;
+    episodeTitle?: string;
+    scriptId?: string;
+    scriptSnapshot?: string;
     createdAt: string;
     updatedAt: string;
     nodes: CanvasNodeData[];
@@ -26,12 +31,15 @@ export type CanvasProject = {
 type CanvasStore = {
     hydrated: boolean;
     projects: CanvasProject[];
-    createProject: (title?: string, preset?: CanvasProjectPreset, options?: { projectId?: string }) => string;
+    createProject: (title?: string, preset?: CanvasProjectPreset, options?: { projectId?: string; episodeContext?: CanvasEpisodeContext }) => string;
     importProject: (project: Partial<CanvasProject>) => string;
     openProject: (id: string) => CanvasProject | null;
     renameProject: (id: string, title: string) => void;
     deleteProjects: (ids: string[]) => void;
-    updateProject: (id: string, patch: Partial<Pick<CanvasProject, "projectId" | "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport" | "preset">>) => void;
+    updateProject: (
+        id: string,
+        patch: Partial<Pick<CanvasProject, "projectId" | "episodeId" | "episodeTitle" | "scriptId" | "scriptSnapshot" | "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport" | "preset">>,
+    ) => void;
 };
 
 const initialViewport: ViewportTransform = { x: 0, y: 0, k: 1 };
@@ -73,6 +81,10 @@ export const useCanvasStore = create<CanvasStore>()(
                     id,
                     projectId: options?.projectId,
                     title,
+                    episodeId: options?.episodeContext?.episodeId,
+                    episodeTitle: options?.episodeContext?.episodeTitle,
+                    scriptId: options?.episodeContext?.scriptId,
+                    scriptSnapshot: options?.episodeContext?.scriptSnapshot,
                     createdAt: now,
                     updatedAt: now,
                     nodes: [],
@@ -93,6 +105,10 @@ export const useCanvasStore = create<CanvasStore>()(
                     id: nanoid(),
                     projectId: source.projectId,
                     title: source.title || "导入画布",
+                    episodeId: source.episodeId,
+                    episodeTitle: source.episodeTitle,
+                    scriptId: source.scriptId,
+                    scriptSnapshot: source.scriptSnapshot,
                     createdAt: source.createdAt || now,
                     updatedAt: now,
                     nodes: source.nodes || [],

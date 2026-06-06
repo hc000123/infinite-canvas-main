@@ -241,6 +241,12 @@
 | `created_at`           | string | 创建时间                                                                     |
 | `updated_at`           | string | 更新时间                                                                     |
 
+M8 起，前台追溯信息不新增数据库字段，统一放入已脱敏 JSON：
+
+- `request_json._frontend_trace`：创建云端 AI 任务时由前端传入的追溯上下文，可能包含 `projectId`、`canvasId`、`nodeId`、`storyboardGroupId`、`storyboardShotId`、`shotGroupId`、`shotIds` 和 `source`。
+- `response_json.frontendArtifacts`：生成结果自动入库“我的素材”后反写的前台产物数组，可能包含 `assetId`、`canvasId`、`nodeId`、`projectId`、`storyboardGroupId`、`storyboardShotId`、`shotGroupId`、`shotIds`、`kind` 和 `createdAt`。
+- 上述 JSON 仍走统一脱敏逻辑，不保存 API Key、Authorization、token、secret、base64、`data:`、`blob:` 或 multipart 文件内容。
+
 后台管理接口：
 
 | 接口                                   | 说明                                                                                              |
@@ -248,6 +254,8 @@
 | `GET /api/admin/ai-tasks`              | 管理员分页查询 AI 任务，支持用户、状态、类型、动作、模型、渠道、上游 taskId、时间范围和关键词筛选 |
 | `GET /api/admin/ai-tasks/:id`          | 管理员查看任务详情、用户简要信息、关联算力点流水和脱敏请求/响应                                   |
 | `POST /api/admin/ai-tasks/:id/refresh` | 管理员手动刷新 Ark 视频任务状态，并复用失败/取消幂等返还逻辑                                      |
+| `GET /api/v1/ai-tasks/:id`             | 当前登录用户查看自己的 AI 任务账本摘要和关联算力点流水                                            |
+| `POST /api/v1/ai-tasks/:id/frontend-artifact` | 当前登录用户把前台生成产物 `assetId / nodeId / canvasId` 等反写到任务响应 JSON             |
 | `POST /api/admin/ai-tasks/:id/refund`  | 管理员对失败/取消或异常任务手动返还，已返还任务会拒绝重复返还                                     |
 
 ### credit_logs

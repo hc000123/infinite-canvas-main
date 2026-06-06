@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Drawer, Empty, Form, Input, Popconfirm, Select, Segmented, Space, Tag } from "antd";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { App, Button, Card, Drawer, Empty, Form, Input, Popconfirm, Select, Segmented, Space, Tag } from "antd";
+import { FileText, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { hasNewerAssetVersion, preserveOrCreateAssetVersionReferences, updateAssetRefListToLatest } from "../../assets/asset-version-references";
@@ -17,11 +17,15 @@ import {
     type ProductionBibleKind,
 } from "../utils/production-bible";
 import { useProductionBibleStore } from "../stores/use-production-bible-store";
+import { useImageBriefStore } from "../stores/use-image-brief-store";
+import type { CanvasProject } from "../stores/use-canvas-store";
 
 type Props = {
     open: boolean;
     projectId: string;
     projectTitle: string;
+    canvases?: CanvasProject[];
+    initialKind?: ProductionBibleKind;
     onClose: () => void;
 };
 
@@ -38,7 +42,8 @@ type FormValues = {
 
 const emptySelection: string[] = [];
 
-export function ProductionBibleDrawer({ open, projectId, projectTitle, onClose }: Props) {
+export function ProductionBibleDrawer({ open, projectId, projectTitle, canvases = [], initialKind, onClose }: Props) {
+    const { message } = App.useApp();
     const [kind, setKind] = useState<ProductionBibleKind>("character");
     const [editingItem, setEditingItem] = useState<ProductionBibleItem | null>(null);
     const [formOpen, setFormOpen] = useState(false);
@@ -46,9 +51,14 @@ export function ProductionBibleDrawer({ open, projectId, projectTitle, onClose }
     const addItem = useProductionBibleStore((state) => state.addItem);
     const updateItem = useProductionBibleStore((state) => state.updateItem);
     const removeItem = useProductionBibleStore((state) => state.removeItem);
+    const createBriefFromProductionBible = useImageBriefStore((state) => state.createFromProductionBible);
     const assets = useAssetStore((state) => state.assets);
     const assetsById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
     const visibleItems = useMemo(() => itemsForProductionBibleProject(items, projectId, kind), [items, kind, projectId]);
+
+    useEffect(() => {
+        if (open && initialKind) setKind(initialKind);
+    }, [initialKind, open]);
 
     const startCreate = () => {
         setEditingItem(null);
@@ -87,6 +97,11 @@ export function ProductionBibleDrawer({ open, projectId, projectTitle, onClose }
                                 const asset = assetsById.get(assetId);
                                 if (!asset) return;
                                 updateItem(item.id, { assetRefs: updateAssetRefListToLatest(item.assetRefs, asset) });
+                            }}
+                            onCreateBrief={() => {
+                                const canvas = canvases.find((item) => item.episodeId) || canvases[0];
+                                createBriefFromProductionBible(item, { canvasId: canvas?.id, episodeId: canvas?.episodeId, episodeTitle: canvas?.episodeTitle });
+                                message.success("已创建生图 Brief");
                             }}
                             onEdit={() => startEdit(item)}
                             onDelete={() => removeItem(item.id)}
@@ -132,7 +147,21 @@ export function ProductionBibleDrawer({ open, projectId, projectTitle, onClose }
     );
 }
 
-function ProductionBibleCard({ item, assetsById, onUpdateAssetRef, onEdit, onDelete }: { item: ProductionBibleItem; assetsById: Map<string, Asset>; onUpdateAssetRef: (assetId: string) => void; onEdit: () => void; onDelete: () => void }) {
+function ProductionBibleCard({
+    item,
+    assetsById,
+    onUpdateAssetRef,
+    onCreateBrief,
+    onEdit,
+    onDelete,
+}: {
+    item: ProductionBibleItem;
+    assetsById: Map<string, Asset>;
+    onUpdateAssetRef: (assetId: string) => void;
+    onCreateBrief: () => void;
+    onEdit: () => void;
+    onDelete: () => void;
+}) {
     const snippets = [
         item.promptSnippets.positive ? `正向：${item.promptSnippets.positive}` : "",
         item.promptSnippets.negative ? `反向：${item.promptSnippets.negative}` : "",
@@ -150,6 +179,7 @@ function ProductionBibleCard({ item, assetsById, onUpdateAssetRef, onEdit, onDel
             }
             extra={
                 <Space size={4}>
+                    <Button size="small" type="text" icon={<FileText className="size-4" />} onClick={onCreateBrief} />
                     <Button size="small" type="text" icon={<Pencil className="size-4" />} onClick={onEdit} />
                     <Popconfirm title="删除这个设定？" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={onDelete}>
                         <Button size="small" type="text" danger icon={<Trash2 className="size-4" />} />

@@ -75,6 +75,25 @@ export type AdminAITask = {
     refundedAt: string;
     createdAt: string;
     updatedAt: string;
+    frontendTrace?: AdminAITaskFrontendTrace;
+    frontendArtifacts?: AdminAITaskFrontendArtifact[];
+};
+
+export type AdminAITaskFrontendTrace = {
+    projectId?: string;
+    canvasId?: string;
+    nodeId?: string;
+    assetId?: string;
+    storyboardGroupId?: string;
+    storyboardShotId?: string;
+    shotGroupId?: string;
+    shotIds?: string[];
+    source?: string;
+};
+
+export type AdminAITaskFrontendArtifact = AdminAITaskFrontendTrace & {
+    kind?: string;
+    createdAt?: string;
 };
 
 export type AdminAITaskListResponse = {

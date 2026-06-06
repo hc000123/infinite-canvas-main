@@ -179,6 +179,11 @@ test("maps video task response details to node metadata strings", () => {
         duration: 6,
         generateAudio: true,
         watermark: false,
+        aiTaskId: "aitask-1",
+        upstreamTaskId: "upstream-1",
+        aiTaskStatus: "queued",
+        aiTaskCredits: 8,
+        creditLogId: "credit-1",
     });
 
     assert.equal(metadata.taskId, "task-1");
@@ -186,6 +191,11 @@ test("maps video task response details to node metadata strings", () => {
     assert.equal(metadata.duration, "6");
     assert.equal(metadata.generateAudio, "true");
     assert.equal(metadata.watermark, "false");
+    assert.equal(metadata.aiTaskId, "aitask-1");
+    assert.equal(metadata.upstreamTaskId, "upstream-1");
+    assert.equal(metadata.aiTaskStatus, "queued");
+    assert.equal(metadata.aiTaskCredits, 8);
+    assert.equal(metadata.creditLogId, "credit-1");
 });
 
 test("restores stored image reference role by stored index", () => {

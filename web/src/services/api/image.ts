@@ -2,6 +2,7 @@ import axios from "axios";
 
 import { type AiConfig } from "@/stores/use-config-store";
 import { AI_REQUEST_TIMEOUT_MS, aiApiUrl, aiHeaders, normalizeAiError, refreshRemoteUser } from "@/services/api/ai-provider";
+import { aiTaskTraceHeaders, readAiTaskLedgerFromHeaders, type AiTaskLedger, type AiTaskTrace } from "@/services/api/ai-task-trace";
 import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { imageToDataUrl } from "@/services/image-storage";
@@ -18,6 +19,12 @@ type ImageApiResponse = {
     error?: { message?: string };
     code?: number;
     msg?: string;
+};
+
+export type GeneratedImageResult = {
+    id: string;
+    dataUrl: string;
+    aiTask?: AiTaskLedger;
 };
 
 const QUALITY_BASE: Record<string, number> = {
@@ -182,20 +189,24 @@ function withSystemMessage(config: AiConfig, messages: ChatCompletionMessage[]) 
     return systemPrompt ? [{ role: "system" as const, content: systemPrompt }, ...messages] : messages;
 }
 
-export async function requestGeneration(config: AiConfig, prompt: string) {
+export async function requestGeneration(config: AiConfig, prompt: string, trace?: AiTaskTrace) {
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const quality = normalizeQuality(config.quality);
     const requestSize = resolveRequestSize(quality, config.size);
     try {
-        const response = await postImageGeneration(config, {
-            model: config.model,
-            prompt: withSystemPrompt(config, prompt),
-            n,
-            ...(quality ? { quality } : {}),
-            ...(requestSize ? { size: requestSize } : {}),
-            response_format: "b64_json",
-        });
-        const images = parseImagePayload(response.data);
+        const response = await postImageGeneration(
+            config,
+            {
+                model: config.model,
+                prompt: withSystemPrompt(config, prompt),
+                n,
+                ...(quality ? { quality } : {}),
+                ...(requestSize ? { size: requestSize } : {}),
+                response_format: "b64_json",
+            },
+            trace,
+        );
+        const images = withAiTaskLedger(parseImagePayload(response.data), readAiTaskLedgerFromHeaders(response.headers));
         refreshRemoteUser(config);
         return images;
     } catch (error) {
@@ -203,21 +214,21 @@ export async function requestGeneration(config: AiConfig, prompt: string) {
     }
 }
 
-function postImageGeneration(config: AiConfig, payload: Record<string, unknown>) {
+function postImageGeneration(config: AiConfig, payload: Record<string, unknown>, trace?: AiTaskTrace) {
     return axios.post<ImageApiResponse>(aiApiUrl(config, "/images/generations"), payload, {
-        headers: aiHeaders(config, "application/json"),
+        headers: { ...aiHeaders(config, "application/json"), ...aiTaskTraceHeaders(config, trace) },
         timeout: AI_REQUEST_TIMEOUT_MS,
     });
 }
 
-export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[]) {
+export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], trace?: AiTaskTrace) {
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const quality = normalizeQuality(config.quality);
     const requestSize = resolveRequestSize(quality, config.size);
     if (shouldUseGeminiImageChatAdapter(config.model)) {
         try {
-            const response = await postGeminiImageEdit(config, prompt, references, { n, quality, size: requestSize });
-            const images = parseImagePayload(response.data);
+            const response = await postGeminiImageEdit(config, prompt, references, { n, quality, size: requestSize }, trace);
+            const images = withAiTaskLedger(parseImagePayload(response.data), readAiTaskLedgerFromHeaders(response.headers));
             refreshRemoteUser(config);
             return images;
         } catch (error) {
@@ -239,8 +250,8 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     files.forEach((file) => formData.append("image", file));
 
     try {
-        const response = await postImageEdit(config, formData);
-        const images = parseImagePayload(response.data);
+        const response = await postImageEdit(config, formData, trace);
+        const images = withAiTaskLedger(parseImagePayload(response.data), readAiTaskLedgerFromHeaders(response.headers));
         refreshRemoteUser(config);
         return images;
     } catch (error) {
@@ -252,9 +263,9 @@ export function shouldUseGeminiImageChatAdapter(model: string) {
     return model.toLowerCase().includes("gemini");
 }
 
-async function postGeminiImageEdit(config: AiConfig, prompt: string, references: ReferenceImage[], options: { n: number; quality?: string; size?: string }) {
+async function postGeminiImageEdit(config: AiConfig, prompt: string, references: ReferenceImage[], options: { n: number; quality?: string; size?: string }, trace?: AiTaskTrace) {
     return axios.post<ImageApiResponse>(aiApiUrl(config, "/chat/completions"), await buildGeminiImageEditPayload(config, prompt, references, options), {
-        headers: aiHeaders(config, "application/json"),
+        headers: { ...aiHeaders(config, "application/json"), ...aiTaskTraceHeaders(config, trace) },
         timeout: AI_REQUEST_TIMEOUT_MS,
     });
 }
@@ -273,11 +284,16 @@ async function buildGeminiImageEditPayload(config: AiConfig, prompt: string, ref
     };
 }
 
-function postImageEdit(config: AiConfig, body: FormData) {
+function postImageEdit(config: AiConfig, body: FormData, trace?: AiTaskTrace) {
     return axios.post<ImageApiResponse>(aiApiUrl(config, "/images/edits"), body, {
-        headers: aiHeaders(config),
+        headers: { ...aiHeaders(config), ...aiTaskTraceHeaders(config, trace) },
         timeout: AI_REQUEST_TIMEOUT_MS,
     });
+}
+
+function withAiTaskLedger(images: GeneratedImageResult[], aiTask: AiTaskLedger): GeneratedImageResult[] {
+    if (!aiTask.aiTaskId) return images;
+    return images.map((image) => ({ ...image, aiTask }));
 }
 
 export async function requestImageQuestion(config: AiConfig, messages: ChatCompletionMessage[], onDelta: (text: string) => void) {

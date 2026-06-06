@@ -9,24 +9,36 @@ import {
     applyStoryboardShotGenerationError,
     applyStoryboardShotGenerationStarted,
     applyStoryboardShotGenerationSuccess,
+    buildStoryboardTableDraftsFromScript,
     buildStoryboardGroupFromScriptEpisode,
     buildStoryboardGroupFromScriptScene,
+    createShotGroupFromSelection,
+    normalizeShotGroup,
     normalizeStoryboardGroup,
     normalizeStoryboardShot,
+    normalizeStoryboardTableShot,
     orderedStoryboardGroups,
     orderedStoryboardShots,
+    orderedStoryboardTableShots,
     reorderStoryboardItems,
+    reorderStoryboardTableShots,
+    type ShotGroup,
+    type ShotGroupWriteInput,
     type StoryboardGroup,
     type StoryboardGroupWriteInput,
     type StoryboardNodeRef,
     type StoryboardShot,
     type StoryboardShotWriteInput,
+    type StoryboardTableShot,
+    type StoryboardTableShotWriteInput,
 } from "../utils/storyboard-management";
 import type { ScriptEpisode, ScriptScene } from "../utils/script-management";
 
 type StoryboardStore = {
     groups: StoryboardGroup[];
     shots: StoryboardShot[];
+    tableShots: StoryboardTableShot[];
+    shotGroups: ShotGroup[];
     addGroup: (input: Omit<StoryboardGroupWriteInput, "order"> & { order?: number }) => string;
     updateGroup: (id: string, patch: Partial<StoryboardGroupWriteInput>) => void;
     removeGroup: (id: string) => void;
@@ -40,6 +52,15 @@ type StoryboardStore = {
     markShotGenerating: (input: { storyboardShotId?: string; nodeId?: string; taskId?: string }) => void;
     markShotSucceeded: (input: { storyboardShotId?: string; assetId?: string; nodeId?: string; taskId?: string }) => void;
     markShotFailed: (input: { storyboardShotId?: string; nodeId?: string; taskId?: string; errorMessage?: string }) => void;
+    generateTableShotsFromScript: (input: { projectId: string; canvasId: string; episodeId: string; scriptText: string }) => number;
+    addTableShot: (input: Omit<StoryboardTableShotWriteInput, "order"> & { order?: number }) => string;
+    updateTableShot: (id: string, patch: Partial<StoryboardTableShotWriteInput>) => void;
+    removeTableShot: (id: string) => void;
+    moveTableShot: (id: string, direction: "up" | "down") => void;
+    createShotGroup: (shotIds: string[]) => { id?: string; errors?: string[] };
+    updateShotGroup: (id: string, patch: Partial<ShotGroupWriteInput>) => void;
+    removeShotGroup: (id: string) => void;
+    attachShotGroupCanvasNodes: (groupId: string, refs: StoryboardNodeRef[]) => void;
 };
 
 const STORYBOARD_STORE_KEY = "infinite-canvas:storyboard_store";
@@ -51,6 +72,8 @@ const storyboardStorage: PersistStorage<StoryboardStore> = {
         const parsed = JSON.parse(value) as StorageValue<StoryboardStore>;
         parsed.state.groups = parsed.state.groups || [];
         parsed.state.shots = parsed.state.shots || [];
+        parsed.state.tableShots = parsed.state.tableShots || [];
+        parsed.state.shotGroups = parsed.state.shotGroups || [];
         return parsed;
     },
     setItem: (name, value) => localForageStorage.setItem(name, JSON.stringify(value)),
@@ -62,6 +85,8 @@ export const useStoryboardStore = create<StoryboardStore>()(
         (set, get) => ({
             groups: [],
             shots: [],
+            tableShots: [],
+            shotGroups: [],
             addGroup: (input) => {
                 const now = new Date().toISOString();
                 const id = nanoid();
@@ -137,11 +162,65 @@ export const useStoryboardStore = create<StoryboardStore>()(
                 set((state) => ({
                     shots: applyStoryboardShotGenerationError(state.shots, input),
                 })),
+            generateTableShotsFromScript: (input) => {
+                const drafts = buildStoryboardTableDraftsFromScript({
+                    ...input,
+                    idFactory: () => nanoid(),
+                });
+                set((state) => ({
+                    tableShots: [...state.tableShots.filter((shot) => !(shot.canvasId === input.canvasId && shot.episodeId === input.episodeId)), ...drafts],
+                    shotGroups: state.shotGroups.filter((group) => !(group.canvasId === input.canvasId && group.episodeId === input.episodeId)),
+                }));
+                return drafts.length;
+            },
+            addTableShot: (input) => {
+                const now = new Date().toISOString();
+                const id = nanoid();
+                const order = input.order ?? nextOrder(orderedStoryboardTableShots(get().tableShots, input.canvasId, input.episodeId));
+                const shot = normalizeStoryboardTableShot({ ...input, order });
+                set((state) => ({ tableShots: [...state.tableShots, { ...shot, id, createdAt: now, updatedAt: now }] }));
+                return id;
+            },
+            updateTableShot: (id, patch) =>
+                set((state) => ({
+                    tableShots: state.tableShots.map((shot) => (shot.id === id ? { ...shot, ...normalizeStoryboardTableShot({ ...shot, ...patch }), updatedAt: new Date().toISOString() } : shot)),
+                })),
+            removeTableShot: (id) =>
+                set((state) => ({
+                    tableShots: state.tableShots.filter((shot) => shot.id !== id),
+                    shotGroups: state.shotGroups.map((group) => ({ ...group, shotIds: group.shotIds.filter((shotId) => shotId !== id) })).filter((group) => group.shotIds.length),
+                })),
+            moveTableShot: (id, direction) => set((state) => ({ tableShots: reorderStoryboardTableShots(state.tableShots, id, direction) })),
+            createShotGroup: (shotIds) => {
+                const tableShots = get().tableShots.filter((shot) => shotIds.includes(shot.id));
+                const result = createShotGroupFromSelection({ shots: tableShots, id: nanoid() });
+                if (!result.ok) return { errors: result.errors };
+                set((state) => ({ shotGroups: [...state.shotGroups, result.group] }));
+                return { id: result.group.id };
+            },
+            updateShotGroup: (id, patch) =>
+                set((state) => ({
+                    shotGroups: state.shotGroups.map((group) => (group.id === id ? { ...group, ...normalizeShotGroup({ ...group, ...patch }), updatedAt: new Date().toISOString() } : group)),
+                })),
+            removeShotGroup: (id) => set((state) => ({ shotGroups: state.shotGroups.filter((group) => group.id !== id) })),
+            attachShotGroupCanvasNodes: (groupId, refs) =>
+                set((state) => ({
+                    shotGroups: state.shotGroups.map((group) =>
+                        group.id === groupId
+                            ? {
+                                  ...group,
+                                  status: refs.length ? "in_canvas" : group.status,
+                                  updatedAt: new Date().toISOString(),
+                              }
+                            : group,
+                    ),
+                    tableShots: state.tableShots.map((shot) => (state.shotGroups.find((group) => group.id === groupId)?.shotIds.includes(shot.id) ? { ...shot, updatedAt: new Date().toISOString() } : shot)),
+                })),
         }),
         {
             name: STORYBOARD_STORE_KEY,
             storage: storyboardStorage,
-            partialize: (state) => ({ groups: state.groups, shots: state.shots }) as StorageValue<StoryboardStore>["state"],
+            partialize: (state) => ({ groups: state.groups, shots: state.shots, tableShots: state.tableShots, shotGroups: state.shotGroups }) as StorageValue<StoryboardStore>["state"],
         },
     ),
 );

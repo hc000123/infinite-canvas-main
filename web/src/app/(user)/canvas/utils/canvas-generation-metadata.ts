@@ -71,7 +71,7 @@ export function buildVideoGenerationMetadata(config: AiConfig, references: { ima
 }
 
 export function videoTaskMetadata(task: NormalizedVideoTask): CanvasNodeMetadata {
-    return {
+    return compactMetadata({
         taskId: task.id,
         taskStatus: task.status,
         rawTaskStatus: task.rawStatus,
@@ -87,7 +87,15 @@ export function videoTaskMetadata(task: NormalizedVideoTask): CanvasNodeMetadata
         duration: task.duration === undefined ? undefined : String(task.duration),
         generateAudio: task.generateAudio === undefined ? undefined : String(task.generateAudio),
         watermark: task.watermark === undefined ? undefined : String(task.watermark),
-    };
+        aiTaskId: task.aiTaskId,
+        upstreamTaskId: task.upstreamTaskId || task.id,
+        aiTaskStatus: task.aiTaskStatus || task.status,
+        aiTaskCredits: task.aiTaskCredits,
+        creditLogId: task.creditLogId,
+        creditsRefunded: task.creditsRefunded,
+        refundedAt: task.refundedAt,
+        finishedAt: task.finishedAt,
+    });
 }
 
 export function buildVideoReferenceInput(images: ReferenceImage[], videos: ReferenceVideo[], audios: ReferenceAudio[] = [], inputs?: VideoReferenceInputLike[], mode?: SeedanceImageRoleMode) {
@@ -180,4 +188,8 @@ function videoRelationMetadata(relation?: VideoRelationInput): CanvasNodeMetadat
         videoActionType: relation.actionType,
         sourceVideoNodeId: relation.sourceVideoNodeId,
     };
+}
+
+function compactMetadata(metadata: CanvasNodeMetadata): CanvasNodeMetadata {
+    return Object.fromEntries(Object.entries(metadata).filter(([, value]) => value !== undefined && value !== "")) as CanvasNodeMetadata;
 }

@@ -1,7 +1,7 @@
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from "react";
 import { useRef, useState } from "react";
 import { Button, Segmented, Switch } from "antd";
-import { AudioLines, CircleDot, Eraser, FolderOpen, Grid2x2, Hand, Image as ImageIcon, Info, Moon, Palette, Redo2, ScrollText, Settings2, Square, Sun, Trash2, Type, Undo2, Upload, Video } from "lucide-react";
+import { AudioLines, CircleDot, Eraser, FolderOpen, Grid2x2, Hand, Image as ImageIcon, Info, Moon, Palette, Redo2, ScrollText, Settings2, Sparkles, Square, Sun, Trash2, Type, Undo2, Upload, Video } from "lucide-react";
 
 import { canvasThemes, type CanvasBackgroundMode, type CanvasColorTheme, type CanvasTheme } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -28,6 +28,7 @@ export function CanvasToolbar({
     onShowImageInfoChange,
     onOpenAssets,
     onOpenScriptManager,
+    onOpenImageBriefs,
 }: {
     selectedCount: number;
     canUndo: boolean;
@@ -49,6 +50,7 @@ export function CanvasToolbar({
     onShowImageInfoChange: (show: boolean) => void;
     onOpenAssets: () => void;
     onOpenScriptManager: () => void;
+    onOpenImageBriefs: () => void;
 }) {
     const wrapRef = useRef<HTMLDivElement>(null);
     const colorTheme = useThemeStore((state) => state.theme);
@@ -101,6 +103,9 @@ export function CanvasToolbar({
                 </ToolbarButton>
                 <ToolbarButton id="tool-script-manager" label="剧本分镜" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onOpenScriptManager}>
                     <ScrollText className="size-4.5" />
+                </ToolbarButton>
+                <ToolbarButton id="tool-image-briefs" label="生图 Brief" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onOpenImageBriefs}>
+                    <Sparkles className="size-4.5" />
                 </ToolbarButton>
                 <ToolbarButton
                     id="tool-style"

@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { AudioLines, Home, ImageIcon, Images, List, Menu, MessageSquare, Plus, Redo2, Settings2, Trash2, Undo2, Upload, Video } from "lucide-react";
 
 import { requestEdit } from "@/services/api/image";
+import { recordAiTaskFrontendArtifact } from "@/services/api/ai-task-trace";
 import { defaultSeedanceImageRole, type SeedanceImageRoleMode } from "@/services/api/video-reference";
 import { fetchVolcengineAssetStatus, submitVolcengineMediaAsset } from "@/services/api/volcengine-assets";
 import { isRecoverableVideoTaskError, refreshVideoTask, type VideoGenerationReferenceInput } from "@/services/api/video";
@@ -18,7 +19,7 @@ import { readImageMeta } from "@/lib/image-utils";
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { useAssetStore } from "@/stores/use-asset-store";
-import { hasNewerAssetVersion, updateAssetReferenceToLatest } from "../../assets/asset-version-references";
+import { hasNewerAssetVersion, preserveOrCreateAssetVersionReferences, updateAssetReferenceToLatest } from "../../assets/asset-version-references";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { applyAssistantCanvasActions, type AssistantCanvasAction } from "../utils/canvas-assistant-actions";
@@ -32,17 +33,20 @@ import { buildCapturedVideoFrameNode } from "../utils/canvas-video-frame";
 import { buildVideoGenerationPlan, shouldCreateVideoVariant } from "../utils/canvas-video-generation-plan";
 import { canvasNodeToAsset } from "../utils/canvas-assets";
 import { canvasAssetReferenceMetadata } from "../utils/canvas-asset-reference";
+import { canvasEpisodeContextFromCanvas, canvasEpisodeLabel } from "../utils/canvas-episode-context";
 import { syncCanvasVolcengineAssetsFromLibrary } from "../utils/canvas-volcengine-asset-sync";
 import { buildGeneratedVideoAsset } from "../utils/canvas-generated-asset";
+import { buildImageBriefImageConfigNode, buildImageBriefResultPatch, buildProductionBibleBriefAssetRefs, type ImageBrief } from "../utils/image-brief";
 import { nextQueuedItem } from "../utils/generation-queue";
 import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions";
 import { buildInsertedMediaAssetNode } from "../utils/canvas-inserted-media-node";
 import { resetInterruptedGeneration } from "../utils/canvas-video-task-recovery";
 import { buildCompletedImageNode, buildCompletedVideoNode } from "../utils/canvas-node-status";
+import { aiTaskIdFromGeneration, aiTaskLedgerNodeMetadata, buildCanvasAiTaskTraceFromNode, buildFrontendArtifactTrace } from "../utils/canvas-ai-task-trace";
 import { buildAngleImageNode, buildAnglePrompt, buildAngleReferenceImage, buildCroppedImageNode, type CanvasImageAngleParams, type CanvasImageCropRect } from "../utils/canvas-image-derivatives";
 import { collectBatchAwareDeletedNodeIds, isHiddenBatchChild, isHiddenBatchConnectionEndpoint, removeDeletedNodesFromBatches, setBatchPrimaryInNodes, toggleBatchExpandedInNodes } from "../utils/canvas-batch-nodes";
 import { applyCanvasProjectPresetToConfig } from "../utils/canvas-project-preset";
-import { planStoryboardGroupCanvasInsert } from "../utils/storyboard-management";
+import { planShotGroupCanvasInsert, planStoryboardGroupCanvasInsert } from "../utils/storyboard-management";
 import { reviewVideoPromptBeforeGeneration, shouldRunVideoPromptReview, type PromptReviewResult } from "../utils/canvas-prompt-review";
 import { cropDataUrl } from "../utils/canvas-image-data";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
@@ -74,11 +78,15 @@ import { CanvasNode } from "../components/canvas-node";
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "../components/canvas-node-prompt-panel";
 import { CanvasToolbar } from "../components/canvas-toolbar";
 import { AssetPickerModal, type AssetPickerTab } from "../components/asset-picker-modal";
+import { ImageBriefWorkbenchDrawer } from "../components/image-brief-workbench-drawer";
 import { ScriptManagerDrawer } from "../components/script-manager-drawer";
 import { StoryboardManagerDrawer } from "../components/storyboard-manager-drawer";
 import { CanvasZoomControls } from "../components/canvas-zoom-controls";
 import type { InsertAssetPayload } from "../utils/asset-insert-payload";
 import { useCanvasStore } from "../stores/use-canvas-store";
+import { useAssetBreakdownStore } from "../stores/use-asset-breakdown-store";
+import { useImageBriefStore } from "../stores/use-image-brief-store";
+import { useProductionBibleStore } from "../stores/use-production-bible-store";
 import { useStoryboardStore } from "../stores/use-storyboard-store";
 import { useGenerationQueueStore } from "../stores/use-generation-queue-store";
 import { useCreativeProjectStore } from "../../projects/use-creative-project-store";
@@ -241,6 +249,7 @@ function InfiniteCanvasPage() {
     const cleanupAssetImages = useAssetStore((state) => state.cleanupImages);
     const assets = useAssetStore((state) => state.assets);
     const attachStoryboardShotCanvasNodes = useStoryboardStore((state) => state.attachShotCanvasNodes);
+    const attachShotGroupCanvasNodes = useStoryboardStore((state) => state.attachShotGroupCanvasNodes);
     const queueItems = useGenerationQueueStore((state) => state.items);
     const queuePaused = useGenerationQueueStore((state) => state.paused);
     const queueConcurrency = useGenerationQueueStore((state) => state.concurrency);
@@ -259,6 +268,7 @@ function InfiniteCanvasPage() {
     const ensureUnfiledProject = useCreativeProjectStore((state) => state.ensureUnfiledProject);
     const workspaceProjectId = currentProject?.projectId || canvasId;
     const workspaceProjectTitle = creativeProject?.title || currentProject?.title || "未命名画布";
+    const canvasEpisodeContext = useMemo(() => canvasEpisodeContextFromCanvas(currentProject), [currentProject]);
     const canvasAiConfig = useMemo(() => applyCanvasProjectPresetToConfig(effectiveConfig.channelMode === "local" ? config : effectiveConfig, currentProject?.preset), [config, currentProject?.preset, effectiveConfig]);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [nodes, setNodes] = useState<CanvasNodeData[]>([]);
@@ -281,6 +291,7 @@ function InfiniteCanvasPage() {
     const [assetPickerTab, setAssetPickerTab] = useState<AssetPickerTab>("my-assets");
     const [scriptManagerOpen, setScriptManagerOpen] = useState(false);
     const [storyboardManagerOpen, setStoryboardManagerOpen] = useState(false);
+    const [imageBriefOpen, setImageBriefOpen] = useState(false);
     const [storyboardInitialGroupId, setStoryboardInitialGroupId] = useState("");
     const [projectLoaded, setProjectLoaded] = useState(false);
     const [toolbarNodeId, setToolbarNodeId] = useState<string | null>(null);
@@ -313,9 +324,40 @@ function InfiniteCanvasPage() {
     const showCanvasSuccess = useCallback((text: string) => message.success(text), [message]);
     const archiveGeneratedAsset = useCallback(
         async (asset: Parameters<typeof addAssetOnce>[0]) => {
-            return addAssetOnce(asset);
+            const assetId = await addAssetOnce(asset);
+            const generation = asset.metadata?.generation as Record<string, unknown> | undefined;
+            const aiTaskId = aiTaskIdFromGeneration(generation);
+            if (aiTaskId) {
+                const artifact = buildFrontendArtifactTrace({
+                    assetId,
+                    kind: asset.kind,
+                    createdAt: new Date().toISOString(),
+                    generation,
+                    canvasId,
+                    fallbackProjectId: workspaceProjectId,
+                });
+                if (artifact) void recordAiTaskFrontendArtifact(aiTaskId, artifact).catch(() => undefined);
+            }
+            const briefId = typeof generation?.briefId === "string" ? generation.briefId : "";
+            if (briefId) {
+                useImageBriefStore.getState().addResultAsset(briefId, assetId, "generated");
+                const assetBreakdownItemId = typeof generation?.assetBreakdownItemId === "string" ? generation.assetBreakdownItemId : "";
+                const productionBibleItemId = typeof generation?.productionBibleItemId === "string" ? generation.productionBibleItemId : "";
+                if (assetBreakdownItemId) {
+                    const item = useAssetBreakdownStore.getState().items.find((entry) => entry.id === assetBreakdownItemId);
+                    if (item) useAssetBreakdownStore.getState().updateItem(item.id, buildImageBriefResultPatch(item, assetId));
+                }
+                if (productionBibleItemId) {
+                    const item = useProductionBibleStore.getState().items.find((entry) => entry.id === productionBibleItemId);
+                    if (item) {
+                        const refs = buildProductionBibleBriefAssetRefs(item, assetId).assetRefs;
+                        useProductionBibleStore.getState().updateItem(item.id, { assetRefs: preserveOrCreateAssetVersionReferences(refs, useAssetStore.getState().assets, item.assetRefs) });
+                    }
+                }
+            }
+            return assetId;
         },
-        [addAssetOnce],
+        [addAssetOnce, canvasId, workspaceProjectId],
     );
     const { generateImageNode } = useCanvasImageGenerationActions({
         setNodes,
@@ -326,8 +368,10 @@ function InfiniteCanvasPage() {
         showError: showImageGenerationError,
         toImageMetadata: imageMetadata,
         projectId: workspaceProjectId,
+        canvasId,
         projectTitle: workspaceProjectTitle,
         projectPreset: currentProject?.preset,
+        episodeContext: canvasEpisodeContext,
         archiveGeneratedAsset,
     });
     const { generateTextNode, retryTextNode } = useCanvasTextGenerationActions({
@@ -341,8 +385,10 @@ function InfiniteCanvasPage() {
         showWarning: showVideoGenerationWarning,
         toVideoMetadata: videoMetadata,
         projectId: workspaceProjectId,
+        canvasId,
         projectTitle: workspaceProjectTitle,
         projectPreset: currentProject?.preset,
+        episodeContext: canvasEpisodeContext,
         archiveGeneratedAsset,
     });
     const { historyState, resetHistory, undoCanvas, redoCanvas, pauseHistory, resumeHistory, skipNextHistoryCommit, getCleanupHistory } = useCanvasHistory({
@@ -1441,10 +1487,17 @@ function InfiniteCanvasPage() {
                         storedVideoReferenceInputs(node.metadata || {}, savedVideoImages || [], savedVideoVideos || [], savedVideoAudios || []) || context?.referenceInputs,
                         generationConfig.videoReferenceImageMode,
                     );
-                    const { video, completedTask } = await runCanvasVideoGeneration(generationConfig, prompt, videoReferences, (task) => {
-                        useStoryboardStore.getState().markShotGenerating({ storyboardShotId: node.metadata?.storyboardShotId, nodeId: node.id, taskId: task.id });
-                        setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, ...videoTaskMetadata(task), errorDetails: task.errorMessage } } : item)));
-                    });
+                    const trace = buildCanvasAiTaskTraceFromNode({ projectId: workspaceProjectId, canvasId, node });
+                    const { video, completedTask } = await runCanvasVideoGeneration(
+                        generationConfig,
+                        prompt,
+                        videoReferences,
+                        (task) => {
+                            useStoryboardStore.getState().markShotGenerating({ storyboardShotId: node.metadata?.storyboardShotId, nodeId: node.id, taskId: task.id });
+                            setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, ...videoTaskMetadata(task), errorDetails: task.errorMessage } } : item)));
+                        },
+                        trace,
+                    );
                     const cachedVideo = await cacheUploadedCanvasMedia(video, `${node.id}.mp4`);
                     const videoSize = fitNodeSize(video.width || node.width, video.height || node.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
                     const latestVideoNode = nodesRef.current.find((item) => item.id === node.id) || node;
@@ -1467,6 +1520,7 @@ function InfiniteCanvasPage() {
                             projectId: workspaceProjectId,
                             projectTitle: workspaceProjectTitle,
                             projectPreset: currentProject?.preset,
+                            episodeContext: canvasEpisodeContext,
                             prompt,
                             effectivePrompt: prompt,
                             config: generationConfig,
@@ -1479,7 +1533,7 @@ function InfiniteCanvasPage() {
                 }
 
                 const imageReferences = retryReferenceImages || [];
-                const uploadedImage = await runCanvasImageGeneration(generationConfig, prompt, imageReferences);
+                const uploadedImage = await runCanvasImageGeneration(generationConfig, prompt, imageReferences, buildCanvasAiTaskTraceFromNode({ projectId: workspaceProjectId, canvasId, node }));
                 const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
                 const imageSize = fitNodeSize(uploadedImage.width, uploadedImage.height, imageConfig.width, imageConfig.height);
                 const generationMetadata = buildRetryImageGenerationMetadata(savedImageMetadata, generationConfig, useReferenceImages, retryReferenceImages);
@@ -1489,7 +1543,7 @@ function InfiniteCanvasPage() {
                             ? buildCompletedImageNode({
                                   imageNode: item,
                                   imageSize,
-                                  imageMetadata: imageMetadata(uploadedImage),
+                                  imageMetadata: { ...imageMetadata(uploadedImage), ...aiTaskLedgerNodeMetadata(uploadedImage.aiTask) },
                                   generationMetadata,
                                   prompt,
                               })
@@ -1527,7 +1581,7 @@ function InfiniteCanvasPage() {
                 setRunningNodeId(null);
             }
         },
-        [archiveGeneratedAsset, canvasAiConfig, currentProject?.preset, message, openConfigDialog, retryTextNode, token, workspaceProjectId, workspaceProjectTitle],
+        [archiveGeneratedAsset, canvasAiConfig, canvasEpisodeContext, canvasId, currentProject?.preset, message, openConfigDialog, retryTextNode, token, workspaceProjectId, workspaceProjectTitle],
     );
 
     const generateImageFromTextNode = useCallback(
@@ -1565,6 +1619,22 @@ function InfiniteCanvasPage() {
             setDialogNodeId(configNode.id);
         },
         [canvasAiConfig.imageModel, canvasAiConfig.model, canvasAiConfig.size, message],
+    );
+
+    const createBriefImageConfigNode = useCallback(
+        (brief: ImageBrief) => {
+            const center = getCanvasCenter();
+            const node = buildImageBriefImageConfigNode({
+                brief,
+                config: canvasAiConfig,
+                position: { x: center.x - NODE_DEFAULT_SIZE.config.width / 2, y: center.y - NODE_DEFAULT_SIZE.config.height / 2 },
+            });
+            setNodes((prev) => [...prev, node]);
+            setSelectedNodeIds(new Set([node.id]));
+            setSelectedConnectionId(null);
+            setDialogNodeId(node.id);
+        },
+        [canvasAiConfig, getCanvasCenter],
     );
 
     const insertAssistantImage = useCallback(
@@ -1685,6 +1755,58 @@ function InfiniteCanvasPage() {
         ],
     );
 
+    const addShotGroupToCanvas = useCallback(
+        (groupId: string) => {
+            const storyboardState = useStoryboardStore.getState();
+            const group = storyboardState.shotGroups.find((item) => item.id === groupId);
+            const shots = storyboardState.tableShots.filter((shot) => group?.shotIds.includes(shot.id));
+            if (!group || !shots.length) {
+                message.warning("请先创建生成镜头组");
+                return;
+            }
+            const center = getCanvasCenter();
+            const plan = planShotGroupCanvasInsert({
+                group,
+                shots,
+                assets,
+                position: { x: center.x - 520, y: center.y - 160 },
+                config: {
+                    provider: canvasAiConfig.videoProtocol === "volcengine-ark" ? "volcengine-ark" : "openai",
+                    model: canvasAiConfig.videoProtocol === "volcengine-ark" ? canvasAiConfig.seedanceEndpointId || canvasAiConfig.seedanceModel || canvasAiConfig.videoModel || canvasAiConfig.model : canvasAiConfig.videoModel || canvasAiConfig.model,
+                    size: canvasAiConfig.size,
+                    seconds: canvasAiConfig.videoSeconds,
+                    vquality: canvasAiConfig.vquality,
+                },
+                idFactory: (prefix) => `${prefix}-${Date.now()}-${nanoid(5)}`,
+                connectionIdFactory: () => nanoid(),
+            });
+            const nextNodes = [...nodesRef.current, ...plan.nodes];
+            const nextConnections = [...connectionsRef.current, ...plan.connections];
+            nodesRef.current = nextNodes;
+            connectionsRef.current = nextConnections;
+            setNodes(nextNodes);
+            setConnections(nextConnections);
+            setSelectedNodeIds(new Set(plan.nodes.map((node) => node.id)));
+            setSelectedConnectionId(null);
+            attachShotGroupCanvasNodes(group.id, plan.groupNodeRefs);
+            message.success("生成镜头组已加入画布");
+        },
+        [
+            assets,
+            attachShotGroupCanvasNodes,
+            canvasAiConfig.model,
+            canvasAiConfig.seedanceEndpointId,
+            canvasAiConfig.seedanceModel,
+            canvasAiConfig.size,
+            canvasAiConfig.videoModel,
+            canvasAiConfig.videoProtocol,
+            canvasAiConfig.videoSeconds,
+            canvasAiConfig.vquality,
+            getCanvasCenter,
+            message,
+        ],
+    );
+
     const handleAssetInsert = useCallback(
         (payload: InsertAssetPayload) => {
             if (payload.kind === "text") {
@@ -1729,6 +1851,8 @@ function InfiniteCanvasPage() {
             <section className="relative min-w-0 flex-1 overflow-hidden">
                 <CanvasTopBar
                     title={currentProject?.title || "未命名画布"}
+                    episodeLabel={canvasEpisodeLabel(currentProject)}
+                    hasEpisode={Boolean(currentProject?.episodeId)}
                     titleDraft={titleDraft}
                     isTitleEditing={titleEditing}
                     onTitleDraftChange={setTitleDraft}
@@ -1742,6 +1866,7 @@ function InfiniteCanvasPage() {
                     onCreateProject={createAndOpenProject}
                     onDeleteProject={deleteCurrentProject}
                     onImportImage={() => handleUploadRequest()}
+                    onOpenEpisodeScript={() => setScriptManagerOpen(true)}
                     onUndo={undoCanvas}
                     onRedo={redoCanvas}
                     assistantCollapsed={assistantCollapsed}
@@ -1939,6 +2064,7 @@ function InfiniteCanvasPage() {
                         setAssetPickerOpen(true);
                     }}
                     onOpenScriptManager={() => setScriptManagerOpen(true)}
+                    onOpenImageBriefs={() => setImageBriefOpen(true)}
                 />
 
                 {isMiniMapOpen ? <Minimap nodes={nodes} viewport={viewport} viewportSize={size} onViewportChange={setViewport} /> : null}
@@ -2002,6 +2128,7 @@ function InfiniteCanvasPage() {
                     open={scriptManagerOpen}
                     projectId={workspaceProjectId}
                     projectTitle={workspaceProjectTitle}
+                    initialEpisodeId={currentProject?.episodeId}
                     onClose={() => setScriptManagerOpen(false)}
                     onOpenStoryboardGroup={(groupId) => {
                         setStoryboardInitialGroupId(groupId);
@@ -2013,9 +2140,19 @@ function InfiniteCanvasPage() {
                     projectId={workspaceProjectId}
                     projectTitle={workspaceProjectTitle}
                     initialGroupId={storyboardInitialGroupId}
+                    canvases={currentProject ? [currentProject] : []}
                     canvasNodes={nodes}
                     onClose={() => setStoryboardManagerOpen(false)}
                     onAddGroupToCanvas={addStoryboardGroupToCanvas}
+                    onAddShotGroupToCanvas={addShotGroupToCanvas}
+                />
+                <ImageBriefWorkbenchDrawer
+                    open={imageBriefOpen}
+                    projectId={workspaceProjectId}
+                    projectTitle={workspaceProjectTitle}
+                    canvases={currentProject ? [currentProject] : []}
+                    onCreateImageConfig={createBriefImageConfigNode}
+                    onClose={() => setImageBriefOpen(false)}
                 />
             </section>
             {assistantMounted ? (
@@ -2041,6 +2178,8 @@ function InfiniteCanvasPage() {
 
 function CanvasTopBar({
     title,
+    episodeLabel,
+    hasEpisode,
     titleDraft,
     isTitleEditing,
     onTitleDraftChange,
@@ -2054,12 +2193,15 @@ function CanvasTopBar({
     onCreateProject,
     onDeleteProject,
     onImportImage,
+    onOpenEpisodeScript,
     onUndo,
     onRedo,
     assistantCollapsed,
     onExpandAssistant,
 }: {
     title: string;
+    episodeLabel: string;
+    hasEpisode: boolean;
     titleDraft: string;
     isTitleEditing: boolean;
     onTitleDraftChange: (value: string) => void;
@@ -2073,6 +2215,7 @@ function CanvasTopBar({
     onCreateProject: () => void;
     onDeleteProject: () => void;
     onImportImage: () => void;
+    onOpenEpisodeScript: () => void;
     onUndo: () => void;
     onRedo: () => void;
     assistantCollapsed: boolean;
@@ -2153,6 +2296,15 @@ function CanvasTopBar({
                                 {title}
                             </button>
                         )}
+                        <button
+                            type="button"
+                            className="max-w-[180px] truncate rounded-full px-2.5 py-1 text-xs transition hover:bg-black/5 dark:hover:bg-white/10"
+                            style={{ color: hasEpisode ? theme.node.text : theme.node.muted, background: hasEpisode ? theme.toolbar.panel : "transparent" }}
+                            onClick={onOpenEpisodeScript}
+                            title={hasEpisode ? "打开本集剧本" : "打开剧本工作台"}
+                        >
+                            {episodeLabel}
+                        </button>
                     </div>
                 </div>
 

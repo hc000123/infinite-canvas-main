@@ -2,6 +2,7 @@ import type { AiConfig } from "@/stores/use-config-store";
 import type { AssetWriteInput } from "@/stores/use-asset-store";
 
 import type { CanvasNodeData, CanvasNodeMetadata, CanvasVideoActionType } from "../types.ts";
+import type { CanvasEpisodeContext } from "./canvas-episode-context.ts";
 import { canvasProjectPresetConfig, type CanvasProjectPreset } from "./canvas-project-preset.ts";
 
 type CanvasGeneratedAssetContext = {
@@ -12,6 +13,7 @@ type CanvasGeneratedAssetContext = {
     config: AiConfig;
     createdAt: string;
     projectPreset?: CanvasProjectPreset;
+    episodeContext?: CanvasEpisodeContext;
 };
 
 export function buildGeneratedImageAsset(node: CanvasNodeData, context: CanvasGeneratedAssetContext): AssetWriteInput | null {
@@ -70,12 +72,21 @@ export function buildGeneratedVideoAsset(node: CanvasNodeData, context: CanvasGe
             prompt: context.prompt,
             generation: {
                 ...buildGeneratedAssetMetadata(node, context, videoActionType(metadata)),
-                storyboardGroupId: metadata.storyboardGroupId || null,
-                storyboardShotId: metadata.storyboardShotId || null,
+                ...buildGeneratedVideoStoryboardMetadata(metadata),
                 taskId: metadata.taskId,
+                upstreamTaskId: metadata.upstreamTaskId || metadata.taskId,
             },
             sourceRefs: [node.id],
         },
+    };
+}
+
+export function buildGeneratedVideoStoryboardMetadata(metadata: CanvasNodeMetadata) {
+    return {
+        storyboardGroupId: metadata.storyboardGroupId || null,
+        storyboardShotId: metadata.storyboardShotId || null,
+        shotGroupId: metadata.shotGroupId || null,
+        shotIds: metadata.shotIds || [],
     };
 }
 
@@ -84,6 +95,23 @@ function buildGeneratedAssetMetadata(node: CanvasNodeData, context: CanvasGenera
         source: "canvas",
         projectId: context.projectId,
         projectTitle: context.projectTitle,
+        episodeId: context.episodeContext?.episodeId || node.metadata?.episodeId,
+        episodeTitle: context.episodeContext?.episodeTitle || node.metadata?.episodeTitle,
+        scriptId: context.episodeContext?.scriptId || node.metadata?.scriptId,
+        scriptSnapshot: context.episodeContext?.scriptSnapshot || node.metadata?.scriptSnapshot,
+        assetBreakdownItemId: node.metadata?.assetBreakdownItemId,
+        assetBriefId: node.metadata?.assetBriefId,
+        briefId: node.metadata?.briefId,
+        briefKind: node.metadata?.briefKind,
+        briefMode: node.metadata?.briefMode,
+        briefSnapshot: node.metadata?.briefSnapshot,
+        finalPrompt: node.metadata?.finalPrompt,
+        referenceAssets: node.metadata?.referenceAssets || [],
+        sourceType: node.metadata?.sourceType,
+        sourceId: node.metadata?.sourceId,
+        productionBibleItemId: node.metadata?.productionBibleItemId,
+        shotGroupId: node.metadata?.shotGroupId,
+        shotIds: node.metadata?.shotIds || [],
         nodeId: node.id,
         prompt: context.prompt,
         effectivePrompt: context.effectivePrompt,
@@ -93,6 +121,14 @@ function buildGeneratedAssetMetadata(node: CanvasNodeData, context: CanvasGenera
         references: buildAssetGenerationReferences(node.metadata),
         productionBibleRefs: [],
         config: buildAssetGenerationConfig(node.metadata, context.config, context.projectPreset),
+        aiTaskId: node.metadata?.aiTaskId,
+        upstreamTaskId: node.metadata?.upstreamTaskId || node.metadata?.taskId,
+        aiTaskStatus: node.metadata?.aiTaskStatus || node.metadata?.taskStatus,
+        aiTaskCredits: node.metadata?.aiTaskCredits,
+        creditLogId: node.metadata?.creditLogId,
+        creditsRefunded: node.metadata?.creditsRefunded,
+        refundedAt: node.metadata?.refundedAt,
+        finishedAt: node.metadata?.finishedAt,
         createdAt: context.createdAt,
     };
 }

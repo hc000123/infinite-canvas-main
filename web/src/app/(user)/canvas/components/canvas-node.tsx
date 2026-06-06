@@ -749,7 +749,11 @@ function VideoNodeStatusPill({ node, offsetTop }: { node: CanvasNodeData; offset
 }
 
 function videoNodeCompactStatus(node: CanvasNodeData) {
-    const parts = [node.metadata?.taskStatus ? videoStatusLabel(node.metadata.taskStatus) : "", node.metadata?.storageKey ? `本地 ${formatBytes(node.metadata.bytes || 0)}` : ""].filter(Boolean);
+    const parts = [
+        node.metadata?.taskStatus ? videoStatusLabel(node.metadata.taskStatus) : "",
+        node.metadata?.aiTaskId ? `账本 ${shortTaskId(node.metadata.aiTaskId)}` : "",
+        node.metadata?.storageKey ? `本地 ${formatBytes(node.metadata.bytes || 0)}` : "",
+    ].filter(Boolean);
     return parts.join(" · ");
 }
 
@@ -757,8 +761,13 @@ function videoTaskDetailRows(node: CanvasNodeData, elapsedSeconds: number) {
     const metadata = node.metadata;
     return [
         { label: "taskId", value: metadata?.taskId },
+        { label: "aiTaskId", value: metadata?.aiTaskId },
+        { label: "上游任务", value: metadata?.upstreamTaskId },
         { label: "阶段", value: buildCanvasVideoProgress(metadata, metadata?.status).label },
         { label: "状态", value: videoStatusLabel(metadata?.taskStatus || metadata?.rawTaskStatus) },
+        { label: "账本状态", value: metadata?.aiTaskStatus },
+        { label: "扣费 / 返还", value: metadata?.aiTaskCredits || metadata?.creditsRefunded ? `${metadata?.aiTaskCredits || 0} / ${metadata?.creditsRefunded || 0}` : "" },
+        { label: "Credit Log", value: metadata?.creditLogId },
         { label: "原始", value: metadata?.rawTaskStatus },
         { label: "耗时", value: formatElapsedTime(elapsedSeconds) },
         { label: "模型", value: metadata?.model },

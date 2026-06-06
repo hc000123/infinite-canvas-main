@@ -11,6 +11,7 @@
 - 我的素材 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:asset_store`。
 - 项目设定库 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:production_bible_store`。
 - 项目剧本 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:script_store`。
+- 本集资产拆解 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:asset_breakdown_store`。
 - 项目分镜 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:storyboard_store`。
 - 本地生成队列 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:generation_queue_store`。
 - Agent 任务 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:agent_task_store`。
@@ -91,6 +92,10 @@ type CanvasProject = {
   id: string;
   projectId?: string;
   title: string;
+  episodeId?: string;
+  episodeTitle?: string;
+  scriptId?: string;
+  scriptSnapshot?: string;
   createdAt: string;
   updatedAt: string;
   nodes: CanvasNodeData[];
@@ -120,6 +125,9 @@ type CanvasProjectPreset = {
 - `id`：画布项目 ID，当前前端生成。
 - `projectId`：可选的创作项目 ID。新建画布会写入该字段；旧画布没有该字段时继续按画布自身 ID 作为剧本、分镜、设定库和队列的兼容项目上下文。
 - `title`：画布名称。
+- `episodeId` / `episodeTitle`：当前画布绑定的本集分集。M6.6.1 起，一个新画布默认可以对应一集内容；旧画布没有该字段时在项目详情中显示“未绑定集数”。
+- `scriptId`：本地剧本上下文 ID。当前第一版使用所属创作项目 ID 作为剧本上下文标识，不新增后端剧本表。
+- `scriptSnapshot`：创建画布时保存的本集剧本文本快照。绑定已有分集时由分集摘要和场次草稿拼接；粘贴导入时保存用户粘贴的本集正文。后续剧本被编辑时，旧画布仍保留创建时快照用于追溯。
 - `createdAt` / `updatedAt`：ISO 字符串。
 - `nodes`：画布节点列表。
 - `connections`：节点连线列表。
@@ -129,6 +137,59 @@ type CanvasProjectPreset = {
 - `showImageInfo`：是否在画布中显示图片信息。
 - `viewport`：视口变换，`x/y` 是屏幕平移，`k` 是缩放比例。
 - `preset`：项目级创作预设，可选字段。旧画布没有该字段时继续使用全局 AI 配置。新建画布时可写入分辨率、画幅、帧率、默认时长、默认图片/视频/文本模型和默认视频供应商；新建生成配置节点、视频生成默认值和生成素材归档会读取该预设。
+
+画布新建时的剧本来源支持三种：
+
+- 不绑定剧本：画布不写入 `episodeId`，适合草稿或旧流程。
+- 从项目已有剧本分集选择：写入分集 ID、标题和当时的剧本快照。
+- 粘贴 / 导入本集剧本：在当前项目的本地剧本 store 中创建一个 `ScriptEpisode`，并把粘贴正文写入画布 `scriptSnapshot`。
+
+画布内生成图片或视频后，自动归档到“我的素材”的 `metadata.generation` 会继续写入 `episodeId`、`episodeTitle`、`scriptId` 和 `scriptSnapshot`，便于后续按集数追溯素材来源。M6.6.1 不做跨集时间线，也不把整部剧所有集塞入同一个画布。
+
+## 本集资产拆解结构
+
+M6.6.2 起，项目可以按 `projectId + episodeId` 保存本集资产拆解结果。第一版只在前端本地保存，不接真实 LLM，不自动确认资产图生成。
+
+```ts
+type AssetBreakdownItem = {
+  id: string;
+  projectId: string;
+  canvasId: string;
+  episodeId: string;
+  episodeTitle: string;
+  scriptId: string;
+  kind: "character" | "scene" | "prop" | "style";
+  name: string;
+  description: string;
+  sourceText: string;
+  tags: string[];
+  productionBibleItemId?: string;
+  briefId?: string;
+  briefDraft?: {
+    id: string;
+    title: string;
+    kind: "character" | "scene" | "prop" | "style";
+    prompt: string;
+    createdAt: string;
+  };
+  assetIds: string[];
+  status: "draft" | "brief_ready" | "generated" | "linked";
+  createdAt: string;
+  updatedAt: string;
+};
+```
+
+字段说明：
+
+- `projectId` / `canvasId` / `episodeId`：资产拆解所属项目、画布和本集。
+- `kind`：资产类型，角色、场景、道具和风格 / 光影四类。
+- `sourceText`：从本集剧本文本中摘录的依据，第一版通过本地规则生成后可人工编辑。
+- `productionBibleItemId`：可选的设定库条目引用。角色、场景、道具可关联到设定库；风格 / 光影第一版仅作为 Brief 草稿。
+- `briefId` / `briefDraft`：资产图 Brief 草稿。M6.6.2 只生成可追溯草稿，不强行接图片生成。
+- `assetIds`：手动绑定或后续资产图生成成功后的素材 ID。绑定后可同步写入设定库 `assetRefs`。
+- `status`：草稿、Brief 已准备、已生成、已关联。
+
+当用户把素材绑定到资产拆解条目时，素材 `metadata` 会记录 `episodeId`、`episodeTitle`、`assetBreakdownItemId` 和 `assetBreakdownItems` 追溯数组。后续如果资产图节点真实生成成功，也可以通过画布节点 `metadata.assetBreakdownItemId` 回写到素材 `metadata.generation.assetBreakdownItemId`。
 
 ## 项目设定库结构
 
@@ -272,6 +333,60 @@ type StoryboardShot = {
   createdAt: string;
   updatedAt: string;
 };
+
+type StoryboardTableShot = {
+  id: string;
+  projectId: string;
+  canvasId: string;
+  episodeId: string;
+  sceneId?: string;
+  sceneName: string;
+  location: string;
+  timeOfDay: string;
+  order: number;
+  title: string;
+  scriptText: string;
+  visualDescription: string;
+  characters: string[];
+  dialogue: string;
+  action: string;
+  emotion: string;
+  shotSize: string;
+  cameraMovement: string;
+  estimatedDuration: number;
+  assetRefs: StoryboardAssetRef[];
+  productionBibleRefs?: StoryboardProductionBibleRef[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+type ShotGroup = {
+  id: string;
+  projectId: string;
+  canvasId: string;
+  episodeId: string;
+  sceneName: string;
+  shotIds: string[];
+  totalDuration: number;
+  prompt: string;
+  effectivePrompt: string;
+  assetRefs: StoryboardAssetRef[];
+  audioRefs: StoryboardAssetRef[];
+  productionBibleRefs?: StoryboardProductionBibleRef[];
+  status:
+    | "draft"
+    | "prompt_ready"
+    | "in_canvas"
+    | "generating"
+    | "done"
+    | "error";
+  taskId?: string;
+  resultAssetIds: string[];
+  primaryAssetId?: string;
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+};
 ```
 
 字段说明：
@@ -284,6 +399,10 @@ type StoryboardShot = {
 - `StoryboardShot.resultAssetIds` / `primaryAssetId`：记录已生成并自动入库到“我的素材”的视频素材 ID。首次成功生成时自动设置主版本；同一素材 ID 不重复写入。
 - `StoryboardShot.lastResultNodeId` / `lastTaskId`：当暂时拿不到素材 ID 时，至少保留画布视频节点和上游任务 ID，方便后续补齐。
 - `StoryboardShot.errorMessage`：视频生成失败时保存失败原因；`status` 会进入 `error`，页面中显示失败提示。
+- `StoryboardTableShot`：M6.6.3 新增的本集分镜头表条目，按 `projectId + canvasId + episodeId` 保存。它来自本集 `scriptSnapshot` 的本地规则粗拆，也允许用户人工编辑、删除、排序和补充镜头信息。
+- `ShotGroup`：M6.6.3 新增的生成镜头组，由连续 `StoryboardTableShot.shotIds` 组成。组合时要求同一个 `sceneName`、不能跳选、`totalDuration <= 15`；它只管理生成单元结构和提示词，不自动触发真实视频生成。
+- `ShotGroup.assetRefs` / `audioRefs` / `productionBibleRefs`：记录生成镜头组可用的图片、参考视频、音频和设定库输入。引用素材时继续保存素材版本快照。
+- `ShotGroup.resultAssetIds` / `primaryAssetId`：预留生成结果回流字段；本轮先保证打组加入画布和 metadata，后续可接入生成结果回流。
 
 ## 本地生成队列结构
 
@@ -488,6 +607,14 @@ type CanvasNodeMetadata = {
   taskId?: string;
   taskStatus?: string;
   rawTaskStatus?: string;
+  aiTaskId?: string;
+  upstreamTaskId?: string;
+  aiTaskStatus?: string;
+  aiTaskCredits?: number;
+  creditLogId?: string;
+  creditsRefunded?: number;
+  refundedAt?: string;
+  finishedAt?: string;
   videoUrl?: string;
   lastFrameUrl?: string;
   lastFrameStorageKey?: string;
@@ -511,6 +638,16 @@ type CanvasNodeMetadata = {
 };
 ```
 
+M8 起，云端 AI 代理任务会把账本字段回填到图片 / 视频节点 metadata：
+
+- `aiTaskId`：后端 `ai_tasks.id`，用于打开后台任务日志或用户自己的任务详情。
+- `upstreamTaskId`：上游任务 ID。Seedance 视频通常等同于视频 `taskId`；同步图片请求可为空。
+- `aiTaskStatus`：后端账本状态，例如 `queued`、`running`、`succeeded`、`failed`、`cancelled`。
+- `aiTaskCredits` / `creditsRefunded` / `creditLogId`：扣费和返还追溯摘要，不改变既有扣费规则。
+- `refundedAt` / `finishedAt`：失败返还或内容回填完成时间。
+
+本地直连模式不会强行写入云端 `ai_tasks`，也不会把本地 API Key 或 Base URL 作为追溯字段下发给后端。
+
 不同节点的使用方式：
 
 - 图片节点：`content` 是当前可展示的图片 URL，通常是 `blob:` URL；`storageKey` 指向本地图片 Blob；`naturalWidth/naturalHeight/bytes/mimeType` 保存原图信息。
@@ -520,7 +657,7 @@ type CanvasNodeMetadata = {
 - 生成配置节点：`generationMode/model/size/count/inputOrder` 保存生成配置；`generationMode` 可选择文本、图片或视频；上游输入通过 `connections` 计算。
 - 图片组节点：根节点用 `isBatchRoot/batchChildIds/primaryImageId/imageBatchExpanded` 记录批量生成结果；子图节点用 `batchRootId` 指回根节点。
 - 素材来源节点：从“我的素材”加入画布时会写入 `sourceAssetId`、`assetVersion` 和 `assetReferenceMode: "fixed-version"`。节点默认锁定创建时的素材版本，素材后续更新不会自动改节点内容；节点悬浮工具栏只在发现新版本时提示，并由用户手动更新引用记录。
-- 分镜节点：由“打组加入画布”创建的文本、素材和视频配置节点会写入 `storyboardGroupId/storyboardShotId/storyboardRole`；参考素材节点额外写入 `sourceAssetId/storyboardAssetRole/assetVersion`，用于后续结果回流、版本锁定和追溯。
+- 分镜节点：由“打组加入画布”创建的文本、素材和视频配置节点会写入 `storyboardGroupId/storyboardShotId/storyboardRole`；参考素材节点额外写入 `sourceAssetId/storyboardAssetRole/assetVersion`，用于后续结果回流、版本锁定和追溯。M6.6.3 生成镜头组加入画布时，节点还会写入 `episodeId/shotGroupId/shotIds/storyboardShotGroupId/storyboardTableShotIds`，用于追溯本集分镜头表和生成镜头组。
 
 ## 连线结构
 
@@ -791,3 +928,84 @@ type StoryboardClipExportManifest = {
 - 分镜参考素材来自 `StoryboardShot.assetRefs`。
 - 模型、供应商、taskId、生成方式和参数优先读取主版本素材的 `metadata.generation/generations`。
 - 缺少主版本、失败分镜、主版本不是视频、主版本缺少本地文件或时长明显异常时，会写入 `warnings`，并在页面导出前提示用户。
+
+## 生图 Brief 工作台
+
+M6.7 第一版新增本地 Brief 工作台，用于把资产拆解、设定库和分镜生成镜头组整理成可复用的生图提示词草稿。不改后端，不自动触发真实生图。
+
+localforage key：
+
+```text
+infinite-canvas:image_brief_store
+```
+
+核心结构：
+
+```ts
+type ImageBrief = {
+  id: string;
+  projectId: string;
+  canvasId: string;
+  episodeId: string;
+  episodeTitle: string;
+  sourceType: "asset_breakdown" | "production_bible" | "storyboard" | "manual";
+  sourceId: string;
+  kind: "scene" | "character" | "prop" | "mood";
+  mode: "standard" | "reminder" | "free";
+  title: string;
+  scriptText: string;
+  fields: Record<string, string>;
+  referenceAssets: Array<{
+    assetId: string;
+    kind?: "image" | "video" | "audio" | "text";
+    role: string;
+    note?: string;
+    assetVersion?: AssetVersionReference;
+  }>;
+  validationResult: {
+    ok: boolean;
+    severity: "none" | "warning" | "error";
+    messages: string[];
+  };
+  prompt: string;
+  finalPrompt: string;
+  resultAssetIds: string[];
+  primaryAssetId?: string;
+  status: "draft" | "prompt_ready" | "generated" | "archived";
+  metadata?: {
+    productionBibleItemId?: string;
+    assetBreakdownItemId?: string;
+    shotGroupId?: string;
+    shotIds?: string[];
+    briefSnapshot?: Record<string, unknown>;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+```
+
+校验规则：
+
+- `standard`：核心字段缺失时 `severity=error`，状态保持 `draft`。
+- `reminder`：核心字段缺失时 `severity=warning`，允许进入 `prompt_ready`。
+- `free`：跳过结构化字段检查，适合人工自由提示词。
+
+来源关系：
+
+- 资产拆解条目创建 Brief 时写入 `sourceType=asset_breakdown`、`sourceId` 和 `metadata.assetBreakdownItemId`。
+- 设定库创建 Brief 时写入 `sourceType=production_bible`、`metadata.productionBibleItemId`，并带入 `assetRefs`。
+- 生成镜头组创建氛围 Brief 时写入 `sourceType=storyboard`、`metadata.shotGroupId / shotIds`。
+
+当前限制：
+
+- 第一版只做 Brief 数据、校验、提示词拼装、复制和入口打通。
+- 不接真实 LLM，不自动理解剧本，不自动触发图片生成。
+- M6.7.1 起，Brief 可创建图片生成配置节点；节点 metadata 会写入 `briefId / briefKind / briefMode / briefSnapshot / finalPrompt / sourceType / sourceId / episodeId / episodeTitle / assetBreakdownItemId / productionBibleItemId / shotGroupId / shotIds / referenceAssets`。
+- 图片生成成功后，自动入库素材的 `metadata.generation` 会补充 `briefId / briefSnapshot / finalPrompt / referenceAssets / sourceType / sourceId`，并回写 Brief 的 `resultAssetIds`。
+- M8 起，自动入库素材的 `metadata.generation` 会同步记录 `aiTaskId / upstreamTaskId / aiTaskStatus / aiTaskCredits / creditLogId / creditsRefunded / refundedAt / finishedAt`。如果素材来自画布视频，还会继续保留 `taskId / storyboardGroupId / storyboardShotId / shotGroupId / shotIds`，并把入库后的 `assetId` 反写到后端 `ai_tasks.response_json.frontendArtifacts`，供后台 AI 任务日志反查。
+- 如果 Brief 来源是资产拆解条目，生成结果 assetId 会写回 `AssetBreakdownItem.assetIds`，状态更新为 `generated`。
+- 如果 Brief 来源是设定库，生成结果可同步写入 `ProductionBibleItem.assetRefs`。
+- M6.7.1 不新增图片生成接口，不接真实 LLM，不自动扣费；真实生图仍由用户通过现有图片生成配置节点触发。
+- M6.7.2 起，Brief 结果列表会读取素材 `metadata.generation` 和素材版本历史，展示生成时间、模型、provider、finalPrompt、参考素材数量和当前版本号。
+- `primaryAssetId` 只记录 Brief 当前主参考图；切换主参考不修改素材本体，也不改变素材版本历史。同步到资产拆解或设定库需要用户显式点击。
+- M6.7.3 起，Brief 工作台可把当前项目 / 当前筛选结果导出为 CSV 或 JSON。导出视图包括“美术设定表”“生图提示词表”“分镜资产表”，只读取 Brief 和素材摘要，不写入 localforage。

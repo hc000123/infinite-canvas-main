@@ -157,15 +157,16 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		}
 	}
 	aiTask, err := service.CreateAITask(service.CreateAITaskInput{
-		UserID:      user.ID,
-		TaskType:    service.AITaskTypeForPath(path),
-		Provider:    channel.Name,
-		Protocol:    channel.Protocol,
-		Model:       modelName,
-		Path:        path,
-		Credits:     credits,
-		RequestBody: upstreamBody,
-		ContentType: upstreamContentType,
+		UserID:        user.ID,
+		TaskType:      service.AITaskTypeForPath(path),
+		Provider:      channel.Name,
+		Protocol:      channel.Protocol,
+		Model:         modelName,
+		Path:          path,
+		Credits:       credits,
+		RequestBody:   upstreamBody,
+		ContentType:   upstreamContentType,
+		FrontendTrace: r.Header.Get("X-Infinite-Canvas-Trace"),
 	})
 	if err != nil {
 		log.Printf("AI proxy create task failed: user=%s model=%s path=%s err=%v", user.ID, modelName, path, err)
@@ -188,6 +189,10 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		FailError(w, err)
 		return
 	}
+	consumeLogID := ""
+	if log, ok, err := service.LatestAITaskConsumeCreditLog(aiTask.ID); err == nil && ok {
+		consumeLogID = log.ID
+	}
 	refundAndFailTask := func(message string, payload []byte) {
 		_ = service.MarkAITaskFailed(aiTask.ID, message, payload, "application/json")
 		if err := service.RefundUserCreditsForTask(user.ID, modelName, credits, path, aiTask.ID); err != nil {
@@ -199,6 +204,7 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 			if err := service.MarkAITaskArkCreated(aiTask.ID, normalized); err != nil {
 				log.Printf("AI proxy mark ark task created failed: task=%s err=%v", aiTask.ID, err)
 			}
+			writeAITaskHeaders(w, aiTask, consumeLogID, arkTaskIDFromNormalized(normalized), string(model.AITaskStatusQueued))
 		})
 		return
 	}
@@ -206,7 +212,38 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		if err := service.MarkAITaskSucceeded(aiTask.ID, payload, responseContentType); err != nil {
 			log.Printf("AI proxy mark task succeeded failed: task=%s err=%v", aiTask.ID, err)
 		}
+		writeAITaskHeaders(w, aiTask, consumeLogID, "", string(model.AITaskStatusSucceeded))
 	})
+}
+
+func UserAITask(w http.ResponseWriter, r *http.Request, id string) {
+	user, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	result, err := service.GetUserAITaskDetail(id, user.ID)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func UserAITaskFrontendArtifact(w http.ResponseWriter, r *http.Request, id string) {
+	user, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	var artifact model.AITaskFrontendArtifact
+	_ = json.NewDecoder(r.Body).Decode(&artifact)
+	result, err := service.RecordUserAITaskFrontendArtifact(id, user.ID, artifact)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
 }
 
 func proxyArkVideoGetRequest(w http.ResponseWriter, ctx context.Context, channel model.ModelChannel, path string) {
@@ -435,6 +472,29 @@ func copyAIResponse(w http.ResponseWriter, request *http.Request, onFailure func
 	}
 	w.WriteHeader(response.StatusCode)
 	_, _ = w.Write(payload)
+}
+
+func writeAITaskHeaders(w http.ResponseWriter, task model.AITask, creditLogID string, upstreamTaskID string, status string) {
+	w.Header().Set("X-AI-Task-ID", task.ID)
+	w.Header().Set("X-AI-Task-Status", status)
+	w.Header().Set("X-AI-Task-Credits", fmt.Sprint(task.Credits))
+	if creditLogID != "" {
+		w.Header().Set("X-AI-Credit-Log-ID", creditLogID)
+	}
+	if upstreamTaskID != "" {
+		w.Header().Set("X-AI-Upstream-Task-ID", upstreamTaskID)
+	}
+}
+
+func arkTaskIDFromNormalized(body []byte) string {
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return ""
+	}
+	if id, ok := payload["id"].(string); ok {
+		return id
+	}
+	return ""
 }
 
 func safeLogRequestURL(request *http.Request) string {

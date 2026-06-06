@@ -53,7 +53,7 @@ export function assetGenerationProjectId(generation: AssetGenerationRecord | und
 }
 
 export function assetHasGenerationTaskId(generation: AssetGenerationRecord | undefined) {
-    return Boolean(readString(generation?.taskId));
+    return Boolean(readString(generation?.taskId) || readString(generation?.aiTaskId) || readString(generation?.upstreamTaskId));
 }
 
 export function assetGenerationLineage(generation: AssetGenerationRecord | undefined): AssetGenerationLineageItem[] {
@@ -65,6 +65,8 @@ export function assetGenerationLineage(generation: AssetGenerationRecord | undef
     const storyboardShotId = readString(generation.storyboardShotId);
     const nodeId = readString(generation.nodeId);
     const taskId = readString(generation.taskId);
+    const aiTaskId = readString(generation.aiTaskId);
+    const upstreamTaskId = readString(generation.upstreamTaskId);
     const action = assetGenerationAction(generation);
     return [
         source ? { key: "source", label: "来源", value: assetGenerationSourceLabel(source) } : null,
@@ -72,7 +74,8 @@ export function assetGenerationLineage(generation: AssetGenerationRecord | undef
         storyboardGroupId ? { key: "storyboardGroupId", label: "分镜组", value: storyboardGroupId } : null,
         storyboardShotId ? { key: "storyboardShotId", label: "分镜", value: storyboardShotId } : null,
         nodeId ? { key: "nodeId", label: "节点", value: nodeId } : null,
-        taskId ? { key: "taskId", label: "任务", value: taskId } : null,
+        aiTaskId ? { key: "aiTaskId", label: "账本任务", value: aiTaskId } : null,
+        upstreamTaskId || taskId ? { key: "taskId", label: "任务", value: upstreamTaskId || taskId } : null,
         action ? { key: "actionType", label: "动作", value: assetGenerationActionLabel(action) } : null,
     ].filter((item): item is AssetGenerationLineageItem => Boolean(item));
 }
@@ -82,9 +85,10 @@ export function assetGenerationVersionRecords(asset: Asset | null | undefined): 
     return records.map((generation, index) => {
         const nodeId = readString(generation.nodeId);
         const taskId = readString(generation.taskId);
+        const upstreamTaskId = readString(generation.upstreamTaskId) || taskId;
         const createdAt = readString(generation.createdAt);
         return {
-            id: [nodeId, taskId, createdAt, index].filter(Boolean).join(":") || `version-${index + 1}`,
+            id: [nodeId, upstreamTaskId, createdAt, index].filter(Boolean).join(":") || `version-${index + 1}`,
             index,
             label: `版本 ${index + 1}`,
             isLatest: index === records.length - 1,
@@ -92,7 +96,7 @@ export function assetGenerationVersionRecords(asset: Asset | null | undefined): 
             actionLabel: assetGenerationActionLabel(assetGenerationAction(generation)),
             modelProvider: assetGenerationModelProvider(generation),
             nodeId,
-            taskId,
+            taskId: upstreamTaskId,
             storyboardGroupId: readString(generation.storyboardGroupId),
             storyboardShotId: readString(generation.storyboardShotId),
             createdAt,
@@ -167,6 +171,10 @@ export function assetGenerationSearchText(asset: Asset) {
             generation.model,
             generation.provider,
             generation.taskId,
+            generation.aiTaskId,
+            generation.upstreamTaskId,
+            generation.creditLogId,
+            generation.aiTaskStatus,
             generation.actionType,
             JSON.stringify(generation.references || ""),
             JSON.stringify(generation.productionBibleRefs || ""),

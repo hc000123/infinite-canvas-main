@@ -255,6 +255,77 @@ func TestMarkArkVideoAITaskContentFetchedSetsFinishedAt(t *testing.T) {
 	}
 }
 
+func TestAITaskFrontendTraceAndArtifactsAreHydrated(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, _ = saveAITaskTestUser("user-frontend-trace", 20)
+	task, err := CreateAITask(CreateAITaskInput{
+		UserID:        "user-frontend-trace",
+		TaskType:      "image_generation",
+		Provider:      "openai",
+		Protocol:      "openai",
+		Model:         "image-model",
+		Path:          "/images/generations",
+		Credits:       2,
+		RequestBody:   []byte(`{"model":"image-model","prompt":"画一张图"}`),
+		ContentType:   "application/json",
+		FrontendTrace: `{"projectId":"project-1","canvasId":"canvas-1","nodeId":"node-1","shotGroupId":"shot-group-1","shotIds":["shot-1"],"apiKey":"sk-secret","preview":"data:image/png;base64,AAAA"}`,
+	})
+	if err != nil {
+		t.Fatalf("CreateAITask returned error: %v", err)
+	}
+	if _, err := RecordUserAITaskFrontendArtifact(task.ID, "user-frontend-trace", model.AITaskFrontendArtifact{
+		AssetID:     "asset-1",
+		CanvasID:    "canvas-1",
+		NodeID:      "node-1",
+		ProjectID:   "project-1",
+		ShotGroupID: "shot-group-1",
+		ShotIDs:     []string{"shot-1"},
+		Kind:        "image",
+		CreatedAt:   "2026-06-06T00:00:00.000Z",
+	}); err != nil {
+		t.Fatalf("RecordUserAITaskFrontendArtifact returned error: %v", err)
+	}
+
+	detail, err := GetAdminAITaskDetail(task.ID)
+	if err != nil {
+		t.Fatalf("GetAdminAITaskDetail returned error: %v", err)
+	}
+	if detail.Task.FrontendTrace.ProjectID != "project-1" || detail.Task.FrontendTrace.CanvasID != "canvas-1" || detail.Task.FrontendTrace.NodeID != "node-1" {
+		t.Fatalf("frontend trace = %#v", detail.Task.FrontendTrace)
+	}
+	if strings.Contains(detail.Task.RequestJSON, "sk-secret") || strings.Contains(detail.Task.RequestJSON, "data:image") {
+		t.Fatalf("frontend trace was not sanitized: %s", detail.Task.RequestJSON)
+	}
+	if len(detail.Task.FrontendArtifacts) != 1 || detail.Task.FrontendArtifacts[0].AssetID != "asset-1" {
+		t.Fatalf("frontend artifacts = %#v", detail.Task.FrontendArtifacts)
+	}
+	if _, err := RecordUserAITaskFrontendArtifact(task.ID, "other-user", model.AITaskFrontendArtifact{AssetID: "asset-other", NodeID: "node-1"}); err == nil {
+		t.Fatal("RecordUserAITaskFrontendArtifact allowed another user")
+	}
+}
+
+func TestAITaskFrontendArtifactsSurviveArkStatusSync(t *testing.T) {
+	task := setupVideoAITaskWithConsumedCredits(t, "task-artifact-preserve", 4)
+	if _, err := RecordUserAITaskFrontendArtifact(task.ID, task.UserID, model.AITaskFrontendArtifact{
+		AssetID: "asset-video-1",
+		NodeID:  "video-node-1",
+		Kind:    "video",
+	}); err != nil {
+		t.Fatalf("RecordUserAITaskFrontendArtifact returned error: %v", err)
+	}
+	if err := SyncArkVideoAITaskStatus("task-artifact-preserve", []byte(`{"id":"task-artifact-preserve","status":"completed","video_url":"https://example.com/video.mp4"}`)); err != nil {
+		t.Fatalf("SyncArkVideoAITaskStatus returned error: %v", err)
+	}
+
+	detail, err := GetAdminAITaskDetail(task.ID)
+	if err != nil {
+		t.Fatalf("GetAdminAITaskDetail returned error: %v", err)
+	}
+	if len(detail.Task.FrontendArtifacts) != 1 || detail.Task.FrontendArtifacts[0].AssetID != "asset-video-1" {
+		t.Fatalf("frontend artifacts after sync = %#v", detail.Task.FrontendArtifacts)
+	}
+}
+
 func TestListAdminAITasksFiltersByTaskFields(t *testing.T) {
 	setupAITaskTestDB(t)
 	_, _ = saveAITaskTestUser("user-list-a", 20)
