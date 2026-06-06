@@ -8,14 +8,18 @@ import type { AgentConfig } from "./agent-settings";
 import {
     approveAgentRun,
     createAgentRunRecord,
+    createWorkflowTextRunRecord,
     listAgentRunsByAgentKind,
     listAgentRunsByEpisode,
     listAgentRunsByProject,
     markAgentRunApplied,
     markAgentRunFailed,
+    setWorkflowTextRunCompleted,
+    setWorkflowTextRunFailed,
     rejectAgentRun,
     updateAgentRunDraft,
     type AgentDraftOutput,
+    type WorkflowTextRunOutput,
     type AgentRunInput,
     type AgentRunKind,
     type AgentRunRecord,
@@ -24,6 +28,9 @@ import {
 type AgentRunnerStore = {
     runs: AgentRunRecord[];
     createRun: (config: AgentConfig, input: AgentRunInput, draftOutput?: unknown) => string;
+    startWorkflowTextRun: (input: AgentRunInput) => string;
+    completeWorkflowTextRun: (id: string, rawText: string) => void;
+    failWorkflowTextRun: (id: string, errorMessage: string) => void;
     updateDraft: (id: string, draftOutput: unknown) => void;
     approveRun: (id: string) => void;
     rejectRun: (id: string) => void;
@@ -59,6 +66,21 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                 set((state) => ({ runs: [run, ...state.runs] }));
                 return id;
             },
+            startWorkflowTextRun: (input) => {
+                const now = new Date().toISOString();
+                const id = `agent-run-workflow-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+                const run = createWorkflowTextRunRecord({ input, id, now });
+                set((state) => ({ runs: [run, ...state.runs] }));
+                return id;
+            },
+            completeWorkflowTextRun: (id, rawText) =>
+                set((state) => ({
+                    runs: state.runs.map((run) => (run.id === id ? setWorkflowTextRunCompleted(run, rawText, new Date().toISOString()) : run)),
+                })),
+            failWorkflowTextRun: (id, errorMessage) =>
+                set((state) => ({
+                    runs: state.runs.map((run) => (run.id === id ? setWorkflowTextRunFailed(run, errorMessage, new Date().toISOString()) : run)),
+                })),
             updateDraft: (id, draftOutput) =>
                 set((state) => ({
                     runs: state.runs.map((run) => (run.id === id ? updateAgentRunDraft(run, draftOutput, new Date().toISOString()) : run)),
@@ -95,6 +117,7 @@ function normalizeStoredRun(run: AgentRunRecord): AgentRunRecord {
     return {
         ...run,
         draftOutput: normalizeStoredDraftOutput(run.draftOutput),
+        workflowTextOutput: normalizeStoredWorkflowTextOutput(run.workflowTextOutput),
         proposedActions: run.proposedActions || [],
     };
 }
@@ -106,5 +129,21 @@ function normalizeStoredDraftOutput(output: AgentDraftOutput | undefined): Agent
         rawJson: output?.rawJson || {},
         warnings: output?.warnings || [],
         schemaVersion: output?.schemaVersion || "1.0.0",
+    };
+}
+
+function normalizeStoredWorkflowTextOutput(output: WorkflowTextRunOutput | undefined): WorkflowTextRunOutput | undefined {
+    if (!output) return undefined;
+    return {
+        rawText: output.rawText || "",
+        summary: output.summary || "暂无文本摘要",
+        structuredOutput: output.structuredOutput,
+        outputFormat: output.outputFormat === "text" ? "text" : "json",
+        stageId: output.stageId || "",
+        agentId: output.agentId || "",
+        workflowId: output.workflowId || "",
+        sourceFiles: Array.isArray(output.sourceFiles) ? output.sourceFiles : [],
+        qualityGateIds: Array.isArray(output.qualityGateIds) ? output.qualityGateIds : [],
+        createdAt: output.createdAt || new Date().toISOString(),
     };
 }

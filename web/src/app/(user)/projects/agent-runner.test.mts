@@ -7,7 +7,12 @@ import {
     buildAgentTraceMetadata,
     buildAgentRunProposedActions,
     canWriteAgentRun,
+    buildWorkflowStagePrompt,
     createAgentRunRecord,
+    createWorkflowTextRunRecord,
+    setWorkflowTextRunCompleted,
+    setWorkflowTextRunFailed,
+    buildWorkflowStageSourceFiles,
     listAgentRunsByAgentKind,
     listAgentRunsByEpisode,
     listAgentRunsByProject,
@@ -18,6 +23,15 @@ import {
     updateAgentRunDraft,
     validateAgentDraftOutputShape,
 } from "./agent-runner.ts";
+import { buildSeedanceWorkflowPreset, workflowStageDetail } from "./agent-workflow-presets.ts";
+
+const workflowPreset = buildSeedanceWorkflowPreset();
+const workflowInputBase = {
+    projectId: "project-workflow",
+    sourceType: "workflow_text_stage",
+    sourceId: "director-analysis",
+    variables: { stageId: "director-analysis" },
+};
 
 const baseInput = {
     projectId: "project-1",
@@ -30,6 +44,29 @@ const baseInput = {
     sourceId: "episode-1",
     variables: { scriptSnapshot: "剧本文本" },
 };
+
+function buildWorkflowStageTextInput() {
+    const stage = workflowPreset.stages[0];
+    const detail = workflowStageDetail(workflowPreset, stage);
+    if (!detail.agent) throw new Error("workflow preset missing director agent");
+    return {
+        workflowId: workflowPreset.workflowId,
+        workflowVersion: workflowPreset.version,
+        stage,
+        agent: detail.agent,
+        skills: detail.skills,
+        qualityGates: detail.qualityGates,
+        inputSnapshot: {
+            projectTitle: "测试项目",
+            episodeTitle: "第1集",
+            scriptSnapshot: "测试剧本文本",
+            stageSummary: "测试阶段输入",
+            directorOutputSummary: "导演稿草案",
+            assetNeedSummary: "角色 / 场景需求",
+            storyboardRequirement: "按场次输出分镜提示词",
+        },
+    } as const;
+}
 
 test("creates run record from enabled agent config and input", () => {
     const config = defaultAgentConfig("asset_extractor", "2026-01-01T00:00:00.000Z");
@@ -144,4 +181,122 @@ test("updates draft output and list helpers filter runs", () => {
         listAgentRunsByAgentKind([updated, runB], "prompt_reviewer").map((run) => run.id),
         ["run-b"],
     );
+});
+
+test("builds workflow stage prompt with stage/agent/skills/quality gates/source files", () => {
+    const input = buildWorkflowStageTextInput();
+    const stagePrompt = buildWorkflowStagePrompt(input);
+    assert.ok(stagePrompt.includes(`workflowId: ${workflowPreset.workflowId}`));
+    assert.ok(stagePrompt.includes(`agentName: ${input.agent.name}`));
+    assert.ok(stagePrompt.includes(`agentId: ${input.agent.agentId}`));
+    assert.ok(input.skills.every((item) => stagePrompt.includes(item.name)));
+    assert.ok(input.qualityGates.every((item) => stagePrompt.includes(item.name)));
+    const sourceFiles = buildWorkflowStageSourceFiles(input.skills, input.qualityGates);
+    assert.equal(sourceFiles.length > 0, true);
+    assert.ok(stagePrompt.includes(sourceFiles[0]));
+});
+
+test("workflow text run input preserves workflowId / stageId / agentId", () => {
+    const run = createWorkflowTextRunRecord({
+        input: {
+            ...workflowInputBase,
+            workflowId: workflowPreset.workflowId,
+            workflowVersion: workflowPreset.version,
+            stageId: "director-analysis",
+            agentId: "director",
+            agentName: "导演 / director",
+            sourcePresetId: workflowPreset.workflowId,
+            presetId: workflowPreset.workflowId,
+            inputSnapshot: { stageSummary: "测试阶段" },
+            qualityGateIds: ["stage-spec-read-record"],
+        },
+        id: "workflow-run-1",
+        now: "2026-01-10T00:00:00.000Z",
+    });
+    assert.equal(run.input.workflowId, workflowPreset.workflowId);
+    assert.equal(run.input.stageId, "director-analysis");
+    assert.equal(run.input.agentId, "director");
+    assert.equal(run.status, "running");
+});
+
+test("workflow text run success enters review and stores text output", () => {
+    const run = createWorkflowTextRunRecord({
+        input: {
+            ...workflowInputBase,
+            workflowId: workflowPreset.workflowId,
+            workflowVersion: workflowPreset.version,
+            stageId: "director-analysis",
+            agentId: "director",
+            sourceFiles: ["agents/director.md", "skills/director-skill/SKILL.md"],
+            qualityGateIds: ["stage-spec-read-record", "director-business-review"],
+        },
+        id: "workflow-run-2",
+        now: "2026-01-10T00:00:00.000Z",
+    });
+    const completed = setWorkflowTextRunCompleted(run, '{"summary":"导演分析草案","items":[{"id":"step-1"}]}', "2026-01-10T00:01:00.000Z");
+    assert.equal(completed.status, "review");
+    assert.equal(completed.workflowTextOutput?.rawText, '{"summary":"导演分析草案","items":[{"id":"step-1"}]}');
+    assert.equal(completed.workflowTextOutput?.outputFormat, "json");
+    assert.equal(completed.workflowTextOutput?.sourceFiles.length, 2);
+    assert.equal(completed.workflowTextOutput?.qualityGateIds.includes("director-business-review"), true);
+});
+
+test("workflow text JSON parse failure still keeps rawText", () => {
+    const run = createWorkflowTextRunRecord({
+        input: {
+            ...workflowInputBase,
+            workflowId: workflowPreset.workflowId,
+            workflowVersion: workflowPreset.version,
+            stageId: "art-design",
+            agentId: "art-designer",
+            sourceFiles: ["skills/art-design-skill/SKILL.md"],
+        },
+        id: "workflow-run-3",
+        now: "2026-01-10T00:00:00.000Z",
+    });
+    const completed = setWorkflowTextRunCompleted(run, "不是 JSON 的原始文本输出", "2026-01-10T00:02:00.000Z");
+    assert.equal(completed.status, "review");
+    assert.equal(completed.workflowTextOutput?.outputFormat, "text");
+    assert.equal(completed.workflowTextOutput?.rawText, "不是 JSON 的原始文本输出");
+    assert.equal(completed.workflowTextOutput?.structuredOutput, undefined);
+});
+
+test("workflow text run failure keeps error message", () => {
+    const run = createWorkflowTextRunRecord({
+        input: {
+            ...workflowInputBase,
+            workflowId: workflowPreset.workflowId,
+            workflowVersion: workflowPreset.version,
+            stageId: "seedance-storyboard",
+            agentId: "storyboard-artist",
+        },
+        id: "workflow-run-4",
+        now: "2026-01-10T00:00:00.000Z",
+    });
+    const failed = setWorkflowTextRunFailed(run, "模型返回异常", "2026-01-10T00:03:00.000Z");
+    assert.equal(failed.status, "error");
+    assert.equal(failed.errorMessage, "模型返回异常");
+    assert.equal(failed.draftOutput.summary || "", "模型返回异常");
+});
+
+test("approve workflow text run only changes HITL state", () => {
+    const run = setWorkflowTextRunCompleted(
+        createWorkflowTextRunRecord({
+            input: {
+                ...workflowInputBase,
+                workflowId: workflowPreset.workflowId,
+                workflowVersion: workflowPreset.version,
+                stageId: "director-analysis",
+                agentId: "director",
+            },
+            id: "workflow-run-5",
+            now: "2026-01-10T00:00:00.000Z",
+        }),
+        '{"summary":"待批准草案","items":[]}',
+        "2026-01-10T00:04:00.000Z",
+    );
+    const approved = approveAgentRun(run, "2026-01-10T00:05:00.000Z");
+    assert.equal(approved.status, "approved");
+    assert.equal(approved.workflowTextOutput?.rawText.includes("待批准草案"), true);
+    assert.equal(approved.agentKind, "workflow_text");
 });

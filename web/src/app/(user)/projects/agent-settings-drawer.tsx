@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, App, Button, Card, Drawer, Form, Input, InputNumber, Select, Space, Switch, Tag } from "antd";
 import { Bot, Copy, RotateCcw, Save, Workflow } from "lucide-react";
 
+import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { requestImageQuestion } from "@/services/api/image";
 import {
     canInvokeAgentConfig,
     defaultAgentConfig,
@@ -18,7 +20,7 @@ import {
     type AgentWritePolicy,
 } from "./agent-settings";
 import { builtInAgentWorkflowPresets, resolveWorkflowPreset, sortedWorkflowStages, workflowStageDetail } from "./agent-workflow-presets";
-import { agentRunKindLabel, agentRunStatusLabel, listAgentRunsByProject } from "./agent-runner";
+import { agentRunKindLabel, agentRunStatusLabel, buildWorkflowStagePromptMessages, buildWorkflowStageSourceFiles, type AgentRunInput, listAgentRunsByProject } from "./agent-runner";
 import { useAgentSettingsStore } from "./use-agent-settings-store";
 import { useAgentRunnerStore } from "./use-agent-runner-store";
 
@@ -59,6 +61,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
     const [selectedWorkflowId, setSelectedWorkflowId] = useState(builtInAgentWorkflowPresets()[0].workflowId);
     const [workflowEnabled, setWorkflowEnabled] = useState(false);
     const [workflowSelected, setWorkflowSelected] = useState(false);
+    const [runningStageIds, setRunningStageIds] = useState<Record<string, boolean>>({});
     const globalConfigs = useAgentSettingsStore((state) => state.globalConfigs);
     const projectConfigs = useAgentSettingsStore((state) => state.projectConfigs);
     const projectWorkflowSelections = useAgentSettingsStore((state) => state.projectWorkflowSelections);
@@ -71,6 +74,10 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
     const createRun = useAgentRunnerStore((state) => state.createRun);
     const approveRun = useAgentRunnerStore((state) => state.approveRun);
     const rejectRun = useAgentRunnerStore((state) => state.rejectRun);
+    const startWorkflowTextRun = useAgentRunnerStore((state) => state.startWorkflowTextRun);
+    const completeWorkflowTextRun = useAgentRunnerStore((state) => state.completeWorkflowTextRun);
+    const failWorkflowTextRun = useAgentRunnerStore((state) => state.failWorkflowTextRun);
+    const checkAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const resolvedConfigs = useMemo(() => mergeAgentConfigs(defaultAgentConfigs(), globalConfigs, projectConfigs[projectId] || []), [globalConfigs, projectConfigs, projectId]);
     const workflowPresets = useMemo(() => builtInAgentWorkflowPresets(), []);
     const selectedWorkflowPreset = useMemo(() => resolveWorkflowPreset(selectedWorkflowId, projectWorkflowSelections[projectId] || []) || workflowPresets[0], [projectId, projectWorkflowSelections, selectedWorkflowId, workflowPresets]);
@@ -80,6 +87,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
     const projectOverrideKinds = new Set((projectConfigs[projectId] || []).map((config) => config.kind));
     const validation = validateAgentConfig(selectedConfig);
     const callable = canInvokeAgentConfig(selectedConfig);
+    const effectiveConfig = useEffectiveConfig();
 
     useEffect(() => {
         if (!open) return;
@@ -137,6 +145,103 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
         }
     };
 
+    const runWorkflowStageText = async (stageId: string) => {
+        const stage = selectedWorkflowStages.find((item) => item.stageId === stageId);
+        if (!stage) return;
+        const detail = workflowStageDetail(selectedWorkflowPreset, stage);
+        if (!detail.agent) {
+            message.error(`阶段 ${stage.name} 缺少绑定的 Agent，无法执行`);
+            return;
+        }
+        const sourceFiles = buildWorkflowStageSourceFiles(detail.skills, detail.qualityGates);
+        const workflowTextModel = (effectiveConfig.textModel || effectiveConfig.model || "").trim();
+        const isReady = Boolean(workflowTextModel) && checkAiConfigReady(effectiveConfig, workflowTextModel);
+        const requestConfig = { ...effectiveConfig, model: workflowTextModel || effectiveConfig.model };
+        const promptMessages = buildWorkflowStagePromptMessages({
+            workflowId: selectedWorkflowPreset.workflowId,
+            workflowVersion: selectedWorkflowPreset.version,
+            stage,
+            agent: detail.agent,
+            skills: detail.skills,
+            qualityGates: detail.qualityGates,
+            inputSnapshot: {
+                projectId,
+                projectTitle,
+                episodeTitle: "未选择本集（设置中心）",
+                scriptSnapshot: "未提供本集剧本快照（设置中心）",
+                stageSummary: `${stage.inputSummary}；输出目标：${stage.outputSummary}`,
+                directorOutputSummary: "",
+                artDesignOutputSummary: "",
+                storyboardRequirement: detail.qualityGates.length ? detail.qualityGates.map((gate) => gate.purpose).join("；") : stage.outputSummary,
+                assetNeedSummary: "",
+            },
+        });
+        const runInput: AgentRunInput = {
+            projectId,
+            sourceType: "workflow_text_stage",
+            sourceId: stage.stageId,
+            variables: { stageId },
+            workflowId: selectedWorkflowPreset.workflowId,
+            workflowVersion: selectedWorkflowPreset.version,
+            stageId: stage.stageId,
+            agentId: detail.agent.agentId,
+            agentName: detail.agent.name,
+            sourcePresetId: selectedWorkflowPreset.workflowId,
+            presetId: selectedWorkflowPreset.workflowId,
+            inputSnapshot: {
+                stageName: stage.name,
+                stageSummary: stage.inputSummary,
+            },
+            promptMessages,
+            model: workflowTextModel,
+            provider: `openai-${effectiveConfig.channelMode}`,
+            configSummary: JSON.stringify(
+                {
+                    model: workflowTextModel,
+                    baseUrl: effectiveConfig.baseUrl,
+                    channelMode: effectiveConfig.channelMode,
+                    textModelList: effectiveConfig.textModels,
+                    provider: effectiveConfig.channelMode === "remote" ? "openai-remote" : "openai-local",
+                },
+                null,
+                2,
+            ),
+            sourceFiles,
+            qualityGateIds: detail.qualityGates.map((gate) => gate.gateId),
+        };
+        const runId = startWorkflowTextRun(runInput);
+        setRunningStageIds((current) => ({ ...current, [stage.stageId]: true }));
+        if (!isReady) {
+            const reason = workflowTextModel ? "当前 API 配置或文本模型不可用" : "未配置文本模型（textModel），请先在 AI 配置中填写。";
+            failWorkflowTextRun(runId, reason);
+            message.warning(`文本执行未完成：${reason}`);
+            setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
+            return;
+        }
+        if (requestConfig.channelMode === "local" && !requestConfig.apiKey.trim()) {
+            failWorkflowTextRun(runId, "本地模式缺少 API Key，无法发起文本调用。请先检查 AI 配置。");
+            message.warning("文本执行未完成：本地模式缺少 API Key。");
+            setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
+            return;
+        }
+        if (requestConfig.channelMode === "local" && !requestConfig.baseUrl.trim()) {
+            failWorkflowTextRun(runId, "本地模式缺少 API Base URL，无法发起文本调用。请先检查 AI 配置。");
+            message.warning("文本执行未完成：本地模式缺少 API Base URL。");
+            setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
+            return;
+        }
+        try {
+            const response = await requestImageQuestion(requestConfig, promptMessages, () => {});
+            completeWorkflowTextRun(runId, response || "没有返回内容");
+            message.success(`阶段 ${stage.name} 文本草案已生成，状态为“待审核”。`);
+        } catch (error) {
+            failWorkflowTextRun(runId, error instanceof Error ? error.message : "文本执行失败");
+            message.warning(error instanceof Error ? error.message : "文本执行失败");
+        } finally {
+            setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
+        }
+    };
+
     const saveWorkflowSelection = () => {
         saveProjectWorkflowSelection(projectId, { workflowId: selectedWorkflowPreset.workflowId, enabled: workflowEnabled, selected: workflowSelected, updatedAt: new Date().toISOString() });
         message.success("多 Agent workflow 项目级选择已保存");
@@ -154,7 +259,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
                     <div>
                         <div className="text-sm text-stone-500">当前项目：{projectTitle}</div>
                         <div className="mt-1 text-xl font-semibold">统一维护资产提取、分镜、生图 Brief、视频提示词和质检 Agent</div>
-                        <p className="mt-2 text-sm leading-6 text-stone-500">第一版只保存本地配置，不接真实 LLM；所有输出默认是草案或预览，写入业务数据前必须用户确认。</p>
+                        <p className="mt-2 text-sm leading-6 text-stone-500">本轮 workflow 文本阶段执行会接真实文本模型生成草案；图片与视频仍为手动触发，不会在此处扣费或写入业务数据。</p>
                     </div>
                     <Tag className="m-0">本地设置</Tag>
                 </div>
@@ -180,7 +285,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
                         </Space>
                     }
                 >
-                    <Alert className="mb-4" type="info" showIcon message="仅导入预设结构" description="该 workflow 预设只用于查看、选择和保存项目配置；不会调用真实 LLM，不会执行工作流，不会生成图片或视频，也不会触发扣费。" />
+                    <Alert className="mb-4" type="info" showIcon message="文本执行模式" description="当前可对单个阶段手动触发文本草案执行。仅生成文本草案，不调用图片/视频接口，不触发扣费。执行完成后先进入待审核状态。" />
                     <div className="grid gap-4">
                         <div>
                             <div className="flex flex-wrap items-center gap-2">
@@ -230,6 +335,11 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
                                                     质量门：{gate.name}
                                                 </Tag>
                                             ))}
+                                        </Space>
+                                        <Space className="mt-3" size={[6, 6]} wrap>
+                                            <Button size="small" type="primary" loading={Boolean(runningStageIds[stage.stageId])} onClick={() => void runWorkflowStageText(stage.stageId)}>
+                                                运行文本草案（文本执行）
+                                            </Button>
                                         </Space>
                                     </div>
                                 );
@@ -382,26 +492,33 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
                                                 <Tag className="m-0">{agentRunKindLabel(run.agentKind)}</Tag>
                                                 <Tag className="m-0">{agentRunStatusLabel(run.status)}</Tag>
                                                 <Tag className="m-0">配置 v{run.agentConfigVersion}</Tag>
+                                                {run.input.workflowId ? <Tag className="m-0">workflow {run.input.workflowId}</Tag> : null}
+                                                {run.input.stageId ? <Tag className="m-0">stage {run.input.stageId}</Tag> : null}
                                                 {run.input.episodeTitle ? <Tag className="m-0">{run.input.episodeTitle}</Tag> : null}
                                             </div>
-                                            <div className="mt-2 text-sm font-medium">{run.draftOutput.summary}</div>
+                                            <div className="mt-2 text-sm font-medium">{run.workflowTextOutput?.summary || run.draftOutput.summary}</div>
+                                            {run.status === "error" || run.status === "failed" ? <div className="mt-1 text-xs text-rose-500">{run.errorMessage || "执行失败"}</div> : null}
                                             <div className="mt-1 text-xs text-stone-500">
                                                 来源：{run.input.sourceType}
                                                 {run.input.sourceId ? ` / ${run.input.sourceId}` : ""} · {run.createdAt}
+                                                {run.input.agentId ? ` · agent ${run.input.agentId}` : ""}
+                                                {run.input.model ? ` · model ${run.input.model}` : ""}
                                             </div>
                                         </div>
                                         <Space size={6} wrap>
-                                            <Button size="small" disabled={run.status !== "ready_for_review"} onClick={() => approveRun(run.id)}>
+                                            <Button size="small" disabled={run.status !== "ready_for_review" && run.status !== "review"} onClick={() => approveRun(run.id)}>
                                                 批准
                                             </Button>
-                                            <Button size="small" disabled={run.status !== "ready_for_review"} onClick={() => rejectRun(run.id)}>
+                                            <Button size="small" disabled={run.status !== "ready_for_review" && run.status !== "review"} onClick={() => rejectRun(run.id)}>
                                                 驳回
                                             </Button>
                                         </Space>
                                     </div>
                                     <details className="mt-3">
-                                        <summary className="cursor-pointer text-xs text-stone-500">查看 draftOutput / rawJson / proposedActions</summary>
-                                        <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-stone-950 p-3 text-xs text-stone-50">{JSON.stringify({ draftOutput: run.draftOutput, proposedActions: run.proposedActions }, null, 2)}</pre>
+                                        <summary className="cursor-pointer text-xs text-stone-500">查看草案 / workflow 文本产物</summary>
+                                        <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-stone-950 p-3 text-xs text-stone-50">
+                                            {JSON.stringify({ draftOutput: run.draftOutput, workflowTextOutput: run.workflowTextOutput, proposedActions: run.proposedActions }, null, 2)}
+                                        </pre>
                                     </details>
                                 </Card>
                             ))}

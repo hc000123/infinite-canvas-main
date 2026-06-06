@@ -1,7 +1,54 @@
 import { canInvokeAgentConfig, normalizeAgentConfig, type AgentConfig, type AgentConfigKind } from "./agent-settings.ts";
+import type { AgentWorkflowAgent, AgentWorkflowQualityGate, AgentWorkflowSkill, AgentWorkflowStage } from "./agent-workflow-presets";
 
-export type AgentRunStatus = "draft" | "ready_for_review" | "approved" | "rejected" | "applied" | "failed";
-export type AgentRunKind = AgentConfigKind;
+export type AgentRunStatus = "draft" | "ready_for_review" | "running" | "review" | "approved" | "rejected" | "applied" | "error" | "failed";
+export type AgentRunKind = AgentConfigKind | "workflow_text";
+
+export type WorkflowTextOutputFormat = "json" | "text";
+
+export type WorkflowTextRunOutput = {
+    rawText: string;
+    summary: string;
+    structuredOutput?: unknown;
+    outputFormat: WorkflowTextOutputFormat;
+    stageId: string;
+    agentId: string;
+    workflowId: string;
+    sourceFiles: string[];
+    qualityGateIds: string[];
+    createdAt: string;
+};
+
+type ChatCompletionMessage = {
+    role: "system" | "user" | "assistant";
+    content: string;
+    name?: string;
+};
+
+export type WorkflowStagePromptContext = {
+    projectId?: string;
+    projectTitle?: string;
+    canvasId?: string;
+    episodeId?: string;
+    episodeTitle?: string;
+    scriptSnapshot?: string;
+    stageSummary?: string;
+    sceneSummary?: string;
+    directorOutputSummary?: string;
+    artDesignOutputSummary?: string;
+    storyboardRequirement?: string;
+    assetNeedSummary?: string;
+};
+
+export type WorkflowStagePromptBuildInput = {
+    workflowId: string;
+    workflowVersion: string;
+    stage: AgentWorkflowStage;
+    agent: AgentWorkflowAgent;
+    skills: AgentWorkflowSkill[];
+    qualityGates: AgentWorkflowQualityGate[];
+    inputSnapshot?: WorkflowStagePromptContext;
+};
 
 export type AgentRunInput = {
     projectId: string;
@@ -13,6 +60,20 @@ export type AgentRunInput = {
     sourceType: string;
     sourceId?: string;
     variables: Record<string, unknown>;
+    workflowId?: string;
+    workflowVersion?: string;
+    stageId?: string;
+    agentId?: string;
+    agentName?: string;
+    sourcePresetId?: string;
+    presetId?: string;
+    inputSnapshot?: Record<string, unknown>;
+    promptMessages?: ChatCompletionMessage[];
+    model?: string;
+    provider?: string;
+    configSummary?: string;
+    sourceFiles?: string[];
+    qualityGateIds?: string[];
 };
 
 export type AgentDraftOutput = {
@@ -48,6 +109,7 @@ export type AgentRunRecord = {
     appliedAt?: string;
     rejectedAt?: string;
     errorMessage?: string;
+    workflowTextOutput?: WorkflowTextRunOutput;
     createdAt: string;
     updatedAt: string;
 };
@@ -68,6 +130,85 @@ export function createAgentRunRecord({ config, input, id, now, draftOutput }: { 
         proposedActions: buildAgentRunProposedActions(normalizedConfig.kind, output),
         createdAt: now,
         updatedAt: now,
+    };
+}
+
+export function createWorkflowTextRunRecord({ input, id, now }: { input: AgentRunInput; id: string; now: string }): AgentRunRecord {
+    const normalizedInput = normalizeWorkflowRunInput(input);
+    return {
+        id,
+        agentKind: "workflow_text",
+        agentConfigId: normalizedInput.sourcePresetId || normalizedInput.workflowId || "workflow-text-runner",
+        agentConfigVersion: normalizedInput.workflowVersion || "1.0.0",
+        status: "running",
+        input: normalizedInput,
+        draftOutput: normalizeAgentDraftOutput({ summary: "workflow 阶段文本执行中...", items: [], warnings: ["执行开始，等待 LLM 返回文本。"] }),
+        proposedActions: [],
+        createdAt: now,
+        updatedAt: now,
+    };
+}
+
+export function buildWorkflowStageSourceFiles(skills: AgentWorkflowSkill[], qualityGates: AgentWorkflowQualityGate[]): string[] {
+    const sourceFiles: string[] = [];
+    for (const skill of skills) {
+        for (const sourceFile of skill.sourceFiles) {
+            if (!sourceFiles.includes(sourceFile.path)) sourceFiles.push(sourceFile.path);
+        }
+    }
+    for (const gate of qualityGates) {
+        for (const sourceFile of gate.sourceFiles) {
+            if (!sourceFiles.includes(sourceFile.path)) sourceFiles.push(sourceFile.path);
+        }
+    }
+    return sourceFiles;
+}
+
+export function buildWorkflowStagePrompt({ workflowId, workflowVersion, stage, agent, skills, qualityGates, inputSnapshot }: WorkflowStagePromptBuildInput) {
+    const sourceFiles = buildWorkflowStageSourceFiles(skills, qualityGates);
+    return [
+        `你正在执行 Seedance 工作流的文本阶段草案生成任务。请仅返回文本草案，不调用图片/视频生成接口，不触发扣费。`,
+        `workflowId: ${workflowId}`,
+        `workflowVersion: ${workflowVersion}`,
+        `stageId: ${stage.stageId}`,
+        `stageName: ${stage.name}`,
+        `agentId: ${agent.agentId}`,
+        `agentName: ${agent.name}`,
+        `stagePurpose: ${stage.purpose}`,
+        `outputSummary: ${stage.outputSummary}`,
+        `agentRole: ${agent.role}`,
+        `agentResponsibility: ${agent.responsibility}`,
+        `agentSystemPromptSummary: ${agent.systemPromptSummary}`,
+        `skills: ${skills.map((skill) => `${skill.name}（${skill.purpose}）`).join("；")}`,
+        `qualityGates: ${qualityGates.map((gate) => `${gate.name}（${gate.summary}）`).join("；")}`,
+        `sourceFiles: ${sourceFiles.join("；") || "（无）"}`,
+        "",
+        `最小上下文：${buildWorkflowStageContextLines(inputSnapshot, agent.agentId, stage.stageId).join("；")}`,
+        "",
+        `要求：输出可读、可审核的文本草案，并在必要处给出校验建议。若你能输出 JSON，请将结果放在 JSON 里；若不适配，可输出纯文本，但必须完整可读。`,
+    ].join("\n");
+}
+
+export function buildWorkflowStagePromptMessages(params: WorkflowStagePromptBuildInput): ChatCompletionMessage[] {
+    return [
+        { role: "system", content: "你是 Seedance workflow 阶段文本助手，只输出可人工审核的文本产物。" },
+        { role: "user", content: buildWorkflowStagePrompt(params) },
+    ];
+}
+
+export function buildWorkflowTextRunOutput(input: AgentRunInput, rawText: string, now: string): WorkflowTextRunOutput {
+    const parsed = tryParseTextOutput(rawText);
+    return {
+        rawText,
+        summary: summarizeWorkflowTextOutput(parsed.value, rawText),
+        structuredOutput: parsed.value,
+        outputFormat: parsed.format,
+        stageId: input.stageId || "",
+        agentId: input.agentId || "",
+        workflowId: input.workflowId || input.sourcePresetId || input.presetId || "workflow",
+        sourceFiles: normalizeStringList(input.sourceFiles),
+        qualityGateIds: normalizeStringList(input.qualityGateIds),
+        createdAt: now,
     };
 }
 
@@ -142,6 +283,45 @@ export function updateAgentRunDraft(run: AgentRunRecord, output: unknown, now: s
     };
 }
 
+export function setWorkflowTextRunCompleted(run: AgentRunRecord, rawText: string, now: string): AgentRunRecord {
+    if (run.agentKind !== "workflow_text") return updateAgentRunDraft(run, rawText, now);
+    const workflowTextOutput = buildWorkflowTextRunOutput(run.input, rawText, now);
+    const structuredItems =
+        workflowTextOutput.structuredOutput && typeof workflowTextOutput.structuredOutput === "object" && !Array.isArray(workflowTextOutput.structuredOutput) ? (workflowTextOutput.structuredOutput as Record<string, unknown>).items : [];
+    return {
+        ...run,
+        status: "review",
+        draftOutput: {
+            summary: workflowTextOutput.summary,
+            items: Array.isArray(structuredItems) ? structuredItems : [],
+            rawJson: workflowTextOutput.structuredOutput || rawText,
+            warnings: workflowTextOutput.outputFormat === "text" ? ["模型返回非 JSON，已按文本保留。"] : [],
+            schemaVersion: "workflow-text.v1",
+        },
+        workflowTextOutput,
+        updatedAt: now,
+        errorMessage: undefined,
+    };
+}
+
+export function setWorkflowTextRunFailed(run: AgentRunRecord, errorMessage: string, now: string): AgentRunRecord {
+    return {
+        ...run,
+        status: "error",
+        errorMessage,
+        draftOutput: {
+            ...run.draftOutput,
+            summary: errorMessage || "执行失败",
+            warnings: [...run.draftOutput.warnings, errorMessage || "执行失败"],
+        },
+        updatedAt: now,
+    };
+}
+
+export function markAgentRunFailed(run: AgentRunRecord, errorMessage: string, now: string): AgentRunRecord {
+    return { ...run, status: "failed", errorMessage, updatedAt: now };
+}
+
 export function approveAgentRun(run: AgentRunRecord, now: string): AgentRunRecord {
     if (run.status === "applied") return run;
     return { ...run, status: "approved", approvedAt: now, rejectedAt: undefined, updatedAt: now };
@@ -154,10 +334,6 @@ export function rejectAgentRun(run: AgentRunRecord, now: string): AgentRunRecord
 export function markAgentRunApplied(run: AgentRunRecord, now: string): AgentRunRecord {
     if (run.status !== "approved") throw new Error("Agent run 必须先批准，才能标记为已应用");
     return { ...run, status: "applied", appliedAt: now, updatedAt: now };
-}
-
-export function markAgentRunFailed(run: AgentRunRecord, errorMessage: string, now: string): AgentRunRecord {
-    return { ...run, status: "failed", errorMessage, updatedAt: now };
 }
 
 export function listAgentRunsByProject(runs: AgentRunRecord[], projectId: string) {
@@ -175,10 +351,13 @@ export function listAgentRunsByAgentKind(runs: AgentRunRecord[], agentKind: Agen
 export function agentRunStatusLabel(status: AgentRunStatus) {
     if (status === "draft") return "草稿";
     if (status === "ready_for_review") return "待审核";
+    if (status === "running") return "运行中";
+    if (status === "review") return "待审核";
     if (status === "approved") return "已批准";
     if (status === "rejected") return "已驳回";
     if (status === "applied") return "已应用";
-    return "失败";
+    if (status === "failed") return "失败";
+    return "异常";
 }
 
 export function agentRunKindLabel(kind: AgentRunKind) {
@@ -186,6 +365,7 @@ export function agentRunKindLabel(kind: AgentRunKind) {
     if (kind === "storyboard_director") return "分镜导演";
     if (kind === "image_brief_builder") return "生图 Brief";
     if (kind === "video_prompt_builder") return "视频提示词";
+    if (kind === "workflow_text") return "文本工作流";
     return "提示词质检";
 }
 
@@ -196,6 +376,77 @@ function parseRawJson(value: unknown) {
     } catch {
         return { summary: value, items: [], warnings: ["原始输出不是合法 JSON，已作为文本摘要保存。"] };
     }
+}
+
+function buildWorkflowStageContextLines(snapshot: WorkflowStagePromptContext | undefined, agentId: string, stageId: string) {
+    if (!snapshot) return ["（未提供上下文）"];
+    const lines: string[] = [];
+    if (snapshot.projectTitle) lines.push(`项目：${snapshot.projectTitle}`);
+    if (snapshot.episodeTitle) lines.push(`本集：${snapshot.episodeTitle}`);
+    if (snapshot.scriptSnapshot) lines.push(`剧本：${snapshot.scriptSnapshot}`);
+    if (snapshot.stageSummary) lines.push(`阶段输入摘要：${snapshot.stageSummary}`);
+
+    if (agentId === "director" || stageId === "director-analysis") {
+        if (snapshot.sceneSummary) lines.push(`场次摘要：${snapshot.sceneSummary}`);
+        return lines.length ? lines : ["未提供项目/剧本/场次上下文"];
+    }
+    if (agentId === "art-designer" || stageId === "art-design") {
+        if (snapshot.directorOutputSummary) lines.push(`导演产物摘要：${snapshot.directorOutputSummary}`);
+        if (snapshot.assetNeedSummary) lines.push(`本集资产需求摘要：${snapshot.assetNeedSummary}`);
+        return lines.length ? lines : ["未提供导演产物摘要 / 资产需求"];
+    }
+    if (agentId === "storyboard-artist" || stageId === "seedance-storyboard") {
+        if (snapshot.directorOutputSummary) lines.push(`导演产物摘要：${snapshot.directorOutputSummary}`);
+        if (snapshot.artDesignOutputSummary) lines.push(`服化道产物摘要：${snapshot.artDesignOutputSummary}`);
+        if (snapshot.storyboardRequirement) lines.push(`分镜输出要求：${snapshot.storyboardRequirement}`);
+        return lines.length ? lines : ["未提供导演 / 服化道产物及要求"];
+    }
+    return lines.length ? lines : ["未提供阶段上下文"];
+}
+
+function normalizeWorkflowRunInput(input: AgentRunInput): AgentRunInput {
+    return {
+        ...input,
+        sourceFiles: normalizeStringList(input.sourceFiles),
+        qualityGateIds: normalizeStringList(input.qualityGateIds),
+        promptMessages: Array.isArray(input.promptMessages) ? input.promptMessages : [],
+    };
+}
+
+function normalizeStringList(value: unknown) {
+    const list = Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+    return Array.from(new Set(list.map((item) => item.trim())));
+}
+
+function tryParseTextOutput(rawText: string) {
+    const trimmed = rawText.trim();
+    const parsed = parseWorkflowTextJson(trimmed) || parseWorkflowTextJson(extractCodeBlock(trimmed));
+    if (parsed !== undefined) return { format: "json" as const, value: parsed };
+    return { format: "text" as const, value: undefined };
+}
+
+function parseWorkflowTextJson(value: string) {
+    try {
+        return JSON.parse(value);
+    } catch {
+        return undefined;
+    }
+}
+
+function extractCodeBlock(text: string) {
+    const match = text.match(/```(?:json)?\n([\s\S]*?)\n```/i);
+    return match?.[1]?.trim() || "";
+}
+
+function summarizeWorkflowTextOutput(value: unknown, rawText: string) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+        const record = value as Record<string, unknown>;
+        if (typeof record.summary === "string" && record.summary.trim()) return record.summary;
+        if (typeof record.text === "string" && record.text.trim()) return record.text;
+        if (typeof record.output === "string" && record.output.trim()) return record.output;
+    }
+    const preview = rawText.trim();
+    return preview.length > 160 ? `${preview.slice(0, 157)}...` : preview || "模型返回空文本";
 }
 
 function buildTargetRefs(record: Record<string, unknown>) {
