@@ -6,7 +6,7 @@
 
 ## 当前基线
 
-- 当前版本：`v0.2.65`。
+- 当前版本：`v0.2.66`。
 - 已具备项目工作台、画布项目预设、剧本管理、分镜管理、设定库、提示词仓库、素材自动归档、素材去重、素材版本历史、素材版本引用锁定、生成队列、剪辑包导出、本地 Agent 工作台和 Agent Skill registry。
 - 火山方舟 / Seedance 的本地直连边界已收口：本地直连只保留 OpenAI 兼容能力，火山方舟 / Seedance 企业能力走云端渠道；火山素材加白仍由后台系统设置维护。
 - 当前核心短板不再是“缺入口”，而是生产链路的 Agent 化收口：本集工作台已经把剧本、分镜头表、生成镜头组、资产绑定、生成状态和画布节点收进同一条主路径；下一阶段要先建立统一 Agent 设置中心，再把剧本拆解、资产提取、生图需求、视频提示词和镜头组视频节点接入同一套可配置、可确认的 Agent 能力。
@@ -1176,6 +1176,10 @@ Seedance 工作流预设
 - 节点 metadata 保存 `workflowId / workflowRunId / workflowVersion / stageId / agentId / sourceOutputId / previewId / previewItemId / sourceFiles / qualityGateIds / episodeId` 等追溯字段。
 - 同一 `previewItemId` 不重复创建节点；重复点击会阻止重复创建并提示已创建。
 - 不写入设定库，不写入分镜头表，不自动生成图片或视频，不触发扣费。
+
+##### M6.10.3-R：总 review 与验收清单整理
+
+状态：已完成，待页面验收。本轮 review 修复了 mapping preview 应用记录只按 `previewItemId` 去重导致不同 preview 之间可能互相误拦截的问题；现在应用记录按 `previewId + previewItemId` 判断，且项目页缺少画布 / 本集上下文时会禁用分镜头表写入入口。
 
 #### M6.10.4：质量门与规范读取记录迁移
 

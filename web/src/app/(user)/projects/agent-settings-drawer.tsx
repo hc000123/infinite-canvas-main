@@ -26,6 +26,7 @@ import {
     buildWorkflowStagePromptMessages,
     buildWorkflowStageSourceFiles,
     canGenerateWorkflowMappingPreview,
+    workflowMappingPreviewItemKey,
     workflowStageStatusLabel,
     type AgentRunInput,
     type AgentWorkflowMappingPreview,
@@ -399,6 +400,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
                                                 appliedPreviewItemIds={workflowAppliedPreviewItemIds}
                                                 applyingPreviewIds={applyingPreviewIds}
                                                 hasCanvasContext={Boolean(canvasId)}
+                                                hasStoryboardContext={Boolean(canvasId && episodeId)}
                                                 onApplyProductionBiblePreview={(preview) => {
                                                     const creatableCount = preview.items.filter((item) => item.targetType === "production_bible" && item.action === "create").length;
                                                     modal.confirm({
@@ -760,6 +762,7 @@ function WorkflowMappingPreviewPanel({
     appliedPreviewItemIds,
     applyingPreviewIds,
     hasCanvasContext,
+    hasStoryboardContext,
     onApplyProductionBiblePreview,
     onApplyStoryboardPreview,
     onApplyVideoNodePreview,
@@ -768,6 +771,7 @@ function WorkflowMappingPreviewPanel({
     appliedPreviewItemIds: string[];
     applyingPreviewIds: Record<string, boolean>;
     hasCanvasContext: boolean;
+    hasStoryboardContext: boolean;
     onApplyProductionBiblePreview: (preview: AgentWorkflowMappingPreview) => void;
     onApplyStoryboardPreview: (preview: AgentWorkflowMappingPreview) => void;
     onApplyVideoNodePreview: (preview: AgentWorkflowMappingPreview) => void;
@@ -777,7 +781,7 @@ function WorkflowMappingPreviewPanel({
             <div className="text-xs font-medium text-stone-500">映射预览</div>
             {previews.map((preview) => {
                 const creatableItems = preview.items.filter((item) => item.targetType === preview.targetType && item.action === "create");
-                const pendingCreatableItems = creatableItems.filter((item) => !appliedPreviewItemIds.includes(item.itemId));
+                const pendingCreatableItems = creatableItems.filter((item) => !appliedPreviewItemIds.includes(workflowMappingPreviewItemKey(preview, item.itemId)));
                 const appliedCount = creatableItems.length - pendingCreatableItems.length;
                 const applyDisabledReason =
                     preview.targetType === "video_node"
@@ -792,11 +796,13 @@ function WorkflowMappingPreviewPanel({
                           ? preview.targetType === "production_bible"
                               ? "当前预览没有可新增的设定库条目"
                               : "当前预览没有可新增的分镜头表条目"
-                          : !pendingCreatableItems.length
-                            ? preview.targetType === "production_bible"
-                                ? "已写入设定库"
-                                : "已写入分镜头表"
-                            : "";
+                          : preview.targetType === "storyboard_table" && !hasStoryboardContext
+                            ? "当前缺少画布或本集上下文，不能写入分镜头表"
+                            : !pendingCreatableItems.length
+                              ? preview.targetType === "production_bible"
+                                  ? "已写入设定库"
+                                  : "已写入分镜头表"
+                              : "";
                 return (
                     <div key={preview.previewId} className="rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-600 dark:bg-white/5 dark:text-stone-300">
                         <div className="flex flex-wrap items-center gap-2">
@@ -828,7 +834,7 @@ function WorkflowMappingPreviewPanel({
                                     <div className="flex flex-wrap items-center gap-2">
                                         <Tag className="m-0">{item.action}</Tag>
                                         <span className="font-medium">{item.title}</span>
-                                        {appliedPreviewItemIds.includes(item.itemId) ? (
+                                        {appliedPreviewItemIds.includes(workflowMappingPreviewItemKey(preview, item.itemId)) ? (
                                             <Tag className="m-0" color="green">
                                                 {preview.targetType === "production_bible" ? "已写入设定库" : preview.targetType === "storyboard_table" ? "已写入分镜头表" : "已创建视频配置节点"}
                                             </Tag>

@@ -233,6 +233,10 @@ export type WorkflowVideoNodeMappingPreviewApplyResult = {
     nextNodes: CanvasNodeData[];
 };
 
+export function workflowMappingPreviewItemKey(preview: AgentWorkflowMappingPreview, previewItemId: string) {
+    return `${preview.previewId}:${previewItemId}`;
+}
+
 export function createAgentRunRecord({ config, input, id, now, draftOutput }: { config: AgentConfig; input: AgentRunInput; id: string; now: string; draftOutput?: unknown }): AgentRunRecord {
     const normalizedConfig = normalizeAgentConfig(config);
     const callable = canInvokeAgentConfig(normalizedConfig);
@@ -555,7 +559,8 @@ export function applyWorkflowMappingPreviewToProductionBible({
             skippedPreviewItemIds.push(item.itemId);
             continue;
         }
-        if (existingItems.some((existing) => existing.projectId === preview.projectId && existing.metadata?.source?.previewItemId === item.itemId)) {
+        const appliedItemKey = workflowMappingPreviewItemKey(preview, item.itemId);
+        if (existingItems.some((existing) => existing.projectId === preview.projectId && existing.metadata?.source?.previewId === preview.previewId && existing.metadata.source.previewItemId === item.itemId)) {
             warnings.push(`条目 ${item.title} 已写入设定库，已跳过重复应用。`);
             skippedPreviewItemIds.push(item.itemId);
             continue;
@@ -595,7 +600,7 @@ export function applyWorkflowMappingPreviewToProductionBible({
             },
         };
         appliedWrites.push({ previewItemId: item.itemId, input });
-        appliedPreviewItemIds.push(item.itemId);
+        appliedPreviewItemIds.push(appliedItemKey);
     }
     return { appliedWrites, appliedPreviewItemIds, skippedPreviewItemIds, warnings };
 }
@@ -682,7 +687,8 @@ export function applyWorkflowMappingPreviewToStoryboardTable({
             skippedPreviewItemIds.push(item.itemId);
             continue;
         }
-        if (existingShots.some((shot) => shot.canvasId === canvasId && shot.episodeId === episodeId && shot.workflowSource?.previewItemId === item.itemId)) {
+        const appliedItemKey = workflowMappingPreviewItemKey(preview, item.itemId);
+        if (existingShots.some((shot) => shot.canvasId === canvasId && shot.episodeId === episodeId && shot.workflowSource?.previewId === preview.previewId && shot.workflowSource.previewItemId === item.itemId)) {
             warnings.push(`条目 ${item.title} 已写入分镜头表，已跳过重复应用。`);
             skippedPreviewItemIds.push(item.itemId);
             continue;
@@ -730,7 +736,7 @@ export function applyWorkflowMappingPreviewToStoryboardTable({
             },
         });
         appliedWrites.push({ previewItemId: item.itemId, input: shot });
-        appliedPreviewItemIds.push(item.itemId);
+        appliedPreviewItemIds.push(appliedItemKey);
     }
     return { appliedWrites, appliedPreviewItemIds, skippedPreviewItemIds, warnings };
 }
@@ -776,7 +782,8 @@ export function applyWorkflowMappingPreviewToVideoNodes({
             skippedPreviewItemIds.push(item.itemId);
             continue;
         }
-        const existingNode = workingNodes.find((node) => node.metadata?.workflowSource?.previewItemId === item.itemId);
+        const appliedItemKey = workflowMappingPreviewItemKey(preview, item.itemId);
+        const existingNode = workingNodes.find((node) => node.metadata?.workflowSource?.previewId === preview.previewId && node.metadata.workflowSource.previewItemId === item.itemId);
         if (item.action === "skip") {
             warnings.push(`条目 ${item.title} 标记为 skip，未创建视频配置节点。`);
             skippedPreviewItemIds.push(item.itemId);
@@ -841,7 +848,7 @@ export function applyWorkflowMappingPreviewToVideoNodes({
             const index = workingNodes.findIndex((node) => node.id === existingNode.id);
             workingNodes[index] = updatedNode;
             appliedNodes.push({ previewItemId: item.itemId, node: updatedNode });
-            appliedPreviewItemIds.push(item.itemId);
+            appliedPreviewItemIds.push(appliedItemKey);
             focusNodeIds.push(updatedNode.id);
             continue;
         }
@@ -857,7 +864,7 @@ export function applyWorkflowMappingPreviewToVideoNodes({
         );
         workingNodes.push(node);
         appliedNodes.push({ previewItemId: item.itemId, node });
-        appliedPreviewItemIds.push(item.itemId);
+        appliedPreviewItemIds.push(appliedItemKey);
         focusNodeIds.push(node.id);
     }
 

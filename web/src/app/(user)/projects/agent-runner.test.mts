@@ -34,6 +34,7 @@ import {
     summarizeAgentRunDraft,
     updateAgentRunDraft,
     validateAgentDraftOutputShape,
+    workflowMappingPreviewItemKey,
 } from "./agent-runner.ts";
 import { buildSeedanceWorkflowPreset, workflowStageDetail } from "./agent-workflow-presets.ts";
 
@@ -638,6 +639,151 @@ test("same previewItemId is not written to production bible twice", () => {
         result.warnings.some((item) => item.includes("已写入设定库")),
         true,
     );
+});
+
+test("same previewItemId from another preview does not block application", () => {
+    const firstBibleFixture = buildApprovedWorkflowStageFixture("art-design", '{"summary":"角色设定","items":[{"title":"阿梁","kind":"character","description":"冷静"}]}', "ev-apply-key-1", "out-apply-key-1", "art-designer");
+    const secondBibleFixture = buildApprovedWorkflowStageFixture("art-design", '{"summary":"角色设定","items":[{"title":"小叶","kind":"character","description":"敏锐"}]}', "ev-apply-key-2", "out-apply-key-2", "art-designer");
+    const firstBiblePreview = buildWorkflowMappingPreviews({ workflowRun: firstBibleFixture.workflowRun, stageId: "art-design", output: firstBibleFixture.output, now: "2026-01-12T00:04:00.000Z" })[0];
+    const secondBiblePreview = buildWorkflowMappingPreviews({ workflowRun: secondBibleFixture.workflowRun, stageId: "art-design", output: secondBibleFixture.output, now: "2026-01-12T00:05:00.000Z" })[0];
+    const existingBibleItem = {
+        id: "bible-existing",
+        projectId: "project-workflow",
+        kind: "character" as const,
+        name: "阿梁",
+        description: "冷静",
+        tags: [],
+        assetRefs: [],
+        promptSnippets: {},
+        metadata: {
+            source: {
+                sourceType: "workflow_mapping_preview" as const,
+                workflowId: workflowPreset.workflowId,
+                workflowRunId: firstBibleFixture.workflowRun.id,
+                workflowVersion: firstBibleFixture.workflowRun.workflowVersion,
+                stageId: "art-design",
+                agentId: "art-designer",
+                sourceOutputId: firstBiblePreview.sourceOutputId,
+                previewId: firstBiblePreview.previewId,
+                previewItemId: firstBiblePreview.items[0].itemId,
+                sourceFiles: firstBibleFixture.output.sourceFiles,
+                qualityGateIds: firstBibleFixture.output.qualityGateIds,
+                createdFromText: "阿梁",
+            },
+        },
+        createdAt: "2026-01-12T00:05:00.000Z",
+        updatedAt: "2026-01-12T00:05:00.000Z",
+    };
+    const bibleResult = applyWorkflowMappingPreviewToProductionBible({
+        preview: secondBiblePreview,
+        workflowRun: secondBibleFixture.workflowRun,
+        output: secondBibleFixture.output,
+        existingItems: [existingBibleItem],
+    });
+    assert.equal(firstBiblePreview.items[0].itemId, secondBiblePreview.items[0].itemId);
+    assert.equal(bibleResult.appliedWrites.length, 1);
+    assert.deepEqual(bibleResult.appliedPreviewItemIds, [workflowMappingPreviewItemKey(secondBiblePreview, secondBiblePreview.items[0].itemId)]);
+
+    const firstStoryboardFixture = buildApprovedWorkflowStageFixture("director-analysis", '{"summary":"导演分析","items":[{"title":"第一场","description":"夜戏开场"}]}', "ev-storyboard-key-1", "out-storyboard-key-1", "director");
+    const secondStoryboardFixture = buildApprovedWorkflowStageFixture("director-analysis", '{"summary":"导演分析","items":[{"title":"第二场","description":"雨夜追逐"}]}', "ev-storyboard-key-2", "out-storyboard-key-2", "director");
+    const firstStoryboardPreview = buildWorkflowMappingPreviews({ workflowRun: firstStoryboardFixture.workflowRun, stageId: "director-analysis", output: firstStoryboardFixture.output, now: "2026-01-12T00:04:00.000Z" })[1];
+    const secondStoryboardPreview = buildWorkflowMappingPreviews({ workflowRun: secondStoryboardFixture.workflowRun, stageId: "director-analysis", output: secondStoryboardFixture.output, now: "2026-01-12T00:05:00.000Z" })[1];
+    const existingShot = {
+        id: "shot-existing-key",
+        projectId: "project-workflow",
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        sceneName: "旧场次",
+        location: "",
+        timeOfDay: "",
+        order: 1,
+        title: "旧镜头",
+        scriptText: "",
+        visualDescription: "",
+        characters: [],
+        dialogue: "",
+        action: "",
+        emotion: "",
+        shotSize: "",
+        cameraMovement: "",
+        estimatedDuration: 3,
+        assetNeeds: [],
+        assetRefs: [],
+        productionBibleRefs: [],
+        sourceType: "workflow_mapping_preview",
+        workflowSource: {
+            sourceType: "workflow_mapping_preview" as const,
+            workflowId: workflowPreset.workflowId,
+            workflowRunId: firstStoryboardFixture.workflowRun.id,
+            workflowVersion: firstStoryboardFixture.workflowRun.workflowVersion,
+            stageId: "director-analysis",
+            agentId: "director",
+            sourceOutputId: firstStoryboardPreview.sourceOutputId,
+            previewId: firstStoryboardPreview.previewId,
+            previewItemId: firstStoryboardPreview.items[0].itemId,
+            sourceFiles: firstStoryboardFixture.output.sourceFiles,
+            qualityGateIds: firstStoryboardFixture.output.qualityGateIds,
+            createdFromText: "第一场",
+        },
+        createdAt: "2026-01-12T00:00:00.000Z",
+        updatedAt: "2026-01-12T00:00:00.000Z",
+    };
+    const storyboardResult = applyWorkflowMappingPreviewToStoryboardTable({
+        preview: secondStoryboardPreview,
+        workflowRun: secondStoryboardFixture.workflowRun,
+        output: secondStoryboardFixture.output,
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        existingShots: [existingShot],
+    });
+    assert.equal(firstStoryboardPreview.items[0].itemId, secondStoryboardPreview.items[0].itemId);
+    assert.equal(storyboardResult.appliedWrites.length, 1);
+    assert.deepEqual(storyboardResult.appliedPreviewItemIds, [workflowMappingPreviewItemKey(secondStoryboardPreview, secondStoryboardPreview.items[0].itemId)]);
+
+    const firstVideoFixture = buildApprovedWorkflowStageFixture("seedance-storyboard", '{"summary":"视频节点","items":[{"title":"镜头一","prompt":"推进镜头"}]}', "ev-video-key-1", "out-video-key-1", "storyboard-artist");
+    const secondVideoFixture = buildApprovedWorkflowStageFixture("seedance-storyboard", '{"summary":"视频节点","items":[{"title":"镜头二","prompt":"拉远镜头"}]}', "ev-video-key-2", "out-video-key-2", "storyboard-artist");
+    const firstVideoPreview = buildWorkflowMappingPreviews({ workflowRun: firstVideoFixture.workflowRun, stageId: "seedance-storyboard", output: firstVideoFixture.output, now: "2026-01-12T00:04:00.000Z" }).find(
+        (item) => item.targetType === "video_node",
+    )!;
+    const secondVideoPreview = buildWorkflowMappingPreviews({ workflowRun: secondVideoFixture.workflowRun, stageId: "seedance-storyboard", output: secondVideoFixture.output, now: "2026-01-12T00:05:00.000Z" }).find(
+        (item) => item.targetType === "video_node",
+    )!;
+    const videoResult = applyWorkflowMappingPreviewToVideoNodes({
+        preview: secondVideoPreview,
+        workflowRun: secondVideoFixture.workflowRun,
+        output: secondVideoFixture.output,
+        canvasId: "canvas-1",
+        existingNodes: [
+            {
+                id: "node-existing-key",
+                type: "config",
+                title: "已存在节点",
+                position: { x: 0, y: 0 },
+                width: 340,
+                height: 240,
+                metadata: {
+                    generationMode: "video",
+                    workflowSource: {
+                        sourceType: "workflow_mapping_preview" as const,
+                        workflowId: workflowPreset.workflowId,
+                        workflowRunId: firstVideoFixture.workflowRun.id,
+                        workflowVersion: firstVideoFixture.workflowRun.workflowVersion,
+                        stageId: "seedance-storyboard",
+                        agentId: "storyboard-artist",
+                        sourceOutputId: firstVideoPreview.sourceOutputId,
+                        previewId: firstVideoPreview.previewId,
+                        previewItemId: firstVideoPreview.items[0].itemId,
+                        sourceFiles: firstVideoFixture.output.sourceFiles,
+                        qualityGateIds: firstVideoFixture.output.qualityGateIds,
+                        createdFromText: "镜头一",
+                    },
+                },
+            },
+        ],
+    });
+    assert.equal(firstVideoPreview.items[0].itemId, secondVideoPreview.items[0].itemId);
+    assert.equal(videoResult.appliedNodes.length, 1);
+    assert.deepEqual(videoResult.appliedPreviewItemIds, [workflowMappingPreviewItemKey(secondVideoPreview, secondVideoPreview.items[0].itemId)]);
 });
 
 test("storyboard_table preview can write storyboard shots with workflow trace metadata", () => {
