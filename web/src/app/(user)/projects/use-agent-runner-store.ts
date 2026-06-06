@@ -4,12 +4,15 @@ import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 
 import { localForageStorage } from "@/lib/localforage-storage";
+import { useProductionBibleStore } from "../canvas/stores/use-production-bible-store";
 import type { AgentConfig } from "./agent-settings";
 import type { AgentWorkflowPreset } from "./agent-workflow-presets";
 import {
+    applyWorkflowMappingPreviewToProductionBible,
     buildWorkflowMappingPreviews,
     buildAgentWorkflowReviewEvidence,
     buildAgentWorkflowStageOutput,
+    canApplyWorkflowMappingPreviewToProductionBible,
     canGenerateWorkflowMappingPreview,
     approveAgentRun,
     completeAgentWorkflowStageRun,
@@ -45,8 +48,10 @@ type AgentRunnerStore = {
     workflowOutputs: AgentWorkflowStageOutput[];
     workflowEvidences: AgentWorkflowReviewEvidence[];
     workflowMappingPreviews: AgentWorkflowMappingPreview[];
+    workflowAppliedPreviewItemIds: string[];
     ensureWorkflowRun: (input: { projectId: string; canvasId?: string; episodeId?: string; preset: AgentWorkflowPreset }) => string;
     generateWorkflowMappingPreview: (workflowRunId: string, stageId: string) => { ok: boolean; reason?: string; previewIds?: string[] };
+    applyProductionBiblePreview: (previewId: string, selectedItemIds?: string[]) => { ok: boolean; reason?: string; appliedCount?: number; skippedCount?: number; warnings: string[] };
     createRun: (config: AgentConfig, input: AgentRunInput, draftOutput?: unknown) => string;
     startWorkflowTextRun: (input: AgentRunInput) => string;
     completeWorkflowTextRun: (id: string, rawText: string) => void;
@@ -73,6 +78,7 @@ const agentRunnerStorage: PersistStorage<AgentRunnerStore> = {
         parsed.state.workflowOutputs = (parsed.state.workflowOutputs || []).map(normalizeStoredWorkflowOutput);
         parsed.state.workflowEvidences = (parsed.state.workflowEvidences || []).map(normalizeStoredWorkflowEvidence);
         parsed.state.workflowMappingPreviews = (parsed.state.workflowMappingPreviews || []).map(normalizeStoredWorkflowMappingPreview);
+        parsed.state.workflowAppliedPreviewItemIds = Array.isArray(parsed.state.workflowAppliedPreviewItemIds) ? parsed.state.workflowAppliedPreviewItemIds : [];
         return parsed;
     },
     setItem: (name, value) => localForageStorage.setItem(name, JSON.stringify(value)),
@@ -87,6 +93,7 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
             workflowOutputs: [],
             workflowEvidences: [],
             workflowMappingPreviews: [],
+            workflowAppliedPreviewItemIds: [],
             ensureWorkflowRun: ({ projectId, canvasId, episodeId, preset }) => {
                 const existing = get().workflowRuns.find((run) => run.projectId === projectId && run.canvasId === canvasId && run.episodeId === episodeId && run.workflowId === preset.workflowId);
                 if (existing) return existing.id;
@@ -110,6 +117,33 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                     workflowMappingPreviews: [...state.workflowMappingPreviews.filter((item) => !previews.some((preview) => preview.previewId === item.previewId)), ...previews],
                 }));
                 return { ok: true, previewIds: previews.map((preview) => preview.previewId) };
+            },
+            applyProductionBiblePreview: (previewId, selectedItemIds) => {
+                const preview = get().workflowMappingPreviews.find((item) => item.previewId === previewId);
+                const workflowRun = preview ? get().workflowRuns.find((item) => item.id === preview.workflowRunId) : undefined;
+                const output = preview ? get().workflowOutputs.find((item) => item.outputId === preview.sourceOutputId) : undefined;
+                const eligibility = canApplyWorkflowMappingPreviewToProductionBible({ workflowRun, preview, output });
+                if (!eligibility.allowed) return { ok: false, reason: eligibility.reason, warnings: [eligibility.reason] };
+                const existingItems = useProductionBibleStore.getState().items;
+                const result = applyWorkflowMappingPreviewToProductionBible({
+                    preview: preview!,
+                    workflowRun: workflowRun!,
+                    output: output!,
+                    selectedItemIds,
+                    existingItems,
+                });
+                if (!result.appliedWrites.length) return { ok: false, reason: result.warnings[0] || "没有可写入的设定库条目", warnings: result.warnings, appliedCount: 0, skippedCount: result.skippedPreviewItemIds.length };
+                const addBibleItem = useProductionBibleStore.getState().addItem;
+                for (const write of result.appliedWrites) addBibleItem(write.input);
+                set((state) => ({
+                    workflowAppliedPreviewItemIds: Array.from(new Set([...state.workflowAppliedPreviewItemIds, ...result.appliedPreviewItemIds])),
+                }));
+                return {
+                    ok: true,
+                    appliedCount: result.appliedWrites.length,
+                    skippedCount: result.skippedPreviewItemIds.length,
+                    warnings: result.warnings,
+                };
             },
             createRun: (config, input, draftOutput) => {
                 const now = new Date().toISOString();
@@ -186,6 +220,7 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                     workflowOutputs: state.workflowOutputs,
                     workflowEvidences: state.workflowEvidences,
                     workflowMappingPreviews: state.workflowMappingPreviews,
+                    workflowAppliedPreviewItemIds: state.workflowAppliedPreviewItemIds,
                 }) as StorageValue<AgentRunnerStore>["state"],
         },
     ),

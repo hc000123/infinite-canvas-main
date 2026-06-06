@@ -71,13 +71,14 @@ const agentKindOptions: Array<{ label: string; value: AgentConfigKind }> = [
 ];
 
 export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, episodeId, episodeTitle, onClose }: Props) {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const [form] = Form.useForm<AgentConfigFormValues>();
     const [selectedKind, setSelectedKind] = useState<AgentConfigKind>("asset_extractor");
     const [selectedWorkflowId, setSelectedWorkflowId] = useState(builtInAgentWorkflowPresets()[0].workflowId);
     const [workflowEnabled, setWorkflowEnabled] = useState(false);
     const [workflowSelected, setWorkflowSelected] = useState(false);
     const [runningStageIds, setRunningStageIds] = useState<Record<string, boolean>>({});
+    const [applyingPreviewIds, setApplyingPreviewIds] = useState<Record<string, boolean>>({});
     const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
     const globalConfigs = useAgentSettingsStore((state) => state.globalConfigs);
     const projectConfigs = useAgentSettingsStore((state) => state.projectConfigs);
@@ -92,8 +93,10 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
     const workflowOutputs = useAgentRunnerStore((state) => state.workflowOutputs);
     const workflowEvidences = useAgentRunnerStore((state) => state.workflowEvidences);
     const workflowMappingPreviews = useAgentRunnerStore((state) => state.workflowMappingPreviews);
+    const workflowAppliedPreviewItemIds = useAgentRunnerStore((state) => state.workflowAppliedPreviewItemIds);
     const ensureWorkflowRun = useAgentRunnerStore((state) => state.ensureWorkflowRun);
     const generateWorkflowMappingPreview = useAgentRunnerStore((state) => state.generateWorkflowMappingPreview);
+    const applyProductionBiblePreview = useAgentRunnerStore((state) => state.applyProductionBiblePreview);
     const createRun = useAgentRunnerStore((state) => state.createRun);
     const approveRun = useAgentRunnerStore((state) => state.approveRun);
     const rejectRun = useAgentRunnerStore((state) => state.rejectRun);
@@ -385,7 +388,36 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
                                             ))}
                                         </Space>
                                         <WorkflowStageStatePanel stageId={stage.stageId} workflowRun={selectedWorkflowRun} workflowOutputs={workflowOutputs} workflowEvidences={workflowEvidences} />
-                                        {stagePreviews.length ? <WorkflowMappingPreviewPanel previews={stagePreviews} /> : null}
+                                        {stagePreviews.length ? (
+                                            <WorkflowMappingPreviewPanel
+                                                previews={stagePreviews}
+                                                appliedPreviewItemIds={workflowAppliedPreviewItemIds}
+                                                applyingPreviewIds={applyingPreviewIds}
+                                                onApplyProductionBiblePreview={(preview) => {
+                                                    const creatableCount = preview.items.filter((item) => item.targetType === "production_bible" && item.action === "create").length;
+                                                    modal.confirm({
+                                                        title: "确认写入设定库",
+                                                        content: `将把 ${creatableCount} 条设定草案写入设定库。不会写入分镜头表，不会创建或修改画布节点。`,
+                                                        okText: "确认写入",
+                                                        cancelText: "取消",
+                                                        onOk: () => {
+                                                            setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: true }));
+                                                            try {
+                                                                const result = applyProductionBiblePreview(preview.previewId);
+                                                                if (!result.ok) {
+                                                                    message.warning(result.reason || "当前预览不能写入设定库");
+                                                                    return;
+                                                                }
+                                                                message.success(`已写入 ${result.appliedCount || 0} 条设定库条目`);
+                                                                if (result.warnings.length) message.info(result.warnings.join("；"));
+                                                            } finally {
+                                                                setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
+                                                            }
+                                                        },
+                                                    });
+                                                }}
+                                            />
+                                        ) : null}
                                         {selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.status === "review" ? (
                                             <div className="mt-3 grid gap-2 rounded-md bg-stone-50 p-2 dark:bg-white/5">
                                                 <Input.TextArea
@@ -668,35 +700,65 @@ function WorkflowStageStatePanel({ stageId, workflowRun, workflowOutputs, workfl
     );
 }
 
-function WorkflowMappingPreviewPanel({ previews }: { previews: AgentWorkflowMappingPreview[] }) {
+function WorkflowMappingPreviewPanel({
+    previews,
+    appliedPreviewItemIds,
+    applyingPreviewIds,
+    onApplyProductionBiblePreview,
+}: {
+    previews: AgentWorkflowMappingPreview[];
+    appliedPreviewItemIds: string[];
+    applyingPreviewIds: Record<string, boolean>;
+    onApplyProductionBiblePreview: (preview: AgentWorkflowMappingPreview) => void;
+}) {
     return (
         <div className="mt-3 grid gap-2 rounded-md border border-dashed border-stone-200 p-3 dark:border-stone-700">
             <div className="text-xs font-medium text-stone-500">映射预览</div>
-            {previews.map((preview) => (
-                <div key={preview.previewId} className="rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-600 dark:bg-white/5 dark:text-stone-300">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Tag className="m-0">{preview.targetType}</Tag>
-                        <span className="font-medium">{preview.title}</span>
-                    </div>
-                    <div className="mt-1">{preview.summary}</div>
-                    {preview.warnings.length ? <div className="mt-1 text-amber-600">Warnings：{preview.warnings.join("；")}</div> : null}
-                    <div className="mt-2 grid gap-2">
-                        {preview.items.map((item) => (
-                            <div key={item.itemId} className="rounded bg-white px-2 py-1.5 dark:bg-black/20">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <Tag className="m-0">{item.action}</Tag>
-                                    <span className="font-medium">{item.title}</span>
-                                    {typeof item.confidence === "number" ? <span className="text-stone-400">置信度 {item.confidence}</span> : null}
+            {previews.map((preview) => {
+                const creatableItems = preview.items.filter((item) => item.targetType === "production_bible" && item.action === "create");
+                const pendingCreatableItems = creatableItems.filter((item) => !appliedPreviewItemIds.includes(item.itemId));
+                const appliedCount = creatableItems.length - pendingCreatableItems.length;
+                const applyDisabledReason = preview.targetType !== "production_bible" ? "分镜表和画布节点映射将在后续步骤处理" : !creatableItems.length ? "当前预览没有可新增的设定库条目" : !pendingCreatableItems.length ? "已写入设定库" : "";
+                return (
+                    <div key={preview.previewId} className="rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-600 dark:bg-white/5 dark:text-stone-300">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Tag className="m-0">{preview.targetType}</Tag>
+                            <span className="font-medium">{preview.title}</span>
+                            {preview.targetType === "production_bible" ? (
+                                <Button size="small" type="primary" disabled={Boolean(applyDisabledReason)} loading={Boolean(applyingPreviewIds[preview.previewId])} onClick={() => onApplyProductionBiblePreview(preview)}>
+                                    写入设定库
+                                </Button>
+                            ) : (
+                                <Tag className="m-0">后续步骤处理</Tag>
+                            )}
+                        </div>
+                        <div className="mt-1">{preview.summary}</div>
+                        {preview.warnings.length ? <div className="mt-1 text-amber-600">Warnings：{preview.warnings.join("；")}</div> : null}
+                        {applyDisabledReason ? <div className="mt-1 text-stone-500">{applyDisabledReason}</div> : null}
+                        {preview.targetType === "production_bible" && appliedCount ? <div className="mt-1 text-emerald-600">已写入：{appliedCount} 条</div> : null}
+                        <div className="mt-2 grid gap-2">
+                            {preview.items.map((item) => (
+                                <div key={item.itemId} className="rounded bg-white px-2 py-1.5 dark:bg-black/20">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Tag className="m-0">{item.action}</Tag>
+                                        <span className="font-medium">{item.title}</span>
+                                        {appliedPreviewItemIds.includes(item.itemId) ? (
+                                            <Tag className="m-0" color="green">
+                                                已写入设定库
+                                            </Tag>
+                                        ) : null}
+                                        {typeof item.confidence === "number" ? <span className="text-stone-400">置信度 {item.confidence}</span> : null}
+                                    </div>
+                                    <div className="mt-1">{item.reason}</div>
+                                    <div className="mt-1 text-stone-500">来源：{item.sourceText}</div>
+                                    <pre className="mt-1 overflow-auto rounded bg-stone-950 p-2 text-[11px] text-stone-50">{JSON.stringify(item.mappedFields, null, 2)}</pre>
+                                    {item.warnings.length ? <div className="mt-1 text-amber-600">{item.warnings.join("；")}</div> : null}
                                 </div>
-                                <div className="mt-1">{item.reason}</div>
-                                <div className="mt-1 text-stone-500">来源：{item.sourceText}</div>
-                                <pre className="mt-1 overflow-auto rounded bg-stone-950 p-2 text-[11px] text-stone-50">{JSON.stringify(item.mappedFields, null, 2)}</pre>
-                                {item.warnings.length ? <div className="mt-1 text-amber-600">{item.warnings.join("；")}</div> : null}
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 }

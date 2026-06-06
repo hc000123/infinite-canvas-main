@@ -14,6 +14,25 @@ export type ProductionBiblePromptSnippets = {
     consistency?: string;
 };
 
+export type ProductionBibleSourceMetadata = {
+    sourceType: "workflow_mapping_preview";
+    workflowId: string;
+    workflowRunId: string;
+    workflowVersion: string;
+    stageId: string;
+    agentId: string;
+    sourceOutputId: string;
+    previewId: string;
+    previewItemId: string;
+    sourceFiles: string[];
+    qualityGateIds: string[];
+    createdFromText: string;
+};
+
+export type ProductionBibleItemMetadata = {
+    source?: ProductionBibleSourceMetadata;
+};
+
 export type ProductionBibleItem = {
     id: string;
     projectId: string;
@@ -23,6 +42,7 @@ export type ProductionBibleItem = {
     tags: string[];
     assetRefs: ProductionBibleAssetRef[];
     promptSnippets: ProductionBiblePromptSnippets;
+    metadata?: ProductionBibleItemMetadata;
     createdAt: string;
     updatedAt: string;
 };
@@ -64,6 +84,16 @@ export function normalizeProductionBibleInput(input: ProductionBibleWriteInput):
             negative: input.promptSnippets.negative?.trim() || "",
             consistency: input.promptSnippets.consistency?.trim() || "",
         },
+        metadata: input.metadata?.source
+            ? {
+                  source: {
+                      ...input.metadata.source,
+                      sourceFiles: uniqueStrings((input.metadata.source.sourceFiles || []).map((item) => item.trim()).filter(Boolean)),
+                      qualityGateIds: uniqueStrings((input.metadata.source.qualityGateIds || []).map((item) => item.trim()).filter(Boolean)),
+                      createdFromText: input.metadata.source.createdFromText.trim(),
+                  },
+              }
+            : input.metadata,
     };
 }
 

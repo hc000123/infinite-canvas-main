@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { defaultAgentConfig, normalizeAgentConfig } from "./agent-settings.ts";
 import {
+    applyWorkflowMappingPreviewToProductionBible,
     approveAgentRun,
     buildWorkflowMappingPreviews,
     buildAgentTraceMetadata,
@@ -79,6 +80,8 @@ function buildWorkflowStageTextInput() {
 
 function buildApprovedWorkflowStageFixture(stageId: "director-analysis" | "art-design" | "seedance-storyboard", rawText: string, evidenceId: string, outputId: string, agentId: string) {
     const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", id: `workflow-${stageId}-${evidenceId}`, now: "2026-01-12T00:00:00.000Z" });
+    const stage = workflowPreset.stages.find((item) => item.stageId === stageId)!;
+    const detail = workflowStageDetail(workflowPreset, stage);
     const targetStageOrder = workflowPreset.stages.find((stage) => stage.stageId === stageId)?.order ?? 0;
     const preparedWorkflowRun = {
         ...workflowRun,
@@ -103,6 +106,8 @@ function buildApprovedWorkflowStageFixture(stageId: "director-analysis" | "art-d
                     workflowVersion: workflowPreset.version,
                     stageId,
                     agentId,
+                    sourceFiles: [...(detail.agent ? [detail.agent.sourceFile] : []), ...detail.skills.flatMap((item) => item.sourceFiles.map((file) => file.path)), ...detail.qualityGates.flatMap((item) => item.sourceFiles.map((file) => file.path))],
+                    qualityGateIds: detail.qualityGates.map((item) => item.gateId),
                 },
                 id: `runner-${stageId}-${evidenceId}`,
                 now: "2026-01-12T00:01:00.000Z",
@@ -515,6 +520,120 @@ test("mapping preview does not write production bible storyboard or canvas nodes
     );
     assert.equal(
         previews.some((preview) => preview.targetType === "storyboard_table"),
+        true,
+    );
+});
+
+test("production_bible preview can write production bible items with workflow trace metadata", () => {
+    const fixture = buildApprovedWorkflowStageFixture(
+        "art-design",
+        '{"summary":"角色设定","items":[{"title":"阿梁","kind":"character","description":"冷静、克制、黑色风衣","tags":["主角"],"prompt":"黑风衣写实角色"}]}',
+        "ev-apply-1",
+        "out-apply-1",
+        "art-designer",
+    );
+    const preview = buildWorkflowMappingPreviews({ workflowRun: fixture.workflowRun, stageId: "art-design", output: fixture.output, now: "2026-01-12T00:04:00.000Z" })[0];
+    const result = applyWorkflowMappingPreviewToProductionBible({
+        preview,
+        workflowRun: fixture.workflowRun,
+        output: fixture.output,
+        existingItems: [],
+    });
+    assert.equal(result.appliedWrites.length, 1);
+    assert.equal(result.appliedWrites[0].input.kind, "character");
+    assert.equal(result.appliedWrites[0].input.name, "阿梁");
+    assert.equal(result.appliedWrites[0].input.metadata?.source?.workflowId, workflowPreset.workflowId);
+    assert.equal(result.appliedWrites[0].input.metadata?.source?.stageId, "art-design");
+    assert.equal(result.appliedWrites[0].input.metadata?.source?.sourceOutputId, "out-apply-1");
+    assert.equal(result.appliedWrites[0].input.metadata?.source?.previewId, preview.previewId);
+    assert.equal(result.appliedWrites[0].input.metadata?.source?.previewItemId, preview.items[0].itemId);
+    assert.equal(result.appliedWrites[0].input.metadata?.source?.sourceFiles.length > 0, true);
+});
+
+test("storyboard_table and video_node previews are not applied to production bible", () => {
+    const fixture = buildApprovedWorkflowStageFixture("seedance-storyboard", '{"summary":"分镜","items":[{"title":"镜头一","prompt":"推进镜头"}]}', "ev-apply-2", "out-apply-2", "storyboard-artist");
+    const previews = buildWorkflowMappingPreviews({ workflowRun: fixture.workflowRun, stageId: "seedance-storyboard", output: fixture.output, now: "2026-01-12T00:04:00.000Z" });
+    for (const preview of previews) {
+        const result = applyWorkflowMappingPreviewToProductionBible({
+            preview,
+            workflowRun: fixture.workflowRun,
+            output: fixture.output,
+            existingItems: [],
+        });
+        assert.equal(result.appliedWrites.length, 0);
+        assert.equal(result.warnings.length > 0, true);
+    }
+});
+
+test("skip item is not written and update item is skipped with warning", () => {
+    const fixture = buildApprovedWorkflowStageFixture(
+        "art-design",
+        '{"summary":"设定","items":[{"title":"阿梁","kind":"character","description":"角色"},{"title":"旧仓库","kind":"scene","description":"场景"}]}',
+        "ev-apply-3",
+        "out-apply-3",
+        "art-designer",
+    );
+    const preview = buildWorkflowMappingPreviews({ workflowRun: fixture.workflowRun, stageId: "art-design", output: fixture.output, now: "2026-01-12T00:04:00.000Z" })[0];
+    preview.items[0].action = "skip";
+    preview.items[1].action = "update";
+    const result = applyWorkflowMappingPreviewToProductionBible({
+        preview,
+        workflowRun: fixture.workflowRun,
+        output: fixture.output,
+        existingItems: [],
+    });
+    assert.equal(result.appliedWrites.length, 0);
+    assert.equal(result.skippedPreviewItemIds.length, 2);
+    assert.equal(
+        result.warnings.some((item) => item.includes("skip")),
+        true,
+    );
+    assert.equal(
+        result.warnings.some((item) => item.includes("update")),
+        true,
+    );
+});
+
+test("same previewItemId is not written to production bible twice", () => {
+    const fixture = buildApprovedWorkflowStageFixture("art-design", '{"summary":"角色设定","items":[{"title":"阿梁","kind":"character","description":"冷静"}]}', "ev-apply-4", "out-apply-4", "art-designer");
+    const preview = buildWorkflowMappingPreviews({ workflowRun: fixture.workflowRun, stageId: "art-design", output: fixture.output, now: "2026-01-12T00:04:00.000Z" })[0];
+    const duplicateExistingItem = {
+        id: "bible-1",
+        projectId: "project-workflow",
+        kind: "character" as const,
+        name: "阿梁",
+        description: "冷静",
+        tags: [],
+        assetRefs: [],
+        promptSnippets: {},
+        metadata: {
+            source: {
+                sourceType: "workflow_mapping_preview" as const,
+                workflowId: workflowPreset.workflowId,
+                workflowRunId: fixture.workflowRun.id,
+                workflowVersion: fixture.workflowRun.workflowVersion,
+                stageId: "art-design",
+                agentId: "art-designer",
+                sourceOutputId: preview.sourceOutputId,
+                previewId: preview.previewId,
+                previewItemId: preview.items[0].itemId,
+                sourceFiles: fixture.output.sourceFiles,
+                qualityGateIds: fixture.output.qualityGateIds,
+                createdFromText: "阿梁",
+            },
+        },
+        createdAt: "2026-01-12T00:05:00.000Z",
+        updatedAt: "2026-01-12T00:05:00.000Z",
+    };
+    const result = applyWorkflowMappingPreviewToProductionBible({
+        preview,
+        workflowRun: fixture.workflowRun,
+        output: fixture.output,
+        existingItems: [duplicateExistingItem],
+    });
+    assert.equal(result.appliedWrites.length, 0);
+    assert.equal(
+        result.warnings.some((item) => item.includes("已写入设定库")),
         true,
     );
 });
