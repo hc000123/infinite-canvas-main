@@ -1,5 +1,5 @@
 import { canInvokeAgentConfig, normalizeAgentConfig, type AgentConfig, type AgentConfigKind } from "./agent-settings.ts";
-import type { AgentWorkflowAgent, AgentWorkflowQualityGate, AgentWorkflowSkill, AgentWorkflowStage } from "./agent-workflow-presets";
+import type { AgentWorkflowAgent, AgentWorkflowPreset, AgentWorkflowQualityGate, AgentWorkflowSkill, AgentWorkflowStage } from "./agent-workflow-presets";
 
 export type AgentRunStatus = "draft" | "ready_for_review" | "running" | "review" | "approved" | "rejected" | "applied" | "error" | "failed";
 export type AgentRunKind = AgentConfigKind | "workflow_text";
@@ -60,6 +60,7 @@ export type AgentRunInput = {
     sourceType: string;
     sourceId?: string;
     variables: Record<string, unknown>;
+    workflowRunId?: string;
     workflowId?: string;
     workflowVersion?: string;
     stageId?: string;
@@ -114,6 +115,66 @@ export type AgentRunRecord = {
     updatedAt: string;
 };
 
+export type AgentWorkflowStageStatus = "idle" | "running" | "review" | "approved" | "rejected" | "error" | "blocked";
+
+export type AgentWorkflowStageState = {
+    stageId: string;
+    agentId: string;
+    status: AgentWorkflowStageStatus;
+    runnerRunId?: string;
+    outputId?: string;
+    approvedAt?: string;
+    rejectedAt?: string;
+    errorMessage?: string;
+    evidenceIds: string[];
+    dependsOnStageIds: string[];
+    blockedReason?: string;
+};
+
+export type AgentWorkflowRunRecord = {
+    id: string;
+    projectId: string;
+    canvasId?: string;
+    episodeId?: string;
+    workflowId: string;
+    workflowVersion: string;
+    presetId: string;
+    currentStageId: string;
+    stageStates: AgentWorkflowStageState[];
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type AgentWorkflowStageOutput = {
+    outputId: string;
+    workflowRunId: string;
+    stageId: string;
+    runnerRunId: string;
+    rawText: string;
+    summary: string;
+    structuredOutput?: unknown;
+    outputFormat: WorkflowTextOutputFormat;
+    sourceFiles: string[];
+    qualityGateIds: string[];
+    createdAt: string;
+};
+
+export type AgentWorkflowReviewEvidence = {
+    evidenceId: string;
+    projectId: string;
+    workflowRunId: string;
+    stageId: string;
+    runnerRunId: string;
+    decision: "approved" | "rejected";
+    reviewer: string;
+    reviewerNote?: string;
+    outputSummary: string;
+    outputHash: string;
+    sourceFiles: string[];
+    qualityGateIds: string[];
+    createdAt: string;
+};
+
 export function createAgentRunRecord({ config, input, id, now, draftOutput }: { config: AgentConfig; input: AgentRunInput; id: string; now: string; draftOutput?: unknown }): AgentRunRecord {
     const normalizedConfig = normalizeAgentConfig(config);
     const callable = canInvokeAgentConfig(normalizedConfig);
@@ -147,6 +208,162 @@ export function createWorkflowTextRunRecord({ input, id, now }: { input: AgentRu
         createdAt: now,
         updatedAt: now,
     };
+}
+
+export function createAgentWorkflowRunRecord({ preset, projectId, canvasId, episodeId, id, now }: { preset: AgentWorkflowPreset; projectId: string; canvasId?: string; episodeId?: string; id: string; now: string }): AgentWorkflowRunRecord {
+    const stages = orderedWorkflowPresetStages(preset);
+    const firstStageId = stages[0]?.stageId || "";
+    return refreshWorkflowStageBlocks(
+        {
+            id,
+            projectId,
+            canvasId,
+            episodeId,
+            workflowId: preset.workflowId,
+            workflowVersion: preset.version,
+            presetId: preset.workflowId,
+            currentStageId: firstStageId,
+            stageStates: stages.map((stage, index) => ({
+                stageId: stage.stageId,
+                agentId: stage.agentId,
+                status: index === 0 ? "idle" : "blocked",
+                evidenceIds: [],
+                dependsOnStageIds: index === 0 ? [] : [stages[index - 1].stageId],
+                blockedReason: index === 0 ? undefined : `需先批准前置阶段：${stages[index - 1].name}`,
+            })),
+            createdAt: now,
+            updatedAt: now,
+        },
+        now,
+    );
+}
+
+export function startAgentWorkflowStageRun(workflowRun: AgentWorkflowRunRecord, stageId: string, runnerRunId: string, now: string): AgentWorkflowRunRecord {
+    const checked = refreshWorkflowStageBlocks(workflowRun, now);
+    const stageState = checked.stageStates.find((stage) => stage.stageId === stageId);
+    if (!stageState || stageState.status === "blocked") return checked;
+    return {
+        ...checked,
+        currentStageId: stageId,
+        stageStates: checked.stageStates.map((stage) => (stage.stageId === stageId ? { ...stage, status: "running", runnerRunId, errorMessage: undefined, blockedReason: undefined } : stage)),
+        updatedAt: now,
+    };
+}
+
+export function buildAgentWorkflowStageOutput({ workflowRunId, runnerRun, outputId, now }: { workflowRunId: string; runnerRun: AgentRunRecord; outputId: string; now: string }): AgentWorkflowStageOutput | undefined {
+    if (!runnerRun.workflowTextOutput || !runnerRun.input.stageId) return undefined;
+    return {
+        outputId,
+        workflowRunId,
+        stageId: runnerRun.input.stageId,
+        runnerRunId: runnerRun.id,
+        rawText: runnerRun.workflowTextOutput.rawText,
+        summary: runnerRun.workflowTextOutput.summary,
+        structuredOutput: runnerRun.workflowTextOutput.structuredOutput,
+        outputFormat: runnerRun.workflowTextOutput.outputFormat,
+        sourceFiles: runnerRun.workflowTextOutput.sourceFiles,
+        qualityGateIds: runnerRun.workflowTextOutput.qualityGateIds,
+        createdAt: now,
+    };
+}
+
+export function completeAgentWorkflowStageRun(workflowRun: AgentWorkflowRunRecord, output: AgentWorkflowStageOutput, now: string): AgentWorkflowRunRecord {
+    return refreshWorkflowStageBlocks(
+        {
+            ...workflowRun,
+            currentStageId: output.stageId,
+            stageStates: workflowRun.stageStates.map((stage) => (stage.stageId === output.stageId ? { ...stage, status: "review", runnerRunId: output.runnerRunId, outputId: output.outputId, errorMessage: undefined, blockedReason: undefined } : stage)),
+            updatedAt: now,
+        },
+        now,
+    );
+}
+
+export function failAgentWorkflowStageRun(workflowRun: AgentWorkflowRunRecord, stageId: string, runnerRunId: string, errorMessage: string, now: string): AgentWorkflowRunRecord {
+    return refreshWorkflowStageBlocks(
+        {
+            ...workflowRun,
+            currentStageId: stageId,
+            stageStates: workflowRun.stageStates.map((stage) => (stage.stageId === stageId ? { ...stage, status: "error", runnerRunId, errorMessage, blockedReason: undefined } : stage)),
+            updatedAt: now,
+        },
+        now,
+    );
+}
+
+export function buildAgentWorkflowReviewEvidence({
+    workflowRun,
+    runnerRun,
+    evidenceId,
+    decision,
+    reviewerNote,
+    now,
+}: {
+    workflowRun: AgentWorkflowRunRecord;
+    runnerRun: AgentRunRecord;
+    evidenceId: string;
+    decision: "approved" | "rejected";
+    reviewerNote?: string;
+    now: string;
+}): AgentWorkflowReviewEvidence | undefined {
+    if (!runnerRun.input.stageId || !runnerRun.workflowTextOutput) return undefined;
+    return {
+        evidenceId,
+        projectId: workflowRun.projectId,
+        workflowRunId: workflowRun.id,
+        stageId: runnerRun.input.stageId,
+        runnerRunId: runnerRun.id,
+        decision,
+        reviewer: "local",
+        reviewerNote: reviewerNote?.trim() || undefined,
+        outputSummary: runnerRun.workflowTextOutput.summary,
+        outputHash: stableWorkflowSnapshotHash({
+            rawText: runnerRun.workflowTextOutput.rawText,
+            summary: runnerRun.workflowTextOutput.summary,
+            outputFormat: runnerRun.workflowTextOutput.outputFormat,
+            stageId: runnerRun.input.stageId,
+            runnerRunId: runnerRun.id,
+        }),
+        sourceFiles: runnerRun.workflowTextOutput.sourceFiles,
+        qualityGateIds: runnerRun.workflowTextOutput.qualityGateIds,
+        createdAt: now,
+    };
+}
+
+export function reviewAgentWorkflowStageRun(workflowRun: AgentWorkflowRunRecord, evidence: AgentWorkflowReviewEvidence, now: string): AgentWorkflowRunRecord {
+    const status = evidence.decision === "approved" ? "approved" : "rejected";
+    return refreshWorkflowStageBlocks(
+        {
+            ...workflowRun,
+            currentStageId: evidence.stageId,
+            stageStates: workflowRun.stageStates.map((stage) =>
+                stage.stageId === evidence.stageId
+                    ? {
+                          ...stage,
+                          status,
+                          runnerRunId: evidence.runnerRunId,
+                          approvedAt: evidence.decision === "approved" ? now : stage.approvedAt,
+                          rejectedAt: evidence.decision === "rejected" ? now : undefined,
+                          errorMessage: undefined,
+                          blockedReason: undefined,
+                          evidenceIds: Array.from(new Set([...stage.evidenceIds, evidence.evidenceId])),
+                      }
+                    : stage,
+            ),
+            updatedAt: now,
+        },
+        now,
+    );
+}
+
+export function workflowStageStatusLabel(status: AgentWorkflowStageStatus) {
+    if (status === "idle") return "未开始";
+    if (status === "running") return "运行中";
+    if (status === "review") return "待审核";
+    if (status === "approved") return "已批准";
+    if (status === "rejected") return "已驳回";
+    if (status === "error") return "异常";
+    return "已阻塞";
 }
 
 export function buildWorkflowStageSourceFiles(skills: AgentWorkflowSkill[], qualityGates: AgentWorkflowQualityGate[]): string[] {
@@ -454,6 +671,39 @@ function buildTargetRefs(record: Record<string, unknown>) {
     const label = typeof record.title === "string" ? record.title : typeof record.name === "string" ? record.name : undefined;
     const kind = typeof record.kind === "string" ? record.kind : "draft_item";
     return id ? [{ kind, id, label }] : [];
+}
+
+function refreshWorkflowStageBlocks(workflowRun: AgentWorkflowRunRecord, now: string): AgentWorkflowRunRecord {
+    const stageById = new Map(workflowRun.stageStates.map((stage) => [stage.stageId, stage]));
+    let changed = false;
+    const stageStates = workflowRun.stageStates.map((stage) => {
+        const missingDependency = stage.dependsOnStageIds.find((stageId) => stageById.get(stageId)?.status !== "approved");
+        if (!missingDependency) {
+            if (stage.status === "blocked") {
+                changed = true;
+                return { ...stage, status: "idle" as const, blockedReason: undefined };
+            }
+            return stage;
+        }
+        const blockedReason = `需先批准前置阶段：${missingDependency}`;
+        if (stage.status === "blocked" && stage.blockedReason === blockedReason) return stage;
+        changed = true;
+        return { ...stage, status: "blocked" as const, blockedReason };
+    });
+    return changed ? { ...workflowRun, stageStates, updatedAt: now } : workflowRun;
+}
+
+function stableWorkflowSnapshotHash(value: unknown) {
+    const text = JSON.stringify(value, Object.keys((value && typeof value === "object" && !Array.isArray(value) ? value : {}) as Record<string, unknown>).sort());
+    let hash = 0;
+    for (let index = 0; index < text.length; index += 1) {
+        hash = (hash * 31 + text.charCodeAt(index)) >>> 0;
+    }
+    return `wf-${hash.toString(16).padStart(8, "0")}`;
+}
+
+function orderedWorkflowPresetStages(preset: Pick<AgentWorkflowPreset, "stages">) {
+    return [...preset.stages].sort((a, b) => a.order - b.order);
 }
 
 function orderAgentRuns(runs: AgentRunRecord[]) {

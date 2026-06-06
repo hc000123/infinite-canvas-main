@@ -5,11 +5,16 @@ import { defaultAgentConfig, normalizeAgentConfig } from "./agent-settings.ts";
 import {
     approveAgentRun,
     buildAgentTraceMetadata,
+    buildAgentWorkflowReviewEvidence,
+    buildAgentWorkflowStageOutput,
     buildAgentRunProposedActions,
     canWriteAgentRun,
     buildWorkflowStagePrompt,
+    completeAgentWorkflowStageRun,
+    createAgentWorkflowRunRecord,
     createAgentRunRecord,
     createWorkflowTextRunRecord,
+    failAgentWorkflowStageRun,
     setWorkflowTextRunCompleted,
     setWorkflowTextRunFailed,
     buildWorkflowStageSourceFiles,
@@ -18,7 +23,9 @@ import {
     listAgentRunsByProject,
     markAgentRunApplied,
     normalizeAgentDraftOutput,
+    reviewAgentWorkflowStageRun,
     rejectAgentRun,
+    startAgentWorkflowStageRun,
     summarizeAgentRunDraft,
     updateAgentRunDraft,
     validateAgentDraftOutputShape,
@@ -299,4 +306,103 @@ test("approve workflow text run only changes HITL state", () => {
     assert.equal(approved.status, "approved");
     assert.equal(approved.workflowTextOutput?.rawText.includes("待批准草案"), true);
     assert.equal(approved.agentKind, "workflow_text");
+});
+
+test("workflow run initializes three stage states with blocked dependencies", () => {
+    const workflowRun = createAgentWorkflowRunRecord({
+        preset: workflowPreset,
+        projectId: "project-workflow",
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        id: "workflow-state-1",
+        now: "2026-01-11T00:00:00.000Z",
+    });
+    assert.equal(workflowRun.stageStates.length, 3);
+    assert.equal(workflowRun.stageStates[0].status, "idle");
+    assert.equal(workflowRun.stageStates[1].status, "blocked");
+    assert.deepEqual(workflowRun.stageStates[1].dependsOnStageIds, ["director-analysis"]);
+    assert.equal(workflowRun.stageStates[2].status, "blocked");
+});
+
+test("director must be approved before art-design and storyboard can run", () => {
+    const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", id: "workflow-state-2", now: "2026-01-11T00:00:00.000Z" });
+    const artDesign = startAgentWorkflowStageRun(workflowRun, "art-design", "runner-blocked", "2026-01-11T00:01:00.000Z");
+    assert.equal(artDesign.stageStates.find((stage) => stage.stageId === "art-design")?.status, "blocked");
+    assert.equal(artDesign.stageStates.find((stage) => stage.stageId === "seedance-storyboard")?.status, "blocked");
+});
+
+test("workflow runner success moves stage to review and stores output snapshot", () => {
+    const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", id: "workflow-state-3", now: "2026-01-11T00:00:00.000Z" });
+    const started = startAgentWorkflowStageRun(workflowRun, "director-analysis", "runner-1", "2026-01-11T00:01:00.000Z");
+    const runnerRun = setWorkflowTextRunCompleted(
+        createWorkflowTextRunRecord({
+            input: {
+                ...workflowInputBase,
+                workflowRunId: workflowRun.id,
+                workflowId: workflowPreset.workflowId,
+                workflowVersion: workflowPreset.version,
+                stageId: "director-analysis",
+                agentId: "director",
+                sourceFiles: ["agents/director.md"],
+                qualityGateIds: ["director-business-review"],
+            },
+            id: "runner-1",
+            now: "2026-01-11T00:01:00.000Z",
+        }),
+        '{"summary":"导演阶段产物"}',
+        "2026-01-11T00:02:00.000Z",
+    );
+    const output = buildAgentWorkflowStageOutput({ workflowRunId: workflowRun.id, runnerRun, outputId: "output-1", now: "2026-01-11T00:02:00.000Z" });
+    assert.ok(output);
+    const reviewed = completeAgentWorkflowStageRun(started, output!, "2026-01-11T00:02:00.000Z");
+    assert.equal(reviewed.stageStates[0].status, "review");
+    assert.equal(reviewed.stageStates[0].outputId, "output-1");
+    assert.equal(output?.summary, "导演阶段产物");
+});
+
+test("approved workflow stage writes evidence and unblocks next stage", () => {
+    const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", id: "workflow-state-4", now: "2026-01-11T00:00:00.000Z" });
+    const runnerRun = setWorkflowTextRunCompleted(
+        createWorkflowTextRunRecord({
+            input: { ...workflowInputBase, workflowRunId: workflowRun.id, workflowId: workflowPreset.workflowId, workflowVersion: workflowPreset.version, stageId: "director-analysis", agentId: "director" },
+            id: "runner-2",
+            now: "2026-01-11T00:01:00.000Z",
+        }),
+        '{"summary":"可批准导演产物"}',
+        "2026-01-11T00:02:00.000Z",
+    );
+    const output = buildAgentWorkflowStageOutput({ workflowRunId: workflowRun.id, runnerRun, outputId: "output-2", now: "2026-01-11T00:02:00.000Z" })!;
+    const reviewed = completeAgentWorkflowStageRun(startAgentWorkflowStageRun(workflowRun, "director-analysis", runnerRun.id, "2026-01-11T00:01:00.000Z"), output, "2026-01-11T00:02:00.000Z");
+    const evidence = buildAgentWorkflowReviewEvidence({ workflowRun: reviewed, runnerRun: approveAgentRun(runnerRun, "2026-01-11T00:03:00.000Z"), evidenceId: "evidence-1", decision: "approved", reviewerNote: "通过", now: "2026-01-11T00:03:00.000Z" })!;
+    const approved = reviewAgentWorkflowStageRun(reviewed, evidence, "2026-01-11T00:03:00.000Z");
+    assert.equal(approved.stageStates[0].status, "approved");
+    assert.equal(approved.stageStates[0].evidenceIds.includes("evidence-1"), true);
+    assert.equal(approved.stageStates[1].status, "idle");
+    assert.equal(evidence.reviewerNote, "通过");
+    assert.ok(evidence.outputHash.startsWith("wf-"));
+});
+
+test("rejected workflow stage writes evidence and keeps downstream blocked", () => {
+    const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", id: "workflow-state-5", now: "2026-01-11T00:00:00.000Z" });
+    const runnerRun = setWorkflowTextRunCompleted(
+        createWorkflowTextRunRecord({
+            input: { ...workflowInputBase, workflowRunId: workflowRun.id, workflowId: workflowPreset.workflowId, workflowVersion: workflowPreset.version, stageId: "director-analysis", agentId: "director" },
+            id: "runner-3",
+            now: "2026-01-11T00:01:00.000Z",
+        }),
+        '{"summary":"需驳回导演产物"}',
+        "2026-01-11T00:02:00.000Z",
+    );
+    const evidence = buildAgentWorkflowReviewEvidence({ workflowRun, runnerRun: rejectAgentRun(runnerRun, "2026-01-11T00:03:00.000Z"), evidenceId: "evidence-2", decision: "rejected", now: "2026-01-11T00:03:00.000Z" })!;
+    const rejected = reviewAgentWorkflowStageRun(workflowRun, evidence, "2026-01-11T00:03:00.000Z");
+    assert.equal(rejected.stageStates[0].status, "rejected");
+    assert.equal(rejected.stageStates[1].status, "blocked");
+    assert.equal(rejected.stageStates[2].status, "blocked");
+});
+
+test("workflow runner error moves stage to error and keeps error message", () => {
+    const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", id: "workflow-state-6", now: "2026-01-11T00:00:00.000Z" });
+    const failed = failAgentWorkflowStageRun(startAgentWorkflowStageRun(workflowRun, "director-analysis", "runner-error", "2026-01-11T00:01:00.000Z"), "director-analysis", "runner-error", "模型超时", "2026-01-11T00:02:00.000Z");
+    assert.equal(failed.stageStates[0].status, "error");
+    assert.equal(failed.stageStates[0].errorMessage, "模型超时");
 });

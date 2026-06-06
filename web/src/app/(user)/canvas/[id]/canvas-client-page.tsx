@@ -2245,7 +2245,15 @@ function InfiniteCanvasPage() {
                     onOpenAgentSettings={() => setAgentSettingsOpen(true)}
                     promptBindWhenUnbound
                 />
-                <AgentSettingsDrawer open={agentSettingsOpen} projectId={workspaceProjectId} projectTitle={workspaceProjectTitle} onClose={() => setAgentSettingsOpen(false)} />
+                <AgentSettingsDrawer
+                    open={agentSettingsOpen}
+                    projectId={workspaceProjectId}
+                    projectTitle={workspaceProjectTitle}
+                    canvasId={canvasId}
+                    episodeId={currentProject?.episodeId}
+                    episodeTitle={currentProject?.episodeTitle}
+                    onClose={() => setAgentSettingsOpen(false)}
+                />
                 <ScriptManagerDrawer
                     open={scriptManagerOpen}
                     projectId={workspaceProjectId}

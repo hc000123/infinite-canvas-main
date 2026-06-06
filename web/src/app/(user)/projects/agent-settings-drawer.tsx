@@ -20,7 +20,18 @@ import {
     type AgentWritePolicy,
 } from "./agent-settings";
 import { builtInAgentWorkflowPresets, resolveWorkflowPreset, sortedWorkflowStages, workflowStageDetail } from "./agent-workflow-presets";
-import { agentRunKindLabel, agentRunStatusLabel, buildWorkflowStagePromptMessages, buildWorkflowStageSourceFiles, type AgentRunInput, listAgentRunsByProject } from "./agent-runner";
+import {
+    agentRunKindLabel,
+    agentRunStatusLabel,
+    buildWorkflowStagePromptMessages,
+    buildWorkflowStageSourceFiles,
+    workflowStageStatusLabel,
+    type AgentRunInput,
+    type AgentWorkflowReviewEvidence,
+    type AgentWorkflowRunRecord,
+    type AgentWorkflowStageOutput,
+    listAgentRunsByProject,
+} from "./agent-runner";
 import { useAgentSettingsStore } from "./use-agent-settings-store";
 import { useAgentRunnerStore } from "./use-agent-runner-store";
 
@@ -28,6 +39,9 @@ type Props = {
     open: boolean;
     projectId: string;
     projectTitle: string;
+    canvasId?: string;
+    episodeId?: string;
+    episodeTitle?: string;
     onClose: () => void;
 };
 
@@ -54,7 +68,7 @@ const agentKindOptions: Array<{ label: string; value: AgentConfigKind }> = [
     { label: "提示词质检 Agent", value: "prompt_reviewer" },
 ];
 
-export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: Props) {
+export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, episodeId, episodeTitle, onClose }: Props) {
     const { message } = App.useApp();
     const [form] = Form.useForm<AgentConfigFormValues>();
     const [selectedKind, setSelectedKind] = useState<AgentConfigKind>("asset_extractor");
@@ -62,6 +76,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
     const [workflowEnabled, setWorkflowEnabled] = useState(false);
     const [workflowSelected, setWorkflowSelected] = useState(false);
     const [runningStageIds, setRunningStageIds] = useState<Record<string, boolean>>({});
+    const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
     const globalConfigs = useAgentSettingsStore((state) => state.globalConfigs);
     const projectConfigs = useAgentSettingsStore((state) => state.projectConfigs);
     const projectWorkflowSelections = useAgentSettingsStore((state) => state.projectWorkflowSelections);
@@ -71,6 +86,10 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
     const saveProjectWorkflowSelection = useAgentSettingsStore((state) => state.saveProjectWorkflowSelection);
     const resetProjectWorkflowSelection = useAgentSettingsStore((state) => state.resetProjectWorkflowSelection);
     const runs = useAgentRunnerStore((state) => state.runs);
+    const workflowRuns = useAgentRunnerStore((state) => state.workflowRuns);
+    const workflowOutputs = useAgentRunnerStore((state) => state.workflowOutputs);
+    const workflowEvidences = useAgentRunnerStore((state) => state.workflowEvidences);
+    const ensureWorkflowRun = useAgentRunnerStore((state) => state.ensureWorkflowRun);
     const createRun = useAgentRunnerStore((state) => state.createRun);
     const approveRun = useAgentRunnerStore((state) => state.approveRun);
     const rejectRun = useAgentRunnerStore((state) => state.rejectRun);
@@ -82,6 +101,10 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
     const workflowPresets = useMemo(() => builtInAgentWorkflowPresets(), []);
     const selectedWorkflowPreset = useMemo(() => resolveWorkflowPreset(selectedWorkflowId, projectWorkflowSelections[projectId] || []) || workflowPresets[0], [projectId, projectWorkflowSelections, selectedWorkflowId, workflowPresets]);
     const selectedWorkflowStages = useMemo(() => sortedWorkflowStages(selectedWorkflowPreset), [selectedWorkflowPreset]);
+    const selectedWorkflowRun = useMemo(
+        () => workflowRuns.find((run) => run.projectId === projectId && run.canvasId === canvasId && run.episodeId === episodeId && run.workflowId === selectedWorkflowPreset.workflowId),
+        [canvasId, episodeId, projectId, selectedWorkflowPreset.workflowId, workflowRuns],
+    );
     const recentRuns = useMemo(() => listAgentRunsByProject(runs, projectId).slice(0, 8), [projectId, runs]);
     const selectedConfig = resolvedConfigs.find((config) => config.kind === selectedKind) || defaultAgentConfig(selectedKind);
     const projectOverrideKinds = new Set((projectConfigs[projectId] || []).map((config) => config.kind));
@@ -99,6 +122,11 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
         setWorkflowEnabled(selectedWorkflowPreset.enabled);
         setWorkflowSelected(selectedWorkflowPreset.selected);
     }, [open, selectedWorkflowPreset]);
+
+    useEffect(() => {
+        if (!open) return;
+        ensureWorkflowRun({ projectId, canvasId, episodeId, preset: selectedWorkflowPreset });
+    }, [canvasId, ensureWorkflowRun, episodeId, open, projectId, selectedWorkflowPreset]);
 
     const saveOverride = async () => {
         const values = await form.validateFields();
@@ -146,6 +174,13 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
     };
 
     const runWorkflowStageText = async (stageId: string) => {
+        const workflowRunId = ensureWorkflowRun({ projectId, canvasId, episodeId, preset: selectedWorkflowPreset });
+        const workflowRun = workflowRuns.find((run) => run.id === workflowRunId) || selectedWorkflowRun;
+        const stageState = workflowRun?.stageStates.find((item) => item.stageId === stageId);
+        if (stageState?.status === "blocked") {
+            message.warning(stageState.blockedReason || "前置阶段未批准，暂不能执行");
+            return;
+        }
         const stage = selectedWorkflowStages.find((item) => item.stageId === stageId);
         if (!stage) return;
         const detail = workflowStageDetail(selectedWorkflowPreset, stage);
@@ -167,7 +202,9 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
             inputSnapshot: {
                 projectId,
                 projectTitle,
-                episodeTitle: "未选择本集（设置中心）",
+                canvasId,
+                episodeId,
+                episodeTitle: episodeTitle || "未选择本集（设置中心）",
                 scriptSnapshot: "未提供本集剧本快照（设置中心）",
                 stageSummary: `${stage.inputSummary}；输出目标：${stage.outputSummary}`,
                 directorOutputSummary: "",
@@ -178,9 +215,13 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
         });
         const runInput: AgentRunInput = {
             projectId,
+            canvasId,
+            episodeId,
+            episodeTitle,
             sourceType: "workflow_text_stage",
             sourceId: stage.stageId,
             variables: { stageId },
+            workflowRunId,
             workflowId: selectedWorkflowPreset.workflowId,
             workflowVersion: selectedWorkflowPreset.version,
             stageId: stage.stageId,
@@ -336,10 +377,52 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
                                                 </Tag>
                                             ))}
                                         </Space>
+                                        <WorkflowStageStatePanel stageId={stage.stageId} workflowRun={selectedWorkflowRun} workflowOutputs={workflowOutputs} workflowEvidences={workflowEvidences} />
+                                        {selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.status === "review" ? (
+                                            <div className="mt-3 grid gap-2 rounded-md bg-stone-50 p-2 dark:bg-white/5">
+                                                <Input.TextArea
+                                                    rows={2}
+                                                    value={reviewNotes[stage.stageId] || ""}
+                                                    placeholder="可选：填写本阶段审核备注"
+                                                    onChange={(event) => setReviewNotes((current) => ({ ...current, [stage.stageId]: event.target.value }))}
+                                                />
+                                                <Space size={6} wrap>
+                                                    <Button
+                                                        size="small"
+                                                        type="primary"
+                                                        onClick={() => {
+                                                            const runnerRunId = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.runnerRunId;
+                                                            if (runnerRunId) approveRun(runnerRunId, reviewNotes[stage.stageId]);
+                                                        }}
+                                                    >
+                                                        批准阶段
+                                                    </Button>
+                                                    <Button
+                                                        size="small"
+                                                        danger
+                                                        onClick={() => {
+                                                            const runnerRunId = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.runnerRunId;
+                                                            if (runnerRunId) rejectRun(runnerRunId, reviewNotes[stage.stageId]);
+                                                        }}
+                                                    >
+                                                        驳回阶段
+                                                    </Button>
+                                                </Space>
+                                            </div>
+                                        ) : null}
                                         <Space className="mt-3" size={[6, 6]} wrap>
-                                            <Button size="small" type="primary" loading={Boolean(runningStageIds[stage.stageId])} onClick={() => void runWorkflowStageText(stage.stageId)}>
+                                            <Button
+                                                size="small"
+                                                type="primary"
+                                                disabled={selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.status === "blocked"}
+                                                loading={Boolean(runningStageIds[stage.stageId])}
+                                                onClick={() => void runWorkflowStageText(stage.stageId)}
+                                            >
                                                 运行文本草案（文本执行）
                                             </Button>
+                                            {selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.status === "blocked" ? (
+                                                <span className="text-xs text-amber-600">{selectedWorkflowRun.stageStates.find((item) => item.stageId === stage.stageId)?.blockedReason}</span>
+                                            ) : null}
                                         </Space>
                                     </div>
                                 );
@@ -541,6 +624,25 @@ function WorkflowSummaryBlock({ title, items }: { title: string; items: string[]
                     <div key={item}>{item}</div>
                 ))}
             </div>
+        </div>
+    );
+}
+
+function WorkflowStageStatePanel({ stageId, workflowRun, workflowOutputs, workflowEvidences }: { stageId: string; workflowRun?: AgentWorkflowRunRecord; workflowOutputs: AgentWorkflowStageOutput[]; workflowEvidences: AgentWorkflowReviewEvidence[] }) {
+    const stageState = workflowRun?.stageStates.find((stage) => stage.stageId === stageId);
+    const output = stageState?.outputId ? workflowOutputs.find((item) => item.outputId === stageState.outputId) : workflowOutputs.find((item) => item.workflowRunId === workflowRun?.id && item.stageId === stageId);
+    const evidences = workflowEvidences.filter((item) => item.workflowRunId === workflowRun?.id && item.stageId === stageId);
+    const latestEvidence = evidences[0];
+    return (
+        <div className="mt-3 grid gap-1.5 rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-500 dark:bg-white/5">
+            <div className="flex flex-wrap items-center gap-2">
+                <Tag className="m-0">{workflowStageStatusLabel(stageState?.status || "idle")}</Tag>
+                <span>审核证据：{evidences.length} 条</span>
+                {latestEvidence ? <span>最近审核：{latestEvidence.createdAt}</span> : null}
+            </div>
+            <div>最近产物：{output?.summary || "暂无阶段产物"}</div>
+            {stageState?.blockedReason ? <div className="text-amber-600">阻塞原因：{stageState.blockedReason}</div> : null}
+            {stageState?.errorMessage ? <div className="text-rose-500">错误：{stageState.errorMessage}</div> : null}
         </div>
     );
 }
