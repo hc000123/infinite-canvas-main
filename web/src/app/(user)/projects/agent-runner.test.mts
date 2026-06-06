@@ -5,6 +5,7 @@ import { defaultAgentConfig, normalizeAgentConfig } from "./agent-settings.ts";
 import {
     applyWorkflowMappingPreviewToProductionBible,
     applyWorkflowMappingPreviewToStoryboardTable,
+    applyWorkflowMappingPreviewToVideoNodes,
     approveAgentRun,
     buildWorkflowMappingPreviews,
     buildAgentTraceMetadata,
@@ -790,6 +791,149 @@ test("skip update and duplicate storyboard preview items are not written", () =>
     );
     assert.equal(
         result.warnings.some((item) => item.includes("已写入分镜头表")),
+        true,
+    );
+});
+
+test("video_node preview can create workflow video config nodes with trace metadata", () => {
+    const fixture = buildApprovedWorkflowStageFixture(
+        "seedance-storyboard",
+        JSON.stringify({
+            summary: "分镜提示词",
+            prompts: [
+                {
+                    id: "prompt-1",
+                    title: "镜头一",
+                    prompt: "主角奔跑进入镜头",
+                    finalPrompt: "主角奔跑进入镜头，电影感跟拍，晨光操场",
+                    seconds: "18",
+                    ratio: "16:9",
+                    shotGroupId: "group-1",
+                    storyboardTableShotIds: ["shot-1", "shot-2"],
+                    references: ["asset:image-1"],
+                    referenceAssets: [{ assetId: "asset-image-1", role: "first_frame" }],
+                },
+            ],
+        }),
+        "evidence-video",
+        "output-video",
+        "storyboard-artist",
+    );
+    const preview = buildWorkflowMappingPreviews({ workflowRun: fixture.workflowRun, stageId: "seedance-storyboard", output: fixture.output, now: "2026-01-12T00:05:00.000Z" }).find((item) => item.targetType === "video_node")!;
+    const result = applyWorkflowMappingPreviewToVideoNodes({
+        preview,
+        workflowRun: fixture.workflowRun,
+        output: fixture.output,
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        existingNodes: [],
+        defaultMetadata: { provider: "openai", model: "seedance-preview", size: "1:1", seconds: "5" },
+        idFactory: (previewItemId) => `node-${previewItemId}`,
+    });
+
+    assert.equal(result.appliedNodes.length, 1);
+    assert.equal(result.focusNodeIds.length, 1);
+    assert.equal(result.nextNodes.length, 1);
+    assert.equal(result.appliedNodes[0].node.type, "config");
+    assert.equal(result.appliedNodes[0].node.metadata?.generationMode, "video");
+    assert.equal(result.appliedNodes[0].node.metadata?.status, "idle");
+    assert.equal(result.appliedNodes[0].node.metadata?.taskId, undefined);
+    assert.equal(result.appliedNodes[0].node.metadata?.prompt, "主角奔跑进入镜头");
+    assert.equal(result.appliedNodes[0].node.metadata?.finalPrompt, "主角奔跑进入镜头，电影感跟拍，晨光操场");
+    assert.equal(result.appliedNodes[0].node.metadata?.seconds, "18");
+    assert.equal(result.appliedNodes[0].node.metadata?.ratio, "16:9");
+    assert.equal(result.appliedNodes[0].node.metadata?.size, "16:9");
+    assert.deepEqual(result.appliedNodes[0].node.metadata?.references, ["asset:image-1"]);
+    assert.deepEqual(result.appliedNodes[0].node.metadata?.storyboardTableShotIds, ["shot-1", "shot-2"]);
+    assert.equal(result.appliedNodes[0].node.metadata?.workflowSource?.workflowId, fixture.workflowRun.workflowId);
+    assert.equal(result.appliedNodes[0].node.metadata?.workflowSource?.previewId, preview.previewId);
+    assert.equal(result.appliedNodes[0].node.metadata?.workflowSource?.previewItemId, preview.items[0].itemId);
+});
+
+test("production_bible and storyboard_table previews are not applied to video nodes", () => {
+    const director = buildApprovedWorkflowStageFixture("director-analysis", JSON.stringify({ summary: "导演分析", items: [{ id: "d-1", title: "人物", text: "角色分析" }] }), "evidence-director-video", "output-director-video", "director");
+    const directorPreviews = buildWorkflowMappingPreviews({ workflowRun: director.workflowRun, stageId: "director-analysis", output: director.output, now: "2026-01-12T00:05:00.000Z" });
+    const biblePreview = directorPreviews.find((item) => item.targetType === "production_bible")!;
+    const storyboardPreview = directorPreviews.find((item) => item.targetType === "storyboard_table")!;
+
+    const bibleResult = applyWorkflowMappingPreviewToVideoNodes({
+        preview: biblePreview,
+        workflowRun: director.workflowRun,
+        output: director.output,
+        canvasId: "canvas-1",
+        existingNodes: [],
+    });
+    const storyboardResult = applyWorkflowMappingPreviewToVideoNodes({
+        preview: storyboardPreview,
+        workflowRun: director.workflowRun,
+        output: director.output,
+        canvasId: "canvas-1",
+        existingNodes: [],
+    });
+
+    assert.equal(bibleResult.appliedNodes.length, 0);
+    assert.match(bibleResult.warnings[0] || "", /不是视频配置节点映射/);
+    assert.equal(storyboardResult.appliedNodes.length, 0);
+    assert.match(storyboardResult.warnings[0] || "", /不是视频配置节点映射/);
+});
+
+test("skip duplicate and missing update video preview items are not applied", () => {
+    const fixture = buildApprovedWorkflowStageFixture("seedance-storyboard", JSON.stringify({ summary: "分镜提示词", prompts: [{ id: "prompt-1", title: "镜头一", prompt: "提示词" }] }), "evidence-video-skip", "output-video-skip", "storyboard-artist");
+    const preview = buildWorkflowMappingPreviews({ workflowRun: fixture.workflowRun, stageId: "seedance-storyboard", output: fixture.output, now: "2026-01-12T00:05:00.000Z" }).find((item) => item.targetType === "video_node")!;
+    preview.items = [
+        { ...preview.items[0], action: "skip" },
+        { ...preview.items[0], itemId: "video-update", action: "update", title: "待更新节点" },
+        { ...preview.items[0], itemId: "video-duplicate", title: "重复节点" },
+    ];
+    const existingNodes = [
+        {
+            id: "node-existing",
+            type: "config",
+            title: "已存在节点",
+            position: { x: 0, y: 0 },
+            width: 340,
+            height: 240,
+            metadata: {
+                generationMode: "video",
+                workflowSource: {
+                    sourceType: "workflow_mapping_preview" as const,
+                    workflowId: fixture.workflowRun.workflowId,
+                    workflowRunId: fixture.workflowRun.id,
+                    workflowVersion: fixture.workflowRun.workflowVersion,
+                    stageId: preview.sourceStageId,
+                    agentId: "storyboard-artist",
+                    sourceOutputId: preview.sourceOutputId,
+                    previewId: preview.previewId,
+                    previewItemId: "video-duplicate",
+                    sourceFiles: fixture.output.sourceFiles,
+                    qualityGateIds: fixture.output.qualityGateIds,
+                    createdFromText: "旧节点",
+                },
+            },
+        },
+    ];
+    const result = applyWorkflowMappingPreviewToVideoNodes({
+        preview,
+        workflowRun: fixture.workflowRun,
+        output: fixture.output,
+        canvasId: "canvas-1",
+        existingNodes,
+    });
+
+    assert.equal(result.appliedNodes.length, 0);
+    assert.equal(result.nextNodes.length, 1);
+    assert.deepEqual(result.skippedPreviewItemIds, ["video_node-1", "video-update", "video-duplicate"]);
+    assert.equal(result.focusNodeIds[0], "node-existing");
+    assert.equal(
+        result.warnings.some((item) => item.includes("skip")),
+        true,
+    );
+    assert.equal(
+        result.warnings.some((item) => item.includes("update")),
+        true,
+    );
+    assert.equal(
+        result.warnings.some((item) => item.includes("已创建视频配置节点")),
         true,
     );
 });

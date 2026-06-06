@@ -87,9 +87,23 @@ export type CanvasNodeMetadata = {
     briefMode?: "standard" | "reminder" | "free";
     briefSnapshot?: Record<string, unknown>;
     finalPrompt?: string;
-    sourceType?: "asset_breakdown" | "production_bible" | "storyboard" | "manual" | "shot_group";
+    sourceType?: "asset_breakdown" | "production_bible" | "storyboard" | "manual" | "shot_group" | "workflow_mapping_preview";
     sourceId?: string;
     productionBibleItemId?: string;
+    workflowSource?: {
+        sourceType: "workflow_mapping_preview";
+        workflowId: string;
+        workflowRunId: string;
+        workflowVersion: string;
+        stageId: string;
+        agentId: string;
+        sourceOutputId: string;
+        previewId: string;
+        previewItemId: string;
+        sourceFiles: string[];
+        qualityGateIds: string[];
+        createdFromText: string;
+    };
     referenceAssets?: Array<Record<string, unknown>>;
     sourceAssetId?: string;
     assetVersion?: AssetVersionReference;

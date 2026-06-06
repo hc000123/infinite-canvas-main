@@ -2252,6 +2252,13 @@ function InfiniteCanvasPage() {
                     canvasId={canvasId}
                     episodeId={currentProject?.episodeId}
                     episodeTitle={currentProject?.episodeTitle}
+                    canvasNodes={nodes}
+                    onApplyVideoPreviewNodes={({ nodes: nextNodes, focusNodeIds }) => {
+                        setNodes(nextNodes);
+                        setSelectedNodeIds(new Set(focusNodeIds));
+                        setSelectedConnectionId(null);
+                        if (focusNodeIds[0]) setDialogNodeId(focusNodeIds[0]);
+                    }}
                     onClose={() => setAgentSettingsOpen(false)}
                 />
                 <ScriptManagerDrawer

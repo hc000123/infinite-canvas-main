@@ -6,7 +6,7 @@
 
 ## 当前基线
 
-- 当前版本：`v0.2.64`。
+- 当前版本：`v0.2.65`。
 - 已具备项目工作台、画布项目预设、剧本管理、分镜管理、设定库、提示词仓库、素材自动归档、素材去重、素材版本历史、素材版本引用锁定、生成队列、剪辑包导出、本地 Agent 工作台和 Agent Skill registry。
 - 火山方舟 / Seedance 的本地直连边界已收口：本地直连只保留 OpenAI 兼容能力，火山方舟 / Seedance 企业能力走云端渠道；火山素材加白仍由后台系统设置维护。
 - 当前核心短板不再是“缺入口”，而是生产链路的 Agent 化收口：本集工作台已经把剧本、分镜头表、生成镜头组、资产绑定、生成状态和画布节点收进同一条主路径；下一阶段要先建立统一 Agent 设置中心，再把剧本拆解、资产提取、生图需求、视频提示词和镜头组视频节点接入同一套可配置、可确认的 Agent 能力。
@@ -101,7 +101,7 @@
 30. M6.10.0 Seedance 多 Agent 工作流预设导入。（已实现，待页面验收）
 31. M6.10.1 Agent Runner 接真实 LLM 文本执行。（已实现，待页面验收）
 32. M6.10.2 三阶段工作流状态、审核证据和产物存储。（已实现，待页面验收）
-33. M6.10.3 阶段产物映射到设定库、分镜和画布视频节点。（进行中：M6.10.3-A / M6.10.3-B / M6.10.3-C 已实现，待页面验收；下一阶段 M6.10.3-D）
+33. M6.10.3 阶段产物映射到设定库、分镜和画布视频节点。（已实现，待页面验收）
 34. M6.10.4 质量门与规范读取记录迁移。
 35. M6.10.R1 Seedance 多 Agent 接入结构收口。
 36. M10.0 云端资产方案冻结文档。（已完成，待人工确认）
@@ -1162,7 +1162,20 @@ Seedance 工作流预设
 - 写入方式固定为 append，追加到当前本集分镜头表末尾，不覆盖已有分镜。
 - 写入的分镜条目会保留 workflow / stage / output / preview / previewItem 的追溯字段。
 - 同一个 `previewItemId` 不会重复写入。
-- 后续 M6.10.3-D 再做画布视频节点写入。
+- 后续已完成 M6.10.3-D，进入 M6.10.4。
+
+##### M6.10.3-D：映射预览确认后创建 / 更新画布视频配置节点
+
+状态：已实现，待页面验收。当前已支持将 `targetType = video_node` 的映射预览，经用户确认后在当前画布创建 / 更新视频配置节点；节点保留 workflow 追溯 metadata，状态默认为 `idle`，不会自动开始视频生成，也不会触发扣费。
+
+交付内容：
+
+- 在 Agent 设置中心的 Seedance workflow 映射预览区，为 `video_node` preview 增加“创建视频配置节点”入口和确认提示。
+- 只处理 approved workflow stage output 生成的 `video_node` preview，不应用 `production_bible` / `storyboard_table` preview。
+- 根据 preview item 的 `prompt / finalPrompt / duration / ratio / references / referenceAssets` 生成或更新当前画布的视频配置节点。
+- 节点 metadata 保存 `workflowId / workflowRunId / workflowVersion / stageId / agentId / sourceOutputId / previewId / previewItemId / sourceFiles / qualityGateIds / episodeId` 等追溯字段。
+- 同一 `previewItemId` 不重复创建节点；重复点击会阻止重复创建并提示已创建。
+- 不写入设定库，不写入分镜头表，不自动生成图片或视频，不触发扣费。
 
 #### M6.10.4：质量门与规范读取记录迁移
 

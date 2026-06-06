@@ -36,6 +36,7 @@ import {
 } from "./agent-runner";
 import { useAgentSettingsStore } from "./use-agent-settings-store";
 import { useAgentRunnerStore } from "./use-agent-runner-store";
+import type { CanvasNodeData } from "../canvas/types";
 
 type Props = {
     open: boolean;
@@ -44,6 +45,8 @@ type Props = {
     canvasId?: string;
     episodeId?: string;
     episodeTitle?: string;
+    canvasNodes?: CanvasNodeData[];
+    onApplyVideoPreviewNodes?: (result: { nodes: CanvasNodeData[]; focusNodeIds: string[] }) => void;
     onClose: () => void;
 };
 
@@ -70,7 +73,7 @@ const agentKindOptions: Array<{ label: string; value: AgentConfigKind }> = [
     { label: "提示词质检 Agent", value: "prompt_reviewer" },
 ];
 
-export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, episodeId, episodeTitle, onClose }: Props) {
+export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, episodeId, episodeTitle, canvasNodes, onApplyVideoPreviewNodes, onClose }: Props) {
     const { message, modal } = App.useApp();
     const [form] = Form.useForm<AgentConfigFormValues>();
     const [selectedKind, setSelectedKind] = useState<AgentConfigKind>("asset_extractor");
@@ -98,6 +101,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
     const generateWorkflowMappingPreview = useAgentRunnerStore((state) => state.generateWorkflowMappingPreview);
     const applyProductionBiblePreview = useAgentRunnerStore((state) => state.applyProductionBiblePreview);
     const applyStoryboardPreview = useAgentRunnerStore((state) => state.applyStoryboardPreview);
+    const applyVideoNodePreview = useAgentRunnerStore((state) => state.applyVideoNodePreview);
     const createRun = useAgentRunnerStore((state) => state.createRun);
     const approveRun = useAgentRunnerStore((state) => state.approveRun);
     const rejectRun = useAgentRunnerStore((state) => state.rejectRun);
@@ -394,6 +398,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
                                                 previews={stagePreviews}
                                                 appliedPreviewItemIds={workflowAppliedPreviewItemIds}
                                                 applyingPreviewIds={applyingPreviewIds}
+                                                hasCanvasContext={Boolean(canvasId)}
                                                 onApplyProductionBiblePreview={(preview) => {
                                                     const creatableCount = preview.items.filter((item) => item.targetType === "production_bible" && item.action === "create").length;
                                                     modal.confirm({
@@ -433,6 +438,32 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
                                                                     return;
                                                                 }
                                                                 message.success(`已追加 ${result.appliedCount || 0} 条分镜头表条目`);
+                                                                if (result.warnings.length) message.info(result.warnings.join("；"));
+                                                            } finally {
+                                                                setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
+                                                            }
+                                                        },
+                                                    });
+                                                }}
+                                                onApplyVideoNodePreview={(preview) => {
+                                                    const creatableCount = preview.items.filter((item) => item.targetType === "video_node" && item.action !== "skip").length;
+                                                    modal.confirm({
+                                                        title: "确认创建视频配置节点",
+                                                        content: `将根据当前预览在当前画布创建或更新 ${creatableCount} 个视频配置节点，不会开始视频生成，不会扣费，也不会写入设定库或分镜头表。`,
+                                                        okText: "确认创建",
+                                                        cancelText: "取消",
+                                                        onOk: () => {
+                                                            setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: true }));
+                                                            try {
+                                                                const result = applyVideoNodePreview(preview.previewId, { existingNodes: canvasNodes });
+                                                                if (!result.ok) {
+                                                                    message.warning(result.reason || "当前预览不能创建视频配置节点");
+                                                                    return;
+                                                                }
+                                                                if (result.nextNodes && result.focusNodeIds?.length) {
+                                                                    onApplyVideoPreviewNodes?.({ nodes: result.nextNodes, focusNodeIds: result.focusNodeIds });
+                                                                }
+                                                                message.success(`已创建或更新 ${result.appliedCount || 0} 个视频配置节点`);
                                                                 if (result.warnings.length) message.info(result.warnings.join("；"));
                                                             } finally {
                                                                 setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
@@ -728,14 +759,18 @@ function WorkflowMappingPreviewPanel({
     previews,
     appliedPreviewItemIds,
     applyingPreviewIds,
+    hasCanvasContext,
     onApplyProductionBiblePreview,
     onApplyStoryboardPreview,
+    onApplyVideoNodePreview,
 }: {
     previews: AgentWorkflowMappingPreview[];
     appliedPreviewItemIds: string[];
     applyingPreviewIds: Record<string, boolean>;
+    hasCanvasContext: boolean;
     onApplyProductionBiblePreview: (preview: AgentWorkflowMappingPreview) => void;
     onApplyStoryboardPreview: (preview: AgentWorkflowMappingPreview) => void;
+    onApplyVideoNodePreview: (preview: AgentWorkflowMappingPreview) => void;
 }) {
     return (
         <div className="mt-3 grid gap-2 rounded-md border border-dashed border-stone-200 p-3 dark:border-stone-700">
@@ -746,7 +781,13 @@ function WorkflowMappingPreviewPanel({
                 const appliedCount = creatableItems.length - pendingCreatableItems.length;
                 const applyDisabledReason =
                     preview.targetType === "video_node"
-                        ? "画布视频节点映射将在后续步骤处理"
+                        ? !hasCanvasContext
+                            ? "当前缺少画布上下文，不能创建视频配置节点"
+                            : !creatableItems.length
+                              ? "当前预览没有可创建的视频配置节点"
+                              : !pendingCreatableItems.length
+                                ? "已创建视频配置节点"
+                                : ""
                         : !creatableItems.length
                           ? preview.targetType === "production_bible"
                               ? "当前预览没有可新增的设定库条目"
@@ -769,6 +810,10 @@ function WorkflowMappingPreviewPanel({
                                 <Button size="small" type="primary" disabled={Boolean(applyDisabledReason)} loading={Boolean(applyingPreviewIds[preview.previewId])} onClick={() => onApplyStoryboardPreview(preview)}>
                                     写入分镜头表
                                 </Button>
+                            ) : preview.targetType === "video_node" ? (
+                                <Button size="small" type="primary" disabled={Boolean(applyDisabledReason)} loading={Boolean(applyingPreviewIds[preview.previewId])} onClick={() => onApplyVideoNodePreview(preview)}>
+                                    创建视频配置节点
+                                </Button>
                             ) : (
                                 <Tag className="m-0">后续步骤处理</Tag>
                             )}
@@ -776,7 +821,7 @@ function WorkflowMappingPreviewPanel({
                         <div className="mt-1">{preview.summary}</div>
                         {preview.warnings.length ? <div className="mt-1 text-amber-600">Warnings：{preview.warnings.join("；")}</div> : null}
                         {applyDisabledReason ? <div className="mt-1 text-stone-500">{applyDisabledReason}</div> : null}
-                        {preview.targetType !== "video_node" && appliedCount ? <div className="mt-1 text-emerald-600">已写入：{appliedCount} 条</div> : null}
+                        {appliedCount ? <div className="mt-1 text-emerald-600">{preview.targetType === "video_node" ? `已创建：${appliedCount} 个` : `已写入：${appliedCount} 条`}</div> : null}
                         <div className="mt-2 grid gap-2">
                             {preview.items.map((item) => (
                                 <div key={item.itemId} className="rounded bg-white px-2 py-1.5 dark:bg-black/20">
@@ -785,7 +830,7 @@ function WorkflowMappingPreviewPanel({
                                         <span className="font-medium">{item.title}</span>
                                         {appliedPreviewItemIds.includes(item.itemId) ? (
                                             <Tag className="m-0" color="green">
-                                                {preview.targetType === "production_bible" ? "已写入设定库" : preview.targetType === "storyboard_table" ? "已写入分镜头表" : "已应用"}
+                                                {preview.targetType === "production_bible" ? "已写入设定库" : preview.targetType === "storyboard_table" ? "已写入分镜头表" : "已创建视频配置节点"}
                                             </Tag>
                                         ) : null}
                                         {typeof item.confidence === "number" ? <span className="text-stone-400">置信度 {item.confidence}</span> : null}
