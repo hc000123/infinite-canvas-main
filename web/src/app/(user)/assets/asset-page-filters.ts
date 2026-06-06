@@ -76,18 +76,13 @@ export function projectReferencedAssetIds(projectId: string, productionBibleItem
     const groupIds = new Set(storyboardGroups.filter((group) => group.projectId === projectId).map((group) => group.id));
     return new Set<string>([
         ...productionBibleItems.filter((item) => item.projectId === projectId).flatMap((item) => item.assetRefs.map((ref) => ref.assetId)),
-        ...storyboardShots.filter((shot) => groupIds.has(shot.groupId)).flatMap((shot) => shot.assetRefs.map((ref) => ref.assetId)),
+        ...storyboardShots.filter((shot) => groupIds.has(shot.groupId)).flatMap(storyboardShotAssetIds),
     ]);
 }
 
 export function storyboardGroupReferencedAssetIds(storyboardGroupId: string, storyboardShots: StoryboardShotLike[]) {
     if (!storyboardGroupId) return new Set<string>();
-    return new Set<string>(
-        storyboardShots
-            .filter((shot) => shot.groupId === storyboardGroupId)
-            .flatMap((shot) => [...shot.assetRefs.map((ref) => ref.assetId), ...(shot.resultAssetIds || []), shot.primaryAssetId || ""])
-            .filter(Boolean),
-    );
+    return new Set<string>(storyboardShots.filter((shot) => shot.groupId === storyboardGroupId).flatMap(storyboardShotAssetIds));
 }
 
 export function filterAssetList(assets: Asset[], filters: AssetListFilters) {
@@ -157,6 +152,10 @@ export function selectedAssetSummary(assets: Asset[]) {
 function assetMatchesStoryboardGroup(asset: Asset, storyboardGroupId: string, referencedAssetIds = new Set<string>()) {
     if (referencedAssetIds.has(asset.id)) return true;
     return assetGenerationRecords(asset).some((generation) => readString(generation.storyboardGroupId) === storyboardGroupId);
+}
+
+function storyboardShotAssetIds(shot: StoryboardShotLike) {
+    return [...shot.assetRefs.map((ref) => ref.assetId), ...(shot.resultAssetIds || []), shot.primaryAssetId || ""].filter(Boolean);
 }
 
 function latestGenerationTime(asset: Asset) {

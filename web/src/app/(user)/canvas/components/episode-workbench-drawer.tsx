@@ -261,7 +261,6 @@ export function EpisodeWorkbenchDrawer({ open, projectId, projectTitle, canvases
                     <EpisodeTableSection
                         shots={activeShots}
                         selectedIds={selectedShotIds}
-                        assets={mediaAssets}
                         onGenerateDrafts={generateDrafts}
                         onCreateShot={() => {
                             setEditingShot(null);
@@ -281,7 +280,6 @@ export function EpisodeWorkbenchDrawer({ open, projectId, projectTitle, canvases
                             shotGroups={activeShotGroups}
                             tableShots={activeShots}
                             assets={mediaAssets}
-                            bibleItems={projectBibleItems}
                             onEditGroup={(group) => {
                                 setEditingShotGroup(group);
                                 setShotGroupFormOpen(true);

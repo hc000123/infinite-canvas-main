@@ -1,12 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Alert, Button, Card, Collapse, Empty, Input, Modal, Select, Space, Tag } from "antd";
-import { Boxes, Clapperboard, Film, Link2, Pencil, Play, RotateCcw, Sparkles } from "lucide-react";
+import { Alert, Button, Card, Collapse, Empty, Input, Space, Tag } from "antd";
+import { Film, Link2, Pencil, Play, RotateCcw, Sparkles } from "lucide-react";
 
 import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
 import type { Asset } from "@/stores/use-asset-store";
-import type { ProductionBibleItem } from "../utils/production-bible";
 import { buildShotGroupGenerationSummaries, groupedTableShotsByScene, productionStatusLabel, type EpisodeProductionStatus, type EpisodeWorkbenchStats } from "../utils/episode-workbench";
 import { ShotGroupRowCard, StoryboardTableShotCard, type ShotGroupFormValues, type TableShotFormValues } from "./storyboard-shot-group-components";
 import type { ShotGroup, StoryboardAssetRef, StoryboardProductionBibleRef, StoryboardTableShot } from "../utils/storyboard-management";
@@ -88,7 +87,6 @@ export function EpisodeScriptSection({
 export function EpisodeTableSection({
     shots,
     selectedIds,
-    assets,
     onGenerateDrafts,
     onCreateShot,
     onToggleShot,
@@ -99,7 +97,6 @@ export function EpisodeTableSection({
 }: {
     shots: StoryboardTableShot[];
     selectedIds: string[];
-    assets: Asset[];
     onGenerateDrafts: () => void;
     onCreateShot: () => void;
     onToggleShot: (id: string, checked: boolean) => void;
@@ -163,7 +160,6 @@ export function ShotGroupSection({
     shotGroups,
     tableShots,
     assets,
-    bibleItems,
     onEditGroup,
     onDeleteGroup,
     onAddToCanvas,
@@ -173,7 +169,6 @@ export function ShotGroupSection({
     shotGroups: ShotGroup[];
     tableShots: StoryboardTableShot[];
     assets: Asset[];
-    bibleItems: ProductionBibleItem[];
     onEditGroup: (group: ShotGroup) => void;
     onDeleteGroup: (id: string) => void;
     onAddToCanvas: (id: string) => void;

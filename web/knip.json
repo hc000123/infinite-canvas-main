@@ -1,0 +1,6 @@
+{
+    "$schema": "https://unpkg.com/knip@6/schema.json",
+    "entry": ["next.config.ts", "postcss.config.mjs", "scripts/**/*.mjs", "src/app/**/{page,layout,route,not-found}.ts", "src/app/**/{page,layout,route,not-found}.tsx", "src/**/*.test.mts"],
+    "project": ["src/**/*.{ts,tsx,mts}", "scripts/**/*.mjs"],
+    "ignore": ["desktop/**"]
+}

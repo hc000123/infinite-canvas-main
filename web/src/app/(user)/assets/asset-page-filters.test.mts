@@ -48,12 +48,12 @@ test("collects project referenced asset ids from production bible and storyboard
         [{ projectId: "project-1", assetRefs: [{ assetId: "asset-a" }, { assetId: "asset-b" }] }],
         [{ id: "group-1", projectId: "project-1" }],
         [
-            { groupId: "group-1", assetRefs: [{ assetId: "asset-c" }] },
+            { groupId: "group-1", assetRefs: [{ assetId: "asset-c" }], resultAssetIds: ["asset-result"], primaryAssetId: "asset-primary" },
             { groupId: "other-group", assetRefs: [{ assetId: "asset-x" }] },
         ],
     );
 
-    assert.deepEqual([...refs].sort(), ["asset-a", "asset-b", "asset-c"]);
+    assert.deepEqual([...refs].sort(), ["asset-a", "asset-b", "asset-c", "asset-primary", "asset-result"]);
     assert.deepEqual([...projectReferencedAssetIds("", [], [], [])], []);
 });
 

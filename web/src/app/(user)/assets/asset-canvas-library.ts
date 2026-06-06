@@ -36,7 +36,7 @@ export function buildAddCanvasLibraryAssetPatch(asset: Asset, canvasIds: string[
     });
     return {
         metadata: {
-            ...(asset.metadata || {}),
+            ...asset.metadata,
             canvasLibraries: Array.from(next.values()),
         },
     };
@@ -46,7 +46,7 @@ export function buildRemoveCanvasLibraryAssetPatch(asset: Asset, canvasIds: stri
     const removing = new Set(uniqueIds(canvasIds));
     return {
         metadata: {
-            ...(asset.metadata || {}),
+            ...asset.metadata,
             canvasLibraries: assetCanvasLibraryEntries(asset).filter((entry) => !removing.has(entry.canvasId)),
         },
     };
