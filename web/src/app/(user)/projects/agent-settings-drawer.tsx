@@ -825,7 +825,7 @@ function WorkflowMappingPreviewPanel({
                             )}
                         </div>
                         <div className="mt-1">{preview.summary}</div>
-                        {preview.warnings.length ? <div className="mt-1 text-amber-600">Warnings：{preview.warnings.join("；")}</div> : null}
+                        {preview.warnings.length ? <div className="mt-1 text-amber-600">提示：{preview.warnings.join("；")}</div> : null}
                         {applyDisabledReason ? <div className="mt-1 text-stone-500">{applyDisabledReason}</div> : null}
                         {appliedCount ? <div className="mt-1 text-emerald-600">{preview.targetType === "video_node" ? `已创建：${appliedCount} 个` : `已写入：${appliedCount} 条`}</div> : null}
                         <div className="mt-2 grid gap-2">

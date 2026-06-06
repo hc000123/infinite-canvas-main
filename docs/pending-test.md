@@ -4,7 +4,26 @@
 
 ## 当前版本验收清单
 
-当前版本：`v0.2.66`。需要优先验收的是 M6.10.3-R Seedance 映射预览总 review 修复项、M6.10.3-D Seedance 映射预览确认后创建 / 更新画布视频配置节点，M6.10.3-C Seedance 映射预览确认后写入分镜头表，M6.10.3-B Seedance 映射预览确认后写入设定库，M6.10.3-A Seedance 阶段产物映射预览，M6.10.2 Seedance 三阶段 workflow 状态、审核证据和产物存储，M6.10.1 Seedance 多 Agent 工作流文本 Runner，M6.10.0 Seedance 多 Agent 工作流预设导入、P3-C / M6.9.7 视频节点自动带入本集资产参考、M6.9.R1 Agent 化工作台结构收口、P3-B / M6.9.5 分镜草案 Agent 接入、M6.9.6 镜头组加入画布改为视频生成节点、M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+当前版本：`v0.2.67`。需要优先验收的是 M6.10.3-Fix1 Seedance 映射预览 JSON 代码块解析质量修复、M6.10.3-R Seedance 映射预览总 review 修复项、M6.10.3-D Seedance 映射预览确认后创建 / 更新画布视频配置节点，M6.10.3-C Seedance 映射预览确认后写入分镜头表，M6.10.3-B Seedance 映射预览确认后写入设定库，M6.10.3-A Seedance 阶段产物映射预览，M6.10.2 Seedance 三阶段 workflow 状态、审核证据和产物存储，M6.10.1 Seedance 多 Agent 工作流文本 Runner，M6.10.0 Seedance 多 Agent 工作流预设导入、P3-C / M6.9.7 视频节点自动带入本集资产参考、M6.9.R1 Agent 化工作台结构收口、P3-B / M6.9.5 分镜草案 Agent 接入、M6.9.6 镜头组加入画布改为视频生成节点、M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+
+#### v0.2.67：M6.10.3-Fix1 Seedance 映射预览 JSON 代码块解析质量修复
+
+- 入口：`/projects/:id` 项目详情页或画布页“Agent 设置”中的“多 Agent 工作流预设”。
+- 本次发现：
+  - 人工测试 v0.2.66 时，真实模型返回 JSON 代码块后，映射预览曾把 `workflowId`、`stageId`、`metadata` 等 JSON 元字段误当成业务条目。
+  - 当前已修复为优先解析结构化输出 / JSON 代码块，只从 `characters`、`scenes`、`shots`、`videoPrompts` 等目标业务数组生成 preview item，并过滤 workflow / metadata 等非业务字段。
+  - 需要复测 preview 映射质量，确认设定库、分镜头表、视频配置节点不再写入元字段条目。
+- 操作步骤：
+  1. 使用真实模型输出包含 JSON 代码块的三阶段产物，并在 approved 后生成 `production_bible` / `storyboard_table` / `video_node` 映射预览。
+  2. 检查 preview 顶部 warning，确认纯文本 fallback 或 JSON 无业务数组时有明确中文提示。
+  3. 检查 preview 条目，确认 `workflowId`、`stageId`、`metadata`、`sourceFiles`、`qualityGateIds` 等字段不会作为标题或业务内容出现。
+  4. 确认后分别写入设定库、分镜头表或创建视频配置节点，检查写入结果只包含业务条目。
+- 预期结果：
+  - JSON 代码块优先按业务数组解析。
+  - 元字段仅保留为追溯来源，不生成业务条目。
+  - JSON 无可映射业务数组时生成 0 条 item，并显示中文 warning。
+  - 纯文本 fallback 仍允许用户应用，但 preview 顶部会提示结构化解析不足。
+  - 不自动生成图片或视频，不触发扣费。
 
 #### v0.2.66：M6.10.3-R Seedance 映射预览总 review 修复项
 

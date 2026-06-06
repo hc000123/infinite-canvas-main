@@ -506,8 +506,96 @@ test("structured output is preferred and rawText fallback keeps warning", () => 
     const raw = buildApprovedWorkflowStageFixture("art-design", "角色B：旧仓库里的年轻人，黑风衣，金属徽章", "ev-raw", "out-raw", "art-designer");
     const structuredPreview = buildWorkflowMappingPreviews({ workflowRun: structured.workflowRun, stageId: "art-design", output: structured.output, now: "2026-01-12T00:03:00.000Z" });
     const rawPreview = buildWorkflowMappingPreviews({ workflowRun: raw.workflowRun, stageId: "art-design", output: raw.output, now: "2026-01-12T00:03:00.000Z" });
-    assert.equal(rawPreview[0].warnings.includes("结构化解析不足，当前预览基于 rawText 摘要生成。"), true);
+    assert.equal(rawPreview[0].warnings.includes("当前预览基于原始文本 fallback 生成，结构化解析不足，请人工筛选后再写入。"), true);
     assert.equal(structuredPreview[0].items[0].mappedFields.description, "结构化描述");
+});
+
+test("rawText json code block maps only production bible business arrays and filters metadata fields", () => {
+    const fixture = buildApprovedWorkflowStageFixture(
+        "art-design",
+        [
+            "模型输出：",
+            "```json",
+            JSON.stringify({
+                workflowId: "seedance-workflow",
+                stageId: "art-design",
+                metadata: { model: "gemini-3.1-pro-preview" },
+                sourceFiles: ["agent.md"],
+                characters: [{ characterName: "阿梁", description: "黑色风衣，银色徽章", workflowId: "nested-workflow" }],
+                scenes: [{ sceneName: "旧仓库", description: "冷白工业灯，潮湿地面" }],
+            }),
+            "```",
+        ].join("\n"),
+        "ev-json-code-bible",
+        "out-json-code-bible",
+        "art-designer",
+    );
+    const preview = buildWorkflowMappingPreviews({ workflowRun: fixture.workflowRun, stageId: "art-design", output: fixture.output, now: "2026-01-12T00:03:00.000Z" })[0];
+
+    assert.deepEqual(
+        preview.items.map((item) => item.title),
+        ["阿梁", "旧仓库"],
+    );
+    assert.equal(
+        preview.items.some((item) => ["workflowId", "stageId", "metadata", "sourceFiles"].includes(item.title)),
+        false,
+    );
+    assert.equal(preview.warnings.includes("已过滤 workflow / metadata 等非业务字段。"), true);
+});
+
+test("rawText json business arrays map storyboard and video previews", () => {
+    const fixture = buildApprovedWorkflowStageFixture(
+        "seedance-storyboard",
+        [
+            "```json",
+            JSON.stringify({
+                workflowId: "seedance-workflow",
+                stageId: "seedance-storyboard",
+                metadata: { model: "gemini-3.1-pro-preview" },
+                shots: [{ shotTitle: "镜头一", sceneName: "仓库夜戏", visualDescription: "手持推进", prompt: "阿梁推门进入仓库" }],
+                videoPrompts: [{ title: "视频一", videoPrompt: "低机位跟拍阿梁穿过冷白灯光", duration: 6, ratio: "16:9" }],
+            }),
+            "```",
+        ].join("\n"),
+        "ev-json-code-board",
+        "out-json-code-board",
+        "storyboard-artist",
+    );
+    const previews = buildWorkflowMappingPreviews({ workflowRun: fixture.workflowRun, stageId: "seedance-storyboard", output: fixture.output, now: "2026-01-12T00:03:00.000Z" });
+    const storyboardPreview = previews.find((preview) => preview.targetType === "storyboard_table")!;
+    const videoPreview = previews.find((preview) => preview.targetType === "video_node")!;
+
+    assert.equal(storyboardPreview.items.length, 1);
+    assert.equal(storyboardPreview.items[0].mappedFields.title, "镜头一");
+    assert.equal(videoPreview.items.length, 1);
+    assert.equal(videoPreview.items[0].mappedFields.videoPrompt, "低机位跟拍阿梁穿过冷白灯光");
+});
+
+test("json object without business arrays returns empty preview with warning", () => {
+    const fixture = buildApprovedWorkflowStageFixture(
+        "art-design",
+        '```json\n{"workflowId":"seedance-workflow","stageId":"art-design","metadata":{"model":"gemini"},"summary":"只有摘要"}\n```',
+        "ev-json-no-business",
+        "out-json-no-business",
+        "art-designer",
+    );
+    const preview = buildWorkflowMappingPreviews({ workflowRun: fixture.workflowRun, stageId: "art-design", output: fixture.output, now: "2026-01-12T00:03:00.000Z" })[0];
+
+    assert.equal(preview.items.length, 0);
+    assert.equal(preview.warnings.includes("已识别到 JSON，但未找到可映射的业务数组，请检查模型输出结构。"), true);
+});
+
+test("structured output is preferred over rawText json block", () => {
+    const fixture = buildApprovedWorkflowStageFixture("art-design", '```json\n{"characters":[{"name":"rawText 角色","description":"不应采用"}]}\n```', "ev-struct-over-json", "out-struct-over-json", "art-designer");
+    const output = {
+        ...fixture.output,
+        structuredOutput: { characters: [{ name: "结构化角色", description: "优先采用" }] },
+    };
+    const preview = buildWorkflowMappingPreviews({ workflowRun: fixture.workflowRun, stageId: "art-design", output, now: "2026-01-12T00:03:00.000Z" })[0];
+
+    assert.equal(preview.items.length, 1);
+    assert.equal(preview.items[0].mappedFields.name, "结构化角色");
+    assert.equal(preview.items[0].mappedFields.description, "优先采用");
 });
 
 test("mapping preview does not write production bible storyboard or canvas nodes", () => {
@@ -946,7 +1034,7 @@ test("video_node preview can create workflow video config nodes with trace metad
         "seedance-storyboard",
         JSON.stringify({
             summary: "分镜提示词",
-            prompts: [
+            videoPrompts: [
                 {
                     id: "prompt-1",
                     title: "镜头一",
@@ -996,6 +1084,57 @@ test("video_node preview can create workflow video config nodes with trace metad
     assert.equal(result.appliedNodes[0].node.metadata?.workflowSource?.previewItemId, preview.items[0].itemId);
 });
 
+test("filtered metadata fields are not applied as production bible storyboard or video business content", () => {
+    const bibleFixture = buildApprovedWorkflowStageFixture(
+        "art-design",
+        '```json\n{"workflowId":"workflow-meta","stageId":"art-design","metadata":{"model":"gemini"},"characters":[{"workflowId":"nested","characterName":"阿梁","description":"黑风衣角色"}]}\n```',
+        "ev-apply-filter-bible",
+        "out-apply-filter-bible",
+        "art-designer",
+    );
+    const biblePreview = buildWorkflowMappingPreviews({ workflowRun: bibleFixture.workflowRun, stageId: "art-design", output: bibleFixture.output, now: "2026-01-12T00:04:00.000Z" })[0];
+    const bibleResult = applyWorkflowMappingPreviewToProductionBible({
+        preview: biblePreview,
+        workflowRun: bibleFixture.workflowRun,
+        output: bibleFixture.output,
+        existingItems: [],
+    });
+    assert.equal(bibleResult.appliedWrites[0].input.name, "阿梁");
+    assert.notEqual(bibleResult.appliedWrites[0].input.name, "workflowId");
+
+    const storyboardFixture = buildApprovedWorkflowStageFixture(
+        "seedance-storyboard",
+        '```json\n{"workflowId":"workflow-meta","stageId":"seedance-storyboard","metadata":{"model":"gemini"},"shots":[{"stageId":"nested","shotTitle":"镜头一","visualDescription":"推门进入"}],"videoPrompts":[{"metadata":{"x":1},"title":"视频一","videoPrompt":"冷白灯下推轨跟拍"}]}\n```',
+        "ev-apply-filter-board",
+        "out-apply-filter-board",
+        "storyboard-artist",
+    );
+    const previews = buildWorkflowMappingPreviews({ workflowRun: storyboardFixture.workflowRun, stageId: "seedance-storyboard", output: storyboardFixture.output, now: "2026-01-12T00:04:00.000Z" });
+    const storyboardPreview = previews.find((preview) => preview.targetType === "storyboard_table")!;
+    const storyboardResult = applyWorkflowMappingPreviewToStoryboardTable({
+        preview: storyboardPreview,
+        workflowRun: storyboardFixture.workflowRun,
+        output: storyboardFixture.output,
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        existingShots: [],
+    });
+    assert.equal(storyboardResult.appliedWrites[0].input.title, "镜头一");
+    assert.notEqual(storyboardResult.appliedWrites[0].input.title, "stageId");
+
+    const videoPreview = previews.find((preview) => preview.targetType === "video_node")!;
+    const videoResult = applyWorkflowMappingPreviewToVideoNodes({
+        preview: videoPreview,
+        workflowRun: storyboardFixture.workflowRun,
+        output: storyboardFixture.output,
+        canvasId: "canvas-1",
+        existingNodes: [],
+        idFactory: (previewItemId) => `node-${previewItemId}`,
+    });
+    assert.equal(videoResult.appliedNodes[0].node.metadata?.prompt, "冷白灯下推轨跟拍");
+    assert.notEqual(videoResult.appliedNodes[0].node.metadata?.prompt, "metadata");
+});
+
 test("production_bible and storyboard_table previews are not applied to video nodes", () => {
     const director = buildApprovedWorkflowStageFixture("director-analysis", JSON.stringify({ summary: "导演分析", items: [{ id: "d-1", title: "人物", text: "角色分析" }] }), "evidence-director-video", "output-director-video", "director");
     const directorPreviews = buildWorkflowMappingPreviews({ workflowRun: director.workflowRun, stageId: "director-analysis", output: director.output, now: "2026-01-12T00:05:00.000Z" });
@@ -1024,7 +1163,13 @@ test("production_bible and storyboard_table previews are not applied to video no
 });
 
 test("skip duplicate and missing update video preview items are not applied", () => {
-    const fixture = buildApprovedWorkflowStageFixture("seedance-storyboard", JSON.stringify({ summary: "分镜提示词", prompts: [{ id: "prompt-1", title: "镜头一", prompt: "提示词" }] }), "evidence-video-skip", "output-video-skip", "storyboard-artist");
+    const fixture = buildApprovedWorkflowStageFixture(
+        "seedance-storyboard",
+        JSON.stringify({ summary: "分镜提示词", videoPrompts: [{ id: "prompt-1", title: "镜头一", prompt: "提示词" }] }),
+        "evidence-video-skip",
+        "output-video-skip",
+        "storyboard-artist",
+    );
     const preview = buildWorkflowMappingPreviews({ workflowRun: fixture.workflowRun, stageId: "seedance-storyboard", output: fixture.output, now: "2026-01-12T00:05:00.000Z" }).find((item) => item.targetType === "video_node")!;
     preview.items = [
         { ...preview.items[0], action: "skip" },

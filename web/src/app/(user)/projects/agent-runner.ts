@@ -233,6 +233,16 @@ export type WorkflowVideoNodeMappingPreviewApplyResult = {
     nextNodes: CanvasNodeData[];
 };
 
+const WORKFLOW_MAPPING_RAW_TEXT_FALLBACK_WARNING = "当前预览基于原始文本 fallback 生成，结构化解析不足，请人工筛选后再写入。";
+const WORKFLOW_MAPPING_JSON_NO_BUSINESS_WARNING = "已识别到 JSON，但未找到可映射的业务数组，请检查模型输出结构。";
+const WORKFLOW_MAPPING_META_FILTER_WARNING = "已过滤 workflow / metadata 等非业务字段。";
+const WORKFLOW_MAPPING_META_FIELD_NAMES = new Set(["workflowId", "workflowVersion", "workflowRunId", "stageId", "agentId", "metadata", "sourceFiles", "qualityGateIds", "qualityGates", "createdAt", "updatedAt", "summary", "warnings", "notes", "rawText"]);
+const WORKFLOW_MAPPING_BUSINESS_ARRAY_KEYS: Record<WorkflowMappingPreviewTargetType, string[]> = {
+    production_bible: ["characters", "characterSettings", "scenes", "sceneSettings", "props", "costumes", "makeup", "moods", "styleSettings", "assets", "items"],
+    storyboard_table: ["shots", "storyboard", "storyboardShots", "shotList", "tableShots", "items"],
+    video_node: ["videoNodes", "videoPrompts", "shotGroups", "shots", "items"],
+};
+
 export function workflowMappingPreviewItemKey(preview: AgentWorkflowMappingPreview, previewItemId: string) {
     return `${preview.previewId}:${previewItemId}`;
 }
@@ -439,7 +449,6 @@ export function canGenerateWorkflowMappingPreview(workflowRun: AgentWorkflowRunR
 export function buildWorkflowMappingPreviews({ workflowRun, stageId, output, now }: { workflowRun: AgentWorkflowRunRecord; stageId: string; output: AgentWorkflowStageOutput; now: string }): AgentWorkflowMappingPreview[] {
     const eligibility = canGenerateWorkflowMappingPreview(workflowRun, stageId);
     if (!eligibility.allowed) return [];
-    const analysis = analyzeWorkflowStageOutput(output);
     const base = {
         projectId: workflowRun.projectId,
         canvasId: workflowRun.canvasId,
@@ -450,6 +459,8 @@ export function buildWorkflowMappingPreviews({ workflowRun, stageId, output, now
         createdAt: now,
     };
     if (stageId === "director-analysis") {
+        const productionBibleAnalysis = analyzeWorkflowStageOutput(output, "production_bible");
+        const storyboardAnalysis = analyzeWorkflowStageOutput(output, "storyboard_table");
         return [
             {
                 ...base,
@@ -457,8 +468,8 @@ export function buildWorkflowMappingPreviews({ workflowRun, stageId, output, now
                 targetType: "production_bible",
                 title: "导演分析设定映射预览",
                 summary: "预览将来可映射到人物 / 场景设定摘要的草案。",
-                items: buildDirectorProductionBiblePreviewItems(analysis),
-                warnings: analysis.warnings,
+                items: buildDirectorProductionBiblePreviewItems(productionBibleAnalysis),
+                warnings: productionBibleAnalysis.warnings,
             },
             {
                 ...base,
@@ -466,12 +477,13 @@ export function buildWorkflowMappingPreviews({ workflowRun, stageId, output, now
                 targetType: "storyboard_table",
                 title: "导演分析分镜表映射预览",
                 summary: "预览将来可映射到分集 / 场次 / 镜头分析摘要的草案。",
-                items: buildDirectorStoryboardPreviewItems(analysis),
-                warnings: analysis.warnings,
+                items: buildDirectorStoryboardPreviewItems(storyboardAnalysis),
+                warnings: storyboardAnalysis.warnings,
             },
         ];
     }
     if (stageId === "art-design") {
+        const productionBibleAnalysis = analyzeWorkflowStageOutput(output, "production_bible");
         return [
             {
                 ...base,
@@ -479,12 +491,14 @@ export function buildWorkflowMappingPreviews({ workflowRun, stageId, output, now
                 targetType: "production_bible",
                 title: "服化道设定映射预览",
                 summary: "预览将来可映射到角色 / 场景 / 道具设定库的草案。",
-                items: buildArtDesignProductionBiblePreviewItems(analysis),
-                warnings: analysis.warnings,
+                items: buildArtDesignProductionBiblePreviewItems(productionBibleAnalysis),
+                warnings: productionBibleAnalysis.warnings,
             },
         ];
     }
     if (stageId === "seedance-storyboard") {
+        const storyboardAnalysis = analyzeWorkflowStageOutput(output, "storyboard_table");
+        const videoAnalysis = analyzeWorkflowStageOutput(output, "video_node");
         return [
             {
                 ...base,
@@ -492,8 +506,8 @@ export function buildWorkflowMappingPreviews({ workflowRun, stageId, output, now
                 targetType: "storyboard_table",
                 title: "Seedance 分镜表映射预览",
                 summary: "预览将来可映射到分镜头表的镜头草案。",
-                items: buildStoryboardTablePreviewItems(analysis),
-                warnings: analysis.warnings,
+                items: buildStoryboardTablePreviewItems(storyboardAnalysis),
+                warnings: storyboardAnalysis.warnings,
             },
             {
                 ...base,
@@ -501,8 +515,8 @@ export function buildWorkflowMappingPreviews({ workflowRun, stageId, output, now
                 targetType: "video_node",
                 title: "Seedance 视频节点映射预览",
                 summary: "预览将来可映射到画布视频配置节点的提示词草案。",
-                items: buildVideoNodePreviewItems(analysis),
-                warnings: analysis.warnings,
+                items: buildVideoNodePreviewItems(videoAnalysis),
+                warnings: videoAnalysis.warnings,
             },
         ];
     }
@@ -1178,30 +1192,84 @@ function buildTargetRefs(record: Record<string, unknown>) {
     return id ? [{ kind, id, label }] : [];
 }
 
-function analyzeWorkflowStageOutput(output: AgentWorkflowStageOutput) {
-    const warnings = [...(output.structuredOutput ? [] : ["结构化解析不足，当前预览基于 rawText 摘要生成。"])];
-    const record = output.structuredOutput && typeof output.structuredOutput === "object" && !Array.isArray(output.structuredOutput) ? (output.structuredOutput as Record<string, unknown>) : {};
+function analyzeWorkflowStageOutput(output: AgentWorkflowStageOutput, targetType: WorkflowMappingPreviewTargetType) {
     const rawLines = output.rawText
         .split(/\n+/)
         .map((line) => line.trim())
         .filter(Boolean)
         .slice(0, 8);
-    const candidates = pickStructuredList(record).length
-        ? pickStructuredList(record)
-        : rawLines.map((line, index) => ({
-              id: `raw-${index + 1}`,
-              title: line.slice(0, 36),
-              text: line,
-          }));
+    const structuredSource = output.structuredOutput === undefined ? undefined : collectWorkflowMappingCandidates(output.structuredOutput, targetType);
+    if (structuredSource) return { record: structuredSource.record, rawLines, candidates: structuredSource.candidates, warnings: structuredSource.warnings };
+    const rawJson = parseWorkflowMappingRawJson(output.rawText);
+    if (rawJson !== undefined) {
+        const parsedSource = collectWorkflowMappingCandidates(rawJson, targetType);
+        return { record: parsedSource.record, rawLines, candidates: parsedSource.candidates, warnings: parsedSource.warnings };
+    }
+    const candidates = rawLines.map((line, index) => ({
+        id: `raw-${index + 1}`,
+        title: line.slice(0, 36),
+        text: line,
+    }));
+    const warnings = [WORKFLOW_MAPPING_RAW_TEXT_FALLBACK_WARNING];
+    const record: Record<string, unknown> = {};
     return { record, rawLines, candidates, warnings };
 }
 
-function pickStructuredList(record: Record<string, unknown>) {
-    const keys = ["items", "characters", "scenes", "props", "assets", "shots", "prompts", "cards", "segments"];
-    for (const key of keys) {
-        if (Array.isArray(record[key])) return record[key];
+function parseWorkflowMappingRawJson(rawText: string) {
+    const trimmed = rawText.trim();
+    const direct = parseWorkflowTextJson(trimmed);
+    if (direct !== undefined) return direct;
+    const blockPattern = /```(?:json)?\s*([\s\S]*?)```/gi;
+    let match: RegExpExecArray | null;
+    while ((match = blockPattern.exec(rawText))) {
+        const parsed = parseWorkflowTextJson(match[1].trim());
+        if (parsed !== undefined) return parsed;
     }
-    return [];
+    return undefined;
+}
+
+function collectWorkflowMappingCandidates(value: unknown, targetType: WorkflowMappingPreviewTargetType) {
+    const warnings: string[] = [];
+    if (Array.isArray(value)) {
+        const sanitized = sanitizeWorkflowMappingCandidateList(value);
+        if (sanitized.filteredMetaFields) warnings.push(WORKFLOW_MAPPING_META_FILTER_WARNING);
+        return { record: {}, candidates: sanitized.candidates, warnings };
+    }
+    const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+    const hasMetaFields = Object.keys(record).some(isWorkflowMappingMetaField);
+    const candidates: unknown[] = [];
+    for (const key of WORKFLOW_MAPPING_BUSINESS_ARRAY_KEYS[targetType]) {
+        const list = record[key];
+        if (!Array.isArray(list)) continue;
+        const sanitized = sanitizeWorkflowMappingCandidateList(list);
+        candidates.push(...sanitized.candidates);
+        if (sanitized.filteredMetaFields) warnings.push(WORKFLOW_MAPPING_META_FILTER_WARNING);
+        if (targetType !== "production_bible" && candidates.length) break;
+    }
+    if (hasMetaFields) warnings.push(WORKFLOW_MAPPING_META_FILTER_WARNING);
+    if (!candidates.length) warnings.push(WORKFLOW_MAPPING_JSON_NO_BUSINESS_WARNING);
+    return { record, candidates, warnings: Array.from(new Set(warnings)) };
+}
+
+function sanitizeWorkflowMappingCandidateList(items: unknown[]) {
+    let filteredMetaFields = false;
+    const candidates = items.map((item) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+        const next: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(item as Record<string, unknown>)) {
+            if (isWorkflowMappingMetaField(key)) {
+                filteredMetaFields = true;
+                continue;
+            }
+            next[key] = value;
+        }
+        return next;
+    });
+    return { candidates, filteredMetaFields };
+}
+
+function isWorkflowMappingMetaField(key: string) {
+    return WORKFLOW_MAPPING_META_FIELD_NAMES.has(key);
 }
 
 function buildDirectorProductionBiblePreviewItems(analysis: ReturnType<typeof analyzeWorkflowStageOutput>): AgentWorkflowMappingPreviewItem[] {
@@ -1222,12 +1290,12 @@ function buildDirectorProductionBiblePreviewItems(analysis: ReturnType<typeof an
 
 function buildDirectorStoryboardPreviewItems(analysis: ReturnType<typeof analyzeWorkflowStageOutput>): AgentWorkflowMappingPreviewItem[] {
     return buildPreviewItems(analysis.candidates.slice(0, 6), "storyboard_table", (item, index) => ({
-        title: readCandidateTitle(item, `场次草案 ${index + 1}`),
+        title: stringField(readCandidateField(item, "shotTitle")) || readCandidateTitle(item, `场次草案 ${index + 1}`),
         reason: "将导演分析中的剧情段落 / 场次摘要映射为分镜表预览。",
         sourceText: readCandidateText(item),
         mappedFields: {
             sceneName: readCandidateTitle(item, `场次 ${index + 1}`),
-            title: readCandidateTitle(item, `镜头 ${index + 1}`),
+            title: stringField(readCandidateField(item, "shotTitle")) || readCandidateTitle(item, `镜头 ${index + 1}`),
             visualDescription: readCandidateText(item),
             action: readCandidateText(item),
         },
@@ -1291,7 +1359,7 @@ function objectListField(value: unknown) {
 
 function buildStoryboardTablePreviewItems(analysis: ReturnType<typeof analyzeWorkflowStageOutput>): AgentWorkflowMappingPreviewItem[] {
     return buildPreviewItems(analysis.candidates.slice(0, 8), "storyboard_table", (item, index) => ({
-        title: readCandidateTitle(item, `分镜草案 ${index + 1}`),
+        title: stringField(readCandidateField(item, "shotTitle")) || readCandidateTitle(item, `分镜草案 ${index + 1}`),
         reason: "将 Seedance 分镜阶段产物映射为分镜头表草案。",
         sourceText: readCandidateText(item),
         mappedFields: {
@@ -1299,7 +1367,7 @@ function buildStoryboardTablePreviewItems(analysis: ReturnType<typeof analyzeWor
             sceneName: readCandidateField(item, "sceneName") || `场次 ${index + 1}`,
             location: readCandidateField(item, "location") || "",
             timeOfDay: readCandidateField(item, "timeOfDay") || "",
-            title: readCandidateTitle(item, `镜头 ${index + 1}`),
+            title: stringField(readCandidateField(item, "shotTitle")) || readCandidateTitle(item, `镜头 ${index + 1}`),
             scriptText: readCandidateField(item, "scriptText") || "",
             visualDescription: readCandidateField(item, "visualDescription") || readCandidateText(item),
             characters: readCandidateField(item, "characters") || [],
@@ -1344,16 +1412,19 @@ function buildVideoNodePreviewItems(analysis: ReturnType<typeof analyzeWorkflowS
 function buildPreviewItems(candidates: unknown[], targetType: WorkflowMappingPreviewTargetType, mapper: (item: unknown, index: number) => Omit<AgentWorkflowMappingPreviewItem, "itemId" | "targetType" | "action" | "warnings"> & { confidence?: number }) {
     return candidates.map((item, index) => {
         const mapped = mapper(item, index);
+        const title = isWorkflowMappingMetaField(String(mapped.title || "")) ? "" : String(mapped.title || "").trim();
+        const hasBusinessContent = hasWorkflowMappingBusinessContent(item);
+        const warnings = hasBusinessContent && title ? [] : ["未识别到可写入的业务标题或内容，已跳过。"];
         return {
             itemId: `${targetType}-${index + 1}`,
             targetType,
-            action: "create" as const,
-            title: mapped.title,
+            action: hasBusinessContent && title ? ("create" as const) : ("skip" as const),
+            title: title || "未识别业务条目",
             reason: mapped.reason,
             sourceText: mapped.sourceText,
             mappedFields: mapped.mappedFields,
             confidence: mapped.confidence,
-            warnings: [],
+            warnings,
         };
     });
 }
@@ -1369,7 +1440,8 @@ function inferBibleKind(item: unknown, fallback: ProductionBibleKind): Productio
 function readCandidateTitle(item: unknown, fallback: string) {
     if (item && typeof item === "object" && !Array.isArray(item)) {
         const record = item as Record<string, unknown>;
-        return String(record.title || record.name || record.label || fallback);
+        const title = pickFirstStringField(record, ["name", "title", "sceneName", "characterName", "shotTitle", "prompt", "videoPrompt", "description", "label"]);
+        return title || fallback;
     }
     return typeof item === "string" ? item.slice(0, 36) : fallback;
 }
@@ -1377,12 +1449,13 @@ function readCandidateTitle(item: unknown, fallback: string) {
 function readCandidateText(item: unknown) {
     if (item && typeof item === "object" && !Array.isArray(item)) {
         const record = item as Record<string, unknown>;
-        return String(record.text || record.summary || record.description || record.prompt || record.output || record.title || record.name || "");
+        return pickFirstStringField(record, ["text", "description", "prompt", "videoPrompt", "finalPrompt", "effectivePrompt", "visualDescription", "action", "output", "title", "name", "sceneName", "characterName", "shotTitle"]);
     }
     return typeof item === "string" ? item : JSON.stringify(item);
 }
 
 function readCandidateField(item: unknown, key: string) {
+    if (isWorkflowMappingMetaField(key)) return "";
     if (!item || typeof item !== "object" || Array.isArray(item)) return "";
     const value = (item as Record<string, unknown>)[key];
     return typeof value === "string" || typeof value === "number" || Array.isArray(value) || (value && typeof value === "object") ? value : "";
@@ -1392,6 +1465,24 @@ function readCandidateTags(item: unknown) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return [];
     const tags = (item as Record<string, unknown>).tags;
     return Array.isArray(tags) ? tags.map((tag) => String(tag)).filter(Boolean) : [];
+}
+
+function pickFirstStringField(record: Record<string, unknown>, keys: string[]) {
+    for (const key of keys) {
+        if (isWorkflowMappingMetaField(key)) continue;
+        const value = record[key];
+        if (typeof value !== "string" && typeof value !== "number") continue;
+        const text = String(value).trim();
+        if (text && !isWorkflowMappingMetaField(text)) return text;
+    }
+    return "";
+}
+
+function hasWorkflowMappingBusinessContent(item: unknown) {
+    if (typeof item === "string") return Boolean(item.trim());
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    const record = item as Record<string, unknown>;
+    return Boolean(pickFirstStringField(record, ["name", "title", "sceneName", "characterName", "shotTitle", "prompt", "videoPrompt", "finalPrompt", "effectivePrompt", "description", "visualDescription", "text", "action", "output"]));
 }
 
 function buildWorkflowVideoConfigNode({ id, title, metadata, position }: { id: string; title: string; metadata: CanvasNodeMetadata; position: Position }): CanvasNodeData {
