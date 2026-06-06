@@ -12,6 +12,7 @@ import { useStoryboardStore } from "../canvas/stores/use-storyboard-store";
 import type { CanvasNodeData, Position } from "../canvas/types";
 import type { AgentConfig } from "./agent-settings";
 import type { AgentWorkflowPreset } from "./agent-workflow-presets";
+import { getSeedanceWorkflowAgentCore } from "./workflow-agents/seedance-workflow-agents";
 import {
     applyWorkflowMappingPreviewToProductionBible,
     applyWorkflowMappingPreviewToStoryboardTable,
@@ -126,7 +127,8 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                 const outputId = workflowRun.stageStates.find((stage) => stage.stageId === stageId)?.outputId;
                 const output = get().workflowOutputs.find((item) => item.outputId === outputId);
                 if (!output) return { ok: false, reason: "未找到已批准阶段的产物快照" };
-                const previews = buildWorkflowMappingPreviews({ workflowRun, stageId, output, now });
+                const core = getSeedanceWorkflowAgentCore(stageId);
+                const previews = core ? core.buildMappingPreviews(output, { workflowRun, now }) : buildWorkflowMappingPreviews({ workflowRun, stageId, output, now });
                 set((state) => ({
                     workflowMappingPreviews: [...state.workflowMappingPreviews.filter((item) => !previews.some((preview) => preview.previewId === item.previewId)), ...previews],
                 }));

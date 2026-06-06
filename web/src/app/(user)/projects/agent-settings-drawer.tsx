@@ -23,7 +23,6 @@ import { builtInAgentWorkflowPresets, resolveWorkflowPreset, sortedWorkflowStage
 import {
     agentRunKindLabel,
     agentRunStatusLabel,
-    buildWorkflowStagePromptMessages,
     buildWorkflowStageSourceFiles,
     canGenerateWorkflowMappingPreview,
     workflowMappingPreviewItemKey,
@@ -37,6 +36,7 @@ import {
 } from "./agent-runner";
 import { useAgentSettingsStore } from "./use-agent-settings-store";
 import { useAgentRunnerStore } from "./use-agent-runner-store";
+import { getSeedanceWorkflowAgentCore } from "./workflow-agents/seedance-workflow-agents";
 import type { CanvasNodeData } from "../canvas/types";
 
 type Props = {
@@ -197,22 +197,16 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
         }
         const stage = selectedWorkflowStages.find((item) => item.stageId === stageId);
         if (!stage) return;
-        const detail = workflowStageDetail(selectedWorkflowPreset, stage);
-        if (!detail.agent) {
-            message.error(`阶段 ${stage.name} 缺少绑定的 Agent，无法执行`);
+        const core = getSeedanceWorkflowAgentCore(stage.stageId);
+        if (!core) {
+            message.error(`阶段 ${stage.name} 缺少 Agent Core，无法执行`);
             return;
         }
-        const sourceFiles = buildWorkflowStageSourceFiles(detail.skills, detail.qualityGates);
         const workflowTextModel = (effectiveConfig.textModel || effectiveConfig.model || "").trim();
         const isReady = Boolean(workflowTextModel) && checkAiConfigReady(effectiveConfig, workflowTextModel);
         const requestConfig = { ...effectiveConfig, model: workflowTextModel || effectiveConfig.model };
-        const promptMessages = buildWorkflowStagePromptMessages({
-            workflowId: selectedWorkflowPreset.workflowId,
-            workflowVersion: selectedWorkflowPreset.version,
-            stage,
-            agent: detail.agent,
-            skills: detail.skills,
-            qualityGates: detail.qualityGates,
+        const coreInput = core.buildInput({
+            preset: selectedWorkflowPreset,
             inputSnapshot: {
                 projectId,
                 projectTitle,
@@ -223,10 +217,17 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
                 stageSummary: `${stage.inputSummary}；输出目标：${stage.outputSummary}`,
                 directorOutputSummary: "",
                 artDesignOutputSummary: "",
-                storyboardRequirement: detail.qualityGates.length ? detail.qualityGates.map((gate) => gate.purpose).join("；") : stage.outputSummary,
+                storyboardRequirement: stage.qualityGateIds.length
+                    ? stage.qualityGateIds
+                          .map((gateId) => selectedWorkflowPreset.qualityGates.find((gate) => gate.gateId === gateId)?.purpose)
+                          .filter(Boolean)
+                          .join("；")
+                    : stage.outputSummary,
                 assetNeedSummary: "",
             },
         });
+        const sourceFiles = buildWorkflowStageSourceFiles(coreInput.skills, coreInput.qualityGates);
+        const promptMessages = core.buildPromptMessages(coreInput, selectedWorkflowPreset);
         const runInput: AgentRunInput = {
             projectId,
             canvasId,
@@ -238,9 +239,9 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
             workflowRunId,
             workflowId: selectedWorkflowPreset.workflowId,
             workflowVersion: selectedWorkflowPreset.version,
-            stageId: stage.stageId,
-            agentId: detail.agent.agentId,
-            agentName: detail.agent.name,
+            stageId: core.stageId,
+            agentId: core.agentId,
+            agentName: coreInput.agent.name,
             sourcePresetId: selectedWorkflowPreset.workflowId,
             presetId: selectedWorkflowPreset.workflowId,
             inputSnapshot: {
@@ -262,7 +263,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
                 2,
             ),
             sourceFiles,
-            qualityGateIds: detail.qualityGates.map((gate) => gate.gateId),
+            qualityGateIds: coreInput.qualityGates.map((gate) => gate.gateId),
         };
         const runId = startWorkflowTextRun(runInput);
         setRunningStageIds((current) => ({ ...current, [stage.stageId]: true }));

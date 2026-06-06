@@ -103,10 +103,12 @@
 32. M6.10.2 三阶段工作流状态、审核证据和产物存储。（已实现，待页面验收）
 33. M6.10.3 阶段产物映射到设定库、分镜和画布视频节点。（已实现，P1 阻断修复后待复测）
 34. M6.10.4 质量门与规范读取记录迁移。
-35. M6.10.R1 Seedance 多 Agent 接入结构收口。
-36. M10.0 云端资产方案冻结文档。（已完成，待人工确认）
-37. M10.1 云端文件表与对象存储底座。
-38. M10.2 项目共享资产库云端版。
+35. M6.10.R0 Seedance 三阶段 Agent Core 拆分。（已实现，待回归确认）
+36. M6.10.R1 Seedance 多 Agent 接入结构收口。
+37. M6.11 画布工具模块化与 Agent 独立化。
+38. M10.0 云端资产方案冻结文档。（已完成，待人工确认）
+39. M10.1 云端文件表与对象存储底座。
+40. M10.2 项目共享资产库云端版。
 
 ## A 线：当前能力收口
 
@@ -1210,6 +1212,30 @@ Seedance 工作流预设
 - 不把机器质量门当成最终创意审核。
 - 不把旧 Python 脚本无提示地运行在用户不可见位置。
 
+#### M6.10.R0：Seedance 三阶段 Agent Core 拆分
+
+模型推理程度：`高`。
+
+状态：已实现，待回归确认。
+
+实现时机：M6.10 workflow 已具备 preset、stage runner、review state、mapping preview 和三类应用链路后，先抽出正式工作流的三阶段 Agent Core，再进入 M6.10.R1 结构收口。
+
+交付内容：
+
+- 新增 `web/src/app/(user)/projects/workflow-agents/`，定义 `WorkflowAgentCore` 协议。
+- 拆出 `director`、`art-designer`、`storyboard-artist` 三个正式工作流 Agent Core。
+- Agent Core 负责构造阶段输入、构造 prompt messages、标准化文本输出入口和生成 mapping preview。
+- 现有 workflow stage runner 和 mapping preview 入口改为通过对应 Agent Core 调用，保持 UI、状态、审核证据、output 存储和应用链路行为不变。
+- 后续快速 Agent 可以复用 Agent Core 的输入 / prompt / output / mapper 能力，但不能绕过 workflow 审核、approved 门禁和质量门。
+
+不做事项：
+
+- 不新增单独运行 `director` / `art-designer` / `storyboard-artist` 的 UI 入口。
+- 不改 workflow 阶段顺序。
+- 不改审核 / approved 门禁。
+- 不改 mapping preview 应用行为。
+- 不触发图片或视频生成，不触发扣费。
+
 #### M6.10.R1：Seedance 多 Agent 接入结构收口
 
 模型推理程度：`中`。
@@ -1233,6 +1259,61 @@ Seedance 工作流预设
 
 - 不在结构收口中新增云端协作。
 - 不做多项目并行调度。
+
+### M6.11：画布工具模块化与 Agent 独立化
+
+模型推理程度：`高`。
+
+目标：在 M6.10 Seedance 多 Agent 接入稳定后，对画布工具和本集 Agent 做结构收口，降低 `canvas-client-page.tsx`、`EpisodeWorkbenchDrawer`、工具栏和节点悬浮工具的耦合度。第一阶段只做模块化和独立化，不改变现有业务行为，不做自动联动。
+
+实现时机：M6.10.R1 完成后。先完成 M6.10.3-Fix1 复测、M6.10.4 质量门迁移和 M6.10.R1 结构收口，再进入本项，避免在未验收链路上继续拆大组件。
+
+Agent 分层边界：
+
+- 当前 Agent 分为两层，不应在 UI 或代码命名里混成同一级：
+  - 快速工具 Agent：M6.9 的 `asset_extractor`、`storyboard_director`，用于单点辅助动作。
+  - 正式工作流 Agent：M6.10 Seedance workflow 的 `director`、`art-designer`、`storyboard-artist`，用于带阶段依赖、审核证据和质量门的三阶段流程。
+- 功能相近但定位不同：
+  - `asset_extractor` 负责快速从剧本拆本集生图需求；`art-designer` 负责正式工作流里的美术设定阶段。
+  - `storyboard_director` 负责快速生成分镜头表草案；`director` / `storyboard-artist` 负责正式工作流里的导演分析和 Seedance 分镜提示词。
+- 产品入口应区分：
+  - 本集工作台展示“快速 Agent”。
+  - Agent 设置中心 / Seedance workflow 展示“正式工作流 Agent”。
+  - 不把五个 Agent 平铺成同一个列表，避免用户误以为能力重复。
+- 后续如果某个正式工作流阶段能力成熟，可以复用快速 Agent 的底层纯函数或 output mapper，但不能让快速 Agent 绕过工作流阶段审核、质量门和用户确认。
+
+交付内容：
+
+- 新增 `web/src/app/(user)/canvas/tools/`，沉淀统一 `CanvasTool` 协议和工具构建函数。
+- 将 `CanvasToolbar` 的主要按钮定义抽到 `canvas-toolbar-tools.tsx`，UI 组件只负责渲染工具数组；主题、外观面板、背景模式和图片信息开关暂时保留在原组件。
+- 将 `CanvasNodeHoverToolbar` 的节点工具显隐逻辑抽到 `canvas-node-tools.tsx`，保持图片、视频、文本、错误节点现有按钮行为不变。
+- 新增 `web/src/app/(user)/canvas/agents/`，定义 `AgentModule`、`AgentModuleContext` 和统一 `useAgentModule`。
+- 将资产提取 Agent 和分镜导演 Agent 的 `canRun / run / approve / reject / apply` 逻辑独立到模块，页面只传项目、画布、本集和剧本上下文。
+- 将 `AgentRunReviewList` 从本集工作台 UI 中抽到可复用 Agent 审核组件，保留状态、配置版本、草案摘要、warnings、批准、驳回和应用能力。
+- 瘦身 `EpisodeWorkbenchDrawer`：保留 UI 状态、绑定 / 导入剧本、打开素材 / Brief / 节点定位逻辑，移除 Agent input 拼装和 output 转换细节。
+
+拆分顺序：
+
+1. M6.11.1 Agent 独立化：待实现。先抽资产提取 Agent、分镜导演 Agent、统一 hook 和审核列表。
+2. M6.11.2 Canvas Toolbar 工具定义模块化：抽顶部工具栏工具协议和构建函数。
+3. M6.11.3 Node Hover Toolbar 工具定义模块化：抽节点悬浮工具显隐规则。
+4. M6.11.4 Generation / Insert 动作 hook 化：后置处理生成、重试、续写、刷新任务、上传和插入类动作。
+
+验收标准：
+
+- `EpisodeWorkbenchDrawer` 不再直接拼 Agent input，也不直接转换 Agent output。
+- 资产提取 Agent 和分镜导演 Agent 可在不依赖 UI 的情况下独立运行、审核和应用。
+- `CanvasToolbar` 的核心工具定义可以集中维护，现有按钮行为不变。
+- `CanvasNodeHoverToolbar` 的显隐逻辑可以集中维护，现有节点工具行为不变。
+- 现有 M6.9 / M6.10 Agent Runner、审核、应用和追溯行为不被破坏。
+
+不做事项：
+
+- 不做自动 Agent 联动。
+- 不做多 Agent workflow 编排器或可视化 Agent 流程图。
+- 不做插件系统、动态加载工具或全局工具 store。
+- 不把每个按钮拆成独立组件文件。
+- 不改变生成、写入、扣费、审核或应用的业务行为。
 
 ### M8：生成历史与任务日志打通
 
