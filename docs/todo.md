@@ -6,7 +6,7 @@
 
 ## 当前基线
 
-- 当前版本：`v0.2.54`。
+- 当前版本：`v0.2.59`。
 - 已具备项目工作台、画布项目预设、剧本管理、分镜管理、设定库、提示词仓库、素材自动归档、素材去重、素材版本历史、素材版本引用锁定、生成队列、剪辑包导出、本地 Agent 工作台和 Agent Skill registry。
 - 火山方舟 / Seedance 的本地直连边界已收口：本地直连只保留 OpenAI 兼容能力，火山方舟 / Seedance 企业能力走云端渠道；火山素材加白仍由后台系统设置维护。
 - 当前核心短板不再是“缺入口”，而是生产链路的 Agent 化收口：本集工作台已经把剧本、分镜头表、生成镜头组、资产绑定、生成状态和画布节点收进同一条主路径；下一阶段要先建立统一 Agent 设置中心，再把剧本拆解、资产提取、生图需求、视频提示词和镜头组视频节点接入同一套可配置、可确认的 Agent 能力。
@@ -54,7 +54,7 @@
 12. M8.R1 追溯链路结构收口与自查。（已实现，待回归确认）
 13. M6.8 本集工作台收口。（已实现，待页面验收）
 14. M6.9 剧本到资产、镜头组和视频节点的 Agent 化工作台。（进行中，M6.9.0 / M6.9.1 / M6.9.2 / M6.9.3 / M6.9.4 已实现）
-15. M6.10 Seedance 2.0 多 Agent 工作流接入。（待启动，用于接入“导演 / 服化道 / 分镜师”三阶段团队工作流）
+15. M6.10 Seedance 2.0 多 Agent 工作流接入。（进行中，M6.10.0 已实现，用于接入“导演 / 服化道 / 分镜师”三阶段团队工作流）
 
 ### C. 云端资产与协作
 
@@ -98,8 +98,8 @@
 27. M6.9.6 镜头组加入画布改为视频生成节点。（已实现，待页面验收）
 28. M6.9.7 视频节点自动带入本集资产参考。（已实现，待页面验收）
 29. M6.9.R1 Agent 化工作台结构收口。（已完成，待回归确认）
-30. M6.10.0 Seedance 多 Agent 工作流预设导入。（下一阶段）
-31. M6.10.1 Agent Runner 接真实 LLM 文本执行。
+30. M6.10.0 Seedance 多 Agent 工作流预设导入。（已实现，待页面验收）
+31. M6.10.1 Agent Runner 接真实 LLM 文本执行。（下一阶段）
 32. M6.10.2 三阶段工作流状态、审核证据和产物存储。
 33. M6.10.3 阶段产物映射到设定库、分镜和画布视频节点。
 34. M6.10.4 质量门与规范读取记录迁移。
@@ -973,15 +973,24 @@ Agent 设置中心
 
 目标：把“废才 Seedance 2.0 AI 分镜师团队”中的 director、art-designer、storyboard-artist 三阶段工作流接入当前项目工具。接入后，它不是一个超长提示词模板，而是项目级 Seedance 工作流模块：预设负责角色与规范，Runner 负责模型调用，workflow store 负责阶段状态和审核证据，现有剧本 / 设定库 / 分镜 / 画布视频节点负责承接结果。
 
-状态：待启动。当前判断是可以接入，但不能原封不动直接跑；需要先把旧文件系统工作流拆成可配置预设和可确认执行链路。
+状态：进行中。M6.10.0 已完成预设导入与项目级选择，后续从 M6.10.1 开始再接真实文本 Runner；当前仍不自动执行工作流。
 
 来源工作流：
 
+- 来源目录：`/Users/huangchi/马也传媒/03_AI工作流/AI/眨眼之间工作区/ai/86.废才Seedance 2.0 AI 分镜师团队/`。
 - `AGENTS.md` 定义制片人调度、三阶段流程和强制执行锁。
 - `agents/director.md`、`agents/art-designer.md`、`agents/storyboard-artist.md` 定义三个内容 Agent。
 - `skills/` 下的 director、art-design、seedance-storyboard、三类 review 和 compliance skill 定义阶段规范。
 - `project.config.json` 定义各阶段需要读取的 agent / skill / template / examples。
 - `tools/workflow_validate.py`、`workflow_gate.py`、`asset_index.py` 等脚本定义质量门、规范缓存和素材索引。
+
+接入学习顺序：
+
+1. 先读取来源目录下的 `AGENTS.md`，理解总流程、阶段门禁、审核证据和强制执行锁。
+2. 再读取 `project.config.json`，确认 stage1 / stage2 / stage3 分别需要加载哪些 agent、skill、template 和 examples。
+3. 再读取 `agents/` 下三个角色文件，拆出 director、art-designer、storyboard-artist 的系统提示词和职责边界。
+4. 再读取 `skills/` 下对应技能包、模板和 examples，转成工具内 workflow preset manifest。
+5. 最后读取 `tools/README.md` 与 `tools/workflow_validate.py`、`tools/workflow_gate.py`、`tools/asset_index.py`，决定哪些质量门先迁移成 TypeScript，哪些可以由本地脚本过渡执行。
 
 核心判断：
 
@@ -1008,6 +1017,8 @@ Seedance 工作流预设
 #### M6.10.0：Seedance 多 Agent 工作流预设导入
 
 模型推理程度：`高`。
+
+状态：已实现，待页面验收。当前已新增内置 `Seedance 2.0 分镜师团队` workflow preset，导入 director / art-designer / storyboard-artist 三阶段摘要、skills、quality gates 和 sourceFiles，并接入 Agent 设置中心项目级启用 / 选择保存；不会执行 workflow、调用真实 LLM、生成图片或视频、触发扣费。
 
 实现时机：M6.9.R1 之后。先把旧工作流沉淀为工具内可选择、可版本化、可编辑的预设，不急着自动执行内容。
 

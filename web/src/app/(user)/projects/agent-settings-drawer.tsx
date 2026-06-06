@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Alert, App, Button, Card, Drawer, Form, Input, InputNumber, Select, Space, Switch, Tag } from "antd";
-import { Bot, Copy, RotateCcw, Save } from "lucide-react";
+import { Bot, Copy, RotateCcw, Save, Workflow } from "lucide-react";
 
 import {
     canInvokeAgentConfig,
@@ -17,6 +17,7 @@ import {
     type AgentReasoningLevel,
     type AgentWritePolicy,
 } from "./agent-settings";
+import { builtInAgentWorkflowPresets, resolveWorkflowPreset, sortedWorkflowStages, workflowStageDetail } from "./agent-workflow-presets";
 import { agentRunKindLabel, agentRunStatusLabel, listAgentRunsByProject } from "./agent-runner";
 import { useAgentSettingsStore } from "./use-agent-settings-store";
 import { useAgentRunnerStore } from "./use-agent-runner-store";
@@ -55,16 +56,25 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
     const { message } = App.useApp();
     const [form] = Form.useForm<AgentConfigFormValues>();
     const [selectedKind, setSelectedKind] = useState<AgentConfigKind>("asset_extractor");
+    const [selectedWorkflowId, setSelectedWorkflowId] = useState(builtInAgentWorkflowPresets()[0].workflowId);
+    const [workflowEnabled, setWorkflowEnabled] = useState(false);
+    const [workflowSelected, setWorkflowSelected] = useState(false);
     const globalConfigs = useAgentSettingsStore((state) => state.globalConfigs);
     const projectConfigs = useAgentSettingsStore((state) => state.projectConfigs);
+    const projectWorkflowSelections = useAgentSettingsStore((state) => state.projectWorkflowSelections);
     const saveProjectConfig = useAgentSettingsStore((state) => state.saveProjectConfig);
     const copyDefaultToProject = useAgentSettingsStore((state) => state.copyDefaultToProject);
     const resetProjectConfig = useAgentSettingsStore((state) => state.resetProjectConfig);
+    const saveProjectWorkflowSelection = useAgentSettingsStore((state) => state.saveProjectWorkflowSelection);
+    const resetProjectWorkflowSelection = useAgentSettingsStore((state) => state.resetProjectWorkflowSelection);
     const runs = useAgentRunnerStore((state) => state.runs);
     const createRun = useAgentRunnerStore((state) => state.createRun);
     const approveRun = useAgentRunnerStore((state) => state.approveRun);
     const rejectRun = useAgentRunnerStore((state) => state.rejectRun);
     const resolvedConfigs = useMemo(() => mergeAgentConfigs(defaultAgentConfigs(), globalConfigs, projectConfigs[projectId] || []), [globalConfigs, projectConfigs, projectId]);
+    const workflowPresets = useMemo(() => builtInAgentWorkflowPresets(), []);
+    const selectedWorkflowPreset = useMemo(() => resolveWorkflowPreset(selectedWorkflowId, projectWorkflowSelections[projectId] || []) || workflowPresets[0], [projectId, projectWorkflowSelections, selectedWorkflowId, workflowPresets]);
+    const selectedWorkflowStages = useMemo(() => sortedWorkflowStages(selectedWorkflowPreset), [selectedWorkflowPreset]);
     const recentRuns = useMemo(() => listAgentRunsByProject(runs, projectId).slice(0, 8), [projectId, runs]);
     const selectedConfig = resolvedConfigs.find((config) => config.kind === selectedKind) || defaultAgentConfig(selectedKind);
     const projectOverrideKinds = new Set((projectConfigs[projectId] || []).map((config) => config.kind));
@@ -75,6 +85,12 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
         if (!open) return;
         form.setFieldsValue(configToForm(selectedConfig));
     }, [form, open, selectedConfig]);
+
+    useEffect(() => {
+        if (!open) return;
+        setWorkflowEnabled(selectedWorkflowPreset.enabled);
+        setWorkflowSelected(selectedWorkflowPreset.selected);
+    }, [open, selectedWorkflowPreset]);
 
     const saveOverride = async () => {
         const values = await form.validateFields();
@@ -121,6 +137,16 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
         }
     };
 
+    const saveWorkflowSelection = () => {
+        saveProjectWorkflowSelection(projectId, { workflowId: selectedWorkflowPreset.workflowId, enabled: workflowEnabled, selected: workflowSelected, updatedAt: new Date().toISOString() });
+        message.success("多 Agent workflow 项目级选择已保存");
+    };
+
+    const resetWorkflowSelection = () => {
+        resetProjectWorkflowSelection(projectId, selectedWorkflowPreset.workflowId);
+        message.success("已移除 workflow 项目级选择");
+    };
+
     return (
         <Drawer title="Agent 设置中心" open={open} onClose={onClose} size={1080} destroyOnHidden>
             <div className="grid gap-5">
@@ -132,6 +158,102 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
                     </div>
                     <Tag className="m-0">本地设置</Tag>
                 </div>
+
+                <Card
+                    size="small"
+                    title={
+                        <span className="inline-flex items-center gap-2">
+                            <Workflow className="size-4" />多 Agent 工作流预设
+                        </span>
+                    }
+                    extra={
+                        <Space wrap>
+                            <Select className="min-w-72" value={selectedWorkflowId} options={workflowPresets.map((preset) => ({ label: `${preset.name} v${preset.version}`, value: preset.workflowId }))} onChange={setSelectedWorkflowId} />
+                            <Switch checked={workflowEnabled} checkedChildren="启用" unCheckedChildren="停用" onChange={setWorkflowEnabled} />
+                            <Switch checked={workflowSelected} checkedChildren="已选择" unCheckedChildren="未选择" onChange={setWorkflowSelected} />
+                            <Button size="small" type="primary" icon={<Save className="size-3.5" />} onClick={saveWorkflowSelection}>
+                                保存 workflow 选择
+                            </Button>
+                            <Button size="small" danger onClick={resetWorkflowSelection}>
+                                清除项目选择
+                            </Button>
+                        </Space>
+                    }
+                >
+                    <Alert className="mb-4" type="info" showIcon message="仅导入预设结构" description="该 workflow 预设只用于查看、选择和保存项目配置；不会调用真实 LLM，不会执行工作流，不会生成图片或视频，也不会触发扣费。" />
+                    <div className="grid gap-4">
+                        <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-base font-semibold">{selectedWorkflowPreset.name}</span>
+                                <Tag className="m-0">v{selectedWorkflowPreset.version}</Tag>
+                                <Tag className="m-0">{selectedWorkflowPreset.enabled ? "项目已启用" : "项目未启用"}</Tag>
+                                <Tag className="m-0">{selectedWorkflowPreset.selected ? "项目已选择" : "项目未选择"}</Tag>
+                                <Tag className="m-0">导入时间：{selectedWorkflowPreset.importedAt}</Tag>
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-stone-500">{selectedWorkflowPreset.description}</p>
+                            <div className="mt-2 text-xs text-stone-500">来源目录：{selectedWorkflowPreset.sourceRoot}</div>
+                        </div>
+
+                        <div className="grid gap-3">
+                            {selectedWorkflowStages.map((stage) => {
+                                const detail = workflowStageDetail(selectedWorkflowPreset, stage);
+                                return (
+                                    <div key={stage.stageId} className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Tag className="m-0">阶段 {stage.order}</Tag>
+                                            <span className="font-medium">{stage.name}</span>
+                                            {detail.agent ? <Tag className="m-0">{detail.agent.name}</Tag> : null}
+                                        </div>
+                                        <div className="mt-2 text-sm leading-6 text-stone-600 dark:text-stone-300">{stage.purpose}</div>
+                                        <div className="mt-2 grid gap-2 text-xs text-stone-500 md:grid-cols-2">
+                                            <div>输入：{stage.inputSummary}</div>
+                                            <div>输出：{stage.outputSummary}</div>
+                                        </div>
+                                        {detail.agent ? (
+                                            <div className="mt-3 rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-600 dark:bg-white/5 dark:text-stone-300">
+                                                <div className="font-medium">{detail.agent.role}</div>
+                                                <div>{detail.agent.responsibility}</div>
+                                                <div className="mt-1 text-stone-500">系统提示摘要：{detail.agent.systemPromptSummary}</div>
+                                                <div className="mt-1 text-stone-500">来源：{detail.agent.sourceFile}</div>
+                                            </div>
+                                        ) : null}
+                                        <Space className="mt-3" size={[6, 6]} wrap>
+                                            {detail.skills.map((skill) => (
+                                                <Tag key={skill.skillId} className="m-0">
+                                                    {skill.name}
+                                                </Tag>
+                                            ))}
+                                        </Space>
+                                        <Space className="mt-2" size={[6, 6]} wrap>
+                                            {detail.qualityGates.map((gate) => (
+                                                <Tag key={gate.gateId} className="m-0">
+                                                    质量门：{gate.name}
+                                                </Tag>
+                                            ))}
+                                        </Space>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <div className="grid gap-3 lg:grid-cols-3">
+                            <WorkflowSummaryBlock title="Agent" items={selectedWorkflowPreset.agents.map((agent) => `${agent.name}：${agent.responsibility}`)} />
+                            <WorkflowSummaryBlock title="技能包" items={selectedWorkflowPreset.skills.map((skill) => `${skill.name}：${skill.summary}`)} />
+                            <WorkflowSummaryBlock title="质量门" items={selectedWorkflowPreset.qualityGates.map((gate) => `${gate.name}：${gate.summary}`)} />
+                        </div>
+
+                        <details>
+                            <summary className="cursor-pointer text-sm text-stone-500">查看来源文件清单</summary>
+                            <div className="mt-2 grid gap-1.5 text-xs text-stone-500">
+                                {selectedWorkflowPreset.sourceFiles.map((file) => (
+                                    <div key={file.path} className="rounded-md bg-stone-50 px-2 py-1 dark:bg-white/5">
+                                        [{sourceCategoryLabel(file.category)}] {file.path}：{file.summary}
+                                    </div>
+                                ))}
+                            </div>
+                        </details>
+                    </div>
+                </Card>
 
                 <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
                     <Card size="small" title="Agent 类型">
@@ -291,6 +413,29 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
             </div>
         </Drawer>
     );
+}
+
+function WorkflowSummaryBlock({ title, items }: { title: string; items: string[] }) {
+    return (
+        <div className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+            <div className="font-medium">{title}</div>
+            <div className="mt-2 grid gap-1.5 text-xs leading-5 text-stone-500">
+                {items.map((item) => (
+                    <div key={item}>{item}</div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function sourceCategoryLabel(category: string) {
+    if (category === "agent") return "Agent";
+    if (category === "skill") return "Skill";
+    if (category === "template") return "Template";
+    if (category === "example") return "Example";
+    if (category === "tool") return "Tool";
+    if (category === "config") return "Config";
+    return "Guide";
 }
 
 function configToForm(config: AgentConfig): AgentConfigFormValues {
