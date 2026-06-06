@@ -78,6 +78,9 @@ export type CanvasNodeMetadata = {
     scriptId?: string;
     scriptSnapshot?: string;
     assetBreakdownItemId?: string;
+    agentRunId?: string;
+    agentConfigId?: string;
+    agentConfigVersion?: string;
     assetBriefId?: string;
     briefId?: string;
     briefKind?: "scene" | "character" | "prop" | "mood";

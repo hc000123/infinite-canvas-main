@@ -12,6 +12,7 @@
 - 项目设定库 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:production_bible_store`。
 - 项目剧本 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:script_store`。
 - 本集资产拆解 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:asset_breakdown_store`。
+- 生图 Brief JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:image_brief_store`。
 - 项目分镜 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:storyboard_store`。
 - 本地生成队列 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:generation_queue_store`。
 - Agent 任务 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:agent_task_store`。
@@ -175,6 +176,14 @@ type AssetBreakdownItem = {
   };
   assetIds: string[];
   status: "draft" | "brief_ready" | "generated" | "linked";
+  agentRunId?: string;
+  agentConfigId?: string;
+  agentConfigVersion?: string;
+  sourceType?: string;
+  agentAssetKind?: string;
+  suggestedBriefKind?: string;
+  importance?: string;
+  warnings?: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -189,8 +198,15 @@ type AssetBreakdownItem = {
 - `briefId` / `briefDraft`：资产图 Brief 草稿。M6.6.2 只生成可追溯草稿，不强行接图片生成。
 - `assetIds`：手动绑定或后续资产图生成成功后的素材 ID。绑定后可同步写入设定库 `assetRefs`。
 - `status`：草稿、Brief 已准备、已生成、已关联。
+- `agentRunId / agentConfigId / agentConfigVersion`：M6.9.3 起由资产提取 Agent 写入，用于追溯需求来自哪一次 Runner 记录和哪一版 Agent 配置。
+- `sourceType`：需求来源。资产提取 Agent 写入 `agent_asset_extractor`；手动补充可写 `manual`；旧资产拆解为空时按资产拆解处理。
+- `agentAssetKind`：保留 Agent 原始资产类型，支持 `character / scene / prop / costume / makeup / mood / effect`。为复用旧数据结构，`costume / makeup` 会落到 `kind=character`，`mood / effect` 会落到 `kind=style`。
+- `suggestedBriefKind`：建议创建的 Brief 类型，支持 `character / scene / prop / mood`。
+- `importance / warnings`：资产提取草案给出的重要度和风险提醒。
 
 当用户把素材绑定到资产拆解条目时，素材 `metadata` 会记录 `episodeId`、`episodeTitle`、`assetBreakdownItemId` 和 `assetBreakdownItems` 追溯数组。后续如果资产图节点真实生成成功，也可以通过画布节点 `metadata.assetBreakdownItemId` 回写到素材 `metadata.generation.assetBreakdownItemId`。
+
+M6.9.4 起，本集工作台的“本集生图需求”直接读取同一个 `asset_breakdown_store`，不新增独立 store。用户点击“创建 Brief”后，系统会在 `image_brief_store` 创建 `sourceType=asset_breakdown` 的 Brief，并把 Brief ID 回写到 `AssetBreakdownItem.briefId`；如果已经存在 `briefId` 或同 `sourceType/sourceId` 的 Brief，则只打开已有 Brief，不重复创建。图片生成成功后，现有素材入库链路会把 assetId 追加到 Brief `resultAssetIds` 和需求 `assetIds`，并把需求状态更新为 `generated`；同一 assetId 会去重。主参考图优先读取 Brief `primaryAssetId`，切换主参考仍在 Brief 结果区完成，不直接改素材本体。
 
 ## 项目设定库结构
 
@@ -1140,6 +1156,13 @@ type ImageBrief = {
   metadata?: {
     productionBibleItemId?: string;
     assetBreakdownItemId?: string;
+    agentRunId?: string;
+    agentConfigId?: string;
+    agentConfigVersion?: string;
+    agentAssetKind?: string;
+    suggestedBriefKind?: string;
+    tags?: string[];
+    warnings?: string[];
     shotGroupId?: string;
     shotIds?: string[];
     briefSnapshot?: Record<string, unknown>;
@@ -1158,6 +1181,7 @@ type ImageBrief = {
 来源关系：
 
 - 资产拆解条目创建 Brief 时写入 `sourceType=asset_breakdown`、`sourceId` 和 `metadata.assetBreakdownItemId`。
+- M6.9.4 起，从本集生图需求创建 Brief 时还会写入 `metadata.agentRunId / agentConfigId / agentConfigVersion / agentAssetKind / suggestedBriefKind / tags / warnings`，用于从 Brief、配置节点和生成素材反查资产提取 Agent 来源。
 - 设定库创建 Brief 时写入 `sourceType=production_bible`、`metadata.productionBibleItemId`，并带入 `assetRefs`。
 - 生成镜头组创建氛围 Brief 时写入 `sourceType=storyboard`、`metadata.shotGroupId / shotIds`。
 
@@ -1166,7 +1190,9 @@ type ImageBrief = {
 - 第一版只做 Brief 数据、校验、提示词拼装、复制和入口打通。
 - 不接真实 LLM，不自动理解剧本，不自动触发图片生成。
 - M6.7.1 起，Brief 可创建图片生成配置节点；节点 metadata 会写入 `briefId / briefKind / briefMode / briefSnapshot / finalPrompt / sourceType / sourceId / episodeId / episodeTitle / assetBreakdownItemId / productionBibleItemId / shotGroupId / shotIds / referenceAssets`。
+- M6.9.4 起，由本集生图需求创建的图片配置节点还会写入 `agentRunId / agentConfigId / agentConfigVersion`，并继续带上 `assetBreakdownItemId / episodeId / episodeTitle / sourceType / finalPrompt`。创建配置节点只写画布节点，不自动触发图片生成。
 - 图片生成成功后，自动入库素材的 `metadata.generation` 会补充 `briefId / briefSnapshot / finalPrompt / referenceAssets / sourceType / sourceId`，并回写 Brief 的 `resultAssetIds`。
+- M6.9.4 起，自动入库素材的 `metadata.generation` 也会保留 `assetBreakdownItemId / agentRunId / agentConfigId / agentConfigVersion / episodeId / episodeTitle`；如果结果素材来自本集生图需求，会同步回写需求 `assetIds / status`。
 - M8 起，自动入库素材的 `metadata.generation` 会同步记录 `aiTaskId / upstreamTaskId / aiTaskStatus / aiTaskCredits / creditLogId / creditsRefunded / refundedAt / finishedAt`。如果素材来自画布视频，还会继续保留 `taskId / storyboardGroupId / storyboardShotId / shotGroupId / shotIds`，并把入库后的 `assetId` 反写到后端 `ai_tasks.response_json.frontendArtifacts`，供后台 AI 任务日志反查。
 - 如果 Brief 来源是资产拆解条目，生成结果 assetId 会写回 `AssetBreakdownItem.assetIds`，状态更新为 `generated`。
 - 如果 Brief 来源是设定库，生成结果可同步写入 `ProductionBibleItem.assetRefs`。

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { App, Button, Drawer, Empty, Modal, Select, Segmented } from "antd";
 import { Download, Plus } from "lucide-react";
 import { saveAs } from "file-saver";
@@ -31,10 +31,12 @@ type Props = {
     canvases?: CanvasProject[];
     onCreateImageConfig?: (brief: ImageBrief, canvasId?: string) => void;
     onOpenAsset?: (asset: Asset) => void;
+    initialBriefId?: string;
+    initialBriefRequestId?: number;
     onClose: () => void;
 };
 
-export function ImageBriefWorkbenchDrawer({ open, projectId, projectTitle, canvases = [], onCreateImageConfig, onOpenAsset, onClose }: Props) {
+export function ImageBriefWorkbenchDrawer({ open, projectId, projectTitle, canvases = [], onCreateImageConfig, onOpenAsset, initialBriefId, initialBriefRequestId = 0, onClose }: Props) {
     const { message } = App.useApp();
     const briefs = useImageBriefStore((state) => state.briefs);
     const addBrief = useImageBriefStore((state) => state.addBrief);
@@ -52,6 +54,15 @@ export function ImageBriefWorkbenchDrawer({ open, projectId, projectTitle, canva
     const [exportView, setExportView] = useState<ImageBriefExportView>("art_direction");
     const projectBriefs = useMemo(() => briefs.filter((brief) => brief.projectId === projectId && (kindFilter === "all" || brief.kind === kindFilter)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), [briefs, kindFilter, projectId]);
     const assetsById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
+
+    useEffect(() => {
+        if (!open || !initialBriefId) return;
+        const brief = briefs.find((item) => item.id === initialBriefId && item.projectId === projectId);
+        if (!brief) return;
+        setKindFilter("all");
+        setEditingBrief(brief);
+        setFormOpen(true);
+    }, [briefs, initialBriefId, initialBriefRequestId, open, projectId]);
 
     const startCreate = () => {
         setEditingBrief(null);

@@ -4,9 +4,33 @@
 
 ## 当前版本验收清单
 
-当前版本：`v0.2.53`。需要优先验收的是 M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+当前版本：`v0.2.54`。需要优先验收的是 M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
 
 ### 当前必须验收
+
+#### v0.2.54：M6.9.4 本集生图需求接入 Brief / 生图链路
+
+- 入口：`/canvas/:id` 画布工具栏“本集工作台”中的“本集生图需求”；从该区域点击“创建 Brief / 打开 Brief”会进入现有“生图 Brief 工作台”。
+- 操作步骤：
+  1. 先用 M6.9.3 资产提取 Agent 批准并写入本集生图需求，或准备已有资产拆解条目。
+  2. 打开本集工作台，确认“本集生图需求”区域按当前 `projectId + canvasId + episodeId` 展示需求。
+  3. 分别切换 `character / scene / prop / costume / makeup / mood / effect` 类型筛选，确认服装 / 妆发 / 特效等 Agent 原始类型不会丢失。
+  4. 检查每条需求是否展示名称、类型、描述、重要度、建议 Brief 类型、来源、Brief 状态、结果素材数量、主参考图和状态。
+  5. 对未建 Brief 的需求点击“创建 Brief”，确认只在用户点击后创建，并回写需求 `briefId / status`。
+  6. 再次点击同一需求“打开 Brief”，确认打开已有 Brief，不重复创建。
+  7. 在 Brief 表单中编辑结构化字段、参考素材、检查模式和最终提示词，确认沿用标准 / 提醒 / 自由模式校验。
+  8. 从 Brief 点击创建图片生成配置节点，确认标准模式 error 会阻止，提醒模式 warning 会二次确认；成功后只新增配置节点，不自动开始图片生成。
+  9. 手动触发该配置节点生成图片后，确认素材自动入库，Brief `resultAssetIds / primaryAssetId` 更新，本集生图需求 `assetIds / status` 更新，重复 assetId 不重复写入。
+  10. 在 Brief 结果区切换主参考图并同步来源，确认本集生图需求区域展示新的主参考图，但素材本体和素材版本历史不被改写。
+- 预期结果：
+  - 本集生图需求继续复用 `infinite-canvas:asset_breakdown_store` 和 `infinite-canvas:image_brief_store`，不新增孤立体系，不改旧 localforage key。
+  - Brief metadata、配置节点 metadata、素材 `metadata.generation` 都能追溯 `briefId / assetBreakdownItemId / agentRunId / agentConfigId / agentConfigVersion / episodeId / episodeTitle / sourceType / finalPrompt`。
+  - 写入 Brief、创建图片配置节点、同步结果都需要用户明确点击。
+  - 本轮不改后端、不接真实 LLM、不新增图片生成接口、不自动生成图片、不自动扣费。
+- 失败影响：
+  - 如果需求创建 Brief 后不能回写 `briefId`，后续会重复创建 Brief 或丢失追溯。
+  - 如果配置节点或素材 metadata 缺少 Agent run / 本集字段，生成结果无法回查是哪次资产提取产生的需求。
+  - 如果自动生成图片或自动扣费，违反 M6.9 的用户确认边界。
 
 #### v0.2.53：M6.9.3 资产提取 Agent 与本集生图需求
 

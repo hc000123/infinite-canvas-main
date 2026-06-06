@@ -48,6 +48,13 @@ export type ImageBrief = {
     metadata?: {
         productionBibleItemId?: string;
         assetBreakdownItemId?: string;
+        agentRunId?: string;
+        agentConfigId?: string;
+        agentConfigVersion?: string;
+        agentAssetKind?: string;
+        suggestedBriefKind?: string;
+        tags?: string[];
+        warnings?: string[];
         shotGroupId?: string;
         shotIds?: string[];
         briefSnapshot?: Record<string, unknown>;
@@ -150,7 +157,7 @@ export function normalizeImageBriefInput(input: ImageBriefWriteInput): Normalize
 }
 
 export function buildImageBriefFromAssetBreakdown(item: AssetBreakdownItem, id = `brief-${Date.now()}`, now = new Date().toISOString()): ImageBrief {
-    const kind = imageBriefKindFromAssetBreakdown(item.kind);
+    const kind = imageBriefKindFromAssetBreakdownItem(item);
     const fields = {
         ...defaultImageBriefFields(kind),
         description: item.description,
@@ -178,7 +185,17 @@ export function buildImageBriefFromAssetBreakdown(item: AssetBreakdownItem, id =
             referenceAssets: item.assetIds.map((assetId) => ({ assetId, role: "reference" })),
             finalPrompt: "",
             resultAssetIds: [],
-            metadata: { assetBreakdownItemId: item.id, productionBibleItemId: item.productionBibleItemId },
+            metadata: {
+                assetBreakdownItemId: item.id,
+                productionBibleItemId: item.productionBibleItemId,
+                agentRunId: item.agentRunId,
+                agentConfigId: item.agentConfigId,
+                agentConfigVersion: item.agentConfigVersion,
+                agentAssetKind: item.agentAssetKind,
+                suggestedBriefKind: item.suggestedBriefKind,
+                tags: item.tags,
+                warnings: item.warnings || [],
+            },
         },
     });
 }
@@ -270,6 +287,16 @@ export function imageBriefGenerationGate(brief: ImageBrief) {
     return { allowed: true, needsConfirmation: false, messages: [] };
 }
 
+export function imageBriefKindFromAssetBreakdownItem(item: Pick<AssetBreakdownItem, "kind" | "agentAssetKind" | "suggestedBriefKind">): ImageBriefKind {
+    if (isImageBriefKind(item.suggestedBriefKind)) return item.suggestedBriefKind;
+    if (item.agentAssetKind === "scene") return "scene";
+    if (item.agentAssetKind === "prop") return "prop";
+    if (item.agentAssetKind === "mood" || item.agentAssetKind === "effect") return "mood";
+    if (item.agentAssetKind === "character" || item.agentAssetKind === "costume" || item.agentAssetKind === "makeup") return "character";
+    if (item.kind === "style") return "mood";
+    return item.kind;
+}
+
 export function buildImageBriefGenerationMetadata(brief: ImageBrief) {
     return {
         briefId: brief.id,
@@ -282,6 +309,9 @@ export function buildImageBriefGenerationMetadata(brief: ImageBrief) {
         episodeId: brief.episodeId,
         episodeTitle: brief.episodeTitle,
         assetBreakdownItemId: brief.metadata?.assetBreakdownItemId,
+        agentRunId: brief.metadata?.agentRunId,
+        agentConfigId: brief.metadata?.agentConfigId,
+        agentConfigVersion: brief.metadata?.agentConfigVersion,
         productionBibleItemId: brief.metadata?.productionBibleItemId,
         shotGroupId: brief.metadata?.shotGroupId,
         shotIds: brief.metadata?.shotIds || [],
@@ -396,13 +426,12 @@ function buildBrief({ id, now, input }: { id: string; now: string; input: ImageB
     return { ...normalized, id, createdAt: now, updatedAt: now };
 }
 
-function imageBriefKindFromAssetBreakdown(kind: AssetBreakdownItem["kind"]): ImageBriefKind {
-    if (kind === "style") return "mood";
-    return kind;
-}
-
 function storyboardRefToBriefRef(ref: StoryboardAssetRef): ImageBriefReferenceAsset {
     return { assetId: ref.assetId, kind: ref.kind, role: ref.role, assetVersion: ref.assetVersion };
+}
+
+function isImageBriefKind(value: unknown): value is ImageBriefKind {
+    return value === "scene" || value === "character" || value === "prop" || value === "mood";
 }
 
 function fieldLabel(key: string) {

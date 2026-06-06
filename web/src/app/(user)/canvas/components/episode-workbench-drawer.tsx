@@ -35,6 +35,7 @@ import {
     EpisodeOverviewSection,
     EpisodeScriptSection,
     AssetExtractionSection,
+    EpisodeImageNeedsSection,
     EpisodeTableSection,
     GenerationManagementSection,
     ShotGroupFormModal,
@@ -47,6 +48,8 @@ import {
     type TableShotFormValues,
 } from "./episode-workbench-sections";
 import type { ShotGroup, StoryboardTableShot } from "../utils/storyboard-management";
+import { findImageBriefForAssetBreakdown } from "../utils/episode-image-needs";
+import type { AssetBreakdownItem } from "../utils/asset-breakdown";
 
 type Props = {
     open: boolean;
@@ -59,6 +62,7 @@ type Props = {
     onUpdateCanvasEpisode: (canvasId: string, patch: Pick<Partial<CanvasProject>, "episodeId" | "episodeTitle" | "scriptId" | "scriptSnapshot">) => void;
     onAddShotGroupToCanvas?: (groupId: string) => void;
     onOpenAsset?: (asset: Asset) => void;
+    onOpenImageBrief?: (briefId: string) => void;
     onLocateNode?: (nodeId: string) => void;
     onRetryNode?: (nodeId: string) => void;
     onOpenAgentSettings?: () => void;
@@ -86,6 +90,7 @@ export function EpisodeWorkbenchDrawer({
     onUpdateCanvasEpisode,
     onAddShotGroupToCanvas,
     onOpenAsset,
+    onOpenImageBrief,
     onLocateNode,
     onRetryNode,
     onOpenAgentSettings,
@@ -111,7 +116,10 @@ export function EpisodeWorkbenchDrawer({
     const updateShotGroup = useStoryboardStore((state) => state.updateShotGroup);
     const removeShotGroup = useStoryboardStore((state) => state.removeShotGroup);
     const createMoodBrief = useImageBriefStore((state) => state.createFromShotGroup);
+    const imageBriefs = useImageBriefStore((state) => state.briefs);
+    const createImageBriefFromAssetBreakdown = useImageBriefStore((state) => state.createFromAssetBreakdown);
     const importAgentAssetDrafts = useAssetBreakdownStore((state) => state.importAgentDrafts);
+    const updateAssetBreakdownItem = useAssetBreakdownStore((state) => state.updateItem);
     const productionBibleItems = useProductionBibleStore((state) => state.items);
     const breakdownItems = useAssetBreakdownStore((state) => state.items);
     const resolvedAgentConfigs = useAgentSettingsStore((state) => state.resolvedProjectConfigs(projectId));
@@ -129,6 +137,7 @@ export function EpisodeWorkbenchDrawer({
     const [shotGroupFormOpen, setShotGroupFormOpen] = useState(false);
     const [bindOpen, setBindOpen] = useState(false);
     const [bindPromptDismissed, setBindPromptDismissed] = useState(false);
+    const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
     const projectCanvases = useMemo(() => canvases, [canvases]);
     const activeCanvas = projectCanvases.find((canvas) => canvas.id === activeCanvasId) || selectEpisodeWorkbenchCanvas(projectCanvases, currentCanvasId);
     const activeShots = useMemo(() => activeEpisodeTableShots(tableShots, activeCanvas), [activeCanvas, tableShots]);
@@ -268,6 +277,25 @@ export function EpisodeWorkbenchDrawer({
         }
     };
 
+    const openNeedAsset = (asset: Asset) => {
+        if (onOpenAsset) onOpenAsset(asset);
+        else setPreviewAsset(asset);
+    };
+
+    const openAssetNeedBrief = (item: AssetBreakdownItem) => {
+        const existing = findImageBriefForAssetBreakdown(item, imageBriefs);
+        if (existing) {
+            if (item.briefId !== existing.id) updateAssetBreakdownItem(item.id, { briefId: existing.id, status: "brief_ready" });
+            onOpenImageBrief?.(existing.id);
+            message.success("已打开关联 Brief");
+            return;
+        }
+        const briefId = createImageBriefFromAssetBreakdown(item);
+        updateAssetBreakdownItem(item.id, { briefId, status: "brief_ready" });
+        onOpenImageBrief?.(briefId);
+        message.success("已创建并打开生图 Brief");
+    };
+
     const submitShot = (values: TableShotFormValues, assetRefs: StoryboardAssetRef[]) => {
         if (!activeCanvas?.episodeId) return;
         const payload = {
@@ -377,6 +405,16 @@ export function EpisodeWorkbenchDrawer({
                             onApply={applyAssetExtractionRun}
                             onOpenAgentSettings={onOpenAgentSettings}
                         />
+                        <EpisodeImageNeedsSection
+                            projectId={projectId}
+                            canvasId={activeCanvas.id}
+                            episodeId={activeCanvas.episodeId}
+                            items={breakdownItems}
+                            briefs={imageBriefs}
+                            assets={assets}
+                            onOpenBrief={openAssetNeedBrief}
+                            onOpenAsset={openNeedAsset}
+                        />
 
                         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(480px,0.95fr)]">
                             <EpisodeTableSection
@@ -432,6 +470,15 @@ export function EpisodeWorkbenchDrawer({
 
             <TableShotFormModal open={shotFormOpen} editingShot={editingShot} assets={mediaAssets} onCancel={() => setShotFormOpen(false)} onSubmit={submitShot} />
             <ShotGroupFormModal open={shotGroupFormOpen} editingGroup={editingShotGroup} assets={mediaAssets} bibleItems={projectBibleItems} onCancel={() => setShotGroupFormOpen(false)} onSubmit={submitShotGroup} />
+            <Modal title={previewAsset?.title || "素材详情"} open={Boolean(previewAsset)} onCancel={() => setPreviewAsset(null)} footer={null} destroyOnHidden>
+                {previewAsset ? (
+                    <div className="space-y-3 text-sm">
+                        {previewAsset.coverUrl ? <img src={previewAsset.coverUrl} alt={previewAsset.title} className="max-h-96 w-full rounded-lg object-contain" /> : null}
+                        <div className="text-stone-500">素材 ID：{previewAsset.id}</div>
+                        <div className="text-stone-500">类型：{previewAsset.kind}</div>
+                    </div>
+                ) : null}
+            </Modal>
             <Modal
                 title="绑定或导入本集剧本"
                 open={bindOpen}

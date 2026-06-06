@@ -309,6 +309,8 @@ function InfiniteCanvasPage() {
     const [agentSettingsOpen, setAgentSettingsOpen] = useState(false);
     const [storyboardManagerOpen, setStoryboardManagerOpen] = useState(false);
     const [imageBriefOpen, setImageBriefOpen] = useState(false);
+    const [imageBriefInitialId, setImageBriefInitialId] = useState("");
+    const [imageBriefOpenRequestId, setImageBriefOpenRequestId] = useState(0);
     const [storyboardInitialGroupId, setStoryboardInitialGroupId] = useState("");
     const [projectLoaded, setProjectLoaded] = useState(false);
     const [toolbarNodeId, setToolbarNodeId] = useState<string | null>(null);
@@ -2230,6 +2232,11 @@ function InfiniteCanvasPage() {
                         const node = nodesRef.current.find((item) => item.id === nodeId);
                         if (node) void handleRetryNode(node);
                     }}
+                    onOpenImageBrief={(briefId) => {
+                        setImageBriefInitialId(briefId);
+                        setImageBriefOpenRequestId((value) => value + 1);
+                        setImageBriefOpen(true);
+                    }}
                     onOpenAgentSettings={() => setAgentSettingsOpen(true)}
                     promptBindWhenUnbound
                 />
@@ -2262,6 +2269,8 @@ function InfiniteCanvasPage() {
                     projectTitle={workspaceProjectTitle}
                     canvases={currentProject ? [currentProject] : []}
                     onCreateImageConfig={createBriefImageConfigNode}
+                    initialBriefId={imageBriefInitialId}
+                    initialBriefRequestId={imageBriefOpenRequestId}
                     onClose={() => setImageBriefOpen(false)}
                 />
             </section>

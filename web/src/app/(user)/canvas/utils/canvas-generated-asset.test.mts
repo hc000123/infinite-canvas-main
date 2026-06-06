@@ -47,6 +47,13 @@ test("builds generated image asset with canvas generation metadata", () => {
                 prompt: "节点提示词",
                 model: "node-image-model",
                 generationType: "edit",
+                briefId: "brief-1",
+                assetBreakdownItemId: "need-1",
+                agentRunId: "run-1",
+                agentConfigId: "asset-extractor",
+                agentConfigVersion: "3",
+                episodeId: "episode-1",
+                episodeTitle: "第一集",
                 aiTaskId: "aitask-image",
                 upstreamTaskId: "upstream-image",
                 aiTaskStatus: "succeeded",
@@ -74,6 +81,13 @@ test("builds generated image asset with canvas generation metadata", () => {
     assert.equal(generation.model, "node-image-model");
     assert.equal(generation.provider, "openai");
     assert.equal(generation.actionType, "edit");
+    assert.equal(generation.briefId, "brief-1");
+    assert.equal(generation.assetBreakdownItemId, "need-1");
+    assert.equal(generation.agentRunId, "run-1");
+    assert.equal(generation.agentConfigId, "asset-extractor");
+    assert.equal(generation.agentConfigVersion, "3");
+    assert.equal(generation.episodeId, "episode-1");
+    assert.equal(generation.episodeTitle, "第一集");
     assert.equal(generation.aiTaskId, "aitask-image");
     assert.equal(generation.upstreamTaskId, "upstream-image");
     assert.equal(generation.aiTaskStatus, "succeeded");

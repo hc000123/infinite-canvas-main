@@ -16,6 +16,7 @@ import {
     buildProductionBibleBriefAssetRefs,
     defaultImageBriefFields,
     imageBriefGenerationGate,
+    imageBriefKindFromAssetBreakdownItem,
     mergeImageBriefResultAssetIds,
     validateImageBrief,
     type ImageBrief,
@@ -53,14 +54,39 @@ test("builds final prompt for scene character prop and mood briefs", () => {
 });
 
 test("creates a brief from asset breakdown item", () => {
-    const result = buildImageBriefFromAssetBreakdown(assetBreakdown(), "brief-1", "now");
+    const result = buildImageBriefFromAssetBreakdown(
+        assetBreakdown({
+            agentRunId: "run-1",
+            agentConfigId: "asset-extractor",
+            agentConfigVersion: "3",
+            suggestedBriefKind: "character",
+            warnings: ["保持一致性"],
+        }),
+        "brief-1",
+        "now",
+    );
     assert.equal(result.id, "brief-1");
     assert.equal(result.sourceType, "asset_breakdown");
     assert.equal(result.sourceId, "asset-breakdown-1");
     assert.equal(result.kind, "character");
     assert.equal(result.episodeId, "episode-1");
     assert.equal(result.fields.description, "学士袍造型");
+    assert.equal(result.metadata?.agentRunId, "run-1");
+    assert.equal(result.metadata?.agentConfigId, "asset-extractor");
+    assert.equal(result.metadata?.agentConfigVersion, "3");
+    assert.deepEqual(result.metadata?.warnings, ["保持一致性"]);
     assert.match(result.prompt, /魏梁/);
+});
+
+test("maps asset need kinds to image brief kinds", () => {
+    assert.equal(imageBriefKindFromAssetBreakdownItem(assetBreakdown({ kind: "character" })), "character");
+    assert.equal(imageBriefKindFromAssetBreakdownItem(assetBreakdown({ kind: "scene" })), "scene");
+    assert.equal(imageBriefKindFromAssetBreakdownItem(assetBreakdown({ kind: "prop" })), "prop");
+    assert.equal(imageBriefKindFromAssetBreakdownItem(assetBreakdown({ kind: "style" })), "mood");
+    assert.equal(imageBriefKindFromAssetBreakdownItem(assetBreakdown({ kind: "character", agentAssetKind: "costume" })), "character");
+    assert.equal(imageBriefKindFromAssetBreakdownItem(assetBreakdown({ kind: "character", agentAssetKind: "makeup" })), "character");
+    assert.equal(imageBriefKindFromAssetBreakdownItem(assetBreakdown({ kind: "style", agentAssetKind: "effect" })), "mood");
+    assert.equal(imageBriefKindFromAssetBreakdownItem(assetBreakdown({ kind: "style", suggestedBriefKind: "prop" })), "prop");
 });
 
 test("creates a brief from production bible item", () => {
@@ -89,9 +115,18 @@ test("builds image generation metadata from a brief", () => {
             mode: "reminder",
             sourceType: "asset_breakdown",
             sourceId: "asset-breakdown-1",
+            episodeId: "episode-1",
+            episodeTitle: "第一集",
             finalPrompt: "最终提示词",
             referenceAssets: [{ assetId: "asset-1", role: "reference" }],
-            metadata: { assetBreakdownItemId: "asset-breakdown-1", shotGroupId: "shot-group-1", shotIds: ["shot-1"] },
+            metadata: {
+                assetBreakdownItemId: "asset-breakdown-1",
+                agentRunId: "run-1",
+                agentConfigId: "asset-extractor",
+                agentConfigVersion: "3",
+                shotGroupId: "shot-group-1",
+                shotIds: ["shot-1"],
+            },
         }),
     );
     assert.equal(result.briefId, "brief-1");
@@ -99,7 +134,11 @@ test("builds image generation metadata from a brief", () => {
     assert.equal(result.briefMode, "reminder");
     assert.equal(result.finalPrompt, "最终提示词");
     assert.equal(result.sourceType, "asset_breakdown");
+    assert.equal(result.episodeId, "episode-1");
     assert.equal(result.assetBreakdownItemId, "asset-breakdown-1");
+    assert.equal(result.agentRunId, "run-1");
+    assert.equal(result.agentConfigId, "asset-extractor");
+    assert.equal(result.agentConfigVersion, "3");
     assert.equal(result.shotGroupId, "shot-group-1");
     assert.deepEqual(result.shotIds, ["shot-1"]);
 });
@@ -118,6 +157,32 @@ test("builds image config node from a brief", () => {
     assert.equal(node.metadata?.model, "image-special");
     assert.equal(node.metadata?.briefId, "brief-1");
     assert.equal(node.metadata?.productionBibleItemId, "bible-1");
+});
+
+test("builds image config node with asset need trace metadata", () => {
+    const node = buildImageBriefImageConfigNode({
+        brief: brief({
+            id: "brief-1",
+            sourceType: "asset_breakdown",
+            sourceId: "asset-breakdown-1",
+            episodeId: "episode-1",
+            episodeTitle: "第一集",
+            finalPrompt: "最终提示词",
+            metadata: { assetBreakdownItemId: "asset-breakdown-1", agentRunId: "run-1", agentConfigId: "asset-extractor", agentConfigVersion: "3" },
+        }),
+        config: { model: "gpt-image", imageModel: "image-special", size: "16:9" } as never,
+        position: { x: 10, y: 20 },
+        id: "config-1",
+    });
+    assert.equal(node.metadata?.briefId, "brief-1");
+    assert.equal(node.metadata?.assetBreakdownItemId, "asset-breakdown-1");
+    assert.equal(node.metadata?.agentRunId, "run-1");
+    assert.equal(node.metadata?.agentConfigId, "asset-extractor");
+    assert.equal(node.metadata?.agentConfigVersion, "3");
+    assert.equal(node.metadata?.episodeId, "episode-1");
+    assert.equal(node.metadata?.episodeTitle, "第一集");
+    assert.equal(node.metadata?.sourceType, "asset_breakdown");
+    assert.equal(node.metadata?.finalPrompt, "最终提示词");
 });
 
 test("gates brief generation by validation mode", () => {
@@ -233,7 +298,7 @@ function asset(id: string, metadata: Record<string, unknown>) {
     };
 }
 
-function assetBreakdown(): AssetBreakdownItem {
+function assetBreakdown(patch: Partial<AssetBreakdownItem> = {}): AssetBreakdownItem {
     return {
         id: "asset-breakdown-1",
         projectId: "project-1",
@@ -250,6 +315,7 @@ function assetBreakdown(): AssetBreakdownItem {
         status: "draft",
         createdAt: "now",
         updatedAt: "now",
+        ...patch,
     };
 }
 

@@ -1,16 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Alert, Button, Card, Collapse, Empty, Input, Space, Tag } from "antd";
-import { Bot, Film, Link2, Pencil, Play, RotateCcw, Sparkles } from "lucide-react";
+import { Alert, Button, Card, Collapse, Empty, Input, Select, Space, Tag } from "antd";
+import { Bot, Film, ImagePlus, Link2, Pencil, Play, RotateCcw, Sparkles } from "lucide-react";
 
 import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
 import type { Asset } from "@/stores/use-asset-store";
 import { buildShotGroupGenerationSummaries, groupedTableShotsByScene, productionStatusLabel, type EpisodeProductionStatus, type EpisodeWorkbenchStats } from "../utils/episode-workbench";
+import { buildEpisodeImageNeedRows, episodeImageNeedKindLabel, type EpisodeImageNeedKind } from "../utils/episode-image-needs";
 import { ShotGroupRowCard, StoryboardTableShotCard, type ShotGroupFormValues, type TableShotFormValues } from "./storyboard-shot-group-components";
 import type { ShotGroup, StoryboardAssetRef, StoryboardProductionBibleRef, StoryboardTableShot } from "../utils/storyboard-management";
 import type { CanvasNodeData } from "../types";
 import { agentRunStatusLabel, type AgentRunRecord } from "../../projects/agent-runner.ts";
+import type { AssetBreakdownItem } from "../utils/asset-breakdown";
+import { imageBriefKindLabel, type ImageBrief } from "../utils/image-brief";
 
 export function EpisodeOverviewSection({ stats, status }: { stats: EpisodeWorkbenchStats; status: EpisodeProductionStatus }) {
     return (
@@ -165,6 +168,99 @@ export function AssetExtractionSection({
                 </div>
             ) : (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无资产提取草案。导入本集剧本后可运行资产提取。" className="py-8" />
+            )}
+        </Card>
+    );
+}
+
+export function EpisodeImageNeedsSection({
+    projectId,
+    canvasId,
+    episodeId,
+    items,
+    briefs,
+    assets,
+    onOpenBrief,
+    onOpenAsset,
+}: {
+    projectId: string;
+    canvasId?: string;
+    episodeId?: string;
+    items: AssetBreakdownItem[];
+    briefs: ImageBrief[];
+    assets: Asset[];
+    onOpenBrief: (item: AssetBreakdownItem) => void;
+    onOpenAsset?: (asset: Asset) => void;
+}) {
+    const [kindFilter, setKindFilter] = useState<EpisodeImageNeedKind | "all">("all");
+    const rows = useMemo(() => buildEpisodeImageNeedRows({ projectId, canvasId, episodeId, items, briefs, assets }).filter((row) => kindFilter === "all" || row.kind === kindFilter), [assets, briefs, canvasId, episodeId, items, kindFilter, projectId]);
+    return (
+        <Card
+            size="small"
+            title="本集生图需求"
+            extra={
+                <Select
+                    className="min-w-36"
+                    size="small"
+                    value={kindFilter}
+                    options={[{ label: "全部类型", value: "all" }, ...(["character", "scene", "prop", "costume", "makeup", "mood", "effect"] as EpisodeImageNeedKind[]).map((kind) => ({ label: episodeImageNeedKindLabel(kind), value: kind }))]}
+                    onChange={(value) => setKindFilter(value)}
+                />
+            }
+        >
+            {rows.length ? (
+                <div className="space-y-3">
+                    {rows.map((row) => (
+                        <div key={row.item.id} className="rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-white/5">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-medium">{row.item.name}</span>
+                                        <Tag className="m-0">{row.kindLabel}</Tag>
+                                        {row.item.importance ? <Tag className="m-0">{importanceLabel(row.item.importance)}</Tag> : null}
+                                        {row.suggestedBriefKind ? <Tag className="m-0">建议 {imageBriefKindLabel(row.suggestedBriefKind)}</Tag> : null}
+                                        <Tag className="m-0">{row.sourceLabel}</Tag>
+                                        <Tag color={row.hasBrief ? "blue" : undefined} className="m-0">
+                                            {row.hasBrief ? "已有 Brief" : "未建 Brief"}
+                                        </Tag>
+                                        <Tag className="m-0">{row.statusLabel}</Tag>
+                                    </div>
+                                    {row.item.description ? <div className="mt-2 text-sm leading-6 text-stone-600 dark:text-stone-300">{row.item.description}</div> : null}
+                                    {row.item.sourceText ? <div className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500 dark:text-stone-400">剧本依据：{row.item.sourceText}</div> : null}
+                                    <Space className="mt-2" size={[6, 6]} wrap>
+                                        <Tag className="m-0">结果素材 {row.resultAssetCount}</Tag>
+                                        {row.item.agentRunId ? <Tag className="m-0">run: {row.item.agentRunId}</Tag> : null}
+                                        {row.item.agentConfigId ? (
+                                            <Tag className="m-0">
+                                                Agent: {row.item.agentConfigId} v{row.item.agentConfigVersion || "-"}
+                                            </Tag>
+                                        ) : null}
+                                    </Space>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {row.primaryAsset ? (
+                                        <button
+                                            type="button"
+                                            className="h-14 w-20 overflow-hidden rounded-md border border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-900"
+                                            title="打开主参考图"
+                                            onClick={() => onOpenAsset?.(row.primaryAsset!)}
+                                        >
+                                            {row.primaryAsset.coverUrl ? <img src={row.primaryAsset.coverUrl} alt={row.primaryAsset.title} className="h-full w-full object-cover" /> : <span className="text-xs text-stone-400">主参考</span>}
+                                        </button>
+                                    ) : (
+                                        <div className="flex h-14 w-20 items-center justify-center rounded-md border border-dashed border-stone-200 text-xs text-stone-400 dark:border-stone-700">无主参考</div>
+                                    )}
+                                    <Button size="small" type={row.hasBrief ? "default" : "primary"} icon={<ImagePlus className="size-3.5" />} onClick={() => onOpenBrief(row.item)}>
+                                        {row.hasBrief ? "打开 Brief" : "创建 Brief"}
+                                    </Button>
+                                </div>
+                            </div>
+                            {row.item.warnings?.length ? <div className="mt-2 rounded-md bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">{row.item.warnings.join("；")}</div> : null}
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无本集生图需求。可先运行资产提取并手动写入，或在资产拆解中补充。" className="py-8" />
             )}
         </Card>
     );
@@ -419,6 +515,12 @@ function generationStatusLabel(status: string) {
     if (status === "retry_needed") return "待重试";
     if (status === "failed") return "失败";
     return status;
+}
+
+function importanceLabel(importance: string) {
+    if (importance === "high") return "高重要度";
+    if (importance === "low") return "低重要度";
+    return "中重要度";
 }
 
 export { TableShotFormModal, ShotGroupFormModal } from "./storyboard-shot-group-components";
