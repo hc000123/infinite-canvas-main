@@ -12,13 +12,14 @@ type InfiniteCanvasProps = {
     backgroundMode?: CanvasBackgroundMode;
     onViewportChange: (viewport: ViewportTransform) => void;
     onCanvasMouseDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
+    onCanvasDoubleClick?: (event: React.PointerEvent<HTMLDivElement>) => void;
     onCanvasDeselect?: () => void;
     onContextMenu?: (event: React.MouseEvent) => void;
     onDrop?: (event: React.DragEvent<HTMLDivElement>) => void;
     children: React.ReactNode;
 };
 
-export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onCanvasMouseDown, onCanvasDeselect, onContextMenu, onDrop, children }: InfiniteCanvasProps) {
+export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onCanvasMouseDown, onCanvasDoubleClick, onCanvasDeselect, onContextMenu, onDrop, children }: InfiniteCanvasProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const panState = useRef({
         isPanning: false,
@@ -31,6 +32,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
     const scaleRef = useRef(viewport.k);
     const frameRef = useRef<number | null>(null);
     const nextViewportRef = useRef<ViewportTransform | null>(null);
+    const lastBackgroundClickRef = useRef({ time: 0, x: 0, y: 0 });
     const [isSpacePressed, setIsSpacePressed] = useState(false);
 
     useEffect(() => {
@@ -90,6 +92,19 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
         if (target?.closest("[data-canvas-no-zoom]")) return;
         if (target?.closest("[data-connection-create-menu]")) return;
         const isBackgroundClick = !target?.closest("[data-node-id],[data-connection-id]");
+
+        if (event.button === 0 && !event.ctrlKey && !event.metaKey && isBackgroundClick) {
+            const now = Date.now();
+            const last = lastBackgroundClickRef.current;
+            const isDoubleClick = now - last.time < 320 && Math.abs(event.clientX - last.x) < 6 && Math.abs(event.clientY - last.y) < 6;
+            lastBackgroundClickRef.current = { time: now, x: event.clientX, y: event.clientY };
+            if (isDoubleClick) {
+                event.preventDefault();
+                onCanvasDoubleClick?.(event);
+                lastBackgroundClickRef.current = { time: 0, x: 0, y: 0 };
+                return;
+            }
+        }
 
         if (event.button === 0 && (event.ctrlKey || event.metaKey) && isBackgroundClick) {
             event.preventDefault();

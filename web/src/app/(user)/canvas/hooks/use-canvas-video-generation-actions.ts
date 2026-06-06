@@ -85,6 +85,10 @@ export function useCanvasVideoGenerationActions({
                 ...canvasEpisodeMetadata(episodeContext),
                 storyboardGroupId: sourceNode?.metadata?.storyboardGroupId,
                 storyboardShotId: sourceNode?.metadata?.storyboardShotId,
+                shotGroupId: sourceNode?.metadata?.shotGroupId,
+                shotIds: sourceNode?.metadata?.shotIds,
+                storyboardShotGroupId: sourceNode?.metadata?.storyboardShotGroupId,
+                storyboardTableShotIds: sourceNode?.metadata?.storyboardTableShotIds,
             };
             const { videoId, videoNode, isEmptyVideoNode, connection } = createVideoGenerationNode({
                 nodeId,
@@ -94,6 +98,7 @@ export function useCanvasVideoGenerationActions({
                 metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, generationStartedAt, ...generationMetadata },
             });
             useStoryboardStore.getState().markShotGenerating({ storyboardShotId: generationMetadata.storyboardShotId, nodeId: videoId });
+            useStoryboardStore.getState().markShotGroupGenerating({ shotGroupId: generationMetadata.shotGroupId, taskId: undefined });
             setPendingChildIds([videoId]);
             setNodes((prev) =>
                 isEmptyVideoNode ? prev.map((node) => (node.id === nodeId ? { ...node, ...videoNode } : node)) : [...prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), videoNode],
@@ -108,6 +113,7 @@ export function useCanvasVideoGenerationActions({
                     videoPlan.references,
                     (task) => {
                         useStoryboardStore.getState().markShotGenerating({ storyboardShotId: generationMetadata.storyboardShotId, nodeId: videoId, taskId: task.id });
+                        useStoryboardStore.getState().markShotGroupGenerating({ shotGroupId: generationMetadata.shotGroupId, taskId: task.id });
                         setNodes((prev) => prev.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, ...videoTaskMetadata(task), errorDetails: task.errorMessage } } : node)));
                     },
                     trace,
@@ -127,11 +133,13 @@ export function useCanvasVideoGenerationActions({
                 const asset = buildGeneratedVideoAsset(finalVideoNode, { projectId, projectTitle, projectPreset, episodeContext, prompt: effectivePrompt, effectivePrompt, config: generationConfig, createdAt });
                 const assetId = asset ? await archiveGeneratedAsset(asset).catch(() => undefined) : undefined;
                 useStoryboardStore.getState().markShotSucceeded({ storyboardShotId: generationMetadata.storyboardShotId, assetId: typeof assetId === "string" ? assetId : undefined, nodeId: videoId, taskId: finalVideoNode.metadata?.taskId });
+                useStoryboardStore.getState().markShotGroupSucceeded({ shotGroupId: generationMetadata.shotGroupId, assetId: typeof assetId === "string" ? assetId : undefined, taskId: finalVideoNode.metadata?.taskId });
                 return { pendingChildIds: [videoId], ok: true, taskId: finalVideoNode.metadata?.taskId, resultAssetId: typeof assetId === "string" ? assetId : undefined };
             } catch (error) {
                 const errorMessage = appendSeedanceMediaReviewDiagnostic(error instanceof Error ? error.message : "视频生成失败", videoPlan.references.images, videoPlan.references.videos);
                 if (isRecoverableVideoTaskError(error)) {
                     showWarning(errorMessage);
+                    useStoryboardStore.getState().markShotGroupGenerating({ shotGroupId: generationMetadata.shotGroupId, taskId: error.task.id });
                     setNodes((prev) =>
                         prev.map((node) =>
                             node.id === videoId
@@ -151,6 +159,7 @@ export function useCanvasVideoGenerationActions({
                 }
                 const latestTaskId = useStoryboardStore.getState().shots.find((shot) => shot.id === generationMetadata.storyboardShotId)?.lastTaskId;
                 useStoryboardStore.getState().markShotFailed({ storyboardShotId: generationMetadata.storyboardShotId, nodeId: videoId, taskId: latestTaskId, errorMessage });
+                useStoryboardStore.getState().markShotGroupFailed({ shotGroupId: generationMetadata.shotGroupId, taskId: latestTaskId, errorMessage });
                 if (connection) {
                     setConnections((prev) => prev.filter((item) => item.id !== connection.id));
                 }

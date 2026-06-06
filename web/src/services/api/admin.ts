@@ -319,9 +319,6 @@ export type AdminPublicSettings = {
     modelChannel: AdminPublicModelChannelSettings;
     auth: {
         allowRegister: boolean;
-        linuxDo: {
-            enabled: boolean;
-        };
     };
     volcengineAsset: AdminPublicVolcengineAssetSettings;
 };
@@ -332,12 +329,7 @@ export type AdminPrivateSettings = {
         enabled: boolean;
         cron: string;
     };
-    auth: {
-        linuxDo: {
-            clientId: string;
-            clientSecret: string;
-        };
-    };
+    auth: Record<string, never>;
     volcengineAsset: AdminPrivateVolcengineAssetSettings;
 };
 

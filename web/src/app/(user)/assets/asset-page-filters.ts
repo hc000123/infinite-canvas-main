@@ -1,5 +1,6 @@
 import type { Asset, AssetKind } from "../../../stores/use-asset-store.ts";
 import { assetGenerationRecords, assetMatchesGenerationFilters, readString } from "./asset-generation.ts";
+import { assetInCanvasLibrary } from "./asset-canvas-library.ts";
 import { assetInProjectLibrary } from "./asset-project-library.ts";
 
 export type AssetProjectContext = {
@@ -47,6 +48,7 @@ type AssetListFilters = {
     generationTaskFilter: "all" | "with" | "without";
     projectContextFilter: string;
     projectLibraryFilter: ProjectLibraryFilter;
+    canvasLibraryFilter: string;
     projectReferencedAssetIds: Set<string>;
     storyboardGroupFilter?: string;
     storyboardGroupAssetIds?: Set<string>;
@@ -98,6 +100,7 @@ export function filterAssetList(assets: Asset[], filters: AssetListFilters) {
         const inProjectLibrary = assetInProjectLibrary(asset, filters.projectContextFilter);
         if (filters.projectLibraryFilter === "shared" && !inProjectLibrary) return false;
         if (filters.projectLibraryFilter === "not_shared" && inProjectLibrary) return false;
+        if (filters.canvasLibraryFilter && !assetInCanvasLibrary(asset, filters.canvasLibraryFilter)) return false;
         if (filters.storyboardGroupFilter && !assetMatchesStoryboardGroup(asset, filters.storyboardGroupFilter, filters.storyboardGroupAssetIds)) return false;
         if (
             !assetMatchesGenerationFilters(asset, {

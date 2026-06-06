@@ -27,7 +27,7 @@ export function CanvasToolbar({
     onBackgroundModeChange,
     onShowImageInfoChange,
     onOpenAssets,
-    onOpenScriptManager,
+    onOpenEpisodeWorkbench,
     onOpenImageBriefs,
 }: {
     selectedCount: number;
@@ -49,7 +49,7 @@ export function CanvasToolbar({
     onBackgroundModeChange: (mode: CanvasBackgroundMode) => void;
     onShowImageInfoChange: (show: boolean) => void;
     onOpenAssets: () => void;
-    onOpenScriptManager: () => void;
+    onOpenEpisodeWorkbench: () => void;
     onOpenImageBriefs: () => void;
 }) {
     const wrapRef = useRef<HTMLDivElement>(null);
@@ -101,7 +101,7 @@ export function CanvasToolbar({
                 <ToolbarButton id="tool-assets" label="素材" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onOpenAssets}>
                     <FolderOpen className="size-4.5" />
                 </ToolbarButton>
-                <ToolbarButton id="tool-script-manager" label="剧本分镜" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onOpenScriptManager}>
+                <ToolbarButton id="tool-episode-workbench" label="视频生产台" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onOpenEpisodeWorkbench}>
                     <ScrollText className="size-4.5" />
                 </ToolbarButton>
                 <ToolbarButton id="tool-image-briefs" label="生图 Brief" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onOpenImageBriefs}>

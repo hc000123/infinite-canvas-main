@@ -11,9 +11,11 @@ import { useAssetStore, type Asset, type AssetKind } from "@/stores/use-asset-st
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { AssetBreakdownDrawer } from "../../canvas/components/asset-breakdown-drawer";
 import { CanvasCreateProjectModal } from "../../canvas/components/canvas-create-project-modal";
+import { EpisodeWorkbenchDrawer } from "../../canvas/components/episode-workbench-drawer";
 import { ImageBriefWorkbenchDrawer } from "../../canvas/components/image-brief-workbench-drawer";
 import { ProductionBibleDrawer } from "../../canvas/components/production-bible-drawer";
 import { StoryboardManagerDrawer } from "../../canvas/components/storyboard-manager-drawer";
+import { AgentSettingsDrawer } from "../agent-settings-drawer";
 import { useCanvasStore } from "../../canvas/stores/use-canvas-store";
 import { useGenerationQueueStore } from "../../canvas/stores/use-generation-queue-store";
 import { useProductionBibleStore } from "../../canvas/stores/use-production-bible-store";
@@ -67,8 +69,10 @@ export default function CreativeProjectDetailPage() {
     const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
     const [storyboardOpen, setStoryboardOpen] = useState(false);
     const [storyboardInitialGroupId, setStoryboardInitialGroupId] = useState("");
+    const [episodeWorkbenchOpen, setEpisodeWorkbenchOpen] = useState(false);
     const [assetBreakdownOpen, setAssetBreakdownOpen] = useState(false);
     const [imageBriefOpen, setImageBriefOpen] = useState(false);
+    const [agentSettingsOpen, setAgentSettingsOpen] = useState(false);
     const [productionBibleOpen, setProductionBibleOpen] = useState(false);
     const [productionBibleInitialKind, setProductionBibleInitialKind] = useState<ProductionBibleKind | undefined>();
     const canvasIds = useMemo(() => (project ? canvasIdsForCreativeProject(project, canvases) : []), [canvases, project]);
@@ -320,12 +324,7 @@ export default function CreativeProjectDetailPage() {
                             label: "工作流",
                             children: (
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                    <EntryCard
-                                        icon={<ScrollText className="size-5" />}
-                                        title="剧本分镜"
-                                        description={`${overviewDashboard?.stats.episodeCount || 0} 个分集，${overviewDashboard?.stats.sceneCount || 0} 个场次，${overviewDashboard?.stats.storyboardGroupCount || 0} 个分镜组，${overviewDashboard?.stats.storyboardShotCount || 0} 条分镜`}
-                                        onOpen={openPrimaryCanvas}
-                                    />
+                                    <EntryCard icon={<ScrollText className="size-5" />} title="视频生产台" description="围绕当前集管理剧本、分镜头表、生成镜头组和视频生成状态" onOpen={() => setEpisodeWorkbenchOpen(true)} />
                                     <EntryCard
                                         icon={<BookOpen className="size-5" />}
                                         title="设定库"
@@ -337,6 +336,7 @@ export default function CreativeProjectDetailPage() {
                                     <EntryLink icon={<Images className="size-5" />} title="素材" description="查看当前项目生成和引用素材" href={`/assets?projectId=${project.id}`} />
                                     <EntryLink icon={<FileText className="size-5" />} title="提示词" description="进入提示词仓库复用模板" href="/prompts" />
                                     <EntryCard icon={<ListVideo className="size-5" />} title="队列" description={`${overviewDashboard?.stats.generationQueueCount || 0} 个本地队列项`} onOpen={() => openStoryboardReference()} />
+                                    <EntryCard icon={<Bot className="size-5" />} title="Agent 设置" description="统一维护资产提取、分镜、生图 Brief、视频提示词和质检 Agent 配置" onOpen={() => setAgentSettingsOpen(true)} />
                                     <EntryLink icon={<Bot className="size-5" />} title="Agent" description="进入短剧 Agent 任务中心" href={`/projects/${project.id}/agent`} />
                                 </div>
                             ),
@@ -390,6 +390,21 @@ export default function CreativeProjectDetailPage() {
                 onCreate={saveCanvasPreset}
             />
             <AssetReferenceDrawer asset={previewAsset} onClose={() => setPreviewAsset(null)} />
+            <EpisodeWorkbenchDrawer
+                open={episodeWorkbenchOpen}
+                projectId={project.id}
+                projectTitle={project.title}
+                canvases={projectCanvases}
+                canvasNodes={projectCanvases.flatMap((canvas) => canvas.nodes)}
+                onClose={() => setEpisodeWorkbenchOpen(false)}
+                onUpdateCanvasEpisode={(canvasId, patch) => updateCanvas(canvasId, patch)}
+                onOpenAsset={setPreviewAsset}
+                onLocateNode={(nodeId) => {
+                    const canvas = projectCanvases.find((item) => item.nodes.some((node) => node.id === nodeId));
+                    if (canvas) router.push(`/canvas/${canvas.id}`);
+                }}
+                onOpenAgentSettings={() => setAgentSettingsOpen(true)}
+            />
             <StoryboardManagerDrawer
                 open={storyboardOpen}
                 projectId={project.id}
@@ -410,6 +425,7 @@ export default function CreativeProjectDetailPage() {
                 onOpenAsset={setPreviewAsset}
                 onClose={() => setImageBriefOpen(false)}
             />
+            <AgentSettingsDrawer open={agentSettingsOpen} projectId={project.id} projectTitle={project.title} onClose={() => setAgentSettingsOpen(false)} />
             <ProductionBibleDrawer open={productionBibleOpen} projectId={project.id} projectTitle={project.title} canvases={projectCanvases} initialKind={productionBibleInitialKind} onClose={() => setProductionBibleOpen(false)} />
         </main>
     );

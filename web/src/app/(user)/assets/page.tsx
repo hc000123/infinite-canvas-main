@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Download, FolderPlus, Library, PencilLine, Search, Trash2, Upload } from "lucide-react";
+import { BookOpen, Download, FolderPlus, LayoutDashboard, Library, PencilLine, Search, Trash2, Upload } from "lucide-react";
 import { Suspense, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { App, Button, Checkbox, Empty, Form, Input, Modal, Pagination, Select, Tag } from "antd";
@@ -22,6 +22,7 @@ import { useStoryboardStore } from "../canvas/stores/use-storyboard-store";
 import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { useCreativeProjectStore } from "../projects/use-creative-project-store";
 import { assetGenerationFilterOptions } from "./asset-generation";
+import { buildAddCanvasLibraryAssetPatch, buildRemoveCanvasLibraryAssetPatch } from "./asset-canvas-library";
 import { buildProjectLibraryAssetPatch, buildRemoveProjectLibraryAssetPatch } from "./asset-project-library";
 import { assetVersionRecords, buildAssetVersionedUpdatePatch, buildRestoreAssetVersionPatch, type AssetVersionRecord } from "./asset-version-history";
 import {
@@ -116,6 +117,7 @@ function AssetsPageContent() {
     const [generationTaskFilter, setGenerationTaskFilter] = useState<"all" | "with" | "without">("all");
     const [projectContextFilter, setProjectContextFilter] = useState(searchParams.get("projectId") || "");
     const [projectLibraryFilter, setProjectLibraryFilter] = useState<ProjectLibraryFilter>("all");
+    const [canvasLibraryFilter, setCanvasLibraryFilter] = useState("");
     const [referenceVersionFilter, setReferenceVersionFilter] = useState<ReferenceVersionFilter>("all");
     const [storyboardGroupFilter, setStoryboardGroupFilter] = useState("");
     const [sortMode, setSortMode] = useState<AssetSortMode>("default");
@@ -142,6 +144,9 @@ function AssetsPageContent() {
     const [bulkTagOpen, setBulkTagOpen] = useState(false);
     const [bulkTags, setBulkTags] = useState<string[]>([]);
     const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+    const [bulkCanvasOpen, setBulkCanvasOpen] = useState(false);
+    const [bulkCanvasMode, setBulkCanvasMode] = useState<"add" | "remove">("add");
+    const [bulkCanvasIds, setBulkCanvasIds] = useState<string[]>([]);
     const [bulkReviewAction, setBulkReviewAction] = useState<"submit" | "refresh" | "">("");
     const [selectedOutdatedUsageIds, setSelectedOutdatedUsageIds] = useState<Set<string>>(() => new Set());
     const [bulkOutdatedOpen, setBulkOutdatedOpen] = useState(false);
@@ -154,6 +159,8 @@ function AssetsPageContent() {
     const folderMap = useMemo(() => new Map(folders.map((folder) => [folder.id, folder])), [folders]);
     const folderCounts = useMemo(() => countFolderAssets(validAssets), [validAssets]);
     const folderOptions = useMemo(() => [{ label: "未分组", value: "" }, ...folders.map((folder) => ({ label: folder.name, value: folder.id }))], [folders]);
+    const canvasOptions = useMemo(() => projects.map((project) => ({ label: project.title || "未命名画布", value: project.id })), [projects]);
+    const canvasLibraryTitles = useMemo(() => Object.fromEntries(projects.map((project) => [project.id, project.title || "未命名画布"])), [projects]);
     const projectContexts = useMemo(() => buildAssetProjectContexts(creativeProjects, projects), [creativeProjects, projects]);
     const projectOptions = useMemo(() => projectContexts.map((project) => ({ label: project.title, value: project.id })), [projectContexts]);
     const projectLibraryProjectTitles = useMemo(() => Object.fromEntries(projectContexts.map((project) => [project.id, project.title])), [projectContexts]);
@@ -214,6 +221,7 @@ function AssetsPageContent() {
                 generationTaskFilter,
                 projectContextFilter,
                 projectLibraryFilter,
+                canvasLibraryFilter,
                 projectReferencedAssetIds,
                 storyboardGroupFilter,
                 storyboardGroupAssetIds,
@@ -232,6 +240,7 @@ function AssetsPageContent() {
         generationTaskFilter,
         projectContextFilter,
         projectLibraryFilter,
+        canvasLibraryFilter,
         projectReferencedAssetIds,
         storyboardGroupFilter,
         storyboardGroupAssetIds,
@@ -563,6 +572,24 @@ function AssetsPageContent() {
         message.success(`已移出项目共享库：${selectedAssets.length} 个素材`);
     };
 
+    const openBulkCanvasLibrary = (mode: "add" | "remove") => {
+        if (!selectedAssets.length) return message.warning("请先选择素材");
+        setBulkCanvasMode(mode);
+        setBulkCanvasIds(mode === "remove" && canvasLibraryFilter ? [canvasLibraryFilter] : []);
+        setBulkCanvasOpen(true);
+    };
+
+    const applyBulkCanvasLibrary = () => {
+        if (!bulkCanvasIds.length) return message.warning("请选择画布");
+        const now = new Date().toISOString();
+        selectedAssets.forEach((asset) => {
+            const patch = bulkCanvasMode === "add" ? buildAddCanvasLibraryAssetPatch(asset, bulkCanvasIds, now) : buildRemoveCanvasLibraryAssetPatch(asset, bulkCanvasIds);
+            updateAsset(asset.id, patch);
+        });
+        setBulkCanvasOpen(false);
+        message.success(`${bulkCanvasMode === "add" ? "已归类到画布" : "已移出画布归类"}：${selectedAssets.length} 个素材`);
+    };
+
     const updateOutdatedUsageToLatest = (usage: OutdatedAssetVersionUsage) => {
         const updated = applyOutdatedUsageUpdates([usage]);
         if (updated) message.success("已更新到素材最新版");
@@ -627,9 +654,17 @@ function AssetsPageContent() {
             return;
         }
         try {
-            const count = await importAssetFileList(fileList, { folderId: activeFolderId, addAssetOnce });
+            const result = await importAssetFileList(fileList, { folderId: activeFolderId, addAssetOnce });
+            if (canvasLibraryFilter) {
+                const now = new Date().toISOString();
+                const importedIds = new Set(result.assetIds);
+                useAssetStore
+                    .getState()
+                    .assets.filter((asset) => importedIds.has(asset.id))
+                    .forEach((asset) => updateAsset(asset.id, buildAddCanvasLibraryAssetPatch(asset, [canvasLibraryFilter], now)));
+            }
             setPage(1);
-            message.success(assetImportSuccessMessage(count, activeFolderId ? folderMap.get(activeFolderId)?.name || "当前文件夹" : ""));
+            message.success(`${assetImportSuccessMessage(result.count, activeFolderId ? folderMap.get(activeFolderId)?.name || "当前文件夹" : "")}${canvasLibraryFilter ? `，已归类到「${canvasLibraryTitles[canvasLibraryFilter] || "当前画布"}」` : ""}`);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "导入失败，请选择有效的素材压缩包或媒体文件");
         } finally {
@@ -997,6 +1032,27 @@ function AssetsPageContent() {
                                 </Button>
                             </div>
                         </div>
+                        <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-center">
+                            <div className="text-xs font-medium text-stone-500 dark:text-stone-400">画布</div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Select
+                                    size="small"
+                                    allowClear
+                                    showSearch
+                                    className="min-w-56"
+                                    placeholder="按画布归类筛选"
+                                    value={canvasLibraryFilter || undefined}
+                                    options={canvasOptions}
+                                    optionFilterProp="label"
+                                    disabled={!canvasOptions.length}
+                                    onChange={(value) => {
+                                        setPage(1);
+                                        setCanvasLibraryFilter(value || "");
+                                    }}
+                                />
+                                <span className="text-xs text-stone-500 dark:text-stone-400">先选择画布再导入，新素材会自动归到该画布；已有素材可多选归类到多个画布。</span>
+                            </div>
+                        </div>
                         <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
                             <div className="pt-1 text-xs font-medium text-stone-500 dark:text-stone-400">文件夹</div>
                             <div className="flex flex-wrap items-center gap-2">
@@ -1156,6 +1212,12 @@ function AssetsPageContent() {
                                         </Button>
                                     </>
                                 ) : null}
+                                <Button size="small" icon={<LayoutDashboard className="size-3.5" />} disabled={!selectedAssets.length || !canvasOptions.length} onClick={() => openBulkCanvasLibrary("add")}>
+                                    归类画布
+                                </Button>
+                                <Button size="small" disabled={!selectedAssets.length || !canvasOptions.length} onClick={() => openBulkCanvasLibrary("remove")}>
+                                    移出画布
+                                </Button>
                                 <Button size="small" disabled={!selectedVolcengineSubmitAssets.length || bulkReviewAction !== ""} loading={bulkReviewAction === "submit"} onClick={() => void submitSelectedVolcengineReviews()}>
                                     批量加白{selectedVolcengineSubmitAssets.length ? ` ${selectedVolcengineSubmitAssets.length}` : ""}
                                 </Button>
@@ -1191,6 +1253,7 @@ function AssetsPageContent() {
                                         onReview={() => void submitImageReview(asset)}
                                         onRefreshReview={() => void refreshImageReview(asset)}
                                         projectLibraryProjectId={projectContextFilter}
+                                        canvasLibraryCanvasId={canvasLibraryFilter}
                                     />
                                 ))}
                             </div>
@@ -1249,6 +1312,7 @@ function AssetsPageContent() {
                 onReview={(asset) => void submitImageReview(asset)}
                 onRefreshReview={(asset) => void refreshImageReview(asset)}
                 projectLibraryProjectTitles={projectLibraryProjectTitles}
+                canvasLibraryTitles={canvasLibraryTitles}
                 usageReferences={previewAssetUsageReferences}
                 onDownloadVersion={(asset, versionId) => void downloadAssetVersion(asset, versionId)}
                 onRestoreVersion={(asset, versionId) => void restoreAssetVersion(asset, versionId)}
@@ -1280,6 +1344,15 @@ function AssetsPageContent() {
 
             <Modal title="批量删除素材" open={bulkDeleteOpen} onCancel={() => setBulkDeleteOpen(false)} onOk={applyBulkDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消" destroyOnHidden>
                 确定删除已选择的 {selectedAssets.length} 个素材吗？删除后会从我的素材中移除。
+            </Modal>
+
+            <Modal title={bulkCanvasMode === "add" ? "归类到画布" : "移出画布归类"} open={bulkCanvasOpen} onCancel={() => setBulkCanvasOpen(false)} onOk={applyBulkCanvasLibrary} okText={bulkCanvasMode === "add" ? "归类" : "移出"} cancelText="取消" destroyOnHidden>
+                <div className="space-y-3">
+                    <div className="text-sm text-stone-500">
+                        将 {selectedAssets.length} 个素材{bulkCanvasMode === "add" ? "归类到以下画布。素材只保存一份，可同时属于多个画布。" : "从以下画布归类中移出，不会删除素材本体。"}
+                    </div>
+                    <Select mode="multiple" className="w-full" allowClear showSearch placeholder="选择一个或多个画布" value={bulkCanvasIds} options={canvasOptions} optionFilterProp="label" onChange={(value) => setBulkCanvasIds(value)} />
+                </div>
             </Modal>
 
             <Modal title="批量更新过期引用" open={bulkOutdatedOpen} onCancel={() => setBulkOutdatedOpen(false)} onOk={applySelectedOutdatedUsages} okText="更新到最新版" cancelText="取消" destroyOnHidden>

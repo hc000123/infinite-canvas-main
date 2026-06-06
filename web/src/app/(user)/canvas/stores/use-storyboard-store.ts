@@ -9,6 +9,9 @@ import {
     applyStoryboardShotGenerationError,
     applyStoryboardShotGenerationStarted,
     applyStoryboardShotGenerationSuccess,
+    applyShotGroupGenerationError,
+    applyShotGroupGenerationStarted,
+    applyShotGroupGenerationSuccess,
     buildStoryboardTableDraftsFromScript,
     buildStoryboardGroupFromScriptEpisode,
     buildStoryboardGroupFromScriptScene,
@@ -61,6 +64,9 @@ type StoryboardStore = {
     updateShotGroup: (id: string, patch: Partial<ShotGroupWriteInput>) => void;
     removeShotGroup: (id: string) => void;
     attachShotGroupCanvasNodes: (groupId: string, refs: StoryboardNodeRef[]) => void;
+    markShotGroupGenerating: (input: { shotGroupId?: string; taskId?: string }) => void;
+    markShotGroupSucceeded: (input: { shotGroupId?: string; assetId?: string; taskId?: string }) => void;
+    markShotGroupFailed: (input: { shotGroupId?: string; taskId?: string; errorMessage?: string }) => void;
 };
 
 const STORYBOARD_STORE_KEY = "infinite-canvas:storyboard_store";
@@ -215,6 +221,18 @@ export const useStoryboardStore = create<StoryboardStore>()(
                             : group,
                     ),
                     tableShots: state.tableShots.map((shot) => (state.shotGroups.find((group) => group.id === groupId)?.shotIds.includes(shot.id) ? { ...shot, updatedAt: new Date().toISOString() } : shot)),
+                })),
+            markShotGroupGenerating: (input) =>
+                set((state) => ({
+                    shotGroups: applyShotGroupGenerationStarted(state.shotGroups, input),
+                })),
+            markShotGroupSucceeded: (input) =>
+                set((state) => ({
+                    shotGroups: applyShotGroupGenerationSuccess(state.shotGroups, input),
+                })),
+            markShotGroupFailed: (input) =>
+                set((state) => ({
+                    shotGroups: applyShotGroupGenerationError(state.shotGroups, input),
                 })),
         }),
         {

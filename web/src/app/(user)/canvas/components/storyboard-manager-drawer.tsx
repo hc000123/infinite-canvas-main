@@ -505,6 +505,7 @@ export function StoryboardManagerDrawer({ open, projectId, projectTitle, initial
                         shotSize: values.shotSize || "",
                         cameraMovement: values.cameraMovement || "",
                         estimatedDuration: values.estimatedDuration || 5,
+                        assetNeeds: values.assetNeeds || [],
                         assetRefs: preserveOrCreateAssetVersionReferences(assetRefs, assets, editingTableShot?.assetRefs || []),
                         productionBibleRefs: editingTableShot?.productionBibleRefs || [],
                     };

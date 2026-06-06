@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, Checkbox, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Tag } from "antd";
-import { ArrowDown, ArrowUp, FileText, Film, Pencil, Trash2 } from "lucide-react";
+import type { TextAreaRef } from "antd/es/input/TextArea";
+import { ArrowDown, ArrowUp, AudioLines, FileText, Film, Image as ImageIcon, Pencil, Trash2, Video } from "lucide-react";
 
 import type { Asset } from "@/stores/use-asset-store";
 import { productionBibleKindLabel, type ProductionBibleItem } from "../utils/production-bible";
+import { applyReferenceMention, filterReferenceMentions, findReferenceMentionTrigger, type CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
 import { buildShotGroupGenerationTableRows, type ShotGroup, type StoryboardAssetKind, type StoryboardAssetRef, type StoryboardProductionBibleRef, type StoryboardTableShot } from "../utils/storyboard-management";
 
 export type TableShotFormValues = {
@@ -22,6 +24,7 @@ export type TableShotFormValues = {
     shotSize?: string;
     cameraMovement?: string;
     estimatedDuration?: number;
+    assetNeeds?: string[];
     assetIds?: string[];
 };
 
@@ -35,6 +38,15 @@ export type ShotGroupFormValues = {
 
 const mediaKinds = new Set(["image", "video", "audio"]);
 const emptySelection: string[] = [];
+const assetNeedOptions = [
+    { label: "角色", value: "character" },
+    { label: "场景", value: "scene" },
+    { label: "道具", value: "prop" },
+    { label: "服化道", value: "costume" },
+    { label: "音频", value: "audio" },
+    { label: "参考视频", value: "reference_video" },
+    { label: "特殊效果", value: "effect" },
+];
 
 export function StoryboardTableShotCard({
     shot,
@@ -83,6 +95,11 @@ export function StoryboardTableShotCard({
                     {shot.characters.map((name) => (
                         <Tag key={name} className="m-0">
                             {name}
+                        </Tag>
+                    ))}
+                    {(shot.assetNeeds || []).map((need) => (
+                        <Tag key={need} color="blue" className="m-0">
+                            {assetNeedLabel(need)}
                         </Tag>
                     ))}
                 </Space>
@@ -186,6 +203,7 @@ export function TableShotFormModal({
             shotSize: editingShot?.shotSize || "",
             cameraMovement: editingShot?.cameraMovement || "",
             estimatedDuration: editingShot?.estimatedDuration || 5,
+            assetNeeds: editingShot?.assetNeeds || [],
             assetIds: editingShot?.assetRefs.map((ref) => ref.assetId) || [],
         });
     }, [editingShot, form, open]);
@@ -199,7 +217,7 @@ export function TableShotFormModal({
                     const assetRefs = selectedAssetIds.flatMap((assetId): StoryboardAssetRef[] => {
                         const asset = assetsById.get(assetId);
                         if (!asset || !mediaKinds.has(asset.kind)) return [];
-                        return [{ assetId, kind: asset.kind as StoryboardAssetKind, role: defaultAssetRole(asset.kind) }];
+                        return [{ assetId, kind: asset.kind as StoryboardAssetKind, role: defaultAssetRole(asset.kind), source: assetBreakdownSource(asset) }];
                     });
                     onSubmit(values, assetRefs);
                 }}
@@ -244,6 +262,9 @@ export function TableShotFormModal({
                 <Form.Item name="emotion" label="情绪">
                     <Input />
                 </Form.Item>
+                <Form.Item name="assetNeeds" label="资产需求">
+                    <Select mode="multiple" options={assetNeedOptions} />
+                </Form.Item>
                 <Form.Item name="assetIds" label="参考资产">
                     <Select mode="multiple" options={assets.map((asset) => ({ label: `${asset.title} · ${assetKindLabel(asset.kind)}`, value: asset.id }))} />
                 </Form.Item>
@@ -268,6 +289,10 @@ export function ShotGroupFormModal({
     onSubmit: (values: ShotGroupFormValues, assetRefs: StoryboardAssetRef[], audioRefs: StoryboardAssetRef[], productionBibleRefs: StoryboardProductionBibleRef[]) => void;
 }) {
     const [form] = Form.useForm<ShotGroupFormValues>();
+    const watchedAssetIds = Form.useWatch("assetIds", form);
+    const watchedAudioAssetIds = Form.useWatch("audioAssetIds", form);
+    const selectedAssetIds = Array.isArray(watchedAssetIds) ? watchedAssetIds : emptySelection;
+    const selectedAudioAssetIds = Array.isArray(watchedAudioAssetIds) ? watchedAudioAssetIds : emptySelection;
     const assetsById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
     const bibleById = useMemo(() => new Map(bibleItems.map((item) => [item.id, item])), [bibleItems]);
 
@@ -282,8 +307,18 @@ export function ShotGroupFormModal({
         });
     }, [editingGroup, form, open]);
 
+    const addMentionedAsset = (asset: Asset) => {
+        if (asset.kind === "audio") {
+            if (selectedAudioAssetIds.includes(asset.id)) return;
+            form.setFieldsValue({ audioAssetIds: [...selectedAudioAssetIds, asset.id] });
+        } else if (asset.kind === "image" || asset.kind === "video") {
+            if (selectedAssetIds.includes(asset.id)) return;
+            form.setFieldsValue({ assetIds: [...selectedAssetIds, asset.id] });
+        }
+    };
+
     return (
-        <Modal title="编辑生成镜头组" open={open} onCancel={onCancel} onOk={() => form.submit()} okText="保存" cancelText="取消" width={760} destroyOnHidden>
+        <Modal title="编辑视频生成镜头组" open={open} onCancel={onCancel} onOk={() => form.submit()} okText="保存" cancelText="取消" width={840} destroyOnHidden>
             <Form
                 form={form}
                 layout="vertical"
@@ -291,11 +326,11 @@ export function ShotGroupFormModal({
                     const assetRefs = (values.assetIds || []).flatMap((assetId): StoryboardAssetRef[] => {
                         const asset = assetsById.get(assetId);
                         if (!asset || asset.kind === "audio" || !mediaKinds.has(asset.kind)) return [];
-                        return [{ assetId, kind: asset.kind as StoryboardAssetKind, role: defaultAssetRole(asset.kind) }];
+                        return [{ assetId, kind: asset.kind as StoryboardAssetKind, role: defaultAssetRole(asset.kind), source: assetBreakdownSource(asset) }];
                     });
                     const audioRefs = (values.audioAssetIds || []).flatMap((assetId): StoryboardAssetRef[] => {
                         const asset = assetsById.get(assetId);
-                        return asset?.kind === "audio" ? [{ assetId, kind: "audio", role: "reference_audio" }] : [];
+                        return asset?.kind === "audio" ? [{ assetId, kind: "audio", role: "reference_audio", source: assetBreakdownSource(asset) }] : [];
                     });
                     const productionBibleRefs = (values.productionBibleIds || []).flatMap((itemId): StoryboardProductionBibleRef[] => {
                         const item = bibleById.get(itemId);
@@ -305,10 +340,10 @@ export function ShotGroupFormModal({
                 }}
             >
                 <Form.Item name="prompt" label="视频提示词" rules={[{ required: true, message: "请填写视频提示词" }]}>
-                    <Input.TextArea rows={6} />
+                    <AssetMentionTextArea assets={assets} selectedAssetIds={selectedAssetIds} selectedAudioAssetIds={selectedAudioAssetIds} rows={7} placeholder="输入 @ 选择图片、视频或音频参考素材" onMentionAsset={addMentionedAsset} />
                 </Form.Item>
                 <Form.Item name="effectivePrompt" label="实际提交提示词">
-                    <Input.TextArea rows={4} placeholder="可选。留空时使用视频提示词" />
+                    <AssetMentionTextArea assets={assets} selectedAssetIds={selectedAssetIds} selectedAudioAssetIds={selectedAudioAssetIds} rows={4} placeholder="可选。留空时使用视频提示词，也可输入 @ 插入素材引用" onMentionAsset={addMentionedAsset} />
                 </Form.Item>
                 <Form.Item name="assetIds" label="图片 / 参考视频资产">
                     <Select mode="multiple" options={assets.filter((asset) => asset.kind === "image" || asset.kind === "video").map((asset) => ({ label: `${asset.title} · ${assetKindLabel(asset.kind)}`, value: asset.id }))} />
@@ -324,6 +359,131 @@ export function ShotGroupFormModal({
     );
 }
 
+type AssetMentionOption = CanvasReferenceMentionOption & { asset: Asset };
+
+function AssetMentionTextArea({
+    value = "",
+    onChange,
+    rows = 4,
+    placeholder,
+    assets,
+    selectedAssetIds,
+    selectedAudioAssetIds,
+    onMentionAsset,
+}: {
+    value?: string;
+    onChange?: (value: string) => void;
+    rows?: number;
+    placeholder?: string;
+    assets: Asset[];
+    selectedAssetIds: string[];
+    selectedAudioAssetIds: string[];
+    onMentionAsset: (asset: Asset) => void;
+}) {
+    const textareaRef = useRef<TextAreaRef>(null);
+    const [caret, setCaret] = useState(0);
+    const mentionTrigger = findReferenceMentionTrigger(value, caret);
+    const mentionOptions = useMemo(() => buildAssetMentionOptions(assets, selectedAssetIds, selectedAudioAssetIds), [assets, selectedAssetIds, selectedAudioAssetIds]);
+    const mentionMatches = useMemo<AssetMentionOption[]>(() => (mentionTrigger ? (filterReferenceMentions(mentionOptions, mentionTrigger.query).slice(0, 8) as AssetMentionOption[]) : []), [mentionOptions, mentionTrigger?.query, mentionTrigger?.start]);
+
+    const updateCaret = () => setCaret(textareaRef.current?.resizableTextArea?.textArea?.selectionStart ?? 0);
+    const insertMention = (option: AssetMentionOption) => {
+        const next = applyReferenceMention(value, caret, option.label);
+        onMentionAsset(option.asset);
+        onChange?.(next.text);
+        setCaret(next.caret);
+        requestAnimationFrame(() => {
+            const textarea = textareaRef.current?.resizableTextArea?.textArea;
+            textareaRef.current?.focus();
+            textarea?.setSelectionRange(next.caret, next.caret);
+        });
+    };
+
+    return (
+        <div className="relative">
+            <Input.TextArea
+                ref={textareaRef}
+                value={value}
+                rows={rows}
+                placeholder={placeholder}
+                onChange={(event) => {
+                    onChange?.(event.target.value);
+                    setCaret(event.target.selectionStart);
+                }}
+                onClick={updateCaret}
+                onKeyUp={updateCaret}
+                onSelect={updateCaret}
+            />
+            {mentionTrigger && mentionMatches.length ? (
+                <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-lg border border-stone-200 bg-white p-1 shadow-xl dark:border-stone-800 dark:bg-stone-950">
+                    {mentionMatches.map((option) => (
+                        <button
+                            key={option.id}
+                            type="button"
+                            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-stone-100 dark:hover:bg-white/10"
+                            onMouseDown={(event) => {
+                                event.preventDefault();
+                                insertMention(option);
+                            }}
+                        >
+                            <AssetMentionPreview option={option} />
+                            <span className="min-w-0 flex-1">
+                                <span className="block truncate font-medium">{option.asset.title}</span>
+                                <span className="block truncate text-stone-500 dark:text-stone-400">
+                                    插入 {option.label} · {assetKindLabel(option.asset.kind)}
+                                </span>
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function AssetMentionPreview({ option }: { option: AssetMentionOption }) {
+    const content =
+        option.previewUrl && option.previewType === "image" ? (
+            <img src={option.previewUrl} alt={option.detail || option.label} className="h-full w-full object-cover" />
+        ) : option.previewUrl && option.previewType === "video" ? (
+            <video src={option.previewUrl} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+        ) : option.previewType === "video" ? (
+            <Video className="size-4 opacity-70" />
+        ) : option.previewType === "audio" ? (
+            <AudioLines className="size-4 opacity-70" />
+        ) : (
+            <ImageIcon className="size-4 opacity-70" />
+        );
+    return <span className="flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-black/10 dark:bg-black/30">{content}</span>;
+}
+
+function buildAssetMentionOptions(assets: Asset[], selectedAssetIds: string[], selectedAudioAssetIds: string[]): AssetMentionOption[] {
+    const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
+    return assets
+        .filter((asset) => asset.kind === "image" || asset.kind === "video" || asset.kind === "audio")
+        .map((asset) => ({
+            id: asset.id,
+            label: assetReferenceLabel(asset, selectedAssetIds, selectedAudioAssetIds, assetsById),
+            detail: asset.title,
+            previewType: asset.kind as "image" | "video" | "audio",
+            previewUrl: assetPreviewUrl(asset),
+            asset,
+        }));
+}
+
+function assetReferenceLabel(asset: Asset, selectedAssetIds: string[], selectedAudioAssetIds: string[], assetsById: Map<string, Asset>) {
+    const ids = asset.kind === "audio" ? selectedAudioAssetIds : selectedAssetIds;
+    const sameKindIds = ids.filter((id) => assetsById.get(id)?.kind === asset.kind);
+    const selectedIndex = sameKindIds.indexOf(asset.id);
+    return `${assetKindLabel(asset.kind)} ${selectedIndex >= 0 ? selectedIndex + 1 : sameKindIds.length + 1}`;
+}
+
+function assetPreviewUrl(asset: Asset) {
+    if (asset.kind === "image") return asset.data.dataUrl || asset.coverUrl;
+    if (asset.kind === "video" || asset.kind === "audio") return asset.data.url || asset.coverUrl;
+    return asset.coverUrl;
+}
+
 function defaultAssetRole(kind?: string) {
     if (kind === "audio") return "reference_audio";
     if (kind === "video") return "reference_video";
@@ -335,6 +495,15 @@ function assetKindLabel(kind: string) {
     if (kind === "video") return "视频";
     if (kind === "audio") return "音频";
     return "素材";
+}
+
+function assetNeedLabel(value: string) {
+    return assetNeedOptions.find((item) => item.value === value)?.label || value;
+}
+
+function assetBreakdownSource(asset: Asset): StoryboardAssetRef["source"] {
+    const metadata = asset.metadata || {};
+    return metadata.assetBreakdownItemId || metadata.assetBreakdownItems ? "asset_breakdown" : "independent";
 }
 
 function shotGroupStatusLabel(status: string) {

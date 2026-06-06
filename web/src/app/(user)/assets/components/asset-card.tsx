@@ -5,6 +5,7 @@ import { Button, Card, Tag, Tooltip, Typography } from "antd";
 import { isVolcengineReviewProcessing, shouldShowVolcengineReviewAction } from "@/services/volcengine-asset-metadata";
 import type { Asset } from "@/stores/use-asset-store";
 import { cn } from "@/lib/utils";
+import { assetInCanvasLibrary } from "../asset-canvas-library";
 import { assetInProjectLibrary } from "../asset-project-library";
 import { assetKindLabel, assetMediaInfo, assetSummary, volcengineReviewActionLabel } from "../asset-utils";
 
@@ -23,6 +24,7 @@ export function AssetCard({
     onReview,
     onRefreshReview,
     projectLibraryProjectId,
+    canvasLibraryCanvasId,
 }: {
     asset: Asset;
     folderName?: string;
@@ -38,6 +40,7 @@ export function AssetCard({
     onReview: () => void;
     onRefreshReview: () => void;
     projectLibraryProjectId?: string;
+    canvasLibraryCanvasId?: string;
 }) {
     const cover = asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "");
     const videoPreviewUrl = asset.kind === "video" ? videoCoverUrl(asset.data.url) : "";
@@ -100,6 +103,7 @@ export function AssetCard({
                                 </Tag>
                             ) : null}
                             {assetInProjectLibrary(asset, projectLibraryProjectId || "") ? <Tag className="m-0 text-[11px]">项目库</Tag> : null}
+                            {assetInCanvasLibrary(asset, canvasLibraryCanvasId || "") ? <Tag className="m-0 text-[11px]">画布</Tag> : null}
                             {(asset.kind === "image" || asset.kind === "video") && asset.metadata?.volcengineAsset ? <VolcengineAssetTag status={asset.metadata.volcengineAsset.status} /> : null}
                         </div>
                     </div>

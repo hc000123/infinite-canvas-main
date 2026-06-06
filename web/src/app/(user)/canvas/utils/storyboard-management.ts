@@ -12,6 +12,7 @@ export type StoryboardAssetRef = {
     assetId: string;
     kind: StoryboardAssetKind;
     role: string;
+    source?: "asset_breakdown" | "independent";
     assetVersion?: AssetVersionReference;
 };
 
@@ -78,6 +79,7 @@ export type StoryboardTableShot = {
     shotSize: string;
     cameraMovement: string;
     estimatedDuration: number;
+    assetNeeds?: string[];
     assetRefs: StoryboardAssetRef[];
     productionBibleRefs?: StoryboardProductionBibleRef[];
     createdAt: string;
@@ -174,6 +176,7 @@ export function normalizeStoryboardTableShot(input: StoryboardTableShotWriteInpu
         shotSize: input.shotSize.trim(),
         cameraMovement: input.cameraMovement.trim(),
         estimatedDuration: clampDuration(input.estimatedDuration),
+        assetNeeds: uniqueStrings((input.assetNeeds || []).map((item) => item.trim()).filter(Boolean)),
         assetRefs: dedupeAssetRefs(input.assetRefs),
         productionBibleRefs: dedupeBibleRefs(input.productionBibleRefs || []),
     };
@@ -247,6 +250,53 @@ export function applyStoryboardShotGenerationError(shots: StoryboardShot[], inpu
             updatedAt: new Date().toISOString(),
         };
     });
+}
+
+export function applyShotGroupGenerationStarted(groups: ShotGroup[], input: { shotGroupId?: string; taskId?: string }) {
+    if (!input.shotGroupId) return groups;
+    return groups.map((group) =>
+        group.id === input.shotGroupId
+            ? {
+                  ...group,
+                  status: "generating" as const,
+                  taskId: input.taskId || group.taskId,
+                  errorMessage: undefined,
+                  updatedAt: new Date().toISOString(),
+              }
+            : group,
+    );
+}
+
+export function applyShotGroupGenerationSuccess(groups: ShotGroup[], input: { shotGroupId?: string; assetId?: string; taskId?: string }) {
+    if (!input.shotGroupId) return groups;
+    return groups.map((group) => {
+        if (group.id !== input.shotGroupId) return group;
+        const resultAssetIds = input.assetId && !group.resultAssetIds.includes(input.assetId) ? [...group.resultAssetIds, input.assetId] : group.resultAssetIds;
+        return {
+            ...group,
+            status: "done" as const,
+            taskId: input.taskId || group.taskId,
+            resultAssetIds,
+            primaryAssetId: group.primaryAssetId || resultAssetIds[0],
+            errorMessage: undefined,
+            updatedAt: new Date().toISOString(),
+        };
+    });
+}
+
+export function applyShotGroupGenerationError(groups: ShotGroup[], input: { shotGroupId?: string; taskId?: string; errorMessage?: string }) {
+    if (!input.shotGroupId) return groups;
+    return groups.map((group) =>
+        group.id === input.shotGroupId
+            ? {
+                  ...group,
+                  status: "error" as const,
+                  taskId: input.taskId || group.taskId,
+                  errorMessage: input.errorMessage || "视频生成失败",
+                  updatedAt: new Date().toISOString(),
+              }
+            : group,
+    );
 }
 
 export function orderedStoryboardGroups(groups: StoryboardGroup[], projectId: string) {
@@ -331,6 +381,7 @@ export function buildStoryboardTableDraftsFromScript({
             shotSize: extractField(part, "景别"),
             cameraMovement: extractField(part, "运镜"),
             estimatedDuration: estimateShotDuration(part),
+            assetNeeds: inferAssetNeeds(part),
             assetRefs: [],
             productionBibleRefs: [],
             createdAt: now,
@@ -712,7 +763,7 @@ function dedupeAssetRefs(refs: StoryboardAssetRef[]) {
         const assetId = ref.assetId.trim();
         if (!assetId || seen.has(assetId)) continue;
         seen.add(assetId);
-        result.push({ assetId, kind: ref.kind, role: ref.role.trim() || "reference", ...(ref.assetVersion ? { assetVersion: ref.assetVersion } : {}) });
+        result.push({ assetId, kind: ref.kind, role: ref.role.trim() || "reference", source: ref.source, ...(ref.assetVersion ? { assetVersion: ref.assetVersion } : {}) });
     }
     return result;
 }
@@ -759,6 +810,18 @@ function parseSceneInfo(text: string) {
 
 function extractField(text: string, label: string) {
     return text.match(new RegExp(`${label}[：:]\\s*([^\\n]+)`))?.[1]?.trim() || "";
+}
+
+function inferAssetNeeds(text: string) {
+    const needs: string[] = [];
+    if (/角色|人物|男主|女主|学生|老师|父亲|母亲|魏梁|周泽|姚澈|蒋文阔|姚渊/.test(text)) needs.push("character");
+    if (/场景|地点|操场|教室|办公室|街道|房间|主席台|观礼区/.test(text)) needs.push("scene");
+    if (/道具|话筒|手机|书|花|车|包|证书|学士帽/.test(text)) needs.push("prop");
+    if (/服装|学士袍|妆容|发型|服化道/.test(text)) needs.push("costume");
+    if (/声音|台词|对白|音乐|音频|掌声|风声/.test(text)) needs.push("audio");
+    if (/参考视频|视频参考|复刻|镜头参考/.test(text)) needs.push("reference_video");
+    if (/特效|转场|慢动作|光效|粒子/.test(text)) needs.push("effect");
+    return uniqueStrings(needs);
 }
 
 function firstNonMetaLine(text: string) {

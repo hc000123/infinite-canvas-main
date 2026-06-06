@@ -1,7 +1,9 @@
 import { useCallback, useRef, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction } from "react";
 import { nanoid } from "nanoid";
 
+import { getNodeSpec } from "../constants";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type ConnectionHandle, type ContextMenuState, type Position } from "../types";
+import { placeCanvasNodeAwayFromNodes } from "../utils/canvas-node-placement";
 
 export type CanvasPendingConnectionCreate = {
     connection: ConnectionHandle;
@@ -91,7 +93,7 @@ export function useCanvasConnections({
     const createConnectedNode = useCallback(
         (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Config | CanvasNodeType.Video | CanvasNodeType.Audio, pending: CanvasPendingConnectionCreate) => {
             const metadata = type === CanvasNodeType.Config ? configNodeMetadata : undefined;
-            const newNode = createNode(type, pending.position, metadata);
+            const newNode = placeCanvasNodeAwayFromNodes(createNode(type, connectedNodePosition(type, pending, nodesRef.current), metadata), nodesRef.current);
             const connection = normalizeConnection(pending.connection.nodeId, newNode.id, [...nodesRef.current, newNode], pending.connection.handleType);
             if (!connection) {
                 showWarning("配置节点之间不能连接");
@@ -186,5 +188,17 @@ export function useCanvasConnections({
         finishConnection,
         handleConnectStart,
         moveConnectionTarget,
+    };
+}
+
+function connectedNodePosition(type: CanvasNodeType, pending: CanvasPendingConnectionCreate, nodes: CanvasNodeData[]): Position {
+    const source = nodes.find((node) => node.id === pending.connection.nodeId);
+    if (!source) return pending.position;
+    const spec = getNodeSpec(type);
+    const gap = 56;
+    const right = pending.connection.handleType === "source";
+    return {
+        x: right ? source.position.x + source.width + gap + spec.width / 2 : source.position.x - gap - spec.width / 2,
+        y: source.position.y + source.height / 2,
     };
 }

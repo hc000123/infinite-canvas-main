@@ -34,7 +34,6 @@ function LoginContent() {
     const user = useUserStore((state) => state.user);
     const isReady = useUserStore((state) => state.isReady);
     const isLoading = useUserStore((state) => state.isLoading);
-    const linuxDoEnabled = useConfigStore((state) => state.publicSettings?.auth?.linuxDo?.enabled === true);
     const allowRegister = useConfigStore((state) => state.publicSettings?.auth?.allowRegister !== false);
     const [mode, setMode] = useState<"login" | "register">("login");
     const redirect = searchParams.get("redirect") || "/";
@@ -102,7 +101,7 @@ function LoginContent() {
                         aria-label="眨眼之间"
                     />
                     <h1 className="text-3xl font-semibold tracking-normal text-stone-950 dark:text-stone-100">账号登录</h1>
-                    <p className="mt-3 text-base leading-7 text-stone-500 dark:text-stone-400">支持账号密码和 Linux.do 登录。</p>
+                    <p className="mt-3 text-base leading-7 text-stone-500 dark:text-stone-400">使用账号密码登录工作台。</p>
                 </div>
 
                 <Form<LoginFormValues> layout="vertical" size="large" requiredMark={false} onFinish={submit}>
@@ -136,11 +135,6 @@ function LoginContent() {
                         <Button block type="primary" htmlType="submit" loading={isLoading}>
                             {mode === "register" ? "注册" : "登录"}
                         </Button>
-                        {linuxDoEnabled ? (
-                            <Button block href={`/api/auth/linux-do/authorize?redirect=${encodeURIComponent(redirect)}`} icon={<img src="/icons/linuxdo.svg" alt="" width={18} height={18} />}>
-                                使用 Linux.do 登录
-                            </Button>
-                        ) : null}
                     </Space>
                 </Form>
             </section>

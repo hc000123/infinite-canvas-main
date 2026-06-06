@@ -3,6 +3,7 @@ import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { uploadImage, type UploadedImage } from "@/services/image-storage";
 
 import { buildUploadedAudioFileNode, buildUploadedImageFileNode, buildUploadedVideoFileNode, replaceNodeWithUploadedAudioFile, replaceNodeWithUploadedImageFile, replaceNodeWithUploadedVideoFile } from "../utils/canvas-uploaded-file-node";
+import { placeCanvasNodeAwayFromNodes } from "../utils/canvas-node-placement";
 import type { CanvasNodeData, CanvasNodeMetadata, Position } from "../types";
 
 type UploadTarget = { nodeId?: string; position?: Position } | null;
@@ -46,13 +47,16 @@ export function useCanvasFileNodeActions({
         async (file: File, position: Position) => {
             const image = await uploadImage(file);
             const id = `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            const newNode = buildUploadedImageFileNode({
-                id,
-                title: file.name,
-                center: position,
-                file: image,
-                metadata: toImageMetadata(image),
-            });
+            const newNode = placeCanvasNodeAwayFromNodes(
+                buildUploadedImageFileNode({
+                    id,
+                    title: file.name,
+                    center: position,
+                    file: image,
+                    metadata: toImageMetadata(image),
+                }),
+                nodesRef.current,
+            );
 
             setNodes((prev) => [...prev, newNode]);
             await addCanvasNodeToAssets(newNode);
@@ -60,46 +64,52 @@ export function useCanvasFileNodeActions({
             setSelectedConnectionId(null);
             setDialogNodeId(id);
         },
-        [addCanvasNodeToAssets, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, toImageMetadata],
+        [addCanvasNodeToAssets, nodesRef, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, toImageMetadata],
     );
 
     const createVideoFileNode = useCallback(
         async (file: File, position: Position) => {
             const video = await uploadMediaFile(file, "video");
             const id = `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            const newNode = buildUploadedVideoFileNode({
-                id,
-                title: file.name,
-                center: position,
-                file: video,
-                metadata: toVideoMetadata(video),
-            });
+            const newNode = placeCanvasNodeAwayFromNodes(
+                buildUploadedVideoFileNode({
+                    id,
+                    title: file.name,
+                    center: position,
+                    file: video,
+                    metadata: toVideoMetadata(video),
+                }),
+                nodesRef.current,
+            );
             setNodes((prev) => [...prev, newNode]);
             await addCanvasNodeToAssets(newNode);
             setSelectedNodeIds(new Set([id]));
             setSelectedConnectionId(null);
             setDialogNodeId(id);
         },
-        [addCanvasNodeToAssets, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, toVideoMetadata],
+        [addCanvasNodeToAssets, nodesRef, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, toVideoMetadata],
     );
 
     const createAudioFileNode = useCallback(
         async (file: File, position: Position) => {
             const audio = await uploadMediaFile(file, "audio");
             const id = `audio-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            const newNode = buildUploadedAudioFileNode({
-                id,
-                title: file.name,
-                center: position,
-                file: audio,
-                metadata: toAudioMetadata(audio),
-            });
+            const newNode = placeCanvasNodeAwayFromNodes(
+                buildUploadedAudioFileNode({
+                    id,
+                    title: file.name,
+                    center: position,
+                    file: audio,
+                    metadata: toAudioMetadata(audio),
+                }),
+                nodesRef.current,
+            );
             setNodes((prev) => [...prev, newNode]);
             await addCanvasNodeToAssets(newNode);
             setSelectedNodeIds(new Set([id]));
             setSelectedConnectionId(null);
         },
-        [addCanvasNodeToAssets, setNodes, setSelectedConnectionId, setSelectedNodeIds, toAudioMetadata],
+        [addCanvasNodeToAssets, nodesRef, setNodes, setSelectedConnectionId, setSelectedNodeIds, toAudioMetadata],
     );
 
     const createFileNode = useCallback(

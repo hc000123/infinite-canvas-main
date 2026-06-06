@@ -3,6 +3,7 @@ import { Button, Drawer, Image, Space, Tag, Typography } from "antd";
 
 import { isVolcengineReviewProcessing, shouldShowVolcengineReviewAction } from "@/services/volcengine-asset-metadata";
 import type { Asset } from "@/stores/use-asset-store";
+import { assetCanvasLibraryEntries } from "../asset-canvas-library";
 import { assetProjectLibraryEntries, projectLibraryRoleLabel, projectLibrarySyncStatusLabel } from "../asset-project-library";
 import { assetVersionMediaSummary, assetVersionRecords, type AssetVersionRecord } from "../asset-version-history";
 import type { AssetVersionUsageReference } from "../asset-version-references";
@@ -21,6 +22,7 @@ export function AssetDrawer({
     onReview,
     onRefreshReview,
     projectLibraryProjectTitles,
+    canvasLibraryTitles,
     usageReferences,
     onDownloadVersion,
     onRestoreVersion,
@@ -35,6 +37,7 @@ export function AssetDrawer({
     onReview: (asset: Asset) => void;
     onRefreshReview: (asset: Asset) => void;
     projectLibraryProjectTitles?: Record<string, string>;
+    canvasLibraryTitles?: Record<string, string>;
     usageReferences?: AssetVersionUsageReference[];
     onDownloadVersion: (asset: Asset, versionId: string) => void;
     onRestoreVersion: (asset: Asset, versionId: string) => void;
@@ -43,6 +46,7 @@ export function AssetDrawer({
     const videoPreviewUrl = asset?.kind === "video" ? videoCoverUrl(asset.data.url) : "";
     const mediaInfo = asset ? assetMediaInfo(asset) : "";
     const projectLibraryEntries = assetProjectLibraryEntries(asset);
+    const canvasLibraryEntries = assetCanvasLibraryEntries(asset);
     const versionRecords = assetVersionRecords(asset);
     return (
         <Drawer title="素材详情" open={Boolean(asset)} size="large" onClose={onClose}>
@@ -108,6 +112,20 @@ export function AssetDrawer({
                                             {entry.remoteAssetId ? ` · 远端素材 ${entry.remoteAssetId}` : ""}
                                         </div>
                                     </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : null}
+                    {canvasLibraryEntries.length ? (
+                        <div className="rounded-lg border border-stone-200 p-4 text-sm dark:border-stone-800">
+                            <Typography.Text type="secondary" className="block text-xs">
+                                画布归类
+                            </Typography.Text>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                {canvasLibraryEntries.map((entry) => (
+                                    <Tag key={entry.canvasId} className="m-0">
+                                        {canvasLibraryTitles?.[entry.canvasId] || entry.canvasId}
+                                    </Tag>
                                 ))}
                             </div>
                         </div>

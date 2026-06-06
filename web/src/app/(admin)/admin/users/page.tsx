@@ -85,12 +85,6 @@ export default function AdminUsersPage() {
             render: (_, item) => <Typography.Text>{item.credits}</Typography.Text>,
         },
         {
-            title: "Linux.do",
-            dataIndex: "linuxDoId",
-            width: 140,
-            render: (_, item) => <Typography.Text type="secondary">{item.linuxDoId || "-"}</Typography.Text>,
-        },
-        {
             title: "最近登录",
             dataIndex: "lastLoginAt",
             width: 180,
@@ -122,14 +116,7 @@ export default function AdminUsersPage() {
                         <Row gutter={16} align="bottom">
                             <Col flex="360px">
                                 <Form.Item label="关键词">
-                                    <Input.Search
-                                        value={keywordText}
-                                        placeholder="搜索用户名、昵称、邮箱或 Linux.do ID"
-                                        allowClear
-                                        enterButton={<SearchOutlined />}
-                                        onSearch={() => searchUsers(keywordText)}
-                                        onChange={(event) => setKeywordText(event.target.value)}
-                                    />
+                                    <Input.Search value={keywordText} placeholder="搜索用户名、昵称或邮箱" allowClear enterButton={<SearchOutlined />} onSearch={() => searchUsers(keywordText)} onChange={(event) => setKeywordText(event.target.value)} />
                                 </Form.Item>
                             </Col>
                             <Col flex="none">

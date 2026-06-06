@@ -354,6 +354,7 @@ type StoryboardTableShot = {
   shotSize: string;
   cameraMovement: string;
   estimatedDuration: number;
+  assetNeeds?: string[];
   assetRefs: StoryboardAssetRef[];
   productionBibleRefs?: StoryboardProductionBibleRef[];
   createdAt: string;
@@ -400,9 +401,12 @@ type ShotGroup = {
 - `StoryboardShot.lastResultNodeId` / `lastTaskId`：当暂时拿不到素材 ID 时，至少保留画布视频节点和上游任务 ID，方便后续补齐。
 - `StoryboardShot.errorMessage`：视频生成失败时保存失败原因；`status` 会进入 `error`，页面中显示失败提示。
 - `StoryboardTableShot`：M6.6.3 新增的本集分镜头表条目，按 `projectId + canvasId + episodeId` 保存。它来自本集 `scriptSnapshot` 的本地规则粗拆，也允许用户人工编辑、删除、排序和补充镜头信息。
+- `StoryboardTableShot.assetNeeds`：M6.8 起用于标记单镜头资产需求，第一版支持角色、场景、道具、服化道、音频、参考视频和特殊效果。它只服务本集工作台的生产提示，不会自动触发素材生成。
 - `ShotGroup`：M6.6.3 新增的生成镜头组，由连续 `StoryboardTableShot.shotIds` 组成。组合时要求同一个 `sceneName`、不能跳选、`totalDuration <= 15`；它只管理生成单元结构和提示词，不自动触发真实视频生成。
-- `ShotGroup.assetRefs` / `audioRefs` / `productionBibleRefs`：记录生成镜头组可用的图片、参考视频、音频和设定库输入。引用素材时继续保存素材版本快照。
-- `ShotGroup.resultAssetIds` / `primaryAssetId`：预留生成结果回流字段；本轮先保证打组加入画布和 metadata，后续可接入生成结果回流。
+- `ShotGroup.assetRefs` / `audioRefs` / `productionBibleRefs`：记录生成镜头组可用的图片、参考视频、音频和设定库输入。引用素材时继续保存素材版本快照；M6.8 起素材引用可标记 `source: "asset_breakdown" | "independent"`，用于区分剧本拆解资产和独立生图工作台资产。
+- `ShotGroup.resultAssetIds` / `primaryAssetId`：记录生成结果回流到生成镜头组的素材 ID；同一素材 ID 不重复写入，首次成功结果可成为主版本。
+- `ShotGroup.status` / `taskId` / `errorMessage`：M6.8 起由画布视频生成链路回写生成状态。本集工作台只展示和管理状态，不自动触发真实视频生成或扣费。
+- M6.8 本集工作台没有新增 localforage key，而是复用脚本、分镜、资产拆解、设定库、素材和画布已有 store。打组加入画布时继续写入 `episodeId / shotGroupId / shotIds / storyboardShotGroupId / storyboardTableShotIds`，用于后续素材归档、任务追溯和生成管理。
 
 ## 本地生成队列结构
 
@@ -442,6 +446,75 @@ type GenerationQueueItem = {
 - `status`：队列项状态。暂停只阻止继续启动未运行的项，不强制中断已经提交到上游的视频任务。
 - `estimatedCredits` / `estimatedDurationSeconds`：第一版按视频时长做轻量估算，用于开始前展示预算，不代表最终扣费凭证。
 - `taskId` / `resultAssetId` / `error`：执行后记录上游任务、生成后自动入库素材和失败原因。
+
+## Agent 设置结构
+
+M6.9.0 新增统一 Agent 设置中心，用于集中维护资产提取、分镜导演、生图 Brief、视频提示词和提示词质检 Agent 的提示词模板、输入变量、输出 JSON 示例、模型偏好和写入策略。第一版只保存在浏览器本地，不改后端，不接真实 LLM，不自动写入业务数据，不触发生成或扣费。
+
+本地保存位置：
+
+- 数据库：`localForage`
+- 数据库名 / store：沿用项目本地存储封装
+- key：`infinite-canvas:agent_settings_store`
+
+```ts
+type AgentConfigKind =
+  | "asset_extractor"
+  | "storyboard_director"
+  | "image_brief_builder"
+  | "video_prompt_builder"
+  | "prompt_reviewer";
+
+type AgentConfig = {
+  id: string;
+  projectId?: string;
+  episodeId?: string;
+  name: string;
+  kind: AgentConfigKind;
+  scenario: string;
+  enabled: boolean;
+  systemPrompt: string;
+  userPromptTemplate: string;
+  inputVariables: Array<{
+    name: string;
+    description: string;
+  }>;
+  outputJsonSchema?: string;
+  outputJsonExample?: string;
+  modelPreference: string;
+  temperature: number;
+  maxOutputTokens: number;
+  reasoningLevel: "中" | "高" | "超高";
+  writePolicy: "preview_only" | "confirm_before_write";
+  version: string;
+  updatedAt: string;
+};
+
+type AgentSettingsStore = {
+  globalConfigs: AgentConfig[];
+  projectConfigs: Record<string, AgentConfig[]>;
+  episodeConfigs: Record<string, AgentConfig[]>;
+};
+```
+
+字段说明：
+
+- `globalConfigs`：全局默认模板的本地覆盖配置。代码内默认模板仍是基础来源，第一版 UI 主要操作项目级覆盖。
+- `projectConfigs`：项目级覆盖配置。项目详情和本集工作台打开 Agent 设置时，会按“代码默认模板 -> 全局覆盖 -> 项目覆盖”合并。
+- `episodeConfigs`：本集级覆盖预留字段，M6.9.0 不强制完整 UI。
+- `enabled`：禁用后，后续 Agent 调用入口需要显示不可用状态。
+- `writePolicy`：默认 `confirm_before_write`。所有写业务数据的 Agent 输出都必须先作为预览，用户确认后才允许写入。
+- `reasoningLevel`：只能是 `中 / 高 / 超高`，用于后续控制模型推理程度和额度消耗。
+
+内置第一批 Agent 配置类型：
+
+- `asset_extractor`：资产提取 Agent。
+- `storyboard_director`：分镜导演 Agent。
+- `image_brief_builder`：生图 Brief Agent。
+- `video_prompt_builder`：视频提示词 Agent。
+- `prompt_reviewer`：提示词质检 Agent。
+
+Agent 设置只描述“怎么生成草案和预览”，不等于 Agent 已执行。真正写入素材、分镜、Brief、画布节点或触发生成任务，仍必须由后续业务入口在用户确认后执行。
 
 ## Agent 任务结构
 

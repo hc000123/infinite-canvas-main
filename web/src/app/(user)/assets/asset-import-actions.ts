@@ -6,35 +6,38 @@ import { assetFileKind, isImportableAssetFile } from "./asset-utils";
 import { importedImageAssetInput, importedMediaAssetInput, importedPackageAssetInput } from "./asset-import-payloads";
 
 type AddAssetOnce = (asset: AssetWriteInput) => Promise<string>;
+export type AssetImportResult = {
+    count: number;
+    assetIds: string[];
+};
 
 export function importableAssetFiles(files?: FileList | File[]) {
     return Array.from(files || []).filter((file) => isImportableAssetFile(file));
 }
 
-export async function importAssetFileList(files: File[], options: { folderId?: string; addAssetOnce: AddAssetOnce }) {
-    let count = 0;
+export async function importAssetFileList(files: File[], options: { folderId?: string; addAssetOnce: AddAssetOnce }): Promise<AssetImportResult> {
+    const assetIds: string[] = [];
     for (const file of files) {
-        count += await importAssetFile(file, options);
+        assetIds.push(...(await importAssetFile(file, options)));
     }
-    return count;
+    return { count: assetIds.length, assetIds };
 }
 
-export async function importAssetFile(file: File, { folderId, addAssetOnce }: { folderId?: string; addAssetOnce: AddAssetOnce }) {
+export async function importAssetFile(file: File, { folderId, addAssetOnce }: { folderId?: string; addAssetOnce: AddAssetOnce }): Promise<string[]> {
     const fileKind = assetFileKind(file);
     if (fileKind === "image") {
         const image = await uploadImage(file);
-        await addAssetOnce(importedImageAssetInput(file.name, image, folderId));
-        return 1;
+        return [await addAssetOnce(importedImageAssetInput(file.name, image, folderId))];
     }
     if (fileKind === "video" || fileKind === "audio") {
         const media = await uploadMediaFile(file, fileKind);
-        await addAssetOnce(importedMediaAssetInput(file.name, fileKind, media, folderId));
-        return 1;
+        return [await addAssetOnce(importedMediaAssetInput(file.name, fileKind, media, folderId))];
     }
 
     const importedAssets = await readAssetPackage(file);
+    const assetIds: string[] = [];
     for (const asset of importedAssets) {
-        await addAssetOnce(importedPackageAssetInput(asset, folderId));
+        assetIds.push(await addAssetOnce(importedPackageAssetInput(asset, folderId)));
     }
-    return importedAssets.length;
+    return assetIds;
 }

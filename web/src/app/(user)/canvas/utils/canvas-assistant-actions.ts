@@ -1,5 +1,6 @@
 import { NODE_DEFAULT_SIZE } from "../constants.ts";
 import type { CanvasConnection, CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata, Position } from "../types.ts";
+import { resolveNonOverlappingNodePosition } from "./canvas-node-placement.ts";
 
 export type AssistantCanvasReadAction =
     | { id: string; kind: "read"; type: "canvas.read"; reason?: string; payload?: Record<string, never> }
@@ -176,7 +177,7 @@ export function buildAssistantCanvasActionPreview(action: AssistantCanvasAction,
             id: `assistant-node-${action.id}`,
             type: "text" as CanvasNodeData["type"],
             title: action.payload.title?.trim() || action.payload.content.slice(0, 32) || spec.title,
-            position: action.payload.position || nextNodePosition(nodes),
+            position: resolveNonOverlappingNodePosition(nodes, action.payload.position || nextNodePosition(nodes), spec),
             width: spec.width,
             height: spec.height,
             metadata: { content: action.payload.content, status: "success", fontSize: 14 },
@@ -190,7 +191,7 @@ export function buildAssistantCanvasActionPreview(action: AssistantCanvasAction,
             id: `assistant-node-${action.id}`,
             type: "config" as CanvasNodeData["type"],
             title: action.payload.title?.trim() || spec.title,
-            position: action.payload.position || nextNodePosition(nodes),
+            position: resolveNonOverlappingNodePosition(nodes, action.payload.position || nextNodePosition(nodes), spec),
             width: spec.width,
             height: spec.height,
             metadata: { content: "", status: "idle", generationMode: action.payload.mode, ...action.payload.config },

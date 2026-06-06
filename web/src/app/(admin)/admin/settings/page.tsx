@@ -37,13 +37,13 @@ const emptySettings: AdminSettings = {
             systemPrompt: "",
             allowCustomChannel: true,
         },
-        auth: { allowRegister: true, linuxDo: { enabled: false } },
+        auth: { allowRegister: true },
         volcengineAsset: { enabled: false },
     },
     private: {
         channels: [],
         promptSync: { enabled: false, cron: "*/5 * * * *" },
-        auth: { linuxDo: { clientId: "", clientSecret: "" } },
+        auth: {},
         volcengineAsset: { enabled: false, accessKey: "", secretKey: "", projectName: "default", region: "cn-beijing", assetGroupId: "", publicAssetBaseUrl: "" },
     },
 };
@@ -501,41 +501,6 @@ export default function AdminSettingsPage() {
                     ) : activeMode === "visual" ? (
                         <Form form={form} layout="vertical" initialValues={emptySettings} requiredMark={false}>
                             <Flex vertical gap={12}>
-                                <Card
-                                    size="small"
-                                    title={
-                                        <Space>
-                                            <img src="/icons/linuxdo.svg" alt="" width={18} height={18} />
-                                            Linux.do 登录
-                                        </Space>
-                                    }
-                                >
-                                    <Flex vertical gap={14}>
-                                        <Typography.Text type="secondary">
-                                            本项目接口回调地址是 /api/auth/linux-do/callback，请在 Linux.do 应用后台自行拼接站点前缀。
-                                            <Typography.Link href="https://connect.linux.do" target="_blank" rel="noreferrer">
-                                                点击此处管理你的 LinuxDO OAuth App
-                                            </Typography.Link>
-                                        </Typography.Text>
-                                        <Row gutter={16}>
-                                            <Col xs={24} md={6}>
-                                                <Form.Item name={["public", "auth", "linuxDo", "enabled"]} label="开启 Linux.do 登录" valuePropName="checked">
-                                                    <Switch />
-                                                </Form.Item>
-                                            </Col>
-                                            <Col xs={24} md={9}>
-                                                <Form.Item name={["private", "auth", "linuxDo", "clientId"]} label="Linux.do Client ID">
-                                                    <Input placeholder="输入 Linux.do OAuth App 的 ID" />
-                                                </Form.Item>
-                                            </Col>
-                                            <Col xs={24} md={9}>
-                                                <Form.Item name={["private", "auth", "linuxDo", "clientSecret"]} label="Linux.do Client Secret">
-                                                    <Input.Password placeholder="留空则沿用已保存的密钥" />
-                                                </Form.Item>
-                                            </Col>
-                                        </Row>
-                                    </Flex>
-                                </Card>
                                 <Card size="small" title="火山素材审核（唯一配置入口）">
                                     <Flex vertical gap={14}>
                                         <Typography.Text type="secondary">
@@ -915,9 +880,6 @@ function normalizePublicSetting(setting: Partial<AdminSettings["public"]> = {}):
         },
         auth: {
             allowRegister: setting.auth?.allowRegister !== false,
-            linuxDo: {
-                enabled: setting.auth?.linuxDo?.enabled === true,
-            },
         },
         volcengineAsset: { enabled: setting.volcengineAsset?.enabled === true },
     };
@@ -934,12 +896,7 @@ function normalizePrivateSetting(setting: Partial<AdminSettings["private"]> = {}
             enabled: setting.promptSync?.enabled === true,
             cron: setting.promptSync?.cron || "*/5 * * * *",
         },
-        auth: {
-            linuxDo: {
-                clientId: setting.auth?.linuxDo?.clientId || "",
-                clientSecret: setting.auth?.linuxDo?.clientSecret || "",
-            },
-        },
+        auth: {},
         volcengineAsset: normalizePrivateVolcengineAssetSetting(setting.volcengineAsset),
     };
 }

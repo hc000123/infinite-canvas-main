@@ -40,12 +40,12 @@
 | `aff_code`      | string | 用户自己的邀请码，唯一索引                           |
 | `aff_count`     | number | 已邀请用户数量，冗余统计字段                         |
 | `inviter_id`    | string | 邀请人用户 ID                                        |
-| `github_id`     | string | GitHub 用户 ID                                       |
-| `linux_do_id`   | string | Linux.do 用户 ID                                     |
-| `wechat_id`     | string | 微信用户 ID                                          |
+| `github_id`     | string | 历史第三方登录字段，当前不提供 GitHub 登录            |
+| `linux_do_id`   | string | 历史第三方登录字段，当前不提供 Linux.do 登录          |
+| `wechat_id`     | string | 历史第三方登录字段，当前不提供微信登录                |
 | `status`        | string | 用户状态：`active`、`ban`                            |
 | `last_login_at` | string | 最近登录时间                                         |
-| `extra`         | json   | 扩展信息，第三方资料按平台命名空间保存，如 `linuxDo` |
+| `extra`         | json   | 扩展信息，保留历史第三方资料                          |
 | `created_at`    | string | 创建时间                                             |
 | `updated_at`    | string | 更新时间                                             |
 
@@ -154,19 +154,13 @@
 | `model`   | string | 模型名称                                             |
 | `credits` | number | 每次后端模型接口调用前预扣的算力点，未配置默认不扣除 |
 
-`auth.linuxDo` 当前字段：
-
-| 字段      | 类型 | 说明                   |
-| --------- | ---- | ---------------------- |
-| `enabled` | bool | 是否开启 Linux.do 登录 |
-
 `private.value` 当前字段：
 
 | 字段              | 类型     | 说明                                                         |
 | ----------------- | -------- | ------------------------------------------------------------ |
 | `channels`        | object[] | 模型渠道配置列表                                             |
 | `promptSync`      | object   | 历史 GitHub 远程提示词定时同步配置；当前没有内置远程提示词源 |
-| `auth`            | object   | 私有登录配置                                                 |
+| `auth`            | object   | 私有登录配置，当前不包含第三方登录配置                       |
 | `volcengineAsset` | object   | 火山素材审核私有配置                                         |
 
 `channels` 每项字段：
@@ -188,13 +182,6 @@
 | --------- | ------ | ---------------------------------------------------- |
 | `enabled` | bool   | 是否开启定时同步；当前没有内置远程提示词源，默认关闭 |
 | `cron`    | string | Cron 表达式，默认每 5 分钟                           |
-
-`auth.linuxDo` 当前字段：
-
-| 字段           | 类型   | 说明                                             |
-| -------------- | ------ | ------------------------------------------------ |
-| `clientId`     | string | Linux.do OAuth App Client ID                     |
-| `clientSecret` | string | Linux.do OAuth App Client Secret，后台返回时隐藏 |
 
 `volcengineAsset` 当前字段：
 
