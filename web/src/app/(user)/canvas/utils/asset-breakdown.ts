@@ -28,6 +28,14 @@ export type AssetBreakdownItem = {
     briefDraft?: AssetBreakdownBriefDraft;
     assetIds: string[];
     status: AssetBreakdownStatus;
+    agentRunId?: string;
+    agentConfigId?: string;
+    agentConfigVersion?: string;
+    sourceType?: string;
+    agentAssetKind?: string;
+    suggestedBriefKind?: string;
+    importance?: string;
+    warnings?: string[];
     createdAt: string;
     updatedAt: string;
 };
@@ -81,6 +89,14 @@ export function mergeAssetBreakdownItems(items: AssetBreakdownItem[]) {
             sourceText: [existing.sourceText, item.sourceText].filter(Boolean).join("\n"),
             tags: uniqueStrings([...existing.tags, ...item.tags]),
             assetIds: uniqueStrings([...existing.assetIds, ...item.assetIds]),
+            agentRunId: item.agentRunId || existing.agentRunId,
+            agentConfigId: item.agentConfigId || existing.agentConfigId,
+            agentConfigVersion: item.agentConfigVersion || existing.agentConfigVersion,
+            sourceType: item.sourceType || existing.sourceType,
+            agentAssetKind: item.agentAssetKind || existing.agentAssetKind,
+            suggestedBriefKind: item.suggestedBriefKind || existing.suggestedBriefKind,
+            importance: item.importance || existing.importance,
+            warnings: uniqueStrings([...(existing.warnings || []), ...(item.warnings || [])]),
             updatedAt: item.updatedAt > existing.updatedAt ? item.updatedAt : existing.updatedAt,
         });
     }

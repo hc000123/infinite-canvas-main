@@ -324,7 +324,7 @@ export default function CreativeProjectDetailPage() {
                             label: "工作流",
                             children: (
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                    <EntryCard icon={<ScrollText className="size-5" />} title="视频生产台" description="围绕当前集管理剧本、分镜头表、生成镜头组和视频生成状态" onOpen={() => setEpisodeWorkbenchOpen(true)} />
+                                    <EntryCard icon={<ScrollText className="size-5" />} title="剧本 / 本集工作台" description="不跳回画布，直接管理当前集剧本、分镜头表、生成镜头组和视频生成状态" onOpen={() => setEpisodeWorkbenchOpen(true)} />
                                     <EntryCard
                                         icon={<BookOpen className="size-5" />}
                                         title="设定库"
@@ -398,6 +398,7 @@ export default function CreativeProjectDetailPage() {
                 canvasNodes={projectCanvases.flatMap((canvas) => canvas.nodes)}
                 onClose={() => setEpisodeWorkbenchOpen(false)}
                 onUpdateCanvasEpisode={(canvasId, patch) => updateCanvas(canvasId, patch)}
+                onCreateCanvas={() => setCreateCanvasOpen(true)}
                 onOpenAsset={setPreviewAsset}
                 onLocateNode={(nodeId) => {
                     const canvas = projectCanvases.find((item) => item.nodes.some((node) => node.id === nodeId));

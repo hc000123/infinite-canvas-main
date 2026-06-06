@@ -13,6 +13,7 @@ type AssetBreakdownStore = {
     updateItem: (id: string, patch: Partial<AssetBreakdownWriteInput>) => void;
     removeItem: (id: string) => void;
     generateDraftsFromScript: (input: Parameters<typeof buildAssetBreakdownDraftsFromScript>[0]) => number;
+    importAgentDrafts: (input: { projectId: string; episodeId: string; drafts: AssetBreakdownWriteInput[] }) => number;
     createBriefDraft: (id: string) => void;
     bindAssets: (id: string, assetIds: string[]) => void;
 };
@@ -55,6 +56,16 @@ export const useAssetBreakdownStore = create<AssetBreakdownStore>()(
                 });
                 return drafts.length;
             },
+            importAgentDrafts: (input) => {
+                const now = new Date().toISOString();
+                const drafts = input.drafts.map((draft) => ({ ...normalizeWriteInput(draft), id: nanoid(), createdAt: now, updatedAt: now }));
+                set((state) => {
+                    const sameEpisode = state.items.filter((item) => item.projectId === input.projectId && item.episodeId === input.episodeId);
+                    const other = state.items.filter((item) => item.projectId !== input.projectId || item.episodeId !== input.episodeId);
+                    return { items: [...mergeAssetBreakdownItems([...sameEpisode, ...drafts]), ...other] };
+                });
+                return drafts.length;
+            },
             createBriefDraft: (id) =>
                 set((state) => ({
                     items: state.items.map((item) => (item.id === id ? createAssetBreakdownBriefDraft(item, `brief-${nanoid()}`) : item)),
@@ -82,5 +93,6 @@ function normalizeWriteInput(input: AssetBreakdownWriteInput): AssetBreakdownWri
         productionBibleItemId: input.productionBibleItemId?.trim() || undefined,
         briefId: input.briefId?.trim() || undefined,
         assetIds: Array.from(new Set(input.assetIds.map((id) => id.trim()).filter(Boolean))),
+        warnings: input.warnings?.map((warning) => warning.trim()).filter(Boolean),
     };
 }

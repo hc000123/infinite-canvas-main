@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Alert, Button, Card, Collapse, Empty, Input, Space, Tag } from "antd";
-import { Film, Link2, Pencil, Play, RotateCcw, Sparkles } from "lucide-react";
+import { Bot, Film, Link2, Pencil, Play, RotateCcw, Sparkles } from "lucide-react";
 
 import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
 import type { Asset } from "@/stores/use-asset-store";
@@ -10,6 +10,7 @@ import { buildShotGroupGenerationSummaries, groupedTableShotsByScene, production
 import { ShotGroupRowCard, StoryboardTableShotCard, type ShotGroupFormValues, type TableShotFormValues } from "./storyboard-shot-group-components";
 import type { ShotGroup, StoryboardAssetRef, StoryboardProductionBibleRef, StoryboardTableShot } from "../utils/storyboard-management";
 import type { CanvasNodeData } from "../types";
+import { agentRunStatusLabel, type AgentRunRecord } from "../../projects/agent-runner.ts";
 
 export function EpisodeOverviewSection({ stats, status }: { stats: EpisodeWorkbenchStats; status: EpisodeProductionStatus }) {
     return (
@@ -80,6 +81,91 @@ export function EpisodeScriptSection({
                 <span className="text-stone-500">{hasEpisode ? "剧本快照可编辑，保存前不会覆盖分镜头。" : "未绑定剧本时仍可自由画布制作。"}</span>
             </div>
             {hasEpisode ? <Input.TextArea value={scriptDraft} rows={8} onChange={(event) => onScriptDraftChange(event.target.value)} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前画布未绑定本集剧本" className="py-8" />}
+        </Card>
+    );
+}
+
+export function AssetExtractionSection({
+    canRun,
+    disabledReason,
+    runs,
+    onRun,
+    onApprove,
+    onReject,
+    onApply,
+    onOpenAgentSettings,
+}: {
+    canRun: boolean;
+    disabledReason: string;
+    runs: AgentRunRecord[];
+    onRun: () => void;
+    onApprove: (runId: string) => void;
+    onReject: (runId: string) => void;
+    onApply: (run: AgentRunRecord) => void;
+    onOpenAgentSettings?: () => void;
+}) {
+    return (
+        <Card
+            size="small"
+            title="资产提取"
+            extra={
+                <Space size={6} wrap>
+                    {onOpenAgentSettings ? (
+                        <Button size="small" icon={<Bot className="size-3.5" />} onClick={onOpenAgentSettings}>
+                            Agent 设置
+                        </Button>
+                    ) : null}
+                    <Button size="small" type="primary" icon={<Sparkles className="size-3.5" />} disabled={!canRun} onClick={onRun}>
+                        运行资产提取
+                    </Button>
+                </Space>
+            }
+        >
+            <Alert
+                className="mb-3"
+                type={canRun ? "info" : "warning"}
+                showIcon
+                message={canRun ? "从本集剧本生成资产草案" : disabledReason}
+                description="第一版使用本地规则生成草案，并写入 Agent Runner 预览记录。必须批准后，才能手动写入本集生图需求；不会自动运行 Agent、生成图片或扣费。"
+            />
+            {runs.length ? (
+                <div className="space-y-3">
+                    {runs.map((run) => (
+                        <Card key={run.id} size="small" className="bg-stone-50/70 dark:bg-white/5">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Tag className="m-0">{agentRunStatusLabel(run.status)}</Tag>
+                                        <Tag className="m-0">配置 v{run.agentConfigVersion}</Tag>
+                                        <Tag className="m-0">{run.draftOutput.items.length} 条草案</Tag>
+                                    </div>
+                                    <div className="mt-2 text-sm font-medium">{run.draftOutput.summary}</div>
+                                    {run.draftOutput.warnings.length ? <div className="mt-1 text-xs text-amber-600">{run.draftOutput.warnings.join("；")}</div> : null}
+                                </div>
+                                <Space size={6} wrap>
+                                    <Button size="small" disabled={run.status !== "ready_for_review"} onClick={() => onApprove(run.id)}>
+                                        批准
+                                    </Button>
+                                    <Button size="small" disabled={run.status !== "ready_for_review"} onClick={() => onReject(run.id)}>
+                                        驳回
+                                    </Button>
+                                    <Button size="small" type="primary" disabled={run.status !== "approved"} onClick={() => onApply(run)}>
+                                        写入本集生图需求
+                                    </Button>
+                                </Space>
+                            </div>
+                            <details className="mt-3">
+                                <summary className="cursor-pointer text-xs text-stone-500">查看 items / rawJson / warnings / proposedActions</summary>
+                                <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-stone-950 p-3 text-xs text-stone-50">
+                                    {JSON.stringify({ items: run.draftOutput.items, rawJson: run.draftOutput.rawJson, warnings: run.draftOutput.warnings, proposedActions: run.proposedActions }, null, 2)}
+                                </pre>
+                            </details>
+                        </Card>
+                    ))}
+                </div>
+            ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无资产提取草案。导入本集剧本后可运行资产提取。" className="py-8" />
+            )}
         </Card>
     );
 }

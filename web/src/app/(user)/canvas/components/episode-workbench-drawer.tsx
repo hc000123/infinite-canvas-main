@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { App, Button, Drawer, Form, Input, Modal, Select, Space } from "antd";
+import { Alert, App, Button, Drawer, Empty, Form, Input, Modal, Select, Space } from "antd";
 import { Bot, FileText } from "lucide-react";
 
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { preserveOrCreateAssetVersionReferences } from "../../assets/asset-version-references";
+import { useAgentSettingsStore } from "../../projects/use-agent-settings-store";
+import { useAgentRunnerStore } from "../../projects/use-agent-runner-store";
+import { listAgentRunsByEpisode, type AgentRunRecord } from "../../projects/agent-runner.ts";
 import type { CanvasProject } from "../stores/use-canvas-store";
 import { useAssetBreakdownStore } from "../stores/use-asset-breakdown-store";
 import { useProductionBibleStore } from "../stores/use-production-bible-store";
@@ -13,12 +16,25 @@ import { useScriptStore } from "../stores/use-script-store";
 import { useStoryboardStore } from "../stores/use-storyboard-store";
 import { useImageBriefStore } from "../stores/use-image-brief-store";
 import { canvasEpisodeLabel } from "../utils/canvas-episode-context";
-import { activeEpisodeShotGroups, activeEpisodeTableShots, buildEpisodeWorkbenchStats, deriveEpisodeProductionStatus, validateEpisodeShotGroupSelection, workbenchModes } from "../utils/episode-workbench";
+import {
+    activeEpisodeShotGroups,
+    activeEpisodeTableShots,
+    buildEpisodeWorkbenchStats,
+    deriveEpisodeProductionStatus,
+    freeCanvasModeKeepsScriptOptional,
+    selectEpisodeWorkbenchCanvas,
+    shouldConfirmEpisodeScriptReimport,
+    shouldPromptEpisodeScriptBinding,
+    validateEpisodeShotGroupSelection,
+    workbenchModes,
+} from "../utils/episode-workbench";
+import { buildAssetBreakdownInputsFromAgentRun, buildAssetExtractorRunInput, buildLocalAssetExtractorDraftOutput, canRunAssetExtractor, shouldAllowAssetExtractorRun } from "../utils/agent-asset-extractor";
 import { itemsForProductionBibleProject } from "../utils/production-bible";
 import type { CanvasNodeData } from "../types";
 import {
     EpisodeOverviewSection,
     EpisodeScriptSection,
+    AssetExtractionSection,
     EpisodeTableSection,
     GenerationManagementSection,
     ShotGroupFormModal,
@@ -46,10 +62,12 @@ type Props = {
     onLocateNode?: (nodeId: string) => void;
     onRetryNode?: (nodeId: string) => void;
     onOpenAgentSettings?: () => void;
+    onCreateCanvas?: () => void;
+    promptBindWhenUnbound?: boolean;
 };
 
 type BindFormValues = {
-    mode: "existing" | "import";
+    mode: "none" | "existing" | "import";
     episodeId?: string;
     title?: string;
     scriptText?: string;
@@ -57,7 +75,23 @@ type BindFormValues = {
 
 const mediaKinds = new Set(["image", "video", "audio"]);
 
-export function EpisodeWorkbenchDrawer({ open, projectId, projectTitle, canvases, currentCanvasId, canvasNodes, onClose, onUpdateCanvasEpisode, onAddShotGroupToCanvas, onOpenAsset, onLocateNode, onRetryNode, onOpenAgentSettings }: Props) {
+export function EpisodeWorkbenchDrawer({
+    open,
+    projectId,
+    projectTitle,
+    canvases,
+    currentCanvasId,
+    canvasNodes,
+    onClose,
+    onUpdateCanvasEpisode,
+    onAddShotGroupToCanvas,
+    onOpenAsset,
+    onLocateNode,
+    onRetryNode,
+    onOpenAgentSettings,
+    onCreateCanvas,
+    promptBindWhenUnbound = false,
+}: Props) {
     const { message } = App.useApp();
     const [bindForm] = Form.useForm<BindFormValues>();
     const assets = useAssetStore((state) => state.assets);
@@ -77,8 +111,15 @@ export function EpisodeWorkbenchDrawer({ open, projectId, projectTitle, canvases
     const updateShotGroup = useStoryboardStore((state) => state.updateShotGroup);
     const removeShotGroup = useStoryboardStore((state) => state.removeShotGroup);
     const createMoodBrief = useImageBriefStore((state) => state.createFromShotGroup);
+    const importAgentAssetDrafts = useAssetBreakdownStore((state) => state.importAgentDrafts);
     const productionBibleItems = useProductionBibleStore((state) => state.items);
     const breakdownItems = useAssetBreakdownStore((state) => state.items);
+    const resolvedAgentConfigs = useAgentSettingsStore((state) => state.resolvedProjectConfigs(projectId));
+    const agentRuns = useAgentRunnerStore((state) => state.runs);
+    const createAgentRun = useAgentRunnerStore((state) => state.createRun);
+    const approveAgentRun = useAgentRunnerStore((state) => state.approveRun);
+    const rejectAgentRun = useAgentRunnerStore((state) => state.rejectRun);
+    const markAgentRunApplied = useAgentRunnerStore((state) => state.markApplied);
     const [activeCanvasId, setActiveCanvasId] = useState("");
     const [scriptDraft, setScriptDraft] = useState("");
     const [selectedShotIds, setSelectedShotIds] = useState<string[]>([]);
@@ -87,8 +128,9 @@ export function EpisodeWorkbenchDrawer({ open, projectId, projectTitle, canvases
     const [editingShotGroup, setEditingShotGroup] = useState<ShotGroup | null>(null);
     const [shotGroupFormOpen, setShotGroupFormOpen] = useState(false);
     const [bindOpen, setBindOpen] = useState(false);
+    const [bindPromptDismissed, setBindPromptDismissed] = useState(false);
     const projectCanvases = useMemo(() => canvases, [canvases]);
-    const activeCanvas = projectCanvases.find((canvas) => canvas.id === activeCanvasId) || projectCanvases.find((canvas) => canvas.id === currentCanvasId) || projectCanvases[0] || null;
+    const activeCanvas = projectCanvases.find((canvas) => canvas.id === activeCanvasId) || selectEpisodeWorkbenchCanvas(projectCanvases, currentCanvasId);
     const activeShots = useMemo(() => activeEpisodeTableShots(tableShots, activeCanvas), [activeCanvas, tableShots]);
     const activeShotGroups = useMemo(() => activeEpisodeShotGroups(shotGroups, activeCanvas), [activeCanvas, shotGroups]);
     const projectBibleItems = useMemo(() => itemsForProductionBibleProject(productionBibleItems, projectId), [productionBibleItems, projectId]);
@@ -96,6 +138,13 @@ export function EpisodeWorkbenchDrawer({ open, projectId, projectTitle, canvases
     const stats = useMemo(() => buildEpisodeWorkbenchStats({ canvas: activeCanvas, tableShots, shotGroups, assetBreakdownItems: breakdownItems, nodes: canvasNodes }), [activeCanvas, breakdownItems, canvasNodes, shotGroups, tableShots]);
     const status = deriveEpisodeProductionStatus(stats);
     const modes = workbenchModes(stats);
+    const assetExtractorConfig = useMemo(() => resolvedAgentConfigs.find((config) => config.kind === "asset_extractor"), [resolvedAgentConfigs]);
+    const assetExtractorAvailability = shouldAllowAssetExtractorRun(assetExtractorConfig);
+    const assetExtractorRunReadiness = canRunAssetExtractor(activeCanvas);
+    const activeAssetExtractorRuns = useMemo(
+        () => (activeCanvas?.episodeId ? listAgentRunsByEpisode(agentRuns, activeCanvas.episodeId).filter((run) => run.agentKind === "asset_extractor" && run.input.canvasId === activeCanvas.id) : []),
+        [activeCanvas?.episodeId, activeCanvas?.id, agentRuns],
+    );
     const episodeOptions = useMemo(
         () =>
             episodes
@@ -107,14 +156,25 @@ export function EpisodeWorkbenchDrawer({ open, projectId, projectTitle, canvases
 
     useEffect(() => {
         if (!open) return;
-        setActiveCanvasId((current) => (current && projectCanvases.some((canvas) => canvas.id === current) ? current : currentCanvasId && projectCanvases.some((canvas) => canvas.id === currentCanvasId) ? currentCanvasId : projectCanvases[0]?.id || ""));
+        setActiveCanvasId((current) => {
+            if (current && projectCanvases.some((canvas) => canvas.id === current)) return current;
+            return selectEpisodeWorkbenchCanvas(projectCanvases, currentCanvasId)?.id || "";
+        });
     }, [currentCanvasId, open, projectCanvases]);
 
     useEffect(() => {
-        if (!open) return;
+        if (!open) {
+            setBindPromptDismissed(false);
+            return;
+        }
         setScriptDraft(activeCanvas?.scriptSnapshot || "");
         setSelectedShotIds([]);
     }, [activeCanvas?.id, activeCanvas?.scriptSnapshot, open]);
+
+    useEffect(() => {
+        if (!open || bindOpen || bindPromptDismissed) return;
+        if (shouldPromptEpisodeScriptBinding(activeCanvas, promptBindWhenUnbound)) openBindModal();
+    }, [activeCanvas, bindOpen, bindPromptDismissed, open, promptBindWhenUnbound]);
 
     const saveScriptSnapshot = () => {
         if (!activeCanvas) return;
@@ -137,6 +197,12 @@ export function EpisodeWorkbenchDrawer({ open, projectId, projectTitle, canvases
         if (!activeCanvas) return;
         const values = await bindForm.validateFields();
         const apply = () => {
+            if (freeCanvasModeKeepsScriptOptional(values.mode)) {
+                setBindOpen(false);
+                setBindPromptDismissed(true);
+                message.info("已保留自由画布制作路径");
+                return;
+            }
             if (values.mode === "existing") {
                 const episode = episodes.find((item) => item.id === values.episodeId);
                 if (!episode) return message.warning("请选择已有分集");
@@ -150,9 +216,11 @@ export function EpisodeWorkbenchDrawer({ open, projectId, projectTitle, canvases
                 onUpdateCanvasEpisode(activeCanvas.id, { episodeId, episodeTitle: title, scriptId: projectId, scriptSnapshot: scriptText });
             }
             setBindOpen(false);
+            setBindPromptDismissed(true);
             message.success("已更新本集剧本绑定");
         };
-        if (activeShots.length || activeShotGroups.length) Modal.confirm({ title: "重新绑定或导入剧本？", content: "已有分镜头和生成镜头组不会被静默覆盖；如需重新生成草案，需要之后手动确认。", okText: "确认更新", cancelText: "取消", onOk: apply });
+        if (values.mode !== "none" && shouldConfirmEpisodeScriptReimport({ hasScriptSnapshot: Boolean(activeCanvas.scriptSnapshot?.trim()), tableShotCount: activeShots.length, shotGroupCount: activeShotGroups.length }))
+            Modal.confirm({ title: "重新绑定或导入剧本？", content: "已有剧本快照、分镜头和生成镜头组不会被静默覆盖；如需重新生成草案，需要之后手动确认。", okText: "确认更新", cancelText: "取消", onOk: apply });
         else apply();
     };
 
@@ -165,6 +233,39 @@ export function EpisodeWorkbenchDrawer({ open, projectId, projectTitle, canvases
         };
         if (activeShots.length || activeShotGroups.length) Modal.confirm({ title: "重新生成分镜头草案？", content: "这会替换当前本集分镜头表，并清空对应生成镜头组。", okText: "重新生成", cancelText: "取消", onOk: run });
         else run();
+    };
+
+    const runAssetExtraction = () => {
+        if (!activeCanvas) return message.warning("请先选择画布");
+        if (!assetExtractorRunReadiness.canRun) return message.warning(assetExtractorRunReadiness.reason);
+        if (!assetExtractorConfig || !assetExtractorAvailability.allowed) {
+            message.warning(assetExtractorAvailability.reason || "资产提取 Agent 不可用");
+            onOpenAgentSettings?.();
+            return;
+        }
+        try {
+            const context = { projectId, canvas: activeCanvas };
+            createAgentRun(assetExtractorConfig, buildAssetExtractorRunInput(context), buildLocalAssetExtractorDraftOutput(context));
+            message.success("已创建资产提取草案，请先审核再写入本集生图需求");
+        } catch (error) {
+            message.warning(error instanceof Error ? error.message : "资产提取 Agent 运行失败");
+        }
+    };
+
+    const applyAssetExtractionRun = (run: AgentRunRecord) => {
+        if (!activeCanvas?.episodeId) return message.warning("请先绑定或导入本集剧本");
+        try {
+            const drafts = buildAssetBreakdownInputsFromAgentRun(run, { projectId, canvas: activeCanvas });
+            if (!drafts.length) return message.warning("当前草案没有可写入的资产需求");
+            const apply = () => {
+                const count = importAgentAssetDrafts({ projectId, episodeId: activeCanvas.episodeId!, drafts });
+                markAgentRunApplied(run.id);
+                message.success(`已写入 ${count} 条本集生图需求，重复项会自动合并`);
+            };
+            Modal.confirm({ title: "写入本集生图需求？", content: "将把已批准的资产草案写入资产拆解列表，不会自动创建 Brief、生成图片或扣费。重复资产会按同集同类同名合并。", okText: "写入", cancelText: "取消", onOk: apply });
+        } catch (error) {
+            message.warning(error instanceof Error ? error.message : "资产草案写入失败");
+        }
     };
 
     const submitShot = (values: TableShotFormValues, assetRefs: StoryboardAssetRef[]) => {
@@ -246,74 +347,115 @@ export function EpisodeWorkbenchDrawer({ open, projectId, projectTitle, canvases
                     </Space>
                 </div>
 
-                <EpisodeOverviewSection stats={stats} status={status} />
-                <WorkModeSection modes={modes} />
-                <EpisodeScriptSection
-                    hasEpisode={Boolean(activeCanvas?.episodeId)}
-                    episodeLabel={canvasEpisodeLabel(activeCanvas)}
-                    scriptDraft={scriptDraft}
-                    onScriptDraftChange={setScriptDraft}
-                    onSaveScriptSnapshot={saveScriptSnapshot}
-                    onOpenBind={openBindModal}
-                />
+                {!activeCanvas ? (
+                    <Empty description="当前项目还没有画布">
+                        {onCreateCanvas ? (
+                            <Button type="primary" onClick={onCreateCanvas}>
+                                新建一集画布并导入剧本
+                            </Button>
+                        ) : null}
+                    </Empty>
+                ) : (
+                    <>
+                        <EpisodeOverviewSection stats={stats} status={status} />
+                        <WorkModeSection modes={modes} />
+                        <EpisodeScriptSection
+                            hasEpisode={Boolean(activeCanvas?.episodeId)}
+                            episodeLabel={canvasEpisodeLabel(activeCanvas)}
+                            scriptDraft={scriptDraft}
+                            onScriptDraftChange={setScriptDraft}
+                            onSaveScriptSnapshot={saveScriptSnapshot}
+                            onOpenBind={openBindModal}
+                        />
+                        <AssetExtractionSection
+                            canRun={assetExtractorRunReadiness.canRun && assetExtractorAvailability.allowed}
+                            disabledReason={assetExtractorRunReadiness.reason || assetExtractorAvailability.reason}
+                            runs={activeAssetExtractorRuns}
+                            onRun={runAssetExtraction}
+                            onApprove={approveAgentRun}
+                            onReject={rejectAgentRun}
+                            onApply={applyAssetExtractionRun}
+                            onOpenAgentSettings={onOpenAgentSettings}
+                        />
 
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(480px,0.95fr)]">
-                    <EpisodeTableSection
-                        shots={activeShots}
-                        selectedIds={selectedShotIds}
-                        onGenerateDrafts={generateDrafts}
-                        onCreateShot={() => {
-                            setEditingShot(null);
-                            setShotFormOpen(true);
-                        }}
-                        onToggleShot={(id, checked) => setSelectedShotIds((current) => (checked ? [...current, id] : current.filter((item) => item !== id)))}
-                        onEditShot={(shot) => {
-                            setEditingShot(shot);
-                            setShotFormOpen(true);
-                        }}
-                        onDeleteShot={removeTableShot}
-                        onMoveShot={moveTableShot}
-                        onCreateShotGroup={createSelectedShotGroup}
-                    />
-                    <div className="grid gap-5">
-                        <ShotGroupSection
-                            shotGroups={activeShotGroups}
-                            tableShots={activeShots}
-                            assets={mediaAssets}
-                            onEditGroup={(group) => {
-                                setEditingShotGroup(group);
-                                setShotGroupFormOpen(true);
-                            }}
-                            onDeleteGroup={removeShotGroup}
-                            onAddToCanvas={addGroupToCanvas}
-                            onCreateBrief={(group) => {
-                                const shots = activeShots.filter((shot) => group.shotIds.includes(shot.id));
-                                createMoodBrief(group, shots);
-                                message.success("已创建氛围参考 Brief");
-                            }}
-                            onInsertPromptTemplate={(group, prompt) => updateShotGroup(group.id, { prompt: [group.prompt, prompt].filter(Boolean).join("\n\n") })}
-                        />
-                        <GenerationManagementSection
-                            shotGroups={activeShotGroups}
-                            tableShots={activeShots}
-                            nodes={canvasNodes}
-                            assets={assets}
-                            onOpenAsset={onOpenAsset}
-                            onLocateNode={onLocateNode}
-                            onAddToCanvas={addGroupToCanvas}
-                            onRetryNode={retryNode}
-                        />
-                    </div>
-                </div>
+                        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(480px,0.95fr)]">
+                            <EpisodeTableSection
+                                shots={activeShots}
+                                selectedIds={selectedShotIds}
+                                onGenerateDrafts={generateDrafts}
+                                onCreateShot={() => {
+                                    setEditingShot(null);
+                                    setShotFormOpen(true);
+                                }}
+                                onToggleShot={(id, checked) => setSelectedShotIds((current) => (checked ? [...current, id] : current.filter((item) => item !== id)))}
+                                onEditShot={(shot) => {
+                                    setEditingShot(shot);
+                                    setShotFormOpen(true);
+                                }}
+                                onDeleteShot={removeTableShot}
+                                onMoveShot={moveTableShot}
+                                onCreateShotGroup={createSelectedShotGroup}
+                            />
+                            <div className="grid gap-5">
+                                <ShotGroupSection
+                                    shotGroups={activeShotGroups}
+                                    tableShots={activeShots}
+                                    assets={mediaAssets}
+                                    onEditGroup={(group) => {
+                                        setEditingShotGroup(group);
+                                        setShotGroupFormOpen(true);
+                                    }}
+                                    onDeleteGroup={removeShotGroup}
+                                    onAddToCanvas={addGroupToCanvas}
+                                    onCreateBrief={(group) => {
+                                        const shots = activeShots.filter((shot) => group.shotIds.includes(shot.id));
+                                        createMoodBrief(group, shots);
+                                        message.success("已创建氛围参考 Brief");
+                                    }}
+                                    onInsertPromptTemplate={(group, prompt) => updateShotGroup(group.id, { prompt: [group.prompt, prompt].filter(Boolean).join("\n\n") })}
+                                />
+                                <GenerationManagementSection
+                                    shotGroups={activeShotGroups}
+                                    tableShots={activeShots}
+                                    nodes={canvasNodes}
+                                    assets={assets}
+                                    onOpenAsset={onOpenAsset}
+                                    onLocateNode={onLocateNode}
+                                    onAddToCanvas={addGroupToCanvas}
+                                    onRetryNode={retryNode}
+                                />
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
 
             <TableShotFormModal open={shotFormOpen} editingShot={editingShot} assets={mediaAssets} onCancel={() => setShotFormOpen(false)} onSubmit={submitShot} />
             <ShotGroupFormModal open={shotGroupFormOpen} editingGroup={editingShotGroup} assets={mediaAssets} bibleItems={projectBibleItems} onCancel={() => setShotGroupFormOpen(false)} onSubmit={submitShotGroup} />
-            <Modal title="绑定或导入本集剧本" open={bindOpen} onCancel={() => setBindOpen(false)} onOk={() => void applyBindEpisode()} okText="确认" cancelText="取消" destroyOnHidden>
+            <Modal
+                title="绑定或导入本集剧本"
+                open={bindOpen}
+                onCancel={() => {
+                    setBindOpen(false);
+                    setBindPromptDismissed(true);
+                }}
+                onOk={() => void applyBindEpisode()}
+                okText="确认"
+                cancelText="取消"
+                destroyOnHidden
+            >
+                <Alert
+                    className="mb-4"
+                    type="info"
+                    showIcon
+                    message="选择本集生产方式"
+                    description="剧本驱动生产用于拆资产和分镜；自由画布制作可以不绑定剧本继续创作；资产生产与复用可先沉淀角色图、场景图、道具图和氛围参考。确认后不会自动运行 Agent、生成分镜草案或触发生成扣费。"
+                />
                 <Form form={bindForm} layout="vertical" initialValues={{ mode: "import" }}>
                     <Form.Item name="mode" label="剧本来源">
                         <Select
                             options={[
+                                { label: "不绑定剧本，继续自由画布制作", value: "none" },
                                 { label: "从项目已有分集选择", value: "existing" },
                                 { label: "粘贴 / 导入本集剧本", value: "import" },
                             ]}
@@ -325,7 +467,7 @@ export function EpisodeWorkbenchDrawer({ open, projectId, projectTitle, canvases
                                 <Form.Item name="episodeId" label="已有分集" rules={[{ required: true, message: "请选择分集" }]}>
                                     <Select options={episodeOptions} placeholder="选择项目分集" />
                                 </Form.Item>
-                            ) : (
+                            ) : getFieldValue("mode") === "import" ? (
                                 <>
                                     <Form.Item name="title" label="本集标题" rules={[{ required: true, message: "请填写标题" }]}>
                                         <Input placeholder="例如：第一集" />
@@ -334,6 +476,8 @@ export function EpisodeWorkbenchDrawer({ open, projectId, projectTitle, canvases
                                         <Input.TextArea rows={8} />
                                     </Form.Item>
                                 </>
+                            ) : (
+                                <Alert type="success" showIcon message="自由画布制作" description="不绑定剧本也可以继续使用画布、素材、Brief 和视频生成节点。后续需要剧本驱动生产时，可随时从本集工作台重新绑定或导入。" />
                             )
                         }
                     </Form.Item>

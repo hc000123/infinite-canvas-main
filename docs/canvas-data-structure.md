@@ -15,6 +15,7 @@
 - 项目分镜 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:storyboard_store`。
 - 本地生成队列 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:generation_queue_store`。
 - Agent 任务 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:agent_task_store`。
+- Agent Runner 运行记录 JSON：`localForage`，数据库名 `infinite-canvas`，storeName `app_state`，key 为 `infinite-canvas:agent_runner_store`。
 - 图片 Blob：单独存到 `localForage` 实例，数据库名 `infinite-canvas`，storeName `image_files`。
 - 视频等媒体 Blob：单独存到 `localForage` 实例，数据库名 `infinite-canvas`，storeName `media_files`。
 
@@ -407,6 +408,10 @@ type ShotGroup = {
 - `ShotGroup.resultAssetIds` / `primaryAssetId`：记录生成结果回流到生成镜头组的素材 ID；同一素材 ID 不重复写入，首次成功结果可成为主版本。
 - `ShotGroup.status` / `taskId` / `errorMessage`：M6.8 起由画布视频生成链路回写生成状态。本集工作台只展示和管理状态，不自动触发真实视频生成或扣费。
 - M6.8 本集工作台没有新增 localforage key，而是复用脚本、分镜、资产拆解、设定库、素材和画布已有 store。打组加入画布时继续写入 `episodeId / shotGroupId / shotIds / storyboardShotGroupId / storyboardTableShotIds`，用于后续素材归档、任务追溯和生成管理。
+- M6.9.2 调整剧本 / 本集工作台入口，但不新增 localforage key。项目页可以直接打开独立本集工作台；画布页打开本集工作台时，如果当前画布没有 `episodeId` 和 `scriptSnapshot`，会先提示绑定已有分集、导入本集剧本或继续自由画布制作。选择自由画布不会写入 episode 字段；绑定或导入只更新画布的本集上下文，不自动创建 Agent run、不自动生成资产草案、分镜草案或触发生成扣费。
+- M6.9.3 起，本集工作台的“资产提取”会先创建 `asset_extractor` 类型 Agent Runner 记录。草案 item 的原始类型支持 `character / scene / prop / costume / makeup / mood / effect`，每条至少包含 `id / kind / name / description / scriptEvidence / importance / suggestedBriefKind / tags / source / warnings`。用户批准 run 并确认写入后，草案才会转换为现有资产拆解 / 本集生图需求。
+- 资产提取写入仍使用 `infinite-canvas:asset_breakdown_store`，不新增孤立 store。由于资产拆解第一版只支持 `character / scene / prop / style`，`costume / makeup` 会作为 `character` 扩展需求保存，`mood / effect` 会作为 `style` 扩展需求保存，同时保留 `agentAssetKind` 追溯原始类型。
+- 由 Agent 写入的资产拆解项可包含追溯字段：`agentRunId`、`agentConfigId`、`agentConfigVersion`、`sourceType: "agent_asset_extractor"`、`agentAssetKind`、`suggestedBriefKind`、`importance`、`warnings`。重复资产按同项目、同集、同类、同名合并，避免同一剧本反复提取时无限追加。
 
 ## 本地生成队列结构
 
@@ -515,6 +520,93 @@ type AgentSettingsStore = {
 - `prompt_reviewer`：提示词质检 Agent。
 
 Agent 设置只描述“怎么生成草案和预览”，不等于 Agent 已执行。真正写入素材、分镜、Brief、画布节点或触发生成任务，仍必须由后续业务入口在用户确认后执行。
+
+## Agent Runner 运行记录结构
+
+M6.9.1 新增轻量 Agent Runner 协议，用于记录“按某个 Agent 配置创建草案、展示预览、等待用户批准、再由后续业务入口应用”的状态流。它借鉴状态图和 HITL 思路，但第一版不引入 LangGraph、AutoGen 或 Dify，不接真实 LLM，不自动写入业务 store，不触发图片 / 视频生成或扣费。
+
+本地保存位置：
+
+- 数据库：`localForage`
+- 数据库名 / store：沿用项目本地存储封装
+- key：`infinite-canvas:agent_runner_store`
+
+```ts
+type AgentRunStatus =
+  | "draft"
+  | "ready_for_review"
+  | "approved"
+  | "rejected"
+  | "applied"
+  | "failed";
+
+type AgentRunKind =
+  | "asset_extractor"
+  | "storyboard_director"
+  | "image_brief_builder"
+  | "video_prompt_builder"
+  | "prompt_reviewer";
+
+type AgentRunInput = {
+  projectId: string;
+  canvasId?: string;
+  episodeId?: string;
+  episodeTitle?: string;
+  scriptId?: string;
+  scriptSnapshot?: string;
+  sourceType: string;
+  sourceId?: string;
+  variables: Record<string, unknown>;
+};
+
+type AgentDraftOutput = {
+  summary: string;
+  items: unknown[];
+  rawJson: unknown;
+  warnings: string[];
+  schemaVersion: string;
+};
+
+type AgentRunProposedAction = {
+  type: string;
+  title: string;
+  targetRefs: Array<{
+    kind: string;
+    id: string;
+    label?: string;
+  }>;
+  payload: unknown;
+  requiresConfirmation: boolean;
+};
+
+type AgentRunRecord = {
+  id: string;
+  agentKind: AgentRunKind;
+  agentConfigId: string;
+  agentConfigVersion: string;
+  status: AgentRunStatus;
+  input: AgentRunInput;
+  draftOutput: AgentDraftOutput;
+  proposedActions: AgentRunProposedAction[];
+  approvedAt?: string;
+  appliedAt?: string;
+  rejectedAt?: string;
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+```
+
+字段说明：
+
+- `agentConfigId / agentConfigVersion`：记录创建 run 时实际使用的 Agent 设置配置。项目级覆盖存在时优先使用项目级配置。
+- `status`：`draft` 表示草案占位，`ready_for_review` 表示已有草案等待用户审核，`approved` / `rejected` 是用户审核结果，`applied` 只表示后续业务入口已经在用户确认后完成写入，`failed` 记录运行或应用失败。
+- `draftOutput`：统一保存本地规则或后续模型返回的草案摘要、条目、原始 JSON 和 warning。非合法 JSON 会被降级保存为文本摘要。
+- `proposedActions`：只用于预览影响对象和待写入动作。M6.9.1 不直接应用这些动作，后续资产提取、分镜草案、生图 Brief 或视频提示词入口必须再次经过用户确认。
+- 禁用的 Agent 不允许创建 run；`writePolicy` 必须通过 Agent 设置中心归一化，默认保持 `confirm_before_write`。
+- 未 `approved` 的 run 不能标记为 `applied`，防止草案绕过审核进入业务数据。
+
+Agent Runner 只保存“运行记录和草案预览”。它不替代 Agent 设置中心，也不替代 M5.9 的 `AgentTask`。后续版本可以把某次 Runner 的 `proposedActions` 转换为素材、分镜、Brief 或画布节点的写入动作，但必须保持用户确认边界。
 
 ## Agent 任务结构
 

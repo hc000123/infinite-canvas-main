@@ -1,7 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildEpisodeWorkbenchStats, buildShotGroupGenerationSummaries, deriveEpisodeProductionStatus, groupedTableShotsByScene, productionStatusLabel, validateEpisodeShotGroupSelection, workbenchModes } from "./episode-workbench.ts";
+import {
+    buildEpisodeWorkbenchStats,
+    buildShotGroupGenerationSummaries,
+    deriveEpisodeProductionStatus,
+    episodeScriptBindingSideEffects,
+    freeCanvasModeKeepsScriptOptional,
+    groupedTableShotsByScene,
+    productionStatusLabel,
+    selectEpisodeWorkbenchCanvas,
+    shouldConfirmEpisodeScriptReimport,
+    shouldPromptEpisodeScriptBinding,
+    validateEpisodeShotGroupSelection,
+    workbenchModes,
+} from "./episode-workbench.ts";
 
 const canvas = { id: "canvas-1", title: "第一集画布", episodeId: "ep-1", episodeTitle: "第一集", scriptSnapshot: "剧本文本" };
 
@@ -125,6 +138,39 @@ test("returns workbench modes without disabling free canvas", () => {
     });
     assert.equal(modes.find((mode) => mode.key === "script_driven")?.active, false);
     assert.equal(modes.find((mode) => mode.key === "free_canvas")?.active, true);
+});
+
+test("selects project workbench canvas from current canvas bound episode or first canvas", () => {
+    const unbound = { id: "canvas-unbound", title: "自由画布" };
+    const bound = { id: "canvas-bound", title: "第一集", episodeId: "episode-1", scriptSnapshot: "剧本" };
+    assert.equal(selectEpisodeWorkbenchCanvas([unbound, bound], "canvas-unbound")?.id, "canvas-unbound");
+    assert.equal(selectEpisodeWorkbenchCanvas([unbound, bound])?.id, "canvas-bound");
+    assert.equal(selectEpisodeWorkbenchCanvas([unbound])?.id, "canvas-unbound");
+    assert.equal(selectEpisodeWorkbenchCanvas([]), null);
+});
+
+test("prompts script binding only for unbound canvas when requested", () => {
+    assert.equal(shouldPromptEpisodeScriptBinding({ id: "canvas-1", title: "自由画布" }, true), true);
+    assert.equal(shouldPromptEpisodeScriptBinding({ id: "canvas-1", title: "自由画布" }, false), false);
+    assert.equal(shouldPromptEpisodeScriptBinding({ id: "canvas-1", title: "第一集", episodeId: "episode-1" }, true), false);
+    assert.equal(shouldPromptEpisodeScriptBinding(null, true), false);
+});
+
+test("reimport confirmation is required when script or generated structure exists", () => {
+    assert.equal(shouldConfirmEpisodeScriptReimport({ hasScriptSnapshot: false, tableShotCount: 0, shotGroupCount: 0 }), false);
+    assert.equal(shouldConfirmEpisodeScriptReimport({ hasScriptSnapshot: true, tableShotCount: 0, shotGroupCount: 0 }), true);
+    assert.equal(shouldConfirmEpisodeScriptReimport({ hasScriptSnapshot: false, tableShotCount: 1, shotGroupCount: 0 }), true);
+    assert.equal(shouldConfirmEpisodeScriptReimport({ hasScriptSnapshot: false, tableShotCount: 0, shotGroupCount: 1 }), true);
+});
+
+test("free canvas mode keeps script optional and does not create agent runs", () => {
+    assert.equal(freeCanvasModeKeepsScriptOptional("none"), true);
+    assert.equal(freeCanvasModeKeepsScriptOptional("existing"), false);
+    assert.deepEqual(episodeScriptBindingSideEffects(), {
+        createsAgentRun: false,
+        createsStoryboardDraft: false,
+        triggersGeneration: false,
+    });
 });
 
 test("groups table shots by scene and validates shot group selection", () => {

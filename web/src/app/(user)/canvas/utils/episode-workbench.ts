@@ -177,6 +177,31 @@ export function buildEpisodeWorkbenchHref(projectId: string, canvasId?: string) 
     return `/projects/${projectId}?panel=episode-workbench`;
 }
 
+export function selectEpisodeWorkbenchCanvas(canvases: EpisodeWorkbenchCanvas[], currentCanvasId?: string) {
+    return canvases.find((canvas) => canvas.id === currentCanvasId) || canvases.find((canvas) => Boolean(canvas.episodeId || canvas.scriptSnapshot?.trim())) || canvases[0] || null;
+}
+
+export function shouldPromptEpisodeScriptBinding(canvas?: EpisodeWorkbenchCanvas | null, promptWhenUnbound = false) {
+    if (!promptWhenUnbound || !canvas) return false;
+    return !canvas.episodeId && !canvas.scriptSnapshot?.trim();
+}
+
+export function shouldConfirmEpisodeScriptReimport({ hasScriptSnapshot, tableShotCount, shotGroupCount }: { hasScriptSnapshot: boolean; tableShotCount: number; shotGroupCount: number }) {
+    return hasScriptSnapshot || tableShotCount > 0 || shotGroupCount > 0;
+}
+
+export function freeCanvasModeKeepsScriptOptional(mode: "none" | "existing" | "import") {
+    return mode === "none";
+}
+
+export function episodeScriptBindingSideEffects() {
+    return {
+        createsAgentRun: false,
+        createsStoryboardDraft: false,
+        triggersGeneration: false,
+    };
+}
+
 export function activeEpisodeTableShots(tableShots: StoryboardTableShot[], canvas?: EpisodeWorkbenchCanvas | null) {
     if (!canvas?.episodeId) return [];
     return orderedStoryboardTableShots(tableShots, canvas.id, canvas.episodeId);

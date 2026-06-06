@@ -1,6 +1,6 @@
 {
     "name": "infinite-canvas",
-    "version": "0.2.50",
+    "version": "0.2.53",
     "private": true,
     "type": "module",
     "scripts": {

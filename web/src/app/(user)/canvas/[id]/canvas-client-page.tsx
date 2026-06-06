@@ -2231,6 +2231,7 @@ function InfiniteCanvasPage() {
                         if (node) void handleRetryNode(node);
                     }}
                     onOpenAgentSettings={() => setAgentSettingsOpen(true)}
+                    promptBindWhenUnbound
                 />
                 <AgentSettingsDrawer open={agentSettingsOpen} projectId={workspaceProjectId} projectTitle={workspaceProjectTitle} onClose={() => setAgentSettingsOpen(false)} />
                 <ScriptManagerDrawer

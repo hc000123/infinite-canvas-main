@@ -17,7 +17,9 @@ import {
     type AgentReasoningLevel,
     type AgentWritePolicy,
 } from "./agent-settings";
+import { agentRunKindLabel, agentRunStatusLabel, listAgentRunsByProject } from "./agent-runner";
 import { useAgentSettingsStore } from "./use-agent-settings-store";
+import { useAgentRunnerStore } from "./use-agent-runner-store";
 
 type Props = {
     open: boolean;
@@ -58,7 +60,12 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
     const saveProjectConfig = useAgentSettingsStore((state) => state.saveProjectConfig);
     const copyDefaultToProject = useAgentSettingsStore((state) => state.copyDefaultToProject);
     const resetProjectConfig = useAgentSettingsStore((state) => state.resetProjectConfig);
+    const runs = useAgentRunnerStore((state) => state.runs);
+    const createRun = useAgentRunnerStore((state) => state.createRun);
+    const approveRun = useAgentRunnerStore((state) => state.approveRun);
+    const rejectRun = useAgentRunnerStore((state) => state.rejectRun);
     const resolvedConfigs = useMemo(() => mergeAgentConfigs(defaultAgentConfigs(), globalConfigs, projectConfigs[projectId] || []), [globalConfigs, projectConfigs, projectId]);
+    const recentRuns = useMemo(() => listAgentRunsByProject(runs, projectId).slice(0, 8), [projectId, runs]);
     const selectedConfig = resolvedConfigs.find((config) => config.kind === selectedKind) || defaultAgentConfig(selectedKind);
     const projectOverrideKinds = new Set((projectConfigs[projectId] || []).map((config) => config.kind));
     const validation = validateAgentConfig(selectedConfig);
@@ -94,6 +101,24 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
     const resetProjectOverride = () => {
         resetProjectConfig(projectId, selectedKind);
         message.success("已移除项目级覆盖，回到默认配置");
+    };
+
+    const createPreviewRun = () => {
+        try {
+            createRun(
+                selectedConfig,
+                {
+                    projectId,
+                    sourceType: "agent_settings_preview",
+                    sourceId: selectedKind,
+                    variables: { agentKind: selectedKind },
+                },
+                selectedConfig.outputJsonExample || { summary: `${selectedConfig.name} 本地预览运行记录`, items: [], warnings: ["第一版只创建本地草案记录，不调用真实模型。"] },
+            );
+            message.success("已创建本地 Agent run 预览");
+        } catch (error) {
+            message.warning(error instanceof Error ? error.message : "Agent 配置不可用，无法创建 run");
+        }
     };
 
     return (
@@ -160,6 +185,9 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
                                 <Button size="small" type="primary" icon={<Save className="size-3.5" />} onClick={() => void saveOverride()}>
                                     保存项目配置
                                 </Button>
+                                <Button size="small" onClick={createPreviewRun}>
+                                    创建预览 Run
+                                </Button>
                             </Space>
                         }
                     >
@@ -220,6 +248,46 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, onClose }: 
                         </Form>
                     </Card>
                 </div>
+
+                <Card size="small" title="运行记录">
+                    {recentRuns.length ? (
+                        <div className="grid gap-3">
+                            {recentRuns.map((run) => (
+                                <Card key={run.id} size="small" className="bg-stone-50/70 dark:bg-white/5">
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <Tag className="m-0">{agentRunKindLabel(run.agentKind)}</Tag>
+                                                <Tag className="m-0">{agentRunStatusLabel(run.status)}</Tag>
+                                                <Tag className="m-0">配置 v{run.agentConfigVersion}</Tag>
+                                                {run.input.episodeTitle ? <Tag className="m-0">{run.input.episodeTitle}</Tag> : null}
+                                            </div>
+                                            <div className="mt-2 text-sm font-medium">{run.draftOutput.summary}</div>
+                                            <div className="mt-1 text-xs text-stone-500">
+                                                来源：{run.input.sourceType}
+                                                {run.input.sourceId ? ` / ${run.input.sourceId}` : ""} · {run.createdAt}
+                                            </div>
+                                        </div>
+                                        <Space size={6} wrap>
+                                            <Button size="small" disabled={run.status !== "ready_for_review"} onClick={() => approveRun(run.id)}>
+                                                批准
+                                            </Button>
+                                            <Button size="small" disabled={run.status !== "ready_for_review"} onClick={() => rejectRun(run.id)}>
+                                                驳回
+                                            </Button>
+                                        </Space>
+                                    </div>
+                                    <details className="mt-3">
+                                        <summary className="cursor-pointer text-xs text-stone-500">查看 draftOutput / rawJson / proposedActions</summary>
+                                        <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-stone-950 p-3 text-xs text-stone-50">{JSON.stringify({ draftOutput: run.draftOutput, proposedActions: run.proposedActions }, null, 2)}</pre>
+                                    </details>
+                                </Card>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="rounded-lg bg-stone-50 p-4 text-sm text-stone-500 dark:bg-white/5">暂无 Agent run。可以先选择一个 Agent，点击“创建预览 Run”生成本地草案记录。</div>
+                    )}
+                </Card>
             </div>
         </Drawer>
     );
