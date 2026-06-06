@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { canInvokeAgentConfig, defaultAgentConfig, defaultAgentConfigs, fillAgentPromptTemplate, formatInputVariablesText, mergeAgentConfigs, normalizeAgentConfig, parseInputVariablesText, validateAgentConfig } from "./agent-settings.ts";
+import {
+    canInvokeAgentConfig,
+    defaultAgentConfig,
+    defaultAgentConfigs,
+    fillAgentPromptTemplate,
+    formatInputVariablesText,
+    mergeAgentConfigs,
+    normalizeAgentConfig,
+    parseInputVariablesText,
+    projectAgentConfigOverrides,
+    validateAgentConfig,
+} from "./agent-settings.ts";
 
 test("builds default templates for all first-batch agent kinds", () => {
     const configs = defaultAgentConfigs("2026-01-01T00:00:00.000Z");
@@ -30,6 +41,14 @@ test("merges global and project overrides by agent kind", () => {
     assert.equal(video?.enabled, false);
     assert.equal(video?.projectId, "project-1");
     assert.equal(brief?.systemPrompt, "全局 Brief 提示词");
+});
+
+test("returns stable project override references for component memo dependencies", () => {
+    const existing = [{ ...defaultAgentConfig("asset_extractor"), projectId: "project-1", systemPrompt: "项目资产提取" }];
+    const projectConfigs = { "project-1": existing };
+
+    assert.equal(projectAgentConfigOverrides(projectConfigs, "project-1"), existing);
+    assert.equal(projectAgentConfigOverrides(projectConfigs, "missing"), projectAgentConfigOverrides(projectConfigs, "missing"));
 });
 
 test("validates required fields and reasoning level", () => {

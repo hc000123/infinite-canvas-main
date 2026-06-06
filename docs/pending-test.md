@@ -4,7 +4,25 @@
 
 ## 当前版本验收清单
 
-当前版本：`v0.2.67`。需要优先验收的是 M6.10.3-Fix1 Seedance 映射预览 JSON 代码块解析质量修复、M6.10.3-R Seedance 映射预览总 review 修复项、M6.10.3-D Seedance 映射预览确认后创建 / 更新画布视频配置节点，M6.10.3-C Seedance 映射预览确认后写入分镜头表，M6.10.3-B Seedance 映射预览确认后写入设定库，M6.10.3-A Seedance 阶段产物映射预览，M6.10.2 Seedance 三阶段 workflow 状态、审核证据和产物存储，M6.10.1 Seedance 多 Agent 工作流文本 Runner，M6.10.0 Seedance 多 Agent 工作流预设导入、P3-C / M6.9.7 视频节点自动带入本集资产参考、M6.9.R1 Agent 化工作台结构收口、P3-B / M6.9.5 分镜草案 Agent 接入、M6.9.6 镜头组加入画布改为视频生成节点、M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+当前版本：`v0.2.68`。需要优先验收的是 M6.10.3-Fix1 P1 阻断修复、M6.10.3-Fix1 Seedance 映射预览 JSON 代码块解析质量修复、M6.10.3-R Seedance 映射预览总 review 修复项、M6.10.3-D Seedance 映射预览确认后创建 / 更新画布视频配置节点，M6.10.3-C Seedance 映射预览确认后写入分镜头表，M6.10.3-B Seedance 映射预览确认后写入设定库，M6.10.3-A Seedance 阶段产物映射预览，M6.10.2 Seedance 三阶段 workflow 状态、审核证据和产物存储，M6.10.1 Seedance 多 Agent 工作流文本 Runner，M6.10.0 Seedance 多 Agent 工作流预设导入、P3-C / M6.9.7 视频节点自动带入本集资产参考、M6.9.R1 Agent 化工作台结构收口、P3-B / M6.9.5 分镜草案 Agent 接入、M6.9.6 镜头组加入画布改为视频生成节点、M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+
+#### v0.2.68：M6.10.3-Fix1 P1 阻断修复
+
+- 入口：`/projects/:id` 项目详情页和 `/canvas/:id` 画布页。
+- 本次发现：
+  - v0.2.67 复测 M6.10.3-Fix1 时，`EpisodeWorkbenchDrawer` 挂载后触发 Zustand selector 无限更新。
+  - 项目详情页和画布页均出现 `The result of getSnapshot should be cached to avoid an infinite loop` 与 `Maximum update depth exceeded`，导致无法进入剧本绑定、Agent 设置、三阶段 Runner 和 mapping preview。
+  - 当前已修复为不在 Zustand selector 中直接返回 `resolvedProjectConfigs(projectId)` 派生数组，改为订阅原始配置字段并在组件内 memo 合并。
+- 操作步骤：
+  1. 打开项目详情页，确认页面可正常渲染，不再出现无限更新错误。
+  2. 打开画布页，确认页面可正常渲染，不再出现无限更新错误。
+  3. 从项目详情页或画布页打开本集工作台 / Agent 设置中心，确认 Agent 配置仍能读取项目级覆盖。
+  4. 重新执行 M6.10.3-Fix1 全流程复测，确认 JSON 代码块映射 preview 修复有效。
+- 预期结果：
+  - 项目详情页和画布页可用。
+  - 不再出现 getSnapshot / Maximum update depth 相关错误。
+  - Agent 设置中心仍能读取全局配置和项目级配置。
+  - 不自动生成图片或视频，不触发扣费。
 
 #### v0.2.67：M6.10.3-Fix1 Seedance 映射预览 JSON 代码块解析质量修复
 

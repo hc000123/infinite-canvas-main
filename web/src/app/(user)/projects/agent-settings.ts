@@ -122,6 +122,12 @@ export function mergeAgentConfigs(defaults: AgentConfig[], globalOverrides: Agen
     return defaults.map((config) => byKind.get(config.kind) || config);
 }
 
+const emptyProjectAgentConfigs: AgentConfig[] = [];
+
+export function projectAgentConfigOverrides(projectConfigs: Record<string, AgentConfig[]>, projectId: string) {
+    return projectConfigs[projectId] || emptyProjectAgentConfigs;
+}
+
 export function validateAgentConfig(config: AgentConfig): AgentConfigValidationResult {
     const errors: string[] = [];
     if (!config.name.trim()) errors.push("Agent 名称不能为空");

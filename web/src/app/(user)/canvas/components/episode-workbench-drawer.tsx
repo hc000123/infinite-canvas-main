@@ -6,6 +6,7 @@ import { Bot, FileText } from "lucide-react";
 
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { preserveOrCreateAssetVersionReferences } from "../../assets/asset-version-references";
+import { defaultAgentConfigs, mergeAgentConfigs, projectAgentConfigOverrides } from "../../projects/agent-settings";
 import { useAgentSettingsStore } from "../../projects/use-agent-settings-store";
 import { useAgentRunnerStore } from "../../projects/use-agent-runner-store";
 import { listAgentRunsByEpisode, type AgentRunRecord } from "../../projects/agent-runner.ts";
@@ -133,7 +134,8 @@ export function EpisodeWorkbenchDrawer({
     const updateAssetBreakdownItem = useAssetBreakdownStore((state) => state.updateItem);
     const productionBibleItems = useProductionBibleStore((state) => state.items);
     const breakdownItems = useAssetBreakdownStore((state) => state.items);
-    const resolvedAgentConfigs = useAgentSettingsStore((state) => state.resolvedProjectConfigs(projectId));
+    const globalAgentConfigs = useAgentSettingsStore((state) => state.globalConfigs);
+    const projectAgentConfigs = useAgentSettingsStore((state) => state.projectConfigs);
     const agentRuns = useAgentRunnerStore((state) => state.runs);
     const createAgentRun = useAgentRunnerStore((state) => state.createRun);
     const approveAgentRun = useAgentRunnerStore((state) => state.approveRun);
@@ -150,6 +152,8 @@ export function EpisodeWorkbenchDrawer({
     const [bindPromptDismissed, setBindPromptDismissed] = useState(false);
     const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
     const projectCanvases = useMemo(() => canvases, [canvases]);
+    const projectAgentOverrides = projectAgentConfigOverrides(projectAgentConfigs, projectId);
+    const resolvedAgentConfigs = useMemo(() => mergeAgentConfigs(defaultAgentConfigs(), globalAgentConfigs, projectAgentOverrides), [globalAgentConfigs, projectAgentOverrides]);
     const activeCanvas = projectCanvases.find((canvas) => canvas.id === activeCanvasId) || selectEpisodeWorkbenchCanvas(projectCanvases, currentCanvasId);
     const activeShots = useMemo(() => activeEpisodeTableShots(tableShots, activeCanvas), [activeCanvas, tableShots]);
     const activeShotGroups = useMemo(() => activeEpisodeShotGroups(shotGroups, activeCanvas), [activeCanvas, shotGroups]);
