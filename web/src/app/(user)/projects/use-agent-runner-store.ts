@@ -5,14 +5,17 @@ import { persist, type PersistStorage, type StorageValue } from "zustand/middlew
 
 import { localForageStorage } from "@/lib/localforage-storage";
 import { useProductionBibleStore } from "../canvas/stores/use-production-bible-store";
+import { useStoryboardStore } from "../canvas/stores/use-storyboard-store";
 import type { AgentConfig } from "./agent-settings";
 import type { AgentWorkflowPreset } from "./agent-workflow-presets";
 import {
     applyWorkflowMappingPreviewToProductionBible,
+    applyWorkflowMappingPreviewToStoryboardTable,
     buildWorkflowMappingPreviews,
     buildAgentWorkflowReviewEvidence,
     buildAgentWorkflowStageOutput,
     canApplyWorkflowMappingPreviewToProductionBible,
+    canApplyWorkflowMappingPreviewToStoryboardTable,
     canGenerateWorkflowMappingPreview,
     approveAgentRun,
     completeAgentWorkflowStageRun,
@@ -52,6 +55,7 @@ type AgentRunnerStore = {
     ensureWorkflowRun: (input: { projectId: string; canvasId?: string; episodeId?: string; preset: AgentWorkflowPreset }) => string;
     generateWorkflowMappingPreview: (workflowRunId: string, stageId: string) => { ok: boolean; reason?: string; previewIds?: string[] };
     applyProductionBiblePreview: (previewId: string, selectedItemIds?: string[]) => { ok: boolean; reason?: string; appliedCount?: number; skippedCount?: number; warnings: string[] };
+    applyStoryboardPreview: (previewId: string, selectedItemIds?: string[]) => { ok: boolean; reason?: string; appliedCount?: number; skippedCount?: number; warnings: string[] };
     createRun: (config: AgentConfig, input: AgentRunInput, draftOutput?: unknown) => string;
     startWorkflowTextRun: (input: AgentRunInput) => string;
     completeWorkflowTextRun: (id: string, rawText: string) => void;
@@ -141,6 +145,47 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                 return {
                     ok: true,
                     appliedCount: result.appliedWrites.length,
+                    skippedCount: result.skippedPreviewItemIds.length,
+                    warnings: result.warnings,
+                };
+            },
+            applyStoryboardPreview: (previewId, selectedItemIds) => {
+                const preview = get().workflowMappingPreviews.find((item) => item.previewId === previewId);
+                const workflowRun = preview ? get().workflowRuns.find((item) => item.id === preview.workflowRunId) : undefined;
+                const output = preview ? get().workflowOutputs.find((item) => item.outputId === preview.sourceOutputId) : undefined;
+                const eligibility = canApplyWorkflowMappingPreviewToStoryboardTable({
+                    workflowRun,
+                    preview,
+                    output,
+                    canvasId: workflowRun?.canvasId,
+                    episodeId: workflowRun?.episodeId,
+                });
+                if (!eligibility.allowed) return { ok: false, reason: eligibility.reason, warnings: [eligibility.reason] };
+                const existingShots = useStoryboardStore.getState().tableShots;
+                const result = applyWorkflowMappingPreviewToStoryboardTable({
+                    preview: preview!,
+                    workflowRun: workflowRun!,
+                    output: output!,
+                    canvasId: workflowRun!.canvasId!,
+                    episodeId: workflowRun!.episodeId!,
+                    selectedItemIds,
+                    existingShots,
+                });
+                if (!result.appliedWrites.length) return { ok: false, reason: result.warnings[0] || "没有可写入的分镜头表条目", warnings: result.warnings, appliedCount: 0, skippedCount: result.skippedPreviewItemIds.length };
+                const applyAgentTableShots = useStoryboardStore.getState().applyAgentTableShots;
+                const count = applyAgentTableShots({
+                    projectId: preview!.projectId,
+                    canvasId: workflowRun!.canvasId!,
+                    episodeId: workflowRun!.episodeId!,
+                    shots: result.appliedWrites.map((item) => item.input),
+                    mode: "append",
+                });
+                set((state) => ({
+                    workflowAppliedPreviewItemIds: Array.from(new Set([...state.workflowAppliedPreviewItemIds, ...result.appliedPreviewItemIds])),
+                }));
+                return {
+                    ok: true,
+                    appliedCount: count,
                     skippedCount: result.skippedPreviewItemIds.length,
                     warnings: result.warnings,
                 };

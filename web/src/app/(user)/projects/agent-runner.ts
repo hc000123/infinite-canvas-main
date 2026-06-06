@@ -1,6 +1,7 @@
 import { canInvokeAgentConfig, normalizeAgentConfig, type AgentConfig, type AgentConfigKind } from "./agent-settings.ts";
 import type { AgentWorkflowAgent, AgentWorkflowPreset, AgentWorkflowQualityGate, AgentWorkflowSkill, AgentWorkflowStage } from "./agent-workflow-presets";
 import type { ProductionBibleItem, ProductionBibleKind, ProductionBibleWriteInput } from "../canvas/utils/production-bible.ts";
+import { normalizeStoryboardTableShot, type StoryboardTableShot, type StoryboardTableShotWriteInput } from "../canvas/utils/storyboard-management.ts";
 
 export type AgentRunStatus = "draft" | "ready_for_review" | "running" | "review" | "approved" | "rejected" | "applied" | "error" | "failed";
 export type AgentRunKind = AgentConfigKind | "workflow_text";
@@ -208,6 +209,13 @@ export type AgentWorkflowMappingPreview = {
 
 export type WorkflowMappingPreviewApplyResult = {
     appliedWrites: Array<{ previewItemId: string; input: ProductionBibleWriteInput }>;
+    appliedPreviewItemIds: string[];
+    skippedPreviewItemIds: string[];
+    warnings: string[];
+};
+
+export type WorkflowStoryboardMappingPreviewApplyResult = {
+    appliedWrites: Array<{ previewItemId: string; input: StoryboardTableShotWriteInput }>;
     appliedPreviewItemIds: string[];
     skippedPreviewItemIds: string[];
     warnings: string[];
@@ -575,6 +583,128 @@ export function applyWorkflowMappingPreviewToProductionBible({
             },
         };
         appliedWrites.push({ previewItemId: item.itemId, input });
+        appliedPreviewItemIds.push(item.itemId);
+    }
+    return { appliedWrites, appliedPreviewItemIds, skippedPreviewItemIds, warnings };
+}
+
+export function canApplyWorkflowMappingPreviewToStoryboardTable({
+    workflowRun,
+    preview,
+    output,
+    canvasId,
+    episodeId,
+}: {
+    workflowRun?: AgentWorkflowRunRecord;
+    preview?: AgentWorkflowMappingPreview;
+    output?: AgentWorkflowStageOutput;
+    canvasId?: string;
+    episodeId?: string;
+}) {
+    if (!preview) return { allowed: false, reason: "未找到映射预览" };
+    if (preview.targetType !== "storyboard_table") return { allowed: false, reason: "当前预览不是分镜头表映射，本轮不能应用" };
+    if (!workflowRun) return { allowed: false, reason: "未找到 workflow run" };
+    if (!canvasId || !episodeId) return { allowed: false, reason: "当前缺少画布或本集上下文，不能写入分镜头表" };
+    const stageState = workflowRun.stageStates.find((stage) => stage.stageId === preview.sourceStageId);
+    if (!stageState) return { allowed: false, reason: "未找到阶段状态" };
+    if (stageState.status !== "approved") return { allowed: false, reason: "该阶段尚未批准，不能写入分镜头表" };
+    if (!stageState.outputId || stageState.outputId !== preview.sourceOutputId) return { allowed: false, reason: "当前预览缺少已批准产物，不能写入分镜头表" };
+    if (!output) return { allowed: false, reason: "未找到阶段产物快照" };
+    return { allowed: true, reason: "" };
+}
+
+export function applyWorkflowMappingPreviewToStoryboardTable({
+    preview,
+    workflowRun,
+    output,
+    canvasId,
+    episodeId,
+    selectedItemIds,
+    existingShots,
+}: {
+    preview: AgentWorkflowMappingPreview;
+    workflowRun: AgentWorkflowRunRecord;
+    output: AgentWorkflowStageOutput;
+    canvasId: string;
+    episodeId: string;
+    selectedItemIds?: string[];
+    existingShots: StoryboardTableShot[];
+}): WorkflowStoryboardMappingPreviewApplyResult {
+    const eligibility = canApplyWorkflowMappingPreviewToStoryboardTable({ workflowRun, preview, output, canvasId, episodeId });
+    if (!eligibility.allowed) return { appliedWrites: [], appliedPreviewItemIds: [], skippedPreviewItemIds: [], warnings: [eligibility.reason] };
+    const stageState = workflowRun.stageStates.find((stage) => stage.stageId === preview.sourceStageId);
+    const selectedIdSet = selectedItemIds?.length ? new Set(selectedItemIds) : undefined;
+    const maxOrder = existingShots.filter((shot) => shot.canvasId === canvasId && shot.episodeId === episodeId).reduce((max, shot) => Math.max(max, shot.order), 0);
+    let createdCount = 0;
+    const warnings: string[] = [];
+    const appliedWrites: Array<{ previewItemId: string; input: StoryboardTableShotWriteInput }> = [];
+    const appliedPreviewItemIds: string[] = [];
+    const skippedPreviewItemIds: string[] = [];
+    for (const item of preview.items) {
+        if (selectedIdSet && !selectedIdSet.has(item.itemId)) continue;
+        if (item.targetType !== "storyboard_table") {
+            warnings.push(`条目 ${item.title} 不是分镜头表映射，已跳过。`);
+            skippedPreviewItemIds.push(item.itemId);
+            continue;
+        }
+        if (item.action === "skip") {
+            warnings.push(`条目 ${item.title} 标记为 skip，未写入分镜头表。`);
+            skippedPreviewItemIds.push(item.itemId);
+            continue;
+        }
+        if (item.action === "update") {
+            warnings.push(`条目 ${item.title} 标记为 update，但当前没有成熟更新匹配逻辑，未写入分镜头表。`);
+            skippedPreviewItemIds.push(item.itemId);
+            continue;
+        }
+        if (existingShots.some((shot) => shot.canvasId === canvasId && shot.episodeId === episodeId && shot.workflowSource?.previewItemId === item.itemId)) {
+            warnings.push(`条目 ${item.title} 已写入分镜头表，已跳过重复应用。`);
+            skippedPreviewItemIds.push(item.itemId);
+            continue;
+        }
+        createdCount += 1;
+        const record = item.mappedFields && typeof item.mappedFields === "object" && !Array.isArray(item.mappedFields) ? (item.mappedFields as Record<string, unknown>) : {};
+        const order = maxOrder + createdCount;
+        const shot = normalizeStoryboardTableShot({
+            projectId: preview.projectId,
+            canvasId,
+            episodeId,
+            sceneId: stringField(record.sceneId),
+            sceneName: stringField(record.sceneName) || "未命名场次",
+            location: stringField(record.location),
+            timeOfDay: stringField(record.timeOfDay),
+            order,
+            title: stringField(record.title) || item.title || `镜头 ${order}`,
+            scriptText: stringField(record.scriptText),
+            visualDescription: stringField(record.visualDescription) || item.sourceText,
+            characters: stringListField(record.characters),
+            dialogue: stringField(record.dialogue),
+            action: stringField(record.action),
+            emotion: stringField(record.emotion),
+            shotSize: stringField(record.shotSize),
+            cameraMovement: stringField(record.cameraMovement),
+            estimatedDuration: numberField(record.estimatedDuration, 3),
+            assetNeeds: stringListField(record.assetNeeds),
+            assetRefs: [],
+            productionBibleRefs: [],
+            agentRunId: stageState?.runnerRunId,
+            sourceType: "workflow_mapping_preview",
+            workflowSource: {
+                sourceType: "workflow_mapping_preview",
+                workflowId: workflowRun.workflowId,
+                workflowRunId: workflowRun.id,
+                workflowVersion: workflowRun.workflowVersion,
+                stageId: preview.sourceStageId,
+                agentId: stageState?.agentId || "",
+                sourceOutputId: preview.sourceOutputId,
+                previewId: preview.previewId,
+                previewItemId: item.itemId,
+                sourceFiles: output.sourceFiles,
+                qualityGateIds: output.qualityGateIds,
+                createdFromText: item.sourceText.slice(0, 500),
+            },
+        });
+        appliedWrites.push({ previewItemId: item.itemId, input: shot });
         appliedPreviewItemIds.push(item.itemId);
     }
     return { appliedWrites, appliedPreviewItemIds, skippedPreviewItemIds, warnings };
@@ -973,20 +1103,47 @@ function mapPreviewKindToProductionBibleKind(value: unknown): ProductionBibleKin
     return "prop";
 }
 
+function stringField(value: unknown) {
+    return String(value || "").trim();
+}
+
+function stringListField(value: unknown) {
+    if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+    const text = String(value || "").trim();
+    return text
+        ? text
+              .split(/[，,、/]/)
+              .map((item) => item.trim())
+              .filter(Boolean)
+        : [];
+}
+
+function numberField(value: unknown, fallback: number) {
+    const numeric = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(numeric) ? numeric : fallback;
+}
+
 function buildStoryboardTablePreviewItems(analysis: ReturnType<typeof analyzeWorkflowStageOutput>): AgentWorkflowMappingPreviewItem[] {
     return buildPreviewItems(analysis.candidates.slice(0, 8), "storyboard_table", (item, index) => ({
         title: readCandidateTitle(item, `分镜草案 ${index + 1}`),
         reason: "将 Seedance 分镜阶段产物映射为分镜头表草案。",
         sourceText: readCandidateText(item),
         mappedFields: {
+            sceneId: readCandidateField(item, "sceneId") || "",
             sceneName: readCandidateField(item, "sceneName") || `场次 ${index + 1}`,
+            location: readCandidateField(item, "location") || "",
+            timeOfDay: readCandidateField(item, "timeOfDay") || "",
             title: readCandidateTitle(item, `镜头 ${index + 1}`),
-            visualDescription: readCandidateText(item),
+            scriptText: readCandidateField(item, "scriptText") || "",
+            visualDescription: readCandidateField(item, "visualDescription") || readCandidateText(item),
+            characters: readCandidateField(item, "characters") || [],
             shotSize: readCandidateField(item, "shotSize") || "",
             cameraMovement: readCandidateField(item, "cameraMovement") || "",
             action: readCandidateField(item, "action") || readCandidateText(item),
             emotion: readCandidateField(item, "emotion") || "",
             dialogue: readCandidateField(item, "dialogue") || "",
+            estimatedDuration: readCandidateField(item, "estimatedDuration") || "3",
+            assetNeeds: readCandidateField(item, "assetNeeds") || [],
         },
         confidence: analysis.warnings.length ? 0.5 : 0.82,
     }));

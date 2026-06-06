@@ -4,6 +4,7 @@ import test from "node:test";
 import { defaultAgentConfig, normalizeAgentConfig } from "./agent-settings.ts";
 import {
     applyWorkflowMappingPreviewToProductionBible,
+    applyWorkflowMappingPreviewToStoryboardTable,
     approveAgentRun,
     buildWorkflowMappingPreviews,
     buildAgentTraceMetadata,
@@ -634,6 +635,161 @@ test("same previewItemId is not written to production bible twice", () => {
     assert.equal(result.appliedWrites.length, 0);
     assert.equal(
         result.warnings.some((item) => item.includes("已写入设定库")),
+        true,
+    );
+});
+
+test("storyboard_table preview can write storyboard shots with workflow trace metadata", () => {
+    const fixture = buildApprovedWorkflowStageFixture(
+        "seedance-storyboard",
+        '{"summary":"分镜","items":[{"title":"镜头一","sceneName":"仓库夜戏","location":"旧仓库","timeOfDay":"夜","scriptText":"阿梁走入仓库","visualDescription":"手持跟拍推进","characters":["阿梁"],"dialogue":"到了。","action":"推门进入","emotion":"警觉","shotSize":"中景","cameraMovement":"push in","estimatedDuration":20,"assetNeeds":["风衣","仓库灯"]}]}',
+        "ev-storyboard-1",
+        "out-storyboard-1",
+        "storyboard-artist",
+    );
+    const preview = buildWorkflowMappingPreviews({ workflowRun: fixture.workflowRun, stageId: "seedance-storyboard", output: fixture.output, now: "2026-01-12T00:04:00.000Z" })[0];
+    const result = applyWorkflowMappingPreviewToStoryboardTable({
+        preview,
+        workflowRun: fixture.workflowRun,
+        output: fixture.output,
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        existingShots: [
+            {
+                id: "shot-existing",
+                projectId: "project-workflow",
+                canvasId: "canvas-1",
+                episodeId: "episode-1",
+                sceneName: "旧场次",
+                location: "",
+                timeOfDay: "",
+                order: 4,
+                title: "旧镜头",
+                scriptText: "",
+                visualDescription: "",
+                characters: [],
+                dialogue: "",
+                action: "",
+                emotion: "",
+                shotSize: "",
+                cameraMovement: "",
+                estimatedDuration: 3,
+                assetNeeds: [],
+                assetRefs: [],
+                productionBibleRefs: [],
+                sourceType: "manual",
+                createdAt: "2026-01-12T00:00:00.000Z",
+                updatedAt: "2026-01-12T00:00:00.000Z",
+            },
+        ],
+    });
+    assert.equal(result.appliedWrites.length, 1);
+    assert.equal(result.appliedWrites[0].input.order, 5);
+    assert.equal(result.appliedWrites[0].input.estimatedDuration, 15);
+    assert.equal(result.appliedWrites[0].input.sceneName, "仓库夜戏");
+    assert.equal(result.appliedWrites[0].input.agentRunId, fixture.runnerRun.id);
+    assert.equal(result.appliedWrites[0].input.sourceType, "workflow_mapping_preview");
+    assert.equal(result.appliedWrites[0].input.workflowSource?.workflowId, workflowPreset.workflowId);
+    assert.equal(result.appliedWrites[0].input.workflowSource?.previewId, preview.previewId);
+    assert.equal(result.appliedWrites[0].input.workflowSource?.previewItemId, preview.items[0].itemId);
+});
+
+test("production_bible and video_node previews are not applied to storyboard table", () => {
+    const artFixture = buildApprovedWorkflowStageFixture("art-design", '{"summary":"设定","items":[{"title":"阿梁","kind":"character","description":"冷静"}]}', "ev-storyboard-2", "out-storyboard-2", "art-designer");
+    const artPreview = buildWorkflowMappingPreviews({ workflowRun: artFixture.workflowRun, stageId: "art-design", output: artFixture.output, now: "2026-01-12T00:04:00.000Z" })[0];
+    const artResult = applyWorkflowMappingPreviewToStoryboardTable({
+        preview: artPreview,
+        workflowRun: artFixture.workflowRun,
+        output: artFixture.output,
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        existingShots: [],
+    });
+    assert.equal(artResult.appliedWrites.length, 0);
+    const boardFixture = buildApprovedWorkflowStageFixture("seedance-storyboard", '{"summary":"视频节点","items":[{"title":"镜头一","prompt":"推进镜头"}]}', "ev-storyboard-3", "out-storyboard-3", "storyboard-artist");
+    const videoPreview = buildWorkflowMappingPreviews({ workflowRun: boardFixture.workflowRun, stageId: "seedance-storyboard", output: boardFixture.output, now: "2026-01-12T00:04:00.000Z" })[1];
+    const videoResult = applyWorkflowMappingPreviewToStoryboardTable({
+        preview: videoPreview,
+        workflowRun: boardFixture.workflowRun,
+        output: boardFixture.output,
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        existingShots: [],
+    });
+    assert.equal(videoResult.appliedWrites.length, 0);
+});
+
+test("skip update and duplicate storyboard preview items are not written", () => {
+    const fixture = buildApprovedWorkflowStageFixture(
+        "director-analysis",
+        '{"summary":"导演分析","items":[{"title":"第一场","description":"夜戏开场"},{"title":"第二场","description":"雨夜追逐"},{"title":"第三场","description":"仓库对峙"}]}',
+        "ev-storyboard-4",
+        "out-storyboard-4",
+        "director",
+    );
+    const preview = buildWorkflowMappingPreviews({ workflowRun: fixture.workflowRun, stageId: "director-analysis", output: fixture.output, now: "2026-01-12T00:04:00.000Z" })[1];
+    preview.items[0].action = "skip";
+    preview.items[1].action = "update";
+    const existingShot = {
+        id: "shot-dup",
+        projectId: "project-workflow",
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        sceneName: "旧场次",
+        location: "",
+        timeOfDay: "",
+        order: 1,
+        title: "旧镜头",
+        scriptText: "",
+        visualDescription: "",
+        characters: [],
+        dialogue: "",
+        action: "",
+        emotion: "",
+        shotSize: "",
+        cameraMovement: "",
+        estimatedDuration: 3,
+        assetNeeds: [],
+        assetRefs: [],
+        productionBibleRefs: [],
+        sourceType: "workflow_mapping_preview",
+        workflowSource: {
+            sourceType: "workflow_mapping_preview" as const,
+            workflowId: workflowPreset.workflowId,
+            workflowRunId: fixture.workflowRun.id,
+            workflowVersion: fixture.workflowRun.workflowVersion,
+            stageId: "director-analysis",
+            agentId: "director",
+            sourceOutputId: preview.sourceOutputId,
+            previewId: preview.previewId,
+            previewItemId: preview.items[2].itemId,
+            sourceFiles: fixture.output.sourceFiles,
+            qualityGateIds: fixture.output.qualityGateIds,
+            createdFromText: "第三场",
+        },
+        createdAt: "2026-01-12T00:00:00.000Z",
+        updatedAt: "2026-01-12T00:00:00.000Z",
+    };
+    const result = applyWorkflowMappingPreviewToStoryboardTable({
+        preview,
+        workflowRun: fixture.workflowRun,
+        output: fixture.output,
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        existingShots: [existingShot],
+    });
+    assert.equal(result.appliedWrites.length, 0);
+    assert.equal(result.skippedPreviewItemIds.length, 3);
+    assert.equal(
+        result.warnings.some((item) => item.includes("skip")),
+        true,
+    );
+    assert.equal(
+        result.warnings.some((item) => item.includes("update")),
+        true,
+    );
+    assert.equal(
+        result.warnings.some((item) => item.includes("已写入分镜头表")),
         true,
     );
 });

@@ -93,6 +93,20 @@ export type StoryboardTableShot = {
     agentConfigVersion?: string;
     inputScriptSnapshotHash?: string;
     sourceType?: string;
+    workflowSource?: {
+        sourceType: "workflow_mapping_preview";
+        workflowId: string;
+        workflowRunId: string;
+        workflowVersion: string;
+        stageId: string;
+        agentId: string;
+        sourceOutputId: string;
+        previewId: string;
+        previewItemId: string;
+        sourceFiles: string[];
+        qualityGateIds: string[];
+        createdFromText: string;
+    };
     createdAt: string;
     updatedAt: string;
 };
@@ -199,6 +213,23 @@ export function normalizeStoryboardTableShot(input: StoryboardTableShotWriteInpu
         agentConfigVersion: input.agentConfigVersion?.trim() || undefined,
         inputScriptSnapshotHash: input.inputScriptSnapshotHash?.trim() || undefined,
         sourceType: input.sourceType?.trim() || undefined,
+        workflowSource:
+            input.workflowSource && input.workflowSource.sourceType === "workflow_mapping_preview"
+                ? {
+                      ...input.workflowSource,
+                      workflowId: input.workflowSource.workflowId.trim(),
+                      workflowRunId: input.workflowSource.workflowRunId.trim(),
+                      workflowVersion: input.workflowSource.workflowVersion.trim(),
+                      stageId: input.workflowSource.stageId.trim(),
+                      agentId: input.workflowSource.agentId.trim(),
+                      sourceOutputId: input.workflowSource.sourceOutputId.trim(),
+                      previewId: input.workflowSource.previewId.trim(),
+                      previewItemId: input.workflowSource.previewItemId.trim(),
+                      sourceFiles: uniqueStrings((input.workflowSource.sourceFiles || []).map((item) => item.trim()).filter(Boolean)),
+                      qualityGateIds: uniqueStrings((input.workflowSource.qualityGateIds || []).map((item) => item.trim()).filter(Boolean)),
+                      createdFromText: input.workflowSource.createdFromText.trim(),
+                  }
+                : undefined,
     };
 }
 
@@ -549,7 +580,7 @@ export function planStoryboardGroupCanvasInsert({
     assets,
     position,
     config,
-    episodeTitle,
+    episodeTitle: _episodeTitle,
     idFactory,
     connectionIdFactory,
 }: {
@@ -650,10 +681,12 @@ export function planShotGroupCanvasInsert({
     connectionIdFactory: (index: number) => string;
 }) {
     const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
-    const prompt = group.effectivePrompt || group.prompt || buildShotGroupPrompt(group.shotIds.map((id) => shots.find((shot) => shot.id === id)).filter((shot): shot is StoryboardTableShot => Boolean(shot)));
+    const shotsById = new Map(shots.map((shot) => [shot.id, shot]));
+    const prompt = group.effectivePrompt || group.prompt || buildShotGroupPrompt(group.shotIds.map((id) => shotsById.get(id)).filter((shot): shot is StoryboardTableShot => Boolean(shot)));
     const nodes: CanvasNodeData[] = [];
     const connections: CanvasConnection[] = [];
     const groupNodeRefs: StoryboardNodeRef[] = [];
+    const mediaNodeRefs: Array<{ ref: StoryboardAssetRef; nodeId: string }> = [];
     let connectionIndex = 0;
     const promptId = idFactory("shot-group-text");
     const configId = idFactory("shot-group-config");
@@ -670,16 +703,14 @@ export function planShotGroupCanvasInsert({
     groupNodeRefs.push({ nodeId: promptId, role: "prompt" });
 
     const mediaRefs = dedupeAssetRefs([...group.assetRefs, ...group.audioRefs, ...autoAssetRefs]);
-    const assetNodeIds = mediaRefs
-        .map((ref, index) => {
-            const asset = assetsById.get(ref.assetId);
-            if (!asset || (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio")) return null;
-            const nodeId = idFactory(`shot-group-${asset.kind}`);
-            groupNodeRefs.push({ nodeId, role: ref.role || "reference" });
-            nodes.push(assetToCanvasNodeForShotGroup(asset, ref, nodeId, { x: position.x + NODE_SIZE.text.width + 80, y: position.y + index * 160 }, group));
-            return nodeId;
-        })
-        .filter((id): id is string => Boolean(id));
+    for (const ref of mediaRefs) {
+        const asset = assetsById.get(ref.assetId);
+        if (!asset || (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio")) continue;
+        const nodeId = idFactory(`shot-group-${asset.kind}`);
+        groupNodeRefs.push({ nodeId, role: ref.role || "reference" });
+        mediaNodeRefs.push({ ref, nodeId });
+        nodes.push(assetToCanvasNodeForShotGroup(asset, ref, nodeId, { x: position.x + NODE_SIZE.text.width + 80, y: position.y + (mediaNodeRefs.length - 1) * 160 }, group));
+    }
 
     nodes.push({
         id: configId,
@@ -705,30 +736,30 @@ export function planShotGroupCanvasInsert({
             sourceId: group.id,
             episodeTitle,
             role: "video_config",
-            references: mediaRefs.filter((ref) => ref.kind === "image").map((ref) => `asset:${ref.assetId}`),
-            videoReferences: mediaRefs.filter((ref) => ref.kind === "video").map((ref) => `asset:${ref.assetId}`),
-            audioReferences: mediaRefs.filter((ref) => ref.kind === "audio").map((ref) => `asset:${ref.assetId}`),
-            referenceAssets: buildShotGroupReferenceAssets(mediaRefs, assetsById, assetNodeIds),
-            referenceRoles: mediaRefs.map((ref, index) => ({ nodeId: assetNodeIds[index] || ref.assetId, kind: ref.kind, role: ref.role || "reference", index: index + 1 })),
-            referenceOrder: mediaRefs.map((ref, index) => ({ nodeId: assetNodeIds[index] || ref.assetId, kind: ref.kind, index: index + 1 })),
+            references: mediaNodeRefs.filter(({ ref }) => ref.kind === "image").map(({ ref }) => `asset:${ref.assetId}`),
+            videoReferences: mediaNodeRefs.filter(({ ref }) => ref.kind === "video").map(({ ref }) => `asset:${ref.assetId}`),
+            audioReferences: mediaNodeRefs.filter(({ ref }) => ref.kind === "audio").map(({ ref }) => `asset:${ref.assetId}`),
+            referenceAssets: buildShotGroupReferenceAssets(mediaNodeRefs, assetsById),
+            referenceRoles: mediaNodeRefs.map(({ ref, nodeId }, index) => ({ nodeId, kind: ref.kind, role: ref.role || "reference", index: index + 1 })),
+            referenceOrder: mediaNodeRefs.map(({ ref, nodeId }, index) => ({ nodeId, kind: ref.kind, index: index + 1 })),
         } as CanvasNodeMetadata & { role: string }),
     });
     groupNodeRefs.push({ nodeId: configId, role: "video_config" });
 
     connections.push({ id: connectionIdFactory(connectionIndex++), fromNodeId: promptId, toNodeId: configId });
-    assetNodeIds.forEach((nodeId) => connections.push({ id: connectionIdFactory(connectionIndex++), fromNodeId: nodeId, toNodeId: configId }));
+    mediaNodeRefs.forEach(({ nodeId }) => connections.push({ id: connectionIdFactory(connectionIndex++), fromNodeId: nodeId, toNodeId: configId }));
     return { nodes, connections, groupNodeRefs };
 }
 
-function buildShotGroupReferenceAssets(refs: StoryboardAssetRef[], assetsById: Map<string, StoryboardAssetLike>, nodeIds: string[]) {
-    return refs.map((ref, index) => {
+function buildShotGroupReferenceAssets(refs: Array<{ ref: StoryboardAssetRef; nodeId: string }>, assetsById: Map<string, StoryboardAssetLike>) {
+    return refs.map(({ ref, nodeId }) => {
         const asset = assetsById.get(ref.assetId);
         const assetVersion = ref.assetVersion || (asset ? buildAssetVersionReference({ id: asset.id, updatedAt: asset.updatedAt || "", metadata: asset.metadata }) : undefined);
         return {
             assetId: ref.assetId,
             kind: ref.kind,
             role: ref.role || "reference",
-            nodeId: nodeIds[index],
+            nodeId,
             ...(assetVersion ? { assetVersion } : {}),
             ...(ref.source ? { sourceType: ref.source } : {}),
             ...(ref.sourceLabel ? { sourceLabel: ref.sourceLabel } : {}),
@@ -763,27 +794,12 @@ function scriptSceneToShot(scene: ScriptScene, groupId: string, id: string, orde
 }
 
 function assetToCanvasNode(asset: StoryboardAssetLike, ref: StoryboardAssetRef, id: string, position: Position, group: StoryboardGroup, shot: StoryboardShot): CanvasNodeData {
-    const data = asset.data || {};
-    const type = asset.kind as CanvasNodeData["type"];
-    const content = String(data.dataUrl || data.url || asset.coverUrl || "");
-    const width = Number(data.width) || NODE_SIZE[type as keyof typeof NODE_SIZE]?.width || NODE_SIZE.image.width;
-    const height = Number(data.height) || NODE_SIZE[type as keyof typeof NODE_SIZE]?.height || NODE_SIZE.image.height;
+    const node = buildAssetCanvasNode(asset, id, position);
     const assetVersion = ref.assetVersion || buildAssetVersionReference({ id: asset.id, updatedAt: asset.updatedAt || "", metadata: asset.metadata });
     return {
-        id,
-        type,
-        title: asset.title,
-        position,
-        width: type === "audio" ? NODE_SIZE.audio.width : Math.min(width, type === "video" ? NODE_SIZE.video.width : NODE_SIZE.image.width),
-        height: type === "audio" ? NODE_SIZE.audio.height : Math.min(height, type === "video" ? NODE_SIZE.video.height : NODE_SIZE.image.height),
+        ...node.base,
         metadata: storyboardMetadata(shot, group, {
-            content,
-            status: "success",
-            storageKey: typeof data.storageKey === "string" ? data.storageKey : undefined,
-            bytes: typeof data.bytes === "number" ? data.bytes : undefined,
-            mimeType: typeof data.mimeType === "string" ? data.mimeType : undefined,
-            naturalWidth: typeof data.width === "number" ? data.width : undefined,
-            naturalHeight: typeof data.height === "number" ? data.height : undefined,
+            ...node.metadata,
             ...canvasAssetReferenceMetadata({ sourceAssetId: ref.assetId, assetVersion }),
             storyboardAssetRole: ref.role || "reference",
             storyboardRole: ref.role || "reference",
@@ -792,20 +808,35 @@ function assetToCanvasNode(asset: StoryboardAssetLike, ref: StoryboardAssetRef, 
 }
 
 function assetToCanvasNodeForShotGroup(asset: StoryboardAssetLike, ref: StoryboardAssetRef, id: string, position: Position, group: ShotGroup): CanvasNodeData {
+    const node = buildAssetCanvasNode(asset, id, position);
+    const assetVersion = ref.assetVersion || buildAssetVersionReference({ id: asset.id, updatedAt: asset.updatedAt || "", metadata: asset.metadata });
+    return {
+        ...node.base,
+        metadata: buildShotGroupCanvasInsertMetadata(group, {
+            ...node.metadata,
+            ...canvasAssetReferenceMetadata({ sourceAssetId: ref.assetId, assetVersion }),
+            storyboardAssetRole: ref.role || "reference",
+            role: ref.role || "reference",
+        } as CanvasNodeMetadata & { role: string }),
+    };
+}
+
+function buildAssetCanvasNode(asset: StoryboardAssetLike, id: string, position: Position) {
     const data = asset.data || {};
     const type = asset.kind as CanvasNodeData["type"];
     const content = String(data.dataUrl || data.url || asset.coverUrl || "");
     const width = Number(data.width) || NODE_SIZE[type as keyof typeof NODE_SIZE]?.width || NODE_SIZE.image.width;
     const height = Number(data.height) || NODE_SIZE[type as keyof typeof NODE_SIZE]?.height || NODE_SIZE.image.height;
-    const assetVersion = ref.assetVersion || buildAssetVersionReference({ id: asset.id, updatedAt: asset.updatedAt || "", metadata: asset.metadata });
     return {
-        id,
-        type,
-        title: asset.title,
-        position,
-        width: type === "audio" ? NODE_SIZE.audio.width : Math.min(width, type === "video" ? NODE_SIZE.video.width : NODE_SIZE.image.width),
-        height: type === "audio" ? NODE_SIZE.audio.height : Math.min(height, type === "video" ? NODE_SIZE.video.height : NODE_SIZE.image.height),
-        metadata: buildShotGroupCanvasInsertMetadata(group, {
+        base: {
+            id,
+            type,
+            title: asset.title,
+            position,
+            width: type === "audio" ? NODE_SIZE.audio.width : Math.min(width, type === "video" ? NODE_SIZE.video.width : NODE_SIZE.image.width),
+            height: type === "audio" ? NODE_SIZE.audio.height : Math.min(height, type === "video" ? NODE_SIZE.video.height : NODE_SIZE.image.height),
+        },
+        metadata: {
             content,
             status: "success",
             storageKey: typeof data.storageKey === "string" ? data.storageKey : undefined,
@@ -813,10 +844,7 @@ function assetToCanvasNodeForShotGroup(asset: StoryboardAssetLike, ref: Storyboa
             mimeType: typeof data.mimeType === "string" ? data.mimeType : undefined,
             naturalWidth: typeof data.width === "number" ? data.width : undefined,
             naturalHeight: typeof data.height === "number" ? data.height : undefined,
-            ...canvasAssetReferenceMetadata({ sourceAssetId: ref.assetId, assetVersion }),
-            storyboardAssetRole: ref.role || "reference",
-            role: ref.role || "reference",
-        } as CanvasNodeMetadata & { role: string }),
+        } satisfies CanvasNodeMetadata,
     };
 }
 
