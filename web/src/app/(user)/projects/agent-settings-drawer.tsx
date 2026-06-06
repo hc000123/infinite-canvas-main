@@ -25,8 +25,10 @@ import {
     agentRunStatusLabel,
     buildWorkflowStagePromptMessages,
     buildWorkflowStageSourceFiles,
+    canGenerateWorkflowMappingPreview,
     workflowStageStatusLabel,
     type AgentRunInput,
+    type AgentWorkflowMappingPreview,
     type AgentWorkflowReviewEvidence,
     type AgentWorkflowRunRecord,
     type AgentWorkflowStageOutput,
@@ -89,7 +91,9 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
     const workflowRuns = useAgentRunnerStore((state) => state.workflowRuns);
     const workflowOutputs = useAgentRunnerStore((state) => state.workflowOutputs);
     const workflowEvidences = useAgentRunnerStore((state) => state.workflowEvidences);
+    const workflowMappingPreviews = useAgentRunnerStore((state) => state.workflowMappingPreviews);
     const ensureWorkflowRun = useAgentRunnerStore((state) => state.ensureWorkflowRun);
+    const generateWorkflowMappingPreview = useAgentRunnerStore((state) => state.generateWorkflowMappingPreview);
     const createRun = useAgentRunnerStore((state) => state.createRun);
     const approveRun = useAgentRunnerStore((state) => state.approveRun);
     const rejectRun = useAgentRunnerStore((state) => state.rejectRun);
@@ -105,6 +109,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
         () => workflowRuns.find((run) => run.projectId === projectId && run.canvasId === canvasId && run.episodeId === episodeId && run.workflowId === selectedWorkflowPreset.workflowId),
         [canvasId, episodeId, projectId, selectedWorkflowPreset.workflowId, workflowRuns],
     );
+    const selectedStagePreviews = useMemo(() => (selectedWorkflowRun ? workflowMappingPreviews.filter((preview) => preview.workflowRunId === selectedWorkflowRun.id) : []), [selectedWorkflowRun, workflowMappingPreviews]);
     const recentRuns = useMemo(() => listAgentRunsByProject(runs, projectId).slice(0, 8), [projectId, runs]);
     const selectedConfig = resolvedConfigs.find((config) => config.kind === selectedKind) || defaultAgentConfig(selectedKind);
     const projectOverrideKinds = new Set((projectConfigs[projectId] || []).map((config) => config.kind));
@@ -343,6 +348,8 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
                         <div className="grid gap-3">
                             {selectedWorkflowStages.map((stage) => {
                                 const detail = workflowStageDetail(selectedWorkflowPreset, stage);
+                                const mappingPreviewStatus = selectedWorkflowRun ? canGenerateWorkflowMappingPreview(selectedWorkflowRun, stage.stageId) : { allowed: false, reason: "尚未初始化 workflow run" };
+                                const stagePreviews = selectedStagePreviews.filter((preview) => preview.sourceStageId === stage.stageId);
                                 return (
                                     <div key={stage.stageId} className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
                                         <div className="flex flex-wrap items-center gap-2">
@@ -378,6 +385,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
                                             ))}
                                         </Space>
                                         <WorkflowStageStatePanel stageId={stage.stageId} workflowRun={selectedWorkflowRun} workflowOutputs={workflowOutputs} workflowEvidences={workflowEvidences} />
+                                        {stagePreviews.length ? <WorkflowMappingPreviewPanel previews={stagePreviews} /> : null}
                                         {selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.status === "review" ? (
                                             <div className="mt-3 grid gap-2 rounded-md bg-stone-50 p-2 dark:bg-white/5">
                                                 <Input.TextArea
@@ -413,6 +421,18 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
                                         <Space className="mt-3" size={[6, 6]} wrap>
                                             <Button
                                                 size="small"
+                                                disabled={!mappingPreviewStatus.allowed}
+                                                onClick={() => {
+                                                    if (!selectedWorkflowRun) return;
+                                                    const result = generateWorkflowMappingPreview(selectedWorkflowRun.id, stage.stageId);
+                                                    if (!result.ok) message.warning(result.reason || "当前阶段不能生成映射预览");
+                                                    else message.success(`已生成 ${stage.name} 的映射预览`);
+                                                }}
+                                            >
+                                                生成映射预览
+                                            </Button>
+                                            <Button
+                                                size="small"
                                                 type="primary"
                                                 disabled={selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.status === "blocked"}
                                                 loading={Boolean(runningStageIds[stage.stageId])}
@@ -420,6 +440,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
                                             >
                                                 运行文本草案（文本执行）
                                             </Button>
+                                            {!mappingPreviewStatus.allowed ? <span className="text-xs text-stone-500">{mappingPreviewStatus.reason}</span> : null}
                                             {selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.status === "blocked" ? (
                                                 <span className="text-xs text-amber-600">{selectedWorkflowRun.stageStates.find((item) => item.stageId === stage.stageId)?.blockedReason}</span>
                                             ) : null}
@@ -643,6 +664,39 @@ function WorkflowStageStatePanel({ stageId, workflowRun, workflowOutputs, workfl
             <div>最近产物：{output?.summary || "暂无阶段产物"}</div>
             {stageState?.blockedReason ? <div className="text-amber-600">阻塞原因：{stageState.blockedReason}</div> : null}
             {stageState?.errorMessage ? <div className="text-rose-500">错误：{stageState.errorMessage}</div> : null}
+        </div>
+    );
+}
+
+function WorkflowMappingPreviewPanel({ previews }: { previews: AgentWorkflowMappingPreview[] }) {
+    return (
+        <div className="mt-3 grid gap-2 rounded-md border border-dashed border-stone-200 p-3 dark:border-stone-700">
+            <div className="text-xs font-medium text-stone-500">映射预览</div>
+            {previews.map((preview) => (
+                <div key={preview.previewId} className="rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-600 dark:bg-white/5 dark:text-stone-300">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Tag className="m-0">{preview.targetType}</Tag>
+                        <span className="font-medium">{preview.title}</span>
+                    </div>
+                    <div className="mt-1">{preview.summary}</div>
+                    {preview.warnings.length ? <div className="mt-1 text-amber-600">Warnings：{preview.warnings.join("；")}</div> : null}
+                    <div className="mt-2 grid gap-2">
+                        {preview.items.map((item) => (
+                            <div key={item.itemId} className="rounded bg-white px-2 py-1.5 dark:bg-black/20">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Tag className="m-0">{item.action}</Tag>
+                                    <span className="font-medium">{item.title}</span>
+                                    {typeof item.confidence === "number" ? <span className="text-stone-400">置信度 {item.confidence}</span> : null}
+                                </div>
+                                <div className="mt-1">{item.reason}</div>
+                                <div className="mt-1 text-stone-500">来源：{item.sourceText}</div>
+                                <pre className="mt-1 overflow-auto rounded bg-stone-950 p-2 text-[11px] text-stone-50">{JSON.stringify(item.mappedFields, null, 2)}</pre>
+                                {item.warnings.length ? <div className="mt-1 text-amber-600">{item.warnings.join("；")}</div> : null}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ))}
         </div>
     );
 }

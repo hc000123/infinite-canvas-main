@@ -4,11 +4,13 @@ import test from "node:test";
 import { defaultAgentConfig, normalizeAgentConfig } from "./agent-settings.ts";
 import {
     approveAgentRun,
+    buildWorkflowMappingPreviews,
     buildAgentTraceMetadata,
     buildAgentWorkflowReviewEvidence,
     buildAgentWorkflowStageOutput,
     buildAgentRunProposedActions,
     canWriteAgentRun,
+    canGenerateWorkflowMappingPreview,
     buildWorkflowStagePrompt,
     completeAgentWorkflowStageRun,
     createAgentWorkflowRunRecord,
@@ -73,6 +75,48 @@ function buildWorkflowStageTextInput() {
             storyboardRequirement: "按场次输出分镜提示词",
         },
     } as const;
+}
+
+function buildApprovedWorkflowStageFixture(stageId: "director-analysis" | "art-design" | "seedance-storyboard", rawText: string, evidenceId: string, outputId: string, agentId: string) {
+    const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", id: `workflow-${stageId}-${evidenceId}`, now: "2026-01-12T00:00:00.000Z" });
+    const targetStageOrder = workflowPreset.stages.find((stage) => stage.stageId === stageId)?.order ?? 0;
+    const preparedWorkflowRun = {
+        ...workflowRun,
+        stageStates: workflowRun.stageStates.map((stageState) => {
+            const presetStage = workflowPreset.stages.find((stage) => stage.stageId === stageState.stageId);
+            if ((presetStage?.order ?? 0) >= targetStageOrder) return stageState;
+            return {
+                ...stageState,
+                status: "approved" as const,
+                approvedAt: "2026-01-12T00:00:00.000Z",
+                blockedReason: undefined,
+            };
+        }),
+    };
+    const runnerRun = approveAgentRun(
+        setWorkflowTextRunCompleted(
+            createWorkflowTextRunRecord({
+                input: {
+                    ...workflowInputBase,
+                    workflowRunId: preparedWorkflowRun.id,
+                    workflowId: workflowPreset.workflowId,
+                    workflowVersion: workflowPreset.version,
+                    stageId,
+                    agentId,
+                },
+                id: `runner-${stageId}-${evidenceId}`,
+                now: "2026-01-12T00:01:00.000Z",
+            }),
+            rawText,
+            "2026-01-12T00:02:00.000Z",
+        ),
+        "2026-01-12T00:03:00.000Z",
+    );
+    const output = buildAgentWorkflowStageOutput({ workflowRunId: preparedWorkflowRun.id, runnerRun, outputId, now: "2026-01-12T00:02:00.000Z" })!;
+    const reviewedRun = completeAgentWorkflowStageRun(startAgentWorkflowStageRun(preparedWorkflowRun, stageId, runnerRun.id, "2026-01-12T00:01:00.000Z"), output, "2026-01-12T00:02:00.000Z");
+    const evidence = buildAgentWorkflowReviewEvidence({ workflowRun: reviewedRun, runnerRun, evidenceId, decision: "approved", now: "2026-01-12T00:03:00.000Z" })!;
+    const approvedWorkflowRun = reviewAgentWorkflowStageRun(reviewedRun, evidence, "2026-01-12T00:03:00.000Z");
+    return { workflowRun: approvedWorkflowRun, runnerRun, output };
 }
 
 test("creates run record from enabled agent config and input", () => {
@@ -405,4 +449,72 @@ test("workflow runner error moves stage to error and keeps error message", () =>
     const failed = failAgentWorkflowStageRun(startAgentWorkflowStageRun(workflowRun, "director-analysis", "runner-error", "2026-01-11T00:01:00.000Z"), "director-analysis", "runner-error", "模型超时", "2026-01-11T00:02:00.000Z");
     assert.equal(failed.stageStates[0].status, "error");
     assert.equal(failed.stageStates[0].errorMessage, "模型超时");
+});
+
+test("approved output can generate mapping preview", () => {
+    const { workflowRun, output } = buildApprovedWorkflowStageFixture(
+        "art-design",
+        '{"summary":"角色设定","items":[{"title":"阿梁","kind":"character","description":"冷静、克制、黑色风衣","tags":["主角"]}]}',
+        "evidence-preview-1",
+        "output-preview-1",
+        "art-designer",
+    );
+    const previews = buildWorkflowMappingPreviews({ workflowRun, stageId: "art-design", output, now: "2026-01-12T00:04:00.000Z" });
+    assert.equal(previews.length, 1);
+    assert.equal(previews[0].targetType, "production_bible");
+    assert.equal(previews[0].items[0].mappedFields.name, "阿梁");
+});
+
+test("non-approved stage cannot generate mapping preview", () => {
+    const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", id: "workflow-preview-2", now: "2026-01-12T00:00:00.000Z" });
+    const result = canGenerateWorkflowMappingPreview(workflowRun, "director-analysis");
+    assert.equal(result.allowed, false);
+    assert.equal(result.reason.includes("尚未批准"), true);
+});
+
+test("director art-design and storyboard map to expected target types", () => {
+    const director = buildApprovedWorkflowStageFixture("director-analysis", '{"summary":"导演分析","items":[{"title":"第一场","description":"夜戏开场"}]}', "ev-dir", "out-dir", "director");
+    const art = buildApprovedWorkflowStageFixture("art-design", '{"summary":"美术设定","items":[{"title":"仓库场景","kind":"scene","description":"冷白工业灯"}]}', "ev-art", "out-art", "art-designer");
+    const board = buildApprovedWorkflowStageFixture("seedance-storyboard", '{"summary":"分镜提示词","items":[{"title":"镜头一","prompt":"镜头从门外推入仓库","cameraMovement":"push in"}]}', "ev-board", "out-board", "storyboard-artist");
+    const directorPreviews = buildWorkflowMappingPreviews({ workflowRun: director.workflowRun, stageId: "director-analysis", output: director.output, now: "2026-01-12T00:03:00.000Z" });
+    const artPreviews = buildWorkflowMappingPreviews({ workflowRun: art.workflowRun, stageId: "art-design", output: art.output, now: "2026-01-12T00:03:00.000Z" });
+    const boardPreviews = buildWorkflowMappingPreviews({ workflowRun: board.workflowRun, stageId: "seedance-storyboard", output: board.output, now: "2026-01-12T00:03:00.000Z" });
+    assert.deepEqual(
+        directorPreviews.map((item) => item.targetType),
+        ["production_bible", "storyboard_table"],
+    );
+    assert.deepEqual(
+        artPreviews.map((item) => item.targetType),
+        ["production_bible"],
+    );
+    assert.deepEqual(
+        boardPreviews.map((item) => item.targetType),
+        ["storyboard_table", "video_node"],
+    );
+});
+
+test("structured output is preferred and rawText fallback keeps warning", () => {
+    const structured = buildApprovedWorkflowStageFixture("art-design", '{"summary":"结构化","items":[{"title":"角色A","description":"结构化描述"}]}', "ev-struct", "out-struct", "art-designer");
+    const raw = buildApprovedWorkflowStageFixture("art-design", "角色B：旧仓库里的年轻人，黑风衣，金属徽章", "ev-raw", "out-raw", "art-designer");
+    const structuredPreview = buildWorkflowMappingPreviews({ workflowRun: structured.workflowRun, stageId: "art-design", output: structured.output, now: "2026-01-12T00:03:00.000Z" });
+    const rawPreview = buildWorkflowMappingPreviews({ workflowRun: raw.workflowRun, stageId: "art-design", output: raw.output, now: "2026-01-12T00:03:00.000Z" });
+    assert.equal(rawPreview[0].warnings.includes("结构化解析不足，当前预览基于 rawText 摘要生成。"), true);
+    assert.equal(structuredPreview[0].items[0].mappedFields.description, "结构化描述");
+});
+
+test("mapping preview does not write production bible storyboard or canvas nodes", () => {
+    const previewFixture = buildApprovedWorkflowStageFixture("seedance-storyboard", '{"summary":"分镜","items":[{"title":"镜头一","prompt":"推进镜头"}]}', "ev-no-write", "out-no-write", "storyboard-artist");
+    const previews = buildWorkflowMappingPreviews({ workflowRun: previewFixture.workflowRun, stageId: "seedance-storyboard", output: previewFixture.output, now: "2026-01-12T00:03:00.000Z" });
+    assert.equal(
+        previews.every((preview) => preview.items.every((item) => item.action === "create" || item.action === "update" || item.action === "skip")),
+        true,
+    );
+    assert.equal(
+        previews.some((preview) => preview.targetType === "video_node"),
+        true,
+    );
+    assert.equal(
+        previews.some((preview) => preview.targetType === "storyboard_table"),
+        true,
+    );
 });

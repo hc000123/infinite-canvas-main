@@ -7,8 +7,10 @@ import { localForageStorage } from "@/lib/localforage-storage";
 import type { AgentConfig } from "./agent-settings";
 import type { AgentWorkflowPreset } from "./agent-workflow-presets";
 import {
+    buildWorkflowMappingPreviews,
     buildAgentWorkflowReviewEvidence,
     buildAgentWorkflowStageOutput,
+    canGenerateWorkflowMappingPreview,
     approveAgentRun,
     completeAgentWorkflowStageRun,
     createAgentWorkflowRunRecord,
@@ -29,6 +31,7 @@ import {
     type AgentDraftOutput,
     type AgentWorkflowReviewEvidence,
     type AgentWorkflowRunRecord,
+    type AgentWorkflowMappingPreview,
     type AgentWorkflowStageOutput,
     type WorkflowTextRunOutput,
     type AgentRunInput,
@@ -41,7 +44,9 @@ type AgentRunnerStore = {
     workflowRuns: AgentWorkflowRunRecord[];
     workflowOutputs: AgentWorkflowStageOutput[];
     workflowEvidences: AgentWorkflowReviewEvidence[];
+    workflowMappingPreviews: AgentWorkflowMappingPreview[];
     ensureWorkflowRun: (input: { projectId: string; canvasId?: string; episodeId?: string; preset: AgentWorkflowPreset }) => string;
+    generateWorkflowMappingPreview: (workflowRunId: string, stageId: string) => { ok: boolean; reason?: string; previewIds?: string[] };
     createRun: (config: AgentConfig, input: AgentRunInput, draftOutput?: unknown) => string;
     startWorkflowTextRun: (input: AgentRunInput) => string;
     completeWorkflowTextRun: (id: string, rawText: string) => void;
@@ -67,6 +72,7 @@ const agentRunnerStorage: PersistStorage<AgentRunnerStore> = {
         parsed.state.workflowRuns = (parsed.state.workflowRuns || []).map(normalizeStoredWorkflowRun);
         parsed.state.workflowOutputs = (parsed.state.workflowOutputs || []).map(normalizeStoredWorkflowOutput);
         parsed.state.workflowEvidences = (parsed.state.workflowEvidences || []).map(normalizeStoredWorkflowEvidence);
+        parsed.state.workflowMappingPreviews = (parsed.state.workflowMappingPreviews || []).map(normalizeStoredWorkflowMappingPreview);
         return parsed;
     },
     setItem: (name, value) => localForageStorage.setItem(name, JSON.stringify(value)),
@@ -80,6 +86,7 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
             workflowRuns: [],
             workflowOutputs: [],
             workflowEvidences: [],
+            workflowMappingPreviews: [],
             ensureWorkflowRun: ({ projectId, canvasId, episodeId, preset }) => {
                 const existing = get().workflowRuns.find((run) => run.projectId === projectId && run.canvasId === canvasId && run.episodeId === episodeId && run.workflowId === preset.workflowId);
                 if (existing) return existing.id;
@@ -88,6 +95,21 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                 const workflowRun = createAgentWorkflowRunRecord({ preset, projectId, canvasId, episodeId, id, now });
                 set((state) => ({ workflowRuns: [workflowRun, ...state.workflowRuns] }));
                 return id;
+            },
+            generateWorkflowMappingPreview: (workflowRunId, stageId) => {
+                const now = new Date().toISOString();
+                const workflowRun = get().workflowRuns.find((run) => run.id === workflowRunId);
+                if (!workflowRun) return { ok: false, reason: "未找到 workflow run" };
+                const eligibility = canGenerateWorkflowMappingPreview(workflowRun, stageId);
+                if (!eligibility.allowed) return { ok: false, reason: eligibility.reason };
+                const outputId = workflowRun.stageStates.find((stage) => stage.stageId === stageId)?.outputId;
+                const output = get().workflowOutputs.find((item) => item.outputId === outputId);
+                if (!output) return { ok: false, reason: "未找到已批准阶段的产物快照" };
+                const previews = buildWorkflowMappingPreviews({ workflowRun, stageId, output, now });
+                set((state) => ({
+                    workflowMappingPreviews: [...state.workflowMappingPreviews.filter((item) => !previews.some((preview) => preview.previewId === item.previewId)), ...previews],
+                }));
+                return { ok: true, previewIds: previews.map((preview) => preview.previewId) };
             },
             createRun: (config, input, draftOutput) => {
                 const now = new Date().toISOString();
@@ -163,6 +185,7 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                     workflowRuns: state.workflowRuns,
                     workflowOutputs: state.workflowOutputs,
                     workflowEvidences: state.workflowEvidences,
+                    workflowMappingPreviews: state.workflowMappingPreviews,
                 }) as StorageValue<AgentRunnerStore>["state"],
         },
     ),
@@ -250,6 +273,24 @@ function normalizeStoredWorkflowEvidence(evidence: AgentWorkflowReviewEvidence):
         sourceFiles: Array.isArray(evidence.sourceFiles) ? evidence.sourceFiles : [],
         qualityGateIds: Array.isArray(evidence.qualityGateIds) ? evidence.qualityGateIds : [],
         createdAt: evidence.createdAt || new Date().toISOString(),
+    };
+}
+
+function normalizeStoredWorkflowMappingPreview(preview: AgentWorkflowMappingPreview): AgentWorkflowMappingPreview {
+    return {
+        previewId: preview.previewId || "",
+        projectId: preview.projectId || "",
+        canvasId: preview.canvasId,
+        episodeId: preview.episodeId,
+        workflowRunId: preview.workflowRunId || "",
+        sourceStageId: preview.sourceStageId || "",
+        sourceOutputId: preview.sourceOutputId || "",
+        targetType: preview.targetType || "production_bible",
+        title: preview.title || "",
+        summary: preview.summary || "",
+        items: Array.isArray(preview.items) ? preview.items : [],
+        warnings: Array.isArray(preview.warnings) ? preview.warnings : [],
+        createdAt: preview.createdAt || new Date().toISOString(),
     };
 }
 

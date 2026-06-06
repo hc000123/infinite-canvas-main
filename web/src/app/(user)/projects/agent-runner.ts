@@ -1,5 +1,6 @@
 import { canInvokeAgentConfig, normalizeAgentConfig, type AgentConfig, type AgentConfigKind } from "./agent-settings.ts";
 import type { AgentWorkflowAgent, AgentWorkflowPreset, AgentWorkflowQualityGate, AgentWorkflowSkill, AgentWorkflowStage } from "./agent-workflow-presets";
+import type { ProductionBibleKind } from "../canvas/utils/production-bible.ts";
 
 export type AgentRunStatus = "draft" | "ready_for_review" | "running" | "review" | "approved" | "rejected" | "applied" | "error" | "failed";
 export type AgentRunKind = AgentConfigKind | "workflow_text";
@@ -172,6 +173,36 @@ export type AgentWorkflowReviewEvidence = {
     outputHash: string;
     sourceFiles: string[];
     qualityGateIds: string[];
+    createdAt: string;
+};
+
+export type WorkflowMappingPreviewTargetType = "production_bible" | "storyboard_table" | "video_node";
+
+export type AgentWorkflowMappingPreviewItem = {
+    itemId: string;
+    targetType: WorkflowMappingPreviewTargetType;
+    action: "create" | "update" | "skip";
+    title: string;
+    reason: string;
+    sourceText: string;
+    mappedFields: Record<string, unknown>;
+    confidence?: number;
+    warnings: string[];
+};
+
+export type AgentWorkflowMappingPreview = {
+    previewId: string;
+    projectId: string;
+    canvasId?: string;
+    episodeId?: string;
+    workflowRunId: string;
+    sourceStageId: string;
+    sourceOutputId: string;
+    targetType: WorkflowMappingPreviewTargetType;
+    title: string;
+    summary: string;
+    items: AgentWorkflowMappingPreviewItem[];
+    warnings: string[];
     createdAt: string;
 };
 
@@ -364,6 +395,87 @@ export function workflowStageStatusLabel(status: AgentWorkflowStageStatus) {
     if (status === "rejected") return "已驳回";
     if (status === "error") return "异常";
     return "已阻塞";
+}
+
+export function canGenerateWorkflowMappingPreview(workflowRun: AgentWorkflowRunRecord, stageId: string) {
+    const stageState = workflowRun.stageStates.find((stage) => stage.stageId === stageId);
+    if (!stageState) return { allowed: false, reason: "未找到阶段状态" };
+    if (stageState.status !== "approved") return { allowed: false, reason: "该阶段尚未批准，不能生成映射预览" };
+    if (!stageState.outputId) return { allowed: false, reason: "该阶段没有可用产物，不能生成映射预览" };
+    return { allowed: true, reason: "" };
+}
+
+export function buildWorkflowMappingPreviews({ workflowRun, stageId, output, now }: { workflowRun: AgentWorkflowRunRecord; stageId: string; output: AgentWorkflowStageOutput; now: string }): AgentWorkflowMappingPreview[] {
+    const eligibility = canGenerateWorkflowMappingPreview(workflowRun, stageId);
+    if (!eligibility.allowed) return [];
+    const analysis = analyzeWorkflowStageOutput(output);
+    const base = {
+        projectId: workflowRun.projectId,
+        canvasId: workflowRun.canvasId,
+        episodeId: workflowRun.episodeId,
+        workflowRunId: workflowRun.id,
+        sourceStageId: stageId,
+        sourceOutputId: output.outputId,
+        createdAt: now,
+    };
+    if (stageId === "director-analysis") {
+        return [
+            {
+                ...base,
+                previewId: `${output.outputId}:production_bible`,
+                targetType: "production_bible",
+                title: "导演分析设定映射预览",
+                summary: "预览将来可映射到人物 / 场景设定摘要的草案。",
+                items: buildDirectorProductionBiblePreviewItems(analysis),
+                warnings: analysis.warnings,
+            },
+            {
+                ...base,
+                previewId: `${output.outputId}:storyboard_table`,
+                targetType: "storyboard_table",
+                title: "导演分析分镜表映射预览",
+                summary: "预览将来可映射到分集 / 场次 / 镜头分析摘要的草案。",
+                items: buildDirectorStoryboardPreviewItems(analysis),
+                warnings: analysis.warnings,
+            },
+        ];
+    }
+    if (stageId === "art-design") {
+        return [
+            {
+                ...base,
+                previewId: `${output.outputId}:production_bible`,
+                targetType: "production_bible",
+                title: "服化道设定映射预览",
+                summary: "预览将来可映射到角色 / 场景 / 道具设定库的草案。",
+                items: buildArtDesignProductionBiblePreviewItems(analysis),
+                warnings: analysis.warnings,
+            },
+        ];
+    }
+    if (stageId === "seedance-storyboard") {
+        return [
+            {
+                ...base,
+                previewId: `${output.outputId}:storyboard_table`,
+                targetType: "storyboard_table",
+                title: "Seedance 分镜表映射预览",
+                summary: "预览将来可映射到分镜头表的镜头草案。",
+                items: buildStoryboardTablePreviewItems(analysis),
+                warnings: analysis.warnings,
+            },
+            {
+                ...base,
+                previewId: `${output.outputId}:video_node`,
+                targetType: "video_node",
+                title: "Seedance 视频节点映射预览",
+                summary: "预览将来可映射到画布视频配置节点的提示词草案。",
+                items: buildVideoNodePreviewItems(analysis),
+                warnings: analysis.warnings,
+            },
+        ];
+    }
+    return [];
 }
 
 export function buildWorkflowStageSourceFiles(skills: AgentWorkflowSkill[], qualityGates: AgentWorkflowQualityGate[]): string[] {
@@ -671,6 +783,170 @@ function buildTargetRefs(record: Record<string, unknown>) {
     const label = typeof record.title === "string" ? record.title : typeof record.name === "string" ? record.name : undefined;
     const kind = typeof record.kind === "string" ? record.kind : "draft_item";
     return id ? [{ kind, id, label }] : [];
+}
+
+function analyzeWorkflowStageOutput(output: AgentWorkflowStageOutput) {
+    const warnings = [...(output.structuredOutput ? [] : ["结构化解析不足，当前预览基于 rawText 摘要生成。"])];
+    const record = output.structuredOutput && typeof output.structuredOutput === "object" && !Array.isArray(output.structuredOutput) ? (output.structuredOutput as Record<string, unknown>) : {};
+    const rawLines = output.rawText
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .slice(0, 8);
+    const candidates = pickStructuredList(record).length
+        ? pickStructuredList(record)
+        : rawLines.map((line, index) => ({
+              id: `raw-${index + 1}`,
+              title: line.slice(0, 36),
+              text: line,
+          }));
+    return { record, rawLines, candidates, warnings };
+}
+
+function pickStructuredList(record: Record<string, unknown>) {
+    const keys = ["items", "characters", "scenes", "props", "assets", "shots", "prompts", "cards", "segments"];
+    for (const key of keys) {
+        if (Array.isArray(record[key])) return record[key];
+    }
+    return [];
+}
+
+function buildDirectorProductionBiblePreviewItems(analysis: ReturnType<typeof analyzeWorkflowStageOutput>): AgentWorkflowMappingPreviewItem[] {
+    return buildPreviewItems(analysis.candidates.slice(0, 6), "production_bible", (item, index) => ({
+        title: readCandidateTitle(item, `导演分析设定 ${index + 1}`),
+        reason: "将导演分析中的人物 / 场景摘要映射为设定库草案。",
+        sourceText: readCandidateText(item),
+        mappedFields: {
+            kind: inferBibleKind(item, index === 0 ? "character" : "scene"),
+            name: readCandidateTitle(item, `设定 ${index + 1}`),
+            description: readCandidateText(item),
+            tags: readCandidateTags(item),
+            promptSnippets: { consistency: readCandidateText(item) },
+        },
+        confidence: analysis.warnings.length ? 0.45 : 0.72,
+    }));
+}
+
+function buildDirectorStoryboardPreviewItems(analysis: ReturnType<typeof analyzeWorkflowStageOutput>): AgentWorkflowMappingPreviewItem[] {
+    return buildPreviewItems(analysis.candidates.slice(0, 6), "storyboard_table", (item, index) => ({
+        title: readCandidateTitle(item, `场次草案 ${index + 1}`),
+        reason: "将导演分析中的剧情段落 / 场次摘要映射为分镜表预览。",
+        sourceText: readCandidateText(item),
+        mappedFields: {
+            sceneName: readCandidateTitle(item, `场次 ${index + 1}`),
+            title: readCandidateTitle(item, `镜头 ${index + 1}`),
+            visualDescription: readCandidateText(item),
+            action: readCandidateText(item),
+        },
+        confidence: analysis.warnings.length ? 0.42 : 0.68,
+    }));
+}
+
+function buildArtDesignProductionBiblePreviewItems(analysis: ReturnType<typeof analyzeWorkflowStageOutput>): AgentWorkflowMappingPreviewItem[] {
+    return buildPreviewItems(analysis.candidates.slice(0, 8), "production_bible", (item, index) => ({
+        title: readCandidateTitle(item, `美术设定 ${index + 1}`),
+        reason: "将服化道阶段产物映射为角色 / 场景 / 道具设定草案。",
+        sourceText: readCandidateText(item),
+        mappedFields: {
+            kind: inferBibleKind(item, "prop"),
+            name: readCandidateTitle(item, `设定 ${index + 1}`),
+            description: readCandidateText(item),
+            tags: readCandidateTags(item),
+            promptSnippets: {
+                positive: readCandidateField(item, "prompt") || readCandidateText(item),
+                consistency: readCandidateField(item, "style") || "",
+            },
+        },
+        confidence: analysis.warnings.length ? 0.48 : 0.78,
+    }));
+}
+
+function buildStoryboardTablePreviewItems(analysis: ReturnType<typeof analyzeWorkflowStageOutput>): AgentWorkflowMappingPreviewItem[] {
+    return buildPreviewItems(analysis.candidates.slice(0, 8), "storyboard_table", (item, index) => ({
+        title: readCandidateTitle(item, `分镜草案 ${index + 1}`),
+        reason: "将 Seedance 分镜阶段产物映射为分镜头表草案。",
+        sourceText: readCandidateText(item),
+        mappedFields: {
+            sceneName: readCandidateField(item, "sceneName") || `场次 ${index + 1}`,
+            title: readCandidateTitle(item, `镜头 ${index + 1}`),
+            visualDescription: readCandidateText(item),
+            shotSize: readCandidateField(item, "shotSize") || "",
+            cameraMovement: readCandidateField(item, "cameraMovement") || "",
+            action: readCandidateField(item, "action") || readCandidateText(item),
+            emotion: readCandidateField(item, "emotion") || "",
+            dialogue: readCandidateField(item, "dialogue") || "",
+        },
+        confidence: analysis.warnings.length ? 0.5 : 0.82,
+    }));
+}
+
+function buildVideoNodePreviewItems(analysis: ReturnType<typeof analyzeWorkflowStageOutput>): AgentWorkflowMappingPreviewItem[] {
+    return buildPreviewItems(analysis.candidates.slice(0, 8), "video_node", (item, index) => ({
+        title: readCandidateTitle(item, `视频提示词 ${index + 1}`),
+        reason: "将 Seedance 分镜阶段产物映射为画布视频配置节点草案。",
+        sourceText: readCandidateText(item),
+        mappedFields: {
+            title: readCandidateTitle(item, `视频节点 ${index + 1}`),
+            prompt: readCandidateField(item, "prompt") || readCandidateText(item),
+            effectivePrompt: readCandidateField(item, "effectivePrompt") || readCandidateField(item, "prompt") || readCandidateText(item),
+            seconds: readCandidateField(item, "seconds") || "5",
+            videoPromptReviewEnabled: "true",
+        },
+        confidence: analysis.warnings.length ? 0.46 : 0.8,
+    }));
+}
+
+function buildPreviewItems(candidates: unknown[], targetType: WorkflowMappingPreviewTargetType, mapper: (item: unknown, index: number) => Omit<AgentWorkflowMappingPreviewItem, "itemId" | "targetType" | "action" | "warnings"> & { confidence?: number }) {
+    return candidates.map((item, index) => {
+        const mapped = mapper(item, index);
+        return {
+            itemId: `${targetType}-${index + 1}`,
+            targetType,
+            action: "create" as const,
+            title: mapped.title,
+            reason: mapped.reason,
+            sourceText: mapped.sourceText,
+            mappedFields: mapped.mappedFields,
+            confidence: mapped.confidence,
+            warnings: [],
+        };
+    });
+}
+
+function inferBibleKind(item: unknown, fallback: ProductionBibleKind): ProductionBibleKind {
+    const text = `${readCandidateTitle(item, "")} ${readCandidateField(item, "kind")} ${readCandidateText(item)}`.toLowerCase();
+    if (text.includes("角色") || text.includes("人物") || text.includes("character")) return "character";
+    if (text.includes("场景") || text.includes("scene")) return "scene";
+    if (text.includes("道具") || text.includes("prop")) return "prop";
+    return fallback;
+}
+
+function readCandidateTitle(item: unknown, fallback: string) {
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+        const record = item as Record<string, unknown>;
+        return String(record.title || record.name || record.label || fallback);
+    }
+    return typeof item === "string" ? item.slice(0, 36) : fallback;
+}
+
+function readCandidateText(item: unknown) {
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+        const record = item as Record<string, unknown>;
+        return String(record.text || record.summary || record.description || record.prompt || record.output || record.title || record.name || "");
+    }
+    return typeof item === "string" ? item : JSON.stringify(item);
+}
+
+function readCandidateField(item: unknown, key: string) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return "";
+    const value = (item as Record<string, unknown>)[key];
+    return typeof value === "string" ? value : typeof value === "number" ? String(value) : "";
+}
+
+function readCandidateTags(item: unknown) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const tags = (item as Record<string, unknown>).tags;
+    return Array.isArray(tags) ? tags.map((tag) => String(tag)).filter(Boolean) : [];
 }
 
 function refreshWorkflowStageBlocks(workflowRun: AgentWorkflowRunRecord, now: string): AgentWorkflowRunRecord {
