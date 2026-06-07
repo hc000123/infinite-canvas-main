@@ -145,7 +145,7 @@
 | `defaultVideoModel`  | string   | 默认视频模型                                                       |
 | `defaultTextModel`   | string   | 默认文本模型                                                       |
 | `systemPrompt`       | string   | 系统提示词                                                         |
-| `allowCustomChannel` | bool     | 是否允许用户自定义渠道，默认允许，关闭后前端只提供走后端渠道的模式 |
+| `allowCustomChannel` | bool     | 是否允许用户自定义渠道，默认关闭，关闭后前端只提供走后端渠道的模式 |
 
 `modelCosts` 每项字段：
 

@@ -2,6 +2,7 @@ package router
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/basketikun/infinite-canvas/config"
 	"github.com/basketikun/infinite-canvas/handler"
@@ -13,6 +14,7 @@ func New() *gin.Engine {
 	router := gin.Default()
 	router.RedirectTrailingSlash = false
 	_ = router.SetTrustedProxies(nil)
+	router.Use(uploadedAssetSecurityHeaders)
 	api := router.Group("/api")
 	api.GET("/health", func(c *gin.Context) {
 		c.String(http.StatusOK, "ok")
@@ -102,4 +104,12 @@ func New() *gin.Engine {
 	router.NoRoute(middleware.NotFoundJSON)
 
 	return router
+}
+
+func uploadedAssetSecurityHeaders(c *gin.Context) {
+	path := c.Request.URL.Path
+	if path == "/uploaded-assets" || strings.HasPrefix(path, "/uploaded-assets/") || path == "/api/uploaded-assets" || strings.HasPrefix(path, "/api/uploaded-assets/") {
+		c.Header("X-Content-Type-Options", "nosniff")
+	}
+	c.Next()
 }

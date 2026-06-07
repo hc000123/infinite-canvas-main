@@ -20,6 +20,12 @@ import (
 	"github.com/basketikun/infinite-canvas/service"
 )
 
+const (
+	maxAIRequestBodyBytes = 100 * 1024 * 1024
+	maxAIRequestCount     = 15
+	maxVideoDownloadBytes = 1024 * 1024 * 1024
+)
+
 func AIImagesGenerations(w http.ResponseWriter, r *http.Request) {
 	proxyAIRequest(w, r, "/images/generations")
 }
@@ -67,7 +73,7 @@ func proxyAIGetRequest(w http.ResponseWriter, r *http.Request, path string) {
 			return
 		}
 		if allowCustomChannel {
-			proxyArkVideoGetByConfig(w, r.Context(), localBaseURL, localAPIKey, path)
+			proxyArkVideoGetByCustomConfig(w, r.Context(), localBaseURL, localAPIKey, path)
 			return
 		}
 	}
@@ -117,7 +123,12 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 			volcengineAPIKey, volcengineBaseURL, seedancePayload, err := service.ReadArkLocalVideoConfig(body, contentType)
 			if err == nil && volcengineAPIKey != "" {
 				arkBody, _ := json.Marshal(seedancePayload)
-				baseURL := strings.TrimRight(volcengineBaseURL, "/")
+				baseURL, validateErr := validateCustomAIBaseURL(r.Context(), volcengineBaseURL)
+				if validateErr != nil {
+					log.Printf("AI proxy rejected custom Ark base URL: url=%s err=%v", safeLogURL(volcengineBaseURL), validateErr)
+					Fail(w, "AI 接口请求失败")
+					return
+				}
 				request, reqErr := http.NewRequest(http.MethodPost, baseURL+"/contents/generations/tasks", bytes.NewReader(arkBody))
 				if reqErr != nil {
 					Fail(w, "AI 接口请求失败")
@@ -125,7 +136,13 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 				}
 				request.Header.Set("Authorization", "Bearer "+volcengineAPIKey)
 				request.Header.Set("Content-Type", "application/json")
-				copyArkVideoTaskResponse(w, request, nil)
+				copyArkVideoTaskResponseWithClient(w, request, newPublicNetworkHTTPClient(r.Context(), service.AIRequestTimeout, func(req *http.Request, via []*http.Request) error {
+					if len(via) >= 5 {
+						return http.ErrUseLastResponse
+					}
+					_, err := validateCustomAIBaseURL(r.Context(), req.URL.String())
+					return err
+				}), nil)
 				return
 			}
 		}
@@ -136,7 +153,11 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		Fail(w, "AI 接口请求失败")
 		return
 	}
-	credits *= readAIRequestCount(body, contentType)
+	credits, err = multiplyAICredits(credits, readAIRequestCount(body, contentType))
+	if err != nil {
+		Fail(w, "AI 接口请求失败")
+		return
+	}
 	channel, err := service.SelectModelChannel(modelName)
 	if err != nil {
 		log.Printf("AI proxy select channel failed: model=%s err=%v", modelName, err)
@@ -251,18 +272,38 @@ func proxyArkVideoGetRequest(w http.ResponseWriter, ctx context.Context, channel
 }
 
 func proxyArkVideoGetByConfig(w http.ResponseWriter, ctx context.Context, baseURL string, apiKey string, path string) {
+	proxyArkVideoGetByConfigWithClient(w, ctx, strings.TrimRight(baseURL, "/"), apiKey, path, nil)
+}
+
+func proxyArkVideoGetByCustomConfig(w http.ResponseWriter, ctx context.Context, baseURL string, apiKey string, path string) {
+	validBaseURL, err := validateCustomAIBaseURL(ctx, baseURL)
+	if err != nil {
+		log.Printf("Ark video custom task query rejected: url=%s err=%v", safeLogURL(baseURL), err)
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	proxyArkVideoGetByConfigWithClient(w, ctx, validBaseURL, apiKey, path, newPublicNetworkHTTPClient(ctx, service.AIRequestTimeout, func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 5 {
+			return http.ErrUseLastResponse
+		}
+		_, err := validateCustomAIBaseURL(ctx, req.URL.String())
+		return err
+	}))
+}
+
+func proxyArkVideoGetByConfigWithClient(w http.ResponseWriter, ctx context.Context, baseURL string, apiKey string, path string, client *http.Client) {
 	taskID, contentRequest := parseVideoTaskPath(path)
 	if taskID == "" {
 		Fail(w, "缺少视频任务 ID")
 		return
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/contents/generations/tasks/"+url.PathEscape(taskID), nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/contents/generations/tasks/"+url.PathEscape(taskID), nil)
 	if err != nil {
 		Fail(w, "AI 接口请求失败")
 		return
 	}
 	request.Header.Set("Authorization", "Bearer "+apiKey)
-	response, err := service.DoAIHTTPRequest(request)
+	response, err := doAIHTTPRequest(client, request)
 	if err != nil {
 		log.Printf("Ark video task query failed: url=%s err=%v", safeLogRequestURL(request), err)
 		Fail(w, "AI 接口请求失败")
@@ -304,7 +345,11 @@ func proxyArkVideoGetByConfig(w http.ResponseWriter, ctx context.Context, baseUR
 }
 
 func copyArkVideoTaskResponse(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onSuccess ...func(int, []byte, []byte)) {
-	response, err := service.DoAIHTTPRequest(request)
+	copyArkVideoTaskResponseWithClient(w, request, nil, onFailure, onSuccess...)
+}
+
+func copyArkVideoTaskResponseWithClient(w http.ResponseWriter, request *http.Request, client *http.Client, onFailure func(string, []byte), onSuccess ...func(int, []byte, []byte)) {
+	response, err := doAIHTTPRequest(client, request)
 	if err != nil {
 		log.Printf("Ark video task request failed: url=%s err=%v", safeLogRequestURL(request), err)
 		if onFailure != nil {
@@ -363,7 +408,7 @@ func proxyArkVideoContent(w http.ResponseWriter, ctx context.Context, videoURL s
 		Fail(w, "视频下载地址无效")
 		return false
 	}
-	client := service.NewAIVideoContentHTTPClient(
+	client := newPublicNetworkHTTPClient(ctx, service.AIVideoContentTimeout,
 		func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return http.ErrUseLastResponse
@@ -383,6 +428,11 @@ func proxyArkVideoContent(w http.ResponseWriter, ctx context.Context, videoURL s
 		Fail(w, "视频下载失败")
 		return false
 	}
+	if err := validateProxyVideoContentResponse(response); err != nil {
+		log.Printf("Ark video content rejected upstream response: url=%s err=%v", safeLogURL(videoURL), err)
+		Fail(w, "视频下载失败")
+		return false
+	}
 	for key, values := range response.Header {
 		if strings.EqualFold(key, "Content-Length") {
 			continue
@@ -392,8 +442,23 @@ func proxyArkVideoContent(w http.ResponseWriter, ctx context.Context, videoURL s
 		}
 	}
 	w.WriteHeader(response.StatusCode)
-	_, _ = io.Copy(w, response.Body)
+	written, _ := io.Copy(w, io.LimitReader(response.Body, maxVideoDownloadBytes+1))
+	if written > maxVideoDownloadBytes {
+		log.Printf("Ark video content exceeded download limit: url=%s", safeLogURL(videoURL))
+		return false
+	}
 	return true
+}
+
+func validateProxyVideoContentResponse(response *http.Response) error {
+	if response.ContentLength > maxVideoDownloadBytes {
+		return errors.New("video content is too large")
+	}
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(response.Header.Get("Content-Type"), ";")[0]))
+	if contentType != "" && !strings.HasPrefix(contentType, "video/") && contentType != "application/octet-stream" {
+		return errors.New("video content type is not allowed")
+	}
+	return nil
 }
 
 func validateProxyDownloadURL(ctx context.Context, rawURL string) error {
@@ -408,6 +473,33 @@ func validateProxyDownloadURL(ctx context.Context, rawURL string) error {
 	if host == "" {
 		return errors.New("missing video url host")
 	}
+	return validatePublicURLHost(ctx, host)
+}
+
+func validateCustomAIBaseURL(ctx context.Context, rawURL string) (string, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+	if parsed.Scheme != "https" {
+		return "", errors.New("custom base url must use https")
+	}
+	if parsed.User != nil {
+		return "", errors.New("custom base url must not include user info")
+	}
+	host := strings.TrimSpace(parsed.Hostname())
+	if host == "" {
+		return "", errors.New("missing custom base url host")
+	}
+	if err := validatePublicURLHost(ctx, host); err != nil {
+		return "", err
+	}
+	parsed.Fragment = ""
+	parsed.RawQuery = ""
+	return strings.TrimRight(parsed.String(), "/"), nil
+}
+
+func validatePublicURLHost(ctx context.Context, host string) error {
 	if ip := net.ParseIP(host); ip != nil {
 		return validatePublicProxyIP(ip)
 	}
@@ -433,6 +525,42 @@ func validatePublicProxyIP(ip net.IP) error {
 		return errors.New("video url host is not public")
 	}
 	return nil
+}
+
+func newPublicNetworkHTTPClient(ctx context.Context, timeout time.Duration, checkRedirect func(*http.Request, []*http.Request) error) *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	dialer := &net.Dialer{}
+	transport.DialContext = func(dialCtx context.Context, network string, address string) (net.Conn, error) {
+		conn, err := dialer.DialContext(dialCtx, network, address)
+		if err != nil {
+			return nil, err
+		}
+		if err := validateConnectionPublicIP(conn); err != nil {
+			_ = conn.Close()
+			return nil, err
+		}
+		return conn, nil
+	}
+	return &http.Client{
+		Timeout:       timeout,
+		Transport:     transport,
+		CheckRedirect: checkRedirect,
+	}
+}
+
+func validateConnectionPublicIP(conn net.Conn) error {
+	addr, ok := conn.RemoteAddr().(*net.TCPAddr)
+	if !ok {
+		return errors.New("unsupported remote address")
+	}
+	return validatePublicProxyIP(addr.IP)
+}
+
+func doAIHTTPRequest(client *http.Client, request *http.Request) (*http.Response, error) {
+	if client != nil {
+		return client.Do(request)
+	}
+	return service.DoAIHTTPRequest(request)
 }
 
 func copyAIResponse(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onSuccess ...func(int, []byte, string)) {
@@ -596,7 +724,7 @@ func readUpstreamString(payload map[string]any, keys ...string) string {
 
 func readAIRequest(r *http.Request) ([]byte, string, string, error) {
 	contentType := r.Header.Get("Content-Type")
-	body, err := io.ReadAll(r.Body)
+	body, err := readLimitedAIRequestBody(r.Body, maxAIRequestBodyBytes)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -658,10 +786,35 @@ func readAIRequestCount(body []byte, contentType string) int {
 	if count < 1 {
 		return 1
 	}
+	if count > maxAIRequestCount {
+		return maxAIRequestCount
+	}
 	return count
 }
 
 var errMissingModel = &aiError{"缺少模型名称"}
+
+func readLimitedAIRequestBody(body io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, &aiError{"AI 请求体过大"}
+	}
+	return data, nil
+}
+
+func multiplyAICredits(credits int, count int) (int, error) {
+	if credits <= 0 || count <= 1 {
+		return credits, nil
+	}
+	maxInt := int(^uint(0) >> 1)
+	if credits > maxInt/count {
+		return 0, &aiError{"AI 请求扣费数量过大"}
+	}
+	return credits * count, nil
+}
 
 type aiError struct {
 	message string

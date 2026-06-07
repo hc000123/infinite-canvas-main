@@ -3,6 +3,8 @@ package config
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
+	"os"
 	"strings"
 
 	"github.com/caarlos0/env/v11"
@@ -34,6 +36,15 @@ func Load() error {
 	if Cfg.PublicAssetDir == "" {
 		Cfg.PublicAssetDir = "data/public-assets"
 	}
+	if strings.TrimSpace(Cfg.AdminPassword) == "change-me-admin-password" {
+		return errors.New("ADMIN_PASSWORD is still an example placeholder")
+	}
+	if isProductionMode() && strings.TrimSpace(Cfg.AdminUsername) == "admin" && strings.TrimSpace(Cfg.AdminPassword) == "infinite-canvas" {
+		return errors.New("ADMIN_USERNAME and ADMIN_PASSWORD must be changed before production deployment")
+	}
+	if strings.TrimSpace(Cfg.JWTSecret) == "change-me-jwt-secret" {
+		return errors.New("JWT_SECRET is still an example placeholder")
+	}
 	if strings.TrimSpace(Cfg.JWTSecret) == "" || Cfg.JWTSecret == "infinite-canvas" {
 		secret, err := randomSecret()
 		if err != nil {
@@ -50,4 +61,14 @@ func randomSecret() (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func isProductionMode() bool {
+	for _, key := range []string{"GIN_MODE", "APP_ENV", "GO_ENV", "NODE_ENV"} {
+		value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+		if value == "release" || value == "production" {
+			return true
+		}
+	}
+	return false
 }

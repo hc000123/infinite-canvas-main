@@ -62,6 +62,16 @@ func TestIsCustomChannelAllowedReadsPublicSetting(t *testing.T) {
 	}
 }
 
+func TestCustomChannelDefaultsDisabled(t *testing.T) {
+	setting := normalizePublicSetting(model.PublicSetting{})
+	if setting.ModelChannel.AllowCustomChannel == nil {
+		t.Fatal("AllowCustomChannel should be normalized")
+	}
+	if *setting.ModelChannel.AllowCustomChannel {
+		t.Fatal("custom channel should default to disabled")
+	}
+}
+
 func saveSettingsForBoundaryTest(t *testing.T, allowCustomChannel bool, apiKey string) {
 	t.Helper()
 	_, err := repository.SaveSettings(model.Settings{

@@ -35,7 +35,7 @@ const emptySettings: AdminSettings = {
             defaultVideoModel: "",
             defaultTextModel: "",
             systemPrompt: "",
-            allowCustomChannel: true,
+            allowCustomChannel: false,
         },
         auth: { allowRegister: true },
         volcengineAsset: { enabled: false },

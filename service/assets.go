@@ -137,12 +137,12 @@ func assetUploadMimeType(data []byte, header *multipart.FileHeader) string {
 }
 
 func assetUploadType(mimeType string) model.AssetType {
-	switch {
-	case strings.HasPrefix(mimeType, "image/"):
+	switch mimeType {
+	case "image/jpeg", "image/png", "image/webp", "image/gif":
 		return model.AssetTypeImage
-	case strings.HasPrefix(mimeType, "video/"):
+	case "video/mp4", "video/webm", "video/quicktime":
 		return model.AssetTypeVideo
-	case strings.HasPrefix(mimeType, "audio/"):
+	case "audio/mpeg", "audio/wav", "audio/wave", "audio/x-wav", "audio/mp4", "audio/ogg":
 		return model.AssetTypeAudio
 	default:
 		return ""
@@ -150,10 +150,6 @@ func assetUploadType(mimeType string) model.AssetType {
 }
 
 func assetUploadExt(mimeType string, filename string) string {
-	ext := strings.ToLower(filepath.Ext(filename))
-	if ext != "" && len(ext) <= 10 {
-		return ext
-	}
 	switch mimeType {
 	case "image/jpeg":
 		return ".jpg"

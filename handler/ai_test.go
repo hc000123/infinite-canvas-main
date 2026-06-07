@@ -103,6 +103,31 @@ func TestCloudVideoProxyIgnoresFrontendVolcengineKey(t *testing.T) {
 	}
 }
 
+func TestLocalArkVideoProxyRejectsUnsafeBaseURL(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	saveAIHandlerSettings(t, true, "https://backend.example.com")
+
+	body := []byte(`{
+		"model": "ep-test",
+		"prompt": "生成一个短视频",
+		"_volcengine_api_key": "frontend-key",
+		"_volcengine_base_url": "http://127.0.0.1:1/api/v3"
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/videos", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(service.WithUser(req.Context(), model.AuthUser{ID: "user-local-boundary", Username: "local-boundary", Role: model.UserRoleUser}))
+	rec := httptest.NewRecorder()
+
+	proxyAIRequest(rec, req, "/videos")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "AI 接口请求失败") {
+		t.Fatalf("body = %s, want AI failure", rec.Body.String())
+	}
+}
+
 func TestNormalizeArkVideoTaskResponseKeepsTaskDetails(t *testing.T) {
 	source := []byte(`{
 		"id": "cgt-2026-test",
@@ -231,6 +256,39 @@ func TestValidateProxyDownloadURLAllowsPublicIP(t *testing.T) {
 	if err := validateProxyDownloadURL(context.Background(), "https://8.8.8.8/video.mp4"); err != nil {
 		t.Fatalf("validateProxyDownloadURL returned error: %v", err)
 	}
+}
+
+func TestReadLimitedAIRequestBodyRejectsOversizedBody(t *testing.T) {
+	_, err := readLimitedAIRequestBody(io.LimitReader(zeroReader{}, 9), 8)
+	if err == nil {
+		t.Fatal("readLimitedAIRequestBody returned nil error for oversized body")
+	}
+}
+
+func TestReadAIRequestCountCapsJSONCount(t *testing.T) {
+	count := readAIRequestCount([]byte(`{"n":999}`), "application/json")
+	if count != maxAIRequestCount {
+		t.Fatalf("count = %d, want %d", count, maxAIRequestCount)
+	}
+}
+
+func TestValidateProxyVideoContentResponseRejectsOversizedAndNonVideo(t *testing.T) {
+	if err := validateProxyVideoContentResponse(&http.Response{ContentLength: maxVideoDownloadBytes + 1}); err == nil {
+		t.Fatal("validateProxyVideoContentResponse accepted oversized response")
+	}
+	response := &http.Response{Header: http.Header{"Content-Type": {"text/html"}}}
+	if err := validateProxyVideoContentResponse(response); err == nil {
+		t.Fatal("validateProxyVideoContentResponse accepted non-video response")
+	}
+}
+
+type zeroReader struct{}
+
+func (zeroReader) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = 0
+	}
+	return len(p), nil
 }
 
 func readJSONMap(t *testing.T, body []byte) map[string]any {
