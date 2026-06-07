@@ -92,6 +92,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
     const [workflowSelected, setWorkflowSelected] = useState(false);
     const [runningStageIds, setRunningStageIds] = useState<Record<string, boolean>>({});
     const [applyingPreviewIds, setApplyingPreviewIds] = useState<Record<string, boolean>>({});
+    const [expandedStageIds, setExpandedStageIds] = useState<string[]>([]);
     const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
     const globalConfigs = useAgentSettingsStore((state) => state.globalConfigs);
     const projectConfigs = useAgentSettingsStore((state) => state.projectConfigs);
@@ -152,6 +153,18 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
         if (!open) return;
         ensureWorkflowRun({ projectId, canvasId, episodeId, preset: selectedWorkflowPreset });
     }, [canvasId, ensureWorkflowRun, episodeId, open, projectId, selectedWorkflowPreset]);
+
+    useEffect(() => {
+        if (!open) return;
+        setExpandedStageIds(
+            selectedWorkflowStages
+                .filter((stage) => {
+                    const stageState = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId);
+                    return shouldExpandWorkflowStageByDefault(stage.stageId, stageState?.status, selectedWorkflowRun?.currentStageId);
+                })
+                .map((stage) => stage.stageId),
+        );
+    }, [open, selectedWorkflowRun?.currentStageId, selectedWorkflowRun?.id, selectedWorkflowStages]);
 
     const saveOverride = async () => {
         const values = await form.validateFields();
@@ -325,8 +338,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <div className="text-sm text-stone-500">当前项目：{projectTitle}</div>
-                        <div className="mt-1 text-xl font-semibold">统一维护资产提取、分镜、生图 Brief、视频提示词和质检 Agent</div>
-                        <p className="mt-2 text-sm leading-6 text-stone-500">本轮 workflow 文本阶段执行会接真实文本模型生成草案；图片与视频仍为手动触发，不会在此处扣费或写入业务数据。</p>
+                        <div className="mt-1 text-xl font-semibold">Agent 工作台</div>
                     </div>
                     <Tag className="m-0">本地设置</Tag>
                 </div>
@@ -352,7 +364,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
                         </Space>
                     }
                 >
-                    <Alert className="mb-4" type="info" showIcon message="文本执行模式" description="当前可对单个阶段手动触发文本草案执行。仅生成文本草案，不调用图片/视频接口，不触发扣费。执行完成后先进入待审核状态。" />
+                    <Alert className="mb-4" type="info" showIcon message="仅运行文本草案；图片、视频生成与业务写入仍需人工确认。" />
                     <div className="grid gap-4">
                         <div>
                             <div className="flex flex-wrap items-center gap-2">
@@ -360,224 +372,240 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
                                 <Tag className="m-0">v{selectedWorkflowPreset.version}</Tag>
                                 <Tag className="m-0">{selectedWorkflowPreset.enabled ? "项目已启用" : "项目未启用"}</Tag>
                                 <Tag className="m-0">{selectedWorkflowPreset.selected ? "项目已选择" : "项目未选择"}</Tag>
-                                <Tag className="m-0">导入时间：{selectedWorkflowPreset.importedAt}</Tag>
+                                <Tag className="m-0">阶段 {selectedWorkflowStages.length}</Tag>
+                                <Tag className="m-0">Agent {selectedWorkflowPreset.agents.length}</Tag>
+                                <Tag className="m-0">质量门 {selectedWorkflowPreset.qualityGates.length}</Tag>
+                                {selectedWorkflowRun ? <Tag className="m-0">当前阶段：{workflowStageName(selectedWorkflowStages, selectedWorkflowRun.currentStageId)}</Tag> : null}
                             </div>
-                            <p className="mt-2 text-sm leading-6 text-stone-500">{selectedWorkflowPreset.description}</p>
-                            <div className="mt-2 text-xs text-stone-500">来源目录：{selectedWorkflowPreset.sourceRoot}</div>
+                            <div className="mt-2 text-sm text-stone-500">主视图只保留状态、数量、warning 和动作，详细追溯信息按需展开。</div>
                         </div>
 
                         <div className="grid gap-3">
                             {selectedWorkflowStages.map((stage) => {
                                 const detail = workflowStageDetail(selectedWorkflowPreset, stage);
+                                const stageState = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId);
                                 const mappingPreviewStatus = selectedWorkflowRun ? canGenerateWorkflowMappingPreview(selectedWorkflowRun, stage.stageId) : { allowed: false, reason: "尚未初始化 workflow run" };
                                 const stagePreviews = selectedStagePreviews.filter((preview) => preview.sourceStageId === stage.stageId);
                                 const qualityGateResults = selectedWorkflowRun
                                     ? evaluateWorkflowQualityGates({ manifest: qualityGateManifest, workflowRun: selectedWorkflowRun, stageId: stage.stageId, outputs: workflowOutputs, evidences: workflowEvidences })
                                     : [];
+                                const errorCount = qualityGateResults.filter((result) => result.status === "error").length;
+                                const warningCount = qualityGateResults.filter((result) => result.status === "warning").length;
+                                const dependencySummary = summarizeWorkflowDependencies(selectedWorkflowStages, selectedWorkflowRun, stage.stageId);
+                                const isExpanded = expandedStageIds.includes(stage.stageId);
                                 return (
-                                    <div key={stage.stageId} className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <Tag className="m-0">阶段 {stage.order}</Tag>
-                                            <span className="font-medium">{stage.name}</span>
-                                            {detail.agent ? <Tag className="m-0">{detail.agent.name}</Tag> : null}
-                                        </div>
-                                        <div className="mt-2 text-sm leading-6 text-stone-600 dark:text-stone-300">{stage.purpose}</div>
-                                        <div className="mt-2 grid gap-2 text-xs text-stone-500 md:grid-cols-2">
-                                            <div>输入：{stage.inputSummary}</div>
-                                            <div>输出：{stage.outputSummary}</div>
-                                        </div>
-                                        {detail.agent ? (
-                                            <div className="mt-3 rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-600 dark:bg-white/5 dark:text-stone-300">
-                                                <div className="font-medium">{detail.agent.role}</div>
-                                                <div>{detail.agent.responsibility}</div>
-                                                <div className="mt-1 text-stone-500">系统提示摘要：{detail.agent.systemPromptSummary}</div>
-                                                <div className="mt-1 text-stone-500">来源：{detail.agent.sourceFile}</div>
+                                    <details
+                                        key={stage.stageId}
+                                        open={isExpanded}
+                                        className="rounded-lg border border-stone-200 p-3 dark:border-stone-800"
+                                        onToggle={(event) => {
+                                            const nextOpen = event.currentTarget.open;
+                                            setExpandedStageIds((current) => (nextOpen ? (current.includes(stage.stageId) ? current : [...current, stage.stageId]) : current.filter((item) => item !== stage.stageId)));
+                                        }}
+                                    >
+                                        <summary className="cursor-pointer list-none">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <Tag className="m-0">阶段 {stage.order}</Tag>
+                                                <span className="font-medium">{stage.name}</span>
+                                                <Tag className="m-0">{workflowStageStatusLabel(stageState?.status || "idle")}</Tag>
+                                                {selectedWorkflowRun?.currentStageId === stage.stageId && stageState?.status !== "approved" ? (
+                                                    <Tag className="m-0" color="blue">
+                                                        当前阶段
+                                                    </Tag>
+                                                ) : null}
+                                                {detail.agent ? <Tag className="m-0">{detail.agent.name}</Tag> : null}
+                                                <Tag className="m-0">预览 {stagePreviews.length}</Tag>
+                                                <Tag className="m-0" color={errorCount ? "red" : "green"}>
+                                                    error {errorCount}
+                                                </Tag>
+                                                <Tag className="m-0" color={warningCount ? "orange" : "default"}>
+                                                    warning {warningCount}
+                                                </Tag>
                                             </div>
-                                        ) : null}
-                                        <Space className="mt-3" size={[6, 6]} wrap>
-                                            {detail.skills.map((skill) => (
-                                                <Tag key={skill.skillId} className="m-0">
-                                                    {skill.name}
-                                                </Tag>
-                                            ))}
-                                        </Space>
-                                        <Space className="mt-2" size={[6, 6]} wrap>
-                                            {detail.qualityGates.map((gate) => (
-                                                <Tag key={gate.gateId} className="m-0">
-                                                    质量门：{gate.name}
-                                                </Tag>
-                                            ))}
-                                        </Space>
-                                        <WorkflowStageStatePanel stageId={stage.stageId} workflowRun={selectedWorkflowRun} workflowOutputs={workflowOutputs} workflowEvidences={workflowEvidences} />
-                                        <WorkflowQualityGatePanel
-                                            stageId={stage.stageId}
-                                            workflowRun={selectedWorkflowRun}
-                                            manifest={qualityGateManifest}
-                                            gateResults={qualityGateResults}
-                                            onMarkReadingsRead={() => {
-                                                if (!selectedWorkflowRun) {
-                                                    message.warning("尚未初始化 workflow run");
-                                                    return;
-                                                }
-                                                const result = markWorkflowStageReadingsRead(selectedWorkflowRun.id, stage.stageId);
-                                                if (!result.ok) message.warning(result.reason || "无法生成规范读取记录");
-                                                else message.success(`已按 manifest 标记 ${result.count || 0} 条规范读取记录`);
-                                            }}
-                                        />
-                                        {stagePreviews.length ? (
-                                            <WorkflowMappingPreviewPanel
-                                                previews={stagePreviews}
-                                                appliedPreviewItemIds={workflowAppliedPreviewItemIds}
-                                                applyingPreviewIds={applyingPreviewIds}
-                                                hasCanvasContext={Boolean(canvasId)}
-                                                hasStoryboardContext={Boolean(canvasId && episodeId)}
-                                                onApplyProductionBiblePreview={(preview) => {
-                                                    const creatableCount = preview.items.filter((item) => item.targetType === "production_bible" && item.action === "create").length;
-                                                    modal.confirm({
-                                                        title: "确认写入设定库",
-                                                        content: `将把 ${creatableCount} 条设定草案写入设定库。不会写入分镜头表，不会创建或修改画布节点。`,
-                                                        okText: "确认写入",
-                                                        cancelText: "取消",
-                                                        onOk: () => {
-                                                            setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: true }));
-                                                            try {
-                                                                const result = applyProductionBiblePreview(preview.previewId);
-                                                                if (!result.ok) {
-                                                                    message.warning(result.reason || "当前预览不能写入设定库");
-                                                                    return;
-                                                                }
-                                                                message.success(`已写入 ${result.appliedCount || 0} 条设定库条目`);
-                                                                if (result.warnings.length) message.info(result.warnings.join("；"));
-                                                            } finally {
-                                                                setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
-                                                            }
-                                                        },
-                                                    });
-                                                }}
-                                                onApplyStoryboardPreview={(preview) => {
-                                                    const creatableCount = preview.items.filter((item) => item.targetType === "storyboard_table" && item.action === "create").length;
-                                                    modal.confirm({
-                                                        title: "确认写入分镜头表",
-                                                        content: `将追加 ${creatableCount} 条分镜草案到当前本集分镜头表。不会写入设定库，不会创建或修改画布节点。`,
-                                                        okText: "确认写入",
-                                                        cancelText: "取消",
-                                                        onOk: () => {
-                                                            setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: true }));
-                                                            try {
-                                                                const result = applyStoryboardPreview(preview.previewId);
-                                                                if (!result.ok) {
-                                                                    message.warning(result.reason || "当前预览不能写入分镜头表");
-                                                                    return;
-                                                                }
-                                                                message.success(`已追加 ${result.appliedCount || 0} 条分镜头表条目`);
-                                                                if (result.warnings.length) message.info(result.warnings.join("；"));
-                                                            } finally {
-                                                                setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
-                                                            }
-                                                        },
-                                                    });
-                                                }}
-                                                onApplyVideoNodePreview={(preview) => {
-                                                    const creatableCount = preview.items.filter((item) => item.targetType === "video_node" && item.action !== "skip").length;
-                                                    modal.confirm({
-                                                        title: "确认创建视频配置节点",
-                                                        content: `将根据当前预览在当前画布创建或更新 ${creatableCount} 个视频配置节点，不会开始视频生成，不会扣费，也不会写入设定库或分镜头表。`,
-                                                        okText: "确认创建",
-                                                        cancelText: "取消",
-                                                        onOk: () => {
-                                                            setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: true }));
-                                                            try {
-                                                                const result = applyVideoNodePreview(preview.previewId, { existingNodes: canvasNodes });
-                                                                if (!result.ok) {
-                                                                    message.warning(result.reason || "当前预览不能创建视频配置节点");
-                                                                    return;
-                                                                }
-                                                                if (result.nextNodes && result.focusNodeIds?.length) {
-                                                                    onApplyVideoPreviewNodes?.({ nodes: result.nextNodes, focusNodeIds: result.focusNodeIds });
-                                                                }
-                                                                message.success(`已创建或更新 ${result.appliedCount || 0} 个视频配置节点`);
-                                                                if (result.warnings.length) message.info(result.warnings.join("；"));
-                                                            } finally {
-                                                                setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
-                                                            }
-                                                        },
-                                                    });
+                                            <div className="mt-2 flex flex-wrap gap-3 text-xs text-stone-500">
+                                                <span>输入：{stage.inputSummary}</span>
+                                                <span>输出：{stage.outputSummary}</span>
+                                            </div>
+                                            {stageState?.blockedReason ? <div className="mt-2 text-xs text-amber-600">阻塞原因：{stageState.blockedReason}</div> : null}
+                                            {dependencySummary ? <div className="mt-1 text-xs text-stone-500">前置依赖：{dependencySummary}</div> : null}
+                                            {stageState?.errorMessage ? <div className="mt-1 text-xs text-rose-500">错误：{stageState.errorMessage}</div> : null}
+                                        </summary>
+
+                                        <div className="mt-3 grid gap-3">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <Tag className="m-0">{stage.purpose}</Tag>
+                                                {detail.skills.length ? <Tag className="m-0">技能 {detail.skills.length}</Tag> : null}
+                                                {detail.qualityGates.length ? <Tag className="m-0">质量门 {detail.qualityGates.length}</Tag> : null}
+                                            </div>
+                                            {detail.agent ? (
+                                                <details className="rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-600 dark:bg-white/5 dark:text-stone-300">
+                                                    <summary className="cursor-pointer font-medium text-stone-600 dark:text-stone-300">查看阶段说明与 Agent</summary>
+                                                    <div className="mt-2 grid gap-1.5">
+                                                        <div>{detail.agent.role}</div>
+                                                        <div>{detail.agent.responsibility}</div>
+                                                        <div className="text-stone-500">系统提示摘要：{detail.agent.systemPromptSummary}</div>
+                                                        <div className="text-stone-500">来源：{detail.agent.sourceFile}</div>
+                                                    </div>
+                                                </details>
+                                            ) : null}
+                                            <WorkflowStageStatePanel stageId={stage.stageId} workflowRun={selectedWorkflowRun} workflowOutputs={workflowOutputs} workflowEvidences={workflowEvidences} />
+                                            <WorkflowQualityGatePanel
+                                                stageId={stage.stageId}
+                                                workflowRun={selectedWorkflowRun}
+                                                manifest={qualityGateManifest}
+                                                gateResults={qualityGateResults}
+                                                onMarkReadingsRead={() => {
+                                                    if (!selectedWorkflowRun) {
+                                                        message.warning("尚未初始化 workflow run");
+                                                        return;
+                                                    }
+                                                    const result = markWorkflowStageReadingsRead(selectedWorkflowRun.id, stage.stageId);
+                                                    if (!result.ok) message.warning(result.reason || "无法生成规范读取记录");
+                                                    else message.success(`已按 manifest 标记 ${result.count || 0} 条规范读取记录`);
                                                 }}
                                             />
-                                        ) : null}
-                                        {selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.status === "review" ? (
-                                            <div className="mt-3 grid gap-2 rounded-md bg-stone-50 p-2 dark:bg-white/5">
-                                                <Input.TextArea
-                                                    rows={2}
-                                                    value={reviewNotes[stage.stageId] || ""}
-                                                    placeholder="可选：填写本阶段审核备注"
-                                                    onChange={(event) => setReviewNotes((current) => ({ ...current, [stage.stageId]: event.target.value }))}
+                                            {stagePreviews.length ? (
+                                                <WorkflowMappingPreviewPanel
+                                                    previews={stagePreviews}
+                                                    appliedPreviewItemIds={workflowAppliedPreviewItemIds}
+                                                    applyingPreviewIds={applyingPreviewIds}
+                                                    hasCanvasContext={Boolean(canvasId)}
+                                                    hasStoryboardContext={Boolean(canvasId && episodeId)}
+                                                    onApplyProductionBiblePreview={(preview) => {
+                                                        const creatableCount = preview.items.filter((item) => item.targetType === "production_bible" && item.action === "create").length;
+                                                        modal.confirm({
+                                                            title: "确认写入设定库",
+                                                            content: `将把 ${creatableCount} 条设定草案写入设定库。不会写入分镜头表，不会创建或修改画布节点。`,
+                                                            okText: "确认写入",
+                                                            cancelText: "取消",
+                                                            onOk: () => {
+                                                                setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: true }));
+                                                                try {
+                                                                    const result = applyProductionBiblePreview(preview.previewId);
+                                                                    if (!result.ok) {
+                                                                        message.warning(result.reason || "当前预览不能写入设定库");
+                                                                        return;
+                                                                    }
+                                                                    message.success(`已写入 ${result.appliedCount || 0} 条设定库条目`);
+                                                                    if (result.warnings.length) message.info(result.warnings.join("；"));
+                                                                } finally {
+                                                                    setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
+                                                                }
+                                                            },
+                                                        });
+                                                    }}
+                                                    onApplyStoryboardPreview={(preview) => {
+                                                        const creatableCount = preview.items.filter((item) => item.targetType === "storyboard_table" && item.action === "create").length;
+                                                        modal.confirm({
+                                                            title: "确认写入分镜头表",
+                                                            content: `将追加 ${creatableCount} 条分镜草案到当前本集分镜头表。不会写入设定库，不会创建或修改画布节点。`,
+                                                            okText: "确认写入",
+                                                            cancelText: "取消",
+                                                            onOk: () => {
+                                                                setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: true }));
+                                                                try {
+                                                                    const result = applyStoryboardPreview(preview.previewId);
+                                                                    if (!result.ok) {
+                                                                        message.warning(result.reason || "当前预览不能写入分镜头表");
+                                                                        return;
+                                                                    }
+                                                                    message.success(`已追加 ${result.appliedCount || 0} 条分镜头表条目`);
+                                                                    if (result.warnings.length) message.info(result.warnings.join("；"));
+                                                                } finally {
+                                                                    setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
+                                                                }
+                                                            },
+                                                        });
+                                                    }}
+                                                    onApplyVideoNodePreview={(preview) => {
+                                                        const creatableCount = preview.items.filter((item) => item.targetType === "video_node" && item.action !== "skip").length;
+                                                        modal.confirm({
+                                                            title: "确认创建视频配置节点",
+                                                            content: `将根据当前预览在当前画布创建或更新 ${creatableCount} 个视频配置节点，不会开始视频生成，不会扣费，也不会写入设定库或分镜头表。`,
+                                                            okText: "确认创建",
+                                                            cancelText: "取消",
+                                                            onOk: () => {
+                                                                setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: true }));
+                                                                try {
+                                                                    const result = applyVideoNodePreview(preview.previewId, { existingNodes: canvasNodes });
+                                                                    if (!result.ok) {
+                                                                        message.warning(result.reason || "当前预览不能创建视频配置节点");
+                                                                        return;
+                                                                    }
+                                                                    if (result.nextNodes && result.focusNodeIds?.length) {
+                                                                        onApplyVideoPreviewNodes?.({ nodes: result.nextNodes, focusNodeIds: result.focusNodeIds });
+                                                                    }
+                                                                    message.success(`已创建或更新 ${result.appliedCount || 0} 个视频配置节点`);
+                                                                    if (result.warnings.length) message.info(result.warnings.join("；"));
+                                                                } finally {
+                                                                    setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
+                                                                }
+                                                            },
+                                                        });
+                                                    }}
                                                 />
-                                                <Space size={6} wrap>
-                                                    <Button
-                                                        size="small"
-                                                        type="primary"
-                                                        onClick={() => {
-                                                            const runnerRunId = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.runnerRunId;
-                                                            if (runnerRunId) approveRun(runnerRunId, reviewNotes[stage.stageId]);
-                                                        }}
-                                                    >
-                                                        批准阶段
-                                                    </Button>
-                                                    <Button
-                                                        size="small"
-                                                        danger
-                                                        onClick={() => {
-                                                            const runnerRunId = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.runnerRunId;
-                                                            if (runnerRunId) rejectRun(runnerRunId, reviewNotes[stage.stageId]);
-                                                        }}
-                                                    >
-                                                        驳回阶段
-                                                    </Button>
-                                                </Space>
-                                            </div>
-                                        ) : null}
-                                        <Space className="mt-3" size={[6, 6]} wrap>
-                                            <Button
-                                                size="small"
-                                                disabled={!mappingPreviewStatus.allowed}
-                                                onClick={() => {
-                                                    if (!selectedWorkflowRun) return;
-                                                    const result = generateWorkflowMappingPreview(selectedWorkflowRun.id, stage.stageId);
-                                                    if (!result.ok) message.warning(result.reason || "当前阶段不能生成映射预览");
-                                                    else message.success(`已生成 ${stage.name} 的映射预览`);
-                                                }}
-                                            >
-                                                生成映射预览
-                                            </Button>
-                                            <Button
-                                                size="small"
-                                                type="primary"
-                                                disabled={selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.status === "blocked"}
-                                                loading={Boolean(runningStageIds[stage.stageId])}
-                                                onClick={() => void runWorkflowStageText(stage.stageId)}
-                                            >
-                                                运行文本草案（文本执行）
-                                            </Button>
-                                            {!mappingPreviewStatus.allowed ? <span className="text-xs text-stone-500">{mappingPreviewStatus.reason}</span> : null}
-                                            {selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.status === "blocked" ? (
-                                                <span className="text-xs text-amber-600">{selectedWorkflowRun.stageStates.find((item) => item.stageId === stage.stageId)?.blockedReason}</span>
                                             ) : null}
-                                        </Space>
-                                    </div>
+                                            {stageState?.status === "review" ? (
+                                                <div className="grid gap-2 rounded-md bg-stone-50 p-2 dark:bg-white/5">
+                                                    <Input.TextArea
+                                                        rows={2}
+                                                        value={reviewNotes[stage.stageId] || ""}
+                                                        placeholder="可选：填写本阶段审核备注"
+                                                        onChange={(event) => setReviewNotes((current) => ({ ...current, [stage.stageId]: event.target.value }))}
+                                                    />
+                                                    <Space size={6} wrap>
+                                                        <Button
+                                                            size="small"
+                                                            type="primary"
+                                                            onClick={() => {
+                                                                const runnerRunId = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.runnerRunId;
+                                                                if (runnerRunId) approveRun(runnerRunId, reviewNotes[stage.stageId]);
+                                                            }}
+                                                        >
+                                                            批准阶段
+                                                        </Button>
+                                                        <Button
+                                                            size="small"
+                                                            danger
+                                                            onClick={() => {
+                                                                const runnerRunId = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.runnerRunId;
+                                                                if (runnerRunId) rejectRun(runnerRunId, reviewNotes[stage.stageId]);
+                                                            }}
+                                                        >
+                                                            驳回阶段
+                                                        </Button>
+                                                    </Space>
+                                                </div>
+                                            ) : null}
+                                            <Space size={[6, 6]} wrap>
+                                                <Button
+                                                    size="small"
+                                                    disabled={!mappingPreviewStatus.allowed}
+                                                    onClick={() => {
+                                                        if (!selectedWorkflowRun) return;
+                                                        const result = generateWorkflowMappingPreview(selectedWorkflowRun.id, stage.stageId);
+                                                        if (!result.ok) message.warning(result.reason || "当前阶段不能生成映射预览");
+                                                        else message.success(`已生成 ${stage.name} 的映射预览`);
+                                                    }}
+                                                >
+                                                    生成预览
+                                                </Button>
+                                                <Button size="small" type="primary" disabled={stageState?.status === "blocked"} loading={Boolean(runningStageIds[stage.stageId])} onClick={() => void runWorkflowStageText(stage.stageId)}>
+                                                    运行草案
+                                                </Button>
+                                                {!mappingPreviewStatus.allowed ? <span className="text-xs text-stone-500">{mappingPreviewStatus.reason}</span> : null}
+                                            </Space>
+                                        </div>
+                                    </details>
                                 );
                             })}
                         </div>
 
-                        <div className="grid gap-3 lg:grid-cols-3">
-                            <WorkflowSummaryBlock title="Agent" items={selectedWorkflowPreset.agents.map((agent) => `${agent.name}：${agent.responsibility}`)} />
-                            <WorkflowSummaryBlock title="技能包" items={selectedWorkflowPreset.skills.map((skill) => `${skill.name}：${skill.summary}`)} />
-                            <WorkflowSummaryBlock title="质量门" items={selectedWorkflowPreset.qualityGates.map((gate) => `${gate.name}：${gate.summary}`)} />
-                        </div>
-
                         <details>
-                            <summary className="cursor-pointer text-sm text-stone-500">查看来源文件清单</summary>
-                            <div className="mt-2 grid gap-1.5 text-xs text-stone-500">
+                            <summary className="cursor-pointer text-sm text-stone-500">查看 preset 来源与文件清单</summary>
+                            <div className="mt-2 grid gap-2 text-xs text-stone-500">
+                                <div>说明：{selectedWorkflowPreset.description}</div>
+                                <div>来源目录：{selectedWorkflowPreset.sourceRoot}</div>
                                 {selectedWorkflowPreset.sourceFiles.map((file) => (
                                     <div key={file.path} className="rounded-md bg-stone-50 px-2 py-1 dark:bg-white/5">
                                         [{sourceCategoryLabel(file.category)}] {file.path}：{file.summary}
@@ -755,34 +783,76 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
     );
 }
 
-function WorkflowSummaryBlock({ title, items }: { title: string; items: string[] }) {
-    return (
-        <div className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
-            <div className="font-medium">{title}</div>
-            <div className="mt-2 grid gap-1.5 text-xs leading-5 text-stone-500">
-                {items.map((item) => (
-                    <div key={item}>{item}</div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
 function WorkflowStageStatePanel({ stageId, workflowRun, workflowOutputs, workflowEvidences }: { stageId: string; workflowRun?: AgentWorkflowRunRecord; workflowOutputs: AgentWorkflowStageOutput[]; workflowEvidences: AgentWorkflowReviewEvidence[] }) {
     const stageState = workflowRun?.stageStates.find((stage) => stage.stageId === stageId);
     const output = stageState?.outputId ? workflowOutputs.find((item) => item.outputId === stageState.outputId) : workflowOutputs.find((item) => item.workflowRunId === workflowRun?.id && item.stageId === stageId);
     const evidences = workflowEvidences.filter((item) => item.workflowRunId === workflowRun?.id && item.stageId === stageId);
     const latestEvidence = evidences[0];
     return (
-        <div className="mt-3 grid gap-1.5 rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-500 dark:bg-white/5">
+        <div className="grid gap-2 rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-500 dark:bg-white/5">
             <div className="flex flex-wrap items-center gap-2">
                 <Tag className="m-0">{workflowStageStatusLabel(stageState?.status || "idle")}</Tag>
+                <span>阶段产物：{output ? "1 条" : "0 条"}</span>
                 <span>审核证据：{evidences.length} 条</span>
                 {latestEvidence ? <span>最近审核：{latestEvidence.createdAt}</span> : null}
             </div>
             <div>最近产物：{output?.summary || "暂无阶段产物"}</div>
             {stageState?.blockedReason ? <div className="text-amber-600">阻塞原因：{stageState.blockedReason}</div> : null}
             {stageState?.errorMessage ? <div className="text-rose-500">错误：{stageState.errorMessage}</div> : null}
+            {output ? (
+                <details>
+                    <summary className="cursor-pointer text-stone-500">查看产物详情</summary>
+                    <div className="mt-2 grid gap-2">
+                        <div className="rounded-md bg-white px-2 py-1.5 dark:bg-black/20">
+                            <div>输出格式：{output.outputFormat}</div>
+                            <div>生成时间：{output.createdAt}</div>
+                            <div className="mt-1">摘要：{output.summary}</div>
+                        </div>
+                        {output.structuredOutput !== undefined ? (
+                            <details className="rounded-md bg-white px-2 py-1.5 dark:bg-black/20">
+                                <summary className="cursor-pointer text-stone-500">查看 rawJson</summary>
+                                <pre className="mt-2 overflow-auto rounded bg-stone-950 p-2 text-[11px] text-stone-50">{JSON.stringify(output.structuredOutput, null, 2)}</pre>
+                            </details>
+                        ) : null}
+                        <details className="rounded-md bg-white px-2 py-1.5 dark:bg-black/20">
+                            <summary className="cursor-pointer text-stone-500">查看 rawText / sourceFiles / qualityGateIds</summary>
+                            <div className="mt-2 grid gap-2">
+                                <pre className="overflow-auto rounded bg-stone-950 p-2 text-[11px] text-stone-50 whitespace-pre-wrap">{output.rawText}</pre>
+                                <div>sourceFiles：{output.sourceFiles.join("；") || "（无）"}</div>
+                                <div>qualityGateIds：{output.qualityGateIds.join("；") || "（无）"}</div>
+                            </div>
+                        </details>
+                    </div>
+                </details>
+            ) : null}
+            {evidences.length ? (
+                <details>
+                    <summary className="cursor-pointer text-stone-500">查看审核证据</summary>
+                    <div className="mt-2 grid gap-2">
+                        {evidences.map((evidence) => (
+                            <div key={evidence.evidenceId} className="rounded-md bg-white px-2 py-1.5 dark:bg-black/20">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Tag className="m-0" color={evidence.decision === "approved" ? "green" : "red"}>
+                                        {evidence.decision === "approved" ? "已批准" : "已驳回"}
+                                    </Tag>
+                                    <span>{evidence.createdAt}</span>
+                                    <span>{evidence.reviewer}</span>
+                                </div>
+                                <div className="mt-1">摘要：{evidence.outputSummary}</div>
+                                {evidence.reviewerNote ? <div className="mt-1 text-stone-500">备注：{evidence.reviewerNote}</div> : null}
+                                <details className="mt-1">
+                                    <summary className="cursor-pointer text-stone-500">查看追溯信息</summary>
+                                    <div className="mt-1 grid gap-1 text-stone-500">
+                                        <div>outputHash：{evidence.outputHash}</div>
+                                        <div>sourceFiles：{evidence.sourceFiles.join("；") || "（无）"}</div>
+                                        <div>qualityGateIds：{evidence.qualityGateIds.join("；") || "（无）"}</div>
+                                    </div>
+                                </details>
+                            </div>
+                        ))}
+                    </div>
+                </details>
+            ) : null}
         </div>
     );
 }
@@ -811,11 +881,11 @@ function WorkflowQualityGatePanel({
     const errorCount = gateResults.filter((result) => result.status === "error").length;
     const warningCount = gateResults.filter((result) => result.status === "warning").length;
     return (
-        <div className="mt-3 grid gap-2 rounded-md border border-stone-200 p-2 text-xs leading-5 dark:border-stone-800">
+        <div className="grid gap-2 rounded-md border border-stone-200 p-2 text-xs leading-5 dark:border-stone-800">
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                     <Tag className="m-0">
-                        规范读取 {readCount}/{requiredReadings.length}
+                        已读 {readCount}/{requiredReadings.length}
                     </Tag>
                     <Tag className="m-0" color={missingCount ? "orange" : "green"}>
                         缺失 {missingCount}
@@ -831,9 +901,8 @@ function WorkflowQualityGatePanel({
                     按 manifest 标记已读
                 </Button>
             </div>
-            <div className="text-stone-500">规范读取记录只表示已按 manifest 留痕；基础 gate 不会自动批准阶段、进入下一阶段或写入业务数据。</div>
             <details>
-                <summary className="cursor-pointer text-stone-500">查看 required readings</summary>
+                <summary className="cursor-pointer text-stone-500">查看 required readings 与缺失原因</summary>
                 <div className="mt-2 grid gap-1">
                     {readingRows.map(({ reading, status, readAt }) => (
                         <div key={reading.readingId} className="rounded-md bg-stone-50 px-2 py-1 dark:bg-white/5">
@@ -854,7 +923,7 @@ function WorkflowQualityGatePanel({
                 </div>
             </details>
             <details>
-                <summary className="cursor-pointer text-stone-500">查看基础 gate result</summary>
+                <summary className="cursor-pointer text-stone-500">查看 gate result 详情</summary>
                 <div className="mt-2 grid gap-1">
                     {gateResults.map((result) => (
                         <div key={result.resultId} className="rounded-md bg-stone-50 px-2 py-1 dark:bg-white/5">
@@ -947,17 +1016,24 @@ function WorkflowMappingPreviewPanel({
                         <div className="flex flex-wrap items-center gap-2">
                             <Tag className="m-0">{preview.targetType}</Tag>
                             <span className="font-medium">{preview.title}</span>
+                            <Tag className="m-0">条目 {preview.items.length}</Tag>
+                            <Tag className="m-0" color={preview.warnings.length ? "orange" : "default"}>
+                                warning {preview.warnings.length}
+                            </Tag>
+                            <Tag className="m-0" color={appliedCount ? "green" : "default"}>
+                                {preview.targetType === "video_node" ? `已创建 ${appliedCount}` : `已应用 ${appliedCount}`}
+                            </Tag>
                             {preview.targetType === "production_bible" ? (
                                 <Button size="small" type="primary" disabled={Boolean(applyDisabledReason)} loading={Boolean(applyingPreviewIds[preview.previewId])} onClick={() => onApplyProductionBiblePreview(preview)}>
                                     写入设定库
                                 </Button>
                             ) : preview.targetType === "storyboard_table" ? (
                                 <Button size="small" type="primary" disabled={Boolean(applyDisabledReason)} loading={Boolean(applyingPreviewIds[preview.previewId])} onClick={() => onApplyStoryboardPreview(preview)}>
-                                    写入分镜头表
+                                    写入分镜
                                 </Button>
                             ) : preview.targetType === "video_node" ? (
                                 <Button size="small" type="primary" disabled={Boolean(applyDisabledReason)} loading={Boolean(applyingPreviewIds[preview.previewId])} onClick={() => onApplyVideoNodePreview(preview)}>
-                                    创建视频配置节点
+                                    创建节点
                                 </Button>
                             ) : (
                                 <Tag className="m-0">后续步骤处理</Tag>
@@ -966,27 +1042,51 @@ function WorkflowMappingPreviewPanel({
                         <div className="mt-1">{preview.summary}</div>
                         {preview.warnings.length ? <div className="mt-1 text-amber-600">提示：{preview.warnings.join("；")}</div> : null}
                         {applyDisabledReason ? <div className="mt-1 text-stone-500">{applyDisabledReason}</div> : null}
-                        {appliedCount ? <div className="mt-1 text-emerald-600">{preview.targetType === "video_node" ? `已创建：${appliedCount} 个` : `已写入：${appliedCount} 条`}</div> : null}
-                        <div className="mt-2 grid gap-2">
-                            {preview.items.map((item) => (
-                                <div key={item.itemId} className="rounded bg-white px-2 py-1.5 dark:bg-black/20">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <Tag className="m-0">{item.action}</Tag>
-                                        <span className="font-medium">{item.title}</span>
-                                        {appliedPreviewItemIds.includes(workflowMappingPreviewItemKey(preview, item.itemId)) ? (
-                                            <Tag className="m-0" color="green">
-                                                {preview.targetType === "production_bible" ? "已写入设定库" : preview.targetType === "storyboard_table" ? "已写入分镜头表" : "已创建视频配置节点"}
-                                            </Tag>
-                                        ) : null}
-                                        {typeof item.confidence === "number" ? <span className="text-stone-400">置信度 {item.confidence}</span> : null}
+                        <details className="mt-2">
+                            <summary className="cursor-pointer text-stone-500">查看条目与追溯</summary>
+                            <div className="mt-2 grid gap-2">
+                                {preview.items.map((item) => (
+                                    <details key={item.itemId} className="rounded bg-white px-2 py-1.5 dark:bg-black/20">
+                                        <summary className="cursor-pointer list-none">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <Tag className="m-0">{item.action}</Tag>
+                                                <span className="font-medium">{item.title}</span>
+                                                {appliedPreviewItemIds.includes(workflowMappingPreviewItemKey(preview, item.itemId)) ? (
+                                                    <Tag className="m-0" color="green">
+                                                        {preview.targetType === "production_bible" ? "已写入设定库" : preview.targetType === "storyboard_table" ? "已写入分镜头表" : "已创建视频配置节点"}
+                                                    </Tag>
+                                                ) : null}
+                                                {typeof item.confidence === "number" ? <span className="text-stone-400">置信度 {item.confidence}</span> : null}
+                                                {item.warnings.length ? (
+                                                    <Tag className="m-0" color="orange">
+                                                        warning {item.warnings.length}
+                                                    </Tag>
+                                                ) : null}
+                                            </div>
+                                            <div className="mt-1">{item.reason}</div>
+                                        </summary>
+                                        <div className="mt-2 grid gap-2">
+                                            <div className="text-stone-500">来源：{item.sourceText}</div>
+                                            {item.warnings.length ? <div className="text-amber-600">{item.warnings.join("；")}</div> : null}
+                                            <details>
+                                                <summary className="cursor-pointer text-stone-500">查看 mappedFields</summary>
+                                                <pre className="mt-2 overflow-auto rounded bg-stone-950 p-2 text-[11px] text-stone-50">{JSON.stringify(item.mappedFields, null, 2)}</pre>
+                                            </details>
+                                        </div>
+                                    </details>
+                                ))}
+                                <details className="rounded bg-white px-2 py-1.5 dark:bg-black/20">
+                                    <summary className="cursor-pointer text-stone-500">查看完整追溯信息</summary>
+                                    <div className="mt-2 grid gap-1 text-stone-500">
+                                        <div>previewId：{preview.previewId}</div>
+                                        <div>workflowRunId：{preview.workflowRunId}</div>
+                                        <div>sourceStageId：{preview.sourceStageId}</div>
+                                        <div>sourceOutputId：{preview.sourceOutputId}</div>
+                                        <div>createdAt：{preview.createdAt}</div>
                                     </div>
-                                    <div className="mt-1">{item.reason}</div>
-                                    <div className="mt-1 text-stone-500">来源：{item.sourceText}</div>
-                                    <pre className="mt-1 overflow-auto rounded bg-stone-950 p-2 text-[11px] text-stone-50">{JSON.stringify(item.mappedFields, null, 2)}</pre>
-                                    {item.warnings.length ? <div className="mt-1 text-amber-600">{item.warnings.join("；")}</div> : null}
-                                </div>
-                            ))}
-                        </div>
+                                </details>
+                            </div>
+                        </details>
                     </div>
                 );
             })}
@@ -1002,6 +1102,28 @@ function sourceCategoryLabel(category: string) {
     if (category === "tool") return "Tool";
     if (category === "config") return "Config";
     return "Guide";
+}
+
+function shouldExpandWorkflowStageByDefault(stageId: string, status: AgentWorkflowRunRecord["stageStates"][number]["status"] | undefined, currentStageId?: string) {
+    if (status === "approved" || status === "blocked") return false;
+    if (status === "review" || status === "running" || status === "rejected" || status === "error") return true;
+    return currentStageId === stageId || !status || status === "idle";
+}
+
+function workflowStageName(stages: ReturnType<typeof sortedWorkflowStages>, stageId?: string) {
+    return stages.find((stage) => stage.stageId === stageId)?.name || "未开始";
+}
+
+function summarizeWorkflowDependencies(stages: ReturnType<typeof sortedWorkflowStages>, workflowRun: AgentWorkflowRunRecord | undefined, stageId: string) {
+    const stageState = workflowRun?.stageStates.find((item) => item.stageId === stageId);
+    if (!stageState?.dependsOnStageIds.length) return "";
+    return stageState.dependsOnStageIds
+        .map((dependencyId) => {
+            const dependencyStage = stages.find((item) => item.stageId === dependencyId);
+            const dependencyState = workflowRun?.stageStates.find((item) => item.stageId === dependencyId);
+            return `${dependencyStage?.name || dependencyId}：${workflowStageStatusLabel(dependencyState?.status || "idle")}`;
+        })
+        .join("；");
 }
 
 function configToForm(config: AgentConfig): AgentConfigFormValues {

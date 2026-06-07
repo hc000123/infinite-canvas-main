@@ -4,7 +4,26 @@
 
 ## 当前版本验收清单
 
-当前版本：`v0.2.70`。需要优先验收的是 M6.10.4-A 规范读取记录与质量门 manifest 底座、M6.10.R0 Seedance 三阶段 Agent Core 拆分、M6.10.3-Fix1 P1 阻断修复、M6.10.3-Fix1 Seedance 映射预览 JSON 代码块解析质量修复、M6.10.3-R Seedance 映射预览总 review 修复项、M6.10.3-D Seedance 映射预览确认后创建 / 更新画布视频配置节点，M6.10.3-C Seedance 映射预览确认后写入分镜头表，M6.10.3-B Seedance 映射预览确认后写入设定库，M6.10.3-A Seedance 阶段产物映射预览，M6.10.2 Seedance 三阶段 workflow 状态、审核证据和产物存储，M6.10.1 Seedance 多 Agent 工作流文本 Runner，M6.10.0 Seedance 多 Agent 工作流预设导入、P3-C / M6.9.7 视频节点自动带入本集资产参考、M6.9.R1 Agent 化工作台结构收口、P3-B / M6.9.5 分镜草案 Agent 接入、M6.9.6 镜头组加入画布改为视频生成节点、M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+当前版本：`v0.2.71`。需要优先验收的是 M6.10.UI-R Seedance workflow UI 精简与信息层级收口、M6.10.4-A 规范读取记录与质量门 manifest 底座、M6.10.R0 Seedance 三阶段 Agent Core 拆分、M6.10.3-Fix1 P1 阻断修复、M6.10.3-Fix1 Seedance 映射预览 JSON 代码块解析质量修复、M6.10.3-R Seedance 映射预览总 review 修复项、M6.10.3-D Seedance 映射预览确认后创建 / 更新画布视频配置节点，M6.10.3-C Seedance 映射预览确认后写入分镜头表，M6.10.3-B Seedance 映射预览确认后写入设定库，M6.10.3-A Seedance 阶段产物映射预览，M6.10.2 Seedance 三阶段 workflow 状态、审核证据和产物存储，M6.10.1 Seedance 多 Agent 工作流文本 Runner，M6.10.0 Seedance 多 Agent 工作流预设导入、P3-C / M6.9.7 视频节点自动带入本集资产参考、M6.9.R1 Agent 化工作台结构收口、P3-B / M6.9.5 分镜草案 Agent 接入、M6.9.6 镜头组加入画布改为视频生成节点、M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+
+#### v0.2.71：M6.10.UI-R Seedance workflow UI 精简与信息层级收口
+
+- 入口：`/projects/:id` 项目详情页或画布页“Agent 设置”中的“多 Agent 工作流预设”。
+- 本次实现：
+  - Seedance workflow 主视图改为工作台式摘要，减少长段说明文字。
+  - 阶段卡片、required readings / gate result、mapping preview、runner output 与追溯信息均改为默认折叠展开查看。
+  - 按钮文案缩短为“运行草案”“生成预览”“写入分镜”“创建节点”等更短操作词。
+- 操作步骤：
+  1. 打开 Agent 设置中心，确认 Seedance workflow 首屏优先展示阶段状态、数量、warning 和下一步动作。
+  2. 检查已完成阶段默认收口、未解锁阶段默认收口且仍可见阻塞原因、当前阶段默认展开。
+  3. 展开 quality gate、mapping preview、阶段产物和审核证据详情，确认 sourceFiles / qualityGateIds / mappedFields / 追溯信息入口仍保留。
+  4. 点击“运行草案”“生成预览”“写入设定库 / 写入分镜 / 创建节点”等操作前后，确认 workflow 行为与确认弹窗风险说明不变。
+- 预期结果：
+  - 主界面长说明明显减少。
+  - 阶段详情、required readings / gate 详情、mapping preview 详情默认折叠。
+  - warning、error、阻塞原因、审核状态仍可见。
+  - 关键操作确认弹窗仍保留扣费 / 生成 / 写入范围说明。
+  - 不改变 workflow 状态、Runner、quality gate、mapping preview 和应用写入逻辑。
 
 #### v0.2.70：M6.10.4-A 规范读取记录与质量门 manifest 底座
 
