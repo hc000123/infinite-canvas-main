@@ -4,7 +4,27 @@
 
 ## 当前版本验收清单
 
-当前版本：`v0.2.69`。需要优先验收的是 M6.10.R0 Seedance 三阶段 Agent Core 拆分、M6.10.3-Fix1 P1 阻断修复、M6.10.3-Fix1 Seedance 映射预览 JSON 代码块解析质量修复、M6.10.3-R Seedance 映射预览总 review 修复项、M6.10.3-D Seedance 映射预览确认后创建 / 更新画布视频配置节点，M6.10.3-C Seedance 映射预览确认后写入分镜头表，M6.10.3-B Seedance 映射预览确认后写入设定库，M6.10.3-A Seedance 阶段产物映射预览，M6.10.2 Seedance 三阶段 workflow 状态、审核证据和产物存储，M6.10.1 Seedance 多 Agent 工作流文本 Runner，M6.10.0 Seedance 多 Agent 工作流预设导入、P3-C / M6.9.7 视频节点自动带入本集资产参考、M6.9.R1 Agent 化工作台结构收口、P3-B / M6.9.5 分镜草案 Agent 接入、M6.9.6 镜头组加入画布改为视频生成节点、M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+当前版本：`v0.2.70`。需要优先验收的是 M6.10.4-A 规范读取记录与质量门 manifest 底座、M6.10.R0 Seedance 三阶段 Agent Core 拆分、M6.10.3-Fix1 P1 阻断修复、M6.10.3-Fix1 Seedance 映射预览 JSON 代码块解析质量修复、M6.10.3-R Seedance 映射预览总 review 修复项、M6.10.3-D Seedance 映射预览确认后创建 / 更新画布视频配置节点，M6.10.3-C Seedance 映射预览确认后写入分镜头表，M6.10.3-B Seedance 映射预览确认后写入设定库，M6.10.3-A Seedance 阶段产物映射预览，M6.10.2 Seedance 三阶段 workflow 状态、审核证据和产物存储，M6.10.1 Seedance 多 Agent 工作流文本 Runner，M6.10.0 Seedance 多 Agent 工作流预设导入、P3-C / M6.9.7 视频节点自动带入本集资产参考、M6.9.R1 Agent 化工作台结构收口、P3-B / M6.9.5 分镜草案 Agent 接入、M6.9.6 镜头组加入画布改为视频生成节点、M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+
+#### v0.2.70：M6.10.4-A 规范读取记录与质量门 manifest 底座
+
+- 入口：`/projects/:id` 项目详情页或画布页“Agent 设置”中的“多 Agent 工作流预设”。
+- 本次实现：
+  - 新增 Seedance quality gate manifest、required readings、reading records 和基础 gate 纯函数。
+  - Agent 设置中心按阶段展示规范读取记录数量、已读 / 缺失、error / warning 和 required readings / gate result 明细。
+- 操作步骤：
+  1. 打开 Seedance workflow 三个阶段，确认每阶段能看到规范读取记录摘要和 required readings 明细。
+  2. 点击“按 manifest 标记已读”，确认当前阶段生成 / 刷新读取记录，已读数量更新。
+  3. 在尚未生成 reading、尚无 output、尚无 evidence 的阶段检查 gate result，确认显示对应 error。
+  4. 查看阶段三，确认显示 industrial-quality-rules 的四个调用节点：阶段开始前、场次开写前、每条生成 P 后、导演审核前。
+  5. 继续运行文本草案、人工审核、mapping preview 和应用链路，确认既有行为不变。
+- 预期结果：
+  - 三阶段 workflow 行为不变。
+  - 三个阶段的 Agent Core 仍可被 workflow 复用。
+  - 未新增单独 Agent 入口。
+  - 不影响 mapping preview / 设定库 / 分镜 / 视频节点应用链路。
+  - gate 结果不自动批准、不自动进入下一阶段、不自动写业务数据。
+  - 不执行旧 Python 脚本，不生成图片或视频，不触发扣费。
 
 #### v0.2.69：M6.10.R0 Seedance 三阶段 Agent Core 拆分
 

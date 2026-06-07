@@ -12,6 +12,7 @@ import { useStoryboardStore } from "../canvas/stores/use-storyboard-store";
 import type { CanvasNodeData, Position } from "../canvas/types";
 import type { AgentConfig } from "./agent-settings";
 import type { AgentWorkflowPreset } from "./agent-workflow-presets";
+import { buildSeedanceQualityGateManifest, buildWorkflowReadingRecords } from "./workflow-quality-gates";
 import { getSeedanceWorkflowAgentCore } from "./workflow-agents/seedance-workflow-agents";
 import {
     applyWorkflowMappingPreviewToProductionBible,
@@ -60,6 +61,7 @@ type AgentRunnerStore = {
     workflowMappingPreviews: AgentWorkflowMappingPreview[];
     workflowAppliedPreviewItemIds: string[];
     ensureWorkflowRun: (input: { projectId: string; canvasId?: string; episodeId?: string; preset: AgentWorkflowPreset }) => string;
+    markWorkflowStageReadingsRead: (workflowRunId: string, stageId: string) => { ok: boolean; reason?: string; count?: number };
     generateWorkflowMappingPreview: (workflowRunId: string, stageId: string) => { ok: boolean; reason?: string; previewIds?: string[] };
     applyProductionBiblePreview: (previewId: string, selectedItemIds?: string[]) => { ok: boolean; reason?: string; appliedCount?: number; skippedCount?: number; warnings: string[] };
     applyStoryboardPreview: (previewId: string, selectedItemIds?: string[]) => { ok: boolean; reason?: string; appliedCount?: number; skippedCount?: number; warnings: string[] };
@@ -117,6 +119,25 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                 const workflowRun = createAgentWorkflowRunRecord({ preset, projectId, canvasId, episodeId, id, now });
                 set((state) => ({ workflowRuns: [workflowRun, ...state.workflowRuns] }));
                 return id;
+            },
+            markWorkflowStageReadingsRead: (workflowRunId, stageId) => {
+                const workflowRun = get().workflowRuns.find((run) => run.id === workflowRunId);
+                if (!workflowRun) return { ok: false, reason: "未找到 workflow run" };
+                if (!workflowRun.stageStates.some((stage) => stage.stageId === stageId)) return { ok: false, reason: "未找到阶段状态" };
+                const now = new Date().toISOString();
+                const records = buildWorkflowReadingRecords({ manifest: buildSeedanceQualityGateManifest({ workflowId: workflowRun.workflowId, version: workflowRun.workflowVersion }), workflowRunId, stageId, now, status: "read" });
+                set((state) => ({
+                    workflowRuns: state.workflowRuns.map((run) =>
+                        run.id === workflowRunId
+                            ? {
+                                  ...run,
+                                  stageStates: run.stageStates.map((stage) => (stage.stageId === stageId ? { ...stage, readingRecords: records } : stage)),
+                                  updatedAt: now,
+                              }
+                            : run,
+                    ),
+                }));
+                return { ok: true, count: records.length };
             },
             generateWorkflowMappingPreview: (workflowRunId, stageId) => {
                 const now = new Date().toISOString();
@@ -376,6 +397,19 @@ function normalizeStoredWorkflowRun(run: AgentWorkflowRunRecord): AgentWorkflowR
             evidenceIds: Array.isArray(stage.evidenceIds) ? stage.evidenceIds : [],
             dependsOnStageIds: Array.isArray(stage.dependsOnStageIds) ? stage.dependsOnStageIds : [],
             blockedReason: stage.blockedReason,
+            readingRecords: Array.isArray(stage.readingRecords)
+                ? stage.readingRecords.map((record) => ({
+                      recordId: record.recordId || "",
+                      workflowRunId: record.workflowRunId || run.id || "",
+                      stageId: record.stageId || stage.stageId || "",
+                      sourceFile: record.sourceFile || "",
+                      sourceType: record.sourceType || "rule",
+                      readAt: record.readAt || new Date().toISOString(),
+                      status: record.status === "missing" || record.status === "skipped" ? record.status : "read",
+                      note: record.note,
+                      readingId: record.readingId,
+                  }))
+                : [],
         })),
         createdAt: run.createdAt || new Date().toISOString(),
         updatedAt: run.updatedAt || run.createdAt || new Date().toISOString(),

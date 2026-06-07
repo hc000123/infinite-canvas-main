@@ -37,6 +37,15 @@ import {
 import { useAgentSettingsStore } from "./use-agent-settings-store";
 import { useAgentRunnerStore } from "./use-agent-runner-store";
 import { getSeedanceWorkflowAgentCore } from "./workflow-agents/seedance-workflow-agents";
+import {
+    buildSeedanceQualityGateManifest,
+    evaluateWorkflowQualityGates,
+    getWorkflowStageRequiredReadings,
+    type WorkflowGateCheckResult,
+    type WorkflowQualityGateManifest,
+    type WorkflowReadingSourceType,
+    type WorkflowReadingStatus,
+} from "./workflow-quality-gates";
 import type { CanvasNodeData } from "../canvas/types";
 
 type Props = {
@@ -99,6 +108,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
     const workflowMappingPreviews = useAgentRunnerStore((state) => state.workflowMappingPreviews);
     const workflowAppliedPreviewItemIds = useAgentRunnerStore((state) => state.workflowAppliedPreviewItemIds);
     const ensureWorkflowRun = useAgentRunnerStore((state) => state.ensureWorkflowRun);
+    const markWorkflowStageReadingsRead = useAgentRunnerStore((state) => state.markWorkflowStageReadingsRead);
     const generateWorkflowMappingPreview = useAgentRunnerStore((state) => state.generateWorkflowMappingPreview);
     const applyProductionBiblePreview = useAgentRunnerStore((state) => state.applyProductionBiblePreview);
     const applyStoryboardPreview = useAgentRunnerStore((state) => state.applyStoryboardPreview);
@@ -114,6 +124,7 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
     const workflowPresets = useMemo(() => builtInAgentWorkflowPresets(), []);
     const selectedWorkflowPreset = useMemo(() => resolveWorkflowPreset(selectedWorkflowId, projectWorkflowSelections[projectId] || []) || workflowPresets[0], [projectId, projectWorkflowSelections, selectedWorkflowId, workflowPresets]);
     const selectedWorkflowStages = useMemo(() => sortedWorkflowStages(selectedWorkflowPreset), [selectedWorkflowPreset]);
+    const qualityGateManifest = useMemo(() => buildSeedanceQualityGateManifest({ workflowId: selectedWorkflowPreset.workflowId, version: selectedWorkflowPreset.version }), [selectedWorkflowPreset.version, selectedWorkflowPreset.workflowId]);
     const selectedWorkflowRun = useMemo(
         () => workflowRuns.find((run) => run.projectId === projectId && run.canvasId === canvasId && run.episodeId === episodeId && run.workflowId === selectedWorkflowPreset.workflowId),
         [canvasId, episodeId, projectId, selectedWorkflowPreset.workflowId, workflowRuns],
@@ -360,6 +371,9 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
                                 const detail = workflowStageDetail(selectedWorkflowPreset, stage);
                                 const mappingPreviewStatus = selectedWorkflowRun ? canGenerateWorkflowMappingPreview(selectedWorkflowRun, stage.stageId) : { allowed: false, reason: "尚未初始化 workflow run" };
                                 const stagePreviews = selectedStagePreviews.filter((preview) => preview.sourceStageId === stage.stageId);
+                                const qualityGateResults = selectedWorkflowRun
+                                    ? evaluateWorkflowQualityGates({ manifest: qualityGateManifest, workflowRun: selectedWorkflowRun, stageId: stage.stageId, outputs: workflowOutputs, evidences: workflowEvidences })
+                                    : [];
                                 return (
                                     <div key={stage.stageId} className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
                                         <div className="flex flex-wrap items-center gap-2">
@@ -395,6 +409,21 @@ export function AgentSettingsDrawer({ open, projectId, projectTitle, canvasId, e
                                             ))}
                                         </Space>
                                         <WorkflowStageStatePanel stageId={stage.stageId} workflowRun={selectedWorkflowRun} workflowOutputs={workflowOutputs} workflowEvidences={workflowEvidences} />
+                                        <WorkflowQualityGatePanel
+                                            stageId={stage.stageId}
+                                            workflowRun={selectedWorkflowRun}
+                                            manifest={qualityGateManifest}
+                                            gateResults={qualityGateResults}
+                                            onMarkReadingsRead={() => {
+                                                if (!selectedWorkflowRun) {
+                                                    message.warning("尚未初始化 workflow run");
+                                                    return;
+                                                }
+                                                const result = markWorkflowStageReadingsRead(selectedWorkflowRun.id, stage.stageId);
+                                                if (!result.ok) message.warning(result.reason || "无法生成规范读取记录");
+                                                else message.success(`已按 manifest 标记 ${result.count || 0} 条规范读取记录`);
+                                            }}
+                                        />
                                         {stagePreviews.length ? (
                                             <WorkflowMappingPreviewPanel
                                                 previews={stagePreviews}
@@ -756,6 +785,115 @@ function WorkflowStageStatePanel({ stageId, workflowRun, workflowOutputs, workfl
             {stageState?.errorMessage ? <div className="text-rose-500">错误：{stageState.errorMessage}</div> : null}
         </div>
     );
+}
+
+function WorkflowQualityGatePanel({
+    stageId,
+    workflowRun,
+    manifest,
+    gateResults,
+    onMarkReadingsRead,
+}: {
+    stageId: string;
+    workflowRun?: AgentWorkflowRunRecord;
+    manifest: WorkflowQualityGateManifest;
+    gateResults: WorkflowGateCheckResult[];
+    onMarkReadingsRead: () => void;
+}) {
+    const stageState = workflowRun?.stageStates.find((stage) => stage.stageId === stageId);
+    const requiredReadings = getWorkflowStageRequiredReadings(manifest, stageId);
+    const readingRows = requiredReadings.map((reading) => {
+        const record = stageState?.readingRecords.find((item) => item.readingId === reading.readingId || item.sourceFile === reading.sourceFile);
+        return { reading, status: record?.status || ("missing" as WorkflowReadingStatus), readAt: record?.readAt };
+    });
+    const readCount = readingRows.filter((row) => row.status === "read").length;
+    const missingCount = readingRows.length - readCount;
+    const errorCount = gateResults.filter((result) => result.status === "error").length;
+    const warningCount = gateResults.filter((result) => result.status === "warning").length;
+    return (
+        <div className="mt-3 grid gap-2 rounded-md border border-stone-200 p-2 text-xs leading-5 dark:border-stone-800">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    <Tag className="m-0">
+                        规范读取 {readCount}/{requiredReadings.length}
+                    </Tag>
+                    <Tag className="m-0" color={missingCount ? "orange" : "green"}>
+                        缺失 {missingCount}
+                    </Tag>
+                    <Tag className="m-0" color={errorCount ? "red" : "green"}>
+                        error {errorCount}
+                    </Tag>
+                    <Tag className="m-0" color={warningCount ? "orange" : "default"}>
+                        warning {warningCount}
+                    </Tag>
+                </div>
+                <Button size="small" disabled={!workflowRun} onClick={onMarkReadingsRead}>
+                    按 manifest 标记已读
+                </Button>
+            </div>
+            <div className="text-stone-500">规范读取记录只表示已按 manifest 留痕；基础 gate 不会自动批准阶段、进入下一阶段或写入业务数据。</div>
+            <details>
+                <summary className="cursor-pointer text-stone-500">查看 required readings</summary>
+                <div className="mt-2 grid gap-1">
+                    {readingRows.map(({ reading, status, readAt }) => (
+                        <div key={reading.readingId} className="rounded-md bg-stone-50 px-2 py-1 dark:bg-white/5">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Tag className="m-0" color={status === "read" ? "green" : status === "missing" ? "red" : "default"}>
+                                    {readingStatusLabel(status)}
+                                </Tag>
+                                <span>
+                                    [{readingSourceTypeLabel(reading.sourceType)}] {reading.sourceFile}
+                                </span>
+                            </div>
+                            <div className="mt-1 text-stone-500">
+                                {reading.label}
+                                {readAt ? ` · ${readAt}` : ""}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </details>
+            <details>
+                <summary className="cursor-pointer text-stone-500">查看基础 gate result</summary>
+                <div className="mt-2 grid gap-1">
+                    {gateResults.map((result) => (
+                        <div key={result.resultId} className="rounded-md bg-stone-50 px-2 py-1 dark:bg-white/5">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Tag className="m-0" color={result.status === "error" ? "red" : result.status === "warning" ? "orange" : "green"}>
+                                    {result.status.toUpperCase()}
+                                </Tag>
+                                <span>{result.name}</span>
+                                <Tag className="m-0">{qualityGateCheckKindLabel(result.checkKind)}</Tag>
+                            </div>
+                            <div className="mt-1 text-stone-500">{result.message}</div>
+                        </div>
+                    ))}
+                </div>
+            </details>
+        </div>
+    );
+}
+
+function readingSourceTypeLabel(sourceType: WorkflowReadingSourceType) {
+    if (sourceType === "agent") return "agent";
+    if (sourceType === "skill") return "skill";
+    if (sourceType === "template") return "template";
+    if (sourceType === "example") return "example";
+    if (sourceType === "tool") return "tool";
+    return "rule";
+}
+
+function readingStatusLabel(status: WorkflowReadingStatus) {
+    if (status === "read") return "已读";
+    if (status === "skipped") return "跳过";
+    return "缺失";
+}
+
+function qualityGateCheckKindLabel(checkKind: WorkflowGateCheckResult["checkKind"]) {
+    if (checkKind === "required_reading") return "规范读取";
+    if (checkKind === "artifact_field") return "阶段产物";
+    if (checkKind === "manual_review") return "审核证据";
+    return "manifest";
 }
 
 function WorkflowMappingPreviewPanel({

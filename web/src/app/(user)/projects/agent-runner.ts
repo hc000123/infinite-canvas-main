@@ -5,6 +5,7 @@ import { NODE_DEFAULT_SIZE } from "../canvas/constants.ts";
 import type { CanvasNodeData, CanvasNodeMetadata, Position } from "../canvas/types.ts";
 import { placeCanvasNodeAwayFromNodes } from "../canvas/utils/canvas-node-placement.ts";
 import { normalizeStoryboardTableShot, type StoryboardTableShot, type StoryboardTableShotWriteInput } from "../canvas/utils/storyboard-management.ts";
+import type { WorkflowReadingRecord } from "./workflow-quality-gates.ts";
 
 export type AgentRunStatus = "draft" | "ready_for_review" | "running" | "review" | "approved" | "rejected" | "applied" | "error" | "failed";
 export type AgentRunKind = AgentConfigKind | "workflow_text";
@@ -133,6 +134,7 @@ export type AgentWorkflowStageState = {
     errorMessage?: string;
     evidenceIds: string[];
     dependsOnStageIds: string[];
+    readingRecords: WorkflowReadingRecord[];
     blockedReason?: string;
 };
 
@@ -301,6 +303,7 @@ export function createAgentWorkflowRunRecord({ preset, projectId, canvasId, epis
                 status: index === 0 ? "idle" : "blocked",
                 evidenceIds: [],
                 dependsOnStageIds: index === 0 ? [] : [stages[index - 1].stageId],
+                readingRecords: [],
                 blockedReason: index === 0 ? undefined : `需先批准前置阶段：${stages[index - 1].name}`,
             })),
             createdAt: now,
