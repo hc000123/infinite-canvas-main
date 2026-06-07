@@ -122,7 +122,7 @@ test("generates next-step suggestions from stats", () => {
 
 test("builds overview action href targets", () => {
     assert.equal(projectOverviewActionHref("project-1", { type: "assets-page" }), "/assets?projectId=project-1");
-    assert.equal(projectOverviewActionHref("project-1", { type: "agent" }), "/projects/project-1/agent");
+    assert.equal(projectOverviewActionHref("project-1", { type: "agent" }), "/projects/project-1/agents");
     assert.equal(projectOverviewActionHref("project-1", { type: "tab", tab: "canvas" }), "");
 });
 

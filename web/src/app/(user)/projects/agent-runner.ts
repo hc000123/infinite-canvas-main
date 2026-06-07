@@ -128,6 +128,7 @@ export type AgentRunRecord = {
 
 export type AgentWorkflowStageStatus = "idle" | "running" | "review" | "approved" | "rejected" | "error" | "blocked";
 export type AgentWorkflowSceneRunStatus = AgentWorkflowStageStatus;
+export type AgentWorkflowDisplayStatus = AgentWorkflowStageStatus | "partial";
 
 export type AgentWorkflowStageState = {
     stageId: string;
@@ -176,6 +177,32 @@ export type AgentWorkflowRunRecord = {
     sceneStates?: AgentWorkflowSceneRunState[];
     createdAt: string;
     updatedAt: string;
+};
+
+export type WorkflowStageSceneProgress = {
+    approvedCount: number;
+    pendingCount: number;
+    rejectedCount: number;
+    errorCount: number;
+    runningCount: number;
+    reviewCount: number;
+    totalCount: number;
+    hasSceneStates: boolean;
+    summaryText: string;
+};
+
+export type WorkflowStageDisplayState = WorkflowStageSceneProgress & {
+    stageId: string;
+    stageStatus: AgentWorkflowStageStatus;
+    displayStatus: AgentWorkflowDisplayStatus;
+    blockedReason?: string;
+};
+
+export type WorkflowRunDisplayState = WorkflowStageSceneProgress & {
+    displayStatus: AgentWorkflowDisplayStatus;
+    stageDisplays: WorkflowStageDisplayState[];
+    blockedReason?: string;
+    summaryText: string;
 };
 
 export type AgentWorkflowStageOutput = {
@@ -654,20 +681,140 @@ export function reviewAgentWorkflowStageRun(workflowRun: AgentWorkflowRunRecord,
     );
 }
 
-export function workflowStageStatusLabel(status: AgentWorkflowStageStatus) {
+export function getWorkflowStageSceneProgress(workflowRun: AgentWorkflowRunRecord, stageId: string, expectedSceneKeys: string[] = []): WorkflowStageSceneProgress {
+    const sceneStates = (workflowRun.sceneStates || []).filter((scene) => scene.stageId === stageId);
+    const sceneByKey = new Map(sceneStates.map((scene) => [scene.sceneKey, scene]));
+    const sceneKeys = uniqueStrings([...expectedSceneKeys, ...sceneStates.map((scene) => scene.sceneKey)]);
+    const totalCount = sceneStates.length ? sceneKeys.length : 0;
+    let approvedCount = 0;
+    let rejectedCount = 0;
+    let errorCount = 0;
+    let runningCount = 0;
+    let reviewCount = 0;
+    for (const sceneKey of sceneKeys) {
+        const status = sceneByKey.get(sceneKey)?.status || "idle";
+        if (status === "approved") approvedCount += 1;
+        else if (status === "rejected") rejectedCount += 1;
+        else if (status === "error") errorCount += 1;
+        else if (status === "running") runningCount += 1;
+        else if (status === "review") reviewCount += 1;
+    }
+    const pendingCount = Math.max(totalCount - approvedCount - rejectedCount - errorCount, 0);
+    const unfinishedCount = Math.max(totalCount - approvedCount, 0);
+    return {
+        approvedCount,
+        pendingCount,
+        rejectedCount,
+        errorCount,
+        runningCount,
+        reviewCount,
+        totalCount,
+        hasSceneStates: sceneStates.length > 0,
+        summaryText: `已批准 ${approvedCount} / 未完成 ${unfinishedCount}`,
+    };
+}
+
+export function summarizeWorkflowStageDisplayState(workflowRun: AgentWorkflowRunRecord, stageId: string, expectedSceneKeys: string[] = []): WorkflowStageDisplayState {
+    const stageState = workflowRun.stageStates.find((stage) => stage.stageId === stageId);
+    const stageStatus = stageState?.status || "idle";
+    const progress = getWorkflowStageSceneProgress(workflowRun, stageId, expectedSceneKeys);
+    if (progress.hasSceneStates) {
+        const displayStatus =
+            stageStatus === "blocked" && !progress.approvedCount && !progress.runningCount && !progress.reviewCount && !progress.rejectedCount && !progress.errorCount
+                ? "blocked"
+                : progress.errorCount
+                  ? "error"
+                  : progress.rejectedCount
+                    ? "rejected"
+                    : progress.totalCount > 0 && progress.approvedCount === progress.totalCount
+                      ? "approved"
+                      : progress.runningCount
+                        ? "running"
+                        : progress.reviewCount
+                          ? "review"
+                          : "partial";
+        const summaryText =
+            displayStatus === "approved"
+                ? `全部场次已批准：${progress.summaryText}`
+                : displayStatus === "rejected"
+                  ? `场次被驳回：${progress.summaryText}`
+                  : displayStatus === "error"
+                    ? `场次执行失败：${progress.summaryText}`
+                    : displayStatus === "running"
+                      ? `场次推进中：${progress.summaryText}`
+                      : displayStatus === "review"
+                        ? `场次待审核：${progress.summaryText}`
+                        : displayStatus === "blocked"
+                          ? `场次已阻塞：${progress.summaryText}`
+                          : `${progress.approvedCount ? "部分完成" : "场次未完成"}：${progress.summaryText}`;
+        return {
+            stageId,
+            stageStatus,
+            displayStatus,
+            blockedReason: normalizeWorkflowBlockedReason(stageState?.blockedReason),
+            ...progress,
+            summaryText,
+        };
+    }
+    return {
+        stageId,
+        stageStatus,
+        displayStatus: stageStatus,
+        blockedReason: normalizeWorkflowBlockedReason(stageState?.blockedReason),
+        ...progress,
+        summaryText: workflowStageStatusLabel(stageStatus),
+    };
+}
+
+export function summarizeWorkflowRunDisplayState(workflowRun: AgentWorkflowRunRecord, expectedSceneKeysByStageId: Record<string, string[]> = {}): WorkflowRunDisplayState {
+    const stageDisplays = workflowRun.stageStates.map((stage) => summarizeWorkflowStageDisplayState(workflowRun, stage.stageId, expectedSceneKeysByStageId[stage.stageId] || []));
+    const displayStatus =
+        stageDisplays.find((stage) => stage.displayStatus === "error")?.displayStatus ||
+        stageDisplays.find((stage) => stage.displayStatus === "rejected")?.displayStatus ||
+        stageDisplays.find((stage) => stage.displayStatus === "running")?.displayStatus ||
+        stageDisplays.find((stage) => stage.displayStatus === "review")?.displayStatus ||
+        stageDisplays.find((stage) => stage.displayStatus === "partial")?.displayStatus ||
+        stageDisplays.find((stage) => stage.displayStatus === "blocked")?.displayStatus ||
+        (stageDisplays.length && stageDisplays.every((stage) => stage.displayStatus === "approved") ? "approved" : "idle");
+    const activeDisplay = stageDisplays.find((stage) => stage.displayStatus === displayStatus);
+    const totals = stageDisplays.reduce(
+        (acc, stage) => ({
+            approvedCount: acc.approvedCount + stage.approvedCount,
+            pendingCount: acc.pendingCount + stage.pendingCount,
+            rejectedCount: acc.rejectedCount + stage.rejectedCount,
+            errorCount: acc.errorCount + stage.errorCount,
+            runningCount: acc.runningCount + stage.runningCount,
+            reviewCount: acc.reviewCount + stage.reviewCount,
+            totalCount: acc.totalCount + stage.totalCount,
+            hasSceneStates: acc.hasSceneStates || stage.hasSceneStates,
+        }),
+        { approvedCount: 0, pendingCount: 0, rejectedCount: 0, errorCount: 0, runningCount: 0, reviewCount: 0, totalCount: 0, hasSceneStates: false },
+    );
+    return {
+        displayStatus,
+        stageDisplays,
+        blockedReason: activeDisplay?.blockedReason,
+        summaryText: displayStatus === "approved" ? "全部阶段已批准" : activeDisplay?.summaryText || workflowStageStatusLabel(displayStatus),
+        ...totals,
+    };
+}
+
+export function workflowStageStatusLabel(status: AgentWorkflowDisplayStatus) {
     if (status === "idle") return "未开始";
     if (status === "running") return "运行中";
     if (status === "review") return "待审核";
     if (status === "approved") return "已批准";
     if (status === "rejected") return "已驳回";
     if (status === "error") return "异常";
+    if (status === "partial") return "部分完成";
     return "已阻塞";
 }
 
-export function canGenerateWorkflowMappingPreview(workflowRun: AgentWorkflowRunRecord, stageId: string) {
+export function canGenerateWorkflowMappingPreview(workflowRun: AgentWorkflowRunRecord, stageId: string, expectedSceneKeys: string[] = []) {
     const stageState = workflowRun.stageStates.find((stage) => stage.stageId === stageId);
     if (!stageState) return { allowed: false, reason: "未找到阶段状态" };
-    if (stageState.status !== "approved") return { allowed: false, reason: "该阶段尚未批准，不能生成映射预览" };
+    const displayState = summarizeWorkflowStageDisplayState(workflowRun, stageId, expectedSceneKeys);
+    if (displayState.displayStatus !== "approved") return { allowed: false, reason: displayState.hasSceneStates ? `${displayState.summaryText}，不能生成映射预览` : "该阶段尚未批准，不能生成映射预览" };
     if (!stageState.outputId) return { allowed: false, reason: "该阶段没有可用产物，不能生成映射预览" };
     return { allowed: true, reason: "" };
 }
@@ -755,7 +902,8 @@ export function canApplyWorkflowMappingPreviewToProductionBible({ workflowRun, p
     if (!workflowRun) return { allowed: false, reason: "未找到 workflow run" };
     const stageState = workflowRun.stageStates.find((stage) => stage.stageId === preview.sourceStageId);
     if (!stageState) return { allowed: false, reason: "未找到阶段状态" };
-    if (stageState.status !== "approved") return { allowed: false, reason: "该阶段尚未批准，不能写入设定库" };
+    const displayState = summarizeWorkflowStageDisplayState(workflowRun, preview.sourceStageId);
+    if (displayState.displayStatus !== "approved") return { allowed: false, reason: displayState.hasSceneStates ? `${displayState.summaryText}，不能写入设定库` : "该阶段尚未批准，不能写入设定库" };
     if (!stageState.outputId || stageState.outputId !== preview.sourceOutputId) return { allowed: false, reason: "当前预览缺少已批准产物，不能写入设定库" };
     if (!output) return { allowed: false, reason: "未找到阶段产物快照" };
     return { allowed: true, reason: "" };
@@ -864,7 +1012,8 @@ export function canApplyWorkflowMappingPreviewToStoryboardTable({
     if (!canvasId || !episodeId) return { allowed: false, reason: "当前缺少画布或本集上下文，不能写入分镜头表" };
     const stageState = workflowRun.stageStates.find((stage) => stage.stageId === preview.sourceStageId);
     if (!stageState) return { allowed: false, reason: "未找到阶段状态" };
-    if (stageState.status !== "approved") return { allowed: false, reason: "该阶段尚未批准，不能写入分镜头表" };
+    const displayState = summarizeWorkflowStageDisplayState(workflowRun, preview.sourceStageId);
+    if (displayState.displayStatus !== "approved") return { allowed: false, reason: displayState.hasSceneStates ? `${displayState.summaryText}，不能写入分镜头表` : "该阶段尚未批准，不能写入分镜头表" };
     if (!stageState.outputId || stageState.outputId !== preview.sourceOutputId) return { allowed: false, reason: "当前预览缺少已批准产物，不能写入分镜头表" };
     if (!output) return { allowed: false, reason: "未找到阶段产物快照" };
     return { allowed: true, reason: "" };
@@ -877,7 +1026,8 @@ export function canApplyWorkflowMappingPreviewToVideoNodes({ workflowRun, previe
     if (!canvasId) return { allowed: false, reason: "当前缺少画布上下文，不能创建视频配置节点" };
     const stageState = workflowRun.stageStates.find((stage) => stage.stageId === preview.sourceStageId);
     if (!stageState) return { allowed: false, reason: "未找到阶段状态" };
-    if (stageState.status !== "approved") return { allowed: false, reason: "该阶段尚未批准，不能创建视频配置节点" };
+    const displayState = summarizeWorkflowStageDisplayState(workflowRun, preview.sourceStageId);
+    if (displayState.displayStatus !== "approved") return { allowed: false, reason: displayState.hasSceneStates ? `${displayState.summaryText}，不能创建视频配置节点` : "该阶段尚未批准，不能创建视频配置节点" };
     if (!stageState.outputId || stageState.outputId !== preview.sourceOutputId) return { allowed: false, reason: "当前预览缺少已批准产物，不能创建视频配置节点" };
     if (!output) return { allowed: false, reason: "未找到阶段产物快照" };
     return { allowed: true, reason: "" };
@@ -1871,6 +2021,11 @@ function workflowStageDisplayName(stageId: string) {
     if (stageId === "art-design") return "服化道美术设计";
     if (stageId === "seedance-storyboard") return "Seedance 分镜";
     return stageId;
+}
+
+function normalizeWorkflowBlockedReason(reason?: string) {
+    if (!reason) return undefined;
+    return ["director-analysis", "art-design", "seedance-storyboard"].reduce((text, stageId) => text.replaceAll(stageId, workflowStageDisplayName(stageId)), reason);
 }
 
 function stableWorkflowSnapshotHash(value: unknown) {

@@ -26,9 +26,11 @@ import {
     agentRunStatusLabel,
     buildWorkflowStageSourceFiles,
     canGenerateWorkflowMappingPreview,
+    summarizeWorkflowStageDisplayState,
     workflowMappingPreviewItemKey,
     workflowStageStatusLabel,
     type AgentRunInput,
+    type AgentWorkflowDisplayStatus,
     type AgentWorkflowMappingPreview,
     type AgentWorkflowReviewEvidence,
     type AgentWorkflowRunRecord,
@@ -162,12 +164,12 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
         setExpandedStageIds(
             selectedWorkflowStages
                 .filter((stage) => {
-                    const stageState = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId);
-                    return shouldExpandWorkflowStageByDefault(stage.stageId, stageState?.status, selectedWorkflowRun?.currentStageId);
+                    const displayState = selectedWorkflowRun ? summarizeWorkflowStageDisplayState(selectedWorkflowRun, stage.stageId) : undefined;
+                    return shouldExpandWorkflowStageByDefault(stage.stageId, displayState?.displayStatus, selectedWorkflowRun?.currentStageId);
                 })
                 .map((stage) => stage.stageId),
         );
-    }, [selectedWorkflowRun?.currentStageId, selectedWorkflowRun?.id, selectedWorkflowStages]);
+    }, [selectedWorkflowRun, selectedWorkflowStages]);
 
     const saveOverride = async () => {
         const values = await form.validateFields();
@@ -396,6 +398,7 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
                                         {selectedWorkflowStages.map((stage) => {
                                             const detail = workflowStageDetail(selectedWorkflowPreset, stage);
                                             const stageState = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId);
+                                            const displayState = selectedWorkflowRun ? summarizeWorkflowStageDisplayState(selectedWorkflowRun, stage.stageId) : undefined;
                                             const mappingPreviewStatus = selectedWorkflowRun ? canGenerateWorkflowMappingPreview(selectedWorkflowRun, stage.stageId) : { allowed: false, reason: "尚未初始化 workflow run" };
                                             const stagePreviews = selectedStagePreviews.filter((preview) => preview.sourceStageId === stage.stageId);
                                             const qualityGateResults = selectedWorkflowRun
@@ -419,8 +422,9 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
                                                         <div className="flex flex-wrap items-center gap-2">
                                                             <Tag className="m-0">阶段 {stage.order}</Tag>
                                                             <span className="font-medium">{stage.name}</span>
-                                                            <Tag className="m-0">{workflowStageStatusLabel(stageState?.status || "idle")}</Tag>
-                                                            {selectedWorkflowRun?.currentStageId === stage.stageId && stageState?.status !== "approved" ? (
+                                                            <Tag className="m-0">{workflowStageStatusLabel(displayState?.displayStatus || "idle")}</Tag>
+                                                            {displayState?.hasSceneStates ? <Tag className="m-0">{displayState.summaryText}</Tag> : null}
+                                                            {selectedWorkflowRun?.currentStageId === stage.stageId && displayState?.displayStatus !== "approved" ? (
                                                                 <Tag className="m-0" color="blue">
                                                                     当前阶段
                                                                 </Tag>
@@ -438,7 +442,7 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
                                                             <span>输入：{stage.inputSummary}</span>
                                                             <span>输出：{stage.outputSummary}</span>
                                                         </div>
-                                                        {stageState?.blockedReason ? <div className="mt-2 text-xs text-amber-600">阻塞原因：{stageState.blockedReason}</div> : null}
+                                                        {displayState?.blockedReason ? <div className="mt-2 text-xs text-amber-600">阻塞原因：{displayState.blockedReason}</div> : null}
                                                         {dependencySummary ? <div className="mt-1 text-xs text-stone-500">前置依赖：{dependencySummary}</div> : null}
                                                         {stageState?.errorMessage ? <div className="mt-1 text-xs text-rose-500">错误：{stageState.errorMessage}</div> : null}
                                                     </summary>
@@ -859,19 +863,21 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
 
 function WorkflowStageStatePanel({ stageId, workflowRun, workflowOutputs, workflowEvidences }: { stageId: string; workflowRun?: AgentWorkflowRunRecord; workflowOutputs: AgentWorkflowStageOutput[]; workflowEvidences: AgentWorkflowReviewEvidence[] }) {
     const stageState = workflowRun?.stageStates.find((stage) => stage.stageId === stageId);
+    const displayState = workflowRun ? summarizeWorkflowStageDisplayState(workflowRun, stageId) : undefined;
     const output = stageState?.outputId ? workflowOutputs.find((item) => item.outputId === stageState.outputId) : workflowOutputs.find((item) => item.workflowRunId === workflowRun?.id && item.stageId === stageId);
     const evidences = workflowEvidences.filter((item) => item.workflowRunId === workflowRun?.id && item.stageId === stageId);
     const latestEvidence = evidences[0];
     return (
         <div className="grid gap-2 rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-500 dark:bg-white/5">
             <div className="flex flex-wrap items-center gap-2">
-                <Tag className="m-0">{workflowStageStatusLabel(stageState?.status || "idle")}</Tag>
+                <Tag className="m-0">{workflowStageStatusLabel(displayState?.displayStatus || "idle")}</Tag>
+                {displayState?.hasSceneStates ? <span>{displayState.summaryText}</span> : null}
                 <span>阶段产物：{output ? "1 条" : "0 条"}</span>
                 <span>审核证据：{evidences.length} 条</span>
                 {latestEvidence ? <span>最近审核：{latestEvidence.createdAt}</span> : null}
             </div>
             <div>最近产物：{output?.summary || "暂无阶段产物"}</div>
-            {stageState?.blockedReason ? <div className="text-amber-600">阻塞原因：{stageState.blockedReason}</div> : null}
+            {displayState?.blockedReason ? <div className="text-amber-600">阻塞原因：{displayState.blockedReason}</div> : null}
             {stageState?.errorMessage ? <div className="text-rose-500">错误：{stageState.errorMessage}</div> : null}
             {output ? (
                 <details>
@@ -1178,9 +1184,9 @@ function sourceCategoryLabel(category: string) {
     return "Guide";
 }
 
-function shouldExpandWorkflowStageByDefault(stageId: string, status: AgentWorkflowRunRecord["stageStates"][number]["status"] | undefined, currentStageId?: string) {
+function shouldExpandWorkflowStageByDefault(stageId: string, status: AgentWorkflowDisplayStatus | undefined, currentStageId?: string) {
     if (status === "approved" || status === "blocked") return false;
-    if (status === "review" || status === "running" || status === "rejected" || status === "error") return true;
+    if (status === "review" || status === "running" || status === "rejected" || status === "error" || status === "partial") return true;
     return currentStageId === stageId || !status || status === "idle";
 }
 
@@ -1194,8 +1200,8 @@ function summarizeWorkflowDependencies(stages: ReturnType<typeof sortedWorkflowS
     return stageState.dependsOnStageIds
         .map((dependencyId) => {
             const dependencyStage = stages.find((item) => item.stageId === dependencyId);
-            const dependencyState = workflowRun?.stageStates.find((item) => item.stageId === dependencyId);
-            return `${dependencyStage?.name || dependencyId}：${workflowStageStatusLabel(dependencyState?.status || "idle")}`;
+            const dependencyDisplay = workflowRun ? summarizeWorkflowStageDisplayState(workflowRun, dependencyId) : undefined;
+            return `${dependencyStage?.name || dependencyId}：${workflowStageStatusLabel(dependencyDisplay?.displayStatus || "idle")}`;
         })
         .join("；");
 }

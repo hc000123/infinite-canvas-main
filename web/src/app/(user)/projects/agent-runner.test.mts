@@ -36,6 +36,9 @@ import {
     startAgentWorkflowSceneRun,
     startAgentWorkflowStageRun,
     summarizeAgentRunDraft,
+    getWorkflowStageSceneProgress,
+    summarizeWorkflowRunDisplayState,
+    summarizeWorkflowStageDisplayState,
     updateAgentRunDraft,
     validateAgentWorkflowSceneOutput,
     validateAgentDraftOutputShape,
@@ -589,6 +592,175 @@ test("stage3 mapping preview requires an approved scene aggregate output", () =>
         previews.map((preview) => preview.targetType),
         ["storyboard_table", "video_node"],
     );
+});
+
+test("old workflow display keeps approved stage status when no scene-level state exists", () => {
+    const { workflowRun } = buildApprovedWorkflowStageFixture("seedance-storyboard", '{"summary":"旧阶段三产物"}', "ev-display-old", "out-display-old", "storyboard-artist");
+    const display = summarizeWorkflowStageDisplayState(workflowRun, "seedance-storyboard", ["scene-1", "scene-2"]);
+
+    assert.equal(display.displayStatus, "approved");
+    assert.equal(display.totalCount, 0);
+    assert.equal(display.summaryText, "已批准");
+});
+
+test("stage3 display trusts scene progress over legacy approved stage status", () => {
+    const { workflowRun } = buildApprovedWorkflowStageFixture("seedance-storyboard", '{"summary":"旧阶段三产物"}', "ev-display-pending", "out-display-pending", "storyboard-artist");
+    const withPendingScenes = {
+        ...workflowRun,
+        sceneStates: Array.from({ length: 8 }, (_, index) => ({
+            stageId: "seedance-storyboard",
+            sceneKey: `scene-${index + 1}`,
+            sceneLabel: `场次 ${index + 1}`,
+            status: "idle" as const,
+            visualDnaSummary: "",
+            promptPlanSummary: "",
+            promptTextSummary: "",
+            industrialPrecheckSummary: "",
+            evidenceIds: [],
+            warnings: [],
+            updatedAt: "2026-01-13T00:00:00.000Z",
+        })),
+    };
+    const display = summarizeWorkflowStageDisplayState(
+        withPendingScenes,
+        "seedance-storyboard",
+        withPendingScenes.sceneStates.map((scene) => scene.sceneKey),
+    );
+    const progress = getWorkflowStageSceneProgress(
+        withPendingScenes,
+        "seedance-storyboard",
+        withPendingScenes.sceneStates.map((scene) => scene.sceneKey),
+    );
+
+    assert.equal(display.displayStatus, "partial");
+    assert.equal(display.approvedCount, 0);
+    assert.equal(display.pendingCount, 8);
+    assert.equal(display.totalCount, 8);
+    assert.equal(display.summaryText.includes("已批准 0 / 未完成 8"), true);
+    assert.deepEqual(progress, {
+        approvedCount: 0,
+        pendingCount: 8,
+        rejectedCount: 0,
+        errorCount: 0,
+        runningCount: 0,
+        reviewCount: 0,
+        totalCount: 8,
+        hasSceneStates: true,
+        summaryText: "已批准 0 / 未完成 8",
+    });
+});
+
+test("stage3 display is approved only when every scene is approved", () => {
+    const { workflowRun } = buildApprovedWorkflowStageFixture("seedance-storyboard", '{"summary":"阶段三聚合产物"}', "ev-display-all-approved", "out-display-all-approved", "storyboard-artist");
+    const withApprovedScenes = {
+        ...workflowRun,
+        sceneStates: Array.from({ length: 8 }, (_, index) => ({
+            stageId: "seedance-storyboard",
+            sceneKey: `scene-${index + 1}`,
+            sceneLabel: `场次 ${index + 1}`,
+            status: "approved" as const,
+            visualDnaSummary: "视觉 DNA",
+            promptPlanSummary: "拆分计划",
+            promptTextSummary: "提示词",
+            industrialPrecheckSummary: "预检通过",
+            outputId: `output-scene-${index + 1}`,
+            evidenceIds: [`evidence-scene-${index + 1}`],
+            warnings: [],
+            updatedAt: "2026-01-13T00:00:00.000Z",
+        })),
+    };
+    const display = summarizeWorkflowStageDisplayState(
+        withApprovedScenes,
+        "seedance-storyboard",
+        withApprovedScenes.sceneStates.map((scene) => scene.sceneKey),
+    );
+
+    assert.equal(display.displayStatus, "approved");
+    assert.equal(display.approvedCount, 8);
+    assert.equal(display.pendingCount, 0);
+    assert.equal(display.summaryText, "全部场次已批准：已批准 8 / 未完成 0");
+});
+
+test("stage3 display surfaces rejected scenes instead of approved", () => {
+    const { workflowRun } = buildApprovedWorkflowStageFixture("seedance-storyboard", '{"summary":"旧阶段三产物"}', "ev-display-rejected", "out-display-rejected", "storyboard-artist");
+    const withRejectedScene = {
+        ...workflowRun,
+        sceneStates: [
+            {
+                stageId: "seedance-storyboard",
+                sceneKey: "scene-1",
+                sceneLabel: "场次 1",
+                status: "approved" as const,
+                visualDnaSummary: "视觉 DNA",
+                promptPlanSummary: "拆分计划",
+                promptTextSummary: "提示词",
+                industrialPrecheckSummary: "预检通过",
+                evidenceIds: ["evidence-scene-1"],
+                warnings: [],
+                updatedAt: "2026-01-13T00:00:00.000Z",
+            },
+            {
+                stageId: "seedance-storyboard",
+                sceneKey: "scene-2",
+                sceneLabel: "场次 2",
+                status: "rejected" as const,
+                visualDnaSummary: "",
+                promptPlanSummary: "",
+                promptTextSummary: "",
+                industrialPrecheckSummary: "",
+                evidenceIds: ["evidence-scene-2"],
+                warnings: [],
+                updatedAt: "2026-01-13T00:00:00.000Z",
+            },
+        ],
+    };
+    const display = summarizeWorkflowStageDisplayState(withRejectedScene, "seedance-storyboard", ["scene-1", "scene-2"]);
+
+    assert.equal(display.displayStatus, "rejected");
+    assert.equal(display.approvedCount, 1);
+    assert.equal(display.rejectedCount, 1);
+    assert.equal(display.summaryText.includes("场次被驳回"), true);
+});
+
+test("workflow run display and stage display share the same stage summarizer output", () => {
+    const { workflowRun } = buildApprovedWorkflowStageFixture("seedance-storyboard", '{"summary":"旧阶段三产物"}', "ev-display-run", "out-display-run", "storyboard-artist");
+    const withScenes = {
+        ...workflowRun,
+        sceneStates: [
+            {
+                stageId: "seedance-storyboard",
+                sceneKey: "scene-1",
+                sceneLabel: "场次 1",
+                status: "approved" as const,
+                visualDnaSummary: "视觉 DNA",
+                promptPlanSummary: "拆分计划",
+                promptTextSummary: "提示词",
+                industrialPrecheckSummary: "预检通过",
+                evidenceIds: ["evidence-scene-1"],
+                warnings: [],
+                updatedAt: "2026-01-13T00:00:00.000Z",
+            },
+            {
+                stageId: "seedance-storyboard",
+                sceneKey: "scene-2",
+                sceneLabel: "场次 2",
+                status: "idle" as const,
+                visualDnaSummary: "",
+                promptPlanSummary: "",
+                promptTextSummary: "",
+                industrialPrecheckSummary: "",
+                evidenceIds: [],
+                warnings: [],
+                updatedAt: "2026-01-13T00:00:00.000Z",
+            },
+        ],
+    };
+    const stageDisplay = summarizeWorkflowStageDisplayState(withScenes, "seedance-storyboard", ["scene-1", "scene-2"]);
+    const runDisplay = summarizeWorkflowRunDisplayState(withScenes, { "seedance-storyboard": ["scene-1", "scene-2"] });
+
+    assert.equal(stageDisplay.displayStatus, "partial");
+    assert.equal(runDisplay.stageDisplays.find((stage) => stage.stageId === "seedance-storyboard")?.displayStatus, stageDisplay.displayStatus);
+    assert.equal(runDisplay.displayStatus, "partial");
 });
 
 test("approved output can generate mapping preview", () => {
