@@ -474,7 +474,7 @@ export function EpisodeWorkbenchDrawer({
                         </Button>
                         {onOpenAgentSettings ? (
                             <Button icon={<Bot className="size-4" />} onClick={onOpenAgentSettings}>
-                                Agent 设置
+                                Agent 工作台
                             </Button>
                         ) : null}
                     </Space>

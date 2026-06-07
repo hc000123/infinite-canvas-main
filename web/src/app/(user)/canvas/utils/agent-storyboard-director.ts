@@ -31,7 +31,7 @@ export function canRunStoryboardDirector(canvas?: EpisodeWorkbenchCanvas | null)
 
 export function shouldAllowStoryboardDirectorRun(config?: AgentConfig) {
     if (!config) return { allowed: false, reason: "没有找到分镜导演 Agent 配置" };
-    if (!config.enabled) return { allowed: false, reason: "分镜导演 Agent 已禁用，请先在 Agent 设置中心启用" };
+    if (!config.enabled) return { allowed: false, reason: "分镜导演 Agent 已禁用，请先在 Agent 工作台启用" };
     return { allowed: true, reason: "" };
 }
 

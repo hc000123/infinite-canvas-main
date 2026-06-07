@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { AudioLines, Home, ImageIcon, Images, List, Menu, MessageSquare, Plus, Redo2, Settings2, Trash2, Undo2, Upload, Video } from "lucide-react";
 
 import { requestEdit } from "@/services/api/image";
@@ -235,12 +235,15 @@ function InfiniteCanvasPage() {
     const { message } = App.useApp();
     const params = useParams<{ id: string }>();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const canvasId = params.id;
+    const focusNodeId = searchParams.get("focusNodeId") || "";
     const containerRef = useRef<HTMLDivElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
     const uploadTargetRef = useRef<{ nodeId?: string; position?: Position } | null>(null);
     const didInitialCenterRef = useRef(false);
     const toolbarHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const handledFocusNodeIdRef = useRef("");
 
     const config = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
@@ -497,6 +500,25 @@ function InfiniteCanvasPage() {
     useEffect(() => {
         if (!dialogNodeId) setNodeImageSettingsOpen(false);
     }, [dialogNodeId]);
+
+    useEffect(() => {
+        if (!projectLoaded || !focusNodeId || handledFocusNodeIdRef.current === focusNodeId) return;
+        const node = nodes.find((item) => item.id === focusNodeId);
+        if (!node || !size.width || !size.height) return;
+        handledFocusNodeIdRef.current = focusNodeId;
+        const k = viewportRef.current.k || 1;
+        const centerX = node.position.x + node.width / 2;
+        const centerY = node.position.y + node.height / 2;
+        setSelectedNodeIds(new Set([focusNodeId]));
+        setSelectedConnectionId(null);
+        setDialogNodeId(focusNodeId);
+        setViewport({
+            x: size.width / 2 - centerX * k,
+            y: size.height / 2 - centerY * k,
+            k,
+        });
+        router.replace(`/canvas/${canvasId}`, { scroll: false });
+    }, [canvasId, focusNodeId, nodes, projectLoaded, router, size.height, size.width]);
 
     useLayoutEffect(() => {
         nodesRef.current = nodes;

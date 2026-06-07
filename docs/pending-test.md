@@ -14,6 +14,10 @@
   - 现有 `AgentSettingsDrawer` 的主体已抽成可复用 `AgentWorkspacePanel`，项目级页面和 Drawer 共用同一套业务逻辑。
   - 画布页不再承载完整 Agent 配置 / 执行抽屉，只保留跳转入口。
   - 从画布页进入时会带上 `canvasId / episodeId` query，用于保留 mapping preview 写入分镜和创建视频节点所需上下文。
+  - 画布内入口与禁用提示统一改成“Agent 工作台”，不再保留“Agent 设置中心”旧文案。
+  - 缺少 `canvasId / episodeId` 时，视频节点 / 分镜写入入口会直接禁用并显示原因，不静默失败。
+  - 从画布上下文进入后，`video_node` mapping preview 创建节点会回跳当前画布，并打开新节点的生成配置面板。
+  - 已回归确认不再出现 `Drawer width deprecated`、`Modal static function context warning`、`Alert message deprecated` 这三类 AntD 告警。
   - workflow 执行、单 Agent 配置、文本 API 状态、实际模型、模板预览、草案记录、mapping preview 和写入逻辑保持不变。
   - 不改 Agent Runner 数据结构，不接新 LLM，不触发图片或视频生成，不触发扣费。
 - 操作步骤：
@@ -21,12 +25,14 @@
   2. 打开画布页，在本集工作台点击“Agent 工作台”，确认进入 `/projects/:id/agents?canvasId=...&episodeId=...`。
   3. 在项目级 Agent 工作台检查“工作流执行”Tab，确认仍可运行文本草案、生成 mapping preview，并保留审核与写入确认流程。
   4. 切换到“单 Agent 配置”Tab，确认文本 API 状态、实际模型、模板预览和草案记录仍正常展示。
-  5. 从带 `canvasId / episodeId` 的入口进入后，生成视频节点类 mapping preview，确认仍可“创建节点”，且不会直接生成视频或扣费。
-  6. 检查控制台，确认不再出现 Ant Design deprecated warning。
+  5. 直接打开不带上下文的 `/projects/:id/agents`，确认 `video_node` / `storyboard_table` 写入入口会禁用，并显示缺少上下文的中文原因。
+  6. 从带 `canvasId / episodeId` 的入口进入后，生成视频节点类 mapping preview，确认仍可“创建节点”，回跳后会定位到当前画布并打开该节点配置，不会直接生成视频或扣费。
+  7. 打开本集生产台的“绑定 / 导入剧本”等确认弹窗，再检查项目级 Agent 工作台，确认控制台不再出现指定的 Ant Design deprecated warning。
 - 预期结果：
   - 项目详情页或画布页都能进入 `/projects/:id/agents`。
   - Agent 工作台页面可以稳定承载 workflow 和单 Agent 配置，不再依赖画布抽屉作为主入口。
   - 从画布进入时，上下文可保留到项目级页面。
+  - 缺少上下文时，相关写入入口会禁用并解释原因。
   - mapping preview 的设定库 / 分镜头表 / 视频节点应用逻辑不变。
   - 不触发真实生成，不触发扣费。
 

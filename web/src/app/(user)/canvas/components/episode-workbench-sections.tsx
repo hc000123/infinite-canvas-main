@@ -116,7 +116,7 @@ export function AssetExtractionSection({
                 <Space size={6} wrap>
                     {onOpenAgentSettings ? (
                         <Button size="small" icon={<Bot className="size-3.5" />} onClick={onOpenAgentSettings}>
-                            Agent 设置
+                            Agent 工作台
                         </Button>
                     ) : null}
                     <Button size="small" type="primary" icon={<Sparkles className="size-3.5" />} disabled={!canRun} onClick={onRun}>

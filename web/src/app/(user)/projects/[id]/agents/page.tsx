@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button, Empty, Tag } from "antd";
 
 import { useCanvasStore } from "../../../canvas/stores/use-canvas-store";
@@ -12,6 +12,7 @@ import { useCreativeProjectStore } from "../../use-creative-project-store";
 
 export default function ProjectAgentWorkspacePage() {
     const params = useParams<{ id: string }>();
+    const router = useRouter();
     const searchParams = useSearchParams();
     const projectId = params.id;
     const project = useCreativeProjectStore((state) => state.projects.find((item) => item.id === projectId));
@@ -65,8 +66,9 @@ export default function ProjectAgentWorkspacePage() {
                     canvasNodes={canvas?.nodes}
                     onApplyVideoPreviewNodes={
                         canvas
-                            ? ({ nodes }) => {
+                            ? ({ nodes, focusNodeIds }) => {
                                   updateCanvas(canvas.id, { nodes });
+                                  if (focusNodeIds[0]) router.push(`/canvas/${canvas.id}?focusNodeId=${focusNodeIds[0]}`);
                               }
                             : undefined
                     }
