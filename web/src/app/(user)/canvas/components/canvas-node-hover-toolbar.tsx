@@ -276,12 +276,10 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
 
 function ToolbarAction({ title, label, icon, onClick, hint, active = false, danger = false }: { title: string; label: string; icon: ReactNode; onClick?: () => void; hint?: string; active?: boolean; danger?: boolean }) {
     return (
-        <Tooltip title={title} placement="top" mouseEnterDelay={0.2}>
-            <button type="button" className={`group relative flex h-12 items-center whitespace-nowrap px-1.5 ${danger ? "text-[#ef4444]" : ""}`} onClick={onClick} aria-label={title}>
-                <span className={`flex h-9 items-center gap-2 rounded-lg px-2.5 transition group-hover:bg-[#f0f0f1] ${active ? "bg-[#eeeeef]" : ""}`}>
+        <Tooltip title={hint ? `${title} · ${hint}` : title || label} placement="top" mouseEnterDelay={0.2}>
+            <button type="button" className={`group relative grid h-12 w-12 place-items-center px-1.5 ${danger ? "text-[#ef4444]" : ""}`} onClick={onClick} aria-label={title || label}>
+                <span className={`grid size-9 place-items-center rounded-lg transition group-hover:bg-[#f0f0f1] ${active ? "bg-[#eeeeef]" : ""}`}>
                     {icon}
-                    <span>{label}</span>
-                    {hint ? <span className="text-[#a3a3a3]">{hint}</span> : null}
                 </span>
             </button>
         </Tooltip>

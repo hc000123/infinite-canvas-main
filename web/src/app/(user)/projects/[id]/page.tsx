@@ -4,14 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { App, Button, Drawer, Empty, Input, Select, Tabs, Tag } from "antd";
+import { App, Button, Drawer, Empty, Form, Input, Modal, Select, Tabs, Tag } from "antd";
 import { AlertTriangle, Bot, BookOpen, Boxes, Clapperboard, ExternalLink, FileText, Images, Library, ListVideo, Maximize2, Plus, ScrollText, Save, SlidersHorizontal, Sparkles, Workflow } from "lucide-react";
 
 import { useAssetStore, type Asset, type AssetKind } from "@/stores/use-asset-store";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { AssetBreakdownDrawer } from "../../canvas/components/asset-breakdown-drawer";
 import { CanvasCreateProjectModal } from "../../canvas/components/canvas-create-project-modal";
-import { EpisodeWorkbenchDrawer } from "../../canvas/components/episode-workbench-drawer";
 import { ImageBriefWorkbenchDrawer } from "../../canvas/components/image-brief-workbench-drawer";
 import { ProductionBibleDrawer } from "../../canvas/components/production-bible-drawer";
 import { StoryboardManagerDrawer } from "../../canvas/components/storyboard-manager-drawer";
@@ -20,7 +19,7 @@ import { useGenerationQueueStore } from "../../canvas/stores/use-generation-queu
 import { useProductionBibleStore } from "../../canvas/stores/use-production-bible-store";
 import { useScriptStore } from "../../canvas/stores/use-script-store";
 import { useStoryboardStore } from "../../canvas/stores/use-storyboard-store";
-import { buildImportedEpisodeWriteInput, canvasEpisodeContextFromCreateBinding, canvasEpisodeLabel, type CanvasCreateScriptBinding } from "../../canvas/utils/canvas-episode-context";
+import { canvasEpisodeLabel } from "../../canvas/utils/canvas-episode-context";
 import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../../canvas/utils/canvas-project-preset";
 import { buildImageBriefImageConfigNode, type ImageBrief } from "../../canvas/utils/image-brief";
 import { productionBibleKindLabel, type ProductionBibleKind } from "../../canvas/utils/production-bible";
@@ -34,10 +33,16 @@ import { LocalAiTaskLogPanel } from "../components/local-ai-task-log-panel";
 import { useAgentTaskStore } from "../use-agent-task-store";
 import { useCreativeProjectStore } from "../use-creative-project-store";
 
+type EpisodeImportFormValues = {
+    title: string;
+    scriptText: string;
+};
+
 export default function CreativeProjectDetailPage() {
     const params = useParams<{ id: string }>();
     const router = useRouter();
     const { message } = App.useApp();
+    const [episodeImportForm] = Form.useForm<EpisodeImportFormValues>();
     const effectiveConfig = useEffectiveConfig();
     const projectId = params.id;
     const project = useCreativeProjectStore((state) => state.projects.find((item) => item.id === projectId));
@@ -59,6 +64,7 @@ export default function CreativeProjectDetailPage() {
     const agentTasks = useAgentTaskStore((state) => state.tasks);
     const [activeTab, setActiveTab] = useState("overview");
     const [createCanvasOpen, setCreateCanvasOpen] = useState(false);
+    const [episodeImportOpen, setEpisodeImportOpen] = useState(false);
     const [editingCanvasPresetId, setEditingCanvasPresetId] = useState("");
     const [descriptionDraft, setDescriptionDraft] = useState(project?.description || "");
     const [bindingCanvasId, setBindingCanvasId] = useState("");
@@ -70,7 +76,6 @@ export default function CreativeProjectDetailPage() {
     const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
     const [storyboardOpen, setStoryboardOpen] = useState(false);
     const [storyboardInitialGroupId, setStoryboardInitialGroupId] = useState("");
-    const [episodeWorkbenchOpen, setEpisodeWorkbenchOpen] = useState(false);
     const [assetBreakdownOpen, setAssetBreakdownOpen] = useState(false);
     const [imageBriefOpen, setImageBriefOpen] = useState(false);
     const [productionBibleOpen, setProductionBibleOpen] = useState(false);
@@ -174,6 +179,11 @@ export default function CreativeProjectDetailPage() {
         setDescriptionDraft(project?.description || "");
     }, [project?.description]);
 
+    useEffect(() => {
+        if (!episodeImportOpen) return;
+        episodeImportForm.setFieldsValue({ title: `第 ${projectEpisodes.length + 1} 集`, scriptText: "" });
+    }, [episodeImportForm, episodeImportOpen, projectEpisodes.length]);
+
     if (!project) {
         return (
             <main className="h-full overflow-auto bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
@@ -191,12 +201,21 @@ export default function CreativeProjectDetailPage() {
         message.success("项目说明已保存");
     };
 
-    const createCanvasAndOpen = (title: string, preset: CanvasProjectPreset, scriptBinding?: CanvasCreateScriptBinding) => {
-        const importedEpisode = buildImportedEpisodeWriteInput(project.id, scriptBinding);
-        if (importedEpisode && scriptBinding?.mode === "import") upsertScriptProject(project.id, scriptBinding.scriptText);
-        const importedEpisodeId = importedEpisode ? addEpisode(importedEpisode) : undefined;
-        const episodeContext = canvasEpisodeContextFromCreateBinding(project.id, scriptBinding, importedEpisodeId);
-        const canvasId = createCanvas(title, preset, { projectId: project.id, episodeContext });
+    const importEpisodeAndOpen = async () => {
+        const values = await episodeImportForm.validateFields();
+        const scriptText = values.scriptText.trim();
+        const title = values.title.trim() || `第 ${projectEpisodes.length + 1} 集`;
+        if (!scriptText) return message.warning("请粘贴本集剧本");
+        upsertScriptProject(project.id, scriptText);
+        const episodeId = addEpisode({ projectId: project.id, order: projectEpisodes.length + 1, title, summary: scriptText, hook: "", turningPoint: "", cliffhanger: "" });
+        setEpisodeImportOpen(false);
+        episodeImportForm.resetFields();
+        message.success("已导入本集剧本");
+        router.push(`/projects/${project.id}/episodes/${episodeId}/workbench`);
+    };
+
+    const createCanvasAndOpen = (title: string, preset: CanvasProjectPreset) => {
+        const canvasId = createCanvas(title, preset, { projectId: project.id });
         attachCanvas(project.id, canvasId);
         setCreateCanvasOpen(false);
         router.push(`/canvas/${canvasId}`);
@@ -278,34 +297,40 @@ export default function CreativeProjectDetailPage() {
         if (target.type === "primary-canvas") openPrimaryCanvas();
     };
 
+    const primaryEpisode = projectEpisodes[0];
+
     return (
         <main className="h-full overflow-auto bg-background text-stone-950 dark:text-stone-100">
-            <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10">
-                <header className="border-b border-stone-200 pb-6 dark:border-stone-800">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="min-w-0">
-                            <Link href="/projects" className="text-xs text-stone-500 hover:text-stone-950 dark:hover:text-stone-100">
-                                项目工作台
-                            </Link>
-                            <h1 className="mt-3 text-3xl font-semibold">{project.title}</h1>
-                            <p className="mt-2 text-sm text-stone-500">{canvasProjectPresetSummary(project.preset)}</p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            <Button icon={<Plus className="size-4" />} onClick={() => setCreateCanvasOpen(true)}>
-                                新建画布
-                            </Button>
-                            <Button type="primary" icon={<Maximize2 className="size-4" />} onClick={openPrimaryCanvas}>
-                                打开画布
-                            </Button>
-                        </div>
-                    </div>
-                    <div className="mt-5 grid gap-3 md:grid-cols-[1fr_auto]">
-                        <Input.TextArea value={descriptionDraft} rows={2} placeholder="补充项目说明、目标风格或当前阶段" onChange={(event) => setDescriptionDraft(event.target.value)} />
-                        <Button icon={<Save className="size-4" />} onClick={saveDescription}>
-                            保存说明
-                        </Button>
+            <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
+                <header className="flex flex-wrap items-end justify-between gap-4">
+                    <div className="min-w-0">
+                        <Link href="/projects" className="text-xs text-stone-500 hover:text-stone-950 dark:hover:text-stone-100">
+                            项目工作台
+                        </Link>
+                        <h1 className="mt-3 text-3xl font-semibold">{project.title}</h1>
+                        <p className="mt-2 text-sm text-stone-500">{canvasProjectPresetSummary(project.preset)}</p>
                     </div>
                 </header>
+
+                <ProjectCommandCenter
+                    dashboard={overviewDashboard}
+                    descriptionDraft={descriptionDraft}
+                    hasCanvas={Boolean(projectCanvases.length)}
+                    primaryEpisodeLabel={primaryEpisode ? `${primaryEpisode.order}. ${primaryEpisode.title}` : ""}
+                    primaryEpisodeReady={Boolean(primaryEpisode?.summary.trim())}
+                    onCreateCanvas={() => setCreateCanvasOpen(true)}
+                    onDescriptionDraftChange={setDescriptionDraft}
+                    onImportEpisode={() => setEpisodeImportOpen(true)}
+                    onManageEpisodes={() => setEpisodeImportOpen(true)}
+                    onOpenAgent={() => router.push(`/projects/${project.id}/agents`)}
+                    onOpenCanvas={openPrimaryCanvas}
+                    onOpenPrimaryEpisode={() => {
+                        if (primaryEpisode) router.push(`/projects/${project.id}/episodes/${primaryEpisode.id}/workbench`);
+                        else setEpisodeImportOpen(true);
+                    }}
+                    onRunSuggestion={runOverviewAction}
+                    onSaveDescription={saveDescription}
+                />
 
                 <Tabs
                     activeKey={activeTab}
@@ -380,8 +405,8 @@ export default function CreativeProjectDetailPage() {
                                                 </div>
                                                 <p className="mt-1 text-sm text-stone-500">按集进入导演分析、服化道美术设计、Seedance 分镜和人工确认写入。</p>
                                             </div>
-                                            <Button size="small" icon={<ScrollText className="size-3.5" />} onClick={() => setEpisodeWorkbenchOpen(true)}>
-                                                管理分集剧本
+                                        <Button size="small" icon={<ScrollText className="size-3.5" />} onClick={() => setEpisodeImportOpen(true)}>
+                                            导入本集剧本
                                             </Button>
                                         </div>
                                         {projectEpisodes.length ? (
@@ -410,11 +435,20 @@ export default function CreativeProjectDetailPage() {
                                                 })}
                                             </div>
                                         ) : (
-                                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无分集。先在本集工作台新建集数。" className="py-8" />
+                                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无分集。先导入本集剧本，再进入生产流程。" className="py-8" />
                                         )}
                                     </section>
                                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                        <EntryCard icon={<ScrollText className="size-5" />} title="剧本 / 本集工作台" description="管理当前集剧本、分镜头表、生成镜头组和视频生成状态" onOpen={() => setEpisodeWorkbenchOpen(true)} />
+                                        <EntryCard
+                                            icon={<ScrollText className="size-5" />}
+                                            title="本集生产流程"
+                                            description="先导入剧本并完成 Agent 分析，最后再创建画布承接结果"
+                                            onOpen={() => {
+                                                const firstEpisode = projectEpisodes[0];
+                                                if (firstEpisode) router.push(`/projects/${project.id}/episodes/${firstEpisode.id}/workbench`);
+                                                else setEpisodeImportOpen(true);
+                                            }}
+                                        />
                                         <EntryCard
                                             icon={<BookOpen className="size-5" />}
                                             title="设定库"
@@ -467,10 +501,29 @@ export default function CreativeProjectDetailPage() {
                 open={createCanvasOpen}
                 defaultTitle={`${project.title} 画布 ${projectCanvases.length + 1}`}
                 config={effectiveConfig}
-                scriptOptions={{ projectId: project.id, episodes, scenes }}
+                modalTitle="最后创建画布"
+                helperText="画布用于承接分镜、提示词和视频配置节点。建议先在本集生产流程完成分析与审核，再作为最后一步创建或绑定画布。"
                 onCancel={() => setCreateCanvasOpen(false)}
                 onCreate={createCanvasAndOpen}
             />
+            <Modal
+                title="导入本集剧本"
+                open={episodeImportOpen}
+                onCancel={() => setEpisodeImportOpen(false)}
+                onOk={() => void importEpisodeAndOpen()}
+                okText="导入并进入生产流程"
+                cancelText="取消"
+                destroyOnHidden
+            >
+                <Form form={episodeImportForm} layout="vertical" initialValues={{ title: `第 ${projectEpisodes.length + 1} 集`, scriptText: "" }} requiredMark={false}>
+                    <Form.Item name="title" label="本集标题" rules={[{ required: true, message: "请填写本集标题" }]}>
+                        <Input placeholder="例如：第一集" />
+                    </Form.Item>
+                    <Form.Item name="scriptText" label="本集剧本" rules={[{ required: true, message: "请粘贴本集剧本" }]}>
+                        <Input.TextArea rows={10} placeholder="先导入剧本并进入本集生产流程；画布会在最后写入结果时再创建或绑定。" />
+                    </Form.Item>
+                </Form>
+            </Modal>
             <CanvasCreateProjectModal
                 open={Boolean(editingCanvasPreset)}
                 defaultTitle={editingCanvasPreset?.title || project.title}
@@ -484,22 +537,6 @@ export default function CreativeProjectDetailPage() {
                 onCreate={saveCanvasPreset}
             />
             <AssetReferenceDrawer asset={previewAsset} onClose={() => setPreviewAsset(null)} />
-            <EpisodeWorkbenchDrawer
-                open={episodeWorkbenchOpen}
-                projectId={project.id}
-                projectTitle={project.title}
-                canvases={projectCanvases}
-                canvasNodes={projectCanvases.flatMap((canvas) => canvas.nodes)}
-                onClose={() => setEpisodeWorkbenchOpen(false)}
-                onUpdateCanvasEpisode={(canvasId, patch) => updateCanvas(canvasId, patch)}
-                onCreateCanvas={() => setCreateCanvasOpen(true)}
-                onOpenAsset={setPreviewAsset}
-                onLocateNode={(nodeId) => {
-                    const canvas = projectCanvases.find((item) => item.nodes.some((node) => node.id === nodeId));
-                    if (canvas) router.push(`/canvas/${canvas.id}`);
-                }}
-                onOpenAgentSettings={() => router.push(`/projects/${project.id}/agents`)}
-            />
             <StoryboardManagerDrawer
                 open={storyboardOpen}
                 projectId={project.id}
@@ -522,6 +559,130 @@ export default function CreativeProjectDetailPage() {
             />
             <ProductionBibleDrawer open={productionBibleOpen} projectId={project.id} projectTitle={project.title} canvases={projectCanvases} initialKind={productionBibleInitialKind} onClose={() => setProductionBibleOpen(false)} />
         </main>
+    );
+}
+
+function ProjectCommandCenter({
+    dashboard,
+    descriptionDraft,
+    hasCanvas,
+    primaryEpisodeLabel,
+    primaryEpisodeReady,
+    onCreateCanvas,
+    onDescriptionDraftChange,
+    onImportEpisode,
+    onManageEpisodes,
+    onOpenAgent,
+    onOpenCanvas,
+    onOpenPrimaryEpisode,
+    onRunSuggestion,
+    onSaveDescription,
+}: {
+    dashboard: ProjectOverviewDashboard | null;
+    descriptionDraft: string;
+    hasCanvas: boolean;
+    primaryEpisodeLabel: string;
+    primaryEpisodeReady: boolean;
+    onCreateCanvas: () => void;
+    onDescriptionDraftChange: (value: string) => void;
+    onImportEpisode: () => void;
+    onManageEpisodes: () => void;
+    onOpenAgent: () => void;
+    onOpenCanvas: () => void;
+    onOpenPrimaryEpisode: () => void;
+    onRunSuggestion: (target: ProjectOverviewActionTarget) => void;
+    onSaveDescription: () => void;
+}) {
+    const stats = dashboard?.stats;
+    const primarySuggestion = dashboard?.suggestions[0];
+    const primaryActionText = primaryEpisodeLabel ? "进入本集生产流程" : "导入本集剧本";
+    return (
+        <section className="grid gap-5 border-y border-stone-200 py-5 dark:border-stone-800 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="grid gap-4">
+                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                            <Workflow className="size-3.5" />
+                            生产主线
+                        </div>
+                        <h2 className="mt-2 text-xl font-semibold">{primaryEpisodeLabel || "先建立本集内容"}</h2>
+                        <p className="mt-2 text-sm text-stone-500">{primaryEpisodeLabel ? (primaryEpisodeReady ? "剧本已就绪，可进入导演分析、服化道和 Seedance 分镜流程。" : "当前集还缺少剧本文本，先补齐剧本再进入生产流程。") : "项目页先围绕单集推进，避免在画布、分镜和素材入口之间来回找。"}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <Button type="primary" icon={<Workflow className="size-4" />} onClick={onOpenPrimaryEpisode}>
+                            {primaryActionText}
+                        </Button>
+                        <Button icon={<ScrollText className="size-4" />} onClick={onManageEpisodes}>
+                            导入剧本
+                        </Button>
+                        <Button icon={<Bot className="size-4" />} onClick={onOpenAgent}>
+                            Agent
+                        </Button>
+                    </div>
+                </div>
+
+                {primarySuggestion ? (
+                    <div className="flex flex-col gap-3 rounded-lg bg-stone-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:bg-white/5">
+                        <div className="min-w-0">
+                            <div className="text-sm font-medium">{primarySuggestion.title}</div>
+                            <div className="mt-1 text-sm text-stone-500">{primarySuggestion.description}</div>
+                        </div>
+                        <Button size="small" onClick={() => onRunSuggestion(primarySuggestion.target)}>
+                            {primarySuggestion.actionLabel}
+                        </Button>
+                    </div>
+                ) : null}
+
+                {stats ? (
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                        <ProjectCommandStat label="画布" value={stats.canvasCount} onClick={onOpenCanvas} />
+                        <ProjectCommandStat label="分集 / 场次" value={`${stats.episodeCount} / ${stats.sceneCount}`} onClick={onManageEpisodes} />
+                        <ProjectCommandStat label="分镜" value={`${stats.storyboardGroupCount} / ${stats.storyboardShotCount}`} onClick={() => onRunSuggestion({ type: "storyboard" })} />
+                        <ProjectCommandStat label="缺素材" value={stats.missingMaterialCount} tone={stats.missingMaterialCount ? "warning" : "default"} onClick={() => onRunSuggestion({ type: "asset-references", missingOnly: true })} />
+                    </div>
+                ) : null}
+            </div>
+
+            <div className="grid gap-3">
+                <div className="flex flex-wrap gap-2">
+                    <Button icon={<Plus className="size-4" />} onClick={onCreateCanvas}>
+                        最后创建画布
+                    </Button>
+                    {hasCanvas ? (
+                        <Button icon={<Maximize2 className="size-4" />} onClick={onOpenCanvas}>
+                            打开画布
+                        </Button>
+                    ) : null}
+                </div>
+                {!primaryEpisodeLabel ? (
+                    <Button type="primary" icon={<ScrollText className="size-4" />} onClick={onImportEpisode}>
+                        先导入本集
+                    </Button>
+                ) : null}
+                <div>
+                    <div className="mb-2 text-sm font-medium">项目备注</div>
+                    <Input.TextArea value={descriptionDraft} rows={3} placeholder="补充项目说明、目标风格或当前阶段" onChange={(event) => onDescriptionDraftChange(event.target.value)} />
+                    <Button className="mt-2" icon={<Save className="size-4" />} onClick={onSaveDescription}>
+                        保存说明
+                    </Button>
+                </div>
+            </div>
+        </section>
+    );
+}
+
+function ProjectCommandStat({ label, value, tone = "default", onClick }: { label: string; value: string | number; tone?: "default" | "warning"; onClick: () => void }) {
+    return (
+        <button
+            type="button"
+            className={`rounded-lg border px-3 py-2 text-left transition hover:bg-stone-50 dark:hover:bg-white/5 ${
+                tone === "warning" ? "border-amber-300 text-amber-600 dark:border-amber-900/70" : "border-stone-200 text-stone-500 dark:border-stone-800"
+            }`}
+            onClick={onClick}
+        >
+            <div className="text-xs">{label}</div>
+            <div className="mt-1 text-lg font-semibold text-stone-950 dark:text-stone-100">{value}</div>
+        </button>
     );
 }
 

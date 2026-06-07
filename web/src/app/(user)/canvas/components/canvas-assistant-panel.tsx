@@ -38,6 +38,7 @@ const PANEL_MOTION_MS = 500;
 const PANEL_MOTION_SECONDS = PANEL_MOTION_MS / 1000;
 
 type CanvasAssistantPanelProps = {
+    embedded?: boolean;
     projectId: string;
     canvasId: string;
     episodeId?: string;
@@ -57,6 +58,7 @@ type CanvasAssistantPanelProps = {
 };
 
 export function CanvasAssistantPanel({
+    embedded = false,
     projectId,
     canvasId,
     episodeId,
@@ -325,22 +327,9 @@ export function CanvasAssistantPanel({
         window.setTimeout(onCollapse, PANEL_MOTION_MS);
     };
 
-    return (
-        <motion.div
-            className="flex shrink-0"
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: closing ? 0 : width + 1, opacity: closing ? 0 : 1 }}
-            transition={{ duration: resizing ? 0 : PANEL_MOTION_SECONDS, ease: [0.22, 1, 0.36, 1] }}
-            style={{ overflow: "clip", pointerEvents: closing ? "none" : undefined }}
-        >
-            <motion.aside
-                className="relative flex shrink-0 flex-col border-l"
-                initial={{ x: 48 }}
-                animate={{ x: closing ? 28 : 0 }}
-                transition={{ duration: resizing ? 0 : PANEL_MOTION_SECONDS, ease: [0.22, 1, 0.36, 1] }}
-                style={{ width, background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}
-            >
-                <button type="button" className="absolute inset-y-0 left-0 z-40 w-4 -translate-x-1/2 cursor-col-resize" onMouseDown={startResize} aria-label="调整右侧面板宽度" />
+    const content = (
+        <>
+                {!embedded ? <button type="button" className="absolute inset-y-0 left-0 z-40 w-4 -translate-x-1/2 cursor-col-resize" onMouseDown={startResize} aria-label="调整右侧面板宽度" /> : null}
                 <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
                     <div className="flex items-center gap-2 text-sm font-medium">
                         <Sparkles className="size-4" />
@@ -484,6 +473,33 @@ export function CanvasAssistantPanel({
                 >
                     <p className="text-sm opacity-60">将删除 {deleteChatIds.length} 条对话记录，此操作不可撤销。</p>
                 </Modal>
+        </>
+    );
+
+    if (embedded) {
+        return (
+            <div className="relative flex h-full min-h-0 flex-col" style={{ background: theme.node.panel, color: theme.node.text }}>
+                {content}
+            </div>
+        );
+    }
+
+    return (
+        <motion.div
+            className="flex shrink-0"
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: closing ? 0 : width + 1, opacity: closing ? 0 : 1 }}
+            transition={{ duration: resizing ? 0 : PANEL_MOTION_SECONDS, ease: [0.22, 1, 0.36, 1] }}
+            style={{ overflow: "clip", pointerEvents: closing ? "none" : undefined }}
+        >
+            <motion.aside
+                className="relative flex shrink-0 flex-col border-l"
+                initial={{ x: 48 }}
+                animate={{ x: closing ? 28 : 0 }}
+                transition={{ duration: resizing ? 0 : PANEL_MOTION_SECONDS, ease: [0.22, 1, 0.36, 1] }}
+                style={{ width, background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}
+            >
+                {content}
             </motion.aside>
         </motion.div>
     );

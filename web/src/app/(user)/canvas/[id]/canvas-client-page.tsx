@@ -49,7 +49,7 @@ import { buildAngleImageNode, buildAnglePrompt, buildAngleReferenceImage, buildC
 import { collectBatchAwareDeletedNodeIds, isHiddenBatchChild, isHiddenBatchConnectionEndpoint, removeDeletedNodesFromBatches, setBatchPrimaryInNodes, toggleBatchExpandedInNodes } from "../utils/canvas-batch-nodes";
 import { applyCanvasProjectPresetToConfig } from "../utils/canvas-project-preset";
 import { planShotGroupCanvasInsert, planStoryboardGroupCanvasInsert, type StoryboardAssetRef } from "../utils/storyboard-management";
-import { buildEpisodeWorkbenchStats, deriveEpisodeProductionStatus, productionStatusLabel } from "../utils/episode-workbench";
+import { activeEpisodeShotGroups, activeEpisodeTableShots, buildEpisodeWorkbenchStats, deriveEpisodeProductionStatus, productionStatusLabel } from "../utils/episode-workbench";
 import { reviewVideoPromptBeforeGeneration, shouldRunVideoPromptReview, type PromptReviewResult } from "../utils/canvas-prompt-review";
 import { cropDataUrl } from "../utils/canvas-image-data";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
@@ -70,6 +70,7 @@ import { NODE_DEFAULT_SIZE, VIDEO_NODE_MAX_HEIGHT, VIDEO_NODE_MAX_WIDTH, getNode
 import { ActiveConnectionPath, ConnectionPath } from "../components/canvas-connections";
 import { CanvasConfigNodePanel } from "../components/canvas-config-node-panel";
 import { CanvasAssistantPanel } from "../components/canvas-assistant-panel";
+import { CanvasContextInspector, type CanvasInspectorView } from "../components/canvas-context-inspector";
 import { CanvasNodeContextMenu } from "../components/canvas-context-menu";
 import { CanvasNodeAngleDialog } from "../components/canvas-node-angle-dialog";
 import { CanvasNodeCropDialog } from "../components/canvas-node-crop-dialog";
@@ -80,6 +81,7 @@ import { Minimap } from "../components/canvas-mini-map";
 import { CanvasNode } from "../components/canvas-node";
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "../components/canvas-node-prompt-panel";
 import { CanvasToolbar } from "../components/canvas-toolbar";
+import { CanvasStoryboardTimeline } from "../components/canvas-storyboard-timeline";
 import { AssetPickerModal, type AssetPickerTab } from "../components/asset-picker-modal";
 import { ImageBriefWorkbenchDrawer } from "../components/image-brief-workbench-drawer";
 import { EpisodeWorkbenchDrawer } from "../components/episode-workbench-drawer";
@@ -326,6 +328,8 @@ function InfiniteCanvasPage() {
     const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
     const [assistantCollapsed, setAssistantCollapsed] = useState(true);
     const [assistantMounted, setAssistantMounted] = useState(false);
+    const [inspectorView, setInspectorView] = useState<CanvasInspectorView>("context");
+    const [activeTimelineShotId, setActiveTimelineShotId] = useState("");
     const [titleEditing, setTitleEditing] = useState(false);
     const [titleDraft, setTitleDraft] = useState("");
     const [collapsingBatchIds, setCollapsingBatchIds] = useState<Set<string>>(new Set());
@@ -649,6 +653,7 @@ function InfiniteCanvasPage() {
     const angleNode = angleNodeId ? nodeById.get(angleNodeId) || null : null;
     const previewNode = previewNodeId ? nodeById.get(previewNodeId) || null : null;
     const hasMultipleSelectedNodes = selectedNodeIds.size > 1;
+    const selectedInspectorNode = selectedNodeIds.size === 1 ? nodeById.get(Array.from(selectedNodeIds)[0]) || null : null;
     const activeNodeId = hasMultipleSelectedNodes ? null : hoveredNodeId || (selectedNodeIds.size === 1 ? Array.from(selectedNodeIds)[0] : null);
     const batchChildCountById = useMemo(() => {
         const map = new Map<string, number>();
@@ -695,6 +700,9 @@ function InfiniteCanvasPage() {
         });
         return map;
     }, [connections, nodes]);
+    const timelineShots = useMemo(() => activeEpisodeTableShots(storyboardTableShots, currentProject), [currentProject, storyboardTableShots]);
+    const timelineShotGroups = useMemo(() => activeEpisodeShotGroups(storyboardShotGroups, currentProject), [currentProject, storyboardShotGroups]);
+    const activeTimelineShot = activeTimelineShotId ? timelineShots.find((shot) => shot.id === activeTimelineShotId) || null : null;
 
     const createNode = useCallback(
         (type: CanvasNodeType, position?: Position) => {
@@ -1984,6 +1992,7 @@ function InfiniteCanvasPage() {
                     onExpandAssistant={() => {
                         setAssistantMounted(true);
                         setAssistantCollapsed(false);
+                        setInspectorView("assistant");
                     }}
                 />
 
@@ -2197,6 +2206,38 @@ function InfiniteCanvasPage() {
                     onOpenImageBriefs={() => setImageBriefOpen(true)}
                 />
 
+                <CanvasStoryboardTimeline
+                    shots={timelineShots}
+                    shotGroups={timelineShotGroups}
+                    nodes={nodes}
+                    activeShotId={activeTimelineShotId}
+                    onOpenWorkbench={() => {
+                        if (currentProject?.projectId && currentProject.episodeId) {
+                            router.push(`/projects/${currentProject.projectId}/episodes/${currentProject.episodeId}/workbench`);
+                            return;
+                        }
+                        setEpisodeWorkbenchOpen(true);
+                    }}
+                    onSelectShot={(shot, nodeId) => {
+                        setActiveTimelineShotId(shot.id);
+                        setInspectorView("context");
+                        setSelectedConnectionId(null);
+                        if (!nodeId) {
+                            setSelectedNodeIds(new Set());
+                            return;
+                        }
+                        const node = nodesRef.current.find((item) => item.id === nodeId);
+                        setSelectedNodeIds(new Set([nodeId]));
+                        if (!node) return;
+                        const k = Math.max(0.45, Math.min(viewportRef.current.k, 1.2));
+                        setViewport({
+                            x: size.width / 2 - (node.position.x + node.width / 2) * k,
+                            y: size.height / 2 - (node.position.y + node.height / 2) * k,
+                            k,
+                        });
+                    }}
+                />
+
                 {isMiniMapOpen ? <Minimap nodes={nodes} viewport={viewport} viewportSize={size} onViewportChange={setViewport} /> : null}
 
                 <CanvasZoomControls scale={viewport.k} onScaleChange={setZoomScale} onReset={resetViewport} isMiniMapOpen={isMiniMapOpen} onToggleMiniMap={() => setIsMiniMapOpen((value) => !value)} />
@@ -2322,26 +2363,74 @@ function InfiniteCanvasPage() {
                     onClose={() => setImageBriefOpen(false)}
                 />
             </section>
-            {assistantMounted ? (
-                <CanvasAssistantPanel
-                    projectId={workspaceProjectId}
-                    canvasId={canvasId}
-                    episodeId={canvasEpisodeContext?.episodeId}
-                    nodes={nodes}
-                    connections={connections}
-                    selectedNodeIds={selectedNodeIds}
-                    sessions={chatSessions}
-                    activeSessionId={activeChatId}
-                    onSelectNodeIds={setSelectedNodeIds}
-                    onSessionsChange={handleAssistantSessionsChange}
-                    onInsertImage={insertAssistantImage}
-                    onInsertText={insertAssistantText}
-                    onPasteImage={pasteAssistantImage}
-                    onApplyAssistantActions={applyAssistantActions}
-                    onCollapseStart={() => setAssistantCollapsed(true)}
-                    onCollapse={() => setAssistantMounted(false)}
-                />
-            ) : null}
+            <CanvasContextInspector
+                view={inspectorView}
+                onViewChange={setInspectorView}
+                title={currentProject?.title || "未命名画布"}
+                episodeLabel={canvasEpisodeLabel(currentProject)}
+                productionLabel={episodeProductionLabel}
+                hasEpisode={Boolean(currentProject?.episodeId)}
+                stats={episodeWorkbenchStats}
+                selectedNode={selectedInspectorNode}
+                selectedShot={activeTimelineShot}
+                selectedCount={selectedNodeIds.size}
+                connections={connections}
+                configInputs={selectedInspectorNode?.type === CanvasNodeType.Config ? configInputsById.get(selectedInspectorNode.id) || [] : []}
+                assistantSlot={
+                    assistantMounted ? (
+                        <CanvasAssistantPanel
+                            embedded
+                            projectId={workspaceProjectId}
+                            canvasId={canvasId}
+                            episodeId={canvasEpisodeContext?.episodeId}
+                            nodes={nodes}
+                            connections={connections}
+                            selectedNodeIds={selectedNodeIds}
+                            sessions={chatSessions}
+                            activeSessionId={activeChatId}
+                            onSelectNodeIds={setSelectedNodeIds}
+                            onSessionsChange={handleAssistantSessionsChange}
+                            onInsertImage={insertAssistantImage}
+                            onInsertText={insertAssistantText}
+                            onPasteImage={pasteAssistantImage}
+                            onApplyAssistantActions={applyAssistantActions}
+                            onCollapseStart={() => setAssistantCollapsed(true)}
+                            onCollapse={() => {
+                                setAssistantMounted(false);
+                                setInspectorView("context");
+                            }}
+                        />
+                    ) : null
+                }
+                onOpenEpisodeWorkbench={() => {
+                    if (currentProject?.projectId && currentProject.episodeId) {
+                        router.push(`/projects/${currentProject.projectId}/episodes/${currentProject.episodeId}/workbench`);
+                        return;
+                    }
+                    setEpisodeWorkbenchOpen(true);
+                }}
+                onOpenAssets={() => {
+                    setAssetPickerTab("my-assets");
+                    setAssetPickerOpen(true);
+                }}
+                onOpenImageBriefs={() => setImageBriefOpen(true)}
+                onOpenAssistant={() => {
+                    setAssistantMounted(true);
+                    setAssistantCollapsed(false);
+                }}
+                onInfo={(node) => setInfoNodeId(node.id)}
+                onEditText={openTextEditor}
+                onToggleDialog={(node) => setDialogNodeId((current) => (current === node.id ? null : node.id))}
+                onGenerateImage={generateImageFromTextNode}
+                onUpload={(node) => handleUploadRequest(node.id)}
+                onDownload={(node) => void downloadNodeMedia(node)}
+                onSaveAsset={(node) => void saveNodeAsset(node)}
+                onRetry={(node) => void handleRetryNode(node)}
+                onContinueVideo={(node) => void handleContinueVideoNode(node)}
+                onCrop={(node) => setCropNodeId(node.id)}
+                onAngle={(node) => setAngleNodeId(node.id)}
+                onViewImage={(node) => setPreviewNodeId(node.id)}
+            />
         </main>
     );
 }

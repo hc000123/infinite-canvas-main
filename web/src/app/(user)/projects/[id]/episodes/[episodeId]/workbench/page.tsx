@@ -9,11 +9,13 @@ import { CheckCircle2, Clapperboard, FileText, Library, Maximize2, Play, ScrollT
 import { requestImageQuestion } from "@/services/api/image";
 import { completeLocalTextTask, failLocalTextTask, startLocalTextTask, summarizeLocalTaskText } from "@/services/local-ai-task-log";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { CanvasCreateProjectModal } from "../../../../../canvas/components/canvas-create-project-modal";
 import { useCanvasStore } from "../../../../../canvas/stores/use-canvas-store";
 import { useScriptStore } from "../../../../../canvas/stores/use-script-store";
 import { useStoryboardStore } from "../../../../../canvas/stores/use-storyboard-store";
 import { orderedScriptScenes } from "../../../../../canvas/utils/script-management";
-import { buildEpisodeScriptSnapshot } from "../../../../../canvas/utils/canvas-episode-context";
+import { buildEpisodeScriptSnapshot, canvasEpisodeContextFromEpisode } from "../../../../../canvas/utils/canvas-episode-context";
+import type { CanvasProjectPreset } from "../../../../../canvas/utils/canvas-project-preset";
 import { orderedStoryboardTableShots } from "../../../../../canvas/utils/storyboard-management";
 import { buildSeedanceWorkflowPreset, sortedWorkflowStages, workflowStageDetail, type AgentWorkflowStage } from "../../../../agent-workflow-presets";
 import { useAgentRunnerStore } from "../../../../use-agent-runner-store";
@@ -67,10 +69,12 @@ export default function EpisodeProductionWorkbenchPage() {
     const projectId = params.id;
     const episodeId = params.episodeId;
     const project = useCreativeProjectStore((state) => state.projects.find((item) => item.id === projectId));
+    const attachCanvas = useCreativeProjectStore((state) => state.attachCanvas);
     const episode = useScriptStore((state) => state.episodes.find((item) => item.id === episodeId && item.projectId === projectId));
     const scenes = useScriptStore((state) => state.scenes);
     const updateEpisode = useScriptStore((state) => state.updateEpisode);
     const canvases = useCanvasStore((state) => state.projects);
+    const createCanvas = useCanvasStore((state) => state.createProject);
     const storyboardTableShots = useStoryboardStore((state) => state.tableShots);
     const workflowRuns = useAgentRunnerStore((state) => state.workflowRuns);
     const workflowOutputs = useAgentRunnerStore((state) => state.workflowOutputs);
@@ -92,6 +96,7 @@ export default function EpisodeProductionWorkbenchPage() {
     const effectiveConfig = useEffectiveConfig();
     const checkAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const [scriptDraft, setScriptDraft] = useState("");
+    const [createCanvasOpen, setCreateCanvasOpen] = useState(false);
     const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
     const [sceneReviewNotes, setSceneReviewNotes] = useState<Record<string, string>>({});
     const [selectedSceneKey, setSelectedSceneKey] = useState("");
@@ -161,6 +166,14 @@ export default function EpisodeProductionWorkbenchPage() {
     const saveScript = () => {
         updateEpisode(episode.id, { summary: scriptDraft });
         message.success("本集剧本已保存");
+    };
+
+    const createBoundCanvas = (title: string, preset: CanvasProjectPreset) => {
+        const canvasId = createCanvas(title, preset, { projectId: project.id, episodeContext: canvasEpisodeContextFromEpisode(project.id, episode, stageSceneRows) });
+        attachCanvas(project.id, canvasId);
+        setCreateCanvasOpen(false);
+        message.success("已创建承接画布");
+        router.push(`/canvas/${canvasId}`);
     };
 
     const runStage = async (stage: AgentWorkflowStage) => {
@@ -426,8 +439,8 @@ export default function EpisodeProductionWorkbenchPage() {
                         </div>
                         <Space wrap>
                             <Button href={`/projects/${project.id}/agents`}>Agent 工作台</Button>
-                            <Button type="primary" icon={<Maximize2 className="size-4" />} disabled={!boundCanvas} onClick={() => boundCanvas && router.push(`/canvas/${boundCanvas.id}`)}>
-                                进入画布
+                            <Button type="primary" icon={<Maximize2 className="size-4" />} onClick={() => (boundCanvas ? router.push(`/canvas/${boundCanvas.id}`) : setCreateCanvasOpen(true))}>
+                                {boundCanvas ? "进入画布" : "创建承接画布"}
                             </Button>
                         </Space>
                     </div>
@@ -531,13 +544,23 @@ export default function EpisodeProductionWorkbenchPage() {
                         ))}
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
-                        <Button type="primary" icon={<Video className="size-4" />} disabled={!boundCanvas} onClick={() => boundCanvas && router.push(`/canvas/${boundCanvas.id}`)}>
-                            去画布查看视频配置节点
+                        <Button type="primary" icon={<Video className="size-4" />} onClick={() => (boundCanvas ? router.push(`/canvas/${boundCanvas.id}`) : setCreateCanvasOpen(true))}>
+                            {boundCanvas ? "去画布查看视频配置节点" : "最后创建承接画布"}
                         </Button>
-                        {!boundCanvas ? <span className="self-center text-sm text-stone-500">没有绑定画布，分镜头表和视频节点写入不可用。</span> : null}
+                        {!boundCanvas ? <span className="self-center text-sm text-stone-500">前面可以先完成文本分析与审核；写入分镜头表和视频节点前，再创建承接画布。</span> : null}
                     </div>
                 </Card>
             </div>
+            <CanvasCreateProjectModal
+                open={createCanvasOpen}
+                defaultTitle={`${episode.title} 承接画布`}
+                initialPreset={project.preset}
+                config={effectiveConfig}
+                modalTitle="创建承接画布"
+                helperText="这一步会把当前集绑定到新画布，用于承接分镜头表、Seedance 提示词和视频配置节点；不会自动生成图片或视频。"
+                onCancel={() => setCreateCanvasOpen(false)}
+                onCreate={createBoundCanvas}
+            />
         </main>
     );
 }

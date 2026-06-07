@@ -488,7 +488,7 @@ export function EpisodeWorkbenchDrawer({
                     <Empty description="当前项目还没有画布">
                         {onCreateCanvas ? (
                             <Button type="primary" onClick={onCreateCanvas}>
-                                新建一集画布并导入剧本
+                                最后创建承接画布
                             </Button>
                         ) : null}
                     </Empty>
