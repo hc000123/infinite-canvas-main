@@ -24,7 +24,7 @@ export function AppTopNav() {
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
     const isReady = useUserStore((state) => state.isReady);
-    const hideHeader = /^\/canvas\/[^/]+/.test(pathname) || pathname === "/projects" || pathname.startsWith("/login");
+    const hideHeader = /^\/canvas\/[^/]+/.test(pathname) || pathname === "/projects" || pathname.startsWith("/projects/") || pathname.startsWith("/login");
     const slug = pathname.split("/").filter(Boolean)[0];
     const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
 
