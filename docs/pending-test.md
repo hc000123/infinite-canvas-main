@@ -13,6 +13,13 @@
 - 验收步骤：打开 `/projects/:id/agents`，确认页面加载态正常，控制台或 dev server 日志不再出现 `[antd: Spin] tip is deprecated`。
 - 明确不应发生：不触发 AI 生成、不扣费、不改变 Agent 工作台业务逻辑。
 
+#### v0.2.76：InputNumber 后缀警告修复
+
+- 入口：项目列表的新建画布弹窗、后台系统设置的模型算力点表。
+- 本次修复：把 Ant Design InputNumber 的 `addonAfter` 后缀改为 `Space.Compact` 组合，避免 antd 6 deprecated 警告。
+- 验收步骤：打开项目列表并唤起新建画布弹窗，确认控制台或 dev server 日志不再出现 `[antd: InputNumber] addonAfter is deprecated`；后台系统设置模型算力点表同样无该警告。
+- 明确不应发生：不改变默认时长、模型费用字段和表单提交数据结构。
+
 #### v0.2.76：依赖与后端安全边界修复
 
 - 入口：前端安装 / 测试脚本、后端 AI 代理、后台素材上传、上传素材静态访问、系统配置。

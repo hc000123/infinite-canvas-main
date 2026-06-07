@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { Form, Input, InputNumber, Modal, Select, Typography } from "antd";
+import { Form, Input, InputNumber, Modal, Select, Space, Typography } from "antd";
 
 import type { AiConfig } from "@/stores/use-config-store";
 import { canvasEpisodeContextFromEpisode, type CanvasCreateScriptBinding } from "../utils/canvas-episode-context";
@@ -120,7 +120,10 @@ export function CanvasCreateProjectModal({
                         />
                     </Form.Item>
                     <Form.Item name="defaultDuration" label="默认时长">
-                        <InputNumber min={1} max={20} className="w-full" addonAfter="秒" />
+                        <Space.Compact className="w-full">
+                            <InputNumber min={1} max={20} className="w-full" />
+                            <Input className="w-12 text-center" value="秒" readOnly />
+                        </Space.Compact>
                     </Form.Item>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
