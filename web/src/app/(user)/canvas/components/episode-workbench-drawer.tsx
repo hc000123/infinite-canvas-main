@@ -189,13 +189,15 @@ export function EpisodeWorkbenchDrawer({
     const storyboardDirectorConfig = useMemo(() => resolvedAgentConfigs.find((config) => config.kind === "storyboard_director"), [resolvedAgentConfigs]);
     const storyboardDirectorAvailability = shouldAllowStoryboardDirectorRun(storyboardDirectorConfig);
     const storyboardDirectorRunReadiness = canRunStoryboardDirector(activeCanvas);
+    const activeCanvasEpisodeId = activeCanvas?.episodeId;
+    const activeCanvasIdForRuns = activeCanvas?.id;
     const activeAssetExtractorRuns = useMemo(
-        () => (activeCanvas?.episodeId ? listAgentRunsByEpisode(agentRuns, activeCanvas.episodeId).filter((run) => run.agentKind === "asset_extractor" && run.input.canvasId === activeCanvas.id) : []),
-        [activeCanvas?.episodeId, activeCanvas?.id, agentRuns],
+        () => (activeCanvasEpisodeId ? listAgentRunsByEpisode(agentRuns, activeCanvasEpisodeId).filter((run) => run.agentKind === "asset_extractor" && run.input.canvasId === activeCanvasIdForRuns) : []),
+        [activeCanvasEpisodeId, activeCanvasIdForRuns, agentRuns],
     );
     const activeStoryboardDirectorRuns = useMemo(
-        () => (activeCanvas?.episodeId ? listAgentRunsByEpisode(agentRuns, activeCanvas.episodeId).filter((run) => run.agentKind === "storyboard_director" && run.input.canvasId === activeCanvas.id) : []),
-        [activeCanvas?.episodeId, activeCanvas?.id, agentRuns],
+        () => (activeCanvasEpisodeId ? listAgentRunsByEpisode(agentRuns, activeCanvasEpisodeId).filter((run) => run.agentKind === "storyboard_director" && run.input.canvasId === activeCanvasIdForRuns) : []),
+        [activeCanvasEpisodeId, activeCanvasIdForRuns, agentRuns],
     );
     const episodeOptions = useMemo(
         () =>
@@ -330,7 +332,7 @@ export function EpisodeWorkbenchDrawer({
         if (!activeCanvas?.episodeId) return message.warning("请先绑定或导入本集剧本");
         const validation = validateStoryboardDraftWriteMode({ existingShotCount: activeShots.length, mode });
         if (!validation.valid) {
-            let destroyConfirm: (() => void) | undefined;
+            const confirmationRef: { destroy?: () => void } = {};
             const confirmation = modal.confirm({
                 title: "写入分镜头表",
                 content: "当前已有分镜头表，请选择追加到现有分镜后面，或覆盖当前本集分镜头表并清空对应生成镜头组。",
@@ -342,7 +344,7 @@ export function EpisodeWorkbenchDrawer({
                         <Button
                             danger
                             onClick={() => {
-                                destroyConfirm?.();
+                                confirmationRef.destroy?.();
                                 applyStoryboardDirectorRun(run, "replace");
                             }}
                         >
@@ -353,7 +355,7 @@ export function EpisodeWorkbenchDrawer({
                     </>
                 ),
             });
-            destroyConfirm = confirmation.destroy;
+            confirmationRef.destroy = confirmation.destroy;
             return;
         }
         try {
