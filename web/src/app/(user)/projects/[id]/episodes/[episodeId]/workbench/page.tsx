@@ -113,6 +113,9 @@ type EpisodeModuleConfig = {
 type WorkflowStageDisplaySummary = ReturnType<typeof summarizeWorkflowStageDisplayState>;
 type EpisodeAssetProcessMode = "bind" | "generate";
 type EpisodeAssetFilter = "全部" | "缺素材" | "已绑定" | "待生成" | "角色" | "场景" | "道具" | "服装";
+type StoryboardPackageDrawerTab = "shots" | "script" | "prompt" | "assets";
+type StoryboardPackageStatus = "已确认" | "待编辑" | "待审核" | "缺资产" | "超时" | "待承接";
+type StoryboardPackageFilter = "全部" | StoryboardPackageStatus;
 
 type EpisodeExtractedAsset = {
     canGenerate: boolean;
@@ -130,6 +133,43 @@ type EpisodeExtractedAsset = {
     status: "已绑定" | "待绑定" | "待生成" | "待确认" | "缺素材";
     tone: EpisodeStatusTone;
     type: "角色" | "场景" | "道具" | "服装";
+};
+
+type StoryboardPackageShot = {
+    action: string;
+    camera: string;
+    duration: number;
+    id: string;
+    order: number;
+    prompt: string;
+    title: string;
+};
+
+type StoryboardProductionPackage = {
+    assetLabels: string[];
+    duration: number;
+    id: string;
+    order: number;
+    promptSummary: string;
+    scriptText: string;
+    segmentId: string;
+    shots: StoryboardPackageShot[];
+    status: StoryboardPackageStatus;
+    summary: string;
+    title: string;
+    tone: EpisodeStatusTone;
+};
+
+type StoryboardStorySegment = {
+    duration: number;
+    id: string;
+    order: number;
+    packages: StoryboardProductionPackage[];
+    scriptRange: string;
+    scriptText: string;
+    status: string;
+    title: string;
+    tone: EpisodeStatusTone;
 };
 
 export default function EpisodeProductionWorkbenchPage() {
@@ -559,7 +599,7 @@ const episodeModules: Array<{ key: EpisodeModuleKey; label: string }> = [
     { key: "script", label: "剧本" },
     { key: "director", label: "导演分析" },
     { key: "assets", label: "资产提取" },
-    { key: "storyboard", label: "分镜" },
+    { key: "storyboard", label: "分镜生产包" },
     { key: "canvas", label: "画布承接" },
 ];
 
@@ -646,6 +686,16 @@ function EpisodeProductionShell({
         productionBibleItems,
         projectId: project.id,
     });
+    const packageSegments = useMemo(
+        () =>
+            buildStoryboardProductionSegments({
+                episode,
+                episodeTableShots,
+                sceneOptions,
+                scriptSnapshot,
+            }),
+        [episode, episodeTableShots, sceneOptions, scriptSnapshot],
+    );
     const tabs = episodeModules.map((module) => ({
         ...module,
         badge:
@@ -781,6 +831,17 @@ function EpisodeProductionShell({
                         projectTitle={project.title}
                         runningStageIds={runningStageIds}
                         stageOutputs={stageOutputs}
+                    />
+                ) : activeModule === "storyboard" ? (
+                    <EpisodeStoryboardPackagePage
+                        episode={episode}
+                        onGeneratePreview={onGeneratePreview}
+                        onOpenAssets={() => onModuleChange("assets")}
+                        onOpenCanvas={onOpenCanvas}
+                        onRunStoryboardScene={onRunStoryboardScene}
+                        projectTitle={project.title}
+                        runningStoryboard={currentSceneState?.status === "running"}
+                        segments={packageSegments}
                     />
                 ) : (
                     <EpisodeModulePanel config={moduleConfig} editorSlot={scriptEditor} filteredRows={filteredRows} activeFilter={activeFilter} onFilterChange={setActiveFilter} onOpenDetail={onOpenDetail} />
@@ -1116,6 +1177,438 @@ function EpisodeAssetProcessDrawer({
                         </div>
                     </div>
                 )}
+            </div>
+        </aside>
+    );
+}
+
+function EpisodeStoryboardPackagePage({
+    episode,
+    onGeneratePreview,
+    onOpenAssets,
+    onOpenCanvas,
+    onRunStoryboardScene,
+    projectTitle,
+    runningStoryboard,
+    segments,
+}: {
+    episode: ScriptEpisode;
+    onGeneratePreview: (stageId: string, targetLabel: string) => void;
+    onOpenAssets: () => void;
+    onOpenCanvas: () => void;
+    onRunStoryboardScene: () => void;
+    projectTitle: string;
+    runningStoryboard: boolean;
+    segments: StoryboardStorySegment[];
+}) {
+    const { message } = App.useApp();
+    const [filter, setFilter] = useState<StoryboardPackageFilter>("全部");
+    const [selectedPackageId, setSelectedPackageId] = useState("");
+    const [drawerTab, setDrawerTab] = useState<StoryboardPackageDrawerTab>("shots");
+    const allPackages = useMemo(() => segments.flatMap((segment) => segment.packages), [segments]);
+    const filteredSegments = useMemo(
+        () =>
+            segments
+                .map((segment) => ({
+                    ...segment,
+                    packages: segment.packages.filter((pkg) => filterStoryboardPackage(pkg, filter)),
+                }))
+                .filter((segment) => filter === "全部" || segment.packages.length),
+        [filter, segments],
+    );
+    const selectedPackage = allPackages.find((pkg) => pkg.id === selectedPackageId) || filteredSegments.flatMap((segment) => segment.packages)[0] || allPackages[0];
+    const selectedSegment = selectedPackage ? segments.find((segment) => segment.id === selectedPackage.segmentId) : undefined;
+    const summary = summarizeStoryboardProductionSegments(segments);
+
+    useEffect(() => {
+        if (!allPackages.length) {
+            setSelectedPackageId("");
+            return;
+        }
+        if (!selectedPackage || !filterStoryboardPackage(selectedPackage, filter)) {
+            setSelectedPackageId(filteredSegments.flatMap((segment) => segment.packages)[0]?.id || allPackages[0].id);
+        }
+    }, [allPackages, filter, filteredSegments, selectedPackage]);
+
+    const openPackage = (pkg: StoryboardProductionPackage, tab: StoryboardPackageDrawerTab = "shots") => {
+        setSelectedPackageId(pkg.id);
+        setDrawerTab(tab);
+    };
+    const notifyAction = (label: string) => message.info(`${label} 已进入交互占位，后续接入生产包编辑能力。`);
+
+    return (
+        <section className="grid gap-5">
+            <div className="grid gap-4 border-b border-slate-800 pb-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+                <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
+                        <span>{projectTitle}</span>
+                        <span>/</span>
+                        <span>第 {padEpisodeOrder(episode.order)} 集</span>
+                        <span>/</span>
+                        <span className="text-cyan-300">分镜生产包</span>
+                    </div>
+                    <h2 className="mt-2 break-words text-3xl font-semibold leading-tight text-slate-50">{episode.title} · 分镜生产包</h2>
+                    <p className="mt-2 break-words text-sm leading-6 text-slate-500">分镜 Agent 先拆剧情段落，再生成 15 秒以内生产包；确认后按包导入画布承接。</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" loading={runningStoryboard} onClick={onRunStoryboardScene}>
+                        重跑段落拆解
+                    </Button>
+                    <Button type="primary" onClick={() => notifyAction("新增生产包")}>
+                        新增生产包
+                    </Button>
+                </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-5">
+                {[
+                    { label: "剧情段落数", value: summary.segments },
+                    { label: "生产包数", value: summary.packages, tone: "cyan" },
+                    { label: "包内镜头数", value: summary.shots },
+                    { label: "超时包数量", value: summary.timeout, tone: summary.timeout ? "red" : "green" },
+                    { label: "缺资产包数量", value: summary.missingAssets, tone: summary.missingAssets ? "amber" : "green" },
+                ].map((item) => (
+                    <div key={item.label} className="rounded-lg border border-slate-800 bg-slate-950/45 px-4 py-3">
+                        <div className="text-xs text-slate-500">{item.label}</div>
+                        <div className={`mt-1 text-2xl font-semibold ${episodeToneTextClass((item.tone as EpisodeStatusTone | undefined) || "slate")}`}>{item.value}</div>
+                    </div>
+                ))}
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_450px]">
+                <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-[#091018]/88">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
+                        <h3 className="text-lg font-semibold text-slate-50">剧情段落与生产包</h3>
+                        <div className="flex flex-wrap gap-2">
+                            {(["全部", "待编辑", "待审核", "缺资产", "超时", "已确认", "待承接"] as StoryboardPackageFilter[]).map((item) => (
+                                <button
+                                    key={item}
+                                    type="button"
+                                    className={`rounded-md border px-3 py-1.5 text-sm transition ${filter === item ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:border-slate-600 hover:text-slate-200"}`}
+                                    onClick={() => setFilter(item)}
+                                >
+                                    {item}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <StoryboardPackageList segments={filteredSegments} selectedPackageId={selectedPackage?.id || ""} onAction={notifyAction} onOpenPackage={openPackage} />
+                </div>
+                <StoryboardPackageProcessDrawer
+                    activeTab={drawerTab}
+                    pkg={selectedPackage}
+                    segment={selectedSegment}
+                    onAction={notifyAction}
+                    onChangeTab={setDrawerTab}
+                    onGeneratePreview={() => onGeneratePreview("seedance-storyboard", "分镜生产包预览")}
+                    onOpenAssets={onOpenAssets}
+                    onOpenCanvas={onOpenCanvas}
+                />
+            </div>
+        </section>
+    );
+}
+
+function StoryboardPackageList({
+    onAction,
+    onOpenPackage,
+    segments,
+    selectedPackageId,
+}: {
+    onAction: (label: string) => void;
+    onOpenPackage: (pkg: StoryboardProductionPackage, tab?: StoryboardPackageDrawerTab) => void;
+    segments: StoryboardStorySegment[];
+    selectedPackageId: string;
+}) {
+    if (!segments.length) {
+        return <div className="px-5 py-10 text-center text-sm text-slate-500">暂无符合筛选的生产包。</div>;
+    }
+    return (
+        <div className="max-h-[calc(100vh-360px)] min-h-[520px] overflow-auto">
+            <div className="min-w-[800px]">
+                {segments.map((segment) => (
+                    <div key={segment.id} className="border-b border-slate-800/90 last:border-b-0">
+                        <div className="grid grid-cols-[64px_minmax(160px,1fr)_78px_58px_58px_62px_72px_84px] gap-2 bg-slate-950/35 px-5 py-4 text-sm">
+                            <div className="self-center text-lg font-semibold text-slate-100">S{padEpisodeOrder(segment.order)}</div>
+                            <div className="min-w-0">
+                                <div className="break-words font-semibold text-slate-100">{segment.title}</div>
+                                <div className="mt-1 break-words text-xs text-slate-500">{segment.scriptRange}</div>
+                            </div>
+                            <div className="self-center text-slate-300">{segment.duration} 秒</div>
+                            <div className="self-center text-slate-300">{segment.packages.length} 包</div>
+                            <div className="self-center text-slate-300">{segment.packages.reduce((total, pkg) => total + pkg.shots.length, 0)} 镜</div>
+                            <div className="self-center text-slate-300">{segment.packages.reduce((total, pkg) => total + pkg.assetLabels.length, 0)} 项</div>
+                            <div className="self-center">
+                                <EpisodeStatusPill status={segment.status} tone={segment.tone} />
+                            </div>
+                            <button type="button" className="self-center rounded-md border border-slate-700 bg-slate-900/80 px-2 py-2 text-sm font-medium text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-100" onClick={() => segment.packages[0] && onOpenPackage(segment.packages[0], "script")}>
+                                查看原文
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-[64px_minmax(170px,1fr)_54px_54px_66px_72px_150px] gap-2 border-y border-slate-800/70 px-5 py-2 text-xs font-medium text-slate-500">
+                            <div>生产包</div>
+                            <div>包内容</div>
+                            <div>时长</div>
+                            <div>镜头</div>
+                            <div>引用资产</div>
+                            <div>状态</div>
+                            <div>操作</div>
+                        </div>
+                        <div className="divide-y divide-slate-800/80">
+                            {segment.packages.map((pkg) => {
+                                const selected = pkg.id === selectedPackageId;
+                                const timeout = pkg.duration > 15 || pkg.status === "超时";
+                                return (
+                                    <div key={pkg.id}>
+                                        <div
+                                            role="button"
+                                            tabIndex={0}
+                                            className={`grid grid-cols-[64px_minmax(170px,1fr)_54px_54px_66px_72px_150px] gap-2 border-l-4 px-5 py-4 text-sm transition ${selected ? "border-cyan-300 bg-cyan-400/[0.08]" : timeout ? "border-red-400/70 bg-red-500/[0.04] hover:bg-red-500/[0.07]" : "border-transparent hover:bg-white/[0.025]"}`}
+                                            onClick={() => onOpenPackage(pkg)}
+                                            onKeyDown={(event) => {
+                                                if (event.key === "Enter" || event.key === " ") onOpenPackage(pkg);
+                                            }}
+                                        >
+                                            <div className="self-center text-lg font-semibold text-slate-100">P{padEpisodeOrder(pkg.order)}</div>
+                                            <div className="min-w-0 self-center">
+                                                <div className="break-words font-semibold text-slate-100">{pkg.title}</div>
+                                                <div className="mt-1 break-words text-slate-500">{pkg.summary}</div>
+                                                {timeout ? <div className="mt-2 text-xs font-semibold text-red-300">预计超过 15 秒，需要拆分生产包。</div> : null}
+                                            </div>
+                                            <div className={`self-center font-semibold ${timeout ? "text-red-300" : "text-slate-200"}`}>{pkg.duration}s</div>
+                                            <div className="self-center text-slate-300">{pkg.shots.length} 镜</div>
+                                            <div className="self-center text-slate-300">{pkg.assetLabels.length ? `${pkg.assetLabels.length} 项` : "缺 1"}</div>
+                                            <div className="self-center">
+                                                <EpisodeStatusPill status={pkg.status} tone={pkg.tone} />
+                                            </div>
+                                            <div className="flex flex-wrap gap-2 self-center" onClick={(event) => event.stopPropagation()}>
+                                                <StoryboardPackageActionButton label="查看" onClick={() => onOpenPackage(pkg)} />
+                                                <StoryboardPackageActionButton label="编辑" onClick={() => onOpenPackage(pkg, "shots")} />
+                                                <StoryboardPackageActionButton label="插入后" onClick={() => onAction(`在 P${padEpisodeOrder(pkg.order)} 后插入生产包`)} />
+                                                <StoryboardPackageActionButton label={timeout ? "拆分" : "确认"} primary={timeout || pkg.status === "待审核"} onClick={() => onAction(timeout ? "拆分生产包" : "确认本包")} />
+                                                <StoryboardPackageActionButton label="合并" onClick={() => onAction("合并到相邻生产包")} />
+                                                <StoryboardPackageActionButton label="移动" onClick={() => onAction("移动顺序")} />
+                                                <StoryboardPackageActionButton label="重提取" onClick={() => onAction("重提取本包")} />
+                                                <StoryboardPackageActionButton label="导入画布" onClick={() => onAction("导入画布承接")} />
+                                            </div>
+                                        </div>
+                                        <button type="button" className="mx-5 my-2 rounded-md border border-dashed border-cyan-500/40 bg-cyan-400/[0.04] px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/[0.08]" onClick={() => onAction(`在 P${padEpisodeOrder(pkg.order)} 后插入生产包`)}>
+                                            + 在 P{padEpisodeOrder(pkg.order)} 后插入生产包
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function StoryboardPackageActionButton({ label, onClick, primary }: { label: string; onClick: () => void; primary?: boolean }) {
+    return (
+        <button
+            type="button"
+            className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition ${primary ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100 hover:bg-cyan-400/20" : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-400/70 hover:text-cyan-100"}`}
+            onClick={onClick}
+        >
+            {label}
+        </button>
+    );
+}
+
+function StoryboardPackageProcessDrawer({
+    activeTab,
+    onAction,
+    onChangeTab,
+    onGeneratePreview,
+    onOpenAssets,
+    onOpenCanvas,
+    pkg,
+    segment,
+}: {
+    activeTab: StoryboardPackageDrawerTab;
+    onAction: (label: string) => void;
+    onChangeTab: (tab: StoryboardPackageDrawerTab) => void;
+    onGeneratePreview: () => void;
+    onOpenAssets: () => void;
+    onOpenCanvas: () => void;
+    pkg?: StoryboardProductionPackage;
+    segment?: StoryboardStorySegment;
+}) {
+    const [promptDraft, setPromptDraft] = useState("");
+    useEffect(() => {
+        setPromptDraft(pkg?.promptSummary || "");
+    }, [pkg?.id, pkg?.promptSummary]);
+
+    if (!pkg) return <aside className="rounded-2xl border border-slate-800 bg-[#091018]/88 p-5 text-sm text-slate-500">请选择一个生产包。</aside>;
+
+    return (
+        <aside className="rounded-2xl border border-slate-800 bg-[#091018]/92 shadow-[0_18px_80px_rgba(0,0,0,0.28)] xl:sticky xl:top-5">
+            <div className="border-b border-slate-800 p-5">
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <h3 className="break-words text-2xl font-semibold leading-tight text-slate-50">
+                            P{padEpisodeOrder(pkg.order)} · {pkg.title}
+                        </h3>
+                        <p className="mt-2 break-words text-sm leading-6 text-slate-500">
+                            属于 S{padEpisodeOrder(segment?.order || 1)} · {pkg.duration} 秒 · {pkg.shots.length} 个镜头
+                        </p>
+                    </div>
+                    <EpisodeStatusPill status={pkg.status} tone={pkg.tone} />
+                </div>
+                <div className="mt-4 grid grid-cols-4 gap-2">
+                    {([
+                        ["shots", "包内镜头"],
+                        ["script", "原剧本"],
+                        ["prompt", "提示词"],
+                        ["assets", "资产"],
+                    ] as Array<[StoryboardPackageDrawerTab, string]>).map(([key, label]) => (
+                        <button key={key} type="button" className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${activeTab === key ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:text-slate-200"}`} onClick={() => onChangeTab(key)}>
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <div className="grid max-h-[calc(100vh-260px)] gap-4 overflow-auto p-5">
+                <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+                    <div className="text-xs font-semibold text-slate-500">生产包约束</div>
+                    <div className="mt-2 break-words text-sm leading-6 text-slate-200">
+                        当前包预计 {pkg.duration} 秒，{pkg.duration > 15 ? "已超过 15 秒，建议拆分为新生产包。" : "符合 15 秒以内规则，可继续新增镜头；超过后需要拆分。"}
+                    </div>
+                </div>
+                {activeTab === "shots" ? (
+                    <div className="grid gap-4">
+                        <div className="overflow-hidden rounded-lg border border-slate-800">
+                            <div className="grid grid-cols-[48px_minmax(0,1fr)_96px_48px_70px] gap-2 border-b border-slate-800 bg-slate-950/45 px-3 py-2 text-xs font-medium text-slate-500">
+                                <div>镜头</div>
+                                <div>内容</div>
+                                <div>景别 / 运动</div>
+                                <div>时长</div>
+                                <div>操作</div>
+                            </div>
+                            <div className="divide-y divide-slate-800/80">
+                                {pkg.shots.map((shot) => (
+                                    <div key={shot.id} className="grid grid-cols-[48px_minmax(0,1fr)_96px_48px_70px] gap-2 px-3 py-3 text-sm">
+                                        <div className="font-semibold text-slate-100">{padEpisodeOrder(shot.order)}</div>
+                                        <div className="min-w-0">
+                                            <div className="break-words font-semibold text-slate-100">{shot.title}</div>
+                                            <div className="mt-1 break-words text-slate-500">{shot.action}</div>
+                                        </div>
+                                        <div className="break-words text-slate-400">{shot.camera}</div>
+                                        <div className="font-semibold text-slate-200">{shot.duration}s</div>
+                                        <div className="flex flex-wrap gap-1">
+                                            <button type="button" className="text-xs text-cyan-200" onClick={() => onAction("编辑镜头")}>
+                                                编辑
+                                            </button>
+                                            <button type="button" className="text-xs text-slate-400" onClick={() => onAction("调整顺序")}>
+                                                顺序
+                                            </button>
+                                            <button type="button" className="text-xs text-red-300" onClick={() => onAction("删除镜头")}>
+                                                删除
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={() => onAction("包内新增镜头")}>
+                                + 包内新增镜头
+                            </Button>
+                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={() => onAction("拆分生产包")}>
+                                拆分生产包
+                            </Button>
+                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={() => onAction("移动到下一包")}>
+                                移到下一包
+                            </Button>
+                        </div>
+                    </div>
+                ) : null}
+                {activeTab === "script" ? (
+                    <div className="grid gap-4">
+                        <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+                            <div className="text-xs font-semibold text-slate-500">对应原剧本内容</div>
+                            <div className="mt-3 max-h-[360px] overflow-auto rounded-lg border border-cyan-500/25 bg-cyan-400/[0.05] p-4 text-sm leading-7 text-slate-100">{pkg.scriptText || segment?.scriptText || "暂无原剧本片段。"}</div>
+                        </div>
+                        <div className="text-sm leading-6 text-slate-500">原剧本只用于查看和定位，不在生产包抽屉内直接修改。</div>
+                    </div>
+                ) : null}
+                {activeTab === "prompt" ? (
+                    <div className="grid gap-4">
+                        <div className="grid gap-2">
+                            <div className="text-xs font-semibold text-slate-500">生产包提示词摘要</div>
+                            <Input.TextArea className="!bg-slate-950/70 !text-slate-100" rows={5} value={promptDraft} onChange={(event) => setPromptDraft(event.target.value)} />
+                        </div>
+                        <div className="overflow-hidden rounded-lg border border-slate-800">
+                            <div className="border-b border-slate-800 bg-slate-950/45 px-3 py-2 text-xs font-medium text-slate-500">包内镜头动态提示词</div>
+                            <div className="divide-y divide-slate-800/80">
+                                {pkg.shots.map((shot) => (
+                                    <div key={shot.id} className="px-3 py-3">
+                                        <div className="text-sm font-semibold text-slate-100">{padEpisodeOrder(shot.order)} · {shot.title}</div>
+                                        <div className="mt-2 break-words text-sm leading-6 text-slate-400">{shot.prompt}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={onGeneratePreview}>
+                                重提取提示词
+                            </Button>
+                            <Button type="primary" onClick={() => onAction("确认提示词")}>
+                                确认提示词
+                            </Button>
+                        </div>
+                    </div>
+                ) : null}
+                {activeTab === "assets" ? (
+                    <div className="grid gap-4">
+                        <div className="overflow-hidden rounded-lg border border-slate-800">
+                            <div className="grid grid-cols-[88px_minmax(0,1fr)_90px] gap-3 border-b border-slate-800 bg-slate-950/45 px-3 py-2 text-xs font-medium text-slate-500">
+                                <div>类型</div>
+                                <div>资产</div>
+                                <div>状态</div>
+                            </div>
+                            <div className="divide-y divide-slate-800/80">
+                                {(pkg.assetLabels.length ? pkg.assetLabels : ["待补齐场景参考"]).map((asset, index) => (
+                                    <div key={`${asset}-${index}`} className="grid grid-cols-[88px_minmax(0,1fr)_90px] gap-3 px-3 py-3 text-sm">
+                                        <div className="font-semibold text-slate-100">{index === 0 ? "场景" : "引用"}</div>
+                                        <div className="break-words text-slate-300">{asset}</div>
+                                        <div>
+                                            <EpisodeStatusPill status={pkg.status === "缺资产" && index === 0 ? "缺资产" : "已绑定"} tone={pkg.status === "缺资产" && index === 0 ? "amber" : "green"} />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        {pkg.status === "缺资产" ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.07] p-3 text-sm leading-6 text-amber-100">当前包存在缺资产项，可跳转到资产提取模块补齐绑定，或直接打开资产处理抽屉。</div> : null}
+                        <div className="flex flex-wrap gap-2">
+                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={onOpenAssets}>
+                                跳到资产提取
+                            </Button>
+                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={() => onAction("打开资产处理抽屉")}>
+                                打开资产处理抽屉
+                            </Button>
+                            <Button type="primary" onClick={onOpenCanvas}>
+                                导入画布承接
+                            </Button>
+                        </div>
+                    </div>
+                ) : null}
+            </div>
+            <div className="border-t border-slate-800 p-5">
+                <div className="flex flex-wrap gap-2">
+                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={() => onAction("重提取本包")}>
+                        重提取本包
+                    </Button>
+                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={() => onAction("编辑包信息")}>
+                        编辑包信息
+                    </Button>
+                    <Button type="primary" onClick={() => onAction("保存并确认")}>
+                        保存并确认
+                    </Button>
+                </div>
             </div>
         </aside>
     );
@@ -1645,6 +2138,247 @@ function productionBibleRoleForExtractedAsset(row: EpisodeExtractedAsset) {
     if (row.type === "角色") return "portrait";
     if (row.type === "场景") return "environment";
     return "reference";
+}
+
+function buildStoryboardProductionSegments({
+    episode,
+    episodeTableShots,
+    sceneOptions,
+    scriptSnapshot,
+}: {
+    episode: ScriptEpisode;
+    episodeTableShots: StoryboardTableShot[];
+    sceneOptions: EpisodeSceneOption[];
+    scriptSnapshot: string;
+}): StoryboardStorySegment[] {
+    if (!episodeTableShots.length) return fallbackStoryboardProductionSegments(episode, scriptSnapshot);
+    const sortedShots = [...episodeTableShots].sort((a, b) => a.order - b.order);
+    const groups: Array<{ key: string; name: string; shots: StoryboardTableShot[] }> = [];
+    sortedShots.forEach((shot) => {
+        const key = shot.sceneId || shot.sceneName || `scene-${shot.order}`;
+        const group = groups.find((item) => item.key === key);
+        if (group) group.shots.push(shot);
+        else groups.push({ key, name: shot.sceneName || sceneOptions.find((scene) => scene.sceneKey === key)?.sceneLabel || `剧情段落 ${groups.length + 1}`, shots: [shot] });
+    });
+
+    let packageOrder = 1;
+    return groups.map((group, index) => {
+        const segmentId = `segment-${group.key || index + 1}`;
+        const shotGroups = splitShotsIntoProductionPackages(group.shots);
+        const packages = shotGroups.map((shots) => {
+            const pkg = buildStoryboardPackageFromShots({ packageOrder, segmentId, shots });
+            packageOrder += 1;
+            return pkg;
+        });
+        const duration = packages.reduce((total, pkg) => total + pkg.duration, 0);
+        const firstShot = group.shots[0];
+        const lastShot = group.shots[group.shots.length - 1];
+        const status = segmentStatusFromPackages(packages);
+        return {
+            duration,
+            id: segmentId,
+            order: index + 1,
+            packages,
+            scriptRange: `原剧本 P${padEpisodeOrder(firstShot.order)} - P${padEpisodeOrder(lastShot.order)}`,
+            scriptText: group.shots.map((shot) => shot.scriptText).filter(Boolean).join("\n\n"),
+            status,
+            title: group.name,
+            tone: segmentToneFromStatus(status),
+        };
+    });
+}
+
+function splitShotsIntoProductionPackages(shots: StoryboardTableShot[]) {
+    const groups: StoryboardTableShot[][] = [];
+    let current: StoryboardTableShot[] = [];
+    let currentDuration = 0;
+    shots.forEach((shot) => {
+        const duration = shot.estimatedDuration || 3;
+        if (current.length && currentDuration + duration > 15) {
+            groups.push(current);
+            current = [];
+            currentDuration = 0;
+        }
+        current.push(shot);
+        currentDuration += duration;
+    });
+    if (current.length) groups.push(current);
+    return groups;
+}
+
+function buildStoryboardPackageFromShots({ packageOrder, segmentId, shots }: { packageOrder: number; segmentId: string; shots: StoryboardTableShot[] }): StoryboardProductionPackage {
+    const duration = shots.reduce((total, shot) => total + (shot.estimatedDuration || 3), 0);
+    const assetLabels = storyboardPackageAssetLabels(shots);
+    const title = shots[0]?.title || `生产包 ${packageOrder}`;
+    const summary = listSafeText(shots.map((shot) => shot.visualDescription || shot.action || shot.scriptText).filter(Boolean).join("；"), "待补充生产包内容。");
+    const status = storyboardPackageStatusFromShots({ assetLabels, duration, shots });
+    return {
+        assetLabels,
+        duration,
+        id: `package-${segmentId}-${packageOrder}`,
+        order: packageOrder,
+        promptSummary: `${shots[0]?.sceneName || "本段"}，${summary}，镜头保持电影级写实、低对比深色影像质感，动作与视线方向连续。`,
+        scriptText: shots.map((shot) => shot.scriptText).filter(Boolean).join("\n\n"),
+        segmentId,
+        shots: shots.map((shot, index) => ({
+            action: shot.visualDescription || shot.action || shot.scriptText || "待补充镜头内容。",
+            camera: `${shot.shotSize || "景别待定"} / ${shot.cameraMovement || "运动待定"}`,
+            duration: shot.estimatedDuration || 3,
+            id: shot.id,
+            order: index + 1,
+            prompt: shot.workflowSource?.createdFromText || `${shot.visualDescription || shot.action || shot.scriptText}，${shot.shotSize || "中景"}，${shot.cameraMovement || "稳定推进"}，${shot.emotion || "保持当前情绪"}。`,
+            title: shot.title || `镜头 ${shot.order}`,
+        })),
+        status,
+        summary,
+        title,
+        tone: storyboardPackageTone(status),
+    };
+}
+
+function storyboardPackageAssetLabels(shots: StoryboardTableShot[]) {
+    return uniqueTextList(
+        shots.flatMap((shot) => [
+            ...shot.characters,
+            ...(shot.assetNeeds || []),
+            ...(shot.assetRefs || []).map((ref) => ref.sourceLabel || ref.role),
+            ...(shot.productionBibleRefs || []).map((ref) => ref.kind),
+        ]),
+    )
+        .filter(Boolean)
+        .slice(0, 8);
+}
+
+function storyboardPackageStatusFromShots({ assetLabels, duration, shots }: { assetLabels: string[]; duration: number; shots: StoryboardTableShot[] }): StoryboardPackageStatus {
+    if (duration > 15) return "超时";
+    if (!assetLabels.length) return "缺资产";
+    if (shots.some((shot) => !shot.visualDescription && !shot.action)) return "待编辑";
+    if (shots.some((shot) => !shot.workflowSource)) return "待审核";
+    return "待承接";
+}
+
+function summarizeStoryboardProductionSegments(segments: StoryboardStorySegment[]) {
+    const packages = segments.flatMap((segment) => segment.packages);
+    return {
+        missingAssets: packages.filter((pkg) => pkg.status === "缺资产").length,
+        packages: packages.length,
+        segments: segments.length,
+        shots: packages.reduce((total, pkg) => total + pkg.shots.length, 0),
+        timeout: packages.filter((pkg) => pkg.status === "超时" || pkg.duration > 15).length,
+    };
+}
+
+function filterStoryboardPackage(pkg: StoryboardProductionPackage, filter: StoryboardPackageFilter) {
+    if (filter === "全部") return true;
+    return pkg.status === filter;
+}
+
+function segmentStatusFromPackages(packages: StoryboardProductionPackage[]) {
+    if (packages.some((pkg) => pkg.status === "超时")) return "含超时";
+    if (packages.some((pkg) => pkg.status === "缺资产")) return "缺资产";
+    if (packages.some((pkg) => pkg.status === "待编辑" || pkg.status === "待审核")) return "待处理";
+    if (packages.every((pkg) => pkg.status === "已确认")) return "已确认";
+    return "已拆解";
+}
+
+function segmentToneFromStatus(status: string): EpisodeStatusTone {
+    if (status === "含超时") return "red";
+    if (status === "缺资产" || status === "待处理") return "amber";
+    if (status === "已确认" || status === "已拆解") return "green";
+    return "slate";
+}
+
+function storyboardPackageTone(status: StoryboardPackageStatus): EpisodeStatusTone {
+    if (status === "已确认") return "green";
+    if (status === "待编辑" || status === "待承接") return "cyan";
+    if (status === "超时") return "red";
+    if (status === "缺资产" || status === "待审核") return "amber";
+    return "slate";
+}
+
+function fallbackStoryboardProductionSegments(episode: ScriptEpisode, scriptSnapshot: string): StoryboardStorySegment[] {
+    const scriptBody = scriptSnapshot || episode.summary || "女主刚走到旧楼后门，身后忽然传来急刹车声。她停住脚步，手机屏幕亮了一下。路灯闪烁，巷口车灯把她的影子拉得很长。";
+    const packages: Array<Omit<StoryboardProductionPackage, "id" | "segmentId" | "tone"> & { segmentOrder: number }> = [
+        fallbackStoryboardPackage(1, 1, "建立环境与女主入场", "雨夜街口、旧楼后门，女主停步。", 12, "已确认", ["暗巷街景", "女主雨衣", "车灯背光", "旧楼后门", "潮湿地面"], scriptBody, [
+            ["女主停在旧楼后门", "全景 / 缓慢推进", 4],
+            ["雨水从门牌滴落", "特写 / 静止", 3],
+            ["车灯从巷口扫过", "中景 / 横移", 5],
+        ]),
+        fallbackStoryboardPackage(1, 2, "女主察觉危险", "急刹车声、回头、路灯闪烁。", 10, "待编辑", ["林澈", "暗巷街景", "车灯背光", "手机屏幕"], scriptBody, [
+            ["女主停下脚步，听见车声", "中近景 / 跟拍", 5],
+            ["她缓慢回头，表情紧张", "近景 / 稳定推进", 5],
+        ]),
+        fallbackStoryboardPackage(2, 3, "暗巷追击", "跟拍、转弯、车辆逼近。", 14, "缺资产", ["林澈", "暗巷街景"], scriptBody, [
+            ["女主沿暗巷奔跑", "全景 / 手持跟拍", 5],
+            ["脚步踩过积水", "特写 / 低机位", 3],
+            ["车辆灯光逼近", "中景 / 快速推近", 4],
+            ["她贴墙躲避", "近景 / 急停", 2],
+        ]),
+        fallbackStoryboardPackage(2, 4, "车灯扫出证据", "墙面、袖扣、女主拍照。", 11, "待审核", ["墙面反光", "带血袖扣", "手机屏幕"], scriptBody, [
+            ["车灯扫过墙面", "全景 / 横移", 4],
+            ["袖扣在水边反光", "特写 / 微距", 3],
+            ["女主迅速拍照留证", "近景 / 下压", 4],
+        ]),
+        fallbackStoryboardPackage(2, 5, "反派声音逼近", "脚步声、阴影、台词压迫。", 9, "已确认", ["反派阴影", "暗巷街景"], scriptBody, [["阴影越过墙面", "中景 / 缓慢推近", 9]]),
+        fallbackStoryboardPackage(3, 6, "仓库火把对峙", "女主进入柴油仓库，火把照亮油桶和刀光。", 18, "超时", ["海边柴油仓库", "旧油桶", "弹簧刀", "女主雨衣"], scriptBody, [
+            ["女主推开仓库铁门", "全景 / 前推", 5],
+            ["火把映亮旧油桶", "中景 / 环绕", 5],
+            ["反派亮出弹簧刀", "特写 / 急推", 4],
+            ["女主握紧手机后退", "近景 / 手持跟拍", 4],
+        ]),
+    ];
+    return [
+        fallbackStoryboardSegment(1, "雨夜追到旧楼后门", "原剧本 1-7 段", packages, scriptBody),
+        fallbackStoryboardSegment(2, "暗巷追击与证物发现", "原剧本 8-18 段", packages, scriptBody),
+        fallbackStoryboardSegment(3, "仓库对峙前的危险升级", "原剧本 19-26 段", packages, scriptBody),
+    ];
+}
+
+function fallbackStoryboardSegment(order: number, title: string, scriptRange: string, packages: Array<Omit<StoryboardProductionPackage, "id" | "segmentId" | "tone"> & { segmentOrder: number }>, scriptText: string): StoryboardStorySegment {
+    const segmentId = `fallback-segment-${order}`;
+    const segmentPackages = packages
+        .filter((pkg) => pkg.segmentOrder === order)
+        .map((pkg) => ({
+            ...pkg,
+            id: `fallback-package-${pkg.order}`,
+            segmentId,
+            tone: storyboardPackageTone(pkg.status),
+        }));
+    const status = segmentStatusFromPackages(segmentPackages);
+    return {
+        duration: segmentPackages.reduce((total, pkg) => total + pkg.duration, 0),
+        id: segmentId,
+        order,
+        packages: segmentPackages,
+        scriptRange,
+        scriptText,
+        status,
+        title,
+        tone: segmentToneFromStatus(status),
+    };
+}
+
+function fallbackStoryboardPackage(segmentOrder: number, order: number, title: string, summary: string, duration: number, status: StoryboardPackageStatus, assetLabels: string[], scriptText: string, shots: Array<[string, string, number]>) {
+    return {
+        assetLabels,
+        duration,
+        order,
+        promptSummary: `${summary} 电影级写实，低对比雨夜光影，镜头从半身逐渐推进到近景，保持动作连续和情绪压迫。`,
+        scriptText,
+        segmentOrder,
+        shots: shots.map(([shotTitle, camera, shotDuration], index) => ({
+            action: shotTitle,
+            camera,
+            duration: shotDuration,
+            id: `fallback-shot-${order}-${index}`,
+            order: index + 1,
+            prompt: `${shotTitle}，${camera}，${shotDuration} 秒，雨夜暗青色调，写实短剧影像质感。`,
+            title: shotTitle,
+        })),
+        status,
+        summary,
+        title,
+    };
 }
 
 function buildAssetsModuleConfig(input: {
