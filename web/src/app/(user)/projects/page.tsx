@@ -3,7 +3,7 @@
 import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { App, Button, Input, Tag } from "antd";
-import { Archive, Bell, CheckCircle2, ChevronDown, CircleDot, Clock3, Edit3, FileText, Filter, Folder, Grid2X2, HelpCircle, Home, ImagePlus, LayoutList, MoreHorizontal, PauseCircle, Plus, RotateCcw, Search, Settings, Trash2, Video } from "lucide-react";
+import { Archive, Bell, CheckCircle2, ChevronDown, CircleDot, Clock3, Edit3, FileText, Filter, Folder, Grid2X2, HelpCircle, Home, ImagePlus, LayoutList, MoreHorizontal, PanelLeftClose, PanelLeftOpen, PauseCircle, Plus, RotateCcw, Search, Settings, Trash2, Video } from "lucide-react";
 
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasCreateProjectModal } from "../canvas/components/canvas-create-project-modal";
@@ -53,6 +53,7 @@ export default function ProjectsPage() {
     const [editingTitle, setEditingTitle] = useState("");
     const [searchText, setSearchText] = useState("");
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+    const [sidebarOpen, setSidebarOpen] = useState(true);
     const hydrated = useCreativeProjectStore((state) => state.hydrated);
     const projects = useCreativeProjectStore((state) => state.projects);
     const createProject = useCreativeProjectStore((state) => state.createProject);
@@ -111,10 +112,21 @@ export default function ProjectsPage() {
 
     return (
         <main className="h-full overflow-hidden bg-[#080d14] text-slate-100">
-            <div className="grid h-full min-h-0 grid-cols-[248px_minmax(0,1fr)]">
-                <ProjectSidebar />
+            <div className={`relative h-full min-h-0 transition-[padding] duration-200 ${sidebarOpen ? "pl-[248px]" : "pl-0"}`}>
+                <ProjectSidebar open={sidebarOpen} onToggle={() => setSidebarOpen(false)} />
+                {!sidebarOpen ? (
+                    <button
+                        type="button"
+                        className="fixed left-4 top-4 z-40 grid size-10 place-items-center rounded-lg border border-cyan-400/35 bg-[#0b1520]/95 text-cyan-200 shadow-[0_16px_38px_rgba(0,0,0,0.32)] backdrop-blur transition hover:border-cyan-300 hover:bg-[#102033]"
+                        onClick={() => setSidebarOpen(true)}
+                        aria-label="展开左侧栏"
+                        title="展开左侧栏"
+                    >
+                        <PanelLeftOpen className="size-5" />
+                    </button>
+                ) : null}
 
-                <section className="min-h-0 overflow-y-auto bg-[radial-gradient(circle_at_20%_0%,rgba(20,184,166,0.12),transparent_28%),linear-gradient(180deg,#0b111b_0%,#080d14_100%)] px-8 py-7">
+                <section className={`h-full min-h-0 overflow-y-auto bg-[radial-gradient(circle_at_20%_0%,rgba(20,184,166,0.12),transparent_28%),linear-gradient(180deg,#0b111b_0%,#080d14_100%)] py-7 pr-8 transition-[padding] duration-200 ${sidebarOpen ? "pl-8" : "pl-20"}`}>
                     <header className="flex flex-wrap items-start justify-between gap-5 2xl:flex-nowrap">
                         <div>
                             <h1 className="text-3xl font-semibold leading-tight tracking-normal text-white">项目工作台</h1>
@@ -210,20 +222,25 @@ export default function ProjectsPage() {
     );
 }
 
-function ProjectSidebar() {
+function ProjectSidebar({ open, onToggle }: { open: boolean; onToggle: () => void }) {
     return (
-        <aside className="flex min-h-0 flex-col border-r border-slate-800 bg-[#08111a]/95 px-5 py-6 shadow-[18px_0_44px_rgba(0,0,0,0.28)]">
-            <div className="flex items-center gap-3">
-                <span className="grid size-9 place-items-center rounded-full bg-cyan-500/90 text-[#071018]">
-                    <CircleDot className="size-5 fill-current" />
-                </span>
-                <div>
-                    <div className="flex items-center gap-2">
-                        <div className="text-xl font-semibold tracking-normal text-white">AI · 画布</div>
-                        <span className="rounded-full border border-cyan-400/60 px-2 py-0.5 text-[11px] font-medium text-cyan-300">专业版</span>
+        <aside className={`fixed inset-y-0 left-0 z-30 flex w-[248px] min-h-0 flex-col border-r border-slate-800 bg-[#08111a]/95 px-5 py-6 shadow-[18px_0_44px_rgba(0,0,0,0.28)] transition-transform duration-200 ${open ? "translate-x-0" : "-translate-x-full"}`}>
+            <div className="relative pr-8">
+                <div className="flex min-w-0 items-center gap-3">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full bg-cyan-500/90 text-[#071018]">
+                        <CircleDot className="size-5 fill-current" />
+                    </span>
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                            <div className="whitespace-nowrap text-xl font-semibold tracking-normal text-white">AI · 画布</div>
+                            <span className="shrink-0 whitespace-nowrap rounded-full border border-cyan-400/60 px-1.5 py-0.5 text-[10px] font-medium leading-none text-cyan-300">专业版</span>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500">让想法成为影像</p>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">让想法成为影像</p>
                 </div>
+                <button type="button" className="absolute right-0 top-0 grid size-8 place-items-center rounded-md text-slate-400 transition hover:bg-slate-800 hover:text-cyan-200" onClick={onToggle} aria-label="收起左侧栏" title="收起左侧栏">
+                    <PanelLeftClose className="size-4" />
+                </button>
             </div>
 
             <nav className="mt-8 border-t border-slate-800 pt-5">
