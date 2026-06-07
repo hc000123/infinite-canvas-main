@@ -9,14 +9,18 @@ import { CheckCircle2, Clapperboard, FileText, Library, Maximize2, Play, ScrollT
 
 import { requestImageQuestion } from "@/services/api/image";
 import { completeLocalTextTask, failLocalTextTask, startLocalTextTask, summarizeLocalTaskText } from "@/services/local-ai-task-log";
+import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { buildAssetVersionReference } from "../../../../../assets/asset-version-references";
 import { CanvasCreateProjectModal } from "../../../../../canvas/components/canvas-create-project-modal";
 import { useCanvasStore, type CanvasProject } from "../../../../../canvas/stores/use-canvas-store";
+import { useProductionBibleStore } from "../../../../../canvas/stores/use-production-bible-store";
 import { useScriptStore } from "../../../../../canvas/stores/use-script-store";
 import { useStoryboardStore } from "../../../../../canvas/stores/use-storyboard-store";
 import { orderedScriptScenes, type ScriptEpisode, type ScriptScene } from "../../../../../canvas/utils/script-management";
 import { buildEpisodeScriptSnapshot, canvasEpisodeContextFromEpisode } from "../../../../../canvas/utils/canvas-episode-context";
 import type { CanvasProjectPreset } from "../../../../../canvas/utils/canvas-project-preset";
+import type { ProductionBibleItem } from "../../../../../canvas/utils/production-bible";
 import { orderedStoryboardTableShots, type StoryboardTableShot } from "../../../../../canvas/utils/storyboard-management";
 import { buildSeedanceWorkflowPreset, sortedWorkflowStages, workflowStageDetail, type AgentWorkflowStage } from "../../../../agent-workflow-presets";
 import { useAgentRunnerStore } from "../../../../use-agent-runner-store";
@@ -32,6 +36,7 @@ import {
     type AgentRunInput,
     type AgentWorkflowDisplayStatus,
     type AgentWorkflowMappingPreview,
+    type AgentWorkflowMappingPreviewItem,
     type AgentWorkflowRunRecord,
     type AgentWorkflowSceneRunState,
     type AgentWorkflowStageOutput,
@@ -106,6 +111,26 @@ type EpisodeModuleConfig = {
 };
 
 type WorkflowStageDisplaySummary = ReturnType<typeof summarizeWorkflowStageDisplayState>;
+type EpisodeAssetProcessMode = "bind" | "generate";
+type EpisodeAssetFilter = "全部" | "缺素材" | "已绑定" | "待生成" | "角色" | "场景" | "道具" | "服装";
+
+type EpisodeExtractedAsset = {
+    canGenerate: boolean;
+    candidates: Asset[];
+    description: string;
+    episodeLabel: string;
+    id: string;
+    item?: AgentWorkflowMappingPreviewItem;
+    libraryMatchCount: number;
+    name: string;
+    productionBibleItem?: ProductionBibleItem;
+    promptDraft: string;
+    referencedShotLabels: string[];
+    sourceReason: string;
+    status: "已绑定" | "待绑定" | "待生成" | "待确认" | "缺素材";
+    tone: EpisodeStatusTone;
+    type: "角色" | "场景" | "道具" | "服装";
+};
 
 export default function EpisodeProductionWorkbenchPage() {
     const params = useParams<{ id: string; episodeId: string }>();
@@ -597,6 +622,10 @@ function EpisodeProductionShell({
     stageSceneRows: ScriptScene[];
     workflowRun?: AgentWorkflowRunRecord;
 }) {
+    const { message } = App.useApp();
+    const assetLibrary = useAssetStore((state) => state.assets);
+    const productionBibleItems = useProductionBibleStore((state) => state.items);
+    const updateProductionBibleItem = useProductionBibleStore((state) => state.updateItem);
     const [activeFilter, setActiveFilter] = useState("全部");
     useEffect(() => setActiveFilter("全部"), [activeModule]);
 
@@ -608,6 +637,15 @@ function EpisodeProductionShell({
     const storyboardPreview = latestPreview(previews, "storyboard_table");
     const videoPreview = latestPreview(previews, "video_node");
     const currentPhase = buildEpisodePhaseText({ artDisplay, boundCanvas, directorDisplay, episodeTableShots, hasScript, productionBiblePreview, storyboardDisplay, storyboardPreview, videoPreview });
+    const assetRows = buildEpisodeExtractedAssets({
+        appliedPreviewItemIds,
+        assetLibrary,
+        episode,
+        episodeTableShots,
+        preview: productionBiblePreview,
+        productionBibleItems,
+        projectId: project.id,
+    });
     const tabs = episodeModules.map((module) => ({
         ...module,
         badge:
@@ -667,6 +705,30 @@ function EpisodeProductionShell({
                 </div>
             </details>
         ) : undefined;
+    const bindExtractedAsset = (row: EpisodeExtractedAsset, asset: Asset) => {
+        if (!row.productionBibleItem) {
+            message.warning("请先将资产提取结果写入设定库，再绑定项目资产库素材。");
+            return;
+        }
+        if (row.productionBibleItem.assetRefs.some((ref) => ref.assetId === asset.id)) {
+            message.info("当前素材已经绑定到这条资产。");
+            return;
+        }
+        updateProductionBibleItem(row.productionBibleItem.id, {
+            assetRefs: [
+                ...row.productionBibleItem.assetRefs,
+                {
+                    assetId: asset.id,
+                    assetVersion: buildAssetVersionReference(asset),
+                    role: productionBibleRoleForExtractedAsset(row),
+                },
+            ],
+        });
+        message.success(`已绑定 ${asset.title}`);
+    };
+    const prepareReferenceGeneration = () => {
+        message.info("已准备生成参数；请在生图工作台确认后生成，结果会回流项目资产库并绑定。");
+    };
 
     return (
         <div className="min-h-full bg-[radial-gradient(circle_at_0%_0%,rgba(20,184,196,0.16),transparent_30%),linear-gradient(180deg,#071017_0%,#050b10_46%,#03070b_100%)]">
@@ -701,7 +763,28 @@ function EpisodeProductionShell({
                 <EpisodeModuleTabs activeModule={activeModule} onChange={onModuleChange} tabs={tabs} />
             </header>
             <div className="px-6 py-5 xl:px-8">
-                <EpisodeModulePanel config={moduleConfig} editorSlot={scriptEditor} filteredRows={filteredRows} activeFilter={activeFilter} onFilterChange={setActiveFilter} onOpenDetail={onOpenDetail} />
+                {activeModule === "assets" ? (
+                    <EpisodeAssetsModulePage
+                        appliedPreviewItemIds={appliedPreviewItemIds}
+                        applyingPreviewIds={applyingPreviewIds}
+                        assets={assetRows}
+                        episode={episode}
+                        onApplyPreview={onApplyPreview}
+                        onBindAsset={bindExtractedAsset}
+                        onGeneratePreview={onGeneratePreview}
+                        onOpenImageWorkbench={() => {
+                            window.location.href = "/image";
+                        }}
+                        onPrepareGenerate={prepareReferenceGeneration}
+                        onRunStage={onRunStage}
+                        preview={productionBiblePreview}
+                        projectTitle={project.title}
+                        runningStageIds={runningStageIds}
+                        stageOutputs={stageOutputs}
+                    />
+                ) : (
+                    <EpisodeModulePanel config={moduleConfig} editorSlot={scriptEditor} filteredRows={filteredRows} activeFilter={activeFilter} onFilterChange={setActiveFilter} onOpenDetail={onOpenDetail} />
+                )}
             </div>
         </div>
     );
@@ -726,6 +809,322 @@ function EpisodeModuleTabs({ activeModule, onChange, tabs }: { activeModule: Epi
             })}
         </div>
     );
+}
+
+function EpisodeAssetsModulePage({
+    appliedPreviewItemIds,
+    applyingPreviewIds,
+    assets,
+    episode,
+    onApplyPreview,
+    onBindAsset,
+    onGeneratePreview,
+    onOpenImageWorkbench,
+    onPrepareGenerate,
+    onRunStage,
+    preview,
+    projectTitle,
+    runningStageIds,
+    stageOutputs,
+}: {
+    appliedPreviewItemIds: string[];
+    applyingPreviewIds: Record<string, boolean>;
+    assets: EpisodeExtractedAsset[];
+    episode: ScriptEpisode;
+    onApplyPreview: (preview: AgentWorkflowMappingPreview) => void;
+    onBindAsset: (row: EpisodeExtractedAsset, asset: Asset) => void;
+    onGeneratePreview: (stageId: string, targetLabel: string) => void;
+    onOpenImageWorkbench: () => void;
+    onPrepareGenerate: () => void;
+    onRunStage: (stageId: string) => void;
+    preview?: AgentWorkflowMappingPreview;
+    projectTitle: string;
+    runningStageIds: Record<string, boolean>;
+    stageOutputs: Record<string, AgentWorkflowStageOutput | undefined>;
+}) {
+    const [filter, setFilter] = useState<EpisodeAssetFilter>("全部");
+    const [selectedAssetId, setSelectedAssetId] = useState("");
+    const [processMode, setProcessMode] = useState<EpisodeAssetProcessMode>("bind");
+    const filteredAssets = assets.filter((asset) => filterEpisodeExtractedAssets(asset, filter));
+    const selectedAsset = assets.find((asset) => asset.id === selectedAssetId) || filteredAssets[0] || assets[0];
+    const summary = summarizeEpisodeExtractedAssets(assets);
+    const previewCountsResult = preview ? previewCounts(preview, appliedPreviewItemIds) : { applied: 0, pending: 0, total: 0 };
+
+    useEffect(() => {
+        if (!assets.length) {
+            setSelectedAssetId("");
+            return;
+        }
+        if (!selectedAsset || !filteredAssets.some((asset) => asset.id === selectedAsset.id)) setSelectedAssetId(filteredAssets[0]?.id || assets[0].id);
+    }, [assets, filteredAssets, selectedAsset]);
+
+    const openAssetProcess = (asset: EpisodeExtractedAsset, mode: EpisodeAssetProcessMode) => {
+        setSelectedAssetId(asset.id);
+        setProcessMode(mode);
+    };
+
+    return (
+        <section className="grid gap-5">
+            <div className="grid gap-4 border-b border-slate-800 pb-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+                <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
+                        <span>{projectTitle}</span>
+                        <span>/</span>
+                        <span>第 {padEpisodeOrder(episode.order)} 集</span>
+                        <span>/</span>
+                        <span className="text-cyan-300">资产提取</span>
+                    </div>
+                    <h2 className="mt-2 break-words text-3xl font-semibold leading-tight text-slate-50">{episode.title} · 资产提取</h2>
+                    <p className="mt-2 break-words text-sm leading-6 text-slate-500">从剧本和导演分析中提取角色、场景、道具、服装，可优先绑定项目资产库已有素材，缺素材时再按提示词生成参考图。</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" onClick={() => (stageOutputs["art-design"] ? onGeneratePreview("art-design", "设定库预览") : onRunStage("art-design"))} loading={Boolean(runningStageIds["art-design"])}>
+                        {stageOutputs["art-design"] ? "刷新资产预览" : "运行资产提取"}
+                    </Button>
+                    <Button type="primary" disabled={!preview || previewCountsResult.pending <= 0} loading={Boolean(preview && applyingPreviewIds[preview.previewId])} onClick={() => preview && onApplyPreview(preview)}>
+                        写入设定库 {previewCountsResult.pending ? previewCountsResult.pending : ""}
+                    </Button>
+                </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-5">
+                {[
+                    { label: "角色", value: summary.characters },
+                    { label: "场景", value: summary.scenes },
+                    { label: "道具", value: summary.props },
+                    { label: "服装", value: summary.costumes },
+                    { label: "缺素材", tone: summary.missing ? "amber" : "green", value: summary.missing },
+                ].map((item) => (
+                    <div key={item.label} className="rounded-lg border border-slate-800 bg-slate-950/45 px-4 py-3">
+                        <div className="text-xs text-slate-500">{item.label}</div>
+                        <div className={`mt-1 text-2xl font-semibold ${episodeToneTextClass((item.tone as EpisodeStatusTone | undefined) || "slate")}`}>{item.value}</div>
+                    </div>
+                ))}
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_430px]">
+                <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-[#091018]/88">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
+                        <div className="flex flex-wrap gap-2">
+                            {(["全部", "缺素材", "已绑定", "待生成", "角色", "场景", "道具", "服装"] as EpisodeAssetFilter[]).map((item) => (
+                                <button
+                                    key={item}
+                                    type="button"
+                                    className={`rounded-md border px-3 py-1.5 text-sm transition ${filter === item ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:border-slate-600 hover:text-slate-200"}`}
+                                    onClick={() => setFilter(item)}
+                                >
+                                    {item}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="text-sm text-slate-500">当前显示 {filteredAssets.length} 条</div>
+                    </div>
+                    <EpisodeAssetTable assets={filteredAssets} selectedAssetId={selectedAsset?.id || ""} onOpenProcess={openAssetProcess} />
+                </div>
+                <EpisodeAssetProcessDrawer asset={selectedAsset} mode={processMode} onBindAsset={onBindAsset} onModeChange={setProcessMode} onOpenImageWorkbench={onOpenImageWorkbench} onPrepareGenerate={onPrepareGenerate} />
+            </div>
+        </section>
+    );
+}
+
+function EpisodeAssetTable({ assets, onOpenProcess, selectedAssetId }: { assets: EpisodeExtractedAsset[]; onOpenProcess: (asset: EpisodeExtractedAsset, mode: EpisodeAssetProcessMode) => void; selectedAssetId: string }) {
+    if (!assets.length) {
+        return <div className="px-5 py-10 text-center text-sm text-slate-500">暂无符合筛选的资产。</div>;
+    }
+    return (
+        <div className="overflow-x-auto">
+            <div className="min-w-[920px]">
+                <div className="grid grid-cols-[90px_minmax(240px,1fr)_110px_90px_100px_150px] gap-4 border-b border-slate-800 px-5 py-3 text-sm font-medium text-slate-500">
+                    <div>类型</div>
+                    <div>资产</div>
+                    <div>项目库</div>
+                    <div>生成</div>
+                    <div>状态</div>
+                    <div>操作</div>
+                </div>
+                <div className="divide-y divide-slate-800/90">
+                    {assets.map((asset) => {
+                        const selected = asset.id === selectedAssetId;
+                        return (
+                            <div
+                                key={asset.id}
+                                role="button"
+                                tabIndex={0}
+                                className={`grid w-full grid-cols-[90px_minmax(240px,1fr)_110px_90px_100px_150px] gap-4 border-l-4 px-5 py-4 text-left text-sm transition ${selected ? "border-cyan-300 bg-cyan-400/[0.08]" : "border-transparent hover:bg-white/[0.025]"}`}
+                                onClick={() => onOpenProcess(asset, asset.status === "已绑定" ? "bind" : asset.libraryMatchCount ? "bind" : "generate")}
+                                onKeyDown={(event) => {
+                                    if (event.key === "Enter" || event.key === " ") onOpenProcess(asset, asset.status === "已绑定" ? "bind" : asset.libraryMatchCount ? "bind" : "generate");
+                                }}
+                            >
+                                <div className="self-center font-semibold text-slate-200">{asset.type}</div>
+                                <div className="min-w-0 self-center">
+                                    <div className="break-words font-semibold text-slate-100">{asset.name}</div>
+                                    <div className="mt-1 break-words text-slate-500">{asset.description}</div>
+                                </div>
+                                <div className="self-center font-semibold text-slate-200">{asset.libraryMatchCount ? `匹配 ${asset.libraryMatchCount}` : "无匹配"}</div>
+                                <div className="self-center text-slate-300">{asset.canGenerate ? "可生成" : "-"}</div>
+                                <div className="self-center">
+                                    <EpisodeStatusPill status={asset.status} tone={asset.tone} />
+                                </div>
+                                <div className="flex self-center" onClick={(event) => event.stopPropagation()}>
+                                    <button type="button" className="rounded-l-md border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-100" onClick={() => onOpenProcess(asset, "bind")}>
+                                        绑定
+                                    </button>
+                                    <button type="button" className="rounded-r-md border border-l-0 border-slate-700 bg-slate-900/80 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-100" onClick={() => onOpenProcess(asset, "generate")}>
+                                        生成
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function EpisodeAssetProcessDrawer({
+    asset,
+    mode,
+    onBindAsset,
+    onModeChange,
+    onOpenImageWorkbench,
+    onPrepareGenerate,
+}: {
+    asset?: EpisodeExtractedAsset;
+    mode: EpisodeAssetProcessMode;
+    onBindAsset: (row: EpisodeExtractedAsset, asset: Asset) => void;
+    onModeChange: (mode: EpisodeAssetProcessMode) => void;
+    onOpenImageWorkbench: () => void;
+    onPrepareGenerate: () => void;
+}) {
+    const [assetSearch, setAssetSearch] = useState("");
+    const [kindFilter, setKindFilter] = useState<"全部" | "图片" | "文本" | "视频">("全部");
+    const [selectedCandidateId, setSelectedCandidateId] = useState("");
+    const [promptDraft, setPromptDraft] = useState("");
+    const [model, setModel] = useState("gpt-image-1");
+    const [size, setSize] = useState("1024x1024");
+    const [count, setCount] = useState("2");
+    const candidates = asset ? filterAssetCandidates(asset.candidates, assetSearch, kindFilter) : [];
+    const selectedCandidate = candidates.find((candidate) => candidate.id === selectedCandidateId) || candidates[0];
+
+    useEffect(() => {
+        setAssetSearch("");
+        setKindFilter("全部");
+        setSelectedCandidateId(asset?.candidates[0]?.id || "");
+        setPromptDraft(asset?.promptDraft || "");
+    }, [asset?.id]);
+
+    if (!asset) {
+        return <aside className="rounded-2xl border border-slate-800 bg-[#091018]/88 p-5 text-sm text-slate-500">请选择一条资产进行处理。</aside>;
+    }
+
+    return (
+        <aside className="rounded-2xl border border-slate-800 bg-[#091018]/92 shadow-[0_18px_80px_rgba(0,0,0,0.28)] xl:sticky xl:top-5">
+            <div className="border-b border-slate-800 p-5">
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <h3 className="break-words text-2xl font-semibold leading-tight text-slate-50">{asset.name}</h3>
+                        <p className="mt-2 break-words text-sm leading-6 text-slate-500">
+                            {asset.type}资产 · {asset.episodeLabel} · {asset.referencedShotLabels.length || 0} 个镜头引用
+                        </p>
+                    </div>
+                    <EpisodeStatusPill status={asset.status} tone={asset.tone} />
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button type="button" className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${mode === "bind" ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:text-slate-200"}`} onClick={() => onModeChange("bind")}>
+                        绑定已有资产
+                    </button>
+                    <button type="button" className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${mode === "generate" ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:text-slate-200"}`} onClick={() => onModeChange("generate")}>
+                        生成参考图
+                    </button>
+                </div>
+            </div>
+            <div className="grid gap-4 p-5">
+                <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+                    <div className="text-xs font-semibold text-slate-500">提取描述</div>
+                    <div className="mt-2 break-words text-sm leading-6 text-slate-200">{asset.description}</div>
+                </div>
+                {mode === "bind" ? (
+                    <div className="grid gap-4">
+                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_110px]">
+                            <Input className="!bg-slate-950/70 !text-slate-100" placeholder="搜索候选素材" value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} />
+                            <div className="grid grid-cols-4 overflow-hidden rounded-md border border-slate-800">
+                                {(["全部", "图片", "文本", "视频"] as const).map((item) => (
+                                    <button key={item} type="button" className={`px-2 py-1.5 text-xs ${kindFilter === item ? "bg-cyan-400/15 text-cyan-100" : "bg-slate-950/50 text-slate-500"}`} onClick={() => setKindFilter(item)}>
+                                        {item}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="grid max-h-[340px] gap-2 overflow-auto pr-1">
+                            {candidates.length ? (
+                                candidates.map((candidate) => (
+                                    <button
+                                        key={candidate.id}
+                                        type="button"
+                                        className={`grid grid-cols-[72px_minmax(0,1fr)] gap-3 rounded-lg border p-2 text-left transition ${selectedCandidate?.id === candidate.id ? "border-cyan-400/70 bg-cyan-400/[0.08]" : "border-slate-800 bg-slate-950/45 hover:border-slate-600"}`}
+                                        onClick={() => setSelectedCandidateId(candidate.id)}
+                                    >
+                                        <AssetCandidateThumb asset={candidate} />
+                                        <div className="min-w-0">
+                                            <div className="break-words text-sm font-semibold text-slate-100">{candidate.title}</div>
+                                            <div className="mt-1 text-xs text-slate-500">{assetKindDisplay(candidate.kind)} · {assetVersionSummary(candidate)}</div>
+                                            {candidate.tags.length ? <div className="mt-1 break-words text-xs text-slate-500">{candidate.tags.slice(0, 4).join(" / ")}</div> : null}
+                                        </div>
+                                    </button>
+                                ))
+                            ) : (
+                                <div className="rounded-lg border border-slate-800 bg-slate-950/45 px-4 py-8 text-center text-sm text-slate-500">项目资产库暂无匹配候选。</div>
+                            )}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" disabled={!selectedCandidate || !asset.productionBibleItem} onClick={() => selectedCandidate && onBindAsset(asset, selectedCandidate)}>
+                                绑定选中素材
+                            </Button>
+                            {!asset.productionBibleItem ? <span className="self-center text-xs text-amber-300">先写入设定库后可确认绑定。</span> : null}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="grid gap-4">
+                        <div className="grid gap-2">
+                            <div className="text-xs font-semibold text-slate-500">生成提示词草案</div>
+                            <Input.TextArea className="!bg-slate-950/70 !text-slate-100" rows={8} value={promptDraft} onChange={(event) => setPromptDraft(event.target.value)} />
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            <label className="grid gap-1 text-xs text-slate-500">
+                                模型
+                                <Input className="!bg-slate-950/70 !text-slate-100" value={model} onChange={(event) => setModel(event.target.value)} />
+                            </label>
+                            <label className="grid gap-1 text-xs text-slate-500">
+                                尺寸
+                                <Input className="!bg-slate-950/70 !text-slate-100" value={size} onChange={(event) => setSize(event.target.value)} />
+                            </label>
+                            <label className="grid gap-1 text-xs text-slate-500">
+                                数量
+                                <Input className="!bg-slate-950/70 !text-slate-100" value={count} onChange={(event) => setCount(event.target.value)} />
+                            </label>
+                        </div>
+                        <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm leading-6 text-slate-400">生成结果会先进入项目资产库，再绑定到当前提取资产；后续分镜和画布承接都引用资产库版本。</div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button type="primary" onClick={onPrepareGenerate}>
+                                用提示词生成
+                            </Button>
+                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={onOpenImageWorkbench}>
+                                打开生图工作台
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </aside>
+    );
+}
+
+function AssetCandidateThumb({ asset }: { asset: Asset }) {
+    const imageUrl = asset.kind === "image" ? asset.coverUrl || asset.data.dataUrl : "";
+    if (imageUrl) return <div className="h-16 overflow-hidden rounded-md border border-slate-800 bg-slate-900"><img className="h-full w-full object-cover" src={imageUrl} alt={asset.title} /></div>;
+    return <div className="grid h-16 place-items-center rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-500">{assetKindDisplay(asset.kind)}</div>;
 }
 
 function EpisodeModulePanel({
@@ -1032,6 +1431,220 @@ function buildDirectorModuleConfig(input: {
         ],
         title: "导演分析模块",
     };
+}
+
+function buildEpisodeExtractedAssets({
+    assetLibrary,
+    episode,
+    episodeTableShots,
+    preview,
+    productionBibleItems,
+    projectId,
+}: {
+    appliedPreviewItemIds: string[];
+    assetLibrary: Asset[];
+    episode: ScriptEpisode;
+    episodeTableShots: StoryboardTableShot[];
+    preview?: AgentWorkflowMappingPreview;
+    productionBibleItems: ProductionBibleItem[];
+    projectId: string;
+}): EpisodeExtractedAsset[] {
+    if (!preview?.items.length) return fallbackEpisodeExtractedAssets({ assetLibrary, episode, episodeTableShots });
+    return preview.items.map((item, index) => {
+        const type = episodeAssetTypeFromPreviewItem(item);
+        const name = item.title || mappedFieldText(item.mappedFields.name) || `资产 ${index + 1}`;
+        const fullDescription = mappedFieldText(item.mappedFields.description) || item.sourceText || item.reason || "待确认资产描述。";
+        const description = listSafeText(fullDescription, "待确认资产描述。");
+        const productionBibleItem = findProductionBibleItemForPreviewItem({ item, preview, productionBibleItems, projectId });
+        const candidates = matchProjectAssetCandidates(assetLibrary, { description, name, type });
+        const canGenerate = item.action !== "skip" && Boolean(fullDescription.trim());
+        const status = episodeExtractedAssetStatus({ canGenerate, candidates, item, productionBibleItem });
+        return {
+            canGenerate,
+            candidates,
+            description,
+            episodeLabel: `第 ${padEpisodeOrder(episode.order)} 集`,
+            id: item.itemId,
+            item,
+            libraryMatchCount: candidates.length,
+            name,
+            productionBibleItem,
+            promptDraft: makeAssetPromptDraft({ description: fullDescription, name, promptSnippets: item.mappedFields.promptSnippets, type }),
+            referencedShotLabels: referencedShotLabelsForAsset(episodeTableShots, name, description),
+            sourceReason: item.reason,
+            status,
+            tone: episodeExtractedAssetTone(status),
+            type,
+        };
+    });
+}
+
+function fallbackEpisodeExtractedAssets({ assetLibrary, episode, episodeTableShots }: { assetLibrary: Asset[]; episode: ScriptEpisode; episodeTableShots: StoryboardTableShot[] }): EpisodeExtractedAsset[] {
+    const fallbackRows: Array<Pick<EpisodeExtractedAsset, "description" | "name" | "type">> = [
+        { description: "女主，旧楼交易线索相关，需保持表情和服装连续性。", name: "林秀妹", type: "角色" },
+        { description: "海边柴油仓库，半开铁门、强逆光、潮湿地面和旧油桶。", name: "海边柴油仓库", type: "场景" },
+        { description: "关键威胁道具，金属反光，需要与动作镜头一致。", name: "弹簧刀", type: "道具" },
+        { description: "旧油桶、残液、柴油味，是本集冲突升级的视觉锚点。", name: "旧油桶", type: "道具" },
+        { description: "雨夜追查用深色短款外套，湿润反光，适合低机位跟拍。", name: "女主雨衣", type: "服装" },
+    ];
+    return fallbackRows.map((row, index) => {
+        const candidates = matchProjectAssetCandidates(assetLibrary, row);
+        const status: EpisodeExtractedAsset["status"] = candidates.length ? "待绑定" : index === 0 ? "待确认" : "待生成";
+        return {
+            ...row,
+            canGenerate: true,
+            candidates,
+            episodeLabel: `第 ${padEpisodeOrder(episode.order)} 集`,
+            id: `asset-fallback-${index}`,
+            libraryMatchCount: candidates.length,
+            promptDraft: makeAssetPromptDraft(row),
+            referencedShotLabels: referencedShotLabelsForAsset(episodeTableShots, row.name, row.description),
+            sourceReason: "等待资产提取 Agent 输出真实条目。",
+            status,
+            tone: episodeExtractedAssetTone(status),
+        };
+    });
+}
+
+function findProductionBibleItemForPreviewItem({
+    item,
+    preview,
+    productionBibleItems,
+    projectId,
+}: {
+    item: AgentWorkflowMappingPreviewItem;
+    preview: AgentWorkflowMappingPreview;
+    productionBibleItems: ProductionBibleItem[];
+    projectId: string;
+}) {
+    return productionBibleItems.find((entry) => {
+        if (entry.projectId !== projectId) return false;
+        const source = entry.metadata?.source;
+        if (source?.previewId === preview.previewId && source.previewItemId === item.itemId) return true;
+        return entry.name === item.title;
+    });
+}
+
+function episodeAssetTypeFromPreviewItem(item: AgentWorkflowMappingPreviewItem): EpisodeExtractedAsset["type"] {
+    const text = `${item.title} ${mappedFieldText(item.mappedFields.kind)} ${mappedFieldText(item.mappedFields.tags)} ${item.sourceText}`.toLowerCase();
+    if (text.includes("服装") || text.includes("服化") || text.includes("costume") || text.includes("makeup")) return "服装";
+    if (text.includes("场景") || text.includes("scene") || text.includes("location")) return "场景";
+    if (text.includes("道具") || text.includes("prop")) return "道具";
+    return "角色";
+}
+
+function episodeExtractedAssetStatus({
+    canGenerate,
+    candidates,
+    item,
+    productionBibleItem,
+}: {
+    canGenerate: boolean;
+    candidates: Asset[];
+    item: AgentWorkflowMappingPreviewItem;
+    productionBibleItem?: ProductionBibleItem;
+}): EpisodeExtractedAsset["status"] {
+    if (productionBibleItem?.assetRefs.length) return "已绑定";
+    if (item.action === "skip" || item.warnings.length) return "待确认";
+    if (candidates.length) return "待绑定";
+    return canGenerate ? "待生成" : "缺素材";
+}
+
+function episodeExtractedAssetTone(status: EpisodeExtractedAsset["status"]): EpisodeStatusTone {
+    if (status === "已绑定") return "green";
+    if (status === "待绑定" || status === "待生成") return "cyan";
+    if (status === "缺素材" || status === "待确认") return "amber";
+    return "slate";
+}
+
+function matchProjectAssetCandidates(assetLibrary: Asset[], asset: Pick<EpisodeExtractedAsset, "description" | "name" | "type">) {
+    const terms = uniqueTextList(`${asset.name} ${asset.description} ${asset.type}`.split(/[\s,，、/·:：。；;（）()]+/).filter((term) => term.length >= 2));
+    return assetLibrary
+        .map((candidate) => ({ asset: candidate, score: scoreAssetCandidate(candidate, terms, asset.type) }))
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score || b.asset.updatedAt.localeCompare(a.asset.updatedAt))
+        .slice(0, 8)
+        .map((item) => item.asset);
+}
+
+function scoreAssetCandidate(asset: Asset, terms: string[], type: EpisodeExtractedAsset["type"]) {
+    const haystack = `${asset.title} ${(asset.tags || []).join(" ")} ${asset.note || ""} ${asset.source || ""}`.toLowerCase();
+    let score = 0;
+    terms.forEach((term) => {
+        if (haystack.includes(term.toLowerCase())) score += term.length > 3 ? 3 : 2;
+    });
+    if (asset.kind === "image") score += 1;
+    if (type === "场景" && (haystack.includes("场景") || haystack.includes("环境"))) score += 2;
+    if (type === "角色" && (haystack.includes("角色") || haystack.includes("人物"))) score += 2;
+    if (type === "道具" && haystack.includes("道具")) score += 2;
+    if (type === "服装" && (haystack.includes("服装") || haystack.includes("服化"))) score += 2;
+    return score;
+}
+
+function referencedShotLabelsForAsset(shots: StoryboardTableShot[], name: string, description: string) {
+    const terms = uniqueTextList([name, ...description.split(/[，,、。\s]+/)].filter((term) => term.length >= 2));
+    return shots
+        .filter((shot) => {
+            const text = `${shot.title} ${shot.sceneName} ${shot.scriptText} ${shot.visualDescription} ${shot.characters.join(" ")} ${shot.assetNeeds?.join(" ") || ""}`;
+            return terms.some((term) => text.includes(term));
+        })
+        .slice(0, 6)
+        .map((shot) => `P${padEpisodeOrder(shot.order)}`);
+}
+
+function makeAssetPromptDraft({ description, name, promptSnippets, type }: { description: string; name: string; promptSnippets?: unknown; type: EpisodeExtractedAsset["type"] }) {
+    const existing = mappedFieldText(promptSnippets);
+    if (existing) return existing;
+    return `${name}，${type}参考图，${description}，电影级写实质感，低对比深色影像风格，保持本集视觉连续性，清晰可作为后续分镜和画布承接参考。`;
+}
+
+function summarizeEpisodeExtractedAssets(assets: EpisodeExtractedAsset[]) {
+    return {
+        characters: assets.filter((asset) => asset.type === "角色").length,
+        costumes: assets.filter((asset) => asset.type === "服装").length,
+        missing: assets.filter((asset) => asset.status === "缺素材" || asset.status === "待生成").length,
+        props: assets.filter((asset) => asset.type === "道具").length,
+        scenes: assets.filter((asset) => asset.type === "场景").length,
+    };
+}
+
+function filterEpisodeExtractedAssets(asset: EpisodeExtractedAsset, filter: EpisodeAssetFilter) {
+    if (filter === "全部") return true;
+    if (filter === "缺素材") return asset.status === "缺素材" || asset.status === "待生成";
+    if (filter === "已绑定") return asset.status === "已绑定";
+    if (filter === "待生成") return asset.status === "待生成";
+    return asset.type === filter;
+}
+
+function filterAssetCandidates(candidates: Asset[], search: string, kindFilter: "全部" | "图片" | "文本" | "视频") {
+    const keyword = search.trim().toLowerCase();
+    return candidates.filter((asset) => {
+        const kindMatched = kindFilter === "全部" || assetKindDisplay(asset.kind) === kindFilter;
+        if (!kindMatched) return false;
+        if (!keyword) return true;
+        return `${asset.title} ${asset.tags.join(" ")} ${asset.note || ""}`.toLowerCase().includes(keyword);
+    });
+}
+
+function assetKindDisplay(kind: Asset["kind"]) {
+    const labels: Record<Asset["kind"], string> = {
+        audio: "音频",
+        image: "图片",
+        text: "文本",
+        video: "视频",
+    };
+    return labels[kind];
+}
+
+function assetVersionSummary(asset: Asset) {
+    const versions = Array.isArray(asset.metadata?.assetVersions) ? asset.metadata.assetVersions : [];
+    return versions.length ? `版本 ${versions.length}` : "版本 1";
+}
+
+function productionBibleRoleForExtractedAsset(row: EpisodeExtractedAsset) {
+    if (row.type === "角色") return "portrait";
+    if (row.type === "场景") return "environment";
+    return "reference";
 }
 
 function buildAssetsModuleConfig(input: {
