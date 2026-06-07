@@ -20,7 +20,6 @@ import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { hasNewerAssetVersion, preserveOrCreateAssetVersionReferences, updateAssetReferenceToLatest } from "../../assets/asset-version-references";
-import { AgentSettingsDrawer } from "../../projects/agent-settings-drawer";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { applyAssistantCanvasActions, type AssistantCanvasAction } from "../utils/canvas-assistant-actions";
@@ -306,7 +305,6 @@ function InfiniteCanvasPage() {
     const [assetPickerTab, setAssetPickerTab] = useState<AssetPickerTab>("my-assets");
     const [scriptManagerOpen, setScriptManagerOpen] = useState(false);
     const [episodeWorkbenchOpen, setEpisodeWorkbenchOpen] = useState(false);
-    const [agentSettingsOpen, setAgentSettingsOpen] = useState(false);
     const [storyboardManagerOpen, setStoryboardManagerOpen] = useState(false);
     const [imageBriefOpen, setImageBriefOpen] = useState(false);
     const [imageBriefInitialId, setImageBriefInitialId] = useState("");
@@ -2242,24 +2240,17 @@ function InfiniteCanvasPage() {
                         setImageBriefOpenRequestId((value) => value + 1);
                         setImageBriefOpen(true);
                     }}
-                    onOpenAgentSettings={() => setAgentSettingsOpen(true)}
-                    promptBindWhenUnbound
-                />
-                <AgentSettingsDrawer
-                    open={agentSettingsOpen}
-                    projectId={workspaceProjectId}
-                    projectTitle={workspaceProjectTitle}
-                    canvasId={canvasId}
-                    episodeId={currentProject?.episodeId}
-                    episodeTitle={currentProject?.episodeTitle}
-                    canvasNodes={nodes}
-                    onApplyVideoPreviewNodes={({ nodes: nextNodes, focusNodeIds }) => {
-                        setNodes(nextNodes);
-                        setSelectedNodeIds(new Set(focusNodeIds));
-                        setSelectedConnectionId(null);
-                        if (focusNodeIds[0]) setDialogNodeId(focusNodeIds[0]);
+                    onOpenAgentSettings={() => {
+                        if (!currentProject?.projectId) {
+                            message.warning("请先把当前画布绑定到项目后再进入 Agent 工作台");
+                            return;
+                        }
+                        const query = new URLSearchParams();
+                        query.set("canvasId", canvasId);
+                        if (currentProject.episodeId) query.set("episodeId", currentProject.episodeId);
+                        router.push(`/projects/${currentProject.projectId}/agents?${query.toString()}`);
                     }}
-                    onClose={() => setAgentSettingsOpen(false)}
+                    promptBindWhenUnbound
                 />
                 <ScriptManagerDrawer
                     open={scriptManagerOpen}

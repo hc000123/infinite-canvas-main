@@ -4,7 +4,64 @@
 
 ## 当前版本验收清单
 
-当前版本：`v0.2.71`。需要优先验收的是 M6.10.UI-R Seedance workflow UI 精简与信息层级收口、M6.10.4-A 规范读取记录与质量门 manifest 底座、M6.10.R0 Seedance 三阶段 Agent Core 拆分、M6.10.3-Fix1 P1 阻断修复、M6.10.3-Fix1 Seedance 映射预览 JSON 代码块解析质量修复、M6.10.3-R Seedance 映射预览总 review 修复项、M6.10.3-D Seedance 映射预览确认后创建 / 更新画布视频配置节点，M6.10.3-C Seedance 映射预览确认后写入分镜头表，M6.10.3-B Seedance 映射预览确认后写入设定库，M6.10.3-A Seedance 阶段产物映射预览，M6.10.2 Seedance 三阶段 workflow 状态、审核证据和产物存储，M6.10.1 Seedance 多 Agent 工作流文本 Runner，M6.10.0 Seedance 多 Agent 工作流预设导入、P3-C / M6.9.7 视频节点自动带入本集资产参考、M6.9.R1 Agent 化工作台结构收口、P3-B / M6.9.5 分镜草案 Agent 接入、M6.9.6 镜头组加入画布改为视频生成节点、M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+当前版本：`v0.2.72`。需要优先验收的是 M6.11.0-A Agent 工作台项目级入口、M6.10.UI-R2 Agent 工作台入口拆层与 workflow 路径提示、M6.10.UI-R Seedance workflow UI 精简与信息层级收口、M6.10.4-A 规范读取记录与质量门 manifest 底座、M6.10.R0 Seedance 三阶段 Agent Core 拆分、M6.10.3-Fix1 P1 阻断修复、M6.10.3-Fix1 Seedance 映射预览 JSON 代码块解析质量修复、M6.10.3-R Seedance 映射预览总 review 修复项、M6.10.3-D Seedance 映射预览确认后创建 / 更新画布视频配置节点，M6.10.3-C Seedance 映射预览确认后写入分镜头表，M6.10.3-B Seedance 映射预览确认后写入设定库，M6.10.3-A Seedance 阶段产物映射预览，M6.10.2 Seedance 三阶段 workflow 状态、审核证据和产物存储，M6.10.1 Seedance 多 Agent 工作流文本 Runner，M6.10.0 Seedance 多 Agent 工作流预设导入、P3-C / M6.9.7 视频节点自动带入本集资产参考、M6.9.R1 Agent 化工作台结构收口、P3-B / M6.9.5 分镜草案 Agent 接入、M6.9.6 镜头组加入画布改为视频生成节点、M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+
+#### v0.2.72：M6.11.0-A Agent 工作台项目级入口
+
+- 入口：项目详情页 `/projects/:id` 的“Agent 工作台”，或画布页本集工作台里的“Agent 工作台”按钮。
+- 本次实现：
+  - 新增项目级页面 `/projects/:id/agents`，页面标题为“Agent 工作台”。
+  - 现有 `AgentSettingsDrawer` 的主体已抽成可复用 `AgentWorkspacePanel`，项目级页面和 Drawer 共用同一套业务逻辑。
+  - 画布页不再承载完整 Agent 配置 / 执行抽屉，只保留跳转入口。
+  - 从画布页进入时会带上 `canvasId / episodeId` query，用于保留 mapping preview 写入分镜和创建视频节点所需上下文。
+  - workflow 执行、单 Agent 配置、文本 API 状态、实际模型、模板预览、草案记录、mapping preview 和写入逻辑保持不变。
+  - 不改 Agent Runner 数据结构，不接新 LLM，不触发图片或视频生成，不触发扣费。
+- 操作步骤：
+  1. 打开项目详情页，点击“Agent 工作台”，确认进入 `/projects/:id/agents`。
+  2. 打开画布页，在本集工作台点击“Agent 工作台”，确认进入 `/projects/:id/agents?canvasId=...&episodeId=...`。
+  3. 在项目级 Agent 工作台检查“工作流执行”Tab，确认仍可运行文本草案、生成 mapping preview，并保留审核与写入确认流程。
+  4. 切换到“单 Agent 配置”Tab，确认文本 API 状态、实际模型、模板预览和草案记录仍正常展示。
+  5. 从带 `canvasId / episodeId` 的入口进入后，生成视频节点类 mapping preview，确认仍可“创建节点”，且不会直接生成视频或扣费。
+  6. 检查控制台，确认不再出现 Ant Design deprecated warning。
+- 预期结果：
+  - 项目详情页或画布页都能进入 `/projects/:id/agents`。
+  - Agent 工作台页面可以稳定承载 workflow 和单 Agent 配置，不再依赖画布抽屉作为主入口。
+  - 从画布进入时，上下文可保留到项目级页面。
+  - mapping preview 的设定库 / 分镜头表 / 视频节点应用逻辑不变。
+  - 不触发真实生成，不触发扣费。
+
+#### v0.2.71：M6.10.UI-R2 Agent 工作台入口拆层与 workflow 路径提示
+
+- 入口：画布页或项目详情页的“Agent 设置 / Agent 工作台”。
+- 本次实现：
+  - Agent 抽屉标题改为“Agent 工作台”，默认 Tab 改为“工作流执行”。
+  - Seedance workflow 与单 Agent 配置拆成两个 Tab，避免正式三阶段流程和模板配置混在同一首屏。
+  - Seedance workflow 作为内置流程展示，不再显示预设选择、启用 / 停用、已选择 / 未选择、保存选择和清除选择等暂不可操作的配置控件。
+  - Seedance workflow 顶部新增简短路径：阶段 1 → 阶段 2 → 阶段 3 → 生成预览 → 确认写入。
+  - 单 Agent 配置中将“可用”改为“模板可用”，并显示文本 API 就绪状态、调用通道和实际文本模型。
+  - 单 Agent 配置明确“创建预览 Run”只创建本地记录，真实文本调用在 workflow 阶段“运行草案”中触发。
+  - 单 Agent 详情默认展示完整模板预览，包含使用场景、输入变量、系统提示词、用户提示词模板和输出 Schema；编辑字段默认折叠。
+  - 单 Agent 的“运行记录”改为“草案记录”，移除列表中的批准 / 驳回按钮，避免把历史记录误当成审核入口。
+  - 本集工作台的资产提取草案改为直接展示可读资产卡片，并默认展开处理过程摘要。
+  - 视频生产台 Drawer 改用 Ant Design 推荐的 `size` 属性，移除 `width` 废弃警告。
+- 操作步骤：
+  1. 打开画布页的 Agent 工作台，确认默认进入“工作流执行”Tab。
+  2. 检查首屏是否只展示当前内置 Seedance 工作流和三阶段路径，不出现无实际意义的启用 / 选择 / 保存配置控件。
+  3. 切换到“单 Agent 配置”Tab，确认旧的单 Agent 模板配置、创建预览 Run 和运行记录仍可用。
+  4. 检查单 Agent 列表和详情区，确认能看清模板状态、文本 API 状态、调用通道和实际模型。
+  5. 检查单 Agent 模板预览，确认提示词和输出 Schema 可完整查看，编辑字段需要主动展开。
+  6. 检查“草案记录”，确认只展示记录和详情，不出现批准 / 驳回按钮。
+  7. 在本集工作台点击“运行资产提取”，确认运行后直接看到资产草案卡片、来源片段和处理过程摘要。
+  8. 打开视频生产台，确认不再出现 `[antd: Drawer] width is deprecated` 控制台提示。
+- 预期结果：
+  - 首屏优先呈现实际工作逻辑，而不是配置表单。
+  - 内置 workflow 不再表现成可新建 / 可切换 / 可开关的预设管理器。
+  - 单 Agent 配置仍保留，但不干扰正式 workflow 执行视图。
+  - 单 Agent 默认先看完整模板预览，避免只露出一段被截断的表单。
+  - 资产提取结果不再只藏在 JSON 折叠区，用户能直接判断草案是否可用。
+  - 用户不会把“模板可用”误解为“API 已真实连通并执行过”。
+  - 单 Agent 草案记录不提供审批动作；审批只保留在正式 workflow 阶段审核中。
+  - 不改变 Runner、workflow 状态、quality gate、mapping preview 或写入逻辑。
 
 #### v0.2.71：M6.10.UI-R Seedance workflow UI 精简与信息层级收口
 

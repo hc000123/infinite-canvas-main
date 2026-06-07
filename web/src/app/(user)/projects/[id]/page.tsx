@@ -15,7 +15,6 @@ import { EpisodeWorkbenchDrawer } from "../../canvas/components/episode-workbenc
 import { ImageBriefWorkbenchDrawer } from "../../canvas/components/image-brief-workbench-drawer";
 import { ProductionBibleDrawer } from "../../canvas/components/production-bible-drawer";
 import { StoryboardManagerDrawer } from "../../canvas/components/storyboard-manager-drawer";
-import { AgentSettingsDrawer } from "../agent-settings-drawer";
 import { useCanvasStore } from "../../canvas/stores/use-canvas-store";
 import { useGenerationQueueStore } from "../../canvas/stores/use-generation-queue-store";
 import { useProductionBibleStore } from "../../canvas/stores/use-production-bible-store";
@@ -72,7 +71,6 @@ export default function CreativeProjectDetailPage() {
     const [episodeWorkbenchOpen, setEpisodeWorkbenchOpen] = useState(false);
     const [assetBreakdownOpen, setAssetBreakdownOpen] = useState(false);
     const [imageBriefOpen, setImageBriefOpen] = useState(false);
-    const [agentSettingsOpen, setAgentSettingsOpen] = useState(false);
     const [productionBibleOpen, setProductionBibleOpen] = useState(false);
     const [productionBibleInitialKind, setProductionBibleInitialKind] = useState<ProductionBibleKind | undefined>();
     const canvasIds = useMemo(() => (project ? canvasIdsForCreativeProject(project, canvases) : []), [canvases, project]);
@@ -336,8 +334,8 @@ export default function CreativeProjectDetailPage() {
                                     <EntryLink icon={<Images className="size-5" />} title="素材" description="查看当前项目生成和引用素材" href={`/assets?projectId=${project.id}`} />
                                     <EntryLink icon={<FileText className="size-5" />} title="提示词" description="进入提示词仓库复用模板" href="/prompts" />
                                     <EntryCard icon={<ListVideo className="size-5" />} title="队列" description={`${overviewDashboard?.stats.generationQueueCount || 0} 个本地队列项`} onOpen={() => openStoryboardReference()} />
-                                    <EntryCard icon={<Bot className="size-5" />} title="Agent 设置" description="统一维护资产提取、分镜、生图 Brief、视频提示词和质检 Agent 配置" onOpen={() => setAgentSettingsOpen(true)} />
-                                    <EntryLink icon={<Bot className="size-5" />} title="Agent" description="进入短剧 Agent 任务中心" href={`/projects/${project.id}/agent`} />
+                                    <EntryCard icon={<Bot className="size-5" />} title="Agent 工作台" description="统一执行 Seedance workflow、单 Agent 配置、模板预览和草案记录" onOpen={() => router.push(`/projects/${project.id}/agents`)} />
+                                    <EntryLink icon={<Bot className="size-5" />} title="Agent 任务中心" description="查看旧的本地 Skill 任务预览与应用记录" href={`/projects/${project.id}/agent`} />
                                 </div>
                             ),
                         },
@@ -404,7 +402,7 @@ export default function CreativeProjectDetailPage() {
                     const canvas = projectCanvases.find((item) => item.nodes.some((node) => node.id === nodeId));
                     if (canvas) router.push(`/canvas/${canvas.id}`);
                 }}
-                onOpenAgentSettings={() => setAgentSettingsOpen(true)}
+                onOpenAgentSettings={() => router.push(`/projects/${project.id}/agents`)}
             />
             <StoryboardManagerDrawer
                 open={storyboardOpen}
@@ -426,7 +424,6 @@ export default function CreativeProjectDetailPage() {
                 onOpenAsset={setPreviewAsset}
                 onClose={() => setImageBriefOpen(false)}
             />
-            <AgentSettingsDrawer open={agentSettingsOpen} projectId={project.id} projectTitle={project.title} onClose={() => setAgentSettingsOpen(false)} />
             <ProductionBibleDrawer open={productionBibleOpen} projectId={project.id} projectTitle={project.title} canvases={projectCanvases} initialKind={productionBibleInitialKind} onClose={() => setProductionBibleOpen(false)} />
         </main>
     );

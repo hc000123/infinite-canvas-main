@@ -180,7 +180,7 @@ export function buildProjectOverviewSuggestions(stats: ProjectOverviewDashboard[
 
 export function projectOverviewActionHref(projectId: string, target: ProjectOverviewActionTarget) {
     if (target.type === "assets-page") return `/assets?projectId=${projectId}`;
-    if (target.type === "agent") return `/projects/${projectId}/agent`;
+    if (target.type === "agent") return `/projects/${projectId}/agents`;
     return "";
 }
 
