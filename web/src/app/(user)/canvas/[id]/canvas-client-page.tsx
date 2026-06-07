@@ -2178,7 +2178,13 @@ function InfiniteCanvasPage() {
                         setAssetPickerTab("my-assets");
                         setAssetPickerOpen(true);
                     }}
-                    onOpenEpisodeWorkbench={() => setEpisodeWorkbenchOpen(true)}
+                    onOpenEpisodeWorkbench={() => {
+                        if (currentProject?.projectId && currentProject.episodeId) {
+                            router.push(`/projects/${currentProject.projectId}/episodes/${currentProject.episodeId}/workbench`);
+                            return;
+                        }
+                        setEpisodeWorkbenchOpen(true);
+                    }}
                     onOpenImageBriefs={() => setImageBriefOpen(true)}
                 />
 

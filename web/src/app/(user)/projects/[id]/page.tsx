@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { App, Button, Drawer, Empty, Input, Select, Tabs, Tag } from "antd";
-import { AlertTriangle, Bot, BookOpen, Boxes, Clapperboard, ExternalLink, FileText, Images, Library, ListVideo, Maximize2, Plus, ScrollText, Save, SlidersHorizontal, Sparkles, Video } from "lucide-react";
+import { AlertTriangle, Bot, BookOpen, Boxes, Clapperboard, ExternalLink, FileText, Images, Library, ListVideo, Maximize2, Plus, ScrollText, Save, SlidersHorizontal, Sparkles, Video, Workflow } from "lucide-react";
 
 import { useAssetStore, type Asset, type AssetKind } from "@/stores/use-asset-store";
 import { useEffectiveConfig } from "@/stores/use-config-store";
@@ -75,6 +75,7 @@ export default function CreativeProjectDetailPage() {
     const [productionBibleInitialKind, setProductionBibleInitialKind] = useState<ProductionBibleKind | undefined>();
     const canvasIds = useMemo(() => (project ? canvasIdsForCreativeProject(project, canvases) : []), [canvases, project]);
     const projectCanvases = useMemo(() => canvases.filter((canvas) => canvasIds.includes(canvas.id)), [canvasIds, canvases]);
+    const projectEpisodes = useMemo(() => episodes.filter((episode) => episode.projectId === projectId).sort((a, b) => a.order - b.order), [episodes, projectId]);
     const editingCanvasPreset = useMemo(() => projectCanvases.find((canvas) => canvas.id === editingCanvasPresetId), [editingCanvasPresetId, projectCanvases]);
     const unboundCanvases = useMemo(() => unfiledCanvasProjects(canvases, project ? [project] : []), [canvases, project]);
     const assetReferenceRows = useMemo(
@@ -321,21 +322,65 @@ export default function CreativeProjectDetailPage() {
                             key: "workflow",
                             label: "工作流",
                             children: (
-                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                    <EntryCard icon={<ScrollText className="size-5" />} title="剧本 / 本集工作台" description="不跳回画布，直接管理当前集剧本、分镜头表、生成镜头组和视频生成状态" onOpen={() => setEpisodeWorkbenchOpen(true)} />
-                                    <EntryCard
-                                        icon={<BookOpen className="size-5" />}
-                                        title="设定库"
-                                        description={`${bibleItems.filter((item) => item.projectId === project.id).length} 个角色 / 场景 / 道具设定`}
-                                        onOpen={() => openProductionBibleReference()}
-                                    />
-                                    <EntryCard icon={<Boxes className="size-5" />} title="资产拆解" description="从本集剧本整理角色、场景、道具和风格 Brief" onOpen={() => setAssetBreakdownOpen(true)} />
-                                    <EntryCard icon={<Sparkles className="size-5" />} title="生图 Brief" description="管理场景图、角色图、道具图和氛围参考图 Brief" onOpen={() => setImageBriefOpen(true)} />
-                                    <EntryLink icon={<Images className="size-5" />} title="素材" description="查看当前项目生成和引用素材" href={`/assets?projectId=${project.id}`} />
-                                    <EntryLink icon={<FileText className="size-5" />} title="提示词" description="进入提示词仓库复用模板" href="/prompts" />
-                                    <EntryCard icon={<ListVideo className="size-5" />} title="队列" description={`${overviewDashboard?.stats.generationQueueCount || 0} 个本地队列项`} onOpen={() => openStoryboardReference()} />
-                                    <EntryCard icon={<Bot className="size-5" />} title="Agent 工作台" description="统一执行 Seedance workflow、单 Agent 配置、模板预览和草案记录" onOpen={() => router.push(`/projects/${project.id}/agents`)} />
-                                    <EntryLink icon={<Bot className="size-5" />} title="Agent 任务中心" description="查看旧的本地 Skill 任务预览与应用记录" href={`/projects/${project.id}/agent`} />
+                                <div className="grid gap-4">
+                                    <section className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                            <div>
+                                                <div className="flex items-center gap-2 text-base font-medium">
+                                                    <Workflow className="size-5" />
+                                                    本集生产流程
+                                                </div>
+                                                <p className="mt-1 text-sm text-stone-500">按集进入导演分析、服化道美术设计、Seedance 分镜和人工确认写入。</p>
+                                            </div>
+                                            <Button size="small" icon={<ScrollText className="size-3.5" />} onClick={() => setEpisodeWorkbenchOpen(true)}>
+                                                管理分集剧本
+                                            </Button>
+                                        </div>
+                                        {projectEpisodes.length ? (
+                                            <div className="mt-4 grid gap-2">
+                                                {projectEpisodes.map((episode) => {
+                                                    const episodeCanvas = projectCanvases.find((canvas) => canvas.episodeId === episode.id);
+                                                    return (
+                                                        <div key={episode.id} className="flex flex-col gap-3 rounded-lg bg-stone-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between dark:bg-white/5">
+                                                            <div className="min-w-0">
+                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                    <span className="font-medium">
+                                                                        {episode.order}. {episode.title}
+                                                                    </span>
+                                                                    <Tag className="m-0" color={episode.summary.trim() ? "green" : "orange"}>
+                                                                        {episode.summary.trim() ? "已有剧本" : "缺少剧本"}
+                                                                    </Tag>
+                                                                    <Tag className="m-0">{episodeCanvas ? `已绑定画布：${episodeCanvas.title}` : "未绑定画布"}</Tag>
+                                                                </div>
+                                                                <div className="mt-1 line-clamp-1 text-xs text-stone-500">{episode.summary || "可先导入本集剧本，再进入生产流程。"}</div>
+                                                            </div>
+                                                            <Button type="primary" size="small" onClick={() => router.push(`/projects/${project.id}/episodes/${episode.id}/workbench`)}>
+                                                                生产流程
+                                                            </Button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无分集。先在本集工作台新建集数。" className="py-8" />
+                                        )}
+                                    </section>
+                                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                        <EntryCard icon={<ScrollText className="size-5" />} title="剧本 / 本集工作台" description="管理当前集剧本、分镜头表、生成镜头组和视频生成状态" onOpen={() => setEpisodeWorkbenchOpen(true)} />
+                                        <EntryCard
+                                            icon={<BookOpen className="size-5" />}
+                                            title="设定库"
+                                            description={`${bibleItems.filter((item) => item.projectId === project.id).length} 个角色 / 场景 / 道具设定`}
+                                            onOpen={() => openProductionBibleReference()}
+                                        />
+                                        <EntryCard icon={<Boxes className="size-5" />} title="资产拆解" description="从本集剧本整理角色、场景、道具和风格 Brief" onOpen={() => setAssetBreakdownOpen(true)} />
+                                        <EntryCard icon={<Sparkles className="size-5" />} title="生图 Brief" description="管理场景图、角色图、道具图和氛围参考图 Brief" onOpen={() => setImageBriefOpen(true)} />
+                                        <EntryLink icon={<Images className="size-5" />} title="素材" description="查看当前项目生成和引用素材" href={`/assets?projectId=${project.id}`} />
+                                        <EntryLink icon={<FileText className="size-5" />} title="提示词" description="进入提示词仓库复用模板" href="/prompts" />
+                                        <EntryCard icon={<ListVideo className="size-5" />} title="队列" description={`${overviewDashboard?.stats.generationQueueCount || 0} 个本地队列项`} onOpen={() => openStoryboardReference()} />
+                                        <EntryCard icon={<Bot className="size-5" />} title="Agent 工作台" description="全项目 Agent 控制台，保留配置、模板预览和草案记录" onOpen={() => router.push(`/projects/${project.id}/agents`)} />
+                                        <EntryLink icon={<Bot className="size-5" />} title="Agent 任务中心" description="查看旧的本地 Skill 任务预览与应用记录" href={`/projects/${project.id}/agent`} />
+                                    </div>
                                 </div>
                             ),
                         },

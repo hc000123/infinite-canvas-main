@@ -101,7 +101,7 @@ export function CanvasToolbar({
                 <ToolbarButton id="tool-assets" label="素材" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onOpenAssets}>
                     <FolderOpen className="size-4.5" />
                 </ToolbarButton>
-                <ToolbarButton id="tool-episode-workbench" label="视频生产台" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onOpenEpisodeWorkbench}>
+                <ToolbarButton id="tool-episode-workbench" label="本集生产流程" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onOpenEpisodeWorkbench}>
                     <ScrollText className="size-4.5" />
                 </ToolbarButton>
                 <ToolbarButton id="tool-image-briefs" label="生图 Brief" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onOpenImageBriefs}>
@@ -292,7 +292,7 @@ function toolLabel(id: string) {
     if (id === "tool-config") return "生成配置";
     if (id === "tool-upload") return "上传图片";
     if (id === "tool-assets") return "素材";
-    if (id === "tool-script-manager") return "剧本分镜";
+    if (id === "tool-episode-workbench") return "本集生产流程";
     if (id === "tool-style") return "画布外观";
     if (id === "tool-delete") return "删除选中";
     if (id === "tool-clear") return "清空画布";

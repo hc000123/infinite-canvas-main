@@ -4,7 +4,42 @@
 
 ## 当前版本验收清单
 
-当前版本：`v0.2.72`。需要优先验收的是 M6.11.0-A Agent 工作台项目级入口、M6.10.UI-R2 Agent 工作台入口拆层与 workflow 路径提示、M6.10.UI-R Seedance workflow UI 精简与信息层级收口、M6.10.4-A 规范读取记录与质量门 manifest 底座、M6.10.R0 Seedance 三阶段 Agent Core 拆分、M6.10.3-Fix1 P1 阻断修复、M6.10.3-Fix1 Seedance 映射预览 JSON 代码块解析质量修复、M6.10.3-R Seedance 映射预览总 review 修复项、M6.10.3-D Seedance 映射预览确认后创建 / 更新画布视频配置节点，M6.10.3-C Seedance 映射预览确认后写入分镜头表，M6.10.3-B Seedance 映射预览确认后写入设定库，M6.10.3-A Seedance 阶段产物映射预览，M6.10.2 Seedance 三阶段 workflow 状态、审核证据和产物存储，M6.10.1 Seedance 多 Agent 工作流文本 Runner，M6.10.0 Seedance 多 Agent 工作流预设导入、P3-C / M6.9.7 视频节点自动带入本集资产参考、M6.9.R1 Agent 化工作台结构收口、P3-B / M6.9.5 分镜草案 Agent 接入、M6.9.6 镜头组加入画布改为视频生成节点、M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+当前版本：`v0.2.73`。需要优先验收的是 M6.11.1 本集生产主线页面、M6.11.0-A Agent 工作台项目级入口、M6.10.UI-R2 Agent 工作台入口拆层与 workflow 路径提示、M6.10.UI-R Seedance workflow UI 精简与信息层级收口、M6.10.4-A 规范读取记录与质量门 manifest 底座、M6.10.R0 Seedance 三阶段 Agent Core 拆分、M6.10.3-Fix1 P1 阻断修复、M6.10.3-Fix1 Seedance 映射预览 JSON 代码块解析质量修复、M6.10.3-R Seedance 映射预览总 review 修复项、M6.10.3-D Seedance 映射预览确认后创建 / 更新画布视频配置节点，M6.10.3-C Seedance 映射预览确认后写入分镜头表，M6.10.3-B Seedance 映射预览确认后写入设定库，M6.10.3-A Seedance 阶段产物映射预览，M6.10.2 Seedance 三阶段 workflow 状态、审核证据和产物存储，M6.10.1 Seedance 多 Agent 工作流文本 Runner，M6.10.0 Seedance 多 Agent 工作流预设导入、P3-C / M6.9.7 视频节点自动带入本集资产参考、M6.9.R1 Agent 化工作台结构收口、P3-B / M6.9.5 分镜草案 Agent 接入、M6.9.6 镜头组加入画布改为视频生成节点、M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+
+#### v0.2.73：M6.11.1 本集生产主线页面
+
+- 入口：项目详情页 `/projects/:id` 的“工作流”Tab 中每集的“生产流程”按钮，或已绑定项目和集数的画布工具栏“本集生产流程”按钮。
+- 本次实现：
+  - 新增本集级正式流程页 `/projects/:id/episodes/:episodeId/workbench`，页面标题为“本集生产流程”。
+  - 页面按单集展示剧本、导演分析、服化道美术设计、Seedance 分镜、写入结果 / 去画布。
+  - 三阶段对齐原始 Seedance workflow：`director-analysis` 使用 `director`，`art-design` 使用 `art-designer`，`seedance-storyboard` 使用 `storyboard-artist`。
+  - 复用现有 `AgentWorkflowRunRecord`、`AgentWorkflowStageState`、`AgentWorkflowStageOutput`、`AgentWorkflowReviewEvidence`、`useAgentRunnerStore`、三阶段 Agent Core、quality gate manifest、mapping preview 生成与写入方法。
+  - 设定库、分镜头表和视频配置节点写入继续复用 mapping preview 的 approved 门禁和重复写入防护。
+  - 项目详情页按分集提供“生产流程”入口；Agent 工作台仍保留为全项目 Agent 控制台。
+  - 画布工具栏在已有 `projectId + episodeId` 时跳转本集生产流程；缺上下文时仍打开原本集工作台用于绑定剧本。
+  - 本轮不做逐场次执行器，不自动生成图片，不自动生成视频，不触发扣费，不改后端。
+- 验收步骤：
+  1. 新建项目。
+  2. 新建集数。
+  3. 导入本集剧本。
+  4. 进入本集生产流程页面。
+  5. 运行导演分析。
+  6. 批准导演分析。
+  7. 运行服化道美术设计。
+  8. 批准服化道。
+  9. 运行 Seedance 分镜。
+  10. 批准分镜。
+  11. 生成 mapping preview。
+  12. 写入设定库。
+  13. 写入分镜头表。
+  14. 创建视频配置节点。
+  15. 去画布确认节点存在且为 `idle`。
+- 明确不应发生：
+  - 不自动生成图片。
+  - 不自动生成视频。
+  - 不触发扣费。
+  - 不绕过 approved 门禁。
+  - 不在缺 canvasId 时写画布节点。
 
 #### v0.2.72：M6.11.0-A Agent 工作台项目级入口
 
