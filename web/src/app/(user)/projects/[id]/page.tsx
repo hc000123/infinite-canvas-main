@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { App, Button, Drawer, Empty, Form, Input, Modal, Select, Tabs, Tag } from "antd";
+import { App, Button, Drawer, Empty, Form, Input, Modal, Select, Tag } from "antd";
 import { AlertTriangle, Bot, BookOpen, Boxes, Clapperboard, ExternalLink, FileText, Images, Library, ListVideo, Maximize2, Plus, ScrollText, Save, SlidersHorizontal, Sparkles, Workflow } from "lucide-react";
 
 import { useAssetStore, type Asset, type AssetKind } from "@/stores/use-asset-store";
@@ -38,6 +38,21 @@ type EpisodeImportFormValues = {
     scriptText: string;
 };
 
+type ProjectEpisodeBoardRow = {
+    actionLabel: string;
+    canvasCount: number;
+    filterStatus: "done" | "draft" | "running";
+    id: string;
+    order: number;
+    progress: number;
+    shotText: string;
+    stage: "分镜" | "剧本" | "成片" | "未开始";
+    status: "已完成" | "草稿" | "进行中";
+    title: string;
+    updatedAt: string;
+    videoCount: number;
+};
+
 export default function CreativeProjectDetailPage() {
     const params = useParams<{ id: string }>();
     const router = useRouter();
@@ -62,11 +77,14 @@ export default function CreativeProjectDetailPage() {
     const queueItems = useGenerationQueueStore((state) => state.items);
     const assets = useAssetStore((state) => state.assets);
     const agentTasks = useAgentTaskStore((state) => state.tasks);
-    const [activeTab, setActiveTab] = useState("overview");
+    const [activeTab, setActiveTab] = useState("episodes");
     const [createCanvasOpen, setCreateCanvasOpen] = useState(false);
     const [episodeImportOpen, setEpisodeImportOpen] = useState(false);
+    const [projectEditOpen, setProjectEditOpen] = useState(false);
     const [editingCanvasPresetId, setEditingCanvasPresetId] = useState("");
+    const [titleDraft, setTitleDraft] = useState(project?.title || "");
     const [descriptionDraft, setDescriptionDraft] = useState(project?.description || "");
+    const [episodeFilter, setEpisodeFilter] = useState<"all" | "done" | "draft" | "running">("all");
     const [bindingCanvasId, setBindingCanvasId] = useState("");
     const [assetKindFilter, setAssetKindFilter] = useState<AssetKind | "all">("all");
     const [referenceTypeFilter, setReferenceTypeFilter] = useState<ProjectAssetReferenceType | "all">("all");
@@ -80,6 +98,8 @@ export default function CreativeProjectDetailPage() {
     const [imageBriefOpen, setImageBriefOpen] = useState(false);
     const [productionBibleOpen, setProductionBibleOpen] = useState(false);
     const [productionBibleInitialKind, setProductionBibleInitialKind] = useState<ProductionBibleKind | undefined>();
+    const storyboardTableShots = useStoryboardStore((state) => state.tableShots);
+    const shotGroups = useStoryboardStore((state) => state.shotGroups);
     const canvasIds = useMemo(() => (project ? canvasIdsForCreativeProject(project, canvases) : []), [canvases, project]);
     const projectCanvases = useMemo(() => canvases.filter((canvas) => canvasIds.includes(canvas.id)), [canvasIds, canvases]);
     const projectEpisodes = useMemo(() => episodes.filter((episode) => episode.projectId === projectId).sort((a, b) => a.order - b.order), [episodes, projectId]);
@@ -177,7 +197,54 @@ export default function CreativeProjectDetailPage() {
     }, [assetReferenceRows, bibleItems, project, storyboardGroups, storyboardShots]);
     useEffect(() => {
         setDescriptionDraft(project?.description || "");
-    }, [project?.description]);
+        setTitleDraft(project?.title || "");
+    }, [project?.description, project?.title]);
+
+    const episodeRows = useMemo(
+        () =>
+            projectEpisodes.map((episode): ProjectEpisodeBoardRow => {
+                const episodeCanvases = projectCanvases.filter((canvas) => canvas.episodeId === episode.id);
+                const episodeTableShots = storyboardTableShots.filter((shot) => shot.projectId === projectId && shot.episodeId === episode.id);
+                const episodeShotGroups = shotGroups.filter((group) => group.projectId === projectId && group.episodeId === episode.id);
+                const finishedGroups = episodeShotGroups.filter((group) => group.status === "done" || group.resultAssetIds.length);
+                const shotCount = episodeTableShots.length || episodeShotGroups.reduce((total, group) => total + group.shotIds.length, 0);
+                const videoCount = finishedGroups.length;
+                const hasScript = Boolean(episode.summary.trim());
+                const stage = !hasScript ? "未开始" : shotCount ? (shotCount > 0 && videoCount >= shotCount ? "成片" : "分镜") : "剧本";
+                const progress = stage === "成片" ? 100 : stage === "分镜" ? Math.max(42, Math.min(92, videoCount ? Math.round((videoCount / Math.max(shotCount, 1)) * 100) : 62)) : stage === "剧本" ? 8 : 0;
+                const status = progress >= 100 ? "已完成" : stage === "分镜" ? "进行中" : "草稿";
+                return {
+                    id: episode.id,
+                    actionLabel: status === "已完成" ? "查看" : "进入",
+                    canvasCount: episodeCanvases.length,
+                    filterStatus: status === "已完成" ? "done" : status === "进行中" ? "running" : "draft",
+                    order: episode.order,
+                    progress,
+                    shotText: shotCount ? (stage === "分镜" && videoCount ? `${videoCount} / ${shotCount}` : String(shotCount)) : "-",
+                    stage,
+                    status,
+                    title: episode.title,
+                    updatedAt: episode.updatedAt,
+                    videoCount,
+                };
+            }),
+        [projectCanvases, projectEpisodes, projectId, shotGroups, storyboardTableShots],
+    );
+    const filteredEpisodeRows = useMemo(() => (episodeFilter === "all" ? episodeRows : episodeRows.filter((row) => row.filterStatus === episodeFilter)), [episodeFilter, episodeRows]);
+    const episodeCounts = useMemo(
+        () => ({
+            all: episodeRows.length,
+            done: episodeRows.filter((row) => row.filterStatus === "done").length,
+            draft: episodeRows.filter((row) => row.filterStatus === "draft").length,
+            running: episodeRows.filter((row) => row.filterStatus === "running").length,
+        }),
+        [episodeRows],
+    );
+    const currentEpisode = useMemo(() => episodeRows.find((row) => row.filterStatus === "running") || episodeRows.find((row) => row.filterStatus === "draft") || episodeRows[episodeRows.length - 1], [episodeRows]);
+    const projectProgress = useMemo(() => {
+        if (!episodeRows.length) return 0;
+        return Math.round(episodeRows.reduce((total, row) => total + row.progress, 0) / episodeRows.length);
+    }, [episodeRows]);
 
     useEffect(() => {
         if (!episodeImportOpen) return;
@@ -199,6 +266,12 @@ export default function CreativeProjectDetailPage() {
     const saveDescription = () => {
         updateCreativeProject(project.id, { description: descriptionDraft });
         message.success("项目说明已保存");
+    };
+
+    const saveProjectEdit = () => {
+        updateCreativeProject(project.id, { title: titleDraft, description: descriptionDraft });
+        setProjectEditOpen(false);
+        message.success("项目信息已保存");
     };
 
     const importEpisodeAndOpen = async () => {
@@ -297,205 +370,29 @@ export default function CreativeProjectDetailPage() {
         if (target.type === "primary-canvas") openPrimaryCanvas();
     };
 
-    const primaryEpisode = projectEpisodes[0];
-
     return (
-        <main className="studio-shell h-full overflow-auto text-stone-950 dark:text-stone-100">
-            <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
-                <header className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-950/10 pb-6 dark:border-white/10">
-                    <div className="min-w-0">
-                        <Link href="/projects" className="text-xs font-medium tracking-[0.22em] text-teal-700 hover:text-teal-900 dark:text-teal-200 dark:hover:text-teal-100">
-                            项目工作台
-                        </Link>
-                        <h1 className="mt-3 break-words text-4xl font-semibold leading-tight">{project.title}</h1>
-                        <p className="mt-3 max-w-4xl break-words text-sm leading-6 text-stone-600 dark:text-stone-300">{canvasProjectPresetSummary(project.preset)}</p>
-                    </div>
-                </header>
-
-                <ProjectCommandCenter
-                    dashboard={overviewDashboard}
-                    descriptionDraft={descriptionDraft}
-                    hasCanvas={Boolean(projectCanvases.length)}
-                    primaryEpisodeLabel={primaryEpisode ? `${primaryEpisode.order}. ${primaryEpisode.title}` : ""}
-                    primaryEpisodeReady={Boolean(primaryEpisode?.summary.trim())}
-                    onCreateCanvas={() => setCreateCanvasOpen(true)}
-                    onDescriptionDraftChange={setDescriptionDraft}
-                    onImportEpisode={() => setEpisodeImportOpen(true)}
-                    onManageEpisodes={() => setEpisodeImportOpen(true)}
-                    onOpenAgent={() => router.push(`/projects/${project.id}/agents`)}
-                    onOpenCanvas={openPrimaryCanvas}
-                    onOpenPrimaryEpisode={() => {
-                        if (primaryEpisode) router.push(`/projects/${project.id}/episodes/${primaryEpisode.id}/workbench`);
-                        else setEpisodeImportOpen(true);
-                    }}
-                    onRunSuggestion={runOverviewAction}
-                    onSaveDescription={saveDescription}
-                />
-
-                <Tabs
-                    activeKey={activeTab}
-                    onChange={setActiveTab}
-                    items={[
-                        {
-                            key: "overview",
-                            label: "总览",
-                            children: overviewDashboard ? <ProjectOverviewDashboardView dashboard={overviewDashboard} onAction={runOverviewAction} /> : null,
-                        },
-                        {
-                            key: "canvas",
-                            label: "画布",
-                            children: (
-                                <section className="grid gap-4">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <Button type="primary" icon={<Plus className="size-4" />} onClick={() => setCreateCanvasOpen(true)}>
-                                            新建项目画布
-                                        </Button>
-                                        <Select
-                                            size="small"
-                                            showSearch
-                                            className="min-w-56"
-                                            placeholder="绑定未归档画布"
-                                            value={bindingCanvasId || undefined}
-                                            options={unboundCanvases.map((canvas) => ({ label: canvas.title, value: canvas.id }))}
-                                            optionFilterProp="label"
-                                            onChange={setBindingCanvasId}
-                                        />
-                                        <Button size="small" disabled={!bindingCanvasId} onClick={bindCanvas}>
-                                            绑定
-                                        </Button>
-                                    </div>
-                                    {projectCanvases.length ? (
-                                        <div className="grid gap-3 md:grid-cols-2">
-                                            {projectCanvases.map((canvas) => (
-                                                <div key={canvas.id} className="studio-panel-muted flex items-center gap-3 p-4 transition hover:border-teal-500/35">
-                                                    <Link href={`/canvas/${canvas.id}`} className="min-w-0 flex-1 text-stone-950 dark:text-stone-100">
-                                                        <div className="flex flex-wrap items-center gap-3">
-                                                            <span className="break-words font-medium">{canvas.title}</span>
-                                                            <Tag className="m-0 shrink-0">{canvas.nodes.length} 节点</Tag>
-                                                            <Tag className="m-0 shrink-0" color={canvas.episodeId ? "blue" : undefined}>
-                                                                {canvasEpisodeLabel(canvas)}
-                                                            </Tag>
-                                                        </div>
-                                                        <p className="mt-2 break-words text-xs leading-5 text-stone-500">{canvasProjectPresetSummary(editableCanvasPreset(canvas.preset, project.preset))}</p>
-                                                    </Link>
-                                                    <Button size="small" icon={<SlidersHorizontal className="size-3.5" />} onClick={() => setEditingCanvasPresetId(canvas.id)}>
-                                                        预设
-                                                    </Button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <Empty description="这个项目还没有画布" />
-                                    )}
-                                </section>
-                            ),
-                        },
-                        {
-                            key: "workflow",
-                            label: "工作流",
-                            children: (
-                                <div className="grid gap-4">
-                                    <LocalAiTaskLogPanel projectId={project.id} />
-                                    <section className="studio-panel p-4">
-                                        <div className="flex flex-wrap items-center justify-between gap-3">
-                                            <div>
-                                                <div className="flex items-center gap-2 text-base font-medium">
-                                                    <Workflow className="size-5" />
-                                                    本集生产流程
-                                                </div>
-                                                <p className="mt-1 text-sm text-stone-500">按集进入导演分析、服化道美术设计、Seedance 分镜和人工确认写入。</p>
-                                            </div>
-                                        <Button size="small" icon={<ScrollText className="size-3.5" />} onClick={() => setEpisodeImportOpen(true)}>
-                                            导入本集剧本
-                                            </Button>
-                                        </div>
-                                        {projectEpisodes.length ? (
-                                            <div className="mt-4 grid gap-2">
-                                                {projectEpisodes.map((episode) => {
-                                                    const episodeCanvas = projectCanvases.find((canvas) => canvas.episodeId === episode.id);
-                                                    return (
-                                                        <div key={episode.id} className="studio-panel-muted flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-start sm:justify-between">
-                                                            <div className="min-w-0">
-                                                                <div className="flex flex-wrap items-center gap-2">
-                                                                    <span className="font-medium">
-                                                                        {episode.order}. {episode.title}
-                                                                    </span>
-                                                                    <Tag className="m-0" color={episode.summary.trim() ? "green" : "orange"}>
-                                                                        {episode.summary.trim() ? "已有剧本" : "缺少剧本"}
-                                                                    </Tag>
-                                                                    <Tag className="m-0">{episodeCanvas ? `已绑定画布：${episodeCanvas.title}` : "未绑定画布"}</Tag>
-                                                                </div>
-                                                                <div className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-stone-500">{episode.summary || "可先导入本集剧本，再进入生产流程。"}</div>
-                                                            </div>
-                                                            <Button type="primary" size="small" onClick={() => router.push(`/projects/${project.id}/episodes/${episode.id}/workbench`)}>
-                                                                生产流程
-                                                            </Button>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : (
-                                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无分集。先导入本集剧本，再进入生产流程。" className="py-8" />
-                                        )}
-                                    </section>
-                                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                        <EntryCard
-                                            icon={<ScrollText className="size-5" />}
-                                            title="本集生产流程"
-                                            description="先导入剧本并完成 Agent 分析，最后再创建画布承接结果"
-                                            onOpen={() => {
-                                                const firstEpisode = projectEpisodes[0];
-                                                if (firstEpisode) router.push(`/projects/${project.id}/episodes/${firstEpisode.id}/workbench`);
-                                                else setEpisodeImportOpen(true);
-                                            }}
-                                        />
-                                        <EntryCard
-                                            icon={<BookOpen className="size-5" />}
-                                            title="设定库"
-                                            description={`${bibleItems.filter((item) => item.projectId === project.id).length} 个角色 / 场景 / 道具设定`}
-                                            onOpen={() => openProductionBibleReference()}
-                                        />
-                                        <EntryCard icon={<Boxes className="size-5" />} title="资产拆解" description="从本集剧本整理角色、场景、道具和风格 Brief" onOpen={() => setAssetBreakdownOpen(true)} />
-                                        <EntryCard icon={<Sparkles className="size-5" />} title="生图 Brief" description="管理场景图、角色图、道具图和氛围参考图 Brief" onOpen={() => setImageBriefOpen(true)} />
-                                        <EntryLink icon={<Images className="size-5" />} title="素材" description="查看当前项目生成和引用素材" href={`/assets?projectId=${project.id}`} />
-                                        <EntryLink icon={<FileText className="size-5" />} title="提示词" description="进入提示词仓库复用模板" href="/prompts" />
-                                        <EntryCard icon={<ListVideo className="size-5" />} title="队列" description={`${overviewDashboard?.stats.generationQueueCount || 0} 个本地队列项`} onOpen={() => openStoryboardReference()} />
-                                        <EntryCard icon={<Bot className="size-5" />} title="Agent 工作台" description="全项目 Agent 控制台，保留配置、模板预览和草案记录" onOpen={() => router.push(`/projects/${project.id}/agents`)} />
-                                        <EntryLink icon={<Bot className="size-5" />} title="Agent 任务中心" description="查看旧的本地 Skill 任务预览与应用记录" href={`/projects/${project.id}/agent`} />
-                                    </div>
-                                </div>
-                            ),
-                        },
-                        {
-                            key: "asset-references",
-                            label: "素材引用",
-                            children: (
-                                <ProjectAssetReferencesView
-                                    rows={filteredAssetReferenceRows}
-                                    totalCount={assetReferenceRows.length}
-                                    filters={{
-                                        assetKind: assetKindFilter,
-                                        referenceType: referenceTypeFilter,
-                                        versionStatus: versionStatusFilter,
-                                        projectLibraryStatus: assetLibraryFilter,
-                                    }}
-                                    onAssetKindChange={setAssetKindFilter}
-                                    onReferenceTypeChange={setReferenceTypeFilter}
-                                    onVersionStatusChange={setVersionStatusFilter}
-                                    onProjectLibraryStatusChange={setAssetLibraryFilter}
-                                    missingOnly={missingOnlyFilter}
-                                    missingItems={missingMaterialItems}
-                                    onMissingOnlyChange={setMissingOnlyFilter}
-                                    onOpenAsset={setPreviewAsset}
-                                    onOpenCanvas={(canvasId) => router.push(`/canvas/${canvasId}`)}
-                                    onOpenStoryboard={openStoryboardReference}
-                                    onOpenProductionBible={openProductionBibleReference}
-                                />
-                            ),
-                        },
-                    ]}
-                />
-            </div>
+        <main className="h-full overflow-auto bg-[radial-gradient(circle_at_16%_0%,rgba(20,184,166,0.14),transparent_28%),linear-gradient(180deg,#070b11_0%,#0a1018_100%)] text-slate-100">
+            <ProjectEpisodeBoard
+                activeTab={activeTab}
+                currentEpisode={currentEpisode}
+                counts={episodeCounts}
+                description={project.description}
+                episodeFilter={episodeFilter}
+                filteredRows={filteredEpisodeRows}
+                progress={projectProgress}
+                projectTitle={project.title}
+                presetSummary={canvasProjectPresetSummary(project.preset)}
+                rows={episodeRows}
+                onCreateCanvas={() => setCreateCanvasOpen(true)}
+                onEditProject={() => setProjectEditOpen(true)}
+                onFilterChange={setEpisodeFilter}
+                onImportEpisode={() => setEpisodeImportOpen(true)}
+                onOpenAssetLibrary={() => router.push(`/assets?projectId=${project.id}`)}
+                onOpenCanvas={openPrimaryCanvas}
+                onOpenEpisode={(episodeId) => router.push(`/projects/${project.id}/episodes/${episodeId}/workbench`)}
+                onOpenProductionBible={() => openProductionBibleReference()}
+                onTabChange={setActiveTab}
+            />
 
             <CanvasCreateProjectModal
                 open={createCanvasOpen}
@@ -506,6 +403,26 @@ export default function CreativeProjectDetailPage() {
                 onCancel={() => setCreateCanvasOpen(false)}
                 onCreate={createCanvasAndOpen}
             />
+            <Modal
+                title="编辑项目"
+                open={projectEditOpen}
+                onCancel={() => setProjectEditOpen(false)}
+                onOk={saveProjectEdit}
+                okText="保存"
+                cancelText="取消"
+                destroyOnHidden
+            >
+                <div className="grid gap-4">
+                    <label className="grid gap-2">
+                        <span className="text-sm text-stone-500">项目名称</span>
+                        <Input value={titleDraft} onChange={(event) => setTitleDraft(event.target.value)} />
+                    </label>
+                    <label className="grid gap-2">
+                        <span className="text-sm text-stone-500">项目说明</span>
+                        <Input.TextArea value={descriptionDraft} rows={5} onChange={(event) => setDescriptionDraft(event.target.value)} />
+                    </label>
+                </div>
+            </Modal>
             <Modal
                 title="导入本集剧本"
                 open={episodeImportOpen}
@@ -560,6 +477,259 @@ export default function CreativeProjectDetailPage() {
             <ProductionBibleDrawer open={productionBibleOpen} projectId={project.id} projectTitle={project.title} canvases={projectCanvases} initialKind={productionBibleInitialKind} onClose={() => setProductionBibleOpen(false)} />
         </main>
     );
+}
+
+function ProjectEpisodeBoard({
+    activeTab,
+    currentEpisode,
+    counts,
+    description,
+    episodeFilter,
+    filteredRows,
+    progress,
+    projectTitle,
+    presetSummary,
+    rows,
+    onCreateCanvas,
+    onEditProject,
+    onFilterChange,
+    onImportEpisode,
+    onOpenAssetLibrary,
+    onOpenCanvas,
+    onOpenEpisode,
+    onOpenProductionBible,
+    onTabChange,
+}: {
+    activeTab: string;
+    currentEpisode?: ProjectEpisodeBoardRow;
+    counts: { all: number; done: number; draft: number; running: number };
+    description: string;
+    episodeFilter: "all" | "done" | "draft" | "running";
+    filteredRows: ProjectEpisodeBoardRow[];
+    progress: number;
+    projectTitle: string;
+    presetSummary: string;
+    rows: ProjectEpisodeBoardRow[];
+    onCreateCanvas: () => void;
+    onEditProject: () => void;
+    onFilterChange: (filter: "all" | "done" | "draft" | "running") => void;
+    onImportEpisode: () => void;
+    onOpenAssetLibrary: () => void;
+    onOpenCanvas: () => void;
+    onOpenEpisode: (episodeId: string) => void;
+    onOpenProductionBible: () => void;
+    onTabChange: (tab: string) => void;
+}) {
+    const currentText = currentEpisode ? `第 ${formatEpisodeOrder(currentEpisode.order)} 集 · ${currentEpisodeStatusText(currentEpisode)}` : "暂无分集";
+    return (
+        <div className="min-h-full rounded-[22px] border border-slate-700/80 bg-[#080d14]/92 shadow-[0_24px_80px_rgba(0,0,0,0.26)]">
+            <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 px-8 py-6">
+                <div className="flex min-w-0 items-center gap-5">
+                    <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-[linear-gradient(135deg,#22d3ee,#0f766e)] shadow-[0_16px_42px_rgba(20,184,166,0.22)]" />
+                    <div className="min-w-0">
+                        <div className="whitespace-nowrap text-2xl font-semibold tracking-normal text-white">AI · 画布</div>
+                        <div className="mt-1 text-sm text-slate-500">专业版</div>
+                    </div>
+                </div>
+
+                <nav className="flex flex-wrap items-center gap-4">
+                    <ProjectDetailNavButton active={activeTab === "episodes"} label="分集" onClick={() => onTabChange("episodes")} />
+                    <ProjectDetailNavButton
+                        active={activeTab === "settings"}
+                        label="设定库"
+                        onClick={() => {
+                            onTabChange("settings");
+                            onOpenProductionBible();
+                        }}
+                    />
+                    <ProjectDetailNavButton
+                        active={activeTab === "assets"}
+                        label="素材"
+                        onClick={() => {
+                            onTabChange("assets");
+                            onOpenAssetLibrary();
+                        }}
+                    />
+                    <ProjectDetailNavButton
+                        active={activeTab === "canvas"}
+                        label="画布"
+                        onClick={() => {
+                            onTabChange("canvas");
+                            onOpenCanvas();
+                        }}
+                    />
+                </nav>
+
+                <div className="flex min-w-0 flex-1 justify-center">
+                    <div className="max-w-full rounded-lg border border-slate-700 bg-slate-950/35 px-5 py-2 text-center text-base font-medium text-slate-300">
+                        <span className="text-slate-500">当前制作到</span>
+                        <span className="ml-2 break-words text-white">{currentText}</span>
+                    </div>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-3">
+                    <Button className="h-11 border-slate-700 bg-slate-900/70 px-5 text-slate-200 hover:!border-slate-500 hover:!text-white" onClick={onEditProject}>
+                        编辑项目
+                    </Button>
+                    <Button className="h-11 border-0 bg-cyan-500 px-5 font-medium text-slate-950 shadow-[0_14px_34px_rgba(6,182,212,0.26)] hover:!bg-cyan-400" icon={<Plus className="size-4" />} onClick={onImportEpisode}>
+                        新建分集
+                    </Button>
+                </div>
+            </header>
+
+            <section className="grid gap-8 px-8 py-10">
+                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_520px]">
+                    <div className="min-w-0">
+                        <Link href="/projects" className="text-xl font-semibold leading-7 text-slate-500 hover:text-cyan-200">
+                            项目工作台 / {projectTitle}
+                        </Link>
+                        <h1 className="mt-4 break-words text-5xl font-semibold leading-tight tracking-normal text-white">{projectTitle}</h1>
+                        <p className="mt-5 max-w-4xl whitespace-pre-wrap break-words text-xl leading-8 text-slate-400">{description || presetSummary}</p>
+                    </div>
+                    <ProjectProgressCard counts={counts} currentEpisode={currentEpisode} progress={progress} total={rows.length} />
+                </div>
+
+                <div className="flex flex-wrap items-end justify-between gap-5">
+                    <h2 className="text-3xl font-semibold tracking-normal text-white">分集列表</h2>
+                    <div className="flex flex-wrap gap-3">
+                        <EpisodeFilterButton active={episodeFilter === "all"} label="全部" onClick={() => onFilterChange("all")} />
+                        <EpisodeFilterButton active={episodeFilter === "running"} label="进行中" onClick={() => onFilterChange("running")} />
+                        <EpisodeFilterButton active={episodeFilter === "done"} label="已完成" onClick={() => onFilterChange("done")} />
+                        <EpisodeFilterButton active={episodeFilter === "draft"} label="草稿" onClick={() => onFilterChange("draft")} />
+                    </div>
+                </div>
+
+                {rows.length ? <ProjectEpisodeTable rows={filteredRows} onOpenEpisode={onOpenEpisode} /> : <ProjectEpisodeEmpty onCreate={onImportEpisode} onCreateCanvas={onCreateCanvas} />}
+            </section>
+        </div>
+    );
+}
+
+function ProjectDetailNavButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+    return (
+        <button
+            type="button"
+            className={`inline-flex h-12 items-center gap-3 rounded-lg border px-4 text-lg font-semibold transition ${active ? "border-cyan-400/45 bg-cyan-400/12 text-slate-100 shadow-[0_0_0_1px_rgba(34,211,238,0.14)]" : "border-transparent text-slate-500 hover:border-slate-700 hover:text-slate-200"}`}
+            onClick={onClick}
+        >
+            <span className={`size-5 rounded-md border ${active ? "border-cyan-200 bg-cyan-400/10" : "border-slate-500"}`} />
+            {label}
+        </button>
+    );
+}
+
+function ProjectProgressCard({ counts, currentEpisode, progress, total }: { counts: { done: number; draft: number; running: number }; currentEpisode?: ProjectEpisodeBoardRow; progress: number; total: number }) {
+    return (
+        <section className="rounded-xl border border-slate-700 bg-[linear-gradient(180deg,rgba(15,23,42,0.78),rgba(15,23,42,0.48))] p-6 shadow-[0_18px_54px_rgba(0,0,0,0.22)]">
+            <div className="flex items-center justify-between gap-4">
+                <h2 className="text-xl font-semibold text-white">整剧制作进度</h2>
+                <div className="text-xl font-semibold text-cyan-300">
+                    第 {formatEpisodeOrder(currentEpisode?.order || 0)} / {String(total).padStart(2, "0")} 集
+                </div>
+            </div>
+            <div className="mt-5 h-2.5 rounded-full bg-slate-800">
+                <div className="h-full rounded-full bg-[linear-gradient(90deg,#22d3ee,#34d399)]" style={{ width: `${progress}%` }} />
+            </div>
+            <div className="mt-5 grid grid-cols-3 gap-4 text-base font-medium text-slate-500">
+                <span>已完成 {counts.done} 集</span>
+                <span className="text-center">进行中 {counts.running} 集</span>
+                <span className="text-right">草稿 {counts.draft} 集</span>
+            </div>
+        </section>
+    );
+}
+
+function EpisodeFilterButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+    return (
+        <button type="button" className={`h-11 rounded-lg border px-5 text-lg font-medium transition ${active ? "border-cyan-400/60 bg-cyan-400/12 text-cyan-200" : "border-slate-700 bg-slate-900/40 text-slate-500 hover:text-slate-200"}`} onClick={onClick}>
+            {label}
+        </button>
+    );
+}
+
+function ProjectEpisodeTable({ rows, onOpenEpisode }: { rows: ProjectEpisodeBoardRow[]; onOpenEpisode: (episodeId: string) => void }) {
+    if (!rows.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的分集" className="rounded-xl border border-slate-800 py-16 text-slate-500" />;
+    return (
+        <section className="overflow-hidden rounded-xl border border-slate-700 bg-[#0b1118]/76">
+            <div className="grid grid-cols-[90px_minmax(180px,1.5fr)_110px_100px_90px_90px_90px_260px] items-center gap-4 border-b border-slate-800 px-6 py-5 text-lg font-semibold text-slate-500">
+                <span>集数</span>
+                <span>标题</span>
+                <span>状态</span>
+                <span>阶段</span>
+                <span>镜头</span>
+                <span>画布</span>
+                <span>视频</span>
+                <span>完成度</span>
+            </div>
+            <div className="divide-y divide-slate-800">
+                {rows.map((row) => (
+                    <button
+                        key={row.id}
+                        type="button"
+                        className={`grid w-full grid-cols-[90px_minmax(180px,1.5fr)_110px_100px_90px_90px_90px_260px] items-center gap-4 px-6 py-5 text-left transition hover:bg-cyan-400/[0.06] ${row.filterStatus === "running" ? "border-l-4 border-cyan-300 bg-cyan-400/[0.08] pl-5" : ""}`}
+                        onClick={() => onOpenEpisode(row.id)}
+                    >
+                        <span className="text-xl font-semibold text-slate-500">第 {formatEpisodeOrder(row.order)} 集</span>
+                        <span className="min-w-0">
+                            <span className="block break-words text-xl font-semibold leading-7 text-white">{row.title}</span>
+                            <span className="mt-2 block text-base text-slate-500">{row.progress ? `最近更新 ${formatEpisodeDate(row.updatedAt)}` : "尚未开始"}</span>
+                        </span>
+                        <EpisodeStatusBadge status={row.status} />
+                        <span className="text-xl font-semibold text-slate-300">{row.stage}</span>
+                        <span className="text-xl font-semibold text-slate-300">{row.shotText}</span>
+                        <span className="text-xl font-semibold text-slate-300">{row.canvasCount || "-"}</span>
+                        <span className="text-xl font-semibold text-slate-300">{row.videoCount || "-"}</span>
+                        <span className="flex items-center gap-5">
+                            <span className="h-2.5 w-24 rounded-full bg-slate-800">
+                                <span className="block h-full rounded-full bg-[linear-gradient(90deg,#22d3ee,#34d399)]" style={{ width: `${row.progress}%` }} />
+                            </span>
+                            <span className="w-12 text-lg font-semibold text-slate-500">{row.progress}%</span>
+                            <span className={`ml-auto grid h-11 w-32 place-items-center rounded-lg border text-lg font-semibold ${row.filterStatus === "running" ? "border-cyan-400/55 bg-cyan-400/10 text-cyan-100" : "border-slate-700 bg-slate-900/50 text-slate-300"}`}>{row.actionLabel}</span>
+                        </span>
+                    </button>
+                ))}
+            </div>
+        </section>
+    );
+}
+
+function EpisodeStatusBadge({ status }: { status: ProjectEpisodeBoardRow["status"] }) {
+    const className = status === "已完成" ? "border-emerald-400/40 bg-emerald-400/12 text-emerald-300" : status === "进行中" ? "border-cyan-400/45 bg-cyan-400/12 text-cyan-300" : "border-amber-400/40 bg-amber-400/12 text-amber-300";
+    return <span className={`w-fit rounded-lg border px-3 py-1.5 text-lg font-semibold ${className}`}>{status}</span>;
+}
+
+function ProjectEpisodeEmpty({ onCreate, onCreateCanvas }: { onCreate: () => void; onCreateCanvas: () => void }) {
+    return (
+        <section className="grid min-h-80 place-items-center rounded-xl border border-slate-700 bg-slate-900/38 px-6 py-16 text-center">
+            <div>
+                <h2 className="text-2xl font-semibold text-white">还没有分集</h2>
+                <p className="mt-3 max-w-xl text-base leading-7 text-slate-500">先新建或导入第一集剧本，后续导演分析、分镜审核、画布承接都会围绕分集推进。</p>
+                <div className="mt-6 flex justify-center gap-3">
+                    <Button className="border-0 bg-cyan-500 text-slate-950 hover:!bg-cyan-400" icon={<Plus className="size-4" />} onClick={onCreate}>
+                        新建分集
+                    </Button>
+                    <Button className="border-slate-700 bg-slate-900/60 text-slate-200" onClick={onCreateCanvas}>
+                        创建画布
+                    </Button>
+                </div>
+            </div>
+        </section>
+    );
+}
+
+function currentEpisodeStatusText(row: ProjectEpisodeBoardRow) {
+    if (row.stage === "分镜") return "分镜审核中";
+    if (row.stage === "成片") return "成片完成";
+    if (row.stage === "剧本") return "剧本整理中";
+    return "尚未开始";
+}
+
+function formatEpisodeOrder(order: number) {
+    return String(order || 0).padStart(2, "0");
+}
+
+function formatEpisodeDate(value: string) {
+    return new Date(value).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
 function ProjectCommandCenter({
