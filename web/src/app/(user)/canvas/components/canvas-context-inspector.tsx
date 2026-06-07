@@ -12,13 +12,9 @@ import type { NodeGenerationInput } from "./canvas-node-generation";
 import type { EpisodeWorkbenchStats } from "../utils/episode-workbench";
 import type { ShotGroup, StoryboardTableShot } from "../utils/storyboard-management";
 import { inspectStoryboardShot, summarizeShotInspections } from "../utils/canvas-shot-inspection";
+import { buildShotReadableContent, readableShotTitle, type ShotReadablePart } from "../utils/shot-readable-content";
 
 export type CanvasInspectorView = "context" | "assistant" | "records";
-
-type ShotTextPart = {
-    title: string;
-    text: string;
-};
 
 type CanvasContextInspectorProps = {
     view: CanvasInspectorView;
@@ -230,8 +226,8 @@ function ShotInspector({
     const prompt = groups.map((group) => group.effectivePrompt || group.prompt).filter(Boolean).join("\n\n");
     const refs = groups.flatMap((group) => [...group.assetRefs, ...group.audioRefs]);
     const nodeStatus = summarizeShotNodes(nodes);
-    const title = readableShotTitle(shot);
-    const textParts = shotTextParts(shot);
+    const title = readableShotTitle(shot, checklistShots);
+    const textParts = buildShotReadableContent(shot, checklistShots);
     return (
         <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
             <div className="flex items-start justify-between gap-3">
@@ -255,6 +251,15 @@ function ShotInspector({
                 <Stat label="承接节点" value={nodeStatus} theme={theme} />
                 <Stat label="参考素材" value={refs.length} theme={theme} />
             </div>
+            {textParts.recovered ? (
+                <div className="mt-3 rounded-lg border px-3 py-2 text-xs" style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.muted }}>
+                    已从原始来源恢复可读内容。
+                </div>
+            ) : !textParts.main.length && textParts.raw.length ? (
+                <div className="mt-3 rounded-lg border px-3 py-2 text-xs" style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.muted }}>
+                    暂无可读正文，原始来源已收起可查。
+                </div>
+            ) : null}
             {textParts.main.map((part) => (
                 <TextSection key={part.title} title={part.title} text={part.text} theme={theme} />
             ))}
@@ -374,7 +379,7 @@ function MiniStat({ label, value, theme }: { label: string; value: number; theme
     );
 }
 
-function RawSourceSection({ items, theme, expanded = false }: { items: ShotTextPart[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; expanded?: boolean }) {
+function RawSourceSection({ items, theme, expanded = false }: { items: ShotReadablePart[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; expanded?: boolean }) {
     if (!items.length) return null;
     return (
         <details open={expanded} className="mt-3 rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
@@ -423,66 +428,6 @@ function summarizeShotNodes(nodes: CanvasNodeData[]) {
     if (nodes.some((node) => node.metadata?.status === "error")) return "有失败";
     if (nodes.some((node) => node.metadata?.status === "success")) return "有结果";
     return `${nodes.length} 个`;
-}
-
-function readableShotTitle(shot: StoryboardTableShot) {
-    const title = shot.title.trim();
-    if (!title) return "";
-    if (title.length > 120) return "";
-    if (/^(```|[{[])/.test(title)) return "";
-    if (/workflow_|workflowId|workflowVersion|stageId|agentId/.test(title)) return "";
-    return title;
-}
-
-function shotTextParts(shot: StoryboardTableShot): { main: ShotTextPart[]; raw: ShotTextPart[] } {
-    const candidates: ShotTextPart[] = [
-        { title: "完整脚本", text: shot.scriptText },
-        { title: "分镜描述", text: shot.visualDescription },
-        { title: "对白", text: shot.dialogue },
-        { title: "表演与镜头", text: shotPerformanceText(shot) },
-    ];
-    const main: ShotTextPart[] = [];
-    const raw: ShotTextPart[] = [];
-    const seen = new Set<string>();
-
-    candidates.forEach((candidate) => {
-        const text = candidate.text.trim();
-        const key = shotTextDedupeKey(text);
-        if (!text || seen.has(key)) return;
-        seen.add(key);
-        if (isRawShotText(text)) {
-            raw.push({ ...candidate, text });
-            return;
-        }
-        main.push({ ...candidate, text });
-    });
-
-    return { main, raw };
-}
-
-function shotPerformanceText(shot: StoryboardTableShot) {
-    return [
-        shot.action ? `动作：${shot.action}` : "",
-        shot.emotion ? `情绪：${shot.emotion}` : "",
-        shot.cameraMovement ? `镜头运动：${shot.cameraMovement}` : "",
-    ]
-        .filter(Boolean)
-        .join("\n\n");
-}
-
-function isRawShotText(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed) return false;
-    if (/^```(?:json)?/i.test(trimmed)) return true;
-    if (/^[{[]\s*$/.test(trimmed)) return true;
-    if (/^(动作|情绪|镜头运动)：\s*[{[]\s*$/.test(trimmed)) return true;
-    if (/^[{[]/.test(trimmed) && /["']?(workflow|stage|agent|qualityGate|preview|sourceOutput|metadata)["']?/i.test(trimmed)) return true;
-    if (/^(动作|情绪|镜头运动)：\s*[{[]/.test(trimmed) && /["']?(workflow|stage|agent|qualityGate|preview|sourceOutput|metadata)["']?/i.test(trimmed)) return true;
-    return /workflow_|workflowId|workflowVersion|workflowRunId|stageId|stageName|agentId|sourceOutputId|qualityGateIds|previewItemId|createdFromText/.test(trimmed);
-}
-
-function shotTextDedupeKey(text: string) {
-    return text.trim().replace(/^(动作|情绪|镜头运动)：\s*/, "");
 }
 
 function InspectorTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
@@ -670,7 +615,7 @@ function ConfigInputsSection({ inputs, theme }: { inputs: NodeGenerationInput[];
 }
 
 function RecordsView({ selectedNode, selectedShot, theme }: { selectedNode: CanvasNodeData | null; selectedShot?: StoryboardTableShot | null; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
-    const shotRawParts = selectedShot ? shotTextParts(selectedShot).raw : [];
+    const shotRawParts = selectedShot ? buildShotReadableContent(selectedShot).raw : [];
     return (
         <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
             <section className="rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
