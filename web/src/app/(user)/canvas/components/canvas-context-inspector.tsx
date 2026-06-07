@@ -10,7 +10,7 @@ import type { CanvasConnection, CanvasNodeData } from "../types";
 import { CanvasNodeType } from "../types";
 import type { NodeGenerationInput } from "./canvas-node-generation";
 import type { EpisodeWorkbenchStats } from "../utils/episode-workbench";
-import type { StoryboardTableShot } from "../utils/storyboard-management";
+import type { ShotGroup, StoryboardTableShot } from "../utils/storyboard-management";
 
 export type CanvasInspectorView = "context" | "assistant" | "records";
 
@@ -24,6 +24,9 @@ type CanvasContextInspectorProps = {
     stats: EpisodeWorkbenchStats;
     selectedNode: CanvasNodeData | null;
     selectedShot?: StoryboardTableShot | null;
+    selectedShotGroups?: ShotGroup[];
+    selectedShotNodes?: CanvasNodeData[];
+    assetTitleById?: Map<string, string>;
     selectedCount: number;
     connections: CanvasConnection[];
     configInputs: NodeGenerationInput[];
@@ -56,6 +59,9 @@ export function CanvasContextInspector({
     stats,
     selectedNode,
     selectedShot,
+    selectedShotGroups = [],
+    selectedShotNodes = [],
+    assetTitleById = new Map(),
     selectedCount,
     connections,
     configInputs,
@@ -144,7 +150,7 @@ export function CanvasContextInspector({
                     onViewImage={onViewImage}
                 />
             ) : selectedShot ? (
-                <ShotInspector shot={selectedShot} theme={theme} onOpenEpisodeWorkbench={onOpenEpisodeWorkbench} />
+                <ShotInspector shot={selectedShot} groups={selectedShotGroups} nodes={selectedShotNodes} assetTitleById={assetTitleById} theme={theme} onOpenEpisodeWorkbench={onOpenEpisodeWorkbench} />
             ) : (
                 <CanvasOverview
                     hasEpisode={hasEpisode}
@@ -163,7 +169,25 @@ export function CanvasContextInspector({
     );
 }
 
-function ShotInspector({ shot, theme, onOpenEpisodeWorkbench }: { shot: StoryboardTableShot; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onOpenEpisodeWorkbench: () => void }) {
+function ShotInspector({
+    shot,
+    groups,
+    nodes,
+    assetTitleById,
+    theme,
+    onOpenEpisodeWorkbench,
+}: {
+    shot: StoryboardTableShot;
+    groups: ShotGroup[];
+    nodes: CanvasNodeData[];
+    assetTitleById: Map<string, string>;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onOpenEpisodeWorkbench: () => void;
+}) {
+    const prompt = groups.map((group) => group.effectivePrompt || group.prompt).filter(Boolean).join("\n\n");
+    const refs = groups.flatMap((group) => [...group.assetRefs, ...group.audioRefs]);
+    const nodeStatus = summarizeShotNodes(nodes);
+    const title = readableShotTitle(shot);
     return (
         <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
             <div className="flex items-start justify-between gap-3">
@@ -172,7 +196,8 @@ function ShotInspector({ shot, theme, onOpenEpisodeWorkbench }: { shot: Storyboa
                         分镜检查
                     </div>
                     <div className="mt-1 break-words text-base font-semibold">
-                        镜头 {shot.order} · {shot.title || "未命名镜头"}
+                        镜头 {shot.order}
+                        {title ? ` · ${title}` : ""}
                     </div>
                 </div>
                 <span className="shrink-0 rounded-md px-2 py-1 text-xs" style={{ background: theme.node.fill, color: theme.node.muted }}>
@@ -182,9 +207,15 @@ function ShotInspector({ shot, theme, onOpenEpisodeWorkbench }: { shot: Storyboa
             <div className="mt-3 grid grid-cols-2 gap-2">
                 <Stat label="场次" value={shot.sceneName || "未命名"} theme={theme} />
                 <Stat label="景别" value={shot.shotSize || "未填写"} theme={theme} />
+                <Stat label="生成组" value={groups.length} theme={theme} />
+                <Stat label="承接节点" value={nodeStatus} theme={theme} />
+                <Stat label="参考素材" value={refs.length} theme={theme} />
             </div>
             {shot.scriptText ? <TextSection title="完整脚本" text={shot.scriptText} theme={theme} /> : null}
             {shot.visualDescription ? <TextSection title="分镜描述" text={shot.visualDescription} theme={theme} /> : null}
+            {prompt ? <TextSection title="Seedance 视频提示词" text={prompt} theme={theme} /> : null}
+            {refs.length ? <ReferenceSection refs={refs} assetTitleById={assetTitleById} theme={theme} /> : null}
+            <HandoffStatusSection groups={groups} nodes={nodes} theme={theme} />
             {shot.dialogue ? <TextSection title="对白" text={shot.dialogue} theme={theme} /> : null}
             {shot.action || shot.emotion || shot.cameraMovement ? <TextSection title="表演与镜头" text={[shot.action, shot.emotion, shot.cameraMovement].filter(Boolean).join("\n\n")} theme={theme} /> : null}
             <div className="mt-3">
@@ -192,6 +223,73 @@ function ShotInspector({ shot, theme, onOpenEpisodeWorkbench }: { shot: Storyboa
             </div>
         </div>
     );
+}
+
+function ReferenceSection({ refs, assetTitleById, theme }: { refs: Array<ShotGroup["assetRefs"][number]>; assetTitleById: Map<string, string>; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    return (
+        <section className="mt-3 rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+            <div className="mb-2 text-sm font-semibold">参考素材</div>
+            <div className="space-y-1.5">
+                {refs.map((ref, index) => (
+                    <div key={`${ref.assetId}-${index}`} className="grid grid-cols-[72px_minmax(0,1fr)] gap-2 rounded-lg border px-2 py-1.5 text-xs" style={{ background: theme.node.panel, borderColor: theme.node.stroke }}>
+                        <span style={{ color: theme.node.muted }}>{ref.role || ref.kind}</span>
+                        <span className="min-w-0 break-words">{assetTitleById.get(ref.assetId) || ref.sourceLabel || ref.assetId}</span>
+                    </div>
+                ))}
+            </div>
+        </section>
+    );
+}
+
+function HandoffStatusSection({ groups, nodes, theme }: { groups: ShotGroup[]; nodes: CanvasNodeData[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    return (
+        <section className="mt-3 rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+            <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold">承接状态</div>
+                <div className="text-xs" style={{ color: theme.node.muted }}>
+                    {groups.length} 组 / {nodes.length} 节点
+                </div>
+            </div>
+            <div className="space-y-1.5">
+                {groups.length ? groups.map((group) => <StatusRow key={group.id} label="生成组" title={shotGroupStatusLabel(group)} meta={group.id} theme={theme} />) : <EmptyStatus text="尚未形成生成组" theme={theme} />}
+                {nodes.length ? nodes.map((node) => <StatusRow key={node.id} label={nodeTypeLabel(node)} title={node.title} meta={nodeStatusLabel(node)} theme={theme} />) : <EmptyStatus text="尚未承接到画布节点" theme={theme} />}
+            </div>
+        </section>
+    );
+}
+
+function StatusRow({ label, title, meta, theme }: { label: string; title: string; meta: string; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    return (
+        <div className="rounded-lg border px-2 py-1.5 text-xs leading-5" style={{ background: theme.node.panel, borderColor: theme.node.stroke }}>
+            <div style={{ color: theme.node.muted }}>{label} · {meta}</div>
+            <div className="break-words font-medium">{title}</div>
+        </div>
+    );
+}
+
+function EmptyStatus({ text, theme }: { text: string; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    return (
+        <div className="rounded-lg border border-dashed px-3 py-2 text-xs" style={{ borderColor: theme.node.stroke, color: theme.node.muted }}>
+            {text}
+        </div>
+    );
+}
+
+function summarizeShotNodes(nodes: CanvasNodeData[]) {
+    if (!nodes.length) return "未入画布";
+    if (nodes.some((node) => node.metadata?.status === "loading")) return "生成中";
+    if (nodes.some((node) => node.metadata?.status === "error")) return "有失败";
+    if (nodes.some((node) => node.metadata?.status === "success")) return "有结果";
+    return `${nodes.length} 个`;
+}
+
+function readableShotTitle(shot: StoryboardTableShot) {
+    const title = shot.title.trim();
+    if (!title) return "";
+    if (title.length > 120) return "";
+    if (/^(```|[{[])/.test(title)) return "";
+    if (/workflow_|workflowId|workflowVersion|stageId|agentId/.test(title)) return "";
+    return title;
 }
 
 function InspectorTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
@@ -470,6 +568,15 @@ function nodeStatusLabel(node: CanvasNodeData) {
     if (status === "success") return "成功";
     if (status === "error") return "失败";
     return "待处理";
+}
+
+function shotGroupStatusLabel(group: ShotGroup) {
+    if (group.status === "generating") return "生成中";
+    if (group.status === "done") return "已生成";
+    if (group.status === "error") return group.errorMessage || "失败";
+    if (group.status === "in_canvas") return "已入画布";
+    if (group.status === "prompt_ready") return "提示词就绪";
+    return "待承接";
 }
 
 function inputTypeLabel(input: NodeGenerationInput) {

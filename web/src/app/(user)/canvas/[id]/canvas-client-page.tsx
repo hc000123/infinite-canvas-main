@@ -647,6 +647,7 @@ function InfiniteCanvasPage() {
 
     const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
     const assetById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
+    const assetTitleById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset.title])), [assets]);
     const toolbarNode = toolbarNodeId ? nodeById.get(toolbarNodeId) || null : null;
     const infoNode = infoNodeId ? nodeById.get(infoNodeId) || null : null;
     const cropNode = cropNodeId ? nodeById.get(cropNodeId) || null : null;
@@ -675,22 +676,47 @@ function InfiniteCanvasPage() {
         });
         return map;
     }, [nodeById, nodes]);
+    const timelineShots = useMemo(() => activeEpisodeTableShots(storyboardTableShots, currentProject), [currentProject, storyboardTableShots]);
+    const timelineShotGroups = useMemo(() => activeEpisodeShotGroups(storyboardShotGroups, currentProject), [currentProject, storyboardShotGroups]);
+    const activeTimelineShot = activeTimelineShotId ? timelineShots.find((shot) => shot.id === activeTimelineShotId) || null : null;
+    const activeTimelineShotGroups = useMemo(() => (activeTimelineShotId ? timelineShotGroups.filter((group) => group.shotIds.includes(activeTimelineShotId)) : []), [activeTimelineShotId, timelineShotGroups]);
+    const activeTimelineNodeIds = useMemo(() => {
+        if (!activeTimelineShotId) return new Set<string>();
+        const groupIds = new Set(activeTimelineShotGroups.map((group) => group.id));
+        return new Set(
+            nodes
+                .filter((node) => {
+                    const metadata = node.metadata;
+                    return Boolean(
+                        metadata?.storyboardTableShotIds?.includes(activeTimelineShotId) ||
+                            metadata?.storyboardShotId === activeTimelineShotId ||
+                            (metadata?.shotGroupId && groupIds.has(metadata.shotGroupId)) ||
+                            (metadata?.storyboardShotGroupId && groupIds.has(metadata.storyboardShotGroupId)),
+                    );
+                })
+                .map((node) => node.id),
+        );
+    }, [activeTimelineShotGroups, activeTimelineShotId, nodes]);
+    const activeTimelineNodes = useMemo(() => nodes.filter((node) => activeTimelineNodeIds.has(node.id)), [activeTimelineNodeIds, nodes]);
     const relatedHighlight = useMemo(() => {
         const nodeIds = new Set<string>();
         const connectionIds = new Set<string>();
+        const baseNodeIds = new Set<string>();
 
-        if (!activeNodeId) return { nodeIds, connectionIds };
+        if (activeNodeId) baseNodeIds.add(activeNodeId);
+        activeTimelineNodeIds.forEach((nodeId) => baseNodeIds.add(nodeId));
+        baseNodeIds.forEach((nodeId) => nodeIds.add(nodeId));
+        if (!baseNodeIds.size) return { nodeIds, connectionIds };
 
-        nodeIds.add(activeNodeId);
         connections.forEach((connection) => {
-            if (connection.fromNodeId !== activeNodeId && connection.toNodeId !== activeNodeId) return;
+            if (!baseNodeIds.has(connection.fromNodeId) && !baseNodeIds.has(connection.toNodeId)) return;
             connectionIds.add(connection.id);
             nodeIds.add(connection.fromNodeId);
             nodeIds.add(connection.toNodeId);
         });
 
         return { nodeIds, connectionIds };
-    }, [activeNodeId, connections]);
+    }, [activeNodeId, activeTimelineNodeIds, connections]);
 
     const configInputsById = useMemo(() => {
         const map = new Map<string, NodeGenerationInput[]>();
@@ -700,9 +726,6 @@ function InfiniteCanvasPage() {
         });
         return map;
     }, [connections, nodes]);
-    const timelineShots = useMemo(() => activeEpisodeTableShots(storyboardTableShots, currentProject), [currentProject, storyboardTableShots]);
-    const timelineShotGroups = useMemo(() => activeEpisodeShotGroups(storyboardShotGroups, currentProject), [currentProject, storyboardShotGroups]);
-    const activeTimelineShot = activeTimelineShotId ? timelineShots.find((shot) => shot.id === activeTimelineShotId) || null : null;
 
     const createNode = useCallback(
         (type: CanvasNodeType, position?: Position) => {
@@ -2048,7 +2071,7 @@ function InfiniteCanvasPage() {
                             scale={viewport.k}
                             isSelected={selectedNodeIds.has(node.id)}
                             isRelated={relatedHighlight.nodeIds.has(node.id)}
-                            isFocusRelated={activeNodeId === node.id}
+                            isFocusRelated={activeNodeId === node.id || activeTimelineNodeIds.has(node.id)}
                             isConnectionTarget={connectionTargetNodeId === node.id}
                             isConnecting={Boolean(connectingParams)}
                             editRequestNonce={editingNodeId === node.id ? editRequestNonce : 0}
@@ -2373,6 +2396,9 @@ function InfiniteCanvasPage() {
                 stats={episodeWorkbenchStats}
                 selectedNode={selectedInspectorNode}
                 selectedShot={activeTimelineShot}
+                selectedShotGroups={activeTimelineShotGroups}
+                selectedShotNodes={activeTimelineNodes}
+                assetTitleById={assetTitleById}
                 selectedCount={selectedNodeIds.size}
                 connections={connections}
                 configInputs={selectedInspectorNode?.type === CanvasNodeType.Config ? configInputsById.get(selectedInspectorNode.id) || [] : []}
