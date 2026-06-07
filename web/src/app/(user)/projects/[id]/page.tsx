@@ -523,15 +523,7 @@ function ProjectEpisodeBoard({
     const currentText = currentEpisode ? `第 ${formatEpisodeOrder(currentEpisode.order)} 集 · ${currentEpisodeStatusText(currentEpisode)}` : "暂无分集";
     return (
         <div className="min-h-full rounded-[22px] border border-slate-700/80 bg-[#080d14]/92 shadow-[0_24px_80px_rgba(0,0,0,0.26)]">
-            <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 px-8 py-6">
-                <div className="flex min-w-0 items-center gap-5">
-                    <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-[linear-gradient(135deg,#22d3ee,#0f766e)] shadow-[0_16px_42px_rgba(20,184,166,0.22)]" />
-                    <div className="min-w-0">
-                        <div className="whitespace-nowrap text-2xl font-semibold tracking-normal text-white">AI · 画布</div>
-                        <div className="mt-1 text-sm text-slate-500">专业版</div>
-                    </div>
-                </div>
-
+            <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 px-8 py-4">
                 <nav className="flex flex-wrap items-center gap-4">
                     <ProjectDetailNavButton active={activeTab === "episodes"} label="分集" onClick={() => onTabChange("episodes")} />
                     <ProjectDetailNavButton
@@ -577,20 +569,20 @@ function ProjectEpisodeBoard({
                 </div>
             </header>
 
-            <section className="grid gap-8 px-8 py-10">
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_520px]">
+            <section className="grid gap-5 px-8 py-6">
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
                     <div className="min-w-0">
-                        <Link href="/projects" className="text-xl font-semibold leading-7 text-slate-500 hover:text-cyan-200">
+                        <Link href="/projects" className="text-base font-semibold leading-6 text-cyan-300/80 hover:text-cyan-200">
                             项目工作台 / {projectTitle}
                         </Link>
-                        <h1 className="mt-4 break-words text-5xl font-semibold leading-tight tracking-normal text-white">{projectTitle}</h1>
-                        <p className="mt-5 max-w-4xl whitespace-pre-wrap break-words text-xl leading-8 text-slate-400">{description || presetSummary}</p>
+                        <h1 className="mt-2 break-words text-3xl font-semibold leading-tight tracking-normal text-white">{projectTitle}</h1>
+                        <p className="mt-2 max-w-4xl whitespace-pre-wrap break-words text-base leading-6 text-slate-500">{description || presetSummary}</p>
                     </div>
                     <ProjectProgressCard counts={counts} currentEpisode={currentEpisode} progress={progress} total={rows.length} />
                 </div>
 
-                <div className="flex flex-wrap items-end justify-between gap-5">
-                    <h2 className="text-3xl font-semibold tracking-normal text-white">分集列表</h2>
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                    <h2 className="text-2xl font-semibold tracking-normal text-white">分集列表</h2>
                     <div className="flex flex-wrap gap-3">
                         <EpisodeFilterButton active={episodeFilter === "all"} label="全部" onClick={() => onFilterChange("all")} />
                         <EpisodeFilterButton active={episodeFilter === "running"} label="进行中" onClick={() => onFilterChange("running")} />
@@ -609,10 +601,10 @@ function ProjectDetailNavButton({ active, label, onClick }: { active: boolean; l
     return (
         <button
             type="button"
-            className={`inline-flex h-12 items-center gap-3 rounded-lg border px-4 text-lg font-semibold transition ${active ? "border-cyan-400/45 bg-cyan-400/12 text-slate-100 shadow-[0_0_0_1px_rgba(34,211,238,0.14)]" : "border-transparent text-slate-500 hover:border-slate-700 hover:text-slate-200"}`}
+            className={`inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-base font-semibold transition ${active ? "border-cyan-400/45 bg-cyan-400/12 text-slate-100 shadow-[0_0_0_1px_rgba(34,211,238,0.14)]" : "border-transparent text-slate-500 hover:border-slate-700 hover:text-slate-200"}`}
             onClick={onClick}
         >
-            <span className={`size-5 rounded-md border ${active ? "border-cyan-200 bg-cyan-400/10" : "border-slate-500"}`} />
+            <span className={`size-4 rounded border ${active ? "border-cyan-200 bg-cyan-400/10" : "border-slate-500"}`} />
             {label}
         </button>
     );
@@ -620,17 +612,17 @@ function ProjectDetailNavButton({ active, label, onClick }: { active: boolean; l
 
 function ProjectProgressCard({ counts, currentEpisode, progress, total }: { counts: { done: number; draft: number; running: number }; currentEpisode?: ProjectEpisodeBoardRow; progress: number; total: number }) {
     return (
-        <section className="rounded-xl border border-slate-700 bg-[linear-gradient(180deg,rgba(15,23,42,0.78),rgba(15,23,42,0.48))] p-6 shadow-[0_18px_54px_rgba(0,0,0,0.22)]">
+        <section className="rounded-xl border border-slate-700 bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(15,23,42,0.42))] p-4 shadow-[0_12px_36px_rgba(0,0,0,0.18)]">
             <div className="flex items-center justify-between gap-4">
-                <h2 className="text-xl font-semibold text-white">整剧制作进度</h2>
-                <div className="text-xl font-semibold text-cyan-300">
+                <h2 className="text-base font-semibold text-white">整剧制作进度</h2>
+                <div className="text-base font-semibold text-cyan-300">
                     第 {formatEpisodeOrder(currentEpisode?.order || 0)} / {String(total).padStart(2, "0")} 集
                 </div>
             </div>
-            <div className="mt-5 h-2.5 rounded-full bg-slate-800">
+            <div className="mt-3 h-2 rounded-full bg-slate-800">
                 <div className="h-full rounded-full bg-[linear-gradient(90deg,#22d3ee,#34d399)]" style={{ width: `${progress}%` }} />
             </div>
-            <div className="mt-5 grid grid-cols-3 gap-4 text-base font-medium text-slate-500">
+            <div className="mt-3 grid grid-cols-3 gap-4 text-sm font-medium text-slate-500">
                 <span>已完成 {counts.done} 集</span>
                 <span className="text-center">进行中 {counts.running} 集</span>
                 <span className="text-right">草稿 {counts.draft} 集</span>
@@ -641,7 +633,7 @@ function ProjectProgressCard({ counts, currentEpisode, progress, total }: { coun
 
 function EpisodeFilterButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
     return (
-        <button type="button" className={`h-11 rounded-lg border px-5 text-lg font-medium transition ${active ? "border-cyan-400/60 bg-cyan-400/12 text-cyan-200" : "border-slate-700 bg-slate-900/40 text-slate-500 hover:text-slate-200"}`} onClick={onClick}>
+        <button type="button" className={`h-9 rounded-lg border px-4 text-sm font-medium transition ${active ? "border-cyan-400/60 bg-cyan-400/12 text-cyan-200" : "border-slate-700 bg-slate-900/40 text-slate-500 hover:text-slate-200"}`} onClick={onClick}>
             {label}
         </button>
     );
