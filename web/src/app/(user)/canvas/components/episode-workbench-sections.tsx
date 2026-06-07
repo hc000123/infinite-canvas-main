@@ -8,6 +8,7 @@ import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
 import type { Asset } from "@/stores/use-asset-store";
 import { buildShotGroupGenerationSummaries, groupedTableShotsByScene, productionStatusLabel, type EpisodeProductionStatus, type EpisodeWorkbenchStats } from "../utils/episode-workbench";
 import { buildEpisodeImageNeedRows, episodeImageNeedKindLabel, type EpisodeImageNeedKind } from "../utils/episode-image-needs";
+import { normalizeAgentAssetDraftItems, type AgentAssetDraftItem } from "../utils/agent-asset-extractor";
 import { ShotGroupRowCard, StoryboardTableShotCard, type ShotGroupFormValues, type TableShotFormValues } from "./storyboard-shot-group-components";
 import type { ShotGroup, StoryboardAssetRef, StoryboardProductionBibleRef, StoryboardTableShot } from "../utils/storyboard-management";
 import type { CanvasNodeData } from "../types";
@@ -129,49 +130,106 @@ export function AssetExtractionSection({
                 className="mb-3"
                 type={canRun ? "info" : "warning"}
                 showIcon
-                message={canRun ? "从本集剧本生成资产草案" : disabledReason}
+                title={canRun ? "从本集剧本生成资产草案" : disabledReason}
                 description="第一版使用本地规则生成草案，并写入 Agent Runner 预览记录。必须批准后，才能手动写入本集生图需求；不会自动运行 Agent、生成图片或扣费。"
             />
             {runs.length ? (
                 <div className="space-y-3">
-                    {runs.map((run) => (
-                        <Card key={run.id} size="small" className="bg-stone-50/70 dark:bg-white/5">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <Tag className="m-0">{agentRunStatusLabel(run.status)}</Tag>
-                                        <Tag className="m-0">配置 v{run.agentConfigVersion}</Tag>
-                                        <Tag className="m-0">{run.draftOutput.items.length} 条草案</Tag>
+                    {runs.map((run) => {
+                        const draftItems = normalizeAgentAssetDraftItems(run.draftOutput.items);
+                        return (
+                            <Card key={run.id} size="small" className="bg-stone-50/70 dark:bg-white/5">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Tag className="m-0">{agentRunStatusLabel(run.status)}</Tag>
+                                            <Tag className="m-0">配置 v{run.agentConfigVersion}</Tag>
+                                            <Tag className="m-0">{draftItems.length} 条草案</Tag>
+                                        </div>
+                                        <div className="mt-2 text-sm font-medium">{run.draftOutput.summary}</div>
+                                        {run.draftOutput.warnings.length ? <div className="mt-1 text-xs text-amber-600">{run.draftOutput.warnings.join("；")}</div> : null}
                                     </div>
-                                    <div className="mt-2 text-sm font-medium">{run.draftOutput.summary}</div>
-                                    {run.draftOutput.warnings.length ? <div className="mt-1 text-xs text-amber-600">{run.draftOutput.warnings.join("；")}</div> : null}
+                                    <Space size={6} wrap>
+                                        <Button size="small" disabled={run.status !== "ready_for_review"} onClick={() => onApprove(run.id)}>
+                                            批准
+                                        </Button>
+                                        <Button size="small" disabled={run.status !== "ready_for_review"} onClick={() => onReject(run.id)}>
+                                            驳回
+                                        </Button>
+                                        <Button size="small" type="primary" disabled={run.status !== "approved"} onClick={() => onApply(run)}>
+                                            写入本集生图需求
+                                        </Button>
+                                    </Space>
                                 </div>
-                                <Space size={6} wrap>
-                                    <Button size="small" disabled={run.status !== "ready_for_review"} onClick={() => onApprove(run.id)}>
-                                        批准
-                                    </Button>
-                                    <Button size="small" disabled={run.status !== "ready_for_review"} onClick={() => onReject(run.id)}>
-                                        驳回
-                                    </Button>
-                                    <Button size="small" type="primary" disabled={run.status !== "approved"} onClick={() => onApply(run)}>
-                                        写入本集生图需求
-                                    </Button>
-                                </Space>
-                            </div>
-                            <details className="mt-3">
-                                <summary className="cursor-pointer text-xs text-stone-500">查看 items / rawJson / warnings / proposedActions</summary>
-                                <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-stone-950 p-3 text-xs text-stone-50">
-                                    {JSON.stringify({ items: run.draftOutput.items, rawJson: run.draftOutput.rawJson, warnings: run.draftOutput.warnings, proposedActions: run.proposedActions }, null, 2)}
-                                </pre>
-                            </details>
-                        </Card>
-                    ))}
+
+                                <div className="mt-3 grid gap-2">
+                                    {draftItems.length ? draftItems.map((item) => <AssetDraftPreviewCard key={item.id} item={item} />) : <div className="rounded-lg bg-white p-3 text-sm text-stone-500 dark:bg-black/20">当前草案没有识别到可写入资产。</div>}
+                                </div>
+
+                                <details className="mt-3" open>
+                                    <summary className="cursor-pointer text-xs text-stone-500">处理过程</summary>
+                                    <div className="mt-2 grid gap-2 rounded-lg bg-white p-3 text-xs leading-5 text-stone-500 dark:bg-black/20">
+                                        <div>1. 读取当前画布绑定的本集剧本：{run.input.episodeTitle || "未命名本集"}。</div>
+                                        <div>2. 使用本地规则扫描角色、场景、道具、服化道、情绪氛围和特效关键词。</div>
+                                        <div>3. 合并同类型同名资产，并保留每条草案的剧本来源片段。</div>
+                                        <div>4. 生成 {draftItems.length} 条待审核资产草案；批准后才可写入本集生图需求。</div>
+                                    </div>
+                                </details>
+                                <details className="mt-3">
+                                    <summary className="cursor-pointer text-xs text-stone-500">查看 rawJson / proposedActions</summary>
+                                    <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-stone-950 p-3 text-xs text-stone-50">
+                                        {JSON.stringify({ rawJson: run.draftOutput.rawJson, warnings: run.draftOutput.warnings, proposedActions: run.proposedActions }, null, 2)}
+                                    </pre>
+                                </details>
+                            </Card>
+                        );
+                    })}
                 </div>
             ) : (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无资产提取草案。导入本集剧本后可运行资产提取。" className="py-8" />
             )}
         </Card>
     );
+}
+
+function AssetDraftPreviewCard({ item }: { item: AgentAssetDraftItem }) {
+    return (
+        <div className="rounded-lg border border-stone-200 bg-white p-3 text-sm dark:border-stone-800 dark:bg-black/20">
+            <div className="flex flex-wrap items-center gap-2">
+                <Tag className="m-0">{assetDraftKindLabel(item.kind)}</Tag>
+                <span className="font-medium">{item.name}</span>
+                <Tag className="m-0">{assetImportanceLabel(item.importance)}</Tag>
+                <Tag className="m-0">Brief：{episodeImageNeedKindLabel(item.suggestedBriefKind)}</Tag>
+            </div>
+            {item.description ? <div className="mt-2 text-stone-600 dark:text-stone-300">{item.description}</div> : null}
+            {item.scriptEvidence ? <div className="mt-2 rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-500 dark:bg-white/5">来源片段：{item.scriptEvidence}</div> : null}
+            {item.tags.length ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                    {item.tags.map((tag) => (
+                        <Tag key={tag} className="m-0">
+                            {tag}
+                        </Tag>
+                    ))}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function assetDraftKindLabel(kind: AgentAssetDraftItem["kind"]) {
+    if (kind === "character") return "角色";
+    if (kind === "scene") return "场景";
+    if (kind === "prop") return "道具";
+    if (kind === "costume") return "服装 / 服化道";
+    if (kind === "makeup") return "妆发";
+    if (kind === "mood") return "情绪氛围";
+    return "特效需求";
+}
+
+function assetImportanceLabel(importance: AgentAssetDraftItem["importance"]) {
+    if (importance === "high") return "高优先级";
+    if (importance === "low") return "低优先级";
+    return "中优先级";
 }
 
 export function EpisodeImageNeedsSection({
@@ -323,7 +381,7 @@ export function EpisodeTableSection({
                 className="mb-3"
                 type={canGenerateDrafts ? "info" : "warning"}
                 showIcon
-                message={canGenerateDrafts ? "分镜草案由分镜导演 Agent 生成预览" : disabledReason}
+                title={canGenerateDrafts ? "分镜草案由分镜导演 Agent 生成预览" : disabledReason}
                 description="第一版使用本地规则生成草案，并写入 Agent Runner 预览记录。必须批准后，才能手动写入分镜头表；不会自动生成视频或扣费。"
             />
             {runs.length ? (
@@ -562,10 +620,10 @@ export function ShotGroupReferencePreview({
     defaultSelectedIds: string[];
     onSelectionChange: (ids: string[]) => void;
 }) {
-    if (!candidates.length) return <Alert type="info" showIcon message="暂无可自动带入的本集参考资产" description="仍会创建文本说明节点、参考素材节点和视频生成配置节点，不会自动生成视频。" />;
+    if (!candidates.length) return <Alert type="info" showIcon title="暂无可自动带入的本集参考资产" description="仍会创建文本说明节点、参考素材节点和视频生成配置节点，不会自动生成视频。" />;
     return (
         <div className="space-y-3">
-            <Alert type="info" showIcon message="确认本集参考资产" description="仅勾选的素材会写入视频配置节点。取消全部勾选也可以继续加入画布，不会自动生成视频或扣费。" />
+            <Alert type="info" showIcon title="确认本集参考资产" description="仅勾选的素材会写入视频配置节点。取消全部勾选也可以继续加入画布，不会自动生成视频或扣费。" />
             <CheckboxGroup defaultValue={defaultSelectedIds} onChange={(values) => onSelectionChange(values.map(String))}>
                 <div className="space-y-2">
                     {candidates.map((candidate) => {

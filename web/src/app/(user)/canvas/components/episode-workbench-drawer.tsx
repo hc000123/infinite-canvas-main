@@ -109,7 +109,7 @@ export function EpisodeWorkbenchDrawer({
     onCreateCanvas,
     promptBindWhenUnbound = false,
 }: Props) {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const [bindForm] = Form.useForm<BindFormValues>();
     const assets = useAssetStore((state) => state.assets);
     const episodes = useScriptStore((state) => state.episodes);
@@ -236,7 +236,7 @@ export function EpisodeWorkbenchDrawer({
             message.success("本集剧本快照已保存");
         };
         if (activeShots.length) {
-            Modal.confirm({ title: "保存剧本快照？", content: "这不会自动覆盖已有分镜头表；如需重新生成草案，请手动点击“运行分镜导演”。", okText: "保存", cancelText: "取消", onOk: apply });
+            modal.confirm({ title: "保存剧本快照？", content: "这不会自动覆盖已有分镜头表；如需重新生成草案，请手动点击“运行分镜导演”。", okText: "保存", cancelText: "取消", onOk: apply });
         } else apply();
     };
 
@@ -272,7 +272,7 @@ export function EpisodeWorkbenchDrawer({
             message.success("已更新本集剧本绑定");
         };
         if (values.mode !== "none" && shouldConfirmEpisodeScriptReimport({ hasScriptSnapshot: Boolean(activeCanvas.scriptSnapshot?.trim()), tableShotCount: activeShots.length, shotGroupCount: activeShotGroups.length }))
-            Modal.confirm({ title: "重新绑定或导入剧本？", content: "已有剧本快照、分镜头和生成镜头组不会被静默覆盖；如需重新生成草案，需要之后手动确认。", okText: "确认更新", cancelText: "取消", onOk: apply });
+            modal.confirm({ title: "重新绑定或导入剧本？", content: "已有剧本快照、分镜头和生成镜头组不会被静默覆盖；如需重新生成草案，需要之后手动确认。", okText: "确认更新", cancelText: "取消", onOk: apply });
         else apply();
     };
 
@@ -320,7 +320,7 @@ export function EpisodeWorkbenchDrawer({
                 markAgentRunApplied(run.id);
                 message.success(`已写入 ${count} 条本集生图需求，重复项会自动合并`);
             };
-            Modal.confirm({ title: "写入本集生图需求？", content: "将把已批准的资产草案写入资产拆解列表，不会自动创建 Brief、生成图片或扣费。重复资产会按同集同类同名合并。", okText: "写入", cancelText: "取消", onOk: apply });
+            modal.confirm({ title: "写入本集生图需求？", content: "将把已批准的资产草案写入资产拆解列表，不会自动创建 Brief、生成图片或扣费。重复资产会按同集同类同名合并。", okText: "写入", cancelText: "取消", onOk: apply });
         } catch (error) {
             message.warning(error instanceof Error ? error.message : "资产草案写入失败");
         }
@@ -330,7 +330,8 @@ export function EpisodeWorkbenchDrawer({
         if (!activeCanvas?.episodeId) return message.warning("请先绑定或导入本集剧本");
         const validation = validateStoryboardDraftWriteMode({ existingShotCount: activeShots.length, mode });
         if (!validation.valid) {
-            Modal.confirm({
+            let destroyConfirm: (() => void) | undefined;
+            const confirmation = modal.confirm({
                 title: "写入分镜头表",
                 content: "当前已有分镜头表，请选择追加到现有分镜后面，或覆盖当前本集分镜头表并清空对应生成镜头组。",
                 okText: "追加",
@@ -341,7 +342,7 @@ export function EpisodeWorkbenchDrawer({
                         <Button
                             danger
                             onClick={() => {
-                                Modal.destroyAll();
+                                destroyConfirm?.();
                                 applyStoryboardDirectorRun(run, "replace");
                             }}
                         >
@@ -352,6 +353,7 @@ export function EpisodeWorkbenchDrawer({
                     </>
                 ),
             });
+            destroyConfirm = confirmation.destroy;
             return;
         }
         try {
@@ -438,7 +440,7 @@ export function EpisodeWorkbenchDrawer({
         if (!onAddShotGroupToCanvas) return message.warning("请在具体画布中执行打组加入画布");
         const candidates = episodeReferenceCandidatesByGroupId[groupId] || [];
         let selectedIds = candidates.filter((candidate) => candidate.defaultSelected).map((candidate) => candidate.assetId);
-        Modal.confirm({
+        modal.confirm({
             title: "确认打组加入画布？",
             content: candidates.length ? (
                 <ShotGroupReferencePreview candidates={candidates} assetsById={assetsById} defaultSelectedIds={selectedIds} onSelectionChange={(ids) => (selectedIds = ids)} />
@@ -456,11 +458,11 @@ export function EpisodeWorkbenchDrawer({
     };
 
     const retryNode = (nodeId: string) => {
-        Modal.confirm({ title: "重试现有配置节点？", content: "会复用当前画布节点配置执行生成，请确认后再继续。", okText: "重试", cancelText: "取消", onOk: () => onRetryNode?.(nodeId) });
+        modal.confirm({ title: "重试现有配置节点？", content: "会复用当前画布节点配置执行生成，请确认后再继续。", okText: "重试", cancelText: "取消", onOk: () => onRetryNode?.(nodeId) });
     };
 
     return (
-        <Drawer title="视频生产台" open={open} onClose={onClose} width="min(1280px, calc(100vw - 24px))" destroyOnHidden>
+        <Drawer title="视频生产台" open={open} onClose={onClose} size="min(1280px, calc(100vw - 24px))" destroyOnHidden>
             <div className="grid gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50/70 p-4 dark:border-stone-800 dark:bg-white/5">
                     <div>
@@ -607,7 +609,7 @@ export function EpisodeWorkbenchDrawer({
                     className="mb-4"
                     type="info"
                     showIcon
-                    message="选择本集生产方式"
+                    title="选择本集生产方式"
                     description="剧本驱动生产用于拆资产和分镜；自由画布制作可以不绑定剧本继续创作；资产生产与复用可先沉淀角色图、场景图、道具图和氛围参考。确认后不会自动运行 Agent、生成分镜草案或触发生成扣费。"
                 />
                 <Form form={bindForm} layout="vertical" initialValues={{ mode: "import" }}>
@@ -636,7 +638,7 @@ export function EpisodeWorkbenchDrawer({
                                     </Form.Item>
                                 </>
                             ) : (
-                                <Alert type="success" showIcon message="自由画布制作" description="不绑定剧本也可以继续使用画布、素材、Brief 和视频生成节点。后续需要剧本驱动生产时，可随时从本集工作台重新绑定或导入。" />
+                                <Alert type="success" showIcon title="自由画布制作" description="不绑定剧本也可以继续使用画布、素材、Brief 和视频生成节点。后续需要剧本驱动生产时，可随时从本集工作台重新绑定或导入。" />
                             )
                         }
                     </Form.Item>
