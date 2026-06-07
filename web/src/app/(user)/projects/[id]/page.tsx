@@ -300,15 +300,15 @@ export default function CreativeProjectDetailPage() {
     const primaryEpisode = projectEpisodes[0];
 
     return (
-        <main className="h-full overflow-auto bg-background text-stone-950 dark:text-stone-100">
-            <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
-                <header className="flex flex-wrap items-end justify-between gap-4">
+        <main className="studio-shell h-full overflow-auto text-stone-950 dark:text-stone-100">
+            <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
+                <header className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-950/10 pb-6 dark:border-white/10">
                     <div className="min-w-0">
-                        <Link href="/projects" className="text-xs text-stone-500 hover:text-stone-950 dark:hover:text-stone-100">
+                        <Link href="/projects" className="text-xs font-medium tracking-[0.22em] text-teal-700 hover:text-teal-900 dark:text-teal-200 dark:hover:text-teal-100">
                             项目工作台
                         </Link>
-                        <h1 className="mt-3 text-3xl font-semibold">{project.title}</h1>
-                        <p className="mt-2 text-sm text-stone-500">{canvasProjectPresetSummary(project.preset)}</p>
+                        <h1 className="mt-3 break-words text-4xl font-semibold leading-tight">{project.title}</h1>
+                        <p className="mt-3 max-w-4xl break-words text-sm leading-6 text-stone-600 dark:text-stone-300">{canvasProjectPresetSummary(project.preset)}</p>
                     </div>
                 </header>
 
@@ -367,16 +367,16 @@ export default function CreativeProjectDetailPage() {
                                     {projectCanvases.length ? (
                                         <div className="grid gap-3 md:grid-cols-2">
                                             {projectCanvases.map((canvas) => (
-                                                <div key={canvas.id} className="flex items-center gap-3 rounded-xl border border-stone-200 p-4 transition hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-white/5">
+                                                <div key={canvas.id} className="studio-panel-muted flex items-center gap-3 p-4 transition hover:border-teal-500/35">
                                                     <Link href={`/canvas/${canvas.id}`} className="min-w-0 flex-1 text-stone-950 dark:text-stone-100">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="truncate font-medium">{canvas.title}</span>
+                                                        <div className="flex flex-wrap items-center gap-3">
+                                                            <span className="break-words font-medium">{canvas.title}</span>
                                                             <Tag className="m-0 shrink-0">{canvas.nodes.length} 节点</Tag>
                                                             <Tag className="m-0 shrink-0" color={canvas.episodeId ? "blue" : undefined}>
                                                                 {canvasEpisodeLabel(canvas)}
                                                             </Tag>
                                                         </div>
-                                                        <p className="mt-2 truncate text-xs text-stone-500">{canvasProjectPresetSummary(editableCanvasPreset(canvas.preset, project.preset))}</p>
+                                                        <p className="mt-2 break-words text-xs leading-5 text-stone-500">{canvasProjectPresetSummary(editableCanvasPreset(canvas.preset, project.preset))}</p>
                                                     </Link>
                                                     <Button size="small" icon={<SlidersHorizontal className="size-3.5" />} onClick={() => setEditingCanvasPresetId(canvas.id)}>
                                                         预设
@@ -396,7 +396,7 @@ export default function CreativeProjectDetailPage() {
                             children: (
                                 <div className="grid gap-4">
                                     <LocalAiTaskLogPanel projectId={project.id} />
-                                    <section className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
+                                    <section className="studio-panel p-4">
                                         <div className="flex flex-wrap items-center justify-between gap-3">
                                             <div>
                                                 <div className="flex items-center gap-2 text-base font-medium">
@@ -414,7 +414,7 @@ export default function CreativeProjectDetailPage() {
                                                 {projectEpisodes.map((episode) => {
                                                     const episodeCanvas = projectCanvases.find((canvas) => canvas.episodeId === episode.id);
                                                     return (
-                                                        <div key={episode.id} className="flex flex-col gap-3 rounded-lg bg-stone-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between dark:bg-white/5">
+                                                        <div key={episode.id} className="studio-panel-muted flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-start sm:justify-between">
                                                             <div className="min-w-0">
                                                                 <div className="flex flex-wrap items-center gap-2">
                                                                     <span className="font-medium">
@@ -425,7 +425,7 @@ export default function CreativeProjectDetailPage() {
                                                                     </Tag>
                                                                     <Tag className="m-0">{episodeCanvas ? `已绑定画布：${episodeCanvas.title}` : "未绑定画布"}</Tag>
                                                                 </div>
-                                                                <div className="mt-1 line-clamp-1 text-xs text-stone-500">{episode.summary || "可先导入本集剧本，再进入生产流程。"}</div>
+                                                                <div className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-stone-500">{episode.summary || "可先导入本集剧本，再进入生产流程。"}</div>
                                                             </div>
                                                             <Button type="primary" size="small" onClick={() => router.push(`/projects/${project.id}/episodes/${episode.id}/workbench`)}>
                                                                 生产流程
@@ -597,7 +597,7 @@ function ProjectCommandCenter({
     const primarySuggestion = dashboard?.suggestions[0];
     const primaryActionText = primaryEpisodeLabel ? "进入本集生产流程" : "导入本集剧本";
     return (
-        <section className="grid gap-5 border-y border-stone-200 py-5 dark:border-stone-800 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="studio-panel grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="grid gap-4">
                 <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div className="min-w-0">
@@ -622,7 +622,7 @@ function ProjectCommandCenter({
                 </div>
 
                 {primarySuggestion ? (
-                    <div className="flex flex-col gap-3 rounded-lg bg-stone-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:bg-white/5">
+                    <div className="studio-panel-muted flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
                             <div className="text-sm font-medium">{primarySuggestion.title}</div>
                             <div className="mt-1 text-sm text-stone-500">{primarySuggestion.description}</div>
@@ -675,8 +675,8 @@ function ProjectCommandStat({ label, value, tone = "default", onClick }: { label
     return (
         <button
             type="button"
-            className={`rounded-lg border px-3 py-2 text-left transition hover:bg-stone-50 dark:hover:bg-white/5 ${
-                tone === "warning" ? "border-amber-300 text-amber-600 dark:border-amber-900/70" : "border-stone-200 text-stone-500 dark:border-stone-800"
+            className={`rounded-lg border px-3 py-2 text-left transition hover:bg-stone-950/5 dark:hover:bg-white/10 ${
+                tone === "warning" ? "border-amber-300 bg-amber-500/5 text-amber-600 dark:border-amber-300/25" : "border-stone-950/10 bg-white/50 text-stone-500 dark:border-white/10 dark:bg-white/[0.035]"
             }`}
             onClick={onClick}
         >
@@ -704,7 +704,7 @@ function ProjectOverviewDashboardView({ dashboard, onAction }: { dashboard: Proj
     return (
         <section className="grid gap-4">
             <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.75fr)]">
-                <div className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
+                <div className="studio-panel p-4">
                     <div className="flex items-center justify-between gap-3">
                         <div>
                             <div className="text-base font-medium">下一步建议</div>
@@ -731,7 +731,7 @@ function ProjectOverviewDashboardView({ dashboard, onAction }: { dashboard: Proj
                 </div>
 
                 <div className="grid gap-3">
-                    <div className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
+                    <div className="studio-panel p-4">
                         <div className="text-base font-medium">项目状态</div>
                         <div className="mt-3 grid grid-cols-2 gap-2">
                             {keyStats.map((item) => (
@@ -745,7 +745,7 @@ function ProjectOverviewDashboardView({ dashboard, onAction }: { dashboard: Proj
                         </div>
                     </div>
 
-                    <div className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
+                    <div className="studio-panel p-4">
                         <div className="flex items-center justify-between gap-3">
                             <div className="text-base font-medium">Agent 摘要</div>
                             <Button size="small" onClick={() => onAction({ type: "agent" })}>
@@ -761,8 +761,8 @@ function ProjectOverviewDashboardView({ dashboard, onAction }: { dashboard: Proj
                                             <Tag className="m-0">{agentRiskLabel(task.riskLevel)}</Tag>
                                             <Tag className="m-0">{agentTaskStatusLabel(task.status)}</Tag>
                                         </div>
-                                        <div className="mt-2 line-clamp-1 text-sm font-medium">{task.title}</div>
-                                        <div className="mt-1 line-clamp-2 text-xs text-stone-500">{task.summary}</div>
+                                        <div className="mt-2 break-words text-sm font-medium">{task.title}</div>
+                                        <div className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-stone-500">{task.summary}</div>
                                     </div>
                                 ))}
                             </div>
@@ -778,7 +778,7 @@ function ProjectOverviewDashboardView({ dashboard, onAction }: { dashboard: Proj
 
 function OverviewStatButton({ icon, label, value, onClick }: { icon: ReactNode; label: string; value: string | number; onClick: () => void }) {
     return (
-        <button type="button" className="rounded-lg border border-stone-200 px-3 py-2 text-left transition hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-white/5" onClick={onClick}>
+        <button type="button" className="studio-panel-muted px-3 py-2 text-left transition hover:border-teal-500/35" onClick={onClick}>
             <div className="flex items-center gap-2 text-xs text-stone-500">
                 {icon}
                 {label}
@@ -792,8 +792,8 @@ function OverviewStatChip({ label, value, tone = "default", onClick }: { label: 
     return (
         <button
             type="button"
-            className={`rounded-full border px-2.5 py-1 text-xs transition hover:bg-stone-50 dark:hover:bg-white/5 ${
-                tone === "danger" ? "border-red-300 text-red-600 dark:border-red-900/70" : tone === "warning" ? "border-amber-300 text-amber-600 dark:border-amber-900/70" : "border-stone-200 text-stone-500 dark:border-stone-800"
+            className={`rounded-md border px-2.5 py-1 text-xs transition hover:bg-stone-950/5 dark:hover:bg-white/10 ${
+                tone === "danger" ? "border-red-300 bg-red-500/5 text-red-600 dark:border-red-300/25" : tone === "warning" ? "border-amber-300 bg-amber-500/5 text-amber-600 dark:border-amber-300/25" : "border-stone-950/10 bg-white/50 text-stone-500 dark:border-white/10 dark:bg-white/[0.035]"
             }`}
             onClick={onClick}
         >
@@ -813,7 +813,7 @@ function EntryCard({ icon, title, description, disabled, onOpen }: { icon: React
         <button
             type="button"
             disabled={disabled}
-            className="rounded-xl border border-stone-200 p-4 text-left transition enabled:hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-800 dark:enabled:hover:bg-white/5"
+            className="studio-panel-muted p-4 text-left transition enabled:hover:border-teal-500/35 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={onOpen}
         >
             <div className="flex items-center gap-2 text-base font-medium">
@@ -827,7 +827,7 @@ function EntryCard({ icon, title, description, disabled, onOpen }: { icon: React
 
 function EntryLink({ icon, title, description, href }: { icon: ReactNode; title: string; description: string; href: string }) {
     return (
-        <Link href={href} className="rounded-xl border border-stone-200 p-4 text-left text-stone-950 transition hover:bg-stone-50 dark:border-stone-800 dark:text-stone-100 dark:hover:bg-white/5">
+        <Link href={href} className="studio-panel-muted p-4 text-left text-stone-950 transition hover:border-teal-500/35 dark:text-stone-100">
             <div className="flex items-center gap-2 text-base font-medium">
                 {icon}
                 {title}
@@ -884,7 +884,7 @@ function ProjectAssetReferencesView({
 }) {
     return (
         <section className="grid gap-4">
-            <div className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
+            <div className="studio-panel p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                         <div className="text-base font-medium">项目素材引用</div>
@@ -981,7 +981,7 @@ function ProjectMissingMaterialList({
     return (
         <div className="grid gap-3">
             {items.map((item) => (
-                <div key={item.id} className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/40 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/70 dark:bg-amber-950/10">
+                <div key={item.id} className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-500/5 p-4 sm:flex-row sm:items-start sm:justify-between dark:border-amber-300/25 dark:bg-amber-300/5">
                     <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                             <Tag color="warning" className="m-0">
@@ -1020,7 +1020,7 @@ function ProjectAssetReferenceCard({
     onOpenProductionBible: (kind?: ProductionBibleKind) => void;
 }) {
     return (
-        <div className="rounded-xl border border-stone-200 bg-background p-4 dark:border-stone-800">
+        <div className="studio-panel p-4">
             <div className="flex flex-col gap-4 lg:flex-row">
                 <button type="button" className="w-full overflow-hidden rounded-lg bg-stone-100 text-left dark:bg-stone-900 lg:w-32" onClick={() => onOpenAsset(row.asset)}>
                     <AssetReferenceThumb asset={row.asset} />
@@ -1028,7 +1028,7 @@ function ProjectAssetReferenceCard({
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
-                            <button type="button" className="truncate text-left text-base font-medium text-stone-950 hover:underline dark:text-stone-100" onClick={() => onOpenAsset(row.asset)}>
+                            <button type="button" className="break-words text-left text-base font-medium text-stone-950 hover:underline dark:text-stone-100" onClick={() => onOpenAsset(row.asset)}>
                                 {row.asset.title || "未命名素材"}
                             </button>
                             <div className="mt-2 flex flex-wrap gap-1.5">

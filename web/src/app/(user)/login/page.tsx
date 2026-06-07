@@ -36,7 +36,7 @@ function LoginContent() {
     const isLoading = useUserStore((state) => state.isLoading);
     const allowRegister = useConfigStore((state) => state.publicSettings?.auth?.allowRegister !== false);
     const [mode, setMode] = useState<"login" | "register">("login");
-    const redirect = searchParams.get("redirect") || "/";
+    const redirect = searchParams.get("redirect") || "/projects";
 
     useEffect(() => {
         const token = searchParams.get("token");
@@ -82,7 +82,7 @@ function LoginContent() {
             message.success(mode === "register" ? "注册成功" : "登录成功");
             router.replace(redirect.startsWith("/") ? redirect : "/");
             router.refresh();
-            if (user.role !== "admin") router.replace("/");
+            if (user.role !== "admin") router.replace("/projects");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "登录失败");
         }

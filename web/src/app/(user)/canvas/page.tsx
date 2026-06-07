@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { App, Button } from "antd";
+import { App, Button, Tag } from "antd";
 import { Download, FileUp, Plus } from "lucide-react";
 
 import { readZip } from "@/lib/zip";
@@ -88,14 +88,17 @@ export default function CanvasPage() {
     };
 
     return (
-        <main className="h-full overflow-auto bg-background text-stone-950 dark:text-stone-100">
-            <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10">
-                <header className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-200 pb-6 dark:border-stone-800">
+        <main className="studio-shell h-full overflow-auto text-stone-950 dark:text-stone-100">
+            <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-8">
+                <header className="grid gap-5 border-b border-stone-950/10 pb-6 dark:border-white/10 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
                     <div>
-                        <p className="text-xs text-stone-500">画布库</p>
-                        <h1 className="mt-3 text-3xl font-semibold">眨眼之间</h1>
+                        <p className="text-xs font-medium tracking-[0.22em] text-teal-700 dark:text-teal-200">画布库</p>
+                        <h1 className="mt-3 text-4xl font-semibold leading-tight">眨眼之间</h1>
+                        <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600 dark:text-stone-300">所有本地画布入口集中在这里，适合回看节点结构、导出压缩包或进入承接画布继续调整。</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Tag className="m-0 border-teal-700/25 bg-teal-700/10 px-3 py-1 text-teal-700 dark:border-teal-200/25 dark:bg-teal-200/10 dark:text-teal-100">画布 {projects.length}</Tag>
+                        <Tag className="m-0 border-amber-600/25 bg-amber-500/10 px-3 py-1 text-amber-700 dark:border-amber-300/25 dark:text-amber-200">已选 {selectedIds.length}</Tag>
                         {selectedIds.length ? (
                             <>
                                 <Button

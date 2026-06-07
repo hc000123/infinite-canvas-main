@@ -29,7 +29,7 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
     };
 
     return (
-        <article className="group flex min-h-44 cursor-pointer flex-col justify-between rounded-2xl bg-[#f1eee8] p-5 transition hover:bg-[#ebe6dc] dark:bg-white/5 dark:hover:bg-white/10" onClick={() => !editing && open()}>
+        <article className="studio-panel group flex min-h-52 cursor-pointer flex-col justify-between p-5 transition hover:-translate-y-0.5 hover:border-teal-500/40 hover:bg-white/90 dark:hover:bg-white/[0.065]" onClick={() => !editing && open()}>
             <div className="flex items-start gap-3">
                 <input
                     type="checkbox"
@@ -50,11 +50,11 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
                             open();
                         }}
                     >
-                        <h2 className="truncate text-xl font-semibold">{project.title}</h2>
+                        <h2 className="break-words text-xl font-semibold leading-7">{project.title}</h2>
                         <p className="mt-3 text-sm leading-6 text-stone-600 dark:text-stone-400">
                             {project.nodes.length} 个节点 · {project.connections.length} 条连线
                         </p>
-                        {project.preset ? <p className="mt-1 truncate text-xs text-stone-500">{canvasProjectPresetSummary(project.preset)}</p> : null}
+                        {project.preset ? <p className="mt-1 break-words text-xs leading-5 text-stone-500">{canvasProjectPresetSummary(project.preset)}</p> : null}
                     </button>
                 )}
             </div>

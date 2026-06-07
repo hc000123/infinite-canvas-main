@@ -41,21 +41,21 @@ import { useCreativeProjectStore } from "../../../../use-creative-project-store"
 const stageCopy: Record<string, { title: string; agent: string; input: string; output: string; previewTargets: Array<AgentWorkflowMappingPreview["targetType"]> }> = {
     "director-analysis": {
         title: "导演分析",
-        agent: "director",
+        agent: "导演分析 Agent",
         input: "本集剧本",
         output: "导演分析、讲戏本、人物清单、场景清单、互动道具清单",
         previewTargets: [],
     },
     "art-design": {
         title: "服化道美术设计",
-        agent: "art-designer",
+        agent: "美术设计 Agent",
         input: "导演分析产物、人物 / 场景 / 道具清单、art-design skill / template / examples",
         output: "人物设定提示词、场景 2x2 规划提示词、道具提示词、服化道提示词",
         previewTargets: ["production_bible"],
     },
     "seedance-storyboard": {
         title: "Seedance 分镜",
-        agent: "storyboard-artist",
+        agent: "分镜 Agent",
         input: "本集剧本、导演讲戏本、美术设定、参考资产、Seedance 方法论、industrial-quality-rules",
         output: "场次视觉 DNA、生成 P / 镜头 P 拆分表、单 P 任务卡、Seedance 2.0 一键复制提示词",
         previewTargets: ["storyboard_table", "video_node"],
@@ -374,7 +374,7 @@ export default function EpisodeProductionWorkbenchPage() {
         if (!workflowRun) return;
         const result = summarizeApprovedStoryboardScenes(workflowRun.id);
         if (!result.ok) message.warning(result.reason || "无法汇总已批准场次");
-        else message.success(`已汇总 ${result.sceneCount || 0} 个已批准场次，可生成 stage3 preview`);
+        else message.success(`已汇总 ${result.sceneCount || 0} 个已批准场次，可生成第三阶段预览`);
     };
 
     const generatePreview = (stageId: string, targetLabel: string) => {
@@ -415,15 +415,15 @@ export default function EpisodeProductionWorkbenchPage() {
     };
 
     return (
-        <main className="h-full overflow-auto bg-background text-stone-950 dark:text-stone-100">
-            <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
-                <header className="border-b border-stone-200 pb-5 dark:border-stone-800">
-                    <Link href={`/projects/${project.id}`} className="text-xs text-stone-500 hover:text-stone-950 dark:hover:text-stone-100">
+        <main className="studio-shell h-full overflow-auto text-stone-950 dark:text-stone-100">
+            <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
+                <header className="border-b border-stone-950/10 pb-6 dark:border-white/10">
+                    <Link href={`/projects/${project.id}`} className="text-xs font-medium tracking-[0.22em] text-teal-700 hover:text-teal-900 dark:text-teal-200 dark:hover:text-teal-100">
                         {project.title}
                     </Link>
                     <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
                         <div>
-                            <h1 className="text-3xl font-semibold">本集生产流程</h1>
+                            <h1 className="text-4xl font-semibold leading-tight">本集生产流程</h1>
                             <div className="mt-2 flex flex-wrap gap-2">
                                 <Tag className="m-0">项目：{project.title}</Tag>
                                 <Tag className="m-0">
@@ -446,12 +446,12 @@ export default function EpisodeProductionWorkbenchPage() {
                     </div>
                 </header>
 
-                <Card size="small" title={<TitleWithIcon icon={<FileText className="size-4" />} title="步骤 0：剧本" />}>
+                <Card className="studio-card" size="small" title={<TitleWithIcon icon={<FileText className="size-4" />} title="步骤 0：剧本" />}>
                     {hasScript ? (
                         <div className="grid gap-3">
-                            <div className="grid gap-2 rounded-lg bg-stone-50 p-3 text-sm leading-6 dark:bg-white/5">
+                            <div className="studio-panel-muted grid gap-2 p-3 text-sm leading-6">
                                 <div className="font-medium">当前本集剧本预览</div>
-                                <div className="line-clamp-5 whitespace-pre-wrap text-stone-600 dark:text-stone-300">{scriptSnapshot}</div>
+                                <div className="thin-scrollbar max-h-72 overflow-auto whitespace-pre-wrap break-words text-stone-600 dark:text-stone-300">{scriptSnapshot}</div>
                             </div>
                             <details>
                                 <summary className="cursor-pointer text-sm text-stone-500">编辑全文 / 导入覆盖</summary>
@@ -475,6 +475,7 @@ export default function EpisodeProductionWorkbenchPage() {
                 </Card>
 
                 <Collapse
+                    className="studio-collapse"
                     activeKey={activeStageIds}
                     onChange={(keys) => setActiveStageIds(Array.isArray(keys) ? keys.map(String) : [String(keys)])}
                     items={stages.map((stage) =>
@@ -528,7 +529,7 @@ export default function EpisodeProductionWorkbenchPage() {
                     )}
                 />
 
-                <Card size="small" title={<TitleWithIcon icon={<Workflow className="size-4" />} title="步骤 4：写入结果 / 去画布" />}>
+                <Card className="studio-card" size="small" title={<TitleWithIcon icon={<Workflow className="size-4" />} title="步骤 4：写入结果 / 去画布" />}>
                     <Alert className="mb-3" type="info" showIcon title="所有写入都需要人工确认；本页不会自动开始图片或视频生成。" />
                     <div className="grid gap-2">
                         {(["production_bible", "storyboard_table", "video_node"] as const).map((targetType) => (
@@ -638,19 +639,19 @@ function stageCollapseItem({
             </div>
         ),
         children: (
-            <Card size="small" className="border-0 shadow-none">
+            <Card size="small" className="border-0 bg-transparent shadow-none">
                 <div className="grid gap-3">
                     <div className="grid gap-3 md:grid-cols-2">
                         <InfoBlock label="输入来源" value={copy.input} />
                         <InfoBlock label="输出产物" value={copy.output} />
                     </div>
-                    <div className="grid gap-2 rounded-lg bg-stone-50 p-3 text-sm dark:bg-white/5">
+                    <div className="studio-panel-muted grid gap-2 p-3 text-sm">
                         <div className="flex flex-wrap items-center gap-2">
                             <Tag className="m-0">
                                 规范读取 {readCount}/{requiredReadingCount}
                             </Tag>
                             <Tag className="m-0" color={gateErrorCount ? "red" : "green"}>
-                                quality gate error {gateErrorCount}
+                                质检错误 {gateErrorCount}
                             </Tag>
                             {output ? <Tag className="m-0">最近产物 1</Tag> : <Tag className="m-0">暂无产物</Tag>}
                             {displayState?.hasSceneStates ? <Tag className="m-0">{displayState.summaryText}</Tag> : null}
@@ -671,24 +672,24 @@ function stageCollapseItem({
                             补记规范读取
                         </Button>
                         {copy.previewTargets.includes("production_bible") ? (
-                            <Button size="small" disabled={!mappingStatus.allowed} onClick={() => onGeneratePreview(stage.stageId, "production_bible preview")}>
-                                生成 production_bible preview
+                            <Button size="small" disabled={!mappingStatus.allowed} onClick={() => onGeneratePreview(stage.stageId, "设定库预览")}>
+                                生成设定库预览
                             </Button>
                         ) : null}
                         {copy.previewTargets.includes("storyboard_table") ? (
-                            <Button size="small" disabled={!mappingStatus.allowed} onClick={() => onGeneratePreview(stage.stageId, "storyboard_table preview")}>
-                                生成 storyboard_table preview
+                            <Button size="small" disabled={!mappingStatus.allowed} onClick={() => onGeneratePreview(stage.stageId, "分镜表预览")}>
+                                生成分镜表预览
                             </Button>
                         ) : null}
                         {copy.previewTargets.includes("video_node") ? (
-                            <Button size="small" disabled={!mappingStatus.allowed} onClick={() => onGeneratePreview(stage.stageId, "video_node preview")}>
-                                生成 video_node preview
+                            <Button size="small" disabled={!mappingStatus.allowed} onClick={() => onGeneratePreview(stage.stageId, "视频节点预览")}>
+                                生成视频节点预览
                             </Button>
                         ) : null}
                         {!mappingStatus.allowed && copy.previewTargets.length ? <span className="text-xs text-stone-500">{mappingStatus.reason}</span> : null}
                     </Space>
                     {!isSceneStage && stageState?.status === "review" ? (
-                        <div className="grid gap-2 rounded-lg bg-stone-50 p-3 dark:bg-white/5">
+                        <div className="studio-panel-muted grid gap-2 p-3">
                             <Input.TextArea rows={2} placeholder="审核备注" value={reviewNote} onChange={(event) => onReviewNoteChange(event.target.value)} />
                             <Space size={6} wrap>
                                 <Button size="small" type="primary" icon={<CheckCircle2 className="size-3.5" />} disabled={!stageState.runnerRunId} onClick={() => stageState.runnerRunId && onApprove(stageState.runnerRunId)}>
@@ -773,7 +774,7 @@ function StoryboardSceneWorkbench({
     const pendingCount = progress ? Math.max(progress.totalCount - progress.approvedCount, 0) : scenes.length;
     const currentWarnings = currentSceneState?.warnings?.length ? currentSceneState.warnings.join("；") : "";
     return (
-        <div className="grid gap-3 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+        <div className="studio-panel-muted grid gap-3 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="font-medium">场次推进</div>
                 <Space size={6} wrap>
@@ -806,7 +807,7 @@ function StoryboardSceneWorkbench({
                                 <button
                                     key={scene.sceneKey}
                                     type="button"
-                                    className={`rounded-md border px-3 py-2 text-left text-sm transition ${selected ? "border-stone-900 bg-stone-100 dark:border-stone-100 dark:bg-white/10" : "border-stone-200 hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-white/5"}`}
+                                    className={`rounded-md border px-3 py-2 text-left text-sm transition ${selected ? "border-teal-600 bg-teal-700/10 dark:border-teal-200 dark:bg-teal-200/10" : "border-stone-950/10 bg-white/45 hover:bg-stone-950/5 dark:border-white/10 dark:bg-white/[0.035] dark:hover:bg-white/10"}`}
                                     onClick={() => onSceneChange(scene.sceneKey)}
                                 >
                                     <div className="flex flex-wrap items-center gap-2">
@@ -819,7 +820,7 @@ function StoryboardSceneWorkbench({
                             );
                         })}
                     </div>
-                    <div className="grid gap-3 rounded-md bg-stone-50 p-3 dark:bg-white/5">
+                    <div className="studio-panel-muted grid gap-3 p-3">
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="font-medium">当前：{currentScene?.sceneLabel || "未选择场次"}</span>
                             <StatusTag status={(currentSceneState?.status || "idle") as AgentWorkflowStageState["status"]} />
@@ -836,7 +837,7 @@ function StoryboardSceneWorkbench({
                         {currentSceneState?.errorMessage ? <Alert type="error" showIcon title={currentSceneState.errorMessage} /> : null}
                         <div className="grid gap-2">
                             <Input placeholder="可选子场次编号，例如 scene-1-a" value={subSceneKey} onChange={(event) => onSubSceneKeyChange(event.target.value)} />
-                            <div className="max-h-28 overflow-auto rounded-md bg-white p-2 text-xs leading-5 text-stone-500 dark:bg-black/20">{currentScene?.scriptText || "暂无当前场次剧本片段"}</div>
+                            <div className="thin-scrollbar max-h-28 overflow-auto rounded-md bg-white/70 p-2 text-xs leading-5 text-stone-500 dark:bg-black/20">{currentScene?.scriptText || "暂无当前场次剧本片段"}</div>
                         </div>
                         <Space size={6} wrap>
                             <Button size="small" type="primary" icon={<Play className="size-3.5" />} disabled={!currentScene} loading={isRunning} onClick={onRun}>
@@ -877,14 +878,14 @@ function PreviewList({
     onApplyPreview: (preview: AgentWorkflowMappingPreview) => void;
 }) {
     return (
-        <div className="grid gap-2 rounded-lg border border-dashed border-stone-200 p-3 dark:border-stone-700">
+        <div className="grid gap-2 rounded-lg border border-dashed border-teal-500/35 bg-teal-700/5 p-3 dark:border-teal-200/25 dark:bg-teal-200/5">
             {previews.map((preview) => {
                 const counts = previewCounts(preview, appliedPreviewItemIds);
                 const disabledReason = previewApplyDisabledReason(preview, counts.pending, hasCanvas);
                 return (
-                    <div key={preview.previewId} className="rounded-lg bg-stone-50 p-3 text-sm dark:bg-white/5">
+                    <div key={preview.previewId} className="studio-panel-muted p-3 text-sm">
                         <div className="flex flex-wrap items-center gap-2">
-                            <Tag className="m-0">{preview.targetType}</Tag>
+                            <Tag className="m-0">{previewTypeName(preview.targetType)}</Tag>
                             <span className="font-medium">{preview.title}</span>
                             <Tag className="m-0">待写入 {counts.pending}</Tag>
                             <Tag className="m-0" color={counts.applied ? "green" : undefined}>
@@ -898,7 +899,7 @@ function PreviewList({
                         {preview.warnings.length ? <div className="mt-1 text-amber-600">提示：{preview.warnings.join("；")}</div> : null}
                         {disabledReason ? <div className="mt-1 text-stone-500">{disabledReason}</div> : null}
                         <details className="mt-2">
-                            <summary className="cursor-pointer text-xs text-stone-500">mapping fields / workflow 追溯</summary>
+                            <summary className="cursor-pointer text-xs text-stone-500">映射字段 / 流程追溯</summary>
                             <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-stone-950 p-3 text-xs text-stone-50">{JSON.stringify(preview, null, 2)}</pre>
                         </details>
                     </div>
@@ -925,12 +926,12 @@ function PreviewSummaryRow({
 }) {
     const latest = previews[0];
     const counts = latest ? previewCounts(latest, appliedPreviewItemIds) : { total: 0, applied: 0, pending: 0 };
-    const disabledReason = latest ? previewApplyDisabledReason(latest, counts.pending, hasCanvas) : "尚未生成 preview";
+    const disabledReason = latest ? previewApplyDisabledReason(latest, counts.pending, hasCanvas) : "尚未生成预览";
     return (
-        <div className="flex flex-col gap-2 rounded-lg border border-stone-200 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-stone-800">
+        <div className="studio-panel-muted flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
                 <div className="flex flex-wrap items-center gap-2">
-                    <Tag className="m-0">{targetType}</Tag>
+                    <Tag className="m-0">预览</Tag>
                     <span className="font-medium">{previewTypeName(targetType)}</span>
                     <Tag className="m-0">总计 {counts.total}</Tag>
                     <Tag className="m-0" color={counts.applied ? "green" : undefined}>
@@ -963,7 +964,7 @@ function TitleWithIcon({ icon, title }: { icon: React.ReactNode; title: string }
 function StageReadingList({ requiredReadings, readingRecords }: { requiredReadings: WorkflowRequiredReading[]; readingRecords: AgentWorkflowStageState["readingRecords"] }) {
     if (!requiredReadings.length) return null;
     return (
-        <div className="rounded-md border border-stone-200 bg-white/60 p-3 dark:border-stone-700 dark:bg-black/15">
+        <div className="studio-panel-muted p-3">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="text-xs font-medium text-stone-500">规范读取清单</div>
                 <div className="text-xs text-stone-500">这些文件 / 规范需要在运行或审核本阶段前确认读过。</div>
@@ -973,7 +974,7 @@ function StageReadingList({ requiredReadings, readingRecords }: { requiredReadin
                     const record = readingRecords.find((item) => (item.readingId ? item.readingId === reading.readingId : item.sourceFile === reading.sourceFile));
                     const isRead = record?.status === "read";
                     return (
-                        <div key={reading.readingId} className="grid gap-2 rounded-md border border-stone-200 px-3 py-2 text-xs dark:border-stone-800 md:grid-cols-[auto_auto_minmax(0,1fr)] md:items-start">
+                        <div key={reading.readingId} className="grid gap-2 rounded-md border border-stone-950/10 bg-white/45 px-3 py-2 text-xs dark:border-white/10 dark:bg-white/[0.035] md:grid-cols-[auto_auto_minmax(0,1fr)] md:items-start">
                             <Tag className="m-0 w-fit" color={isRead ? "green" : "red"}>
                                 {isRead ? "已读" : "未读"}
                             </Tag>
@@ -1005,7 +1006,7 @@ function readingSourceTypeLabel(type: WorkflowRequiredReading["sourceType"]) {
 
 function InfoBlock({ label, value }: { label: string; value: string }) {
     return (
-        <div className="rounded-lg border border-stone-200 p-3 text-sm dark:border-stone-800">
+        <div className="studio-panel-muted p-3 text-sm">
             <div className="mb-1 text-xs text-stone-500">{label}</div>
             <div className="leading-6">{value}</div>
         </div>
@@ -1030,14 +1031,14 @@ function StageOutputDigest({ stageId, output }: { stageId: string; output: Agent
     const digest = useMemo(() => buildStageOutputDigest(stageId, output), [output, stageId]);
     return (
         <div className="grid gap-3">
-            <div className="rounded-md border border-stone-200 bg-white/70 p-3 dark:border-stone-700 dark:bg-black/20">
+            <div className="studio-panel-muted p-3">
                 <div className="mb-1 text-xs font-medium text-stone-500">核心摘要</div>
                 <div className="text-sm leading-6 whitespace-pre-line text-stone-800 dark:text-stone-100">{digest.summary}</div>
             </div>
             {digest.sections.length ? (
                 <div className="grid gap-2 md:grid-cols-2">
                     {digest.sections.map((section) => (
-                        <div key={section.label} className="rounded-md border border-stone-200 bg-white/60 p-3 dark:border-stone-700 dark:bg-black/15">
+                        <div key={section.label} className="studio-panel-muted p-3">
                             <div className="mb-1 text-xs font-medium text-stone-500">{section.label}</div>
                             <div className="text-sm leading-6 whitespace-pre-line text-stone-700 dark:text-stone-200">{section.value}</div>
                         </div>
