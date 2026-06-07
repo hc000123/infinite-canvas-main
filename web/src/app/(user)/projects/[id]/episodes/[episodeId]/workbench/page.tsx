@@ -115,8 +115,8 @@ export default function EpisodeProductionWorkbenchPage() {
             stages
                 .filter((stage) => {
                     const status = workflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.status;
-                    if (status === "approved" || status === "blocked") return false;
-                    return workflowRun?.currentStageId === stage.stageId || !status || status === "idle" || status === "review" || status === "running" || status === "rejected" || status === "error";
+                    if (status === "approved") return false;
+                    return workflowRun?.currentStageId === stage.stageId || !status || status === "idle" || status === "review" || status === "running" || status === "rejected" || status === "error" || status === "blocked";
                 })
                 .map((stage) => stage.stageId),
         );
@@ -429,7 +429,7 @@ function stageCollapseItem({
     const mappingStatus = workflowRun ? canGenerateWorkflowMappingPreview(workflowRun, stage.stageId) : { allowed: false, reason: "尚未初始化 workflow run" };
     const gateErrorCount = qualityResults.filter((result) => result.status === "error").length;
     const readCount = stageState?.readingRecords.filter((record) => record.status === "read").length || 0;
-    const lockedReason = !hasScript ? "缺少本集剧本" : stageState?.status === "blocked" ? stageState.blockedReason || "前置阶段未批准" : "";
+    const lockedReason = !hasScript ? "缺少本集剧本" : stageState?.status === "blocked" ? formatBlockedReason(stageState.blockedReason) : "";
     return {
         key: stage.stageId,
         label: (
@@ -444,6 +444,7 @@ function stageCollapseItem({
                         阻塞
                     </Tag>
                 ) : null}
+                {lockedReason ? <span className="text-xs text-stone-500">原因：{lockedReason}</span> : null}
             </div>
         ),
         children: (
@@ -674,4 +675,10 @@ function previewTargetLabels(targetType: AgentWorkflowMappingPreview["targetType
     if (targetType === "production_bible") return { confirmTitle: "确认写入设定库", confirmContentPrefix: "将把设定草案写入设定库：", okText: "确认写入", doneText: "已写入设定库 " };
     if (targetType === "storyboard_table") return { confirmTitle: "确认写入分镜头表", confirmContentPrefix: "将把分镜草案追加到当前本集分镜头表：", okText: "确认写入", doneText: "已写入分镜头表 " };
     return { confirmTitle: "确认创建视频配置节点", confirmContentPrefix: "将在绑定画布创建或更新视频配置节点：", okText: "确认创建", doneText: "已创建视频配置节点 " };
+}
+
+function formatBlockedReason(reason?: string) {
+    const value = reason?.trim();
+    if (!value) return "前置阶段未批准";
+    return value.replace("director-analysis", "导演分析").replace("art-design", "服化道美术设计").replace("seedance-storyboard", "Seedance 分镜");
 }

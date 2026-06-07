@@ -1514,6 +1514,7 @@ function defaultPreviewNodeId(previewItemId: string) {
 
 function refreshWorkflowStageBlocks(workflowRun: AgentWorkflowRunRecord, now: string): AgentWorkflowRunRecord {
     const stageById = new Map(workflowRun.stageStates.map((stage) => [stage.stageId, stage]));
+    const stageNameById = new Map(workflowRun.stageStates.map((stage) => [stage.stageId, workflowStageDisplayName(stage.stageId)]));
     let changed = false;
     const stageStates = workflowRun.stageStates.map((stage) => {
         const missingDependency = stage.dependsOnStageIds.find((stageId) => stageById.get(stageId)?.status !== "approved");
@@ -1524,12 +1525,19 @@ function refreshWorkflowStageBlocks(workflowRun: AgentWorkflowRunRecord, now: st
             }
             return stage;
         }
-        const blockedReason = `需先批准前置阶段：${missingDependency}`;
+        const blockedReason = `需先批准前置阶段：${stageNameById.get(missingDependency) || missingDependency}`;
         if (stage.status === "blocked" && stage.blockedReason === blockedReason) return stage;
         changed = true;
         return { ...stage, status: "blocked" as const, blockedReason };
     });
     return changed ? { ...workflowRun, stageStates, updatedAt: now } : workflowRun;
+}
+
+function workflowStageDisplayName(stageId: string) {
+    if (stageId === "director-analysis") return "导演分析";
+    if (stageId === "art-design") return "服化道美术设计";
+    if (stageId === "seedance-storyboard") return "Seedance 分镜";
+    return stageId;
 }
 
 function stableWorkflowSnapshotHash(value: unknown) {
