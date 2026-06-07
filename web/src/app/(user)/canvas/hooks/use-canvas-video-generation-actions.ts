@@ -15,7 +15,8 @@ import { runCanvasVideoGeneration } from "../utils/canvas-generation-runner";
 import { buildCanvasAiTaskTrace } from "../utils/canvas-ai-task-trace";
 import { appendSeedanceMediaReviewDiagnostic } from "../utils/canvas-volcengine-review-diagnostics";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
-import { buildCompletedVideoNode } from "../utils/canvas-node-status";
+import { applyCompletedVideoNodeToNodes, buildCompletedVideoNode } from "../utils/canvas-node-status";
+import { buildNextProductionVideoVersionMetadata } from "../utils/canvas-production-packages";
 import type { VideoGenerationPlan } from "../utils/canvas-video-generation-plan";
 import { useStoryboardStore } from "../stores/use-storyboard-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "../types";
@@ -27,6 +28,7 @@ const NODE_STATUS_SUCCESS = "success" as const;
 type UseCanvasVideoGenerationActionsOptions = {
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setConnections: Dispatch<SetStateAction<CanvasConnection[]>>;
+    getNodes: () => CanvasNodeData[];
     cacheUploadedCanvasMedia: (file: UploadedFile, filename: string) => Promise<Partial<CanvasNodeMetadata>>;
     showWarning: (message: string) => void;
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
@@ -50,6 +52,7 @@ type GenerateVideoNodeInput = {
 export function useCanvasVideoGenerationActions({
     setNodes,
     setConnections,
+    getNodes,
     cacheUploadedCanvasMedia,
     showWarning,
     toVideoMetadata,
@@ -89,6 +92,10 @@ export function useCanvasVideoGenerationActions({
                 shotIds: sourceNode?.metadata?.shotIds,
                 storyboardShotGroupId: sourceNode?.metadata?.storyboardShotGroupId,
                 storyboardTableShotIds: sourceNode?.metadata?.storyboardTableShotIds,
+                productionPackageId: sourceNode?.metadata?.productionPackageId || sourceNode?.metadata?.shotGroupId || sourceNode?.metadata?.storyboardShotGroupId,
+                productionPackageLabel: sourceNode?.metadata?.productionPackageLabel,
+                productionPackageTitle: sourceNode?.metadata?.productionPackageTitle,
+                ...buildNextProductionVideoVersionMetadata(getNodes(), sourceNode, createdAt),
             };
             const { videoId, videoNode, isEmptyVideoNode, connection } = createVideoGenerationNode({
                 nodeId,
@@ -129,9 +136,12 @@ export function useCanvasVideoGenerationActions({
                     generationMetadata,
                     prompt: effectivePrompt,
                 });
-                setNodes((prev) => prev.map((node) => (node.id === videoId ? finalVideoNode : node)));
+                setNodes((prev) => applyCompletedVideoNodeToNodes(prev, finalVideoNode));
                 const asset = buildGeneratedVideoAsset(finalVideoNode, { projectId, projectTitle, projectPreset, episodeContext, prompt: effectivePrompt, effectivePrompt, config: generationConfig, createdAt });
                 const assetId = asset ? await archiveGeneratedAsset(asset).catch(() => undefined) : undefined;
+                if (typeof assetId === "string") {
+                    setNodes((prev) => prev.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, sourceAssetId: assetId } } : node)));
+                }
                 useStoryboardStore.getState().markShotSucceeded({ storyboardShotId: generationMetadata.storyboardShotId, assetId: typeof assetId === "string" ? assetId : undefined, nodeId: videoId, taskId: finalVideoNode.metadata?.taskId });
                 useStoryboardStore.getState().markShotGroupSucceeded({ shotGroupId: generationMetadata.shotGroupId, assetId: typeof assetId === "string" ? assetId : undefined, taskId: finalVideoNode.metadata?.taskId });
                 return { pendingChildIds: [videoId], ok: true, taskId: finalVideoNode.metadata?.taskId, resultAssetId: typeof assetId === "string" ? assetId : undefined };
@@ -166,7 +176,7 @@ export function useCanvasVideoGenerationActions({
                 throw new Error(errorMessage);
             }
         },
-        [archiveGeneratedAsset, cacheUploadedCanvasMedia, canvasId, episodeContext, projectId, projectPreset, projectTitle, setConnections, setNodes, showWarning, toVideoMetadata],
+        [archiveGeneratedAsset, cacheUploadedCanvasMedia, canvasId, episodeContext, getNodes, projectId, projectPreset, projectTitle, setConnections, setNodes, showWarning, toVideoMetadata],
     );
 
     return { generateVideoNode };

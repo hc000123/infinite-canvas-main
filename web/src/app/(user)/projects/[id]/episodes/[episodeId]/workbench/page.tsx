@@ -2740,7 +2740,7 @@ function buildCanvasHandoffRows({ boundCanvas, segments }: { boundCanvas?: Canva
                 eligibleIndex += 1;
                 status = boundCanvas && eligibleIndex === 1 ? "已导入" : "待导入";
             }
-            const importedNodeCount = status === "已导入" || status === "已进入画布" ? Math.max(5, Math.min(boundCanvas?.nodes.length || 5, 12)) : 0;
+            const importedNodeCount = status === "已导入" ? Math.max(5, Math.min(boundCanvas?.nodes.length || 5, 12)) : 0;
             return {
                 assetState: assetMissing ? "缺 1" : `${pkg.assetLabels.length} 项已绑定`,
                 canImport: Boolean(boundCanvas) && status === "待导入",
@@ -2789,7 +2789,7 @@ function buildAssetsModuleConfig(input: {
 }): EpisodeModuleConfig {
     const preview = latestPreview(input.previews, "production_bible");
     const counts = preview ? previewCounts(preview, input.appliedPreviewItemIds) : { applied: 0, pending: 0, total: 0 };
-    const rows = preview?.items.length
+    const rows: EpisodeModuleRow[] = preview?.items.length
         ? preview.items.map((item, index): EpisodeModuleRow => {
               const applied = input.appliedPreviewItemIds.includes(workflowMappingPreviewItemKey(preview, item.itemId));
               const kind = productionBibleKindLabel(item.mappedFields.kind);
@@ -2952,7 +2952,7 @@ function buildCanvasModuleConfig(input: {
 }): EpisodeModuleConfig {
     const preview = latestPreview(input.previews, "video_node");
     const counts = preview ? previewCounts(preview, input.appliedPreviewItemIds) : { applied: 0, pending: 0, total: 0 };
-    const rows = preview?.items.length
+    const rows: EpisodeModuleRow[] = preview?.items.length
         ? preview.items.map((item): EpisodeModuleRow => {
               const applied = input.appliedPreviewItemIds.includes(workflowMappingPreviewItemKey(preview, item.itemId));
               const configText = generationConfigText(item.mappedFields);

@@ -1,4 +1,5 @@
 import type { CanvasNodeData, CanvasNodeMetadata } from "../types.ts";
+import { withProductionVersionAsCurrent } from "./canvas-production-packages.ts";
 
 const NODE_STATUS_SUCCESS = "success" as const;
 const NODE_STATUS_ERROR = "error" as const;
@@ -160,7 +161,13 @@ export function buildCompletedVideoNode({
             prompt,
             ...generationMetadata,
             taskStatus: "succeeded",
+            isCurrentProductionVersion: generationMetadata.productionPackageId ? true : videoNode.metadata?.isCurrentProductionVersion,
+            productionVideoVersionHidden: false,
             errorDetails: undefined,
         },
     };
+}
+
+export function applyCompletedVideoNodeToNodes(nodes: CanvasNodeData[], finalVideoNode: CanvasNodeData) {
+    return withProductionVersionAsCurrent(nodes, finalVideoNode);
 }

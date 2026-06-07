@@ -42,7 +42,7 @@ import { nextQueuedItem } from "../utils/generation-queue";
 import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions";
 import { buildInsertedMediaAssetNode } from "../utils/canvas-inserted-media-node";
 import { resetInterruptedGeneration } from "../utils/canvas-video-task-recovery";
-import { buildCompletedImageNode, buildCompletedVideoNode } from "../utils/canvas-node-status";
+import { applyCompletedVideoNodeToNodes, buildCompletedImageNode, buildCompletedVideoNode } from "../utils/canvas-node-status";
 import { placeCanvasNodeAwayFromNodes, resolveRightwardNodePosition } from "../utils/canvas-node-placement";
 import { aiTaskIdFromGeneration, aiTaskLedgerNodeMetadata, buildCanvasAiTaskTraceFromNode, buildFrontendArtifactTrace } from "../utils/canvas-ai-task-trace";
 import { buildAngleImageNode, buildAnglePrompt, buildAngleReferenceImage, buildCroppedImageNode, type CanvasImageAngleParams, type CanvasImageCropRect } from "../utils/canvas-image-derivatives";
@@ -50,6 +50,7 @@ import { collectBatchAwareDeletedNodeIds, isHiddenBatchChild, isHiddenBatchConne
 import { applyCanvasProjectPresetToConfig } from "../utils/canvas-project-preset";
 import { planShotGroupCanvasInsert, planStoryboardGroupCanvasInsert, type StoryboardAssetRef, type StoryboardTableShot } from "../utils/storyboard-management";
 import { activeEpisodeShotGroups, activeEpisodeTableShots, buildEpisodeWorkbenchStats, deriveEpisodeProductionStatus, productionStatusLabel } from "../utils/episode-workbench";
+import { applyPreviousPackageTailFrame, buildCanvasProductionPackages, buildNextProductionVideoVersionMetadata, getNodeProductionPackageId, getNodeProductionPackageRole, hideProductionVideoVersion, markCurrentProductionVideoVersion, packageLabelById, productionPackageRoleLabel, type CanvasProductionPackageSummary, type CanvasProductionVideoVersion } from "../utils/canvas-production-packages";
 import { reviewVideoPromptBeforeGeneration, shouldRunVideoPromptReview, type PromptReviewResult } from "../utils/canvas-prompt-review";
 import { cropDataUrl } from "../utils/canvas-image-data";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
@@ -330,6 +331,7 @@ function InfiniteCanvasPage() {
     const [assistantMounted, setAssistantMounted] = useState(false);
     const [inspectorView, setInspectorView] = useState<CanvasInspectorView>("context");
     const [activeTimelineShotId, setActiveTimelineShotId] = useState("");
+    const [activeProductionPackageId, setActiveProductionPackageId] = useState("");
     const [titleEditing, setTitleEditing] = useState(false);
     const [titleDraft, setTitleDraft] = useState("");
     const [collapsingBatchIds, setCollapsingBatchIds] = useState<Set<string>>(new Set());
@@ -406,6 +408,7 @@ function InfiniteCanvasPage() {
     const { generateVideoNode } = useCanvasVideoGenerationActions({
         setNodes,
         setConnections,
+        getNodes: () => nodesRef.current,
         cacheUploadedCanvasMedia,
         showWarning: showVideoGenerationWarning,
         toVideoMetadata: videoMetadata,
@@ -698,9 +701,30 @@ function InfiniteCanvasPage() {
         );
     }, [activeTimelineShotGroups, activeTimelineShotId, nodes]);
     const activeTimelineNodes = useMemo(() => nodes.filter((node) => activeTimelineNodeIds.has(node.id)), [activeTimelineNodeIds, nodes]);
+    const productionPackages = useMemo(() => buildCanvasProductionPackages({ shotGroups: timelineShotGroups, tableShots: timelineShots, nodes }), [nodes, timelineShotGroups, timelineShots]);
+    const productionPackageLabelMap = useMemo(() => packageLabelById(productionPackages), [productionPackages]);
+    const selectedNodeProductionPackageId = selectedInspectorNode ? getNodeProductionPackageId(selectedInspectorNode) : "";
+    const inspectorProductionPackage = useMemo(() => {
+        const packageId = selectedNodeProductionPackageId || (selectedInspectorNode ? "" : activeProductionPackageId);
+        return packageId ? productionPackages.find((item) => item.id === packageId) || null : null;
+    }, [activeProductionPackageId, productionPackages, selectedInspectorNode, selectedNodeProductionPackageId]);
+    const activeProductionPackage = useMemo(() => (activeProductionPackageId ? productionPackages.find((item) => item.id === activeProductionPackageId) || null : null), [activeProductionPackageId, productionPackages]);
+    const activeProductionPackageNodeIds = useMemo(() => new Set(activeProductionPackage?.nodeIds || []), [activeProductionPackage]);
+
+    useEffect(() => {
+        if (!productionPackages.length) {
+            if (activeProductionPackageId) setActiveProductionPackageId("");
+            return;
+        }
+        if (!activeProductionPackageId || !productionPackages.some((item) => item.id === activeProductionPackageId)) {
+            setActiveProductionPackageId(productionPackages[0].id);
+        }
+    }, [activeProductionPackageId, productionPackages]);
+
     const handleTimelineShotSelect = useCallback(
         (shot: StoryboardTableShot, nodeId?: string) => {
             setActiveTimelineShotId(shot.id);
+            setActiveProductionPackageId("");
             setInspectorView("context");
             setSelectedConnectionId(null);
             if (!nodeId) {
@@ -719,6 +743,30 @@ function InfiniteCanvasPage() {
         },
         [size.height, size.width],
     );
+    const focusProductionPackage = useCallback(
+        (productionPackage: CanvasProductionPackageSummary) => {
+            setActiveProductionPackageId(productionPackage.id);
+            setActiveTimelineShotId("");
+            setInspectorView("context");
+            setSelectedConnectionId(null);
+            const relatedNodes = nodesRef.current.filter((node) => getNodeProductionPackageId(node) === productionPackage.id);
+            setSelectedNodeIds(new Set(relatedNodes.map((node) => node.id)));
+            if (!relatedNodes.length) return;
+            const left = Math.min(...relatedNodes.map((node) => node.position.x));
+            const top = Math.min(...relatedNodes.map((node) => node.position.y));
+            const right = Math.max(...relatedNodes.map((node) => node.position.x + node.width));
+            const bottom = Math.max(...relatedNodes.map((node) => node.position.y + node.height));
+            const width = Math.max(1, right - left);
+            const height = Math.max(1, bottom - top);
+            const k = Math.max(0.35, Math.min(1.05, Math.min((size.width - 120) / width, (size.height - 160) / height)));
+            setViewport({
+                x: size.width / 2 - (left + width / 2) * k,
+                y: size.height / 2 - (top + height / 2) * k,
+                k,
+            });
+        },
+        [size.height, size.width],
+    );
     const relatedHighlight = useMemo(() => {
         const nodeIds = new Set<string>();
         const connectionIds = new Set<string>();
@@ -726,6 +774,7 @@ function InfiniteCanvasPage() {
 
         if (activeNodeId) baseNodeIds.add(activeNodeId);
         activeTimelineNodeIds.forEach((nodeId) => baseNodeIds.add(nodeId));
+        activeProductionPackageNodeIds.forEach((nodeId) => baseNodeIds.add(nodeId));
         baseNodeIds.forEach((nodeId) => nodeIds.add(nodeId));
         if (!baseNodeIds.size) return { nodeIds, connectionIds };
 
@@ -737,7 +786,7 @@ function InfiniteCanvasPage() {
         });
 
         return { nodeIds, connectionIds };
-    }, [activeNodeId, activeTimelineNodeIds, connections]);
+    }, [activeNodeId, activeProductionPackageNodeIds, activeTimelineNodeIds, connections]);
 
     const configInputsById = useMemo(() => {
         const map = new Map<string, NodeGenerationInput[]>();
@@ -1651,10 +1700,16 @@ function InfiniteCanvasPage() {
                             shotIds: latestVideoNode.metadata?.shotIds,
                             storyboardShotGroupId: latestVideoNode.metadata?.storyboardShotGroupId,
                             storyboardTableShotIds: latestVideoNode.metadata?.storyboardTableShotIds,
+                            productionPackageId: latestVideoNode.metadata?.productionPackageId || latestVideoNode.metadata?.shotGroupId || latestVideoNode.metadata?.storyboardShotGroupId,
+                            productionPackageLabel: latestVideoNode.metadata?.productionPackageLabel,
+                            productionPackageTitle: latestVideoNode.metadata?.productionPackageTitle,
+                            productionVideoVersionId: latestVideoNode.metadata?.productionVideoVersionId,
+                            productionVideoVersionNumber: latestVideoNode.metadata?.productionVideoVersionNumber,
+                            productionVideoVersionCreatedAt: latestVideoNode.metadata?.productionVideoVersionCreatedAt || new Date().toISOString(),
                         },
                         prompt,
                     });
-                    setNodes((prev) => prev.map((item) => (item.id === node.id ? finalVideoNode : item)));
+                    setNodes((prev) => applyCompletedVideoNodeToNodes(prev, finalVideoNode));
                     if (finalVideoNode) {
                         const asset = buildGeneratedVideoAsset(finalVideoNode, {
                             projectId: workspaceProjectId,
@@ -1667,6 +1722,9 @@ function InfiniteCanvasPage() {
                             createdAt: new Date().toISOString(),
                         });
                         const assetId = asset ? await archiveGeneratedAsset(asset).catch(() => undefined) : undefined;
+                        if (typeof assetId === "string") {
+                            setNodes((prev) => prev.map((item) => (item.id === finalVideoNode.id ? { ...item, metadata: { ...item.metadata, sourceAssetId: assetId } } : item)));
+                        }
                         useStoryboardStore.getState().markShotSucceeded({ storyboardShotId: finalVideoNode.metadata?.storyboardShotId, assetId: typeof assetId === "string" ? assetId : undefined, nodeId: node.id, taskId: finalVideoNode.metadata?.taskId });
                         useStoryboardStore.getState().markShotGroupSucceeded({ shotGroupId: finalVideoNode.metadata?.shotGroupId, assetId: typeof assetId === "string" ? assetId : undefined, taskId: finalVideoNode.metadata?.taskId });
                     }
@@ -2006,6 +2064,85 @@ function InfiniteCanvasPage() {
         [assetById, message],
     );
 
+    const selectAndCenterNode = useCallback(
+        (node: CanvasNodeData) => {
+            setSelectedNodeIds(new Set([node.id]));
+            setSelectedConnectionId(null);
+            setInspectorView("context");
+            const k = Math.max(0.45, Math.min(viewportRef.current.k, 1.15));
+            setViewport({
+                x: size.width / 2 - (node.position.x + node.width / 2) * k,
+                y: size.height / 2 - (node.position.y + node.height / 2) * k,
+                k,
+            });
+        },
+        [size.height, size.width],
+    );
+
+    const handlePreviewProductionVideoVersion = useCallback(
+        (version: CanvasProductionVideoVersion) => {
+            selectAndCenterNode(version.node);
+        },
+        [selectAndCenterNode],
+    );
+
+    const handleDownloadProductionVideoVersion = useCallback(
+        (version: CanvasProductionVideoVersion) => {
+            void downloadNodeMedia(version.node);
+        },
+        [downloadNodeMedia],
+    );
+
+    const handleSetCurrentProductionVideoVersion = useCallback(
+        (packageId: string, nodeId: string) => {
+            setNodes((prev) => markCurrentProductionVideoVersion(prev, packageId, nodeId));
+            message.success("已设为当前采用版本");
+        },
+        [message],
+    );
+
+    const handleHideProductionVideoVersion = useCallback(
+        (nodeId: string) => {
+            setNodes((prev) => hideProductionVideoVersion(prev, nodeId));
+            message.success("已隐藏该视频版本");
+        },
+        [message],
+    );
+
+    const handleEditProductionPackagePrompt = useCallback(
+        (packageId: string) => {
+            const targetPackage = productionPackages.find((item) => item.id === packageId);
+            const configNode = targetPackage?.configNodeId ? nodesRef.current.find((node) => node.id === targetPackage.configNodeId) : undefined;
+            if (!configNode) return message.warning("该生产包还没有视频配置节点");
+            setActiveProductionPackageId(packageId);
+            selectAndCenterNode(configNode);
+            setDialogNodeId(configNode.id);
+        },
+        [message, productionPackages, selectAndCenterNode],
+    );
+
+    const handleGenerateProductionPackageVersion = useCallback(
+        (packageId: string) => {
+            const targetPackage = productionPackages.find((item) => item.id === packageId);
+            const configNode = targetPackage?.configNodeId ? nodesRef.current.find((node) => node.id === targetPackage.configNodeId) : undefined;
+            if (!configNode) return message.warning("该生产包还没有视频配置节点");
+            setActiveProductionPackageId(packageId);
+            selectAndCenterNode(configNode);
+            void handleGenerateNode(configNode.id, "video", configNode.metadata?.prompt || configNode.metadata?.finalPrompt || "");
+        },
+        [handleGenerateNode, message, productionPackages, selectAndCenterNode],
+    );
+
+    const handleUsePreviousPackageTailFrame = useCallback(
+        (packageId: string) => {
+            const targetPackage = productionPackages.find((item) => item.id === packageId);
+            if (!targetPackage?.previousCurrentVersion) return message.warning("上一生产包还没有当前采用版本");
+            setNodes((prev) => applyPreviousPackageTailFrame(prev, packageId, targetPackage.previousCurrentVersion!));
+            message.success("已启用上一包尾帧参考");
+        },
+        [message, productionPackages],
+    );
+
     if (!projectLoaded) return <CanvasRefreshShell />;
 
     return (
@@ -2039,6 +2176,8 @@ function InfiniteCanvasPage() {
                         setInspectorView("assistant");
                     }}
                 />
+
+                <CanvasProductionPackageBar packages={productionPackages} activePackageId={activeProductionPackageId} onSelect={focusProductionPackage} />
 
                 <InfiniteCanvas
                     containerRef={containerRef}
@@ -2104,6 +2243,8 @@ function InfiniteCanvasPage() {
                             batchRecovering={collapsingBatchIds.has(node.id)}
                             batchMotion={batchMotionById.get(node.id)}
                             showImageInfo={showImageInfo}
+                            productionPackageBadge={productionNodeBadge(node, productionPackageLabelMap)}
+                            isProductionPackageActive={Boolean(getNodeProductionPackageId(node) && getNodeProductionPackageId(node) === activeProductionPackageId)}
                             renderPanel={(panelNode) => (
                                 <CanvasNodePromptPanel
                                     node={panelNode}
@@ -2399,6 +2540,7 @@ function InfiniteCanvasPage() {
                 hasEpisode={Boolean(currentProject?.episodeId)}
                 stats={episodeWorkbenchStats}
                 selectedNode={selectedInspectorNode}
+                selectedProductionPackage={inspectorProductionPackage}
                 selectedShot={activeTimelineShot}
                 selectedShotGroups={activeTimelineShotGroups}
                 selectedShotNodes={activeTimelineNodes}
@@ -2453,6 +2595,13 @@ function InfiniteCanvasPage() {
                     setAssistantCollapsed(false);
                 }}
                 onSelectShot={handleTimelineShotSelect}
+                onPreviewProductionVideoVersion={handlePreviewProductionVideoVersion}
+                onDownloadProductionVideoVersion={handleDownloadProductionVideoVersion}
+                onSetCurrentProductionVideoVersion={handleSetCurrentProductionVideoVersion}
+                onHideProductionVideoVersion={handleHideProductionVideoVersion}
+                onGenerateProductionPackageVersion={handleGenerateProductionPackageVersion}
+                onEditProductionPackagePrompt={handleEditProductionPackagePrompt}
+                onUsePreviousPackageTailFrame={handleUsePreviousPackageTailFrame}
                 onInfo={(node) => setInfoNodeId(node.id)}
                 onEditText={openTextEditor}
                 onToggleDialog={(node) => setDialogNodeId((current) => (current === node.id ? null : node.id))}
@@ -2467,6 +2616,35 @@ function InfiniteCanvasPage() {
                 onViewImage={(node) => setPreviewNodeId(node.id)}
             />
         </main>
+    );
+}
+
+function CanvasProductionPackageBar({ packages, activePackageId, onSelect }: { packages: CanvasProductionPackageSummary[]; activePackageId: string; onSelect: (productionPackage: CanvasProductionPackageSummary) => void }) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    if (!packages.length) return null;
+    return (
+        <div className="pointer-events-none absolute left-4 right-[440px] top-16 z-40 flex justify-center">
+            <div className="pointer-events-auto flex max-w-full gap-2 overflow-x-auto rounded-xl border p-1.5 backdrop-blur-md" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }} data-canvas-no-zoom>
+                {packages.map((item) => {
+                    const active = item.id === activePackageId;
+                    return (
+                        <button
+                            key={item.id}
+                            type="button"
+                            className="min-w-[132px] rounded-lg border px-3 py-2 text-left transition hover:opacity-85"
+                            style={{ background: active ? "rgba(34,211,238,.14)" : theme.node.fill, borderColor: active ? "rgba(34,211,238,.72)" : theme.node.stroke, color: active ? "rgb(103,232,249)" : theme.node.text }}
+                            onClick={() => onSelect(item)}
+                            title={`${item.label} · ${item.title}`}
+                        >
+                            <div className="truncate text-sm font-semibold">{item.label}</div>
+                            <div className="mt-1 truncate text-xs" style={{ color: active ? "rgb(165,243,252)" : theme.node.muted }}>
+                                {item.statusLabel}
+                            </div>
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
     );
 }
 
@@ -2684,6 +2862,18 @@ function Shortcut({ keys, value }: { keys: string[]; value: string }) {
             <span className="text-right text-sm opacity-55">{value}</span>
         </div>
     );
+}
+
+function productionNodeBadge(node: CanvasNodeData, labels: Map<string, string>) {
+    const packageId = getNodeProductionPackageId(node);
+    if (!packageId) return "";
+    const packageLabel = labels.get(packageId) || node.metadata?.productionPackageLabel || packageId.slice(0, 4).toUpperCase();
+    if (node.type === CanvasNodeType.Video) {
+        const versionNumber = node.metadata?.productionVideoVersionNumber;
+        const versionLabel = versionNumber ? `v${versionNumber}` : "";
+        return node.metadata?.isCurrentProductionVersion && versionLabel ? `${packageLabel} · 当前视频版本 ${versionLabel}` : versionLabel ? `${packageLabel} · 视频版本 ${versionLabel}` : `${packageLabel} · 视频结果`;
+    }
+    return `${packageLabel} · ${productionPackageRoleLabel(getNodeProductionPackageRole(node))}`;
 }
 
 async function fetchCanvasImageBlob(url: string) {

@@ -29,6 +29,7 @@ export type CanvasVideoRelationType = "variant" | "continuation" | "derivative";
 export type CanvasVideoTaskMode = "generate" | "edit" | "extend";
 export type CanvasVideoEditType = "replace" | "add" | "remove" | "inpaint";
 export type CanvasVideoExtendDirection = "forward" | "backward";
+export type CanvasProductionPackageRole = "script" | "asset" | "prompt" | "video_config" | "video_result" | "reference" | "manual";
 
 export type CanvasNodeMetadata = {
     content?: string;
@@ -73,6 +74,20 @@ export type CanvasNodeMetadata = {
     storyboardTableShotIds?: string[];
     storyboardRole?: string;
     storyboardAssetRole?: string;
+    productionPackageId?: string;
+    productionPackageLabel?: string;
+    productionPackageTitle?: string;
+    productionPackageRole?: CanvasProductionPackageRole;
+    productionVideoVersionId?: string;
+    productionVideoVersionNumber?: number;
+    productionVideoVersionCreatedAt?: string;
+    productionVideoVersionNote?: string;
+    productionVideoVersionHidden?: boolean;
+    isCurrentProductionVersion?: boolean;
+    usePreviousPackageTailFrame?: boolean;
+    previousPackageVersionId?: string;
+    previousPackageVersionNodeId?: string;
+    previousPackageVersionLabel?: string;
     episodeId?: string;
     episodeTitle?: string;
     scriptId?: string;

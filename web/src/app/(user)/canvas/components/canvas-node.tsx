@@ -24,6 +24,8 @@ type CanvasNodeProps = {
     editRequestNonce?: number;
     showPanel: boolean;
     showImageInfo: boolean;
+    productionPackageBadge?: string;
+    isProductionPackageActive?: boolean;
     renderPanel?: (node: CanvasNodeData) => ReactNode;
     renderNodeContent?: (node: CanvasNodeData) => ReactNode;
     batchCount?: number;
@@ -80,6 +82,8 @@ export const CanvasNode = React.memo(function CanvasNode({
     editRequestNonce = 0,
     showPanel,
     showImageInfo,
+    productionPackageBadge,
+    isProductionPackageActive = false,
     renderPanel,
     renderNodeContent,
     batchCount = 0,
@@ -111,7 +115,9 @@ export const CanvasNode = React.memo(function CanvasNode({
     const isBatchRoot = data.type === CanvasNodeType.Image && Boolean(data.metadata?.isBatchRoot) && batchCount > 1;
     const isBatchChild = data.type === CanvasNodeType.Image && Boolean(data.metadata?.batchRootId);
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
-    const imageBorderColor = isActive ? selectionBlue : isRelated && !isBatchChild ? theme.node.muted : "transparent";
+    const packageAccent = "rgba(34,211,238,.86)";
+    const packageAccentSoft = "rgba(34,211,238,.24)";
+    const imageBorderColor = isActive ? selectionBlue : isProductionPackageActive ? packageAccent : isRelated && !isBatchChild ? theme.node.muted : "transparent";
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const resizeRef = useRef({
         isResizing: false,
@@ -260,8 +266,8 @@ export const CanvasNode = React.memo(function CanvasNode({
                 className="relative h-full w-full overflow-visible rounded-3xl border-2"
                 style={{
                     background: hasImageContent || hasVideoContent || hasAudioContent ? "transparent" : theme.node.fill,
-                    borderColor: hasImageContent ? imageBorderColor : isActive ? selectionBlue : isRelated ? theme.node.muted : theme.node.stroke,
-                    boxShadow: isActive ? `0 0 0 1px ${selectionBlue}55` : isRelated && !isBatchChild ? `0 0 0 1px ${theme.node.muted}55, 0 18px 48px rgba(0,0,0,.14)` : undefined,
+                    borderColor: hasImageContent ? imageBorderColor : isActive ? selectionBlue : isProductionPackageActive ? packageAccent : isRelated ? theme.node.muted : theme.node.stroke,
+                    boxShadow: isActive ? `0 0 0 1px ${selectionBlue}55` : isProductionPackageActive ? `0 0 0 1px ${packageAccentSoft}, 0 18px 48px rgba(0,0,0,.14)` : isRelated && !isBatchChild ? `0 0 0 1px ${theme.node.muted}55, 0 18px 48px rgba(0,0,0,.14)` : undefined,
                 }}
                 onMouseDown={(event) => onMouseDown(event, data.id)}
                 onDoubleClick={(event) => {
@@ -314,6 +320,15 @@ export const CanvasNode = React.memo(function CanvasNode({
                 {showImageInfo && hasImageContent ? <ImageInfoBar node={data} /> : null}
 
                 {!hasImageContent && !hasVideoContent && !hasAudioContent ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12" style={{ background: `linear-gradient(to top, ${theme.canvas.background}66, transparent)` }} /> : null}
+
+                {productionPackageBadge ? (
+                    <div
+                        className="pointer-events-none absolute left-2.5 top-2.5 z-30 max-w-[calc(100%-20px)] truncate rounded-lg border px-2 py-1 text-[11px] font-medium leading-none backdrop-blur-md"
+                        style={{ background: `${theme.toolbar.panel}dd`, borderColor: isProductionPackageActive ? packageAccent : theme.node.stroke, color: isProductionPackageActive ? "rgb(103,232,249)" : theme.node.muted }}
+                    >
+                        {productionPackageBadge}
+                    </div>
+                ) : null}
 
                 <ResizeHandle corner="top-left" onMouseDown={handleResizeMouseDown} />
                 <ResizeHandle corner="top-right" onMouseDown={handleResizeMouseDown} />

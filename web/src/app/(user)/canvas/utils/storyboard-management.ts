@@ -529,12 +529,23 @@ export function buildShotGroupCanvasInsertMetadata(group: ShotGroup, metadata: C
         shotIds: group.shotIds,
         storyboardShotGroupId: group.id,
         storyboardTableShotIds: group.shotIds,
+        productionPackageId: group.id,
+        productionPackageTitle: group.sceneName,
+        productionPackageRole: productionPackageRoleFromStoryboardRole(role),
         ...(group.agentRunId ? { agentRunId: group.agentRunId } : {}),
         ...(group.agentConfigId ? { agentConfigId: group.agentConfigId } : {}),
         ...(group.agentConfigVersion ? { agentConfigVersion: group.agentConfigVersion } : {}),
         ...(role ? { storyboardRole: role } : {}),
         ...rest,
     };
+}
+
+function productionPackageRoleFromStoryboardRole(role?: string): CanvasNodeMetadata["productionPackageRole"] {
+    if (role === "prompt") return "prompt";
+    if (role === "video_config") return "video_config";
+    if (role === "result_video") return "video_result";
+    if (role === "reference") return "asset";
+    return role ? "reference" : "manual";
 }
 
 export function buildStoryboardGroupFromScriptScene(scene: ScriptScene, options: { projectId: string; groupId: string; shotId: string; preset?: Record<string, unknown> }) {

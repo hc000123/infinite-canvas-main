@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Camera, Download, FileText, Image as ImageIcon, Info, Maximize2, MessageSquare, RefreshCw, Scissors, Sparkles, Upload, Video } from "lucide-react";
+import { Camera, CheckCircle2, Download, Eye, EyeOff, FileText, Image as ImageIcon, Info, Maximize2, MessageSquare, RefreshCw, Scissors, Sparkles, Upload, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
@@ -13,6 +13,7 @@ import type { EpisodeWorkbenchStats } from "../utils/episode-workbench";
 import type { ShotGroup, StoryboardTableShot } from "../utils/storyboard-management";
 import { inspectStoryboardShot, summarizeShotInspections } from "../utils/canvas-shot-inspection";
 import { buildShotReadableContent, readableShotTitle, type ShotReadablePart } from "../utils/shot-readable-content";
+import type { CanvasProductionPackageSummary, CanvasProductionVideoVersion } from "../utils/canvas-production-packages";
 
 export type CanvasInspectorView = "context" | "assistant" | "records";
 
@@ -25,6 +26,7 @@ type CanvasContextInspectorProps = {
     hasEpisode: boolean;
     stats: EpisodeWorkbenchStats;
     selectedNode: CanvasNodeData | null;
+    selectedProductionPackage?: CanvasProductionPackageSummary | null;
     selectedShot?: StoryboardTableShot | null;
     selectedShotGroups?: ShotGroup[];
     selectedShotNodes?: CanvasNodeData[];
@@ -42,6 +44,13 @@ type CanvasContextInspectorProps = {
     onOpenImageBriefs: () => void;
     onOpenAssistant: () => void;
     onSelectShot?: (shot: StoryboardTableShot, nodeId?: string) => void;
+    onPreviewProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
+    onDownloadProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
+    onSetCurrentProductionVideoVersion: (packageId: string, nodeId: string) => void;
+    onHideProductionVideoVersion: (nodeId: string) => void;
+    onGenerateProductionPackageVersion: (packageId: string) => void;
+    onEditProductionPackagePrompt: (packageId: string) => void;
+    onUsePreviousPackageTailFrame: (packageId: string) => void;
     onInfo: (node: CanvasNodeData) => void;
     onEditText: (node: CanvasNodeData) => void;
     onToggleDialog: (node: CanvasNodeData) => void;
@@ -65,6 +74,7 @@ export function CanvasContextInspector({
     hasEpisode,
     stats,
     selectedNode,
+    selectedProductionPackage,
     selectedShot,
     selectedShotGroups = [],
     selectedShotNodes = [],
@@ -82,6 +92,13 @@ export function CanvasContextInspector({
     onOpenImageBriefs,
     onOpenAssistant,
     onSelectShot,
+    onPreviewProductionVideoVersion,
+    onDownloadProductionVideoVersion,
+    onSetCurrentProductionVideoVersion,
+    onHideProductionVideoVersion,
+    onGenerateProductionPackageVersion,
+    onEditProductionPackagePrompt,
+    onUsePreviousPackageTailFrame,
     onInfo,
     onEditText,
     onToggleDialog,
@@ -144,6 +161,7 @@ export function CanvasContextInspector({
             ) : selectedNode ? (
                 <NodeInspector
                     node={selectedNode}
+                    productionPackage={selectedProductionPackage}
                     selectedCount={selectedCount}
                     connections={connections}
                     inputs={configInputs}
@@ -160,6 +178,25 @@ export function CanvasContextInspector({
                     onCrop={onCrop}
                     onAngle={onAngle}
                     onViewImage={onViewImage}
+                    onPreviewProductionVideoVersion={onPreviewProductionVideoVersion}
+                    onDownloadProductionVideoVersion={onDownloadProductionVideoVersion}
+                    onSetCurrentProductionVideoVersion={onSetCurrentProductionVideoVersion}
+                    onHideProductionVideoVersion={onHideProductionVideoVersion}
+                    onGenerateProductionPackageVersion={onGenerateProductionPackageVersion}
+                    onEditProductionPackagePrompt={onEditProductionPackagePrompt}
+                    onUsePreviousPackageTailFrame={onUsePreviousPackageTailFrame}
+                />
+            ) : selectedProductionPackage ? (
+                <ProductionPackageInspector
+                    productionPackage={selectedProductionPackage}
+                    theme={theme}
+                    onPreviewProductionVideoVersion={onPreviewProductionVideoVersion}
+                    onDownloadProductionVideoVersion={onDownloadProductionVideoVersion}
+                    onSetCurrentProductionVideoVersion={onSetCurrentProductionVideoVersion}
+                    onHideProductionVideoVersion={onHideProductionVideoVersion}
+                    onGenerateProductionPackageVersion={onGenerateProductionPackageVersion}
+                    onEditProductionPackagePrompt={onEditProductionPackagePrompt}
+                    onUsePreviousPackageTailFrame={onUsePreviousPackageTailFrame}
                 />
             ) : selectedShot ? (
                 <ShotInspector
@@ -493,6 +530,7 @@ function CanvasOverview({
 
 function NodeInspector({
     node,
+    productionPackage,
     selectedCount,
     connections,
     inputs,
@@ -509,8 +547,16 @@ function NodeInspector({
     onCrop,
     onAngle,
     onViewImage,
+    onPreviewProductionVideoVersion,
+    onDownloadProductionVideoVersion,
+    onSetCurrentProductionVideoVersion,
+    onHideProductionVideoVersion,
+    onGenerateProductionPackageVersion,
+    onEditProductionPackagePrompt,
+    onUsePreviousPackageTailFrame,
 }: {
     node: CanvasNodeData;
+    productionPackage?: CanvasProductionPackageSummary | null;
     selectedCount: number;
     connections: CanvasConnection[];
     inputs: NodeGenerationInput[];
@@ -527,6 +573,13 @@ function NodeInspector({
     onCrop: (node: CanvasNodeData) => void;
     onAngle: (node: CanvasNodeData) => void;
     onViewImage: (node: CanvasNodeData) => void;
+    onPreviewProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
+    onDownloadProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
+    onSetCurrentProductionVideoVersion: (packageId: string, nodeId: string) => void;
+    onHideProductionVideoVersion: (nodeId: string) => void;
+    onGenerateProductionPackageVersion: (packageId: string) => void;
+    onEditProductionPackagePrompt: (packageId: string) => void;
+    onUsePreviousPackageTailFrame: (packageId: string) => void;
 }) {
     const upstreamCount = connections.filter((connection) => connection.toNodeId === node.id).length;
     const downstreamCount = connections.filter((connection) => connection.fromNodeId === node.id).length;
@@ -558,6 +611,27 @@ function NodeInspector({
             {node.type === CanvasNodeType.Video && node.metadata?.content ? <video className="mt-3 max-h-60 w-full rounded-xl bg-black" src={node.metadata.content} controls playsInline /> : null}
             {node.type === CanvasNodeType.Audio && node.metadata?.content ? <audio className="mt-3 w-full" src={node.metadata.content} controls /> : null}
 
+            {productionPackage ? <ProductionPackageBindingSection productionPackage={productionPackage} currentNode={node} theme={theme} /> : null}
+            {productionPackage ? (
+                <VideoVersionsSection
+                    productionPackage={productionPackage}
+                    theme={theme}
+                    onPreview={onPreviewProductionVideoVersion}
+                    onDownload={onDownloadProductionVideoVersion}
+                    onSetCurrent={onSetCurrentProductionVideoVersion}
+                    onHide={onHideProductionVideoVersion}
+                />
+            ) : null}
+            {productionPackage ? (
+                <ProductionPackageGenerationSection
+                    productionPackage={productionPackage}
+                    theme={theme}
+                    onGenerate={onGenerateProductionPackageVersion}
+                    onEditPrompt={onEditProductionPackagePrompt}
+                    onUsePreviousTailFrame={onUsePreviousPackageTailFrame}
+                />
+            ) : null}
+
             {node.type === CanvasNodeType.Config ? <ConfigInputsSection inputs={inputs} theme={theme} /> : null}
             {prompt ? <TextSection title={node.type === CanvasNodeType.Text ? "完整文本" : "完整提示词"} text={prompt} theme={theme} /> : null}
             {node.metadata?.errorDetails ? <TextSection title="失败原因" text={node.metadata.errorDetails} theme={theme} danger /> : null}
@@ -580,6 +654,207 @@ function NodeInspector({
             <MetadataSummary node={node} theme={theme} />
         </div>
     );
+}
+
+function ProductionPackageInspector({
+    productionPackage,
+    theme,
+    onPreviewProductionVideoVersion,
+    onDownloadProductionVideoVersion,
+    onSetCurrentProductionVideoVersion,
+    onHideProductionVideoVersion,
+    onGenerateProductionPackageVersion,
+    onEditProductionPackagePrompt,
+    onUsePreviousPackageTailFrame,
+}: {
+    productionPackage: CanvasProductionPackageSummary;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onPreviewProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
+    onDownloadProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
+    onSetCurrentProductionVideoVersion: (packageId: string, nodeId: string) => void;
+    onHideProductionVideoVersion: (nodeId: string) => void;
+    onGenerateProductionPackageVersion: (packageId: string) => void;
+    onEditProductionPackagePrompt: (packageId: string) => void;
+    onUsePreviousPackageTailFrame: (packageId: string) => void;
+}) {
+    return (
+        <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
+            <ProductionPackageBindingSection productionPackage={productionPackage} theme={theme} />
+            <VideoVersionsSection
+                productionPackage={productionPackage}
+                theme={theme}
+                onPreview={onPreviewProductionVideoVersion}
+                onDownload={onDownloadProductionVideoVersion}
+                onSetCurrent={onSetCurrentProductionVideoVersion}
+                onHide={onHideProductionVideoVersion}
+            />
+            <ProductionPackageGenerationSection productionPackage={productionPackage} theme={theme} onGenerate={onGenerateProductionPackageVersion} onEditPrompt={onEditProductionPackagePrompt} onUsePreviousTailFrame={onUsePreviousPackageTailFrame} />
+        </div>
+    );
+}
+
+function ProductionPackageBindingSection({ productionPackage, currentNode, theme }: { productionPackage: CanvasProductionPackageSummary; currentNode?: CanvasNodeData; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    return (
+        <section className="rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+            <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <div className="text-sm font-semibold">生产包绑定</div>
+                    <div className="mt-1 break-words text-base font-semibold">
+                        {productionPackage.label} · {productionPackage.title}
+                    </div>
+                </div>
+                <span className="shrink-0 rounded-md border px-2 py-1 text-xs" style={{ borderColor: productionPackage.currentVersion ? "rgba(34,211,238,.72)" : theme.node.stroke, color: productionPackage.currentVersion ? "rgb(103,232,249)" : theme.node.muted }}>
+                    {productionPackage.statusLabel}
+                </span>
+            </div>
+            <div className="space-y-1.5">
+                <InspectorRow label="所属段落" value={productionPackage.sceneName} theme={theme} />
+                <InspectorRow label="镜头范围" value={productionPackage.shotRangeLabel} theme={theme} />
+                <InspectorRow label="包内节点" value={`${productionPackage.nodeIds.length} 个`} theme={theme} />
+                <InspectorRow label="当前版本" value={productionPackage.currentVersion ? `${productionPackage.currentVersion.label} · 已采用` : "暂无"} theme={theme} />
+                <InspectorRow label="版本数量" value={`${productionPackage.versions.filter((version) => !version.hidden).length} 个视频结果`} theme={theme} />
+                {currentNode ? <InspectorRow label="当前节点" value={currentNode.title} theme={theme} /> : null}
+            </div>
+        </section>
+    );
+}
+
+function VideoVersionsSection({
+    productionPackage,
+    theme,
+    onPreview,
+    onDownload,
+    onSetCurrent,
+    onHide,
+}: {
+    productionPackage: CanvasProductionPackageSummary;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onPreview: (version: CanvasProductionVideoVersion) => void;
+    onDownload: (version: CanvasProductionVideoVersion) => void;
+    onSetCurrent: (packageId: string, nodeId: string) => void;
+    onHide: (nodeId: string) => void;
+}) {
+    const versions = productionPackage.versions;
+    return (
+        <section className="mt-3 rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+            <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold">视频版本</div>
+                <div className="text-xs" style={{ color: theme.node.muted }}>
+                    {versions.filter((version) => !version.hidden).length} 个可用
+                </div>
+            </div>
+            {versions.length ? (
+                <div className="space-y-2">
+                    {versions.map((version) => (
+                        <div
+                            key={version.versionId}
+                            className="rounded-xl border p-3"
+                            style={{
+                                background: version.isCurrent ? "rgba(34,211,238,.12)" : theme.node.panel,
+                                borderColor: version.isCurrent ? "rgba(34,211,238,.72)" : theme.node.stroke,
+                                opacity: version.hidden ? 0.48 : 1,
+                            }}
+                        >
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <div className="break-words text-sm font-semibold">
+                                        {version.label}
+                                        {version.isCurrent ? " · 当前采用" : version.hidden ? " · 已隐藏" : ""}
+                                    </div>
+                                    <div className="mt-1 text-xs leading-5" style={{ color: theme.node.muted }}>
+                                        {formatVersionTime(version.createdAt)} · {version.duration || "未记录时长"} · {version.status}
+                                    </div>
+                                </div>
+                                {version.isCurrent ? (
+                                    <span className="shrink-0 rounded-md border px-2 py-1 text-xs" style={{ borderColor: "rgba(34,211,238,.72)", color: "rgb(103,232,249)" }}>
+                                        已采用
+                                    </span>
+                                ) : null}
+                            </div>
+                            <div className="mt-2 break-words text-xs leading-5" style={{ color: theme.node.muted }}>
+                                {version.note}
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                <SmallInspectorButton icon={<Eye className="size-3.5" />} label="预览" onClick={() => onPreview(version)} theme={theme} />
+                                <SmallInspectorButton icon={<Download className="size-3.5" />} label="导出" onClick={() => onDownload(version)} theme={theme} disabled={!version.node.metadata?.content} />
+                                <SmallInspectorButton icon={<CheckCircle2 className="size-3.5" />} label="设为当前" onClick={() => onSetCurrent(productionPackage.id, version.nodeId)} theme={theme} disabled={version.isCurrent || version.hidden || version.node.metadata?.status !== "success"} />
+                                <SmallInspectorButton icon={<EyeOff className="size-3.5" />} label="隐藏" onClick={() => onHide(version.nodeId)} theme={theme} disabled={version.hidden} />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <EmptyStatus text="暂无视频版本。可先检查提示词、资产和配置，再生成新版本。" theme={theme} />
+            )}
+        </section>
+    );
+}
+
+function ProductionPackageGenerationSection({
+    productionPackage,
+    theme,
+    onGenerate,
+    onEditPrompt,
+    onUsePreviousTailFrame,
+}: {
+    productionPackage: CanvasProductionPackageSummary;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onGenerate: (packageId: string) => void;
+    onEditPrompt: (packageId: string) => void;
+    onUsePreviousTailFrame: (packageId: string) => void;
+}) {
+    return (
+        <section className="mt-3 rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+            <div className="mb-2 text-sm font-semibold">生成操作</div>
+            <div className="grid grid-cols-2 gap-2">
+                <InspectorAction icon={<Video className="size-4" />} label="生成新版本" onClick={() => onGenerate(productionPackage.id)} theme={theme} disabled={!productionPackage.configNodeId} />
+                <InspectorAction icon={<FileText className="size-4" />} label="编辑提示词" onClick={() => onEditPrompt(productionPackage.id)} theme={theme} disabled={!productionPackage.configNodeId} />
+            </div>
+            <div className="mt-3 rounded-lg border p-2.5 text-xs leading-5" style={{ background: theme.node.panel, borderColor: productionPackage.tailFrame.needsReview ? "rgba(245,158,11,.7)" : theme.node.stroke }}>
+                <div className="font-medium">首尾帧衔接</div>
+                <div className="mt-1" style={{ color: theme.node.muted }}>
+                    上一生产包当前版本：{productionPackage.tailFrame.sourceLabel}
+                </div>
+                <div className="mt-1" style={{ color: productionPackage.tailFrame.needsReview ? "rgb(251,191,36)" : theme.node.muted }}>
+                    {productionPackage.tailFrame.enabled ? (productionPackage.tailFrame.needsReview ? "上一包当前版本已变化，可能需要重新检查。" : "已使用上一包尾帧作为首帧参考。") : "尚未启用上一包尾帧参考。"}
+                </div>
+                <div className="mt-2">
+                    <SmallInspectorButton icon={<RefreshCw className="size-3.5" />} label="使用上一包尾帧" onClick={() => onUsePreviousTailFrame(productionPackage.id)} theme={theme} disabled={!productionPackage.previousCurrentVersion || !productionPackage.configNodeId} />
+                </div>
+            </div>
+        </section>
+    );
+}
+
+function InspectorRow({ label, value, theme }: { label: string; value: string; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    return (
+        <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-2 text-xs leading-5">
+            <span style={{ color: theme.node.muted }}>{label}</span>
+            <span className="break-words font-medium">{value}</span>
+        </div>
+    );
+}
+
+function SmallInspectorButton({ icon, label, onClick, theme, disabled = false }: { icon: ReactNode; label: string; onClick: () => void; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; disabled?: boolean }) {
+    return (
+        <button
+            type="button"
+            className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke, color: theme.node.text }}
+            onClick={onClick}
+            disabled={disabled}
+        >
+            {icon}
+            <span>{label}</span>
+        </button>
+    );
+}
+
+function formatVersionTime(value: string) {
+    if (!value) return "未记录时间";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function ConfigInputsSection({ inputs, theme }: { inputs: NodeGenerationInput[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
