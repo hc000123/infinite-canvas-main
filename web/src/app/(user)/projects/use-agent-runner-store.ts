@@ -325,22 +325,7 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                 const run = createWorkflowTextRunRecord({ input, id, now });
                 set((state) => ({
                     runs: [run, ...state.runs],
-                    workflowRuns:
-                        input.workflowRunId && input.stageId
-                            ? state.workflowRuns.map((workflowRun) =>
-                                  workflowRun.id === input.workflowRunId
-                                      ? typeof input.variables.sceneKey === "string"
-                                          ? startAgentWorkflowSceneRun(workflowRun, {
-                                                stageId: input.stageId!,
-                                                sceneKey: input.variables.sceneKey,
-                                                sceneLabel: typeof input.variables.sceneLabel === "string" ? input.variables.sceneLabel : input.variables.sceneKey,
-                                                runnerRunId: id,
-                                                now,
-                                            })
-                                          : startAgentWorkflowStageRun(workflowRun, input.stageId!, id, now)
-                                      : workflowRun,
-                              )
-                            : state.workflowRuns,
+                    workflowRuns: input.workflowRunId && input.stageId ? state.workflowRuns.map((workflowRun) => (workflowRun.id === input.workflowRunId ? markStartedWorkflowStageReadings(workflowRun, input, id, now) : workflowRun)) : state.workflowRuns,
                 }));
                 return id;
             },
@@ -427,6 +412,33 @@ function normalizeStoredRun(run: AgentRunRecord): AgentRunRecord {
         draftOutput: normalizeStoredDraftOutput(run.draftOutput),
         workflowTextOutput: normalizeStoredWorkflowTextOutput(run.workflowTextOutput),
         proposedActions: run.proposedActions || [],
+    };
+}
+
+function markStartedWorkflowStageReadings(workflowRun: AgentWorkflowRunRecord, input: AgentRunInput, runnerRunId: string, now: string) {
+    if (!input.stageId) return workflowRun;
+    const started =
+        typeof input.variables.sceneKey === "string"
+            ? startAgentWorkflowSceneRun(workflowRun, {
+                  stageId: input.stageId,
+                  sceneKey: input.variables.sceneKey,
+                  sceneLabel: typeof input.variables.sceneLabel === "string" ? input.variables.sceneLabel : input.variables.sceneKey,
+                  runnerRunId,
+                  now,
+              })
+            : startAgentWorkflowStageRun(workflowRun, input.stageId, runnerRunId, now);
+    const stageState = started.stageStates.find((stage) => stage.stageId === input.stageId);
+    if (!stageState || stageState.status === "blocked") return started;
+    const records = buildWorkflowReadingRecords({
+        manifest: buildSeedanceQualityGateManifest({ workflowId: started.workflowId, version: started.workflowVersion }),
+        workflowRunId: started.id,
+        stageId: input.stageId,
+        now,
+        status: "read",
+    });
+    return {
+        ...started,
+        stageStates: started.stageStates.map((stage) => (stage.stageId === input.stageId ? { ...stage, readingRecords: records } : stage)),
     };
 }
 

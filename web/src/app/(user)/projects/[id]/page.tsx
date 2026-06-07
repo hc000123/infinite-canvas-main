@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { App, Button, Drawer, Empty, Input, Select, Tabs, Tag } from "antd";
-import { AlertTriangle, Bot, BookOpen, Boxes, Clapperboard, ExternalLink, FileText, Images, Library, ListVideo, Maximize2, Plus, ScrollText, Save, SlidersHorizontal, Sparkles, Video, Workflow } from "lucide-react";
+import { AlertTriangle, Bot, BookOpen, Boxes, Clapperboard, ExternalLink, FileText, Images, Library, ListVideo, Maximize2, Plus, ScrollText, Save, SlidersHorizontal, Sparkles, Workflow } from "lucide-react";
 
 import { useAssetStore, type Asset, type AssetKind } from "@/stores/use-asset-store";
 import { useEffectiveConfig } from "@/stores/use-config-store";
@@ -23,7 +23,7 @@ import { useStoryboardStore } from "../../canvas/stores/use-storyboard-store";
 import { buildImportedEpisodeWriteInput, canvasEpisodeContextFromCreateBinding, canvasEpisodeLabel, type CanvasCreateScriptBinding } from "../../canvas/utils/canvas-episode-context";
 import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../../canvas/utils/canvas-project-preset";
 import { buildImageBriefImageConfigNode, type ImageBrief } from "../../canvas/utils/image-brief";
-import type { ProductionBibleKind } from "../../canvas/utils/production-bible";
+import { productionBibleKindLabel, type ProductionBibleKind } from "../../canvas/utils/production-bible";
 import { assetKindLabel } from "../../assets/asset-utils";
 import { canvasIdsForCreativeProject, unfiledCanvasProjects } from "../creative-projects";
 import { collectProjectAssetReferences, filterProjectAssetReferences, type ProjectAssetLibraryFilter, type ProjectAssetReferenceSummary, type ProjectAssetReferenceType, type ProjectAssetVersionFilter } from "../project-asset-references";
@@ -66,6 +66,7 @@ export default function CreativeProjectDetailPage() {
     const [referenceTypeFilter, setReferenceTypeFilter] = useState<ProjectAssetReferenceType | "all">("all");
     const [versionStatusFilter, setVersionStatusFilter] = useState<ProjectAssetVersionFilter>("all");
     const [assetLibraryFilter, setAssetLibraryFilter] = useState<ProjectAssetLibraryFilter>("all");
+    const [missingOnlyFilter, setMissingOnlyFilter] = useState(false);
     const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
     const [storyboardOpen, setStoryboardOpen] = useState(false);
     const [storyboardInitialGroupId, setStoryboardInitialGroupId] = useState("");
@@ -125,6 +126,50 @@ export default function CreativeProjectDetailPage() {
             }),
         [assetKindFilter, assetLibraryFilter, assetReferenceRows, referenceTypeFilter, versionStatusFilter],
     );
+    const missingMaterialItems = useMemo(() => {
+        if (!project) return [];
+        const projectGroups = storyboardGroups.filter((group) => group.projectId === project.id);
+        const groupIds = new Set(projectGroups.map((group) => group.id));
+        const projectShots = storyboardShots.filter((shot) => groupIds.has(shot.groupId));
+        const groupsById = new Map(projectGroups.map((group) => [group.id, group]));
+        const missingBibleItems = bibleItems
+            .filter((item) => item.projectId === project.id && !item.assetRefs.length)
+            .map(
+                (item): ProjectMissingMaterialItem => ({
+                    id: `bible:${item.id}`,
+                    sourceLabel: "设定库",
+                    title: `${productionBibleKindLabel(item.kind)} · ${item.name}`,
+                    description: "还没有绑定参考素材。",
+                    actionLabel: "打开设定库",
+                    action: { type: "production-bible", kind: item.kind },
+                }),
+            );
+        const missingShotItems = projectShots
+            .filter((shot) => !shot.assetRefs.length)
+            .map(
+                (shot): ProjectMissingMaterialItem => ({
+                    id: `shot:${shot.id}`,
+                    sourceLabel: "分镜",
+                    title: shot.title || `分镜 ${shot.order}`,
+                    description: `${groupsById.get(shot.groupId)?.title || "未命名分镜组"} 没有绑定参考素材。`,
+                    actionLabel: "打开分镜",
+                    action: { type: "storyboard", groupId: shot.groupId, shotId: shot.id },
+                }),
+            );
+        const missingFileItems = assetReferenceRows
+            .filter((row) => row.hasMissingLocalFile)
+            .map(
+                (row): ProjectMissingMaterialItem => ({
+                    id: `asset-file:${row.asset.id}`,
+                    sourceLabel: "本地文件",
+                    title: row.asset.title || "未命名素材",
+                    description: "素材记录存在，但本地文件或 dataUrl 缺失。",
+                    actionLabel: "素材详情",
+                    action: { type: "asset", asset: row.asset },
+                }),
+            );
+        return [...missingBibleItems, ...missingShotItems, ...missingFileItems];
+    }, [assetReferenceRows, bibleItems, project, storyboardGroups, storyboardShots]);
     useEffect(() => {
         setDescriptionDraft(project?.description || "");
     }, [project?.description]);
@@ -216,6 +261,7 @@ export default function CreativeProjectDetailPage() {
         }
         if (target.type === "asset-references") {
             setActiveTab("asset-references");
+            setMissingOnlyFilter(Boolean(target.missingOnly));
             if (target.versionStatus === "outdated") setVersionStatusFilter("outdated");
             return;
         }
@@ -403,6 +449,9 @@ export default function CreativeProjectDetailPage() {
                                     onReferenceTypeChange={setReferenceTypeFilter}
                                     onVersionStatusChange={setVersionStatusFilter}
                                     onProjectLibraryStatusChange={setAssetLibraryFilter}
+                                    missingOnly={missingOnlyFilter}
+                                    missingItems={missingMaterialItems}
+                                    onMissingOnlyChange={setMissingOnlyFilter}
                                     onOpenAsset={setPreviewAsset}
                                     onOpenCanvas={(canvasId) => router.push(`/canvas/${canvasId}`)}
                                     onOpenStoryboard={openStoryboardReference}
@@ -478,48 +527,40 @@ export default function CreativeProjectDetailPage() {
 
 function ProjectOverviewDashboardView({ dashboard, onAction }: { dashboard: ProjectOverviewDashboard; onAction: (target: ProjectOverviewActionTarget) => void }) {
     const stats = dashboard.stats;
+    const keyStats = [
+        { icon: <Maximize2 className="size-3.5" />, label: "画布", value: stats.canvasCount, target: { type: "tab", tab: "canvas" } as ProjectOverviewActionTarget },
+        { icon: <ScrollText className="size-3.5" />, label: "分集 / 场次", value: `${stats.episodeCount} / ${stats.sceneCount}`, target: { type: "primary-canvas" } as ProjectOverviewActionTarget },
+        { icon: <Clapperboard className="size-3.5" />, label: "分镜", value: `${stats.storyboardGroupCount} / ${stats.storyboardShotCount}`, target: { type: "storyboard" } as ProjectOverviewActionTarget },
+        { icon: <ListVideo className="size-3.5" />, label: "队列 / 视频", value: `${stats.generationQueueCount} / ${stats.generatedVideoCount}`, target: { type: "storyboard" } as ProjectOverviewActionTarget },
+    ];
+    const attentionStats = [
+        { label: "失败", value: stats.failedGenerationCount, tone: stats.failedGenerationCount ? "danger" : "default", target: { type: "storyboard" } as ProjectOverviewActionTarget },
+        { label: "缺素材", value: stats.missingMaterialCount, tone: stats.missingMaterialCount ? "warning" : "default", target: { type: "asset-references", missingOnly: true } as ProjectOverviewActionTarget },
+        { label: "过期引用", value: stats.outdatedReferenceCount, tone: stats.outdatedReferenceCount ? "warning" : "default", target: { type: "asset-references", versionStatus: "outdated" } as ProjectOverviewActionTarget },
+        { label: "项目库", value: stats.projectLibraryAssetCount, tone: "default", target: { type: "assets-page" } as ProjectOverviewActionTarget },
+        { label: "Agent", value: stats.recentAgentTaskCount, tone: "default", target: { type: "agent" } as ProjectOverviewActionTarget },
+    ];
     return (
-        <section className="grid gap-5">
-            <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
-                <OverviewStatCard icon={<Maximize2 className="size-4" />} label="画布" value={stats.canvasCount} onClick={() => onAction({ type: "tab", tab: "canvas" })} />
-                <OverviewStatCard icon={<ScrollText className="size-4" />} label="剧本 / 分集 / 场次" value={`${stats.scriptProjectCount} / ${stats.episodeCount} / ${stats.sceneCount}`} onClick={() => onAction({ type: "primary-canvas" })} />
-                <OverviewStatCard icon={<Clapperboard className="size-4" />} label="分镜组 / 条目" value={`${stats.storyboardGroupCount} / ${stats.storyboardShotCount}`} onClick={() => onAction({ type: "storyboard" })} />
-                <OverviewStatCard icon={<ListVideo className="size-4" />} label="生成队列" value={stats.generationQueueCount} onClick={() => onAction({ type: "storyboard" })} />
-                <OverviewStatCard icon={<Video className="size-4" />} label="已生成视频" value={stats.generatedVideoCount} onClick={() => onAction({ type: "asset-references" })} />
-                <OverviewStatCard icon={<AlertTriangle className="size-4" />} label="失败生成" value={stats.failedGenerationCount} tone={stats.failedGenerationCount ? "danger" : "default"} onClick={() => onAction({ type: "storyboard" })} />
-                <OverviewStatCard icon={<Boxes className="size-4" />} label="缺素材" value={stats.missingMaterialCount} tone={stats.missingMaterialCount ? "warning" : "default"} onClick={() => onAction({ type: "asset-references", missingOnly: true })} />
-                <OverviewStatCard
-                    icon={<AlertTriangle className="size-4" />}
-                    label="过期引用"
-                    value={stats.outdatedReferenceCount}
-                    tone={stats.outdatedReferenceCount ? "warning" : "default"}
-                    onClick={() => onAction({ type: "asset-references", versionStatus: "outdated" })}
-                />
-                <OverviewStatCard icon={<Library className="size-4" />} label="项目库素材" value={stats.projectLibraryAssetCount} onClick={() => onAction({ type: "assets-page" })} />
-                <OverviewStatCard icon={<Bot className="size-4" />} label="最近 Agent 任务" value={stats.recentAgentTaskCount} onClick={() => onAction({ type: "agent" })} />
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.8fr)]">
+        <section className="grid gap-4">
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.75fr)]">
                 <div className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
                     <div className="flex items-center justify-between gap-3">
                         <div>
                             <div className="text-base font-medium">下一步建议</div>
-                            <p className="mt-1 text-sm text-stone-500">根据当前项目状态给出可点击的制作动作，不会自动修改数据。</p>
+                            <p className="mt-1 text-sm text-stone-500">优先展示当前最该处理的创作动作。</p>
                         </div>
                     </div>
                     {dashboard.suggestions.length ? (
-                        <div className="mt-4 grid gap-3">
+                        <div className="mt-3 divide-y divide-stone-200 dark:divide-stone-800">
                             {dashboard.suggestions.map((suggestion) => (
-                                <div key={suggestion.id} className="rounded-lg bg-stone-50 px-4 py-3 dark:bg-stone-900/70">
-                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                        <div className="min-w-0">
-                                            <div className="font-medium text-stone-950 dark:text-stone-100">{suggestion.title}</div>
-                                            <div className="mt-1 text-sm text-stone-500">{suggestion.description}</div>
-                                        </div>
-                                        <Button size="small" onClick={() => onAction(suggestion.target)}>
-                                            {suggestion.actionLabel}
-                                        </Button>
+                                <div key={suggestion.id} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="min-w-0">
+                                        <div className="font-medium text-stone-950 dark:text-stone-100">{suggestion.title}</div>
+                                        <div className="mt-1 text-sm text-stone-500">{suggestion.description}</div>
                                     </div>
+                                    <Button size="small" onClick={() => onAction(suggestion.target)}>
+                                        {suggestion.actionLabel}
+                                    </Button>
                                 </div>
                             ))}
                         </div>
@@ -528,53 +569,74 @@ function ProjectOverviewDashboardView({ dashboard, onAction }: { dashboard: Proj
                     )}
                 </div>
 
-                <div className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
-                    <div className="flex items-center justify-between gap-3">
-                        <div>
-                            <div className="text-base font-medium">Agent 摘要</div>
-                            <p className="mt-1 text-sm text-stone-500">只展示最近任务，不新增 Agent 进阶能力。</p>
-                        </div>
-                        <Button size="small" onClick={() => onAction({ type: "agent" })}>
-                            打开 Agent
-                        </Button>
-                    </div>
-                    {dashboard.recentAgentTasks.length ? (
-                        <div className="mt-4 space-y-2">
-                            {dashboard.recentAgentTasks.map((task) => (
-                                <div key={task.id} className="rounded-lg bg-stone-50 px-3 py-2 dark:bg-stone-900/70">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <Tag className="m-0">{agentKindLabel(task.kind)}</Tag>
-                                        <Tag className="m-0">{agentRiskLabel(task.riskLevel)}</Tag>
-                                        <Tag className="m-0">{agentTaskStatusLabel(task.status)}</Tag>
-                                    </div>
-                                    <div className="mt-2 line-clamp-1 text-sm font-medium">{task.title}</div>
-                                    <div className="mt-1 line-clamp-2 text-xs text-stone-500">{task.summary}</div>
-                                </div>
+                <div className="grid gap-3">
+                    <div className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
+                        <div className="text-base font-medium">项目状态</div>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                            {keyStats.map((item) => (
+                                <OverviewStatButton key={item.label} icon={item.icon} label={item.label} value={item.value} onClick={() => onAction(item.target)} />
                             ))}
                         </div>
-                    ) : (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 Agent 任务" className="py-8" />
-                    )}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            {attentionStats.map((item) => (
+                                <OverviewStatChip key={item.label} label={item.label} value={item.value} tone={item.tone as "default" | "warning" | "danger"} onClick={() => onAction(item.target)} />
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="text-base font-medium">Agent 摘要</div>
+                            <Button size="small" onClick={() => onAction({ type: "agent" })}>
+                                打开 Agent
+                            </Button>
+                        </div>
+                        {dashboard.recentAgentTasks.length ? (
+                            <div className="mt-3 divide-y divide-stone-200 dark:divide-stone-800">
+                                {dashboard.recentAgentTasks.map((task) => (
+                                    <div key={task.id} className="py-2 first:pt-0 last:pb-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Tag className="m-0">{agentKindLabel(task.kind)}</Tag>
+                                            <Tag className="m-0">{agentRiskLabel(task.riskLevel)}</Tag>
+                                            <Tag className="m-0">{agentTaskStatusLabel(task.status)}</Tag>
+                                        </div>
+                                        <div className="mt-2 line-clamp-1 text-sm font-medium">{task.title}</div>
+                                        <div className="mt-1 line-clamp-2 text-xs text-stone-500">{task.summary}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 Agent 任务" className="py-6" />
+                        )}
+                    </div>
                 </div>
             </div>
         </section>
     );
 }
 
-function OverviewStatCard({ icon, label, value, tone = "default", onClick }: { icon: ReactNode; label: string; value: string | number; tone?: "default" | "warning" | "danger"; onClick: () => void }) {
+function OverviewStatButton({ icon, label, value, onClick }: { icon: ReactNode; label: string; value: string | number; onClick: () => void }) {
     return (
-        <button
-            type="button"
-            className={`rounded-xl border p-4 text-left transition hover:bg-stone-50 dark:hover:bg-white/5 ${
-                tone === "danger" ? "border-red-200 dark:border-red-900/70" : tone === "warning" ? "border-amber-200 dark:border-amber-900/70" : "border-stone-200 dark:border-stone-800"
-            }`}
-            onClick={onClick}
-        >
+        <button type="button" className="rounded-lg border border-stone-200 px-3 py-2 text-left transition hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-white/5" onClick={onClick}>
             <div className="flex items-center gap-2 text-xs text-stone-500">
                 {icon}
                 {label}
             </div>
-            <div className="mt-2 text-2xl font-semibold text-stone-950 dark:text-stone-100">{value}</div>
+            <div className="mt-1 text-lg font-semibold text-stone-950 dark:text-stone-100">{value}</div>
+        </button>
+    );
+}
+
+function OverviewStatChip({ label, value, tone = "default", onClick }: { label: string; value: string | number; tone?: "default" | "warning" | "danger"; onClick: () => void }) {
+    return (
+        <button
+            type="button"
+            className={`rounded-full border px-2.5 py-1 text-xs transition hover:bg-stone-50 dark:hover:bg-white/5 ${
+                tone === "danger" ? "border-red-300 text-red-600 dark:border-red-900/70" : tone === "warning" ? "border-amber-300 text-amber-600 dark:border-amber-900/70" : "border-stone-200 text-stone-500 dark:border-stone-800"
+            }`}
+            onClick={onClick}
+        >
+            {label} {value}
         </button>
     );
 }
@@ -614,14 +676,26 @@ function EntryLink({ icon, title, description, href }: { icon: ReactNode; title:
     );
 }
 
+type ProjectMissingMaterialItem = {
+    id: string;
+    sourceLabel: string;
+    title: string;
+    description: string;
+    actionLabel: string;
+    action: { type: "production-bible"; kind?: ProductionBibleKind } | { type: "storyboard"; groupId?: string; shotId?: string } | { type: "asset"; asset: Asset };
+};
+
 function ProjectAssetReferencesView({
     rows,
     totalCount,
     filters,
+    missingOnly,
+    missingItems,
     onAssetKindChange,
     onReferenceTypeChange,
     onVersionStatusChange,
     onProjectLibraryStatusChange,
+    onMissingOnlyChange,
     onOpenAsset,
     onOpenCanvas,
     onOpenStoryboard,
@@ -635,10 +709,13 @@ function ProjectAssetReferencesView({
         versionStatus: ProjectAssetVersionFilter;
         projectLibraryStatus: ProjectAssetLibraryFilter;
     };
+    missingOnly: boolean;
+    missingItems: ProjectMissingMaterialItem[];
     onAssetKindChange: (value: AssetKind | "all") => void;
     onReferenceTypeChange: (value: ProjectAssetReferenceType | "all") => void;
     onVersionStatusChange: (value: ProjectAssetVersionFilter) => void;
     onProjectLibraryStatusChange: (value: ProjectAssetLibraryFilter) => void;
+    onMissingOnlyChange: (value: boolean) => void;
     onOpenAsset: (asset: Asset) => void;
     onOpenCanvas: (canvasId: string) => void;
     onOpenStoryboard: (groupId?: string, shotId?: string) => void;
@@ -703,12 +780,19 @@ function ProjectAssetReferencesView({
                         />
                     </div>
                 </div>
-                <div className="mt-3 text-xs text-stone-500">
-                    当前显示 {rows.length} 个素材，总计 {totalCount} 个项目引用素材。
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                    <span>
+                        当前显示 {missingOnly ? missingItems.length : rows.length} 个{missingOnly ? "缺口" : "素材"}，总计 {totalCount} 个项目引用素材、{missingItems.length} 处素材缺口。
+                    </span>
+                    <Button size="small" type={missingOnly ? "primary" : "default"} onClick={() => onMissingOnlyChange(!missingOnly)}>
+                        {missingOnly ? "查看素材引用" : "只看缺素材"}
+                    </Button>
                 </div>
             </div>
 
-            {rows.length ? (
+            {missingOnly ? (
+                <ProjectMissingMaterialList items={missingItems} onOpenAsset={onOpenAsset} onOpenStoryboard={onOpenStoryboard} onOpenProductionBible={onOpenProductionBible} />
+            ) : rows.length ? (
                 <div className="grid gap-3">
                     {rows.map((row) => (
                         <ProjectAssetReferenceCard key={row.asset.id} row={row} onOpenAsset={onOpenAsset} onOpenCanvas={onOpenCanvas} onOpenStoryboard={onOpenStoryboard} onOpenProductionBible={onOpenProductionBible} />
@@ -719,6 +803,46 @@ function ProjectAssetReferencesView({
             )}
         </section>
     );
+}
+
+function ProjectMissingMaterialList({
+    items,
+    onOpenAsset,
+    onOpenStoryboard,
+    onOpenProductionBible,
+}: {
+    items: ProjectMissingMaterialItem[];
+    onOpenAsset: (asset: Asset) => void;
+    onOpenStoryboard: (groupId?: string, shotId?: string) => void;
+    onOpenProductionBible: (kind?: ProductionBibleKind) => void;
+}) {
+    if (!items.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有素材缺口" className="py-16" />;
+    return (
+        <div className="grid gap-3">
+            {items.map((item) => (
+                <div key={item.id} className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/40 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/70 dark:bg-amber-950/10">
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Tag color="warning" className="m-0">
+                                {item.sourceLabel}
+                            </Tag>
+                            <div className="font-medium text-stone-950 dark:text-stone-100">{item.title}</div>
+                        </div>
+                        <div className="mt-2 text-sm text-stone-600 dark:text-stone-400">{item.description}</div>
+                    </div>
+                    <Button size="small" onClick={() => openMissingMaterialAction(item, onOpenAsset, onOpenStoryboard, onOpenProductionBible)}>
+                        {item.actionLabel}
+                    </Button>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function openMissingMaterialAction(item: ProjectMissingMaterialItem, onOpenAsset: (asset: Asset) => void, onOpenStoryboard: (groupId?: string, shotId?: string) => void, onOpenProductionBible: (kind?: ProductionBibleKind) => void) {
+    if (item.action.type === "asset") onOpenAsset(item.action.asset);
+    if (item.action.type === "storyboard") onOpenStoryboard(item.action.groupId, item.action.shotId);
+    if (item.action.type === "production-bible") onOpenProductionBible(item.action.kind);
 }
 
 function ProjectAssetReferenceCard({

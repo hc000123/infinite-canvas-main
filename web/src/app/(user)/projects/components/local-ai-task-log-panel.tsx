@@ -30,7 +30,7 @@ export function LocalAiTaskLogPanel({ projectId }: { projectId: string }) {
                 </div>
                 <Tag className="m-0">{projectRecords.length} 条</Tag>
             </div>
-            <Alert className="mt-3" type="warning" showIcon message="本地 API Key 保存在浏览器本地，仅适合个人本机使用；这里不做真实扣点，也不回写后台算力点日志。" />
+            <Alert className="mt-3" type="warning" showIcon title="本地 API Key 保存在浏览器本地，仅适合个人本机使用；这里不做真实扣点，也不回写后台算力点日志。" />
             {projectRecords.length ? (
                 <div className="mt-4 grid gap-2">
                     {projectRecords.map((record) => (

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Button, Empty, Tag } from "antd";
+import { Button, Empty, Spin, Tag } from "antd";
 
 import { useCanvasStore } from "../../../canvas/stores/use-canvas-store";
 import { useScriptStore } from "../../../canvas/stores/use-script-store";
@@ -15,6 +15,7 @@ export default function ProjectAgentWorkspacePage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const projectId = params.id;
+    const hydrated = useCreativeProjectStore((state) => state.hydrated);
     const project = useCreativeProjectStore((state) => state.projects.find((item) => item.id === projectId));
     const canvases = useCanvasStore((state) => state.projects);
     const updateCanvas = useCanvasStore((state) => state.updateProject);
@@ -25,12 +26,23 @@ export default function ProjectAgentWorkspacePage() {
     const episodeId = canvas?.episodeId || requestedEpisodeId || undefined;
     const episodeTitle = canvas?.episodeTitle || episodes.find((item) => item.id === episodeId)?.title;
 
+    if (!hydrated) {
+        return (
+            <main className="grid h-full place-items-center bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
+                <Spin description="正在读取本地项目" />
+            </main>
+        );
+    }
+
     if (!project) {
         return (
             <main className="h-full overflow-auto bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
                 <div className="mx-auto max-w-3xl">
                     <Empty description="项目不存在或尚未加载">
-                        <Button href="/projects">返回项目工作台</Button>
+                        <div className="flex flex-wrap justify-center gap-2">
+                            <Button href={`/projects/${projectId}/agent`}>打开旧 Agent 任务中心</Button>
+                            <Button href="/projects">返回项目工作台</Button>
+                        </div>
                     </Empty>
                 </div>
             </main>

@@ -4,7 +4,35 @@
 
 ## 当前版本验收清单
 
-当前版本：`v0.2.76`。需要优先验收的是 M6.11.3-B workflow 状态一致性修复、项目详情总览布局收口、本集生产流程阶段产物可读摘要、M6.11.3-A 本地直连文本 / 生图任务日志与费用追踪、Agent 工作台 `useForm` 未连接告警修复、M6.11.2 阶段三按场次 / 子场次推进、M6.11.1 本集生产主线页面、M6.11.0-A Agent 工作台项目级入口、M6.10.UI-R2 Agent 工作台入口拆层与 workflow 路径提示、M6.10.UI-R Seedance workflow UI 精简与信息层级收口、M6.10.4-A 规范读取记录与质量门 manifest 底座、M6.10.R0 Seedance 三阶段 Agent Core 拆分、M6.10.3-Fix1 P1 阻断修复、M6.10.3-Fix1 Seedance 映射预览 JSON 代码块解析质量修复、M6.10.3-R Seedance 映射预览总 review 修复项、M6.10.3-D Seedance 映射预览确认后创建 / 更新画布视频配置节点，M6.10.3-C Seedance 映射预览确认后写入分镜头表，M6.10.3-B Seedance 映射预览确认后写入设定库，M6.10.3-A Seedance 阶段产物映射预览，M6.10.2 Seedance 三阶段 workflow 状态、审核证据和产物存储，M6.10.1 Seedance 多 Agent 工作流文本 Runner，M6.10.0 Seedance 多 Agent 工作流预设导入、P3-C / M6.9.7 视频节点自动带入本集资产参考、M6.9.R1 Agent 化工作台结构收口、P3-B / M6.9.5 分镜草案 Agent 接入、M6.9.6 镜头组加入画布改为视频生成节点、M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+当前版本：`v0.2.76`。需要优先验收的是依赖与后端安全边界修复、M6.11.3-B workflow 状态一致性修复、项目详情总览布局收口、本集生产流程阶段产物可读摘要、M6.11.3-A 本地直连文本 / 生图任务日志与费用追踪、Agent 工作台 `useForm` 未连接告警修复、M6.11.2 阶段三按场次 / 子场次推进、M6.11.1 本集生产主线页面、M6.11.0-A Agent 工作台项目级入口、M6.10.UI-R2 Agent 工作台入口拆层与 workflow 路径提示、M6.10.UI-R Seedance workflow UI 精简与信息层级收口、M6.10.4-A 规范读取记录与质量门 manifest 底座、M6.10.R0 Seedance 三阶段 Agent Core 拆分、M6.10.3-Fix1 P1 阻断修复、M6.10.3-Fix1 Seedance 映射预览 JSON 代码块解析质量修复、M6.10.3-R Seedance 映射预览总 review 修复项、M6.10.3-D Seedance 映射预览确认后创建 / 更新画布视频配置节点，M6.10.3-C Seedance 映射预览确认后写入分镜头表，M6.10.3-B Seedance 映射预览确认后写入设定库，M6.10.3-A Seedance 阶段产物映射预览，M6.10.2 Seedance 三阶段 workflow 状态、审核证据和产物存储，M6.10.1 Seedance 多 Agent 工作流文本 Runner，M6.10.0 Seedance 多 Agent 工作流预设导入、P3-C / M6.9.7 视频节点自动带入本集资产参考、M6.9.R1 Agent 化工作台结构收口、P3-B / M6.9.5 分镜草案 Agent 接入、M6.9.6 镜头组加入画布改为视频生成节点、M6.9.4 本集生图需求接入 Brief / 生图链路、M6.9.3 资产提取 Agent 与本集生图需求、M6.9.2 剧本入口调整与独立工作台、M6.9.1 Agent Runner 协议与运行记录底座、M6.9.0 Agent 设置中心、视频生产台 @素材与布局优化、M6.8 本集工作台收口、画布新建节点目录与定位规则、Linux.do 登录移除、M10.0 云端资产方案冻结文档、M8.R1 追溯链路结构收口、M8 生成历史与任务日志打通、M6.7.3 Brief 导出为美术设定表 / 生图提示词表、M6.7.2 Brief 结果版本对比与主参考图强化、M6.7.R1 Brief 工作台结构收口、M6.7.1 Brief 接入生图与结果归档、M6.7 生图 Brief 工作台，以及 M6.6 / M7 系列回归项。
+
+#### v0.2.76：Agent 工作台加载态 Spin 警告修复
+
+- 入口：项目级 Agent 工作台 `/projects/:id/agents`。
+- 本次修复：加载本地项目时使用 Ant Design Spin 的 `description` 属性，避免 antd 6 `tip` deprecated 警告。
+- 验收步骤：打开 `/projects/:id/agents`，确认页面加载态正常，控制台或 dev server 日志不再出现 `[antd: Spin] tip is deprecated`。
+- 明确不应发生：不触发 AI 生成、不扣费、不改变 Agent 工作台业务逻辑。
+
+#### v0.2.76：依赖与后端安全边界修复
+
+- 入口：前端安装 / 测试脚本、后端 AI 代理、后台素材上传、上传素材静态访问、系统配置。
+- 本次修复：
+  - `@ant-design/pro-components` 升到支持 antd 6 的版本，`.mts` 测试脚本改为使用 Node 类型剥离参数。
+  - `.env.example` 中的 `change-me-*` 占位管理员密码和 JWT 密钥不再被后端启动配置接受。
+  - 用户自定义渠道默认关闭；火山本地视频自定义 `baseUrl` 只允许 HTTPS 公网地址，并在最终连接 IP 上再次校验。
+  - AI 请求体增加 100 MB 上限，生成数量 `n` 增加服务端上限，扣费乘法增加溢出保护。
+  - 视频下载代理增加最终连接公网 IP 校验和 1 GB 下载上限。
+  - 后台素材上传改为 MIME 白名单，文件扩展名由 MIME 决定；上传素材静态响应增加 `nosniff`。
+- 验收步骤：
+  1. 前端执行安装和 `npm test`，确认不再因 antd / pro-components peer dependency 或 `.mts` 扩展失败。
+  2. 复制 `.env.example` 后不修改 `ADMIN_PASSWORD` / `JWT_SECRET` 启动后端，确认启动会提示占位配置错误。
+  3. 后台系统设置中不配置 `allowCustomChannel` 时，用户配置弹窗应只走云端渠道。
+  4. 登录后构造 `/api/v1/videos` 请求，把 `_volcengine_base_url` 指向 localhost、内网 IP 或非 HTTPS 地址，确认后端拒绝请求。
+  5. 后台上传 SVG 或伪造扩展名的图片，确认 SVG 被拒绝，合法图片按真实 MIME 保存扩展名。
+- 明确不应发生：
+  - 不改已有业务数据结构。
+  - 不迁移旧数据。
+  - 不改变云端模型渠道的管理员配置能力。
 
 #### v0.2.76：M6.11.3-B workflow 状态一致性修复
 
