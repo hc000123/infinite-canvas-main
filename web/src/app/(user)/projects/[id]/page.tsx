@@ -30,6 +30,7 @@ import { collectProjectAssetReferences, filterProjectAssetReferences, type Proje
 import { buildProjectOverviewDashboard, projectOverviewActionHref, type ProjectOverviewActionTarget, type ProjectOverviewDashboard } from "../project-overview-dashboard";
 import { editableCanvasPreset } from "../project-canvas-preset";
 import { agentKindLabel, agentRiskLabel } from "../agent-workbench";
+import { LocalAiTaskLogPanel } from "../components/local-ai-task-log-panel";
 import { useAgentTaskStore } from "../use-agent-task-store";
 import { useCreativeProjectStore } from "../use-creative-project-store";
 
@@ -323,6 +324,7 @@ export default function CreativeProjectDetailPage() {
                             label: "工作流",
                             children: (
                                 <div className="grid gap-4">
+                                    <LocalAiTaskLogPanel projectId={project.id} />
                                     <section className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
                                         <div className="flex flex-wrap items-center justify-between gap-3">
                                             <div>

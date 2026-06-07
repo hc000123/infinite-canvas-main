@@ -7,6 +7,7 @@ import { Alert, App, Button, Card, Collapse, Empty, Input, Space, Tag } from "an
 import { CheckCircle2, Clapperboard, FileText, Library, Maximize2, Play, ScrollText, Video, Workflow, XCircle } from "lucide-react";
 
 import { requestImageQuestion } from "@/services/api/image";
+import { completeLocalTextTask, failLocalTextTask, startLocalTextTask, summarizeLocalTaskText } from "@/services/local-ai-task-log";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useCanvasStore } from "../../../../../canvas/stores/use-canvas-store";
 import { useScriptStore } from "../../../../../canvas/stores/use-script-store";
@@ -232,13 +233,21 @@ export default function EpisodeProductionWorkbenchPage() {
             setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
             return message.warning(reason);
         }
+        let localTaskId: string | undefined;
         try {
+            localTaskId = startLocalTextTask(requestConfig, {
+                ...runInput,
+                sourceType: "workflow_text_stage",
+                inputSummary: summarizeLocalTaskText(`${stage.name}：${stage.inputSummary}\n${scriptSnapshot}`),
+            });
             const response = await requestImageQuestion(requestConfig, promptMessages, () => {});
             completeWorkflowTextRun(runId, response || "没有返回内容");
+            completeLocalTextTask(localTaskId, response || "没有返回内容");
             message.success(`${stage.name} 草案已生成，待审核`);
         } catch (error) {
             const reason = error instanceof Error ? error.message : "文本执行失败";
             failWorkflowTextRun(runId, reason);
+            failLocalTextTask(localTaskId, reason);
             message.warning(reason);
         } finally {
             setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
@@ -323,13 +332,21 @@ export default function EpisodeProductionWorkbenchPage() {
             setRunningSceneKeys((current) => ({ ...current, [currentScene.sceneKey]: false }));
             return message.warning(reason);
         }
+        let localTaskId: string | undefined;
         try {
+            localTaskId = startLocalTextTask(requestConfig, {
+                ...runInput,
+                sourceType: "workflow_text_stage",
+                inputSummary: summarizeLocalTaskText(`${stage.name}：${currentScene.sceneLabel}\n${currentScene.scriptText || scriptSnapshot}`),
+            });
             const response = await requestImageQuestion(requestConfig, promptMessages, () => {});
             completeWorkflowTextRun(runId, response || "没有返回内容");
+            completeLocalTextTask(localTaskId, response || "没有返回内容");
             message.success(`${currentScene.sceneLabel} 草案已生成，待审核`);
         } catch (error) {
             const reason = error instanceof Error ? error.message : "文本执行失败";
             failWorkflowTextRun(runId, reason);
+            failLocalTextTask(localTaskId, reason);
             message.warning(reason);
         } finally {
             setRunningSceneKeys((current) => ({ ...current, [currentScene.sceneKey]: false }));

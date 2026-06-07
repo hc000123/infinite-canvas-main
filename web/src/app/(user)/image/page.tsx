@@ -18,6 +18,7 @@ import { formatBytes, formatDuration, getDataUrlByteSize, readImageMeta } from "
 import { requestEdit, requestGeneration } from "@/services/api/image";
 import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
+import { useLocalAiTaskLogStore } from "@/stores/use-local-ai-task-log-store";
 import type { ReferenceImage } from "@/types/image";
 
 type GeneratedImage = {
@@ -281,11 +282,24 @@ export default function ImagePage() {
     const runGenerationSlot = async (index: number, snapshot: { text: string; config: AiConfig; references: ReferenceImage[] }) => {
         const itemStartedAt = performance.now();
         try {
-            const result = snapshot.references.length ? await requestEdit(snapshot.config, snapshot.text, snapshot.references) : await requestGeneration(snapshot.config, snapshot.text);
+            const result = snapshot.references.length
+                ? await requestEdit(snapshot.config, snapshot.text, snapshot.references, undefined, {
+                      projectId: "local-image-workbench",
+                      sourceType: "image_generation",
+                      sourceId: "image-page",
+                      inputSummary: summarizeLocalImageInput(snapshot.text, snapshot.references.length),
+                  })
+                : await requestGeneration(snapshot.config, snapshot.text, undefined, {
+                      projectId: "local-image-workbench",
+                      sourceType: "image_generation",
+                      sourceId: "image-page",
+                      inputSummary: summarizeLocalImageInput(snapshot.text, 0),
+                  });
             const image = result[0];
             if (!image) throw new Error("接口没有返回图片");
             const meta = await readImageMeta(image.dataUrl);
             const nextImage = { id: image.id, dataUrl: image.dataUrl, durationMs: performance.now() - itemStartedAt, width: meta.width, height: meta.height, bytes: getDataUrlByteSize(image.dataUrl) };
+            if (image.localAiTaskId) updateLocalImageResultSize(image.localAiTaskId, meta.width, meta.height);
             setResults((value) => updateResultAt(value, index, { status: "success", image: nextImage }));
             return nextImage;
         } catch (error) {
@@ -567,6 +581,20 @@ function FailedImageCard({ error, onRetry }: { error: string; onRetry: () => voi
 
 function updateResultAt(results: GenerationResult[], index: number, next: Partial<GenerationResult>) {
     return results.map((item, itemIndex) => (itemIndex === index ? { ...item, ...next } : item));
+}
+
+function updateLocalImageResultSize(localAiTaskId: string, width: number, height: number) {
+    const resultImageSize = `${width}x${height}`;
+    useLocalAiTaskLogStore.getState().updateTask(localAiTaskId, {
+        resultImageSize,
+        outputSummary: `图片已生成，返回尺寸 ${resultImageSize}`,
+    });
+}
+
+function summarizeLocalImageInput(prompt: string, referenceCount: number) {
+    const text = prompt.replace(/\s+/g, " ").trim();
+    const summary = text.length > 160 ? `${text.slice(0, 160)}...` : text;
+    return referenceCount ? `${summary || "生图提示词为空"}；参考图 ${referenceCount} 张` : summary || "生图提示词为空";
 }
 
 function LogPanel({

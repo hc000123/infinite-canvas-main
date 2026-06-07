@@ -110,7 +110,15 @@ export function useCanvasImageGenerationActions({
                 targetIds.map(async (targetId) => {
                     try {
                         const trace = buildCanvasAiTaskTrace({ projectId, canvasId, nodeId: targetId, metadata: targetNodeMetadata(targetId, rootNode, childNodes) });
-                        const uploaded = await runCanvasImageGeneration({ ...generationConfig, count: "1" }, effectivePrompt, referenceImages, trace);
+                        const targetMetadata = targetNodeMetadata(targetId, rootNode, childNodes);
+                        const uploaded = await runCanvasImageGeneration({ ...generationConfig, count: "1" }, effectivePrompt, referenceImages, trace, {
+                            projectId,
+                            canvasId,
+                            episodeId: targetMetadata?.episodeId || episodeContext?.episodeId,
+                            sourceType: targetMetadata?.briefId ? "brief_image_generation" : "image_generation",
+                            sourceId: targetMetadata?.briefId || targetId,
+                            inputSummary: summarizeLocalImageInput(effectivePrompt, referenceImages.length),
+                        });
                         const imageSize = fitNodeSize(uploaded.width, uploaded.height, imageConfig.width, imageConfig.height);
                         const metadata = { ...toImageMetadata(uploaded), ...aiTaskLedgerNodeMetadata(uploaded.aiTask) };
                         setNodes((prev) => applyGeneratedImageToNodes({ nodes: prev, rootId, targetId, imageSize, imageMetadata: metadata }));
@@ -152,4 +160,10 @@ function targetNodeMetadata(targetId: string, rootNode: CanvasNodeData, childNod
 
 function imageGenerationCount(count: string) {
     return Math.max(1, Math.min(15, Math.floor(Math.abs(Number(count)) || 1)));
+}
+
+function summarizeLocalImageInput(prompt: string, referenceCount: number) {
+    const text = prompt.replace(/\s+/g, " ").trim();
+    const summary = text.length > 160 ? `${text.slice(0, 160)}...` : text;
+    return referenceCount ? `${summary || "生图提示词为空"}；参考图 ${referenceCount} 张` : summary || "生图提示词为空";
 }

@@ -1,11 +1,13 @@
 import axios from "axios";
 
 import { type AiConfig } from "@/stores/use-config-store";
+import { estimateImageCost, normalizeBillingNote } from "@/services/ai-local-billing";
 import { AI_REQUEST_TIMEOUT_MS, aiApiUrl, aiHeaders, normalizeAiError, refreshRemoteUser } from "@/services/api/ai-provider";
 import { aiTaskTraceHeaders, readAiTaskLedgerFromHeaders, type AiTaskLedger, type AiTaskTrace } from "@/services/api/ai-task-trace";
 import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { imageToDataUrl } from "@/services/image-storage";
+import { useLocalAiTaskLogStore, type LocalAiTaskSourceType } from "@/stores/use-local-ai-task-log-store";
 import type { ReferenceImage } from "@/types/image";
 
 export type ChatCompletionMessage = {
@@ -25,6 +27,17 @@ export type GeneratedImageResult = {
     id: string;
     dataUrl: string;
     aiTask?: AiTaskLedger;
+    localAiTaskId?: string;
+};
+
+export type LocalImageTaskTrace = {
+    projectId?: string;
+    episodeId?: string;
+    canvasId?: string;
+    sourceType?: Extract<LocalAiTaskSourceType, "image_generation" | "brief_image_generation">;
+    sourceId?: string;
+    inputSummary?: string;
+    outputSummary?: string;
 };
 
 const QUALITY_BASE: Record<string, number> = {
@@ -189,10 +202,11 @@ function withSystemMessage(config: AiConfig, messages: ChatCompletionMessage[]) 
     return systemPrompt ? [{ role: "system" as const, content: systemPrompt }, ...messages] : messages;
 }
 
-export async function requestGeneration(config: AiConfig, prompt: string, trace?: AiTaskTrace) {
+export async function requestGeneration(config: AiConfig, prompt: string, trace?: AiTaskTrace, localTask?: LocalImageTaskTrace) {
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const quality = normalizeQuality(config.quality);
     const requestSize = resolveRequestSize(quality, config.size);
+    const localTaskId = startLocalImageTask(config, prompt, n, requestSize, localTask);
     try {
         const response = await postImageGeneration(
             config,
@@ -206,11 +220,14 @@ export async function requestGeneration(config: AiConfig, prompt: string, trace?
             },
             trace,
         );
-        const images = withAiTaskLedger(parseImagePayload(response.data), readAiTaskLedgerFromHeaders(response.headers));
+        const images = withTaskMetadata(parseImagePayload(response.data), readAiTaskLedgerFromHeaders(response.headers), localTaskId);
+        completeLocalImageTask(localTaskId, images.length, requestSize, localTask?.outputSummary);
         refreshRemoteUser(config);
         return images;
     } catch (error) {
-        throw new Error(normalizeAiError(error, "请求失败"));
+        const reason = normalizeAiError(error, "请求失败");
+        failLocalImageTask(localTaskId, reason, requestSize);
+        throw new Error(reason);
     }
 }
 
@@ -221,18 +238,22 @@ function postImageGeneration(config: AiConfig, payload: Record<string, unknown>,
     });
 }
 
-export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], trace?: AiTaskTrace) {
+export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], trace?: AiTaskTrace, localTask?: LocalImageTaskTrace) {
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const quality = normalizeQuality(config.quality);
     const requestSize = resolveRequestSize(quality, config.size);
+    const localTaskId = startLocalImageTask(config, prompt, n, requestSize, localTask);
     if (shouldUseGeminiImageChatAdapter(config.model)) {
         try {
             const response = await postGeminiImageEdit(config, prompt, references, { n, quality, size: requestSize }, trace);
-            const images = withAiTaskLedger(parseImagePayload(response.data), readAiTaskLedgerFromHeaders(response.headers));
+            const images = withTaskMetadata(parseImagePayload(response.data), readAiTaskLedgerFromHeaders(response.headers), localTaskId);
+            completeLocalImageTask(localTaskId, images.length, requestSize, localTask?.outputSummary);
             refreshRemoteUser(config);
             return images;
         } catch (error) {
-            throw new Error(normalizeAiError(error, "请求失败"));
+            const reason = normalizeAiError(error, "请求失败");
+            failLocalImageTask(localTaskId, reason, requestSize);
+            throw new Error(reason);
         }
     }
     const formData = new FormData();
@@ -251,11 +272,14 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
 
     try {
         const response = await postImageEdit(config, formData, trace);
-        const images = withAiTaskLedger(parseImagePayload(response.data), readAiTaskLedgerFromHeaders(response.headers));
+        const images = withTaskMetadata(parseImagePayload(response.data), readAiTaskLedgerFromHeaders(response.headers), localTaskId);
+        completeLocalImageTask(localTaskId, images.length, requestSize, localTask?.outputSummary);
         refreshRemoteUser(config);
         return images;
     } catch (error) {
-        throw new Error(normalizeAiError(error, "请求失败"));
+        const reason = normalizeAiError(error, "请求失败");
+        failLocalImageTask(localTaskId, reason, requestSize);
+        throw new Error(reason);
     }
 }
 
@@ -291,9 +315,53 @@ function postImageEdit(config: AiConfig, body: FormData, trace?: AiTaskTrace) {
     });
 }
 
-function withAiTaskLedger(images: GeneratedImageResult[], aiTask: AiTaskLedger): GeneratedImageResult[] {
-    if (!aiTask.aiTaskId) return images;
-    return images.map((image) => ({ ...image, aiTask }));
+function withTaskMetadata(images: GeneratedImageResult[], aiTask: AiTaskLedger, localAiTaskId?: string): GeneratedImageResult[] {
+    if (!aiTask.aiTaskId && !localAiTaskId) return images;
+    return images.map((image) => ({ ...image, ...(aiTask.aiTaskId ? { aiTask } : {}), ...(localAiTaskId ? { localAiTaskId } : {}) }));
+}
+
+function startLocalImageTask(config: AiConfig, prompt: string, imageCount: number, requestedSize?: string, trace?: LocalImageTaskTrace) {
+    if (config.channelMode !== "local" || !trace) return undefined;
+    return useLocalAiTaskLogStore.getState().startTask({
+        projectId: trace.projectId || "local-image-workbench",
+        episodeId: trace.episodeId,
+        canvasId: trace.canvasId,
+        sourceType: trace.sourceType || "image_generation",
+        sourceId: trace.sourceId || "image-api",
+        provider: "openai-compatible",
+        model: config.model,
+        channelMode: config.channelMode,
+        requestType: "image",
+        inputSummary: trace.inputSummary || summarizeText(prompt),
+        outputSummary: "本地直连生图调用中",
+        imageCount,
+        imageSize: requestedSize || config.size,
+        requestedImageSize: requestedSize || config.size,
+        estimatedCost: estimateImageCost({ model: config.model, imageCount, requestedSize: requestedSize || config.size, quality: config.quality }),
+        billingNote: normalizeBillingNote({ requestType: "image", requestedSize: requestedSize || config.size }),
+    });
+}
+
+function completeLocalImageTask(id: string | undefined, imageCount: number, requestedSize?: string, outputSummary?: string) {
+    if (!id) return;
+    useLocalAiTaskLogStore.getState().completeTask(id, {
+        imageCount,
+        outputSummary: outputSummary || `接口返回 ${imageCount} 张图片`,
+        requestedImageSize: requestedSize,
+    });
+}
+
+function failLocalImageTask(id: string | undefined, errorMessage: string, requestedSize?: string) {
+    if (!id) return;
+    useLocalAiTaskLogStore.getState().failTask(id, errorMessage, {
+        outputSummary: "生图调用失败",
+        requestedImageSize: requestedSize,
+    });
+}
+
+function summarizeText(value: string, maxLength = 180) {
+    const text = value.replace(/\s+/g, " ").trim();
+    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text || "暂无输入摘要";
 }
 
 export async function requestImageQuestion(config: AiConfig, messages: ChatCompletionMessage[], onDelta: (text: string) => void) {

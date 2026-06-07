@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { requestEdit, requestGeneration, requestImageQuestion, type ChatCompletionMessage } from "@/services/api/image";
 import { imageToDataUrl, uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
+import { useLocalAiTaskLogStore } from "@/stores/use-local-ai-task-log-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { ReferenceImage } from "@/types/image";
 import { DiaTextReveal } from "@/components/ui/dia-text-reveal";
@@ -37,6 +38,9 @@ const PANEL_MOTION_MS = 500;
 const PANEL_MOTION_SECONDS = PANEL_MOTION_MS / 1000;
 
 type CanvasAssistantPanelProps = {
+    projectId: string;
+    canvasId: string;
+    episodeId?: string;
     nodes: CanvasNodeData[];
     connections: CanvasConnection[];
     selectedNodeIds: Set<string>;
@@ -53,6 +57,9 @@ type CanvasAssistantPanelProps = {
 };
 
 export function CanvasAssistantPanel({
+    projectId,
+    canvasId,
+    episodeId,
     nodes,
     connections,
     selectedNodeIds,
@@ -212,8 +219,28 @@ export function CanvasAssistantPanel({
                 const referenceImages: ReferenceImage[] = await Promise.all(
                     refs.filter((item) => item.dataUrl).map(async (item) => ({ id: item.id, name: `${item.title}.png`, type: "image/png", dataUrl: await imageToDataUrl(item), storageKey: item.storageKey })),
                 );
-                const images = referenceImages.length ? await requestEdit(requestConfig, text, referenceImages) : await requestGeneration(requestConfig, text);
+                const images = referenceImages.length
+                    ? await requestEdit(requestConfig, text, referenceImages, undefined, {
+                          projectId,
+                          canvasId,
+                          episodeId,
+                          sourceType: "image_generation",
+                          sourceId: session.id,
+                          inputSummary: summarizeLocalImageInput(text, referenceImages.length),
+                      })
+                    : await requestGeneration(requestConfig, text, undefined, {
+                          projectId,
+                          canvasId,
+                          episodeId,
+                          sourceType: "image_generation",
+                          sourceId: session.id,
+                          inputSummary: summarizeLocalImageInput(text, 0),
+                      });
                 const storedImages = await Promise.all(images.map((image) => uploadImage(image.dataUrl)));
+                images.forEach((image, index) => {
+                    const stored = storedImages[index];
+                    if (image.localAiTaskId && stored) updateLocalImageResultSize(image.localAiTaskId, stored.width, stored.height);
+                });
                 updateMessage(session.id, assistantId, {
                     text: `生成了 ${storedImages.length} 张图片`,
                     images: storedImages.map((image, index) => ({ id: images[index].id, dataUrl: image.url, storageKey: image.storageKey, prompt: text })),
@@ -861,4 +888,18 @@ async function buildChatMessages(messages: CanvasAssistantMessage[]): Promise<Ch
 function createSession(): CanvasAssistantSession {
     const now = new Date().toISOString();
     return { id: nanoid(), title: "新对话", messages: [], createdAt: now, updatedAt: now };
+}
+
+function updateLocalImageResultSize(localAiTaskId: string, width: number, height: number) {
+    const resultImageSize = `${width}x${height}`;
+    useLocalAiTaskLogStore.getState().updateTask(localAiTaskId, {
+        resultImageSize,
+        outputSummary: `图片已生成，返回尺寸 ${resultImageSize}`,
+    });
+}
+
+function summarizeLocalImageInput(prompt: string, referenceCount: number) {
+    const text = prompt.replace(/\s+/g, " ").trim();
+    const summary = text.length > 160 ? `${text.slice(0, 160)}...` : text;
+    return referenceCount ? `${summary || "生图提示词为空"}；参考图 ${referenceCount} 张` : summary || "生图提示词为空";
 }

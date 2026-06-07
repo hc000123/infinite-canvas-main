@@ -11,6 +11,7 @@ import { defaultSeedanceImageRole, type SeedanceImageRoleMode } from "@/services
 import { fetchVolcengineAssetStatus, submitVolcengineMediaAsset } from "@/services/api/volcengine-assets";
 import { isRecoverableVideoTaskError, refreshVideoTask, type VideoGenerationReferenceInput } from "@/services/api/video";
 import { defaultConfig, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { useLocalAiTaskLogStore } from "@/stores/use-local-ai-task-log-store";
 import { getImageBlob, resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { getMediaBlob, resolveMediaUrl, type UploadedFile } from "@/services/file-storage";
 import { activeVolcengineAssetURI, buildVolcengineMediaFilename, isVolcengineReviewProcessing, mergeVolcengineReviewStatus, volcengineReviewMetadataFromSubmission, volcengineReviewPollingKey } from "@/services/volcengine-asset-metadata";
@@ -1174,8 +1175,16 @@ function InfiniteCanvasPage() {
             setSelectedNodeIds(new Set([childId]));
             setDialogNodeId(childId);
             try {
-                const image = await requestEdit(generationConfig, prompt, [referenceImage]).then((items) => items[0]);
+                const image = await requestEdit(generationConfig, prompt, [referenceImage], undefined, {
+                    projectId: workspaceProjectId,
+                    canvasId,
+                    episodeId: canvasEpisodeContext?.episodeId,
+                    sourceType: "image_generation",
+                    sourceId: childId,
+                    inputSummary: summarizeLocalImageInput(prompt, 1),
+                }).then((items) => items[0]);
                 const uploaded = await uploadImage(image.dataUrl);
+                if (image.localAiTaskId) updateLocalImageResultSize(image.localAiTaskId, uploaded.width, uploaded.height);
                 const size = fitNodeSize(uploaded.width, uploaded.height, imageConfig.width, imageConfig.height);
                 setNodes((prev) => prev.map((item) => (item.id === childId ? buildCompletedImageNode({ imageNode: item, imageSize: size, imageMetadata: imageMetadata(uploaded), generationMetadata, prompt }) : item)));
             } catch (error) {
@@ -2315,6 +2324,9 @@ function InfiniteCanvasPage() {
             </section>
             {assistantMounted ? (
                 <CanvasAssistantPanel
+                    projectId={workspaceProjectId}
+                    canvasId={canvasId}
+                    episodeId={canvasEpisodeContext?.episodeId}
                     nodes={nodes}
                     connections={connections}
                     selectedNodeIds={selectedNodeIds}
@@ -2818,6 +2830,20 @@ function audioExtension(mimeType?: string) {
     if (!subtype || subtype === "mpeg") return "mp3";
     if (subtype === "x-wav") return "wav";
     return subtype;
+}
+
+function updateLocalImageResultSize(localAiTaskId: string, width: number, height: number) {
+    const resultImageSize = `${width}x${height}`;
+    useLocalAiTaskLogStore.getState().updateTask(localAiTaskId, {
+        resultImageSize,
+        outputSummary: `图片已生成，返回尺寸 ${resultImageSize}`,
+    });
+}
+
+function summarizeLocalImageInput(prompt: string, referenceCount: number) {
+    const text = prompt.replace(/\s+/g, " ").trim();
+    const summary = text.length > 160 ? `${text.slice(0, 160)}...` : text;
+    return referenceCount ? `${summary || "生图提示词为空"}；参考图 ${referenceCount} 张` : summary || "生图提示词为空";
 }
 
 function confirmVideoPromptReview(review: PromptReviewResult) {

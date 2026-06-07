@@ -6,6 +6,7 @@ import { Bot, Copy, RotateCcw, Save, Workflow } from "lucide-react";
 
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { requestImageQuestion } from "@/services/api/image";
+import { completeLocalTextTask, failLocalTextTask, startLocalTextTask, summarizeLocalTaskText } from "@/services/local-ai-task-log";
 import {
     canInvokeAgentConfig,
     defaultAgentConfig,
@@ -311,13 +312,22 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
             setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
             return;
         }
+        let localTaskId: string | undefined;
         try {
+            localTaskId = startLocalTextTask(requestConfig, {
+                ...runInput,
+                sourceType: "workflow_text_stage",
+                inputSummary: summarizeLocalTaskText(`${stage.name}：${stage.inputSummary}`),
+            });
             const response = await requestImageQuestion(requestConfig, promptMessages, () => {});
             completeWorkflowTextRun(runId, response || "没有返回内容");
+            completeLocalTextTask(localTaskId, response || "没有返回内容");
             message.success(`阶段 ${stage.name} 文本草案已生成，状态为“待审核”。`);
         } catch (error) {
-            failWorkflowTextRun(runId, error instanceof Error ? error.message : "文本执行失败");
-            message.warning(error instanceof Error ? error.message : "文本执行失败");
+            const reason = error instanceof Error ? error.message : "文本执行失败";
+            failWorkflowTextRun(runId, reason);
+            failLocalTextTask(localTaskId, reason);
+            message.warning(reason);
         } finally {
             setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
         }
