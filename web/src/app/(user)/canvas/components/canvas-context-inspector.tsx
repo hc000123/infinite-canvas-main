@@ -15,6 +15,11 @@ import { inspectStoryboardShot, summarizeShotInspections } from "../utils/canvas
 
 export type CanvasInspectorView = "context" | "assistant" | "records";
 
+type ShotTextPart = {
+    title: string;
+    text: string;
+};
+
 type CanvasContextInspectorProps = {
     view: CanvasInspectorView;
     onViewChange: (view: CanvasInspectorView) => void;
@@ -139,7 +144,7 @@ export function CanvasContextInspector({
             {activeView === "assistant" ? (
                 <div className="min-h-0 flex-1 overflow-hidden">{assistantSlot}</div>
             ) : activeView === "records" ? (
-                <RecordsView selectedNode={selectedNode} theme={theme} />
+                <RecordsView selectedNode={selectedNode} selectedShot={selectedShot} theme={theme} />
             ) : selectedNode ? (
                 <NodeInspector
                     node={selectedNode}
@@ -226,6 +231,7 @@ function ShotInspector({
     const refs = groups.flatMap((group) => [...group.assetRefs, ...group.audioRefs]);
     const nodeStatus = summarizeShotNodes(nodes);
     const title = readableShotTitle(shot);
+    const textParts = shotTextParts(shot);
     return (
         <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
             <div className="flex items-start justify-between gap-3">
@@ -249,14 +255,14 @@ function ShotInspector({
                 <Stat label="承接节点" value={nodeStatus} theme={theme} />
                 <Stat label="参考素材" value={refs.length} theme={theme} />
             </div>
-            {shot.scriptText ? <TextSection title="完整脚本" text={shot.scriptText} theme={theme} /> : null}
-            {shot.visualDescription ? <TextSection title="分镜描述" text={shot.visualDescription} theme={theme} /> : null}
+            {textParts.main.map((part) => (
+                <TextSection key={part.title} title={part.title} text={part.text} theme={theme} />
+            ))}
             {prompt ? <TextSection title="Seedance 视频提示词" text={prompt} theme={theme} /> : null}
             {refs.length ? <ReferenceSection refs={refs} assetTitleById={assetTitleById} theme={theme} /> : null}
             <HandoffStatusSection groups={groups} nodes={nodes} theme={theme} />
             <ShotChecklistSection shots={checklistShots} shotGroups={checklistShotGroups} nodes={checklistNodes} activeShotId={activeShotId} theme={theme} onSelectShot={onSelectShot} />
-            {shot.dialogue ? <TextSection title="对白" text={shot.dialogue} theme={theme} /> : null}
-            {shot.action || shot.emotion || shot.cameraMovement ? <TextSection title="表演与镜头" text={[shot.action, shot.emotion, shot.cameraMovement].filter(Boolean).join("\n\n")} theme={theme} /> : null}
+            {textParts.raw.length ? <RawSourceSection items={textParts.raw} theme={theme} /> : null}
             <div className="mt-3">
                 <InspectorAction icon={<FileText className="size-4" />} label="返回本集生产流程" onClick={onOpenEpisodeWorkbench} theme={theme} />
             </div>
@@ -368,6 +374,32 @@ function MiniStat({ label, value, theme }: { label: string; value: number; theme
     );
 }
 
+function RawSourceSection({ items, theme, expanded = false }: { items: ShotTextPart[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; expanded?: boolean }) {
+    if (!items.length) return null;
+    return (
+        <details open={expanded} className="mt-3 rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+            <summary className="cursor-pointer select-none text-sm font-semibold">
+                原始来源
+                <span className="ml-2 text-xs font-normal" style={{ color: theme.node.muted }}>
+                    {items.length} 项
+                </span>
+            </summary>
+            <div className="mt-2 space-y-2">
+                {items.map((item) => (
+                    <div key={item.title} className="rounded-lg border p-2" style={{ background: theme.node.panel, borderColor: theme.node.stroke }}>
+                        <div className="mb-1 text-xs font-medium" style={{ color: theme.node.muted }}>
+                            {item.title}
+                        </div>
+                        <div className="thin-scrollbar max-h-[38vh] overflow-y-auto whitespace-pre-wrap break-words text-xs leading-5" data-canvas-no-zoom>
+                            {item.text}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </details>
+    );
+}
+
 function StatusRow({ label, title, meta, theme }: { label: string; title: string; meta: string; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     return (
         <div className="rounded-lg border px-2 py-1.5 text-xs leading-5" style={{ background: theme.node.panel, borderColor: theme.node.stroke }}>
@@ -400,6 +432,57 @@ function readableShotTitle(shot: StoryboardTableShot) {
     if (/^(```|[{[])/.test(title)) return "";
     if (/workflow_|workflowId|workflowVersion|stageId|agentId/.test(title)) return "";
     return title;
+}
+
+function shotTextParts(shot: StoryboardTableShot): { main: ShotTextPart[]; raw: ShotTextPart[] } {
+    const candidates: ShotTextPart[] = [
+        { title: "完整脚本", text: shot.scriptText },
+        { title: "分镜描述", text: shot.visualDescription },
+        { title: "对白", text: shot.dialogue },
+        { title: "表演与镜头", text: shotPerformanceText(shot) },
+    ];
+    const main: ShotTextPart[] = [];
+    const raw: ShotTextPart[] = [];
+    const seen = new Set<string>();
+
+    candidates.forEach((candidate) => {
+        const text = candidate.text.trim();
+        const key = shotTextDedupeKey(text);
+        if (!text || seen.has(key)) return;
+        seen.add(key);
+        if (isRawShotText(text)) {
+            raw.push({ ...candidate, text });
+            return;
+        }
+        main.push({ ...candidate, text });
+    });
+
+    return { main, raw };
+}
+
+function shotPerformanceText(shot: StoryboardTableShot) {
+    return [
+        shot.action ? `动作：${shot.action}` : "",
+        shot.emotion ? `情绪：${shot.emotion}` : "",
+        shot.cameraMovement ? `镜头运动：${shot.cameraMovement}` : "",
+    ]
+        .filter(Boolean)
+        .join("\n\n");
+}
+
+function isRawShotText(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) return false;
+    if (/^```(?:json)?/i.test(trimmed)) return true;
+    if (/^[{[]\s*$/.test(trimmed)) return true;
+    if (/^(动作|情绪|镜头运动)：\s*[{[]\s*$/.test(trimmed)) return true;
+    if (/^[{[]/.test(trimmed) && /["']?(workflow|stage|agent|qualityGate|preview|sourceOutput|metadata)["']?/i.test(trimmed)) return true;
+    if (/^(动作|情绪|镜头运动)：\s*[{[]/.test(trimmed) && /["']?(workflow|stage|agent|qualityGate|preview|sourceOutput|metadata)["']?/i.test(trimmed)) return true;
+    return /workflow_|workflowId|workflowVersion|workflowRunId|stageId|stageName|agentId|sourceOutputId|qualityGateIds|previewItemId|createdFromText/.test(trimmed);
+}
+
+function shotTextDedupeKey(text: string) {
+    return text.trim().replace(/^(动作|情绪|镜头运动)：\s*/, "");
 }
 
 function InspectorTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
@@ -586,7 +669,8 @@ function ConfigInputsSection({ inputs, theme }: { inputs: NodeGenerationInput[];
     );
 }
 
-function RecordsView({ selectedNode, theme }: { selectedNode: CanvasNodeData | null; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+function RecordsView({ selectedNode, selectedShot, theme }: { selectedNode: CanvasNodeData | null; selectedShot?: StoryboardTableShot | null; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    const shotRawParts = selectedShot ? shotTextParts(selectedShot).raw : [];
     return (
         <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
             <section className="rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
@@ -595,7 +679,8 @@ function RecordsView({ selectedNode, theme }: { selectedNode: CanvasNodeData | n
                     系统提示、原始响应、规范读取和调试字段默认收在这里，主界面只展示可判断的结果。
                 </div>
             </section>
-            {selectedNode ? <MetadataSummary node={selectedNode} theme={theme} expanded /> : <div className="mt-3 text-sm" style={{ color: theme.node.muted }}>选中节点后可查看任务和元信息。</div>}
+            {shotRawParts.length ? <RawSourceSection items={shotRawParts} theme={theme} expanded /> : null}
+            {selectedNode ? <MetadataSummary node={selectedNode} theme={theme} expanded /> : !shotRawParts.length ? <div className="mt-3 text-sm" style={{ color: theme.node.muted }}>选中节点或镜头后可查看任务和元信息。</div> : null}
         </div>
     );
 }
