@@ -40,6 +40,11 @@ export type WorkflowStagePromptContext = {
     scriptSnapshot?: string;
     stageSummary?: string;
     sceneSummary?: string;
+    sceneKey?: string;
+    sceneLabel?: string;
+    sceneScriptText?: string;
+    sceneVisualDnaSummary?: string;
+    previousSceneSummary?: string;
     directorOutputSummary?: string;
     artDesignOutputSummary?: string;
     storyboardRequirement?: string;
@@ -122,6 +127,7 @@ export type AgentRunRecord = {
 };
 
 export type AgentWorkflowStageStatus = "idle" | "running" | "review" | "approved" | "rejected" | "error" | "blocked";
+export type AgentWorkflowSceneRunStatus = AgentWorkflowStageStatus;
 
 export type AgentWorkflowStageState = {
     stageId: string;
@@ -138,6 +144,25 @@ export type AgentWorkflowStageState = {
     blockedReason?: string;
 };
 
+export type AgentWorkflowSceneRunState = {
+    stageId: string;
+    sceneKey: string;
+    sceneLabel: string;
+    subSceneKey?: string;
+    status: AgentWorkflowSceneRunStatus;
+    visualDnaSummary: string;
+    promptPlanSummary: string;
+    promptTextSummary: string;
+    industrialPrecheckSummary: string;
+    runnerRunId?: string;
+    outputId?: string;
+    evidenceIds: string[];
+    warnings: string[];
+    errorMessage?: string;
+    blockedReason?: string;
+    updatedAt: string;
+};
+
 export type AgentWorkflowRunRecord = {
     id: string;
     projectId: string;
@@ -148,6 +173,7 @@ export type AgentWorkflowRunRecord = {
     presetId: string;
     currentStageId: string;
     stageStates: AgentWorkflowStageState[];
+    sceneStates?: AgentWorkflowSceneRunState[];
     createdAt: string;
     updatedAt: string;
 };
@@ -172,6 +198,8 @@ export type AgentWorkflowReviewEvidence = {
     workflowRunId: string;
     stageId: string;
     runnerRunId: string;
+    sceneKey?: string;
+    sceneLabel?: string;
     decision: "approved" | "rejected";
     reviewer: string;
     reviewerNote?: string;
@@ -366,6 +394,197 @@ export function failAgentWorkflowStageRun(workflowRun: AgentWorkflowRunRecord, s
     );
 }
 
+export function startAgentWorkflowSceneRun(
+    workflowRun: AgentWorkflowRunRecord,
+    {
+        stageId,
+        sceneKey,
+        sceneLabel,
+        subSceneKey,
+        runnerRunId,
+        now,
+    }: {
+        stageId: string;
+        sceneKey: string;
+        sceneLabel: string;
+        subSceneKey?: string;
+        runnerRunId: string;
+        now: string;
+    },
+): AgentWorkflowRunRecord {
+    const checked = refreshWorkflowStageBlocks(workflowRun, now);
+    const stageState = checked.stageStates.find((stage) => stage.stageId === stageId);
+    const blockedReason = !stageState ? "未找到阶段状态" : stageState.status === "blocked" ? stageState.blockedReason || "前置阶段未批准" : "";
+    const sceneState = upsertWorkflowSceneState(checked.sceneStates, {
+        stageId,
+        sceneKey,
+        sceneLabel,
+        subSceneKey,
+        status: blockedReason ? "blocked" : "running",
+        runnerRunId,
+        outputId: undefined,
+        warnings: [],
+        errorMessage: undefined,
+        blockedReason,
+        updatedAt: now,
+    });
+    if (blockedReason) return { ...checked, sceneStates: sceneState, updatedAt: now };
+    return {
+        ...checked,
+        currentStageId: stageId,
+        stageStates: checked.stageStates.map((stage) => (stage.stageId === stageId ? { ...stage, status: "running", runnerRunId, errorMessage: undefined, blockedReason: undefined } : stage)),
+        sceneStates: sceneState,
+        updatedAt: now,
+    };
+}
+
+export function completeAgentWorkflowSceneRun(workflowRun: AgentWorkflowRunRecord, { stageId, sceneKey, output, now }: { stageId: string; sceneKey: string; output: AgentWorkflowStageOutput; now: string }): AgentWorkflowRunRecord {
+    const existing = workflowRun.sceneStates?.find((scene) => scene.stageId === stageId && scene.sceneKey === sceneKey);
+    const summaries = summarizeWorkflowSceneOutput(output);
+    const validation = validateAgentWorkflowSceneOutput(output);
+    const nextStatus: AgentWorkflowSceneRunStatus = validation.valid ? "review" : "error";
+    return {
+        ...workflowRun,
+        currentStageId: stageId,
+        stageStates: workflowRun.stageStates.map((stage) =>
+            stage.stageId === stageId ? { ...stage, status: nextStatus, runnerRunId: output.runnerRunId, errorMessage: validation.valid ? undefined : validation.errors.join("；"), blockedReason: undefined } : stage,
+        ),
+        sceneStates: upsertWorkflowSceneState(workflowRun.sceneStates, {
+            stageId,
+            sceneKey,
+            sceneLabel: existing?.sceneLabel || sceneKey,
+            subSceneKey: existing?.subSceneKey,
+            status: nextStatus,
+            visualDnaSummary: summaries.visualDnaSummary,
+            promptPlanSummary: summaries.promptPlanSummary,
+            promptTextSummary: summaries.promptTextSummary,
+            industrialPrecheckSummary: summaries.industrialPrecheckSummary,
+            runnerRunId: output.runnerRunId,
+            outputId: output.outputId,
+            evidenceIds: existing?.evidenceIds || [],
+            warnings: validation.errors,
+            errorMessage: validation.valid ? undefined : validation.errors.join("；"),
+            blockedReason: undefined,
+            updatedAt: now,
+        }),
+        updatedAt: now,
+    };
+}
+
+export function failAgentWorkflowSceneRun(workflowRun: AgentWorkflowRunRecord, stageId: string, sceneKey: string, runnerRunId: string, errorMessage: string, now: string): AgentWorkflowRunRecord {
+    const existing = workflowRun.sceneStates?.find((scene) => scene.stageId === stageId && scene.sceneKey === sceneKey);
+    return {
+        ...workflowRun,
+        currentStageId: stageId,
+        stageStates: workflowRun.stageStates.map((stage) => (stage.stageId === stageId ? { ...stage, status: "error", runnerRunId, errorMessage, blockedReason: undefined } : stage)),
+        sceneStates: upsertWorkflowSceneState(workflowRun.sceneStates, {
+            stageId,
+            sceneKey,
+            sceneLabel: existing?.sceneLabel || sceneKey,
+            subSceneKey: existing?.subSceneKey,
+            status: "error",
+            runnerRunId,
+            warnings: [errorMessage],
+            errorMessage,
+            blockedReason: undefined,
+            updatedAt: now,
+        }),
+        updatedAt: now,
+    };
+}
+
+export function reviewAgentWorkflowSceneRun(workflowRun: AgentWorkflowRunRecord, evidence: AgentWorkflowReviewEvidence, now: string): AgentWorkflowRunRecord {
+    const sceneKey = evidence.sceneKey || "";
+    if (!sceneKey) return workflowRun;
+    const status: AgentWorkflowSceneRunStatus = evidence.decision === "approved" ? "approved" : "rejected";
+    const sceneStates = (workflowRun.sceneStates || []).map((scene) =>
+        scene.stageId === evidence.stageId && scene.sceneKey === sceneKey
+            ? {
+                  ...scene,
+                  status,
+                  runnerRunId: evidence.runnerRunId,
+                  evidenceIds: Array.from(new Set([...scene.evidenceIds, evidence.evidenceId])),
+                  errorMessage: undefined,
+                  blockedReason: undefined,
+                  updatedAt: now,
+              }
+            : scene,
+    );
+    return {
+        ...workflowRun,
+        currentStageId: evidence.stageId,
+        stageStates: workflowRun.stageStates.map((stage) => (stage.stageId === evidence.stageId ? { ...stage, status: "idle", runnerRunId: evidence.runnerRunId, errorMessage: undefined, blockedReason: undefined } : stage)),
+        sceneStates,
+        updatedAt: now,
+    };
+}
+
+export function validateAgentWorkflowSceneOutput(output: AgentWorkflowStageOutput) {
+    const summaries = summarizeWorkflowSceneOutput(output);
+    const errors: string[] = [];
+    if (!summaries.visualDnaSummary) errors.push("缺少场次视觉 DNA");
+    if (!summaries.promptPlanSummary) errors.push("缺少生成 P / 镜头 P 拆分表摘要");
+    if (!summaries.promptTextSummary) errors.push("缺少单 P 任务卡 / Seedance 提示词");
+    if (!summaries.industrialPrecheckSummary) errors.push("缺少工业化预检记录摘要");
+    return { valid: errors.length === 0, errors, summaries };
+}
+
+export function buildApprovedWorkflowSceneAggregateOutput({
+    workflowRun,
+    outputs,
+    outputId,
+    now,
+}: {
+    workflowRun: AgentWorkflowRunRecord;
+    outputs: AgentWorkflowStageOutput[];
+    outputId: string;
+    now: string;
+}): { ok: true; output: AgentWorkflowStageOutput; sceneCount: number } | { ok: false; reason: string } {
+    const approvedScenes = (workflowRun.sceneStates || []).filter((scene) => scene.stageId === "seedance-storyboard" && scene.status === "approved" && scene.outputId);
+    if (!approvedScenes.length) return { ok: false, reason: "尚无已批准场次，不能汇总阶段三 preview" };
+    const outputById = new Map(outputs.map((output) => [output.outputId, output]));
+    const sceneOutputs = approvedScenes.map((scene) => outputById.get(scene.outputId || "")).filter((output): output is AgentWorkflowStageOutput => Boolean(output));
+    if (!sceneOutputs.length) return { ok: false, reason: "未找到已批准场次产物快照" };
+    const sourceFiles = uniqueStrings(sceneOutputs.flatMap((output) => output.sourceFiles));
+    const qualityGateIds = uniqueStrings(sceneOutputs.flatMap((output) => output.qualityGateIds));
+    const scenes = approvedScenes.map((scene) => {
+        const output = outputById.get(scene.outputId || "");
+        return {
+            sceneKey: scene.sceneKey,
+            sceneLabel: scene.sceneLabel,
+            visualDnaSummary: scene.visualDnaSummary,
+            promptPlanSummary: scene.promptPlanSummary,
+            promptTextSummary: scene.promptTextSummary,
+            industrialPrecheckSummary: scene.industrialPrecheckSummary,
+            outputId: scene.outputId,
+            rawText: output?.rawText || "",
+        };
+    });
+    const items = sceneOutputs.flatMap((output) => collectWorkflowSceneOutputItems(output));
+    const structuredOutput = {
+        summary: `已汇总 ${approvedScenes.length} 个已批准场次的 Seedance 分镜产物。`,
+        scenes,
+        items,
+    };
+    return {
+        ok: true,
+        sceneCount: approvedScenes.length,
+        output: {
+            outputId,
+            workflowRunId: workflowRun.id,
+            stageId: "seedance-storyboard",
+            runnerRunId: `workflow-scene-aggregate-${workflowRun.id}`,
+            rawText: JSON.stringify(structuredOutput, null, 2),
+            summary: structuredOutput.summary,
+            structuredOutput,
+            outputFormat: "json",
+            sourceFiles,
+            qualityGateIds,
+            createdAt: now,
+        },
+    };
+}
+
 export function buildAgentWorkflowReviewEvidence({
     workflowRun,
     runnerRun,
@@ -382,12 +601,16 @@ export function buildAgentWorkflowReviewEvidence({
     now: string;
 }): AgentWorkflowReviewEvidence | undefined {
     if (!runnerRun.input.stageId || !runnerRun.workflowTextOutput) return undefined;
+    const sceneKey = typeof runnerRun.input.variables.sceneKey === "string" ? runnerRun.input.variables.sceneKey : undefined;
+    const sceneLabel = typeof runnerRun.input.variables.sceneLabel === "string" ? runnerRun.input.variables.sceneLabel : undefined;
     return {
         evidenceId,
         projectId: workflowRun.projectId,
         workflowRunId: workflowRun.id,
         stageId: runnerRun.input.stageId,
         runnerRunId: runnerRun.id,
+        sceneKey,
+        sceneLabel,
         decision,
         reviewer: "local",
         reviewerNote: reviewerNote?.trim() || undefined,
@@ -905,6 +1128,15 @@ export function buildWorkflowStageSourceFiles(skills: AgentWorkflowSkill[], qual
 
 export function buildWorkflowStagePrompt({ workflowId, workflowVersion, stage, agent, skills, qualityGates, inputSnapshot }: WorkflowStagePromptBuildInput) {
     const sourceFiles = buildWorkflowStageSourceFiles(skills, qualityGates);
+    const sceneRequirement =
+        stage.stageId === "seedance-storyboard"
+            ? [
+                  "",
+                  "阶段三场次推进要求：本次只能处理当前场次 / 子场次，不得整集一次性生成到底。",
+                  "输出必须包含：场次视觉 DNA、生成 P / 镜头 P 拆分表摘要、单 P 任务卡 / Seedance 提示词正文、工业化预检记录摘要。",
+                  "请优先输出 JSON 字段：summary、sceneVisualDna、promptPlanSummary、singlePTaskCards 或 seedancePrompts、industrialPrecheckSummary、items。",
+              ]
+            : [];
     return [
         `你正在执行 Seedance 工作流的文本阶段草案生成任务。请仅返回文本草案，不调用图片/视频生成接口，不触发扣费。`,
         `workflowId: ${workflowId}`,
@@ -923,6 +1155,7 @@ export function buildWorkflowStagePrompt({ workflowId, workflowVersion, stage, a
         `sourceFiles: ${sourceFiles.join("；") || "（无）"}`,
         "",
         `最小上下文：${buildWorkflowStageContextLines(inputSnapshot, agent.agentId, stage.stageId).join("；")}`,
+        ...sceneRequirement,
         "",
         `要求：输出可读、可审核的文本草案，并在必要处给出校验建议。若你能输出 JSON，请将结果放在 JSON 里；若不适配，可输出纯文本，但必须完整可读。`,
     ].join("\n");
@@ -1135,6 +1368,10 @@ function buildWorkflowStageContextLines(snapshot: WorkflowStagePromptContext | u
         return lines.length ? lines : ["未提供导演产物摘要 / 资产需求"];
     }
     if (agentId === "storyboard-artist" || stageId === "seedance-storyboard") {
+        if (snapshot.sceneKey || snapshot.sceneLabel) lines.push(`当前场次 / 子场次：${[snapshot.sceneKey, snapshot.sceneLabel].filter(Boolean).join(" · ")}`);
+        if (snapshot.sceneScriptText) lines.push(`当前场次剧本片段：${snapshot.sceneScriptText}`);
+        if (snapshot.sceneVisualDnaSummary) lines.push(`当前场次已有视觉 DNA：${snapshot.sceneVisualDnaSummary}`);
+        if (snapshot.previousSceneSummary) lines.push(`前序衔接状态：${snapshot.previousSceneSummary}`);
         if (snapshot.directorOutputSummary) lines.push(`导演产物摘要：${snapshot.directorOutputSummary}`);
         if (snapshot.artDesignOutputSummary) lines.push(`服化道产物摘要：${snapshot.artDesignOutputSummary}`);
         if (snapshot.storyboardRequirement) lines.push(`分镜输出要求：${snapshot.storyboardRequirement}`);
@@ -1186,6 +1423,102 @@ function summarizeWorkflowTextOutput(value: unknown, rawText: string) {
     }
     const preview = rawText.trim();
     return preview.length > 160 ? `${preview.slice(0, 157)}...` : preview || "模型返回空文本";
+}
+
+function summarizeWorkflowSceneOutput(output: AgentWorkflowStageOutput) {
+    const record = output.structuredOutput && typeof output.structuredOutput === "object" && !Array.isArray(output.structuredOutput) ? (output.structuredOutput as Record<string, unknown>) : parseWorkflowMappingRawJson(output.rawText);
+    return {
+        visualDnaSummary: readSceneSummaryField(record, ["sceneVisualDna", "visualDna", "visualDnaSummary", "场次视觉DNA", "场次视觉 DNA"], output.rawText, ["场次视觉 DNA", "视觉 DNA"]),
+        promptPlanSummary: readSceneSummaryField(record, ["promptPlanSummary", "promptPlan", "shotPlan", "splitPlan", "生成P拆分表", "生成 P / 镜头 P 拆分表"], output.rawText, ["生成 P / 镜头 P 拆分表", "生成 P 拆分", "镜头 P 拆分表"]),
+        promptTextSummary: readSceneSummaryField(record, ["promptTextSummary", "seedancePrompt", "seedancePrompts", "singlePTaskCards", "taskCards", "items"], output.rawText, ["单 P 任务卡", "Seedance 提示词", "一键复制"]),
+        industrialPrecheckSummary: readSceneSummaryField(record, ["industrialPrecheckSummary", "industrialPrecheck", "precheckSummary", "工业化预检记录"], output.rawText, ["工业化预检记录", "工业化预检", "预检记录"]),
+    };
+}
+
+function readSceneSummaryField(record: unknown, keys: string[], rawText: string, markers: string[]) {
+    if (record && typeof record === "object" && !Array.isArray(record)) {
+        for (const key of keys) {
+            const value = (record as Record<string, unknown>)[key];
+            const text = summarizeUnknownSceneValue(value);
+            if (text) return text;
+        }
+    }
+    return summarizeMarkedRawText(rawText, markers);
+}
+
+function summarizeUnknownSceneValue(value: unknown): string {
+    if (typeof value === "string") return value.trim();
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => summarizeUnknownSceneValue(item))
+            .filter(Boolean)
+            .slice(0, 3)
+            .join("；");
+    }
+    if (value && typeof value === "object") {
+        const record = value as Record<string, unknown>;
+        const direct = stringField(record.summary) || stringField(record.text) || stringField(record.prompt) || stringField(record.title) || stringField(record.description);
+        if (direct) return direct;
+        return Object.values(record)
+            .map((item) => summarizeUnknownSceneValue(item))
+            .filter(Boolean)
+            .slice(0, 3)
+            .join("；");
+    }
+    return "";
+}
+
+function summarizeMarkedRawText(rawText: string, markers: string[]) {
+    const lines = rawText
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    const index = lines.findIndex((line) => markers.some((marker) => line.includes(marker)));
+    if (index < 0) return "";
+    return lines
+        .slice(index, index + 4)
+        .join(" ")
+        .slice(0, 240);
+}
+
+function collectWorkflowSceneOutputItems(output: AgentWorkflowStageOutput) {
+    const source = output.structuredOutput !== undefined ? output.structuredOutput : parseWorkflowMappingRawJson(output.rawText);
+    if (Array.isArray(source)) return source;
+    if (!source || typeof source !== "object") return [];
+    const record = source as Record<string, unknown>;
+    for (const key of ["items", "shots", "storyboard", "storyboardShots", "videoPrompts", "seedancePrompts", "shotGroups"]) {
+        if (Array.isArray(record[key])) return record[key] as unknown[];
+    }
+    return [];
+}
+
+function upsertWorkflowSceneState(sceneStates: AgentWorkflowSceneRunState[] | undefined, patch: Partial<AgentWorkflowSceneRunState> & { stageId: string; sceneKey: string; sceneLabel: string; updatedAt: string }) {
+    const current = sceneStates || [];
+    const existing = current.find((scene) => scene.stageId === patch.stageId && scene.sceneKey === patch.sceneKey);
+    const next: AgentWorkflowSceneRunState = {
+        stageId: patch.stageId,
+        sceneKey: patch.sceneKey,
+        sceneLabel: patch.sceneLabel,
+        subSceneKey: patch.subSceneKey ?? existing?.subSceneKey,
+        status: patch.status || existing?.status || "idle",
+        visualDnaSummary: patch.visualDnaSummary ?? existing?.visualDnaSummary ?? "",
+        promptPlanSummary: patch.promptPlanSummary ?? existing?.promptPlanSummary ?? "",
+        promptTextSummary: patch.promptTextSummary ?? existing?.promptTextSummary ?? "",
+        industrialPrecheckSummary: patch.industrialPrecheckSummary ?? existing?.industrialPrecheckSummary ?? "",
+        runnerRunId: patch.runnerRunId ?? existing?.runnerRunId,
+        outputId: patch.outputId ?? existing?.outputId,
+        evidenceIds: patch.evidenceIds ?? existing?.evidenceIds ?? [],
+        warnings: patch.warnings ?? existing?.warnings ?? [],
+        errorMessage: patch.errorMessage,
+        blockedReason: patch.blockedReason,
+        updatedAt: patch.updatedAt,
+    };
+    if (existing) return current.map((scene) => (scene.stageId === patch.stageId && scene.sceneKey === patch.sceneKey ? next : scene));
+    return [...current, next];
+}
+
+function uniqueStrings(values: string[]) {
+    return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
 
 function buildTargetRefs(record: Record<string, unknown>) {

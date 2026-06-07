@@ -10,8 +10,10 @@ import { requestImageQuestion } from "@/services/api/image";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useCanvasStore } from "../../../../../canvas/stores/use-canvas-store";
 import { useScriptStore } from "../../../../../canvas/stores/use-script-store";
+import { useStoryboardStore } from "../../../../../canvas/stores/use-storyboard-store";
 import { orderedScriptScenes } from "../../../../../canvas/utils/script-management";
 import { buildEpisodeScriptSnapshot } from "../../../../../canvas/utils/canvas-episode-context";
+import { orderedStoryboardTableShots } from "../../../../../canvas/utils/storyboard-management";
 import { buildSeedanceWorkflowPreset, sortedWorkflowStages, workflowStageDetail, type AgentWorkflowStage } from "../../../../agent-workflow-presets";
 import { useAgentRunnerStore } from "../../../../use-agent-runner-store";
 import { getSeedanceWorkflowAgentCore } from "../../../../workflow-agents/seedance-workflow-agents";
@@ -24,6 +26,7 @@ import {
     type AgentRunInput,
     type AgentWorkflowMappingPreview,
     type AgentWorkflowRunRecord,
+    type AgentWorkflowSceneRunState,
     type AgentWorkflowStageOutput,
     type AgentWorkflowStageState,
 } from "../../../../agent-runner";
@@ -64,6 +67,7 @@ export default function EpisodeProductionWorkbenchPage() {
     const scenes = useScriptStore((state) => state.scenes);
     const updateEpisode = useScriptStore((state) => state.updateEpisode);
     const canvases = useCanvasStore((state) => state.projects);
+    const storyboardTableShots = useStoryboardStore((state) => state.tableShots);
     const workflowRuns = useAgentRunnerStore((state) => state.workflowRuns);
     const workflowOutputs = useAgentRunnerStore((state) => state.workflowOutputs);
     const workflowEvidences = useAgentRunnerStore((state) => state.workflowEvidences);
@@ -71,6 +75,7 @@ export default function EpisodeProductionWorkbenchPage() {
     const workflowAppliedPreviewItemIds = useAgentRunnerStore((state) => state.workflowAppliedPreviewItemIds);
     const ensureWorkflowRun = useAgentRunnerStore((state) => state.ensureWorkflowRun);
     const markWorkflowStageReadingsRead = useAgentRunnerStore((state) => state.markWorkflowStageReadingsRead);
+    const summarizeApprovedStoryboardScenes = useAgentRunnerStore((state) => state.summarizeApprovedStoryboardScenes);
     const generateWorkflowMappingPreview = useAgentRunnerStore((state) => state.generateWorkflowMappingPreview);
     const applyProductionBiblePreview = useAgentRunnerStore((state) => state.applyProductionBiblePreview);
     const applyStoryboardPreview = useAgentRunnerStore((state) => state.applyStoryboardPreview);
@@ -84,7 +89,11 @@ export default function EpisodeProductionWorkbenchPage() {
     const checkAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const [scriptDraft, setScriptDraft] = useState("");
     const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+    const [sceneReviewNotes, setSceneReviewNotes] = useState<Record<string, string>>({});
+    const [selectedSceneKey, setSelectedSceneKey] = useState("");
+    const [subSceneKey, setSubSceneKey] = useState("");
     const [runningStageIds, setRunningStageIds] = useState<Record<string, boolean>>({});
+    const [runningSceneKeys, setRunningSceneKeys] = useState<Record<string, boolean>>({});
     const [applyingPreviewIds, setApplyingPreviewIds] = useState<Record<string, boolean>>({});
     const [activeStageIds, setActiveStageIds] = useState<string[]>([]);
     const preset = useMemo(() => buildSeedanceWorkflowPreset(), []);
@@ -92,6 +101,8 @@ export default function EpisodeProductionWorkbenchPage() {
     const stageSceneRows = useMemo(() => orderedScriptScenes(scenes, episodeId), [episodeId, scenes]);
     const scriptSnapshot = useMemo(() => (episode ? buildEpisodeScriptSnapshot(episode, stageSceneRows) : ""), [episode, stageSceneRows]);
     const boundCanvas = useMemo(() => canvases.find((canvas) => canvas.projectId === projectId && canvas.episodeId === episodeId), [canvases, episodeId, projectId]);
+    const episodeTableShots = useMemo(() => (boundCanvas ? orderedStoryboardTableShots(storyboardTableShots, boundCanvas.id, episodeId) : []), [boundCanvas, episodeId, storyboardTableShots]);
+    const sceneOptions = useMemo(() => buildEpisodeSceneOptions({ tableShots: episodeTableShots, scriptScenes: stageSceneRows, scriptSnapshot }), [episodeTableShots, scriptSnapshot, stageSceneRows]);
     const workflowRun = useMemo(
         () => workflowRuns.find((run) => run.projectId === projectId && run.canvasId === boundCanvas?.id && run.episodeId === episodeId && run.workflowId === preset.workflowId),
         [boundCanvas?.id, episodeId, preset.workflowId, projectId, workflowRuns],
@@ -109,6 +120,14 @@ export default function EpisodeProductionWorkbenchPage() {
         if (!project || !episode) return;
         ensureWorkflowRun({ projectId, canvasId: boundCanvas?.id, episodeId, preset });
     }, [boundCanvas?.id, ensureWorkflowRun, episode, episodeId, preset, project, projectId]);
+
+    useEffect(() => {
+        if (!sceneOptions.length) {
+            setSelectedSceneKey("");
+            return;
+        }
+        if (!selectedSceneKey || !sceneOptions.some((scene) => scene.sceneKey === selectedSceneKey)) setSelectedSceneKey(sceneOptions[0].sceneKey);
+    }, [sceneOptions, selectedSceneKey]);
 
     useEffect(() => {
         setActiveStageIds(
@@ -226,6 +245,104 @@ export default function EpisodeProductionWorkbenchPage() {
         }
     };
 
+    const selectedBaseScene = sceneOptions.find((scene) => scene.sceneKey === selectedSceneKey);
+    const currentScene = selectedBaseScene ? withSubScene(selectedBaseScene, subSceneKey) : undefined;
+    const currentSceneState = currentScene ? workflowRun?.sceneStates?.find((scene) => scene.stageId === "seedance-storyboard" && scene.sceneKey === currentScene.sceneKey) : undefined;
+
+    const runStoryboardScene = async () => {
+        const stage = stages.find((item) => item.stageId === "seedance-storyboard");
+        if (!stage) return;
+        if (!hasScript) return message.warning("请先导入本集剧本");
+        if (!currentScene) return message.warning("请先选择当前场次 / 子场次");
+        const workflowRunId = ensureWorkflowRun({ projectId, canvasId: boundCanvas?.id, episodeId, preset });
+        const currentRun = workflowRuns.find((run) => run.id === workflowRunId) || workflowRun;
+        const stageState = currentRun?.stageStates.find((item) => item.stageId === stage.stageId);
+        if (stageState?.status === "blocked") return message.warning(stageState.blockedReason || "前置阶段未批准");
+        const unfinishedScene = currentRun?.sceneStates?.find((scene) => scene.stageId === "seedance-storyboard" && scene.sceneKey !== currentScene.sceneKey && ["running", "review"].includes(scene.status));
+        if (unfinishedScene) return message.warning(`请先完成当前场次审核：${unfinishedScene.sceneLabel}`);
+        const core = getSeedanceWorkflowAgentCore(stage.stageId);
+        if (!core) return message.error("缺少分镜师 Agent Core");
+        const textModel = (effectiveConfig.textModel || effectiveConfig.model || "").trim();
+        const requestConfig = { ...effectiveConfig, model: textModel || effectiveConfig.model };
+        const directorSummary = stageOutputs["director-analysis"]?.summary || "";
+        const artSummary = stageOutputs["art-design"]?.summary || "";
+        const sourceFiles = buildWorkflowStageSourceFiles(workflowStageDetail(preset, stage).skills, workflowStageDetail(preset, stage).qualityGates);
+        const coreInput = core.buildInput({
+            preset,
+            inputSnapshot: {
+                projectId,
+                projectTitle: project.title,
+                canvasId: boundCanvas?.id,
+                episodeId,
+                episodeTitle: episode.title,
+                scriptSnapshot,
+                stageSummary: "阶段三按场次 / 子场次推进；本次只处理当前选中场次。",
+                sceneKey: currentScene.sceneKey,
+                sceneLabel: currentScene.sceneLabel,
+                sceneScriptText: currentScene.scriptText,
+                sceneVisualDnaSummary: currentSceneState?.visualDnaSummary,
+                previousSceneSummary: previousApprovedSceneSummary(workflowRun?.sceneStates || [], currentScene.sceneKey),
+                directorOutputSummary: directorSummary,
+                artDesignOutputSummary: artSummary,
+                storyboardRequirement: "先输出场次视觉 DNA，再输出生成 P / 镜头 P 拆分表、单 P 任务卡、Seedance 提示词正文和工业化预检记录摘要。",
+                assetNeedSummary: artSummary,
+            },
+        });
+        const promptMessages = core.buildPromptMessages(coreInput, preset);
+        const runInput: AgentRunInput = {
+            projectId,
+            canvasId: boundCanvas?.id,
+            episodeId,
+            episodeTitle: episode.title,
+            scriptId: projectId,
+            scriptSnapshot: currentScene.scriptText || scriptSnapshot,
+            sourceType: "episode_production_workbench_scene",
+            sourceId: currentScene.sceneKey,
+            variables: { stageId: stage.stageId, sceneKey: currentScene.sceneKey, sceneLabel: currentScene.sceneLabel },
+            workflowRunId,
+            workflowId: preset.workflowId,
+            workflowVersion: preset.version,
+            stageId: core.stageId,
+            agentId: core.agentId,
+            agentName: coreInput.agent.name,
+            sourcePresetId: preset.workflowId,
+            presetId: preset.workflowId,
+            inputSnapshot: { stageName: stage.name, sceneKey: currentScene.sceneKey, sceneLabel: currentScene.sceneLabel },
+            promptMessages,
+            model: textModel,
+            provider: `openai-${effectiveConfig.channelMode}`,
+            configSummary: JSON.stringify({ model: textModel, baseUrl: effectiveConfig.baseUrl, channelMode: effectiveConfig.channelMode, textModelList: effectiveConfig.textModels }, null, 2),
+            sourceFiles,
+            qualityGateIds: coreInput.qualityGates.map((gate) => gate.gateId),
+        };
+        const runId = startWorkflowTextRun(runInput);
+        setRunningSceneKeys((current) => ({ ...current, [currentScene.sceneKey]: true }));
+        if (!textModel || !checkAiConfigReady(effectiveConfig, textModel)) {
+            const reason = textModel ? "当前 API 配置或文本模型不可用" : "未配置文本模型";
+            failWorkflowTextRun(runId, reason);
+            setRunningSceneKeys((current) => ({ ...current, [currentScene.sceneKey]: false }));
+            return message.warning(reason);
+        }
+        try {
+            const response = await requestImageQuestion(requestConfig, promptMessages, () => {});
+            completeWorkflowTextRun(runId, response || "没有返回内容");
+            message.success(`${currentScene.sceneLabel} 草案已生成，待审核`);
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : "文本执行失败";
+            failWorkflowTextRun(runId, reason);
+            message.warning(reason);
+        } finally {
+            setRunningSceneKeys((current) => ({ ...current, [currentScene.sceneKey]: false }));
+        }
+    };
+
+    const summarizeStoryboardScenes = () => {
+        if (!workflowRun) return;
+        const result = summarizeApprovedStoryboardScenes(workflowRun.id);
+        if (!result.ok) message.warning(result.reason || "无法汇总已批准场次");
+        else message.success(`已汇总 ${result.sceneCount || 0} 个已批准场次，可生成 stage3 preview`);
+    };
+
     const generatePreview = (stageId: string, targetLabel: string) => {
         if (!workflowRun) return;
         const result = generateWorkflowMappingPreview(workflowRun.id, stageId);
@@ -338,6 +455,26 @@ export default function EpisodeProductionWorkbenchPage() {
                             hasCanvas: Boolean(boundCanvas),
                             reviewNote: reviewNotes[stage.stageId] || "",
                             isRunning: Boolean(runningStageIds[stage.stageId]),
+                            sceneWorkbench:
+                                stage.stageId === "seedance-storyboard" ? (
+                                    <StoryboardSceneWorkbench
+                                        scenes={sceneOptions}
+                                        selectedSceneKey={selectedSceneKey}
+                                        subSceneKey={subSceneKey}
+                                        workflowRun={workflowRun}
+                                        currentScene={currentScene}
+                                        currentSceneState={currentSceneState}
+                                        reviewNote={currentScene ? sceneReviewNotes[currentScene.sceneKey] || "" : ""}
+                                        isRunning={Boolean(currentScene && runningSceneKeys[currentScene.sceneKey])}
+                                        onSceneChange={setSelectedSceneKey}
+                                        onSubSceneKeyChange={setSubSceneKey}
+                                        onReviewNoteChange={(value) => currentScene && setSceneReviewNotes((notes) => ({ ...notes, [currentScene.sceneKey]: value }))}
+                                        onRun={runStoryboardScene}
+                                        onApprove={(runnerRunId) => currentScene && approveRun(runnerRunId, sceneReviewNotes[currentScene.sceneKey])}
+                                        onReject={(runnerRunId) => currentScene && rejectRun(runnerRunId, sceneReviewNotes[currentScene.sceneKey])}
+                                        onSummarize={summarizeStoryboardScenes}
+                                    />
+                                ) : undefined,
                             applyingPreviewIds,
                             appliedPreviewItemIds: workflowAppliedPreviewItemIds,
                             onReviewNoteChange: (value) => setReviewNotes((current) => ({ ...current, [stage.stageId]: value })),
@@ -394,6 +531,7 @@ function stageCollapseItem({
     hasCanvas,
     reviewNote,
     isRunning,
+    sceneWorkbench,
     applyingPreviewIds,
     appliedPreviewItemIds,
     onReviewNoteChange,
@@ -414,6 +552,7 @@ function stageCollapseItem({
     hasCanvas: boolean;
     reviewNote: string;
     isRunning: boolean;
+    sceneWorkbench?: React.ReactNode;
     applyingPreviewIds: Record<string, boolean>;
     appliedPreviewItemIds: string[];
     onReviewNoteChange: (value: string) => void;
@@ -430,6 +569,7 @@ function stageCollapseItem({
     const gateErrorCount = qualityResults.filter((result) => result.status === "error").length;
     const readCount = stageState?.readingRecords.filter((record) => record.status === "read").length || 0;
     const lockedReason = !hasScript ? "缺少本集剧本" : stageState?.status === "blocked" ? formatBlockedReason(stageState.blockedReason) : "";
+    const isSceneStage = stage.stageId === "seedance-storyboard";
     return {
         key: stage.stageId,
         label: (
@@ -468,10 +608,13 @@ function stageCollapseItem({
                         {lockedReason ? <div className="text-amber-600">阻塞原因：{lockedReason}</div> : null}
                         {stageState?.errorMessage ? <div className="text-rose-500">错误：{stageState.errorMessage}</div> : null}
                     </div>
+                    {sceneWorkbench}
                     <Space size={[6, 6]} wrap>
-                        <Button size="small" icon={<Play className="size-3.5" />} type="primary" disabled={Boolean(lockedReason)} loading={isRunning} onClick={onRun}>
-                            运行草案
-                        </Button>
+                        {!isSceneStage ? (
+                            <Button size="small" icon={<Play className="size-3.5" />} type="primary" disabled={Boolean(lockedReason)} loading={isRunning} onClick={onRun}>
+                                运行草案
+                            </Button>
+                        ) : null}
                         <Button size="small" onClick={onMarkReadingsRead} disabled={!workflowRun}>
                             记录规范读取
                         </Button>
@@ -492,7 +635,7 @@ function stageCollapseItem({
                         ) : null}
                         {!mappingStatus.allowed && copy.previewTargets.length ? <span className="text-xs text-stone-500">{mappingStatus.reason}</span> : null}
                     </Space>
-                    {stageState?.status === "review" ? (
+                    {!isSceneStage && stageState?.status === "review" ? (
                         <div className="grid gap-2 rounded-lg bg-stone-50 p-3 dark:bg-white/5">
                             <Input.TextArea rows={2} placeholder="审核备注" value={reviewNote} onChange={(event) => onReviewNoteChange(event.target.value)} />
                             <Space size={6} wrap>
@@ -524,6 +667,131 @@ function stageCollapseItem({
             </Card>
         ),
     };
+}
+
+type EpisodeSceneOption = {
+    sceneKey: string;
+    sceneLabel: string;
+    scriptText: string;
+    source: "storyboard_table" | "script_scene" | "script_text";
+};
+
+function StoryboardSceneWorkbench({
+    scenes,
+    selectedSceneKey,
+    subSceneKey,
+    workflowRun,
+    currentScene,
+    currentSceneState,
+    reviewNote,
+    isRunning,
+    onSceneChange,
+    onSubSceneKeyChange,
+    onReviewNoteChange,
+    onRun,
+    onApprove,
+    onReject,
+    onSummarize,
+}: {
+    scenes: EpisodeSceneOption[];
+    selectedSceneKey: string;
+    subSceneKey: string;
+    workflowRun?: AgentWorkflowRunRecord;
+    currentScene?: EpisodeSceneOption;
+    currentSceneState?: AgentWorkflowSceneRunState;
+    reviewNote: string;
+    isRunning: boolean;
+    onSceneChange: (value: string) => void;
+    onSubSceneKeyChange: (value: string) => void;
+    onReviewNoteChange: (value: string) => void;
+    onRun: () => void;
+    onApprove: (runnerRunId: string) => void;
+    onReject: (runnerRunId: string) => void;
+    onSummarize: () => void;
+}) {
+    const sceneStates = workflowRun?.sceneStates?.filter((scene) => scene.stageId === "seedance-storyboard") || [];
+    const approvedCount = sceneStates.filter((scene) => scene.status === "approved").length;
+    const pendingCount = scenes.filter((scene) => !sceneStates.some((state) => state.sceneKey === scene.sceneKey && state.status === "approved")).length;
+    const currentWarnings = currentSceneState?.warnings?.length ? currentSceneState.warnings.join("；") : "";
+    return (
+        <div className="grid gap-3 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="font-medium">场次推进</div>
+                <Space size={6} wrap>
+                    <Tag className="m-0">已批准 {approvedCount}</Tag>
+                    <Tag className="m-0" color={pendingCount ? "orange" : "green"}>
+                        未完成 {pendingCount}
+                    </Tag>
+                    <Button size="small" onClick={onSummarize} disabled={!approvedCount}>
+                        汇总已批准场次
+                    </Button>
+                </Space>
+            </div>
+            {scenes.length ? (
+                <div className="grid gap-3 lg:grid-cols-[280px_minmax(0,1fr)]">
+                    <div className="grid content-start gap-2">
+                        {scenes.map((scene) => {
+                            const state = sceneStates.find((item) => item.sceneKey === scene.sceneKey);
+                            const selected = scene.sceneKey === selectedSceneKey;
+                            return (
+                                <button
+                                    key={scene.sceneKey}
+                                    type="button"
+                                    className={`rounded-md border px-3 py-2 text-left text-sm transition ${selected ? "border-stone-900 bg-stone-100 dark:border-stone-100 dark:bg-white/10" : "border-stone-200 hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-white/5"}`}
+                                    onClick={() => onSceneChange(scene.sceneKey)}
+                                >
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-medium">{scene.sceneLabel}</span>
+                                        <StatusTag status={(state?.status || "idle") as AgentWorkflowStageState["status"]} />
+                                    </div>
+                                    <div className="mt-1 text-xs text-stone-500">{sceneSourceLabel(scene.source)}</div>
+                                    {state?.blockedReason || state?.errorMessage ? <div className="mt-1 text-xs text-amber-600">{state.blockedReason || state.errorMessage}</div> : null}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <div className="grid gap-3 rounded-md bg-stone-50 p-3 dark:bg-white/5">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium">当前：{currentScene?.sceneLabel || "未选择场次"}</span>
+                            <StatusTag status={(currentSceneState?.status || "idle") as AgentWorkflowStageState["status"]} />
+                            {currentSceneState?.evidenceIds.length ? <Tag className="m-0">审核证据 {currentSceneState.evidenceIds.length}</Tag> : null}
+                        </div>
+                        <div className="grid gap-2 md:grid-cols-2">
+                            <InfoBlock label="场次视觉 DNA" value={currentSceneState?.visualDnaSummary || "尚未产出"} />
+                            <InfoBlock label="生成 P / 镜头 P 拆分表" value={currentSceneState?.promptPlanSummary || "尚未产出"} />
+                            <InfoBlock label="单 P 任务卡 / Seedance 提示词" value={currentSceneState?.promptTextSummary || "尚未产出"} />
+                            <InfoBlock label="工业化预检记录" value={currentSceneState?.industrialPrecheckSummary || "尚未产出"} />
+                        </div>
+                        {currentWarnings ? <Alert type="warning" showIcon title={currentWarnings} /> : null}
+                        {currentSceneState?.blockedReason ? <Alert type="warning" showIcon title={currentSceneState.blockedReason} /> : null}
+                        {currentSceneState?.errorMessage ? <Alert type="error" showIcon title={currentSceneState.errorMessage} /> : null}
+                        <div className="grid gap-2">
+                            <Input placeholder="可选子场次编号，例如 scene-1-a" value={subSceneKey} onChange={(event) => onSubSceneKeyChange(event.target.value)} />
+                            <div className="max-h-28 overflow-auto rounded-md bg-white p-2 text-xs leading-5 text-stone-500 dark:bg-black/20">{currentScene?.scriptText || "暂无当前场次剧本片段"}</div>
+                        </div>
+                        <Space size={6} wrap>
+                            <Button size="small" type="primary" icon={<Play className="size-3.5" />} disabled={!currentScene} loading={isRunning} onClick={onRun}>
+                                运行当前场次草案
+                            </Button>
+                            {currentSceneState?.status === "review" ? (
+                                <>
+                                    <Input.TextArea className="min-w-80" rows={2} placeholder="当前场次审核备注" value={reviewNote} onChange={(event) => onReviewNoteChange(event.target.value)} />
+                                    <Button size="small" type="primary" icon={<CheckCircle2 className="size-3.5" />} disabled={!currentSceneState.runnerRunId} onClick={() => currentSceneState.runnerRunId && onApprove(currentSceneState.runnerRunId)}>
+                                        批准当前场次
+                                    </Button>
+                                    <Button size="small" danger icon={<XCircle className="size-3.5" />} disabled={!currentSceneState.runnerRunId} onClick={() => currentSceneState.runnerRunId && onReject(currentSceneState.runnerRunId)}>
+                                        驳回当前场次
+                                    </Button>
+                                </>
+                            ) : null}
+                        </Space>
+                    </div>
+                </div>
+            ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无可推进场次。请先导入剧本或生成分镜头表。" />
+            )}
+        </div>
+    );
 }
 
 function PreviewList({
@@ -675,6 +943,95 @@ function previewTargetLabels(targetType: AgentWorkflowMappingPreview["targetType
     if (targetType === "production_bible") return { confirmTitle: "确认写入设定库", confirmContentPrefix: "将把设定草案写入设定库：", okText: "确认写入", doneText: "已写入设定库 " };
     if (targetType === "storyboard_table") return { confirmTitle: "确认写入分镜头表", confirmContentPrefix: "将把分镜草案追加到当前本集分镜头表：", okText: "确认写入", doneText: "已写入分镜头表 " };
     return { confirmTitle: "确认创建视频配置节点", confirmContentPrefix: "将在绑定画布创建或更新视频配置节点：", okText: "确认创建", doneText: "已创建视频配置节点 " };
+}
+
+function buildEpisodeSceneOptions({
+    tableShots,
+    scriptScenes,
+    scriptSnapshot,
+}: {
+    tableShots: Array<{ sceneId?: string; sceneName: string; scriptText: string }>;
+    scriptScenes: Array<{ id: string; order: number; location: string; beat: string; dialogue: string; emotion: string }>;
+    scriptSnapshot: string;
+}): EpisodeSceneOption[] {
+    if (tableShots.length) {
+        const sceneMap = new Map<string, EpisodeSceneOption>();
+        tableShots.forEach((shot, index) => {
+            const label = shot.sceneName || `场次 ${index + 1}`;
+            const key = shot.sceneId || slugSceneKey(label, index);
+            const existing = sceneMap.get(key);
+            const scriptText = [existing?.scriptText, shot.scriptText].filter(Boolean).join("\n");
+            sceneMap.set(key, { sceneKey: key, sceneLabel: label, scriptText, source: "storyboard_table" });
+        });
+        return Array.from(sceneMap.values());
+    }
+    if (scriptScenes.length) {
+        return scriptScenes.map((scene) => ({
+            sceneKey: scene.id,
+            sceneLabel: `${scene.order}. ${scene.location || "未命名场次"}`,
+            scriptText: [scene.beat, scene.dialogue, scene.emotion].filter(Boolean).join("\n"),
+            source: "script_scene",
+        }));
+    }
+    return extractSceneOptionsFromScriptText(scriptSnapshot);
+}
+
+function extractSceneOptionsFromScriptText(scriptSnapshot: string): EpisodeSceneOption[] {
+    const lines = scriptSnapshot
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    const titleIndexes = lines.map((line, index) => ({ line, index })).filter(({ line }) => /^#{0,3}\s*\d+[-.、]\d+|^#{0,3}\s*第?\d+\s*[场幕]/.test(line));
+    if (!titleIndexes.length && scriptSnapshot.trim()) return [{ sceneKey: "scene-1", sceneLabel: "scene-1", scriptText: scriptSnapshot.trim(), source: "script_text" }];
+    return titleIndexes.map(({ line, index }, sceneIndex) => {
+        const nextIndex = titleIndexes[sceneIndex + 1]?.index ?? lines.length;
+        const label = line.replace(/^#+\s*/, "").slice(0, 48);
+        return {
+            sceneKey: slugSceneKey(label, sceneIndex),
+            sceneLabel: label || `scene-${sceneIndex + 1}`,
+            scriptText: lines.slice(index, nextIndex).join("\n"),
+            source: "script_text",
+        };
+    });
+}
+
+function withSubScene(scene: EpisodeSceneOption, subSceneKey: string): EpisodeSceneOption {
+    const suffix = subSceneKey.trim();
+    if (!suffix) return scene;
+    return {
+        ...scene,
+        sceneKey: `${scene.sceneKey}:${suffix}`,
+        sceneLabel: `${scene.sceneLabel} · ${suffix}`,
+    };
+}
+
+function previousApprovedSceneSummary(sceneStates: AgentWorkflowSceneRunState[], sceneKey: string) {
+    const index = sceneStates.findIndex((scene) => scene.sceneKey === sceneKey);
+    const previous =
+        index > 0
+            ? sceneStates
+                  .slice(0, index)
+                  .reverse()
+                  .find((scene) => scene.status === "approved")
+            : undefined;
+    return previous ? `${previous.sceneLabel}：${previous.promptTextSummary || previous.promptPlanSummary || "已批准"}` : "";
+}
+
+function sceneSourceLabel(source: EpisodeSceneOption["source"]) {
+    if (source === "storyboard_table") return "来源：分镜头表";
+    if (source === "script_scene") return "来源：剧本场次";
+    return "来源：剧本文本标题";
+}
+
+function slugSceneKey(label: string, index: number) {
+    return (
+        label
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .slice(0, 40) || `scene-${index + 1}`
+    );
 }
 
 function formatBlockedReason(reason?: string) {

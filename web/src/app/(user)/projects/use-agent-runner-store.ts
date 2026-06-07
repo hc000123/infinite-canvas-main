@@ -19,6 +19,7 @@ import {
     applyWorkflowMappingPreviewToStoryboardTable,
     applyWorkflowMappingPreviewToVideoNodes,
     buildWorkflowMappingPreviews,
+    buildApprovedWorkflowSceneAggregateOutput,
     buildAgentWorkflowReviewEvidence,
     buildAgentWorkflowStageOutput,
     canApplyWorkflowMappingPreviewToProductionBible,
@@ -31,19 +32,25 @@ import {
     createAgentRunRecord,
     createWorkflowTextRunRecord,
     failAgentWorkflowStageRun,
+    failAgentWorkflowSceneRun,
+    completeAgentWorkflowSceneRun,
     listAgentRunsByAgentKind,
     listAgentRunsByEpisode,
     listAgentRunsByProject,
     markAgentRunApplied,
     markAgentRunFailed,
     reviewAgentWorkflowStageRun,
+    reviewAgentWorkflowSceneRun,
+    startAgentWorkflowSceneRun,
     startAgentWorkflowStageRun,
     setWorkflowTextRunCompleted,
     setWorkflowTextRunFailed,
     rejectAgentRun,
     updateAgentRunDraft,
+    validateAgentWorkflowSceneOutput,
     type AgentDraftOutput,
     type AgentWorkflowReviewEvidence,
+    type AgentWorkflowSceneRunState,
     type AgentWorkflowRunRecord,
     type AgentWorkflowMappingPreview,
     type AgentWorkflowStageOutput,
@@ -62,6 +69,7 @@ type AgentRunnerStore = {
     workflowAppliedPreviewItemIds: string[];
     ensureWorkflowRun: (input: { projectId: string; canvasId?: string; episodeId?: string; preset: AgentWorkflowPreset }) => string;
     markWorkflowStageReadingsRead: (workflowRunId: string, stageId: string) => { ok: boolean; reason?: string; count?: number };
+    summarizeApprovedStoryboardScenes: (workflowRunId: string) => { ok: boolean; reason?: string; outputId?: string; sceneCount?: number };
     generateWorkflowMappingPreview: (workflowRunId: string, stageId: string) => { ok: boolean; reason?: string; previewIds?: string[] };
     applyProductionBiblePreview: (previewId: string, selectedItemIds?: string[]) => { ok: boolean; reason?: string; appliedCount?: number; skippedCount?: number; warnings: string[] };
     applyStoryboardPreview: (previewId: string, selectedItemIds?: string[]) => { ok: boolean; reason?: string; appliedCount?: number; skippedCount?: number; warnings: string[] };
@@ -138,6 +146,39 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                     ),
                 }));
                 return { ok: true, count: records.length };
+            },
+            summarizeApprovedStoryboardScenes: (workflowRunId) => {
+                const workflowRun = get().workflowRuns.find((run) => run.id === workflowRunId);
+                if (!workflowRun) return { ok: false, reason: "未找到 workflow run" };
+                const now = new Date().toISOString();
+                const result = buildApprovedWorkflowSceneAggregateOutput({ workflowRun, outputs: get().workflowOutputs, outputId: `workflow-output-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, now });
+                if (!result.ok) return result;
+                set((state) => ({
+                    workflowOutputs: [result.output, ...state.workflowOutputs],
+                    workflowRuns: state.workflowRuns.map((run) =>
+                        run.id === workflowRunId
+                            ? {
+                                  ...run,
+                                  currentStageId: "seedance-storyboard",
+                                  stageStates: run.stageStates.map((stage) =>
+                                      stage.stageId === "seedance-storyboard"
+                                          ? {
+                                                ...stage,
+                                                status: "approved",
+                                                runnerRunId: result.output.runnerRunId,
+                                                outputId: result.output.outputId,
+                                                approvedAt: now,
+                                                errorMessage: undefined,
+                                                blockedReason: undefined,
+                                            }
+                                          : stage,
+                                  ),
+                                  updatedAt: now,
+                              }
+                            : run,
+                    ),
+                }));
+                return { ok: true, outputId: result.output.outputId, sceneCount: result.sceneCount };
             },
             generateWorkflowMappingPreview: (workflowRunId, stageId) => {
                 const now = new Date().toISOString();
@@ -285,7 +326,21 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                 set((state) => ({
                     runs: [run, ...state.runs],
                     workflowRuns:
-                        input.workflowRunId && input.stageId ? state.workflowRuns.map((workflowRun) => (workflowRun.id === input.workflowRunId ? startAgentWorkflowStageRun(workflowRun, input.stageId!, id, now) : workflowRun)) : state.workflowRuns,
+                        input.workflowRunId && input.stageId
+                            ? state.workflowRuns.map((workflowRun) =>
+                                  workflowRun.id === input.workflowRunId
+                                      ? typeof input.variables.sceneKey === "string"
+                                          ? startAgentWorkflowSceneRun(workflowRun, {
+                                                stageId: input.stageId!,
+                                                sceneKey: input.variables.sceneKey,
+                                                sceneLabel: typeof input.variables.sceneLabel === "string" ? input.variables.sceneLabel : input.variables.sceneKey,
+                                                runnerRunId: id,
+                                                now,
+                                            })
+                                          : startAgentWorkflowStageRun(workflowRun, input.stageId!, id, now)
+                                      : workflowRun,
+                              )
+                            : state.workflowRuns,
                 }));
                 return id;
             },
@@ -301,7 +356,15 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                     return {
                         runs: state.runs.map((item) => (item.id === id ? run : item)),
                         workflowOutputs: output ? [output, ...state.workflowOutputs] : state.workflowOutputs,
-                        workflowRuns: output ? state.workflowRuns.map((workflowRun) => (workflowRun.id === workflowRunId ? completeAgentWorkflowStageRun(workflowRun, output, now) : workflowRun)) : state.workflowRuns,
+                        workflowRuns: output
+                            ? state.workflowRuns.map((workflowRun) =>
+                                  workflowRun.id === workflowRunId
+                                      ? typeof run.input.variables.sceneKey === "string"
+                                          ? completeAgentWorkflowSceneRun(workflowRun, { stageId: run.input.stageId!, sceneKey: run.input.variables.sceneKey, output, now })
+                                          : completeAgentWorkflowStageRun(workflowRun, output, now)
+                                      : workflowRun,
+                              )
+                            : state.workflowRuns,
                     };
                 }),
             failWorkflowTextRun: (id, errorMessage) =>
@@ -314,7 +377,13 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                         runs: state.runs.map((item) => (item.id === id ? run : item)),
                         workflowRuns:
                             run.input.workflowRunId && run.input.stageId
-                                ? state.workflowRuns.map((workflowRun) => (workflowRun.id === run.input.workflowRunId ? failAgentWorkflowStageRun(workflowRun, run.input.stageId!, id, errorMessage, now) : workflowRun))
+                                ? state.workflowRuns.map((workflowRun) =>
+                                      workflowRun.id === run.input.workflowRunId
+                                          ? typeof run.input.variables.sceneKey === "string"
+                                              ? failAgentWorkflowSceneRun(workflowRun, run.input.stageId!, run.input.variables.sceneKey, id, errorMessage, now)
+                                              : failAgentWorkflowStageRun(workflowRun, run.input.stageId!, id, errorMessage, now)
+                                          : workflowRun,
+                                  )
                                 : state.workflowRuns,
                     };
                 }),
@@ -365,13 +434,37 @@ function updateRunReviewState(state: AgentRunnerStore, id: string, decision: "ap
     const now = new Date().toISOString();
     const targetRun = state.runs.find((run) => run.id === id);
     if (!targetRun) return state;
+    const sceneKey = typeof targetRun.input.variables.sceneKey === "string" ? targetRun.input.variables.sceneKey : "";
+    if (decision === "approved" && sceneKey && targetRun.input.workflowRunId) {
+        const workflowRun = state.workflowRuns.find((item) => item.id === targetRun.input.workflowRunId);
+        const scene = workflowRun?.sceneStates?.find((item) => item.sceneKey === sceneKey && item.stageId === targetRun.input.stageId);
+        const output = scene?.outputId ? state.workflowOutputs.find((item) => item.outputId === scene.outputId) : undefined;
+        const validation = output ? validateAgentWorkflowSceneOutput(output) : { valid: false, errors: ["未找到当前场次产物快照"] };
+        if (!validation.valid) {
+            return {
+                workflowRuns: state.workflowRuns.map((run) =>
+                    run.id === workflowRun?.id
+                        ? {
+                              ...run,
+                              stageStates: run.stageStates.map((stage) => (stage.stageId === targetRun.input.stageId ? { ...stage, status: "error", errorMessage: validation.errors.join("；") } : stage)),
+                              sceneStates: (run.sceneStates || []).map((item) =>
+                                  item.sceneKey === sceneKey && item.stageId === targetRun.input.stageId ? { ...item, status: "error", warnings: validation.errors, errorMessage: validation.errors.join("；"), updatedAt: now } : item,
+                              ),
+                              updatedAt: now,
+                          }
+                        : run,
+                ),
+            };
+        }
+    }
     const run = decision === "approved" ? approveAgentRun(targetRun, now) : rejectAgentRun(targetRun, now);
     const workflowRun = run.input.workflowRunId ? state.workflowRuns.find((item) => item.id === run.input.workflowRunId) : undefined;
     const evidence = workflowRun ? buildAgentWorkflowReviewEvidence({ workflowRun, runnerRun: run, evidenceId: `workflow-evidence-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, decision, reviewerNote, now }) : undefined;
+    const isSceneRun = Boolean(evidence?.sceneKey);
     return {
         runs: state.runs.map((item) => (item.id === id ? run : item)),
         workflowEvidences: evidence ? [evidence, ...state.workflowEvidences] : state.workflowEvidences,
-        workflowRuns: evidence ? state.workflowRuns.map((item) => (item.id === workflowRun?.id ? reviewAgentWorkflowStageRun(item, evidence, now) : item)) : state.workflowRuns,
+        workflowRuns: evidence ? state.workflowRuns.map((item) => (item.id === workflowRun?.id ? (isSceneRun ? reviewAgentWorkflowSceneRun(item, evidence, now) : reviewAgentWorkflowStageRun(item, evidence, now)) : item)) : state.workflowRuns,
     };
 }
 
@@ -411,8 +504,30 @@ function normalizeStoredWorkflowRun(run: AgentWorkflowRunRecord): AgentWorkflowR
                   }))
                 : [],
         })),
+        sceneStates: Array.isArray(run.sceneStates) ? run.sceneStates.map(normalizeStoredWorkflowSceneState) : [],
         createdAt: run.createdAt || new Date().toISOString(),
         updatedAt: run.updatedAt || run.createdAt || new Date().toISOString(),
+    };
+}
+
+function normalizeStoredWorkflowSceneState(scene: AgentWorkflowSceneRunState): AgentWorkflowSceneRunState {
+    return {
+        stageId: scene.stageId || "seedance-storyboard",
+        sceneKey: scene.sceneKey || "",
+        sceneLabel: scene.sceneLabel || scene.sceneKey || "未命名场次",
+        subSceneKey: scene.subSceneKey,
+        status: scene.status || "idle",
+        visualDnaSummary: scene.visualDnaSummary || "",
+        promptPlanSummary: scene.promptPlanSummary || "",
+        promptTextSummary: scene.promptTextSummary || "",
+        industrialPrecheckSummary: scene.industrialPrecheckSummary || "",
+        runnerRunId: scene.runnerRunId,
+        outputId: scene.outputId,
+        evidenceIds: Array.isArray(scene.evidenceIds) ? scene.evidenceIds : [],
+        warnings: Array.isArray(scene.warnings) ? scene.warnings : [],
+        errorMessage: scene.errorMessage,
+        blockedReason: scene.blockedReason,
+        updatedAt: scene.updatedAt || new Date().toISOString(),
     };
 }
 
@@ -439,6 +554,8 @@ function normalizeStoredWorkflowEvidence(evidence: AgentWorkflowReviewEvidence):
         workflowRunId: evidence.workflowRunId || "",
         stageId: evidence.stageId || "",
         runnerRunId: evidence.runnerRunId || "",
+        sceneKey: evidence.sceneKey,
+        sceneLabel: evidence.sceneLabel,
         decision: evidence.decision === "rejected" ? "rejected" : "approved",
         reviewer: evidence.reviewer || "local",
         reviewerNote: evidence.reviewerNote,

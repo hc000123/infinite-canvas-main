@@ -16,10 +16,12 @@ import {
     canGenerateWorkflowMappingPreview,
     buildWorkflowStagePrompt,
     completeAgentWorkflowStageRun,
+    completeAgentWorkflowSceneRun,
     createAgentWorkflowRunRecord,
     createAgentRunRecord,
     createWorkflowTextRunRecord,
     failAgentWorkflowStageRun,
+    buildApprovedWorkflowSceneAggregateOutput,
     setWorkflowTextRunCompleted,
     setWorkflowTextRunFailed,
     buildWorkflowStageSourceFiles,
@@ -28,11 +30,14 @@ import {
     listAgentRunsByProject,
     markAgentRunApplied,
     normalizeAgentDraftOutput,
+    reviewAgentWorkflowSceneRun,
     reviewAgentWorkflowStageRun,
     rejectAgentRun,
+    startAgentWorkflowSceneRun,
     startAgentWorkflowStageRun,
     summarizeAgentRunDraft,
     updateAgentRunDraft,
+    validateAgentWorkflowSceneOutput,
     validateAgentDraftOutputShape,
     workflowMappingPreviewItemKey,
 } from "./agent-runner.ts";
@@ -457,6 +462,133 @@ test("workflow runner error moves stage to error and keeps error message", () =>
     const failed = failAgentWorkflowStageRun(startAgentWorkflowStageRun(workflowRun, "director-analysis", "runner-error", "2026-01-11T00:01:00.000Z"), "director-analysis", "runner-error", "模型超时", "2026-01-11T00:02:00.000Z");
     assert.equal(failed.stageStates[0].status, "error");
     assert.equal(failed.stageStates[0].errorMessage, "模型超时");
+});
+
+test("stage3 scene run advances independently without approving whole storyboard stage", () => {
+    const { workflowRun } = buildApprovedWorkflowStageFixture("art-design", '{"summary":"美术设定"}', "ev-scene-upstream", "out-scene-upstream", "art-designer");
+    const started = startAgentWorkflowSceneRun(workflowRun, { stageId: "seedance-storyboard", sceneKey: "scene-1", sceneLabel: "1. 海边柴油仓库", runnerRunId: "runner-scene-1", now: "2026-01-13T00:01:00.000Z" });
+    assert.equal(started.sceneStates?.[0].status, "running");
+    assert.equal(started.stageStates.find((stage) => stage.stageId === "seedance-storyboard")?.status, "running");
+
+    const runnerRun = setWorkflowTextRunCompleted(
+        createWorkflowTextRunRecord({
+            input: {
+                ...workflowInputBase,
+                workflowRunId: workflowRun.id,
+                workflowId: workflowPreset.workflowId,
+                workflowVersion: workflowPreset.version,
+                stageId: "seedance-storyboard",
+                agentId: "storyboard-artist",
+                variables: { stageId: "seedance-storyboard", sceneKey: "scene-1" },
+            },
+            id: "runner-scene-1",
+            now: "2026-01-13T00:01:00.000Z",
+        }),
+        JSON.stringify({
+            summary: "海边柴油仓库分镜",
+            sceneVisualDna: "冷白海光、低饱和柴油仓库、火把暖色强调。",
+            promptPlanSummary: "拆为 2 条生成 P，先威胁对峙再逃离。",
+            seedancePrompts: [{ title: "P1 对峙", prompt: "镜头从仓库门口推入，火把压低，人物微反应清晰。" }],
+            industrialPrecheckSummary: "已记录场次开写前、单 P 自检和导演审核前预检。",
+        }),
+        "2026-01-13T00:02:00.000Z",
+    );
+    const output = buildAgentWorkflowStageOutput({ workflowRunId: workflowRun.id, runnerRun, outputId: "output-scene-1", now: "2026-01-13T00:02:00.000Z" })!;
+    const reviewed = completeAgentWorkflowSceneRun(started, { stageId: "seedance-storyboard", sceneKey: "scene-1", output, now: "2026-01-13T00:02:00.000Z" });
+    assert.equal(reviewed.sceneStates?.[0].status, "review");
+    assert.equal(reviewed.sceneStates?.[0].visualDnaSummary.includes("冷白海光"), true);
+
+    const evidence = buildAgentWorkflowReviewEvidence({
+        workflowRun: reviewed,
+        runnerRun: approveAgentRun(runnerRun, "2026-01-13T00:03:00.000Z"),
+        evidenceId: "evidence-scene-1",
+        decision: "approved",
+        reviewerNote: "本场通过",
+        now: "2026-01-13T00:03:00.000Z",
+    })!;
+    const sceneApproved = reviewAgentWorkflowSceneRun(reviewed, evidence, "2026-01-13T00:03:00.000Z");
+    assert.equal(sceneApproved.sceneStates?.[0].status, "approved");
+    assert.equal(sceneApproved.sceneStates?.[0].evidenceIds.includes("evidence-scene-1"), true);
+    assert.notEqual(sceneApproved.stageStates.find((stage) => stage.stageId === "seedance-storyboard")?.status, "approved");
+});
+
+test("stage3 scene output must contain visual dna prompt plan prompt text and precheck before approval", () => {
+    const run = createWorkflowTextRunRecord({
+        input: { ...workflowInputBase, workflowId: workflowPreset.workflowId, workflowVersion: workflowPreset.version, stageId: "seedance-storyboard", agentId: "storyboard-artist", variables: { stageId: "seedance-storyboard", sceneKey: "scene-2" } },
+        id: "runner-scene-invalid",
+        now: "2026-01-13T00:04:00.000Z",
+    });
+    const invalid = setWorkflowTextRunCompleted(run, JSON.stringify({ summary: "只有摘要", seedancePrompts: [] }), "2026-01-13T00:05:00.000Z");
+    const output = buildAgentWorkflowStageOutput({ workflowRunId: "workflow-scene-invalid", runnerRun: invalid, outputId: "output-scene-invalid", now: "2026-01-13T00:05:00.000Z" })!;
+    const validation = validateAgentWorkflowSceneOutput(output);
+    assert.equal(validation.valid, false);
+    assert.deepEqual(validation.errors, ["缺少场次视觉 DNA", "缺少生成 P / 镜头 P 拆分表摘要", "缺少单 P 任务卡 / Seedance 提示词", "缺少工业化预检记录摘要"]);
+});
+
+test("stage3 mapping preview requires an approved scene aggregate output", () => {
+    const { workflowRun } = buildApprovedWorkflowStageFixture("art-design", '{"summary":"美术设定"}', "ev-scene-preview-upstream", "out-scene-preview-upstream", "art-designer");
+    const sceneOutput = {
+        outputId: "output-scene-approved",
+        workflowRunId: workflowRun.id,
+        stageId: "seedance-storyboard",
+        runnerRunId: "runner-scene-approved",
+        rawText: JSON.stringify({ summary: "场次已批准", items: [{ title: "仓库对峙 P1", prompt: "火把靠近油桶，镜头缓慢推进。", cameraMovement: "push in" }] }),
+        summary: "场次已批准",
+        structuredOutput: { summary: "场次已批准", items: [{ title: "仓库对峙 P1", prompt: "火把靠近油桶，镜头缓慢推进。", cameraMovement: "push in" }] },
+        outputFormat: "json" as const,
+        sourceFiles: ["agents/storyboard-artist.md"],
+        qualityGateIds: ["scene-by-scene-lock"],
+        createdAt: "2026-01-13T00:06:00.000Z",
+    };
+    const withScene = {
+        ...workflowRun,
+        sceneStates: [
+            {
+                stageId: "seedance-storyboard",
+                sceneKey: "scene-1",
+                sceneLabel: "1. 海边柴油仓库",
+                status: "approved" as const,
+                visualDnaSummary: "冷白海光",
+                promptPlanSummary: "拆为 1 条生成 P",
+                promptTextSummary: "火把靠近油桶，镜头缓慢推进。",
+                industrialPrecheckSummary: "预检通过",
+                runnerRunId: sceneOutput.runnerRunId,
+                outputId: sceneOutput.outputId,
+                evidenceIds: ["evidence-scene-approved"],
+                warnings: [],
+                updatedAt: "2026-01-13T00:07:00.000Z",
+            },
+        ],
+    };
+    assert.equal(canGenerateWorkflowMappingPreview(withScene, "seedance-storyboard").allowed, false);
+    const aggregate = buildApprovedWorkflowSceneAggregateOutput({ workflowRun: withScene, outputs: [sceneOutput], outputId: "output-stage3-aggregate", now: "2026-01-13T00:08:00.000Z" });
+    assert.equal(aggregate.ok, true);
+    if (!aggregate.ok) throw new Error("aggregate should be ok");
+    const stageApproved = reviewAgentWorkflowStageRun(
+        completeAgentWorkflowStageRun(withScene, aggregate.output, "2026-01-13T00:08:00.000Z"),
+        {
+            evidenceId: "evidence-stage3-aggregate",
+            projectId: withScene.projectId,
+            workflowRunId: withScene.id,
+            stageId: "seedance-storyboard",
+            runnerRunId: aggregate.output.runnerRunId,
+            decision: "approved",
+            reviewer: "local",
+            outputSummary: aggregate.output.summary,
+            outputHash: "wf-aggregate",
+            sourceFiles: aggregate.output.sourceFiles,
+            qualityGateIds: aggregate.output.qualityGateIds,
+            createdAt: "2026-01-13T00:09:00.000Z",
+        },
+        "2026-01-13T00:09:00.000Z",
+    );
+    const previewGate = canGenerateWorkflowMappingPreview(stageApproved, "seedance-storyboard");
+    assert.equal(previewGate.allowed, true);
+    const previews = buildWorkflowMappingPreviews({ workflowRun: stageApproved, stageId: "seedance-storyboard", output: aggregate.output, now: "2026-01-13T00:10:00.000Z" });
+    assert.deepEqual(
+        previews.map((preview) => preview.targetType),
+        ["storyboard_table", "video_node"],
+    );
 });
 
 test("approved output can generate mapping preview", () => {
