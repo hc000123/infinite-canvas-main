@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Film, Link2, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasNodeData } from "../types";
 import type { ShotGroup, StoryboardTableShot } from "../utils/storyboard-management";
+import { inspectStoryboardShot, summarizeShotInspections, type ShotInspectionPhase } from "../utils/canvas-shot-inspection";
 
 type CanvasStoryboardTimelineProps = {
     shots: StoryboardTableShot[];
@@ -16,24 +18,47 @@ type CanvasStoryboardTimelineProps = {
     onOpenWorkbench: () => void;
 };
 
+type TimelineFilter = "all" | ShotInspectionPhase;
+
 export function CanvasStoryboardTimeline({ shots, shotGroups, nodes, activeShotId, onSelectShot, onOpenWorkbench }: CanvasStoryboardTimelineProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const [filter, setFilter] = useState<TimelineFilter>("all");
+    const shotItems = useMemo(() => shots.map((shot) => ({ shot, inspection: inspectStoryboardShot(shot, shotGroups, nodes) })), [nodes, shotGroups, shots]);
+    const summary = useMemo(() => summarizeShotInspections(shotItems.map((item) => item.inspection)), [shotItems]);
+    const visibleShotItems = filter === "all" ? shotItems : shotItems.filter((item) => item.inspection.phase === filter);
+    useEffect(() => {
+        if (filter === "all" || !activeShotId) return;
+        const activeItem = shotItems.find((item) => item.shot.id === activeShotId);
+        if (activeItem && activeItem.inspection.phase !== filter) setFilter("all");
+    }, [activeShotId, filter, shotItems]);
     if (!shots.length) return null;
 
     return (
         <div className="pointer-events-none absolute inset-x-4 bottom-20 z-40 flex justify-center">
-            <div className="pointer-events-auto flex max-w-[min(980px,calc(100%-32px))] items-center gap-2 rounded-xl border px-2 py-2 shadow-[0_14px_34px_rgba(28,25,23,.12)] backdrop-blur" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
-                <button type="button" className="inline-flex h-16 w-24 shrink-0 flex-col items-center justify-center gap-1 rounded-lg text-xs transition hover:opacity-80" style={{ background: theme.node.fill, color: theme.node.muted }} onClick={onOpenWorkbench}>
-                    <Film className="size-4" />
-                    分镜检查
-                </button>
+            <div className="pointer-events-auto flex max-w-[min(1100px,calc(100%-32px))] items-stretch gap-2 rounded-xl border px-2 py-2 shadow-[0_14px_34px_rgba(28,25,23,.12)] backdrop-blur" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
+                <div className="flex w-32 shrink-0 flex-col gap-1.5">
+                    <button type="button" className="inline-flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg text-xs transition hover:opacity-80" style={{ background: theme.node.fill, color: theme.node.muted }} onClick={onOpenWorkbench}>
+                        <Film className="size-4" />
+                        分镜检查
+                    </button>
+                    <div className="grid grid-cols-2 gap-1">
+                        {timelineFilters.map((item) => (
+                            <button
+                                key={item.value}
+                                type="button"
+                                className="min-h-7 rounded-md px-1 text-[10px] font-medium transition hover:opacity-85"
+                                style={{ background: filter === item.value ? theme.toolbar.activeBg : theme.node.fill, color: filter === item.value ? theme.node.text : theme.node.muted }}
+                                onClick={() => setFilter(item.value)}
+                            >
+                                {item.label} {summary[item.value]}
+                            </button>
+                        ))}
+                    </div>
+                </div>
                 <div className="thin-scrollbar flex min-w-0 gap-1.5 overflow-x-auto">
-                    {shots.map((shot) => {
-                        const groups = findShotGroups(shot, shotGroups);
-                        const node = findShotNode(shot, groups, nodes);
+                    {visibleShotItems.map(({ shot, inspection }) => {
+                        const node = inspection.node;
                         const active = activeShotId === shot.id;
-                        const status = shotStatusLabel(shot, groups, node);
-                        const health = shotHealth(groups, node);
                         return (
                             <button
                                 key={shot.id}
@@ -50,75 +75,41 @@ export function CanvasStoryboardTimeline({ shots, shotGroups, nodes, activeShotI
                                     <div className="mt-1 flex items-center gap-1 text-[10px]" style={{ color: theme.node.muted }}>
                                         <span>{shot.estimatedDuration || 0}s</span>
                                         <span>·</span>
-                                        <span>{status}</span>
+                                        <span>{inspection.statusLabel}</span>
                                     </div>
                                     <div className="mt-1 break-words text-[10px]" style={{ color: theme.node.muted }}>
                                         {shot.sceneName || "未命名场次"}
                                     </div>
                                     <div className="mt-1 flex items-center gap-1">
-                                        <StatusDot health={health} />
-                                        <span className="truncate text-[10px]" style={{ color: health === "warning" ? "#b45309" : theme.node.muted }}>
-                                            {healthLabel(health, groups)}
+                                        <StatusDot health={inspection.health} />
+                                        <span className="truncate text-[10px]" style={{ color: inspection.health === "warning" ? "#b45309" : theme.node.muted }}>
+                                            {inspection.healthLabel}
                                         </span>
                                     </div>
                                 </div>
                             </button>
                         );
                     })}
+                    {!visibleShotItems.length ? (
+                        <div className="grid h-[76px] w-64 shrink-0 place-items-center rounded-lg border border-dashed px-3 text-center text-xs" style={{ borderColor: theme.node.stroke, color: theme.node.muted }}>
+                            当前筛选下没有镜头
+                        </div>
+                    ) : null}
                 </div>
             </div>
         </div>
     );
 }
 
-function findShotGroups(shot: StoryboardTableShot, shotGroups: ShotGroup[]) {
-    return shotGroups.filter((group) => group.shotIds.includes(shot.id));
-}
-
-function findShotNode(shot: StoryboardTableShot, groups: ShotGroup[], nodes: CanvasNodeData[]) {
-    const groupIds = groups.map((group) => group.id);
-    return nodes.find(
-        (node) =>
-            node.metadata?.storyboardTableShotIds?.includes(shot.id) ||
-            node.metadata?.storyboardShotId === shot.id ||
-            (node.metadata?.shotGroupId && groupIds.includes(node.metadata.shotGroupId)) ||
-            (node.metadata?.storyboardShotGroupId && groupIds.includes(node.metadata.storyboardShotGroupId)),
-    );
-}
-
-function shotStatusLabel(shot: StoryboardTableShot, groups: ShotGroup[], node?: CanvasNodeData) {
-    if (node?.metadata?.status === "loading") return "生成中";
-    if (node?.metadata?.status === "success") return "已生成";
-    if (node?.metadata?.status === "error") return "失败";
-    if (groups.some((group) => group.status === "generating")) return "生成中";
-    if (groups.some((group) => group.status === "done")) return "已生成";
-    if (groups.some((group) => group.status === "error")) return "失败";
-    if (groups.some((group) => group.status === "in_canvas")) return "已入画布";
-    if (node) return "已入画布";
-    if (groups.some((group) => group.effectivePrompt || group.prompt)) return "提示词就绪";
-    if (shot.workflowSource) return "已审核";
-    return "待承接";
-}
-
-function shotHealth(groups: ShotGroup[], node?: CanvasNodeData) {
-    if (node?.metadata?.status === "error") return "danger";
-    if (node?.metadata?.status === "success") return "done";
-    if (groups.some((group) => group.status === "error")) return "danger";
-    if (groups.some((group) => group.status === "done")) return "done";
-    if (node) return "linked";
-    if (groups.some((group) => group.status === "in_canvas" || group.status === "generating")) return "linked";
-    if (!groups.length) return "warning";
-    if (!groups.some((group) => group.assetRefs.length || group.audioRefs.length)) return "warning";
-    return "ready";
-}
-
-function healthLabel(health: string, groups: ShotGroup[]) {
-    if (health === "danger") return "需要重试";
-    if (health === "done") return "成片可查";
-    if (health === "linked") return "节点已承接";
-    if (health === "ready") return `${groups.reduce((total, group) => total + group.assetRefs.length + group.audioRefs.length, 0)} 个参考`;
-    return "待补承接";
-}
+const timelineFilters: { value: TimelineFilter; label: string }[] = [
+    { value: "all", label: "全部" },
+    { value: "todo", label: "未承接" },
+    { value: "ready", label: "就绪" },
+    { value: "linked", label: "入画布" },
+    { value: "running", label: "生成中" },
+    { value: "done", label: "已生成" },
+    { value: "error", label: "失败" },
+];
 
 function StatusDot({ health }: { health: string }) {
     if (health === "danger") return <AlertTriangle className="size-3 text-red-500" />;

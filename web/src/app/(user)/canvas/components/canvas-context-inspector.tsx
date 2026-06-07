@@ -11,6 +11,7 @@ import { CanvasNodeType } from "../types";
 import type { NodeGenerationInput } from "./canvas-node-generation";
 import type { EpisodeWorkbenchStats } from "../utils/episode-workbench";
 import type { ShotGroup, StoryboardTableShot } from "../utils/storyboard-management";
+import { inspectStoryboardShot, summarizeShotInspections } from "../utils/canvas-shot-inspection";
 
 export type CanvasInspectorView = "context" | "assistant" | "records";
 
@@ -27,6 +28,10 @@ type CanvasContextInspectorProps = {
     selectedShotGroups?: ShotGroup[];
     selectedShotNodes?: CanvasNodeData[];
     assetTitleById?: Map<string, string>;
+    checklistShots?: StoryboardTableShot[];
+    checklistShotGroups?: ShotGroup[];
+    checklistNodes?: CanvasNodeData[];
+    activeShotId?: string;
     selectedCount: number;
     connections: CanvasConnection[];
     configInputs: NodeGenerationInput[];
@@ -35,6 +40,7 @@ type CanvasContextInspectorProps = {
     onOpenAssets: () => void;
     onOpenImageBriefs: () => void;
     onOpenAssistant: () => void;
+    onSelectShot?: (shot: StoryboardTableShot, nodeId?: string) => void;
     onInfo: (node: CanvasNodeData) => void;
     onEditText: (node: CanvasNodeData) => void;
     onToggleDialog: (node: CanvasNodeData) => void;
@@ -62,6 +68,10 @@ export function CanvasContextInspector({
     selectedShotGroups = [],
     selectedShotNodes = [],
     assetTitleById = new Map(),
+    checklistShots = [],
+    checklistShotGroups = [],
+    checklistNodes = [],
+    activeShotId,
     selectedCount,
     connections,
     configInputs,
@@ -70,6 +80,7 @@ export function CanvasContextInspector({
     onOpenAssets,
     onOpenImageBriefs,
     onOpenAssistant,
+    onSelectShot,
     onInfo,
     onEditText,
     onToggleDialog,
@@ -150,12 +161,29 @@ export function CanvasContextInspector({
                     onViewImage={onViewImage}
                 />
             ) : selectedShot ? (
-                <ShotInspector shot={selectedShot} groups={selectedShotGroups} nodes={selectedShotNodes} assetTitleById={assetTitleById} theme={theme} onOpenEpisodeWorkbench={onOpenEpisodeWorkbench} />
+                <ShotInspector
+                    shot={selectedShot}
+                    groups={selectedShotGroups}
+                    nodes={selectedShotNodes}
+                    assetTitleById={assetTitleById}
+                    checklistShots={checklistShots}
+                    checklistShotGroups={checklistShotGroups}
+                    checklistNodes={checklistNodes}
+                    activeShotId={activeShotId}
+                    theme={theme}
+                    onSelectShot={onSelectShot}
+                    onOpenEpisodeWorkbench={onOpenEpisodeWorkbench}
+                />
             ) : (
                 <CanvasOverview
                     hasEpisode={hasEpisode}
                     stats={stats}
+                    checklistShots={checklistShots}
+                    checklistShotGroups={checklistShotGroups}
+                    checklistNodes={checklistNodes}
+                    activeShotId={activeShotId}
                     theme={theme}
+                    onSelectShot={onSelectShot}
                     onOpenAssets={onOpenAssets}
                     onOpenImageBriefs={onOpenImageBriefs}
                     onOpenEpisodeWorkbench={onOpenEpisodeWorkbench}
@@ -174,14 +202,24 @@ function ShotInspector({
     groups,
     nodes,
     assetTitleById,
+    checklistShots,
+    checklistShotGroups,
+    checklistNodes,
+    activeShotId,
     theme,
+    onSelectShot,
     onOpenEpisodeWorkbench,
 }: {
     shot: StoryboardTableShot;
     groups: ShotGroup[];
     nodes: CanvasNodeData[];
     assetTitleById: Map<string, string>;
+    checklistShots: StoryboardTableShot[];
+    checklistShotGroups: ShotGroup[];
+    checklistNodes: CanvasNodeData[];
+    activeShotId?: string;
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onSelectShot?: (shot: StoryboardTableShot, nodeId?: string) => void;
     onOpenEpisodeWorkbench: () => void;
 }) {
     const prompt = groups.map((group) => group.effectivePrompt || group.prompt).filter(Boolean).join("\n\n");
@@ -216,6 +254,7 @@ function ShotInspector({
             {prompt ? <TextSection title="Seedance 视频提示词" text={prompt} theme={theme} /> : null}
             {refs.length ? <ReferenceSection refs={refs} assetTitleById={assetTitleById} theme={theme} /> : null}
             <HandoffStatusSection groups={groups} nodes={nodes} theme={theme} />
+            <ShotChecklistSection shots={checklistShots} shotGroups={checklistShotGroups} nodes={checklistNodes} activeShotId={activeShotId} theme={theme} onSelectShot={onSelectShot} />
             {shot.dialogue ? <TextSection title="对白" text={shot.dialogue} theme={theme} /> : null}
             {shot.action || shot.emotion || shot.cameraMovement ? <TextSection title="表演与镜头" text={[shot.action, shot.emotion, shot.cameraMovement].filter(Boolean).join("\n\n")} theme={theme} /> : null}
             <div className="mt-3">
@@ -255,6 +294,77 @@ function HandoffStatusSection({ groups, nodes, theme }: { groups: ShotGroup[]; n
                 {nodes.length ? nodes.map((node) => <StatusRow key={node.id} label={nodeTypeLabel(node)} title={node.title} meta={nodeStatusLabel(node)} theme={theme} />) : <EmptyStatus text="尚未承接到画布节点" theme={theme} />}
             </div>
         </section>
+    );
+}
+
+function ShotChecklistSection({
+    shots,
+    shotGroups,
+    nodes,
+    activeShotId,
+    theme,
+    onSelectShot,
+}: {
+    shots: StoryboardTableShot[];
+    shotGroups: ShotGroup[];
+    nodes: CanvasNodeData[];
+    activeShotId?: string;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onSelectShot?: (shot: StoryboardTableShot, nodeId?: string) => void;
+}) {
+    if (!shots.length) return null;
+    const rows = shots.map((shot) => ({ shot, inspection: inspectStoryboardShot(shot, shotGroups, nodes) }));
+    const summary = summarizeShotInspections(rows.map((row) => row.inspection));
+    return (
+        <section className="mt-3 rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+            <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold">镜头检查清单</div>
+                <div className="text-xs" style={{ color: theme.node.muted }}>
+                    {summary.all} 个镜头
+                </div>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+                <MiniStat label="未承接" value={summary.todo} theme={theme} />
+                <MiniStat label="就绪" value={summary.ready} theme={theme} />
+                <MiniStat label="已入画布" value={summary.linked} theme={theme} />
+                <MiniStat label="生成中" value={summary.running} theme={theme} />
+                <MiniStat label="已生成" value={summary.done} theme={theme} />
+                <MiniStat label="失败" value={summary.error} theme={theme} />
+            </div>
+            <div className="thin-scrollbar mt-2 max-h-56 space-y-1.5 overflow-y-auto" data-canvas-no-zoom>
+                {rows.map(({ shot, inspection }) => {
+                    const active = activeShotId === shot.id;
+                    return (
+                        <button
+                            key={shot.id}
+                            type="button"
+                            className="w-full rounded-lg border px-2 py-1.5 text-left text-xs leading-5 transition hover:opacity-85"
+                            style={{ background: active ? theme.toolbar.activeBg : theme.node.panel, borderColor: active ? theme.node.activeStroke : theme.node.stroke, color: theme.node.text }}
+                            onClick={() => onSelectShot?.(shot, inspection.node?.id)}
+                        >
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium">镜头 {shot.order}</span>
+                                <span style={{ color: inspection.phase === "error" ? "#ef4444" : theme.node.muted }}>{inspection.statusLabel}</span>
+                            </div>
+                            <div className="break-words" style={{ color: theme.node.muted }}>
+                                {shot.sceneName || "未命名场次"} · {inspection.healthLabel}
+                            </div>
+                        </button>
+                    );
+                })}
+            </div>
+        </section>
+    );
+}
+
+function MiniStat({ label, value, theme }: { label: string; value: number; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    return (
+        <div className="rounded-lg border px-2 py-1.5" style={{ background: theme.node.panel, borderColor: theme.node.stroke }}>
+            <div className="text-[10px]" style={{ color: theme.node.muted }}>
+                {label}
+            </div>
+            <div className="text-sm font-semibold tabular-nums">{value}</div>
+        </div>
     );
 }
 
@@ -304,7 +414,12 @@ function InspectorTab({ label, active, onClick }: { label: string; active: boole
 function CanvasOverview({
     hasEpisode,
     stats,
+    checklistShots,
+    checklistShotGroups,
+    checklistNodes,
+    activeShotId,
     theme,
+    onSelectShot,
     onOpenAssets,
     onOpenImageBriefs,
     onOpenEpisodeWorkbench,
@@ -312,7 +427,12 @@ function CanvasOverview({
 }: {
     hasEpisode: boolean;
     stats: EpisodeWorkbenchStats;
+    checklistShots: StoryboardTableShot[];
+    checklistShotGroups: ShotGroup[];
+    checklistNodes: CanvasNodeData[];
+    activeShotId?: string;
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onSelectShot?: (shot: StoryboardTableShot, nodeId?: string) => void;
     onOpenAssets: () => void;
     onOpenImageBriefs: () => void;
     onOpenEpisodeWorkbench: () => void;
@@ -332,6 +452,7 @@ function CanvasOverview({
                     <Stat label="失败" value={stats.failedCount} theme={theme} />
                 </div>
             </section>
+            <ShotChecklistSection shots={checklistShots} shotGroups={checklistShotGroups} nodes={checklistNodes} activeShotId={activeShotId} theme={theme} onSelectShot={onSelectShot} />
             <div className="mt-3 grid gap-2">
                 <InspectorAction icon={<FileText className="size-4" />} label={hasEpisode ? "返回本集生产流程" : "绑定或导入本集"} onClick={onOpenEpisodeWorkbench} theme={theme} />
                 <InspectorAction icon={<ImageIcon className="size-4" />} label="打开素材" onClick={onOpenAssets} theme={theme} />

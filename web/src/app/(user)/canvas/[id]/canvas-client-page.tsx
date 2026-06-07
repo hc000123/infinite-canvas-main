@@ -48,7 +48,7 @@ import { aiTaskIdFromGeneration, aiTaskLedgerNodeMetadata, buildCanvasAiTaskTrac
 import { buildAngleImageNode, buildAnglePrompt, buildAngleReferenceImage, buildCroppedImageNode, type CanvasImageAngleParams, type CanvasImageCropRect } from "../utils/canvas-image-derivatives";
 import { collectBatchAwareDeletedNodeIds, isHiddenBatchChild, isHiddenBatchConnectionEndpoint, removeDeletedNodesFromBatches, setBatchPrimaryInNodes, toggleBatchExpandedInNodes } from "../utils/canvas-batch-nodes";
 import { applyCanvasProjectPresetToConfig } from "../utils/canvas-project-preset";
-import { planShotGroupCanvasInsert, planStoryboardGroupCanvasInsert, type StoryboardAssetRef } from "../utils/storyboard-management";
+import { planShotGroupCanvasInsert, planStoryboardGroupCanvasInsert, type StoryboardAssetRef, type StoryboardTableShot } from "../utils/storyboard-management";
 import { activeEpisodeShotGroups, activeEpisodeTableShots, buildEpisodeWorkbenchStats, deriveEpisodeProductionStatus, productionStatusLabel } from "../utils/episode-workbench";
 import { reviewVideoPromptBeforeGeneration, shouldRunVideoPromptReview, type PromptReviewResult } from "../utils/canvas-prompt-review";
 import { cropDataUrl } from "../utils/canvas-image-data";
@@ -698,6 +698,27 @@ function InfiniteCanvasPage() {
         );
     }, [activeTimelineShotGroups, activeTimelineShotId, nodes]);
     const activeTimelineNodes = useMemo(() => nodes.filter((node) => activeTimelineNodeIds.has(node.id)), [activeTimelineNodeIds, nodes]);
+    const handleTimelineShotSelect = useCallback(
+        (shot: StoryboardTableShot, nodeId?: string) => {
+            setActiveTimelineShotId(shot.id);
+            setInspectorView("context");
+            setSelectedConnectionId(null);
+            if (!nodeId) {
+                setSelectedNodeIds(new Set());
+                return;
+            }
+            const node = nodesRef.current.find((item) => item.id === nodeId);
+            setSelectedNodeIds(new Set([nodeId]));
+            if (!node) return;
+            const k = Math.max(0.45, Math.min(viewportRef.current.k, 1.2));
+            setViewport({
+                x: size.width / 2 - (node.position.x + node.width / 2) * k,
+                y: size.height / 2 - (node.position.y + node.height / 2) * k,
+                k,
+            });
+        },
+        [size.height, size.width],
+    );
     const relatedHighlight = useMemo(() => {
         const nodeIds = new Set<string>();
         const connectionIds = new Set<string>();
@@ -2241,24 +2262,7 @@ function InfiniteCanvasPage() {
                         }
                         setEpisodeWorkbenchOpen(true);
                     }}
-                    onSelectShot={(shot, nodeId) => {
-                        setActiveTimelineShotId(shot.id);
-                        setInspectorView("context");
-                        setSelectedConnectionId(null);
-                        if (!nodeId) {
-                            setSelectedNodeIds(new Set());
-                            return;
-                        }
-                        const node = nodesRef.current.find((item) => item.id === nodeId);
-                        setSelectedNodeIds(new Set([nodeId]));
-                        if (!node) return;
-                        const k = Math.max(0.45, Math.min(viewportRef.current.k, 1.2));
-                        setViewport({
-                            x: size.width / 2 - (node.position.x + node.width / 2) * k,
-                            y: size.height / 2 - (node.position.y + node.height / 2) * k,
-                            k,
-                        });
-                    }}
+                    onSelectShot={handleTimelineShotSelect}
                 />
 
                 {isMiniMapOpen ? <Minimap nodes={nodes} viewport={viewport} viewportSize={size} onViewportChange={setViewport} /> : null}
@@ -2399,6 +2403,10 @@ function InfiniteCanvasPage() {
                 selectedShotGroups={activeTimelineShotGroups}
                 selectedShotNodes={activeTimelineNodes}
                 assetTitleById={assetTitleById}
+                checklistShots={timelineShots}
+                checklistShotGroups={timelineShotGroups}
+                checklistNodes={nodes}
+                activeShotId={activeTimelineShotId}
                 selectedCount={selectedNodeIds.size}
                 connections={connections}
                 configInputs={selectedInspectorNode?.type === CanvasNodeType.Config ? configInputsById.get(selectedInspectorNode.id) || [] : []}
@@ -2444,6 +2452,7 @@ function InfiniteCanvasPage() {
                     setAssistantMounted(true);
                     setAssistantCollapsed(false);
                 }}
+                onSelectShot={handleTimelineShotSelect}
                 onInfo={(node) => setInfoNodeId(node.id)}
                 onEditText={openTextEditor}
                 onToggleDialog={(node) => setDialogNodeId((current) => (current === node.id ? null : node.id))}
