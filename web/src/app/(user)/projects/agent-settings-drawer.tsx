@@ -636,6 +636,7 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
                     {
                         key: "quick-agents",
                         label: "单 Agent 配置",
+                        forceRender: true,
                         children: (
                             <div className="grid gap-4">
                                 <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">

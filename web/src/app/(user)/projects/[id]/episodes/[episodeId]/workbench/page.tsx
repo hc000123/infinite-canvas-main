@@ -283,6 +283,23 @@ export default function EpisodeProductionWorkbenchPage() {
         }
         message.success(state === "adopted" ? "已采用分镜建议" : "已确认风险提示");
     };
+    const approveStageReview = (stageId: string, note: string) => {
+        const stageState = workflowRun?.stageStates.find((item) => item.stageId === stageId);
+        if (stageState?.status !== "review" || !stageState.runnerRunId) {
+            message.warning("当前阶段缺少可批准的运行记录");
+            return;
+        }
+        approveRun(stageState.runnerRunId, note);
+        message.success("已批准阶段结果");
+    };
+    const approveCurrentStoryboardScene = () => {
+        if (currentSceneState?.status !== "review" || !currentSceneState.runnerRunId) {
+            message.warning("当前场次缺少可批准的运行记录");
+            return;
+        }
+        approveRun(currentSceneState.runnerRunId, sceneReviewNotes[currentSceneState.sceneKey] || "分镜场次结果已确认。");
+        message.success("已批准当前场次");
+    };
     const importCanvasPackage = (pkg: CanvasHandoffImportTarget) => {
         if (!boundCanvas) {
             message.info("请先创建承接画布，再导入生产包节点组。");
@@ -347,6 +364,8 @@ export default function EpisodeProductionWorkbenchPage() {
                 onModuleChange={setActiveModule}
                 onOpenCanvas={openCanvasOrCreate}
                 onOpenDetail={setDetailRecord}
+                onApproveStageReview={approveStageReview}
+                onApproveStoryboardScene={approveCurrentStoryboardScene}
                 onUpdateDirectorReviewState={updateDirectorReviewState}
                 onRunStage={(stageId) => {
                     const stage = stages.find((item) => item.stageId === stageId);
@@ -354,6 +373,7 @@ export default function EpisodeProductionWorkbenchPage() {
                 }}
                 onRunStoryboardScene={() => void runStoryboardScene()}
                 onSaveScript={saveScript}
+                onSummarizeStoryboardScenes={summarizeStoryboardScenes}
                 project={project}
                 previews={previews}
                 runningStageIds={runningStageIds}
@@ -408,10 +428,13 @@ function EpisodeProductionShell({
     onModuleChange,
     onOpenCanvas,
     onOpenDetail,
+    onApproveStageReview,
+    onApproveStoryboardScene,
     onUpdateDirectorReviewState,
     onRunStage,
     onRunStoryboardScene,
     onSaveScript,
+    onSummarizeStoryboardScenes,
     project,
     previews,
     runningStageIds,
@@ -441,10 +464,13 @@ function EpisodeProductionShell({
     onModuleChange: (module: EpisodeModuleKey) => void;
     onOpenCanvas: () => void;
     onOpenDetail: (record: EpisodeDetailRecord) => void;
+    onApproveStageReview: (stageId: string, note: string) => void;
+    onApproveStoryboardScene: () => void;
     onUpdateDirectorReviewState: (rowId: string, state: DirectorReviewState) => void;
     onRunStage: (stageId: string) => void;
     onRunStoryboardScene: () => void;
     onSaveScript: () => void;
+    onSummarizeStoryboardScenes: () => void;
     project: { id: string; title: string };
     previews: AgentWorkflowMappingPreview[];
     runningStageIds: Record<string, boolean>;
@@ -534,6 +560,7 @@ function EpisodeProductionShell({
         onApplyPreview,
         onGeneratePreview,
         onOpenCanvas,
+        onApproveStageReview,
         onUpdateDirectorReviewState,
         onRunStage,
         onRunStoryboardScene,
@@ -645,6 +672,7 @@ function EpisodeProductionShell({
                                 assets={assetRows}
                                 episode={episode}
                                 onApplyPreview={onApplyPreview}
+                                onApproveStageReview={onApproveStageReview}
                                 onBindAsset={bindExtractedAsset}
                                 onGeneratePreview={onGeneratePreview}
                                 onOpenImageWorkbench={openImageWorkbenchWithPrompt}
@@ -655,14 +683,22 @@ function EpisodeProductionShell({
                                 runningStageIds={runningStageIds}
                                 stageActionHint={assetStageActionHint}
                                 stageOutputs={stageOutputs}
+                                workflowRun={workflowRun}
                             />
                         ) : activeModule === "storyboard" ? (
                             <EpisodeStoryboardPackagePage
                                 episode={episode}
+                                appliedPreviewItemIds={appliedPreviewItemIds}
+                                applyingPreviewIds={applyingPreviewIds}
+                                currentSceneState={currentSceneState}
+                                onApplyPreview={onApplyPreview}
+                                onApproveStoryboardScene={onApproveStoryboardScene}
                                 onGeneratePreview={onGeneratePreview}
                                 onOpenAssets={() => onModuleChange("assets")}
                                 onOpenCanvas={onOpenCanvas}
                                 onRunStoryboardScene={onRunStoryboardScene}
+                                onSummarizeStoryboardScenes={onSummarizeStoryboardScenes}
+                                previews={previews}
                                 projectTitle={project.title}
                                 runningStoryboard={currentSceneState?.status === "running"}
                                 segments={packageSegments}
@@ -724,6 +760,7 @@ function buildEpisodeModuleConfig(input: {
     onApplyPreview: (preview: AgentWorkflowMappingPreview) => void;
     onGeneratePreview: (stageId: string, targetLabel: string) => void;
     onOpenCanvas: () => void;
+    onApproveStageReview: (stageId: string, note: string) => void;
     onUpdateDirectorReviewState: (rowId: string, state: DirectorReviewState) => void;
     onRunStage: (stageId: string) => void;
     onRunStoryboardScene: () => void;
@@ -904,7 +941,7 @@ function buildEpisodeExtractedAssets({
     productionBibleItems: ProductionBibleItem[];
     projectId: string;
 }): EpisodeExtractedAsset[] {
-    if (!preview?.items.length) return fallbackEpisodeExtractedAssets({ assetLibrary, episode, episodeTableShots });
+    if (!preview?.items.length) return [];
     return preview.items.map((item, index) => {
         const type = episodeAssetTypeFromPreviewItem(item);
         const name = item.title || mappedFieldText(item.mappedFields.name) || `资产 ${index + 1}`;
@@ -930,33 +967,6 @@ function buildEpisodeExtractedAssets({
             status,
             tone: episodeExtractedAssetTone(status),
             type,
-        };
-    });
-}
-
-function fallbackEpisodeExtractedAssets({ assetLibrary, episode, episodeTableShots }: { assetLibrary: Asset[]; episode: ScriptEpisode; episodeTableShots: StoryboardTableShot[] }): EpisodeExtractedAsset[] {
-    const fallbackRows: Array<Pick<EpisodeExtractedAsset, "description" | "name" | "type">> = [
-        { description: "女主，旧楼交易线索相关，需保持表情和服装连续性。", name: "林秀妹", type: "角色" },
-        { description: "海边柴油仓库，半开铁门、强逆光、潮湿地面和旧油桶。", name: "海边柴油仓库", type: "场景" },
-        { description: "关键威胁道具，金属反光，需要与动作镜头一致。", name: "弹簧刀", type: "道具" },
-        { description: "旧油桶、残液、柴油味，是本集冲突升级的视觉锚点。", name: "旧油桶", type: "道具" },
-        { description: "雨夜追查用深色短款外套，湿润反光，适合低机位跟拍。", name: "女主雨衣", type: "服装" },
-    ];
-    return fallbackRows.map((row, index) => {
-        const candidates = matchProjectAssetCandidates(assetLibrary, row);
-        const status: EpisodeExtractedAsset["status"] = candidates.length ? "待绑定" : index === 0 ? "待确认" : "待生成";
-        return {
-            ...row,
-            canGenerate: true,
-            candidates,
-            episodeLabel: `第 ${padEpisodeOrder(episode.order)} 集`,
-            id: `asset-fallback-${index}`,
-            libraryMatchCount: candidates.length,
-            promptDraft: makeAssetPromptDraft(row),
-            referencedShotLabels: referencedShotLabelsForAsset(episodeTableShots, row.name, row.description),
-            sourceReason: "等待资产提取 Agent 输出真实条目。",
-            status,
-            tone: episodeExtractedAssetTone(status),
         };
     });
 }
@@ -1073,6 +1083,7 @@ function buildAssetsModuleConfig(input: {
     appliedPreviewItemIds: string[];
     applyingPreviewIds: Record<string, boolean>;
     onApplyPreview: (preview: AgentWorkflowMappingPreview) => void;
+    onApproveStageReview: (stageId: string, note: string) => void;
     onGeneratePreview: (stageId: string, targetLabel: string) => void;
     onRunStage: (stageId: string) => void;
     previews: AgentWorkflowMappingPreview[];
@@ -1082,6 +1093,8 @@ function buildAssetsModuleConfig(input: {
 }): EpisodeModuleConfig {
     const preview = latestPreview(input.previews, "production_bible");
     const counts = preview ? previewCounts(preview, input.appliedPreviewItemIds) : { applied: 0, pending: 0, total: 0 };
+    const display = input.workflowRun ? summarizeWorkflowStageDisplayState(input.workflowRun, "art-design", []) : undefined;
+    const needsReview = display?.displayStatus === "review";
     const rows: EpisodeModuleRow[] = preview?.items.length
         ? preview.items.map((item, index): EpisodeModuleRow => {
               const applied = input.appliedPreviewItemIds.includes(workflowMappingPreviewItemKey(preview, item.itemId));
@@ -1111,11 +1124,20 @@ function buildAssetsModuleConfig(input: {
         : assetPlaceholderRows();
     return {
         actions: [
+            ...(needsReview
+                ? [
+                      {
+                          label: "批准资产提取",
+                          onClick: () => input.onApproveStageReview("art-design", "资产提取结果已确认。"),
+                          primary: true,
+                      },
+                  ]
+                : []),
             {
                 label: input.stageOutputs["art-design"] ? "生成资产预览" : "运行资产提取",
                 loading: Boolean(input.runningStageIds["art-design"]),
                 onClick: () => (input.stageOutputs["art-design"] ? input.onGeneratePreview("art-design", "设定库预览") : input.onRunStage("art-design")),
-                primary: true,
+                primary: !needsReview,
             },
             {
                 disabled: !preview || counts.pending <= 0,

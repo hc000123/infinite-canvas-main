@@ -20,7 +20,9 @@ import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/ima
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useLocalAiTaskLogStore } from "@/stores/use-local-ai-task-log-store";
 import type { ReferenceImage } from "@/types/image";
+import { buildAssetVersionReference } from "../assets/asset-version-references";
 import { useImageBriefStore } from "../canvas/stores/use-image-brief-store";
+import { useProductionBibleStore } from "../canvas/stores/use-production-bible-store";
 
 type GeneratedImage = {
     id: string;
@@ -98,6 +100,8 @@ export default function ImagePage() {
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
     const addBriefResultAsset = useImageBriefStore((state) => state.addResultAsset);
+    const productionBibleItems = useProductionBibleStore((state) => state.items);
+    const updateProductionBibleItem = useProductionBibleStore((state) => state.updateItem);
     const [prompt, setPrompt] = useState("");
     const [references, setReferences] = useState<ReferenceImage[]>([]);
     const [results, setResults] = useState<GenerationResult[]>([]);
@@ -255,14 +259,26 @@ export default function ImagePage() {
                 episodeId: sourceContext.episodeId,
                 imageBriefId: sourceContext.briefId,
                 assetBreakdownItemId: sourceContext.assetId,
+                productionBibleItemId: sourceContext.assetId,
             },
         });
+        const linkedBibleItem = productionBibleItems.find((item) => item.id === sourceContext.assetId && (!sourceContext.projectId || item.projectId === sourceContext.projectId));
+        if (linkedBibleItem) {
+            const savedAsset = useAssetStore.getState().assets.find((asset) => asset.id === assetId);
+            const nextRefs = linkedBibleItem.assetRefs.some((ref) => ref.assetId === assetId)
+                ? linkedBibleItem.assetRefs
+                : [
+                      ...linkedBibleItem.assetRefs,
+                      savedAsset ? { assetId, assetVersion: buildAssetVersionReference(savedAsset), role: "generated_reference" } : { assetId, role: "generated_reference" },
+                  ];
+            updateProductionBibleItem(linkedBibleItem.id, { assetRefs: nextRefs });
+        }
         if (sourceContext.briefId) {
             addBriefResultAsset(sourceContext.briefId, assetId);
-            message.success("已加入我的素材，并回写到当前 Brief");
+            message.success(linkedBibleItem ? "已加入我的素材，并回写到当前 Brief 和设定库" : "已加入我的素材，并回写到当前 Brief");
             return;
         }
-        message.success("已加入我的素材");
+        message.success(linkedBibleItem ? "已加入我的素材，并绑定到当前设定库资产" : "已加入我的素材");
     };
 
     const insertPickedAsset = async (payload: InsertAssetPayload) => {

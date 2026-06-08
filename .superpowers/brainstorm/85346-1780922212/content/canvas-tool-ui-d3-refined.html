@@ -1,0 +1,116 @@
+<style>
+  .stage { margin-top:18px; display:grid; grid-template-columns:1.35fr .9fr; gap:18px; align-items:start; }
+  .mock { position:relative; height:560px; overflow:hidden; border:1px solid #262a33; border-radius:18px; background:#101217; color:#edf0f5; box-shadow:0 30px 90px rgba(0,0,0,.28); }
+  .grid { position:absolute; inset:0; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:34px 34px; mask-image:radial-gradient(circle at 52% 48%,#000 0,rgba(0,0,0,.82) 42%,rgba(0,0,0,.28) 100%); }
+  .top { position:absolute; left:0; right:0; top:0; height:48px; display:flex; align-items:center; justify-content:space-between; padding:0 16px; border-bottom:1px solid #232731; background:rgba(16,18,23,.90); backdrop-filter:blur(18px); }
+  .title { display:flex; gap:8px; align-items:center; font-size:12px; color:#8f97a8; }
+  .title strong { color:#f2f4f8; font-weight:650; }
+  .top-actions { display:flex; gap:8px; align-items:center; font-size:11px; color:#aeb5c4; }
+  .chip { display:inline-flex; align-items:center; height:24px; padding:0 9px; border:1px solid #2c313d; border-radius:999px; background:#171a21; }
+  .rail { position:absolute; left:14px; top:66px; width:44px; padding:6px; border:1px solid #2a2f3a; border-radius:14px; background:#151821; box-shadow:0 18px 55px rgba(0,0,0,.28); }
+  .rail .ico { margin-bottom:6px; }
+  .ico { display:grid; place-items:center; width:32px; height:32px; border-radius:9px; color:#b5bdcc; font-size:12px; }
+  .ico.active { background:#243045; color:#8db8ff; box-shadow:inset 0 0 0 1px rgba(141,184,255,.12); }
+  .ico.danger { color:#ff6b81; }
+  .node { position:absolute; overflow:hidden; border:1px solid #2b303b; border-radius:18px; background:#171a21; box-shadow:0 24px 70px rgba(0,0,0,.32); }
+  .node.selected { border-color:#6fa8ff; box-shadow:0 0 0 1px rgba(111,168,255,.36),0 28px 80px rgba(0,0,0,.36); }
+  .image { background:linear-gradient(135deg,#25344b 0%,#7c6654 48%,#1f4b43 100%); }
+  .image::after { content:""; position:absolute; inset:0; background:radial-gradient(circle at 36% 20%,rgba(255,255,255,.20),transparent 30%),linear-gradient(to top,rgba(0,0,0,.62),transparent 56%); }
+  .node-caption { position:absolute; left:12px; right:12px; bottom:11px; display:flex; justify-content:space-between; font-size:11px; color:#f5f7fb; }
+  .text-node { padding:15px; font-size:12px; line-height:1.55; color:#c5cbd7; }
+  .text-node h4 { margin:0 0 8px; color:#f2f4f8; font-size:13px; }
+  .bar { height:7px; border-radius:999px; background:#303642; margin-top:9px; }
+  .bar.blue { background:#6fa8ff; width:72%; }
+  .bar.green { background:#57d57f; width:48%; }
+  .hoverbar,.bottombar,.inspector,.queue { position:absolute; border:1px solid #2a2f3a; background:#151821; box-shadow:0 20px 65px rgba(0,0,0,.34); backdrop-filter:blur(18px); }
+  .hoverbar { left:162px; top:76px; height:40px; padding:0 7px; border-radius:13px; display:flex; align-items:center; gap:4px; }
+  .bottombar { left:50%; bottom:22px; transform:translateX(-50%); height:48px; padding:0 9px; border-radius:15px; display:flex; align-items:center; gap:5px; }
+  .sep { width:1px; height:22px; background:#2c313d; margin:0 4px; }
+  .inspector { right:16px; top:66px; width:178px; border-radius:16px; padding:14px; }
+  .queue { right:16px; bottom:88px; width:178px; border-radius:16px; padding:13px; }
+  .panel-title { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; color:#f2f4f8; font-size:12px; font-weight:650; }
+  .panel-title span { color:#768092; font-weight:500; font-size:10px; }
+  .field { margin-top:10px; }
+  .field label { display:block; margin-bottom:6px; color:#7e8798; font-size:10px; }
+  .input { height:28px; border:1px solid #2c313d; border-radius:9px; background:#101217; }
+  .mini-row { display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-top:1px solid #242934; font-size:11px; color:#aeb5c4; }
+  .status { color:#6fa8ff; }
+  .legend { display:grid; gap:12px; }
+  .option { border-radius:16px; border:1px solid #dde1ea; padding:16px; background:#fff; cursor:pointer; }
+  .option h3 { margin:0 0 8px; font-size:16px; }
+  .option p { margin:0; line-height:1.58; color:#5d6472; }
+  .tokens { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:12px; }
+  .swatch { height:34px; border-radius:10px; border:1px solid rgba(0,0,0,.08); }
+  @media (max-width: 980px) { .stage { grid-template-columns:1fr; } }
+</style>
+
+<h2>D3 收敛版：暗色 AI 创作台</h2>
+<p class="subtitle">这版不再发散，直接把 D3 变成可落地的主方向：近黑画布、蓝色只做焦点、控件更像真实生产工具。下面右侧是我建议的设计规则。</p>
+
+<div class="stage">
+  <div class="mock" data-choice="d3-refined" onclick="toggleSelect(this)">
+    <div class="grid"></div>
+    <div class="top">
+      <div class="title"><strong>眨眼之间</strong><span>/</span><span>第 02 集画布</span></div>
+      <div class="top-actions"><span class="chip">生成中 3</span><span class="chip">本地保存</span></div>
+    </div>
+    <div class="rail">
+      <div class="ico active">✦</div>
+      <div class="ico">T</div>
+      <div class="ico">▧</div>
+      <div class="ico">▶</div>
+      <div class="ico">↥</div>
+      <div class="ico">⌘</div>
+    </div>
+    <div class="node image selected" style="left:108px;top:132px;width:194px;height:138px;">
+      <div class="node-caption"><span>角色参考</span><span>1536×864</span></div>
+    </div>
+    <div class="node text-node" style="left:338px;top:206px;width:190px;height:148px;">
+      <h4>视频生成节点</h4>
+      <div>使用角色参考，生成近景回头镜头。低色温侧光，背景保持虚化。</div>
+      <div class="bar blue"></div>
+      <div class="bar"></div>
+    </div>
+    <div class="node text-node" style="left:142px;top:324px;width:164px;height:116px;">
+      <h4>配置节点</h4>
+      <div>Seedance 2.0<br><span style="color:#858fa2">16:9 · 5s · 镜头运动</span></div>
+      <div class="bar green"></div>
+    </div>
+    <div class="hoverbar"><div class="ico active">✦</div><div class="ico">↧</div><div class="ico">✎</div><div class="ico">□</div><div class="sep"></div><div class="ico danger">⌫</div></div>
+    <div class="inspector">
+      <div class="panel-title">节点设置 <span>IMAGE</span></div>
+      <div class="field"><label>生成模式</label><div class="input"></div></div>
+      <div class="field"><label>参考权重</label><div class="bar blue"></div></div>
+      <div class="field"><label>输出尺寸</label><div class="input" style="width:72%;"></div></div>
+    </div>
+    <div class="queue">
+      <div class="panel-title">任务队列 <span>3 RUNNING</span></div>
+      <div class="mini-row"><span>镜头 08</span><span class="status">62%</span></div>
+      <div class="mini-row"><span>角色角度</span><span>排队</span></div>
+      <div class="mini-row"><span>尾帧续写</span><span>排队</span></div>
+    </div>
+    <div class="bottombar"><div class="ico active">✦</div><div class="sep"></div><div class="ico">T</div><div class="ico">▧</div><div class="ico">▶</div><div class="ico">⌁</div><div class="sep"></div><div class="ico">↶</div><div class="ico">↷</div><div class="sep"></div><div class="ico">⚙</div></div>
+  </div>
+
+  <div class="legend">
+    <div class="option" data-choice="d3-rules" onclick="toggleSelect(this)">
+      <h3>建议采用这套规则</h3>
+      <p>整体做暗色 AI 创作台：工具栏少圆角、少阴影；节点保留柔和圆角；右侧面板承担状态和设置，减少底部工具栏塞满的感觉。</p>
+      <div class="tokens">
+        <div class="swatch" style="background:#101217"></div>
+        <div class="swatch" style="background:#151821"></div>
+        <div class="swatch" style="background:#2a2f3a"></div>
+        <div class="swatch" style="background:#6fa8ff"></div>
+        <div class="swatch" style="background:#57d57f"></div>
+      </div>
+    </div>
+    <div class="option" data-choice="d3-changes" onclick="toggleSelect(this)">
+      <h3>落地时优先改哪里</h3>
+      <p>先改画布主题 token、CanvasToolbar、CanvasToolButton、CanvasNodeHoverToolbar、节点边框/阴影。抽屉和复杂面板第二步再跟进，避免一次改太散。</p>
+    </div>
+    <div class="option" data-choice="d3-question" onclick="toggleSelect(this)">
+      <h3>还要确认的取舍</h3>
+      <p>左侧竖向工具栏是否要替代当前底部全量工具栏？我个人建议：保留底部快捷栏，但把“创建类工具”移到左侧，底部只放高频操作。</p>
+    </div>
+  </div>
+</div>

@@ -52,7 +52,7 @@ export function buildStoryboardProductionSegments({
     sceneOptions: Array<{ sceneKey: string; sceneLabel: string }>;
     scriptSnapshot: string;
 }): StoryboardStorySegment[] {
-    if (!episodeTableShots.length) return fallbackStoryboardProductionSegments(episode, scriptSnapshot);
+    if (!episodeTableShots.length) return [];
     const sortedShots = [...episodeTableShots].sort((a, b) => a.order - b.order);
     const groups: Array<{ key: string; name: string; shots: StoryboardTableShot[] }> = [];
     sortedShots.forEach((shot) => {
@@ -181,90 +181,6 @@ function storyboardPackageTone(status: StoryboardPackageStatus): EpisodeStatusTo
     return "slate";
 }
 
-function fallbackStoryboardProductionSegments(episode: ScriptEpisode, scriptSnapshot: string): StoryboardStorySegment[] {
-    const scriptBody = scriptSnapshot || episode.summary || "女主刚走到旧楼后门，身后忽然传来急刹车声。她停住脚步，手机屏幕亮了一下。路灯闪烁，巷口车灯把她的影子拉得很长。";
-    const packages: Array<Omit<StoryboardProductionPackage, "id" | "segmentId" | "tone"> & { segmentOrder: number }> = [
-        fallbackStoryboardPackage(1, 1, "建立环境与女主入场", "雨夜街口、旧楼后门，女主停步。", 12, "已确认", ["暗巷街景", "女主雨衣", "车灯背光", "旧楼后门", "潮湿地面"], scriptBody, [
-            ["女主停在旧楼后门", "全景 / 缓慢推进", 4],
-            ["雨水从门牌滴落", "特写 / 静止", 3],
-            ["车灯从巷口扫过", "中景 / 横移", 5],
-        ]),
-        fallbackStoryboardPackage(1, 2, "女主察觉危险", "急刹车声、回头、路灯闪烁。", 10, "待编辑", ["林澈", "暗巷街景", "车灯背光", "手机屏幕"], scriptBody, [
-            ["女主停下脚步，听见车声", "中近景 / 跟拍", 5],
-            ["她缓慢回头，表情紧张", "近景 / 稳定推进", 5],
-        ]),
-        fallbackStoryboardPackage(2, 3, "暗巷追击", "跟拍、转弯、车辆逼近。", 14, "缺资产", ["林澈", "暗巷街景"], scriptBody, [
-            ["女主沿暗巷奔跑", "全景 / 手持跟拍", 5],
-            ["脚步踩过积水", "特写 / 低机位", 3],
-            ["车辆灯光逼近", "中景 / 快速推近", 4],
-            ["她贴墙躲避", "近景 / 急停", 2],
-        ]),
-        fallbackStoryboardPackage(2, 4, "车灯扫出证据", "墙面、袖扣、女主拍照。", 11, "待审核", ["墙面反光", "带血袖扣", "手机屏幕"], scriptBody, [
-            ["车灯扫过墙面", "全景 / 横移", 4],
-            ["袖扣在水边反光", "特写 / 微距", 3],
-            ["女主迅速拍照留证", "近景 / 下压", 4],
-        ]),
-        fallbackStoryboardPackage(2, 5, "反派声音逼近", "脚步声、阴影、台词压迫。", 9, "已确认", ["反派阴影", "暗巷街景"], scriptBody, [["阴影越过墙面", "中景 / 缓慢推近", 9]]),
-        fallbackStoryboardPackage(3, 6, "仓库火把对峙", "女主进入柴油仓库，火把照亮油桶和刀光。", 18, "超时", ["海边柴油仓库", "旧油桶", "弹簧刀", "女主雨衣"], scriptBody, [
-            ["女主推开仓库铁门", "全景 / 前推", 5],
-            ["火把映亮旧油桶", "中景 / 环绕", 5],
-            ["反派亮出弹簧刀", "特写 / 急推", 4],
-            ["女主握紧手机后退", "近景 / 手持跟拍", 4],
-        ]),
-    ];
-    return [
-        fallbackStoryboardSegment(1, "雨夜追到旧楼后门", "原剧本 1-7 段", packages, scriptBody),
-        fallbackStoryboardSegment(2, "暗巷追击与证物发现", "原剧本 8-18 段", packages, scriptBody),
-        fallbackStoryboardSegment(3, "仓库对峙前的危险升级", "原剧本 19-26 段", packages, scriptBody),
-    ];
-}
-
-function fallbackStoryboardSegment(order: number, title: string, scriptRange: string, packages: Array<Omit<StoryboardProductionPackage, "id" | "segmentId" | "tone"> & { segmentOrder: number }>, scriptText: string): StoryboardStorySegment {
-    const segmentId = `fallback-segment-${order}`;
-    const segmentPackages = packages
-        .filter((pkg) => pkg.segmentOrder === order)
-        .map((pkg) => ({
-            ...pkg,
-            id: `fallback-package-${pkg.order}`,
-            segmentId,
-            tone: storyboardPackageTone(pkg.status),
-        }));
-    const status = segmentStatusFromPackages(segmentPackages);
-    return {
-        duration: segmentPackages.reduce((total, pkg) => total + pkg.duration, 0),
-        id: segmentId,
-        order,
-        packages: segmentPackages,
-        scriptRange,
-        scriptText,
-        status,
-        title,
-        tone: segmentToneFromStatus(status),
-    };
-}
-
-function fallbackStoryboardPackage(segmentOrder: number, order: number, title: string, summary: string, duration: number, status: StoryboardPackageStatus, assetLabels: string[], scriptText: string, shots: Array<[string, string, number]>) {
-    return {
-        assetLabels,
-        duration,
-        order,
-        promptSummary: `${summary} 电影级写实，低对比雨夜光影，镜头从半身逐渐推进到近景，保持动作连续和情绪压迫。`,
-        scriptText,
-        segmentOrder,
-        shots: shots.map(([shotTitle, camera, shotDuration], index) => ({
-            action: shotTitle,
-            camera,
-            duration: shotDuration,
-            id: `fallback-shot-${order}-${index}`,
-            order: index + 1,
-            prompt: `${shotTitle}，${camera}，${shotDuration} 秒，雨夜暗青色调，写实短剧影像质感。`,
-            title: shotTitle,
-        })),
-        status,
-        summary,
-        title,
-    };
-}
 
 function listSafeText(text: string, fallback: string) {
     const value = text.trim();

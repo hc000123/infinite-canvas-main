@@ -62,6 +62,7 @@ export default function ProjectAgentWorkspacePage() {
                             <p className="mt-2 text-sm text-stone-500">项目级统一入口；保留 workflow、单 Agent 配置、映射预览和草案记录，不在这里触发图片或视频生成。</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
+                            <Button href={`/projects/${project.id}/agent`}>打开旧 Agent 任务中心</Button>
                             {canvas ? <Tag className="m-0">{canvas.title}</Tag> : null}
                             {episodeTitle ? <Tag className="m-0">{episodeTitle}</Tag> : null}
                             {requestedCanvasId && !canvas ? <Tag className="m-0">未找到画布上下文</Tag> : null}

@@ -6,7 +6,7 @@ import { Button, Input } from "antd";
 import type { Asset } from "@/stores/use-asset-store";
 import type { ScriptEpisode } from "../../../../../../canvas/utils/script-management";
 import type { ProductionBibleItem } from "../../../../../../canvas/utils/production-bible";
-import { workflowMappingPreviewItemKey, type AgentWorkflowMappingPreview, type AgentWorkflowStageOutput } from "../../../../../agent-runner";
+import { summarizeWorkflowStageDisplayState, workflowMappingPreviewItemKey, type AgentWorkflowMappingPreview, type AgentWorkflowRunRecord, type AgentWorkflowStageOutput } from "../../../../../agent-runner";
 import { EpisodeStatusPill, episodeToneTextClass, type EpisodeStatusTone } from "./episode-module-panel";
 
 type EpisodeAssetProcessMode = "bind" | "generate";
@@ -37,6 +37,7 @@ export function EpisodeAssetsModulePage({
     assets,
     episode,
     onApplyPreview,
+    onApproveStageReview,
     onBindAsset,
     onGeneratePreview,
     onOpenImageWorkbench,
@@ -47,12 +48,14 @@ export function EpisodeAssetsModulePage({
     runningStageIds,
     stageActionHint,
     stageOutputs,
+    workflowRun,
 }: {
     appliedPreviewItemIds: string[];
     applyingPreviewIds: Record<string, boolean>;
     assets: EpisodeAssetRow[];
     episode: ScriptEpisode;
     onApplyPreview: (preview: AgentWorkflowMappingPreview) => void;
+    onApproveStageReview: (stageId: string, note: string) => void;
     onBindAsset: (row: EpisodeAssetRow, asset: Asset) => void;
     onGeneratePreview: (stageId: string, targetLabel: string) => void;
     onOpenImageWorkbench: (payload: OpenImageWorkbenchPayload) => void;
@@ -63,6 +66,7 @@ export function EpisodeAssetsModulePage({
     runningStageIds: Record<string, boolean>;
     stageActionHint: EpisodeStageActionHint;
     stageOutputs: Record<string, AgentWorkflowStageOutput | undefined>;
+    workflowRun?: AgentWorkflowRunRecord;
 }) {
     const [filter, setFilter] = useState<EpisodeAssetFilter>("全部");
     const [selectedAssetId, setSelectedAssetId] = useState("");
@@ -71,6 +75,8 @@ export function EpisodeAssetsModulePage({
     const selectedAsset = assets.find((asset) => asset.id === selectedAssetId) || filteredAssets[0] || assets[0];
     const summary = summarizeEpisodeExtractedAssets(assets);
     const previewCountsResult = preview ? previewCounts(preview, appliedPreviewItemIds) : { applied: 0, pending: 0, total: 0 };
+    const stageDisplay = workflowRun ? summarizeWorkflowStageDisplayState(workflowRun, "art-design", []) : undefined;
+    const needsReview = stageDisplay?.displayStatus === "review";
 
     useEffect(() => {
         if (!assets.length) {
@@ -101,6 +107,11 @@ export function EpisodeAssetsModulePage({
                 </div>
                 <div className="grid justify-items-start gap-2 xl:justify-items-end">
                     <div className="flex flex-wrap gap-2">
+                        {needsReview ? (
+                            <Button type="primary" onClick={() => onApproveStageReview("art-design", "资产提取结果已确认。")}>
+                                批准资产提取
+                            </Button>
+                        ) : null}
                         <Button
                             className="!border-slate-700 !bg-slate-950/55 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100"
                             disabled={stageActionHint.blocked}

@@ -1,0 +1,219 @@
+<style>
+  .canvas-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    margin-top: 18px;
+  }
+  .canvas-card {
+    cursor: pointer;
+    overflow: hidden;
+    border: 1px solid rgba(120, 113, 108, .22);
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 18px 45px rgba(41, 37, 36, .08);
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .canvas-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(47, 128, 255, .55);
+    box-shadow: 0 22px 60px rgba(41, 37, 36, .13);
+  }
+  .canvas-preview {
+    position: relative;
+    height: 310px;
+    overflow: hidden;
+    background: #f4f2ed;
+  }
+  .canvas-card-body {
+    padding: 16px 18px 18px;
+  }
+  .canvas-card-body h3 {
+    margin: 0 0 7px;
+    font-size: 18px;
+  }
+  .canvas-card-body p {
+    margin: 0;
+    color: #6b6259;
+    line-height: 1.58;
+  }
+  .grid-lines {
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(rgba(87,83,78,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(87,83,78,.12) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  .dot-grid {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(87,83,78,.25) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  .node {
+    position: absolute;
+    border-radius: 18px;
+    overflow: hidden;
+    background: #fffaf3;
+    border: 1px solid rgba(87, 83, 78, .22);
+    box-shadow: 0 16px 38px rgba(41, 37, 36, .12);
+  }
+  .node-img {
+    background: linear-gradient(135deg, #adc8f7, #ffe0c2 52%, #8dd0b4);
+  }
+  .node-text {
+    padding: 14px;
+    color: #34302b;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .toolbar {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid rgba(87, 83, 78, .18);
+    box-shadow: 0 16px 40px rgba(41, 37, 36, .12);
+  }
+  .tool {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+  .panel {
+    position: absolute;
+    right: 16px;
+    top: 28px;
+    width: 120px;
+    border-radius: 16px;
+    padding: 12px;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .tiny-row {
+    height: 7px;
+    margin-top: 8px;
+    border-radius: 999px;
+  }
+  .badge {
+    position: absolute;
+    left: 18px;
+    top: 18px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .dark .canvas-preview { background: #141414; }
+  .dark .grid-lines { background-image: linear-gradient(rgba(244,244,245,.10) 1px, transparent 1px), linear-gradient(90deg, rgba(244,244,245,.10) 1px, transparent 1px); }
+  @media (max-width: 900px) {
+    .canvas-options { grid-template-columns: 1fr; }
+  }
+</style>
+
+<h2>画布工具 UI 方向选择</h2>
+<p class="subtitle">我按当前项目的底部工具栏、节点悬浮工具条、右侧面板做了 4 个方向。点击你第一眼最想继续深化的方案，也可以直接在聊天里说“要 A 但借 C 的颜色”。</p>
+
+<div class="canvas-options">
+  <div class="canvas-card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="canvas-preview">
+      <div class="grid-lines"></div>
+      <div class="badge" style="background:#fff7ed;color:#9a3412;">A · 专业轻工作台</div>
+      <div class="node node-img" style="left:56px;top:76px;width:132px;height:96px;"></div>
+      <div class="node node-text" style="left:210px;top:118px;width:154px;height:104px;">生成提示词<br>参考图 3 张<br>尺寸 16:9<br>状态：待生成</div>
+      <div class="toolbar" style="left:50%;bottom:18px;transform:translateX(-50%);height:44px;padding:0 10px;border-radius:12px;background:rgba(255,255,255,.88);backdrop-filter:blur(14px);">
+        <div class="tool" style="background:#f4f4f5;">↖</div><div class="tool">T</div><div class="tool">▧</div><div class="tool">▶</div><div class="tool">↥</div><div class="tool">⚙</div>
+      </div>
+      <div class="toolbar" style="left:132px;top:48px;height:36px;padding:0 8px;border-radius:11px;background:#fff;">
+        <div class="tool">ⓘ</div><div class="tool">↧</div><div class="tool">✎</div><div class="tool">⌫</div>
+      </div>
+      <div class="panel" style="background:rgba(255,255,255,.82);border:1px solid rgba(87,83,78,.16);box-shadow:0 14px 35px rgba(41,37,36,.10);">
+        节点设置
+        <div class="tiny-row" style="background:#e7e5e4;"></div>
+        <div class="tiny-row" style="background:#d6d3d1;width:70%;"></div>
+        <div class="tiny-row" style="background:#2563eb;width:52%;"></div>
+      </div>
+    </div>
+    <div class="canvas-card-body">
+      <h3>A. 专业轻工作台</h3>
+      <p>保留浅色纸面，但工具栏更薄、更清楚；按钮用图标分组，选中状态克制。适合长期工作、不抢内容。</p>
+    </div>
+  </div>
+
+  <div class="canvas-card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="canvas-preview">
+      <div class="dot-grid"></div>
+      <div class="badge" style="background:#1f2937;color:#f9fafb;">B · 电影分镜台</div>
+      <div class="node node-img" style="left:50px;top:72px;width:142px;height:86px;border-radius:10px;border:3px solid #111827;"></div>
+      <div class="node" style="left:222px;top:100px;width:136px;height:106px;border-radius:10px;background:#fef3c7;border:2px solid #111827;padding:12px;font-size:12px;">SHOT 014<br>推轨近景<br>低色温侧逆光<br><span style="color:#b45309;">生成中 62%</span></div>
+      <div class="toolbar" style="left:50%;bottom:18px;transform:translateX(-50%);height:48px;padding:0 12px;border-radius:8px;background:#111827;color:#f9fafb;border-color:#111827;">
+        <div class="tool" style="background:#374151;">✋</div><div class="tool">T</div><div class="tool">▧</div><div class="tool">▣</div><div class="tool">🎬</div><div class="tool">⚙</div>
+      </div>
+      <div class="toolbar" style="left:120px;top:42px;height:34px;padding:0 7px;border-radius:7px;background:#111827;color:#f9fafb;border-color:#111827;">
+        <div class="tool">⌕</div><div class="tool">↧</div><div class="tool">✂</div><div class="tool">✦</div>
+      </div>
+      <div class="panel" style="background:#fff7ed;border:2px solid #111827;box-shadow:8px 8px 0 rgba(17,24,39,.18);">
+        镜头流程
+        <div class="tiny-row" style="background:#111827;"></div>
+        <div class="tiny-row" style="background:#f59e0b;width:72%;"></div>
+        <div class="tiny-row" style="background:#ef4444;width:45%;"></div>
+      </div>
+    </div>
+    <div class="canvas-card-body">
+      <h3>B. 电影分镜台</h3>
+      <p>更有影视制作感：硬朗边框、镜头标签、时间线感更强。个性鲜明，但比 A 更重、更“工具软件”。</p>
+    </div>
+  </div>
+
+  <div class="canvas-card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="canvas-preview">
+      <div class="grid-lines" style="opacity:.45;"></div>
+      <div class="badge" style="background:rgba(255,255,255,.75);color:#334155;backdrop-filter:blur(10px);">C · 轻量玻璃创作台</div>
+      <div class="node node-img" style="left:58px;top:70px;width:138px;height:100px;border-radius:22px;border:1px solid rgba(255,255,255,.7);box-shadow:0 22px 60px rgba(59,130,246,.18);"></div>
+      <div class="node node-text" style="left:220px;top:116px;width:148px;height:98px;border-radius:22px;background:rgba(255,255,255,.72);backdrop-filter:blur(16px);">灵感节点<br>更轻的输入区域<br>更柔的浮层</div>
+      <div class="toolbar" style="left:50%;bottom:18px;transform:translateX(-50%);height:46px;padding:0 10px;border-radius:999px;background:rgba(255,255,255,.66);backdrop-filter:blur(20px);">
+        <div class="tool" style="background:#ffffff;">✋</div><div class="tool">T</div><div class="tool">▧</div><div class="tool">▶</div><div class="tool">↥</div><div class="tool">⚙</div>
+      </div>
+      <div class="toolbar" style="left:124px;top:42px;height:38px;padding:0 8px;border-radius:999px;background:rgba(255,255,255,.70);backdrop-filter:blur(18px);">
+        <div class="tool">ⓘ</div><div class="tool">↧</div><div class="tool">✎</div><div class="tool">⌫</div>
+      </div>
+      <div class="panel" style="background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.75);backdrop-filter:blur(18px);box-shadow:0 22px 60px rgba(15,23,42,.10);">
+        外观
+        <div class="tiny-row" style="background:#bfdbfe;"></div>
+        <div class="tiny-row" style="background:#c4b5fd;width:70%;"></div>
+        <div class="tiny-row" style="background:#99f6e4;width:48%;"></div>
+      </div>
+    </div>
+    <div class="canvas-card-body">
+      <h3>C. 轻量玻璃创作台</h3>
+      <p>最现代、最柔和，适合 AI 创作产品。风险是如果玻璃感过度，会显得不够稳，需要控制透明和阴影。</p>
+    </div>
+  </div>
+
+  <div class="canvas-card dark" data-choice="d" onclick="toggleSelect(this)">
+    <div class="canvas-preview">
+      <div class="grid-lines"></div>
+      <div class="badge" style="background:#27272a;color:#e4e4e7;border:1px solid #3f3f46;">D · 暗色创作软件</div>
+      <div class="node node-img" style="left:58px;top:74px;width:138px;height:96px;border-radius:16px;border:1px solid #3f3f46;box-shadow:0 18px 50px rgba(0,0,0,.35);"></div>
+      <div class="node" style="left:220px;top:118px;width:150px;height:100px;border-radius:16px;background:#202024;color:#f4f4f5;border:1px solid #3f3f46;padding:14px;font-size:12px;">配置节点<br><span style="color:#a1a1aa;">模型 / 尺寸 / 参考</span><br><span style="color:#22c55e;">Ready</span></div>
+      <div class="toolbar" style="left:50%;bottom:18px;transform:translateX(-50%);height:46px;padding:0 10px;border-radius:12px;background:#242428;color:#e4e4e7;border-color:#3f3f46;">
+        <div class="tool" style="background:#3f3f46;">✋</div><div class="tool">T</div><div class="tool">▧</div><div class="tool">▶</div><div class="tool">↥</div><div class="tool">⚙</div>
+      </div>
+      <div class="toolbar" style="left:124px;top:44px;height:36px;padding:0 8px;border-radius:12px;background:#242428;color:#e4e4e7;border-color:#3f3f46;">
+        <div class="tool">ⓘ</div><div class="tool">↧</div><div class="tool">✎</div><div class="tool" style="color:#fb7185;">⌫</div>
+      </div>
+      <div class="panel" style="background:#202024;color:#e4e4e7;border:1px solid #3f3f46;box-shadow:0 20px 55px rgba(0,0,0,.38);">
+        Inspector
+        <div class="tiny-row" style="background:#3f3f46;"></div>
+        <div class="tiny-row" style="background:#6366f1;width:72%;"></div>
+        <div class="tiny-row" style="background:#22c55e;width:46%;"></div>
+      </div>
+    </div>
+    <div class="canvas-card-body">
+      <h3>D. 暗色创作软件</h3>
+      <p>更像专业剪辑/设计工具，聚焦内容、对比强。适合夜间创作，但需要同步做好浅色主题对应版本。</p>
+    </div>
+  </div>
+</div>

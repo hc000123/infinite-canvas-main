@@ -1,0 +1,2 @@
+{"type":"click","text":"设计 token\n      收敛到近黑蓝灰、低对比面板、信号蓝焦点、柔绿色状态。减少 cyan、stone、teal 到处混用。\n      #101217#151821#6fa8ff#57d57f","choice":"tokens","id":null,"timestamp":1780922803896}
+{"type":"click","text":"第一阶段覆盖\n      用户侧所有主页面统一：项目、项目详情、生图、视频、提示词、素材、画布。后台只同步基础 token，第二阶段再细化。\n      /projects/image/video/prompts/assets/canvas","choice":"scope","id":null,"timestamp":1780922804471}

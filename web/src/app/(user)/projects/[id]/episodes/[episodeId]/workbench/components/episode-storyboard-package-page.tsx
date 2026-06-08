@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { App, Button, Input } from "antd";
 
 import type { ScriptEpisode } from "../../../../../../canvas/utils/script-management";
+import { workflowMappingPreviewItemKey, type AgentWorkflowMappingPreview, type AgentWorkflowSceneRunState } from "../../../../../agent-runner";
 import { EpisodeStatusPill, episodeToneTextClass, type EpisodeStatusTone } from "./episode-module-panel";
 
 type StoryboardPackageDrawerTab = "shots" | "script" | "prompt" | "assets";
@@ -47,20 +48,34 @@ export type StoryboardPackageStorySegment = {
 };
 
 export function EpisodeStoryboardPackagePage({
+    appliedPreviewItemIds,
+    applyingPreviewIds,
+    currentSceneState,
     episode,
+    onApplyPreview,
+    onApproveStoryboardScene,
     onGeneratePreview,
     onOpenAssets,
     onOpenCanvas,
     onRunStoryboardScene,
+    onSummarizeStoryboardScenes,
+    previews,
     projectTitle,
     runningStoryboard,
     segments,
 }: {
+    appliedPreviewItemIds: string[];
+    applyingPreviewIds: Record<string, boolean>;
+    currentSceneState?: AgentWorkflowSceneRunState;
     episode: ScriptEpisode;
+    onApplyPreview: (preview: AgentWorkflowMappingPreview) => void;
+    onApproveStoryboardScene: () => void;
     onGeneratePreview: (stageId: string, targetLabel: string) => void;
     onOpenAssets: () => void;
     onOpenCanvas: () => void;
     onRunStoryboardScene: () => void;
+    onSummarizeStoryboardScenes: () => void;
+    previews: AgentWorkflowMappingPreview[];
     projectTitle: string;
     runningStoryboard: boolean;
     segments: StoryboardPackageStorySegment[];
@@ -83,6 +98,12 @@ export function EpisodeStoryboardPackagePage({
     const selectedPackage = allPackages.find((pkg) => pkg.id === selectedPackageId) || filteredSegments.flatMap((segment) => segment.packages)[0] || allPackages[0];
     const selectedSegment = selectedPackage ? segments.find((segment) => segment.id === selectedPackage.segmentId) : undefined;
     const summary = summarizeStoryboardProductionSegments(segments);
+    const storyboardPreview = latestPreview(previews, "storyboard_table");
+    const videoPreview = latestPreview(previews, "video_node");
+    const storyboardCounts = storyboardPreview ? previewCounts(storyboardPreview, appliedPreviewItemIds) : { pending: 0, total: 0 };
+    const videoCounts = videoPreview ? previewCounts(videoPreview, appliedPreviewItemIds) : { pending: 0, total: 0 };
+    const sceneNeedsReview = currentSceneState?.status === "review";
+    const hasApprovedScenes = Boolean(currentSceneState?.status === "approved" || segments.some((segment) => segment.status === "已确认" || segment.packages.some((pkg) => pkg.status === "已确认")));
 
     useEffect(() => {
         if (!allPackages.length) {
@@ -115,11 +136,25 @@ export function EpisodeStoryboardPackagePage({
                     <p className="mt-2 break-words text-sm leading-6 text-slate-500">分镜 Agent 先拆剧情段落，再生成 15 秒以内生产包；确认后按包导入画布承接。</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    {sceneNeedsReview ? (
+                        <Button type="primary" onClick={onApproveStoryboardScene}>
+                            批准当前场次
+                        </Button>
+                    ) : null}
+                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" disabled={!hasApprovedScenes} onClick={onSummarizeStoryboardScenes}>
+                        汇总已批准场次
+                    </Button>
                     <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" loading={runningStoryboard} onClick={onRunStoryboardScene}>
                         重跑段落拆解
                     </Button>
-                    <Button type="primary" onClick={() => notifyAction("新增生产包")}>
-                        新增生产包
+                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" onClick={() => onGeneratePreview("seedance-storyboard", "分镜表和视频节点预览")}>
+                        生成预览
+                    </Button>
+                    <Button disabled={!storyboardPreview || storyboardCounts.pending <= 0} loading={Boolean(storyboardPreview && applyingPreviewIds[storyboardPreview.previewId])} onClick={() => storyboardPreview && onApplyPreview(storyboardPreview)}>
+                        写入分镜表 {storyboardCounts.pending ? storyboardCounts.pending : ""}
+                    </Button>
+                    <Button type="primary" disabled={!videoPreview || videoCounts.pending <= 0} loading={Boolean(videoPreview && applyingPreviewIds[videoPreview.previewId])} onClick={() => videoPreview && onApplyPreview(videoPreview)}>
+                        创建视频节点 {videoCounts.pending ? videoCounts.pending : ""}
                     </Button>
                 </div>
             </div>
@@ -495,6 +530,18 @@ function filterStoryboardPackage(pkg: StoryboardProductionPackage, filter: Story
     if (filter === "全部") return true;
     if (filter === "超时") return pkg.status === "超时" || pkg.duration > 15;
     return pkg.status === filter;
+}
+
+function latestPreview(previews: AgentWorkflowMappingPreview[], targetType: AgentWorkflowMappingPreview["targetType"]) {
+    return previews
+        .filter((preview) => preview.targetType === targetType)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+}
+
+function previewCounts(preview: AgentWorkflowMappingPreview, appliedPreviewItemIds: string[]) {
+    const creatable = preview.items.filter((item) => item.targetType === preview.targetType && item.action === "create");
+    const applied = creatable.filter((item) => appliedPreviewItemIds.includes(workflowMappingPreviewItemKey(preview, item.itemId))).length;
+    return { applied, pending: Math.max(0, creatable.length - applied), total: creatable.length };
 }
 
 function padEpisodeOrder(order: number) {

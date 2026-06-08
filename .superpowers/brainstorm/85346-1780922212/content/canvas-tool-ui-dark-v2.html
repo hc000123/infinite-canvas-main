@@ -1,0 +1,102 @@
+<style>
+  .dark-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-top:18px; }
+  .dark-card { cursor:pointer; overflow:hidden; border-radius:16px; border:1px solid #26272b; background:#111214; box-shadow:0 24px 70px rgba(0,0,0,.22); transition:transform .18s ease,border-color .18s ease; }
+  .dark-card:hover { transform:translateY(-2px); border-color:#525866; }
+  .preview { position:relative; height:430px; overflow:hidden; background:#121315; color:#e8e8ea; }
+  .preview::before { content:""; position:absolute; inset:0; background-image:linear-gradient(rgba(255,255,255,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px); background-size:32px 32px; mask-image:linear-gradient(to bottom,#000,rgba(0,0,0,.35)); }
+  .topbar { position:absolute; left:0; right:0; top:0; height:42px; display:flex; align-items:center; justify-content:space-between; padding:0 14px; border-bottom:1px solid #24262b; background:rgba(17,18,20,.88); backdrop-filter:blur(18px); font-size:11px; color:#a9adb8; }
+  .crumb { display:flex; align-items:center; gap:7px; }
+  .pill { border:1px solid #30333a; border-radius:999px; padding:4px 8px; color:#cfd2da; background:#1a1b1f; }
+  .node { position:absolute; overflow:hidden; border:1px solid #2c2f36; background:#181a1f; box-shadow:0 20px 60px rgba(0,0,0,.30); }
+  .media { background:linear-gradient(135deg,#27384d,#79644f 46%,#24473f); }
+  .media::after { content:""; position:absolute; inset:0; background:radial-gradient(circle at 30% 20%,rgba(255,255,255,.18),transparent 32%),linear-gradient(to top,rgba(0,0,0,.48),transparent 60%); }
+  .caption { position:absolute; left:10px; right:10px; bottom:10px; font-size:11px; color:#f4f4f5; display:flex; justify-content:space-between; align-items:center; }
+  .node-text { padding:13px; font-size:11px; line-height:1.5; color:#d8dbe2; }
+  .node-title { font-weight:650; color:#f2f4f8; margin-bottom:7px; }
+  .muted { color:#8f96a3; }
+  .toolbar { position:absolute; display:flex; align-items:center; border:1px solid #30333a; background:#18191d; box-shadow:0 18px 55px rgba(0,0,0,.34); }
+  .tool { width:30px; height:30px; display:grid; place-items:center; border-radius:7px; color:#c9ccd4; font-size:12px; }
+  .tool.active { background:#2e3138; color:#fff; }
+  .tool.warn { color:#ff637a; }
+  .divider { width:1px; height:20px; background:#30333a; margin:0 4px; }
+  .rail { position:absolute; left:12px; top:58px; width:42px; padding:6px; display:flex; flex-direction:column; gap:6px; border:1px solid #2c2f36; background:#17181c; border-radius:12px; box-shadow:0 18px 50px rgba(0,0,0,.28); }
+  .rail .tool { width:30px; height:30px; }
+  .inspector { position:absolute; right:12px; top:58px; width:116px; border:1px solid #2c2f36; background:#17181c; border-radius:12px; padding:11px; box-shadow:0 18px 50px rgba(0,0,0,.30); }
+  .section-label { font-size:10px; color:#858b96; margin-bottom:9px; text-transform:uppercase; letter-spacing:.02em; }
+  .field { height:8px; border-radius:999px; background:#30333a; margin:8px 0; }
+  .field.short { width:58%; }
+  .field.mid { width:76%; }
+  .accent-blue { background:#6ea8ff; }
+  .accent-green { background:#52d273; }
+  .accent-amber { background:#d6a74a; }
+  .card-body { padding:14px 15px 16px; }
+  .card-body h3 { margin:0 0 7px; color:#f3f4f6; font-size:16px; }
+  .card-body p { margin:0; color:#a3a8b3; line-height:1.55; font-size:13px; }
+  .label { position:absolute; left:14px; bottom:14px; color:#737986; font-size:10px; }
+  .v2 .preview { background:#0f1013; }
+  .v2 .node { border-radius:10px; }
+  .v2 .toolbar { border-radius:10px; }
+  .v3 .preview { background:#151515; }
+  .v3 .preview::before { background-image:radial-gradient(rgba(255,255,255,.075) 1px,transparent 1px); background-size:22px 22px; }
+  .v3 .node { border-radius:6px; border-color:#343434; background:#1b1b1b; box-shadow:none; }
+  .v3 .toolbar { border-radius:6px; background:#1b1b1b; border-color:#343434; box-shadow:0 12px 35px rgba(0,0,0,.26); }
+  .v3 .tool { border-radius:4px; }
+  .v3 .topbar,.v3 .rail,.v3 .inspector { background:#181818; border-color:#343434; border-radius:6px; }
+  .v4 .preview { background:#111318; }
+  .v4 .node { border-radius:18px; background:#181b22; }
+  .v4 .toolbar { border-radius:14px; background:#191c22; }
+  .v4 .tool.active { background:#293241; color:#8fb9ff; }
+  @media (max-width: 1050px) { .dark-options { grid-template-columns:1fr; } }
+</style>
+
+<h2>暗色方向重新打磨</h2>
+<p class="subtitle">我把 D 拆成 3 个更实际的方向：一个更专业像剪辑软件，一个更冷静像设计工具，一个更柔和像 AI 创作台。重点看：工具栏形状、节点质感、右侧面板是否舒服。</p>
+
+<div class="dark-options">
+  <div class="dark-card v2" data-choice="d1" onclick="toggleSelect(this)">
+    <div class="preview">
+      <div class="topbar"><div class="crumb"><span>Canvas</span><span>/</span><span style="color:#e7e9ee">镜头生产</span></div><div class="pill">本地草稿</div></div>
+      <div class="rail"><div class="tool active">⌁</div><div class="tool">T</div><div class="tool">▧</div><div class="tool">▣</div><div class="tool">⌘</div></div>
+      <div class="node media" style="left:78px;top:86px;width:150px;height:106px;"><div class="caption"><span>SHOT 08</span><span>16:9</span></div></div>
+      <div class="node node-text" style="left:250px;top:144px;width:152px;height:112px;"><div class="node-title">视频生成</div><div class="muted">参考：主角近景<br>动作：缓慢回头<br>状态：等待队列</div><div class="field accent-blue mid"></div></div>
+      <div class="toolbar" style="left:50%;bottom:20px;transform:translateX(-50%);height:44px;padding:0 8px;"><div class="tool active">⌁</div><div class="divider"></div><div class="tool">T</div><div class="tool">▧</div><div class="tool">▣</div><div class="tool">↥</div><div class="divider"></div><div class="tool">⌘</div><div class="tool warn">⌫</div></div>
+      <div class="toolbar" style="left:150px;top:58px;height:36px;padding:0 6px;"><div class="tool">ⓘ</div><div class="tool">↧</div><div class="tool">✎</div><div class="tool">□</div></div>
+      <div class="inspector"><div class="section-label">Inspector</div><div class="field"></div><div class="field mid"></div><div class="field accent-green short"></div></div>
+    </div>
+    <div class="card-body">
+      <h3>D1. 专业剪辑台</h3>
+      <p>左侧主工具 + 底部快捷工具，像剪辑/调色软件。最稳、最专业，适合重度生产流程。</p>
+    </div>
+  </div>
+
+  <div class="dark-card v3" data-choice="d2" onclick="toggleSelect(this)">
+    <div class="preview">
+      <div class="topbar"><div class="crumb"><span>Production Canvas</span></div><div class="pill">72%</div></div>
+      <div class="node media" style="left:46px;top:86px;width:166px;height:112px;"><div class="caption"><span>image_024</span><span>ready</span></div></div>
+      <div class="node node-text" style="left:238px;top:124px;width:158px;height:126px;"><div class="node-title">Prompt Block</div><div class="muted">冷灰色背景，电影级侧光，角色半身构图。</div><div class="field"></div><div class="field short"></div></div>
+      <div class="toolbar" style="left:50%;bottom:22px;transform:translateX(-50%);height:40px;padding:0 7px;"><div class="tool active">V</div><div class="tool">T</div><div class="tool">I</div><div class="tool">M</div><div class="divider"></div><div class="tool">↶</div><div class="tool">↷</div><div class="divider"></div><div class="tool">⌫</div></div>
+      <div class="toolbar" style="left:128px;top:58px;height:32px;padding:0 5px;"><div class="tool">i</div><div class="tool">↓</div><div class="tool">↗</div></div>
+      <div class="inspector"><div class="section-label">Node</div><div class="field"></div><div class="field mid"></div><div class="field accent-amber short"></div></div>
+      <div class="label">No glow, no decoration, pure tool feeling</div>
+    </div>
+    <div class="card-body">
+      <h3>D2. 冷静设计工具</h3>
+      <p>去掉大阴影和花哨质感，接近 Figma/Linear 的冷静感。更耐看，但情绪更淡。</p>
+    </div>
+  </div>
+
+  <div class="dark-card v4" data-choice="d3" onclick="toggleSelect(this)">
+    <div class="preview">
+      <div class="topbar"><div class="crumb"><span>AI Canvas</span><span style="color:#7da7ff">/ Assistant flow</span></div><div class="pill">生成中 3</div></div>
+      <div class="node media" style="left:66px;top:82px;width:150px;height:110px;"><div class="caption"><span>角色参考</span><span>asset</span></div></div>
+      <div class="node node-text" style="left:244px;top:132px;width:158px;height:128px;"><div class="node-title">灵感生成</div><div class="muted">把选中素材扩展为三版风格探索。</div><div class="field accent-blue"></div><div class="field mid"></div></div>
+      <div class="toolbar" style="left:50%;bottom:20px;transform:translateX(-50%);height:46px;padding:0 9px;"><div class="tool active">✦</div><div class="tool">T</div><div class="tool">▧</div><div class="tool">▶</div><div class="divider"></div><div class="tool">↥</div><div class="tool">⚙</div></div>
+      <div class="toolbar" style="left:144px;top:58px;height:38px;padding:0 7px;"><div class="tool active">✦</div><div class="tool">↧</div><div class="tool">✎</div><div class="tool">□</div></div>
+      <div class="inspector"><div class="section-label">Generate</div><div class="field accent-blue"></div><div class="field mid"></div><div class="field short"></div></div>
+    </div>
+    <div class="card-body">
+      <h3>D3. 暗色 AI 创作台</h3>
+      <p>保留专业暗色，但加一点 AI 产品的柔和蓝色焦点。比 D1 轻，比 D2 有温度。</p>
+    </div>
+  </div>
+</div>
