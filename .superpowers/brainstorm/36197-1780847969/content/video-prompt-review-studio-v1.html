@@ -1,0 +1,532 @@
+<style>
+  .stage {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 14% 9%, rgba(19, 194, 205, 0.12), transparent 28%),
+      linear-gradient(135deg, #0f1721 0%, #070b10 72%, #0b1018 100%);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.34);
+    color: #eff8fa;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .mock {
+    min-height: 820px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 410px;
+  }
+
+  .main {
+    padding: 24px 26px;
+    min-width: 0;
+  }
+
+  .drawer {
+    border-left: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(1, 7, 12, 0.26);
+    padding: 22px 18px;
+  }
+
+  .crumb {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 12px;
+    margin-bottom: 7px;
+  }
+
+  .title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .title {
+    margin: 0;
+    font-size: 25px;
+    line-height: 1.18;
+    letter-spacing: 0;
+  }
+
+  .subline {
+    color: rgba(239, 248, 250, 0.58);
+    font-size: 13px;
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  .button {
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(255, 255, 255, 0.045);
+    color: rgba(239, 248, 250, 0.78);
+    padding: 0 11px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .button.primary {
+    border-color: rgba(20, 200, 212, 0.5);
+    background: linear-gradient(135deg, #18c8d6 0%, #0f96aa 100%);
+    color: #05262b;
+    font-weight: 760;
+  }
+
+  .button.warn {
+    border-color: rgba(238, 177, 70, 0.34);
+    background: rgba(238, 177, 70, 0.08);
+    color: #f1be63;
+  }
+
+  .title-actions,
+  .module-tabs,
+  .filters {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .module-tabs {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.13);
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+  }
+
+  .tab,
+  .filter {
+    height: 30px;
+    border-radius: 8px;
+    padding: 0 11px;
+    display: flex;
+    align-items: center;
+    color: rgba(239, 248, 250, 0.62);
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    font-size: 12px;
+  }
+
+  .tab.active,
+  .filter.active {
+    color: #dfffff;
+    border-color: rgba(20, 200, 212, 0.38);
+    background: rgba(20, 200, 212, 0.11);
+  }
+
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .metric {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    border-radius: 10px;
+    padding: 10px;
+  }
+
+  .metric span {
+    display: block;
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+  }
+
+  .metric strong {
+    display: block;
+    margin-top: 5px;
+    font-size: 19px;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+
+  .toolbar strong {
+    font-size: 15px;
+  }
+
+  .pack-table {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    border-radius: 11px;
+    overflow: hidden;
+  }
+
+  .thead,
+  .row {
+    display: grid;
+    grid-template-columns: 76px minmax(180px, 1fr) 80px 86px 92px 92px 126px;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .thead {
+    min-height: 38px;
+    padding: 0 14px;
+    color: rgba(239, 248, 250, 0.42);
+    font-size: 11px;
+    background: rgba(1, 7, 12, 0.22);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  }
+
+  .row {
+    min-height: 64px;
+    padding: 0 14px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    font-size: 12px;
+  }
+
+  .row:last-child {
+    border-bottom: 0;
+  }
+
+  .row.active {
+    background: rgba(20, 200, 212, 0.1);
+    box-shadow: inset 3px 0 0 #18c8d6;
+  }
+
+  .pack-title strong {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 3px;
+  }
+
+  .pack-title span {
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+  }
+
+  .badge {
+    justify-self: start;
+    border-radius: 7px;
+    padding: 4px 7px;
+    font-size: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    color: rgba(239, 248, 250, 0.62);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .badge.ok {
+    border-color: rgba(33, 210, 127, 0.34);
+    color: #68e29f;
+    background: rgba(33, 210, 127, 0.08);
+  }
+
+  .badge.work {
+    border-color: rgba(20, 200, 212, 0.38);
+    color: #67eef4;
+    background: rgba(20, 200, 212, 0.1);
+  }
+
+  .badge.warn {
+    border-color: rgba(238, 177, 70, 0.36);
+    color: #f1be63;
+    background: rgba(238, 177, 70, 0.08);
+  }
+
+  .actions {
+    display: flex;
+    gap: 7px;
+    justify-content: flex-end;
+  }
+
+  .row-button {
+    height: 27px;
+    border-radius: 7px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(239, 248, 250, 0.78);
+    font-size: 11px;
+    padding: 0 9px;
+  }
+
+  .row.active .row-button.primary-soft {
+    border-color: rgba(20, 200, 212, 0.42);
+    background: rgba(20, 200, 212, 0.13);
+    color: #dfffff;
+  }
+
+  .drawer-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 14px;
+  }
+
+  .drawer-head strong {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 5px;
+  }
+
+  .drawer-head span {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 11px;
+  }
+
+  .drawer-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 7px;
+    margin-bottom: 12px;
+  }
+
+  .drawer-tab {
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    color: rgba(239, 248, 250, 0.62);
+    font-size: 12px;
+  }
+
+  .drawer-tab.active {
+    color: #dfffff;
+    border-color: rgba(20, 200, 212, 0.38);
+    background: rgba(20, 200, 212, 0.11);
+  }
+
+  .field {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.032);
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  .field label {
+    display: block;
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+    margin-bottom: 6px;
+  }
+
+  .field div,
+  .prompt-box {
+    color: rgba(239, 248, 250, 0.76);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .prompt-box {
+    min-height: 150px;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 9px;
+    background: rgba(1, 7, 12, 0.28);
+    padding: 10px;
+  }
+
+  .ref-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .ref-card {
+    min-height: 64px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    padding: 8px;
+    font-size: 10px;
+    color: rgba(239, 248, 250, 0.68);
+  }
+
+  .drawer-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+
+  .note {
+    margin-top: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: #f8fafc;
+    color: #172033;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+</style>
+
+<h2>视频创作台重做：视频提示词审核台</h2>
+<p class="subtitle">正式项目流程不在这里直接生成视频。这里审核 Agent 产出的视频提示词、参考素材和配置，再导入画布执行。</p>
+
+<div class="stage">
+  <div class="mock">
+    <main class="main">
+      <div class="crumb">霓虹之下 / 第 05 集 / 视频提示词</div>
+      <div class="title-row">
+        <div>
+          <h1 class="title">视频提示词审核台</h1>
+          <div class="subline">承接分镜生产包和视频提示词 Agent 草案，确认后导入画布。真实视频生成在完整画布中执行。</div>
+        </div>
+        <div class="title-actions">
+          <button class="button">运行视频提示词 Agent</button>
+          <button class="button primary">导入已确认项到画布</button>
+        </div>
+      </div>
+
+      <div class="module-tabs">
+        <div class="tab">剧本</div>
+        <div class="tab">资产提取</div>
+        <div class="tab">分镜生产包</div>
+        <div class="tab active">视频提示词</div>
+        <div class="tab">画布承接</div>
+      </div>
+
+      <div class="summary">
+        <div class="metric"><span>生产包</span><strong>11</strong></div>
+        <div class="metric"><span>待审核</span><strong>4</strong></div>
+        <div class="metric"><span>缺参考</span><strong>2</strong></div>
+        <div class="metric"><span>可导入</span><strong>5</strong></div>
+        <div class="metric"><span>已导入</span><strong>3</strong></div>
+        <div class="metric"><span>已生成</span><strong>1</strong></div>
+      </div>
+
+      <div class="toolbar">
+        <strong>生产包视频提示词</strong>
+        <div class="filters">
+          <div class="filter active">全部</div>
+          <div class="filter">待审核</div>
+          <div class="filter">缺参考</div>
+          <div class="filter">可导入</div>
+          <div class="filter">已导入</div>
+        </div>
+      </div>
+
+      <div class="pack-table">
+        <div class="thead">
+          <div>生产包</div>
+          <div>内容</div>
+          <div>时长</div>
+          <div>提示词</div>
+          <div>参考素材</div>
+          <div>画布状态</div>
+          <div></div>
+        </div>
+
+        <div class="row">
+          <div>P01</div>
+          <div class="pack-title"><strong>建立环境与女主入场</strong><span>S01 · 雨夜街口，旧楼后门。</span></div>
+          <div>12s</div>
+          <div><span class="badge ok">已确认</span></div>
+          <div>5 项</div>
+          <div><span class="badge ok">已导入</span></div>
+          <div class="actions"><button class="row-button">查看画布</button></div>
+        </div>
+
+        <div class="row active">
+          <div>P02</div>
+          <div class="pack-title"><strong>女主察觉危险</strong><span>S01 · 急刹车声、回头、路灯闪烁。</span></div>
+          <div>10s</div>
+          <div><span class="badge work">待审核</span></div>
+          <div>4 项</div>
+          <div><span class="badge">未导入</span></div>
+          <div class="actions"><button class="row-button primary-soft">审核</button><button class="row-button">导入</button></div>
+        </div>
+
+        <div class="row">
+          <div>P03</div>
+          <div class="pack-title"><strong>暗巷追击</strong><span>S02 · 跟拍、转弯、车辆逼近。</span></div>
+          <div>14s</div>
+          <div><span class="badge warn">需修改</span></div>
+          <div>缺 1</div>
+          <div><span class="badge warn">不可导入</span></div>
+          <div class="actions"><button class="row-button">补参考</button></div>
+        </div>
+
+        <div class="row">
+          <div>P04</div>
+          <div class="pack-title"><strong>车灯扫出证据</strong><span>S02 · 墙面、袖扣、女主拍照。</span></div>
+          <div>11s</div>
+          <div><span class="badge work">待审核</span></div>
+          <div>3 项</div>
+          <div><span class="badge">未导入</span></div>
+          <div class="actions"><button class="row-button">审核</button><button class="row-button">导入</button></div>
+        </div>
+
+        <div class="row">
+          <div>P05</div>
+          <div class="pack-title"><strong>反派声音逼近</strong><span>S02 · 脚步声、阴影、台词压迫。</span></div>
+          <div>9s</div>
+          <div><span class="badge ok">已确认</span></div>
+          <div>2 项</div>
+          <div><span class="badge work">可导入</span></div>
+          <div class="actions"><button class="row-button">导入</button></div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="drawer">
+      <div class="drawer-head">
+        <div>
+          <strong>P02 · 女主察觉危险</strong>
+          <span>10 秒 · 2 个镜头 · 视频提示词待审核</span>
+        </div>
+        <span class="badge work">待审核</span>
+      </div>
+
+      <div class="drawer-tabs">
+        <div class="drawer-tab active">提示词</div>
+        <div class="drawer-tab">参考</div>
+        <div class="drawer-tab">配置</div>
+        <div class="drawer-tab">风险</div>
+      </div>
+
+      <div class="field">
+        <label>生产包依据</label>
+        <div>女主听见身后车辆急停，停步回头，路灯闪烁照亮她紧张的表情。</div>
+      </div>
+
+      <div class="field">
+        <label>Agent 视频提示词草案</label>
+        <div class="prompt-box">雨夜城市暗巷近景，年轻女性主角停下脚步缓慢回头，湿润发丝贴在脸侧，路灯忽明忽暗，远处车灯形成冷色背光。镜头轻微向前推进，强调她从疑惑转为警觉的表情变化，写实短剧电影感，低饱和冷色调，雨滴和地面积水反光清晰。</div>
+      </div>
+
+      <div class="field">
+        <label>参考素材</label>
+        <div class="ref-grid">
+          <div class="ref-card">角色：林澈 · 主参考图</div>
+          <div class="ref-card">场景：暗巷街景 · 已绑定</div>
+          <div class="ref-card">道具：手机 · 已绑定</div>
+          <div class="ref-card">首帧：P01 当前版本尾帧</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>视频配置草案</label>
+        <div>Seedance 2.0 · 9:16 · 10 秒 · 使用上一生产包当前版本尾帧作为首帧参考。</div>
+      </div>
+
+      <div class="field">
+        <label>审核建议</label>
+        <div>提示词动作清楚，未超过 15 秒生产包边界。建议保留“路灯忽明忽暗”，有利于悬疑氛围。</div>
+      </div>
+
+      <div class="drawer-actions">
+        <button class="button">重新生成草案</button>
+        <button class="button">编辑提示词</button>
+        <button class="button primary">确认并标记可导入</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="note">
+  设计规则：视频创作台改为“视频提示词审核台”。这里不直接生成视频，只审核生产包的视频提示词、参考素材和配置草案。确认后导入画布，用户在完整画布中逐包检查并生成视频。自由视频试验可以保留为低频工具入口，不进入正式项目主流程。
+</div>

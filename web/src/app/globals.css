@@ -270,6 +270,12 @@
         }
     }
 
+    @media (prefers-reduced-motion: reduce) {
+        .ai-title-aurora {
+            animation: none;
+        }
+    }
+
     .hide-scrollbar {
         -ms-overflow-style: none;
         scrollbar-width: none;

@@ -6,7 +6,7 @@
 
 ## 当前基线
 
-- 当前版本：`v0.2.76`。
+- 当前版本：`v0.2.82`。
 - 已具备项目工作台、画布项目预设、剧本管理、分镜管理、设定库、提示词仓库、素材自动归档、素材去重、素材版本历史、素材版本引用锁定、生成队列、剪辑包导出、本地 Agent 工作台和 Agent Skill registry。
 - 火山方舟 / Seedance 的本地直连边界已收口：本地直连只保留 OpenAI 兼容能力，火山方舟 / Seedance 企业能力走云端渠道；火山素材加白仍由后台系统设置维护。
 - 当前核心短板不再是“缺入口”，而是生产链路的 Agent 化收口：本集工作台已经把剧本、分镜头表、生成镜头组、资产绑定、生成状态和画布节点收进同一条主路径；下一阶段要先建立统一 Agent 设置中心，再把剧本拆解、资产提取、生图需求、视频提示词和镜头组视频节点接入同一套可配置、可确认的 Agent 能力。
@@ -350,10 +350,10 @@
 
 入口规划：
 
-- 项目详情可进入“生图 Brief 工作台”。
-- 画布图片生成配置节点可打开 Brief 抽屉。
+- 单集页可进入“生图需求审核台”，作为完整 Brief 审核主入口。
+- 画布图片生成配置节点只引用已确认 Brief / 主参考图，不作为完整 Brief 编写入口。
 - 本集资产拆解条目可直接创建角色图、场景图、道具图或氛围图 Brief。
-- 设定库中的角色、场景、道具可从对应条目创建 Brief。
+- 设定库中的角色、场景、道具只作为上下文和回流对象，必要时可生成 Brief 草案并回到单集审核台确认。
 - 分镜条目可基于当前分镜创建氛围图或参考图 Brief。
 
 第一版交付内容：
@@ -785,7 +785,7 @@ Agent 设置中心
 - `asset_extractor` 被禁用时不能创建 run，并引导回 Agent 设置中心。
 - 运行后只新增 Runner 草案记录，不写业务数据。
 - 未批准或已驳回的 run 禁止写入本集生图需求。
-- 批准并确认写入后，资产草案进入资产拆解列表，后续可复用已有“创建 Brief”链路。
+- 批准并确认写入后，资产草案进入资产拆解列表，后续进入单集“生图需求审核台”生成 / 审核 Brief 草案。
 
 不做事项：
 
@@ -797,18 +797,18 @@ Agent 设置中心
 
 模型推理程度：`高`。
 
-实现位置：v0.2.54。资产需求确认后，复用生图 Brief 工作台完成参考图生产。
+实现位置：v0.2.54；v0.2.76 已将入口收口为单集页“生图需求审核台”。资产需求确认后，先进入审核台确认 Brief 草案，再生成参考图并回流项目资产库。
 
 状态：已实现，待页面验收。
 
 交付内容：
 
-- 本集工作台新增“本集生图需求”区域，按 `projectId + canvasId + episodeId` 展示资产拆解 / 生图需求。
+- 本集工作台新增“生图需求”模块，按 `projectId + canvasId + episodeId` 展示资产拆解 / 生图需求。
 - 支持按 `character / scene / prop / costume / makeup / mood / effect` 筛选需求。
 - 每条需求展示名称、类型、描述、重要度、建议 Brief 类型、来源、是否已有 Brief、结果素材数量、主参考图和状态。
-- 从需求点击“创建 Brief / 打开 Brief”时，优先查找已有 `image_brief_store` 中的关联 Brief；没有时按需求类型创建 Brief，并回写资产需求 `briefId`。
-- 需求创建 Brief 时写入 `projectId / canvasId / episodeId / episodeTitle / sourceType: asset_breakdown / sourceId / agentRunId / agentConfigId / agentConfigVersion / tags / warnings` 等追溯字段。
-- Brief 编辑继续复用现有生图 Brief 工作台和 Brief 表单，不另造一套大表单。
+- 从需求点击“审核 / 生成草案”时，优先查找已有 `image_brief_store` 中的关联 Brief；没有时按需求类型生成 Brief 草案，并回写资产需求 `briefId`。
+- 需求生成 Brief 草案时写入 `projectId / canvasId / episodeId / episodeTitle / sourceType: asset_breakdown / sourceId / agentRunId / agentConfigId / agentConfigVersion / tags / warnings` 等追溯字段。
+- Brief 审核、提示词微调、参考素材和生成结果集中在单集页生图需求审核台；旧 Brief 抽屉仅作为低频补救入口。
 - Brief 仍复用标准 / 提醒 / 自由模式校验、prompt builder、最终提示词人工修改、参考素材和结果区能力。
 - 从 Brief 创建图片生成配置节点时，节点 metadata 保留 `briefId / assetBreakdownItemId / agentRunId / agentConfigId / agentConfigVersion / episodeId / episodeTitle / sourceType / finalPrompt`。
 - 图片生成成功后继续走现有素材自动入库，回写 Brief `resultAssetIds / primaryAssetId`，并回写资产需求 `assetIds / status`；重复 assetId 不重复写入。

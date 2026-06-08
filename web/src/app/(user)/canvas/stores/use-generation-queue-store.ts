@@ -45,8 +45,8 @@ export const useGenerationQueueStore = create<GenerationQueueStore>()(
         (set) => ({
             items: [],
             paused: false,
-            concurrency: 1,
-            setConcurrency: (value) => set({ concurrency: Math.max(1, Math.min(4, Math.floor(value) || 1)) }),
+            concurrency: 10,
+            setConcurrency: (value) => set({ concurrency: Math.max(1, Math.min(10, Math.floor(value) || 1)) }),
             upsertItems: (items) =>
                 set((state) => {
                     const incomingIds = new Set(items.map((item) => item.id));

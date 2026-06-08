@@ -380,13 +380,13 @@ export function EpisodeWorkbenchDrawer({
         if (existing) {
             if (item.briefId !== existing.id) updateAssetBreakdownItem(item.id, { briefId: existing.id, status: "brief_ready" });
             onOpenImageBrief?.(existing.id);
-            message.success("已打开关联 Brief");
+            message.success("已定位关联 Brief 草案");
             return;
         }
         const briefId = createImageBriefFromAssetBreakdown(item);
         updateAssetBreakdownItem(item.id, { briefId, status: "brief_ready" });
         onOpenImageBrief?.(briefId);
-        message.success("已创建并打开生图 Brief");
+        message.success("已生成并定位 Brief 草案");
     };
 
     const submitShot = (values: TableShotFormValues, assetRefs: StoryboardAssetRef[]) => {
@@ -464,7 +464,7 @@ export function EpisodeWorkbenchDrawer({
     };
 
     return (
-        <Drawer title="视频生产台" open={open} onClose={onClose} size="min(1280px, calc(100vw - 24px))" destroyOnHidden>
+        <Drawer title="本集生产流程" open={open} onClose={onClose} size="min(1280px, calc(100vw - 24px))" destroyOnHidden>
             <div className="grid gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50/70 p-4 dark:border-stone-800 dark:bg-white/5">
                     <div>

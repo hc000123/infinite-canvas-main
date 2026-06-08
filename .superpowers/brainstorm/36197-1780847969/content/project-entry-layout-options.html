@@ -1,0 +1,441 @@
+<style>
+  .direction-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .direction-card {
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    background: #0c121a;
+    border-radius: 14px;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: 0 22px 70px rgba(0, 0, 0, 0.32);
+  }
+
+  .direction-card.selected {
+    border-color: #14c8d4;
+    box-shadow: 0 0 0 2px rgba(20, 200, 212, 0.22), 0 24px 70px rgba(20, 200, 212, 0.2);
+  }
+
+  .mini-ui {
+    height: 460px;
+    background:
+      radial-gradient(circle at 18% 12%, rgba(20, 200, 212, 0.16), transparent 30%),
+      linear-gradient(145deg, #111923 0%, #070b10 60%, #0a1018 100%);
+    color: #eef7fa;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: grid;
+    grid-template-columns: 54px 1fr;
+  }
+
+  .rail {
+    border-right: 1px solid rgba(148, 163, 184, 0.18);
+    padding: 14px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: center;
+  }
+
+  .logo-dot {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #16c9d5, #148496);
+  }
+
+  .rail-dot {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .rail-dot.active {
+    background: rgba(20, 200, 212, 0.18);
+    border-color: rgba(20, 200, 212, 0.58);
+  }
+
+  .panel {
+    padding: 18px;
+    min-width: 0;
+  }
+
+  .topline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .crumb {
+    color: rgba(238, 247, 250, 0.5);
+    font-size: 11px;
+  }
+
+  .project-title {
+    font-size: 19px;
+    font-weight: 750;
+    letter-spacing: 0;
+    margin-top: 3px;
+  }
+
+  .tiny-button {
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 7px;
+    border: 1px solid rgba(20, 200, 212, 0.38);
+    background: rgba(20, 200, 212, 0.14);
+    color: #dffcff;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .kpi {
+    min-height: 54px;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.035);
+    border-radius: 9px;
+    padding: 9px;
+  }
+
+  .kpi-label {
+    font-size: 10px;
+    color: rgba(238, 247, 250, 0.52);
+  }
+
+  .kpi-value {
+    margin-top: 5px;
+    font-size: 18px;
+    font-weight: 760;
+  }
+
+  .content-grid {
+    display: grid;
+    gap: 10px;
+  }
+
+  .flow-grid {
+    grid-template-columns: 1.1fr 0.9fr;
+  }
+
+  .episode-grid {
+    grid-template-columns: 0.82fr 1.18fr;
+  }
+
+  .asset-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .section {
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.035);
+    border-radius: 10px;
+    padding: 10px;
+    min-height: 114px;
+  }
+
+  .section-title {
+    font-size: 12px;
+    font-weight: 720;
+    margin-bottom: 9px;
+  }
+
+  .timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .step {
+    display: grid;
+    grid-template-columns: 20px 1fr auto;
+    align-items: center;
+    gap: 7px;
+    min-height: 28px;
+    font-size: 10px;
+    color: rgba(238, 247, 250, 0.72);
+  }
+
+  .step-mark {
+    width: 18px;
+    height: 18px;
+    border-radius: 6px;
+    background: rgba(20, 200, 212, 0.16);
+    border: 1px solid rgba(20, 200, 212, 0.45);
+  }
+
+  .status {
+    color: #21d27f;
+    font-size: 10px;
+  }
+
+  .status.warn {
+    color: #eeb146;
+  }
+
+  .episode-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .episode {
+    min-height: 42px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(148, 163, 184, 0.13);
+    padding: 8px;
+  }
+
+  .episode strong {
+    display: block;
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+
+  .episode span {
+    color: rgba(238, 247, 250, 0.54);
+    font-size: 10px;
+  }
+
+  .shot-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .shot {
+    min-height: 64px;
+    border-radius: 8px;
+    background: linear-gradient(150deg, rgba(20, 200, 212, 0.13), rgba(255, 255, 255, 0.04));
+    border: 1px solid rgba(148, 163, 184, 0.13);
+    padding: 7px;
+    font-size: 10px;
+  }
+
+  .visual-board {
+    height: 144px;
+    border-radius: 9px;
+    background:
+      linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+      linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+      rgba(2, 8, 13, 0.5);
+    background-size: 24px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .node {
+    position: absolute;
+    width: 74px;
+    height: 42px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.075);
+    border: 1px solid rgba(20, 200, 212, 0.26);
+  }
+
+  .node.a { left: 18px; top: 26px; }
+  .node.b { left: 112px; top: 72px; border-color: rgba(238, 177, 70, 0.35); }
+  .node.c { left: 206px; top: 35px; border-color: rgba(33, 210, 127, 0.34); }
+
+  .asset-mosaic {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .thumb {
+    aspect-ratio: 1.2;
+    border-radius: 7px;
+    background: linear-gradient(135deg, rgba(20, 200, 212, 0.2), rgba(238, 177, 70, 0.12)), rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(148, 163, 184, 0.13);
+  }
+
+  .body-copy {
+    padding: 13px 15px 15px;
+  }
+
+  .body-copy h3 {
+    margin: 0 0 6px;
+    font-size: 16px;
+  }
+
+  .body-copy p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.55;
+    color: rgba(15, 23, 42, 0.72);
+  }
+
+  @media (max-width: 1180px) {
+    .direction-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<h2>点击项目后的 UI 方向</h2>
+<p class="subtitle">基于当前主视觉：深色影视生产台、青色 AI 强调、低视觉重量工具栏。建议点击项目后进入“项目内工作台”，再从这里进入本集、分镜、设定库、素材和画布承接。</p>
+
+<div class="direction-grid">
+  <div class="direction-card" data-choice="flow" onclick="toggleSelect(this)">
+    <div class="mini-ui">
+      <div class="rail">
+        <div class="logo-dot"></div>
+        <div class="rail-dot active"></div>
+        <div class="rail-dot"></div>
+        <div class="rail-dot"></div>
+        <div class="rail-dot"></div>
+      </div>
+      <div class="panel">
+        <div class="topline">
+          <div>
+            <div class="crumb">项目工作台 / 霓虹之下</div>
+            <div class="project-title">霓虹之下 · 生产总览</div>
+          </div>
+          <button class="tiny-button">导入本集</button>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi"><div class="kpi-label">本集</div><div class="kpi-value">8</div></div>
+          <div class="kpi"><div class="kpi-label">分镜</div><div class="kpi-value">82</div></div>
+          <div class="kpi"><div class="kpi-label">素材缺口</div><div class="kpi-value">12</div></div>
+          <div class="kpi"><div class="kpi-label">队列</div><div class="kpi-value">3</div></div>
+        </div>
+        <div class="content-grid flow-grid">
+          <div class="section">
+            <div class="section-title">生产链路</div>
+            <div class="timeline">
+              <div class="step"><div class="step-mark"></div><span>项目基准设定</span><span class="status">完成</span></div>
+              <div class="step"><div class="step-mark"></div><span>本集剧本导入</span><span class="status">完成</span></div>
+              <div class="step"><div class="step-mark"></div><span>导演分析确认</span><span class="status warn">待确认</span></div>
+              <div class="step"><div class="step-mark"></div><span>分镜提示词</span><span class="status warn">进行中</span></div>
+              <div class="step"><div class="step-mark"></div><span>画布承接生成</span><span class="status warn">未开始</span></div>
+            </div>
+          </div>
+          <div class="section">
+            <div class="section-title">下一步</div>
+            <div class="episode"><strong>确认第 03 集导演分析</strong><span>3 项风险需要人工确认</span></div>
+            <div style="height:8px"></div>
+            <div class="episode"><strong>补齐角色参考图</strong><span>林澈、反派父亲缺素材</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="body-copy">
+      <h3>A. 生产流程中枢</h3>
+      <p>最适合当前产品主线。用户点击项目后先看到全剧生产链路、风险和下一步动作，适合作为专业版默认方案。</p>
+    </div>
+  </div>
+
+  <div class="direction-card" data-choice="episode" onclick="toggleSelect(this)">
+    <div class="mini-ui">
+      <div class="rail">
+        <div class="logo-dot"></div>
+        <div class="rail-dot active"></div>
+        <div class="rail-dot"></div>
+        <div class="rail-dot"></div>
+        <div class="rail-dot"></div>
+      </div>
+      <div class="panel">
+        <div class="topline">
+          <div>
+            <div class="crumb">项目工作台 / 西部往事</div>
+            <div class="project-title">西部往事 · 分集制作</div>
+          </div>
+          <button class="tiny-button">新建分集</button>
+        </div>
+        <div class="content-grid episode-grid">
+          <div class="section" style="min-height: 350px;">
+            <div class="section-title">分集列表</div>
+            <div class="episode-list">
+              <div class="episode"><strong>第 01 集 · 沙漠来客</strong><span>导演分析完成</span></div>
+              <div class="episode"><strong>第 02 集 · 酒馆冲突</strong><span>分镜 12 / 18</span></div>
+              <div class="episode"><strong>第 03 集 · 夜色追击</strong><span>待导入剧本</span></div>
+              <div class="episode"><strong>第 04 集 · 终点之前</strong><span>草稿</span></div>
+            </div>
+          </div>
+          <div class="section" style="min-height: 350px;">
+            <div class="section-title">当前集看板</div>
+            <div class="shot-strip">
+              <div class="shot">01<br>远景开场<br><span class="status">已审</span></div>
+              <div class="shot">02<br>角色入场<br><span class="status warn">缺图</span></div>
+              <div class="shot">03<br>冲突爆发<br><span class="status warn">待改词</span></div>
+            </div>
+            <div style="height:10px"></div>
+            <div class="visual-board">
+              <div class="node a"></div>
+              <div class="node b"></div>
+              <div class="node c"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="body-copy">
+      <h3>B. 分集优先工作台</h3>
+      <p>适合短剧按集推进，点击项目后立即进入“第几集在做什么”。效率高，但全剧设定和素材管理容易退到二线。</p>
+    </div>
+  </div>
+
+  <div class="direction-card" data-choice="asset" onclick="toggleSelect(this)">
+    <div class="mini-ui">
+      <div class="rail">
+        <div class="logo-dot"></div>
+        <div class="rail-dot active"></div>
+        <div class="rail-dot"></div>
+        <div class="rail-dot"></div>
+        <div class="rail-dot"></div>
+      </div>
+      <div class="panel">
+        <div class="topline">
+          <div>
+            <div class="crumb">项目工作台 / 山海之间</div>
+            <div class="project-title">山海之间 · 设定与素材</div>
+          </div>
+          <button class="tiny-button">生成参考图</button>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi"><div class="kpi-label">角色</div><div class="kpi-value">9</div></div>
+          <div class="kpi"><div class="kpi-label">场景</div><div class="kpi-value">14</div></div>
+          <div class="kpi"><div class="kpi-label">道具</div><div class="kpi-value">21</div></div>
+          <div class="kpi"><div class="kpi-label">缺口</div><div class="kpi-value">6</div></div>
+        </div>
+        <div class="content-grid asset-grid">
+          <div class="section" style="min-height: 265px;">
+            <div class="section-title">素材矩阵</div>
+            <div class="asset-mosaic">
+              <div class="thumb"></div><div class="thumb"></div><div class="thumb"></div><div class="thumb"></div>
+              <div class="thumb"></div><div class="thumb"></div><div class="thumb"></div><div class="thumb"></div>
+              <div class="thumb"></div><div class="thumb"></div><div class="thumb"></div><div class="thumb"></div>
+            </div>
+          </div>
+          <div class="section" style="min-height: 265px;">
+            <div class="section-title">引用健康度</div>
+            <div class="timeline">
+              <div class="step"><div class="step-mark"></div><span>主角设定</span><span class="status">完整</span></div>
+              <div class="step"><div class="step-mark"></div><span>雨林场景</span><span class="status">完整</span></div>
+              <div class="step"><div class="step-mark"></div><span>神庙道具</span><span class="status warn">缺图</span></div>
+              <div class="step"><div class="step-mark"></div><span>分镜引用</span><span class="status warn">5 个过期</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="body-copy">
+      <h3>C. 资产生产中枢</h3>
+      <p>适合重设定、重素材的影视项目。视觉上最有“片场资料库”感，但会弱化剧本到分镜的生产步骤。</p>
+    </div>
+  </div>
+</div>

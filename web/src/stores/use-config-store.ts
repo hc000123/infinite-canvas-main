@@ -36,6 +36,8 @@ export type AiConfig = {
     videoExtendDirection: "forward" | "backward";
     videoReferenceImageMode: SeedanceImageRoleMode;
     systemPrompt: string;
+    thinkingMode: string;
+    reasoningEffort: "minimal" | "low" | "medium" | "high";
     models: string[];
     imageModels: string[];
     videoModels: string[];
@@ -76,6 +78,8 @@ export const defaultConfig: AiConfig = {
     videoExtendDirection: "forward",
     videoReferenceImageMode: "reference",
     systemPrompt: "",
+    thinkingMode: "false",
+    reasoningEffort: "medium",
     models: [],
     imageModels: [],
     videoModels: [],
@@ -203,6 +207,8 @@ export const useConfigStore = create<ConfigStore>()(
                         videoEditType: normalizeVideoEditType(config.videoEditType),
                         videoExtendDirection: normalizeVideoExtendDirection(config.videoExtendDirection),
                         videoReferenceImageMode: normalizeSeedanceImageRoleMode(config.videoReferenceImageMode),
+                        thinkingMode: config.thinkingMode === "true" ? "true" : "false",
+                        reasoningEffort: normalizeReasoningEffort(config.reasoningEffort),
                     },
                 };
             },
@@ -226,6 +232,10 @@ function normalizeVideoEditType(value?: string): AiConfig["videoEditType"] {
 
 function normalizeVideoExtendDirection(value?: string): AiConfig["videoExtendDirection"] {
     return value === "backward" ? "backward" : "forward";
+}
+
+function normalizeReasoningEffort(value?: string): AiConfig["reasoningEffort"] {
+    return value === "minimal" || value === "low" || value === "high" ? value : "medium";
 }
 
 export function buildApiUrl(baseUrl: string, path: string, protocol: AiConfig["videoProtocol"] = "openai") {

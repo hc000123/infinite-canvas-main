@@ -491,7 +491,7 @@ function VideoTaskProgressPanel({ node, theme, onRefreshVideoTask, children, com
             </div>
             {!isFailed ? (
                 <div className="mt-3 h-1.5 overflow-hidden rounded-full" style={{ background: theme.toolbar.activeBg }}>
-                    <div className="h-full rounded-full bg-[#2f80ff] transition-all duration-500" style={{ width: `${progress.percent}%` }} />
+                    <div className="h-full rounded-full bg-[#2f80ff] transition-[width] duration-500" style={{ width: `${progress.percent}%` }} />
                 </div>
             ) : null}
             <div className="mt-3 grid grid-cols-5 gap-1.5">
@@ -600,7 +600,7 @@ function TextContent({ node, theme, isEditingContent, textareaRef, onContentChan
             {isEditingContent ? (
                 <textarea
                     ref={textareaRef}
-                    className="thin-scrollbar block h-full w-full resize-none overflow-y-auto whitespace-pre-wrap break-words border-none bg-transparent pl-4 pr-14 pt-0 pb-4 m-0 font-mono leading-relaxed outline-none select-text appearance-none"
+                    className="thin-scrollbar block h-full w-full resize-none overflow-y-auto whitespace-pre-wrap break-words border-none bg-transparent pl-4 pr-14 pt-0 pb-4 m-0 font-mono leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300/70 select-text appearance-none"
                     style={{ fontSize: `${node.metadata?.fontSize || 14}px`, color: theme.node.text }}
                     value={node.metadata?.content || ""}
                     onChange={(event) => onContentChange(node.id, event.target.value)}
@@ -987,7 +987,7 @@ function BatchFrame({ batchCount, batchExpanded, batchOpening, batchRecovering, 
                     {Array.from({ length: Math.min(batchCount - 1, 5) }).map((_, index) => (
                         <div
                             key={index}
-                            className="absolute rounded-[inherit] border shadow-[0_14px_34px_rgba(68,64,60,.16)] transition-all duration-300 group-hover/batch:translate-x-2"
+                            className="absolute rounded-[inherit] border shadow-[0_14px_34px_rgba(68,64,60,.16)] transition-transform duration-300 group-hover/batch:translate-x-2"
                             style={{
                                 inset: 0,
                                 background: `linear-gradient(135deg, ${theme.node.panel}, ${theme.node.fill})`,
@@ -1026,7 +1026,7 @@ function ConnectionHandleDot({ side, visible, onMouseDown }: { side: "left" | "r
             } ${visible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
             onMouseDown={onMouseDown}
         >
-            <div className="size-3 rounded-full border-2 transition-all hover:scale-125" style={{ background: theme.node.panel, borderColor: theme.node.muted }} />
+            <div className="size-3 rounded-full border-2 transition-transform hover:scale-125" style={{ background: theme.node.panel, borderColor: theme.node.muted }} />
         </div>
     );
 }

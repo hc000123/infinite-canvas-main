@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyCanvasProjectPresetToConfig, buildCanvasProjectPresetFromConfig, canvasProjectPresetConfig, canvasProjectPresetSummary, canvasProjectPresetModelOptions, normalizeCanvasProjectPresetRatio } from "./canvas-project-preset.ts";
+import { applyCanvasProjectPresetToConfig, buildCanvasProjectPresetFromConfig, canvasProjectPresetConfig, canvasProjectPresetOptions, canvasProjectPresetSummary, canvasProjectPresetModelOptions, normalizeCanvasProjectPresetRatio } from "./canvas-project-preset.ts";
 
 const config = {
     videoProtocol: "openai",
@@ -29,6 +29,12 @@ test("builds project preset from current config and patch", () => {
     assert.equal(preset.defaultVideoModel, "seedance-model");
     assert.equal(preset.defaultTextModel, "text-model");
     assert.equal(preset.defaultVideoProvider, "volcengine-ark");
+});
+
+test("built-in HD presets do not lock video duration to 10 seconds", () => {
+    const hdPresets = canvasProjectPresetOptions.filter((item) => item.key.startsWith("hd-"));
+    assert.ok(hdPresets.length);
+    assert.deepEqual(hdPresets.map((item) => item.preset.defaultDuration), ["6", "6"]);
 });
 
 test("applies project preset to effective AI config", () => {

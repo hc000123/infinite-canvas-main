@@ -1,0 +1,573 @@
+<style>
+  .stage {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 14% 9%, rgba(19, 194, 205, 0.13), transparent 28%),
+      linear-gradient(135deg, #0f1721 0%, #070b10 72%, #0b1018 100%);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.34);
+    color: #eff8fa;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .topnav {
+    height: 68px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 18px;
+    padding: 0 24px;
+    background: rgba(1, 7, 12, 0.2);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 132px;
+  }
+
+  .brand-mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #18c8d6 0%, #107787 100%);
+    box-shadow: 0 0 24px rgba(24, 200, 214, 0.28);
+  }
+
+  .brand strong {
+    display: block;
+    font-size: 14px;
+  }
+
+  .brand span {
+    display: block;
+    margin-top: 2px;
+    color: rgba(239, 248, 250, 0.48);
+    font-size: 10px;
+  }
+
+  .navline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .nav-item {
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 11px;
+    color: rgba(239, 248, 250, 0.62);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .nav-item.active {
+    color: #dfffff;
+    background: rgba(20, 200, 212, 0.13);
+    border: 1px solid rgba(20, 200, 212, 0.25);
+  }
+
+  .nav-icon {
+    width: 14px;
+    height: 14px;
+    border-radius: 5px;
+    border: 1px solid currentColor;
+    opacity: 0.78;
+  }
+
+  .current-pill {
+    margin-left: 10px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    background: rgba(255, 255, 255, 0.035);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 11px;
+    color: rgba(239, 248, 250, 0.72);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .current-pill strong {
+    color: #eff8fa;
+    font-size: 13px;
+  }
+
+  .top-actions {
+    display: flex;
+    gap: 9px;
+  }
+
+  .button {
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(255, 255, 255, 0.045);
+    color: rgba(239, 248, 250, 0.78);
+    padding: 0 12px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .button.primary {
+    border-color: rgba(20, 200, 212, 0.5);
+    background: linear-gradient(135deg, #18c8d6 0%, #0f96aa 100%);
+    color: #05262b;
+    font-weight: 760;
+  }
+
+  .main {
+    padding: 26px 30px 30px;
+    min-height: 708px;
+  }
+
+  .hero-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 520px;
+    gap: 18px;
+    align-items: end;
+    margin-bottom: 22px;
+  }
+
+  .crumb {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .title {
+    margin: 0;
+    font-size: 26px;
+    line-height: 1.2;
+    letter-spacing: 0;
+  }
+
+  .subline {
+    color: rgba(239, 248, 250, 0.58);
+    font-size: 13px;
+    margin-top: 9px;
+  }
+
+  .progress-main {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.035);
+    border-radius: 10px;
+    padding: 14px;
+  }
+
+  .progress-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .progress-head strong {
+    font-size: 14px;
+  }
+
+  .progress-head span {
+    color: #18c8d6;
+    font-size: 12px;
+  }
+
+  .bar {
+    height: 7px;
+    border-radius: 99px;
+    background: rgba(148, 163, 184, 0.16);
+    overflow: hidden;
+  }
+
+  .bar i {
+    display: block;
+    width: 58%;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #18c8d6, #21d27f);
+  }
+
+  .progress-note {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 12px;
+    margin-top: 10px;
+  }
+
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .stat {
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    background: rgba(1, 7, 12, 0.2);
+    border-radius: 9px;
+    padding: 10px;
+  }
+
+  .stat span {
+    display: block;
+    color: rgba(239, 248, 250, 0.48);
+    font-size: 10px;
+  }
+
+  .stat strong {
+    display: block;
+    font-size: 20px;
+    margin-top: 5px;
+  }
+
+  .section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+
+  .section-head strong {
+    font-size: 15px;
+  }
+
+  .filters {
+    display: flex;
+    gap: 8px;
+  }
+
+  .filter {
+    height: 28px;
+    border-radius: 7px;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    color: rgba(239, 248, 250, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.035);
+    font-size: 11px;
+  }
+
+  .filter.active {
+    color: #dfffff;
+    border-color: rgba(20, 200, 212, 0.38);
+    background: rgba(20, 200, 212, 0.11);
+  }
+
+  .episode-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .episode-card {
+    min-height: 206px;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    background: rgba(255, 255, 255, 0.038);
+    border-radius: 11px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .episode-card.current {
+    border-color: rgba(20, 200, 212, 0.45);
+    background:
+      linear-gradient(135deg, rgba(20, 200, 212, 0.13), rgba(255, 255, 255, 0.035));
+    box-shadow: 0 0 0 1px rgba(20, 200, 212, 0.1);
+  }
+
+  .card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .episode-name span {
+    display: block;
+    color: rgba(239, 248, 250, 0.48);
+    font-size: 11px;
+    margin-bottom: 5px;
+  }
+
+  .episode-name strong {
+    display: block;
+    font-size: 15px;
+    line-height: 1.35;
+  }
+
+  .status {
+    flex: 0 0 auto;
+    border-radius: 7px;
+    padding: 4px 7px;
+    font-size: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    color: rgba(239, 248, 250, 0.62);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .status.doing {
+    border-color: rgba(20, 200, 212, 0.38);
+    color: #67eef4;
+    background: rgba(20, 200, 212, 0.1);
+  }
+
+  .status.done {
+    border-color: rgba(33, 210, 127, 0.34);
+    color: #68e29f;
+    background: rgba(33, 210, 127, 0.08);
+  }
+
+  .status.wait {
+    border-color: rgba(238, 177, 70, 0.36);
+    color: #f1be63;
+    background: rgba(238, 177, 70, 0.08);
+  }
+
+  .episode-meta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .meta {
+    border-radius: 8px;
+    background: rgba(1, 7, 12, 0.24);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    padding: 8px;
+  }
+
+  .meta span {
+    display: block;
+    color: rgba(239, 248, 250, 0.45);
+    font-size: 10px;
+  }
+
+  .meta strong {
+    display: block;
+    font-size: 14px;
+    margin-top: 4px;
+  }
+
+  .card-progress {
+    margin-top: auto;
+  }
+
+  .card-progress-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: rgba(239, 248, 250, 0.56);
+    font-size: 11px;
+    margin-bottom: 7px;
+  }
+
+  .card-action {
+    margin-top: 12px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(239, 248, 250, 0.78);
+    font-size: 12px;
+  }
+
+  .current .card-action {
+    border-color: rgba(20, 200, 212, 0.42);
+    background: rgba(20, 200, 212, 0.13);
+    color: #dfffff;
+  }
+
+  .simple-note {
+    margin-top: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: #f8fafc;
+    color: #172033;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+</style>
+
+<h2>简化版 v3：顶部导航，释放卡片空间</h2>
+<p class="subtitle">左侧栏取消，品牌、项目内导航、当前制作到、操作按钮全部放到顶部。页面主体专注展示项目进度和分集卡片。</p>
+
+<div class="stage">
+  <header class="topnav">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div>
+        <strong>AI · 画布</strong>
+        <span>专业版</span>
+      </div>
+    </div>
+
+    <div class="navline">
+      <div class="nav-item active"><div class="nav-icon"></div>分集</div>
+      <div class="nav-item"><div class="nav-icon"></div>设定库</div>
+      <div class="nav-item"><div class="nav-icon"></div>素材</div>
+      <div class="nav-item"><div class="nav-icon"></div>画布</div>
+      <div class="current-pill">当前制作到 <strong>第 05 集</strong> · 分镜审核中</div>
+    </div>
+
+    <div class="top-actions">
+      <button class="button">编辑项目</button>
+      <button class="button primary">新建分集</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="hero-row">
+      <div>
+        <div class="crumb">项目工作台 / 霓虹之下</div>
+        <h1 class="title">霓虹之下</h1>
+        <div class="subline">都市悬疑短剧 · 共 12 集 · 当前主线停留在第 05 集</div>
+      </div>
+
+      <div class="progress-main">
+        <div class="progress-head">
+          <strong>整剧制作进度</strong>
+          <span>第 05 / 12 集</span>
+        </div>
+        <div class="bar"><i></i></div>
+        <div class="progress-note">已完成 4 集，当前第 5 集正在审核分镜提示词。</div>
+        <div class="stat-row">
+          <div class="stat"><span>已完成</span><strong>4</strong></div>
+          <div class="stat"><span>进行中</span><strong>1</strong></div>
+          <div class="stat"><span>草稿</span><strong>7</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-head">
+      <strong>分集列表</strong>
+      <div class="filters">
+        <div class="filter active">全部</div>
+        <div class="filter">进行中</div>
+        <div class="filter">已完成</div>
+        <div class="filter">草稿</div>
+      </div>
+    </div>
+
+    <div class="episode-grid">
+      <div class="episode-card">
+        <div class="card-top">
+          <div class="episode-name"><span>第 01 集</span><strong>雨夜相逢</strong></div>
+          <div class="status done">已完成</div>
+        </div>
+        <div class="episode-meta">
+          <div class="meta"><span>镜头</span><strong>18</strong></div>
+          <div class="meta"><span>画布</span><strong>1</strong></div>
+          <div class="meta"><span>视频</span><strong>18</strong></div>
+        </div>
+        <div class="card-progress">
+          <div class="card-progress-row"><span>完成度</span><span>100%</span></div>
+          <div class="bar"><i style="width:100%"></i></div>
+        </div>
+        <button class="card-action">查看本集</button>
+      </div>
+
+      <div class="episode-card">
+        <div class="card-top">
+          <div class="episode-name"><span>第 02 集</span><strong>暗巷追击</strong></div>
+          <div class="status done">已完成</div>
+        </div>
+        <div class="episode-meta">
+          <div class="meta"><span>镜头</span><strong>22</strong></div>
+          <div class="meta"><span>画布</span><strong>1</strong></div>
+          <div class="meta"><span>视频</span><strong>22</strong></div>
+        </div>
+        <div class="card-progress">
+          <div class="card-progress-row"><span>完成度</span><span>100%</span></div>
+          <div class="bar"><i style="width:100%"></i></div>
+        </div>
+        <button class="card-action">查看本集</button>
+      </div>
+
+      <div class="episode-card">
+        <div class="card-top">
+          <div class="episode-name"><span>第 03 集</span><strong>旧楼交易</strong></div>
+          <div class="status done">已完成</div>
+        </div>
+        <div class="episode-meta">
+          <div class="meta"><span>镜头</span><strong>20</strong></div>
+          <div class="meta"><span>画布</span><strong>1</strong></div>
+          <div class="meta"><span>视频</span><strong>20</strong></div>
+        </div>
+        <div class="card-progress">
+          <div class="card-progress-row"><span>完成度</span><span>100%</span></div>
+          <div class="bar"><i style="width:100%"></i></div>
+        </div>
+        <button class="card-action">查看本集</button>
+      </div>
+
+      <div class="episode-card">
+        <div class="card-top">
+          <div class="episode-name"><span>第 04 集</span><strong>天台对峙</strong></div>
+          <div class="status done">已完成</div>
+        </div>
+        <div class="episode-meta">
+          <div class="meta"><span>镜头</span><strong>16</strong></div>
+          <div class="meta"><span>画布</span><strong>1</strong></div>
+          <div class="meta"><span>视频</span><strong>16</strong></div>
+        </div>
+        <div class="card-progress">
+          <div class="card-progress-row"><span>完成度</span><span>100%</span></div>
+          <div class="bar"><i style="width:100%"></i></div>
+        </div>
+        <button class="card-action">查看本集</button>
+      </div>
+
+      <div class="episode-card current">
+        <div class="card-top">
+          <div class="episode-name"><span>第 05 集</span><strong>真相浮出</strong></div>
+          <div class="status doing">进行中</div>
+        </div>
+        <div class="episode-meta">
+          <div class="meta"><span>阶段</span><strong>分镜</strong></div>
+          <div class="meta"><span>镜头</span><strong>12 / 18</strong></div>
+          <div class="meta"><span>缺口</span><strong>3</strong></div>
+        </div>
+        <div class="card-progress">
+          <div class="card-progress-row"><span>完成度</span><span>62%</span></div>
+          <div class="bar"><i style="width:62%"></i></div>
+        </div>
+        <button class="card-action">进入本集</button>
+      </div>
+
+      <div class="episode-card">
+        <div class="card-top">
+          <div class="episode-name"><span>第 06 集</span><strong>午夜来电</strong></div>
+          <div class="status wait">草稿</div>
+        </div>
+        <div class="episode-meta">
+          <div class="meta"><span>阶段</span><strong>剧本</strong></div>
+          <div class="meta"><span>镜头</span><strong>-</strong></div>
+          <div class="meta"><span>缺口</span><strong>-</strong></div>
+        </div>
+        <div class="card-progress">
+          <div class="card-progress-row"><span>完成度</span><span>8%</span></div>
+          <div class="bar"><i style="width:8%"></i></div>
+        </div>
+        <button class="card-action">进入本集</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="simple-note">
+  调整点：取消左侧导航栏，项目内入口全部进入顶部横向区域；“当前制作到第 05 集”变成顶部状态提示，不再单独占一块侧边空间。主体区域更像一个干净的分集索引页。
+</div>

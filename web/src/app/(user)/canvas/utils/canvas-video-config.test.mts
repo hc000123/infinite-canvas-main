@@ -70,6 +70,7 @@ test("video mode patch starts config nodes with the active video provider model"
         model: "openai-video-model",
         size: "1:1",
         seconds: "6",
+        duration: "6",
         vquality: "720",
         generateAudio: "false",
         watermark: "false",
@@ -87,6 +88,7 @@ test("video mode patch starts config nodes with the active video provider model"
         model: "ep-seedance-endpoint",
         size: "1:1",
         seconds: "6",
+        duration: "6",
         vquality: "720",
         generateAudio: "false",
         watermark: "false",
@@ -109,7 +111,14 @@ test("video config normalizes duration by provider capability", () => {
     assert.equal(buildCanvasVideoConfig(cloudConfig, { provider: "volcengine-ark", seconds: "20" }).videoSeconds, "15");
     assert.equal(buildCanvasVideoConfig(cloudConfig, { provider: "volcengine-ark", seconds: "3" }).videoSeconds, "4");
     assert.equal(buildCanvasVideoConfig(cloudConfig, { provider: "volcengine-ark", seconds: "11" }).videoSeconds, "11");
+    assert.equal(buildCanvasVideoConfig(cloudConfig, { provider: "volcengine-ark", duration: "9" }).videoSeconds, "9");
     assert.equal(buildCanvasVideoConfig({ ...baseConfig, videoProtocol: "openai" }, { provider: "openai", seconds: "20" }).videoSeconds, "20");
+});
+
+test("video config keeps audio off by default but preserves explicit node choice", () => {
+    assert.equal(buildCanvasVideoConfig({ ...cloudConfig, videoGenerateAudio: "true" }, { provider: "volcengine-ark" }).videoGenerateAudio, "false");
+    assert.equal(buildCanvasVideoConfig(cloudConfig, { provider: "volcengine-ark", generateAudio: "true" }).videoGenerateAudio, "true");
+    assert.equal(buildCanvasVideoModePatch({ ...cloudConfig, videoGenerateAudio: "true" }).generateAudio, "false");
 });
 
 test("video config restores Seedance task mode fields from node metadata", () => {

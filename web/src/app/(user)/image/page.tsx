@@ -20,6 +20,7 @@ import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/ima
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useLocalAiTaskLogStore } from "@/stores/use-local-ai-task-log-store";
 import type { ReferenceImage } from "@/types/image";
+import { useImageBriefStore } from "../canvas/stores/use-image-brief-store";
 
 type GeneratedImage = {
     id: string;
@@ -62,19 +63,41 @@ type GenerationLog = {
 type GenerationLogConfig = Pick<AiConfig, "model" | "imageModel" | "quality" | "size" | "count">;
 
 type UpdateAiConfig = <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
+type ImageWorkbenchSourceContext = {
+    assetId: string;
+    briefId: string;
+    episodeId: string;
+    episodeTitle: string;
+    projectId: string;
+    projectTitle: string;
+    prompt: string;
+    title: string;
+};
 
 const LOG_STORE_KEY = "infinite-canvas:image_generation_logs";
 const logStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_generation_logs" });
+const emptyImageWorkbenchSourceContext: ImageWorkbenchSourceContext = {
+    assetId: "",
+    briefId: "",
+    episodeId: "",
+    episodeTitle: "",
+    projectId: "",
+    projectTitle: "",
+    prompt: "",
+    title: "",
+};
 
 export default function ImagePage() {
     const { message } = App.useApp();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const importedContextRef = useRef("");
     const config = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
+    const addBriefResultAsset = useImageBriefStore((state) => state.addResultAsset);
     const [prompt, setPrompt] = useState("");
     const [references, setReferences] = useState<ReferenceImage[]>([]);
     const [results, setResults] = useState<GenerationResult[]>([]);
@@ -89,10 +112,12 @@ export default function ImagePage() {
     const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
     const [previewLog, setPreviewLog] = useState<GenerationLog | null>(null);
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [sourceContext, setSourceContext] = useState<ImageWorkbenchSourceContext>(emptyImageWorkbenchSourceContext);
 
     const model = effectiveConfig.imageModel || effectiveConfig.model;
     const canGenerate = Boolean(prompt.trim());
     const generationCount = Math.max(1, Math.min(10, Number(config.count) || 1));
+    const sourceContextLabel = sourceContext.projectId ? [sourceContext.projectTitle || "项目", sourceContext.episodeTitle, sourceContext.title || sourceContext.briefId || sourceContext.assetId].filter(Boolean).join(" / ") : "";
 
     useEffect(() => {
         if (!running || !startedAt) return;
@@ -103,6 +128,18 @@ export default function ImagePage() {
     useEffect(() => {
         void refreshLogs();
     }, []);
+
+    useEffect(() => {
+        const nextContext = parseImageWorkbenchSourceContext();
+        const nextKey = [nextContext.projectId, nextContext.episodeId, nextContext.assetId, nextContext.briefId, nextContext.prompt].join("|");
+        setSourceContext(nextContext);
+        if (!nextContext.prompt || importedContextRef.current === nextKey) return;
+        importedContextRef.current = nextKey;
+        setPrompt(nextContext.prompt);
+        setPreviewLog(null);
+        setResults([]);
+        message.success("已带入单集生图需求提示词");
+    }, [message]);
 
     const addReferences = async (files?: FileList | null) => {
         const imageFiles = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
@@ -204,15 +241,27 @@ export default function ImagePage() {
 
     const saveResultToAssets = async (image: GeneratedImage, index: number) => {
         const stored = await uploadImage(image.dataUrl);
-        await addAssetOnce({
+        const assetId = await addAssetOnce({
             kind: "image",
             title: `生成结果 ${index + 1}`,
             coverUrl: stored.url,
             tags: [],
             source: "生图工作台",
             data: { dataUrl: stored.url, storageKey: stored.storageKey, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType },
-            metadata: { source: "image-page", generation: { prompt, index: index + 1 } },
+            metadata: {
+                source: "image-page",
+                generation: { prompt, index: index + 1 },
+                projectId: sourceContext.projectId,
+                episodeId: sourceContext.episodeId,
+                imageBriefId: sourceContext.briefId,
+                assetBreakdownItemId: sourceContext.assetId,
+            },
         });
+        if (sourceContext.briefId) {
+            addBriefResultAsset(sourceContext.briefId, assetId);
+            message.success("已加入我的素材，并回写到当前 Brief");
+            return;
+        }
         message.success("已加入我的素材");
     };
 
@@ -254,15 +303,16 @@ export default function ImagePage() {
     const refreshLogs = async () => setLogs(await readStoredLogs());
 
     const previewGenerationLog = async (log: GenerationLog) => {
-        setPreviewLog(log);
+        const hydratedLog = await normalizeLog(log, true);
+        setPreviewLog(hydratedLog);
         setLogsOpen(false);
-        setPrompt(log.prompt);
-        setReferences(log.references || []);
-        if (log.config.imageModel || log.model) updateConfig("imageModel", log.config.imageModel || log.model);
-        if (log.config.quality) updateConfig("quality", log.config.quality);
-        if (log.config.size) updateConfig("size", log.config.size);
-        if (log.config.count) updateConfig("count", log.config.count);
-        setResults(log.images.map((image) => ({ id: image.id, status: "success", image })));
+        setPrompt(hydratedLog.prompt);
+        setReferences(hydratedLog.references || []);
+        if (hydratedLog.config.imageModel || hydratedLog.model) updateConfig("imageModel", hydratedLog.config.imageModel || hydratedLog.model);
+        if (hydratedLog.config.quality) updateConfig("quality", hydratedLog.config.quality);
+        if (hydratedLog.config.size) updateConfig("size", hydratedLog.config.size);
+        if (hydratedLog.config.count) updateConfig("count", hydratedLog.config.count);
+        setResults(hydratedLog.images.map((image) => ({ id: image.id, status: "success", image })));
     };
 
     const buildRequestSnapshot = () => {
@@ -284,15 +334,15 @@ export default function ImagePage() {
         try {
             const result = snapshot.references.length
                 ? await requestEdit(snapshot.config, snapshot.text, snapshot.references, undefined, {
-                      projectId: "local-image-workbench",
+                      projectId: sourceContext.projectId || "local-image-workbench",
                       sourceType: "image_generation",
-                      sourceId: "image-page",
+                      sourceId: sourceContext.briefId || sourceContext.assetId || "image-page",
                       inputSummary: summarizeLocalImageInput(snapshot.text, snapshot.references.length),
                   })
                 : await requestGeneration(snapshot.config, snapshot.text, undefined, {
-                      projectId: "local-image-workbench",
+                      projectId: sourceContext.projectId || "local-image-workbench",
                       sourceType: "image_generation",
-                      sourceId: "image-page",
+                      sourceId: sourceContext.briefId || sourceContext.assetId || "image-page",
                       inputSummary: summarizeLocalImageInput(snapshot.text, 0),
                   });
             const image = result[0];
@@ -317,9 +367,9 @@ export default function ImagePage() {
     };
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100">
-            <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 lg:grid-cols-[280px_minmax(0,1fr)] lg:overflow-hidden xl:grid-cols-[300px_minmax(0,1fr)]">
-                <aside className="thin-scrollbar hidden min-h-0 overflow-y-auto rounded-lg border border-stone-200 bg-card p-4 shadow-sm dark:border-stone-800 lg:block">
+        <div className="flex h-full flex-col overflow-hidden bg-[#070b12] text-slate-100">
+            <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 lg:grid-cols-[260px_minmax(0,1fr)] lg:overflow-hidden 2xl:grid-cols-[280px_minmax(0,1fr)]">
+                <aside className="thin-scrollbar hidden min-h-0 overflow-y-auto rounded-lg border border-slate-800/80 bg-[#0c121c] p-4 lg:block">
                     <LogPanel
                         logs={logs}
                         selectedLogIds={selectedLogIds}
@@ -331,12 +381,13 @@ export default function ImagePage() {
                     />
                 </aside>
 
-                <section className="grid gap-3 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_360px] lg:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_400px]">
-                    <div className="thin-scrollbar flex flex-col rounded-lg border border-stone-200 bg-card p-4 shadow-sm dark:border-stone-800 lg:order-2 lg:min-h-0 lg:overflow-y-auto">
+                <section className="grid gap-3 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(430px,460px)] lg:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_minmax(500px,540px)]">
+                    <div className="thin-scrollbar flex flex-col rounded-lg border border-slate-800/80 bg-[#0c121c] p-4 lg:order-2 lg:min-h-0 lg:overflow-y-auto lg:p-5">
                         <div>
                             <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                    <h1 className="text-xl font-semibold text-stone-950 dark:text-stone-100">生图工作台</h1>
+                                    <h1 className="text-xl font-semibold text-slate-50">生图工作台</h1>
+                                    {sourceContextLabel ? <p className="mt-1 break-words text-xs leading-5 text-cyan-200/80">来自：{sourceContextLabel}</p> : null}
                                 </div>
                                 <div className="flex shrink-0 gap-2 lg:hidden">
                                     <Button icon={<History className="size-4" />} onClick={() => setLogsOpen(true)}>
@@ -352,7 +403,7 @@ export default function ImagePage() {
                         <div className="mt-4 space-y-4">
                             <div>
                                 <div className="mb-2 flex items-center justify-between gap-3">
-                                    <span className="text-base font-semibold">提示词</span>
+                                    <span className="text-base font-semibold text-slate-100">提示词</span>
                                     <div className="flex gap-2">
                                         <Button size="small" icon={<BookOpen className="size-3.5" />} onClick={() => setPromptDialogOpen(true)}>
                                             提示词库
@@ -367,7 +418,7 @@ export default function ImagePage() {
 
                             <div className="min-w-0">
                                 <div className="mb-2 flex items-center justify-between gap-3">
-                                    <span className="text-base font-semibold">参考图</span>
+                                    <span className="text-base font-semibold text-slate-100">参考图</span>
                                     <div className="flex gap-2">
                                         <Button size="small" icon={<ClipboardPaste className="size-3.5" />} onClick={() => void addReferencesFromClipboard()}>
                                             剪切板
@@ -378,7 +429,7 @@ export default function ImagePage() {
                                     </div>
                                 </div>
                                 <div
-                                    className="hover-scrollbar hover-scrollbar-hint flex min-h-24 w-full min-w-0 max-w-full gap-2 overflow-x-scroll overflow-y-hidden rounded-lg border border-dashed border-stone-300 p-2 pb-3 overscroll-x-contain dark:border-stone-700"
+                                    className="hover-scrollbar hover-scrollbar-hint flex min-h-24 w-full min-w-0 max-w-full gap-2 overflow-x-scroll overflow-y-hidden rounded-lg border border-dashed border-slate-700/80 bg-[#070b12]/70 p-2 pb-3 overscroll-x-contain"
                                     onWheel={(event) => {
                                         if (event.currentTarget.scrollWidth <= event.currentTarget.clientWidth) return;
                                         event.preventDefault();
@@ -386,7 +437,7 @@ export default function ImagePage() {
                                     }}
                                 >
                                     {references.map((item) => (
-                                        <div key={item.id} className="group relative size-20 shrink-0 overflow-hidden rounded-md border border-stone-200 dark:border-stone-800">
+                                        <div key={item.id} className="group relative size-20 shrink-0 overflow-hidden rounded-md border border-slate-700/80 bg-slate-950/70">
                                             <img src={item.dataUrl} alt={item.name} className="size-full object-cover" />
                                             <button
                                                 type="button"
@@ -398,12 +449,12 @@ export default function ImagePage() {
                                             </button>
                                         </div>
                                     ))}
-                                    {!references.length ? <div className="flex min-w-full items-center justify-center text-sm text-stone-500">暂无参考图</div> : null}
+                                    {!references.length ? <div className="flex min-w-full items-center justify-center text-sm text-slate-500">暂无参考图</div> : null}
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm dark:border-stone-800 dark:bg-stone-900 sm:hidden">
-                                <span className="truncate text-stone-500 dark:text-stone-400">
+                            <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-[#080d14] px-3 py-2 text-sm sm:hidden">
+                                <span className="truncate text-slate-400">
                                     {model} · {effectiveConfig.size} · {effectiveConfig.quality}
                                 </span>
                                 <Button size="small" type="text" icon={<SlidersHorizontal className="size-4" />} onClick={() => setSettingsOpen(true)}>
@@ -423,10 +474,10 @@ export default function ImagePage() {
                         </div>
                     </div>
 
-                    <div className="thin-scrollbar rounded-lg border border-stone-200 bg-card p-4 shadow-sm dark:border-stone-800 lg:order-1 lg:min-h-0 lg:overflow-y-auto lg:p-5">
+                    <div className="thin-scrollbar rounded-lg border border-slate-800/80 bg-[#0c121c] p-4 lg:order-1 lg:min-h-0 lg:overflow-y-auto lg:p-5">
                         <div className="mb-4 flex items-center justify-between gap-3">
                             <div>
-                                <h2 className="text-xl font-semibold">生成结果</h2>
+                                <h2 className="text-xl font-semibold text-slate-50">生成结果</h2>
                             </div>
                             {running ? <Tag className="m-0 px-2 py-1">等待 {formatDuration(elapsedMs)}</Tag> : null}
                         </div>
@@ -443,8 +494,8 @@ export default function ImagePage() {
                                 )}
                             </div>
                         ) : (
-                            <div className="flex min-h-[320px] flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 text-center dark:border-stone-700 lg:min-h-[560px]">
-                                <ImagePlus className="mb-4 size-11 text-stone-400" />
+                            <div className="flex min-h-[320px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-700/80 bg-[#070b12]/55 text-center lg:min-h-[560px]">
+                                <ImagePlus className="mb-4 size-11 text-slate-500" />
                                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有生成图片" />
                             </div>
                         )}
@@ -493,7 +544,7 @@ function GenerationSettings({ config, model, updateConfig, openConfigDialog, com
     return (
         <>
             <label className={compact ? "block min-w-0" : "col-span-2 block min-w-0 sm:col-span-1"}>
-                <span className={compact ? "mb-1.5 block text-sm font-semibold" : "mb-1.5 block text-sm font-semibold sm:mb-2 sm:text-base"}>模型</span>
+                <span className={compact ? "mb-1.5 block text-sm font-semibold text-slate-100" : "mb-1.5 block text-sm font-semibold text-slate-100 sm:mb-2 sm:text-base"}>模型</span>
                 <ModelPicker config={config} modelType="image" value={model} onChange={(value) => updateConfig("imageModel", value)} fullWidth onMissingConfig={() => openConfigDialog(false)} />
             </label>
             <div className={compact ? "" : "col-span-2"}>
@@ -517,10 +568,10 @@ function ResultImageCard({
     onSaveAsset: (image: GeneratedImage, index: number) => void;
 }) {
     return (
-        <div className="overflow-hidden rounded-lg border border-stone-200 bg-background dark:border-stone-800">
+        <div className="overflow-hidden rounded-lg border border-slate-800 bg-[#080d14]">
             <Image src={image.dataUrl} alt={`生成结果 ${index + 1}`} className="aspect-square object-cover" />
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-stone-200 px-3 py-2.5 dark:border-stone-800">
-                <div className="flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-slate-800 px-3 py-2.5">
+                <div className="flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-xs text-slate-400">
                     <span>
                         {image.width}x{image.height}
                     </span>
@@ -545,16 +596,16 @@ function ResultImageCard({
 
 function PendingImageCard() {
     return (
-        <div className="relative aspect-square overflow-hidden rounded-lg border border-dashed border-stone-300 bg-stone-50 dark:border-stone-700 dark:bg-stone-900">
+        <div className="relative aspect-square overflow-hidden rounded-lg border border-dashed border-slate-700 bg-[#080d14]">
             <div
                 className="absolute inset-0 opacity-60"
                 style={{
-                    backgroundImage: "radial-gradient(circle, rgba(120,113,108,0.35) 1.4px, transparent 1.6px)",
+                    backgroundImage: "radial-gradient(circle, rgba(20,184,166,0.22) 1.4px, transparent 1.6px)",
                     backgroundSize: "16px 16px",
                 }}
             />
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-stone-500 dark:text-stone-400">
-                <LoaderCircle className="size-6 animate-spin" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-slate-400">
+                <LoaderCircle className="size-6 animate-spin text-cyan-300" />
                 <span>生成中</span>
             </div>
         </div>
@@ -563,14 +614,14 @@ function PendingImageCard() {
 
 function FailedImageCard({ error, onRetry }: { error: string; onRetry: () => void }) {
     return (
-        <div className="overflow-hidden rounded-lg border border-red-200 bg-red-50 dark:border-red-950 dark:bg-red-950/20">
+        <div className="overflow-hidden rounded-lg border border-red-900/70 bg-red-950/20">
             <div className="flex aspect-square flex-col items-center justify-center gap-3 p-5 text-center">
                 <div className="text-sm font-medium text-red-600 dark:text-red-300">生成失败</div>
                 <Typography.Paragraph ellipsis={{ rows: 4 }} className="!mb-0 !text-xs !text-red-500 dark:!text-red-300">
                     {error}
                 </Typography.Paragraph>
             </div>
-            <div className="flex justify-end border-t border-red-200 p-3 dark:border-red-950">
+            <div className="flex justify-end border-t border-red-900/70 p-3">
                 <Button size="small" danger onClick={onRetry}>
                     重试
                 </Button>
@@ -621,7 +672,7 @@ function LogPanel({
         <>
             <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                    <h2 className="text-base font-semibold">生成记录</h2>
+                    <h2 className="text-base font-semibold text-slate-100">生成记录</h2>
                 </div>
                 <Tag className="m-0">{logs.length}</Tag>
             </div>
@@ -647,7 +698,7 @@ function LogPanel({
                         onClick={() => onPreviewLog(log)}
                     />
                 ))}
-                {!logs.length ? <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-stone-300 text-center text-sm text-stone-500 dark:border-stone-700">暂无生成记录</div> : null}
+                {!logs.length ? <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-slate-700/80 bg-[#070b12]/55 text-center text-sm text-slate-500">暂无生成记录</div> : null}
             </div>
         </>
     );
@@ -657,14 +708,14 @@ function LogCard({ log, selected, active, onSelectedChange, onClick }: { log: Ge
     return (
         <button
             type="button"
-            className={`block w-full rounded-lg border p-2 text-left transition ${active ? "border-stone-900 bg-blue-50 dark:border-stone-100 dark:bg-blue-950/20" : "border-stone-200 bg-background hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-stone-900"}`}
+            className={`block w-full rounded-lg border p-2 text-left transition ${active ? "border-cyan-400/70 bg-cyan-500/10" : "border-slate-800 bg-[#080d14] hover:border-slate-700 hover:bg-slate-900/70"}`}
             onClick={onClick}
         >
             <div className="grid grid-cols-[minmax(128px,1fr)_auto] gap-2">
                 <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-2">
                     <Checkbox className="mt-0.5" checked={selected} onClick={(event) => event.stopPropagation()} onChange={(event) => onSelectedChange(event.target.checked)} />
                     <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold leading-5">{log.title}</div>
+                        <div className="truncate text-sm font-semibold leading-5 text-slate-100">{log.title}</div>
                         {log.thumbnails?.length ? (
                             <div className="mt-2 flex gap-1 overflow-hidden">
                                 {log.thumbnails.slice(0, 4).map((image, index) => (
@@ -707,24 +758,24 @@ async function readStoredLogs() {
         await logStore.iterate<GenerationLog, void>((value) => {
             values.push(value);
         });
-        const logs = await Promise.all(values.map(normalizeLog));
+        const logs = await Promise.all(values.map((value) => normalizeLog(value, false)));
         return logs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } catch {
         return [];
     }
 }
 
-async function normalizeLog(log: Partial<GenerationLog>): Promise<GenerationLog> {
+async function normalizeLog(log: Partial<GenerationLog>, resolveMedia = true): Promise<GenerationLog> {
     const references = await Promise.all(
         (log.references || []).map(async (item) => ({
             ...item,
-            dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl),
+            dataUrl: resolveMedia ? await resolveImageUrl(item.storageKey, item.dataUrl) : item.dataUrl,
         })),
     );
     const images = await Promise.all(
         (log.images || []).map(async (item) => ({
             ...item,
-            dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl),
+            dataUrl: resolveMedia ? await resolveImageUrl(item.storageKey, item.dataUrl) : item.dataUrl,
         })),
     );
     const config = normalizeLogConfig(log);
@@ -765,6 +816,21 @@ function normalizeLogConfig(log: Partial<GenerationLog>): GenerationLogConfig {
         quality: log.config?.quality || log.quality || "",
         size: log.config?.size || log.size || "",
         count: log.config?.count || String(log.imageCount || log.successCount || 1),
+    };
+}
+
+function parseImageWorkbenchSourceContext(): ImageWorkbenchSourceContext {
+    if (typeof window === "undefined") return emptyImageWorkbenchSourceContext;
+    const params = new URLSearchParams(window.location.search);
+    return {
+        assetId: params.get("assetId") || "",
+        briefId: params.get("briefId") || "",
+        episodeId: params.get("episodeId") || "",
+        episodeTitle: params.get("episodeTitle") || "",
+        projectId: params.get("projectId") || "",
+        projectTitle: params.get("projectTitle") || "",
+        prompt: params.get("prompt") || "",
+        title: params.get("title") || "",
     };
 }
 

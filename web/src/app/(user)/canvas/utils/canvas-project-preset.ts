@@ -17,8 +17,8 @@ export const canvasProjectPresetOptions = [
     { key: "vertical-drama", label: "竖屏短剧", preset: { resolution: "720", ratio: "9:16", fps: "24", defaultDuration: "8", defaultVideoProvider: "volcengine-ark" } },
     { key: "landscape-film", label: "横屏短片", preset: { resolution: "720", ratio: "16:9", fps: "24", defaultDuration: "8", defaultVideoProvider: "volcengine-ark" } },
     { key: "square-social", label: "方形社媒", preset: { resolution: "720", ratio: "1:1", fps: "24", defaultDuration: "6", defaultVideoProvider: "openai" } },
-    { key: "hd-landscape", label: "高清横屏", preset: { resolution: "1080", ratio: "16:9", fps: "30", defaultDuration: "10", defaultVideoProvider: "volcengine-ark" } },
-    { key: "hd-vertical", label: "高清竖屏", preset: { resolution: "1080", ratio: "9:16", fps: "30", defaultDuration: "10", defaultVideoProvider: "volcengine-ark" } },
+    { key: "hd-landscape", label: "高清横屏", preset: { resolution: "1080", ratio: "16:9", fps: "30", defaultDuration: "6", defaultVideoProvider: "volcengine-ark" } },
+    { key: "hd-vertical", label: "高清竖屏", preset: { resolution: "1080", ratio: "9:16", fps: "30", defaultDuration: "6", defaultVideoProvider: "volcengine-ark" } },
 ] satisfies Array<{ key: string; label: string; preset: CanvasProjectPreset }>;
 
 export function buildCanvasProjectPresetFromConfig(config: AiConfig, patch: CanvasProjectPreset = {}): CanvasProjectPreset {

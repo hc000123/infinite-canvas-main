@@ -730,7 +730,7 @@ function GenerationQueuePanel({
                     </Button>
                     <span className="ml-auto inline-flex items-center gap-2 text-xs text-stone-500">
                         并发
-                        <InputNumber size="small" min={1} max={4} value={concurrency} onChange={(value) => onConcurrencyChange(Number(value) || 1)} className="w-16" />
+                        <InputNumber size="small" min={1} max={10} value={concurrency} onChange={(value) => onConcurrencyChange(Number(value) || 1)} className="w-16" />
                     </span>
                 </div>
                 {visibleItems.length ? (

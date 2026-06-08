@@ -83,7 +83,7 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                             <button
                                 key={item.value}
                                 type="button"
-                                className={`flex cursor-pointer flex-col items-center justify-center border bg-transparent transition hover:opacity-80 ${compact ? "h-12 gap-0.5 rounded-lg text-xs" : "h-[72px] gap-1.5 rounded-xl text-sm"}`}
+                                className={`flex cursor-pointer flex-col items-center justify-center border bg-transparent transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f80ff]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${compact ? "h-12 gap-0.5 rounded-lg text-xs" : "h-[72px] gap-1.5 rounded-xl text-sm"}`}
                                 style={{ borderColor: selectedAspect?.value === item.value ? theme.node.text : theme.node.stroke, background: "transparent", color: theme.node.text }}
                                 onMouseDown={(event) => event.stopPropagation()}
                                 onClick={() => selectAspect(item.value)}
@@ -135,7 +135,7 @@ function OptionPill({ selected, theme, onClick, children }: { selected: boolean;
     return (
         <button
             type="button"
-            className="h-9 cursor-pointer rounded-full border px-2 text-sm transition hover:opacity-80"
+            className="h-9 cursor-pointer rounded-full border px-2 text-sm transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f80ff]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
             style={{ background: "transparent", borderColor: selected ? theme.node.text : theme.node.stroke, color: theme.node.text }}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={onClick}
@@ -155,7 +155,7 @@ function DimensionInput({ prefix, value, disabled, theme, onChange }: { prefix: 
                 type="number"
                 min={1}
                 disabled={disabled}
-                className="min-w-0 flex-1 bg-transparent px-2 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="min-w-0 flex-1 bg-transparent px-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2f80ff]/70 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 value={value || ""}
                 onChange={(event) => onChange(Number(event.target.value) || null)}
                 onMouseDown={(event) => event.stopPropagation()}
@@ -171,7 +171,7 @@ function CountInput({ value, max, theme, onChange }: { value: number; max: numbe
                 type="number"
                 min={1}
                 max={max}
-                className="min-w-0 flex-1 bg-transparent px-3 text-center outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="min-w-0 flex-1 bg-transparent px-3 text-center outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2f80ff]/70 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 style={{ color: theme.node.text, WebkitTextFillColor: theme.node.text }}
                 value={value || ""}
                 onChange={(event) => onChange(Number(event.target.value) || null)}

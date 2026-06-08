@@ -27,8 +27,8 @@ export function CanvasNodeContextMenu({ menu, onClose, onDuplicate, onDelete }: 
             style={{ left: menu.x, top: menu.y, background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
             onPointerDown={(event) => event.stopPropagation()}
         >
-            <MenuButton icon={<Plus className="size-4" />} label="Duplicate" onClick={onDuplicate} />
-            <MenuButton icon={<Trash2 className="size-4" />} label="Delete" onClick={onDelete} danger />
+            <MenuButton icon={<Plus className="size-4" />} label="复制" onClick={onDuplicate} />
+            <MenuButton icon={<Trash2 className="size-4" />} label="删除" onClick={onDelete} danger />
         </div>
     );
 }
@@ -37,7 +37,7 @@ function MenuButton({ icon, label, onClick, danger = false }: { icon: ReactNode;
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
 
     return (
-        <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:opacity-80" style={{ color: danger ? "#f87171" : theme.node.text }} onClick={onClick}>
+        <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70" style={{ color: danger ? "#f87171" : theme.node.text }} onClick={onClick}>
             {icon}
             <span>{label}</span>
         </button>

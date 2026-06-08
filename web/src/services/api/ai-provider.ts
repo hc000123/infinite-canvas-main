@@ -10,6 +10,7 @@ export const AI_VIDEO_POLL_INTERVAL_MS = 2500;
 export const AI_VIDEO_MAX_POLL_ATTEMPTS = 240;
 
 export type AiProviderProtocol = AiConfig["videoProtocol"];
+const reasoningEfforts = new Set<AiConfig["reasoningEffort"]>(["minimal", "low", "medium", "high"]);
 
 export function aiApiUrl(config: AiConfig, path: string, protocol: AiProviderProtocol = "openai") {
     const baseUrl = protocol === "volcengine-ark" ? config.volcengineBaseUrl || defaultConfig.volcengineBaseUrl : config.baseUrl;
@@ -32,6 +33,12 @@ export function aiHeaders(config: AiConfig, contentType?: string, protocol: AiPr
 
 export function refreshRemoteUser(config: AiConfig) {
     if (config.channelMode === "remote") void useUserStore.getState().hydrateUser();
+}
+
+export function aiReasoningPayload(config: AiConfig) {
+    if (config.thinkingMode !== "true") return {};
+    const effort = reasoningEfforts.has(config.reasoningEffort) ? config.reasoningEffort : "medium";
+    return { reasoning_effort: effort };
 }
 
 export function normalizeAiError(error: unknown, fallback: string) {

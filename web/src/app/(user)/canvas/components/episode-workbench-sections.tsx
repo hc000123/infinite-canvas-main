@@ -310,7 +310,7 @@ export function EpisodeImageNeedsSection({
                                         <div className="flex h-14 w-20 items-center justify-center rounded-md border border-dashed border-stone-200 text-xs text-stone-400 dark:border-stone-700">无主参考</div>
                                     )}
                                     <Button size="small" type={row.hasBrief ? "default" : "primary"} icon={<ImagePlus className="size-3.5" />} onClick={() => onOpenBrief(row.item)}>
-                                        {row.hasBrief ? "打开 Brief" : "创建 Brief"}
+                                        {row.hasBrief ? "查看草案" : "生成草案"}
                                     </Button>
                                 </div>
                             </div>

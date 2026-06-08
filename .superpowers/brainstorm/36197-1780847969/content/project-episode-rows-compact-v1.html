@@ -1,0 +1,551 @@
+<style>
+  .stage {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 14% 9%, rgba(19, 194, 205, 0.12), transparent 28%),
+      linear-gradient(135deg, #0f1721 0%, #070b10 72%, #0b1018 100%);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.34);
+    color: #eff8fa;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .topnav {
+    height: 62px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 18px;
+    padding: 0 22px;
+    background: rgba(1, 7, 12, 0.2);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 132px;
+  }
+
+  .brand-mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #18c8d6 0%, #107787 100%);
+    box-shadow: 0 0 24px rgba(24, 200, 214, 0.28);
+  }
+
+  .brand strong {
+    display: block;
+    font-size: 14px;
+  }
+
+  .brand span {
+    display: block;
+    color: rgba(239, 248, 250, 0.48);
+    font-size: 10px;
+    margin-top: 2px;
+  }
+
+  .navline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .nav-item {
+    height: 30px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 10px;
+    color: rgba(239, 248, 250, 0.62);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .nav-item.active {
+    color: #dfffff;
+    background: rgba(20, 200, 212, 0.13);
+    border: 1px solid rgba(20, 200, 212, 0.25);
+  }
+
+  .nav-icon {
+    width: 13px;
+    height: 13px;
+    border-radius: 4px;
+    border: 1px solid currentColor;
+    opacity: 0.78;
+  }
+
+  .current-pill {
+    margin-left: 8px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    background: rgba(255, 255, 255, 0.035);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 10px;
+    color: rgba(239, 248, 250, 0.72);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .current-pill strong {
+    color: #eff8fa;
+    font-size: 13px;
+  }
+
+  .top-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .button {
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(255, 255, 255, 0.045);
+    color: rgba(239, 248, 250, 0.78);
+    padding: 0 11px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .button.primary {
+    border-color: rgba(20, 200, 212, 0.5);
+    background: linear-gradient(135deg, #18c8d6 0%, #0f96aa 100%);
+    color: #05262b;
+    font-weight: 760;
+  }
+
+  .main {
+    padding: 22px 28px 28px;
+    min-height: 715px;
+  }
+
+  .summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 390px;
+    gap: 18px;
+    align-items: end;
+    margin-bottom: 18px;
+  }
+
+  .crumb {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 12px;
+    margin-bottom: 7px;
+  }
+
+  .title {
+    margin: 0;
+    font-size: 25px;
+    line-height: 1.18;
+    letter-spacing: 0;
+  }
+
+  .subline {
+    color: rgba(239, 248, 250, 0.58);
+    font-size: 13px;
+    margin-top: 8px;
+  }
+
+  .progress-box {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.035);
+    border-radius: 10px;
+    padding: 12px;
+  }
+
+  .progress-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    font-size: 12px;
+  }
+
+  .progress-head strong {
+    color: rgba(239, 248, 250, 0.88);
+  }
+
+  .progress-head span {
+    color: #18c8d6;
+  }
+
+  .bar {
+    height: 6px;
+    border-radius: 99px;
+    background: rgba(148, 163, 184, 0.16);
+    overflow: hidden;
+  }
+
+  .bar i {
+    display: block;
+    width: 58%;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #18c8d6, #21d27f);
+  }
+
+  .statline {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+    color: rgba(239, 248, 250, 0.52);
+    font-size: 11px;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+
+  .toolbar strong {
+    font-size: 15px;
+  }
+
+  .filters {
+    display: flex;
+    gap: 7px;
+  }
+
+  .filter {
+    height: 26px;
+    border-radius: 7px;
+    padding: 0 9px;
+    display: flex;
+    align-items: center;
+    color: rgba(239, 248, 250, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.035);
+    font-size: 11px;
+  }
+
+  .filter.active {
+    color: #dfffff;
+    border-color: rgba(20, 200, 212, 0.38);
+    background: rgba(20, 200, 212, 0.11);
+  }
+
+  .episode-list {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    border-radius: 11px;
+    overflow: hidden;
+  }
+
+  .list-head,
+  .episode-row {
+    display: grid;
+    grid-template-columns: 72px minmax(170px, 1.2fr) 92px 92px 82px 82px 82px 96px 108px;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .list-head {
+    min-height: 38px;
+    padding: 0 14px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.13);
+    color: rgba(239, 248, 250, 0.42);
+    font-size: 11px;
+    background: rgba(1, 7, 12, 0.22);
+  }
+
+  .episode-row {
+    min-height: 58px;
+    padding: 0 14px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.09);
+    color: rgba(239, 248, 250, 0.78);
+    font-size: 12px;
+  }
+
+  .episode-row:last-child {
+    border-bottom: 0;
+  }
+
+  .episode-row.current {
+    background: linear-gradient(90deg, rgba(20, 200, 212, 0.13), rgba(20, 200, 212, 0.035));
+    box-shadow: inset 3px 0 0 #18c8d6;
+  }
+
+  .ep-no {
+    color: rgba(239, 248, 250, 0.52);
+  }
+
+  .ep-title strong {
+    display: block;
+    font-size: 13px;
+    color: #eff8fa;
+    margin-bottom: 3px;
+  }
+
+  .ep-title span {
+    color: rgba(239, 248, 250, 0.42);
+    font-size: 11px;
+  }
+
+  .badge {
+    justify-self: start;
+    border-radius: 7px;
+    padding: 4px 7px;
+    font-size: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    color: rgba(239, 248, 250, 0.62);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .badge.done {
+    border-color: rgba(33, 210, 127, 0.34);
+    color: #68e29f;
+    background: rgba(33, 210, 127, 0.08);
+  }
+
+  .badge.doing {
+    border-color: rgba(20, 200, 212, 0.38);
+    color: #67eef4;
+    background: rgba(20, 200, 212, 0.1);
+  }
+
+  .badge.wait {
+    border-color: rgba(238, 177, 70, 0.36);
+    color: #f1be63;
+    background: rgba(238, 177, 70, 0.08);
+  }
+
+  .progress-cell {
+    display: grid;
+    grid-template-columns: 1fr 34px;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .progress-cell span {
+    color: rgba(239, 248, 250, 0.52);
+    font-size: 11px;
+    text-align: right;
+  }
+
+  .row-action {
+    height: 28px;
+    border-radius: 7px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(239, 248, 250, 0.78);
+    font-size: 11px;
+  }
+
+  .current .row-action {
+    border-color: rgba(20, 200, 212, 0.42);
+    background: rgba(20, 200, 212, 0.13);
+    color: #dfffff;
+  }
+
+  .note {
+    margin-top: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: #f8fafc;
+    color: #172033;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+</style>
+
+<h2>简化版 v4：长条分集清单</h2>
+<p class="subtitle">分集不再用块状卡片，而是紧凑长条。首屏可以展示 9-12 集，适合用户快速扫当前进度，再点击进入单集。</p>
+
+<div class="stage">
+  <header class="topnav">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div>
+        <strong>AI · 画布</strong>
+        <span>专业版</span>
+      </div>
+    </div>
+
+    <div class="navline">
+      <div class="nav-item active"><div class="nav-icon"></div>分集</div>
+      <div class="nav-item"><div class="nav-icon"></div>设定库</div>
+      <div class="nav-item"><div class="nav-icon"></div>素材</div>
+      <div class="nav-item"><div class="nav-icon"></div>画布</div>
+      <div class="current-pill">当前制作到 <strong>第 05 集</strong> · 分镜审核中</div>
+    </div>
+
+    <div class="top-actions">
+      <button class="button">编辑项目</button>
+      <button class="button primary">新建分集</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="summary">
+      <div>
+        <div class="crumb">项目工作台 / 霓虹之下</div>
+        <h1 class="title">霓虹之下</h1>
+        <div class="subline">都市悬疑短剧 · 共 12 集 · 当前主线停留在第 05 集</div>
+      </div>
+
+      <div class="progress-box">
+        <div class="progress-head">
+          <strong>整剧制作进度</strong>
+          <span>第 05 / 12 集</span>
+        </div>
+        <div class="bar"><i></i></div>
+        <div class="statline">
+          <span>已完成 4 集</span>
+          <span>进行中 1 集</span>
+          <span>草稿 7 集</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <strong>分集列表</strong>
+      <div class="filters">
+        <div class="filter active">全部</div>
+        <div class="filter">进行中</div>
+        <div class="filter">已完成</div>
+        <div class="filter">草稿</div>
+      </div>
+    </div>
+
+    <div class="episode-list">
+      <div class="list-head">
+        <div>集数</div>
+        <div>标题</div>
+        <div>状态</div>
+        <div>阶段</div>
+        <div>镜头</div>
+        <div>画布</div>
+        <div>视频</div>
+        <div>完成度</div>
+        <div></div>
+      </div>
+
+      <div class="episode-row">
+        <div class="ep-no">第 01 集</div>
+        <div class="ep-title"><strong>雨夜相逢</strong><span>最近更新 06-01 19:20</span></div>
+        <div><span class="badge done">已完成</span></div>
+        <div>成片</div>
+        <div>18</div>
+        <div>1</div>
+        <div>18</div>
+        <div class="progress-cell"><div class="bar"><i style="width:100%"></i></div><span>100%</span></div>
+        <button class="row-action">查看</button>
+      </div>
+
+      <div class="episode-row">
+        <div class="ep-no">第 02 集</div>
+        <div class="ep-title"><strong>暗巷追击</strong><span>最近更新 06-02 21:10</span></div>
+        <div><span class="badge done">已完成</span></div>
+        <div>成片</div>
+        <div>22</div>
+        <div>1</div>
+        <div>22</div>
+        <div class="progress-cell"><div class="bar"><i style="width:100%"></i></div><span>100%</span></div>
+        <button class="row-action">查看</button>
+      </div>
+
+      <div class="episode-row">
+        <div class="ep-no">第 03 集</div>
+        <div class="ep-title"><strong>旧楼交易</strong><span>最近更新 06-03 18:42</span></div>
+        <div><span class="badge done">已完成</span></div>
+        <div>成片</div>
+        <div>20</div>
+        <div>1</div>
+        <div>20</div>
+        <div class="progress-cell"><div class="bar"><i style="width:100%"></i></div><span>100%</span></div>
+        <button class="row-action">查看</button>
+      </div>
+
+      <div class="episode-row">
+        <div class="ep-no">第 04 集</div>
+        <div class="ep-title"><strong>天台对峙</strong><span>最近更新 06-04 17:35</span></div>
+        <div><span class="badge done">已完成</span></div>
+        <div>成片</div>
+        <div>16</div>
+        <div>1</div>
+        <div>16</div>
+        <div class="progress-cell"><div class="bar"><i style="width:100%"></i></div><span>100%</span></div>
+        <button class="row-action">查看</button>
+      </div>
+
+      <div class="episode-row current">
+        <div class="ep-no">第 05 集</div>
+        <div class="ep-title"><strong>真相浮出</strong><span>最近更新 06-07 14:23</span></div>
+        <div><span class="badge doing">进行中</span></div>
+        <div>分镜</div>
+        <div>12 / 18</div>
+        <div>1</div>
+        <div>0</div>
+        <div class="progress-cell"><div class="bar"><i style="width:62%"></i></div><span>62%</span></div>
+        <button class="row-action">进入</button>
+      </div>
+
+      <div class="episode-row">
+        <div class="ep-no">第 06 集</div>
+        <div class="ep-title"><strong>午夜来电</strong><span>最近更新 06-07 10:05</span></div>
+        <div><span class="badge wait">草稿</span></div>
+        <div>剧本</div>
+        <div>-</div>
+        <div>-</div>
+        <div>-</div>
+        <div class="progress-cell"><div class="bar"><i style="width:8%"></i></div><span>8%</span></div>
+        <button class="row-action">进入</button>
+      </div>
+
+      <div class="episode-row">
+        <div class="ep-no">第 07 集</div>
+        <div class="ep-title"><strong>车站失踪</strong><span>尚未开始</span></div>
+        <div><span class="badge wait">草稿</span></div>
+        <div>未开始</div>
+        <div>-</div>
+        <div>-</div>
+        <div>-</div>
+        <div class="progress-cell"><div class="bar"><i style="width:0%"></i></div><span>0%</span></div>
+        <button class="row-action">进入</button>
+      </div>
+
+      <div class="episode-row">
+        <div class="ep-no">第 08 集</div>
+        <div class="ep-title"><strong>谎言之后</strong><span>尚未开始</span></div>
+        <div><span class="badge wait">草稿</span></div>
+        <div>未开始</div>
+        <div>-</div>
+        <div>-</div>
+        <div>-</div>
+        <div class="progress-cell"><div class="bar"><i style="width:0%"></i></div><span>0%</span></div>
+        <button class="row-action">进入</button>
+      </div>
+
+      <div class="episode-row">
+        <div class="ep-no">第 09 集</div>
+        <div class="ep-title"><strong>最终证人</strong><span>尚未开始</span></div>
+        <div><span class="badge wait">草稿</span></div>
+        <div>未开始</div>
+        <div>-</div>
+        <div>-</div>
+        <div>-</div>
+        <div class="progress-cell"><div class="bar"><i style="width:0%"></i></div><span>0%</span></div>
+        <button class="row-action">进入</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="note">
+  调整点：分集列表改为表格式长条，每行高度约 58px；首屏能直接扫到更多集数。卡片信息保留但变成列：状态、阶段、镜头、画布、视频、完成度，点击右侧按钮进入单集详情。
+</div>

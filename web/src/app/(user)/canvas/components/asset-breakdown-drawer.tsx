@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { App, Button, Card, Drawer, Empty, Form, Input, Modal, Popconfirm, Select, Segmented, Space, Tag } from "antd";
-import { FileText, Link2, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { App, Button, Drawer, Empty, Select, Segmented, Space } from "antd";
+import { Plus, Sparkles } from "lucide-react";
 
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { preserveOrCreateAssetVersionReferences } from "../../assets/asset-version-references";
@@ -11,17 +11,17 @@ import { useAssetBreakdownStore } from "../stores/use-asset-breakdown-store";
 import { useImageBriefStore } from "../stores/use-image-brief-store";
 import { useProductionBibleStore } from "../stores/use-production-bible-store";
 import {
-    assetBreakdownKindLabel,
     buildAssetBreakdownAssetMetadata,
     buildAssetBreakdownProductionBibleAssetRefs,
     matchProductionBibleItem,
-    productionBibleKindForAssetBreakdown,
     type AssetBreakdownItem,
     type AssetBreakdownKind,
     type AssetBreakdownWriteInput,
 } from "../utils/asset-breakdown";
 import { canvasEpisodeLabel } from "../utils/canvas-episode-context";
-import { itemsForProductionBibleProject, productionBibleKindLabel, type ProductionBibleItem } from "../utils/production-bible";
+import { itemsForProductionBibleProject, type ProductionBibleItem } from "../utils/production-bible";
+import { AssetBreakdownCard } from "./asset-breakdown-card";
+import { AssetBreakdownFormModal, assetBreakdownDefaultKind, assetBreakdownKindOptionsWithAll, type AssetBreakdownFormValues } from "./asset-breakdown-form-modal";
 
 type Props = {
     open: boolean;
@@ -30,23 +30,6 @@ type Props = {
     canvases: CanvasProject[];
     onClose: () => void;
 };
-
-type FormValues = {
-    kind: AssetBreakdownKind;
-    name: string;
-    description?: string;
-    sourceText?: string;
-    tags?: string[];
-    productionBibleItemId?: string;
-    assetIds?: string[];
-};
-
-const kindOptions: Array<{ label: string; value: AssetBreakdownKind }> = [
-    { label: "角色", value: "character" },
-    { label: "场景", value: "scene" },
-    { label: "道具", value: "prop" },
-    { label: "风格 / 光影", value: "style" },
-];
 
 export function AssetBreakdownDrawer({ open, projectId, projectTitle, canvases, onClose }: Props) {
     const { message } = App.useApp();
@@ -98,7 +81,7 @@ export function AssetBreakdownDrawer({ open, projectId, projectTitle, canvases, 
         setFormOpen(true);
     };
 
-    const submitItem = (values: FormValues) => {
+    const submitItem = (values: AssetBreakdownFormValues) => {
         if (!activeCanvas?.episodeId) return;
         const payload: AssetBreakdownWriteInput = {
             projectId,
@@ -154,7 +137,7 @@ export function AssetBreakdownDrawer({ open, projectId, projectTitle, canvases, 
                     options={boundCanvases.map((canvas) => ({ label: `${canvasEpisodeLabel(canvas)} · ${canvas.title}`, value: canvas.id }))}
                     onChange={setActiveCanvasId}
                 />
-                <Segmented value={kindFilter} onChange={(value) => setKindFilter(value as AssetBreakdownKind | "all")} options={[{ label: "全部", value: "all" }, ...kindOptions]} />
+                <Segmented value={kindFilter} onChange={(value) => setKindFilter(value as AssetBreakdownKind | "all")} options={assetBreakdownKindOptionsWithAll()} />
             </div>
 
             {!boundCanvases.length ? (
@@ -181,7 +164,7 @@ export function AssetBreakdownDrawer({ open, projectId, projectTitle, canvases, 
                                 createBriefDraft(item.id);
                                 const briefId = createImageBriefFromAssetBreakdown(item);
                                 updateItem(item.id, { briefId, status: "brief_ready" });
-                                message.success("已创建生图 Brief");
+                                message.success("已生成 Brief 草案；主流程请到单集生图需求审核台确认");
                             }}
                             onBindAssets={(assetIds) => bindItemAssets(item, assetIds)}
                         />
@@ -191,152 +174,8 @@ export function AssetBreakdownDrawer({ open, projectId, projectTitle, canvases, 
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无资产拆解条目，可先从本集剧本整理草案。" className="py-20" />
             )}
 
-            <AssetBreakdownFormModal open={formOpen} editingItem={editingItem} defaultKind={kindFilter === "all" ? "character" : kindFilter} assets={assets} bibleItems={projectBibleItems} onCancel={() => setFormOpen(false)} onSubmit={submitItem} />
+            <AssetBreakdownFormModal open={formOpen} editingItem={editingItem} defaultKind={assetBreakdownDefaultKind(kindFilter)} assets={assets} bibleItems={projectBibleItems} onCancel={() => setFormOpen(false)} onSubmit={submitItem} />
         </Drawer>
-    );
-}
-
-function AssetBreakdownCard({
-    item,
-    assets,
-    bibleItems,
-    onEdit,
-    onDelete,
-    onMatchBible,
-    onBrief,
-    onBindAssets,
-}: {
-    item: AssetBreakdownItem;
-    assets: Asset[];
-    bibleItems: ProductionBibleItem[];
-    onEdit: () => void;
-    onDelete: () => void;
-    onMatchBible: () => void;
-    onBrief: () => void;
-    onBindAssets: (assetIds: string[]) => void;
-}) {
-    const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
-    const bibleItem = bibleItems.find((bible) => bible.id === item.productionBibleItemId);
-    return (
-        <Card
-            size="small"
-            title={
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <Tag className="m-0">{kindOptions.find((option) => option.value === item.kind)?.label}</Tag>
-                    <span className="truncate">{item.name}</span>
-                    <Tag className="m-0">{statusLabel(item.status)}</Tag>
-                </div>
-            }
-            extra={
-                <Space size={4}>
-                    <Button size="small" type="text" icon={<FileText className="size-4" />} onClick={onBrief} />
-                    <Button size="small" type="text" icon={<Link2 className="size-4" />} onClick={onMatchBible} disabled={item.kind === "style"} />
-                    <Button size="small" type="text" icon={<Pencil className="size-4" />} onClick={onEdit} />
-                    <Popconfirm title="删除这个资产条目？" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={onDelete}>
-                        <Button size="small" type="text" danger icon={<Trash2 className="size-4" />} />
-                    </Popconfirm>
-                </Space>
-            }
-        >
-            <div className="space-y-3 text-sm">
-                <p className="m-0 whitespace-pre-wrap text-stone-600 dark:text-stone-300">{item.description || item.sourceText || "暂无描述"}</p>
-                <Space size={[4, 4]} wrap>
-                    {item.tags.map((tag) => (
-                        <Tag key={tag} className="m-0">
-                            {tag}
-                        </Tag>
-                    ))}
-                    {bibleItem ? (
-                        <Tag color="blue" className="m-0">
-                            设定库：{productionBibleKindLabel(bibleItem.kind)} · {bibleItem.name}
-                        </Tag>
-                    ) : null}
-                    {item.briefDraft ? (
-                        <Tag color="purple" className="m-0">
-                            Brief：{item.briefDraft.title}
-                        </Tag>
-                    ) : null}
-                    {item.assetIds.map((assetId) => (
-                        <Tag key={assetId} color="green" className="m-0">
-                            素材：{assets.find((asset) => asset.id === assetId)?.title || assetId}
-                        </Tag>
-                    ))}
-                </Space>
-                {item.briefDraft ? <pre className="max-h-32 overflow-auto rounded bg-stone-50 p-2 text-xs leading-5 text-stone-500 dark:bg-stone-900 dark:text-stone-400">{item.briefDraft.prompt}</pre> : null}
-                <div className="flex flex-wrap items-center gap-2">
-                    <Select mode="tags" className="min-w-72 flex-1" placeholder="选择或粘贴素材 ID 绑定到该资产" value={selectedAssetIds} options={assets.map((asset) => ({ label: asset.title, value: asset.id }))} onChange={setSelectedAssetIds} />
-                    <Button size="small" disabled={!selectedAssetIds.length} onClick={() => onBindAssets(selectedAssetIds)}>
-                        绑定素材
-                    </Button>
-                </div>
-            </div>
-        </Card>
-    );
-}
-
-function AssetBreakdownFormModal({
-    open,
-    editingItem,
-    defaultKind,
-    assets,
-    bibleItems,
-    onCancel,
-    onSubmit,
-}: {
-    open: boolean;
-    editingItem: AssetBreakdownItem | null;
-    defaultKind: AssetBreakdownKind;
-    assets: Asset[];
-    bibleItems: ProductionBibleItem[];
-    onCancel: () => void;
-    onSubmit: (values: FormValues) => void;
-}) {
-    const [form] = Form.useForm<FormValues>();
-    const kind = Form.useWatch("kind", form) || defaultKind;
-    const bibleKind = productionBibleKindForAssetBreakdown(kind);
-    useEffect(() => {
-        if (!open) return;
-        form.setFieldsValue({
-            kind: editingItem?.kind || defaultKind,
-            name: editingItem?.name || "",
-            description: editingItem?.description || "",
-            sourceText: editingItem?.sourceText || "",
-            tags: editingItem?.tags || [],
-            productionBibleItemId: editingItem?.productionBibleItemId,
-            assetIds: editingItem?.assetIds || [],
-        });
-    }, [defaultKind, editingItem, form, open]);
-    return (
-        <Modal title={editingItem ? "编辑资产条目" : "新增资产条目"} open={open} onCancel={onCancel} onOk={() => void form.validateFields().then(onSubmit)} okText="保存" cancelText="取消" destroyOnHidden>
-            <Form form={form} layout="vertical" requiredMark={false}>
-                <Form.Item name="kind" label="资产类型">
-                    <Select options={kindOptions} />
-                </Form.Item>
-                <Form.Item name="name" label="名称" rules={[{ required: true, message: "请输入资产名称" }]}>
-                    <Input placeholder="例如：魏梁 / 大学操场 / 话筒 / 白天自然光" />
-                </Form.Item>
-                <Form.Item name="description" label="描述">
-                    <Input.TextArea rows={3} placeholder="人工整理资产特征、服化道、场景氛围或参考要求" />
-                </Form.Item>
-                <Form.Item name="sourceText" label="剧本依据">
-                    <Input.TextArea rows={3} placeholder="从剧本中摘录该资产出现的原文" />
-                </Form.Item>
-                <Form.Item name="tags" label="标签">
-                    <Select mode="tags" tokenSeparators={[",", "，"]} />
-                </Form.Item>
-                <Form.Item name="productionBibleItemId" label="关联设定库">
-                    <Select
-                        allowClear
-                        disabled={!bibleKind}
-                        placeholder={bibleKind ? "选择已有设定库条目" : "风格 / 光影资产暂不关联设定库"}
-                        options={bibleItems.filter((item) => item.kind === bibleKind).map((item) => ({ label: item.name, value: item.id }))}
-                    />
-                </Form.Item>
-                <Form.Item name="assetIds" label="绑定素材">
-                    <Select mode="tags" options={assets.map((asset) => ({ label: asset.title, value: asset.id }))} />
-                </Form.Item>
-            </Form>
-        </Modal>
     );
 }
 
@@ -366,11 +205,4 @@ function syncAssetBindings({
     if (!bibleItem || !assetIds.length) return;
     const refs = buildAssetBreakdownProductionBibleAssetRefs(item, assetIds);
     updateProductionBibleItem(bibleItem.id, { assetRefs: preserveOrCreateAssetVersionReferences([...bibleItem.assetRefs, ...refs], assets, bibleItem.assetRefs) });
-}
-
-function statusLabel(status: AssetBreakdownItem["status"]) {
-    if (status === "brief_ready") return "Brief 草稿";
-    if (status === "generated") return "已生成";
-    if (status === "linked") return "已关联";
-    return "草稿";
 }

@@ -41,7 +41,6 @@ type CanvasContextInspectorProps = {
     assistantSlot?: ReactNode;
     onOpenEpisodeWorkbench: () => void;
     onOpenAssets: () => void;
-    onOpenImageBriefs: () => void;
     onOpenAssistant: () => void;
     onSelectShot?: (shot: StoryboardTableShot, nodeId?: string) => void;
     onPreviewProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
@@ -89,7 +88,6 @@ export function CanvasContextInspector({
     assistantSlot,
     onOpenEpisodeWorkbench,
     onOpenAssets,
-    onOpenImageBriefs,
     onOpenAssistant,
     onSelectShot,
     onPreviewProductionVideoVersion,
@@ -223,7 +221,6 @@ export function CanvasContextInspector({
                     theme={theme}
                     onSelectShot={onSelectShot}
                     onOpenAssets={onOpenAssets}
-                    onOpenImageBriefs={onOpenImageBriefs}
                     onOpenEpisodeWorkbench={onOpenEpisodeWorkbench}
                     onOpenAssistant={() => {
                         onOpenAssistant();
@@ -470,7 +467,7 @@ function summarizeShotNodes(nodes: CanvasNodeData[]) {
 function InspectorTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
-        <button type="button" className="h-8 rounded-md text-xs font-medium transition" style={{ background: active ? theme.toolbar.panel : "transparent", color: active ? theme.node.text : theme.node.muted }} onClick={onClick}>
+        <button type="button" className="h-8 rounded-md text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70" style={{ background: active ? theme.toolbar.panel : "transparent", color: active ? theme.node.text : theme.node.muted }} onClick={onClick}>
             {label}
         </button>
     );
@@ -486,7 +483,6 @@ function CanvasOverview({
     theme,
     onSelectShot,
     onOpenAssets,
-    onOpenImageBriefs,
     onOpenEpisodeWorkbench,
     onOpenAssistant,
 }: {
@@ -499,7 +495,6 @@ function CanvasOverview({
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     onSelectShot?: (shot: StoryboardTableShot, nodeId?: string) => void;
     onOpenAssets: () => void;
-    onOpenImageBriefs: () => void;
     onOpenEpisodeWorkbench: () => void;
     onOpenAssistant: () => void;
 }) {
@@ -521,7 +516,6 @@ function CanvasOverview({
             <div className="mt-3 grid gap-2">
                 <InspectorAction icon={<FileText className="size-4" />} label={hasEpisode ? "返回本集生产流程" : "绑定或导入本集"} onClick={onOpenEpisodeWorkbench} theme={theme} />
                 <InspectorAction icon={<ImageIcon className="size-4" />} label="打开素材" onClick={onOpenAssets} theme={theme} />
-                <InspectorAction icon={<Sparkles className="size-4" />} label="生图 Brief" onClick={onOpenImageBriefs} theme={theme} />
                 <InspectorAction icon={<MessageSquare className="size-4" />} label="打开画布助手" onClick={onOpenAssistant} theme={theme} />
             </div>
         </div>
@@ -807,8 +801,8 @@ function ProductionPackageGenerationSection({
         <section className="mt-3 rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
             <div className="mb-2 text-sm font-semibold">生成操作</div>
             <div className="grid grid-cols-2 gap-2">
-                <InspectorAction icon={<Video className="size-4" />} label="生成新版本" onClick={() => onGenerate(productionPackage.id)} theme={theme} disabled={!productionPackage.configNodeId} />
-                <InspectorAction icon={<FileText className="size-4" />} label="编辑提示词" onClick={() => onEditPrompt(productionPackage.id)} theme={theme} disabled={!productionPackage.configNodeId} />
+                <InspectorAction icon={<Video className="size-4" />} label="生成新版本" onClick={() => onGenerate(productionPackage.id)} theme={theme} />
+                <InspectorAction icon={<FileText className="size-4" />} label="编辑提示词" onClick={() => onEditPrompt(productionPackage.id)} theme={theme} />
             </div>
             <div className="mt-3 rounded-lg border p-2.5 text-xs leading-5" style={{ background: theme.node.panel, borderColor: productionPackage.tailFrame.needsReview ? "rgba(245,158,11,.7)" : theme.node.stroke }}>
                 <div className="font-medium">首尾帧衔接</div>
@@ -839,7 +833,7 @@ function SmallInspectorButton({ icon, label, onClick, theme, disabled = false }:
     return (
         <button
             type="button"
-            className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:cursor-not-allowed disabled:opacity-40"
             style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke, color: theme.node.text }}
             onClick={onClick}
             disabled={disabled}
@@ -964,7 +958,7 @@ function InspectorAction({ icon, label, onClick, theme, disabled = false }: { ic
     return (
         <button
             type="button"
-            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-2 text-xs font-medium transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-2 text-xs font-medium transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:cursor-not-allowed disabled:opacity-40"
             style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke, color: theme.node.text }}
             onClick={onClick}
             disabled={disabled}

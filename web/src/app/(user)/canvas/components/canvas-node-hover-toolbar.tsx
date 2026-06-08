@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Modal, Segmented, Tooltip } from "antd";
+import { type ReactNode } from "react";
 import { AudioLines, Camera, Download, FolderPlus, Image as ImageIcon, Info, Lock, LockOpen, Maximize2, MessageSquare, Minus, Pencil, Plus, RefreshCw, Scissors, Settings2, ShieldCheck, Trash2, Upload, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
-import { formatBytes, getDataUrlByteSize } from "@/lib/image-utils";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { CanvasToolButton, CanvasToolDivider } from "./canvas-tool-button";
 import { CanvasNodeType, type CanvasNodeData, type ViewportTransform } from "../types";
 
 type CanvasNodeHoverToolbarProps = {
@@ -14,6 +13,11 @@ type CanvasNodeHoverToolbarProps = {
     viewport: ViewportTransform;
     onKeep: (nodeId: string) => void;
     onLeave: () => void;
+    actions: CanvasNodeHoverToolbarActions;
+    state: CanvasNodeHoverToolbarState;
+};
+
+export type CanvasNodeHoverToolbarActions = {
     onInfo: (node: CanvasNodeData) => void;
     onEditText: (node: CanvasNodeData) => void;
     onDecreaseFont: (node: CanvasNodeData) => void;
@@ -23,7 +27,6 @@ type CanvasNodeHoverToolbarProps = {
     onUpload: (node: CanvasNodeData) => void;
     onDownload: (node: CanvasNodeData) => void;
     onSaveAsset: (node: CanvasNodeData) => void;
-    hasNewAssetVersion?: boolean;
     onUpdateAssetReference: (node: CanvasNodeData) => void;
     onContinueVideo: (node: CanvasNodeData) => void;
     onCaptureVideoFrame: (node: CanvasNodeData) => void;
@@ -35,43 +38,103 @@ type CanvasNodeHoverToolbarProps = {
     onRetry: (node: CanvasNodeData) => void;
     onToggleFreeResize: (node: CanvasNodeData) => void;
     onDelete: (node: CanvasNodeData) => void;
+};
+
+export type CanvasNodeHoverToolbarState = {
+    hasNewAssetVersion?: boolean;
     submittingReview: boolean;
     refreshingReview: boolean;
 };
+
+type NodeToolbarAction =
+    | {
+          type: "button";
+          key: string;
+          title: string;
+          label: string;
+          icon: ReactNode;
+          onClick: () => void;
+          active?: boolean;
+          danger?: boolean;
+      }
+    | {
+          type: "divider";
+          key: string;
+      };
 
 export function CanvasNodeHoverToolbar({
     node,
     viewport,
     onKeep,
     onLeave,
-    onInfo,
-    onEditText,
-    onDecreaseFont,
-    onIncreaseFont,
-    onToggleDialog,
-    onGenerateImage,
-    onUpload,
-    onDownload,
-    onSaveAsset,
-    hasNewAssetVersion,
-    onUpdateAssetReference,
-    onContinueVideo,
-    onCaptureVideoFrame,
-    onReviewAsset,
-    onRefreshReview,
-    onCrop,
-    onAngle,
-    onViewImage,
-    onRetry,
-    onToggleFreeResize,
-    onDelete,
-    submittingReview,
-    refreshingReview,
+    actions: toolbarActions,
+    state,
 }: CanvasNodeHoverToolbarProps) {
+    const colorTheme = useThemeStore((state) => state.theme);
+    const theme = canvasThemes[colorTheme];
+
     if (!node) return null;
 
     const left = viewport.x + (node.position.x + node.width / 2) * viewport.k;
     const top = viewport.y + node.position.y * viewport.k - 14;
+    const items = buildNodeToolbarActions({
+        node,
+        actions: toolbarActions,
+        state,
+    });
+
+    return (
+        <div
+            className="absolute z-[70] flex h-12 -translate-x-1/2 -translate-y-full items-center overflow-visible rounded-[18px] border text-[15px] shadow-lg backdrop-blur"
+            style={{ left, top, background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item, boxShadow: colorTheme === "dark" ? "0 18px 45px rgba(0,0,0,.32)" : "0 16px 40px rgba(28,25,23,.12)" }}
+            onMouseEnter={() => onKeep(node.id)}
+            onMouseLeave={onLeave}
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+        >
+            {items.map((action) =>
+                action.type === "divider" ? (
+                    <CanvasToolDivider key={action.key} size="md" />
+                ) : (
+                    <ToolbarAction key={action.key} title={action.title} label={action.label} icon={action.icon} onClick={action.onClick} active={action.active} danger={action.danger} />
+                ),
+            )}
+        </div>
+    );
+}
+
+function buildNodeToolbarActions({
+    node,
+    actions,
+    state,
+}: {
+    node: CanvasNodeData;
+    actions: CanvasNodeHoverToolbarActions;
+    state: CanvasNodeHoverToolbarState;
+}) {
+    const {
+        onInfo,
+        onEditText,
+        onDecreaseFont,
+        onIncreaseFont,
+        onToggleDialog,
+        onGenerateImage,
+        onUpload,
+        onDownload,
+        onSaveAsset,
+        onUpdateAssetReference,
+        onContinueVideo,
+        onCaptureVideoFrame,
+        onReviewAsset,
+        onRefreshReview,
+        onCrop,
+        onAngle,
+        onViewImage,
+        onRetry,
+        onToggleFreeResize,
+        onDelete,
+    } = actions;
+    const { hasNewAssetVersion, submittingReview, refreshingReview } = state;
     const isImage = node.type === CanvasNodeType.Image;
     const isVideo = node.type === CanvasNodeType.Video;
     const isAudio = node.type === CanvasNodeType.Audio;
@@ -85,60 +148,54 @@ export function CanvasNodeHoverToolbar({
     const hasSpecificTools = canRetry || isText || isImage || isVideo || isAudio || isConfig;
     const review = node.metadata?.volcengineAsset;
     const reviewProcessing = review?.status === "Processing";
+    const items: NodeToolbarAction[] = [
+        { type: "button", key: "info", title: "查看节点信息", label: "信息", icon: <Info className="size-4" />, onClick: () => onInfo(node) },
+        { type: "button", key: "delete", title: "移除节点", label: "删除", icon: <Trash2 className="size-4" />, onClick: () => onDelete(node), danger: true },
+    ];
 
-    return (
-        <div
-            className="absolute z-[70] flex h-12 -translate-x-1/2 -translate-y-full items-center overflow-visible rounded-[18px] border border-black/10 bg-white text-[15px] text-[#242529] shadow-[0_8px_28px_rgba(15,23,42,.12)]"
-            style={{ left, top }}
-            onMouseEnter={() => onKeep(node.id)}
-            onMouseLeave={onLeave}
-            onMouseDown={(event) => event.stopPropagation()}
-            onPointerDown={(event) => event.stopPropagation()}
-        >
-            <ToolbarAction title="查看节点信息" label="信息" icon={<Info className="size-4" />} onClick={() => onInfo(node)} />
-            <ToolbarAction title="移除节点" label="删除" icon={<Trash2 className="size-4" />} onClick={() => onDelete(node)} danger />
-            {hasSpecificTools ? <ToolbarDivider /> : null}
-            {canRetry ? <ToolbarAction title="重新生成" label="重试" icon={<RefreshCw className="size-4" />} onClick={() => onRetry(node)} /> : null}
-            {hasImage || hasVideo || hasAudio || isText ? <ToolbarAction title="加入我的素材" label="存素材" icon={<FolderPlus className="size-4" />} onClick={() => onSaveAsset(node)} /> : null}
-            {hasNewAssetVersion ? <ToolbarAction title="素材有新版本可用，仅更新当前节点的引用版本记录" label="有新版本" icon={<RefreshCw className="size-4" />} onClick={() => onUpdateAssetReference(node)} active /> : null}
-            {hasImage || hasVideo ? (
-                review?.assetId ? (
-                    <ToolbarAction
-                        title={reviewProcessing ? "火山加白审核中，状态会自动刷新" : `火山加白状态：${volcengineStatusLabel(review.status)}`}
-                        label={volcengineReviewActionLabel(review.status)}
-                        icon={<RefreshCw className={`size-4 ${reviewProcessing || refreshingReview ? "animate-spin" : ""}`} />}
-                        onClick={() => onRefreshReview(node)}
-                    />
-                ) : (
-                    <ToolbarAction title="提交火山人像加白" label={submittingReview ? "提交中" : "加白"} icon={<ShieldCheck className="size-4" />} onClick={() => onReviewAsset(node)} />
-                )
-            ) : null}
-            {hasImage || hasVideo || hasAudio ? <IconAction title={hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片"} icon={<Download className="size-5" />} onClick={() => onDownload(node)} /> : null}
-            {hasVideo ? <ToolbarAction title="截取当前预览帧" label="截帧" icon={<ImageIcon className="size-4" />} onClick={() => onCaptureVideoFrame(node)} /> : null}
-            {hasVideo && node.metadata?.lastFrameUrl ? <ToolbarAction title="续写下一段" label="续写" icon={<Video className="size-4" />} onClick={() => onContinueVideo(node)} /> : null}
-            {canOpenDialog ? <ToolbarAction title="编辑" label="编辑" icon={<MessageSquare className="size-4" />} onClick={() => onToggleDialog(node)} /> : null}
-            {isText ? <ToolbarAction title="编辑文本" label="编辑文字" icon={<Pencil className="size-4" />} onClick={() => onEditText(node)} /> : null}
-            {isText ? <ToolbarAction title="用文本生图" label="生图" icon={<ImageIcon className="size-4" />} onClick={() => onGenerateImage(node)} /> : null}
-            {isConfig ? <ToolbarAction title="生成配置" label="生成配置" icon={<Settings2 className="size-4" />} onClick={() => onInfo(node)} /> : null}
-            {isText ? <ToolbarAction title="减小字号" label="缩小" icon={<Minus className="size-4" />} onClick={() => onDecreaseFont(node)} /> : null}
-            {isText ? <ToolbarAction title="增大字号" label="放大" icon={<Plus className="size-4" />} onClick={() => onIncreaseFont(node)} /> : null}
-            {isImage ? <ToolbarAction title={hasImage ? "替换图片" : "上传图片"} label={hasImage ? "替换图片" : "上传图片"} icon={<Upload className="size-4" />} onClick={() => onUpload(node)} /> : null}
-            {isVideo ? <ToolbarAction title={hasVideo ? "替换视频" : "上传视频"} label={hasVideo ? "替换视频" : "上传视频"} icon={<Video className="size-4" />} onClick={() => onUpload(node)} /> : null}
-            {isAudio ? <ToolbarAction title={hasAudio ? "替换音频" : "上传音频"} label={hasAudio ? "替换音频" : "上传音频"} icon={<AudioLines className="size-4" />} onClick={() => onUpload(node)} /> : null}
-            {hasImage ? (
-                <ToolbarAction
-                    title={node.metadata?.freeResize ? "切换为等比缩放" : "切换为自由比例"}
-                    label={node.metadata?.freeResize ? "自由比例" : "锁比例"}
-                    icon={node.metadata?.freeResize ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
-                    onClick={() => onToggleFreeResize(node)}
-                    active={node.metadata?.freeResize}
-                />
-            ) : null}
-            {hasImage ? <ToolbarAction title="裁剪并生成新节点" label="裁剪" icon={<Scissors className="size-4" />} onClick={() => onCrop(node)} /> : null}
-            {hasImage ? <ToolbarAction title="生成角度" label="多角度" icon={<Camera className="size-4" />} onClick={() => onAngle(node)} /> : null}
-            {hasImage ? <ToolbarAction title="查看图片详情" label="查看大图" icon={<Maximize2 className="size-4" />} onClick={() => onViewImage(node)} /> : null}
-        </div>
-    );
+    if (hasSpecificTools) items.push({ type: "divider", key: "specific-divider" });
+    if (canRetry) items.push({ type: "button", key: "retry", title: "重新生成", label: "重试", icon: <RefreshCw className="size-4" />, onClick: () => onRetry(node) });
+    if (hasImage || hasVideo || hasAudio || isText) items.push({ type: "button", key: "save-asset", title: "加入我的素材", label: "存素材", icon: <FolderPlus className="size-4" />, onClick: () => onSaveAsset(node) });
+    if (hasNewAssetVersion) items.push({ type: "button", key: "update-asset-reference", title: "素材有新版本可用，仅更新当前节点的引用版本记录", label: "有新版本", icon: <RefreshCw className="size-4" />, onClick: () => onUpdateAssetReference(node), active: true });
+    if (hasImage || hasVideo) {
+        items.push(
+            review?.assetId
+                ? {
+                      type: "button",
+                      key: "refresh-review",
+                      title: reviewProcessing ? "火山加白审核中，状态会自动刷新" : `火山加白状态：${volcengineStatusLabel(review.status)}`,
+                      label: volcengineReviewActionLabel(review.status),
+                      icon: <RefreshCw className={`size-4 ${reviewProcessing || refreshingReview ? "animate-spin" : ""}`} />,
+                      onClick: () => onRefreshReview(node),
+                  }
+                : {
+                      type: "button",
+                      key: "review-asset",
+                      title: "提交火山人像加白",
+                      label: submittingReview ? "提交中" : "加白",
+                      icon: <ShieldCheck className="size-4" />,
+                      onClick: () => onReviewAsset(node),
+                  },
+        );
+    }
+    if (hasImage || hasVideo || hasAudio) items.push({ type: "button", key: "download", title: hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片", label: hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片", icon: <Download className="size-5" />, onClick: () => onDownload(node) });
+    if (hasVideo) items.push({ type: "button", key: "capture-video-frame", title: "截取当前预览帧", label: "截帧", icon: <ImageIcon className="size-4" />, onClick: () => onCaptureVideoFrame(node) });
+    if (hasVideo && node.metadata?.lastFrameUrl) items.push({ type: "button", key: "continue-video", title: "续写下一段", label: "续写", icon: <Video className="size-4" />, onClick: () => onContinueVideo(node) });
+    if (canOpenDialog) items.push({ type: "button", key: "toggle-dialog", title: "编辑", label: "编辑", icon: <MessageSquare className="size-4" />, onClick: () => onToggleDialog(node) });
+    if (isText) items.push({ type: "button", key: "edit-text", title: "编辑文本", label: "编辑文字", icon: <Pencil className="size-4" />, onClick: () => onEditText(node) });
+    if (isText) items.push({ type: "button", key: "generate-image", title: "用文本生图", label: "生图", icon: <ImageIcon className="size-4" />, onClick: () => onGenerateImage(node) });
+    if (isConfig) items.push({ type: "button", key: "config-info", title: "生成配置", label: "生成配置", icon: <Settings2 className="size-4" />, onClick: () => onInfo(node) });
+    if (isText) items.push({ type: "button", key: "decrease-font", title: "减小字号", label: "缩小", icon: <Minus className="size-4" />, onClick: () => onDecreaseFont(node) });
+    if (isText) items.push({ type: "button", key: "increase-font", title: "增大字号", label: "放大", icon: <Plus className="size-4" />, onClick: () => onIncreaseFont(node) });
+    if (isImage) items.push({ type: "button", key: "upload-image", title: hasImage ? "替换图片" : "上传图片", label: hasImage ? "替换图片" : "上传图片", icon: <Upload className="size-4" />, onClick: () => onUpload(node) });
+    if (isVideo) items.push({ type: "button", key: "upload-video", title: hasVideo ? "替换视频" : "上传视频", label: hasVideo ? "替换视频" : "上传视频", icon: <Video className="size-4" />, onClick: () => onUpload(node) });
+    if (isAudio) items.push({ type: "button", key: "upload-audio", title: hasAudio ? "替换音频" : "上传音频", label: hasAudio ? "替换音频" : "上传音频", icon: <AudioLines className="size-4" />, onClick: () => onUpload(node) });
+    if (hasImage) items.push({ type: "button", key: "toggle-free-resize", title: node.metadata?.freeResize ? "切换为等比缩放" : "切换为自由比例", label: node.metadata?.freeResize ? "自由比例" : "锁比例", icon: node.metadata?.freeResize ? <LockOpen className="size-4" /> : <Lock className="size-4" />, onClick: () => onToggleFreeResize(node), active: node.metadata?.freeResize });
+    if (hasImage) items.push({ type: "button", key: "crop", title: "裁剪并生成新节点", label: "裁剪", icon: <Scissors className="size-4" />, onClick: () => onCrop(node) });
+    if (hasImage) items.push({ type: "button", key: "angle", title: "生成角度", label: "多角度", icon: <Camera className="size-4" />, onClick: () => onAngle(node) });
+    if (hasImage) items.push({ type: "button", key: "view-image", title: "查看图片详情", label: "查看大图", icon: <Maximize2 className="size-4" />, onClick: () => onViewImage(node) });
+
+    return items;
 }
 
 function volcengineStatusLabel(status?: string) {
@@ -155,217 +212,6 @@ function volcengineReviewActionLabel(status?: string) {
     return "加白状态";
 }
 
-export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeData | null; open: boolean; onClose: () => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const [view, setView] = useState<"info" | "json">("info");
-    const imageBytes = node?.type === CanvasNodeType.Image && node.metadata?.content ? getDataUrlByteSize(node.metadata.content) : 0;
-    const batchCount = node?.type === CanvasNodeType.Image ? node.metadata?.batchChildIds?.length || 0 : 0;
-    const json = useMemo(() => {
-        if (!node) return "";
-        return JSON.stringify(
-            node,
-            (key, value) => {
-                if (key === "title") return undefined;
-                if (key === "content" && typeof value === "string" && value.startsWith("data:image/")) {
-                    return "[base64 image]";
-                }
-                return value;
-            },
-            2,
-        );
-    }, [node]);
-
-    useEffect(() => {
-        if (open) setView("info");
-    }, [node?.id, open]);
-    const isVideoNode = node?.type === CanvasNodeType.Video;
-    const videoParams = isVideoNode ? videoParamLabel(node) : "";
-    const arkParams = isVideoNode ? arkParamLabel(node) : "";
-
-    const title = (
-        <div className="flex items-center justify-between gap-4 pr-12">
-            <span>节点信息</span>
-            <Segmented
-                size="small"
-                value={view}
-                onChange={(value) => setView(value as "info" | "json")}
-                options={[
-                    { label: "信息", value: "info" },
-                    { label: "JSON", value: "json" },
-                ]}
-            />
-        </div>
-    );
-
-    return (
-        <Modal className="canvas-node-info-modal" title={title} open={open && Boolean(node)} centered footer={null} onCancel={onClose}>
-            {node ? (
-                <div className="h-[56vh] min-h-[360px] text-sm">
-                    {view === "info" ? (
-                        <div className="thin-scrollbar h-full space-y-3 overflow-auto pr-1">
-                            <InfoRow label="ID" value={node.id} />
-                            <InfoRow label="类型" value={node.type === CanvasNodeType.Text ? "文本" : node.type === CanvasNodeType.Image ? "图片" : node.type === CanvasNodeType.Video ? "视频" : node.type === CanvasNodeType.Audio ? "音频" : "生成配置"} />
-                            <InfoRow label="尺寸" value={`${Math.round(node.width)} x ${Math.round(node.height)}`} />
-                            <InfoRow label="位置" value={`${Math.round(node.position.x)}, ${Math.round(node.position.y)}`} />
-                            <InfoRow label="状态" value={node.metadata?.status || "idle"} />
-                            {isVideoNode && node.metadata?.taskId ? <InfoRow label="任务 ID" value={node.metadata.taskId} /> : null}
-                            {node.metadata?.aiTaskId ? <InfoRow label="账本任务" value={node.metadata.aiTaskId} /> : null}
-                            {node.metadata?.upstreamTaskId ? <InfoRow label="上游任务" value={node.metadata.upstreamTaskId} /> : null}
-                            {isVideoNode && (node.metadata?.taskStatus || node.metadata?.rawTaskStatus) ? <InfoRow label="任务状态" value={taskStatusLabel(node.metadata.taskStatus, node.metadata.rawTaskStatus)} /> : null}
-                            {node.metadata?.aiTaskStatus ? <InfoRow label="账本状态" value={node.metadata.aiTaskStatus} /> : null}
-                            {node.metadata?.aiTaskCredits || node.metadata?.creditsRefunded ? <InfoRow label="扣费 / 返还" value={`${node.metadata.aiTaskCredits || 0} / ${node.metadata.creditsRefunded || 0}`} /> : null}
-                            {node.metadata?.creditLogId ? <InfoRow label="Credit Log" value={node.metadata.creditLogId} /> : null}
-                            {isVideoNode && node.metadata?.model ? <InfoRow label="模型" value={node.metadata.model} /> : null}
-                            {isVideoNode && videoParams ? <InfoRow label="视频参数" value={videoParams} /> : null}
-                            {isVideoNode && arkParams ? <InfoRow label="Ark 参数" value={arkParams} /> : null}
-                            {isVideoNode && node.metadata?.videoUrl ? (
-                                <InfoRow
-                                    label="video_url"
-                                    value={
-                                        <a className="text-blue-500 underline underline-offset-2" href={node.metadata.videoUrl} target="_blank" rel="noreferrer">
-                                            打开临时地址
-                                        </a>
-                                    }
-                                />
-                            ) : null}
-                            {isVideoNode && videoUrlExpiryLabel(node) ? <InfoRow label="URL有效期" value={videoUrlExpiryLabel(node)} /> : null}
-                            {isVideoNode && node.metadata?.storageKey ? (
-                                <InfoRow label="本地转存" value={`${node.metadata.storageKey}${node.metadata.bytes ? ` · ${formatBytes(node.metadata.bytes)}` : ""}${node.metadata.mimeType ? ` · ${node.metadata.mimeType}` : ""}`} />
-                            ) : null}
-                            {isVideoNode && node.metadata?.cachePath ? <InfoRow label="缓存文件" value={node.metadata.cachePath} /> : null}
-                            {isVideoNode && node.metadata?.cacheUrl ? (
-                                <InfoRow
-                                    label="缓存地址"
-                                    value={
-                                        <a className="text-blue-500 underline underline-offset-2" href={node.metadata.cacheUrl} target="_blank" rel="noreferrer">
-                                            打开缓存文件
-                                        </a>
-                                    }
-                                />
-                            ) : null}
-                            {isVideoNode && node.metadata?.localStoredAt ? <InfoRow label="转存时间" value={formatLocalTime(node.metadata.localStoredAt)} /> : null}
-                            {batchCount > 1 ? <InfoRow label="图片组" value={`${batchCount} 张`} /> : null}
-                            {node.type === CanvasNodeType.Image && node.metadata?.capturedFrameSourceVideoNodeId ? <InfoRow label="来源视频" value={node.metadata.capturedFrameSourceVideoNodeId} /> : null}
-                            {node.type === CanvasNodeType.Image && node.metadata?.capturedFrameTime !== undefined ? <InfoRow label="截取时间" value={`${node.metadata.capturedFrameTime}s`} /> : null}
-                            {node.metadata?.prompt ? <InfoRow label="提示词" value={node.metadata.prompt} /> : null}
-                            {imageBytes ? <InfoRow label="图片大小" value={formatBytes(imageBytes)} /> : null}
-                            {(node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video) && node.metadata?.volcengineAsset ? (
-                                <>
-                                    <InfoRow label="火山状态" value={volcengineStatusLabel(node.metadata.volcengineAsset.status)} />
-                                    <InfoRow label="Asset ID" value={node.metadata.volcengineAsset.assetId} />
-                                    <InfoRow label="素材组" value={node.metadata.volcengineAsset.groupId} />
-                                    {node.metadata.volcengineAsset.error ? <InfoRow label="失败原因" value={node.metadata.volcengineAsset.error} /> : null}
-                                </>
-                            ) : null}
-                            {node.metadata?.errorDetails ? (
-                                <div className="rounded-lg border p-3 text-red-400" style={{ borderColor: theme.node.stroke }}>
-                                    {node.metadata.errorDetails}
-                                </div>
-                            ) : null}
-                        </div>
-                    ) : (
-                        <pre className="thin-scrollbar h-full overflow-auto rounded-lg border p-3 text-xs leading-5" style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }}>
-                            {json}
-                        </pre>
-                    )}
-                </div>
-            ) : null}
-        </Modal>
-    );
-}
-
 function ToolbarAction({ title, label, icon, onClick, hint, active = false, danger = false }: { title: string; label: string; icon: ReactNode; onClick?: () => void; hint?: string; active?: boolean; danger?: boolean }) {
-    return (
-        <Tooltip title={hint ? `${title} · ${hint}` : title || label} placement="top" mouseEnterDelay={0.2}>
-            <button type="button" className={`group relative grid h-12 w-12 place-items-center px-1.5 ${danger ? "text-[#ef4444]" : ""}`} onClick={onClick} aria-label={title || label}>
-                <span className={`grid size-9 place-items-center rounded-lg transition group-hover:bg-[#f0f0f1] ${active ? "bg-[#eeeeef]" : ""}`}>
-                    {icon}
-                </span>
-            </button>
-        </Tooltip>
-    );
-}
-
-function IconAction({ title, icon, onClick }: { title: string; icon: ReactNode; onClick: () => void }) {
-    return (
-        <Tooltip title={title} placement="top" mouseEnterDelay={0.2}>
-            <button type="button" className="group relative grid h-12 w-12 place-items-center px-1.5" onClick={onClick} aria-label={title}>
-                <span className="grid size-9 place-items-center rounded-lg transition group-hover:bg-[#f0f0f1]">{icon}</span>
-            </button>
-        </Tooltip>
-    );
-}
-
-function ToolbarDivider() {
-    return <span className="mx-1 h-7 w-px scale-x-50 bg-[#dedee2]" />;
-}
-
-function taskStatusLabel(status?: string, rawStatus?: string) {
-    const labels: Record<string, string> = {
-        queued: "排队中",
-        running: "生成中",
-        processing: "生成中",
-        succeeded: "已完成",
-        completed: "已完成",
-        failed: "失败",
-        error: "失败",
-        cancelled: "已取消",
-        canceled: "已取消",
-    };
-    const label = labels[(status || "").toLowerCase()] || status;
-    return rawStatus && rawStatus !== status ? `${label || status}（${rawStatus}）` : label || rawStatus || "";
-}
-
-function videoParamLabel(node: CanvasNodeData) {
-    const resolution = resolutionLabel(node.metadata?.resolution || node.metadata?.vquality);
-    const ratio = node.metadata?.ratio || node.metadata?.size;
-    const duration = node.metadata?.duration || node.metadata?.seconds;
-    return [resolution, ratio, duration ? `${duration}s` : ""].filter(Boolean).join(" · ");
-}
-
-function arkParamLabel(node: CanvasNodeData) {
-    const audio = boolLabel(node.metadata?.generateAudio);
-    const watermark = boolLabel(node.metadata?.watermark);
-    return [audio ? `音频 ${audio}` : "", watermark ? `水印 ${watermark}` : "", node.metadata?.seed ? `seed ${node.metadata.seed}` : ""].filter(Boolean).join(" · ");
-}
-
-function boolLabel(value?: string) {
-    if (value === "true") return "开";
-    if (value === "false") return "关";
-    return "";
-}
-
-function resolutionLabel(value?: string) {
-    if (!value) return "";
-    return /^\d+$/.test(value) ? `${value}p` : value;
-}
-
-function videoUrlExpiryLabel(node: CanvasNodeData) {
-    if (node.metadata?.videoUrlExpiresAt) return `至 ${formatUnixSeconds(node.metadata.videoUrlExpiresAt)}`;
-    if (node.metadata?.executionExpiresAfter) return `约 ${formatSecondSpan(node.metadata.executionExpiresAfter)}`;
-    return "";
-}
-
-function formatUnixSeconds(value: number) {
-    return new Date(value * 1000).toLocaleString("zh-CN", { hour12: false });
-}
-
-function formatLocalTime(value: string) {
-    return new Date(value).toLocaleString("zh-CN", { hour12: false });
-}
-
-function formatSecondSpan(value: number) {
-    const hours = Math.floor(value / 3600);
-    if (hours >= 24) return `${Math.round(hours / 24)}天`;
-    if (hours > 0) return `${hours}小时`;
-    return `${Math.max(1, Math.floor(value / 60))}分钟`;
-}
-
-function InfoRow({ label, value }: { label: string; value: ReactNode }) {
-    return (
-        <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-3">
-            <span className="opacity-50">{label}</span>
-            <span className="min-w-0 whitespace-pre-wrap break-words">{value}</span>
-        </div>
-    );
+    return <CanvasToolButton size="md" title={hint ? `${title} · ${hint}` : title} label={label} icon={icon} onClick={onClick} active={active} danger={danger} />;
 }

@@ -160,7 +160,7 @@ async function cleanTargetRelease() {
 async function createMacDmg() {
     const productName = "眨眼之间";
     const version = JSON.parse(await fs.readFile(path.join(desktopAppDir, "package.json"), "utf8")).version;
-    const appParentDir = path.join(releaseDir, `mac-${arch}`);
+    const appParentDir = (await exists(path.join(releaseDir, `mac-${arch}`, `${productName}.app`))) ? path.join(releaseDir, `mac-${arch}`) : path.join(releaseDir, "mac");
     const appPath = path.join(appParentDir, `${productName}.app`);
     const dmgPath = path.join(releaseDir, `${productName}-${version}-${arch}.dmg`);
 

@@ -125,7 +125,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                             <button
                                 key={item.value}
                                 type="button"
-                                className="flex h-[78px] cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border bg-transparent text-sm transition hover:opacity-80"
+                                className="flex h-[78px] cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border bg-transparent text-sm transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f80ff]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
                                 style={{ borderColor: ratio === item.value ? theme.node.text : theme.node.stroke, color: theme.node.text }}
                                 onMouseDown={(event) => event.stopPropagation()}
                                 onClick={() => onConfigChange("size", item.value)}
@@ -166,7 +166,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                                 min={0}
                                 placeholder="随机"
                                 theme={theme}
-                                className="h-8 flex-1 rounded-lg border bg-transparent px-3 text-left text-sm outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                className="h-8 flex-1 rounded-lg border bg-transparent px-3 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2f80ff]/70 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                 onChange={(value) => onConfigChange("videoSeed", value)}
                             />
                         </label>
@@ -231,7 +231,7 @@ function OptionPill({ selected, theme, onClick, children }: { selected: boolean;
     return (
         <button
             type="button"
-            className="h-9 cursor-pointer rounded-full border px-2 text-sm transition hover:opacity-80"
+            className="h-9 cursor-pointer rounded-full border px-2 text-sm transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f80ff]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
             style={{ background: "transparent", borderColor: selected ? theme.node.text : theme.node.stroke, color: theme.node.text }}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={onClick}
@@ -256,8 +256,8 @@ function ToggleSwitch({ checked, label, theme, onChange }: { checked: boolean; l
     return (
         <label className="flex h-10 cursor-pointer items-center justify-between gap-3 rounded-xl px-3 text-sm" style={{ background: theme.node.fill, color: theme.node.text }}>
             <span>{label}</span>
-            <input type="checkbox" className="sr-only" checked={checked} onChange={(event) => onChange(event.target.checked)} onMouseDown={(event) => event.stopPropagation()} />
-            <span className="relative h-5 w-9 rounded-full transition" style={{ background: checked ? theme.node.activeStroke : theme.node.stroke }}>
+            <input type="checkbox" className="peer sr-only" checked={checked} onChange={(event) => onChange(event.target.checked)} onMouseDown={(event) => event.stopPropagation()} />
+            <span className="relative h-5 w-9 rounded-full transition peer-focus-visible:ring-2 peer-focus-visible:ring-[#2f80ff]/70 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-transparent" style={{ background: checked ? theme.node.activeStroke : theme.node.stroke }}>
                 <span className="absolute top-0.5 size-4 rounded-full bg-white transition" style={{ left: checked ? 18 : 2 }} />
             </span>
         </label>
@@ -275,13 +275,13 @@ function SecondRangeControl({ value, min, max, theme, onChange }: { value: strin
                 <span>{max}s</span>
             </div>
             <div className="grid grid-cols-[minmax(0,1fr)_72px] items-center gap-3">
-                <input type="range" min={min} max={max} step={1} value={value} className="h-8 w-full cursor-pointer accent-[#2f80ff]" onChange={(event) => onChange(event.target.value)} onMouseDown={(event) => event.stopPropagation()} />
+                <input type="range" min={min} max={max} step={1} value={value} className="h-8 w-full cursor-pointer accent-[#2f80ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f80ff]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent" onChange={(event) => onChange(event.target.value)} onMouseDown={(event) => event.stopPropagation()} />
                 <NumberInput
                     value={value}
                     min={min}
                     max={max}
                     theme={theme}
-                    className="h-8 rounded-lg border bg-transparent px-2 text-center text-sm outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    className="h-8 rounded-lg border bg-transparent px-2 text-center text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2f80ff]/70 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     onChange={onChange}
                 />
             </div>
@@ -296,7 +296,7 @@ function NumberInput({ value, min, max, placeholder, theme, className, onChange 
             min={min}
             max={max}
             placeholder={placeholder}
-            className={className || "h-9 rounded-full border bg-transparent px-3 text-center text-sm outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"}
+            className={className || "h-9 rounded-full border bg-transparent px-3 text-center text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2f80ff]/70 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"}
             style={{ borderColor: theme.node.stroke, color: theme.node.text, WebkitTextFillColor: theme.node.text }}
             value={value}
             onChange={(event) => onChange(event.target.value)}

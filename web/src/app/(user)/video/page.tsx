@@ -1,724 +1,402 @@
 "use client";
 
-import { BookOpen, CheckSquare, ClipboardPaste, Download, FolderPlus, History, LoaderCircle, Plus, SlidersHorizontal, Sparkles, Trash2, Upload, VideoIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { App, Button, Checkbox, Drawer, Empty, Input, Modal, Tag, Typography } from "antd";
-import localforage from "localforage";
-import { nanoid } from "nanoid";
-import { saveAs } from "file-saver";
+import { Bot, Check, ChevronRight, FlaskConical, Link2, Play, RotateCcw, SendToBack, TriangleAlert } from "lucide-react";
+import { useMemo, useState } from "react";
+import { App, Button, Input, Tabs, Tag } from "antd";
 
-import { AssetPickerModal, type InsertAssetPayload } from "@/app/(user)/canvas/components/asset-picker-modal";
-import { ModelPicker } from "@/components/model-picker";
-import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
-import { VideoSettingsPanel, normalizeVideoResolutionValue, normalizeVideoSecondsValue, normalizeVideoSizeValue, videoRatioLabel, videoSecondsLabel } from "@/components/video-settings-panel";
-import { canvasThemes } from "@/lib/canvas-theme";
-import { formatBytes, formatDuration } from "@/lib/image-utils";
-import { deleteStoredMedia, resolveMediaUrl, uploadMediaFile } from "@/services/file-storage";
-import { resolveImageUrl, uploadImage } from "@/services/image-storage";
-import { requestVideoGeneration } from "@/services/api/video";
-import { useAssetStore } from "@/stores/use-asset-store";
-import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
-import { useThemeStore } from "@/stores/use-theme-store";
-import type { ReferenceImage } from "@/types/image";
+import { cn } from "@/lib/utils";
 
-type GeneratedVideo = {
+type PromptStatus = "待审核" | "已确认" | "需修改";
+type AssetStatus = "完整" | "缺角色图" | "缺场景图";
+type CanvasStatus = "未导入" | "已导入" | "已生成";
+type FilterKey = "all" | "review" | "missing" | "ready" | "imported" | "generated";
+type AssetKind = "角色图" | "场景图" | "道具图" | "上一镜尾帧";
+
+type ProductionPackage = {
     id: string;
-    url: string;
-    storageKey: string;
-    durationMs: number;
-    width: number;
-    height: number;
-    bytes: number;
-    mimeType: string;
-};
-
-type GenerationResult = {
-    id: string;
-    status: "pending" | "success" | "failed";
-    video?: GeneratedVideo;
-    error?: string;
-};
-
-type GenerationLog = {
-    id: string;
-    createdAt: number;
-    title: string;
+    segment: string;
+    duration: string;
+    promptStatus: PromptStatus;
+    assetStatus: AssetStatus;
+    canvasStatus: CanvasStatus;
     prompt: string;
-    time: string;
-    model: string;
-    config: GenerationLogConfig;
-    references: ReferenceImage[];
-    durationMs: number;
-    size: string;
-    resolution: string;
-    seconds: string;
-    status: "成功" | "失败";
-    video?: GeneratedVideo;
-    error?: string;
+    tags: Record<"运镜" | "主体动作" | "环境" | "光影" | "节奏", string>;
+    assets: { kind: AssetKind; name: string; status: "已绑定" | "缺失" }[];
+    config: { model: string; ratio: string; duration: string; resolution: string; motion: string; frames: string };
+    risks: { level: "提示" | "注意" | "阻断"; text: string }[];
 };
 
-type GenerationLogConfig = Pick<AiConfig, "model" | "videoModel" | "seedanceModel" | "seedanceEndpointId" | "videoProtocol" | "size" | "vquality" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoSeed">;
+const initialPackages: ProductionPackage[] = [
+    {
+        id: "P01",
+        segment: "雨夜天桥，女主发现遗落的加密芯片",
+        duration: "8s",
+        promptStatus: "已确认",
+        assetStatus: "完整",
+        canvasStatus: "已导入",
+        prompt: "雨夜霓虹天桥，女主低头捡起一枚微弱发光的加密芯片，镜头从湿漉漉的地面低角度推近到她警觉的侧脸，远处警灯反射在玻璃幕墙上，节奏克制、悬疑。",
+        tags: { 运镜: "低角度推近，结尾轻微上摇", 主体动作: "拾起芯片后迅速环顾四周", 环境: "雨夜天桥、霓虹反射、远处警灯", 光影: "青蓝主光，红色警灯扫过", 节奏: "前慢后紧，8 秒内完成发现动作" },
+        assets: [
+            { kind: "角色图", name: "林夏·雨衣造型", status: "已绑定" },
+            { kind: "场景图", name: "天桥夜景", status: "已绑定" },
+            { kind: "道具图", name: "加密芯片", status: "已绑定" },
+            { kind: "上一镜尾帧", name: "P00 尾帧", status: "已绑定" },
+        ],
+        config: { model: "Seedance 2.0 Pro", ratio: "16:9", duration: "8s", resolution: "1080p", motion: "中", frames: "使用首尾帧" },
+        risks: [{ level: "提示", text: "镜头动作清晰，可直接进入画布生成节点。" }],
+    },
+    {
+        id: "P02",
+        segment: "地下停车场，追踪者从柱后现身",
+        duration: "12s",
+        promptStatus: "待审核",
+        assetStatus: "缺角色图",
+        canvasStatus: "未导入",
+        prompt: "地下停车场冷白灯闪烁，追踪者从水泥柱后缓慢现身，主角背对镜头察觉异常后停步，镜头横移穿过车辆缝隙，制造被窥视感，最后定格在追踪者手中的旧式通讯器。",
+        tags: { 运镜: "横移穿车缝，末尾定格", 主体动作: "追踪者现身，主角停步回头", 环境: "地下停车场、车辆阴影、水泥柱", 光影: "冷白灯闪烁，局部暗区", 节奏: "中速推进，末尾悬停" },
+        assets: [
+            { kind: "角色图", name: "追踪者制服设定", status: "缺失" },
+            { kind: "场景图", name: "地下停车场", status: "已绑定" },
+            { kind: "道具图", name: "旧式通讯器", status: "已绑定" },
+            { kind: "上一镜尾帧", name: "P01 尾帧", status: "已绑定" },
+        ],
+        config: { model: "Seedance 2.0 Pro", ratio: "16:9", duration: "12s", resolution: "1080p", motion: "中高", frames: "使用首尾帧" },
+        risks: [
+            { level: "注意", text: "缺少追踪者角色图，导入画布前建议绑定角色参考。" },
+            { level: "提示", text: "12 秒内动作数量可控，但末尾定格需避免与下一包衔接断裂。" },
+        ],
+    },
+    {
+        id: "P03",
+        segment: "监控室，屏幕显示关键证据被远程删除",
+        duration: "15s",
+        promptStatus: "需修改",
+        assetStatus: "缺场景图",
+        canvasStatus: "未导入",
+        prompt: "监控室内多块屏幕同时闪烁，技术员快速切换窗口试图恢复证据，主角冲进画面质问，屏幕上的文件夹逐个变红并消失，镜头环绕两人和屏幕形成紧张压迫。",
+        tags: { 运镜: "半环绕加快速切屏", 主体动作: "技术员操作、主角冲入、文件消失", 环境: "监控室、多屏幕、数据面板", 光影: "屏幕蓝绿光为主，红色警示闪烁", 节奏: "信息量偏高，需压缩动作" },
+        assets: [
+            { kind: "角色图", name: "技术员", status: "已绑定" },
+            { kind: "场景图", name: "监控室", status: "缺失" },
+            { kind: "道具图", name: "证据文件 UI", status: "已绑定" },
+            { kind: "上一镜尾帧", name: "P02 尾帧", status: "缺失" },
+        ],
+        config: { model: "Seedance 2.0 Pro", ratio: "16:9", duration: "15s", resolution: "1080p", motion: "高", frames: "仅首帧" },
+        risks: [
+            { level: "阻断", text: "动作过多且 15 秒达到上限，建议拆成技术员恢复证据和主角冲入两个生产包。" },
+            { level: "注意", text: "缺少监控室场景图和上一镜尾帧，镜头衔接不明确。" },
+        ],
+    },
+    {
+        id: "P04",
+        segment: "街边便利店外，线人交出备份密钥",
+        duration: "8s",
+        promptStatus: "待审核",
+        assetStatus: "完整",
+        canvasStatus: "未导入",
+        prompt: "便利店招牌的红绿灯光照在雨棚下，线人把备份密钥塞进主角掌心后迅速离开，镜头跟随手部特写再切到主角抬眼，背景车流形成拖影。",
+        tags: { 运镜: "手部特写跟随，轻切抬眼", 主体动作: "线人交付密钥后离开", 环境: "便利店雨棚、街边车流", 光影: "红绿招牌光与湿地反射", 节奏: "短促直接，留出情绪停顿" },
+        assets: [
+            { kind: "角色图", name: "线人", status: "已绑定" },
+            { kind: "场景图", name: "便利店街边", status: "已绑定" },
+            { kind: "道具图", name: "备份密钥", status: "已绑定" },
+            { kind: "上一镜尾帧", name: "P03 尾帧", status: "已绑定" },
+        ],
+        config: { model: "Seedance 2.0 Lite", ratio: "16:9", duration: "8s", resolution: "720p", motion: "中", frames: "使用首尾帧" },
+        risks: [{ level: "提示", text: "提示词聚焦单一动作，适合确认后导入画布。" }],
+    },
+    {
+        id: "P05",
+        segment: "楼顶对峙，反派说出真相",
+        duration: "12s",
+        promptStatus: "已确认",
+        assetStatus: "完整",
+        canvasStatus: "已生成",
+        prompt: "城市楼顶强风中，反派站在霓虹广告牌下说出真相，主角向前一步停住，镜头从两人之间的空隙缓慢推进，远处城市灯海压低，情绪冷峻。",
+        tags: { 运镜: "双人间隙慢推", 主体动作: "反派陈述，主角克制逼近", 环境: "城市楼顶、霓虹广告牌", 光影: "背光轮廓，冷色城市灯海", 节奏: "慢速压迫，适合台词段" },
+        assets: [
+            { kind: "角色图", name: "反派楼顶造型", status: "已绑定" },
+            { kind: "场景图", name: "城市楼顶", status: "已绑定" },
+            { kind: "道具图", name: "广告牌", status: "已绑定" },
+            { kind: "上一镜尾帧", name: "P04 尾帧", status: "已绑定" },
+        ],
+        config: { model: "Seedance 2.0 Pro", ratio: "16:9", duration: "12s", resolution: "1080p", motion: "低", frames: "使用首尾帧" },
+        risks: [{ level: "提示", text: "已在画布生成视频版本，后续版本选择请到画布完成。" }],
+    },
+];
 
-type UpdateAiConfig = <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
-
-const LOG_STORE_KEY = "infinite-canvas:video_generation_logs";
-const logStore = localforage.createInstance({ name: "infinite-canvas", storeName: "video_generation_logs" });
+const filters: { key: FilterKey; label: string }[] = [
+    { key: "all", label: "全部" },
+    { key: "review", label: "待审核" },
+    { key: "missing", label: "缺参考" },
+    { key: "ready", label: "可导入画布" },
+    { key: "imported", label: "已导入画布" },
+    { key: "generated", label: "已生成" },
+];
 
 export default function VideoPage() {
     const { message } = App.useApp();
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const config = useConfigStore((state) => state.config);
-    const effectiveConfig = useEffectiveConfig();
-    const updateConfig = useConfigStore((state) => state.updateConfig);
-    const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
-    const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
-    const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
-    const [prompt, setPrompt] = useState("");
-    const [references, setReferences] = useState<ReferenceImage[]>([]);
-    const [results, setResults] = useState<GenerationResult[]>([]);
-    const [logs, setLogs] = useState<GenerationLog[]>([]);
-    const [running, setRunning] = useState(false);
-    const [logsOpen, setLogsOpen] = useState(false);
-    const [settingsOpen, setSettingsOpen] = useState(false);
-    const [promptDialogOpen, setPromptDialogOpen] = useState(false);
-    const [assetPickerOpen, setAssetPickerOpen] = useState(false);
-    const [startedAt, setStartedAt] = useState(0);
-    const [elapsedMs, setElapsedMs] = useState(0);
-    const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
-    const [previewLog, setPreviewLog] = useState<GenerationLog | null>(null);
-    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [packages, setPackages] = useState(initialPackages);
+    const [selectedId, setSelectedId] = useState(initialPackages[1].id);
+    const [filter, setFilter] = useState<FilterKey>("all");
+    const [detailTab, setDetailTab] = useState("prompt");
 
-    const model = effectiveConfig.videoModel || effectiveConfig.model;
-    const canGenerate = Boolean(prompt.trim());
+    const selected = packages.find((item) => item.id === selectedId) || packages[0];
+    const visiblePackages = useMemo(() => packages.filter((item) => matchFilter(item, filter)), [packages, filter]);
 
-    useEffect(() => {
-        if (!running || !startedAt) return;
-        const timer = window.setInterval(() => setElapsedMs(performance.now() - startedAt), 1000);
-        return () => window.clearInterval(timer);
-    }, [running, startedAt]);
-
-    useEffect(() => {
-        void refreshLogs();
-    }, []);
-
-    const addReferences = async (files?: FileList | null) => {
-        const imageFiles = Array.from(files || [])
-            .filter((file) => file.type.startsWith("image/"))
-            .slice(0, 7 - references.length);
-        const nextReferences = await Promise.all(
-            imageFiles.map(async (file) => {
-                const image = await uploadImage(file);
-                return { id: nanoid(), name: file.name, type: image.mimeType, dataUrl: image.url, storageKey: image.storageKey };
-            }),
-        );
-        setReferences((value) => [...value, ...nextReferences].slice(0, 7));
+    const updatePackage = (id: string, patch: Partial<ProductionPackage>) => setPackages((items) => items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+    const confirmPackage = (item: ProductionPackage) => {
+        updatePackage(item.id, { promptStatus: "已确认" });
+        message.success(`${item.id} 已确认，可进入画布`);
     };
-
-    const addReferencesFromClipboard = async () => {
-        try {
-            const items = await navigator.clipboard.read();
-            const blobs = await Promise.all(items.flatMap((item) => item.types.filter((type) => type.startsWith("image/")).map((type) => item.getType(type))));
-            if (!blobs.length) {
-                message.error("剪切板里没有可读取的图片");
-                return;
-            }
-            const nextReferences = await Promise.all(
-                blobs.slice(0, 7 - references.length).map(async (blob, index) => {
-                    const image = await uploadImage(blob);
-                    return { id: nanoid(), name: `clipboard-${index + 1}.png`, type: image.mimeType, dataUrl: image.url, storageKey: image.storageKey };
-                }),
-            );
-            setReferences((value) => [...value, ...nextReferences].slice(0, 7));
-            message.success(`已读取 ${nextReferences.length} 张参考图`);
-        } catch {
-            message.error("剪切板里没有可读取的图片");
+    const importPackage = (item: ProductionPackage) => {
+        if (item.promptStatus !== "已确认") {
+            message.warning("请先确认提示词，再导入画布");
+            return;
         }
+        updatePackage(item.id, { canvasStatus: "已导入" });
+        message.success(`${item.id} 已导入画布节点`);
     };
-
-    const generate = async () => {
-        const snapshot = buildRequestSnapshot();
-        if (!snapshot) return;
-        setElapsedMs(0);
-        setRunning(true);
-        setPreviewLog(null);
-        setResults([{ id: nanoid(), status: "pending" }]);
-        const batchStartedAt = performance.now();
-        setStartedAt(batchStartedAt);
-        try {
-            const blob = await requestVideoGeneration(snapshot.config, snapshot.text, snapshot.references);
-            const stored = await uploadMediaFile(blob, "video");
-            const nextVideo: GeneratedVideo = {
-                id: nanoid(),
-                url: stored.url,
-                storageKey: stored.storageKey,
-                durationMs: performance.now() - batchStartedAt,
-                width: stored.width || 1280,
-                height: stored.height || 720,
-                bytes: stored.bytes,
-                mimeType: stored.mimeType,
-            };
-            setResults([{ id: nextVideo.id, status: "success", video: nextVideo }]);
-            saveLog(buildLog({ prompt: snapshot.text, model, config: snapshot.config, references: snapshot.references, durationMs: nextVideo.durationMs, status: "成功", video: nextVideo }));
-            message.success("视频已生成");
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "生成失败";
-            setResults([{ id: nanoid(), status: "failed", error: errorMessage }]);
-            saveLog(buildLog({ prompt: snapshot.text, model, config: snapshot.config, references: snapshot.references, durationMs: performance.now() - batchStartedAt, status: "失败", error: errorMessage }));
-            message.error(errorMessage);
-        } finally {
-            setRunning(false);
+    const importConfirmedPackages = () => {
+        const readyCount = packages.filter((item) => item.promptStatus === "已确认" && item.canvasStatus === "未导入").length;
+        if (!readyCount) {
+            message.info("暂无可导入的已确认生产包");
+            return;
         }
-    };
-
-    const buildRequestSnapshot = () => {
-        const text = prompt.trim();
-        if (!text) {
-            message.error("请输入视频提示词");
-            return null;
-        }
-        if (!isAiConfigReady(effectiveConfig, model)) {
-            message.warning("请先完成配置");
-            openConfigDialog(true);
-            return null;
-        }
-        return { text, config: buildVideoConfig(effectiveConfig, model), references: [...references] };
-    };
-
-    const retryResult = () => {
-        void generate();
-    };
-
-    const downloadVideo = (video: GeneratedVideo) => {
-        saveAs(video.url, "video.mp4");
-    };
-
-    const saveResultToAssets = async (video: GeneratedVideo) => {
-        await addAssetOnce({
-            kind: "video",
-            title: "生成视频",
-            coverUrl: "",
-            tags: [],
-            source: "视频创作台",
-            data: { url: video.url, storageKey: video.storageKey, width: video.width, height: video.height, bytes: video.bytes, mimeType: video.mimeType },
-            metadata: { source: "video-page", generation: { prompt } },
-        });
-        message.success("已加入我的素材");
-    };
-
-    const insertPickedAsset = async (payload: InsertAssetPayload) => {
-        if (payload.kind === "text") {
-            setPrompt(payload.content);
-        } else if (payload.kind === "image") {
-            const stored = await uploadImage(payload.dataUrl);
-            setReferences((value) => [...value, { id: nanoid(), name: payload.title, type: stored.mimeType, dataUrl: stored.url, storageKey: stored.storageKey }].slice(0, 7));
-        }
-        setAssetPickerOpen(false);
-    };
-
-    const createSession = () => {
-        setPrompt("");
-        setReferences([]);
-        setResults([]);
-        setElapsedMs(0);
-        setStartedAt(0);
-        setSelectedLogIds([]);
-        setPreviewLog(null);
-    };
-
-    const deleteSelectedLogs = () => {
-        const mediaKeys = logs
-            .filter((log) => selectedLogIds.includes(log.id))
-            .map((log) => log.video?.storageKey)
-            .filter((key): key is string => Boolean(key));
-        void Promise.all([deleteStoredMedia(mediaKeys), ...selectedLogIds.map((id) => logStore.removeItem(id))]).then(refreshLogs);
-        if (previewLog && selectedLogIds.includes(previewLog.id)) {
-            setPreviewLog(null);
-            setResults([]);
-        }
-        setSelectedLogIds([]);
-        setDeleteConfirmOpen(false);
-    };
-
-    const saveLog = (log: GenerationLog) => {
-        void logStore.setItem(log.id, serializeLog(log)).then(refreshLogs);
-    };
-
-    const refreshLogs = async () => setLogs(await readStoredLogs());
-
-    const previewGenerationLog = (log: GenerationLog) => {
-        setPreviewLog(log);
-        setLogsOpen(false);
-        setPrompt(log.prompt);
-        setReferences(log.references || []);
-        if (log.config.videoProtocol && effectiveConfig.channelMode !== "local") updateConfig("videoProtocol", log.config.videoProtocol);
-        if (effectiveConfig.channelMode !== "local" && log.config.videoProtocol === "volcengine-ark" && (log.config.seedanceModel || log.model)) {
-            updateConfig("seedanceModel", log.config.seedanceModel || log.model);
-            updateConfig("seedanceEndpointId", log.config.seedanceEndpointId || "");
-        } else if (log.config.videoModel || log.model) {
-            updateConfig("videoModel", log.config.videoModel || log.model);
-        }
-        if (log.config.size) updateConfig("size", log.config.size);
-        if (log.config.vquality) updateConfig("vquality", log.config.vquality);
-        if (log.config.videoSeconds) updateConfig("videoSeconds", log.config.videoSeconds);
-        if (log.config.videoGenerateAudio) updateConfig("videoGenerateAudio", log.config.videoGenerateAudio);
-        if (log.config.videoWatermark) updateConfig("videoWatermark", log.config.videoWatermark);
-        updateConfig("videoSeed", log.config.videoSeed || "");
-        setResults(log.video ? [{ id: log.video.id, status: "success", video: log.video }] : [{ id: log.id, status: "failed", error: log.error || "生成失败" }]);
+        setPackages((items) => items.map((item) => (item.promptStatus === "已确认" && item.canvasStatus === "未导入" ? { ...item, canvasStatus: "已导入" } : item)));
+        message.success(`已导入 ${readyCount} 个已确认生产包到画布`);
     };
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100">
-            <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 lg:grid-cols-[300px_minmax(0,1fr)] lg:overflow-hidden xl:grid-cols-[320px_minmax(0,1fr)]">
-                <aside className="thin-scrollbar hidden min-h-0 overflow-y-auto rounded-lg border border-stone-200 bg-card p-4 shadow-sm dark:border-stone-800 lg:block">
-                    <LogPanel
-                        logs={logs}
-                        selectedLogIds={selectedLogIds}
-                        activeLogId={previewLog?.id}
-                        onSelectedLogIdsChange={setSelectedLogIds}
-                        onCreateSession={createSession}
-                        onDeleteSelected={() => setDeleteConfirmOpen(true)}
-                        onPreviewLog={previewGenerationLog}
-                    />
-                </aside>
-
-                <section className="grid gap-3 lg:min-h-0 lg:overflow-hidden xl:grid-cols-[420px_minmax(0,1fr)]">
-                    <div className="flex min-h-[560px] flex-col overflow-hidden rounded-lg border border-stone-200 bg-card shadow-sm dark:border-stone-800 lg:min-h-0">
-                        <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
-                            <div className="flex items-start justify-between gap-3">
-                                <h1 className="text-2xl font-semibold text-stone-950 dark:text-stone-100">视频创作台</h1>
-                                <div className="flex shrink-0 gap-2 lg:hidden">
-                                    <Button icon={<History className="size-4" />} onClick={() => setLogsOpen(true)}>
-                                        记录
-                                    </Button>
-                                    <Button icon={<SlidersHorizontal className="size-4" />} onClick={() => setSettingsOpen(true)}>
-                                        参数
-                                    </Button>
-                                </div>
+        <div className="min-h-full bg-[#090d0f] text-stone-100">
+            <main className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[1500px] flex-col gap-4 px-4 py-4 sm:px-6">
+                <section className="shrink-0 border-b border-white/10 pb-4">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0">
+                            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
+                                <span className="font-medium text-teal-200">AI · 画布</span>
+                                <ChevronRight className="size-3.5" />
+                                <span>霓虹之下 / 第 05 集 / 真相浮出</span>
                             </div>
-
-                            <div className="mt-6 space-y-5">
-                                <div>
-                                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                                        <span className="text-base font-semibold">提示词</span>
-                                        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex">
-                                            <Button className="!justify-center !px-2.5" size="small" icon={<BookOpen className="size-3.5" />} onClick={() => setPromptDialogOpen(true)}>
-                                                查看提示词库
-                                            </Button>
-                                            <Button className="!justify-center !px-2.5" size="small" icon={<FolderPlus className="size-3.5" />} onClick={() => setAssetPickerOpen(true)}>
-                                                查看我的素材
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    <Input.TextArea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={7} placeholder="描述镜头运动、主体动作、场景氛围和画面风格" />
-                                </div>
-
-                                <div className="min-w-0">
-                                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                                        <span className="text-base font-semibold">参考图</span>
-                                        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex">
-                                            <Button className="!justify-center !px-2.5" size="small" icon={<ClipboardPaste className="size-3.5" />} onClick={() => void addReferencesFromClipboard()}>
-                                                剪切板
-                                            </Button>
-                                            <Button className="!justify-center !px-2.5" size="small" icon={<Upload className="size-3.5" />} onClick={() => fileInputRef.current?.click()}>
-                                                上传
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    <div className="hover-scrollbar hover-scrollbar-hint flex min-h-24 w-full min-w-0 max-w-full gap-2 overflow-x-scroll overflow-y-hidden rounded-lg border border-dashed border-stone-300 p-2 pb-3 overscroll-x-contain dark:border-stone-700">
-                                        {references.map((item) => (
-                                            <div key={item.id} className="group relative size-20 shrink-0 overflow-hidden rounded-md border border-stone-200 dark:border-stone-800">
-                                                <img src={item.dataUrl} alt={item.name} className="size-full object-cover" />
-                                                <button
-                                                    type="button"
-                                                    className="absolute right-1 top-1 hidden size-6 items-center justify-center rounded bg-black/60 text-white group-hover:flex"
-                                                    onClick={() => setReferences((value) => value.filter((ref) => ref.id !== item.id))}
-                                                    aria-label="移除参考图"
-                                                >
-                                                    <Trash2 className="size-3.5" />
-                                                </button>
-                                            </div>
-                                        ))}
-                                        {!references.length ? <div className="flex min-w-full items-center justify-center text-sm text-stone-500">暂无参考图，最多 7 张</div> : null}
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm dark:border-stone-800 dark:bg-stone-900 sm:hidden">
-                                    <span className="truncate text-stone-500 dark:text-stone-400">
-                                        {model} · {normalizeResolution(effectiveConfig.vquality)}p · {videoRatioLabel(effectiveConfig.size)} · {videoSecondsLabel(effectiveConfig.videoSeconds, effectiveConfig)}
-                                    </span>
-                                    <Button size="small" type="text" icon={<SlidersHorizontal className="size-4" />} onClick={() => setSettingsOpen(true)}>
-                                        调整
-                                    </Button>
-                                </div>
-
-                                <div className="hidden sm:block">
-                                    <GenerationSettings config={effectiveConfig} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} />
-                                </div>
+                            <h1 className="text-2xl font-semibold tracking-normal text-white sm:text-3xl">视频提示词审核台</h1>
+                            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-stone-300">
+                                <span>当前阶段：视频提示词审核</span>
+                                <span className="text-stone-500">|</span>
+                                <span>已确认 8 个生产包，缺参考 3 个，待审核 4 个</span>
                             </div>
                         </div>
-
-                        <div className="shrink-0 border-t border-stone-200 p-4 dark:border-stone-800">
-                            <Button type="primary" size="large" block icon={<Sparkles className="size-4" />} loading={running} disabled={!canGenerate || running} onClick={() => void generate()}>
-                                开始生成
+                        <div className="flex flex-wrap gap-2 lg:justify-end">
+                            <Button type="primary" icon={<Bot className="size-4" />} onClick={() => message.info("已请求视频提示词 Agent 重新检查生产包")}>
+                                运行视频提示词 Agent
+                            </Button>
+                            <Button className="!border-teal-300/30 !bg-teal-300/10 !text-teal-100 hover:!border-teal-200 hover:!bg-teal-300/20" icon={<SendToBack className="size-4" />} onClick={importConfirmedPackages}>
+                                导入已确认项到画布
                             </Button>
                         </div>
                     </div>
+                </section>
 
-                    <div className="thin-scrollbar rounded-lg border border-stone-200 bg-card p-4 shadow-sm dark:border-stone-800 lg:min-h-0 lg:overflow-y-auto lg:p-5">
-                        <div className="mb-4 flex items-center justify-between gap-3">
-                            <h2 className="text-xl font-semibold">生成结果</h2>
-                            {running ? <Tag className="m-0 px-2 py-1">等待 {formatDuration(elapsedMs)}</Tag> : null}
+                <section className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+                    <div className="min-h-0 overflow-hidden rounded-lg border border-white/10 bg-white/[0.035]">
+                        <div className="border-b border-white/10 px-3 pt-2">
+                            <Tabs
+                                activeKey={filter}
+                                onChange={(key) => setFilter(key as FilterKey)}
+                                items={filters.map((item) => ({ key: item.key, label: item.label }))}
+                                className="video-review-tabs"
+                            />
                         </div>
-                        {results.length ? (
-                            <div className="grid gap-4">
-                                {results.map((result) =>
-                                    result.status === "success" && result.video ? (
-                                        <ResultVideoCard key={result.id} video={result.video} onDownload={downloadVideo} onSaveAsset={saveResultToAssets} />
-                                    ) : result.status === "failed" ? (
-                                        <FailedVideoCard key={result.id} error={result.error || "生成失败"} onRetry={retryResult} />
-                                    ) : (
-                                        <PendingVideoCard key={result.id} />
-                                    ),
-                                )}
+                        <div className="thin-scrollbar min-h-0 overflow-x-auto">
+                            <div className="min-w-[980px]">
+                                <div className="grid grid-cols-[76px_minmax(240px,1fr)_72px_112px_120px_112px_210px] border-b border-white/10 px-3 py-2 text-xs font-medium text-stone-500">
+                                    <span>编号</span>
+                                    <span>对应剧情段落</span>
+                                    <span>时长</span>
+                                    <span>提示词状态</span>
+                                    <span>参考资产</span>
+                                    <span>画布状态</span>
+                                    <span className="text-right">操作</span>
+                                </div>
+                                {visiblePackages.map((item) => (
+                                    <div
+                                        key={item.id}
+                                        className={cn(
+                                            "grid w-full cursor-pointer grid-cols-[76px_minmax(240px,1fr)_72px_112px_120px_112px_210px] items-center gap-0 border-b border-white/[0.07] px-3 py-2.5 text-left text-sm transition hover:bg-white/[0.055]",
+                                            selected.id === item.id && "bg-teal-300/[0.08]",
+                                        )}
+                                        onClick={() => {
+                                            setSelectedId(item.id);
+                                            setDetailTab("prompt");
+                                        }}
+                                    >
+                                        <span className="font-semibold text-teal-100">{item.id}</span>
+                                        <span className="truncate pr-4 text-stone-100">{item.segment}</span>
+                                        <span className="text-stone-300">{item.duration}</span>
+                                        <span>
+                                            <StatusTag label={item.promptStatus} />
+                                        </span>
+                                        <span>
+                                            <StatusTag label={item.assetStatus} />
+                                        </span>
+                                        <span>
+                                            <StatusTag label={item.canvasStatus} />
+                                        </span>
+                                        <span className="flex justify-end gap-1.5" onClick={(event) => event.stopPropagation()}>
+                                            <Button size="small" type="text" className="!text-stone-200 hover:!bg-white/10" onClick={() => setSelectedId(item.id)}>
+                                                查看
+                                            </Button>
+                                            <Button size="small" type="text" className="!text-emerald-200 hover:!bg-emerald-300/10" disabled={item.promptStatus === "已确认"} onClick={() => confirmPackage(item)}>
+                                                确认
+                                            </Button>
+                                            <Button size="small" type="text" className="!text-teal-100 hover:!bg-teal-300/10" disabled={item.canvasStatus !== "未导入"} onClick={() => importPackage(item)}>
+                                                导入画布
+                                            </Button>
+                                        </span>
+                                    </div>
+                                ))}
                             </div>
-                        ) : (
-                            <div className="flex min-h-[320px] flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 text-center dark:border-stone-700 lg:min-h-[560px]">
-                                <VideoIcon className="mb-4 size-11 text-stone-400" />
-                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有生成视频" />
-                            </div>
-                        )}
+                        </div>
                     </div>
+
+                    <aside className="min-h-[620px] overflow-hidden rounded-lg border border-white/10 bg-[#0d1316] xl:min-h-0">
+                        <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-lg font-semibold text-white">{selected.id}</span>
+                                    <StatusTag label={selected.promptStatus} />
+                                </div>
+                                <div className="mt-1 line-clamp-2 text-sm text-stone-400">{selected.segment}</div>
+                            </div>
+                            <Button size="small" type="text" className="!text-stone-400 hover:!bg-white/10 hover:!text-stone-100" icon={<FlaskConical className="size-4" />}>
+                                自由视频试验
+                            </Button>
+                        </div>
+                        <Tabs
+                            activeKey={detailTab}
+                            onChange={setDetailTab}
+                            className="video-review-tabs px-4"
+                            items={[
+                                { key: "prompt", label: "视频提示词", children: <PromptDetail item={selected} onChange={(prompt) => updatePackage(selected.id, { prompt })} /> },
+                                { key: "assets", label: "参考资产", children: <AssetDetail item={selected} /> },
+                                { key: "config", label: "生成配置", children: <ConfigDetail item={selected} /> },
+                                { key: "risk", label: "风险与建议", children: <RiskDetail item={selected} /> },
+                            ]}
+                        />
+                    </aside>
                 </section>
             </main>
-            <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={(event) => {
-                    void addReferences(event.target.files);
-                    event.target.value = "";
-                }}
+        </div>
+    );
+}
+
+function PromptDetail({ item, onChange }: { item: ProductionPackage; onChange: (prompt: string) => void }) {
+    return (
+        <div className="thin-scrollbar max-h-[calc(100vh-250px)] space-y-4 overflow-y-auto pb-4">
+            <Input.TextArea
+                value={item.prompt}
+                onChange={(event) => onChange(event.target.value)}
+                autoSize={{ minRows: 8, maxRows: 12 }}
+                className="!border-white/10 !bg-black/20 !text-stone-100 placeholder:!text-stone-600"
             />
-            <Drawer title="生成记录" placement="bottom" size="large" open={logsOpen} onClose={() => setLogsOpen(false)}>
-                <LogPanel
-                    logs={logs}
-                    selectedLogIds={selectedLogIds}
-                    activeLogId={previewLog?.id}
-                    onSelectedLogIdsChange={setSelectedLogIds}
-                    onCreateSession={createSession}
-                    onDeleteSelected={() => setDeleteConfirmOpen(true)}
-                    onPreviewLog={previewGenerationLog}
-                />
-            </Drawer>
-            <Drawer title="参数" placement="bottom" size="82vh" open={settingsOpen} onClose={() => setSettingsOpen(false)}>
-                <div className="pb-4">
-                    <GenerationSettings config={effectiveConfig} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} />
-                </div>
-            </Drawer>
-            <PromptSelectDialog open={promptDialogOpen} nodeGroup="video" allowedTypes={["video", "positive", "negative", "workflow"]} onOpenChange={setPromptDialogOpen} onSelect={setPrompt} />
-            <AssetPickerModal open={assetPickerOpen} defaultTab="my-assets" onInsert={(payload) => void insertPickedAsset(payload)} onClose={() => setAssetPickerOpen(false)} />
-            <Modal title="删除生成记录" open={deleteConfirmOpen} onCancel={() => setDeleteConfirmOpen(false)} onOk={deleteSelectedLogs} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
-                确定删除选中的 {selectedLogIds.length} 条生成记录吗？
-            </Modal>
-        </div>
-    );
-}
-
-function GenerationSettings({ config, model, updateConfig, openConfigDialog }: { config: AiConfig; model: string; updateConfig: UpdateAiConfig; openConfigDialog: (shouldPromptContinue?: boolean) => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
-
-    return (
-        <div className="grid min-w-0 gap-4">
-            <label className="block min-w-0">
-                <span className="mb-1.5 block text-sm font-semibold sm:mb-2 sm:text-base">模型</span>
-                <ModelPicker config={config} modelType="video" value={model} onChange={(value) => updateConfig("videoModel", value)} fullWidth onMissingConfig={() => openConfigDialog(false)} />
-            </label>
-            <div className="min-w-0">
-                <VideoSettingsPanel config={config} onConfigChange={(key, value) => updateConfig(key, value)} theme={theme} showTitle={false} className="space-y-4" />
-            </div>
-        </div>
-    );
-}
-
-function ResultVideoCard({ video, onDownload, onSaveAsset }: { video: GeneratedVideo; onDownload: (video: GeneratedVideo) => void; onSaveAsset: (video: GeneratedVideo) => void }) {
-    return (
-        <div className="overflow-hidden rounded-lg border border-stone-200 bg-background dark:border-stone-800">
-            <video src={video.url} controls className="aspect-video w-full bg-black object-contain" />
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-stone-200 px-3 py-2.5 dark:border-stone-800">
-                <div className="flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
-                    <span>
-                        {video.width}x{video.height}
-                    </span>
-                    <span>{formatBytes(video.bytes)}</span>
-                    <span>{formatDuration(video.durationMs)}</span>
-                </div>
-                <div className="flex shrink-0 gap-1">
-                    <Button size="small" icon={<FolderPlus className="size-3.5" />} onClick={() => onSaveAsset(video)}>
-                        添加到素材
-                    </Button>
-                    <Button size="small" icon={<Download className="size-3.5" />} onClick={() => onDownload(video)}>
-                        下载
-                    </Button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function PendingVideoCard() {
-    return (
-        <div className="relative aspect-video overflow-hidden rounded-lg border border-dashed border-stone-300 bg-stone-50 dark:border-stone-700 dark:bg-stone-900">
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-stone-500 dark:text-stone-400">
-                <LoaderCircle className="size-6 animate-spin" />
-                <span>生成中</span>
-            </div>
-        </div>
-    );
-}
-
-function FailedVideoCard({ error, onRetry }: { error: string; onRetry: () => void }) {
-    return (
-        <div className="overflow-hidden rounded-lg border border-red-200 bg-red-50 dark:border-red-950 dark:bg-red-950/20">
-            <div className="flex aspect-video flex-col items-center justify-center gap-3 p-5 text-center">
-                <div className="text-sm font-medium text-red-600 dark:text-red-300">生成失败</div>
-                <Typography.Paragraph ellipsis={{ rows: 4 }} className="!mb-0 !text-xs !text-red-500 dark:!text-red-300">
-                    {error}
-                </Typography.Paragraph>
-            </div>
-            <div className="flex justify-end border-t border-red-200 p-3 dark:border-red-950">
-                <Button size="small" danger onClick={onRetry}>
-                    重试
-                </Button>
-            </div>
-        </div>
-    );
-}
-
-function LogPanel({
-    logs,
-    selectedLogIds,
-    activeLogId,
-    onSelectedLogIdsChange,
-    onCreateSession,
-    onDeleteSelected,
-    onPreviewLog,
-}: {
-    logs: GenerationLog[];
-    selectedLogIds: string[];
-    activeLogId?: string;
-    onSelectedLogIdsChange: (ids: string[]) => void;
-    onCreateSession: () => void;
-    onDeleteSelected: () => void;
-    onPreviewLog: (log: GenerationLog) => void;
-}) {
-    const allSelected = Boolean(logs.length) && selectedLogIds.length === logs.length;
-    const toggleAll = () => onSelectedLogIdsChange(allSelected ? [] : logs.map((log) => log.id));
-
-    return (
-        <>
-            <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="text-base font-semibold">生成记录</h2>
-                <Tag className="m-0">{logs.length}</Tag>
-            </div>
-            <div className="mb-4 flex flex-wrap gap-2">
-                <Button size="small" icon={<Plus className="size-3.5" />} onClick={onCreateSession}>
-                    新建
-                </Button>
-                <Button size="small" icon={<CheckSquare className="size-3.5" />} disabled={!logs.length} onClick={toggleAll}>
-                    {allSelected ? "取消" : "全选"}
-                </Button>
-                <Button size="small" danger icon={<Trash2 className="size-3.5" />} disabled={!selectedLogIds.length} onClick={onDeleteSelected}>
-                    删除
-                </Button>
-            </div>
-            <div className="space-y-3">
-                {logs.map((log) => (
-                    <LogCard
-                        key={log.id}
-                        log={log}
-                        selected={selectedLogIds.includes(log.id)}
-                        active={activeLogId === log.id}
-                        onSelectedChange={(checked) => onSelectedLogIdsChange(checked ? [...selectedLogIds, log.id] : selectedLogIds.filter((id) => id !== log.id))}
-                        onClick={() => onPreviewLog(log)}
-                    />
+            <div className="grid gap-2">
+                {Object.entries(item.tags).map(([label, value]) => (
+                    <div key={label} className="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-md border border-white/[0.07] bg-white/[0.035] px-3 py-2 text-sm">
+                        <span className="text-stone-500">{label}</span>
+                        <span className="text-stone-200">{value}</span>
+                    </div>
                 ))}
-                {!logs.length ? <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-stone-300 text-center text-sm text-stone-500 dark:border-stone-700">暂无生成记录</div> : null}
             </div>
-        </>
+        </div>
     );
 }
 
-function LogCard({ log, selected, active, onSelectedChange, onClick }: { log: GenerationLog; selected: boolean; active: boolean; onSelectedChange: (checked: boolean) => void; onClick: () => void }) {
+function AssetDetail({ item }: { item: ProductionPackage }) {
     return (
-        <button
-            type="button"
-            className={`block w-full rounded-lg border p-2 text-left transition ${active ? "border-stone-900 bg-blue-50 dark:border-stone-100 dark:bg-blue-950/20" : "border-stone-200 bg-background hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-stone-900"}`}
-            onClick={onClick}
-        >
-            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2">
-                <Checkbox className="mt-0.5" checked={selected} onClick={(event) => event.stopPropagation()} onChange={(event) => onSelectedChange(event.target.checked)} />
-                <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold leading-5">{log.title}</div>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                        <Tag className="m-0 flex h-6 items-center rounded-md px-1.5 text-xs leading-none">{log.size}</Tag>
-                        <Tag className="m-0 flex h-6 items-center rounded-md px-1.5 text-xs leading-none">{log.resolution}p</Tag>
-                        <Tag className="m-0 flex h-6 items-center rounded-md px-1.5 text-xs leading-none">{log.seconds}s</Tag>
+        <div className="space-y-3 pb-4">
+            {item.assets.map((asset) => (
+                <div key={asset.kind} className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 rounded-md border border-white/[0.07] bg-white/[0.035] px-3 py-2.5 text-sm">
+                    <span className="text-stone-500">{asset.kind}</span>
+                    <div className="min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                            <span className={cn("truncate", asset.status === "缺失" ? "text-amber-200" : "text-stone-100")}>{asset.name}</span>
+                            <StatusTag label={asset.status === "缺失" ? "缺参考" : "完整"} />
+                        </div>
+                        {asset.status === "缺失" ? (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                <Button size="small" icon={<Link2 className="size-3.5" />}>
+                                    去资产库绑定
+                                </Button>
+                                <Button size="small" icon={<Play className="size-3.5" />}>
+                                    生成参考图
+                                </Button>
+                            </div>
+                        ) : null}
                     </div>
                 </div>
-                <div className="grid justify-items-end gap-2">
-                    <Tag className="m-0 flex h-6 items-center rounded-md px-1.5 text-xs leading-none" color={log.status === "成功" ? "blue" : "red"}>
-                        {log.status}
-                    </Tag>
-                    <Tag className="m-0 flex h-6 items-center rounded-md px-1.5 text-xs leading-none" color="green">
-                        {formatDuration(log.durationMs)}
-                    </Tag>
-                </div>
+            ))}
+        </div>
+    );
+}
+
+function ConfigDetail({ item }: { item: ProductionPackage }) {
+    const entries = [
+        ["模型", item.config.model],
+        ["比例", item.config.ratio],
+        ["时长", item.config.duration],
+        ["清晰度", item.config.resolution],
+        ["运动强度", item.config.motion],
+        ["首尾帧", item.config.frames],
+    ];
+
+    return (
+        <div className="space-y-3 pb-4">
+            <div className="rounded-md border border-teal-300/15 bg-teal-300/[0.06] px-3 py-2 text-sm text-teal-100">这里只做审核和确认，不在这里生成正式视频。</div>
+            <div className="grid grid-cols-2 gap-2">
+                {entries.map(([label, value]) => (
+                    <div key={label} className="rounded-md border border-white/[0.07] bg-white/[0.035] px-3 py-2">
+                        <div className="text-xs text-stone-500">{label}</div>
+                        <div className="mt-1 text-sm text-stone-100">{value}</div>
+                    </div>
+                ))}
             </div>
-        </button>
+        </div>
     );
 }
 
-async function readStoredLogs() {
-    if (typeof window === "undefined") return [];
-    try {
-        const logs: GenerationLog[] = [];
-        await logStore.iterate<GenerationLog, void>((value) => {
-            logs.push(value);
-        });
-        return (await Promise.all(logs.map(normalizeLog))).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    } catch {
-        return [];
-    }
-}
-
-async function normalizeLog(log: Partial<GenerationLog>): Promise<GenerationLog> {
-    const video = log.video?.storageKey ? { ...log.video, url: await resolveMediaUrl(log.video.storageKey, log.video.url) } : log.video;
-    const references = await Promise.all(
-        (log.references || []).map(async (item) => ({
-            ...item,
-            dataUrl: await resolveImageUrl(item.storageKey, item.dataUrl),
-        })),
+function RiskDetail({ item }: { item: ProductionPackage }) {
+    return (
+        <div className="space-y-3 pb-4">
+            {item.risks.map((risk) => (
+                <div key={risk.text} className="flex gap-3 rounded-md border border-white/[0.07] bg-white/[0.035] px-3 py-2.5 text-sm">
+                    {risk.level === "提示" ? <Check className="mt-0.5 size-4 shrink-0 text-emerald-300" /> : risk.level === "注意" ? <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-300" /> : <RotateCcw className="mt-0.5 size-4 shrink-0 text-amber-300" />}
+                    <div>
+                        <div className="text-xs text-stone-500">{risk.level}</div>
+                        <div className="mt-1 text-stone-100">{risk.text}</div>
+                    </div>
+                </div>
+            ))}
+        </div>
     );
-    const config = normalizeLogConfig(log);
-    return {
-        id: log.id || nanoid(),
-        createdAt: log.createdAt || Date.now(),
-        title: log.title || log.model || "未命名",
-        prompt: log.prompt || "",
-        time: log.time || new Date().toLocaleString("zh-CN", { hour12: false }),
-        model: log.model || config.videoModel || "",
-        config,
-        references,
-        durationMs: log.durationMs || 0,
-        size: log.size || config.size || "",
-        resolution: normalizeResolution(log.resolution || config.vquality || ""),
-        seconds: log.seconds || config.videoSeconds || "",
-        status: log.status || "成功",
-        video,
-        error: log.error,
-    };
 }
 
-function serializeLog(log: GenerationLog): GenerationLog {
-    return {
-        ...log,
-        references: log.references.map((item) => ({ ...item, dataUrl: item.storageKey ? "" : item.dataUrl })),
-        video: log.video?.storageKey ? { ...log.video, url: "" } : log.video,
-    };
+function StatusTag({ label }: { label: PromptStatus | AssetStatus | CanvasStatus | "缺参考" | "完整" }) {
+    const colorClass =
+        label === "已确认" || label === "完整" || label === "已生成"
+            ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-200"
+            : label === "待审核" || label === "已导入"
+              ? "border-teal-300/25 bg-teal-300/10 text-teal-200"
+              : label === "未导入"
+                ? "border-stone-400/20 bg-stone-400/10 text-stone-300"
+                : "border-amber-300/25 bg-amber-300/10 text-amber-200";
+
+    return <Tag className={cn("m-0 rounded px-1.5 py-0 text-xs leading-5", colorClass)}>{label}</Tag>;
 }
 
-function normalizeLogConfig(log: Partial<GenerationLog>): GenerationLogConfig {
-    return {
-        model: log.config?.model || log.model || "",
-        videoModel: log.config?.videoModel || log.model || "",
-        seedanceModel: log.config?.seedanceModel || (log.config?.videoProtocol === "volcengine-ark" ? log.model || "" : ""),
-        seedanceEndpointId: log.config?.seedanceEndpointId || "",
-        videoProtocol: log.config?.videoProtocol || "openai",
-        size: log.config?.size || log.size || "",
-        vquality: normalizeResolution(log.config?.vquality || log.resolution || ""),
-        videoSeconds: log.config?.videoSeconds || log.seconds || "",
-        videoGenerateAudio: log.config?.videoGenerateAudio || "false",
-        videoWatermark: log.config?.videoWatermark || "false",
-        videoSeed: log.config?.videoSeed || "",
-    };
-}
-
-function buildLog({
-    prompt,
-    model,
-    config,
-    references,
-    durationMs,
-    status,
-    video,
-    error,
-}: {
-    prompt: string;
-    model: string;
-    config: AiConfig;
-    references: ReferenceImage[];
-    durationMs: number;
-    status: GenerationLog["status"];
-    video?: GeneratedVideo;
-    error?: string;
-}): GenerationLog {
-    const logConfig = {
-        model: config.model,
-        videoModel: config.videoModel,
-        seedanceModel: config.seedanceModel,
-        seedanceEndpointId: config.seedanceEndpointId,
-        videoProtocol: config.videoProtocol,
-        size: config.size,
-        vquality: normalizeResolution(config.vquality),
-        videoSeconds: config.videoSeconds,
-        videoGenerateAudio: config.videoGenerateAudio,
-        videoWatermark: config.videoWatermark,
-        videoSeed: config.videoSeed,
-    };
-    return {
-        id: nanoid(),
-        createdAt: Date.now(),
-        title: prompt.slice(0, 12) || "未命名",
-        prompt,
-        time: new Date().toLocaleString("zh-CN", { hour12: false }),
-        model,
-        config: logConfig,
-        references,
-        durationMs,
-        size: logConfig.size,
-        resolution: logConfig.vquality,
-        seconds: logConfig.videoSeconds,
-        status,
-        video,
-        error,
-    };
-}
-
-function buildVideoConfig(config: AiConfig, model: string): AiConfig {
-    return {
-        ...config,
-        model,
-        videoModel: model,
-        seedanceModel: config.seedanceModel,
-        size: normalizeVideoSize(config.size),
-        videoSeconds: normalizeVideoSeconds(config.videoSeconds, config),
-        vquality: normalizeResolution(config.vquality),
-        videoGenerateAudio: config.videoGenerateAudio,
-        videoWatermark: config.videoWatermark,
-        videoSeed: config.videoSeed,
-    };
-}
-
-function normalizeVideoSeconds(value: string, config?: AiConfig) {
-    return normalizeVideoSecondsValue(value, config);
-}
-
-function normalizeVideoSize(value: string) {
-    return normalizeVideoSizeValue(value);
-}
-
-function normalizeResolution(value: string) {
-    return normalizeVideoResolutionValue(value);
+function matchFilter(item: ProductionPackage, filter: FilterKey) {
+    if (filter === "review") return item.promptStatus === "待审核";
+    if (filter === "missing") return item.assetStatus !== "完整";
+    if (filter === "ready") return item.promptStatus === "已确认" && item.canvasStatus === "未导入";
+    if (filter === "imported") return item.canvasStatus === "已导入";
+    if (filter === "generated") return item.canvasStatus === "已生成";
+    return true;
 }

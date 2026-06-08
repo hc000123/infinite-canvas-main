@@ -1,0 +1,464 @@
+<style>
+  .stage {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 14% 9%, rgba(19, 194, 205, 0.12), transparent 28%),
+      linear-gradient(135deg, #0f1721 0%, #070b10 72%, #0b1018 100%);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.34);
+    color: #eff8fa;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .topnav {
+    height: 62px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 18px;
+    padding: 0 22px;
+    background: rgba(1, 7, 12, 0.2);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 132px;
+  }
+
+  .brand-mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #18c8d6 0%, #107787 100%);
+    box-shadow: 0 0 24px rgba(24, 200, 214, 0.28);
+  }
+
+  .brand strong {
+    display: block;
+    font-size: 14px;
+  }
+
+  .brand span {
+    display: block;
+    color: rgba(239, 248, 250, 0.48);
+    font-size: 10px;
+    margin-top: 2px;
+  }
+
+  .navline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .nav-item {
+    height: 30px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    color: rgba(239, 248, 250, 0.62);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .nav-item.active {
+    color: #dfffff;
+    background: rgba(20, 200, 212, 0.13);
+    border: 1px solid rgba(20, 200, 212, 0.25);
+  }
+
+  .button {
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(255, 255, 255, 0.045);
+    color: rgba(239, 248, 250, 0.78);
+    padding: 0 11px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .button.primary {
+    border-color: rgba(20, 200, 212, 0.5);
+    background: linear-gradient(135deg, #18c8d6 0%, #0f96aa 100%);
+    color: #05262b;
+    font-weight: 760;
+  }
+
+  .main {
+    padding: 22px 28px 28px;
+    min-height: 744px;
+  }
+
+  .summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 18px;
+    align-items: end;
+    margin-bottom: 16px;
+  }
+
+  .crumb {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 12px;
+    margin-bottom: 7px;
+  }
+
+  .title {
+    margin: 0;
+    font-size: 25px;
+    line-height: 1.18;
+    letter-spacing: 0;
+  }
+
+  .subline {
+    color: rgba(239, 248, 250, 0.58);
+    font-size: 13px;
+    margin-top: 8px;
+  }
+
+  .module-tabs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.13);
+    padding-bottom: 10px;
+  }
+
+  .module-tab {
+    height: 30px;
+    border-radius: 8px;
+    padding: 0 11px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: rgba(239, 248, 250, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    font-size: 12px;
+  }
+
+  .module-tab.active {
+    color: #dfffff;
+    border-color: rgba(20, 200, 212, 0.38);
+    background: rgba(20, 200, 212, 0.11);
+  }
+
+  .module-tab small {
+    color: rgba(239, 248, 250, 0.45);
+    font-size: 10px;
+  }
+
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .module {
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    background: rgba(255, 255, 255, 0.032);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .module-head {
+    min-height: 62px;
+    padding: 13px 14px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: center;
+    background: rgba(1, 7, 12, 0.18);
+  }
+
+  .module-head strong {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+
+  .module-head span {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 11px;
+  }
+
+  .metric-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  }
+
+  .metric {
+    border: 1px solid rgba(148, 163, 184, 0.11);
+    background: rgba(1, 7, 12, 0.22);
+    border-radius: 8px;
+    padding: 8px;
+  }
+
+  .metric span {
+    display: block;
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+  }
+
+  .metric strong {
+    display: block;
+    font-size: 16px;
+    margin-top: 4px;
+  }
+
+  .list-head,
+  .row {
+    display: grid;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .director .list-head,
+  .director .row {
+    grid-template-columns: 86px minmax(0, 1fr) 80px 72px;
+  }
+
+  .assets .list-head,
+  .assets .row {
+    grid-template-columns: 58px minmax(0, 1fr) 76px 76px 72px;
+  }
+
+  .list-head {
+    min-height: 34px;
+    padding: 0 14px;
+    color: rgba(239, 248, 250, 0.42);
+    font-size: 10px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  }
+
+  .row {
+    min-height: 50px;
+    padding: 0 14px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    font-size: 12px;
+  }
+
+  .row:last-child {
+    border-bottom: 0;
+  }
+
+  .row.active {
+    background: rgba(20, 200, 212, 0.1);
+    box-shadow: inset 3px 0 0 #18c8d6;
+  }
+
+  .row-title strong {
+    display: block;
+    font-size: 12px;
+    margin-bottom: 3px;
+  }
+
+  .row-title span {
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+  }
+
+  .badge {
+    justify-self: start;
+    border-radius: 7px;
+    padding: 4px 7px;
+    font-size: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    color: rgba(239, 248, 250, 0.62);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .badge.ok {
+    border-color: rgba(33, 210, 127, 0.34);
+    color: #68e29f;
+    background: rgba(33, 210, 127, 0.08);
+  }
+
+  .badge.work {
+    border-color: rgba(20, 200, 212, 0.38);
+    color: #67eef4;
+    background: rgba(20, 200, 212, 0.1);
+  }
+
+  .badge.warn {
+    border-color: rgba(238, 177, 70, 0.36);
+    color: #f1be63;
+    background: rgba(238, 177, 70, 0.08);
+  }
+
+  .row-button {
+    height: 26px;
+    border-radius: 7px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(239, 248, 250, 0.78);
+    font-size: 11px;
+  }
+
+  .note {
+    margin-top: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: #f8fafc;
+    color: #172033;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+</style>
+
+<h2>单集内：导演分析 / 资产提取怎么放</h2>
+<p class="subtitle">建议不要和分镜表堆在同一屏，而是作为单集内的模块 Tab。每个模块内部都用紧凑长条清单，延续你喜欢的“展示更多信息”的方向。</p>
+
+<div class="stage">
+  <header class="topnav">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div>
+        <strong>AI · 画布</strong>
+        <span>专业版</span>
+      </div>
+    </div>
+    <div class="navline">
+      <div class="nav-item active">分集</div>
+      <div class="nav-item">设定库</div>
+      <div class="nav-item">素材</div>
+      <div class="nav-item">画布</div>
+    </div>
+    <button class="button">返回项目</button>
+  </header>
+
+  <main class="main">
+    <div class="summary">
+      <div>
+        <div class="crumb">霓虹之下 / 第 05 集</div>
+        <h1 class="title">真相浮出</h1>
+        <div class="subline">当前阶段：分镜提示词审核 · 导演分析已确认 · 资产提取待补齐 3 项</div>
+      </div>
+      <button class="button primary">继续当前模块</button>
+    </div>
+
+    <div class="module-tabs">
+      <div class="module-tab">剧本 <small>已导入</small></div>
+      <div class="module-tab active">导演分析 <small>已确认</small></div>
+      <div class="module-tab">资产提取 <small>3 缺口</small></div>
+      <div class="module-tab">分镜 <small>12 / 18</small></div>
+      <div class="module-tab">画布承接 <small>未开始</small></div>
+    </div>
+
+    <div class="split">
+      <section class="module director">
+        <div class="module-head">
+          <div>
+            <strong>导演分析模块</strong>
+            <span>用于确认这一集的戏剧方向，不承载素材绑定和画布操作。</span>
+          </div>
+          <button class="button">重新分析</button>
+        </div>
+        <div class="metric-row">
+          <div class="metric"><span>冲突点</span><strong>4</strong></div>
+          <div class="metric"><span>情绪点</span><strong>6</strong></div>
+          <div class="metric"><span>风险</span><strong>1</strong></div>
+          <div class="metric"><span>状态</span><strong>已确认</strong></div>
+        </div>
+        <div class="list-head">
+          <div>类型</div>
+          <div>分析内容</div>
+          <div>状态</div>
+          <div></div>
+        </div>
+        <div class="row">
+          <div>本集目标</div>
+          <div class="row-title"><strong>揭开旧楼交易线索</strong><span>推动女主从被动逃跑转为主动追查。</span></div>
+          <div><span class="badge ok">确认</span></div>
+          <button class="row-button">查看</button>
+        </div>
+        <div class="row">
+          <div>情绪节奏</div>
+          <div class="row-title"><strong>压迫 -> 惊险 -> 反击</strong><span>中段要保留喘息点，避免连续追逐疲劳。</span></div>
+          <div><span class="badge ok">确认</span></div>
+          <button class="row-button">查看</button>
+        </div>
+        <div class="row active">
+          <div>风险提示</div>
+          <div class="row-title"><strong>动作戏过密</strong><span>第 04-06 镜建议拆分，不要让单镜头承载过多动作。</span></div>
+          <div><span class="badge warn">需注意</span></div>
+          <button class="row-button">处理</button>
+        </div>
+        <div class="row">
+          <div>分镜建议</div>
+          <div class="row-title"><strong>暗巷段落使用低机位跟拍</strong><span>突出压迫感，转折处切入近景。</span></div>
+          <div><span class="badge work">待采用</span></div>
+          <button class="row-button">查看</button>
+        </div>
+      </section>
+
+      <section class="module assets">
+        <div class="module-head">
+          <div>
+            <strong>资产提取模块</strong>
+            <span>从剧本和导演分析中提取角色、场景、道具，再绑定参考素材。</span>
+          </div>
+          <button class="button">重新提取</button>
+        </div>
+        <div class="metric-row">
+          <div class="metric"><span>角色</span><strong>3</strong></div>
+          <div class="metric"><span>场景</span><strong>4</strong></div>
+          <div class="metric"><span>道具</span><strong>5</strong></div>
+          <div class="metric"><span>缺口</span><strong>3</strong></div>
+        </div>
+        <div class="list-head">
+          <div>类型</div>
+          <div>资产</div>
+          <div>引用</div>
+          <div>状态</div>
+          <div></div>
+        </div>
+        <div class="row">
+          <div>角色</div>
+          <div class="row-title"><strong>林澈</strong><span>主角，雨夜追查旧楼交易。</span></div>
+          <div>2 图</div>
+          <div><span class="badge ok">完整</span></div>
+          <button class="row-button">查看</button>
+        </div>
+        <div class="row active">
+          <div>场景</div>
+          <div class="row-title"><strong>暗巷街景</strong><span>雨夜、背光、旧楼后门。</span></div>
+          <div>缺</div>
+          <div><span class="badge warn">待补</span></div>
+          <button class="row-button">绑定</button>
+        </div>
+        <div class="row">
+          <div>道具</div>
+          <div class="row-title"><strong>带血袖扣</strong><span>关键证物，需保持特写一致。</span></div>
+          <div>1 图</div>
+          <div><span class="badge ok">完整</span></div>
+          <button class="row-button">查看</button>
+        </div>
+        <div class="row">
+          <div>场景</div>
+          <div class="row-title"><strong>旧楼楼梯间</strong><span>狭窄、冷光、潮湿墙面。</span></div>
+          <div>缺</div>
+          <div><span class="badge warn">待补</span></div>
+          <button class="row-button">绑定</button>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div class="note">
+  结构建议：单集页顶部保持同一套模块 Tab：剧本、导演分析、资产提取、分镜、画布承接。导演分析展示“导演判断和风险”；资产提取展示“角色 / 场景 / 道具清单和素材绑定状态”。分镜表只在分镜模块里展示，避免所有信息挤在一个页面里。
+</div>

@@ -1,9 +1,11 @@
 "use client";
 
+import { Download, Upload } from "lucide-react";
 import { App, Button, Form, Input, Modal, Segmented, Tag } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ModelPicker } from "@/components/model-picker";
+import { parseAiConfigPackage } from "@/services/ai-config-package";
 import { fetchAdminSettings, type AdminSettings } from "@/services/api/admin";
 import { fetchImageModels } from "@/services/api/image";
 import { summarizeVolcengineAssetConfig, VOLCENGINE_ASSET_CONFIG_NOTICE } from "@/services/volcengine-asset-config";
@@ -12,8 +14,10 @@ import { useUserStore } from "@/stores/use-user-store";
 
 export function AppConfigModal() {
     const { message } = App.useApp();
+    const configFileInputRef = useRef<HTMLInputElement>(null);
     const [loadingModels, setLoadingModels] = useState(false);
     const [loadingVolcengineAsset, setLoadingVolcengineAsset] = useState(false);
+    const [importingConfig, setImportingConfig] = useState(false);
     const [adminSettings, setAdminSettings] = useState<AdminSettings | null>(null);
     const config = useConfigStore((state) => state.config);
     const updateConfig = useConfigStore((state) => state.updateConfig);
@@ -95,6 +99,29 @@ export function AppConfigModal() {
         }
     };
 
+    const importConfigPackage = async (file?: File | null) => {
+        if (!file) return;
+        setImportingConfig(true);
+        try {
+            const { patch, importedKeys } = parseAiConfigPackage(await file.text());
+            const applyConfig = updateConfig as (key: keyof AiConfig, value: AiConfig[keyof AiConfig]) => void;
+            importedKeys.forEach((key) => {
+                const value = patch[key];
+                if (value !== undefined) applyConfig(key, value);
+            });
+            message.success(`已导入 ${importedKeys.length} 项配置`);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "配置包导入失败");
+        } finally {
+            setImportingConfig(false);
+            if (configFileInputRef.current) configFileInputRef.current.value = "";
+        }
+    };
+
+    const downloadConfigTemplate = () => {
+        message.success("配置模板已下载");
+    };
+
     const volcengineAssetDetails = adminSettings?.private.volcengineAsset;
     const volcengineAssetSummary = summarizeVolcengineAssetConfig(volcengineAssetDetails || publicSettings?.volcengineAsset, { showDetails: Boolean(volcengineAssetDetails) });
 
@@ -111,12 +138,23 @@ export function AppConfigModal() {
             centered
             onCancel={() => setConfigDialogOpen(false)}
             footer={
-                <Button type="primary" onClick={finishConfig}>
-                    完成
-                </Button>
+                <div className="flex w-full items-center justify-between gap-3">
+                    <div className="flex gap-2">
+                        <Button icon={<Upload className="size-4" />} loading={importingConfig} onClick={() => configFileInputRef.current?.click()}>
+                            导入配置包
+                        </Button>
+                        <Button icon={<Download className="size-4" />} href="/api/ai-config-template" download="ai-config-template.json" onClick={downloadConfigTemplate}>
+                            下载模板
+                        </Button>
+                    </div>
+                    <Button type="primary" onClick={finishConfig}>
+                        完成
+                    </Button>
+                </div>
             }
         >
             <div className="pt-1">
+                <input ref={configFileInputRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => void importConfigPackage(event.target.files?.[0])} />
                 <Form layout="vertical" requiredMark={false}>
                     {allowCustomChannel ? (
                         <Form.Item label="渠道模式" className="mb-4">
@@ -210,9 +248,41 @@ export function AppConfigModal() {
                         </Form.Item>
                     </div>
                     {effectiveMode === "local" ? (
-                        <Form.Item label="系统提示词" className="mb-0">
-                            <Input.TextArea rows={3} value={config.systemPrompt} placeholder="例如：你是一位擅长电影感写实摄影的视觉导演。" onChange={(event) => updateConfig("systemPrompt", event.target.value)} />
-                        </Form.Item>
+                        <>
+                            <div className="mb-4 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <div className="text-sm font-medium">思考模式</div>
+                                        <div className="mt-1 text-xs text-stone-500">用于支持 reasoning_effort 的 OpenAI 兼容 Chat Completions 模型。</div>
+                                    </div>
+                                    <Segmented
+                                        size="small"
+                                        value={config.thinkingMode}
+                                        onChange={(value) => updateConfig("thinkingMode", value as AiConfig["thinkingMode"])}
+                                        options={[
+                                            { label: "关闭", value: "false" },
+                                            { label: "开启", value: "true" },
+                                        ]}
+                                    />
+                                </div>
+                                <Segmented
+                                    block
+                                    size="middle"
+                                    disabled={config.thinkingMode !== "true"}
+                                    value={config.reasoningEffort}
+                                    onChange={(value) => updateConfig("reasoningEffort", value as AiConfig["reasoningEffort"])}
+                                    options={[
+                                        { label: "极低", value: "minimal" },
+                                        { label: "低", value: "low" },
+                                        { label: "中", value: "medium" },
+                                        { label: "高", value: "high" },
+                                    ]}
+                                />
+                            </div>
+                            <Form.Item label="系统提示词" className="mb-0">
+                                <Input.TextArea rows={3} value={config.systemPrompt} placeholder="例如：你是一位擅长电影感写实摄影的视觉导演。" onChange={(event) => updateConfig("systemPrompt", event.target.value)} />
+                            </Form.Item>
+                        </>
                     ) : null}
                 </Form>
             </div>

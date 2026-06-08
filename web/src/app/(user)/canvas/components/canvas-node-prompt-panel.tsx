@@ -234,7 +234,7 @@ function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: Can
 }
 
 function videoConfigPatch(key: keyof AiConfig, value: string): Partial<CanvasNodeMetadata> {
-    if (key === "videoSeconds") return { seconds: value };
+    if (key === "videoSeconds") return { seconds: value, duration: value };
     if (key === "videoGenerateAudio") return { generateAudio: value };
     if (key === "videoWatermark") return { watermark: value };
     if (key === "videoSeed") return { seed: value };

@@ -138,7 +138,7 @@ export function ImageBriefFormModal({
     }, [form, kind, open]);
 
     return (
-        <Modal title={editingBrief ? "编辑生图 Brief" : "新增生图 Brief"} open={open} onCancel={onCancel} onOk={() => form.submit()} okText="保存" cancelText="取消" width={760} destroyOnHidden>
+        <Modal title={editingBrief ? "编辑生图 Brief" : "手动补充需求"} open={open} onCancel={onCancel} onOk={() => form.submit()} okText="保存" cancelText="取消" width={760} destroyOnHidden>
             <Form form={form} layout="vertical" onFinish={onSubmit} requiredMark={false}>
                 <div className="grid gap-3 sm:grid-cols-2">
                     <Form.Item name="kind" label="Brief 类型" rules={[{ required: true, message: "请选择类型" }]}>

@@ -2,7 +2,7 @@ import axios from "axios";
 
 import { type AiConfig } from "@/stores/use-config-store";
 import { estimateImageCost, normalizeBillingNote } from "@/services/ai-local-billing";
-import { AI_REQUEST_TIMEOUT_MS, aiApiUrl, aiHeaders, normalizeAiError, refreshRemoteUser } from "@/services/api/ai-provider";
+import { AI_REQUEST_TIMEOUT_MS, aiApiUrl, aiHeaders, aiReasoningPayload, normalizeAiError, refreshRemoteUser } from "@/services/api/ai-provider";
 import { aiTaskTraceHeaders, readAiTaskLedgerFromHeaders, type AiTaskLedger, type AiTaskTrace } from "@/services/api/ai-task-trace";
 import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
@@ -302,6 +302,7 @@ async function buildGeminiImageEditPayload(config: AiConfig, prompt: string, ref
         model: config.model,
         messages: withSystemMessage(config, [{ role: "user" as const, content }]),
         stream: false,
+        ...aiReasoningPayload(config),
         n: options.n,
         ...(options.quality ? { quality: options.quality } : {}),
         ...(options.size ? { size: options.size } : {}),
@@ -376,6 +377,7 @@ export async function requestImageQuestion(config: AiConfig, messages: ChatCompl
                 model: config.model,
                 messages: withSystemMessage(config, messages),
                 stream: true,
+                ...aiReasoningPayload(config),
             },
             {
                 headers: {

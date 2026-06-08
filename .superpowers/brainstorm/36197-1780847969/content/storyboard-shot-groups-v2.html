@@ -1,0 +1,556 @@
+<style>
+  .stage {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 14% 9%, rgba(19, 194, 205, 0.12), transparent 28%),
+      linear-gradient(135deg, #0f1721 0%, #070b10 72%, #0b1018 100%);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.34);
+    color: #eff8fa;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .mock {
+    min-height: 820px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 430px;
+  }
+
+  .main {
+    padding: 24px 26px;
+    min-width: 0;
+  }
+
+  .drawer {
+    border-left: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(1, 7, 12, 0.26);
+    padding: 22px 18px;
+  }
+
+  .crumb {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 12px;
+    margin-bottom: 7px;
+  }
+
+  .title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .title {
+    margin: 0;
+    font-size: 25px;
+    line-height: 1.18;
+    letter-spacing: 0;
+  }
+
+  .subline {
+    color: rgba(239, 248, 250, 0.58);
+    font-size: 13px;
+    margin-top: 8px;
+  }
+
+  .button {
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(255, 255, 255, 0.045);
+    color: rgba(239, 248, 250, 0.78);
+    padding: 0 11px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .button.primary {
+    border-color: rgba(20, 200, 212, 0.5);
+    background: linear-gradient(135deg, #18c8d6 0%, #0f96aa 100%);
+    color: #05262b;
+    font-weight: 760;
+  }
+
+  .module-tabs,
+  .filters,
+  .title-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .module-tabs {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.13);
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+  }
+
+  .tab,
+  .filter {
+    height: 30px;
+    border-radius: 8px;
+    padding: 0 11px;
+    display: flex;
+    align-items: center;
+    color: rgba(239, 248, 250, 0.62);
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    font-size: 12px;
+  }
+
+  .tab.active,
+  .filter.active {
+    color: #dfffff;
+    border-color: rgba(20, 200, 212, 0.38);
+    background: rgba(20, 200, 212, 0.11);
+  }
+
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .metric {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    border-radius: 10px;
+    padding: 11px;
+  }
+
+  .metric span {
+    display: block;
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+  }
+
+  .metric strong {
+    display: block;
+    margin-top: 5px;
+    font-size: 20px;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+
+  .toolbar strong {
+    font-size: 15px;
+  }
+
+  .group-list {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    border-radius: 11px;
+    overflow: hidden;
+  }
+
+  .list-head,
+  .group-row {
+    display: grid;
+    grid-template-columns: 62px minmax(190px, 1fr) 92px 92px 86px 92px 136px;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .list-head {
+    min-height: 38px;
+    padding: 0 14px;
+    color: rgba(239, 248, 250, 0.42);
+    font-size: 11px;
+    background: rgba(1, 7, 12, 0.22);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  }
+
+  .group-row {
+    min-height: 66px;
+    padding: 0 14px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    font-size: 12px;
+  }
+
+  .group-row:last-child {
+    border-bottom: 0;
+  }
+
+  .group-row.active {
+    background: rgba(20, 200, 212, 0.1);
+    box-shadow: inset 3px 0 0 #18c8d6;
+  }
+
+  .group-title strong {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 3px;
+  }
+
+  .group-title span {
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+  }
+
+  .badge {
+    justify-self: start;
+    border-radius: 7px;
+    padding: 4px 7px;
+    font-size: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    color: rgba(239, 248, 250, 0.62);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .badge.ok {
+    border-color: rgba(33, 210, 127, 0.34);
+    color: #68e29f;
+    background: rgba(33, 210, 127, 0.08);
+  }
+
+  .badge.work {
+    border-color: rgba(20, 200, 212, 0.38);
+    color: #67eef4;
+    background: rgba(20, 200, 212, 0.1);
+  }
+
+  .badge.warn {
+    border-color: rgba(238, 177, 70, 0.36);
+    color: #f1be63;
+    background: rgba(238, 177, 70, 0.08);
+  }
+
+  .actions {
+    display: flex;
+    gap: 7px;
+    justify-content: flex-end;
+  }
+
+  .row-button {
+    height: 27px;
+    border-radius: 7px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(239, 248, 250, 0.78);
+    font-size: 11px;
+    padding: 0 9px;
+  }
+
+  .group-row.active .row-button.primary-soft {
+    border-color: rgba(20, 200, 212, 0.42);
+    background: rgba(20, 200, 212, 0.13);
+    color: #dfffff;
+  }
+
+  .insert-row {
+    min-height: 40px;
+    padding: 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    color: rgba(239, 248, 250, 0.58);
+    font-size: 12px;
+    background: rgba(20, 200, 212, 0.035);
+  }
+
+  .insert-row button {
+    height: 25px;
+    border-radius: 7px;
+    border: 1px dashed rgba(20, 200, 212, 0.42);
+    background: rgba(20, 200, 212, 0.08);
+    color: #bdfbff;
+    font-size: 11px;
+    padding: 0 10px;
+  }
+
+  .drawer-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 14px;
+  }
+
+  .drawer-head strong {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 5px;
+  }
+
+  .drawer-head span {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 11px;
+  }
+
+  .drawer-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 7px;
+    margin-bottom: 12px;
+  }
+
+  .drawer-tab {
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    color: rgba(239, 248, 250, 0.62);
+    font-size: 12px;
+  }
+
+  .drawer-tab.active {
+    color: #dfffff;
+    border-color: rgba(20, 200, 212, 0.38);
+    background: rgba(20, 200, 212, 0.11);
+  }
+
+  .field {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.032);
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  .field label {
+    display: block;
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+    margin-bottom: 6px;
+  }
+
+  .field div,
+  .script-box {
+    color: rgba(239, 248, 250, 0.76);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .script-box {
+    max-height: 150px;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 9px;
+    background: rgba(1, 7, 12, 0.28);
+    padding: 10px;
+  }
+
+  .inner-shot-list {
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    border-radius: 9px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+
+  .inner-shot {
+    min-height: 46px;
+    display: grid;
+    grid-template-columns: 42px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 0 9px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    font-size: 11px;
+  }
+
+  .inner-shot:last-child {
+    border-bottom: 0;
+  }
+
+  .inner-shot span {
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+  }
+
+  .drawer-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .note {
+    margin-top: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: #f8fafc;
+    color: #172033;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+</style>
+
+<h2>分镜提示词 v2：镜头组清单 + 原剧本查看</h2>
+<p class="subtitle">分镜不再是一条等于一个镜头，而是一条等于一个镜头组。支持在组之间插入新镜头组，右侧抽屉编辑组内镜头，并查看对应原剧本文本。</p>
+
+<div class="stage">
+  <div class="mock">
+    <main class="main">
+      <div class="crumb">霓虹之下 / 第 05 集 / 分镜提示词</div>
+      <div class="title-row">
+        <div>
+          <h1 class="title">真相浮出 · 分镜提示词提取</h1>
+          <div class="subline">按镜头组组织分镜，每组可包含 1-5 个镜头；确认后整组进入画布承接。</div>
+        </div>
+        <div class="title-actions">
+          <button class="button">从剧本重建分组</button>
+          <button class="button primary">新增镜头组</button>
+        </div>
+      </div>
+
+      <div class="module-tabs">
+        <div class="tab">剧本</div>
+        <div class="tab">导演分析</div>
+        <div class="tab">资产提取</div>
+        <div class="tab active">分镜提示词</div>
+        <div class="tab">画布承接</div>
+      </div>
+
+      <div class="summary">
+        <div class="metric"><span>镜头组</span><strong>8</strong></div>
+        <div class="metric"><span>组内镜头</span><strong>18</strong></div>
+        <div class="metric"><span>已确认组</span><strong>4</strong></div>
+        <div class="metric"><span>待编辑组</span><strong>3</strong></div>
+        <div class="metric"><span>缺资产组</span><strong>1</strong></div>
+      </div>
+
+      <div class="toolbar">
+        <strong>镜头组清单</strong>
+        <div class="filters">
+          <div class="filter active">全部</div>
+          <div class="filter">待编辑</div>
+          <div class="filter">缺资产</div>
+          <div class="filter">已确认</div>
+        </div>
+      </div>
+
+      <div class="group-list">
+        <div class="list-head">
+          <div>组号</div>
+          <div>镜头组</div>
+          <div>组内镜头</div>
+          <div>原剧本</div>
+          <div>引用资产</div>
+          <div>状态</div>
+          <div></div>
+        </div>
+
+        <div class="group-row">
+          <div>G01</div>
+          <div class="group-title"><strong>雨夜街口建立空间</strong><span>开场环境、女主停步、车辆出现</span></div>
+          <div>3 镜</div>
+          <div>场次 1 · 1-4 段</div>
+          <div>5 项</div>
+          <div><span class="badge ok">已确认</span></div>
+          <div class="actions"><button class="row-button">查看</button><button class="row-button">插入后</button></div>
+        </div>
+
+        <div class="insert-row"><button>+ 在 G01 后插入镜头组</button><span>可手动新增，或从选中的剧本文本生成</span></div>
+
+        <div class="group-row active">
+          <div>G02</div>
+          <div class="group-title"><strong>女主察觉危险</strong><span>回头、路灯闪烁、表情警觉</span></div>
+          <div>2 镜</div>
+          <div>场次 1 · 5-7 段</div>
+          <div>4 项</div>
+          <div><span class="badge work">待编辑</span></div>
+          <div class="actions"><button class="row-button primary-soft">编辑</button><button class="row-button">插入后</button></div>
+        </div>
+
+        <div class="group-row">
+          <div>G03</div>
+          <div class="group-title"><strong>暗巷追击</strong><span>跟拍、转弯、车辆逼近</span></div>
+          <div>4 镜</div>
+          <div>场次 1 · 8-13 段</div>
+          <div>缺 1</div>
+          <div><span class="badge warn">缺资产</span></div>
+          <div class="actions"><button class="row-button">补资产</button><button class="row-button">插入后</button></div>
+        </div>
+
+        <div class="group-row">
+          <div>G04</div>
+          <div class="group-title"><strong>证物被发现</strong><span>车灯扫墙、袖扣特写、女主拍照</span></div>
+          <div>3 镜</div>
+          <div>场次 1 · 14-18 段</div>
+          <div>3 项</div>
+          <div><span class="badge work">待审核</span></div>
+          <div class="actions"><button class="row-button">审核</button><button class="row-button">插入后</button></div>
+        </div>
+
+        <div class="group-row">
+          <div>G05</div>
+          <div class="group-title"><strong>反派现身</strong><span>低角度、阴影、台词压迫</span></div>
+          <div>2 镜</div>
+          <div>场次 2 · 1-5 段</div>
+          <div>4 项</div>
+          <div><span class="badge ok">已确认</span></div>
+          <div class="actions"><button class="row-button">查看</button><button class="row-button">插入后</button></div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="drawer">
+      <div class="drawer-head">
+        <div>
+          <strong>G02 · 女主察觉危险</strong>
+          <span>2 个镜头 · 对应场次 1 第 5-7 段 · 待编辑</span>
+        </div>
+        <span class="badge work">待编辑</span>
+      </div>
+
+      <div class="drawer-tabs">
+        <div class="drawer-tab active">组内镜头</div>
+        <div class="drawer-tab">原剧本</div>
+        <div class="drawer-tab">提示词</div>
+        <div class="drawer-tab">资产</div>
+      </div>
+
+      <div class="field">
+        <label>组内镜头</label>
+        <div class="inner-shot-list">
+          <div class="inner-shot"><strong>02-01</strong><div>女主停下脚步，听见车辆急停声。</div><button class="row-button">编辑</button></div>
+          <div class="inner-shot"><strong>02-02</strong><div>她缓慢回头，路灯闪烁照亮紧张表情。</div><button class="row-button">编辑</button></div>
+        </div>
+      </div>
+
+      <div class="drawer-actions" style="margin-top:0;margin-bottom:10px;">
+        <button class="button">+ 组内新增镜头</button>
+        <button class="button">拆分镜头组</button>
+        <button class="button">合并到上一组</button>
+      </div>
+
+      <div class="field">
+        <label>对应原剧本内容</label>
+        <div class="script-box">女主刚走到旧楼后门，身后忽然传来急刹车声。她停住脚步，手里的手机屏幕亮了一下。路灯闪烁，巷口的车灯把她的影子拉得很长。她慢慢回头，看见车门打开，一个熟悉的身影从雨幕里走下来。</div>
+      </div>
+
+      <div class="field">
+        <label>镜头组提示词摘要</label>
+        <div>雨夜暗巷，女性主角察觉危险，先停步再回头，路灯闪烁与车灯背光形成压迫感。镜头从半身逐渐推进到近景。</div>
+      </div>
+
+      <div class="field">
+        <label>编辑规则</label>
+        <div>组内镜头可以新增、删除、改顺序；原剧本只作为依据查看，不在这里直接改剧本。</div>
+      </div>
+
+      <div class="drawer-actions">
+        <button class="button">重提取本组</button>
+        <button class="button">编辑组信息</button>
+        <button class="button primary">保存并确认</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="note">
+  设计规则：主列表按“镜头组”展示，每组可以包含多个镜头。列表提供“新增镜头组”和“插入后”动作；右侧抽屉负责编辑组内镜头、查看对应原剧本、查看/编辑提示词和资产引用。这样既能保持主页面紧凑，也能支持手动插入、拆分、合并和编辑。
+</div>

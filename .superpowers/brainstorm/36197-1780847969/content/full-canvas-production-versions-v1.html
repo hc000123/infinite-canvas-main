@@ -1,0 +1,638 @@
+<style>
+  .stage {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 14% 9%, rgba(19, 194, 205, 0.12), transparent 28%),
+      linear-gradient(135deg, #0f1721 0%, #070b10 72%, #0b1018 100%);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.34);
+    color: #eff8fa;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .mock {
+    min-height: 850px;
+    display: grid;
+    grid-template-columns: 318px minmax(0, 1fr) 380px;
+  }
+
+  .left,
+  .right {
+    background: rgba(1, 7, 12, 0.24);
+  }
+
+  .left {
+    border-right: 1px solid rgba(148, 163, 184, 0.16);
+    padding: 18px 14px;
+  }
+
+  .right {
+    border-left: 1px solid rgba(148, 163, 184, 0.16);
+    padding: 18px 14px;
+  }
+
+  .center {
+    padding: 18px;
+    min-width: 0;
+  }
+
+  .crumb {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  .title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .title {
+    margin: 0;
+    font-size: 22px;
+    line-height: 1.18;
+    letter-spacing: 0;
+  }
+
+  .subline {
+    color: rgba(239, 248, 250, 0.56);
+    font-size: 12px;
+    margin-top: 7px;
+    line-height: 1.45;
+  }
+
+  .button {
+    height: 31px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(255, 255, 255, 0.045);
+    color: rgba(239, 248, 250, 0.78);
+    padding: 0 10px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .button.primary {
+    border-color: rgba(20, 200, 212, 0.5);
+    background: linear-gradient(135deg, #18c8d6 0%, #0f96aa 100%);
+    color: #05262b;
+    font-weight: 760;
+  }
+
+  .button.warn {
+    border-color: rgba(238, 177, 70, 0.36);
+    background: rgba(238, 177, 70, 0.08);
+    color: #f1be63;
+  }
+
+  .toolbar {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .filter {
+    height: 28px;
+    border-radius: 8px;
+    padding: 0 9px;
+    display: flex;
+    align-items: center;
+    color: rgba(239, 248, 250, 0.62);
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .filter.active {
+    color: #dfffff;
+    border-color: rgba(20, 200, 212, 0.38);
+    background: rgba(20, 200, 212, 0.11);
+  }
+
+  .pack-list {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    border-radius: 11px;
+    overflow: hidden;
+  }
+
+  .pack {
+    min-height: 82px;
+    padding: 11px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  }
+
+  .pack:last-child {
+    border-bottom: 0;
+  }
+
+  .pack.active {
+    background: rgba(20, 200, 212, 0.1);
+    box-shadow: inset 3px 0 0 #18c8d6;
+  }
+
+  .pack-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .pack strong {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+
+  .pack span {
+    color: rgba(239, 248, 250, 0.48);
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .pack-meta {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    justify-self: start;
+    border-radius: 7px;
+    padding: 4px 7px;
+    font-size: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    color: rgba(239, 248, 250, 0.62);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .badge.ok {
+    border-color: rgba(33, 210, 127, 0.34);
+    color: #68e29f;
+    background: rgba(33, 210, 127, 0.08);
+  }
+
+  .badge.work {
+    border-color: rgba(20, 200, 212, 0.38);
+    color: #67eef4;
+    background: rgba(20, 200, 212, 0.1);
+  }
+
+  .badge.warn {
+    border-color: rgba(238, 177, 70, 0.36);
+    color: #f1be63;
+    background: rgba(238, 177, 70, 0.08);
+  }
+
+  .canvas-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 10px;
+  }
+
+  .canvas-shell {
+    height: 632px;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 12px;
+    background:
+      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px),
+      linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+      rgba(1, 7, 12, 0.34);
+    background-size: 28px 28px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .canvas-tools {
+    position: absolute;
+    left: 15px;
+    top: 14px;
+    display: flex;
+    gap: 8px;
+    z-index: 2;
+  }
+
+  .tool {
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    background: rgba(7, 12, 18, 0.7);
+    color: rgba(239, 248, 250, 0.72);
+    padding: 0 9px;
+    font-size: 11px;
+  }
+
+  .node {
+    position: absolute;
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(12, 20, 29, 0.92);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24);
+    padding: 10px;
+  }
+
+  .node strong {
+    display: block;
+    font-size: 12px;
+    margin-bottom: 5px;
+  }
+
+  .node span {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .node.script {
+    width: 150px;
+    min-height: 78px;
+    left: 48px;
+    top: 96px;
+  }
+
+  .node.asset {
+    width: 146px;
+    min-height: 84px;
+    left: 54px;
+    top: 256px;
+    border-color: rgba(238, 177, 70, 0.32);
+  }
+
+  .node.prompt {
+    width: 206px;
+    min-height: 116px;
+    left: 272px;
+    top: 146px;
+    border-color: rgba(20, 200, 212, 0.44);
+    background: rgba(9, 35, 42, 0.84);
+  }
+
+  .node.config {
+    width: 156px;
+    min-height: 84px;
+    right: 62px;
+    top: 94px;
+    border-color: rgba(20, 200, 212, 0.3);
+  }
+
+  .node.video {
+    width: 190px;
+    min-height: 144px;
+    right: 56px;
+    top: 274px;
+    border-color: rgba(33, 210, 127, 0.36);
+    background: rgba(13, 31, 26, 0.9);
+  }
+
+  .video-preview {
+    height: 72px;
+    border-radius: 8px;
+    margin-top: 8px;
+    background:
+      linear-gradient(135deg, rgba(20, 200, 212, 0.18), rgba(238, 177, 70, 0.12)),
+      rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(148, 163, 184, 0.13);
+    display: flex;
+    align-items: end;
+    padding: 7px;
+    font-size: 10px;
+    color: rgba(239, 248, 250, 0.62);
+  }
+
+  .link {
+    position: absolute;
+    height: 2px;
+    background: rgba(20, 200, 212, 0.32);
+    transform-origin: left center;
+  }
+
+  .link.l1 { width: 120px; left: 190px; top: 150px; transform: rotate(17deg); }
+  .link.l2 { width: 112px; left: 190px; top: 298px; transform: rotate(-21deg); }
+  .link.l3 { width: 112px; left: 470px; top: 188px; transform: rotate(-10deg); }
+  .link.l4 { width: 118px; left: 468px; top: 238px; transform: rotate(28deg); }
+
+  .bottom-strip {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 14px;
+    height: 96px;
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.13);
+    background: rgba(7, 12, 18, 0.72);
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .mini-version {
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    background: rgba(255, 255, 255, 0.035);
+    padding: 8px;
+    font-size: 10px;
+    color: rgba(239, 248, 250, 0.58);
+  }
+
+  .mini-version.active {
+    border-color: rgba(20, 200, 212, 0.42);
+    background: rgba(20, 200, 212, 0.1);
+    color: #dfffff;
+  }
+
+  .mini-version strong {
+    display: block;
+    color: #eff8fa;
+    margin-bottom: 4px;
+  }
+
+  .panel-section {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    padding-bottom: 13px;
+    margin-bottom: 13px;
+  }
+
+  .panel-section:last-child {
+    border-bottom: 0;
+    margin-bottom: 0;
+  }
+
+  .panel-section h3 {
+    margin: 0 0 10px;
+    font-size: 14px;
+  }
+
+  .kv {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    gap: 8px;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    font-size: 12px;
+  }
+
+  .kv:last-child {
+    border-bottom: 0;
+  }
+
+  .kv span:first-child {
+    color: rgba(239, 248, 250, 0.46);
+  }
+
+  .version-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .version {
+    border: 1px solid rgba(148, 163, 184, 0.13);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.032);
+    padding: 10px;
+  }
+
+  .version.active {
+    border-color: rgba(20, 200, 212, 0.42);
+    background: rgba(20, 200, 212, 0.1);
+  }
+
+  .version-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .version strong {
+    font-size: 12px;
+  }
+
+  .version span {
+    color: rgba(239, 248, 250, 0.48);
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .version-actions {
+    display: flex;
+    gap: 7px;
+    margin-top: 9px;
+  }
+
+  .panel-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .note {
+    margin-top: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: #f8fafc;
+    color: #172033;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+</style>
+
+<h2>完整画布页：生产包绑定 + 视频版本管理</h2>
+<p class="subtitle">进入完整画布后，用户逐包检查并生成。每次生成都绑定到当前生产包，多个结果以版本保存，可选择当前采用版本。</p>
+
+<div class="stage">
+  <div class="mock">
+    <aside class="left">
+      <div class="crumb">霓虹之下 / 第 05 集 / 承接画布</div>
+      <h1 class="title">生产包导航</h1>
+      <div class="subline">按生产包检查节点链路，生成结果必须绑定回对应生产包。</div>
+
+      <div class="toolbar">
+        <div class="filter active">全部</div>
+        <div class="filter">待生成</div>
+        <div class="filter">有多版本</div>
+        <div class="filter">已采用</div>
+      </div>
+
+      <div class="pack-list">
+        <div class="pack">
+          <div class="pack-top">
+            <div>
+              <strong>P01 · 建立环境与女主入场</strong>
+              <span>12s · 3 镜 · 当前采用 v2</span>
+            </div>
+            <span class="badge ok">已采用</span>
+          </div>
+          <div class="pack-meta"><span class="badge ok">3 版本</span><span class="badge ok">已回流</span></div>
+        </div>
+
+        <div class="pack active">
+          <div class="pack-top">
+            <div>
+              <strong>P02 · 女主察觉危险</strong>
+              <span>10s · 2 镜 · 当前采用 v1</span>
+            </div>
+            <span class="badge work">待确认</span>
+          </div>
+          <div class="pack-meta"><span class="badge work">2 版本</span><span class="badge">可继续生成</span></div>
+        </div>
+
+        <div class="pack">
+          <div class="pack-top">
+            <div>
+              <strong>P03 · 暗巷追击</strong>
+              <span>14s · 4 镜 · 缺街景资产</span>
+            </div>
+            <span class="badge warn">缺资产</span>
+          </div>
+          <div class="pack-meta"><span class="badge warn">不可生成</span></div>
+        </div>
+
+        <div class="pack">
+          <div class="pack-top">
+            <div>
+              <strong>P04 · 车灯扫出证据</strong>
+              <span>11s · 3 镜 · 尚未生成</span>
+            </div>
+            <span class="badge">待生成</span>
+          </div>
+          <div class="pack-meta"><span class="badge">0 版本</span></div>
+        </div>
+
+        <div class="pack">
+          <div class="pack-top">
+            <div>
+              <strong>P05 · 反派声音逼近</strong>
+              <span>9s · 1 镜 · 尚未生成</span>
+            </div>
+            <span class="badge">待生成</span>
+          </div>
+          <div class="pack-meta"><span class="badge">0 版本</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="center">
+      <div class="canvas-head">
+        <div>
+          <div class="crumb">当前生产包</div>
+          <h1 class="title">P02 · 女主察觉危险</h1>
+          <div class="subline">当前采用版本：v1。再次生成会创建新版本，不覆盖已有结果。</div>
+        </div>
+        <div class="toolbar">
+          <button class="button">检查引用</button>
+          <button class="button">编辑提示词</button>
+          <button class="button primary">生成新版本</button>
+        </div>
+      </div>
+
+      <div class="canvas-shell">
+        <div class="canvas-tools">
+          <button class="tool">适配视图</button>
+          <button class="tool">只看当前包</button>
+          <button class="tool">显示版本节点</button>
+          <button class="tool">导出当前版本</button>
+        </div>
+
+        <div class="link l1"></div>
+        <div class="link l2"></div>
+        <div class="link l3"></div>
+        <div class="link l4"></div>
+
+        <div class="node script">
+          <strong>原剧本片段</strong>
+          <span>急刹车声、女主回头、路灯闪烁。</span>
+        </div>
+        <div class="node asset">
+          <strong>引用资产</strong>
+          <span>林澈、暗巷街景、手机、雨夜风格。</span>
+        </div>
+        <div class="node prompt">
+          <strong>动态提示词</strong>
+          <span>雨夜城市暗巷近景，女性主角停下脚步缓慢回头...</span>
+        </div>
+        <div class="node config">
+          <strong>视频配置</strong>
+          <span>Seedance 2.0<br>9:16 · 10s · 首帧参考</span>
+        </div>
+        <div class="node video">
+          <strong>视频结果 · 当前 v1</strong>
+          <span>已绑定 P02，已回流项目资产库。</span>
+          <div class="video-preview">P02_v1.mp4 · 10s</div>
+        </div>
+
+        <div class="bottom-strip">
+          <div class="mini-version active"><strong>v1 当前采用</strong>稳定，表情清晰 · 10s</div>
+          <div class="mini-version"><strong>v2 候选</strong>动作更强，但车灯过曝</div>
+          <div class="mini-version"><strong>生成新版本</strong>沿用当前资产和提示词</div>
+          <div class="mini-version"><strong>下一包衔接</strong>P02 当前版本尾帧 -> P03 首帧</div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="right">
+      <section class="panel-section">
+        <h3>生产包绑定</h3>
+        <div class="kv"><span>生产包</span><span>P02 · 女主察觉危险</span></div>
+        <div class="kv"><span>所属段落</span><span>S01 · 雨夜追到旧楼后门</span></div>
+        <div class="kv"><span>当前版本</span><span>v1 · 已采用</span></div>
+        <div class="kv"><span>版本数量</span><span>2 个结果版本</span></div>
+        <div class="kv"><span>资产回流</span><span>已写入项目资产库</span></div>
+      </section>
+
+      <section class="panel-section">
+        <h3>视频版本</h3>
+        <div class="version-list">
+          <div class="version active">
+            <div class="version-head">
+              <strong>v1 · 当前采用</strong>
+              <span class="badge ok">已绑定</span>
+            </div>
+            <span>10s · 06-08 14:20 · 表情清晰，节奏稳定，可作为 P03 首帧参考。</span>
+            <div class="version-actions">
+              <button class="button">预览</button>
+              <button class="button">导出</button>
+            </div>
+          </div>
+
+          <div class="version">
+            <div class="version-head">
+              <strong>v2 · 候选</strong>
+              <span class="badge work">待选择</span>
+            </div>
+            <span>10s · 06-08 14:48 · 动作更明显，但车灯过曝。</span>
+            <div class="version-actions">
+              <button class="button">预览</button>
+              <button class="button primary">设为当前</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-section">
+        <h3>生成与回流</h3>
+        <div class="panel-actions">
+          <button class="button primary">生成新版本</button>
+          <button class="button">用当前版本尾帧衔接下一包</button>
+          <button class="button">查看项目资产库记录</button>
+          <button class="button warn">取消当前版本绑定</button>
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<div class="note">
+  设计规则：完整画布页按生产包导航。每个生产包可以生成多次，每次生成都创建一个视频版本，并绑定到该生产包。用户在右侧版本列表中选择“当前采用版本”；只有当前采用版本参与导出、下一包首尾帧衔接和项目资产库主引用。历史版本保留，可预览、导出或重新设为当前。
+</div>

@@ -9,7 +9,7 @@ type UseCanvasClipboardActionsOptions = {
     connectionsRef: RefObject<CanvasConnection[]>;
     selectedNodeIdsRef: RefObject<Set<string>>;
     getCanvasCenter: () => Position;
-    createImageFileNode: (file: File, position: Position) => Promise<void>;
+    createImageFileNode: (file: File, position: Position) => Promise<unknown>;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setConnections: Dispatch<SetStateAction<CanvasConnection[]>>;
     setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;

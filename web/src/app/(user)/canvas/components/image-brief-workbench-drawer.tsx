@@ -167,18 +167,18 @@ export function ImageBriefWorkbenchDrawer({ open, projectId, projectTitle, canva
 
     return (
         <Drawer
-            title="生图 Brief 工作台"
+            title="美术 Brief 审核台（旧入口）"
             open={open}
             onClose={onClose}
             size={920}
             destroyOnHidden
             extra={
                 <Button type="primary" icon={<Plus className="size-4" />} onClick={startCreate}>
-                    新增 Brief
+                    手动补充需求
                 </Button>
             }
         >
-            <div className="mb-4 text-sm text-stone-500 dark:text-stone-400">当前项目：{projectTitle}</div>
+            <div className="mb-4 text-sm text-stone-500 dark:text-stone-400">当前项目：{projectTitle}。主流程建议从单集页“生图需求审核台”进入。</div>
             <div className="mb-4 flex flex-wrap items-center gap-2">
                 <Segmented value={kindFilter} onChange={(value) => setKindFilter(value as ImageBriefKind | "all")} options={[{ label: "全部", value: "all" }, ...imageBriefKindOptions]} />
                 {onCreateImageConfig ? (
@@ -227,7 +227,7 @@ export function ImageBriefWorkbenchDrawer({ open, projectId, projectTitle, canva
                     ))}
                 </div>
             ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无生图 Brief，可从资产拆解、设定库、分镜组或手动新增。" className="py-20" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无生图需求；建议先在单集页运行 Brief Agent，手动补充仅作低频补救。" className="py-20" />
             )}
             <ImageBriefFormModal open={formOpen} editingBrief={editingBrief} canvases={canvases} assets={assets} onCancel={() => setFormOpen(false)} onSubmit={submitBrief} />
         </Drawer>

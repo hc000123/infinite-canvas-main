@@ -1,0 +1,394 @@
+<style>
+  .option-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .choice-card {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    background: #0b1119;
+    border-radius: 14px;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+  }
+
+  .choice-card.selected {
+    border-color: #18c8d6;
+    box-shadow: 0 0 0 2px rgba(24, 200, 214, 0.22), 0 24px 70px rgba(24, 200, 214, 0.18);
+  }
+
+  .mock {
+    height: 520px;
+    color: #eff8fa;
+    background:
+      radial-gradient(circle at 16% 10%, rgba(24, 200, 214, 0.14), transparent 30%),
+      linear-gradient(135deg, #111923, #060a0f 70%);
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    padding: 16px;
+    box-sizing: border-box;
+  }
+
+  .mini-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .crumb {
+    color: rgba(239, 248, 250, 0.48);
+    font-size: 10px;
+    margin-bottom: 4px;
+  }
+
+  .title {
+    font-size: 18px;
+    font-weight: 760;
+    line-height: 1.2;
+  }
+
+  .sub {
+    margin-top: 5px;
+    color: rgba(239, 248, 250, 0.52);
+    font-size: 10px;
+  }
+
+  .btn {
+    height: 28px;
+    border-radius: 7px;
+    border: 1px solid rgba(24, 200, 214, 0.42);
+    background: rgba(24, 200, 214, 0.13);
+    color: #dfffff;
+    padding: 0 9px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 7px;
+    margin-bottom: 11px;
+  }
+
+  .step {
+    min-height: 54px;
+    border-radius: 9px;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.035);
+    padding: 8px;
+  }
+
+  .step.active {
+    border-color: rgba(24, 200, 214, 0.42);
+    background: rgba(24, 200, 214, 0.11);
+  }
+
+  .step.warn {
+    border-color: rgba(238, 177, 70, 0.34);
+    background: rgba(238, 177, 70, 0.08);
+  }
+
+  .step strong {
+    display: block;
+    font-size: 10px;
+    margin-bottom: 4px;
+  }
+
+  .step span {
+    color: rgba(239, 248, 250, 0.48);
+    font-size: 9px;
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+  }
+
+  .panel {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.035);
+    border-radius: 10px;
+    padding: 10px;
+    min-width: 0;
+  }
+
+  .panel h4 {
+    margin: 0 0 8px;
+    font-size: 11px;
+  }
+
+  .mini-row {
+    min-height: 31px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.09);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
+    font-size: 10px;
+  }
+
+  .mini-row:last-child {
+    border-bottom: 0;
+  }
+
+  .mini-row span {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 9px;
+  }
+
+  .tag {
+    border-radius: 6px;
+    padding: 3px 6px;
+    font-size: 9px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    color: rgba(239, 248, 250, 0.62);
+  }
+
+  .tag.ok {
+    border-color: rgba(33, 210, 127, 0.34);
+    color: #68e29f;
+    background: rgba(33, 210, 127, 0.08);
+  }
+
+  .tag.work {
+    border-color: rgba(24, 200, 214, 0.38);
+    color: #67eef4;
+    background: rgba(24, 200, 214, 0.1);
+  }
+
+  .tag.warn {
+    border-color: rgba(238, 177, 70, 0.36);
+    color: #f1be63;
+    background: rgba(238, 177, 70, 0.08);
+  }
+
+  .table {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.032);
+  }
+
+  .thead,
+  .tr {
+    display: grid;
+    grid-template-columns: 42px 1fr 64px 64px 64px 52px;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .thead {
+    min-height: 30px;
+    padding: 0 10px;
+    color: rgba(239, 248, 250, 0.42);
+    font-size: 9px;
+    background: rgba(1, 7, 12, 0.22);
+  }
+
+  .tr {
+    min-height: 42px;
+    padding: 0 10px;
+    border-top: 1px solid rgba(148, 163, 184, 0.09);
+    font-size: 10px;
+  }
+
+  .tr.active {
+    background: rgba(24, 200, 214, 0.11);
+    box-shadow: inset 3px 0 0 #18c8d6;
+  }
+
+  .layout-3 {
+    display: grid;
+    grid-template-columns: 0.86fr 1.18fr 0.96fr;
+    gap: 9px;
+  }
+
+  .script-box {
+    height: 316px;
+    border-radius: 9px;
+    background: rgba(1, 7, 12, 0.24);
+    border: 1px solid rgba(148, 163, 184, 0.11);
+    padding: 9px;
+    color: rgba(239, 248, 250, 0.58);
+    font-size: 10px;
+    line-height: 1.55;
+    overflow: hidden;
+  }
+
+  .canvas-mini {
+    height: 316px;
+    border-radius: 9px;
+    background:
+      linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px),
+      linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px),
+      rgba(1, 7, 12, 0.36);
+    background-size: 22px 22px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .node {
+    position: absolute;
+    width: 88px;
+    min-height: 42px;
+    border-radius: 8px;
+    border: 1px solid rgba(24, 200, 214, 0.32);
+    background: rgba(15, 23, 33, 0.9);
+    padding: 7px;
+    font-size: 9px;
+  }
+
+  .node.a { left: 18px; top: 36px; }
+  .node.b { left: 118px; top: 112px; border-color: rgba(238, 177, 70, 0.4); }
+  .node.c { left: 212px; top: 198px; border-color: rgba(33, 210, 127, 0.36); }
+
+  .copy {
+    padding: 13px 15px 15px;
+    background: #f8fafc;
+    color: #172033;
+  }
+
+  .copy h3 {
+    margin: 0 0 6px;
+    font-size: 15px;
+  }
+
+  .copy p {
+    margin: 0;
+    color: rgba(23, 32, 51, 0.68);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  @media (max-width: 1180px) {
+    .option-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<h2>点击单集后的界面方向</h2>
+<p class="subtitle">这三个方案都默认从“项目分集清单”进入。区别在于单集页第一眼是看阶段、看镜头表，还是看具体制作内容。</p>
+
+<div class="option-grid">
+  <div class="choice-card" data-choice="stage-overview" onclick="toggleSelect(this)">
+    <div class="mock">
+      <div class="mini-top">
+        <div>
+          <div class="crumb">霓虹之下 / 第 05 集</div>
+          <div class="title">真相浮出</div>
+          <div class="sub">当前阶段：分镜提示词审核 · 完成度 62%</div>
+        </div>
+        <button class="btn">继续当前阶段</button>
+      </div>
+      <div class="steps">
+        <div class="step"><strong>剧本</strong><span>已导入</span></div>
+        <div class="step"><strong>导演分析</strong><span>已确认</span></div>
+        <div class="step"><strong>设定素材</strong><span>缺 3 项</span></div>
+        <div class="step active"><strong>分镜</strong><span>12 / 18</span></div>
+        <div class="step warn"><strong>画布承接</strong><span>未开始</span></div>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <h4>本集信息</h4>
+          <div class="mini-row"><div>核心冲突</div><span>女主发现交易证据</span></div>
+          <div class="mini-row"><div>主要人物</div><span>林澈 / 沈越 / 反派</span></div>
+          <div class="mini-row"><div>当前缺口</div><span>场景参考 2，角色参考 1</span></div>
+          <div class="mini-row"><div>最近更新</div><span>06-07 14:23</span></div>
+        </div>
+        <div class="panel">
+          <h4>下一步</h4>
+          <div class="mini-row"><div>审核第 13-18 镜提示词</div><span class="tag work">进行中</span></div>
+          <div class="mini-row"><div>补齐暗巷街景参考</div><span class="tag warn">缺口</span></div>
+          <div class="mini-row"><div>确认后创建承接画布</div><span class="tag">待开始</span></div>
+          <div class="mini-row"><div>查看生成任务</div><span class="tag ok">正常</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="copy">
+      <h3>A. 阶段总览型</h3>
+      <p>最像“单集首页”。用户先看这集做到哪一步、有哪些缺口，再点击进入剧本、分镜、素材或画布模块。</p>
+    </div>
+  </div>
+
+  <div class="choice-card" data-choice="shot-table" onclick="toggleSelect(this)">
+    <div class="mock">
+      <div class="mini-top">
+        <div>
+          <div class="crumb">霓虹之下 / 第 05 集</div>
+          <div class="title">真相浮出 · 分镜清单</div>
+          <div class="sub">18 个镜头 · 12 个已确认 · 3 个素材缺口</div>
+        </div>
+        <button class="btn">创建承接画布</button>
+      </div>
+      <div class="steps">
+        <div class="step"><strong>剧本</strong><span>已完成</span></div>
+        <div class="step"><strong>导演</strong><span>已完成</span></div>
+        <div class="step"><strong>素材</strong><span>缺 3</span></div>
+        <div class="step active"><strong>分镜表</strong><span>当前</span></div>
+        <div class="step"><strong>画布</strong><span>待承接</span></div>
+      </div>
+      <div class="table">
+        <div class="thead"><div>镜头</div><div>内容</div><div>提示词</div><div>参考</div><div>视频</div><div></div></div>
+        <div class="tr"><div>01</div><div>雨夜街口，女主停步</div><div><span class="tag ok">已审</span></div><div>2</div><div>-</div><button class="row-action">查看</button></div>
+        <div class="tr"><div>02</div><div>反派车辆从远处驶入</div><div><span class="tag ok">已审</span></div><div>3</div><div>-</div><button class="row-action">查看</button></div>
+        <div class="tr active"><div>03</div><div>女主回头，路灯闪烁</div><div><span class="tag work">待审</span></div><div>1</div><div>-</div><button class="row-action">进入</button></div>
+        <div class="tr"><div>04</div><div>暗巷追击，镜头跟拍</div><div><span class="tag warn">待改</span></div><div>缺</div><div>-</div><button class="row-action">进入</button></div>
+        <div class="tr"><div>05</div><div>车灯扫过墙面证据</div><div><span class="tag work">待审</span></div><div>缺</div><div>-</div><button class="row-action">进入</button></div>
+        <div class="tr"><div>06</div><div>女主藏入楼梯间</div><div><span class="tag">草稿</span></div><div>1</div><div>-</div><button class="row-action">进入</button></div>
+        <div class="tr"><div>07</div><div>手机震动，陌生号码</div><div><span class="tag">草稿</span></div><div>0</div><div>-</div><button class="row-action">进入</button></div>
+      </div>
+    </div>
+    <div class="copy">
+      <h3>B. 分镜长表型</h3>
+      <p>最紧凑、最直接。点进单集后主要看镜头表，适合你的项目如果核心工作就是逐镜检查和推进。</p>
+    </div>
+  </div>
+
+  <div class="choice-card" data-choice="workbench" onclick="toggleSelect(this)">
+    <div class="mock">
+      <div class="mini-top">
+        <div>
+          <div class="crumb">霓虹之下 / 第 05 集</div>
+          <div class="title">真相浮出 · 制作空间</div>
+          <div class="sub">左看剧本，中间看镜头，右看待办</div>
+        </div>
+        <button class="btn">导入到画布</button>
+      </div>
+      <div class="layout-3">
+        <div class="panel">
+          <h4>剧本片段</h4>
+          <div class="script-box">
+            女主在雨夜追到旧楼后门，发现地面有一枚带血的袖扣。她正要拍照，巷口车灯突然亮起。反派的声音从背后传来，逼她交出手机。
+            <br><br>
+            情绪重点：压迫、反转、女主第一次主动反击。
+          </div>
+        </div>
+        <div class="panel">
+          <h4>当前镜头组</h4>
+          <div class="canvas-mini">
+            <div class="node a">镜头脚本<br>03-05</div>
+            <div class="node b">动态提示词<br>待审核</div>
+            <div class="node c">视频配置<br>9:16 / 6s</div>
+          </div>
+        </div>
+        <div class="panel">
+          <h4>待办与风险</h4>
+          <div class="mini-row"><div>第 04 镜动作过密</div><span class="tag warn">待改</span></div>
+          <div class="mini-row"><div>缺暗巷场景参考</div><span class="tag warn">缺口</span></div>
+          <div class="mini-row"><div>第 03 镜可承接</div><span class="tag ok">通过</span></div>
+          <div class="mini-row"><div>队列未开始</div><span class="tag">等待</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="copy">
+      <h3>C. 小工作台型</h3>
+      <p>比 A/B 更像操作页。适合需要边读剧本、边看镜头组、边处理问题，但信息量也会更高。</p>
+    </div>
+  </div>
+</div>

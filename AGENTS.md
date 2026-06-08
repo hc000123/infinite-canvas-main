@@ -64,6 +64,15 @@
 - 图片节点尺寸逻辑要尊重原始比例，除非功能明确要求自由变形。
 - 批量生成、多图展示、助手面板等画布交互要尽量简洁，不要占用过多画布空间。
 
+## 画布架构边界
+
+- `canvas-client-page.tsx` 优先作为装配层，只接线 store、hooks、组件和必要的页面状态；生成、重试、生产包、分镜入画布等成段业务动作优先放到 `web/src/app/(user)/canvas/hooks/`。
+- 画布 hooks 负责业务动作、副作用和跨组件协作；如果 hook 参数接近 25 个，应停止扩张并拆分更小的职责边界。
+- `web/src/app/(user)/canvas/utils/` 只放纯计算、数据转换、节点/生产包/分镜等结构规划逻辑；不要在 utils 中直接操作 React state、弹窗或消息提示。
+- `web/src/app/(user)/canvas/components/` 负责展示和局部交互；卡片、表单、消息列表、预览面板等可独立组件应放在同目录组件文件中，不要塞回页面或大抽屉组件。
+- 单集 workbench 页面私有 hook、组件和工具放在 `projects/[id]/episodes/[episodeId]/workbench/` 当前页面目录下；不提升到全局共享目录，除非多个页面已经真实复用。
+- assistant、asset breakdown、image brief、production bible 等画布资产流程中，消息状态和局部 UI 可拆为 hook / components；素材回写、设定库同步、生成结果归档等数据结构和持久化路径不要为了减重而改动。
+
 ## 文档规范
 
 - README 保持简洁，只放项目介绍、核心功能、快速开始和文档入口。

@@ -1,0 +1,585 @@
+<style>
+  .stage {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 16% 10%, rgba(19, 194, 205, 0.12), transparent 28%),
+      linear-gradient(135deg, #0f1721 0%, #070b10 72%, #0b1018 100%);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.34);
+    color: #eff8fa;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .canvas-page {
+    height: 830px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 420px;
+  }
+
+  .canvas-area {
+    position: relative;
+    overflow: hidden;
+    background:
+      linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px),
+      linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px),
+      rgba(1, 7, 12, 0.44);
+    background-size: 48px 48px;
+  }
+
+  .top-strip {
+    position: absolute;
+    left: 18px;
+    right: 18px;
+    top: 16px;
+    z-index: 3;
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) auto;
+    gap: 12px;
+    align-items: start;
+    pointer-events: none;
+  }
+
+  .project-bar,
+  .pack-switcher,
+  .dock,
+  .mini-map {
+    pointer-events: auto;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(7, 12, 18, 0.78);
+    backdrop-filter: blur(12px);
+    border-radius: 12px;
+    box-shadow: 0 18px 44px rgba(0,0,0,.24);
+  }
+
+  .project-bar {
+    min-height: 66px;
+    padding: 12px 14px;
+  }
+
+  .crumb {
+    color: rgba(239, 248, 250, 0.48);
+    font-size: 11px;
+    margin-bottom: 5px;
+  }
+
+  .title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .title-row strong {
+    font-size: 15px;
+  }
+
+  .pack-switcher {
+    width: 520px;
+    padding: 9px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .pack-chip {
+    min-height: 48px;
+    border-radius: 9px;
+    border: 1px solid rgba(148, 163, 184, 0.13);
+    background: rgba(255, 255, 255, 0.035);
+    padding: 8px;
+    font-size: 10px;
+    color: rgba(239, 248, 250, 0.55);
+  }
+
+  .pack-chip.active {
+    border-color: rgba(20, 200, 212, 0.46);
+    background: rgba(20, 200, 212, 0.12);
+    color: #dfffff;
+  }
+
+  .pack-chip strong {
+    display: block;
+    color: #eff8fa;
+    margin-bottom: 3px;
+  }
+
+  .badge {
+    border-radius: 7px;
+    padding: 4px 7px;
+    font-size: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    color: rgba(239, 248, 250, 0.62);
+    background: rgba(255, 255, 255, 0.035);
+    white-space: nowrap;
+  }
+
+  .badge.ok {
+    border-color: rgba(33, 210, 127, 0.34);
+    color: #68e29f;
+    background: rgba(33, 210, 127, 0.08);
+  }
+
+  .badge.work {
+    border-color: rgba(20, 200, 212, 0.38);
+    color: #67eef4;
+    background: rgba(20, 200, 212, 0.1);
+  }
+
+  .badge.warn {
+    border-color: rgba(238, 177, 70, 0.36);
+    color: #f1be63;
+    background: rgba(238, 177, 70, 0.08);
+  }
+
+  .node {
+    position: absolute;
+    border-radius: 11px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(12, 20, 29, 0.94);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24);
+    padding: 11px;
+  }
+
+  .node strong {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+
+  .node span {
+    display: block;
+    color: rgba(239, 248, 250, 0.52);
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  .node .node-tag {
+    display: inline-flex;
+    margin-bottom: 7px;
+  }
+
+  .node.script {
+    width: 190px;
+    min-height: 116px;
+    left: 74px;
+    top: 154px;
+  }
+
+  .node.assets {
+    width: 190px;
+    min-height: 130px;
+    left: 84px;
+    top: 370px;
+    border-color: rgba(238, 177, 70, 0.34);
+  }
+
+  .node.prompt {
+    width: 260px;
+    min-height: 158px;
+    left: 380px;
+    top: 228px;
+    border-color: rgba(20, 200, 212, 0.46);
+    background: rgba(9, 35, 42, 0.86);
+  }
+
+  .node.config {
+    width: 190px;
+    min-height: 124px;
+    right: 150px;
+    top: 156px;
+    border-color: rgba(20, 200, 212, 0.28);
+  }
+
+  .node.video {
+    width: 230px;
+    min-height: 178px;
+    right: 118px;
+    top: 392px;
+    border-color: rgba(33, 210, 127, 0.36);
+    background: rgba(13, 31, 26, 0.92);
+  }
+
+  .video-thumb {
+    height: 90px;
+    border-radius: 9px;
+    margin-top: 9px;
+    background:
+      linear-gradient(135deg, rgba(20, 200, 212, 0.18), rgba(238, 177, 70, 0.12)),
+      rgba(255,255,255,.04);
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    display: flex;
+    align-items: end;
+    padding: 8px;
+    box-sizing: border-box;
+    color: rgba(239, 248, 250, 0.68);
+    font-size: 10px;
+  }
+
+  .link {
+    position: absolute;
+    height: 2px;
+    background: rgba(20, 200, 212, 0.34);
+    transform-origin: left center;
+  }
+
+  .link.l1 { width: 160px; left: 252px; top: 220px; transform: rotate(16deg); }
+  .link.l2 { width: 154px; left: 260px; top: 440px; transform: rotate(-24deg); }
+  .link.l3 { width: 164px; left: 636px; top: 282px; transform: rotate(-14deg); }
+  .link.l4 { width: 136px; left: 618px; top: 352px; transform: rotate(28deg); }
+
+  .dock {
+    position: absolute;
+    left: 260px;
+    right: 32px;
+    bottom: 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .tool {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    border: 1px solid rgba(148, 163, 184, 0.13);
+    background: rgba(255,255,255,.035);
+  }
+
+  .tool.active {
+    border-color: rgba(20, 200, 212, 0.42);
+    background: rgba(20, 200, 212, 0.12);
+  }
+
+  .mini-map {
+    position: absolute;
+    left: 18px;
+    bottom: 24px;
+    width: 190px;
+    height: 118px;
+    padding: 10px;
+    box-sizing: border-box;
+  }
+
+  .mini-map strong {
+    font-size: 11px;
+  }
+
+  .mini-box {
+    margin-top: 8px;
+    height: 68px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    background: rgba(255,255,255,.035);
+    position: relative;
+  }
+
+  .mini-node {
+    position: absolute;
+    width: 30px;
+    height: 18px;
+    border-radius: 5px;
+    background: rgba(20, 200, 212, 0.24);
+  }
+
+  .mini-node.a { left: 18px; top: 14px; }
+  .mini-node.b { left: 70px; top: 32px; }
+  .mini-node.c { left: 120px; top: 20px; }
+
+  .inspector {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .inspector-head {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+    padding: 14px 16px;
+  }
+
+  .inspector-head strong {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 7px;
+  }
+
+  .inspector-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-top: 12px;
+  }
+
+  .inspector-tab {
+    height: 30px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(239, 248, 250, 0.62);
+    background: rgba(255,255,255,.035);
+    font-size: 12px;
+  }
+
+  .inspector-tab.active {
+    color: #dfffff;
+    border: 1px solid rgba(20, 200, 212, 0.34);
+    background: rgba(20, 200, 212, 0.11);
+  }
+
+  .inspector-body {
+    padding: 14px 16px;
+    overflow: hidden;
+  }
+
+  .section {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    padding-bottom: 13px;
+    margin-bottom: 13px;
+  }
+
+  .section:last-child {
+    border-bottom: 0;
+    margin-bottom: 0;
+  }
+
+  .section h3 {
+    margin: 0 0 10px;
+    font-size: 14px;
+  }
+
+  .kv {
+    display: grid;
+    grid-template-columns: 86px 1fr;
+    gap: 8px;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    font-size: 12px;
+  }
+
+  .kv:last-child {
+    border-bottom: 0;
+  }
+
+  .kv span:first-child {
+    color: rgba(239, 248, 250, 0.46);
+  }
+
+  .version {
+    border: 1px solid rgba(148, 163, 184, 0.13);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.032);
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+
+  .version.active {
+    border-color: rgba(20, 200, 212, 0.42);
+    background: rgba(20, 200, 212, 0.1);
+  }
+
+  .version-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .version strong {
+    font-size: 12px;
+  }
+
+  .version span {
+    color: rgba(239, 248, 250, 0.48);
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .version-actions,
+  .actions {
+    display: flex;
+    gap: 7px;
+    margin-top: 9px;
+  }
+
+  .small-button {
+    height: 27px;
+    border-radius: 7px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(239, 248, 250, 0.78);
+    font-size: 11px;
+    padding: 0 9px;
+  }
+
+  .small-button.primary {
+    border-color: rgba(20, 200, 212, 0.42);
+    background: rgba(20, 200, 212, 0.13);
+    color: #dfffff;
+  }
+
+  .note {
+    margin-top: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: #f8fafc;
+    color: #172033;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+</style>
+
+<h2>在现有画布页面上调整：生产包绑定与视频版本</h2>
+<p class="subtitle">保留现有无限画布、底部工具栏、右侧检查器。新增的是顶部生产包切换条、节点上的生产包标识，以及右侧检查器里的版本管理。</p>
+
+<div class="stage">
+  <div class="canvas-page">
+    <main class="canvas-area">
+      <div class="top-strip">
+        <div class="project-bar">
+          <div class="crumb">霓虹之下 / 第 05 集 / 承接画布</div>
+          <div class="title-row">
+            <strong>P02 · 女主察觉危险</strong>
+            <span class="badge work">当前生产包 · 2 个视频版本</span>
+          </div>
+        </div>
+        <div class="pack-switcher">
+          <div class="pack-chip"><strong>P01</strong>已采用 v2</div>
+          <div class="pack-chip active"><strong>P02</strong>当前 v1 / 2</div>
+          <div class="pack-chip"><strong>P03</strong>缺资产</div>
+          <div class="pack-chip"><strong>P04</strong>待生成</div>
+        </div>
+      </div>
+
+      <div class="link l1"></div>
+      <div class="link l2"></div>
+      <div class="link l3"></div>
+      <div class="link l4"></div>
+
+      <div class="node script">
+        <span class="node-tag badge work">P02 · 原剧本</span>
+        <strong>剧本片段</strong>
+        <span>急刹车声、女主回头、路灯闪烁。</span>
+      </div>
+
+      <div class="node assets">
+        <span class="node-tag badge work">P02 · 引用资产</span>
+        <strong>项目资产引用</strong>
+        <span>林澈、暗巷街景、手机、雨夜风格。全部来自项目资产库。</span>
+      </div>
+
+      <div class="node prompt">
+        <span class="node-tag badge work">P02 · 提示词</span>
+        <strong>动态提示词</strong>
+        <span>雨夜城市暗巷近景，女性主角停下脚步缓慢回头，路灯忽明忽暗...</span>
+      </div>
+
+      <div class="node config">
+        <span class="node-tag badge work">P02 · 视频配置</span>
+        <strong>Seedance 2.0</strong>
+        <span>9:16 · 10s · 使用 P01 当前版本尾帧作为首帧参考。</span>
+      </div>
+
+      <div class="node video">
+        <span class="node-tag badge ok">P02 · 当前视频版本</span>
+        <strong>视频结果 v1</strong>
+        <span>已绑定到 P02，当前采用版本。v2 可在右侧检查器切换。</span>
+        <div class="video-thumb">P02_v1.mp4 · 10s · 当前采用</div>
+      </div>
+
+      <div class="mini-map">
+        <strong>小地图</strong>
+        <div class="mini-box">
+          <div class="mini-node a"></div>
+          <div class="mini-node b"></div>
+          <div class="mini-node c"></div>
+        </div>
+      </div>
+
+      <div class="dock">
+        <div class="tool active"></div>
+        <div class="tool"></div>
+        <div class="tool"></div>
+        <div class="tool"></div>
+        <div class="tool"></div>
+        <div class="tool"></div>
+        <div class="tool"></div>
+        <div class="tool"></div>
+        <div class="tool"></div>
+        <div class="tool"></div>
+      </div>
+    </main>
+
+    <aside class="inspector">
+      <div class="inspector-head">
+        <strong>内容检查器</strong>
+        <div>
+          <span class="badge work">第 05 集</span>
+          <span class="badge work">P02 · 女主察觉危险</span>
+        </div>
+        <div class="inspector-tabs">
+          <div class="inspector-tab active">内容</div>
+          <div class="inspector-tab">助手</div>
+          <div class="inspector-tab">记录</div>
+        </div>
+      </div>
+
+      <div class="inspector-body">
+        <section class="section">
+          <h3>生产包绑定</h3>
+          <div class="kv"><span>生产包</span><span>P02 · 女主察觉危险</span></div>
+          <div class="kv"><span>所属段落</span><span>S01 · 雨夜追到旧楼后门</span></div>
+          <div class="kv"><span>当前节点</span><span>视频结果节点</span></div>
+          <div class="kv"><span>当前版本</span><span>v1 · 已采用</span></div>
+          <div class="kv"><span>版本数量</span><span>2 个视频结果</span></div>
+        </section>
+
+        <section class="section">
+          <h3>视频版本</h3>
+          <div class="version active">
+            <div class="version-head">
+              <strong>v1 · 当前采用</strong>
+              <span class="badge ok">已绑定</span>
+            </div>
+            <span>10s · 表情清晰，节奏稳定。用于导出和 P03 首帧衔接。</span>
+            <div class="version-actions">
+              <button class="small-button">预览</button>
+              <button class="small-button">导出</button>
+            </div>
+          </div>
+
+          <div class="version">
+            <div class="version-head">
+              <strong>v2 · 候选</strong>
+              <span class="badge work">待选择</span>
+            </div>
+            <span>10s · 动作更明显，但车灯过曝。可设为当前采用版本。</span>
+            <div class="version-actions">
+              <button class="small-button">预览</button>
+              <button class="small-button primary">设为当前</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h3>生成操作</h3>
+          <div class="actions">
+            <button class="small-button primary">生成新版本</button>
+            <button class="small-button">编辑提示词</button>
+          </div>
+          <div class="actions">
+            <button class="small-button">用当前尾帧衔接下一包</button>
+          </div>
+        </section>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="note">
+  调整原则：不是重做画布页面，而是在现有画布上增加生产包上下文。顶部轻量切换生产包；节点标识自己属于哪个生产包；右侧检查器在选中视频节点或生产包时显示版本管理。生成新版本会新增视频结果版本，不覆盖旧版本；用户选择“当前采用版本”后，导出、首尾帧衔接和项目资产库主引用都使用该版本。
+</div>

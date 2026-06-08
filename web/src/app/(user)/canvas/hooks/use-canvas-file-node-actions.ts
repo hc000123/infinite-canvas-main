@@ -63,6 +63,7 @@ export function useCanvasFileNodeActions({
             setSelectedNodeIds(new Set([id]));
             setSelectedConnectionId(null);
             setDialogNodeId(id);
+            return id;
         },
         [addCanvasNodeToAssets, nodesRef, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, toImageMetadata],
     );
@@ -86,6 +87,7 @@ export function useCanvasFileNodeActions({
             setSelectedNodeIds(new Set([id]));
             setSelectedConnectionId(null);
             setDialogNodeId(id);
+            return id;
         },
         [addCanvasNodeToAssets, nodesRef, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, toVideoMetadata],
     );
@@ -108,6 +110,7 @@ export function useCanvasFileNodeActions({
             await addCanvasNodeToAssets(newNode);
             setSelectedNodeIds(new Set([id]));
             setSelectedConnectionId(null);
+            return id;
         },
         [addCanvasNodeToAssets, nodesRef, setNodes, setSelectedConnectionId, setSelectedNodeIds, toAudioMetadata],
     );
@@ -121,6 +124,23 @@ export function useCanvasFileNodeActions({
         [createAudioFileNode, createImageFileNode, createVideoFileNode],
     );
 
+    const createFileNodes = useCallback(
+        async (files: File[], position: Position) => {
+            const ids: string[] = [];
+            for (const [index, file] of files.entries()) {
+                const id = await createFileNode(file, getBatchDropPosition(position, index));
+                if (id) ids.push(id);
+            }
+            if (ids.length > 1) {
+                setSelectedNodeIds(new Set(ids));
+                setSelectedConnectionId(null);
+                setDialogNodeId(null);
+                showSuccess(`已添加 ${ids.length} 个素材到画布`);
+            }
+        },
+        [createFileNode, setDialogNodeId, setSelectedConnectionId, setSelectedNodeIds, showSuccess],
+    );
+
     const handleUploadRequest = useCallback(
         (nodeId?: string, position?: Position) => {
             uploadTargetRef.current = { nodeId, position };
@@ -131,9 +151,10 @@ export function useCanvasFileNodeActions({
 
     const handleImageInputChange = useCallback(
         async (event: ReactChangeEvent<HTMLInputElement>) => {
-            const file = event.target.files?.[0];
+            const files = Array.from(event.target.files || []).filter(isSupportedCanvasFile);
+            const file = files[0];
             const target = uploadTargetRef.current;
-            if (!file || !isSupportedCanvasFile(file)) return;
+            if (!file) return;
 
             if (target?.nodeId) {
                 const currentNode = nodesRef.current.find((node) => node.id === target.nodeId);
@@ -189,25 +210,25 @@ export function useCanvasFileNodeActions({
                 setDialogNodeId(target.nodeId);
             } else {
                 const position = target?.position || getCanvasCenterFromContainer(containerRef, size, screenToCanvas);
-                void createFileNode(file, position);
+                void createFileNodes(files, position);
             }
 
             uploadTargetRef.current = null;
             event.target.value = "";
         },
-        [addCanvasNodeToAssets, containerRef, createFileNode, nodesRef, screenToCanvas, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, size, toAudioMetadata, toImageMetadata, toVideoMetadata, uploadTargetRef],
+        [addCanvasNodeToAssets, containerRef, createFileNodes, nodesRef, screenToCanvas, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, size, toAudioMetadata, toImageMetadata, toVideoMetadata, uploadTargetRef],
     );
 
     const handleDrop = useCallback(
         (event: ReactDragEvent<HTMLDivElement>) => {
             event.preventDefault();
-            const file = Array.from(event.dataTransfer.files).find(isSupportedCanvasFile);
-            if (!file) return;
+            const files = Array.from(event.dataTransfer.files).filter(isSupportedCanvasFile);
+            if (!files.length) return;
 
             const pos = screenToCanvas(event.clientX, event.clientY);
-            void createFileNode(file, pos);
+            void createFileNodes(files, pos);
         },
-        [createFileNode, screenToCanvas],
+        [createFileNodes, screenToCanvas],
     );
 
     const pasteAssistantImage = useCallback(
@@ -237,4 +258,11 @@ function isSupportedCanvasFile(file: File) {
 function getCanvasCenterFromContainer(containerRef: RefObject<HTMLDivElement | null>, size: { width: number; height: number }, screenToCanvas: (clientX: number, clientY: number) => Position) {
     const rect = containerRef.current?.getBoundingClientRect();
     return screenToCanvas((rect?.left || 0) + size.width / 2, (rect?.top || 0) + size.height / 2);
+}
+
+function getBatchDropPosition(position: Position, index: number): Position {
+    return {
+        x: position.x + (index % 4) * 220,
+        y: position.y + Math.floor(index / 4) * 160,
+    };
 }

@@ -9,7 +9,7 @@ import { useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasCreateProjectModal } from "../canvas/components/canvas-create-project-modal";
 import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../canvas/utils/canvas-project-preset";
-import { UNFILED_CREATIVE_PROJECT_TITLE, canvasIdsForCreativeProject, unfiledCanvasProjects, type CreativeProject } from "./creative-projects";
+import { canvasIdsForCreativeProject, type CreativeProject } from "./creative-projects";
 import { shouldOpenProjectCardFromTarget } from "./project-card-navigation";
 import { useCreativeProjectStore } from "./use-creative-project-store";
 
@@ -62,7 +62,6 @@ export default function ProjectsPage() {
     const deleteProject = useCreativeProjectStore((state) => state.deleteProject);
     const canvases = useCanvasStore((state) => state.projects);
     const updateCanvasProject = useCanvasStore((state) => state.updateProject);
-    const unfiledCanvases = useMemo(() => unfiledCanvasProjects(canvases, projects), [canvases, projects]);
     const sortedProjects = useMemo(() => [...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)), [projects]);
     const projectCards = useMemo<ProjectCardView[]>(
         () =>
@@ -84,9 +83,9 @@ export default function ProjectsPage() {
             running: countByStatus("进行中"),
             done: countByStatus("已完成"),
             paused: countByStatus("暂停中"),
-            draft: countByStatus("草稿") + unfiledCanvases.length,
+            draft: countByStatus("草稿"),
         };
-    }, [projectCards, unfiledCanvases.length]);
+    }, [projectCards]);
     const defaultTitle = `创作项目 ${projects.length + 1}`;
 
     const createAndOpen = (title: string, preset: CanvasProjectPreset) => {
@@ -121,7 +120,7 @@ export default function ProjectsPage() {
                             <Input
                                 value={searchText}
                                 onChange={(event) => setSearchText(event.target.value)}
-                                placeholder="搜索项目名称、简介、标签..."
+                                placeholder="搜索项目名称、简介、标签…"
                                 prefix={<Search className="size-4 text-slate-500" />}
                                 className="h-11 w-[340px] max-w-full rounded-lg border-slate-700/80 bg-[#0b111b]/80 text-slate-100 placeholder:text-slate-500"
                                 style={{ width: 340 }}
@@ -130,10 +129,10 @@ export default function ProjectsPage() {
                                 筛选
                             </Button>
                             <div className="flex h-11 overflow-hidden rounded-lg border border-slate-700/80 bg-[#0b111b]/80 p-1">
-                                <button type="button" className={`grid size-9 place-items-center rounded-md transition ${viewMode === "grid" ? "bg-cyan-500/18 text-cyan-300 ring-1 ring-cyan-400/35" : "text-slate-400 hover:text-white"}`} onClick={() => setViewMode("grid")} aria-label="网格视图">
+                                <button type="button" className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 ${viewMode === "grid" ? "bg-cyan-500/18 text-cyan-300 ring-1 ring-cyan-400/35" : "text-slate-400 hover:text-white"}`} onClick={() => setViewMode("grid")} aria-label="网格视图">
                                     <Grid2X2 className="size-4" />
                                 </button>
-                                <button type="button" className={`grid size-9 place-items-center rounded-md transition ${viewMode === "list" ? "bg-cyan-500/18 text-cyan-300 ring-1 ring-cyan-400/35" : "text-slate-400 hover:text-white"}`} onClick={() => setViewMode("list")} aria-label="列表视图">
+                                <button type="button" className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 ${viewMode === "list" ? "bg-cyan-500/18 text-cyan-300 ring-1 ring-cyan-400/35" : "text-slate-400 hover:text-white"}`} onClick={() => setViewMode("list")} aria-label="列表视图">
                                     <LayoutList className="size-4" />
                                 </button>
                             </div>
@@ -148,7 +147,7 @@ export default function ProjectsPage() {
 
                     {!hydrated ? (
                         <section className="mt-7 flex min-h-[420px] items-center justify-center rounded-lg border border-slate-700/70 bg-slate-900/45 text-sm text-slate-400">正在加载项目...</section>
-                    ) : filteredCards.length || unfiledCanvases.length ? (
+                    ) : filteredCards.length ? (
                         <>
                             <div className={`mt-7 ${viewMode === "grid" ? "grid gap-5 lg:grid-cols-2 2xl:grid-cols-4" : "grid gap-4"}`}>
                                 {filteredCards.map((card) => (
@@ -174,9 +173,8 @@ export default function ProjectsPage() {
                                         onOpen={() => router.push(`/projects/${card.project.id}`)}
                                     />
                                 ))}
-                                {!searchText.trim() && unfiledCanvases.length ? <UnfiledProjectCard count={unfiledCanvases.length} listMode={viewMode === "list"} /> : null}
                             </div>
-                            <ProjectPagination count={filteredCards.length + (!searchText.trim() && unfiledCanvases.length ? 1 : 0)} />
+                            <ProjectPagination count={filteredCards.length} />
                         </>
                     ) : (
                         <section className="mt-7 flex min-h-[420px] flex-col items-center justify-center rounded-lg border border-slate-700/70 bg-slate-900/45 text-center">
@@ -278,7 +276,7 @@ function ProjectCard({
 
     return (
         <article
-            className={`group overflow-hidden rounded-lg border border-slate-700/80 bg-[linear-gradient(180deg,rgba(30,41,59,0.82),rgba(15,23,42,0.82))] shadow-[0_18px_50px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:border-cyan-400/45 ${openable ? "cursor-pointer" : ""} ${listMode ? "grid md:grid-cols-[320px_minmax(0,1fr)]" : ""}`}
+            className={`group overflow-hidden rounded-lg border border-slate-700/80 bg-[linear-gradient(180deg,rgba(30,41,59,0.82),rgba(15,23,42,0.82))] shadow-[0_18px_50px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:border-cyan-400/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080d14] ${openable ? "cursor-pointer" : ""} ${listMode ? "grid md:grid-cols-[320px_minmax(0,1fr)]" : ""}`}
             role={openable ? "link" : undefined}
             tabIndex={openable ? 0 : undefined}
             aria-label={openable ? `打开项目 ${project.title}` : undefined}
@@ -355,25 +353,6 @@ function ProjectCard({
                         )}
                     </div>
                 </div>
-            </div>
-        </article>
-    );
-}
-
-function UnfiledProjectCard({ count, listMode }: { count: number; listMode: boolean }) {
-    return (
-        <article className={`overflow-hidden rounded-lg border border-amber-400/30 bg-[linear-gradient(180deg,rgba(120,53,15,0.28),rgba(15,23,42,0.82))] shadow-[0_18px_50px_rgba(0,0,0,0.22)] ${listMode ? "grid md:grid-cols-[320px_minmax(0,1fr)]" : ""}`}>
-            <div className={`${listMode ? "min-h-full" : "h-36"} bg-[linear-gradient(135deg,rgba(245,158,11,0.75),rgba(20,184,166,0.18)),linear-gradient(45deg,rgba(255,255,255,0.1)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.1)_50%,rgba(255,255,255,0.1)_75%,transparent_75%,transparent)] bg-[length:auto,22px_22px]`} />
-            <div className="p-4">
-                <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-400/45 bg-amber-400/15 px-2.5 py-1 text-xs font-medium text-amber-200">
-                    <Edit3 className="size-3.5" />
-                    草稿
-                </span>
-                <h2 className="mt-3 break-words text-xl font-semibold leading-7 text-white">{UNFILED_CREATIVE_PROJECT_TITLE}</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-400">发现 {count} 个旧画布没有项目归属，可继续从画布库打开，也可以在项目详情里轻量绑定。</p>
-                <Button className="mt-4 border-slate-700 bg-slate-950/30 text-slate-100" href="/canvas">
-                    打开画布库
-                </Button>
             </div>
         </article>
     );

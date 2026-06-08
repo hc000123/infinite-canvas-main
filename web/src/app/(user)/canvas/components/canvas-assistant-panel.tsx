@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, FileText, History, ImageIcon, LoaderCircle, MessageSquare, Network, PanelRightClose, Plus, RotateCcw, Settings2, Sparkles, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowUp, FileText, History, ImageIcon, LoaderCircle, MessageSquare, Network, PanelRightClose, Plus, Settings2, Sparkles, Trash2, X } from "lucide-react";
 import { Button, Modal, Tooltip } from "antd";
 import { motion } from "motion/react";
 
-import { ImageGenerationPending } from "@/components/image-generation-pending";
 import { ModelPicker } from "@/components/model-picker";
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { nanoid } from "nanoid";
-import { cn } from "@/lib/utils";
 import { requestEdit, requestGeneration, requestImageQuestion, type ChatCompletionMessage } from "@/services/api/image";
 import { imageToDataUrl, uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
@@ -27,11 +25,12 @@ import {
     executeAssistantCanvasReadAction,
     parseAssistantCanvasActionSuggestion,
     validateAssistantCanvasAction,
-    validateAssistantCanvasActions,
     type AssistantCanvasAction,
     type AssistantCanvasReadAction,
 } from "../utils/canvas-assistant-actions";
 import { buildAssistantReferences } from "../utils/canvas-assistant-references";
+import { useCanvasAssistantSessions } from "../hooks/use-canvas-assistant-sessions";
+import { AssistantMessages, AssistantReferenceChip } from "./canvas-assistant-messages";
 
 type AssistantMode = "ask" | "image";
 const PANEL_MOTION_MS = 500;
@@ -84,35 +83,32 @@ export function CanvasAssistantPanel({
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const [width, setWidth] = useState(390);
-    const [view, setView] = useState<"chat" | "history">("chat");
     const [mode, setMode] = useState<AssistantMode>("image");
     const [prompt, setPrompt] = useState("");
     const [isRunning, setIsRunning] = useState(false);
-    const [checkedChatIds, setCheckedChatIds] = useState<string[]>([]);
-    const [deleteChatIds, setDeleteChatIds] = useState<string[]>([]);
     const [closing, setClosing] = useState(false);
     const [resizing, setResizing] = useState(false);
     const [removedReferenceIds, setRemovedReferenceIds] = useState<Set<string>>(new Set());
-    const [localSessions, setLocalSessions] = useState<CanvasAssistantSession[]>(() => (sessions.length ? sessions : [createSession()]));
-    const [localActiveSessionId, setLocalActiveSessionId] = useState<string | null>(activeSessionId);
-    const skipNextSessionsHistoryRef = useRef(false);
-
-    useEffect(() => {
-        if (!sessions.length) return;
-        setLocalSessions(sessions);
-        setLocalActiveSessionId(activeSessionId);
-    }, [activeSessionId, sessions]);
-
-    useEffect(() => {
-        onSessionsChange(localSessions, localActiveSessionId, { skipCanvasHistory: skipNextSessionsHistoryRef.current });
-        skipNextSessionsHistoryRef.current = false;
-    }, [localActiveSessionId, localSessions, onSessionsChange]);
-
-    const safeSessions = localSessions.length ? localSessions : [createSession()];
-    const activeSession = useMemo(() => safeSessions.find((session) => session.id === localActiveSessionId) || safeSessions[0] || null, [localActiveSessionId, safeSessions]);
-    const historySessions = safeSessions.filter((session) => session.messages.length > 0);
-    const messages = activeSession?.messages || [];
-    const hasMessages = messages.length > 0;
+    const {
+        activeSession,
+        appendAssistantMessage,
+        appendMessage,
+        checkedChatIds,
+        clearSessions,
+        deleteChatIds,
+        ensureActiveSession,
+        hasMessages,
+        historySessions,
+        messages,
+        removeSessions,
+        setActiveSessionId,
+        setCheckedChatIds,
+        setDeleteChatIds,
+        setView,
+        startChatSession,
+        updateMessage,
+        view,
+    } = useCanvasAssistantSessions({ activeSessionId, cleanupImages, onSessionsChange, sessions });
     const selectedNodeKey = useMemo(() => Array.from(selectedNodeIds).sort().join(","), [selectedNodeIds]);
     const allSelectedReferences = useMemo(() => buildAssistantReferences(nodes, selectedNodeIds, connections), [connections, nodes, selectedNodeIds]);
     const selectedReferences = useMemo(() => allSelectedReferences.filter((item) => !removedReferenceIds.has(item.id)), [allSelectedReferences, removedReferenceIds]);
@@ -122,79 +118,6 @@ export function CanvasAssistantPanel({
         setRemovedReferenceIds(new Set());
     }, [selectedNodeKey]);
 
-    const updateSession = (sessionId: string, updater: (session: CanvasAssistantSession) => CanvasAssistantSession) => {
-        setLocalSessions((prev) => prev.map((session) => (session.id === sessionId ? updater(session) : session)));
-    };
-
-    const appendMessage = (sessionId: string, message: CanvasAssistantMessage) => {
-        updateSession(sessionId, (session) => ({
-            ...session,
-            title: session.messages.length ? session.title : message.text.slice(0, 18) || "新对话",
-            messages: [...session.messages, message],
-            updatedAt: new Date().toISOString(),
-        }));
-    };
-
-    const appendAssistantMessage = (message: CanvasAssistantMessage, options?: { skipCanvasHistory?: boolean }) => {
-        if (options?.skipCanvasHistory) skipNextSessionsHistoryRef.current = true;
-        const session = activeSession || createSession();
-        setLocalActiveSessionId(session.id);
-        setView("chat");
-        setLocalSessions((prev) => {
-            const base = prev.some((item) => item.id === session.id) ? prev : [session, ...prev];
-            return base.map((item) =>
-                item.id === session.id
-                    ? {
-                          ...item,
-                          title: item.messages.length ? item.title : message.text.slice(0, 18) || "助手消息",
-                          messages: [...item.messages, message],
-                          updatedAt: new Date().toISOString(),
-                      }
-                    : item,
-            );
-        });
-    };
-
-    const updateMessage = (sessionId: string, messageId: string, patch: Partial<CanvasAssistantMessage>) => {
-        updateSession(sessionId, (session) => ({
-            ...session,
-            messages: session.messages.map((message) => (message.id === messageId ? { ...message, ...patch } : message)),
-            updatedAt: new Date().toISOString(),
-        }));
-    };
-
-    const startChatSession = () => {
-        if (activeSession && activeSession.messages.length === 0) {
-            setLocalActiveSessionId(activeSession.id);
-            return;
-        }
-        const session = createSession();
-        setLocalSessions((prev) => [session, ...prev]);
-        setLocalActiveSessionId(session.id);
-    };
-
-    const removeSessions = (ids: string[]) => {
-        const next = safeSessions.filter((session) => !ids.includes(session.id));
-        if (!next.length) {
-            const session = createSession();
-            setLocalSessions([session]);
-            setLocalActiveSessionId(session.id);
-        } else {
-            setLocalSessions(next);
-            setLocalActiveSessionId(localActiveSessionId && ids.includes(localActiveSessionId) ? next[0].id : localActiveSessionId);
-        }
-        cleanupImages({ sessions: next });
-        setCheckedChatIds((prev) => prev.filter((id) => !ids.includes(id)));
-    };
-
-    const clearSessions = () => {
-        const session = createSession();
-        setLocalSessions([session]);
-        setLocalActiveSessionId(session.id);
-        setCheckedChatIds([]);
-        cleanupImages({ sessions: [session] });
-    };
-
     const sendMessage = async (text: string, nextMode: AssistantMode, history: CanvasAssistantMessage[], savedReferences?: CanvasAssistantReference[]) => {
         const requestConfig = { ...effectiveConfig, model: nextMode === "image" ? effectiveConfig.imageModel || effectiveConfig.model : effectiveConfig.textModel || effectiveConfig.model };
         if (!isAiConfigReady(requestConfig, requestConfig.model)) {
@@ -202,11 +125,7 @@ export function CanvasAssistantPanel({
             return;
         }
 
-        const session = activeSession || createSession();
-        if (!activeSession) {
-            setLocalSessions([session]);
-            setLocalActiveSessionId(session.id);
-        }
+        const session = ensureActiveSession();
 
         const refs = savedReferences || selectedReferences;
         const userMessage: CanvasAssistantMessage = { id: nanoid(), role: "user", mode: nextMode, text, references: refs };
@@ -388,7 +307,7 @@ export function CanvasAssistantPanel({
                             checkedIds={checkedChatIds.filter((id) => historySessions.some((session) => session.id === id))}
                             onToggleChecked={(id, checked) => setCheckedChatIds((prev) => (checked ? [...new Set([...prev, id])] : prev.filter((item) => item !== id)))}
                             onOpen={(id) => {
-                                setLocalActiveSessionId(id);
+                                setActiveSessionId(id);
                                 setView("chat");
                             }}
                             onDelete={(id) => setDeleteChatIds([id])}
@@ -640,137 +559,6 @@ function AssistantModeSwitch({ mode, theme, onChange }: { mode: AssistantMode; t
     );
 }
 
-function SettingTitle({ children, color }: { children: string; color: string }) {
-    return (
-        <div className="text-xs font-medium" style={{ color }}>
-            {children}
-        </div>
-    );
-}
-
-function qualityLabel(value: string) {
-    return ({ auto: "自动", high: "高", medium: "中", low: "低" } as Record<string, string>)[value] || value;
-}
-
-function AssistantMessages({
-    messages,
-    nodes,
-    connections,
-    onRetry,
-    onInsertImage,
-    onInsertText,
-    onApplyAssistantActions,
-    onCancelAssistantActions,
-}: {
-    messages: CanvasAssistantMessage[];
-    nodes: CanvasNodeData[];
-    connections: CanvasConnection[];
-    onRetry: (message: CanvasAssistantMessage) => void;
-    onInsertImage: (image: CanvasAssistantImage) => void;
-    onInsertText: (text: string) => void;
-    onApplyAssistantActions: (message: CanvasAssistantMessage) => void;
-    onCancelAssistantActions: (message: CanvasAssistantMessage) => void;
-}) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
-
-    return (
-        <>
-            {messages.map((message) => (
-                <div key={message.id} className={cn("flex flex-col gap-2", message.role === "user" ? "items-end" : "items-start")}>
-                    <div
-                        className="max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm leading-6"
-                        style={message.role === "user" ? { background: theme.toolbar.activeBg, color: theme.toolbar.activeText } : { background: theme.node.fill, color: theme.node.text }}
-                    >
-                        {message.role === "assistant" ? (
-                            <div className="mb-1 flex items-center gap-1.5 text-xs opacity-60">
-                                <MessageSquare className="size-3.5" />
-                                回答
-                            </div>
-                        ) : null}
-                        {message.text}
-                    </div>
-                    {message.references?.length ? <MessageReferences message={message} /> : null}
-                    {message.assistantActions?.length ? <AssistantActionPreviewCard message={message} nodes={nodes} connections={connections} onApply={() => onApplyAssistantActions(message)} onCancel={() => onCancelAssistantActions(message)} /> : null}
-                    {message.isLoading ? <ImageGenerationPending compact label={message.mode === "image" ? "正在生成图片" : "正在回答"} className="w-[250px] rounded-2xl border" /> : null}
-                    {message.role === "assistant" && !message.isLoading ? (
-                        <div className="flex gap-1">
-                            <Button shape="circle" size="small" style={{ borderColor: theme.node.stroke }} icon={<RotateCcw className="size-3.5" />} onClick={() => onRetry(message)} title="重试" />
-                            {!message.images?.length ? <Button shape="circle" size="small" style={{ borderColor: theme.node.stroke }} icon={<Plus className="size-3.5" />} onClick={() => onInsertText(message.text)} title="插入画布" /> : null}
-                        </div>
-                    ) : null}
-                    {message.images?.map((image) => (
-                        <div key={image.id} className="w-[250px] overflow-hidden rounded-2xl border" style={{ background: theme.node.panel, borderColor: theme.node.stroke }}>
-                            <img src={image.dataUrl} alt="" className="aspect-square w-full object-cover" />
-                            <Button
-                                type="text"
-                                className="!h-8 !w-full !rounded-none"
-                                style={{ borderTop: `1px solid ${theme.node.stroke}`, color: theme.node.text }}
-                                icon={<Plus className="size-3.5" />}
-                                onClick={() => onInsertImage(image)}
-                                title="插入画布"
-                            />
-                        </div>
-                    ))}
-                </div>
-            ))}
-        </>
-    );
-}
-
-function AssistantActionPreviewCard({ message, nodes, connections, onApply, onCancel }: { message: CanvasAssistantMessage; nodes: CanvasNodeData[]; connections: CanvasConnection[]; onApply: () => void; onCancel: () => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const actions = message.assistantActions || [];
-    const status = message.assistantActionStatus || "pending";
-    const validationErrors = status === "pending" ? validateAssistantCanvasActions(actions, nodes, connections) : [];
-    const missingPreviewCount = status === "pending" ? actions.filter((action) => action.kind === "write" && !action.preview).length : 0;
-    const previews = actions.flatMap((action) => (action.kind === "write" && action.preview ? [action.preview] : []));
-    const createdNodeCount = previews.reduce((count, preview) => count + (preview.createdNodes?.length || 0), 0);
-    const createdConnectionCount = previews.reduce((count, preview) => count + (preview.createdConnections?.length || 0), 0);
-    const affectedNodeIds = unique(previews.flatMap((preview) => preview.affectedNodeIds));
-    const affectedConnectionIds = unique(previews.flatMap((preview) => preview.affectedConnectionIds));
-    const reasons = actions.map((action) => action.reason).filter(Boolean);
-    const risk = [...validationErrors, ...(missingPreviewCount ? [`${missingPreviewCount} 个动作缺少预览`] : [])];
-    const canApply = status === "pending" && actions.length > 0 && risk.length === 0;
-
-    return (
-        <div className="w-[290px] rounded-2xl border p-3 text-sm" style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}>
-            <div className="mb-2 text-xs font-medium opacity-60">动作预览</div>
-            <div className="space-y-1.5 leading-5">
-                <div>
-                    <span className="opacity-60">原因：</span>
-                    {reasons.length ? reasons.join("；") : "助手建议修改画布"}
-                </div>
-                <div>
-                    <span className="opacity-60">将创建：</span>
-                    {createdNodeCount} 个节点，{createdConnectionCount} 条连线
-                </div>
-                <div>
-                    <span className="opacity-60">影响节点：</span>
-                    {affectedNodeIds.length ? affectedNodeIds.join("、") : "无"}
-                </div>
-                <div>
-                    <span className="opacity-60">影响连线：</span>
-                    {affectedConnectionIds.length ? affectedConnectionIds.join("、") : "无"}
-                </div>
-                <div style={{ color: risk.length ? "#dc2626" : theme.node.muted }}>
-                    <span className="opacity-60">风险/校验：</span>
-                    {risk.length ? unique(risk).join("；") : status === "pending" ? "校验通过，等待确认" : status === "applied" ? "已应用到画布" : "已取消"}
-                </div>
-            </div>
-            {status === "pending" ? (
-                <div className="mt-3 flex gap-2">
-                    <Button size="small" type="primary" disabled={!canApply} onClick={onApply}>
-                        应用到画布
-                    </Button>
-                    <Button size="small" onClick={onCancel}>
-                        取消
-                    </Button>
-                </div>
-            ) : null}
-        </div>
-    );
-}
-
 function AssistantHistory({
     sessions,
     activeSession,
@@ -800,43 +588,6 @@ function AssistantHistory({
                     <Button type="text" shape="circle" size="small" className="opacity-0 transition group-hover:opacity-100" icon={<Trash2 className="size-3.5" />} onClick={() => onDelete(session.id)} title="删除" />
                 </div>
             ))}
-        </div>
-    );
-}
-
-function MessageReferences({ message }: { message: CanvasAssistantMessage }) {
-    return (
-        <div className={cn("flex max-w-[88%] flex-wrap gap-2", message.role === "user" ? "justify-end" : "justify-start")}>
-            {message.references?.map((item) => (
-                <AssistantReferenceChip key={item.id} item={item} />
-            ))}
-        </div>
-    );
-}
-
-function AssistantReferenceChip({ item, onRemove }: { item: CanvasAssistantReference; onRemove?: () => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const text = (item.text || item.title).replace(/\s+/g, " ").trim().slice(0, 1) || "文";
-    return (
-        <div className="group/chip relative inline-flex h-8 max-w-[150px] shrink-0 items-center gap-1.5 rounded-lg text-sm" style={{ color: theme.node.text }}>
-            {item.dataUrl ? (
-                <img src={item.dataUrl} alt="" className="size-8 rounded-lg object-cover" />
-            ) : (
-                <span className="grid size-8 place-items-center rounded-lg border text-sm font-medium" style={{ background: theme.node.panel, borderColor: theme.node.activeStroke }}>
-                    {text}
-                </span>
-            )}
-            {onRemove ? (
-                <button
-                    type="button"
-                    className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full border opacity-0 shadow-sm transition group-hover/chip:opacity-100"
-                    style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke }}
-                    onClick={onRemove}
-                    aria-label="移除引用"
-                >
-                    <X className="size-3" />
-                </button>
-            ) : null}
         </div>
     );
 }
@@ -879,10 +630,6 @@ function buildDebugAssistantActions(nodes: CanvasNodeData[], connections: Canvas
     });
 }
 
-function unique<T>(items: T[]) {
-    return Array.from(new Set(items));
-}
-
 async function buildChatMessages(messages: CanvasAssistantMessage[]): Promise<ChatCompletionMessage[]> {
     return Promise.all(
         messages.map(async (message, index) => {
@@ -899,11 +646,6 @@ async function buildChatMessages(messages: CanvasAssistantMessage[]): Promise<Ch
             };
         }),
     );
-}
-
-function createSession(): CanvasAssistantSession {
-    const now = new Date().toISOString();
-    return { id: nanoid(), title: "新对话", messages: [], createdAt: now, updatedAt: now };
 }
 
 function updateLocalImageResultSize(localAiTaskId: string, width: number, height: number) {

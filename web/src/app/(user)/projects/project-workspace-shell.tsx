@@ -3,8 +3,8 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { CircleDot, Database, FileText, Folder, Home, ImagePlus, PanelLeftClose, PanelLeftOpen, Settings2, UserRound, Video } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { CircleDot, Database, FileText, Folder, Home, ImagePlus, LogIn, LogOut, PanelLeftClose, PanelLeftOpen, Settings2, UserRound } from "lucide-react";
 
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -34,11 +34,20 @@ export function ProjectWorkspaceShell({ children }: { children: ReactNode }) {
 }
 
 function ProjectWorkspaceSidebar({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+    const router = useRouter();
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const user = useUserStore((state) => state.user);
+    const logout = useUserStore((state) => state.clearSession);
     const userName = user?.displayName || user?.username || "本地创作者";
     const userInitial = userName.trim().slice(0, 1) || "创";
     const roleLabel = user?.role === "admin" ? "管理员" : user ? "已登录" : "未登录";
+    const handleLogout = () => {
+        logout();
+        router.replace("/login");
+    };
+    const handleLogin = () => {
+        router.push("/login");
+    };
 
     return (
         <aside className={`fixed inset-y-0 left-0 z-30 flex w-[248px] min-h-0 flex-col border-r border-slate-800 bg-[#08111a]/95 px-5 py-6 shadow-[18px_0_44px_rgba(0,0,0,0.28)] transition-transform duration-200 ${open ? "translate-x-0" : "-translate-x-full"}`}>
@@ -63,7 +72,6 @@ function ProjectWorkspaceSidebar({ open, onToggle }: { open: boolean; onToggle: 
             <nav className="mt-8 border-t border-slate-800 pt-5">
                 <ProjectWorkspaceLink icon={<Home className="size-5" />} label="项目工作台" href="/projects" />
                 <ProjectWorkspaceLink icon={<ImagePlus className="size-5" />} label="生图工作台" href="/image" />
-                <ProjectWorkspaceLink icon={<Video className="size-5" />} label="视频创作台" href="/video" />
                 <ProjectWorkspaceLink icon={<FileText className="size-5" />} label="提示词库" href="/prompts" />
                 <ProjectWorkspaceLink icon={<Folder className="size-5" />} label="我的素材" href="/assets" />
             </nav>
@@ -107,6 +115,17 @@ function ProjectWorkspaceSidebar({ open, onToggle }: { open: boolean; onToggle: 
                             </div>
                         </div>
                     </div>
+                    {user ? (
+                        <button type="button" className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-slate-800 bg-black/15 text-sm font-medium text-slate-400 transition hover:border-rose-400/40 hover:bg-rose-400/10 hover:text-rose-100" onClick={handleLogout}>
+                            <LogOut className="size-4" />
+                            <span>退出登录</span>
+                        </button>
+                    ) : (
+                        <button type="button" className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-slate-800 bg-black/15 text-sm font-medium text-slate-400 transition hover:border-cyan-400/45 hover:bg-cyan-400/10 hover:text-cyan-100" onClick={handleLogin}>
+                            <LogIn className="size-4" />
+                            <span>登录</span>
+                        </button>
+                    )}
                 </div>
             </div>
         </aside>

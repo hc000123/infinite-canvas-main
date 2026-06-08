@@ -1,0 +1,522 @@
+<style>
+  .stage {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 14% 9%, rgba(19, 194, 205, 0.12), transparent 28%),
+      linear-gradient(135deg, #0f1721 0%, #070b10 72%, #0b1018 100%);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.34);
+    color: #eff8fa;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .mock {
+    min-height: 790px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 410px;
+  }
+
+  .main {
+    padding: 24px 26px;
+    min-width: 0;
+  }
+
+  .drawer {
+    border-left: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(1, 7, 12, 0.26);
+    padding: 22px 18px;
+  }
+
+  .crumb {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 12px;
+    margin-bottom: 7px;
+  }
+
+  .title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .title {
+    margin: 0;
+    font-size: 25px;
+    line-height: 1.18;
+    letter-spacing: 0;
+  }
+
+  .subline {
+    color: rgba(239, 248, 250, 0.58);
+    font-size: 13px;
+    margin-top: 8px;
+  }
+
+  .button {
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(255, 255, 255, 0.045);
+    color: rgba(239, 248, 250, 0.78);
+    padding: 0 11px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .button.primary {
+    border-color: rgba(20, 200, 212, 0.5);
+    background: linear-gradient(135deg, #18c8d6 0%, #0f96aa 100%);
+    color: #05262b;
+    font-weight: 760;
+  }
+
+  .module-tabs,
+  .filters {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .module-tabs {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.13);
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+  }
+
+  .tab,
+  .filter {
+    height: 30px;
+    border-radius: 8px;
+    padding: 0 11px;
+    display: flex;
+    align-items: center;
+    color: rgba(239, 248, 250, 0.62);
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    font-size: 12px;
+  }
+
+  .tab.active,
+  .filter.active {
+    color: #dfffff;
+    border-color: rgba(20, 200, 212, 0.38);
+    background: rgba(20, 200, 212, 0.11);
+  }
+
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .metric {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    border-radius: 10px;
+    padding: 11px;
+  }
+
+  .metric span {
+    display: block;
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+  }
+
+  .metric strong {
+    display: block;
+    margin-top: 5px;
+    font-size: 20px;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+
+  .toolbar strong {
+    font-size: 15px;
+  }
+
+  .shot-list {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    border-radius: 11px;
+    overflow: hidden;
+  }
+
+  .list-head,
+  .row {
+    display: grid;
+    grid-template-columns: 56px minmax(170px, 1fr) 86px 92px 92px 86px 120px;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .list-head {
+    min-height: 38px;
+    padding: 0 14px;
+    color: rgba(239, 248, 250, 0.42);
+    font-size: 11px;
+    background: rgba(1, 7, 12, 0.22);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  }
+
+  .row {
+    min-height: 58px;
+    padding: 0 14px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    font-size: 12px;
+  }
+
+  .row:last-child {
+    border-bottom: 0;
+  }
+
+  .row.active {
+    background: rgba(20, 200, 212, 0.1);
+    box-shadow: inset 3px 0 0 #18c8d6;
+  }
+
+  .shot-title strong {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 3px;
+  }
+
+  .shot-title span {
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+  }
+
+  .badge {
+    justify-self: start;
+    border-radius: 7px;
+    padding: 4px 7px;
+    font-size: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    color: rgba(239, 248, 250, 0.62);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .badge.ok {
+    border-color: rgba(33, 210, 127, 0.34);
+    color: #68e29f;
+    background: rgba(33, 210, 127, 0.08);
+  }
+
+  .badge.work {
+    border-color: rgba(20, 200, 212, 0.38);
+    color: #67eef4;
+    background: rgba(20, 200, 212, 0.1);
+  }
+
+  .badge.warn {
+    border-color: rgba(238, 177, 70, 0.36);
+    color: #f1be63;
+    background: rgba(238, 177, 70, 0.08);
+  }
+
+  .actions {
+    display: flex;
+    gap: 7px;
+    justify-content: flex-end;
+  }
+
+  .row-button {
+    height: 27px;
+    border-radius: 7px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(239, 248, 250, 0.78);
+    font-size: 11px;
+    padding: 0 9px;
+  }
+
+  .row.active .row-button.primary-soft {
+    border-color: rgba(20, 200, 212, 0.42);
+    background: rgba(20, 200, 212, 0.13);
+    color: #dfffff;
+  }
+
+  .drawer-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 14px;
+  }
+
+  .drawer-head strong {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 5px;
+  }
+
+  .drawer-head span {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 11px;
+  }
+
+  .drawer-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .drawer-tab {
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    color: rgba(239, 248, 250, 0.62);
+    font-size: 12px;
+  }
+
+  .drawer-tab.active {
+    color: #dfffff;
+    border-color: rgba(20, 200, 212, 0.38);
+    background: rgba(20, 200, 212, 0.11);
+  }
+
+  .field {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.032);
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  .field label {
+    display: block;
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+    margin-bottom: 6px;
+  }
+
+  .field div,
+  .prompt-box {
+    color: rgba(239, 248, 250, 0.76);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .prompt-box {
+    min-height: 158px;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 9px;
+    background: rgba(1, 7, 12, 0.28);
+    padding: 10px;
+  }
+
+  .mini-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .asset-chip {
+    min-height: 48px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    padding: 8px;
+    font-size: 10px;
+    color: rgba(239, 248, 250, 0.68);
+  }
+
+  .drawer-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .note {
+    margin-top: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: #f8fafc;
+    color: #172033;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+</style>
+
+<h2>分镜提示词提取页面</h2>
+<p class="subtitle">主页面用镜头长表展示提取状态；右侧抽屉处理单条镜头的提示词、引用资产和承接配置。</p>
+
+<div class="stage">
+  <div class="mock">
+    <main class="main">
+      <div class="crumb">霓虹之下 / 第 05 集 / 分镜提示词</div>
+      <div class="title-row">
+        <div>
+          <h1 class="title">真相浮出 · 分镜提示词提取</h1>
+          <div class="subline">从剧本、导演分析和资产提取结果生成逐镜 Seedance 动态提示词，确认后进入画布承接。</div>
+        </div>
+        <button class="button primary">批量提取提示词</button>
+      </div>
+
+      <div class="module-tabs">
+        <div class="tab">剧本</div>
+        <div class="tab">导演分析</div>
+        <div class="tab">资产提取</div>
+        <div class="tab active">分镜提示词</div>
+        <div class="tab">画布承接</div>
+      </div>
+
+      <div class="summary">
+        <div class="metric"><span>镜头总数</span><strong>18</strong></div>
+        <div class="metric"><span>已确认</span><strong>9</strong></div>
+        <div class="metric"><span>待审核</span><strong>6</strong></div>
+        <div class="metric"><span>需修改</span><strong>2</strong></div>
+        <div class="metric"><span>缺资产</span><strong>1</strong></div>
+      </div>
+
+      <div class="toolbar">
+        <strong>镜头提示词清单</strong>
+        <div class="filters">
+          <div class="filter active">全部</div>
+          <div class="filter">待审核</div>
+          <div class="filter">需修改</div>
+          <div class="filter">缺资产</div>
+          <div class="filter">已确认</div>
+        </div>
+      </div>
+
+      <div class="shot-list">
+        <div class="list-head">
+          <div>镜头</div>
+          <div>镜头内容</div>
+          <div>提示词</div>
+          <div>引用资产</div>
+          <div>视频配置</div>
+          <div>状态</div>
+          <div></div>
+        </div>
+
+        <div class="row">
+          <div>01</div>
+          <div class="shot-title"><strong>雨夜街口，女主停步</strong><span>远景 / 冷色雨夜 / 建立空间</span></div>
+          <div><span class="badge ok">已提取</span></div>
+          <div>3 项</div>
+          <div>9:16 / 6s</div>
+          <div><span class="badge ok">已确认</span></div>
+          <div class="actions"><button class="row-button">查看</button></div>
+        </div>
+
+        <div class="row">
+          <div>02</div>
+          <div class="shot-title"><strong>反派车辆驶入巷口</strong><span>中远景 / 车灯背光 / 压迫感</span></div>
+          <div><span class="badge ok">已提取</span></div>
+          <div>2 项</div>
+          <div>9:16 / 6s</div>
+          <div><span class="badge ok">已确认</span></div>
+          <div class="actions"><button class="row-button">查看</button></div>
+        </div>
+
+        <div class="row active">
+          <div>03</div>
+          <div class="shot-title"><strong>女主回头，路灯闪烁</strong><span>近景 / 惊觉 / 轻微推镜</span></div>
+          <div><span class="badge work">待审核</span></div>
+          <div>3 项</div>
+          <div>9:16 / 6s</div>
+          <div><span class="badge work">处理中</span></div>
+          <div class="actions"><button class="row-button primary-soft">审核</button><button class="row-button">重提取</button></div>
+        </div>
+
+        <div class="row">
+          <div>04</div>
+          <div class="shot-title"><strong>暗巷追击，镜头跟拍</strong><span>运动镜头 / 动作密集 / 需拆分</span></div>
+          <div><span class="badge warn">需修改</span></div>
+          <div>2 项</div>
+          <div>9:16 / 5s</div>
+          <div><span class="badge warn">风险</span></div>
+          <div class="actions"><button class="row-button">修改</button></div>
+        </div>
+
+        <div class="row">
+          <div>05</div>
+          <div class="shot-title"><strong>车灯扫过墙面证据</strong><span>特写 / 证据揭示 / 强反光</span></div>
+          <div><span class="badge warn">缺资产</span></div>
+          <div>缺 1</div>
+          <div>未配置</div>
+          <div><span class="badge warn">待补</span></div>
+          <div class="actions"><button class="row-button">补资产</button></div>
+        </div>
+
+        <div class="row">
+          <div>06</div>
+          <div class="shot-title"><strong>女主藏入楼梯间</strong><span>半身 / 暗处躲避 / 呼吸紧张</span></div>
+          <div><span class="badge work">待审核</span></div>
+          <div>2 项</div>
+          <div>9:16 / 6s</div>
+          <div><span class="badge work">待审</span></div>
+          <div class="actions"><button class="row-button">审核</button></div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="drawer">
+      <div class="drawer-head">
+        <div>
+          <strong>镜头 03 · 女主回头</strong>
+          <span>待审核 · 引用 3 个资产 · Seedance 2.0</span>
+        </div>
+        <span class="badge work">处理中</span>
+      </div>
+
+      <div class="drawer-tabs">
+        <div class="drawer-tab active">提示词</div>
+        <div class="drawer-tab">引用资产</div>
+        <div class="drawer-tab">视频配置</div>
+      </div>
+
+      <div class="field">
+        <label>镜头依据</label>
+        <div>女主听见身后车辆急停，缓慢回头，路灯闪烁照亮她紧张的表情。</div>
+      </div>
+
+      <div class="field">
+        <label>动态提示词草案</label>
+        <div class="prompt-box">雨夜城市暗巷近景，年轻女性主角停下脚步缓慢回头，湿润发丝贴在脸侧，路灯忽明忽暗，远处车灯形成冷色背光，镜头轻微向前推进，强调她从疑惑转为警觉的表情变化，写实短剧电影感，低饱和冷色调，雨滴和地面积水反光清晰。</div>
+      </div>
+
+      <div class="field">
+        <label>引用资产</label>
+        <div class="mini-grid">
+          <div class="asset-chip">角色：林澈 · 已绑定</div>
+          <div class="asset-chip">场景：暗巷街景 · 已绑定</div>
+          <div class="asset-chip">道具：手机 · 已绑定</div>
+          <div class="asset-chip">风格：冷色雨夜 · 项目设定</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>审核建议</label>
+        <div>当前提示词动作明确，可以确认。若希望更强悬疑感，可增加“背景车辆轮廓不完全露出”。</div>
+      </div>
+
+      <div class="drawer-actions">
+        <button class="button">重提取</button>
+        <button class="button">编辑提示词</button>
+        <button class="button primary">确认此镜头</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="note">
+  设计规则：分镜提示词主页面只展示镜头清单和状态，不直接铺开长提示词。点击某个镜头后，在右侧抽屉查看提示词草案、引用资产、视频配置和审核建议。确认后的镜头可进入画布承接；缺资产的镜头回到资产提取模块处理。
+</div>

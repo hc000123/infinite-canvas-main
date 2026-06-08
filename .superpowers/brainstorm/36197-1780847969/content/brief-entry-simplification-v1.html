@@ -1,0 +1,463 @@
+<style>
+  .stage {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 14% 9%, rgba(19, 194, 205, 0.12), transparent 28%),
+      linear-gradient(135deg, #0f1721 0%, #070b10 72%, #0b1018 100%);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.34);
+    color: #eff8fa;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .mock {
+    min-height: 780px;
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr) 360px;
+  }
+
+  .left,
+  .right {
+    background: rgba(1, 7, 12, 0.24);
+  }
+
+  .left {
+    border-right: 1px solid rgba(148, 163, 184, 0.16);
+    padding: 22px 16px;
+  }
+
+  .right {
+    border-left: 1px solid rgba(148, 163, 184, 0.16);
+    padding: 22px 16px;
+  }
+
+  .main {
+    padding: 24px 26px;
+    min-width: 0;
+  }
+
+  .crumb {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 12px;
+    margin-bottom: 7px;
+  }
+
+  .title {
+    margin: 0;
+    font-size: 25px;
+    line-height: 1.18;
+    letter-spacing: 0;
+  }
+
+  .subline {
+    color: rgba(239, 248, 250, 0.58);
+    font-size: 13px;
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  .nav-item {
+    min-height: 40px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0 10px;
+    color: rgba(239, 248, 250, 0.62);
+    font-size: 13px;
+    margin-bottom: 8px;
+    border: 1px solid transparent;
+  }
+
+  .nav-item.active {
+    color: #dfffff;
+    border-color: rgba(20, 200, 212, 0.28);
+    background: rgba(20, 200, 212, 0.12);
+  }
+
+  .nav-item.muted {
+    opacity: 0.58;
+  }
+
+  .badge {
+    border-radius: 7px;
+    padding: 4px 7px;
+    font-size: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    color: rgba(239, 248, 250, 0.62);
+    background: rgba(255, 255, 255, 0.035);
+    white-space: nowrap;
+  }
+
+  .badge.ok {
+    border-color: rgba(33, 210, 127, 0.34);
+    color: #68e29f;
+    background: rgba(33, 210, 127, 0.08);
+  }
+
+  .badge.work {
+    border-color: rgba(20, 200, 212, 0.38);
+    color: #67eef4;
+    background: rgba(20, 200, 212, 0.1);
+  }
+
+  .badge.warn {
+    border-color: rgba(238, 177, 70, 0.36);
+    color: #f1be63;
+    background: rgba(238, 177, 70, 0.08);
+  }
+
+  .button {
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(255, 255, 255, 0.045);
+    color: rgba(239, 248, 250, 0.78);
+    padding: 0 11px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .button.primary {
+    border-color: rgba(20, 200, 212, 0.5);
+    background: linear-gradient(135deg, #18c8d6 0%, #0f96aa 100%);
+    color: #05262b;
+    font-weight: 760;
+  }
+
+  .top-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .tabs,
+  .filters {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .tab,
+  .filter {
+    height: 30px;
+    border-radius: 8px;
+    padding: 0 11px;
+    display: flex;
+    align-items: center;
+    color: rgba(239, 248, 250, 0.62);
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    font-size: 12px;
+  }
+
+  .tab.active,
+  .filter.active {
+    color: #dfffff;
+    border-color: rgba(20, 200, 212, 0.38);
+    background: rgba(20, 200, 212, 0.11);
+  }
+
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .metric {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    border-radius: 10px;
+    padding: 11px;
+  }
+
+  .metric span {
+    display: block;
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+  }
+
+  .metric strong {
+    display: block;
+    margin-top: 5px;
+    font-size: 20px;
+  }
+
+  .brief-table {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    border-radius: 11px;
+    overflow: hidden;
+  }
+
+  .thead,
+  .row {
+    display: grid;
+    grid-template-columns: 84px minmax(190px, 1fr) 92px 92px 96px 126px;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .thead {
+    min-height: 38px;
+    padding: 0 14px;
+    color: rgba(239, 248, 250, 0.42);
+    font-size: 11px;
+    background: rgba(1, 7, 12, 0.22);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  }
+
+  .row {
+    min-height: 62px;
+    padding: 0 14px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    font-size: 12px;
+  }
+
+  .row:last-child {
+    border-bottom: 0;
+  }
+
+  .row.active {
+    background: rgba(20, 200, 212, 0.1);
+    box-shadow: inset 3px 0 0 #18c8d6;
+  }
+
+  .brief-title strong {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 3px;
+  }
+
+  .brief-title span {
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+  }
+
+  .actions {
+    display: flex;
+    gap: 7px;
+    justify-content: flex-end;
+  }
+
+  .row-button {
+    height: 27px;
+    border-radius: 7px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(239, 248, 250, 0.78);
+    font-size: 11px;
+    padding: 0 9px;
+  }
+
+  .row.active .row-button.primary-soft {
+    border-color: rgba(20, 200, 212, 0.42);
+    background: rgba(20, 200, 212, 0.13);
+    color: #dfffff;
+  }
+
+  .right-section {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+  }
+
+  .right-section:last-child {
+    border-bottom: 0;
+    margin-bottom: 0;
+  }
+
+  .right-section h3 {
+    margin: 0 0 10px;
+    font-size: 14px;
+  }
+
+  .rule {
+    border: 1px solid rgba(148, 163, 184, 0.13);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.032);
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+
+  .rule strong {
+    display: block;
+    font-size: 12px;
+    margin-bottom: 5px;
+  }
+
+  .rule span {
+    color: rgba(239, 248, 250, 0.48);
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .note {
+    margin-top: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: #f8fafc;
+    color: #172033;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+</style>
+
+<h2>Brief 入口精简方案</h2>
+<p class="subtitle">Brief 从“到处都能新增”改成“Agent 草案审核台”。只保留一个主入口，其他页面只显示关联状态和跳转动作。</p>
+
+<div class="stage">
+  <div class="mock">
+    <aside class="left">
+      <div class="crumb">第 05 集 / 生产模块</div>
+      <h1 class="title">单集流程</h1>
+      <div class="subline">左侧只保留生产模块，不再单独把 Brief 散落成多个入口。</div>
+
+      <div style="height:18px"></div>
+      <div class="nav-item">剧本 <span class="badge ok">已导入</span></div>
+      <div class="nav-item">导演分析 <span class="badge ok">已确认</span></div>
+      <div class="nav-item">资产提取 <span class="badge work">12 项</span></div>
+      <div class="nav-item active">生图需求 <span class="badge warn">4 待审</span></div>
+      <div class="nav-item">分镜生产包 <span class="badge">11 包</span></div>
+      <div class="nav-item">画布承接 <span class="badge">待导入</span></div>
+
+      <div style="height:24px"></div>
+      <div class="nav-item muted">设定库条目 <span class="badge">只显示 Brief 状态</span></div>
+      <div class="nav-item muted">资产列表 <span class="badge">只显示绑定结果</span></div>
+      <div class="nav-item muted">画布节点 <span class="badge">只引用结果</span></div>
+    </aside>
+
+    <main class="main">
+      <div class="crumb">霓虹之下 / 第 05 集</div>
+      <div class="top-actions">
+        <div>
+          <h1 class="title">生图需求审核台</h1>
+          <div class="subline">Agent 生成 Brief 草案，用户审核后生成参考图。这里是唯一主入口。</div>
+        </div>
+        <button class="button primary">运行 Brief Agent</button>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active">待审核</div>
+        <div class="tab">待补素材</div>
+        <div class="tab">可生成</div>
+        <div class="tab">已生成</div>
+        <div class="tab">已回流</div>
+      </div>
+
+      <div style="height:14px"></div>
+      <div class="summary">
+        <div class="metric"><span>Agent 草案</span><strong>12</strong></div>
+        <div class="metric"><span>待审核</span><strong>4</strong></div>
+        <div class="metric"><span>可生成</span><strong>5</strong></div>
+        <div class="metric"><span>已生成</span><strong>3</strong></div>
+        <div class="metric"><span>已回流</span><strong>2</strong></div>
+      </div>
+
+      <div class="filters">
+        <div class="filter active">全部</div>
+        <div class="filter">角色图</div>
+        <div class="filter">场景图</div>
+        <div class="filter">道具图</div>
+        <div class="filter">氛围图</div>
+      </div>
+
+      <div style="height:10px"></div>
+      <div class="brief-table">
+        <div class="thead">
+          <div>类型</div>
+          <div>Brief 草案</div>
+          <div>来源</div>
+          <div>参考</div>
+          <div>状态</div>
+          <div></div>
+        </div>
+
+        <div class="row active">
+          <div>场景图</div>
+          <div class="brief-title"><strong>暗巷街景</strong><span>雨夜、旧楼后门、车灯背光。</span></div>
+          <div>资产提取</div>
+          <div>匹配 4</div>
+          <div><span class="badge warn">待审核</span></div>
+          <div class="actions"><button class="row-button primary-soft">审核</button><button class="row-button">生成</button></div>
+        </div>
+
+        <div class="row">
+          <div>角色图</div>
+          <div class="brief-title"><strong>林澈雨夜造型</strong><span>湿发、深色外套、紧张表情。</span></div>
+          <div>Agent</div>
+          <div>2 图</div>
+          <div><span class="badge work">可生成</span></div>
+          <div class="actions"><button class="row-button">编辑</button><button class="row-button">生成</button></div>
+        </div>
+
+        <div class="row">
+          <div>道具图</div>
+          <div class="brief-title"><strong>带血袖扣</strong><span>关键证物，需保持特写一致。</span></div>
+          <div>资产提取</div>
+          <div>1 图</div>
+          <div><span class="badge ok">已生成</span></div>
+          <div class="actions"><button class="row-button">查看</button><button class="row-button">设主图</button></div>
+        </div>
+
+        <div class="row">
+          <div>氛围图</div>
+          <div class="brief-title"><strong>雨夜冷色悬疑氛围</strong><span>低饱和、背光、湿润反光。</span></div>
+          <div>导演分析</div>
+          <div>缺</div>
+          <div><span class="badge warn">待补素材</span></div>
+          <div class="actions"><button class="row-button">补素材</button></div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="right">
+      <section class="right-section">
+        <h3>入口收口规则</h3>
+        <div class="rule">
+          <strong>保留一个主入口</strong>
+          <span>单集页只保留“生图需求 / Brief 审核台”，承接所有 Agent 产出的 Brief 草案。</span>
+        </div>
+        <div class="rule">
+          <strong>其他地方不再新增 Brief</strong>
+          <span>资产提取、设定库、分镜包只显示“已有 Brief / 打开 Brief / 创建需求”，不展示完整 Brief 表单。</span>
+        </div>
+        <div class="rule">
+          <strong>人工不是主路径</strong>
+          <span>手动新增 Brief 放到更多菜单，默认通过 Agent 草案进入审核。</span>
+        </div>
+      </section>
+
+      <section class="right-section">
+        <h3>调用关系</h3>
+        <div class="rule">
+          <strong>资产提取</strong>
+          <span>写入生图需求，触发 Brief Agent 生成草案。</span>
+        </div>
+        <div class="rule">
+          <strong>设定库</strong>
+          <span>作为上下文和回流对象，不再作为单独 Brief 工作台入口。</span>
+        </div>
+        <div class="rule">
+          <strong>分镜生产包</strong>
+          <span>发现缺参考图时跳转到对应生图需求。</span>
+        </div>
+        <div class="rule">
+          <strong>画布</strong>
+          <span>只引用已生成主参考图，不再承担 Brief 编写。</span>
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<div class="note">
+  建议：把“生图 Brief 工作台”改名为“生图需求审核台”或“美术 Brief 审核台”。主路径是 Agent 生成草案 -> 用户审核 -> 生成参考图 -> 回流项目资产库。项目页、资产提取、设定库、分镜和画布不再各自放完整 Brief 入口，只保留状态和跳转。
+</div>

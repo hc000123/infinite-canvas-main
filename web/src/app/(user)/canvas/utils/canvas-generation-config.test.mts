@@ -65,7 +65,7 @@ test("builds video generation config through provider-aware video config", () =>
             position: { x: 0, y: 0 },
             width: 100,
             height: 100,
-            metadata: { provider: "volcengine-ark", model: "node-endpoint", seconds: "20", count: 2 },
+            metadata: { provider: "volcengine-ark", model: "node-endpoint", seconds: "20", generateAudio: "true", count: 2 },
         },
         "video",
         baseConfig,
@@ -75,6 +75,7 @@ test("builds video generation config through provider-aware video config", () =>
     assert.equal(config.model, "node-endpoint");
     assert.equal(config.seedanceModel, "node-endpoint");
     assert.equal(config.videoSeconds, "15");
+    assert.equal(config.videoGenerateAudio, "true");
     assert.equal(config.count, "2");
 
     const localConfig = buildGenerationConfig(
@@ -94,6 +95,25 @@ test("builds video generation config through provider-aware video config", () =>
     assert.equal(localConfig.videoProtocol, "openai");
     assert.equal(localConfig.model, "node-endpoint");
     assert.equal(localConfig.videoSeconds, "20");
+});
+
+test("builds video generation config from duration metadata when seconds is missing", () => {
+    const config = buildGenerationConfig(
+        { ...baseConfig, channelMode: "remote" },
+        {
+            id: "video-config",
+            type: "config",
+            title: "配置",
+            position: { x: 0, y: 0 },
+            width: 100,
+            height: 100,
+            metadata: { provider: "volcengine-ark", model: "node-endpoint", duration: "9" },
+        },
+        "video",
+        baseConfig,
+    );
+
+    assert.equal(config.videoSeconds, "9");
 });
 
 test("builds retry config from saved image generation metadata", () => {

@@ -21,6 +21,7 @@ type CanvasVideoDefaultKey =
 export function buildCanvasVideoConfig(config: AiConfig, metadata?: CanvasNodeMetadata): AiConfig {
     const provider = resolveCanvasVideoProvider(config, metadata);
     const model = resolveCanvasVideoModel(config, provider, metadata);
+    const seconds = normalizeCanvasVideoSeconds(metadata?.seconds || metadata?.duration || config.videoSeconds, provider);
     return {
         ...config,
         videoProtocol: provider,
@@ -28,9 +29,9 @@ export function buildCanvasVideoConfig(config: AiConfig, metadata?: CanvasNodeMe
         videoModel: provider === "openai" ? model : config.videoModel,
         seedanceModel: provider === "volcengine-ark" ? model : config.seedanceModel,
         size: metadata?.size || config.size,
-        videoSeconds: normalizeCanvasVideoSeconds(metadata?.seconds || config.videoSeconds, provider),
+        videoSeconds: seconds,
         vquality: metadata?.vquality || config.vquality,
-        videoGenerateAudio: metadata?.generateAudio || config.videoGenerateAudio,
+        videoGenerateAudio: metadata?.generateAudio || "false",
         videoWatermark: metadata?.watermark || config.videoWatermark,
         videoSeed: metadata?.seed || config.videoSeed,
         videoPromptReviewEnabled: metadata?.videoPromptReviewEnabled || config.videoPromptReviewEnabled || "true",
@@ -52,14 +53,16 @@ export function buildCanvasVideoProviderPatch(config: AiConfig, provider: Canvas
 
 export function buildCanvasVideoModePatch(config: AiConfig): Partial<CanvasNodeMetadata> {
     const provider = resolveCanvasVideoProvider(config);
+    const seconds = normalizeCanvasVideoSeconds(config.videoSeconds, provider);
     return {
         generationMode: "video",
         provider,
         model: resolveCanvasVideoModel(config, provider),
         size: config.size,
-        seconds: normalizeCanvasVideoSeconds(config.videoSeconds, provider),
+        seconds,
+        duration: seconds,
         vquality: config.vquality,
-        generateAudio: config.videoGenerateAudio,
+        generateAudio: "false",
         watermark: config.videoWatermark,
         seed: config.videoSeed,
         videoPromptReviewEnabled: config.videoPromptReviewEnabled || "true",
@@ -84,7 +87,7 @@ export function buildCanvasVideoDefaultsPatch(config: AiConfig, metadata: Partia
         }
     }
     if (metadata.size) patch.size = metadata.size;
-    if (metadata.seconds) patch.videoSeconds = normalizeCanvasVideoSeconds(metadata.seconds, provider);
+    if (metadata.seconds || metadata.duration) patch.videoSeconds = normalizeCanvasVideoSeconds(metadata.seconds || metadata.duration || "", provider);
     if (metadata.vquality) patch.vquality = metadata.vquality;
     if (metadata.generateAudio) patch.videoGenerateAudio = metadata.generateAudio;
     if (metadata.watermark) patch.videoWatermark = metadata.watermark;

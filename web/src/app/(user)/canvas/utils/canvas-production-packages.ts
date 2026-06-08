@@ -38,6 +38,27 @@ export type CanvasProductionPackageSummary = {
     shotIds: string[];
 };
 
+export type CanvasProductionPackageSeed = {
+    id: string;
+    label?: string;
+    title: string;
+    sceneName?: string;
+    shotRangeLabel?: string;
+    duration?: number;
+    status?: CanvasProductionPackageSummary["status"];
+};
+
+export function buildCanvasFallbackProductionPackages(canvasId: string, title: string): CanvasProductionPackageSeed[] {
+    return Array.from({ length: 3 }, (_, index) => ({
+        id: `${canvasId}:package:${index + 1}`,
+        label: `P${String(index + 1).padStart(2, "0")}`,
+        title: `${title} · 生产包 ${index + 1}`,
+        sceneName: title,
+        shotRangeLabel: "待导入",
+        status: "pending",
+    }));
+}
+
 export function getNodeProductionPackageId(node?: CanvasNodeData | null) {
     const metadata = node?.metadata;
     return explicitNodeProductionPackageId(node) || fallbackNodeProductionPackageId(node);
@@ -68,34 +89,37 @@ export function productionPackageRoleLabel(role: CanvasProductionPackageRole) {
     return labels[role];
 }
 
-export function buildCanvasProductionPackages({ shotGroups, tableShots, nodes }: { shotGroups: ShotGroup[]; tableShots: StoryboardTableShot[]; nodes: CanvasNodeData[] }): CanvasProductionPackageSummary[] {
+export function buildCanvasProductionPackages({ shotGroups, tableShots, nodes, fallbackPackages = [] }: { shotGroups: ShotGroup[]; tableShots: StoryboardTableShot[]; nodes: CanvasNodeData[]; fallbackPackages?: CanvasProductionPackageSeed[] }): CanvasProductionPackageSummary[] {
     const tableShotById = new Map(tableShots.map((shot) => [shot.id, shot]));
     const packageIds = new Set(shotGroups.map((group) => group.id));
+    const seedById = new Map(fallbackPackages.map((item) => [item.id, item]));
     if (!shotGroups.length) tableShots.forEach((shot) => packageIds.add(shot.id));
     nodes.forEach((node) => {
         const packageId = explicitNodeProductionPackageId(node) || (!shotGroups.length ? fallbackNodeProductionPackageId(node) : "");
         if (packageId) packageIds.add(packageId);
     });
+    if (!packageIds.size) fallbackPackages.forEach((item) => packageIds.add(item.id));
 
     const packages = Array.from(packageIds).map((id, index) => {
+        const seed = seedById.get(id);
         const group = shotGroups.find((item) => item.id === id);
         const relatedNodes = nodes.filter((node) => nodeMatchesProductionPackage(node, id));
         const fallbackShot = tableShotById.get(id);
         const shots = group?.shotIds.map((shotId) => tableShotById.get(shotId)).filter((shot): shot is StoryboardTableShot => Boolean(shot)) || (fallbackShot ? [fallbackShot] : []);
-        const label = group?.id ? productionPackageLabel(index) : fallbackPackageLabel(index, id);
+        const label = seed?.label || (group?.id ? productionPackageLabel(index) : fallbackPackageLabel(index, id));
         const versions = buildProductionVideoVersions(id, relatedNodes);
         const currentVersion = versions.find((version) => version.isCurrent);
         const configNode = relatedNodes.find((node) => node.type === "config");
-        const title = group?.sceneName || shots[0]?.sceneName || configNode?.title || relatedNodes[0]?.title || "未命名生产包";
-        const status = resolvePackageStatus(group, versions, shots);
+        const title = group?.sceneName || shots[0]?.sceneName || configNode?.title || relatedNodes[0]?.title || seed?.title || "未命名生产包";
+        const status = versions.length ? resolvePackageStatus(group, versions, shots) : seed?.status || resolvePackageStatus(group, versions, shots);
         const shotOrders = shots.map((shot) => shot.order);
         return {
             id,
             label,
             title,
-            sceneName: group?.sceneName || shots[0]?.sceneName || "未命名段落",
-            shotRangeLabel: shotOrders.length ? `${Math.min(...shotOrders)}-${Math.max(...shotOrders)}` : "-",
-            duration: group?.totalDuration || versions.reduce((total, version) => total + parseDurationNumber(version.duration), 0),
+            sceneName: group?.sceneName || shots[0]?.sceneName || seed?.sceneName || "项目画布",
+            shotRangeLabel: shotOrders.length ? `${Math.min(...shotOrders)}-${Math.max(...shotOrders)}` : seed?.shotRangeLabel || "-",
+            duration: group?.totalDuration || seed?.duration || versions.reduce((total, version) => total + parseDurationNumber(version.duration), 0),
             status,
             statusLabel: packageStatusLabel(status, versions),
             nodeIds: relatedNodes.map((node) => node.id),
@@ -141,7 +165,7 @@ export function buildNextProductionVideoVersionMetadata(nodes: CanvasNodeData[],
         productionVideoVersionNumber: versionNumber,
         productionVideoVersionCreatedAt: createdAt,
         productionVideoVersionHidden: false,
-        isCurrentProductionVersion: true,
+        isCurrentProductionVersion: false,
         usePreviousPackageTailFrame: sourceNode?.metadata?.usePreviousPackageTailFrame,
         previousPackageVersionId: sourceNode?.metadata?.previousPackageVersionId,
         previousPackageVersionNodeId: sourceNode?.metadata?.previousPackageVersionNodeId,

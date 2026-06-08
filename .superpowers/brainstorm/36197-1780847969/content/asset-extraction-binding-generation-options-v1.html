@@ -1,0 +1,446 @@
+<style>
+  .stage {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 14px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 14% 9%, rgba(19, 194, 205, 0.12), transparent 28%),
+      linear-gradient(135deg, #0f1721 0%, #070b10 72%, #0b1018 100%);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.34);
+    color: #eff8fa;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .mock {
+    min-height: 760px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 390px;
+  }
+
+  .main {
+    padding: 24px 26px;
+    min-width: 0;
+  }
+
+  .drawer {
+    border-left: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(1, 7, 12, 0.26);
+    padding: 22px 18px;
+  }
+
+  .crumb {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 12px;
+    margin-bottom: 7px;
+  }
+
+  .title {
+    margin: 0;
+    font-size: 25px;
+    line-height: 1.18;
+    letter-spacing: 0;
+  }
+
+  .subline {
+    color: rgba(239, 248, 250, 0.58);
+    font-size: 13px;
+    margin-top: 8px;
+    margin-bottom: 16px;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+
+  .tabs,
+  .filters {
+    display: flex;
+    gap: 8px;
+  }
+
+  .tab,
+  .filter {
+    height: 30px;
+    border-radius: 8px;
+    padding: 0 11px;
+    display: flex;
+    align-items: center;
+    color: rgba(239, 248, 250, 0.62);
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    font-size: 12px;
+  }
+
+  .tab.active,
+  .filter.active {
+    color: #dfffff;
+    border-color: rgba(20, 200, 212, 0.38);
+    background: rgba(20, 200, 212, 0.11);
+  }
+
+  .button {
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(255, 255, 255, 0.045);
+    color: rgba(239, 248, 250, 0.78);
+    padding: 0 11px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .button.primary {
+    border-color: rgba(20, 200, 212, 0.5);
+    background: linear-gradient(135deg, #18c8d6 0%, #0f96aa 100%);
+    color: #05262b;
+    font-weight: 760;
+  }
+
+  .asset-list {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    border-radius: 11px;
+    overflow: hidden;
+  }
+
+  .list-head,
+  .row {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) 86px 86px 88px 168px;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .list-head {
+    min-height: 38px;
+    padding: 0 14px;
+    color: rgba(239, 248, 250, 0.42);
+    font-size: 11px;
+    background: rgba(1, 7, 12, 0.22);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  }
+
+  .row {
+    min-height: 58px;
+    padding: 0 14px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    font-size: 12px;
+  }
+
+  .row:last-child {
+    border-bottom: 0;
+  }
+
+  .row.active {
+    background: rgba(20, 200, 212, 0.1);
+    box-shadow: inset 3px 0 0 #18c8d6;
+  }
+
+  .asset-title strong {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 3px;
+  }
+
+  .asset-title span {
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+  }
+
+  .badge {
+    justify-self: start;
+    border-radius: 7px;
+    padding: 4px 7px;
+    font-size: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    color: rgba(239, 248, 250, 0.62);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .badge.ok {
+    border-color: rgba(33, 210, 127, 0.34);
+    color: #68e29f;
+    background: rgba(33, 210, 127, 0.08);
+  }
+
+  .badge.work {
+    border-color: rgba(20, 200, 212, 0.38);
+    color: #67eef4;
+    background: rgba(20, 200, 212, 0.1);
+  }
+
+  .badge.warn {
+    border-color: rgba(238, 177, 70, 0.36);
+    color: #f1be63;
+    background: rgba(238, 177, 70, 0.08);
+  }
+
+  .actions {
+    display: flex;
+    gap: 7px;
+    justify-content: flex-end;
+  }
+
+  .row-button {
+    height: 27px;
+    border-radius: 7px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(239, 248, 250, 0.78);
+    font-size: 11px;
+    padding: 0 9px;
+  }
+
+  .row.active .row-button.primary-soft {
+    border-color: rgba(20, 200, 212, 0.42);
+    background: rgba(20, 200, 212, 0.13);
+    color: #dfffff;
+  }
+
+  .drawer-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 14px;
+  }
+
+  .drawer-head strong {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 5px;
+  }
+
+  .drawer-head span {
+    color: rgba(239, 248, 250, 0.5);
+    font-size: 11px;
+  }
+
+  .drawer-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .drawer-tab {
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(255, 255, 255, 0.032);
+    color: rgba(239, 248, 250, 0.62);
+    font-size: 12px;
+  }
+
+  .drawer-tab.active {
+    color: #dfffff;
+    border-color: rgba(20, 200, 212, 0.38);
+    background: rgba(20, 200, 212, 0.11);
+  }
+
+  .field {
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.032);
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  .field label {
+    display: block;
+    color: rgba(239, 248, 250, 0.46);
+    font-size: 10px;
+    margin-bottom: 6px;
+  }
+
+  .field div {
+    color: rgba(239, 248, 250, 0.82);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .library-results {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .thumb {
+    min-height: 92px;
+    border-radius: 9px;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background:
+      linear-gradient(135deg, rgba(20, 200, 212, 0.18), rgba(238, 177, 70, 0.09)),
+      rgba(255, 255, 255, 0.035);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    color: rgba(239, 248, 250, 0.68);
+    font-size: 10px;
+  }
+
+  .prompt-box {
+    min-height: 110px;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 9px;
+    background: rgba(1, 7, 12, 0.26);
+    padding: 10px;
+    color: rgba(239, 248, 250, 0.7);
+    font-size: 12px;
+    line-height: 1.55;
+    margin-bottom: 10px;
+  }
+
+  .drawer-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .note {
+    margin-top: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: #f8fafc;
+    color: #172033;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+</style>
+
+<h2>资产提取联动方案：主列表 + 资产处理抽屉</h2>
+<p class="subtitle">推荐不要单独开完整生图工作台作为第一层入口。资产列表保持紧凑，点击“绑定/生成”打开右侧抽屉，在抽屉里联动项目资产库和提示词生成。</p>
+
+<div class="stage">
+  <div class="mock">
+    <main class="main">
+      <div class="crumb">霓虹之下 / 第 05 集 / 资产提取</div>
+      <h1 class="title">真相浮出 · 资产提取</h1>
+      <div class="subline">从剧本和导演分析中提取角色、场景、道具，可绑定项目资产库已有素材，也可按提示词生成参考图。</div>
+
+      <div class="toolbar">
+        <div class="tabs">
+          <div class="tab active">全部 12</div>
+          <div class="tab">缺素材 3</div>
+          <div class="tab">已绑定 6</div>
+          <div class="tab">待生成 3</div>
+        </div>
+        <div class="filters">
+          <button class="button">批量绑定</button>
+          <button class="button primary">批量生成缺口</button>
+        </div>
+      </div>
+
+      <div class="asset-list">
+        <div class="list-head">
+          <div>类型</div>
+          <div>资产</div>
+          <div>项目库</div>
+          <div>生成</div>
+          <div>状态</div>
+          <div></div>
+        </div>
+
+        <div class="row">
+          <div>角色</div>
+          <div class="asset-title"><strong>林澈</strong><span>主角，雨夜追查旧楼交易。</span></div>
+          <div>2 图</div>
+          <div>-</div>
+          <div><span class="badge ok">已绑定</span></div>
+          <div class="actions"><button class="row-button">查看</button><button class="row-button">换图</button></div>
+        </div>
+
+        <div class="row active">
+          <div>场景</div>
+          <div class="asset-title"><strong>暗巷街景</strong><span>雨夜、背光、旧楼后门、潮湿墙面。</span></div>
+          <div>匹配 4</div>
+          <div>可生成</div>
+          <div><span class="badge warn">待处理</span></div>
+          <div class="actions"><button class="row-button primary-soft">绑定</button><button class="row-button">生成</button></div>
+        </div>
+
+        <div class="row">
+          <div>道具</div>
+          <div class="asset-title"><strong>带血袖扣</strong><span>关键证物，需保持特写一致。</span></div>
+          <div>1 图</div>
+          <div>-</div>
+          <div><span class="badge ok">已绑定</span></div>
+          <div class="actions"><button class="row-button">查看</button><button class="row-button">换图</button></div>
+        </div>
+
+        <div class="row">
+          <div>场景</div>
+          <div class="asset-title"><strong>旧楼楼梯间</strong><span>狭窄、冷光、破旧扶手。</span></div>
+          <div>无匹配</div>
+          <div>可生成</div>
+          <div><span class="badge work">待生成</span></div>
+          <div class="actions"><button class="row-button">绑定</button><button class="row-button primary-soft">生成</button></div>
+        </div>
+
+        <div class="row">
+          <div>服装</div>
+          <div class="asset-title"><strong>女主雨衣</strong><span>深色短款，湿润反光。</span></div>
+          <div>匹配 2</div>
+          <div>可生成</div>
+          <div><span class="badge warn">待确认</span></div>
+          <div class="actions"><button class="row-button">绑定</button><button class="row-button">生成</button></div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="drawer">
+      <div class="drawer-head">
+        <div>
+          <strong>暗巷街景</strong>
+          <span>场景资产 · 第 05 集 · 3 个镜头引用</span>
+        </div>
+        <span class="badge warn">待处理</span>
+      </div>
+
+      <div class="drawer-tabs">
+        <div class="drawer-tab active">绑定已有资产</div>
+        <div class="drawer-tab">生成参考图</div>
+      </div>
+
+      <div class="field">
+        <label>提取描述</label>
+        <div>雨夜暗巷，旧楼后门，地面潮湿反光，远处车灯形成强背光。</div>
+      </div>
+
+      <div class="field">
+        <label>项目资产库匹配</label>
+        <div>按“暗巷 / 雨夜 / 旧楼 / 街景”找到 4 个候选素材。</div>
+      </div>
+
+      <div class="library-results">
+        <div class="thumb">雨夜巷口 · 版本 2</div>
+        <div class="thumb">旧楼后门 · 版本 1</div>
+        <div class="thumb">潮湿街面 · 版本 3</div>
+        <div class="thumb">车灯背光 · 版本 1</div>
+      </div>
+
+      <div class="field">
+        <label>生成提示词草案</label>
+        <div class="prompt-box">雨夜城市暗巷，旧楼后门，潮湿墙面和地面积水反光，远处车灯形成冷色背光，电影感低机位，写实短剧风格。</div>
+      </div>
+
+      <div class="drawer-actions">
+        <button class="button">绑定选中素材</button>
+        <button class="button primary">用提示词生成</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="note">
+  交互建议：资产提取列表每条都显示“项目库匹配”和“生成可用性”。点击绑定或生成时打开右侧资产处理抽屉。抽屉里先展示项目资产库候选素材，同时给出由资产描述生成的提示词草案；用户可以绑定已有素材，也可以一键生成参考图。生成结果自动回写到项目资产库，并绑定到当前提取资产。
+</div>

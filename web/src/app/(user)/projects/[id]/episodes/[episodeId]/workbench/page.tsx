@@ -1,14 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Alert, App, Button, Card, Collapse, Drawer, Empty, Input, Space, Tag } from "antd";
-import { CheckCircle2, Clapperboard, FileText, Library, Maximize2, Play, ScrollText, Video, Workflow, XCircle } from "lucide-react";
+import { Alert, App, Button, Card, Collapse, Empty, Input, Space, Tag } from "antd";
+import { CheckCircle2, Play, XCircle } from "lucide-react";
 
-import { requestImageQuestion } from "@/services/api/image";
-import { completeLocalTextTask, failLocalTextTask, startLocalTextTask, summarizeLocalTaskText } from "@/services/local-ai-task-log";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { buildAssetVersionReference } from "../../../../../assets/asset-version-references";
@@ -17,23 +14,20 @@ import { useCanvasStore, type CanvasProject } from "../../../../../canvas/stores
 import { useProductionBibleStore } from "../../../../../canvas/stores/use-production-bible-store";
 import { useScriptStore } from "../../../../../canvas/stores/use-script-store";
 import { useStoryboardStore } from "../../../../../canvas/stores/use-storyboard-store";
-import { orderedScriptScenes, type ScriptEpisode, type ScriptScene } from "../../../../../canvas/utils/script-management";
-import { buildEpisodeScriptSnapshot, canvasEpisodeContextFromEpisode } from "../../../../../canvas/utils/canvas-episode-context";
+import type { ScriptEpisode, ScriptScene } from "../../../../../canvas/utils/script-management";
+import { canvasEpisodeContextFromEpisode } from "../../../../../canvas/utils/canvas-episode-context";
 import type { CanvasProjectPreset } from "../../../../../canvas/utils/canvas-project-preset";
 import type { ProductionBibleItem } from "../../../../../canvas/utils/production-bible";
-import { orderedStoryboardTableShots, type StoryboardTableShot } from "../../../../../canvas/utils/storyboard-management";
-import { buildSeedanceWorkflowPreset, sortedWorkflowStages, workflowStageDetail, type AgentWorkflowStage } from "../../../../agent-workflow-presets";
+import type { StoryboardTableShot } from "../../../../../canvas/utils/storyboard-management";
+import { workflowStageDetail, type AgentWorkflowStage } from "../../../../agent-workflow-presets";
 import { useAgentRunnerStore } from "../../../../use-agent-runner-store";
-import { getSeedanceWorkflowAgentCore } from "../../../../workflow-agents/seedance-workflow-agents";
-import { buildSeedanceQualityGateManifest, evaluateWorkflowQualityGates, getWorkflowStageRequiredReadings, type WorkflowGateCheckResult, type WorkflowRequiredReading } from "../../../../workflow-quality-gates";
+import { evaluateWorkflowQualityGates, getWorkflowStageRequiredReadings, type WorkflowGateCheckResult, type WorkflowRequiredReading } from "../../../../workflow-quality-gates";
 import {
-    buildWorkflowStageSourceFiles,
     canGenerateWorkflowMappingPreview,
     getWorkflowStageSceneProgress,
     summarizeWorkflowStageDisplayState,
     workflowMappingPreviewItemKey,
     workflowStageStatusLabel,
-    type AgentRunInput,
     type AgentWorkflowDisplayStatus,
     type AgentWorkflowMappingPreview,
     type AgentWorkflowMappingPreviewItem,
@@ -43,6 +37,15 @@ import {
     type AgentWorkflowStageState,
 } from "../../../../agent-runner";
 import { useCreativeProjectStore } from "../../../../use-creative-project-store";
+import { useEpisodeWorkbenchState, type EpisodeSceneOption } from "./use-episode-workbench-state";
+import { useEpisodeWorkbenchPreviewActions } from "./use-episode-workbench-preview-actions";
+import { useEpisodeWorkbenchRunActions } from "./use-episode-workbench-run-actions";
+import { EpisodeAssetsModulePage } from "./components/episode-assets-module-page";
+import { EpisodeCanvasHandoffPage, type CanvasHandoffImportTarget } from "./components/episode-canvas-handoff-page";
+import { EpisodeStoryboardPackagePage } from "./components/episode-storyboard-package-page";
+import { EpisodeDetailDrawer, EpisodeModulePanel, EpisodeProgress, EpisodeStatusPill, episodeToneTextClass, type EpisodeDetailRecord, type EpisodeModuleConfig, type EpisodeModuleRow, type EpisodeStatusTone } from "./components/episode-module-panel";
+import { buildStageOutputDigest, findDigestSection, findOutputKeywordLine, StageOutputDigest } from "./components/stage-output-digest";
+import { buildStoryboardProductionSegments, type StoryboardStorySegment } from "./storyboard-production-segments";
 
 const stageCopy: Record<string, { title: string; agent: string; input: string; output: string; previewTargets: Array<AgentWorkflowMappingPreview["targetType"]> }> = {
     "director-analysis": {
@@ -69,56 +72,9 @@ const stageCopy: Record<string, { title: string; agent: string; input: string; o
 };
 
 type EpisodeModuleKey = "script" | "director" | "assets" | "storyboard" | "canvas";
-
-type EpisodeDetailRecord = {
-    body: string;
-    meta?: Array<{ label: string; value: string }>;
-    subtitle?: string;
-    title: string;
-};
-
-type EpisodeStatusTone = "cyan" | "green" | "amber" | "red" | "slate";
-
-type EpisodeModuleAction = {
-    disabled?: boolean;
-    label: string;
-    loading?: boolean;
-    onClick: () => void;
-    primary?: boolean;
-};
-
-type EpisodeModuleRow = {
-    actionLabel: string;
-    cells: ReactNode[];
-    detail: EpisodeDetailRecord;
-    highlight?: boolean;
-    id: string;
-    onAction?: () => void;
-    status: string;
-    tone?: EpisodeStatusTone;
-};
-
-type EpisodeModuleConfig = {
-    actions: EpisodeModuleAction[];
-    columns: string;
-    emptyText: string;
-    filters: string[];
-    headers: string[];
-    rows: EpisodeModuleRow[];
-    subtitle: string;
-    summary: Array<{ label: string; tone?: EpisodeStatusTone; value: string }>;
-    title: string;
-};
+type DirectorReviewState = "confirmed" | "adopted";
 
 type WorkflowStageDisplaySummary = ReturnType<typeof summarizeWorkflowStageDisplayState>;
-type EpisodeAssetProcessMode = "bind" | "generate";
-type EpisodeAssetFilter = "全部" | "缺素材" | "已绑定" | "待生成" | "角色" | "场景" | "道具" | "服装";
-type StoryboardPackageDrawerTab = "shots" | "script" | "prompt" | "assets";
-type StoryboardPackageStatus = "已确认" | "待编辑" | "待审核" | "缺资产" | "超时" | "待承接";
-type StoryboardPackageFilter = "全部" | StoryboardPackageStatus;
-type CanvasHandoffStatus = "未导入" | "待导入" | "已导入" | "缺资产" | "已进入画布" | "已生成" | "已回流";
-type CanvasHandoffFilter = "全部" | CanvasHandoffStatus;
-
 type EpisodeExtractedAsset = {
     canGenerate: boolean;
     candidates: Asset[];
@@ -135,53 +91,6 @@ type EpisodeExtractedAsset = {
     status: "已绑定" | "待绑定" | "待生成" | "待确认" | "缺素材";
     tone: EpisodeStatusTone;
     type: "角色" | "场景" | "道具" | "服装";
-};
-
-type StoryboardPackageShot = {
-    action: string;
-    camera: string;
-    duration: number;
-    id: string;
-    order: number;
-    prompt: string;
-    title: string;
-};
-
-type StoryboardProductionPackage = {
-    assetLabels: string[];
-    duration: number;
-    id: string;
-    order: number;
-    promptSummary: string;
-    scriptText: string;
-    segmentId: string;
-    shots: StoryboardPackageShot[];
-    status: StoryboardPackageStatus;
-    summary: string;
-    title: string;
-    tone: EpisodeStatusTone;
-};
-
-type StoryboardStorySegment = {
-    duration: number;
-    id: string;
-    order: number;
-    packages: StoryboardProductionPackage[];
-    scriptRange: string;
-    scriptText: string;
-    status: string;
-    title: string;
-    tone: EpisodeStatusTone;
-};
-
-type CanvasHandoffPackageRow = {
-    assetState: string;
-    canImport: boolean;
-    importedNodeCount: number;
-    pkg: StoryboardProductionPackage;
-    segment: StoryboardStorySegment;
-    status: CanvasHandoffStatus;
-    tone: EpisodeStatusTone;
 };
 
 export default function EpisodeProductionWorkbenchPage() {
@@ -223,28 +132,24 @@ export default function EpisodeProductionWorkbenchPage() {
     const [sceneReviewNotes, setSceneReviewNotes] = useState<Record<string, string>>({});
     const [selectedSceneKey, setSelectedSceneKey] = useState("");
     const [subSceneKey, setSubSceneKey] = useState("");
-    const [runningStageIds, setRunningStageIds] = useState<Record<string, boolean>>({});
-    const [runningSceneKeys, setRunningSceneKeys] = useState<Record<string, boolean>>({});
     const [applyingPreviewIds, setApplyingPreviewIds] = useState<Record<string, boolean>>({});
     const [activeStageIds, setActiveStageIds] = useState<string[]>([]);
     const [activeModule, setActiveModule] = useState<EpisodeModuleKey>("director");
     const [detailRecord, setDetailRecord] = useState<EpisodeDetailRecord | null>(null);
+    const [directorReviewStates, setDirectorReviewStates] = useState<Record<string, DirectorReviewState>>({});
     const [initialModuleSynced, setInitialModuleSynced] = useState(false);
-    const preset = useMemo(() => buildSeedanceWorkflowPreset(), []);
-    const stages = useMemo(() => sortedWorkflowStages(preset), [preset]);
-    const stageSceneRows = useMemo(() => orderedScriptScenes(scenes, episodeId), [episodeId, scenes]);
-    const scriptSnapshot = useMemo(() => (episode ? buildEpisodeScriptSnapshot(episode, stageSceneRows) : ""), [episode, stageSceneRows]);
-    const boundCanvas = useMemo(() => canvases.find((canvas) => canvas.projectId === projectId && canvas.episodeId === episodeId), [canvases, episodeId, projectId]);
-    const episodeTableShots = useMemo(() => (boundCanvas ? orderedStoryboardTableShots(storyboardTableShots, boundCanvas.id, episodeId) : []), [boundCanvas, episodeId, storyboardTableShots]);
-    const sceneOptions = useMemo(() => buildEpisodeSceneOptions({ tableShots: episodeTableShots, scriptScenes: stageSceneRows, scriptSnapshot }), [episodeTableShots, scriptSnapshot, stageSceneRows]);
-    const workflowRun = useMemo(
-        () => workflowRuns.find((run) => run.projectId === projectId && run.canvasId === boundCanvas?.id && run.episodeId === episodeId && run.workflowId === preset.workflowId),
-        [boundCanvas?.id, episodeId, preset.workflowId, projectId, workflowRuns],
-    );
-    const qualityGateManifest = useMemo(() => buildSeedanceQualityGateManifest({ workflowId: preset.workflowId, version: preset.version }), [preset.version, preset.workflowId]);
-    const previews = useMemo(() => (workflowRun ? workflowMappingPreviews.filter((preview) => preview.workflowRunId === workflowRun.id) : []), [workflowMappingPreviews, workflowRun]);
-    const stageOutputs = useMemo(() => Object.fromEntries(stages.map((stage) => [stage.stageId, stageOutput(workflowRun, workflowOutputs, stage.stageId)])), [stages, workflowOutputs, workflowRun]);
-    const hasScript = Boolean(scriptSnapshot.trim());
+    const { boundCanvas, episodeTableShots, hasScript, preset, previews, sceneOptions, scriptSnapshot, stageOutputs, stages, stageSceneRows, workflowRun } = useEpisodeWorkbenchState({
+        canvases,
+        episode,
+        episodeId,
+        projectId,
+        scenes,
+        storyboardTableShots,
+        workflowMappingPreviews,
+        workflowOutputs,
+        workflowRuns,
+    });
+    const directorOutputText = stageOutputs["director-analysis"]?.rawText || "";
 
     useEffect(() => {
         if (episode) setScriptDraft(scriptSnapshot);
@@ -253,6 +158,10 @@ export default function EpisodeProductionWorkbenchPage() {
     useEffect(() => {
         setInitialModuleSynced(false);
     }, [episodeId]);
+
+    useEffect(() => {
+        setDirectorReviewStates({});
+    }, [directorOutputText, episodeId]);
 
     useEffect(() => {
         if (!hasScript) {
@@ -291,6 +200,50 @@ export default function EpisodeProductionWorkbenchPage() {
         );
     }, [sceneOptions, stages, workflowRun]);
 
+    const selectedBaseScene = sceneOptions.find((scene) => scene.sceneKey === selectedSceneKey);
+    const currentScene = selectedBaseScene ? withSubScene(selectedBaseScene, subSceneKey) : undefined;
+    const currentSceneState = currentScene ? workflowRun?.sceneStates?.find((scene) => scene.stageId === "seedance-storyboard" && scene.sceneKey === currentScene.sceneKey) : undefined;
+
+    const { runStage, runStoryboardScene, runningStageIds } = useEpisodeWorkbenchRunActions({
+        boundCanvas,
+        checkAiConfigReady,
+        currentScene,
+        currentSceneState,
+        effectiveConfig,
+        ensureWorkflowRun,
+        episode: episode as ScriptEpisode,
+        episodeId,
+        failWorkflowTextRun,
+        hasScript,
+        message,
+        preset,
+        projectId,
+        projectTitle: project?.title || "",
+        scriptSnapshot,
+        stageOutputs,
+        stages,
+        startWorkflowTextRun,
+        completeWorkflowTextRun,
+        workflowRun,
+        workflowRuns,
+    });
+
+    const { confirmApplyPreview, generatePreview, openCanvasOrCreate, summarizeStoryboardScenes } = useEpisodeWorkbenchPreviewActions({
+        applyProductionBiblePreview,
+        applyStoryboardPreview,
+        applyVideoNodePreview,
+        boundCanvas,
+        generateWorkflowMappingPreview,
+        message,
+        modal,
+        router,
+        setApplyingPreviewIds,
+        setCreateCanvasOpen,
+        summarizeApprovedStoryboardScenes,
+        workflowAppliedPreviewItemIds,
+        workflowRun,
+    });
+
     if (!project || !episode) {
         return (
             <main className="h-full overflow-auto bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
@@ -316,245 +269,62 @@ export default function EpisodeProductionWorkbenchPage() {
         router.push(`/canvas/${canvasId}`);
     };
 
-    const runStage = async (stage: AgentWorkflowStage) => {
-        if (!hasScript) {
-            message.warning("请先导入本集剧本");
+    const updateDirectorReviewState = (rowId: string, state: DirectorReviewState) => {
+        const nextStates = { ...directorReviewStates, [rowId]: state };
+        const directorStageState = workflowRun?.stageStates.find((item) => item.stageId === "director-analysis");
+        setDirectorReviewStates(nextStates);
+        if (nextStates["director-risk"] === "confirmed" && nextStates["director-storyboard"] === "adopted") {
+            if (directorStageState?.status === "review" && directorStageState.runnerRunId) {
+                approveRun(directorStageState.runnerRunId, "风险提示已确认，分镜建议已采用。");
+                message.success("导演分析已批准，资产提取已解锁");
+                return;
+            }
+            if (directorStageState?.status !== "approved") message.warning("导演分析缺少可批准的运行记录，请重新分析后再确认");
+        }
+        message.success(state === "adopted" ? "已采用分镜建议" : "已确认风险提示");
+    };
+    const importCanvasPackage = (pkg: CanvasHandoffImportTarget) => {
+        if (!boundCanvas) {
+            message.info("请先创建承接画布，再导入生产包节点组。");
+            setCreateCanvasOpen(true);
             return;
         }
-        const workflowRunId = ensureWorkflowRun({ projectId, canvasId: boundCanvas?.id, episodeId, preset });
-        const currentRun = workflowRuns.find((run) => run.id === workflowRunId) || workflowRun;
-        const stageState = currentRun?.stageStates.find((item) => item.stageId === stage.stageId);
-        if (stageState?.status === "blocked") {
-            message.warning(stageState.blockedReason || "前置阶段未批准");
+        let previewGenerationReason = "";
+        let videoPreview = latestPreview(previews, "video_node");
+        if (!videoPreview && workflowRun) {
+            const previewResult = generateWorkflowMappingPreview(workflowRun.id, "seedance-storyboard");
+            if (previewResult.ok) {
+                videoPreview = latestPreview(
+                    useAgentRunnerStore.getState().workflowMappingPreviews.filter((item) => item.workflowRunId === workflowRun.id),
+                    "video_node",
+                );
+            } else {
+                previewGenerationReason = previewResult.reason || "";
+            }
+        }
+        if (!videoPreview) {
+            message.warning(previewGenerationReason || "还没有可导入的视频节点预览，请先在分镜生产包阶段生成画布预览。");
             return;
         }
-        const core = getSeedanceWorkflowAgentCore(stage.stageId);
-        if (!core) return message.error("缺少当前阶段 Agent Core");
-        const textModel = (effectiveConfig.textModel || effectiveConfig.model || "").trim();
-        const requestConfig = { ...effectiveConfig, model: textModel || effectiveConfig.model };
-        const directorSummary = stageOutputs["director-analysis"]?.summary || "";
-        const artSummary = stageOutputs["art-design"]?.summary || "";
-        const coreInput = core.buildInput({
-            preset,
-            inputSnapshot: {
-                projectId,
-                projectTitle: project.title,
-                canvasId: boundCanvas?.id,
-                episodeId,
-                episodeTitle: episode.title,
-                scriptSnapshot,
-                stageSummary: `${stage.inputSummary}；输出目标：${stage.outputSummary}`,
-                directorOutputSummary: directorSummary,
-                artDesignOutputSummary: artSummary,
-                storyboardRequirement:
-                    stage.qualityGateIds
-                        .map((gateId) => preset.qualityGates.find((gate) => gate.gateId === gateId)?.purpose)
-                        .filter(Boolean)
-                        .join("；") || stage.outputSummary,
-                assetNeedSummary: artSummary,
-            },
+        const selectedItemIds = findVideoPreviewItemIdsForPackage(videoPreview, pkg);
+        if (!selectedItemIds.length) {
+            message.warning(`没有找到 P${padEpisodeOrder(pkg.order)} 对应的视频节点预览。`);
+            return;
+        }
+        setApplyingPreviewIds((state) => ({ ...state, [videoPreview.previewId]: true }));
+        const result = applyVideoNodePreview(videoPreview.previewId, {
+            existingNodes: boundCanvas.nodes || [],
+            selectedItemIds,
         });
-        const sourceFiles = buildWorkflowStageSourceFiles(coreInput.skills, coreInput.qualityGates);
-        const promptMessages = core.buildPromptMessages(coreInput, preset);
-        const runInput: AgentRunInput = {
-            projectId,
-            canvasId: boundCanvas?.id,
-            episodeId,
-            episodeTitle: episode.title,
-            scriptId: projectId,
-            scriptSnapshot,
-            sourceType: "episode_production_workbench",
-            sourceId: stage.stageId,
-            variables: { stageId: stage.stageId },
-            workflowRunId,
-            workflowId: preset.workflowId,
-            workflowVersion: preset.version,
-            stageId: core.stageId,
-            agentId: core.agentId,
-            agentName: coreInput.agent.name,
-            sourcePresetId: preset.workflowId,
-            presetId: preset.workflowId,
-            inputSnapshot: { stageName: stage.name, stageSummary: stage.inputSummary },
-            promptMessages,
-            model: textModel,
-            provider: `openai-${effectiveConfig.channelMode}`,
-            configSummary: JSON.stringify({ model: textModel, baseUrl: effectiveConfig.baseUrl, channelMode: effectiveConfig.channelMode, textModelList: effectiveConfig.textModels }, null, 2),
-            sourceFiles,
-            qualityGateIds: coreInput.qualityGates.map((gate) => gate.gateId),
-        };
-        const runId = startWorkflowTextRun(runInput);
-        setRunningStageIds((current) => ({ ...current, [stage.stageId]: true }));
-        if (!textModel || !checkAiConfigReady(effectiveConfig, textModel)) {
-            const reason = textModel ? "当前 API 配置或文本模型不可用" : "未配置文本模型";
-            failWorkflowTextRun(runId, reason);
-            setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
-            return message.warning(reason);
+        setApplyingPreviewIds((state) => ({ ...state, [videoPreview.previewId]: false }));
+        if (!result.ok) {
+            message.warning(result.reason || "导入画布失败，请检查视频节点预览状态。");
+            return;
         }
-        let localTaskId: string | undefined;
-        try {
-            localTaskId = startLocalTextTask(requestConfig, {
-                ...runInput,
-                sourceType: "workflow_text_stage",
-                inputSummary: summarizeLocalTaskText(`${stage.name}：${stage.inputSummary}\n${scriptSnapshot}`),
-            });
-            const response = await requestImageQuestion(requestConfig, promptMessages, () => {});
-            completeWorkflowTextRun(runId, response || "没有返回内容");
-            completeLocalTextTask(localTaskId, response || "没有返回内容");
-            message.success(`${stage.name} 草案已生成，待审核`);
-        } catch (error) {
-            const reason = error instanceof Error ? error.message : "文本执行失败";
-            failWorkflowTextRun(runId, reason);
-            failLocalTextTask(localTaskId, reason);
-            message.warning(reason);
-        } finally {
-            setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
-        }
+        const focusNodeId = result.focusNodeIds?.[0];
+        message.success(`已导入 P${padEpisodeOrder(pkg.order)}，正在进入画布`);
+        router.push(`/canvas/${boundCanvas.id}${focusNodeId ? `?focusNodeId=${encodeURIComponent(focusNodeId)}` : ""}`);
     };
-
-    const selectedBaseScene = sceneOptions.find((scene) => scene.sceneKey === selectedSceneKey);
-    const currentScene = selectedBaseScene ? withSubScene(selectedBaseScene, subSceneKey) : undefined;
-    const currentSceneState = currentScene ? workflowRun?.sceneStates?.find((scene) => scene.stageId === "seedance-storyboard" && scene.sceneKey === currentScene.sceneKey) : undefined;
-
-    const runStoryboardScene = async () => {
-        const stage = stages.find((item) => item.stageId === "seedance-storyboard");
-        if (!stage) return;
-        if (!hasScript) return message.warning("请先导入本集剧本");
-        if (!currentScene) return message.warning("请先选择当前场次 / 子场次");
-        const workflowRunId = ensureWorkflowRun({ projectId, canvasId: boundCanvas?.id, episodeId, preset });
-        const currentRun = workflowRuns.find((run) => run.id === workflowRunId) || workflowRun;
-        const stageState = currentRun?.stageStates.find((item) => item.stageId === stage.stageId);
-        if (stageState?.status === "blocked") return message.warning(stageState.blockedReason || "前置阶段未批准");
-        const unfinishedScene = currentRun?.sceneStates?.find((scene) => scene.stageId === "seedance-storyboard" && scene.sceneKey !== currentScene.sceneKey && ["running", "review"].includes(scene.status));
-        if (unfinishedScene) return message.warning(`请先完成当前场次审核：${unfinishedScene.sceneLabel}`);
-        const core = getSeedanceWorkflowAgentCore(stage.stageId);
-        if (!core) return message.error("缺少分镜师 Agent Core");
-        const textModel = (effectiveConfig.textModel || effectiveConfig.model || "").trim();
-        const requestConfig = { ...effectiveConfig, model: textModel || effectiveConfig.model };
-        const directorSummary = stageOutputs["director-analysis"]?.summary || "";
-        const artSummary = stageOutputs["art-design"]?.summary || "";
-        const sourceFiles = buildWorkflowStageSourceFiles(workflowStageDetail(preset, stage).skills, workflowStageDetail(preset, stage).qualityGates);
-        const coreInput = core.buildInput({
-            preset,
-            inputSnapshot: {
-                projectId,
-                projectTitle: project.title,
-                canvasId: boundCanvas?.id,
-                episodeId,
-                episodeTitle: episode.title,
-                scriptSnapshot,
-                stageSummary: "阶段三按场次 / 子场次推进；本次只处理当前选中场次。",
-                sceneKey: currentScene.sceneKey,
-                sceneLabel: currentScene.sceneLabel,
-                sceneScriptText: currentScene.scriptText,
-                sceneVisualDnaSummary: currentSceneState?.visualDnaSummary,
-                previousSceneSummary: previousApprovedSceneSummary(workflowRun?.sceneStates || [], currentScene.sceneKey),
-                directorOutputSummary: directorSummary,
-                artDesignOutputSummary: artSummary,
-                storyboardRequirement: "先输出场次视觉 DNA，再输出生成 P / 镜头 P 拆分表、单 P 任务卡、Seedance 提示词正文和工业化预检记录摘要。",
-                assetNeedSummary: artSummary,
-            },
-        });
-        const promptMessages = core.buildPromptMessages(coreInput, preset);
-        const runInput: AgentRunInput = {
-            projectId,
-            canvasId: boundCanvas?.id,
-            episodeId,
-            episodeTitle: episode.title,
-            scriptId: projectId,
-            scriptSnapshot: currentScene.scriptText || scriptSnapshot,
-            sourceType: "episode_production_workbench_scene",
-            sourceId: currentScene.sceneKey,
-            variables: { stageId: stage.stageId, sceneKey: currentScene.sceneKey, sceneLabel: currentScene.sceneLabel },
-            workflowRunId,
-            workflowId: preset.workflowId,
-            workflowVersion: preset.version,
-            stageId: core.stageId,
-            agentId: core.agentId,
-            agentName: coreInput.agent.name,
-            sourcePresetId: preset.workflowId,
-            presetId: preset.workflowId,
-            inputSnapshot: { stageName: stage.name, sceneKey: currentScene.sceneKey, sceneLabel: currentScene.sceneLabel },
-            promptMessages,
-            model: textModel,
-            provider: `openai-${effectiveConfig.channelMode}`,
-            configSummary: JSON.stringify({ model: textModel, baseUrl: effectiveConfig.baseUrl, channelMode: effectiveConfig.channelMode, textModelList: effectiveConfig.textModels }, null, 2),
-            sourceFiles,
-            qualityGateIds: coreInput.qualityGates.map((gate) => gate.gateId),
-        };
-        const runId = startWorkflowTextRun(runInput);
-        setRunningSceneKeys((current) => ({ ...current, [currentScene.sceneKey]: true }));
-        if (!textModel || !checkAiConfigReady(effectiveConfig, textModel)) {
-            const reason = textModel ? "当前 API 配置或文本模型不可用" : "未配置文本模型";
-            failWorkflowTextRun(runId, reason);
-            setRunningSceneKeys((current) => ({ ...current, [currentScene.sceneKey]: false }));
-            return message.warning(reason);
-        }
-        let localTaskId: string | undefined;
-        try {
-            localTaskId = startLocalTextTask(requestConfig, {
-                ...runInput,
-                sourceType: "workflow_text_stage",
-                inputSummary: summarizeLocalTaskText(`${stage.name}：${currentScene.sceneLabel}\n${currentScene.scriptText || scriptSnapshot}`),
-            });
-            const response = await requestImageQuestion(requestConfig, promptMessages, () => {});
-            completeWorkflowTextRun(runId, response || "没有返回内容");
-            completeLocalTextTask(localTaskId, response || "没有返回内容");
-            message.success(`${currentScene.sceneLabel} 草案已生成，待审核`);
-        } catch (error) {
-            const reason = error instanceof Error ? error.message : "文本执行失败";
-            failWorkflowTextRun(runId, reason);
-            failLocalTextTask(localTaskId, reason);
-            message.warning(reason);
-        } finally {
-            setRunningSceneKeys((current) => ({ ...current, [currentScene.sceneKey]: false }));
-        }
-    };
-
-    const summarizeStoryboardScenes = () => {
-        if (!workflowRun) return;
-        const result = summarizeApprovedStoryboardScenes(workflowRun.id);
-        if (!result.ok) message.warning(result.reason || "无法汇总已批准场次");
-        else message.success(`已汇总 ${result.sceneCount || 0} 个已批准场次，可生成第三阶段预览`);
-    };
-
-    const generatePreview = (stageId: string, targetLabel: string) => {
-        if (!workflowRun) return;
-        const result = generateWorkflowMappingPreview(workflowRun.id, stageId);
-        if (!result.ok) message.warning(result.reason || "当前阶段不能生成映射预览");
-        else message.success(`已生成 ${targetLabel}`);
-    };
-
-    const confirmApplyPreview = (preview: AgentWorkflowMappingPreview) => {
-        const creatableCount = preview.items.filter((item) => item.targetType === preview.targetType && item.action === "create" && !workflowAppliedPreviewItemIds.includes(workflowMappingPreviewItemKey(preview, item.itemId))).length;
-        const labels = previewTargetLabels(preview.targetType);
-        modal.confirm({
-            title: labels.confirmTitle,
-            content: `${labels.confirmContentPrefix}${creatableCount} 条。不会自动生成图片，不会自动生成视频，不会触发扣费。`,
-            okText: labels.okText,
-            cancelText: "取消",
-            onOk: () => {
-                setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: true }));
-                try {
-                    const result =
-                        preview.targetType === "production_bible"
-                            ? applyProductionBiblePreview(preview.previewId)
-                            : preview.targetType === "storyboard_table"
-                              ? applyStoryboardPreview(preview.previewId)
-                              : applyVideoNodePreview(preview.previewId, { existingNodes: boundCanvas?.nodes || [] });
-                    if (!result.ok) {
-                        message.warning(result.reason || "当前预览不能写入");
-                        return;
-                    }
-                    message.success(`${labels.doneText}${result.appliedCount || 0} 条`);
-                    if (result.warnings.length) message.info(result.warnings.join("；"));
-                } finally {
-                    setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
-                }
-            },
-        });
-    };
-
-    const openCanvasOrCreate = () => (boundCanvas ? router.push(`/canvas/${boundCanvas.id}`) : setCreateCanvasOpen(true));
 
     return (
         <main className="h-full overflow-auto bg-[#050b10] text-slate-100">
@@ -568,13 +338,16 @@ export default function EpisodeProductionWorkbenchPage() {
                 episode={episode}
                 episodeTableShots={episodeTableShots}
                 hasScript={hasScript}
+                directorReviewStates={directorReviewStates}
                 onApplyPreview={confirmApplyPreview}
                 onBackProject={() => router.push(`/projects/${project.id}`)}
                 onCreateCanvas={() => setCreateCanvasOpen(true)}
                 onGeneratePreview={generatePreview}
+                onImportCanvasPackage={importCanvasPackage}
                 onModuleChange={setActiveModule}
                 onOpenCanvas={openCanvasOrCreate}
                 onOpenDetail={setDetailRecord}
+                onUpdateDirectorReviewState={updateDirectorReviewState}
                 onRunStage={(stageId) => {
                     const stage = stages.find((item) => item.stageId === stageId);
                     if (stage) void runStage(stage);
@@ -611,7 +384,7 @@ export default function EpisodeProductionWorkbenchPage() {
 const episodeModules: Array<{ key: EpisodeModuleKey; label: string }> = [
     { key: "script", label: "剧本" },
     { key: "director", label: "导演分析" },
-    { key: "assets", label: "资产提取" },
+    { key: "assets", label: "资产与生图" },
     { key: "storyboard", label: "分镜生产包" },
     { key: "canvas", label: "画布承接" },
 ];
@@ -623,6 +396,7 @@ function EpisodeProductionShell({
     boundCanvas,
     currentScene,
     currentSceneState,
+    directorReviewStates,
     episode,
     episodeTableShots,
     hasScript,
@@ -630,9 +404,11 @@ function EpisodeProductionShell({
     onBackProject,
     onCreateCanvas,
     onGeneratePreview,
+    onImportCanvasPackage,
     onModuleChange,
     onOpenCanvas,
     onOpenDetail,
+    onUpdateDirectorReviewState,
     onRunStage,
     onRunStoryboardScene,
     onSaveScript,
@@ -653,6 +429,7 @@ function EpisodeProductionShell({
     boundCanvas?: CanvasProject;
     currentScene?: EpisodeSceneOption;
     currentSceneState?: AgentWorkflowSceneRunState;
+    directorReviewStates: Record<string, DirectorReviewState>;
     episode: ScriptEpisode;
     episodeTableShots: StoryboardTableShot[];
     hasScript: boolean;
@@ -660,9 +437,11 @@ function EpisodeProductionShell({
     onBackProject: () => void;
     onCreateCanvas: () => void;
     onGeneratePreview: (stageId: string, targetLabel: string) => void;
+    onImportCanvasPackage: (pkg: CanvasHandoffImportTarget) => void;
     onModuleChange: (module: EpisodeModuleKey) => void;
     onOpenCanvas: () => void;
     onOpenDetail: (record: EpisodeDetailRecord) => void;
+    onUpdateDirectorReviewState: (rowId: string, state: DirectorReviewState) => void;
     onRunStage: (stageId: string) => void;
     onRunStoryboardScene: () => void;
     onSaveScript: () => void;
@@ -677,6 +456,7 @@ function EpisodeProductionShell({
     stageSceneRows: ScriptScene[];
     workflowRun?: AgentWorkflowRunRecord;
 }) {
+    const router = useRouter();
     const { message } = App.useApp();
     const assetLibrary = useAssetStore((state) => state.assets);
     const productionBibleItems = useProductionBibleStore((state) => state.items);
@@ -689,8 +469,16 @@ function EpisodeProductionShell({
     const artDisplay = workflowRun ? summarizeWorkflowStageDisplayState(workflowRun, "art-design", []) : undefined;
     const storyboardDisplay = workflowRun ? summarizeWorkflowStageDisplayState(workflowRun, "seedance-storyboard", storyboardSceneKeys) : undefined;
     const productionBiblePreview = latestPreview(previews, "production_bible");
+    const productionBiblePreviewCounts = productionBiblePreview ? previewCounts(productionBiblePreview, appliedPreviewItemIds) : { applied: 0, pending: 0, total: 0 };
     const storyboardPreview = latestPreview(previews, "storyboard_table");
     const videoPreview = latestPreview(previews, "video_node");
+    const assetStageActionHint = buildAssetStageActionHint({
+        display: artDisplay,
+        hasOutput: Boolean(stageOutputs["art-design"]),
+        isRunning: Boolean(runningStageIds["art-design"]),
+        previewPending: productionBiblePreviewCounts.pending,
+        previewTotal: productionBiblePreviewCounts.total,
+    });
     const currentPhase = buildEpisodePhaseText({ artDisplay, boundCanvas, directorDisplay, episodeTableShots, hasScript, productionBiblePreview, storyboardDisplay, storyboardPreview, videoPreview });
     const assetRows = buildEpisodeExtractedAssets({
         appliedPreviewItemIds,
@@ -739,12 +527,14 @@ function EpisodeProductionShell({
         boundCanvas,
         currentScene,
         currentSceneState,
+        directorReviewStates,
         episode,
         episodeTableShots,
         hasScript,
         onApplyPreview,
         onGeneratePreview,
         onOpenCanvas,
+        onUpdateDirectorReviewState,
         onRunStage,
         onRunStoryboardScene,
         onSaveScript,
@@ -792,7 +582,25 @@ function EpisodeProductionShell({
         message.success(`已绑定 ${asset.title}`);
     };
     const prepareReferenceGeneration = () => {
-        message.info("已准备生成参数；请在生图工作台确认后生成，结果会回流项目资产库并绑定。");
+        message.info("已准备生成参数；可直接进入生图工作台生成参考图。");
+    };
+    const openImageWorkbenchWithPrompt = (payload: { assetId?: string; briefId?: string; prompt: string; title?: string }) => {
+        const params = new URLSearchParams({
+            projectId: project.id,
+            projectTitle: project.title,
+            episodeId: episode.id,
+            episodeTitle: episode.title,
+            source: "episode-workbench",
+            prompt: payload.prompt,
+        });
+        if (payload.assetId) params.set("assetId", payload.assetId);
+        if (payload.briefId) params.set("briefId", payload.briefId);
+        if (payload.title) params.set("title", payload.title);
+        const href = `/image?${params.toString()}`;
+        router.push(href);
+        window.setTimeout(() => {
+            if (window.location.pathname !== "/image") window.location.assign(href);
+        }, 120);
     };
 
     return (
@@ -825,53 +633,57 @@ function EpisodeProductionShell({
                         </Button>
                     </div>
                 </div>
-                <EpisodeModuleTabs activeModule={activeModule} onChange={onModuleChange} tabs={tabs} />
             </header>
             <div className="px-6 py-5 xl:px-8">
-                {activeModule === "assets" ? (
-                    <EpisodeAssetsModulePage
-                        appliedPreviewItemIds={appliedPreviewItemIds}
-                        applyingPreviewIds={applyingPreviewIds}
-                        assets={assetRows}
-                        episode={episode}
-                        onApplyPreview={onApplyPreview}
-                        onBindAsset={bindExtractedAsset}
-                        onGeneratePreview={onGeneratePreview}
-                        onOpenImageWorkbench={() => {
-                            window.location.href = "/image";
-                        }}
-                        onPrepareGenerate={prepareReferenceGeneration}
-                        onRunStage={onRunStage}
-                        preview={productionBiblePreview}
-                        projectTitle={project.title}
-                        runningStageIds={runningStageIds}
-                        stageOutputs={stageOutputs}
-                    />
-                ) : activeModule === "storyboard" ? (
-                    <EpisodeStoryboardPackagePage
-                        episode={episode}
-                        onGeneratePreview={onGeneratePreview}
-                        onOpenAssets={() => onModuleChange("assets")}
-                        onOpenCanvas={onOpenCanvas}
-                        onRunStoryboardScene={onRunStoryboardScene}
-                        projectTitle={project.title}
-                        runningStoryboard={currentSceneState?.status === "running"}
-                        segments={packageSegments}
-                    />
-                ) : activeModule === "canvas" ? (
-                    <EpisodeCanvasHandoffPage
-                        boundCanvas={boundCanvas}
-                        episode={episode}
-                        onCreateCanvas={onCreateCanvas}
-                        onOpenAssets={() => onModuleChange("assets")}
-                        onOpenCanvas={onOpenCanvas}
-                        onOpenStoryboard={() => onModuleChange("storyboard")}
-                        projectTitle={project.title}
-                        segments={packageSegments}
-                    />
-                ) : (
-                    <EpisodeModulePanel config={moduleConfig} editorSlot={scriptEditor} filteredRows={filteredRows} activeFilter={activeFilter} onFilterChange={setActiveFilter} onOpenDetail={onOpenDetail} />
-                )}
+                <div className="grid gap-5 lg:grid-cols-[190px_minmax(0,1fr)]">
+                    <EpisodeModuleTabs activeModule={activeModule} onChange={onModuleChange} tabs={tabs} />
+                    <div className="min-w-0">
+                        {activeModule === "assets" ? (
+                            <EpisodeAssetsModulePage
+                                appliedPreviewItemIds={appliedPreviewItemIds}
+                                applyingPreviewIds={applyingPreviewIds}
+                                assets={assetRows}
+                                episode={episode}
+                                onApplyPreview={onApplyPreview}
+                                onBindAsset={bindExtractedAsset}
+                                onGeneratePreview={onGeneratePreview}
+                                onOpenImageWorkbench={openImageWorkbenchWithPrompt}
+                                onPrepareGenerate={prepareReferenceGeneration}
+                                onRunStage={onRunStage}
+                                preview={productionBiblePreview}
+                                projectTitle={project.title}
+                                runningStageIds={runningStageIds}
+                                stageActionHint={assetStageActionHint}
+                                stageOutputs={stageOutputs}
+                            />
+                        ) : activeModule === "storyboard" ? (
+                            <EpisodeStoryboardPackagePage
+                                episode={episode}
+                                onGeneratePreview={onGeneratePreview}
+                                onOpenAssets={() => onModuleChange("assets")}
+                                onOpenCanvas={onOpenCanvas}
+                                onRunStoryboardScene={onRunStoryboardScene}
+                                projectTitle={project.title}
+                                runningStoryboard={currentSceneState?.status === "running"}
+                                segments={packageSegments}
+                            />
+                        ) : activeModule === "canvas" ? (
+                            <EpisodeCanvasHandoffPage
+                                boundCanvas={boundCanvas}
+                                episode={episode}
+                                onCreateCanvas={onCreateCanvas}
+                                onImportPackage={onImportCanvasPackage}
+                                onOpenAssets={() => onModuleChange("assets")}
+                                onOpenCanvas={onOpenCanvas}
+                                onOpenStoryboard={() => onModuleChange("storyboard")}
+                                projectTitle={project.title}
+                                segments={packageSegments}
+                            />
+                        ) : (
+                            <EpisodeModulePanel config={moduleConfig} editorSlot={scriptEditor} filteredRows={filteredRows} activeFilter={activeFilter} onFilterChange={setActiveFilter} onOpenDetail={onOpenDetail} />
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -879,1246 +691,22 @@ function EpisodeProductionShell({
 
 function EpisodeModuleTabs({ activeModule, onChange, tabs }: { activeModule: EpisodeModuleKey; onChange: (module: EpisodeModuleKey) => void; tabs: Array<{ badge: string; key: EpisodeModuleKey; label: string }> }) {
     return (
-        <div className="mt-5 flex flex-wrap gap-2">
+        <nav className="grid content-start gap-2 rounded-lg border border-slate-800 bg-slate-950/35 p-2">
             {tabs.map((tab) => {
                 const active = tab.key === activeModule;
                 return (
                     <button
                         key={tab.key}
                         type="button"
-                        className={`rounded-lg border px-4 py-2 text-left transition ${active ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]" : "border-slate-800 bg-slate-950/35 text-slate-500 hover:border-slate-600 hover:text-slate-200"}`}
+                        className={`rounded-md border px-3 py-2 text-left transition ${active ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]" : "border-transparent bg-transparent text-slate-500 hover:border-slate-700 hover:bg-slate-950/45 hover:text-slate-200"}`}
                         onClick={() => onChange(tab.key)}
                     >
-                        <span className="font-semibold">{tab.label}</span>
-                        <span className="ml-2 text-xs opacity-70">{tab.badge}</span>
+                        <span className="block font-semibold">{tab.label}</span>
+                        <span className="mt-1 block text-xs opacity-70">{tab.badge}</span>
                     </button>
                 );
             })}
-        </div>
-    );
-}
-
-function EpisodeAssetsModulePage({
-    appliedPreviewItemIds,
-    applyingPreviewIds,
-    assets,
-    episode,
-    onApplyPreview,
-    onBindAsset,
-    onGeneratePreview,
-    onOpenImageWorkbench,
-    onPrepareGenerate,
-    onRunStage,
-    preview,
-    projectTitle,
-    runningStageIds,
-    stageOutputs,
-}: {
-    appliedPreviewItemIds: string[];
-    applyingPreviewIds: Record<string, boolean>;
-    assets: EpisodeExtractedAsset[];
-    episode: ScriptEpisode;
-    onApplyPreview: (preview: AgentWorkflowMappingPreview) => void;
-    onBindAsset: (row: EpisodeExtractedAsset, asset: Asset) => void;
-    onGeneratePreview: (stageId: string, targetLabel: string) => void;
-    onOpenImageWorkbench: () => void;
-    onPrepareGenerate: () => void;
-    onRunStage: (stageId: string) => void;
-    preview?: AgentWorkflowMappingPreview;
-    projectTitle: string;
-    runningStageIds: Record<string, boolean>;
-    stageOutputs: Record<string, AgentWorkflowStageOutput | undefined>;
-}) {
-    const [filter, setFilter] = useState<EpisodeAssetFilter>("全部");
-    const [selectedAssetId, setSelectedAssetId] = useState("");
-    const [processMode, setProcessMode] = useState<EpisodeAssetProcessMode>("bind");
-    const filteredAssets = assets.filter((asset) => filterEpisodeExtractedAssets(asset, filter));
-    const selectedAsset = assets.find((asset) => asset.id === selectedAssetId) || filteredAssets[0] || assets[0];
-    const summary = summarizeEpisodeExtractedAssets(assets);
-    const previewCountsResult = preview ? previewCounts(preview, appliedPreviewItemIds) : { applied: 0, pending: 0, total: 0 };
-
-    useEffect(() => {
-        if (!assets.length) {
-            setSelectedAssetId("");
-            return;
-        }
-        if (!selectedAsset || !filteredAssets.some((asset) => asset.id === selectedAsset.id)) setSelectedAssetId(filteredAssets[0]?.id || assets[0].id);
-    }, [assets, filteredAssets, selectedAsset]);
-
-    const openAssetProcess = (asset: EpisodeExtractedAsset, mode: EpisodeAssetProcessMode) => {
-        setSelectedAssetId(asset.id);
-        setProcessMode(mode);
-    };
-
-    return (
-        <section className="grid gap-5">
-            <div className="grid gap-4 border-b border-slate-800 pb-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-                <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
-                        <span>{projectTitle}</span>
-                        <span>/</span>
-                        <span>第 {padEpisodeOrder(episode.order)} 集</span>
-                        <span>/</span>
-                        <span className="text-cyan-300">资产提取</span>
-                    </div>
-                    <h2 className="mt-2 break-words text-3xl font-semibold leading-tight text-slate-50">{episode.title} · 资产提取</h2>
-                    <p className="mt-2 break-words text-sm leading-6 text-slate-500">从剧本和导演分析中提取角色、场景、道具、服装，可优先绑定项目资产库已有素材，缺素材时再按提示词生成参考图。</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" onClick={() => (stageOutputs["art-design"] ? onGeneratePreview("art-design", "设定库预览") : onRunStage("art-design"))} loading={Boolean(runningStageIds["art-design"])}>
-                        {stageOutputs["art-design"] ? "刷新资产预览" : "运行资产提取"}
-                    </Button>
-                    <Button type="primary" disabled={!preview || previewCountsResult.pending <= 0} loading={Boolean(preview && applyingPreviewIds[preview.previewId])} onClick={() => preview && onApplyPreview(preview)}>
-                        写入设定库 {previewCountsResult.pending ? previewCountsResult.pending : ""}
-                    </Button>
-                </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-5">
-                {[
-                    { label: "角色", value: summary.characters },
-                    { label: "场景", value: summary.scenes },
-                    { label: "道具", value: summary.props },
-                    { label: "服装", value: summary.costumes },
-                    { label: "缺素材", tone: summary.missing ? "amber" : "green", value: summary.missing },
-                ].map((item) => (
-                    <div key={item.label} className="rounded-lg border border-slate-800 bg-slate-950/45 px-4 py-3">
-                        <div className="text-xs text-slate-500">{item.label}</div>
-                        <div className={`mt-1 text-2xl font-semibold ${episodeToneTextClass((item.tone as EpisodeStatusTone | undefined) || "slate")}`}>{item.value}</div>
-                    </div>
-                ))}
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_430px]">
-                <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-[#091018]/88">
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
-                        <div className="flex flex-wrap gap-2">
-                            {(["全部", "缺素材", "已绑定", "待生成", "角色", "场景", "道具", "服装"] as EpisodeAssetFilter[]).map((item) => (
-                                <button
-                                    key={item}
-                                    type="button"
-                                    className={`rounded-md border px-3 py-1.5 text-sm transition ${filter === item ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:border-slate-600 hover:text-slate-200"}`}
-                                    onClick={() => setFilter(item)}
-                                >
-                                    {item}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="text-sm text-slate-500">当前显示 {filteredAssets.length} 条</div>
-                    </div>
-                    <EpisodeAssetTable assets={filteredAssets} selectedAssetId={selectedAsset?.id || ""} onOpenProcess={openAssetProcess} />
-                </div>
-                <EpisodeAssetProcessDrawer asset={selectedAsset} mode={processMode} onBindAsset={onBindAsset} onModeChange={setProcessMode} onOpenImageWorkbench={onOpenImageWorkbench} onPrepareGenerate={onPrepareGenerate} />
-            </div>
-        </section>
-    );
-}
-
-function EpisodeAssetTable({ assets, onOpenProcess, selectedAssetId }: { assets: EpisodeExtractedAsset[]; onOpenProcess: (asset: EpisodeExtractedAsset, mode: EpisodeAssetProcessMode) => void; selectedAssetId: string }) {
-    if (!assets.length) {
-        return <div className="px-5 py-10 text-center text-sm text-slate-500">暂无符合筛选的资产。</div>;
-    }
-    return (
-        <div className="overflow-x-auto">
-            <div className="min-w-[920px]">
-                <div className="grid grid-cols-[90px_minmax(240px,1fr)_110px_90px_100px_150px] gap-4 border-b border-slate-800 px-5 py-3 text-sm font-medium text-slate-500">
-                    <div>类型</div>
-                    <div>资产</div>
-                    <div>项目库</div>
-                    <div>生成</div>
-                    <div>状态</div>
-                    <div>操作</div>
-                </div>
-                <div className="divide-y divide-slate-800/90">
-                    {assets.map((asset) => {
-                        const selected = asset.id === selectedAssetId;
-                        return (
-                            <div
-                                key={asset.id}
-                                role="button"
-                                tabIndex={0}
-                                className={`grid w-full grid-cols-[90px_minmax(240px,1fr)_110px_90px_100px_150px] gap-4 border-l-4 px-5 py-4 text-left text-sm transition ${selected ? "border-cyan-300 bg-cyan-400/[0.08]" : "border-transparent hover:bg-white/[0.025]"}`}
-                                onClick={() => onOpenProcess(asset, asset.status === "已绑定" ? "bind" : asset.libraryMatchCount ? "bind" : "generate")}
-                                onKeyDown={(event) => {
-                                    if (event.key === "Enter" || event.key === " ") onOpenProcess(asset, asset.status === "已绑定" ? "bind" : asset.libraryMatchCount ? "bind" : "generate");
-                                }}
-                            >
-                                <div className="self-center font-semibold text-slate-200">{asset.type}</div>
-                                <div className="min-w-0 self-center">
-                                    <div className="break-words font-semibold text-slate-100">{asset.name}</div>
-                                    <div className="mt-1 break-words text-slate-500">{asset.description}</div>
-                                </div>
-                                <div className="self-center font-semibold text-slate-200">{asset.libraryMatchCount ? `匹配 ${asset.libraryMatchCount}` : "无匹配"}</div>
-                                <div className="self-center text-slate-300">{asset.canGenerate ? "可生成" : "-"}</div>
-                                <div className="self-center">
-                                    <EpisodeStatusPill status={asset.status} tone={asset.tone} />
-                                </div>
-                                <div className="flex self-center" onClick={(event) => event.stopPropagation()}>
-                                    <button type="button" className="rounded-l-md border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-100" onClick={() => onOpenProcess(asset, "bind")}>
-                                        绑定
-                                    </button>
-                                    <button type="button" className="rounded-r-md border border-l-0 border-slate-700 bg-slate-900/80 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-100" onClick={() => onOpenProcess(asset, "generate")}>
-                                        生成
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function EpisodeAssetProcessDrawer({
-    asset,
-    mode,
-    onBindAsset,
-    onModeChange,
-    onOpenImageWorkbench,
-    onPrepareGenerate,
-}: {
-    asset?: EpisodeExtractedAsset;
-    mode: EpisodeAssetProcessMode;
-    onBindAsset: (row: EpisodeExtractedAsset, asset: Asset) => void;
-    onModeChange: (mode: EpisodeAssetProcessMode) => void;
-    onOpenImageWorkbench: () => void;
-    onPrepareGenerate: () => void;
-}) {
-    const [assetSearch, setAssetSearch] = useState("");
-    const [kindFilter, setKindFilter] = useState<"全部" | "图片" | "文本" | "视频">("全部");
-    const [selectedCandidateId, setSelectedCandidateId] = useState("");
-    const [promptDraft, setPromptDraft] = useState("");
-    const [model, setModel] = useState("gpt-image-1");
-    const [size, setSize] = useState("1024x1024");
-    const [count, setCount] = useState("2");
-    const candidates = asset ? filterAssetCandidates(asset.candidates, assetSearch, kindFilter) : [];
-    const selectedCandidate = candidates.find((candidate) => candidate.id === selectedCandidateId) || candidates[0];
-
-    useEffect(() => {
-        setAssetSearch("");
-        setKindFilter("全部");
-        setSelectedCandidateId(asset?.candidates[0]?.id || "");
-        setPromptDraft(asset?.promptDraft || "");
-    }, [asset?.id]);
-
-    if (!asset) {
-        return <aside className="rounded-2xl border border-slate-800 bg-[#091018]/88 p-5 text-sm text-slate-500">请选择一条资产进行处理。</aside>;
-    }
-
-    return (
-        <aside className="rounded-2xl border border-slate-800 bg-[#091018]/92 shadow-[0_18px_80px_rgba(0,0,0,0.28)] xl:sticky xl:top-5">
-            <div className="border-b border-slate-800 p-5">
-                <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                        <h3 className="break-words text-2xl font-semibold leading-tight text-slate-50">{asset.name}</h3>
-                        <p className="mt-2 break-words text-sm leading-6 text-slate-500">
-                            {asset.type}资产 · {asset.episodeLabel} · {asset.referencedShotLabels.length || 0} 个镜头引用
-                        </p>
-                    </div>
-                    <EpisodeStatusPill status={asset.status} tone={asset.tone} />
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                    <button type="button" className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${mode === "bind" ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:text-slate-200"}`} onClick={() => onModeChange("bind")}>
-                        绑定已有资产
-                    </button>
-                    <button type="button" className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${mode === "generate" ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:text-slate-200"}`} onClick={() => onModeChange("generate")}>
-                        生成参考图
-                    </button>
-                </div>
-            </div>
-            <div className="grid gap-4 p-5">
-                <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
-                    <div className="text-xs font-semibold text-slate-500">提取描述</div>
-                    <div className="mt-2 break-words text-sm leading-6 text-slate-200">{asset.description}</div>
-                </div>
-                {mode === "bind" ? (
-                    <div className="grid gap-4">
-                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_110px]">
-                            <Input className="!bg-slate-950/70 !text-slate-100" placeholder="搜索候选素材" value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} />
-                            <div className="grid grid-cols-4 overflow-hidden rounded-md border border-slate-800">
-                                {(["全部", "图片", "文本", "视频"] as const).map((item) => (
-                                    <button key={item} type="button" className={`px-2 py-1.5 text-xs ${kindFilter === item ? "bg-cyan-400/15 text-cyan-100" : "bg-slate-950/50 text-slate-500"}`} onClick={() => setKindFilter(item)}>
-                                        {item}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="grid max-h-[340px] gap-2 overflow-auto pr-1">
-                            {candidates.length ? (
-                                candidates.map((candidate) => (
-                                    <button
-                                        key={candidate.id}
-                                        type="button"
-                                        className={`grid grid-cols-[72px_minmax(0,1fr)] gap-3 rounded-lg border p-2 text-left transition ${selectedCandidate?.id === candidate.id ? "border-cyan-400/70 bg-cyan-400/[0.08]" : "border-slate-800 bg-slate-950/45 hover:border-slate-600"}`}
-                                        onClick={() => setSelectedCandidateId(candidate.id)}
-                                    >
-                                        <AssetCandidateThumb asset={candidate} />
-                                        <div className="min-w-0">
-                                            <div className="break-words text-sm font-semibold text-slate-100">{candidate.title}</div>
-                                            <div className="mt-1 text-xs text-slate-500">{assetKindDisplay(candidate.kind)} · {assetVersionSummary(candidate)}</div>
-                                            {candidate.tags.length ? <div className="mt-1 break-words text-xs text-slate-500">{candidate.tags.slice(0, 4).join(" / ")}</div> : null}
-                                        </div>
-                                    </button>
-                                ))
-                            ) : (
-                                <div className="rounded-lg border border-slate-800 bg-slate-950/45 px-4 py-8 text-center text-sm text-slate-500">项目资产库暂无匹配候选。</div>
-                            )}
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" disabled={!selectedCandidate || !asset.productionBibleItem} onClick={() => selectedCandidate && onBindAsset(asset, selectedCandidate)}>
-                                绑定选中素材
-                            </Button>
-                            {!asset.productionBibleItem ? <span className="self-center text-xs text-amber-300">先写入设定库后可确认绑定。</span> : null}
-                        </div>
-                    </div>
-                ) : (
-                    <div className="grid gap-4">
-                        <div className="grid gap-2">
-                            <div className="text-xs font-semibold text-slate-500">生成提示词草案</div>
-                            <Input.TextArea className="!bg-slate-950/70 !text-slate-100" rows={8} value={promptDraft} onChange={(event) => setPromptDraft(event.target.value)} />
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-3">
-                            <label className="grid gap-1 text-xs text-slate-500">
-                                模型
-                                <Input className="!bg-slate-950/70 !text-slate-100" value={model} onChange={(event) => setModel(event.target.value)} />
-                            </label>
-                            <label className="grid gap-1 text-xs text-slate-500">
-                                尺寸
-                                <Input className="!bg-slate-950/70 !text-slate-100" value={size} onChange={(event) => setSize(event.target.value)} />
-                            </label>
-                            <label className="grid gap-1 text-xs text-slate-500">
-                                数量
-                                <Input className="!bg-slate-950/70 !text-slate-100" value={count} onChange={(event) => setCount(event.target.value)} />
-                            </label>
-                        </div>
-                        <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm leading-6 text-slate-400">生成结果会先进入项目资产库，再绑定到当前提取资产；后续分镜和画布承接都引用资产库版本。</div>
-                        <div className="flex flex-wrap gap-2">
-                            <Button type="primary" onClick={onPrepareGenerate}>
-                                用提示词生成
-                            </Button>
-                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={onOpenImageWorkbench}>
-                                打开生图工作台
-                            </Button>
-                        </div>
-                    </div>
-                )}
-            </div>
-        </aside>
-    );
-}
-
-function EpisodeStoryboardPackagePage({
-    episode,
-    onGeneratePreview,
-    onOpenAssets,
-    onOpenCanvas,
-    onRunStoryboardScene,
-    projectTitle,
-    runningStoryboard,
-    segments,
-}: {
-    episode: ScriptEpisode;
-    onGeneratePreview: (stageId: string, targetLabel: string) => void;
-    onOpenAssets: () => void;
-    onOpenCanvas: () => void;
-    onRunStoryboardScene: () => void;
-    projectTitle: string;
-    runningStoryboard: boolean;
-    segments: StoryboardStorySegment[];
-}) {
-    const { message } = App.useApp();
-    const [filter, setFilter] = useState<StoryboardPackageFilter>("全部");
-    const [selectedPackageId, setSelectedPackageId] = useState("");
-    const [drawerTab, setDrawerTab] = useState<StoryboardPackageDrawerTab>("shots");
-    const allPackages = useMemo(() => segments.flatMap((segment) => segment.packages), [segments]);
-    const filteredSegments = useMemo(
-        () =>
-            segments
-                .map((segment) => ({
-                    ...segment,
-                    packages: segment.packages.filter((pkg) => filterStoryboardPackage(pkg, filter)),
-                }))
-                .filter((segment) => filter === "全部" || segment.packages.length),
-        [filter, segments],
-    );
-    const selectedPackage = allPackages.find((pkg) => pkg.id === selectedPackageId) || filteredSegments.flatMap((segment) => segment.packages)[0] || allPackages[0];
-    const selectedSegment = selectedPackage ? segments.find((segment) => segment.id === selectedPackage.segmentId) : undefined;
-    const summary = summarizeStoryboardProductionSegments(segments);
-
-    useEffect(() => {
-        if (!allPackages.length) {
-            setSelectedPackageId("");
-            return;
-        }
-        if (!selectedPackage || !filterStoryboardPackage(selectedPackage, filter)) {
-            setSelectedPackageId(filteredSegments.flatMap((segment) => segment.packages)[0]?.id || allPackages[0].id);
-        }
-    }, [allPackages, filter, filteredSegments, selectedPackage]);
-
-    const openPackage = (pkg: StoryboardProductionPackage, tab: StoryboardPackageDrawerTab = "shots") => {
-        setSelectedPackageId(pkg.id);
-        setDrawerTab(tab);
-    };
-    const notifyAction = (label: string) => message.info(`${label} 已进入交互占位，后续接入生产包编辑能力。`);
-
-    return (
-        <section className="grid gap-5">
-            <div className="grid gap-4 border-b border-slate-800 pb-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-                <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
-                        <span>{projectTitle}</span>
-                        <span>/</span>
-                        <span>第 {padEpisodeOrder(episode.order)} 集</span>
-                        <span>/</span>
-                        <span className="text-cyan-300">分镜生产包</span>
-                    </div>
-                    <h2 className="mt-2 break-words text-3xl font-semibold leading-tight text-slate-50">{episode.title} · 分镜生产包</h2>
-                    <p className="mt-2 break-words text-sm leading-6 text-slate-500">分镜 Agent 先拆剧情段落，再生成 15 秒以内生产包；确认后按包导入画布承接。</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" loading={runningStoryboard} onClick={onRunStoryboardScene}>
-                        重跑段落拆解
-                    </Button>
-                    <Button type="primary" onClick={() => notifyAction("新增生产包")}>
-                        新增生产包
-                    </Button>
-                </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-5">
-                {[
-                    { label: "剧情段落数", value: summary.segments },
-                    { label: "生产包数", value: summary.packages, tone: "cyan" },
-                    { label: "包内镜头数", value: summary.shots },
-                    { label: "超时包数量", value: summary.timeout, tone: summary.timeout ? "red" : "green" },
-                    { label: "缺资产包数量", value: summary.missingAssets, tone: summary.missingAssets ? "amber" : "green" },
-                ].map((item) => (
-                    <div key={item.label} className="rounded-lg border border-slate-800 bg-slate-950/45 px-4 py-3">
-                        <div className="text-xs text-slate-500">{item.label}</div>
-                        <div className={`mt-1 text-2xl font-semibold ${episodeToneTextClass((item.tone as EpisodeStatusTone | undefined) || "slate")}`}>{item.value}</div>
-                    </div>
-                ))}
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_450px]">
-                <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-[#091018]/88">
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
-                        <h3 className="text-lg font-semibold text-slate-50">剧情段落与生产包</h3>
-                        <div className="flex flex-wrap gap-2">
-                            {(["全部", "待编辑", "待审核", "缺资产", "超时", "已确认", "待承接"] as StoryboardPackageFilter[]).map((item) => (
-                                <button
-                                    key={item}
-                                    type="button"
-                                    className={`rounded-md border px-3 py-1.5 text-sm transition ${filter === item ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:border-slate-600 hover:text-slate-200"}`}
-                                    onClick={() => setFilter(item)}
-                                >
-                                    {item}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                    <StoryboardPackageList segments={filteredSegments} selectedPackageId={selectedPackage?.id || ""} onAction={notifyAction} onOpenPackage={openPackage} />
-                </div>
-                <StoryboardPackageProcessDrawer
-                    activeTab={drawerTab}
-                    pkg={selectedPackage}
-                    segment={selectedSegment}
-                    onAction={notifyAction}
-                    onChangeTab={setDrawerTab}
-                    onGeneratePreview={() => onGeneratePreview("seedance-storyboard", "分镜生产包预览")}
-                    onOpenAssets={onOpenAssets}
-                    onOpenCanvas={onOpenCanvas}
-                />
-            </div>
-        </section>
-    );
-}
-
-function StoryboardPackageList({
-    onAction,
-    onOpenPackage,
-    segments,
-    selectedPackageId,
-}: {
-    onAction: (label: string) => void;
-    onOpenPackage: (pkg: StoryboardProductionPackage, tab?: StoryboardPackageDrawerTab) => void;
-    segments: StoryboardStorySegment[];
-    selectedPackageId: string;
-}) {
-    if (!segments.length) {
-        return <div className="px-5 py-10 text-center text-sm text-slate-500">暂无符合筛选的生产包。</div>;
-    }
-    return (
-        <div className="max-h-[calc(100vh-360px)] min-h-[520px] overflow-auto">
-            <div className="min-w-[800px]">
-                {segments.map((segment) => (
-                    <div key={segment.id} className="border-b border-slate-800/90 last:border-b-0">
-                        <div className="grid grid-cols-[64px_minmax(160px,1fr)_78px_58px_58px_62px_72px_84px] gap-2 bg-slate-950/35 px-5 py-4 text-sm">
-                            <div className="self-center text-lg font-semibold text-slate-100">S{padEpisodeOrder(segment.order)}</div>
-                            <div className="min-w-0">
-                                <div className="break-words font-semibold text-slate-100">{segment.title}</div>
-                                <div className="mt-1 break-words text-xs text-slate-500">{segment.scriptRange}</div>
-                            </div>
-                            <div className="self-center text-slate-300">{segment.duration} 秒</div>
-                            <div className="self-center text-slate-300">{segment.packages.length} 包</div>
-                            <div className="self-center text-slate-300">{segment.packages.reduce((total, pkg) => total + pkg.shots.length, 0)} 镜</div>
-                            <div className="self-center text-slate-300">{segment.packages.reduce((total, pkg) => total + pkg.assetLabels.length, 0)} 项</div>
-                            <div className="self-center">
-                                <EpisodeStatusPill status={segment.status} tone={segment.tone} />
-                            </div>
-                            <button type="button" className="self-center rounded-md border border-slate-700 bg-slate-900/80 px-2 py-2 text-sm font-medium text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-100" onClick={() => segment.packages[0] && onOpenPackage(segment.packages[0], "script")}>
-                                查看原文
-                            </button>
-                        </div>
-                        <div className="grid grid-cols-[64px_minmax(170px,1fr)_54px_54px_66px_72px_150px] gap-2 border-y border-slate-800/70 px-5 py-2 text-xs font-medium text-slate-500">
-                            <div>生产包</div>
-                            <div>包内容</div>
-                            <div>时长</div>
-                            <div>镜头</div>
-                            <div>引用资产</div>
-                            <div>状态</div>
-                            <div>操作</div>
-                        </div>
-                        <div className="divide-y divide-slate-800/80">
-                            {segment.packages.map((pkg) => {
-                                const selected = pkg.id === selectedPackageId;
-                                const timeout = pkg.duration > 15 || pkg.status === "超时";
-                                return (
-                                    <div key={pkg.id}>
-                                        <div
-                                            role="button"
-                                            tabIndex={0}
-                                            className={`grid grid-cols-[64px_minmax(170px,1fr)_54px_54px_66px_72px_150px] gap-2 border-l-4 px-5 py-4 text-sm transition ${selected ? "border-cyan-300 bg-cyan-400/[0.08]" : timeout ? "border-red-400/70 bg-red-500/[0.04] hover:bg-red-500/[0.07]" : "border-transparent hover:bg-white/[0.025]"}`}
-                                            onClick={() => onOpenPackage(pkg)}
-                                            onKeyDown={(event) => {
-                                                if (event.key === "Enter" || event.key === " ") onOpenPackage(pkg);
-                                            }}
-                                        >
-                                            <div className="self-center text-lg font-semibold text-slate-100">P{padEpisodeOrder(pkg.order)}</div>
-                                            <div className="min-w-0 self-center">
-                                                <div className="break-words font-semibold text-slate-100">{pkg.title}</div>
-                                                <div className="mt-1 break-words text-slate-500">{pkg.summary}</div>
-                                                {timeout ? <div className="mt-2 text-xs font-semibold text-red-300">预计超过 15 秒，需要拆分生产包。</div> : null}
-                                            </div>
-                                            <div className={`self-center font-semibold ${timeout ? "text-red-300" : "text-slate-200"}`}>{pkg.duration}s</div>
-                                            <div className="self-center text-slate-300">{pkg.shots.length} 镜</div>
-                                            <div className="self-center text-slate-300">{pkg.assetLabels.length ? `${pkg.assetLabels.length} 项` : "缺 1"}</div>
-                                            <div className="self-center">
-                                                <EpisodeStatusPill status={pkg.status} tone={pkg.tone} />
-                                            </div>
-                                            <div className="flex flex-wrap gap-2 self-center" onClick={(event) => event.stopPropagation()}>
-                                                <StoryboardPackageActionButton label="查看" onClick={() => onOpenPackage(pkg)} />
-                                                <StoryboardPackageActionButton label="编辑" onClick={() => onOpenPackage(pkg, "shots")} />
-                                                <StoryboardPackageActionButton label="插入后" onClick={() => onAction(`在 P${padEpisodeOrder(pkg.order)} 后插入生产包`)} />
-                                                <StoryboardPackageActionButton label={timeout ? "拆分" : "确认"} primary={timeout || pkg.status === "待审核"} onClick={() => onAction(timeout ? "拆分生产包" : "确认本包")} />
-                                                <StoryboardPackageActionButton label="合并" onClick={() => onAction("合并到相邻生产包")} />
-                                                <StoryboardPackageActionButton label="移动" onClick={() => onAction("移动顺序")} />
-                                                <StoryboardPackageActionButton label="重提取" onClick={() => onAction("重提取本包")} />
-                                                <StoryboardPackageActionButton label="导入画布" onClick={() => onAction("导入画布承接")} />
-                                            </div>
-                                        </div>
-                                        <button type="button" className="mx-5 my-2 rounded-md border border-dashed border-cyan-500/40 bg-cyan-400/[0.04] px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/[0.08]" onClick={() => onAction(`在 P${padEpisodeOrder(pkg.order)} 后插入生产包`)}>
-                                            + 在 P{padEpisodeOrder(pkg.order)} 后插入生产包
-                                        </button>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-function StoryboardPackageActionButton({ label, onClick, primary }: { label: string; onClick: () => void; primary?: boolean }) {
-    return (
-        <button
-            type="button"
-            className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition ${primary ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100 hover:bg-cyan-400/20" : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-400/70 hover:text-cyan-100"}`}
-            onClick={onClick}
-        >
-            {label}
-        </button>
-    );
-}
-
-function StoryboardPackageProcessDrawer({
-    activeTab,
-    onAction,
-    onChangeTab,
-    onGeneratePreview,
-    onOpenAssets,
-    onOpenCanvas,
-    pkg,
-    segment,
-}: {
-    activeTab: StoryboardPackageDrawerTab;
-    onAction: (label: string) => void;
-    onChangeTab: (tab: StoryboardPackageDrawerTab) => void;
-    onGeneratePreview: () => void;
-    onOpenAssets: () => void;
-    onOpenCanvas: () => void;
-    pkg?: StoryboardProductionPackage;
-    segment?: StoryboardStorySegment;
-}) {
-    const [promptDraft, setPromptDraft] = useState("");
-    useEffect(() => {
-        setPromptDraft(pkg?.promptSummary || "");
-    }, [pkg?.id, pkg?.promptSummary]);
-
-    if (!pkg) return <aside className="rounded-2xl border border-slate-800 bg-[#091018]/88 p-5 text-sm text-slate-500">请选择一个生产包。</aside>;
-
-    return (
-        <aside className="rounded-2xl border border-slate-800 bg-[#091018]/92 shadow-[0_18px_80px_rgba(0,0,0,0.28)] xl:sticky xl:top-5">
-            <div className="border-b border-slate-800 p-5">
-                <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                        <h3 className="break-words text-2xl font-semibold leading-tight text-slate-50">
-                            P{padEpisodeOrder(pkg.order)} · {pkg.title}
-                        </h3>
-                        <p className="mt-2 break-words text-sm leading-6 text-slate-500">
-                            属于 S{padEpisodeOrder(segment?.order || 1)} · {pkg.duration} 秒 · {pkg.shots.length} 个镜头
-                        </p>
-                    </div>
-                    <EpisodeStatusPill status={pkg.status} tone={pkg.tone} />
-                </div>
-                <div className="mt-4 grid grid-cols-4 gap-2">
-                    {([
-                        ["shots", "包内镜头"],
-                        ["script", "原剧本"],
-                        ["prompt", "提示词"],
-                        ["assets", "资产"],
-                    ] as Array<[StoryboardPackageDrawerTab, string]>).map(([key, label]) => (
-                        <button key={key} type="button" className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${activeTab === key ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:text-slate-200"}`} onClick={() => onChangeTab(key)}>
-                            {label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-            <div className="grid max-h-[calc(100vh-260px)] gap-4 overflow-auto p-5">
-                <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
-                    <div className="text-xs font-semibold text-slate-500">生产包约束</div>
-                    <div className="mt-2 break-words text-sm leading-6 text-slate-200">
-                        当前包预计 {pkg.duration} 秒，{pkg.duration > 15 ? "已超过 15 秒，建议拆分为新生产包。" : "符合 15 秒以内规则，可继续新增镜头；超过后需要拆分。"}
-                    </div>
-                </div>
-                {activeTab === "shots" ? (
-                    <div className="grid gap-4">
-                        <div className="overflow-hidden rounded-lg border border-slate-800">
-                            <div className="grid grid-cols-[48px_minmax(0,1fr)_96px_48px_70px] gap-2 border-b border-slate-800 bg-slate-950/45 px-3 py-2 text-xs font-medium text-slate-500">
-                                <div>镜头</div>
-                                <div>内容</div>
-                                <div>景别 / 运动</div>
-                                <div>时长</div>
-                                <div>操作</div>
-                            </div>
-                            <div className="divide-y divide-slate-800/80">
-                                {pkg.shots.map((shot) => (
-                                    <div key={shot.id} className="grid grid-cols-[48px_minmax(0,1fr)_96px_48px_70px] gap-2 px-3 py-3 text-sm">
-                                        <div className="font-semibold text-slate-100">{padEpisodeOrder(shot.order)}</div>
-                                        <div className="min-w-0">
-                                            <div className="break-words font-semibold text-slate-100">{shot.title}</div>
-                                            <div className="mt-1 break-words text-slate-500">{shot.action}</div>
-                                        </div>
-                                        <div className="break-words text-slate-400">{shot.camera}</div>
-                                        <div className="font-semibold text-slate-200">{shot.duration}s</div>
-                                        <div className="flex flex-wrap gap-1">
-                                            <button type="button" className="text-xs text-cyan-200" onClick={() => onAction("编辑镜头")}>
-                                                编辑
-                                            </button>
-                                            <button type="button" className="text-xs text-slate-400" onClick={() => onAction("调整顺序")}>
-                                                顺序
-                                            </button>
-                                            <button type="button" className="text-xs text-red-300" onClick={() => onAction("删除镜头")}>
-                                                删除
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={() => onAction("包内新增镜头")}>
-                                + 包内新增镜头
-                            </Button>
-                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={() => onAction("拆分生产包")}>
-                                拆分生产包
-                            </Button>
-                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={() => onAction("移动到下一包")}>
-                                移到下一包
-                            </Button>
-                        </div>
-                    </div>
-                ) : null}
-                {activeTab === "script" ? (
-                    <div className="grid gap-4">
-                        <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
-                            <div className="text-xs font-semibold text-slate-500">对应原剧本内容</div>
-                            <div className="mt-3 max-h-[360px] overflow-auto rounded-lg border border-cyan-500/25 bg-cyan-400/[0.05] p-4 text-sm leading-7 text-slate-100">{pkg.scriptText || segment?.scriptText || "暂无原剧本片段。"}</div>
-                        </div>
-                        <div className="text-sm leading-6 text-slate-500">原剧本只用于查看和定位，不在生产包抽屉内直接修改。</div>
-                    </div>
-                ) : null}
-                {activeTab === "prompt" ? (
-                    <div className="grid gap-4">
-                        <div className="grid gap-2">
-                            <div className="text-xs font-semibold text-slate-500">生产包提示词摘要</div>
-                            <Input.TextArea className="!bg-slate-950/70 !text-slate-100" rows={5} value={promptDraft} onChange={(event) => setPromptDraft(event.target.value)} />
-                        </div>
-                        <div className="overflow-hidden rounded-lg border border-slate-800">
-                            <div className="border-b border-slate-800 bg-slate-950/45 px-3 py-2 text-xs font-medium text-slate-500">包内镜头动态提示词</div>
-                            <div className="divide-y divide-slate-800/80">
-                                {pkg.shots.map((shot) => (
-                                    <div key={shot.id} className="px-3 py-3">
-                                        <div className="text-sm font-semibold text-slate-100">{padEpisodeOrder(shot.order)} · {shot.title}</div>
-                                        <div className="mt-2 break-words text-sm leading-6 text-slate-400">{shot.prompt}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={onGeneratePreview}>
-                                重提取提示词
-                            </Button>
-                            <Button type="primary" onClick={() => onAction("确认提示词")}>
-                                确认提示词
-                            </Button>
-                        </div>
-                    </div>
-                ) : null}
-                {activeTab === "assets" ? (
-                    <div className="grid gap-4">
-                        <div className="overflow-hidden rounded-lg border border-slate-800">
-                            <div className="grid grid-cols-[88px_minmax(0,1fr)_90px] gap-3 border-b border-slate-800 bg-slate-950/45 px-3 py-2 text-xs font-medium text-slate-500">
-                                <div>类型</div>
-                                <div>资产</div>
-                                <div>状态</div>
-                            </div>
-                            <div className="divide-y divide-slate-800/80">
-                                {(pkg.assetLabels.length ? pkg.assetLabels : ["待补齐场景参考"]).map((asset, index) => (
-                                    <div key={`${asset}-${index}`} className="grid grid-cols-[88px_minmax(0,1fr)_90px] gap-3 px-3 py-3 text-sm">
-                                        <div className="font-semibold text-slate-100">{index === 0 ? "场景" : "引用"}</div>
-                                        <div className="break-words text-slate-300">{asset}</div>
-                                        <div>
-                                            <EpisodeStatusPill status={pkg.status === "缺资产" && index === 0 ? "缺资产" : "已绑定"} tone={pkg.status === "缺资产" && index === 0 ? "amber" : "green"} />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        {pkg.status === "缺资产" ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.07] p-3 text-sm leading-6 text-amber-100">当前包存在缺资产项，可跳转到资产提取模块补齐绑定，或直接打开资产处理抽屉。</div> : null}
-                        <div className="flex flex-wrap gap-2">
-                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={onOpenAssets}>
-                                跳到资产提取
-                            </Button>
-                            <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={() => onAction("打开资产处理抽屉")}>
-                                打开资产处理抽屉
-                            </Button>
-                            <Button type="primary" onClick={onOpenCanvas}>
-                                导入画布承接
-                            </Button>
-                        </div>
-                    </div>
-                ) : null}
-            </div>
-            <div className="border-t border-slate-800 p-5">
-                <div className="flex flex-wrap gap-2">
-                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={() => onAction("重提取本包")}>
-                        重提取本包
-                    </Button>
-                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={() => onAction("编辑包信息")}>
-                        编辑包信息
-                    </Button>
-                    <Button type="primary" onClick={() => onAction("保存并确认")}>
-                        保存并确认
-                    </Button>
-                </div>
-            </div>
-        </aside>
-    );
-}
-
-function EpisodeCanvasHandoffPage({
-    boundCanvas,
-    episode,
-    onCreateCanvas,
-    onOpenAssets,
-    onOpenCanvas,
-    onOpenStoryboard,
-    projectTitle,
-    segments,
-}: {
-    boundCanvas?: CanvasProject;
-    episode: ScriptEpisode;
-    onCreateCanvas: () => void;
-    onOpenAssets: () => void;
-    onOpenCanvas: () => void;
-    onOpenStoryboard: () => void;
-    projectTitle: string;
-    segments: StoryboardStorySegment[];
-}) {
-    const { message } = App.useApp();
-    const [filter, setFilter] = useState<CanvasHandoffFilter>("全部");
-    const rows = useMemo(() => buildCanvasHandoffRows({ boundCanvas, segments }), [boundCanvas, segments]);
-    const [selectedPackageId, setSelectedPackageId] = useState("");
-    const filteredRows = useMemo(() => rows.filter((row) => filterCanvasHandoffRow(row, filter)), [filter, rows]);
-    const preferredFilteredRow = filteredRows.find((row) => row.canImport) || filteredRows[0];
-    const selectedRow = rows.find((row) => row.pkg.id === selectedPackageId) || preferredFilteredRow || rows.find((row) => row.canImport) || rows[0];
-    const summary = summarizeCanvasHandoffRows(rows, boundCanvas);
-
-    useEffect(() => {
-        if (!rows.length) {
-            setSelectedPackageId("");
-            return;
-        }
-        if (!selectedRow || !filterCanvasHandoffRow(selectedRow, filter)) setSelectedPackageId(preferredFilteredRow?.pkg.id || rows[0].pkg.id);
-    }, [filter, filteredRows, preferredFilteredRow, rows, selectedRow]);
-
-    const importPackage = (row?: CanvasHandoffPackageRow) => {
-        if (!row) return;
-        if (!boundCanvas) {
-            message.info("请先创建承接画布，再导入生产包节点组。");
-            return;
-        }
-        if (!row.canImport) {
-            message.warning(row.status === "缺资产" ? "当前生产包缺资产，请先补齐资产后再导入。" : "只有已确认且资产完整的生产包可以导入。");
-            return;
-        }
-        message.success(`已准备导入 P${padEpisodeOrder(row.pkg.order)}；实际节点创建将在承接写入流程中完成，不会触发任何视频任务。`);
-    };
-
-    return (
-        <section className="grid gap-5">
-            <div className="grid gap-4 border-b border-slate-800 pb-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-                <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
-                        <span>{projectTitle}</span>
-                        <span>/</span>
-                        <span>第 {padEpisodeOrder(episode.order)} 集</span>
-                        <span>/</span>
-                        <span className="text-cyan-300">画布承接</span>
-                    </div>
-                    <h2 className="mt-2 break-words text-3xl font-semibold leading-tight text-slate-50">{episode.title} · 画布承接</h2>
-                    <p className="mt-2 break-words text-sm leading-6 text-slate-500">将已确认的 15 秒生产包导入画布节点组，进入完整画布后再逐一检查节点、资产、提示词和配置。</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" onClick={onCreateCanvas}>
-                        创建新承接画布
-                    </Button>
-                    <Button type="primary" disabled={!selectedRow?.canImport} onClick={() => importPackage(selectedRow)}>
-                        导入选中生产包
-                    </Button>
-                </div>
-            </div>
-
-            <div className="grid gap-3 lg:grid-cols-5">
-                {[
-                    { label: "1. 确认生产包", text: "分镜生产包页面完成审核", tone: "green" },
-                    { active: true, label: "2. 导入到画布", text: "当前页面只做承接导入", tone: "cyan" },
-                    { label: "3. 进入完整画布", text: "逐包检查节点链路", tone: "slate" },
-                    { label: "4. 在画布生成", text: "确认后手动触发视频任务", tone: "slate" },
-                    { label: "5. 结果回流", text: "写入项目资产库并追踪来源", tone: "slate" },
-                ].map((step) => (
-                    <div key={step.label} className={`rounded-lg border px-4 py-3 transition ${step.active ? "border-cyan-400/70 bg-cyan-400/12 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]" : step.tone === "green" ? "border-emerald-500/35 bg-emerald-500/[0.06]" : "border-slate-800 bg-slate-950/45"}`}>
-                        <div className={`text-sm font-semibold ${episodeToneTextClass(step.tone as EpisodeStatusTone)}`}>{step.label}</div>
-                        <div className="mt-2 break-words text-xs leading-5 text-slate-500">{step.text}</div>
-                    </div>
-                ))}
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-5">
-                {[
-                    { label: "已确认生产包", value: summary.confirmed, tone: "green" },
-                    { label: "已导入", value: summary.imported, tone: summary.imported ? "green" : "slate" },
-                    { label: "待导入", value: summary.pending, tone: summary.pending ? "cyan" : "slate" },
-                    { label: "缺资产", value: summary.missingAssets, tone: summary.missingAssets ? "amber" : "green" },
-                    { label: "承接画布", value: summary.canvasCount, tone: summary.canvasCount ? "green" : "amber" },
-                ].map((item) => (
-                    <div key={item.label} className="rounded-lg border border-slate-800 bg-slate-950/45 px-4 py-3">
-                        <div className="text-xs text-slate-500">{item.label}</div>
-                        <div className={`mt-1 text-2xl font-semibold ${episodeToneTextClass(item.tone as EpisodeStatusTone)}`}>{item.value}</div>
-                    </div>
-                ))}
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_450px]">
-                <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-[#091018]/88">
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
-                        <h3 className="text-lg font-semibold text-slate-50">生产包导入状态</h3>
-                        <div className="flex flex-wrap gap-2">
-                            {(["全部", "待导入", "已导入", "缺资产", "已进入画布", "已生成", "已回流"] as CanvasHandoffFilter[]).map((item) => (
-                                <button
-                                    key={item}
-                                    type="button"
-                                    className={`rounded-md border px-3 py-1.5 text-sm transition ${filter === item ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:border-slate-600 hover:text-slate-200"}`}
-                                    onClick={() => setFilter(item)}
-                                >
-                                    {item}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                    <CanvasHandoffTable
-                        rows={filteredRows}
-                        selectedPackageId={selectedRow?.pkg.id || ""}
-                        onImport={importPackage}
-                        onOpenAssets={onOpenAssets}
-                        onOpenCanvas={onOpenCanvas}
-                        onOpenStoryboard={onOpenStoryboard}
-                        onPreview={(row) => setSelectedPackageId(row.pkg.id)}
-                    />
-                </div>
-                <CanvasHandoffPreviewPanel
-                    boundCanvas={boundCanvas}
-                    row={selectedRow}
-                    onCreateCanvas={onCreateCanvas}
-                    onImport={importPackage}
-                    onOpenCanvas={onOpenCanvas}
-                    onOpenStoryboard={onOpenStoryboard}
-                />
-            </div>
-        </section>
-    );
-}
-
-function CanvasHandoffTable({
-    onImport,
-    onOpenAssets,
-    onOpenCanvas,
-    onOpenStoryboard,
-    onPreview,
-    rows,
-    selectedPackageId,
-}: {
-    onImport: (row: CanvasHandoffPackageRow) => void;
-    onOpenAssets: () => void;
-    onOpenCanvas: () => void;
-    onOpenStoryboard: () => void;
-    onPreview: (row: CanvasHandoffPackageRow) => void;
-    rows: CanvasHandoffPackageRow[];
-    selectedPackageId: string;
-}) {
-    if (!rows.length) return <div className="px-5 py-10 text-center text-sm text-slate-500">暂无符合筛选的生产包。</div>;
-    return (
-        <div className="max-h-[calc(100vh-430px)] min-h-[520px] overflow-auto">
-            <div className="min-w-[800px]">
-                <div className="grid grid-cols-[56px_minmax(150px,1fr)_112px_50px_50px_72px_76px_126px] gap-2 border-b border-slate-800/70 px-5 py-3 text-xs font-medium text-slate-500">
-                    <div>生产包</div>
-                    <div>内容</div>
-                    <div>所属剧情段落</div>
-                    <div>时长</div>
-                    <div>镜头</div>
-                    <div>资产</div>
-                    <div>承接状态</div>
-                    <div>操作</div>
-                </div>
-                <div className="divide-y divide-slate-800/80">
-                    {rows.map((row) => {
-                        const selected = row.pkg.id === selectedPackageId;
-                        return (
-                            <div
-                                key={row.pkg.id}
-                                role="button"
-                                tabIndex={0}
-                                className={`grid grid-cols-[56px_minmax(150px,1fr)_112px_50px_50px_72px_76px_126px] gap-2 border-l-4 px-5 py-4 text-sm transition ${selected ? "border-cyan-300 bg-cyan-400/[0.08]" : row.status === "缺资产" ? "border-amber-400/70 bg-amber-500/[0.04] hover:bg-amber-500/[0.07]" : "border-transparent hover:bg-white/[0.025]"}`}
-                                onClick={() => onPreview(row)}
-                                onKeyDown={(event) => {
-                                    if (event.key === "Enter" || event.key === " ") onPreview(row);
-                                }}
-                            >
-                                <div className="self-center text-lg font-semibold text-slate-100">P{padEpisodeOrder(row.pkg.order)}</div>
-                                <div className="min-w-0 self-center">
-                                    <div className="break-words font-semibold text-slate-100">{row.pkg.title}</div>
-                                    <div className="mt-1 break-words text-slate-500">{row.status === "已导入" ? `已创建 ${row.importedNodeCount} 个画布节点` : row.pkg.summary}</div>
-                                </div>
-                                <div className="self-center break-words text-slate-300">S{padEpisodeOrder(row.segment.order)} · {row.segment.title}</div>
-                                <div className="self-center font-semibold text-slate-200">{row.pkg.duration}s</div>
-                                <div className="self-center text-slate-300">{row.pkg.shots.length} 镜</div>
-                                <div className={`self-center font-semibold ${row.status === "缺资产" ? "text-amber-300" : "text-slate-200"}`}>{row.assetState}</div>
-                                <div className="self-center">
-                                    <EpisodeStatusPill status={row.status} tone={row.tone} />
-                                </div>
-                                <div className="flex flex-wrap gap-2 self-center" onClick={(event) => event.stopPropagation()}>
-                                    <CanvasHandoffActionButton disabled={!row.canImport} label="导入" primary={row.canImport} onClick={() => onImport(row)} />
-                                    <CanvasHandoffActionButton label="预览" onClick={() => onPreview(row)} />
-                                    <CanvasHandoffActionButton label="查看画布" onClick={onOpenCanvas} />
-                                    {row.status === "缺资产" ? <CanvasHandoffActionButton label="补资产" onClick={onOpenAssets} /> : null}
-                                    <CanvasHandoffActionButton label="返回分镜" onClick={onOpenStoryboard} />
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function CanvasHandoffActionButton({ disabled, label, onClick, primary }: { disabled?: boolean; label: string; onClick: () => void; primary?: boolean }) {
-    return (
-        <button
-            type="button"
-            disabled={disabled}
-            className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${primary ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100 hover:bg-cyan-400/20" : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-400/70 hover:text-cyan-100"}`}
-            onClick={onClick}
-        >
-            {label}
-        </button>
-    );
-}
-
-function CanvasHandoffPreviewPanel({
-    boundCanvas,
-    onCreateCanvas,
-    onImport,
-    onOpenCanvas,
-    onOpenStoryboard,
-    row,
-}: {
-    boundCanvas?: CanvasProject;
-    onCreateCanvas: () => void;
-    onImport: (row: CanvasHandoffPackageRow) => void;
-    onOpenCanvas: () => void;
-    onOpenStoryboard: () => void;
-    row?: CanvasHandoffPackageRow;
-}) {
-    if (!row) return <aside className="rounded-2xl border border-slate-800 bg-[#091018]/88 p-5 text-sm text-slate-500">请选择一个生产包查看导入预览。</aside>;
-    const allAssetsBound = row.status !== "缺资产" && row.pkg.assetLabels.length > 0;
-    return (
-        <aside className="rounded-2xl border border-slate-800 bg-[#091018]/92 shadow-[0_18px_80px_rgba(0,0,0,0.28)] xl:sticky xl:top-5">
-            <div className="border-b border-slate-800 p-5">
-                <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                        <h3 className="text-2xl font-semibold text-slate-50">导入预览</h3>
-                        <p className="mt-2 break-words text-sm leading-6 text-slate-500">P{padEpisodeOrder(row.pkg.order)} · {row.pkg.title}</p>
-                    </div>
-                    <EpisodeStatusPill status={row.status} tone={row.tone} />
-                </div>
-            </div>
-            <div className="grid max-h-[calc(100vh-260px)] gap-5 overflow-auto p-5">
-                <CanvasHandoffNodePreview row={row} />
-                <div className="rounded-lg border border-slate-800 bg-slate-950/45">
-                    {[
-                        ["所属段落", `S${padEpisodeOrder(row.segment.order)} · ${row.segment.title}`],
-                        ["预计时长", `${row.pkg.duration} 秒`],
-                        ["包内镜头", `${row.pkg.shots.length} 个`],
-                        ["引用资产", `${row.pkg.assetLabels.length} 项，${allAssetsBound ? "全部已绑定" : "存在缺口"}`],
-                        ["承接画布", boundCanvas ? boundCanvas.title : "未创建"],
-                        ["导入后", "创建剧本、资产、提示词、配置和结果占位节点"],
-                    ].map(([label, value]) => (
-                        <div key={label} className="grid grid-cols-[92px_minmax(0,1fr)] gap-3 border-b border-slate-800 px-4 py-3 text-sm last:border-b-0">
-                            <div className="text-slate-500">{label}</div>
-                            <div className="break-words font-semibold text-slate-100">{value}</div>
-                        </div>
-                    ))}
-                </div>
-                <div className="rounded-lg border border-slate-800 bg-slate-950/45 p-4">
-                    <div className="text-sm font-semibold text-slate-100">重要限制</div>
-                    <div className="mt-2 break-words text-sm leading-6 text-slate-500">当前页面只负责导入画布节点组和查看承接状态；最终节点检查和视频生成必须进入完整画布后手动完成。</div>
-                </div>
-            </div>
-            <div className="border-t border-slate-800 p-5">
-                <div className="grid gap-2">
-                    <Button type="primary" disabled={!row.canImport} onClick={() => onImport(row)}>
-                        导入 P{padEpisodeOrder(row.pkg.order)} 到画布
-                    </Button>
-                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={boundCanvas ? onOpenCanvas : onCreateCanvas}>
-                        {boundCanvas ? "导入后进入完整画布" : "先创建承接画布"}
-                    </Button>
-                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={onOpenStoryboard}>
-                        返回分镜生产包
-                    </Button>
-                </div>
-            </div>
-        </aside>
-    );
-}
-
-function CanvasHandoffNodePreview({ row }: { row: CanvasHandoffPackageRow }) {
-    const nodes = [
-        { className: "left-[6%] top-[12%] border-cyan-400/45 bg-cyan-400/[0.08]", label: "原剧本", sub: "片段节点" },
-        { className: "left-[38%] top-[38%] border-amber-400/45 bg-amber-400/[0.07]", label: "引用资产", sub: `${row.pkg.assetLabels.length || 1} 项` },
-        { className: "right-[7%] top-[62%] border-emerald-400/45 bg-emerald-400/[0.07]", label: "提示词 + 配置", sub: "待画布检查" },
-        { className: "left-[10%] bottom-[12%] border-slate-500/45 bg-slate-400/[0.04]", label: "结果占位", sub: "生成后回流" },
-    ];
-    return (
-        <div className="overflow-hidden rounded-lg border border-slate-800 bg-[#050a0f]">
-            <div className="border-b border-slate-800 px-4 py-3 text-sm font-semibold text-slate-100">导入后会创建的画布节点</div>
-            <div className="relative h-64 bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:28px_28px]">
-                <div className="absolute left-[27%] top-[26%] h-px w-[29%] rotate-[20deg] bg-cyan-400/30" />
-                <div className="absolute left-[58%] top-[52%] h-px w-[26%] rotate-[24deg] bg-cyan-400/30" />
-                <div className="absolute left-[20%] top-[58%] h-px w-[28%] -rotate-[28deg] bg-cyan-400/20" />
-                {nodes.map((node) => (
-                    <div key={node.label} className={`absolute w-32 rounded-lg border px-3 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.24)] ${node.className}`}>
-                        <div className="text-sm font-semibold text-slate-100">{node.label}</div>
-                        <div className="mt-1 text-xs text-slate-400">{node.sub}</div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-function AssetCandidateThumb({ asset }: { asset: Asset }) {
-    const imageUrl = asset.kind === "image" ? asset.coverUrl || asset.data.dataUrl : "";
-    if (imageUrl) return <div className="h-16 overflow-hidden rounded-md border border-slate-800 bg-slate-900"><img className="h-full w-full object-cover" src={imageUrl} alt={asset.title} /></div>;
-    return <div className="grid h-16 place-items-center rounded-md border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-500">{assetKindDisplay(asset.kind)}</div>;
-}
-
-function EpisodeModulePanel({
-    activeFilter,
-    config,
-    editorSlot,
-    filteredRows,
-    onFilterChange,
-    onOpenDetail,
-}: {
-    activeFilter: string;
-    config: EpisodeModuleConfig;
-    editorSlot?: ReactNode;
-    filteredRows: EpisodeModuleRow[];
-    onFilterChange: (filter: string) => void;
-    onOpenDetail: (record: EpisodeDetailRecord) => void;
-}) {
-    return (
-        <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#091018]/82 shadow-[0_18px_80px_rgba(0,0,0,0.28)]">
-            <div className="grid gap-4 border-b border-slate-800 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-                <div className="min-w-0">
-                    <h2 className="text-xl font-semibold text-slate-50">{config.title}</h2>
-                    <p className="mt-1 break-words text-sm leading-6 text-slate-500">{config.subtitle}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    {config.actions.map((action) => (
-                        <Button
-                            key={action.label}
-                            className={action.primary ? "" : "!border-slate-700 !bg-slate-950/55 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100"}
-                            type={action.primary ? "primary" : "default"}
-                            disabled={action.disabled}
-                            loading={action.loading}
-                            onClick={action.onClick}
-                        >
-                            {action.label}
-                        </Button>
-                    ))}
-                </div>
-            </div>
-            <div className="grid gap-4 p-5">
-                <div className="grid gap-3 md:grid-cols-4">
-                    {config.summary.map((item) => (
-                        <div key={item.label} className="rounded-lg border border-slate-800 bg-slate-950/45 px-4 py-3">
-                            <div className="text-xs text-slate-500">{item.label}</div>
-                            <div className={`mt-1 break-words text-2xl font-semibold ${episodeToneTextClass(item.tone || "slate")}`}>{item.value}</div>
-                        </div>
-                    ))}
-                </div>
-                {editorSlot}
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap gap-2">
-                        {config.filters.map((filter) => (
-                            <button
-                                key={filter}
-                                type="button"
-                                className={`rounded-md border px-3 py-1.5 text-sm transition ${activeFilter === filter ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/35 text-slate-500 hover:text-slate-200"}`}
-                                onClick={() => onFilterChange(filter)}
-                            >
-                                {filter}
-                            </button>
-                        ))}
-                    </div>
-                    <div className="text-sm text-slate-500">当前显示 {filteredRows.length} 条</div>
-                </div>
-                <EpisodeDenseTable columns={config.columns} emptyText={config.emptyText} headers={config.headers} onOpenDetail={onOpenDetail} rows={filteredRows} />
-            </div>
-        </section>
-    );
-}
-
-function EpisodeDenseTable({ columns, emptyText, headers, onOpenDetail, rows }: { columns: string; emptyText: string; headers: string[]; onOpenDetail: (record: EpisodeDetailRecord) => void; rows: EpisodeModuleRow[] }) {
-    if (!rows.length) {
-        return (
-            <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-5 py-10 text-center text-sm text-slate-500">
-                {emptyText}
-            </div>
-        );
-    }
-    return (
-        <div className="overflow-x-auto rounded-xl border border-slate-800 bg-[#070d13]/90">
-            <div className="min-w-[860px]">
-                <div className="grid gap-4 border-b border-slate-800 px-4 py-3 text-sm font-medium text-slate-500" style={{ gridTemplateColumns: columns }}>
-                    {headers.map((header) => (
-                        <div key={header}>{header}</div>
-                    ))}
-                </div>
-                <div className="divide-y divide-slate-800/90">
-                    {rows.map((row) => (
-                        <div key={row.id} className={`grid gap-4 px-4 py-3 text-sm ${row.highlight ? "border-l-4 border-cyan-300 bg-cyan-400/[0.08]" : "border-l-4 border-transparent hover:bg-white/[0.025]"}`} style={{ gridTemplateColumns: columns }}>
-                            {row.cells.map((cell, index) => (
-                                <div key={index} className="min-w-0 self-center break-words leading-6 text-slate-200">
-                                    {cell}
-                                </div>
-                            ))}
-                            <div className="self-center">
-                                <EpisodeStatusPill status={row.status} tone={row.tone || "slate"} />
-                            </div>
-                            <button
-                                type="button"
-                                className="self-center rounded-md border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-100"
-                                onClick={row.onAction || (() => onOpenDetail(row.detail))}
-                            >
-                                {row.actionLabel}
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function EpisodeStatusPill({ status, tone = "slate" }: { status: string; tone?: EpisodeStatusTone }) {
-    const toneClass: Record<EpisodeStatusTone, string> = {
-        amber: "border-amber-400/45 bg-amber-400/10 text-amber-200",
-        cyan: "border-cyan-400/55 bg-cyan-400/12 text-cyan-100",
-        green: "border-emerald-400/45 bg-emerald-400/10 text-emerald-200",
-        red: "border-rose-400/45 bg-rose-400/10 text-rose-200",
-        slate: "border-slate-700 bg-slate-900/70 text-slate-300",
-    };
-    return <span className={`inline-flex w-fit items-center rounded-md border px-2.5 py-1 text-xs font-semibold ${toneClass[tone]}`}>{status}</span>;
-}
-
-function EpisodeDetailDrawer({ onClose, record }: { onClose: () => void; record: EpisodeDetailRecord | null }) {
-    return (
-        <Drawer
-            className="[&_.ant-drawer-close]:!text-slate-300"
-            open={Boolean(record)}
-            title={<span className="text-slate-100">{record?.title || "详情"}</span>}
-            width={620}
-            onClose={onClose}
-            styles={{
-                body: { background: "#061018", color: "#cbd5e1" },
-                content: { background: "#061018" },
-                header: { background: "#061018", borderBottom: "1px solid rgba(148,163,184,0.2)" },
-            }}
-        >
-            {record ? (
-                <div className="grid gap-4 text-slate-200">
-                    {record.subtitle ? <div className="break-words text-sm leading-6 text-slate-500">{record.subtitle}</div> : null}
-                    {record.meta?.length ? (
-                        <div className="grid gap-2 rounded-lg border border-slate-800 bg-slate-950/50 p-3">
-                            {record.meta.map((item) => (
-                                <div key={item.label} className="grid gap-2 text-sm sm:grid-cols-[110px_minmax(0,1fr)]">
-                                    <div className="text-slate-500">{item.label}</div>
-                                    <div className="break-words text-slate-200">{item.value}</div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : null}
-                    <div className="thin-scrollbar max-h-[68vh] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800 bg-slate-950/70 p-4 text-sm leading-7">{record.body || "暂无详情"}</div>
-                </div>
-            ) : null}
-        </Drawer>
+        </nav>
     );
 }
 
@@ -2129,12 +717,14 @@ function buildEpisodeModuleConfig(input: {
     boundCanvas?: CanvasProject;
     currentScene?: EpisodeSceneOption;
     currentSceneState?: AgentWorkflowSceneRunState;
+    directorReviewStates: Record<string, DirectorReviewState>;
     episode: ScriptEpisode;
     episodeTableShots: StoryboardTableShot[];
     hasScript: boolean;
     onApplyPreview: (preview: AgentWorkflowMappingPreview) => void;
     onGeneratePreview: (stageId: string, targetLabel: string) => void;
     onOpenCanvas: () => void;
+    onUpdateDirectorReviewState: (rowId: string, state: DirectorReviewState) => void;
     onRunStage: (stageId: string) => void;
     onRunStoryboardScene: () => void;
     onSaveScript: () => void;
@@ -2237,7 +827,9 @@ function buildScriptModuleConfig(input: {
 }
 
 function buildDirectorModuleConfig(input: {
+    directorReviewStates: Record<string, DirectorReviewState>;
     hasScript: boolean;
+    onUpdateDirectorReviewState: (rowId: string, state: DirectorReviewState) => void;
     onRunStage: (stageId: string) => void;
     runningStageIds: Record<string, boolean>;
     stageOutputs: Record<string, AgentWorkflowStageOutput | undefined>;
@@ -2249,24 +841,47 @@ function buildDirectorModuleConfig(input: {
     const status = output ? "已完成" : input.hasScript ? workflowDisplayText(display) : "待生成";
     const tone = episodeToneFromWorkflow(display, output ? "green" : input.hasScript ? "cyan" : "amber");
     const fullBody = output ? output.rawText : "尚未生成导演分析。";
+    const directorApproved = display?.displayStatus === "approved";
+    const riskConfirmed = directorApproved || input.directorReviewStates["director-risk"] === "confirmed";
+    const storyboardAdopted = directorApproved || input.directorReviewStates["director-storyboard"] === "adopted";
     const rows: EpisodeModuleRow[] = [
         directorRow("director-target", "本集目标", digest?.summary || "待确认本集叙事目标。", status, tone, fullBody, output ? undefined : () => input.onRunStage("director-analysis")),
         directorRow("director-rhythm", "情绪节奏", findDigestSection(digest, ["导演讲戏", "导演分析"]) || "待输出情绪节奏。", status, tone, fullBody, output ? undefined : () => input.onRunStage("director-analysis")),
-        directorRow("director-risk", "风险提示", findOutputKeywordLine(fullBody, ["风险", "注意", "避免"]) || "待识别风险提示。", output ? "待确认" : status, output ? "amber" : tone, fullBody, output ? undefined : () => input.onRunStage("director-analysis"), Boolean(output)),
-        directorRow("director-storyboard", "分镜建议", findDigestSection(digest, ["场景清单", "场景", "导演讲戏"]) || "待形成分镜建议。", output ? "待采用" : status, output ? "cyan" : tone, fullBody, output ? undefined : () => input.onRunStage("director-analysis")),
+        directorRow(
+            "director-risk",
+            "风险提示",
+            findOutputKeywordLine(fullBody, ["风险", "注意", "避免"]) || "待识别风险提示。",
+            output ? (riskConfirmed ? "已确认" : "待确认") : status,
+            output ? (riskConfirmed ? "green" : "amber") : tone,
+            fullBody,
+            output && !riskConfirmed ? () => input.onUpdateDirectorReviewState("director-risk", "confirmed") : output ? undefined : () => input.onRunStage("director-analysis"),
+            Boolean(output && !riskConfirmed),
+            output && !riskConfirmed ? "确认" : undefined,
+        ),
+        directorRow(
+            "director-storyboard",
+            "分镜建议",
+            findDigestSection(digest, ["场景清单", "场景", "导演讲戏"]) || "待形成分镜建议。",
+            output ? (storyboardAdopted ? "已采用" : "待采用") : status,
+            output ? (storyboardAdopted ? "green" : "cyan") : tone,
+            fullBody,
+            output && !storyboardAdopted ? () => input.onUpdateDirectorReviewState("director-storyboard", "adopted") : output ? undefined : () => input.onRunStage("director-analysis"),
+            false,
+            output && !storyboardAdopted ? "采用" : undefined,
+        ),
     ];
     return {
         actions: [{ disabled: !input.hasScript, label: output ? "重新分析" : "运行分析", loading: Boolean(input.runningStageIds["director-analysis"]), onClick: () => input.onRunStage("director-analysis"), primary: true }],
         columns: "120px minmax(300px,1fr) 90px 90px 80px",
         emptyText: "暂无导演分析记录",
-        filters: ["全部", "已完成", "待确认", "待采用", "待生成"],
+        filters: ["全部", "已完成", "已确认", "已采用", "待确认", "待采用", "待生成"],
         headers: ["项目", "分析内容", "来源", "状态", "操作"],
         rows,
         subtitle: "确认这一集的戏剧方向、情绪节奏、风险提示和分镜建议；完整分析进入详情抽屉查看。",
         summary: [
             { label: "阶段状态", tone, value: status },
             { label: "输出", value: output ? "1" : "0" },
-            { label: "风险提示", tone: output ? "amber" : "slate", value: output ? "待确认" : "未生成" },
+            { label: "风险提示", tone: output ? (riskConfirmed ? "green" : "amber") : "slate", value: output ? (riskConfirmed ? "已确认" : "待确认") : "未生成" },
             { label: "操作", tone: input.hasScript ? "cyan" : "amber", value: input.hasScript ? "可运行" : "缺剧本" },
         ],
         title: "导演分析模块",
@@ -2438,34 +1053,6 @@ function makeAssetPromptDraft({ description, name, promptSnippets, type }: { des
     return `${name}，${type}参考图，${description}，电影级写实质感，低对比深色影像风格，保持本集视觉连续性，清晰可作为后续分镜和画布承接参考。`;
 }
 
-function summarizeEpisodeExtractedAssets(assets: EpisodeExtractedAsset[]) {
-    return {
-        characters: assets.filter((asset) => asset.type === "角色").length,
-        costumes: assets.filter((asset) => asset.type === "服装").length,
-        missing: assets.filter((asset) => asset.status === "缺素材" || asset.status === "待生成").length,
-        props: assets.filter((asset) => asset.type === "道具").length,
-        scenes: assets.filter((asset) => asset.type === "场景").length,
-    };
-}
-
-function filterEpisodeExtractedAssets(asset: EpisodeExtractedAsset, filter: EpisodeAssetFilter) {
-    if (filter === "全部") return true;
-    if (filter === "缺素材") return asset.status === "缺素材" || asset.status === "待生成";
-    if (filter === "已绑定") return asset.status === "已绑定";
-    if (filter === "待生成") return asset.status === "待生成";
-    return asset.type === filter;
-}
-
-function filterAssetCandidates(candidates: Asset[], search: string, kindFilter: "全部" | "图片" | "文本" | "视频") {
-    const keyword = search.trim().toLowerCase();
-    return candidates.filter((asset) => {
-        const kindMatched = kindFilter === "全部" || assetKindDisplay(asset.kind) === kindFilter;
-        if (!kindMatched) return false;
-        if (!keyword) return true;
-        return `${asset.title} ${asset.tags.join(" ")} ${asset.note || ""}`.toLowerCase().includes(keyword);
-    });
-}
-
 function assetKindDisplay(kind: Asset["kind"]) {
     const labels: Record<Asset["kind"], string> = {
         audio: "音频",
@@ -2476,304 +1063,10 @@ function assetKindDisplay(kind: Asset["kind"]) {
     return labels[kind];
 }
 
-function assetVersionSummary(asset: Asset) {
-    const versions = Array.isArray(asset.metadata?.assetVersions) ? asset.metadata.assetVersions : [];
-    return versions.length ? `版本 ${versions.length}` : "版本 1";
-}
-
 function productionBibleRoleForExtractedAsset(row: EpisodeExtractedAsset) {
     if (row.type === "角色") return "portrait";
     if (row.type === "场景") return "environment";
     return "reference";
-}
-
-function buildStoryboardProductionSegments({
-    episode,
-    episodeTableShots,
-    sceneOptions,
-    scriptSnapshot,
-}: {
-    episode: ScriptEpisode;
-    episodeTableShots: StoryboardTableShot[];
-    sceneOptions: EpisodeSceneOption[];
-    scriptSnapshot: string;
-}): StoryboardStorySegment[] {
-    if (!episodeTableShots.length) return fallbackStoryboardProductionSegments(episode, scriptSnapshot);
-    const sortedShots = [...episodeTableShots].sort((a, b) => a.order - b.order);
-    const groups: Array<{ key: string; name: string; shots: StoryboardTableShot[] }> = [];
-    sortedShots.forEach((shot) => {
-        const key = shot.sceneId || shot.sceneName || `scene-${shot.order}`;
-        const group = groups.find((item) => item.key === key);
-        if (group) group.shots.push(shot);
-        else groups.push({ key, name: shot.sceneName || sceneOptions.find((scene) => scene.sceneKey === key)?.sceneLabel || `剧情段落 ${groups.length + 1}`, shots: [shot] });
-    });
-
-    let packageOrder = 1;
-    return groups.map((group, index) => {
-        const segmentId = `segment-${group.key || index + 1}`;
-        const shotGroups = splitShotsIntoProductionPackages(group.shots);
-        const packages = shotGroups.map((shots) => {
-            const pkg = buildStoryboardPackageFromShots({ packageOrder, segmentId, shots });
-            packageOrder += 1;
-            return pkg;
-        });
-        const duration = packages.reduce((total, pkg) => total + pkg.duration, 0);
-        const firstShot = group.shots[0];
-        const lastShot = group.shots[group.shots.length - 1];
-        const status = segmentStatusFromPackages(packages);
-        return {
-            duration,
-            id: segmentId,
-            order: index + 1,
-            packages,
-            scriptRange: `原剧本 P${padEpisodeOrder(firstShot.order)} - P${padEpisodeOrder(lastShot.order)}`,
-            scriptText: group.shots.map((shot) => shot.scriptText).filter(Boolean).join("\n\n"),
-            status,
-            title: group.name,
-            tone: segmentToneFromStatus(status),
-        };
-    });
-}
-
-function splitShotsIntoProductionPackages(shots: StoryboardTableShot[]) {
-    const groups: StoryboardTableShot[][] = [];
-    let current: StoryboardTableShot[] = [];
-    let currentDuration = 0;
-    shots.forEach((shot) => {
-        const duration = shot.estimatedDuration || 3;
-        if (current.length && currentDuration + duration > 15) {
-            groups.push(current);
-            current = [];
-            currentDuration = 0;
-        }
-        current.push(shot);
-        currentDuration += duration;
-    });
-    if (current.length) groups.push(current);
-    return groups;
-}
-
-function buildStoryboardPackageFromShots({ packageOrder, segmentId, shots }: { packageOrder: number; segmentId: string; shots: StoryboardTableShot[] }): StoryboardProductionPackage {
-    const duration = shots.reduce((total, shot) => total + (shot.estimatedDuration || 3), 0);
-    const assetLabels = storyboardPackageAssetLabels(shots);
-    const title = shots[0]?.title || `生产包 ${packageOrder}`;
-    const summary = listSafeText(shots.map((shot) => shot.visualDescription || shot.action || shot.scriptText).filter(Boolean).join("；"), "待补充生产包内容。");
-    const status = storyboardPackageStatusFromShots({ assetLabels, duration, shots });
-    return {
-        assetLabels,
-        duration,
-        id: `package-${segmentId}-${packageOrder}`,
-        order: packageOrder,
-        promptSummary: `${shots[0]?.sceneName || "本段"}，${summary}，镜头保持电影级写实、低对比深色影像质感，动作与视线方向连续。`,
-        scriptText: shots.map((shot) => shot.scriptText).filter(Boolean).join("\n\n"),
-        segmentId,
-        shots: shots.map((shot, index) => ({
-            action: shot.visualDescription || shot.action || shot.scriptText || "待补充镜头内容。",
-            camera: `${shot.shotSize || "景别待定"} / ${shot.cameraMovement || "运动待定"}`,
-            duration: shot.estimatedDuration || 3,
-            id: shot.id,
-            order: index + 1,
-            prompt: shot.workflowSource?.createdFromText || `${shot.visualDescription || shot.action || shot.scriptText}，${shot.shotSize || "中景"}，${shot.cameraMovement || "稳定推进"}，${shot.emotion || "保持当前情绪"}。`,
-            title: shot.title || `镜头 ${shot.order}`,
-        })),
-        status,
-        summary,
-        title,
-        tone: storyboardPackageTone(status),
-    };
-}
-
-function storyboardPackageAssetLabels(shots: StoryboardTableShot[]) {
-    return uniqueTextList(
-        shots.flatMap((shot) => [
-            ...shot.characters,
-            ...(shot.assetNeeds || []),
-            ...(shot.assetRefs || []).map((ref) => ref.sourceLabel || ref.role),
-            ...(shot.productionBibleRefs || []).map((ref) => ref.kind),
-        ]),
-    )
-        .filter(Boolean)
-        .slice(0, 8);
-}
-
-function storyboardPackageStatusFromShots({ assetLabels, duration, shots }: { assetLabels: string[]; duration: number; shots: StoryboardTableShot[] }): StoryboardPackageStatus {
-    if (duration > 15) return "超时";
-    if (!assetLabels.length) return "缺资产";
-    if (shots.some((shot) => !shot.visualDescription && !shot.action)) return "待编辑";
-    if (shots.some((shot) => !shot.workflowSource)) return "待审核";
-    return "待承接";
-}
-
-function summarizeStoryboardProductionSegments(segments: StoryboardStorySegment[]) {
-    const packages = segments.flatMap((segment) => segment.packages);
-    return {
-        missingAssets: packages.filter((pkg) => pkg.status === "缺资产").length,
-        packages: packages.length,
-        segments: segments.length,
-        shots: packages.reduce((total, pkg) => total + pkg.shots.length, 0),
-        timeout: packages.filter((pkg) => pkg.status === "超时" || pkg.duration > 15).length,
-    };
-}
-
-function filterStoryboardPackage(pkg: StoryboardProductionPackage, filter: StoryboardPackageFilter) {
-    if (filter === "全部") return true;
-    return pkg.status === filter;
-}
-
-function segmentStatusFromPackages(packages: StoryboardProductionPackage[]) {
-    if (packages.some((pkg) => pkg.status === "超时")) return "含超时";
-    if (packages.some((pkg) => pkg.status === "缺资产")) return "缺资产";
-    if (packages.some((pkg) => pkg.status === "待编辑" || pkg.status === "待审核")) return "待处理";
-    if (packages.every((pkg) => pkg.status === "已确认")) return "已确认";
-    return "已拆解";
-}
-
-function segmentToneFromStatus(status: string): EpisodeStatusTone {
-    if (status === "含超时") return "red";
-    if (status === "缺资产" || status === "待处理") return "amber";
-    if (status === "已确认" || status === "已拆解") return "green";
-    return "slate";
-}
-
-function storyboardPackageTone(status: StoryboardPackageStatus): EpisodeStatusTone {
-    if (status === "已确认") return "green";
-    if (status === "待编辑" || status === "待承接") return "cyan";
-    if (status === "超时") return "red";
-    if (status === "缺资产" || status === "待审核") return "amber";
-    return "slate";
-}
-
-function fallbackStoryboardProductionSegments(episode: ScriptEpisode, scriptSnapshot: string): StoryboardStorySegment[] {
-    const scriptBody = scriptSnapshot || episode.summary || "女主刚走到旧楼后门，身后忽然传来急刹车声。她停住脚步，手机屏幕亮了一下。路灯闪烁，巷口车灯把她的影子拉得很长。";
-    const packages: Array<Omit<StoryboardProductionPackage, "id" | "segmentId" | "tone"> & { segmentOrder: number }> = [
-        fallbackStoryboardPackage(1, 1, "建立环境与女主入场", "雨夜街口、旧楼后门，女主停步。", 12, "已确认", ["暗巷街景", "女主雨衣", "车灯背光", "旧楼后门", "潮湿地面"], scriptBody, [
-            ["女主停在旧楼后门", "全景 / 缓慢推进", 4],
-            ["雨水从门牌滴落", "特写 / 静止", 3],
-            ["车灯从巷口扫过", "中景 / 横移", 5],
-        ]),
-        fallbackStoryboardPackage(1, 2, "女主察觉危险", "急刹车声、回头、路灯闪烁。", 10, "待编辑", ["林澈", "暗巷街景", "车灯背光", "手机屏幕"], scriptBody, [
-            ["女主停下脚步，听见车声", "中近景 / 跟拍", 5],
-            ["她缓慢回头，表情紧张", "近景 / 稳定推进", 5],
-        ]),
-        fallbackStoryboardPackage(2, 3, "暗巷追击", "跟拍、转弯、车辆逼近。", 14, "缺资产", ["林澈", "暗巷街景"], scriptBody, [
-            ["女主沿暗巷奔跑", "全景 / 手持跟拍", 5],
-            ["脚步踩过积水", "特写 / 低机位", 3],
-            ["车辆灯光逼近", "中景 / 快速推近", 4],
-            ["她贴墙躲避", "近景 / 急停", 2],
-        ]),
-        fallbackStoryboardPackage(2, 4, "车灯扫出证据", "墙面、袖扣、女主拍照。", 11, "待审核", ["墙面反光", "带血袖扣", "手机屏幕"], scriptBody, [
-            ["车灯扫过墙面", "全景 / 横移", 4],
-            ["袖扣在水边反光", "特写 / 微距", 3],
-            ["女主迅速拍照留证", "近景 / 下压", 4],
-        ]),
-        fallbackStoryboardPackage(2, 5, "反派声音逼近", "脚步声、阴影、台词压迫。", 9, "已确认", ["反派阴影", "暗巷街景"], scriptBody, [["阴影越过墙面", "中景 / 缓慢推近", 9]]),
-        fallbackStoryboardPackage(3, 6, "仓库火把对峙", "女主进入柴油仓库，火把照亮油桶和刀光。", 18, "超时", ["海边柴油仓库", "旧油桶", "弹簧刀", "女主雨衣"], scriptBody, [
-            ["女主推开仓库铁门", "全景 / 前推", 5],
-            ["火把映亮旧油桶", "中景 / 环绕", 5],
-            ["反派亮出弹簧刀", "特写 / 急推", 4],
-            ["女主握紧手机后退", "近景 / 手持跟拍", 4],
-        ]),
-    ];
-    return [
-        fallbackStoryboardSegment(1, "雨夜追到旧楼后门", "原剧本 1-7 段", packages, scriptBody),
-        fallbackStoryboardSegment(2, "暗巷追击与证物发现", "原剧本 8-18 段", packages, scriptBody),
-        fallbackStoryboardSegment(3, "仓库对峙前的危险升级", "原剧本 19-26 段", packages, scriptBody),
-    ];
-}
-
-function fallbackStoryboardSegment(order: number, title: string, scriptRange: string, packages: Array<Omit<StoryboardProductionPackage, "id" | "segmentId" | "tone"> & { segmentOrder: number }>, scriptText: string): StoryboardStorySegment {
-    const segmentId = `fallback-segment-${order}`;
-    const segmentPackages = packages
-        .filter((pkg) => pkg.segmentOrder === order)
-        .map((pkg) => ({
-            ...pkg,
-            id: `fallback-package-${pkg.order}`,
-            segmentId,
-            tone: storyboardPackageTone(pkg.status),
-        }));
-    const status = segmentStatusFromPackages(segmentPackages);
-    return {
-        duration: segmentPackages.reduce((total, pkg) => total + pkg.duration, 0),
-        id: segmentId,
-        order,
-        packages: segmentPackages,
-        scriptRange,
-        scriptText,
-        status,
-        title,
-        tone: segmentToneFromStatus(status),
-    };
-}
-
-function fallbackStoryboardPackage(segmentOrder: number, order: number, title: string, summary: string, duration: number, status: StoryboardPackageStatus, assetLabels: string[], scriptText: string, shots: Array<[string, string, number]>) {
-    return {
-        assetLabels,
-        duration,
-        order,
-        promptSummary: `${summary} 电影级写实，低对比雨夜光影，镜头从半身逐渐推进到近景，保持动作连续和情绪压迫。`,
-        scriptText,
-        segmentOrder,
-        shots: shots.map(([shotTitle, camera, shotDuration], index) => ({
-            action: shotTitle,
-            camera,
-            duration: shotDuration,
-            id: `fallback-shot-${order}-${index}`,
-            order: index + 1,
-            prompt: `${shotTitle}，${camera}，${shotDuration} 秒，雨夜暗青色调，写实短剧影像质感。`,
-            title: shotTitle,
-        })),
-        status,
-        summary,
-        title,
-    };
-}
-
-function buildCanvasHandoffRows({ boundCanvas, segments }: { boundCanvas?: CanvasProject; segments: StoryboardStorySegment[] }): CanvasHandoffPackageRow[] {
-    let eligibleIndex = 0;
-    return segments.flatMap((segment) =>
-        segment.packages.map((pkg) => {
-            const assetMissing = pkg.status === "缺资产" || !pkg.assetLabels.length;
-            const confirmed = pkg.status === "已确认" || pkg.status === "待承接";
-            let status: CanvasHandoffStatus = "未导入";
-            if (assetMissing) status = "缺资产";
-            else if (confirmed) {
-                eligibleIndex += 1;
-                status = boundCanvas && eligibleIndex === 1 ? "已导入" : "待导入";
-            }
-            const importedNodeCount = status === "已导入" ? Math.max(5, Math.min(boundCanvas?.nodes.length || 5, 12)) : 0;
-            return {
-                assetState: assetMissing ? "缺 1" : `${pkg.assetLabels.length} 项已绑定`,
-                canImport: Boolean(boundCanvas) && status === "待导入",
-                importedNodeCount,
-                pkg,
-                segment,
-                status,
-                tone: canvasHandoffTone(status),
-            };
-        }),
-    );
-}
-
-function summarizeCanvasHandoffRows(rows: CanvasHandoffPackageRow[], boundCanvas?: CanvasProject) {
-    return {
-        canvasCount: boundCanvas ? 1 : 0,
-        confirmed: rows.filter((row) => row.pkg.status === "已确认" || row.pkg.status === "待承接").length,
-        imported: rows.filter((row) => ["已导入", "已进入画布", "已生成", "已回流"].includes(row.status)).length,
-        missingAssets: rows.filter((row) => row.status === "缺资产").length,
-        pending: rows.filter((row) => row.status === "待导入").length,
-    };
-}
-
-function filterCanvasHandoffRow(row: CanvasHandoffPackageRow, filter: CanvasHandoffFilter) {
-    if (filter === "全部") return true;
-    return row.status === filter;
-}
-
-function canvasHandoffTone(status: CanvasHandoffStatus): EpisodeStatusTone {
-    if (status === "已回流" || status === "已生成" || status === "已进入画布" || status === "已导入") return "green";
-    if (status === "待导入") return "cyan";
-    if (status === "缺资产") return "amber";
-    return "slate";
 }
 
 function buildAssetsModuleConfig(input: {
@@ -3008,9 +1301,9 @@ function buildCanvasModuleConfig(input: {
     };
 }
 
-function directorRow(id: string, label: string, content: string, status: string, tone: EpisodeStatusTone, body: string, onAction?: () => void, highlight?: boolean): EpisodeModuleRow {
+function directorRow(id: string, label: string, content: string, status: string, tone: EpisodeStatusTone, body: string, onAction?: () => void, highlight?: boolean, actionLabel?: string): EpisodeModuleRow {
     return {
-        actionLabel: onAction ? "运行" : "查看",
+        actionLabel: actionLabel || (onAction ? "运行" : status === "待确认" ? "确认" : status === "待采用" ? "采用" : "查看"),
         cells: [label, content, "导演分析"],
         detail: { body, subtitle: content, title: label },
         highlight,
@@ -3051,20 +1344,9 @@ function storyboardPlaceholderRows(scenes: EpisodeSceneOption[], currentSceneKey
     }));
 }
 
-function EpisodeProgress({ label, value }: { label: string; value: number }) {
-    return (
-        <div className="flex items-center gap-2">
-            <div className="h-1.5 flex-1 rounded-full bg-slate-800">
-                <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400" style={{ width: `${Math.max(0, Math.min(value, 100))}%` }} />
-            </div>
-            <span className="text-xs text-slate-400">{label}</span>
-        </div>
-    );
-}
-
 function filterEpisodeRows(rows: EpisodeModuleRow[], filter: string) {
     if (filter === "全部") return rows;
-    return rows.filter((row) => row.status === filter || row.status.includes(filter) || (filter === "已完成" && row.status === "完整"));
+    return rows.filter((row) => row.status === filter || row.status.includes(filter) || (filter === "已完成" && (row.status === "完整" || row.status.startsWith("已"))));
 }
 
 function latestPreview(previews: AgentWorkflowMappingPreview[], targetType: AgentWorkflowMappingPreview["targetType"]) {
@@ -3110,6 +1392,31 @@ function workflowDisplayText(display?: WorkflowStageDisplaySummary) {
     return workflowStageStatusLabel(display.displayStatus);
 }
 
+function buildAssetStageActionHint({
+    display,
+    hasOutput,
+    isRunning,
+    previewPending,
+    previewTotal,
+}: {
+    display?: WorkflowStageDisplaySummary;
+    hasOutput: boolean;
+    isRunning: boolean;
+    previewPending: number;
+    previewTotal: number;
+}): { blocked?: boolean; text: string; tone: EpisodeStatusTone } {
+    if (isRunning || display?.displayStatus === "running") return { text: "资产提取正在运行，等待 Agent 返回结果。", tone: "cyan" };
+    if (display?.displayStatus === "blocked") return { blocked: true, text: `暂不可运行，${formatBlockedReason(display.blockedReason)}。`, tone: "amber" };
+    if (display?.displayStatus === "error") return { text: "上次资产提取失败，请查看错误后重新运行。", tone: "red" };
+    if (display?.displayStatus === "rejected") return { text: "资产提取结果已驳回，可重新运行生成新结果。", tone: "red" };
+    if (previewPending > 0) return { text: `已有资产预览，${previewPending} 项待写入设定库。`, tone: "amber" };
+    if (previewTotal > 0) return { text: `资产预览已处理完成，共 ${previewTotal} 项。`, tone: "green" };
+    if (hasOutput) return { text: "资产提取已完成，可刷新资产预览或写入设定库。", tone: "cyan" };
+    if (display?.displayStatus === "review") return { text: "资产提取产物待审核，可生成资产预览。", tone: "cyan" };
+    if (display?.displayStatus === "approved") return { text: "资产提取阶段已批准，可继续处理生图需求。", tone: "green" };
+    return { text: "可运行，将从剧本和导演分析中提取角色、场景、道具和服装。", tone: "slate" };
+}
+
 function episodeToneFromWorkflow(display: WorkflowStageDisplaySummary | undefined, fallback: EpisodeStatusTone): EpisodeStatusTone {
     if (!display) return fallback;
     if (display.displayStatus === "approved") return "green";
@@ -3117,28 +1424,6 @@ function episodeToneFromWorkflow(display: WorkflowStageDisplaySummary | undefine
     if (display.displayStatus === "blocked" || display.displayStatus === "idle") return "amber";
     if (display.displayStatus === "error" || display.displayStatus === "rejected") return "red";
     return fallback;
-}
-
-function episodeToneTextClass(tone: EpisodeStatusTone) {
-    const classes: Record<EpisodeStatusTone, string> = {
-        amber: "text-amber-200",
-        cyan: "text-cyan-100",
-        green: "text-emerald-200",
-        red: "text-rose-200",
-        slate: "text-slate-100",
-    };
-    return classes[tone];
-}
-
-function findDigestSection(digest: ReturnType<typeof buildStageOutputDigest> | undefined, labels: string[]) {
-    return digest?.sections.find((section) => labels.some((label) => section.label.includes(label)))?.value || "";
-}
-
-function findOutputKeywordLine(text: string, keywords: string[]) {
-    return text
-        .split(/\r?\n/g)
-        .map((line) => line.trim())
-        .find((line) => keywords.some((keyword) => line.includes(keyword))) || "";
 }
 
 function productionBibleKindLabel(kind: unknown) {
@@ -3353,13 +1638,6 @@ function stageCollapseItem({
         ),
     };
 }
-
-type EpisodeSceneOption = {
-    sceneKey: string;
-    sceneLabel: string;
-    scriptText: string;
-    source: "storyboard_table" | "script_scene" | "script_text";
-};
 
 function StoryboardSceneWorkbench({
     scenes,
@@ -3654,344 +1932,25 @@ function StatusTag({ status }: { status: AgentWorkflowDisplayStatus }) {
     );
 }
 
-function stageOutput(workflowRun: AgentWorkflowRunRecord | undefined, outputs: AgentWorkflowStageOutput[], stageId: string) {
-    const stageState = workflowRun?.stageStates.find((stage) => stage.stageId === stageId);
-    return stageState?.outputId ? outputs.find((output) => output.outputId === stageState.outputId) : outputs.find((output) => output.workflowRunId === workflowRun?.id && output.stageId === stageId);
-}
-
-function StageOutputDigest({ stageId, output }: { stageId: string; output: AgentWorkflowStageOutput }) {
-    const digest = useMemo(() => buildStageOutputDigest(stageId, output), [output, stageId]);
-    return (
-        <div className="grid gap-3">
-            <div className="studio-panel-muted p-3">
-                <div className="mb-1 text-xs font-medium text-stone-500">核心摘要</div>
-                <div className="text-sm leading-6 whitespace-pre-line text-stone-800 dark:text-stone-100">{digest.summary}</div>
-            </div>
-            {digest.sections.length ? (
-                <div className="grid gap-2 md:grid-cols-2">
-                    {digest.sections.map((section) => (
-                        <div key={section.label} className="studio-panel-muted p-3">
-                            <div className="mb-1 text-xs font-medium text-stone-500">{section.label}</div>
-                            <div className="text-sm leading-6 whitespace-pre-line text-stone-700 dark:text-stone-200">{section.value}</div>
-                        </div>
-                    ))}
-                </div>
-            ) : null}
-        </div>
-    );
-}
-
-function buildStageOutputDigest(stageId: string, output: AgentWorkflowStageOutput) {
-    const record = parseStageOutputRecord(stageId, output);
-    const rawText = stripCodeFence(output.rawText);
-    const hasRecord = Object.keys(record).length > 0;
-    const sections = stageOutputSectionSpecs(stageId)
-        .map((section) => ({
-            label: section.label,
-            value: cleanOutputText(readFirstText(record, section.keys) || (hasRecord ? "" : readMarkedSection(rawText, section.markers))),
-        }))
-        .filter((section) => section.value);
-    const summary = cleanOutputText(readDirectText(record, ["summary", "title", "overview", "摘要", "核心摘要"]) || (looksLikeStructuredText(output.summary) ? "" : output.summary) || summarizePlainText(rawText) || "已按下方分区展示完整阶段产物");
-    return { summary, sections };
-}
-
-function stageOutputSectionSpecs(stageId: string) {
-    if (stageId === "director-analysis") {
-        return [
-            { label: "导演讲戏", keys: ["directorScript", "directorNotes", "directingNotes", "storytellingScript", "讲戏本", "导演讲戏", "导演分析"], markers: ["导演讲戏", "讲戏本", "导演分析"] },
-            { label: "人物清单", keys: ["characters", "characterList", "人物清单", "人物"], markers: ["人物清单", "人物"] },
-            { label: "场景清单", keys: ["scenes", "sceneList", "场景清单", "场景"], markers: ["场景清单", "场景"] },
-            { label: "互动道具", keys: ["props", "interactiveProps", "propList", "道具清单", "互动道具清单", "互动道具"], markers: ["互动道具", "道具清单"] },
-        ];
-    }
-    if (stageId === "art-design") {
-        return [
-            { label: "人物设定", keys: ["characters", "characterPrompts", "人物设定提示词", "人物设定"], markers: ["人物设定", "角色设定"] },
-            { label: "场景规划", keys: ["scenePlans", "scene2x2Plans", "scenes", "scenePrompts", "locations", "场景规划提示词", "场景 2x2"], markers: ["场景 2x2", "场景规划", "场景设定"] },
-            { label: "道具提示词", keys: ["props", "interactiveProps", "propDesigns", "propPrompts", "道具提示词", "道具"], markers: ["道具提示词", "道具"] },
-            { label: "服化道提示词", keys: ["costumeMakeupProps", "costumePrompts", "makeupPrompts", "artDirectionPrompts", "服化道提示词", "服化道"], markers: ["服化道", "美术设计"] },
-        ];
-    }
-    return [
-        { label: "场次视觉 DNA", keys: ["sceneVisualDna", "visualDna", "visualDnaSummary", "场次视觉DNA", "场次视觉 DNA"], markers: ["场次视觉 DNA", "视觉 DNA"] },
-        { label: "拆分计划", keys: ["promptPlanSummary", "promptPlan", "shotPlan", "splitPlan", "生成P拆分表", "生成 P / 镜头 P 拆分表"], markers: ["生成 P / 镜头 P 拆分表", "生成 P 拆分", "镜头 P 拆分"] },
-        { label: "Seedance 提示词", keys: ["seedancePrompt", "seedancePrompts", "singlePTaskCards", "taskCards", "items"], markers: ["Seedance 提示词", "单 P 任务卡", "一键复制"] },
-        { label: "工业化预检", keys: ["industrialPrecheckSummary", "industrialPrecheck", "precheckSummary", "工业化预检记录"], markers: ["工业化预检", "预检记录"] },
-    ];
-}
-
-function parseStageOutputRecord(stageId: string, output: AgentWorkflowStageOutput): Record<string, unknown> {
-    const source = output.structuredOutput !== undefined ? output.structuredOutput : parseStageOutputJson(output.rawText);
-    if (!source || typeof source !== "object" || Array.isArray(source)) return {};
-    const record = source as Record<string, unknown>;
-    const business = findStageBusinessRecord(stageId, record);
-    return business || record;
-}
-
-function findStageBusinessRecord(stageId: string, record: Record<string, unknown>): Record<string, unknown> | undefined {
-    const keys =
-        stageId === "director-analysis"
-            ? ["directorOutput", "directorAnalysisOutput", "directorAnalysis", "analysisOutput", "stageOutput"]
-            : stageId === "art-design"
-              ? ["artDesignOutput", "artDirectionOutput", "visualDesignOutput", "stageOutput"]
-              : ["storyboardOutput", "seedanceOutput", "sceneOutput", "stageOutput"];
-    for (const key of keys) {
-        const value = record[key];
-        if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
-    }
-    for (const value of Object.values(record)) {
-        if (!value || typeof value !== "object" || Array.isArray(value)) continue;
-        const nested = findStageBusinessRecord(stageId, value as Record<string, unknown>);
-        if (nested) return nested;
-    }
-    return undefined;
-}
-
-function parseStageOutputJson(rawText: string) {
-    const direct = safeJsonParse(rawText.trim());
-    if (direct !== undefined) return direct;
-    const plain = stripCodeFence(rawText);
-    const plainJson = safeJsonParse(plain);
-    if (plainJson !== undefined) return plainJson;
-    const objectText = extractFirstJsonObjectText(plain);
-    if (objectText) {
-        const parsedObject = safeJsonParse(objectText);
-        if (parsedObject !== undefined) return parsedObject;
-    }
-    const blockPattern = /```(?:json)?\s*([\s\S]*?)```/gi;
-    let match: RegExpExecArray | null;
-    while ((match = blockPattern.exec(rawText))) {
-        const parsed = safeJsonParse(match[1].trim());
-        if (parsed !== undefined) return parsed;
-    }
-    return undefined;
-}
-
-function extractFirstJsonObjectText(text: string) {
-    const start = text.indexOf("{");
-    if (start < 0) return "";
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-    for (let index = start; index < text.length; index += 1) {
-        const char = text[index];
-        if (escaped) {
-            escaped = false;
-            continue;
-        }
-        if (char === "\\") {
-            escaped = inString;
-            continue;
-        }
-        if (char === '"') {
-            inString = !inString;
-            continue;
-        }
-        if (inString) continue;
-        if (char === "{") depth += 1;
-        if (char === "}") depth -= 1;
-        if (depth === 0) return text.slice(start, index + 1);
-    }
-    return text.slice(start);
-}
-
-function safeJsonParse(value: string) {
-    try {
-        return JSON.parse(value);
-    } catch {
-        return undefined;
-    }
-}
-
-function readFirstText(record: Record<string, unknown>, keys: string[]) {
-    for (const key of keys) {
-        const text = summarizeOutputValue(record[key]);
-        if (text) return text;
-    }
-    const nested = summarizeOutputValue(findNestedOutputValue(record, keys));
-    if (nested) return nested;
-    const businessEntries = Object.entries(record).filter(([key]) => !isOutputMetaKey(key));
-    if (businessEntries.length === 1) return summarizeOutputValue(businessEntries[0][1]);
-    return "";
-}
-
-function readDirectText(record: Record<string, unknown>, keys: string[]) {
-    for (const key of keys) {
-        const text = summarizeOutputValue(record[key]);
-        if (text) return text;
-    }
-    return "";
-}
-
-function findNestedOutputValue(value: unknown, keys: string[], depth = 0): unknown {
-    if (!value || depth > 4) return undefined;
-    if (Array.isArray(value)) {
-        for (const item of value) {
-            const nested = findNestedOutputValue(item, keys, depth + 1);
-            if (nested !== undefined) return nested;
-        }
-        return undefined;
-    }
-    if (typeof value !== "object") return undefined;
-    const record = value as Record<string, unknown>;
-    for (const key of keys) {
-        if (record[key] !== undefined) return record[key];
-    }
-    for (const [key, item] of Object.entries(record)) {
-        if (isOutputMetaKey(key)) continue;
-        const nested = findNestedOutputValue(item, keys, depth + 1);
-        if (nested !== undefined) return nested;
-    }
-    return undefined;
-}
-
-function summarizeOutputValue(value: unknown): string {
-    if (typeof value === "string") return value.trim();
-    if (Array.isArray(value)) {
-        return value
-            .map((item, index) => summarizeOutputItem(item, index))
-            .filter(Boolean)
-            .join("\n");
-    }
-    if (value && typeof value === "object") {
-        const record = value as Record<string, unknown>;
-        const direct =
-            Object.keys(record).length <= 2
-                ? readStringValue(record, ["summary", "description", "text", "content", "appearance", "costume", "makeup", "function", "usage", "note", "visualPrompt", "imagePrompt", "designPrompt", "prompt", "promptText"])
-                : "";
-        if (direct) return direct;
-        return Object.entries(record)
-            .filter(([key]) => !isOutputMetaKey(key))
-            .map(([key, item]) => `${humanizeOutputKey(key)}：${summarizeOutputValue(item)}`)
-            .filter((line) => !line.endsWith("："))
-            .join("\n");
-    }
-    return "";
-}
-
-function summarizeOutputItem(value: unknown, index: number) {
-    if (typeof value === "string") return `- ${value.trim()}`;
-    if (!value || typeof value !== "object") return "";
-    const record = value as Record<string, unknown>;
-    const title = readStringValue(record, ["characterName", "sceneName", "propName", "name", "title", "location", "role", "角色", "名称"]) || `条目 ${index + 1}`;
-    const titleKeys = new Set(["characterName", "sceneName", "propName", "name", "title", "location", "role", "角色", "名称"]);
-    const details = Object.entries(record)
-        .filter(([key]) => !isOutputMetaKey(key) && !titleKeys.has(key))
-        .map(([key, item]) => {
-            const text = summarizeOutputValue(item);
-            return text ? `  ${humanizeOutputKey(key)}：${text}` : "";
-        })
-        .filter(Boolean);
-    return [`- ${title}`, ...details].join("\n");
-}
-
-function readStringValue(record: Record<string, unknown>, keys: string[]) {
-    for (const key of keys) {
-        const value = record[key];
-        if (typeof value === "string" && value.trim()) return value.trim();
-    }
-    return "";
-}
-
-function readMarkedSection(rawText: string, markers: string[]) {
-    const lines = stripCodeFence(rawText)
-        .split(/\n+/)
-        .map((line) => line.trim())
-        .filter(Boolean);
-    const start = lines.findIndex((line) => markers.some((marker) => line.includes(marker)));
-    if (start < 0) return "";
-    const next = lines.findIndex((line, index) => index > start && /^#{1,4}\s+|^[一二三四五六七八九十]+[、.．]|^\d+[.、]/.test(line));
-    return lines.slice(start, next > start ? next : lines.length).join("\n");
-}
-
-function summarizePlainText(text: string) {
-    const plain = stripCodeFence(text);
-    if (plain.startsWith("{") || plain.startsWith("[")) return "";
-    return plain
-        .split(/\n+/)
-        .map((line) => line.trim())
-        .filter((line) => line && !looksLikeStructuredText(line))
-        .join("\n");
-}
-
-function stripCodeFence(text: string) {
-    return text
-        .replace(/^```(?:json|markdown)?\s*/i, "")
-        .replace(/\s*```$/i, "")
-        .trim();
-}
-
-function cleanOutputText(text: string) {
-    return text
-        .replace(/\s+\n/g, "\n")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
-}
-
-function looksLikeStructuredText(text: string) {
-    const value = text.trim();
-    return value.startsWith("{") || value.startsWith("[") || value.startsWith("```");
-}
-
-function isOutputMetaKey(key: string) {
-    return [
-        "workflowId",
-        "workflowVersion",
-        "workflowRunId",
-        "stageId",
-        "stageName",
-        "agentId",
-        "agentName",
-        "metadata",
-        "sourceFiles",
-        "qualityGateIds",
-        "qualityGates",
-        "specReadingRecord",
-        "readPaths",
-        "verification",
-        "complianceNotes",
-        "createdAt",
-        "updatedAt",
-        "warnings",
-        "notes",
-        "rawText",
-    ].includes(key);
-}
-
-function humanizeOutputKey(key: string) {
-    const labels: Record<string, string> = {
-        items: "条目",
-        characters: "人物",
-        scenes: "场景",
-        scenePlans: "场景",
-        sceneId: "场景编号",
-        time: "时间",
-        environment: "环境",
-        props: "道具",
-        interactiveProps: "道具",
-        shots: "镜头",
-        appearance: "外观",
-        status: "状态",
-        description: "描述",
-        costume: "服装",
-        makeup: "妆容",
-        function: "功能",
-        usage: "用途",
-        action: "动作",
-        visualDescription: "视觉描述",
-        visualPrompt: "视觉提示词",
-        imagePrompt: "图片提示词",
-        designPrompt: "设计提示词",
-        prompt: "提示词",
-        promptText: "提示词",
-    };
-    return labels[key] || key;
-}
-
 function previewCounts(preview: AgentWorkflowMappingPreview, appliedPreviewItemIds: string[]) {
     const creatable = preview.items.filter((item) => item.targetType === preview.targetType && item.action === "create");
     const applied = creatable.filter((item) => appliedPreviewItemIds.includes(workflowMappingPreviewItemKey(preview, item.itemId))).length;
     return { total: creatable.length, applied, pending: creatable.length - applied };
+}
+
+function findVideoPreviewItemIdsForPackage(preview: AgentWorkflowMappingPreview, pkg: CanvasHandoffImportTarget) {
+    const exactId = `video_node-${pkg.order}`;
+    const videoItems = preview.items.filter((item) => item.targetType === "video_node" && item.action !== "skip");
+    const exactItem = videoItems.find((item) => item.itemId === exactId);
+    if (exactItem) return [exactItem.itemId];
+    const orderLabel = `P${padEpisodeOrder(pkg.order)}`.toLowerCase();
+    const title = pkg.title.trim().toLowerCase();
+    const matched = videoItems.filter((item) => {
+        const text = [item.itemId, item.title, item.reason, item.sourceText, JSON.stringify(item.mappedFields || {})].join(" ").toLowerCase();
+        return text.includes(pkg.id.toLowerCase()) || text.includes(orderLabel) || Boolean(title && text.includes(title));
+    });
+    if (matched.length) return matched.map((item) => item.itemId);
+    return videoItems[pkg.order - 1] ? [videoItems[pkg.order - 1].itemId] : [];
 }
 
 function previewApplyDisabledReason(preview: AgentWorkflowMappingPreview, pendingCount: number, hasCanvas: boolean) {
@@ -4013,62 +1972,6 @@ function previewTypeName(targetType: AgentWorkflowMappingPreview["targetType"]) 
     return "视频节点预览";
 }
 
-function previewTargetLabels(targetType: AgentWorkflowMappingPreview["targetType"]) {
-    if (targetType === "production_bible") return { confirmTitle: "确认写入设定库", confirmContentPrefix: "将把设定草案写入设定库：", okText: "确认写入", doneText: "已写入设定库 " };
-    if (targetType === "storyboard_table") return { confirmTitle: "确认写入分镜头表", confirmContentPrefix: "将把分镜草案追加到当前本集分镜头表：", okText: "确认写入", doneText: "已写入分镜头表 " };
-    return { confirmTitle: "确认创建视频配置节点", confirmContentPrefix: "将在绑定画布创建或更新视频配置节点：", okText: "确认创建", doneText: "已创建视频配置节点 " };
-}
-
-function buildEpisodeSceneOptions({
-    tableShots,
-    scriptScenes,
-    scriptSnapshot,
-}: {
-    tableShots: Array<{ sceneId?: string; sceneName: string; scriptText: string }>;
-    scriptScenes: Array<{ id: string; order: number; location: string; beat: string; dialogue: string; emotion: string }>;
-    scriptSnapshot: string;
-}): EpisodeSceneOption[] {
-    if (tableShots.length) {
-        const sceneMap = new Map<string, EpisodeSceneOption>();
-        tableShots.forEach((shot, index) => {
-            const label = shot.sceneName || `场次 ${index + 1}`;
-            const key = shot.sceneId || slugSceneKey(label, index);
-            const existing = sceneMap.get(key);
-            const scriptText = [existing?.scriptText, shot.scriptText].filter(Boolean).join("\n");
-            sceneMap.set(key, { sceneKey: key, sceneLabel: label, scriptText, source: "storyboard_table" });
-        });
-        return Array.from(sceneMap.values());
-    }
-    if (scriptScenes.length) {
-        return scriptScenes.map((scene) => ({
-            sceneKey: scene.id,
-            sceneLabel: `${scene.order}. ${scene.location || "未命名场次"}`,
-            scriptText: [scene.beat, scene.dialogue, scene.emotion].filter(Boolean).join("\n"),
-            source: "script_scene",
-        }));
-    }
-    return extractSceneOptionsFromScriptText(scriptSnapshot);
-}
-
-function extractSceneOptionsFromScriptText(scriptSnapshot: string): EpisodeSceneOption[] {
-    const lines = scriptSnapshot
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
-    const titleIndexes = lines.map((line, index) => ({ line, index })).filter(({ line }) => /^#{0,3}\s*\d+[-.、]\d+|^#{0,3}\s*第?\d+\s*[场幕]/.test(line));
-    if (!titleIndexes.length && scriptSnapshot.trim()) return [{ sceneKey: "scene-1", sceneLabel: "scene-1", scriptText: scriptSnapshot.trim(), source: "script_text" }];
-    return titleIndexes.map(({ line, index }, sceneIndex) => {
-        const nextIndex = titleIndexes[sceneIndex + 1]?.index ?? lines.length;
-        const label = line.replace(/^#+\s*/, "").slice(0, 48);
-        return {
-            sceneKey: slugSceneKey(label, sceneIndex),
-            sceneLabel: label || `scene-${sceneIndex + 1}`,
-            scriptText: lines.slice(index, nextIndex).join("\n"),
-            source: "script_text",
-        };
-    });
-}
-
 function withSubScene(scene: EpisodeSceneOption, subSceneKey: string): EpisodeSceneOption {
     const suffix = subSceneKey.trim();
     if (!suffix) return scene;
@@ -4079,33 +1982,10 @@ function withSubScene(scene: EpisodeSceneOption, subSceneKey: string): EpisodeSc
     };
 }
 
-function previousApprovedSceneSummary(sceneStates: AgentWorkflowSceneRunState[], sceneKey: string) {
-    const index = sceneStates.findIndex((scene) => scene.sceneKey === sceneKey);
-    const previous =
-        index > 0
-            ? sceneStates
-                  .slice(0, index)
-                  .reverse()
-                  .find((scene) => scene.status === "approved")
-            : undefined;
-    return previous ? `${previous.sceneLabel}：${previous.promptTextSummary || previous.promptPlanSummary || "已批准"}` : "";
-}
-
 function sceneSourceLabel(source: EpisodeSceneOption["source"]) {
     if (source === "storyboard_table") return "来源：分镜头表";
     if (source === "script_scene") return "来源：剧本场次";
     return "来源：剧本文本标题";
-}
-
-function slugSceneKey(label: string, index: number) {
-    return (
-        label
-            .trim()
-            .toLowerCase()
-            .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
-            .replace(/^-+|-+$/g, "")
-            .slice(0, 40) || `scene-${index + 1}`
-    );
 }
 
 function formatBlockedReason(reason?: string) {

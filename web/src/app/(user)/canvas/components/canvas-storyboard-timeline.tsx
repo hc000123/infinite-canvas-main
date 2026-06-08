@@ -37,7 +37,7 @@ export function CanvasStoryboardTimeline({ shots, shotGroups, nodes, activeShotI
         <div className="pointer-events-none absolute inset-x-4 bottom-20 z-40 flex justify-center">
             <div className="pointer-events-auto flex max-w-[min(1100px,calc(100%-32px))] items-stretch gap-2 rounded-xl border px-2 py-2 shadow-[0_14px_34px_rgba(28,25,23,.12)] backdrop-blur" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
                 <div className="flex w-32 shrink-0 flex-col gap-1.5">
-                    <button type="button" className="inline-flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg text-xs transition hover:opacity-80" style={{ background: theme.node.fill, color: theme.node.muted }} onClick={onOpenWorkbench}>
+                    <button type="button" className="inline-flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg text-xs transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70" style={{ background: theme.node.fill, color: theme.node.muted }} onClick={onOpenWorkbench}>
                         <Film className="size-4" />
                         分镜检查
                     </button>
@@ -46,7 +46,7 @@ export function CanvasStoryboardTimeline({ shots, shotGroups, nodes, activeShotI
                             <button
                                 key={item.value}
                                 type="button"
-                                className="min-h-7 rounded-md px-1 text-[10px] font-medium transition hover:opacity-85"
+                                className="min-h-7 rounded-md px-1 text-[10px] font-medium transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
                                 style={{ background: filter === item.value ? theme.toolbar.activeBg : theme.node.fill, color: filter === item.value ? theme.node.text : theme.node.muted }}
                                 onClick={() => setFilter(item.value)}
                             >
@@ -63,7 +63,7 @@ export function CanvasStoryboardTimeline({ shots, shotGroups, nodes, activeShotI
                             <button
                                 key={shot.id}
                                 type="button"
-                                className="grid h-[76px] w-52 shrink-0 grid-cols-[48px_minmax(0,1fr)] gap-2 rounded-lg border p-1.5 text-left transition hover:opacity-90"
+                                className="grid h-[76px] w-52 shrink-0 grid-cols-[48px_minmax(0,1fr)] gap-2 rounded-lg border p-1.5 text-left transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
                                 style={{ background: active ? theme.toolbar.activeBg : theme.node.fill, borderColor: active ? theme.node.activeStroke : theme.node.stroke, color: theme.node.text }}
                                 onClick={() => onSelectShot(shot, node?.id)}
                             >
