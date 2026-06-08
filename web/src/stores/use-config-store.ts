@@ -153,6 +153,11 @@ export const useConfigStore = create<ConfigStore>()(
                 set({ isPublicSettingsLoading: true });
                 try {
                     set({ publicSettings: await apiGet<AdminPublicSettings>("/api/settings") });
+                } catch (error) {
+                    if (process.env.NODE_ENV === "development") {
+                        console.warn("公共设置加载失败，已使用本地默认配置继续运行。", error);
+                    }
+                    set({ publicSettings: null });
                 } finally {
                     set({ isPublicSettingsLoading: false });
                 }
