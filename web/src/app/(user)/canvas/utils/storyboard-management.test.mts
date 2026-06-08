@@ -273,6 +273,9 @@ test("builds shot group canvas insertion metadata", () => {
         shotIds: ["s-1", "s-2"],
         storyboardShotGroupId: "sg-1",
         storyboardTableShotIds: ["s-1", "s-2"],
+        productionPackageId: "sg-1",
+        productionPackageTitle: "操场",
+        productionPackageRole: "video_config",
         storyboardRole: "video_config",
     });
 });
