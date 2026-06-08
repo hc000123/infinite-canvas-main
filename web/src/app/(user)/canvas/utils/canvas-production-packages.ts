@@ -40,7 +40,7 @@ export type CanvasProductionPackageSummary = {
 
 export function getNodeProductionPackageId(node?: CanvasNodeData | null) {
     const metadata = node?.metadata;
-    return metadata?.productionPackageId || metadata?.shotGroupId || metadata?.storyboardShotGroupId || "";
+    return explicitNodeProductionPackageId(node) || fallbackNodeProductionPackageId(node);
 }
 
 export function getNodeProductionPackageRole(node: CanvasNodeData): CanvasProductionPackageRole {
@@ -71,21 +71,23 @@ export function productionPackageRoleLabel(role: CanvasProductionPackageRole) {
 export function buildCanvasProductionPackages({ shotGroups, tableShots, nodes }: { shotGroups: ShotGroup[]; tableShots: StoryboardTableShot[]; nodes: CanvasNodeData[] }): CanvasProductionPackageSummary[] {
     const tableShotById = new Map(tableShots.map((shot) => [shot.id, shot]));
     const packageIds = new Set(shotGroups.map((group) => group.id));
+    if (!shotGroups.length) tableShots.forEach((shot) => packageIds.add(shot.id));
     nodes.forEach((node) => {
-        const packageId = getNodeProductionPackageId(node);
+        const packageId = explicitNodeProductionPackageId(node) || (!shotGroups.length ? fallbackNodeProductionPackageId(node) : "");
         if (packageId) packageIds.add(packageId);
     });
 
     const packages = Array.from(packageIds).map((id, index) => {
         const group = shotGroups.find((item) => item.id === id);
-        const relatedNodes = nodes.filter((node) => getNodeProductionPackageId(node) === id);
-        const shots = group?.shotIds.map((shotId) => tableShotById.get(shotId)).filter((shot): shot is StoryboardTableShot => Boolean(shot)) || [];
+        const relatedNodes = nodes.filter((node) => nodeMatchesProductionPackage(node, id));
+        const fallbackShot = tableShotById.get(id);
+        const shots = group?.shotIds.map((shotId) => tableShotById.get(shotId)).filter((shot): shot is StoryboardTableShot => Boolean(shot)) || (fallbackShot ? [fallbackShot] : []);
         const label = group?.id ? productionPackageLabel(index) : fallbackPackageLabel(index, id);
         const versions = buildProductionVideoVersions(id, relatedNodes);
         const currentVersion = versions.find((version) => version.isCurrent);
         const configNode = relatedNodes.find((node) => node.type === "config");
         const title = group?.sceneName || shots[0]?.sceneName || configNode?.title || relatedNodes[0]?.title || "未命名生产包";
-        const status = resolvePackageStatus(group, versions);
+        const status = resolvePackageStatus(group, versions, shots);
         const shotOrders = shots.map((shot) => shot.order);
         return {
             id,
@@ -101,7 +103,7 @@ export function buildCanvasProductionPackages({ shotGroups, tableShots, nodes }:
             versions,
             currentVersion,
             tailFrame: { enabled: false, needsReview: false, sourceLabel: "" },
-            shotIds: group?.shotIds || [],
+            shotIds: group?.shotIds || shots.map((shot) => shot.id),
         } satisfies CanvasProductionPackageSummary;
     });
 
@@ -194,7 +196,7 @@ export function withProductionVersionAsCurrent(nodes: CanvasNodeData[], finalVid
 }
 
 function buildProductionVideoVersions(packageId: string, nodes: CanvasNodeData[]): CanvasProductionVideoVersion[] {
-    const videoNodes = nodes.filter((node) => node.type === "video" && getNodeProductionPackageId(node) === packageId).sort(compareVersionNodes);
+    const videoNodes = nodes.filter((node) => node.type === "video" && nodeMatchesProductionPackage(node, packageId)).sort(compareVersionNodes);
     const visibleSuccessNodes = videoNodes.filter((node) => node.metadata?.status === "success" && !node.metadata?.productionVideoVersionHidden);
     const explicitCurrent = visibleSuccessNodes.find((node) => node.metadata?.isCurrentProductionVersion);
     const fallbackCurrentId = explicitCurrent?.id || visibleSuccessNodes.at(-1)?.id || "";
@@ -228,7 +230,7 @@ function nextVersionNumber(nodes: CanvasNodeData[], packageId: string) {
     );
 }
 
-function resolvePackageStatus(group: ShotGroup | undefined, versions: CanvasProductionVideoVersion[]): CanvasProductionPackageSummary["status"] {
+function resolvePackageStatus(group: ShotGroup | undefined, versions: CanvasProductionVideoVersion[], shots: StoryboardTableShot[] = []): CanvasProductionPackageSummary["status"] {
     const visibleVersions = versions.filter((version) => !version.hidden);
     if (visibleVersions.some((version) => version.isCurrent)) return visibleVersions.length > 1 ? "multi_version" : "adopted";
     if (visibleVersions.length > 1) return "multi_version";
@@ -236,6 +238,7 @@ function resolvePackageStatus(group: ShotGroup | undefined, versions: CanvasProd
     if (group?.status === "generating") return "generating";
     if (group?.status === "error") return group.errorMessage?.includes("素材") ? "missing_asset" : "error";
     if (!group?.assetRefs.length && !group?.audioRefs.length && group?.status === "in_canvas") return "missing_asset";
+    if (shots.length && shots.some((shot) => !shot.assetRefs.length && (shot.assetNeeds || []).length > 0)) return "missing_asset";
     return "pending";
 }
 
@@ -276,6 +279,26 @@ function compareVersionNodes(a: CanvasNodeData, b: CanvasNodeData) {
 function timestampOf(node: CanvasNodeData) {
     const value = node.metadata?.productionVideoVersionCreatedAt || node.metadata?.localStoredAt || node.metadata?.finishedAt || "";
     return value ? new Date(value).getTime() || 0 : 0;
+}
+
+function explicitNodeProductionPackageId(node?: CanvasNodeData | null) {
+    const metadata = node?.metadata;
+    return metadata?.productionPackageId || metadata?.shotGroupId || metadata?.storyboardShotGroupId || "";
+}
+
+function fallbackNodeProductionPackageId(node?: CanvasNodeData | null) {
+    const metadata = node?.metadata;
+    if (!metadata) return "";
+    if (metadata.storyboardShotId) return metadata.storyboardShotId;
+    const tableShotIds = metadata.storyboardTableShotIds || [];
+    return tableShotIds.length === 1 ? tableShotIds[0] : "";
+}
+
+function nodeMatchesProductionPackage(node: CanvasNodeData, packageId: string) {
+    const explicitId = explicitNodeProductionPackageId(node);
+    if (explicitId) return explicitId === packageId;
+    const metadata = node.metadata;
+    return Boolean(metadata?.storyboardShotId === packageId || metadata?.storyboardTableShotIds?.includes(packageId));
 }
 
 function productionPackageLabel(index: number) {

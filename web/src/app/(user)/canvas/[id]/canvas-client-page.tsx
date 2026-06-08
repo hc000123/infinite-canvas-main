@@ -749,9 +749,13 @@ function InfiniteCanvasPage() {
             setActiveTimelineShotId("");
             setInspectorView("context");
             setSelectedConnectionId(null);
-            const relatedNodes = nodesRef.current.filter((node) => getNodeProductionPackageId(node) === productionPackage.id);
+            const relatedNodeIds = new Set(productionPackage.nodeIds);
+            const relatedNodes = nodesRef.current.filter((node) => relatedNodeIds.has(node.id));
             setSelectedNodeIds(new Set(relatedNodes.map((node) => node.id)));
-            if (!relatedNodes.length) return;
+            if (!relatedNodes.length) {
+                if (productionPackage.shotIds[0]) setActiveTimelineShotId(productionPackage.shotIds[0]);
+                return;
+            }
             const left = Math.min(...relatedNodes.map((node) => node.position.x));
             const top = Math.min(...relatedNodes.map((node) => node.position.y));
             const right = Math.max(...relatedNodes.map((node) => node.position.x + node.width));
