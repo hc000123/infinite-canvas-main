@@ -49,7 +49,7 @@ export function AssetDrawer({
     const canvasLibraryEntries = assetCanvasLibraryEntries(asset);
     const versionRecords = assetVersionRecords(asset);
     return (
-        <Drawer rootClassName="dark studio-workspace" title="素材详情" open={Boolean(asset)} size="large" onClose={onClose}>
+        <Drawer rootClassName="studio-workspace" title="素材详情" open={Boolean(asset)} size="large" onClose={onClose}>
             {asset ? (
                 <div className="space-y-5">
                     {cover ? (

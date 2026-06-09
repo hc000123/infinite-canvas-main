@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { Modal } from "antd";
 import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Download, Eye, EyeOff, FileText, Image as ImageIcon, Info, Maximize2, MessageSquare, RefreshCw, Scissors, Sparkles, Upload, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -15,7 +16,7 @@ import { inspectStoryboardShot, summarizeShotInspections } from "../utils/canvas
 import { buildShotReadableContent, readableShotTitle, type ShotReadablePart } from "../utils/shot-readable-content";
 import type { CanvasProductionPackageSummary, CanvasProductionVideoVersion } from "../utils/canvas-production-packages";
 
-export type CanvasInspectorView = "context" | "assistant" | "records";
+export type CanvasInspectorView = "context" | "assistant";
 
 type CanvasContextInspectorProps = {
     view: CanvasInspectorView;
@@ -49,9 +50,6 @@ type CanvasContextInspectorProps = {
     onDownloadProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
     onSetCurrentProductionVideoVersion: (packageId: string, nodeId: string) => void;
     onHideProductionVideoVersion: (nodeId: string) => void;
-    onGenerateProductionPackageVersion: (packageId: string) => void;
-    onEditProductionPackagePrompt: (packageId: string) => void;
-    onUsePreviousPackageTailFrame: (packageId: string) => void;
     onInfo: (node: CanvasNodeData) => void;
     onEditText: (node: CanvasNodeData) => void;
     onToggleDialog: (node: CanvasNodeData) => void;
@@ -98,9 +96,6 @@ export function CanvasContextInspector({
     onDownloadProductionVideoVersion,
     onSetCurrentProductionVideoVersion,
     onHideProductionVideoVersion,
-    onGenerateProductionPackageVersion,
-    onEditProductionPackagePrompt,
-    onUsePreviousPackageTailFrame,
     onInfo,
     onEditText,
     onToggleDialog,
@@ -116,6 +111,8 @@ export function CanvasContextInspector({
 }: CanvasContextInspectorProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const activeView = view === "assistant" && !assistantSlot ? "context" : view;
+    const [productionInfoOpen, setProductionInfoOpen] = useState(false);
+    const [recordsOpen, setRecordsOpen] = useState(false);
 
     if (collapsed) {
         return (
@@ -152,13 +149,26 @@ export function CanvasContextInspector({
                     <div className="flex shrink-0 items-center gap-2">
                         <button
                             type="button"
-                            className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition hover:opacity-85"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
                             style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel, color: theme.node.text }}
-                            onClick={onOpenEpisodeWorkbench}
+                            onClick={() => setRecordsOpen(true)}
+                            title="查看记录"
+                            aria-label="查看记录"
                         >
-                            <FileText className="size-3.5" />
-                            本集流程
+                            <FileText className="size-4" />
                         </button>
+                        {selectedProductionPackage ? (
+                            <button
+                                type="button"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                                style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel, color: theme.node.text }}
+                                onClick={() => setProductionInfoOpen(true)}
+                                title="查看生产包信息"
+                                aria-label="查看生产包信息"
+                            >
+                                <Info className="size-4" />
+                            </button>
+                        ) : null}
                         <button
                             type="button"
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
@@ -171,7 +181,7 @@ export function CanvasContextInspector({
                         </button>
                     </div>
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-1 rounded-lg border p-1" style={{ background: "rgba(15, 23, 42, 0.18)", borderColor: theme.node.stroke }}>
+                <div className="mt-3 grid grid-cols-2 gap-1 rounded-lg border p-1" style={{ background: "rgba(15, 23, 42, 0.18)", borderColor: theme.node.stroke }}>
                     <InspectorTab label="内容" active={activeView === "context"} onClick={() => onViewChange("context")} />
                     <InspectorTab
                         label="助手"
@@ -181,18 +191,14 @@ export function CanvasContextInspector({
                             onViewChange("assistant");
                         }}
                     />
-                    <InspectorTab label="记录" active={activeView === "records"} onClick={() => onViewChange("records")} />
                 </div>
             </div>
 
             {activeView === "assistant" ? (
                 <div className="min-h-0 flex-1 overflow-hidden">{assistantSlot}</div>
-            ) : activeView === "records" ? (
-                <RecordsView selectedNode={selectedNode} selectedShot={selectedShot} theme={theme} />
             ) : selectedNode ? (
                 <NodeInspector
                     node={selectedNode}
-                    productionPackage={selectedProductionPackage}
                     selectedCount={selectedCount}
                     connections={connections}
                     inputs={configInputs}
@@ -209,25 +215,15 @@ export function CanvasContextInspector({
                     onCrop={onCrop}
                     onAngle={onAngle}
                     onViewImage={onViewImage}
-                    onPreviewProductionVideoVersion={onPreviewProductionVideoVersion}
-                    onDownloadProductionVideoVersion={onDownloadProductionVideoVersion}
-                    onSetCurrentProductionVideoVersion={onSetCurrentProductionVideoVersion}
-                    onHideProductionVideoVersion={onHideProductionVideoVersion}
-                    onGenerateProductionPackageVersion={onGenerateProductionPackageVersion}
-                    onEditProductionPackagePrompt={onEditProductionPackagePrompt}
-                    onUsePreviousPackageTailFrame={onUsePreviousPackageTailFrame}
                 />
             ) : selectedProductionPackage ? (
-                <ProductionPackageInspector
+                <ProductionPackageContentView
                     productionPackage={selectedProductionPackage}
                     theme={theme}
                     onPreviewProductionVideoVersion={onPreviewProductionVideoVersion}
                     onDownloadProductionVideoVersion={onDownloadProductionVideoVersion}
                     onSetCurrentProductionVideoVersion={onSetCurrentProductionVideoVersion}
                     onHideProductionVideoVersion={onHideProductionVideoVersion}
-                    onGenerateProductionPackageVersion={onGenerateProductionPackageVersion}
-                    onEditProductionPackagePrompt={onEditProductionPackagePrompt}
-                    onUsePreviousPackageTailFrame={onUsePreviousPackageTailFrame}
                 />
             ) : selectedShot ? (
                 <ShotInspector
@@ -261,6 +257,21 @@ export function CanvasContextInspector({
                     }}
                 />
             )}
+            {selectedProductionPackage ? (
+                <Modal title="生产包信息" open={productionInfoOpen} footer={null} onCancel={() => setProductionInfoOpen(false)} centered width={520}>
+                    <ProductionPackageInfoContent
+                        productionPackage={selectedProductionPackage}
+                        theme={theme}
+                        onPreviewProductionVideoVersion={onPreviewProductionVideoVersion}
+                        onDownloadProductionVideoVersion={onDownloadProductionVideoVersion}
+                        onSetCurrentProductionVideoVersion={onSetCurrentProductionVideoVersion}
+                        onHideProductionVideoVersion={onHideProductionVideoVersion}
+                    />
+                </Modal>
+            ) : null}
+            <Modal title="记录 / 任务详情" open={recordsOpen} footer={null} onCancel={() => setRecordsOpen(false)} centered width={560}>
+                <RecordsView selectedNode={selectedNode} selectedShot={selectedShot} theme={theme} />
+            </Modal>
         </aside>
     );
 }
@@ -568,7 +579,6 @@ function CanvasOverview({
 
 function NodeInspector({
     node,
-    productionPackage,
     selectedCount,
     connections,
     inputs,
@@ -585,16 +595,8 @@ function NodeInspector({
     onCrop,
     onAngle,
     onViewImage,
-    onPreviewProductionVideoVersion,
-    onDownloadProductionVideoVersion,
-    onSetCurrentProductionVideoVersion,
-    onHideProductionVideoVersion,
-    onGenerateProductionPackageVersion,
-    onEditProductionPackagePrompt,
-    onUsePreviousPackageTailFrame,
 }: {
     node: CanvasNodeData;
-    productionPackage?: CanvasProductionPackageSummary | null;
     selectedCount: number;
     connections: CanvasConnection[];
     inputs: NodeGenerationInput[];
@@ -611,18 +613,12 @@ function NodeInspector({
     onCrop: (node: CanvasNodeData) => void;
     onAngle: (node: CanvasNodeData) => void;
     onViewImage: (node: CanvasNodeData) => void;
-    onPreviewProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
-    onDownloadProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
-    onSetCurrentProductionVideoVersion: (packageId: string, nodeId: string) => void;
-    onHideProductionVideoVersion: (nodeId: string) => void;
-    onGenerateProductionPackageVersion: (packageId: string) => void;
-    onEditProductionPackagePrompt: (packageId: string) => void;
-    onUsePreviousPackageTailFrame: (packageId: string) => void;
 }) {
     const upstreamCount = connections.filter((connection) => connection.toNodeId === node.id).length;
     const downstreamCount = connections.filter((connection) => connection.fromNodeId === node.id).length;
     const prompt = readablePrompt(node);
     const hasMedia = Boolean(node.metadata?.content);
+    const canOpenGenerateSettings = node.type === CanvasNodeType.Config || ((node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video) && !hasMedia);
     return (
         <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
             <div className="flex items-start justify-between gap-3">
@@ -646,29 +642,8 @@ function NodeInspector({
             </div>
 
             {node.type === CanvasNodeType.Image && node.metadata?.content ? <img className="mt-3 max-h-60 w-full rounded-xl object-contain" src={node.metadata.content} alt={node.title || "图片节点"} /> : null}
-            {node.type === CanvasNodeType.Video && node.metadata?.content ? <video className="mt-3 max-h-60 w-full rounded-xl bg-black" src={node.metadata.content} controls playsInline /> : null}
+            {node.type === CanvasNodeType.Video && node.metadata?.content ? <video className="mt-3 max-h-60 w-full rounded-xl bg-black" src={node.metadata.content} controls controlsList="nodownload" playsInline /> : null}
             {node.type === CanvasNodeType.Audio && node.metadata?.content ? <audio className="mt-3 w-full" src={node.metadata.content} controls /> : null}
-
-            {productionPackage ? <ProductionPackageBindingSection productionPackage={productionPackage} currentNode={node} theme={theme} /> : null}
-            {productionPackage ? (
-                <VideoVersionsSection
-                    productionPackage={productionPackage}
-                    theme={theme}
-                    onPreview={onPreviewProductionVideoVersion}
-                    onDownload={onDownloadProductionVideoVersion}
-                    onSetCurrent={onSetCurrentProductionVideoVersion}
-                    onHide={onHideProductionVideoVersion}
-                />
-            ) : null}
-            {productionPackage ? (
-                <ProductionPackageGenerationSection
-                    productionPackage={productionPackage}
-                    theme={theme}
-                    onGenerate={onGenerateProductionPackageVersion}
-                    onEditPrompt={onEditProductionPackagePrompt}
-                    onUsePreviousTailFrame={onUsePreviousPackageTailFrame}
-                />
-            ) : null}
 
             {node.type === CanvasNodeType.Config ? <ConfigInputsSection inputs={inputs} theme={theme} /> : null}
             {prompt ? <TextSection title={node.type === CanvasNodeType.Text ? "完整文本" : "完整提示词"} text={prompt} theme={theme} /> : null}
@@ -678,7 +653,7 @@ function NodeInspector({
                 <InspectorAction icon={<Info className="size-4" />} label="节点信息" onClick={() => onInfo(node)} theme={theme} />
                 {node.type === CanvasNodeType.Text ? <InspectorAction icon={<FileText className="size-4" />} label="编辑文字" onClick={() => onEditText(node)} theme={theme} /> : null}
                 {node.type === CanvasNodeType.Text ? <InspectorAction icon={<ImageIcon className="size-4" />} label="用文本生图" onClick={() => onGenerateImage(node)} theme={theme} /> : null}
-                {node.type !== CanvasNodeType.Audio ? <InspectorAction icon={<MessageSquare className="size-4" />} label="编辑 / 生成" onClick={() => onToggleDialog(node)} theme={theme} /> : null}
+                {canOpenGenerateSettings ? <InspectorAction icon={<MessageSquare className="size-4" />} label="生成设置" onClick={() => onToggleDialog(node)} theme={theme} /> : null}
                 {(node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && hasMedia ? <InspectorAction icon={<Download className="size-4" />} label="下载" onClick={() => onDownload(node)} theme={theme} /> : null}
                 {(node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && hasMedia ? <InspectorAction icon={<Sparkles className="size-4" />} label="存素材" onClick={() => onSaveAsset(node)} theme={theme} /> : null}
                 {(node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) ? <InspectorAction icon={<Upload className="size-4" />} label={hasMedia ? "替换素材" : "上传素材"} onClick={() => onUpload(node)} theme={theme} /> : null}
@@ -694,16 +669,13 @@ function NodeInspector({
     );
 }
 
-function ProductionPackageInspector({
+function ProductionPackageInfoContent({
     productionPackage,
     theme,
     onPreviewProductionVideoVersion,
     onDownloadProductionVideoVersion,
     onSetCurrentProductionVideoVersion,
     onHideProductionVideoVersion,
-    onGenerateProductionPackageVersion,
-    onEditProductionPackagePrompt,
-    onUsePreviousPackageTailFrame,
 }: {
     productionPackage: CanvasProductionPackageSummary;
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
@@ -711,12 +683,9 @@ function ProductionPackageInspector({
     onDownloadProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
     onSetCurrentProductionVideoVersion: (packageId: string, nodeId: string) => void;
     onHideProductionVideoVersion: (nodeId: string) => void;
-    onGenerateProductionPackageVersion: (packageId: string) => void;
-    onEditProductionPackagePrompt: (packageId: string) => void;
-    onUsePreviousPackageTailFrame: (packageId: string) => void;
 }) {
     return (
-        <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <div className="thin-scrollbar max-h-[70vh] overflow-y-auto">
             <ProductionPackageBindingSection productionPackage={productionPackage} theme={theme} />
             <VideoVersionsSection
                 productionPackage={productionPackage}
@@ -726,7 +695,42 @@ function ProductionPackageInspector({
                 onSetCurrent={onSetCurrentProductionVideoVersion}
                 onHide={onHideProductionVideoVersion}
             />
-            <ProductionPackageGenerationSection productionPackage={productionPackage} theme={theme} onGenerate={onGenerateProductionPackageVersion} onEditPrompt={onEditProductionPackagePrompt} onUsePreviousTailFrame={onUsePreviousPackageTailFrame} />
+        </div>
+    );
+}
+
+function ProductionPackageContentView({
+    productionPackage,
+    theme,
+    onPreviewProductionVideoVersion,
+    onDownloadProductionVideoVersion,
+    onSetCurrentProductionVideoVersion,
+    onHideProductionVideoVersion,
+}: {
+    productionPackage: CanvasProductionPackageSummary;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onPreviewProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
+    onDownloadProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
+    onSetCurrentProductionVideoVersion: (packageId: string, nodeId: string) => void;
+    onHideProductionVideoVersion: (nodeId: string) => void;
+}) {
+    return (
+        <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
+            <ProductionPackageBindingSection productionPackage={productionPackage} theme={theme} />
+            <section className="mt-3 rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+                <div className="text-sm font-semibold">画布绑定方式</div>
+                <div className="mt-2 text-xs leading-5" style={{ color: theme.node.muted }}>
+                    可在上方 P 卡片把配置节点放入画布；选中一个已有视频节点后，可用 P 卡片上的绑定按钮把它加入这个生产包。
+                </div>
+            </section>
+            <VideoVersionsSection
+                productionPackage={productionPackage}
+                theme={theme}
+                onPreview={onPreviewProductionVideoVersion}
+                onDownload={onDownloadProductionVideoVersion}
+                onSetCurrent={onSetCurrentProductionVideoVersion}
+                onHide={onHideProductionVideoVersion}
+            />
         </div>
     );
 }
@@ -822,44 +826,8 @@ function VideoVersionsSection({
                     ))}
                 </div>
             ) : (
-                <EmptyStatus text="暂无视频版本。可先检查提示词、资产和配置，再生成新版本。" theme={theme} />
+                <EmptyStatus text="暂无视频版本。可把配置节点放入画布，或先选中已有视频再绑定到这个生产包。" theme={theme} />
             )}
-        </section>
-    );
-}
-
-function ProductionPackageGenerationSection({
-    productionPackage,
-    theme,
-    onGenerate,
-    onEditPrompt,
-    onUsePreviousTailFrame,
-}: {
-    productionPackage: CanvasProductionPackageSummary;
-    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
-    onGenerate: (packageId: string) => void;
-    onEditPrompt: (packageId: string) => void;
-    onUsePreviousTailFrame: (packageId: string) => void;
-}) {
-    return (
-        <section className="mt-3 rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
-            <div className="mb-2 text-sm font-semibold">生成操作</div>
-            <div className="grid grid-cols-2 gap-2">
-                <InspectorAction icon={<Video className="size-4" />} label="生成新版本" onClick={() => onGenerate(productionPackage.id)} theme={theme} />
-                <InspectorAction icon={<FileText className="size-4" />} label="编辑提示词" onClick={() => onEditPrompt(productionPackage.id)} theme={theme} />
-            </div>
-            <div className="mt-3 rounded-lg border p-2.5 text-xs leading-5" style={{ background: theme.node.panel, borderColor: productionPackage.tailFrame.needsReview ? "rgba(245,158,11,.7)" : theme.node.stroke }}>
-                <div className="font-medium">首尾帧衔接</div>
-                <div className="mt-1" style={{ color: theme.node.muted }}>
-                    上一生产包当前版本：{productionPackage.tailFrame.sourceLabel}
-                </div>
-                <div className="mt-1" style={{ color: productionPackage.tailFrame.needsReview ? "rgb(251,191,36)" : theme.node.muted }}>
-                    {productionPackage.tailFrame.enabled ? (productionPackage.tailFrame.needsReview ? "上一包当前版本已变化，可能需要重新检查。" : "已使用上一包尾帧作为首帧参考。") : "尚未启用上一包尾帧参考。"}
-                </div>
-                <div className="mt-2">
-                    <SmallInspectorButton icon={<RefreshCw className="size-3.5" />} label="使用上一包尾帧" onClick={() => onUsePreviousTailFrame(productionPackage.id)} theme={theme} disabled={!productionPackage.previousCurrentVersion || !productionPackage.configNodeId} />
-                </div>
-            </div>
         </section>
     );
 }
@@ -930,13 +898,7 @@ function ConfigInputsSection({ inputs, theme }: { inputs: NodeGenerationInput[];
 function RecordsView({ selectedNode, selectedShot, theme }: { selectedNode: CanvasNodeData | null; selectedShot?: StoryboardTableShot | null; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     const shotRawParts = selectedShot ? buildShotReadableContent(selectedShot).raw : [];
     return (
-        <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
-            <section className="rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
-                <div className="text-sm font-semibold">记录 / 任务详情</div>
-                <div className="mt-2 text-xs leading-5" style={{ color: theme.node.muted }}>
-                    系统提示、原始响应、规范读取和调试字段默认收在这里，主界面只展示可判断的结果。
-                </div>
-            </section>
+        <div className="thin-scrollbar max-h-[70vh] overflow-y-auto px-1 py-1">
             {shotRawParts.length ? <RawSourceSection items={shotRawParts} theme={theme} expanded /> : null}
             {selectedNode ? <MetadataSummary node={selectedNode} theme={theme} expanded /> : !shotRawParts.length ? <div className="mt-3 text-sm" style={{ color: theme.node.muted }}>选中节点或镜头后可查看任务和元信息。</div> : null}
         </div>

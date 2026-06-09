@@ -4,11 +4,10 @@ import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction 
 
 import type { AiConfig } from "@/stores/use-config-store";
 import { buildCanvasVideoModePatch } from "../utils/canvas-video-config";
-import { applyPreviousPackageTailFrame, hideProductionVideoVersion, markCurrentProductionVideoVersion, type CanvasProductionPackageSummary, type CanvasProductionVideoVersion } from "../utils/canvas-production-packages";
+import { bindVideoNodeToProductionPackage, hideProductionVideoVersion, markCurrentProductionVideoVersion, type CanvasProductionPackageSummary, type CanvasProductionVideoVersion } from "../utils/canvas-production-packages";
 import { placeCanvasNodeAwayFromNodes, resolveRightwardNodePosition } from "../utils/canvas-node-placement";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type Position, type ViewportTransform } from "../types";
 import type { CanvasInspectorView } from "../components/canvas-context-inspector";
-import type { CanvasNodeGenerationMode } from "../components/canvas-node-prompt-panel";
 
 type CanvasActionMessage = {
     success: (content: string) => void;
@@ -25,7 +24,6 @@ type UseCanvasProductionPackageActionsOptions = {
     downloadNodeMedia: (node: CanvasNodeData) => void | Promise<void>;
     getAppendNodeCenter: (type: CanvasNodeType) => Position;
     createCanvasNode: (type: CanvasNodeType, position: Position, metadata?: CanvasNodeMetadata) => CanvasNodeData;
-    handleGenerateNode: (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => Promise<unknown>;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setActiveTimelineShotId: Dispatch<SetStateAction<string>>;
     setActiveProductionPackageId: Dispatch<SetStateAction<string>>;
@@ -46,7 +44,6 @@ export function useCanvasProductionPackageActions({
     downloadNodeMedia,
     getAppendNodeCenter,
     createCanvasNode,
-    handleGenerateNode,
     setNodes,
     setActiveTimelineShotId,
     setActiveProductionPackageId,
@@ -75,7 +72,6 @@ export function useCanvasProductionPackageActions({
         (productionPackage: CanvasProductionPackageSummary) => {
             setActiveProductionPackageId(productionPackage.id);
             setActiveTimelineShotId("");
-            setInspectorView("context");
             setSelectedConnectionId(null);
             const relatedNodeIds = new Set(productionPackage.nodeIds);
             const relatedNodes = nodesRef.current.filter((node) => relatedNodeIds.has(node.id));
@@ -153,10 +149,21 @@ export function useCanvasProductionPackageActions({
             setActiveProductionPackageId(productionPackage.id);
             setSelectedNodeIds(new Set([configNode.id]));
             setSelectedConnectionId(null);
-            setDialogNodeId(configNode.id);
             return configNode;
         },
-        [canvasAiConfig, createCanvasNode, getAppendNodeCenter, nodesRef, setActiveProductionPackageId, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds],
+        [canvasAiConfig, createCanvasNode, getAppendNodeCenter, nodesRef, setActiveProductionPackageId, setNodes, setSelectedConnectionId, setSelectedNodeIds],
+    );
+
+    const handleInsertProductionPackageConfigNode = useCallback(
+        (packageId: string) => {
+            const targetPackage = productionPackages.find((item) => item.id === packageId);
+            if (!targetPackage) return;
+            const configNode = ensureProductionPackageConfigNode(targetPackage);
+            setActiveProductionPackageId(packageId);
+            selectAndCenterNode(configNode);
+            message.success(targetPackage.configNodeId ? "已定位到该生产包配置" : "已把生产包配置放入画布");
+        },
+        [ensureProductionPackageConfigNode, message, productionPackages, selectAndCenterNode, setActiveProductionPackageId],
     );
 
     const handleEditProductionPackagePrompt = useCallback(
@@ -171,32 +178,19 @@ export function useCanvasProductionPackageActions({
         [ensureProductionPackageConfigNode, productionPackages, selectAndCenterNode, setActiveProductionPackageId, setDialogNodeId],
     );
 
-    const handleGenerateProductionPackageVersion = useCallback(
-        (packageId: string) => {
+    const handleBindSelectedVideoToProductionPackage = useCallback(
+        (packageId: string, nodeId: string) => {
             const targetPackage = productionPackages.find((item) => item.id === packageId);
-            if (!targetPackage) return;
-            const configNode = ensureProductionPackageConfigNode(targetPackage);
+            const targetNode = nodesRef.current.find((node) => node.id === nodeId);
+            if (!targetPackage || !targetNode || targetNode.type !== CanvasNodeType.Video || !targetNode.metadata?.content) return;
+            setNodes((prev) => bindVideoNodeToProductionPackage(prev, targetPackage, nodeId, new Date().toISOString()));
             setActiveProductionPackageId(packageId);
-            selectAndCenterNode(configNode);
-            const prompt = configNode.metadata?.prompt || configNode.metadata?.finalPrompt || "";
-            if (!prompt.trim()) {
-                setDialogNodeId(configNode.id);
-                message.warning("已创建该生产包的视频配置节点，请先补充提示词再生成");
-                return;
-            }
-            void handleGenerateNode(configNode.id, "video", prompt);
+            setSelectedNodeIds(new Set([nodeId]));
+            setSelectedConnectionId(null);
+            setInspectorView("context");
+            message.success(`已将视频绑定到 ${targetPackage.label}`);
         },
-        [ensureProductionPackageConfigNode, handleGenerateNode, message, productionPackages, selectAndCenterNode, setActiveProductionPackageId, setDialogNodeId],
-    );
-
-    const handleUsePreviousPackageTailFrame = useCallback(
-        (packageId: string) => {
-            const targetPackage = productionPackages.find((item) => item.id === packageId);
-            if (!targetPackage?.previousCurrentVersion) return message.warning("上一生产包还没有当前采用版本");
-            setNodes((prev) => applyPreviousPackageTailFrame(prev, packageId, targetPackage.previousCurrentVersion!));
-            message.success("已启用上一包尾帧参考");
-        },
-        [message, productionPackages, setNodes],
+        [message, nodesRef, productionPackages, setActiveProductionPackageId, setInspectorView, setNodes, setSelectedConnectionId, setSelectedNodeIds],
     );
 
     return {
@@ -205,8 +199,8 @@ export function useCanvasProductionPackageActions({
         handleDownloadProductionVideoVersion,
         handleSetCurrentProductionVideoVersion,
         handleHideProductionVideoVersion,
+        handleInsertProductionPackageConfigNode,
         handleEditProductionPackagePrompt,
-        handleGenerateProductionPackageVersion,
-        handleUsePreviousPackageTailFrame,
+        handleBindSelectedVideoToProductionPackage,
     };
 }

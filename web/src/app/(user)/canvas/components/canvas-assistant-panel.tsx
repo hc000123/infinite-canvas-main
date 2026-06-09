@@ -6,6 +6,7 @@ import { Button, Modal, Tooltip } from "antd";
 import { motion } from "motion/react";
 
 import { ModelPicker } from "@/components/model-picker";
+import { ModelThinkingSettings } from "@/components/image-settings-panel";
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -507,6 +508,7 @@ function AssistantComposer({
                         {mode === "image" ? (
                             <>
                                 <ModelPicker className="h-8 shrink-0" config={config} modelType="image" value={config.imageModel || config.model} onChange={(model) => onConfigChange("imageModel", model)} onMissingConfig={onMissingConfig} />
+                                <ModelThinkingSettings compact config={config} model={config.imageModel || config.model} theme={theme} onConfigChange={onConfigChange} />
                                 <CanvasImageSettingsPopover
                                     config={config}
                                     placement="topRight"

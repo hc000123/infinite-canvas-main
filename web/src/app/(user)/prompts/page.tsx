@@ -1,20 +1,27 @@
 "use client";
 
-import { FolderPlus, Search } from "lucide-react";
+import { FolderPlus, Plus, Search } from "lucide-react";
 import { type UIEvent, useEffect, useState } from "react";
-import { App, Button, Empty, Input, Spin, Tag } from "antd";
+import { useQueryClient } from "@tanstack/react-query";
+import { App, Button, Empty, Form, Input, Spin, Tag } from "antd";
 
 import { PromptCard } from "@/components/prompts/prompt-card";
+import { PromptCreateDialog, type PromptCreateFormValues } from "@/components/prompts/prompt-select-dialog";
 import { PromptDetailDialog } from "@/components/prompts/prompt-detail-dialog";
 import { usePromptList } from "@/components/prompts/use-prompt-list";
-import { promptTypeLabel, promptTypeOptions } from "@/components/prompts/prompt-template";
+import { defaultPromptTypeForNodeGroup, parsePromptVariablesText, promptTypeLabel, promptTypeOptions } from "@/components/prompts/prompt-template";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { cn } from "@/lib/utils";
+import { saveAdminPrompt } from "@/services/api/admin";
 import { useAssetStore } from "@/stores/use-asset-store";
+import { useUserStore } from "@/stores/use-user-store";
 import { ALL_PROMPTS_OPTION, type Prompt } from "@/services/api/prompts";
 
 export default function PromptsPage() {
     const { message } = App.useApp();
+    const queryClient = useQueryClient();
+    const token = useUserStore((state) => state.token);
+    const [createForm] = Form.useForm<PromptCreateFormValues>();
     const [titleKeyword, setTitleKeyword] = useState("");
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [selectedCategory, setSelectedCategory] = useState(ALL_PROMPTS_OPTION);
@@ -22,6 +29,8 @@ export default function PromptsPage() {
     const [selectedScenario, setSelectedScenario] = useState(ALL_PROMPTS_OPTION);
     const [favoriteOnly, setFavoriteOnly] = useState(false);
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
+    const [createOpen, setCreateOpen] = useState(false);
+    const [isSavingPrompt, setIsSavingPrompt] = useState(false);
     const addAsset = useAssetStore((state) => state.addAsset);
     const copyText = useCopyText();
     const {
@@ -34,6 +43,7 @@ export default function PromptsPage() {
         total: totalPrompts,
     } = usePromptList({ keyword: titleKeyword, tags: selectedTags, category: selectedCategory, type: selectedType, scenario: selectedScenario, favorite: favoriteOnly });
     const typeOptions = [ALL_PROMPTS_OPTION, ...promptTypeOptions.map((item) => item.value), ...promptTypes.filter((type) => type !== ALL_PROMPTS_OPTION && !promptTypeOptions.some((item) => item.value === type))];
+    const defaultCreateCategory = () => (selectedCategory !== ALL_PROMPTS_OPTION ? selectedCategory : promptCategoryOptions.find((category) => category !== ALL_PROMPTS_OPTION) || "system");
 
     useEffect(() => {
         if (query.isError) {
@@ -49,6 +59,64 @@ export default function PromptsPage() {
     const savePromptAsset = (item: Prompt) => {
         addAsset({ kind: "text", title: item.title, coverUrl: item.coverUrl, tags: item.tags, source: item.category, data: { content: item.prompt }, metadata: { source: "prompt-library", promptId: item.id, githubUrl: item.githubUrl } });
         message.success("已加入我的素材");
+    };
+
+    const openCreatePrompt = () => {
+        if (!token) {
+            message.warning("请先登录管理员账号后再新建提示词");
+            return;
+        }
+        createForm.setFieldsValue({
+            title: "",
+            category: defaultCreateCategory(),
+            coverUrl: "",
+            prompt: "",
+            tagText: "",
+            variableText: "",
+            metadata: {
+                nodeGroup: "image",
+                type: defaultPromptTypeForNodeGroup("image"),
+                scenario: "",
+                favorite: false,
+            },
+        });
+        setCreateOpen(true);
+    };
+
+    const saveCreatedPrompt = async () => {
+        if (!token) {
+            message.warning("请先登录管理员账号后再新建提示词");
+            return;
+        }
+        const value = await createForm.validateFields();
+        const { tagText = "", variableText = "", metadata, ...promptValue } = value;
+        const nextNodeGroup = metadata?.nodeGroup || "image";
+        setIsSavingPrompt(true);
+        try {
+            const saved = await saveAdminPrompt(token, {
+                ...promptValue,
+                category: promptValue.category || defaultCreateCategory(),
+                coverUrl: promptValue.coverUrl || "/logo.svg",
+                tags: tagText
+                    .split(",")
+                    .map((item) => item.trim())
+                    .filter(Boolean),
+                metadata: {
+                    ...(metadata || {}),
+                    nodeGroup: nextNodeGroup,
+                    variables: parsePromptVariablesText(variableText),
+                    favorite: metadata?.favorite === true,
+                },
+            });
+            setCreateOpen(false);
+            setSelectedPrompt(saved);
+            await queryClient.invalidateQueries({ queryKey: ["prompts"] });
+            message.success("提示词已新建");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "新建提示词失败");
+        } finally {
+            setIsSavingPrompt(false);
+        }
     };
 
     const handleListScroll = (event: UIEvent<HTMLDivElement>) => {
@@ -76,8 +144,11 @@ export default function PromptsPage() {
                     ) : null}
                     {!query.isLoading ? (
                         <>
-                            <div className="mx-auto mt-8 w-full max-w-2xl">
-                                <Input size="large" className="w-full rounded-lg border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)] placeholder:text-[var(--studio-text-muted)]" prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} value={titleKeyword} placeholder="按标题查询" onChange={(event) => setTitleKeyword(event.target.value)} />
+                            <div className="mx-auto mt-8 flex w-full max-w-3xl gap-3">
+                                <Input size="large" className="min-w-0 flex-1 rounded-lg border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)] placeholder:text-[var(--studio-text-muted)]" prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} value={titleKeyword} placeholder="按标题查询" onChange={(event) => setTitleKeyword(event.target.value)} />
+                                <Button size="large" type="primary" icon={<Plus className="size-4" />} onClick={openCreatePrompt}>
+                                    新建提示词
+                                </Button>
                             </div>
                             <div className="studio-panel-muted mx-auto mt-6 grid max-w-6xl gap-3 p-4 text-left">
                                 <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
@@ -158,7 +229,13 @@ export default function PromptsPage() {
                                 />
                             ))}
                         </div>
-                        {promptItems.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到匹配的提示词" className="py-16" /> : null}
+                        {promptItems.length === 0 ? (
+                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到匹配的提示词" className="py-16">
+                                <Button type="primary" icon={<Plus className="size-4" />} onClick={openCreatePrompt}>
+                                    新建提示词
+                                </Button>
+                            </Empty>
+                        ) : null}
                         <div className="mx-auto mt-6 max-w-7xl text-center text-xs text-[var(--studio-text-muted)]">
                             {query.isFetchingNextPage ? "加载中..." : query.hasNextPage ? "继续向下滚动加载更多" : promptItems.length > 0 ? "已经到底了" : null}
                         </div>
@@ -167,6 +244,7 @@ export default function PromptsPage() {
             </main>
 
             <PromptDetailDialog prompt={selectedPrompt} onClose={() => setSelectedPrompt(null)} onCopy={(prompt) => copyText(prompt, "提示词已复制")} onSaveAsset={savePromptAsset} />
+            <PromptCreateDialog form={createForm} open={createOpen} categories={promptCategoryOptions} saving={isSavingPrompt} onCancel={() => setCreateOpen(false)} onSave={saveCreatedPrompt} />
         </div>
     );
 }

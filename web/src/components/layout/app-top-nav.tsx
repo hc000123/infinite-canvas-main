@@ -27,6 +27,7 @@ export function AppTopNav() {
     const hideHeader = /^\/canvas\/[^/]+/.test(pathname) || ["/image", "/video", "/prompts", "/assets"].some((path) => pathname === path || pathname.startsWith(`${path}/`)) || pathname === "/projects" || pathname.startsWith("/projects/") || pathname.startsWith("/login");
     const slug = pathname.split("/").filter(Boolean)[0];
     const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
+    const themeToggleLabel = theme === "dark" ? "切换到全局浅色主题" : "切换到全局深色主题";
 
     return (
         <>
@@ -101,8 +102,8 @@ export function AppTopNav() {
                                         theme={theme}
                                         onThemeChange={setTheme}
                                         className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-transparent text-stone-600 transition hover:border-stone-950/10 hover:bg-stone-950/5 hover:text-stone-950 dark:text-stone-300 dark:hover:border-white/10 dark:hover:bg-white/10 dark:hover:text-white [&_svg]:size-4"
-                                        aria-label={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}
-                                        title={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}
+                                        aria-label={themeToggleLabel}
+                                        title={themeToggleLabel}
                                     />
                                     <VersionReleaseModal />
                                     <Link href="/login" className="text-sm font-medium text-stone-600 underline-offset-4 transition hover:text-stone-950 hover:underline dark:text-stone-300 dark:hover:text-stone-100">

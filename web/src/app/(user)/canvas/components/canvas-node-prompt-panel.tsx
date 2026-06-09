@@ -5,6 +5,7 @@ import { ArrowUp, AudioLines, Image as ImageIcon, LoaderCircle, Video } from "lu
 import { Button } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
+import { ModelThinkingSettings } from "@/components/image-settings-panel";
 import { inferRemoteVideoProtocol } from "@/services/api/ai-channel-boundary";
 import { defaultConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
@@ -156,6 +157,7 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                     {mode === "image" ? (
                         <>
                             <ModelPicker className="h-10 !min-w-[140px] flex-1" fullWidth config={config} modelType="image" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />
+                            <ModelThinkingSettings className="min-w-[236px] flex-1" config={config} model={config.model} theme={theme} onConfigChange={(key, value) => onConfigChange(node.id, { [key]: value })} />
                             <CanvasImageSettingsPopover
                                 config={config}
                                 placement="topLeft"

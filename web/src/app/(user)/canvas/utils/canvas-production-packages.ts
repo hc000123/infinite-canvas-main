@@ -187,6 +187,34 @@ export function markCurrentProductionVideoVersion(nodes: CanvasNodeData[], packa
     });
 }
 
+export function bindVideoNodeToProductionPackage(nodes: CanvasNodeData[], productionPackage: CanvasProductionPackageSummary, nodeId: string, createdAt: string) {
+    const target = nodes.find((node) => node.id === nodeId);
+    if (!target || target.type !== "video") return nodes;
+    const alreadyInPackage = getNodeProductionPackageId(target) === productionPackage.id;
+    const versionNumber = alreadyInPackage && target.metadata?.productionVideoVersionNumber ? target.metadata.productionVideoVersionNumber : nextVersionNumber(nodes, productionPackage.id);
+    const versionId = alreadyInPackage && target.metadata?.productionVideoVersionId ? target.metadata.productionVideoVersionId : `${productionPackage.id}-v${versionNumber}-${Date.now()}`;
+    const next = nodes.map((node) =>
+        node.id === nodeId
+            ? {
+                  ...node,
+                  metadata: {
+                      ...node.metadata,
+                      productionPackageId: productionPackage.id,
+                      productionPackageLabel: productionPackage.label,
+                      productionPackageTitle: productionPackage.title,
+                      productionPackageRole: "video_result",
+                      productionVideoVersionId: versionId,
+                      productionVideoVersionNumber: versionNumber,
+                      productionVideoVersionCreatedAt: node.metadata?.productionVideoVersionCreatedAt || node.metadata?.finishedAt || node.metadata?.localStoredAt || createdAt,
+                      productionVideoVersionHidden: false,
+                      isCurrentProductionVersion: node.metadata?.status === "success" ? true : node.metadata?.isCurrentProductionVersion,
+                  },
+              }
+            : node,
+    );
+    return target.metadata?.status === "success" ? markCurrentProductionVideoVersion(next, productionPackage.id, nodeId) : next;
+}
+
 export function hideProductionVideoVersion(nodes: CanvasNodeData[], nodeId: string) {
     const target = nodes.find((node) => node.id === nodeId);
     const packageId = getNodeProductionPackageId(target);
@@ -194,23 +222,6 @@ export function hideProductionVideoVersion(nodes: CanvasNodeData[], nodeId: stri
     if (!packageId || !target?.metadata?.isCurrentProductionVersion) return hidden;
     const replacement = hidden.find((node) => node.id !== nodeId && node.type === "video" && getNodeProductionPackageId(node) === packageId && node.metadata?.status === "success" && !node.metadata?.productionVideoVersionHidden);
     return replacement ? markCurrentProductionVideoVersion(hidden, packageId, replacement.id) : hidden;
-}
-
-export function applyPreviousPackageTailFrame(nodes: CanvasNodeData[], packageId: string, previousVersion: CanvasProductionVideoVersion) {
-    return nodes.map((node) =>
-        getNodeProductionPackageId(node) === packageId && node.type === "config"
-            ? {
-                  ...node,
-                  metadata: {
-                      ...node.metadata,
-                      usePreviousPackageTailFrame: true,
-                      previousPackageVersionId: previousVersion.versionId,
-                      previousPackageVersionNodeId: previousVersion.nodeId,
-                      previousPackageVersionLabel: previousVersion.label,
-                  },
-              }
-            : node,
-    );
 }
 
 export function withProductionVersionAsCurrent(nodes: CanvasNodeData[], finalVideoNode: CanvasNodeData) {

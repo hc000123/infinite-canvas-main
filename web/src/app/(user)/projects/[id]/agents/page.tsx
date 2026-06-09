@@ -8,6 +8,7 @@ import { Button, Empty, Spin, Tag } from "antd";
 import { useCanvasStore } from "../../../canvas/stores/use-canvas-store";
 import { useScriptStore } from "../../../canvas/stores/use-script-store";
 import { AgentWorkspacePanel } from "../../agent-settings-drawer";
+import type { AgentConfigKind } from "../../agent-settings";
 import { useCreativeProjectStore } from "../../use-creative-project-store";
 
 export default function ProjectAgentWorkspacePage() {
@@ -22,6 +23,9 @@ export default function ProjectAgentWorkspacePage() {
     const episodes = useScriptStore((state) => state.episodes);
     const requestedCanvasId = searchParams.get("canvasId") || "";
     const requestedEpisodeId = searchParams.get("episodeId") || "";
+    const requestedAgentKind = parseAgentKind(searchParams.get("agentKind"));
+    const requestedStageId = searchParams.get("stageId") || undefined;
+    const requestedTab = parseAgentTab(searchParams.get("tab"));
     const canvas = useMemo(() => canvases.find((item) => item.id === requestedCanvasId && item.projectId === projectId), [canvases, projectId, requestedCanvasId]);
     const episodeId = canvas?.episodeId || requestedEpisodeId || undefined;
     const episodeTitle = canvas?.episodeTitle || episodes.find((item) => item.id === episodeId)?.title;
@@ -40,7 +44,6 @@ export default function ProjectAgentWorkspacePage() {
                 <div className="mx-auto max-w-3xl">
                     <Empty description="项目不存在或尚未加载">
                         <div className="flex flex-wrap justify-center gap-2">
-                            <Button href={`/projects/${projectId}/agent`}>打开旧 Agent 任务中心</Button>
                             <Button href="/projects">返回项目工作台</Button>
                         </div>
                     </Empty>
@@ -58,11 +61,10 @@ export default function ProjectAgentWorkspacePage() {
                     </Link>
                     <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
                         <div>
-                            <h1 className="text-3xl font-semibold">Agent 工作台</h1>
-                            <p className="mt-2 text-sm text-stone-500">项目级统一入口；保留 workflow、单 Agent 配置、映射预览和草案记录，不在这里触发图片或视频生成。</p>
+                            <h1 className="text-3xl font-semibold">Agent 设置</h1>
+                            <p className="mt-2 text-sm text-stone-500">项目级设置入口；集中维护通用模型配置、Agent 模板、提示词和写入策略，流程执行回到本集生产流程中完成。</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                            <Button href={`/projects/${project.id}/agent`}>打开旧 Agent 任务中心</Button>
                             {canvas ? <Tag className="m-0">{canvas.title}</Tag> : null}
                             {episodeTitle ? <Tag className="m-0">{episodeTitle}</Tag> : null}
                             {requestedCanvasId && !canvas ? <Tag className="m-0">未找到画布上下文</Tag> : null}
@@ -76,6 +78,10 @@ export default function ProjectAgentWorkspacePage() {
                     canvasId={canvas?.id}
                     episodeId={episodeId}
                     episodeTitle={episodeTitle}
+                    initialAgentKind={requestedAgentKind}
+                    initialStageId={requestedStageId}
+                    initialTab={requestedTab === "workflow" ? "quick-agents" : requestedTab}
+                    settingsOnly
                     canvasNodes={canvas?.nodes}
                     onApplyVideoPreviewNodes={
                         canvas
@@ -89,4 +95,12 @@ export default function ProjectAgentWorkspacePage() {
             </div>
         </main>
     );
+}
+
+function parseAgentKind(value: string | null): AgentConfigKind | undefined {
+    return ["asset_extractor", "storyboard_director", "image_brief_builder", "video_prompt_builder", "prompt_reviewer"].includes(value || "") ? (value as AgentConfigKind) : undefined;
+}
+
+function parseAgentTab(value: string | null): "quick-agents" | "workflow" | undefined {
+    return value === "quick-agents" || value === "workflow" ? value : undefined;
 }

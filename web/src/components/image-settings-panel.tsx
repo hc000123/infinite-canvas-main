@@ -38,14 +38,13 @@ type ImageSettingsPanelProps = {
     quickCount?: number;
     compact?: boolean;
 };
-type ImageSettingsKey = "quality" | "size" | "count" | "thinkingMode" | "reasoningEffort";
+type ImageSettingsKey = "quality" | "size" | "count";
+type ModelThinkingSettingsKey = "thinkingMode" | "reasoningEffort";
 
 export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, className = "w-[320px] space-y-4 rounded-2xl px-1 py-0.5", maxCount = 15, quickCount = 10, compact = false }: ImageSettingsPanelProps) {
     const quality = config.quality || "auto";
     const count = Math.max(1, Math.min(maxCount, Math.floor(Math.abs(Number(config.count)) || 1)));
     const activeSize = config.size || "auto";
-    const imageModel = config.imageModel || config.model;
-    const thinkingSupported = supportsImageThinkingModel(imageModel);
     const selectedAspect = aspectOptions.find((item) => (item.size || item.value) === activeSize || item.value === activeSize);
     const dimensions = readSizeDimensions(activeSize, selectedAspect || aspectOptions[0]);
     const selectAspect = (value: string) => {
@@ -69,36 +68,6 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                                 {item.label}
                             </OptionPill>
                         ))}
-                    </div>
-                </div>
-                <div className={compact ? "space-y-2" : "space-y-2.5"}>
-                    <SettingTitle color={theme.node.muted}>思考模式</SettingTitle>
-                    <div className="rounded-xl border p-2" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}>
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                            <div className="min-w-0 text-xs leading-5" style={{ color: theme.node.muted }}>
-                                {thinkingSupported ? "当前模型可使用思考参数" : "仅支持思考参数的模型生效"}
-                            </div>
-                            <div className="grid shrink-0 grid-cols-2 gap-1">
-                                <SmallOptionPill selected={config.thinkingMode !== "true"} theme={theme} onClick={() => onConfigChange("thinkingMode", "false")}>
-                                    关
-                                </SmallOptionPill>
-                                <SmallOptionPill selected={config.thinkingMode === "true"} theme={theme} onClick={() => onConfigChange("thinkingMode", "true")}>
-                                    开
-                                </SmallOptionPill>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-4 gap-1.5 opacity-100">
-                            {[
-                                { value: "minimal", label: "极低" },
-                                { value: "low", label: "低" },
-                                { value: "medium", label: "中" },
-                                { value: "high", label: "高" },
-                            ].map((item) => (
-                                <SmallOptionPill key={item.value} selected={config.reasoningEffort === item.value} disabled={config.thinkingMode !== "true"} theme={theme} onClick={() => onConfigChange("reasoningEffort", item.value as AiConfig["reasoningEffort"])}>
-                                    {item.label}
-                                </SmallOptionPill>
-                            ))}
-                        </div>
                     </div>
                 </div>
                 <div className={compact ? "space-y-2" : "space-y-2.5"}>
@@ -137,6 +106,61 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                         <CountInput value={count} max={maxCount} theme={theme} onChange={(value) => onConfigChange("count", String(value || 1))} />
                     </div>
                 </div>
+            </div>
+        </ImageSettingsTheme>
+    );
+}
+
+export function ModelThinkingSettings({
+    config,
+    model,
+    onConfigChange,
+    theme,
+    className = "",
+    compact = false,
+}: {
+    config: AiConfig;
+    model?: string;
+    onConfigChange: (key: ModelThinkingSettingsKey, value: string) => void;
+    theme: CanvasTheme;
+    className?: string;
+    compact?: boolean;
+}) {
+    const currentModel = model || config.imageModel || config.textModel || config.model || "";
+    const thinkingSupported = supportsThinkingModel(currentModel);
+    const thinkingOn = config.thinkingMode === "true";
+    const effort = config.reasoningEffort || "medium";
+    const title = thinkingSupported ? "当前模型可使用思考参数" : "仅支持思考参数的模型生效";
+
+    return (
+        <ImageSettingsTheme theme={theme}>
+            <div
+                className={`inline-flex min-w-0 items-center gap-1 rounded-full border px-2 py-1 ${compact ? "text-[11px]" : "text-xs"} ${className}`}
+                style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }}
+                title={title}
+                onMouseDown={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+            >
+                <span className="shrink-0 font-medium" style={{ color: theme.node.muted }}>
+                    思考
+                </span>
+                <SmallOptionPill selected={!thinkingOn} theme={theme} onClick={() => onConfigChange("thinkingMode", "false")}>
+                    关
+                </SmallOptionPill>
+                <SmallOptionPill selected={thinkingOn} theme={theme} onClick={() => onConfigChange("thinkingMode", "true")}>
+                    开
+                </SmallOptionPill>
+                <span className="mx-0.5 h-4 w-px shrink-0 opacity-60" style={{ background: theme.node.stroke }} />
+                {[
+                    { value: "minimal", label: "极低" },
+                    { value: "low", label: "低" },
+                    { value: "medium", label: "中" },
+                    { value: "high", label: "高" },
+                ].map((item) => (
+                    <SmallOptionPill key={item.value} selected={effort === item.value} disabled={!thinkingOn} theme={theme} onClick={() => onConfigChange("reasoningEffort", item.value)}>
+                        {item.label}
+                    </SmallOptionPill>
+                ))}
             </div>
         </ImageSettingsTheme>
     );
@@ -236,7 +260,7 @@ function SettingTitle({ children, color }: { children: string; color: string }) 
     );
 }
 
-function supportsImageThinkingModel(model: string) {
+function supportsThinkingModel(model: string) {
     const value = model.toLowerCase();
     return value.includes("gemini-3") || value.includes("gemini-2.5") || value.includes("thinking");
 }

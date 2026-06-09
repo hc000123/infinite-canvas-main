@@ -56,7 +56,7 @@ export function CanvasToolbar({
         {
             type: "button",
             id: "tool-style",
-            label: "画布外观",
+            label: "外观设置",
             icon: <Palette className="size-4.5" />,
             active: appearanceOpen,
             onClick: (event) => {
@@ -85,8 +85,8 @@ export function CanvasToolbar({
                     className="pointer-events-auto absolute bottom-[72px] z-30 w-[248px] -translate-x-1/2 rounded-xl border p-2.5 shadow-xl backdrop-blur"
                     style={{ left: panelX || "50%", background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item }}
                 >
-                    <div className="px-1 pb-2 text-sm font-medium opacity-65">画布外观</div>
-                    <div className="px-1 pb-1.5 text-[11px] font-medium opacity-50">主题模式</div>
+                    <div className="px-1 pb-2 text-sm font-medium opacity-65">外观设置</div>
+                    <div className="px-1 pb-1.5 text-[11px] font-medium opacity-50">全局主题</div>
                     <div className="grid grid-cols-2 gap-1 rounded-lg p-1" style={{ background: theme.toolbar.itemHover }}>
                         <CanvasThemeButton colorTheme={colorTheme} targetTheme="light" onThemeChange={setTheme}>
                             <Sun className="size-4" />
@@ -180,8 +180,8 @@ function CanvasThemeButton({ colorTheme, targetTheme, onThemeChange, children }:
             onThemeChange={onThemeChange}
             className="inline-flex h-8 min-w-0 items-center justify-center gap-1.5 rounded-md px-2 text-sm transition"
             style={active ? { background: theme.toolbar.activeBg, color: theme.toolbar.activeText } : { color: theme.toolbar.item }}
-            aria-label={`切换到${targetTheme === "dark" ? "深色" : "浅色"}主题`}
-            title={`切换到${targetTheme === "dark" ? "深色" : "浅色"}主题`}
+            aria-label={`切换到全局${targetTheme === "dark" ? "深色" : "浅色"}主题`}
+            title={`切换到全局${targetTheme === "dark" ? "深色" : "浅色"}主题`}
         >
             {children}
         </AnimatedThemeToggler>

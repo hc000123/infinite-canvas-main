@@ -487,10 +487,10 @@ function StoryboardPackageProcessDrawer({
                                 ))}
                             </div>
                         </div>
-                        {pkg.status === "缺资产" ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.07] p-3 text-sm leading-6 text-amber-100">当前包存在缺资产项，可跳转到资产提取模块补齐绑定，或直接打开资产处理抽屉。</div> : null}
+                        {pkg.status === "缺资产" ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.07] p-3 text-sm leading-6 text-amber-100">当前包存在缺资产项，可跳转到资产与生图模块补齐绑定，或直接打开资产处理抽屉。</div> : null}
                         <div className="flex flex-wrap gap-2">
                             <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={onOpenAssets}>
-                                跳到资产提取
+                                跳到资产与生图
                             </Button>
                             <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={() => onAction("打开资产处理抽屉")}>
                                 打开资产处理抽屉

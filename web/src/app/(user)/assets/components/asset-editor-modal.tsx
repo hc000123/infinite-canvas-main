@@ -67,7 +67,7 @@ export function AssetEditorModal({
     onReadMediaFile,
 }: AssetEditorModalProps) {
     return (
-        <Modal className="dark studio-modal" title={editingAsset ? "编辑素材" : "新增素材"} open={open} width={980} onCancel={onCancel} onOk={() => void onSave()} okText="保存" cancelText="取消" destroyOnHidden>
+        <Modal className="studio-modal" title={editingAsset ? "编辑素材" : "新增素材"} open={open} width={980} onCancel={onCancel} onOk={() => void onSave()} okText="保存" cancelText="取消" destroyOnHidden>
             <div className="grid gap-6 pt-1 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", tags: [] }}>
                     <Form.Item name="kind" label="类型">

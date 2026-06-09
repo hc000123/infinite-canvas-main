@@ -42,7 +42,7 @@ export function PromptDetailDialog({
 
     return (
         <>
-            <Modal title={prompt?.title} open={Boolean(prompt)} onCancel={onClose} footer={null} width={860} className="dark studio-modal">
+            <Modal title={prompt?.title} open={Boolean(prompt)} onCancel={onClose} footer={null} width={860} className="studio-modal">
                 {prompt ? (
                     <>
                         <div className="grid gap-5 md:grid-cols-[300px_minmax(0,1fr)]">

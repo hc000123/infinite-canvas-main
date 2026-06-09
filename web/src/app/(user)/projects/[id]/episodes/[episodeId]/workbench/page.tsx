@@ -71,6 +71,7 @@ const stageCopy: Record<string, { title: string; agent: string; input: string; o
 };
 
 type EpisodeModuleKey = "script" | "director" | "assets" | "storyboard" | "canvas";
+type EpisodeModuleNavStatus = { detail?: string; text: string; tone: EpisodeStatusTone };
 type DirectorReviewState = "confirmed" | "adopted";
 
 type WorkflowStageDisplaySummary = ReturnType<typeof summarizeWorkflowStageDisplayState>;
@@ -275,7 +276,7 @@ export default function EpisodeProductionWorkbenchPage() {
         if (nextStates["director-risk"] === "confirmed" && nextStates["director-storyboard"] === "adopted") {
             if (directorStageState?.status === "review" && directorStageState.runnerRunId) {
                 approveRun(directorStageState.runnerRunId, "风险提示已确认，分镜建议已采用。");
-                message.success("导演分析已批准，资产提取已解锁");
+                message.success("导演分析已批准，资产与生图已解锁");
                 return;
             }
             if (directorStageState?.status !== "approved") message.warning("导演分析缺少可批准的运行记录，请重新分析后再确认");
@@ -495,6 +496,7 @@ function EpisodeProductionShell({
         previewTotal: productionBiblePreviewCounts.total,
     });
     const currentPhase = buildEpisodePhaseText({ artDisplay, boundCanvas, directorDisplay, episodeTableShots, hasScript, productionBiblePreview, storyboardDisplay, storyboardPreview, videoPreview });
+    const nextActionText = buildEpisodeNextActionText({ appliedPreviewItemIds, artDisplay, boundCanvas, directorDisplay, episodeTableShots, hasScript, productionBiblePreview, storyboardDisplay, storyboardPreview, videoPreview });
     const assetRows = buildEpisodeExtractedAssets({
         appliedPreviewItemIds,
         assetLibrary,
@@ -514,26 +516,22 @@ function EpisodeProductionShell({
             }),
         [episode, episodeTableShots, sceneOptions, scriptSnapshot],
     );
-    const tabs = episodeModules.map((module) => ({
+    const tabs = episodeModules.map((module, index) => ({
         ...module,
-        badge:
-            module.key === "script"
-                ? hasScript
-                    ? "已导入"
-                    : "待导入"
-                : module.key === "director"
-                  ? workflowDisplayText(directorDisplay)
-                  : module.key === "assets"
-                    ? productionBiblePreview
-                        ? `${previewCounts(productionBiblePreview, appliedPreviewItemIds).pending} 待写入`
-                        : workflowDisplayText(artDisplay)
-                    : module.key === "storyboard"
-                      ? episodeTableShots.length
-                          ? `${episodeTableShots.length} 镜头`
-                          : workflowDisplayText(storyboardDisplay)
-                      : boundCanvas
-                        ? "已绑定"
-                        : "未绑定",
+        status: buildEpisodeModuleNavStatus({
+            appliedPreviewItemIds,
+            artDisplay,
+            boundCanvas,
+            directorDisplay,
+            episodeTableShots,
+            hasScript,
+            key: module.key,
+            productionBiblePreview,
+            storyboardDisplay,
+            storyboardPreview,
+            videoPreview,
+        }),
+        step: index + 1,
     }));
     const moduleConfig = buildEpisodeModuleConfig({
         activeModule,
@@ -570,15 +568,12 @@ function EpisodeProductionShell({
                 <summary className="cursor-pointer text-sm font-medium text-cyan-200">编辑 / 导入本集剧本</summary>
                 <div className="mt-3 grid gap-3">
                     <Input.TextArea className="!bg-slate-950/70 !text-slate-100" rows={7} value={scriptDraft} onChange={(event) => setScriptDraft(event.target.value)} placeholder="粘贴本集剧本，保存后进入导演分析。" />
-                    <Button className="w-fit" type="primary" disabled={!scriptDraft.trim()} onClick={onSaveScript}>
-                        保存本集剧本
-                    </Button>
                 </div>
             </details>
         ) : undefined;
     const bindExtractedAsset = (row: EpisodeExtractedAsset, asset: Asset) => {
         if (!row.productionBibleItem) {
-            message.warning("请先将资产提取结果写入设定库，再绑定项目资产库素材。");
+            message.warning("请先将资产清单写入设定库，再绑定项目资产库素材。");
             return;
         }
         if (row.productionBibleItem.assetRefs.some((ref) => ref.assetId === asset.id)) {
@@ -618,7 +613,6 @@ function EpisodeProductionShell({
             if (window.location.pathname !== "/image") window.location.assign(href);
         }, 120);
     };
-
     return (
         <div className="min-h-full bg-[radial-gradient(circle_at_0%_0%,rgba(20,184,196,0.16),transparent_30%),linear-gradient(180deg,#071017_0%,#050b10_46%,#03070b_100%)]">
             <header className="border-b border-slate-800/80 px-6 py-5 xl:px-8">
@@ -635,10 +629,7 @@ function EpisodeProductionShell({
                             <h1 className="break-words text-3xl font-semibold leading-tight text-slate-50">{episode.title}</h1>
                             <EpisodeStatusPill status={currentPhase} tone="cyan" />
                         </div>
-                        <p className="mt-2 break-words text-sm leading-6 text-slate-500">
-                            当前阶段：{currentPhase} · 导演分析 {workflowDisplayText(directorDisplay)} · 资产提取 {productionBiblePreview ? `${productionBiblePreview.items.length} 项预览` : workflowDisplayText(artDisplay)} · 分镜{" "}
-                            {episodeTableShots.length ? `${episodeTableShots.length} 镜头` : workflowDisplayText(storyboardDisplay)}
-                        </p>
+                        <p className="mt-2 break-words text-sm leading-6 text-slate-500">建议下一步：{nextActionText}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <Button className="!border-slate-700 !bg-slate-950/50 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" onClick={onBackProject}>
@@ -715,20 +706,24 @@ function EpisodeProductionShell({
     );
 }
 
-function EpisodeModuleTabs({ activeModule, onChange, tabs }: { activeModule: EpisodeModuleKey; onChange: (module: EpisodeModuleKey) => void; tabs: Array<{ badge: string; key: EpisodeModuleKey; label: string }> }) {
+function EpisodeModuleTabs({ activeModule, onChange, tabs }: { activeModule: EpisodeModuleKey; onChange: (module: EpisodeModuleKey) => void; tabs: Array<{ key: EpisodeModuleKey; label: string; status: EpisodeModuleNavStatus; step: number }> }) {
     return (
-        <nav className="grid content-start gap-2 rounded-lg border border-slate-800 bg-slate-950/35 p-2">
+        <nav className="grid content-start gap-1.5 rounded-xl border border-slate-800 bg-slate-950/35 p-2">
             {tabs.map((tab) => {
                 const active = tab.key === activeModule;
                 return (
                     <button
                         key={tab.key}
                         type="button"
-                        className={`rounded-md border px-3 py-2 text-left transition ${active ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]" : "border-transparent bg-transparent text-slate-500 hover:border-slate-700 hover:bg-slate-950/45 hover:text-slate-200"}`}
+                        className={`rounded-lg border px-3 py-2.5 text-left transition ${active ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]" : "border-transparent bg-transparent text-slate-400 hover:border-slate-700 hover:bg-slate-950/45 hover:text-slate-100"}`}
                         onClick={() => onChange(tab.key)}
+                        title={tab.status.detail || tab.status.text}
                     >
-                        <span className="block font-semibold">{tab.label}</span>
-                        <span className="mt-1 block text-xs opacity-70">{tab.badge}</span>
+                        <span className="flex items-center gap-2">
+                            <span className={`grid size-6 shrink-0 place-items-center rounded-md border text-xs font-semibold ${active ? "border-cyan-300/70 bg-cyan-300/15 text-cyan-100" : "border-slate-700 bg-slate-900/70 text-slate-400"}`}>{tab.step}</span>
+                            <span className="min-w-0 flex-1 truncate text-base font-semibold">{tab.label}</span>
+                        </span>
+                        <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${episodeModuleNavToneClass(tab.status.tone)}`}>{tab.status.text}</span>
                     </button>
                 );
             })}
@@ -774,7 +769,9 @@ function buildEpisodeModuleConfig(input: {
 function buildScriptModuleConfig(input: {
     episode: ScriptEpisode;
     hasScript: boolean;
+    onRunStage: (stageId: string) => void;
     onSaveScript: () => void;
+    runningStageIds: Record<string, boolean>;
     scriptDraft: string;
     scriptSnapshot: string;
     stageSceneRows: ScriptScene[];
@@ -782,6 +779,7 @@ function buildScriptModuleConfig(input: {
     const characters = uniqueTextList(input.stageSceneRows.flatMap((scene) => scene.characterIds)).join("、") || "待导演分析确认";
     const sceneList = input.stageSceneRows.map((scene) => `第 ${padEpisodeOrder(scene.order)} 场 ${scene.location || "未标注地点"}：${scene.beat || scene.dialogue || "待补充"}`).join("\n") || "暂无结构化场次；可在详情查看剧本文本。";
     const scriptBody = input.scriptSnapshot || input.scriptDraft || "暂无本集剧本。";
+    const scriptChanged = input.scriptDraft.trim() !== input.scriptSnapshot.trim();
     const scriptOverview = extractEpisodeOverview(input.episode.summary || input.scriptSnapshot) || (input.hasScript ? `已导入本集剧本，完整正文 ${scriptBody.length} 字，点击查看。` : "尚未导入本集剧本。");
     const sceneListPreview = input.stageSceneRows.length ? `已整理 ${input.stageSceneRows.length} 个结构化场次，点击查看列表。` : "暂无结构化场次；可在详情查看剧本文本。";
     const rows: EpisodeModuleRow[] = [
@@ -836,7 +834,12 @@ function buildScriptModuleConfig(input: {
         },
     ];
     return {
-        actions: [{ disabled: !input.scriptDraft.trim(), label: input.hasScript ? "保存剧本" : "导入剧本", onClick: input.onSaveScript, primary: true }],
+        actions: input.hasScript
+            ? [
+                  { disabled: !input.scriptDraft.trim() || !scriptChanged, label: "保存修改", onClick: input.onSaveScript },
+                  { disabled: false, label: "运行分析", loading: Boolean(input.runningStageIds["director-analysis"]), onClick: () => input.onRunStage("director-analysis"), primary: true },
+              ]
+            : [{ disabled: !input.scriptDraft.trim(), label: "导入剧本", onClick: input.onSaveScript, primary: true }],
         columns: "110px minmax(300px,1fr) 80px 90px 80px",
         emptyText: "暂无剧本条目",
         filters: ["全部", "已完成", "待确认", "待生成"],
@@ -873,19 +876,21 @@ function buildDirectorModuleConfig(input: {
     const directorApproved = display?.displayStatus === "approved";
     const riskConfirmed = directorApproved || input.directorReviewStates["director-risk"] === "confirmed";
     const storyboardAdopted = directorApproved || input.directorReviewStates["director-storyboard"] === "adopted";
+    const riskSummary = buildDirectorRiskSummary(fullBody);
     const rows: EpisodeModuleRow[] = [
         directorRow("director-target", "本集目标", digest?.summary || "待确认本集叙事目标。", status, tone, fullBody, output ? undefined : () => input.onRunStage("director-analysis")),
         directorRow("director-rhythm", "情绪节奏", findDigestSection(digest, ["导演讲戏", "导演分析"]) || "待输出情绪节奏。", status, tone, fullBody, output ? undefined : () => input.onRunStage("director-analysis")),
         directorRow(
             "director-risk",
             "风险提示",
-            findOutputKeywordLine(fullBody, ["风险", "注意", "避免"]) || "待识别风险提示。",
+            output ? riskSummary : "待识别风险提示。",
             output ? (riskConfirmed ? "已确认" : "待确认") : status,
             output ? (riskConfirmed ? "green" : "amber") : tone,
             fullBody,
-            output && !riskConfirmed ? () => input.onUpdateDirectorReviewState("director-risk", "confirmed") : output ? undefined : () => input.onRunStage("director-analysis"),
+            output ? undefined : () => input.onRunStage("director-analysis"),
             Boolean(output && !riskConfirmed),
-            output && !riskConfirmed ? "确认" : undefined,
+            output && !riskConfirmed ? "查看" : undefined,
+            output && !riskConfirmed ? { label: "确认风险提示", onClick: () => input.onUpdateDirectorReviewState("director-risk", "confirmed"), primary: true } : undefined,
         ),
         directorRow(
             "director-storyboard",
@@ -1119,14 +1124,14 @@ function buildAssetsModuleConfig(input: {
             ...(needsReview
                 ? [
                       {
-                          label: "批准资产提取",
-                          onClick: () => input.onApproveStageReview("art-design", "资产提取结果已确认。"),
+                          label: "批准资产清单",
+                          onClick: () => input.onApproveStageReview("art-design", "资产清单已确认。"),
                           primary: true,
                       },
                   ]
                 : []),
             {
-                label: input.stageOutputs["art-design"] ? "生成资产预览" : "运行资产提取",
+                label: input.stageOutputs["art-design"] ? "生成资产清单" : "运行资产分析",
                 loading: Boolean(input.runningStageIds["art-design"]),
                 onClick: () => (input.stageOutputs["art-design"] ? input.onGeneratePreview("art-design", "设定库预览") : input.onRunStage("art-design")),
                 primary: !needsReview,
@@ -1139,7 +1144,7 @@ function buildAssetsModuleConfig(input: {
             },
         ],
         columns: "90px 140px minmax(260px,1fr) 80px 90px 80px",
-        emptyText: "暂无资产提取记录",
+        emptyText: "暂无资产与生图记录",
         filters: ["全部", "已完成", "待确认", "缺素材", "待生成"],
         headers: ["类型", "资产", "简述", "引用", "状态", "操作"],
         rows,
@@ -1150,7 +1155,7 @@ function buildAssetsModuleConfig(input: {
             { label: "待写入", tone: counts.pending ? "amber" : "slate", value: String(counts.pending) },
             { label: "缺口", tone: rows.some((row) => row.status === "缺素材") ? "amber" : "green", value: String(rows.filter((row) => row.status === "缺素材").length) },
         ],
-        title: "资产提取模块",
+        title: "资产与生图模块",
     };
 }
 
@@ -1315,17 +1320,25 @@ function buildCanvasModuleConfig(input: {
     };
 }
 
-function directorRow(id: string, label: string, content: string, status: string, tone: EpisodeStatusTone, body: string, onAction?: () => void, highlight?: boolean, actionLabel?: string): EpisodeModuleRow {
+function directorRow(id: string, label: string, content: string, status: string, tone: EpisodeStatusTone, body: string, onAction?: () => void, highlight?: boolean, actionLabel?: string, detailAction?: EpisodeDetailRecord["action"]): EpisodeModuleRow {
     return {
         actionLabel: actionLabel || (onAction ? "运行" : status === "待确认" ? "确认" : status === "待采用" ? "采用" : "查看"),
         cells: [label, content, "导演分析"],
-        detail: { body, subtitle: content, title: label },
+        detail: { action: detailAction, body, subtitle: content, title: label },
         highlight,
         id,
         onAction,
         status,
         tone,
     };
+}
+
+function buildDirectorRiskSummary(text: string) {
+    const keywordLine = findOutputKeywordLine(text, ["风险", "注意", "避免", "PASS", "合规", "安全", "审核"]);
+    if (!keywordLine) return "已生成风险提示，点击查看完整导演分析后确认。";
+    const normalized = keywordLine.replace(/\s+/g, " ").trim();
+    if (/^PASS\b/i.test(normalized) || normalized.includes("PASS")) return `${normalized}。点击查看完整风险依据后确认。`;
+    return listSafeText(normalized, "已生成风险提示，点击查看完整导演分析后确认。");
 }
 
 function assetPlaceholderRows(): EpisodeModuleRow[] {
@@ -1394,10 +1407,114 @@ function buildEpisodePhaseText({
     if (!hasScript) return "待导入剧本";
     if (videoPreview || boundCanvas) return "画布承接准备";
     if (storyboardPreview || episodeTableShots.length) return "分镜提示词审核";
-    if (productionBiblePreview || artDisplay?.displayStatus === "approved") return "资产提取待补齐";
+    if (productionBiblePreview || artDisplay?.displayStatus === "approved") return "资产与生图待补齐";
     if (directorDisplay?.displayStatus && directorDisplay.displayStatus !== "idle") return `导演分析${workflowStageStatusLabel(directorDisplay.displayStatus)}`;
     if (storyboardDisplay?.displayStatus === "running") return "分镜生成中";
     return "导演分析待启动";
+}
+
+function buildEpisodeNextActionText({
+    appliedPreviewItemIds,
+    artDisplay,
+    boundCanvas,
+    directorDisplay,
+    episodeTableShots,
+    hasScript,
+    productionBiblePreview,
+    storyboardDisplay,
+    storyboardPreview,
+    videoPreview,
+}: {
+    appliedPreviewItemIds: string[];
+    artDisplay?: WorkflowStageDisplaySummary;
+    boundCanvas?: CanvasProject;
+    directorDisplay?: WorkflowStageDisplaySummary;
+    episodeTableShots: StoryboardTableShot[];
+    hasScript: boolean;
+    productionBiblePreview?: AgentWorkflowMappingPreview;
+    storyboardDisplay?: WorkflowStageDisplaySummary;
+    storyboardPreview?: AgentWorkflowMappingPreview;
+    videoPreview?: AgentWorkflowMappingPreview;
+}) {
+    if (!hasScript) return "先导入或粘贴本集剧本。";
+    if (directorDisplay?.displayStatus === "error" || directorDisplay?.displayStatus === "rejected") return "处理导演分析异常，然后重新运行分析。";
+    if (!directorDisplay || directorDisplay.displayStatus === "idle") return "运行导演分析。";
+    if (directorDisplay.displayStatus === "running") return "等待导演分析完成。";
+    if (directorDisplay.displayStatus === "review" || directorDisplay.displayStatus === "partial") return "查看并确认导演分析结果。";
+    if (artDisplay?.displayStatus === "error" || artDisplay?.displayStatus === "rejected") return "处理资产与生图异常，然后重新运行资产分析。";
+    if (!productionBiblePreview && artDisplay?.displayStatus !== "approved") return "进入资产与生图，运行资产分析。";
+    const assetCounts = productionBiblePreview ? previewCounts(productionBiblePreview, appliedPreviewItemIds) : { applied: 0, pending: 0, total: 0 };
+    if (assetCounts.pending) return `写入 ${assetCounts.pending} 条资产清单。`;
+    if (storyboardDisplay?.displayStatus === "error" || storyboardDisplay?.displayStatus === "rejected") return "处理分镜生成异常，再重新推进分镜。";
+    if (!storyboardPreview && !episodeTableShots.length) return "进入分镜生产包，生成分镜。";
+    if (!videoPreview && !boundCanvas) return "进入画布承接，把分镜放入画布。";
+    return "进入画布继续生成或检查视频版本。";
+}
+
+function buildEpisodeModuleNavStatus({
+    appliedPreviewItemIds,
+    artDisplay,
+    boundCanvas,
+    directorDisplay,
+    episodeTableShots,
+    hasScript,
+    key,
+    productionBiblePreview,
+    storyboardDisplay,
+    storyboardPreview,
+    videoPreview,
+}: {
+    appliedPreviewItemIds: string[];
+    artDisplay?: WorkflowStageDisplaySummary;
+    boundCanvas?: CanvasProject;
+    directorDisplay?: WorkflowStageDisplaySummary;
+    episodeTableShots: StoryboardTableShot[];
+    hasScript: boolean;
+    key: EpisodeModuleKey;
+    productionBiblePreview?: AgentWorkflowMappingPreview;
+    storyboardDisplay?: WorkflowStageDisplaySummary;
+    storyboardPreview?: AgentWorkflowMappingPreview;
+    videoPreview?: AgentWorkflowMappingPreview;
+}): EpisodeModuleNavStatus {
+    if (key === "script") return hasScript ? { text: "完成", tone: "green" } : { text: "开始", tone: "cyan" };
+    if (key === "director") return compactWorkflowNavStatus(directorDisplay, hasScript ? "下一步" : "等待", hasScript ? "cyan" : "slate");
+    if (key === "assets") {
+        if (!hasScript) return { text: "等待", tone: "slate" };
+        if (productionBiblePreview) {
+            const counts = previewCounts(productionBiblePreview, appliedPreviewItemIds);
+            if (counts.pending) return { detail: `${counts.pending} 条资产清单待写入`, text: "待写入", tone: "amber" };
+            return { text: "完成", tone: "green" };
+        }
+        return compactWorkflowNavStatus(artDisplay, "待分析", "slate");
+    }
+    if (key === "storyboard") {
+        if (episodeTableShots.length) return { detail: `${episodeTableShots.length} 个镜头`, text: "完成", tone: "green" };
+        if (!hasScript) return { text: "等待", tone: "slate" };
+        return compactWorkflowNavStatus(storyboardDisplay, "待生成", "slate");
+    }
+    if (boundCanvas || videoPreview) return { text: "完成", tone: "green" };
+    if (storyboardPreview || episodeTableShots.length) return { text: "待承接", tone: "cyan" };
+    return { text: "等待", tone: "slate" };
+}
+
+function compactWorkflowNavStatus(display: WorkflowStageDisplaySummary | undefined, idleText: string, idleTone: EpisodeStatusTone): EpisodeModuleNavStatus {
+    if (!display || display.displayStatus === "idle") return { text: idleText, tone: idleTone };
+    if (display.displayStatus === "approved") return { text: "完成", tone: "green" };
+    if (display.displayStatus === "running") return { text: "运行中", tone: "cyan" };
+    if (display.displayStatus === "review" || display.displayStatus === "partial") return { text: "待确认", tone: "amber" };
+    if (display.displayStatus === "error" || display.displayStatus === "rejected" || display.displayStatus === "blocked") return { detail: display.summaryText, text: "需处理", tone: "red" };
+    return { text: workflowStageStatusLabel(display.displayStatus), tone: "slate" };
+}
+
+function episodeModuleNavToneClass(tone: EpisodeStatusTone) {
+    const toneClass: Record<EpisodeStatusTone, string> = {
+        amber: "bg-amber-400/10 text-amber-200",
+        cyan: "bg-cyan-400/10 text-cyan-100",
+        green: "bg-emerald-400/10 text-emerald-200",
+        red: "bg-rose-400/10 text-rose-200",
+        slate: "bg-slate-800/80 text-slate-400",
+    };
+    return toneClass[tone];
 }
 
 function workflowDisplayText(display?: WorkflowStageDisplaySummary) {
@@ -1419,15 +1536,15 @@ function buildAssetStageActionHint({
     previewPending: number;
     previewTotal: number;
 }): { blocked?: boolean; text: string; tone: EpisodeStatusTone } {
-    if (isRunning || display?.displayStatus === "running") return { text: "资产提取正在运行，等待 Agent 返回结果。", tone: "cyan" };
+    if (isRunning || display?.displayStatus === "running") return { text: "资产分析正在运行，等待 Agent 返回结果。", tone: "cyan" };
     if (display?.displayStatus === "blocked") return { blocked: true, text: `暂不可运行，${formatBlockedReason(display.blockedReason)}。`, tone: "amber" };
-    if (display?.displayStatus === "error") return { text: "上次资产提取失败，请查看错误后重新运行。", tone: "red" };
-    if (display?.displayStatus === "rejected") return { text: "资产提取结果已驳回，可重新运行生成新结果。", tone: "red" };
-    if (previewPending > 0) return { text: `已有资产预览，${previewPending} 项待写入设定库。`, tone: "amber" };
-    if (previewTotal > 0) return { text: `资产预览已处理完成，共 ${previewTotal} 项。`, tone: "green" };
-    if (hasOutput) return { text: "资产提取已完成，可刷新资产预览或写入设定库。", tone: "cyan" };
-    if (display?.displayStatus === "review") return { text: "资产提取产物待审核，可生成资产预览。", tone: "cyan" };
-    if (display?.displayStatus === "approved") return { text: "资产提取阶段已批准，可继续处理生图需求。", tone: "green" };
+    if (display?.displayStatus === "error") return { text: "上次资产分析失败，请查看错误后重新运行。", tone: "red" };
+    if (display?.displayStatus === "rejected") return { text: "资产清单已驳回，可重新运行生成新结果。", tone: "red" };
+    if (previewPending > 0) return { text: `已有资产清单，${previewPending} 项待写入设定库。`, tone: "amber" };
+    if (previewTotal > 0) return { text: `资产清单已处理完成，共 ${previewTotal} 项。`, tone: "green" };
+    if (hasOutput) return { text: "资产分析已完成，可刷新资产清单或写入设定库。", tone: "cyan" };
+    if (display?.displayStatus === "review") return { text: "资产清单待审核，可生成资产清单。", tone: "cyan" };
+    if (display?.displayStatus === "approved") return { text: "资产与生图阶段已批准，可继续处理生图需求。", tone: "green" };
     return { text: "可运行，将从剧本和导演分析中提取角色、场景、道具和服装。", tone: "slate" };
 }
 

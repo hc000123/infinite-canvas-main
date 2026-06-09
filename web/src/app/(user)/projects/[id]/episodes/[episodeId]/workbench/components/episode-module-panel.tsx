@@ -3,7 +3,10 @@
 import { useState, type ReactNode } from "react";
 import { Button, Drawer } from "antd";
 
+import { EpisodeDetailBody } from "./episode-detail-body";
+
 export type EpisodeDetailRecord = {
+    action?: EpisodeModuleAction;
     body: string;
     meta?: Array<{ label: string; value: string }>;
     subtitle?: string;
@@ -209,7 +212,21 @@ export function EpisodeDetailDrawer({ onClose, record }: { onClose: () => void; 
                             ))}
                         </div>
                     ) : null}
-                    <div className="thin-scrollbar max-h-[68vh] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800 bg-slate-950/70 p-4 text-sm leading-7">{record.body || "暂无详情"}</div>
+                    <EpisodeDetailBody body={record.body} />
+                    {record.action ? (
+                        <Button
+                            className="w-fit"
+                            type={record.action.primary ? "primary" : "default"}
+                            disabled={record.action.disabled}
+                            loading={record.action.loading}
+                            onClick={() => {
+                                record.action?.onClick();
+                                onClose();
+                            }}
+                        >
+                            {record.action.label}
+                        </Button>
+                    ) : null}
                 </div>
             ) : null}
         </Drawer>

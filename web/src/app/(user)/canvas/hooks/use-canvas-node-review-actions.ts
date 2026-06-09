@@ -52,7 +52,7 @@ export function useCanvasNodeReviewActions({ token, message, nodes, nodesRef, se
         async (node: CanvasNodeData) => {
             if ((node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video) || !node.metadata?.content) return;
             if (!volcengineAssetEnabled) {
-                message.warning("请先开启火山人像加白");
+                message.warning("请先开启火山素材加白");
                 return;
             }
             if (!token) {

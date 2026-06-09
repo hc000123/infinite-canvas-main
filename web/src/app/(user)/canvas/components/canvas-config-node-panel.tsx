@@ -6,6 +6,7 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AudioLines, Edit3, Eye, Imag
 import { App, Button, Empty, Input, Modal, Segmented } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
+import { ModelThinkingSettings } from "@/components/image-settings-panel";
 import { inferRemoteVideoProtocol } from "@/services/api/ai-channel-boundary";
 import { defaultConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
@@ -53,10 +54,17 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
     const videoInputs = inputs.filter((input) => input.type === "video");
     const audioInputs = inputs.filter((input) => input.type === "audio");
     const mediaInputs = inputs.filter((input) => input.type === "image" || input.type === "video" || input.type === "audio");
+    const ownPrompt = String(node.metadata?.prompt || node.metadata?.finalPrompt || "").trim();
+    const promptCount = inputSummary.textCount + (ownPrompt ? 1 : 0);
+    const hasGenerationInput = Boolean(promptCount || inputSummary.imageCount || inputSummary.videoCount || inputSummary.audioCount);
+    const hasPreviewContent = Boolean(inputs.length || ownPrompt);
     const hasSourceVideo = videoInputs.some((input) => Boolean(input.video?.url));
     const imageReferenceValue = mode === "video" && imageInputs.length ? seedanceReferenceLabelRange("image", imageInputs.length) : `${inputSummary.imageCount} 张`;
     const videoReferenceValue = videoInputs.length ? seedanceReferenceLabelRange("video", videoInputs.length) : `${inputSummary.videoCount} 个`;
     const audioReferenceValue = audioInputs.length ? seedanceReferenceLabelRange("audio", audioInputs.length) : `${inputSummary.audioCount} 个`;
+    const modeLabel = mode === "video" ? "视频生成方案" : mode === "text" ? "文本生成方案" : "图片生成方案";
+    const modeHint = mode === "video" ? "收集提示词、参考素材和模型参数，用来生成视频版本" : mode === "text" ? "收集上下文和模型参数，用来生成文本结果" : "收集提示词、参考图和模型参数，用来生成图片";
+    const emptyHint = mode === "video" ? "先连接提示词或参考素材，再生成视频版本" : mode === "text" ? "先连接文本上下文，再生成文本结果" : "先连接提示词或参考图，再生成图片";
 
     const moveInput = (input: NodeGenerationInput, offset: number, scopedInputs?: NodeGenerationInput[]) => {
         const sameTypeInputs = scopedInputs || inputs.filter((item) => item.type === input.type);
@@ -106,9 +114,12 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
     };
 
     return (
-        <div className="flex h-full w-full cursor-move flex-col px-3 pb-3 pt-7 text-sm" style={{ color: theme.node.text }} onWheel={(event) => event.stopPropagation()}>
-            <div className="mb-2 flex items-center justify-between gap-3">
-                <div className="shrink-0 text-sm font-semibold">生成配置</div>
+        <div className="flex h-full w-full cursor-move flex-col gap-2 overflow-hidden px-3 pb-3 pt-7 text-sm" style={{ color: theme.node.text }} onWheel={(event) => event.stopPropagation()}>
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-1.5">
+                <div className="min-w-0 shrink">
+                    <div className="truncate text-sm font-semibold leading-5">{modeLabel}</div>
+                    <div className="truncate text-[10px] leading-4 opacity-55">{modeHint}</div>
+                </div>
                 <div className="cursor-default" onMouseDown={(event) => event.stopPropagation()}>
                     <Segmented
                         size="small"
@@ -148,45 +159,50 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
                 </div>
             </div>
 
-            <div className="mb-2 flex flex-wrap gap-1.5" onMouseDown={(event) => event.stopPropagation()}>
-                <InputChip label="提示词" value={`${inputSummary.textCount} 个`} style={chipStyle} />
-                <InputChip label="参考图" value={imageReferenceValue} style={chipStyle} />
-                {mode === "video" ? <InputChip label="参考视频" value={videoReferenceValue} style={chipStyle} /> : null}
-                {mode === "video" ? <InputChip label="参考音频" value={audioReferenceValue} style={chipStyle} /> : null}
-                <button type="button" className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-md border px-2 text-[11px]" style={chipStyle} onClick={() => setPreviewOpen(true)}>
+            <div className="grid shrink-0 grid-cols-2 gap-1.5" onMouseDown={(event) => event.stopPropagation()}>
+                <InputChip label="提示" value={`${promptCount}`} style={chipStyle} />
+                <InputChip label="图" value={imageReferenceValue} style={chipStyle} />
+                {mode === "video" ? <InputChip label="视频" value={videoReferenceValue} style={chipStyle} /> : null}
+                {mode === "video" ? <InputChip label="音频" value={audioReferenceValue} style={chipStyle} /> : null}
+                <button type="button" className="inline-flex h-6 min-w-0 cursor-pointer items-center justify-center gap-1 rounded-md border px-2 text-[11px]" style={chipStyle} onClick={() => setPreviewOpen(true)}>
                     <Eye className="size-3.5" />
                     预览
                 </button>
             </div>
 
-            <div className={`mb-2 grid min-w-0 cursor-default items-center gap-2 ${mode === "text" ? "grid-cols-1" : mode === "video" && allowCustomChannel ? "grid-cols-[88px_minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)_148px]"}`} onMouseDown={(event) => event.stopPropagation()}>
+            {!hasGenerationInput ? (
+                <div className="shrink-0 rounded-md border border-dashed px-2 py-1.5 text-[11px] leading-4 opacity-65" style={{ borderColor: theme.node.stroke, background: `${theme.node.fill}88` }}>
+                    {emptyHint}
+                </div>
+            ) : null}
+
+            <div className="grid min-w-0 shrink-0 cursor-default gap-1.5" onMouseDown={(event) => event.stopPropagation()}>
                 {mode === "video" && allowCustomChannel ? (
                     <CanvasVideoChannelPicker
-                        className="!rounded-lg"
+                        className="!h-8 !rounded-lg"
                         value={config.channelMode}
                         disabled={isRunning}
                         onChange={(channelMode) => onConfigChange(node.id, buildCanvasVideoChannelPatch(resolveCanvasVideoChannelConfig(localConfig, effectiveConfig, publicSettings?.modelChannel, channelMode)))}
                     />
                 ) : null}
-                <ModelPicker className="canvas-compact-control h-10" config={config} modelType={mode} value={config.model} onChange={(model) => onConfigChange(node.id, mode === "video" ? videoModelPatch(config, model) : { model })} onMissingConfig={() => openConfigDialog(true)} fullWidth />
+                <ModelPicker className="canvas-compact-control h-8 !rounded-lg !px-2 !text-xs" config={config} modelType={mode} value={config.model} onChange={(model) => onConfigChange(node.id, mode === "video" ? videoModelPatch(config, model) : { model })} onMissingConfig={() => openConfigDialog(true)} fullWidth />
+                {mode === "image" ? <ModelThinkingSettings className="w-full justify-start" compact config={config} model={config.model} theme={theme} onConfigChange={(key, value) => onConfigChange(node.id, { [key]: value })} /> : null}
                 {mode === "video" ? (
-                    <div className={allowCustomChannel ? "col-span-2" : ""}>
-                        <CanvasVideoSettingsPopover
-                            config={config}
-                            placement="topRight"
-                            showTaskMode
-                            hasSourceVideo={hasSourceVideo}
-                            disabled={isRunning}
-                            buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2"
-                            onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))}
-                        />
-                    </div>
+                    <CanvasVideoSettingsPopover
+                        config={config}
+                        placement="topRight"
+                        showTaskMode
+                        hasSourceVideo={hasSourceVideo}
+                        disabled={isRunning}
+                        buttonClassName="canvas-compact-control !h-8 !w-full !justify-start !rounded-lg !px-2 !text-xs"
+                        onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))}
+                    />
                 ) : mode === "image" ? (
                     <CanvasImageSettingsPopover
                         config={config}
                         placement="topRight"
                         autoAdjustOverflow={false}
-                        buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2"
+                        buttonClassName="canvas-compact-control !h-8 !w-full !justify-start !rounded-lg !px-2 !text-xs"
                         onConfigChange={(key, value) => onConfigChange(node.id, key === "count" ? { count: Number(value) || 1 } : { [key]: value })}
                     />
                 ) : null}
@@ -195,9 +211,10 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
             <Button
                 type="primary"
                 className="mt-auto !h-9 !w-full !cursor-pointer !rounded-lg"
-                disabled={isRunning || (!inputSummary.textCount && !inputSummary.imageCount && !inputSummary.videoCount && !inputSummary.audioCount)}
+                disabled={isRunning || !hasGenerationInput}
                 onMouseDown={(event) => event.stopPropagation()}
                 onClick={() => onGenerate(node.id)}
+                title={hasGenerationInput ? "开始生成" : emptyHint}
             >
                 <span className="inline-flex items-center gap-1.5">
                     <span className="inline-flex items-center gap-1">
@@ -205,7 +222,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
                         {credits.toLocaleString()}
                     </span>
                     {isRunning ? <LoaderCircle className="size-4 animate-spin" /> : <Play className="size-4" />}
-                    <span>开始生成</span>
+                    <span>{hasGenerationInput ? "开始生成" : "等待输入"}</span>
                 </span>
             </Button>
             <Modal
@@ -225,7 +242,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
                 )}
             >
                 <div onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheelCapture={(event) => event.stopPropagation()}>
-                    {inputs.length ? (
+                    {hasPreviewContent ? (
                         <div className="flex h-[min(66vh,580px)] flex-col gap-3 overflow-hidden">
                             <div className="shrink-0 space-y-3">
                                 {mode === "video" ? (
@@ -265,8 +282,9 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
                             </div>
                             <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-hidden">
                                 <div className="thin-scrollbar min-h-0 overflow-y-auto pr-1.5">
-                                    <PreviewSection title="文本提示词" count={textInputs.length} empty="暂无文本提示词">
+                                    <PreviewSection title="文本提示词" count={promptCount} empty="暂无文本提示词">
                                         <div className="space-y-1.5">
+                                            {ownPrompt ? <OwnPromptPreviewCard prompt={ownPrompt} theme={theme} /> : null}
                                             {textInputs.map((input, index) => (
                                                 <TextSortCard key={input.nodeId} input={input} textIndex={index} textTotal={textInputs.length} inputs={inputs} theme={theme} onMove={moveInput} onEdit={startTextEdit} />
                                             ))}
@@ -319,6 +337,15 @@ function PreviewSection({ title, count, empty, children }: { title: string; coun
             </div>
             {count ? children : <div className="rounded-xl border border-dashed px-3 py-5 text-center text-xs opacity-45">{empty}</div>}
         </section>
+    );
+}
+
+function OwnPromptPreviewCard({ prompt, theme }: { prompt: string; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    return (
+        <div className="rounded-md border px-2 py-1.5" style={{ background: `${theme.node.fill}99`, borderColor: theme.node.stroke }}>
+            <div className="mb-0.5 text-[10px] font-medium opacity-50">节点提示词</div>
+            <div className="line-clamp-3 whitespace-pre-wrap break-words text-[11px] leading-4 opacity-80">{prompt}</div>
+        </div>
     );
 }
 
@@ -516,9 +543,9 @@ function HorizontalOrderButtons({ index, total, onMove }: { index: number; total
 
 function InputChip({ label, value, style }: { label: string; value: string; style: CSSProperties }) {
     return (
-        <div className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[11px]" style={style}>
-            <span>{label}</span>
-            <span className="font-medium">{value}</span>
+        <div className="inline-flex h-6 min-w-0 items-center justify-center gap-1 rounded-md border px-2 text-[11px]" style={style}>
+            <span className="shrink-0 opacity-70">{label}</span>
+            <span className="min-w-0 truncate font-medium">{value}</span>
         </div>
     );
 }

@@ -8,6 +8,7 @@ import type { ScriptEpisode } from "../../../../../../canvas/utils/script-manage
 import type { ProductionBibleItem } from "../../../../../../canvas/utils/production-bible";
 import { summarizeWorkflowStageDisplayState, workflowMappingPreviewItemKey, type AgentWorkflowMappingPreview, type AgentWorkflowRunRecord, type AgentWorkflowStageOutput } from "../../../../../agent-runner";
 import { EpisodeStatusPill, episodeToneTextClass, type EpisodeStatusTone } from "./episode-module-panel";
+import { StageOutputDigest } from "./stage-output-digest";
 
 type EpisodeAssetProcessMode = "bind" | "generate";
 type EpisodeAssetFilter = "全部" | "缺素材" | "已绑定" | "待生成" | "角色" | "场景" | "道具" | "服装";
@@ -77,6 +78,7 @@ export function EpisodeAssetsModulePage({
     const previewCountsResult = preview ? previewCounts(preview, appliedPreviewItemIds) : { applied: 0, pending: 0, total: 0 };
     const stageDisplay = workflowRun ? summarizeWorkflowStageDisplayState(workflowRun, "art-design", []) : undefined;
     const needsReview = stageDisplay?.displayStatus === "review";
+    const reviewOutput = stageOutputs["art-design"];
 
     useEffect(() => {
         if (!assets.length) {
@@ -100,25 +102,20 @@ export function EpisodeAssetsModulePage({
                         <span>/</span>
                         <span>第 {padEpisodeOrder(episode.order)} 集</span>
                         <span>/</span>
-                        <span className="text-cyan-300">资产提取</span>
+                        <span className="text-cyan-300">资产与生图</span>
                     </div>
-                    <h2 className="mt-2 break-words text-3xl font-semibold leading-tight text-slate-50">{episode.title} · 资产提取</h2>
+                    <h2 className="mt-2 break-words text-3xl font-semibold leading-tight text-slate-50">{episode.title} · 资产与生图</h2>
                     <p className="mt-2 break-words text-sm leading-6 text-slate-500">从剧本和导演分析中提取角色、场景、道具、服装；每条资产可直接绑定已有素材，或带提示词进入生图工作台生成参考图。</p>
                 </div>
                 <div className="grid justify-items-start gap-2 xl:justify-items-end">
                     <div className="flex flex-wrap gap-2">
-                        {needsReview ? (
-                            <Button type="primary" onClick={() => onApproveStageReview("art-design", "资产提取结果已确认。")}>
-                                批准资产提取
-                            </Button>
-                        ) : null}
                         <Button
                             className="!border-slate-700 !bg-slate-950/55 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100"
                             disabled={stageActionHint.blocked}
                             onClick={() => (stageOutputs["art-design"] ? onGeneratePreview("art-design", "设定库预览") : onRunStage("art-design"))}
                             loading={Boolean(runningStageIds["art-design"])}
                         >
-                            {stageOutputs["art-design"] ? "刷新资产预览" : "运行资产提取"}
+                            {stageOutputs["art-design"] ? "刷新资产清单" : "运行资产分析"}
                         </Button>
                         <Button type="primary" disabled={!preview || previewCountsResult.pending <= 0} loading={Boolean(preview && applyingPreviewIds[preview.previewId])} onClick={() => preview && onApplyPreview(preview)}>
                             写入设定库 {previewCountsResult.pending ? previewCountsResult.pending : ""}
@@ -127,6 +124,23 @@ export function EpisodeAssetsModulePage({
                     <div className={`max-w-[360px] break-words text-xs leading-5 ${episodeToneTextClass(stageActionHint.tone)}`}>当前：{stageActionHint.text}</div>
                 </div>
             </div>
+
+            {needsReview ? (
+                <div className="rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <div className="text-base font-semibold text-amber-100">待确认资产清单草案</div>
+                            <div className="mt-1 text-sm leading-6 text-amber-100/70">请先核对下方资产分析内容。确认后，本阶段会标记为已批准，才继续刷新资产清单或写入设定库。</div>
+                        </div>
+                        <Button type="primary" disabled={!reviewOutput} onClick={() => onApproveStageReview("art-design", "资产清单已确认。")}>
+                            确认这份资产清单
+                        </Button>
+                    </div>
+                    <div className="mt-4">
+                        {reviewOutput ? <StageOutputDigest stageId="art-design" output={reviewOutput} /> : <div className="rounded-lg border border-amber-400/20 bg-slate-950/45 p-3 text-sm text-amber-100/70">当前没有可审核的资产分析输出，请先运行资产分析。</div>}
+                    </div>
+                </div>
+            ) : null}
 
             <div className="grid gap-3 md:grid-cols-5">
                 {[

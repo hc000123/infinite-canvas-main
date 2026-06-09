@@ -254,7 +254,7 @@ export default function CreativeProjectDetailPage() {
 
     if (!project) {
         return (
-            <main className="dark studio-workspace h-full overflow-auto bg-[var(--studio-shell-bg)] px-6 py-10 text-[var(--studio-text-primary)]">
+            <main className="studio-workspace h-full overflow-auto bg-[var(--studio-shell-bg)] px-6 py-10 text-[var(--studio-text-primary)]">
                 <div className="mx-auto max-w-3xl">
                     <Empty description="项目不存在或尚未加载">
                         <Button href="/projects">返回项目工作台</Button>
@@ -372,7 +372,7 @@ export default function CreativeProjectDetailPage() {
     };
 
     return (
-        <main className="dark studio-workspace studio-shell h-full overflow-auto text-[var(--studio-text-primary)]">
+        <main className="studio-workspace studio-shell h-full overflow-auto text-[var(--studio-text-primary)]">
             <ProjectEpisodeBoard
                 activeTab={activeTab}
                 currentEpisode={currentEpisode}
@@ -400,7 +400,7 @@ export default function CreativeProjectDetailPage() {
             />
 
             <Modal
-                className="dark studio-modal"
+                className="studio-modal"
                 title="编辑项目"
                 open={projectEditOpen}
                 onCancel={() => setProjectEditOpen(false)}
@@ -421,7 +421,7 @@ export default function CreativeProjectDetailPage() {
                 </div>
             </Modal>
             <Modal
-                className="dark studio-modal"
+                className="studio-modal"
                 title="导入本集剧本"
                 open={episodeImportOpen}
                 onCancel={() => setEpisodeImportOpen(false)}
@@ -782,7 +782,6 @@ function ProjectEpisodeTable({ rows, onOpenCanvas, onOpenEpisode }: { rows: Proj
                                 <span className="block h-full rounded-full bg-[linear-gradient(90deg,var(--studio-accent),var(--studio-success))]" style={{ width: `${row.progress}%` }} />
                             </span>
                             <span className="w-12 text-sm font-semibold text-[var(--studio-text-muted)]">{row.progress}%</span>
-                            <span className={`ml-auto grid h-9 w-28 place-items-center rounded-md border text-sm font-semibold ${row.filterStatus === "running" ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-secondary)]"}`}>{row.actionLabel}</span>
                         </span>
                         {row.primaryCanvasId ? (
                             <Button
@@ -1412,7 +1411,7 @@ function ReferenceOpenButton({
 
 function AssetReferenceDrawer({ asset, onClose }: { asset: Asset | null; onClose: () => void }) {
     return (
-        <Drawer rootClassName="dark studio-workspace" title="素材详情" open={Boolean(asset)} onClose={onClose} size="large">
+        <Drawer rootClassName="studio-workspace" title="素材详情" open={Boolean(asset)} onClose={onClose} size="large">
             {asset ? (
                 <div className="space-y-4">
                     <AssetReferenceThumb asset={asset} large />

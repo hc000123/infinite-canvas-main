@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode } from "react";
-import { AudioLines, Camera, Download, FolderPlus, Image as ImageIcon, Info, Lock, LockOpen, Maximize2, MessageSquare, Minus, Pencil, Plus, RefreshCw, Scissors, Settings2, ShieldCheck, Trash2, Upload, Video } from "lucide-react";
+import { AudioLines, Camera, Download, FolderPlus, Image as ImageIcon, Info, Lock, LockOpen, Maximize2, Minus, Pencil, Plus, RefreshCw, Scissors, Settings2, ShieldCheck, Trash2, Upload, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -143,20 +143,18 @@ function buildNodeToolbarActions({
     const hasAudio = isAudio && Boolean(node.metadata?.content);
     const isText = node.type === CanvasNodeType.Text;
     const isConfig = node.type === CanvasNodeType.Config;
-    const canOpenDialog = isText || hasImage || isVideo;
+    const canOpenDialog = isConfig || (isImage && !hasImage) || (isVideo && !hasVideo);
     const canRetry = node.metadata?.status === "error";
     const hasSpecificTools = canRetry || isText || isImage || isVideo || isAudio || isConfig;
     const review = node.metadata?.volcengineAsset;
     const reviewProcessing = review?.status === "Processing";
-    const items: NodeToolbarAction[] = [
-        { type: "button", key: "info", title: "查看节点信息", label: "信息", icon: <Info className="size-4" />, onClick: () => onInfo(node) },
-        { type: "button", key: "delete", title: "移除节点", label: "删除", icon: <Trash2 className="size-4" />, onClick: () => onDelete(node), danger: true },
-    ];
+    const items: NodeToolbarAction[] = [{ type: "button", key: "info", title: "查看节点信息", label: "信息", icon: <Info className="size-4" />, onClick: () => onInfo(node) }];
 
-    if (hasSpecificTools) items.push({ type: "divider", key: "specific-divider" });
-    if (canRetry) items.push({ type: "button", key: "retry", title: "重新生成", label: "重试", icon: <RefreshCw className="size-4" />, onClick: () => onRetry(node) });
+    if (hasSpecificTools) items.push({ type: "divider", key: "primary-divider" });
+    if (hasImage || hasVideo || hasAudio) items.push({ type: "button", key: "download", title: hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片", label: hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片", icon: <Download className="size-5" />, onClick: () => onDownload(node) });
     if (hasImage || hasVideo || hasAudio || isText) items.push({ type: "button", key: "save-asset", title: "加入我的素材", label: "存素材", icon: <FolderPlus className="size-4" />, onClick: () => onSaveAsset(node) });
     if (hasNewAssetVersion) items.push({ type: "button", key: "update-asset-reference", title: "素材有新版本可用，仅更新当前节点的引用版本记录", label: "有新版本", icon: <RefreshCw className="size-4" />, onClick: () => onUpdateAssetReference(node), active: true });
+    if (canRetry) items.push({ type: "button", key: "retry", title: "重新生成", label: "重试", icon: <RefreshCw className="size-4" />, onClick: () => onRetry(node) });
     if (hasImage || hasVideo) {
         items.push(
             review?.assetId
@@ -171,22 +169,21 @@ function buildNodeToolbarActions({
                 : {
                       type: "button",
                       key: "review-asset",
-                      title: "提交火山人像加白",
+                      title: hasVideo ? "提交视频火山素材加白" : "提交图片火山素材加白",
                       label: submittingReview ? "提交中" : "加白",
                       icon: <ShieldCheck className="size-4" />,
                       onClick: () => onReviewAsset(node),
                   },
         );
     }
-    if (hasImage || hasVideo || hasAudio) items.push({ type: "button", key: "download", title: hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片", label: hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片", icon: <Download className="size-5" />, onClick: () => onDownload(node) });
     if (hasVideo) items.push({ type: "button", key: "capture-video-frame", title: "截取当前预览帧", label: "截帧", icon: <ImageIcon className="size-4" />, onClick: () => onCaptureVideoFrame(node) });
     if (hasVideo && node.metadata?.lastFrameUrl) items.push({ type: "button", key: "continue-video", title: "续写下一段", label: "续写", icon: <Video className="size-4" />, onClick: () => onContinueVideo(node) });
-    if (canOpenDialog) items.push({ type: "button", key: "toggle-dialog", title: "编辑", label: "编辑", icon: <MessageSquare className="size-4" />, onClick: () => onToggleDialog(node) });
     if (isText) items.push({ type: "button", key: "edit-text", title: "编辑文本", label: "编辑文字", icon: <Pencil className="size-4" />, onClick: () => onEditText(node) });
     if (isText) items.push({ type: "button", key: "generate-image", title: "用文本生图", label: "生图", icon: <ImageIcon className="size-4" />, onClick: () => onGenerateImage(node) });
-    if (isConfig) items.push({ type: "button", key: "config-info", title: "生成配置", label: "生成配置", icon: <Settings2 className="size-4" />, onClick: () => onInfo(node) });
+    if (canOpenDialog) items.push({ type: "button", key: "toggle-dialog", title: "打开生成设置", label: "生成设置", icon: <Settings2 className="size-4" />, onClick: () => onToggleDialog(node) });
     if (isText) items.push({ type: "button", key: "decrease-font", title: "减小字号", label: "缩小", icon: <Minus className="size-4" />, onClick: () => onDecreaseFont(node) });
     if (isText) items.push({ type: "button", key: "increase-font", title: "增大字号", label: "放大", icon: <Plus className="size-4" />, onClick: () => onIncreaseFont(node) });
+    if (isImage || isVideo || isAudio) items.push({ type: "divider", key: "media-manage-divider" });
     if (isImage) items.push({ type: "button", key: "upload-image", title: hasImage ? "替换图片" : "上传图片", label: hasImage ? "替换图片" : "上传图片", icon: <Upload className="size-4" />, onClick: () => onUpload(node) });
     if (isVideo) items.push({ type: "button", key: "upload-video", title: hasVideo ? "替换视频" : "上传视频", label: hasVideo ? "替换视频" : "上传视频", icon: <Video className="size-4" />, onClick: () => onUpload(node) });
     if (isAudio) items.push({ type: "button", key: "upload-audio", title: hasAudio ? "替换音频" : "上传音频", label: hasAudio ? "替换音频" : "上传音频", icon: <AudioLines className="size-4" />, onClick: () => onUpload(node) });
@@ -194,6 +191,8 @@ function buildNodeToolbarActions({
     if (hasImage) items.push({ type: "button", key: "crop", title: "裁剪并生成新节点", label: "裁剪", icon: <Scissors className="size-4" />, onClick: () => onCrop(node) });
     if (hasImage) items.push({ type: "button", key: "angle", title: "生成角度", label: "多角度", icon: <Camera className="size-4" />, onClick: () => onAngle(node) });
     if (hasImage) items.push({ type: "button", key: "view-image", title: "查看图片详情", label: "查看大图", icon: <Maximize2 className="size-4" />, onClick: () => onViewImage(node) });
+    items.push({ type: "divider", key: "danger-divider" });
+    items.push({ type: "button", key: "delete", title: "移除节点", label: "删除", icon: <Trash2 className="size-4" />, onClick: () => onDelete(node), danger: true });
 
     return items;
 }

@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertTriangle, AudioLines, ChevronRight, Download, FileText, Image as ImageIcon, RefreshCw, Settings2, Star, Video } from "lucide-react";
+import { AlertTriangle, AudioLines, ChevronRight, FileText, Image as ImageIcon, RefreshCw, Settings2, Star, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
@@ -46,6 +46,7 @@ type CanvasNodeProps = {
     onRefreshVideoTask?: (node: CanvasNodeData) => void;
     onGenerateImage?: (node: CanvasNodeData) => void;
     onDownload?: (node: CanvasNodeData) => void;
+    onViewImage?: (node: CanvasNodeData) => void;
     onContextMenu: (event: React.MouseEvent, nodeId: string) => void;
 };
 
@@ -104,6 +105,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onRefreshVideoTask,
     onGenerateImage,
     onDownload,
+    onViewImage,
     onContextMenu,
 }: CanvasNodeProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -275,6 +277,11 @@ export const CanvasNode = React.memo(function CanvasNode({
                     if (isBatchRoot) {
                         event.stopPropagation();
                         onToggleBatch?.(data.id);
+                        return;
+                    }
+                    if (hasImageContent) {
+                        event.stopPropagation();
+                        onViewImage?.(data);
                         return;
                     }
                     if (data.type !== CanvasNodeType.Text) return;
@@ -682,7 +689,7 @@ function EmptyImageContent({ theme, isBatchRoot, batchCount, batchExpanded, batc
     return content;
 }
 
-function VideoNodeContent({ node, theme, onDownload, onRefreshVideoTask }: NodeContentRendererProps) {
+function VideoNodeContent({ node, theme, onRefreshVideoTask }: NodeContentRendererProps) {
     const [detailsOpen, setDetailsOpen] = useState(false);
     if (!node.metadata?.content)
         return (
@@ -693,22 +700,7 @@ function VideoNodeContent({ node, theme, onDownload, onRefreshVideoTask }: NodeC
         );
     return (
         <div className="relative h-full w-full rounded-[18px] bg-black">
-            <video src={node.metadata.content} controls className="h-full w-full rounded-[18px] object-contain" data-canvas-no-zoom />
-            <button
-                type="button"
-                className="absolute right-2.5 top-2.5 z-30 grid size-9 place-items-center rounded-lg border text-white shadow-[0_8px_24px_rgba(0,0,0,.24)] backdrop-blur-md transition hover:scale-[1.03]"
-                style={{ background: "rgba(0,0,0,.5)", borderColor: "rgba(255,255,255,.22)" }}
-                onClick={(event) => {
-                    event.stopPropagation();
-                    onDownload?.(node);
-                }}
-                onMouseDown={(event) => event.stopPropagation()}
-                onPointerDown={(event) => event.stopPropagation()}
-                title="下载视频"
-                aria-label="下载视频"
-            >
-                <Download className="size-4" />
-            </button>
+            <video src={node.metadata.content} controls controlsList="nodownload" className="h-full w-full rounded-[18px] object-contain" data-canvas-no-zoom />
             {node.metadata?.taskId || node.metadata?.prompt ? (
                 <div className="absolute left-2.5 top-2.5 z-30 flex flex-wrap gap-1.5">
                     {node.metadata?.taskId ? (

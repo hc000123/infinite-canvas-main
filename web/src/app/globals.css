@@ -232,9 +232,13 @@
     }
 
     .dark.studio-workspace .ant-card,
+    .dark .studio-workspace .ant-card,
     .dark.studio-workspace .ant-drawer-content,
+    .dark .studio-workspace .ant-drawer-content,
     .dark.studio-workspace .ant-modal-content,
+    .dark .studio-workspace .ant-modal-content,
     .dark.studio-workspace .ant-popover-inner,
+    .dark .studio-workspace .ant-popover-inner,
     .dark .studio-shell .ant-card,
     .dark .studio-shell .ant-modal-content,
     .dark .studio-shell .ant-popover-inner {
@@ -244,12 +248,19 @@
     }
 
     .dark.studio-workspace .ant-card-body,
+    .dark .studio-workspace .ant-card-body,
     .dark.studio-workspace .ant-card-head,
+    .dark .studio-workspace .ant-card-head,
     .dark.studio-workspace .ant-drawer-body,
+    .dark .studio-workspace .ant-drawer-body,
     .dark.studio-workspace .ant-drawer-header,
+    .dark .studio-workspace .ant-drawer-header,
     .dark.studio-workspace .ant-drawer-title,
+    .dark .studio-workspace .ant-drawer-title,
     .dark.studio-workspace .ant-modal-title,
+    .dark .studio-workspace .ant-modal-title,
     .dark.studio-workspace .ant-modal-body,
+    .dark .studio-workspace .ant-modal-body,
     .dark .studio-shell .ant-card-body,
     .dark .studio-shell .ant-card-head,
     .dark .studio-shell .ant-modal-title,
@@ -288,21 +299,38 @@
         color: #f2f4f8 !important;
     }
 
+    .project-card-action-tooltip .ant-tooltip-inner,
+    .project-card-action-tooltip .ant-tooltip-inner * {
+        color: #f8fafc !important;
+    }
+
     .dark.studio-workspace .ant-drawer-header {
         border-bottom-color: var(--studio-border-subtle);
     }
 
+    .dark .studio-workspace .ant-drawer-header {
+        border-bottom-color: var(--studio-border-subtle);
+    }
+
     .dark.studio-workspace.ant-drawer .ant-drawer-header,
+    .dark .studio-workspace.ant-drawer .ant-drawer-header,
     .dark.studio-workspace.ant-drawer .ant-drawer-body,
+    .dark .studio-workspace.ant-drawer .ant-drawer-body,
     .dark.studio-workspace .ant-drawer-header,
-    .dark.studio-workspace .ant-drawer-body {
+    .dark .studio-workspace .ant-drawer-header,
+    .dark.studio-workspace .ant-drawer-body,
+    .dark .studio-workspace .ant-drawer-body {
         background: var(--studio-elevated-bg);
     }
 
     .dark.studio-workspace .ant-input,
+    .dark .studio-workspace .ant-input,
     .dark.studio-workspace .ant-input-affix-wrapper,
+    .dark .studio-workspace .ant-input-affix-wrapper,
     .dark.studio-workspace .ant-input-number,
+    .dark .studio-workspace .ant-input-number,
     .dark.studio-workspace .ant-select-selector,
+    .dark .studio-workspace .ant-select-selector,
     .dark .studio-shell .ant-input,
     .dark .studio-shell .ant-input-affix-wrapper,
     .dark .studio-shell .ant-input-number,
@@ -313,33 +341,42 @@
     }
 
     .dark.studio-workspace .ant-input::placeholder,
+    .dark .studio-workspace .ant-input::placeholder,
     .dark.studio-workspace .ant-input-affix-wrapper input::placeholder,
+    .dark .studio-workspace .ant-input-affix-wrapper input::placeholder,
     .dark .studio-shell .ant-input::placeholder,
     .dark .studio-shell .ant-input-affix-wrapper input::placeholder {
         color: var(--studio-text-muted) !important;
     }
 
     .dark.studio-workspace .ant-btn-default,
+    .dark .studio-workspace .ant-btn-default,
     .dark.studio-workspace .ant-btn-text,
+    .dark .studio-workspace .ant-btn-text,
     .dark .studio-shell .ant-btn-default,
     .dark .studio-shell .ant-btn-text {
         color: var(--studio-text-secondary);
     }
 
     .dark.studio-workspace .ant-btn,
+    .dark .studio-workspace .ant-btn,
     .dark .studio-shell .ant-btn {
         border-radius: 5px !important;
         font-weight: 550 !important;
     }
 
     .dark.studio-workspace .ant-btn-primary,
+    .dark .studio-workspace .ant-btn-primary,
     .dark .studio-shell .ant-btn-primary {
         font-weight: 650 !important;
     }
 
     .dark.studio-workspace .ant-input,
+    .dark .studio-workspace .ant-input,
     .dark.studio-workspace .ant-input-affix-wrapper,
+    .dark .studio-workspace .ant-input-affix-wrapper,
     .dark.studio-workspace .ant-select-selector,
+    .dark .studio-workspace .ant-select-selector,
     .dark .studio-shell .ant-input,
     .dark .studio-shell .ant-input-affix-wrapper,
     .dark .studio-shell .ant-select-selector {
@@ -347,6 +384,7 @@
     }
 
     .dark.studio-workspace .ant-btn-default,
+    .dark .studio-workspace .ant-btn-default,
     .dark .studio-shell .ant-btn-default {
         background: var(--studio-panel-bg);
         border-color: var(--studio-border-subtle);
@@ -415,78 +453,113 @@
 
     .dark.studio-workspace .ant-empty-description,
     .dark.studio-workspace .ant-spin-text,
+    .dark .studio-workspace .ant-empty-description,
+    .dark .studio-workspace .ant-spin-text,
     .dark .studio-shell .ant-empty-description,
     .dark .studio-shell .ant-spin-text {
         color: var(--studio-text-secondary) !important;
     }
 
     .dark.studio-workspace .text-slate-500,
+    .dark .studio-workspace .text-slate-500,
     .dark.studio-workspace .text-stone-500,
+    .dark .studio-workspace .text-stone-500,
     .dark.studio-workspace .text-gray-500,
-    .dark.studio-workspace .text-zinc-500 {
+    .dark .studio-workspace .text-gray-500,
+    .dark.studio-workspace .text-zinc-500,
+    .dark .studio-workspace .text-zinc-500 {
         color: var(--studio-text-muted) !important;
     }
 
     .dark.studio-workspace .text-slate-400,
+    .dark .studio-workspace .text-slate-400,
     .dark.studio-workspace .text-stone-400,
+    .dark .studio-workspace .text-stone-400,
     .dark.studio-workspace .text-gray-400,
-    .dark.studio-workspace .text-zinc-400 {
+    .dark .studio-workspace .text-gray-400,
+    .dark.studio-workspace .text-zinc-400,
+    .dark .studio-workspace .text-zinc-400 {
         color: var(--studio-text-secondary) !important;
     }
 
     .dark.studio-workspace .text-slate-300,
+    .dark .studio-workspace .text-slate-300,
     .dark.studio-workspace .text-stone-300,
+    .dark .studio-workspace .text-stone-300,
     .dark.studio-workspace .text-gray-300,
-    .dark.studio-workspace .text-zinc-300 {
+    .dark .studio-workspace .text-gray-300,
+    .dark.studio-workspace .text-zinc-300,
+    .dark .studio-workspace .text-zinc-300 {
         color: #d7deeb !important;
     }
 
     .dark.studio-modal .ant-modal-content,
-    .dark.studio-modal .ant-modal-header {
+    .dark .studio-modal .ant-modal-content,
+    .dark.studio-modal .ant-modal-header,
+    .dark .studio-modal .ant-modal-header {
         background: var(--studio-elevated-bg);
         color: var(--studio-text-primary);
     }
 
     .dark.studio-modal.ant-modal,
+    .dark .studio-modal.ant-modal,
     .dark.studio-modal.ant-modal .ant-modal-header,
+    .dark .studio-modal.ant-modal .ant-modal-header,
     .dark.studio-modal.ant-modal .ant-modal-body,
-    .dark.studio-modal.ant-modal .ant-modal-footer {
+    .dark .studio-modal.ant-modal .ant-modal-body,
+    .dark.studio-modal.ant-modal .ant-modal-footer,
+    .dark .studio-modal.ant-modal .ant-modal-footer {
         background: var(--studio-elevated-bg) !important;
         color: var(--studio-text-primary) !important;
     }
 
-    .dark.studio-modal.ant-modal {
+    .dark.studio-modal.ant-modal,
+    .dark .studio-modal.ant-modal {
         border: 1px solid var(--studio-border-subtle);
         border-radius: 8px;
         overflow: hidden;
     }
 
-    .dark.studio-modal.ant-modal .ant-modal-header {
+    .dark.studio-modal.ant-modal .ant-modal-header,
+    .dark .studio-modal.ant-modal .ant-modal-header {
         border-bottom: 1px solid var(--studio-border-subtle) !important;
     }
 
-    .dark.studio-modal.ant-modal .ant-modal-footer {
+    .dark.studio-modal.ant-modal .ant-modal-footer,
+    .dark .studio-modal.ant-modal .ant-modal-footer {
         border-top: 1px solid var(--studio-border-subtle) !important;
     }
 
     .dark.studio-modal .ant-modal-title,
+    .dark .studio-modal .ant-modal-title,
     .dark.studio-modal .ant-modal-body,
+    .dark .studio-modal .ant-modal-body,
     .dark.studio-modal .ant-modal-close,
+    .dark .studio-modal .ant-modal-close,
     .dark.studio-modal .ant-form-item-label > label,
+    .dark .studio-modal .ant-form-item-label > label,
     .dark.studio-modal .ant-typography,
-    .dark.studio-modal .ant-checkbox-wrapper {
+    .dark .studio-modal .ant-typography,
+    .dark.studio-modal .ant-checkbox-wrapper,
+    .dark .studio-modal .ant-checkbox-wrapper {
         color: var(--studio-text-primary);
     }
 
-    .dark.studio-modal .ant-modal-footer {
+    .dark.studio-modal .ant-modal-footer,
+    .dark .studio-modal .ant-modal-footer {
         border-top-color: var(--studio-border-subtle);
     }
 
     .dark.studio-modal .ant-input,
+    .dark .studio-modal .ant-input,
     .dark.studio-modal .ant-input-affix-wrapper,
+    .dark .studio-modal .ant-input-affix-wrapper,
     .dark.studio-modal .ant-input-number,
+    .dark .studio-modal .ant-input-number,
     .dark.studio-modal .ant-select-selector,
-    .dark.studio-modal .ant-picker {
+    .dark .studio-modal .ant-select-selector,
+    .dark.studio-modal .ant-picker,
+    .dark .studio-modal .ant-picker {
         background: var(--studio-panel-bg) !important;
         border-color: var(--studio-border-subtle) !important;
         border-radius: 6px !important;
@@ -494,27 +567,38 @@
     }
 
     .dark.studio-modal.ant-modal .ant-input,
+    .dark .studio-modal.ant-modal .ant-input,
     .dark.studio-modal.ant-modal .ant-input-affix-wrapper,
+    .dark .studio-modal.ant-modal .ant-input-affix-wrapper,
     .dark.studio-modal.ant-modal .ant-input-number,
+    .dark .studio-modal.ant-modal .ant-input-number,
     .dark.studio-modal.ant-modal .ant-select-selector,
-    .dark.studio-modal.ant-modal .ant-picker {
+    .dark .studio-modal.ant-modal .ant-select-selector,
+    .dark.studio-modal.ant-modal .ant-picker,
+    .dark .studio-modal.ant-modal .ant-picker {
         background: var(--studio-panel-bg) !important;
         border-color: var(--studio-border-subtle) !important;
         color: var(--studio-text-primary) !important;
     }
 
     .dark.studio-modal .ant-input::placeholder,
-    .dark.studio-modal .ant-input-affix-wrapper input::placeholder {
+    .dark .studio-modal .ant-input::placeholder,
+    .dark.studio-modal .ant-input-affix-wrapper input::placeholder,
+    .dark .studio-modal .ant-input-affix-wrapper input::placeholder {
         color: var(--studio-text-muted) !important;
     }
 
     .dark.studio-modal .ant-select-selection-placeholder,
+    .dark .studio-modal .ant-select-selection-placeholder,
     .dark.studio-modal .ant-select-selection-item,
-    .dark.studio-modal .ant-form-item-extra {
+    .dark .studio-modal .ant-select-selection-item,
+    .dark.studio-modal .ant-form-item-extra,
+    .dark .studio-modal .ant-form-item-extra {
         color: var(--studio-text-secondary) !important;
     }
 
-    .dark.studio-modal .ant-btn {
+    .dark.studio-modal .ant-btn,
+    .dark .studio-modal .ant-btn {
         border-radius: 5px !important;
         font-weight: 550 !important;
     }

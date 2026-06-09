@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, AudioLines, Home, ImageIcon, List, Menu, MessageSquare, Plus, Redo2, Save, Settings2, Trash2, Undo2, Upload, Video } from "lucide-react";
+import { ArrowLeft, AudioLines, FilePlus2, FileText, Home, ImageIcon, Link2, List, Menu, MessageSquare, Plus, Redo2, Save, Settings2, Trash2, Undo2, Upload, Video } from "lucide-react";
 
 import { recordAiTaskFrontendArtifact } from "@/services/api/ai-task-trace";
 import { refreshVideoTask } from "@/services/api/video";
@@ -79,7 +79,6 @@ import { CanvasToolbar } from "../components/canvas-toolbar";
 import { CanvasStoryboardTimeline } from "../components/canvas-storyboard-timeline";
 import { AssetPickerModal, type AssetPickerTab } from "../components/asset-picker-modal";
 import { ImageBriefWorkbenchDrawer } from "../components/image-brief-workbench-drawer";
-import { EpisodeWorkbenchDrawer } from "../components/episode-workbench-drawer";
 import { ScriptManagerDrawer } from "../components/script-manager-drawer";
 import { StoryboardManagerDrawer } from "../components/storyboard-manager-drawer";
 import { CanvasZoomControls } from "../components/canvas-zoom-controls";
@@ -298,7 +297,6 @@ function InfiniteCanvasPage() {
     const [assetPickerOpen, setAssetPickerOpen] = useState(false);
     const [assetPickerTab, setAssetPickerTab] = useState<AssetPickerTab>("my-assets");
     const [scriptManagerOpen, setScriptManagerOpen] = useState(false);
-    const [episodeWorkbenchOpen, setEpisodeWorkbenchOpen] = useState(false);
     const [storyboardManagerOpen, setStoryboardManagerOpen] = useState(false);
     const [imageBriefOpen, setImageBriefOpen] = useState(false);
     const [imageBriefInitialId, setImageBriefInitialId] = useState("");
@@ -787,7 +785,11 @@ function InfiniteCanvasPage() {
             router.push(`/projects/${currentProject.projectId}/episodes/${currentProject.episodeId}/workbench`);
             return;
         }
-        setEpisodeWorkbenchOpen(true);
+        if (currentProject?.projectId) {
+            router.push(`/projects/${currentProject.projectId}`);
+            return;
+        }
+        router.push("/projects");
     }, [currentProject?.episodeId, currentProject?.projectId, router]);
     const returnTarget = useMemo(() => {
         if (currentProject?.projectId && currentProject.episodeId) {
@@ -874,7 +876,6 @@ function InfiniteCanvasPage() {
         setClearConfirmOpen,
         setAssetPickerTab,
         setAssetPickerOpen,
-        setEpisodeWorkbenchOpen,
     });
 
     const { copySelectedNodes, pasteCopiedNodes, pasteSystemClipboard } = useCanvasClipboardActions({
@@ -1229,7 +1230,7 @@ function InfiniteCanvasPage() {
         [assetById, message],
     );
 
-    const { focusProductionPackage, handlePreviewProductionVideoVersion, handleDownloadProductionVideoVersion, handleSetCurrentProductionVideoVersion, handleHideProductionVideoVersion, handleEditProductionPackagePrompt, handleGenerateProductionPackageVersion, handleUsePreviousPackageTailFrame } = useCanvasProductionPackageActions({
+    const { focusProductionPackage, handlePreviewProductionVideoVersion, handleDownloadProductionVideoVersion, handleSetCurrentProductionVideoVersion, handleHideProductionVideoVersion, handleInsertProductionPackageConfigNode, handleEditProductionPackagePrompt, handleBindSelectedVideoToProductionPackage } = useCanvasProductionPackageActions({
         canvasAiConfig,
         productionPackages,
         nodesRef,
@@ -1239,7 +1240,6 @@ function InfiniteCanvasPage() {
         downloadNodeMedia,
         getAppendNodeCenter,
         createCanvasNode,
-        handleGenerateNode,
         setNodes,
         setActiveTimelineShotId,
         setActiveProductionPackageId,
@@ -1287,7 +1287,22 @@ function InfiniteCanvasPage() {
                     }}
                 />
 
-                <CanvasProductionPackageBar packages={productionPackages} activePackageId={activeProductionPackageId} inspectorCollapsed={isInspectorCollapsed} onSelect={focusProductionPackage} />
+                <CanvasProductionPackageBar
+                    packages={productionPackages}
+                    activePackageId={activeProductionPackageId}
+                    inspectorCollapsed={isInspectorCollapsed}
+                    selectedVideoNodeId={selectedInspectorNode?.type === CanvasNodeType.Video && selectedInspectorNode.metadata?.content ? selectedInspectorNode.id : ""}
+                    onSelect={(productionPackage) => {
+                        focusProductionPackage(productionPackage);
+                        setAssistantMounted(true);
+                        setAssistantCollapsed(false);
+                        setIsInspectorCollapsed(false);
+                        setInspectorView("context");
+                    }}
+                    onInsertConfig={handleInsertProductionPackageConfigNode}
+                    onEditPrompt={handleEditProductionPackagePrompt}
+                    onBindVideo={handleBindSelectedVideoToProductionPackage}
+                />
 
                 <InfiniteCanvas
                     containerRef={containerRef}
@@ -1403,6 +1418,7 @@ function InfiniteCanvasPage() {
                             onRefreshVideoTask={(node) => void handleRefreshVideoTask(node)}
                             onGenerateImage={generateImageFromTextNode}
                             onDownload={(node) => void downloadNodeMedia(node)}
+                            onViewImage={(node) => setPreviewNodeId(node.id)}
                             onContextMenu={(event, id) => {
                                 event.preventDefault();
                                 event.stopPropagation();
@@ -1555,41 +1571,6 @@ function InfiniteCanvasPage() {
                 </Modal>
 
                 <AssetPickerModal open={assetPickerOpen} defaultTab={assetPickerTab} onInsert={handleAssetInsert} onClose={() => setAssetPickerOpen(false)} />
-                <EpisodeWorkbenchDrawer
-                    open={episodeWorkbenchOpen}
-                    projectId={workspaceProjectId}
-                    projectTitle={workspaceProjectTitle}
-                    canvases={currentProject ? [currentProject] : []}
-                    currentCanvasId={currentProject?.id}
-                    canvasNodes={nodes}
-                    onClose={() => setEpisodeWorkbenchOpen(false)}
-                    onUpdateCanvasEpisode={(targetCanvasId, patch) => updateProject(targetCanvasId, patch)}
-                    onAddShotGroupToCanvas={addShotGroupToCanvas}
-                    onLocateNode={(nodeId) => {
-                        setSelectedNodeIds(new Set([nodeId]));
-                        setSelectedConnectionId(null);
-                    }}
-                    onRetryNode={(nodeId) => {
-                        const node = nodesRef.current.find((item) => item.id === nodeId);
-                        if (node) void handleRetryNode(node);
-                    }}
-                    onOpenImageBrief={(briefId) => {
-                        setImageBriefInitialId(briefId);
-                        setImageBriefOpenRequestId((value) => value + 1);
-                        setImageBriefOpen(true);
-                    }}
-                    onOpenAgentSettings={() => {
-                        if (!currentProject?.projectId) {
-                            message.warning("请先把当前画布绑定到项目后再进入 Agent 工作台");
-                            return;
-                        }
-                        const query = new URLSearchParams();
-                        query.set("canvasId", canvasId);
-                        if (currentProject.episodeId) query.set("episodeId", currentProject.episodeId);
-                        router.push(`/projects/${currentProject.projectId}/agents?${query.toString()}`);
-                    }}
-                    promptBindWhenUnbound
-                />
                 <ScriptManagerDrawer
                     open={scriptManagerOpen}
                     projectId={workspaceProjectId}
@@ -1686,9 +1667,6 @@ function InfiniteCanvasPage() {
                 onDownloadProductionVideoVersion={handleDownloadProductionVideoVersion}
                 onSetCurrentProductionVideoVersion={handleSetCurrentProductionVideoVersion}
                 onHideProductionVideoVersion={handleHideProductionVideoVersion}
-                onGenerateProductionPackageVersion={handleGenerateProductionPackageVersion}
-                onEditProductionPackagePrompt={handleEditProductionPackagePrompt}
-                onUsePreviousPackageTailFrame={handleUsePreviousPackageTailFrame}
                 onInfo={(node) => setInfoNodeId(node.id)}
                 onEditText={openTextEditor}
                 onToggleDialog={(node) => setDialogNodeId((current) => (current === node.id ? null : node.id))}
@@ -1706,28 +1684,102 @@ function InfiniteCanvasPage() {
     );
 }
 
-function CanvasProductionPackageBar({ packages, activePackageId, inspectorCollapsed, onSelect }: { packages: CanvasProductionPackageSummary[]; activePackageId: string; inspectorCollapsed: boolean; onSelect: (productionPackage: CanvasProductionPackageSummary) => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+function CanvasProductionPackageBar({
+    packages,
+    activePackageId,
+    inspectorCollapsed,
+    selectedVideoNodeId,
+    onSelect,
+    onInsertConfig,
+    onEditPrompt,
+    onBindVideo,
+}: {
+    packages: CanvasProductionPackageSummary[];
+    activePackageId: string;
+    inspectorCollapsed: boolean;
+    selectedVideoNodeId: string;
+    onSelect: (productionPackage: CanvasProductionPackageSummary) => void;
+    onInsertConfig: (packageId: string) => void;
+    onEditPrompt: (packageId: string) => void;
+    onBindVideo: (packageId: string, nodeId: string) => void;
+}) {
+    const colorTheme = useThemeStore((state) => state.theme);
+    const theme = canvasThemes[colorTheme];
+    const activePackageStyle =
+        colorTheme === "light"
+            ? {
+                  background: "rgba(219,234,254,.92)",
+                  border: "#2563eb",
+                  text: "#1e3a8a",
+                  muted: "#2563eb",
+                  actionBackground: "rgba(37,99,235,.10)",
+              }
+            : {
+                  background: "rgba(34,211,238,.14)",
+                  border: "rgba(34,211,238,.72)",
+                  text: "rgb(103,232,249)",
+                  muted: "rgb(165,243,252)",
+                  actionBackground: "rgba(34,211,238,.18)",
+              };
     if (!packages.length) return null;
     return (
         <div className={`pointer-events-none absolute left-4 ${inspectorCollapsed ? "right-14" : "right-[440px]"} top-16 z-40 flex justify-center`}>
             <div className="pointer-events-auto flex max-w-full gap-2 overflow-x-auto rounded-xl border p-1.5 backdrop-blur-md" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }} data-canvas-no-zoom>
                 {packages.map((item) => {
                     const active = item.id === activePackageId;
+                    const visibleVersionCount = item.versions.filter((version) => !version.hidden).length;
                     return (
-                        <button
+                        <div
                             key={item.id}
-                            type="button"
-                            className="min-w-[132px] rounded-lg border px-3 py-2 text-left transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
-                            style={{ background: active ? "rgba(34,211,238,.14)" : theme.node.fill, borderColor: active ? "rgba(34,211,238,.72)" : theme.node.stroke, color: active ? "rgb(103,232,249)" : theme.node.text }}
-                            onClick={() => onSelect(item)}
+                            className="min-w-[150px] rounded-lg border px-3 py-2 transition hover:opacity-95"
+                            style={{ background: active ? activePackageStyle.background : theme.node.fill, borderColor: active ? activePackageStyle.border : theme.node.stroke, color: active ? activePackageStyle.text : theme.node.text }}
                             title={`${item.label} · ${item.title}`}
                         >
-                            <div className="truncate text-sm font-semibold">{item.label}</div>
-                            <div className="mt-1 truncate text-xs" style={{ color: active ? "rgb(165,243,252)" : theme.node.muted }}>
-                                {item.statusLabel}
+                            <button type="button" className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70" onClick={() => onSelect(item)}>
+                                <div className="truncate text-sm font-semibold">{item.label}</div>
+                                <div className="mt-1 truncate text-xs" style={{ color: active ? activePackageStyle.muted : theme.node.muted }}>
+                                    {item.statusLabel}
+                                </div>
+                                <div className="mt-1 truncate text-[11px]" style={{ color: active ? activePackageStyle.muted : theme.node.muted }}>
+                                    节点 {item.nodeIds.length} · 版本 {visibleVersionCount}
+                                </div>
+                            </button>
+                            <div className="mt-2 flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-md border px-2 text-[11px] font-medium transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                                    style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke, color: theme.node.text }}
+                                    onClick={() => onInsertConfig(item.id)}
+                                    title={item.configNodeId ? "查看生产包配置节点" : "将生产包配置放入画布"}
+                                >
+                                    <FilePlus2 className="size-3" />
+                                    {item.configNodeId ? "配置" : "放入"}
+                                </button>
+                                {selectedVideoNodeId ? (
+                                    <button
+                                        type="button"
+                                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                                        style={{ background: active ? activePackageStyle.actionBackground : theme.toolbar.panel, borderColor: active ? activePackageStyle.border : theme.node.stroke, color: active ? activePackageStyle.text : theme.node.muted }}
+                                        onClick={() => onBindVideo(item.id, selectedVideoNodeId)}
+                                        title={`将选中视频绑定到 ${item.label}`}
+                                        aria-label={`将选中视频绑定到 ${item.label}`}
+                                    >
+                                        <Link2 className="size-3" />
+                                    </button>
+                                ) : item.configNodeId ? (
+                                    <button
+                                        type="button"
+                                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                                        style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke, color: theme.node.muted }}
+                                        onClick={() => onEditPrompt(item.id)}
+                                        title="编辑提示词"
+                                        aria-label="编辑提示词"
+                                    >
+                                        <FileText className="size-3" />
+                                    </button>
+                                ) : null}
                             </div>
-                        </button>
+                        </div>
                     );
                 })}
             </div>

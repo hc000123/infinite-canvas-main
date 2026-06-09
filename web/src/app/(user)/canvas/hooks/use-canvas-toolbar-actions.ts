@@ -16,7 +16,6 @@ type CanvasToolbarActionsOptions = {
     setClearConfirmOpen: Dispatch<SetStateAction<boolean>>;
     setAssetPickerTab: Dispatch<SetStateAction<AssetPickerTab>>;
     setAssetPickerOpen: Dispatch<SetStateAction<boolean>>;
-    setEpisodeWorkbenchOpen: Dispatch<SetStateAction<boolean>>;
 };
 
 export function useCanvasToolbarActions({
@@ -30,7 +29,6 @@ export function useCanvasToolbarActions({
     setClearConfirmOpen,
     setAssetPickerTab,
     setAssetPickerOpen,
-    setEpisodeWorkbenchOpen,
 }: CanvasToolbarActionsOptions) {
     return useMemo(
         () => ({
@@ -52,9 +50,13 @@ export function useCanvasToolbarActions({
                     router.push(`/projects/${currentProject.projectId}/episodes/${currentProject.episodeId}/workbench`);
                     return;
                 }
-                setEpisodeWorkbenchOpen(true);
+                if (currentProject?.projectId) {
+                    router.push(`/projects/${currentProject.projectId}`);
+                    return;
+                }
+                router.push("/projects");
             },
         }),
-        [createNode, currentProject, deleteNodes, deselectCanvas, handleUploadRequest, router, selectedNodeIds, setAssetPickerOpen, setAssetPickerTab, setClearConfirmOpen, setEpisodeWorkbenchOpen],
+        [createNode, currentProject, deleteNodes, deselectCanvas, handleUploadRequest, router, selectedNodeIds, setAssetPickerOpen, setAssetPickerTab, setClearConfirmOpen],
     );
 }

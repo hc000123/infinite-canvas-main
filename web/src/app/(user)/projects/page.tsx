@@ -3,7 +3,7 @@
 import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { App, Button, Input, Tooltip } from "antd";
-import { Archive, ChevronDown, Clock3, Edit3, Filter, Folder, Grid2X2, LayoutList, MoreHorizontal, PauseCircle, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { Archive, ChevronDown, Clock3, Edit3, Folder, Grid2X2, LayoutList, PauseCircle, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasCreateProjectModal } from "../canvas/components/canvas-create-project-modal";
@@ -21,10 +21,10 @@ type ProjectCardView = {
 
 type ProjectVisualMeta = {
     coverUrl: string;
-    statusClass: string;
-    statusIcon: ReactNode;
     statusLabel: "进行中" | "暂停中" | "草稿";
 };
+
+type ProjectStatusFilter = "全部项目" | ProjectVisualMeta["statusLabel"];
 
 const coverUrls = [
     "https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=900&q=80",
@@ -48,6 +48,7 @@ export default function ProjectsPage() {
     const [editingId, setEditingId] = useState("");
     const [editingTitle, setEditingTitle] = useState("");
     const [searchText, setSearchText] = useState("");
+    const [statusFilter, setStatusFilter] = useState<ProjectStatusFilter>("全部项目");
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
     const hydrated = useCreativeProjectStore((state) => state.hydrated);
     const projects = useCreativeProjectStore((state) => state.projects);
@@ -69,9 +70,12 @@ export default function ProjectsPage() {
     );
     const filteredCards = useMemo(() => {
         const keyword = searchText.trim().toLowerCase();
-        if (!keyword) return projectCards;
-        return projectCards.filter(({ project, meta }) => `${project.title} ${project.description} ${meta.statusLabel} ${canvasProjectPresetSummary(project.preset)}`.toLowerCase().includes(keyword));
-    }, [projectCards, searchText]);
+        return projectCards.filter(({ project, meta }) => {
+            if (statusFilter !== "全部项目" && meta.statusLabel !== statusFilter) return false;
+            if (!keyword) return true;
+            return `${project.title} ${project.description} ${meta.statusLabel} ${canvasProjectPresetSummary(project.preset)}`.toLowerCase().includes(keyword);
+        });
+    }, [projectCards, searchText, statusFilter]);
     const stats = useMemo(() => {
         const countByStatus = (status: ProjectVisualMeta["statusLabel"]) => projectCards.filter((card) => card.meta.statusLabel === status).length;
         return {
@@ -105,40 +109,37 @@ export default function ProjectsPage() {
 
     return (
         <>
-            <section className="studio-shell h-full min-h-0 overflow-y-auto py-7">
-                    <header className="flex flex-wrap items-start justify-between gap-5 2xl:flex-nowrap">
-                        <div>
-                            <h1 className="text-3xl font-semibold leading-tight tracking-normal text-[var(--studio-text-primary)]">项目工作台</h1>
-                            <p className="mt-2 text-sm leading-6 text-[var(--studio-text-secondary)]">管理你的影视创作项目与进度</p>
+            <section className="studio-shell h-full min-h-0 overflow-y-auto px-5 py-7 md:px-7 xl:px-8">
+                <header className="flex flex-wrap items-start justify-between gap-5 2xl:flex-nowrap">
+                    <div>
+                        <h1 className="text-3xl font-semibold leading-tight tracking-normal text-[var(--studio-text-primary)]">项目工作台</h1>
+                        <p className="mt-2 text-sm leading-6 text-[var(--studio-text-secondary)]">管理你的影视创作项目与进度</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                        <Input
+                            value={searchText}
+                            onChange={(event) => setSearchText(event.target.value)}
+                            placeholder="搜索项目名称、简介、标签…"
+                            prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />}
+                            className="h-11 w-[340px] max-w-full rounded-lg border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)] placeholder:text-[var(--studio-text-muted)]"
+                            style={{ width: 340 }}
+                        />
+                        <div className="flex h-11 overflow-hidden rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-1">
+                            <button type="button" className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] ${viewMode === "grid" ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-muted)] hover:text-[var(--studio-text-primary)]"}`} onClick={() => setViewMode("grid")} aria-label="网格视图">
+                                <Grid2X2 className="size-4" />
+                            </button>
+                            <button type="button" className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] ${viewMode === "list" ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-muted)] hover:text-[var(--studio-text-primary)]"}`} onClick={() => setViewMode("list")} aria-label="列表视图">
+                                <LayoutList className="size-4" />
+                            </button>
                         </div>
-                        <div className="flex shrink-0 items-center gap-3">
-                            <Input
-                                value={searchText}
-                                onChange={(event) => setSearchText(event.target.value)}
-                                placeholder="搜索项目名称、简介、标签…"
-                                prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />}
-                                className="h-11 w-[340px] max-w-full rounded-lg border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)] placeholder:text-[var(--studio-text-muted)]"
-                                style={{ width: 340 }}
-                            />
-                            <Button className="h-11 border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)]" icon={<Filter className="size-4" />}>
-                                筛选
-                            </Button>
-                            <div className="flex h-11 overflow-hidden rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-1">
-                                <button type="button" className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] ${viewMode === "grid" ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-muted)] hover:text-[var(--studio-text-primary)]"}`} onClick={() => setViewMode("grid")} aria-label="网格视图">
-                                    <Grid2X2 className="size-4" />
-                                </button>
-                                <button type="button" className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] ${viewMode === "list" ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-muted)] hover:text-[var(--studio-text-primary)]"}`} onClick={() => setViewMode("list")} aria-label="列表视图">
-                                    <LayoutList className="size-4" />
-                                </button>
-                            </div>
-                            <Button className={`h-11 px-5 ${createProjectButtonClass}`} icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)} disabled={!hydrated}>
-                                新建项目
-                                <ChevronDown className="ml-1 size-4" />
-                            </Button>
-                        </div>
-                    </header>
+                        <Button className={`h-11 px-5 ${createProjectButtonClass}`} icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)} disabled={!hydrated}>
+                            新建项目
+                            <ChevronDown className="ml-1 size-4" />
+                        </Button>
+                    </div>
+                </header>
 
-                    <ProjectStatsBar stats={stats} />
+                    <ProjectStatsBar activeFilter={statusFilter} onFilterChange={setStatusFilter} stats={stats} />
 
                     {!hydrated ? (
                         <section className="studio-panel mt-7 flex min-h-[420px] items-center justify-center text-sm text-[var(--studio-text-muted)]">正在加载项目...</section>
@@ -181,7 +182,7 @@ export default function ProjectsPage() {
                             </Button>
                         </section>
                     )}
-                </section>
+            </section>
 
             <CanvasCreateProjectModal
                 open={createOpen}
@@ -199,18 +200,18 @@ export default function ProjectsPage() {
     );
 }
 
-function ProjectStatsBar({ stats }: { stats: { all: number; draft: number; paused: number; running: number } }) {
+function ProjectStatsBar({ activeFilter, onFilterChange, stats }: { activeFilter: ProjectStatusFilter; onFilterChange: (filter: ProjectStatusFilter) => void; stats: { all: number; draft: number; paused: number; running: number } }) {
     return (
-        <section className="studio-panel mt-8 grid gap-4 p-5 md:grid-cols-4">
-            <ProjectStat icon={<Folder className="size-5" />} label="全部项目" value={stats.all} tone="slate" />
-            <ProjectStat icon={<Clock3 className="size-5" />} label="进行中" value={stats.running} tone="cyan" />
-            <ProjectStat icon={<PauseCircle className="size-5" />} label="暂停中" value={stats.paused} tone="amber" />
-            <ProjectStat icon={<Edit3 className="size-5" />} label="草稿" value={stats.draft} tone="blue" />
+        <section className="studio-panel mt-8 grid gap-3 p-3 md:grid-cols-4">
+            <ProjectStat active={activeFilter === "全部项目"} icon={<Folder className="size-5" />} label="全部项目" onClick={() => onFilterChange("全部项目")} value={stats.all} tone="slate" />
+            <ProjectStat active={activeFilter === "进行中"} icon={<Clock3 className="size-5" />} label="进行中" onClick={() => onFilterChange("进行中")} value={stats.running} tone="cyan" />
+            <ProjectStat active={activeFilter === "暂停中"} icon={<PauseCircle className="size-5" />} label="暂停中" onClick={() => onFilterChange("暂停中")} value={stats.paused} tone="amber" />
+            <ProjectStat active={activeFilter === "草稿"} icon={<Edit3 className="size-5" />} label="草稿" onClick={() => onFilterChange("草稿")} value={stats.draft} tone="blue" />
         </section>
     );
 }
 
-function ProjectStat({ icon, label, value, tone }: { icon: ReactNode; label: string; value: number; tone: "amber" | "blue" | "cyan" | "slate" }) {
+function ProjectStat({ active, icon, label, onClick, value, tone }: { active: boolean; icon: ReactNode; label: ProjectStatusFilter; onClick: () => void; value: number; tone: "amber" | "blue" | "cyan" | "slate" }) {
     const toneClass = {
         amber: "bg-amber-400/14 text-[var(--studio-warning)]",
         blue: "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]",
@@ -218,13 +219,18 @@ function ProjectStat({ icon, label, value, tone }: { icon: ReactNode; label: str
         slate: "bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]",
     }[tone];
     return (
-        <div className="flex items-center gap-4 border-[var(--studio-border-subtle)] md:border-r md:last:border-r-0">
+        <button
+            type="button"
+            className={`flex items-center gap-4 rounded-lg border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] ${active ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-transparent hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-panel-muted-bg)]"}`}
+            aria-pressed={active}
+            onClick={onClick}
+        >
             <span className={`grid size-11 place-items-center rounded-lg ${toneClass}`}>{icon}</span>
             <div>
                 <div className="text-sm text-[var(--studio-text-secondary)]">{label}</div>
                 <div className="mt-1 text-2xl font-semibold leading-none text-[var(--studio-text-primary)]">{value}</div>
             </div>
-        </div>
+        </button>
     );
 }
 
@@ -280,16 +286,8 @@ function ProjectCard({
                 <div className="absolute inset-0 bg-cover bg-center transition duration-500 group-hover:scale-[1.03]" style={{ backgroundImage: `linear-gradient(180deg,rgba(8,13,20,0.05),rgba(8,13,20,0.36)), url(${meta.coverUrl})` }} />
                 <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.32))]" />
                 <div className="absolute left-3 top-3">
-                    <span className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium backdrop-blur ${meta.statusClass}`}>
-                        {meta.statusIcon}
-                        {meta.statusLabel}
-                    </span>
+                    <ProjectStatusBadge status={meta.statusLabel} />
                 </div>
-                <Tooltip title="更多操作">
-                    <button type="button" className="absolute right-3 top-3 grid size-8 place-items-center rounded-md border border-[var(--studio-border-subtle)] bg-[rgba(21,24,33,.72)] text-[var(--studio-text-primary)] backdrop-blur transition hover:bg-[rgba(21,24,33,.92)]" aria-label="更多操作" title="更多操作">
-                        <MoreHorizontal className="size-5" />
-                    </button>
-                </Tooltip>
             </div>
 
             <div className="p-4">
@@ -338,7 +336,7 @@ function ProjectCard({
 
 function ProjectActionIconButton({ title, icon, danger, onClick }: { title: string; icon: ReactNode; danger?: boolean; onClick: () => void }) {
     return (
-        <Tooltip title={title}>
+        <Tooltip title={<span className="text-slate-50">{title}</span>} overlayClassName="project-card-action-tooltip" overlayInnerStyle={{ color: "#f8fafc" }}>
             <Button type="text" size="small" shape="circle" icon={icon} danger={danger} onClick={onClick} aria-label={title} />
         </Tooltip>
     );
@@ -380,18 +378,23 @@ function projectVisualMeta(project: CreativeProject, index: number, canvasCount:
     if (project.status === "archived") {
         return {
             coverUrl: coverUrls[index % coverUrls.length],
-            statusClass: "border-amber-400/45 bg-amber-400/15 text-[var(--studio-warning)]",
-            statusIcon: <PauseCircle className="size-3.5" />,
             statusLabel: "暂停中",
         };
     }
     const hasCanvas = canvasCount > 0;
     return {
         coverUrl: coverUrls[index % coverUrls.length],
-        statusClass: hasCanvas ? "border-[var(--studio-border-strong)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]" : "border-[var(--studio-border-strong)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]",
-        statusIcon: hasCanvas ? <Clock3 className="size-3.5" /> : <Edit3 className="size-3.5" />,
         statusLabel: hasCanvas ? "进行中" : "草稿",
     };
+}
+
+function ProjectStatusBadge({ status }: { status: ProjectVisualMeta["statusLabel"] }) {
+    const tone = {
+        暂停中: "border-amber-300/30 bg-[#2c2318]/90 text-amber-100 before:bg-amber-300",
+        草稿: "border-sky-300/28 bg-[#172337]/90 text-sky-100 before:bg-sky-300",
+        进行中: "border-emerald-300/28 bg-[#102820]/90 text-emerald-100 before:bg-emerald-300",
+    }[status];
+    return <span className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-semibold shadow-[0_8px_22px_rgba(0,0,0,0.28)] backdrop-blur-md before:block before:size-1.5 before:rounded-full ${tone}`}>{status}</span>;
 }
 
 function formatProjectDate(value: string) {

@@ -15,7 +15,7 @@ import { PromptDetailDialog } from "./prompt-detail-dialog";
 import { defaultPromptTypeForNodeGroup, formatPromptVariablesText, parsePromptVariablesText, promptNodeGroupLabel, promptNodeGroupOptions, promptTypeLabel, promptTypeOptions, promptTypesForNodeGroup } from "./prompt-template";
 import { usePromptList } from "./use-prompt-list";
 
-type PromptCreateFormValues = Partial<Prompt> & { tagText?: string; variableText?: string };
+export type PromptCreateFormValues = Partial<Prompt> & { tagText?: string; variableText?: string };
 
 const promptVariablePlaceholder = formatPromptVariablesText([
     { name: "角色", description: "主角设定", defaultValue: "魏梁" },
@@ -164,7 +164,7 @@ export function PromptSelectDialog({
     };
 
     return (
-        <Modal className="dark studio-modal" title="提示词库" open={open} onCancel={() => onOpenChange(false)} footer={null} width={1040} centered>
+        <Modal className="studio-modal" title="提示词库" open={open} onCancel={() => onOpenChange(false)} footer={null} width={1040} centered>
             <div data-canvas-no-zoom onWheelCapture={(event) => event.stopPropagation()}>
                 <div className="mx-auto flex max-w-2xl gap-2">
                     <Input className="studio-command-input min-w-0 flex-1" size="large" prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="按标题查询" />
@@ -272,11 +272,11 @@ function PromptFilterTag({ checked, children, onChange }: { checked: boolean; ch
     );
 }
 
-function PromptCreateDialog({ open, form, categories, saving, onCancel, onSave }: { open: boolean; form: FormInstance<PromptCreateFormValues>; categories: string[]; saving: boolean; onCancel: () => void; onSave: () => void | Promise<void> }) {
+export function PromptCreateDialog({ open, form, categories, saving, onCancel, onSave }: { open: boolean; form: FormInstance<PromptCreateFormValues>; categories: string[]; saving: boolean; onCancel: () => void; onSave: () => void | Promise<void> }) {
     const categoryOptions = categories.filter((category) => category !== ALL_PROMPTS_OPTION).map((category) => ({ label: category, value: category }));
 
     return (
-        <Modal className="dark studio-modal" title="新建提示词" open={open} width={720} onCancel={onCancel} onOk={() => void onSave()} okText="保存" cancelText="取消" confirmLoading={saving} destroyOnHidden>
+        <Modal className="studio-modal" title="新建提示词" open={open} width={720} onCancel={onCancel} onOk={() => void onSave()} okText="保存" cancelText="取消" confirmLoading={saving} destroyOnHidden>
             <Form form={form} layout="vertical" requiredMark={false}>
                 <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
                     <Input />

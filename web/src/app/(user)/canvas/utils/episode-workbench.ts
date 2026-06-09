@@ -175,8 +175,7 @@ export function deriveShotGroupRuntimeStatus(group: ShotGroup, node?: CanvasNode
 }
 
 export function buildEpisodeWorkbenchHref(projectId: string, canvasId?: string) {
-    if (canvasId) return `/canvas/${canvasId}?panel=episode-workbench`;
-    return `/projects/${projectId}?panel=episode-workbench`;
+    return `/projects/${projectId}`;
 }
 
 export function selectEpisodeWorkbenchCanvas(canvases: EpisodeWorkbenchCanvas[], currentCanvasId?: string) {
