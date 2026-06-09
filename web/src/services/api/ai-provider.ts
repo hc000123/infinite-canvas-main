@@ -44,9 +44,11 @@ export function aiReasoningPayload(config: AiConfig) {
 export function normalizeAiError(error: unknown, fallback: string) {
     if (axios.isAxiosError(error)) {
         if (error.code === "ECONNABORTED") return `${fallback}：请求超时`;
+        if (!error.response) return `${fallback}：网络连接失败`;
         const responseData = error.response?.data;
         const message = readErrorMessage(responseData);
-        return message || (error.response?.status ? `${fallback}：${error.response.status}` : fallback);
+        if (message) return error.response.status ? `${fallback}：HTTP ${error.response.status}：${message}` : `${fallback}：${message}`;
+        return error.response?.status ? `${fallback}：HTTP ${error.response.status}` : fallback;
     }
     return error instanceof Error ? error.message : fallback;
 }
@@ -61,10 +63,13 @@ function readErrorMessage(value: unknown): string | undefined {
         }
     }
     if (typeof value !== "object") return undefined;
-    const payload = value as { msg?: unknown; message?: unknown; error?: { message?: unknown } };
+    const payload = value as { msg?: unknown; message?: unknown; detail?: unknown; error?: { code?: unknown; message?: unknown; type?: unknown }; errors?: unknown };
     if (typeof payload.msg === "string") return payload.msg;
-    if (typeof payload.error?.message === "string") return payload.error.message;
+    const errorMessage = [payload.error?.code, payload.error?.message || payload.error?.type].filter((item): item is string => typeof item === "string" && item.trim().length > 0).join("：");
+    if (errorMessage) return errorMessage;
     if (typeof payload.message === "string") return payload.message;
+    if (typeof payload.detail === "string") return payload.detail;
+    if (Array.isArray(payload.errors)) return payload.errors.map(readErrorMessage).filter(Boolean).join("；") || undefined;
     return undefined;
 }
 

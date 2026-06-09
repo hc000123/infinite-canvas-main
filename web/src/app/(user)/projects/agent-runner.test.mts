@@ -15,6 +15,7 @@ import {
     canWriteAgentRun,
     canGenerateWorkflowMappingPreview,
     buildWorkflowStagePrompt,
+    bindAgentWorkflowRunCanvas,
     completeAgentWorkflowStageRun,
     completeAgentWorkflowSceneRun,
     createAgentWorkflowRunRecord,
@@ -261,6 +262,20 @@ test("builds workflow stage prompt with stage/agent/skills/quality gates/source 
     const sourceFiles = buildWorkflowStageSourceFiles(input.skills, input.qualityGates);
     assert.equal(sourceFiles.length > 0, true);
     assert.ok(stagePrompt.includes(sourceFiles[0]));
+});
+
+test("binds unbound workflow run to canvas without losing failed stage state", () => {
+    const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", episodeId: "episode-1", id: "workflow-unbound", now: "2026-01-12T00:00:00.000Z" });
+    const failedRun = failAgentWorkflowStageRun(workflowRun, "director-analysis", "runner-director-failed", "模型配置不可用", "2026-01-12T00:01:00.000Z");
+    const boundRun = bindAgentWorkflowRunCanvas(failedRun, "canvas-1", "2026-01-12T00:02:00.000Z");
+    const directorState = boundRun.stageStates.find((stage) => stage.stageId === "director-analysis");
+
+    assert.equal(boundRun.id, "workflow-unbound");
+    assert.equal(boundRun.canvasId, "canvas-1");
+    assert.equal(boundRun.updatedAt, "2026-01-12T00:02:00.000Z");
+    assert.equal(directorState?.status, "error");
+    assert.equal(directorState?.runnerRunId, "runner-director-failed");
+    assert.equal(directorState?.errorMessage, "模型配置不可用");
 });
 
 test("workflow text run input preserves workflowId / stageId / agentId", () => {

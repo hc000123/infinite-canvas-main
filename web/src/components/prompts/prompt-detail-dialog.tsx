@@ -42,53 +42,53 @@ export function PromptDetailDialog({
 
     return (
         <>
-            <Modal title={prompt?.title} open={Boolean(prompt)} onCancel={onClose} footer={null} width={860}>
+            <Modal title={prompt?.title} open={Boolean(prompt)} onCancel={onClose} footer={null} width={860} className="dark studio-modal">
                 {prompt ? (
                     <>
                         <div className="grid gap-5 md:grid-cols-[300px_minmax(0,1fr)]">
                             <div className="space-y-3">
                                 <img src={prompt.coverUrl} alt={prompt.title} className="aspect-[4/3] w-full rounded-lg object-cover" />
-                                {prompt.preview ? <pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded-lg bg-stone-100 p-3 text-xs leading-5 text-stone-600 dark:bg-stone-900 dark:text-stone-300">{prompt.preview}</pre> : null}
+                                {prompt.preview ? <pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3 text-xs leading-5 text-[var(--studio-text-secondary)]">{prompt.preview}</pre> : null}
                             </div>
                             <div className="min-w-0">
                                 <div className="flex flex-wrap gap-1.5">
                                     {prompt.metadata?.nodeGroup ? (
-                                        <Tag color="purple" className="m-0">
+                                        <Tag className="studio-tag">
                                             {promptNodeGroupLabel(prompt.metadata.nodeGroup)}
                                         </Tag>
                                     ) : null}
                                     {prompt.metadata?.type ? (
-                                        <Tag color="blue" className="m-0">
+                                        <Tag className="studio-tag">
                                             {promptTypeLabel(prompt.metadata.type)}
                                         </Tag>
                                     ) : null}
-                                    {prompt.metadata?.scenario ? <Tag className="m-0">场景：{prompt.metadata.scenario}</Tag> : null}
-                                    {prompt.metadata?.provider ? <Tag className="m-0">供应商：{prompt.metadata.provider}</Tag> : null}
-                                    {prompt.metadata?.model ? <Tag className="m-0">模型：{prompt.metadata.model}</Tag> : null}
-                                    {prompt.metadata?.inputKind ? <Tag className="m-0">输入：{inputOutputKindLabel(prompt.metadata.inputKind)}</Tag> : null}
-                                    {prompt.metadata?.outputKind ? <Tag className="m-0">输出：{inputOutputKindLabel(prompt.metadata.outputKind)}</Tag> : null}
+                                    {prompt.metadata?.scenario ? <Tag className="studio-tag">场景：{prompt.metadata.scenario}</Tag> : null}
+                                    {prompt.metadata?.provider ? <Tag className="studio-tag">供应商：{prompt.metadata.provider}</Tag> : null}
+                                    {prompt.metadata?.model ? <Tag className="studio-tag">模型：{prompt.metadata.model}</Tag> : null}
+                                    {prompt.metadata?.inputKind ? <Tag className="studio-tag">输入：{inputOutputKindLabel(prompt.metadata.inputKind)}</Tag> : null}
+                                    {prompt.metadata?.outputKind ? <Tag className="studio-tag">输出：{inputOutputKindLabel(prompt.metadata.outputKind)}</Tag> : null}
                                     {prompt.metadata?.favorite ? (
-                                        <Tag color="gold" className="m-0">
+                                        <Tag className="studio-tag">
                                             常用
                                         </Tag>
                                     ) : null}
                                     {prompt.tags.map((tag) => (
-                                        <Tag key={tag} className="m-0">
+                                        <Tag key={tag} className="studio-tag">
                                             {tag}
                                         </Tag>
                                     ))}
                                 </div>
-                                <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-stone-800 dark:text-stone-300">{prompt.prompt}</p>
+                                <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-[var(--studio-text-secondary)]">{prompt.prompt}</p>
                                 {variables.length ? (
                                     <>
                                         <Divider className="!my-4" />
                                         <div className="space-y-3">
-                                            <div className="text-sm font-semibold text-stone-800 dark:text-stone-100">变量填写</div>
+                                            <div className="text-sm font-semibold text-[var(--studio-text-primary)]">变量填写</div>
                                             {variables.map((variable) => (
                                                 <div key={variable.name} className="grid gap-2 md:grid-cols-[120px_minmax(0,1fr)]">
-                                                    <div className="pt-1 text-sm font-medium text-stone-600 dark:text-stone-300">
+                                                    <div className="pt-1 text-sm font-medium text-[var(--studio-text-secondary)]">
                                                         {variable.name}
-                                                        {variable.description ? <div className="mt-1 text-xs font-normal text-stone-400">{variable.description}</div> : null}
+                                                        {variable.description ? <div className="mt-1 text-xs font-normal text-[var(--studio-text-muted)]">{variable.description}</div> : null}
                                                     </div>
                                                     <div className="flex min-w-0 gap-2">
                                                         <Input value={values[variable.name] || ""} placeholder={`填写 ${variable.name}`} onChange={(event) => setValues((current) => ({ ...current, [variable.name]: event.target.value }))} />
@@ -104,13 +104,13 @@ export function PromptDetailDialog({
                                                 </div>
                                             ))}
                                         </div>
-                                        <div className="mt-4 rounded-lg bg-stone-50 p-3 text-xs leading-6 text-stone-600 dark:bg-stone-900 dark:text-stone-300">
-                                            <div className="mb-1 font-medium text-stone-700 dark:text-stone-200">最终提示词</div>
+                                        <div className="mt-4 rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3 text-xs leading-6 text-[var(--studio-text-secondary)]">
+                                            <div className="mb-1 font-medium text-[var(--studio-text-primary)]">最终提示词</div>
                                             <div className="whitespace-pre-wrap">{finalPrompt}</div>
                                         </div>
                                     </>
                                 ) : null}
-                                <div className="mt-4 text-xs text-stone-500 dark:text-stone-400">
+                                <div className="mt-4 text-xs text-[var(--studio-text-muted)]">
                                     创建：{formatPromptDate(prompt.createdAt)} · 更新：{formatPromptDate(prompt.updatedAt)}
                                 </div>
                                 <Space wrap className="mt-5">

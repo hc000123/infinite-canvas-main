@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Alert, App, Button, Card, Collapse, Empty, Input, Space, Tag } from "antd";
@@ -9,14 +9,13 @@ import { CheckCircle2, Play, XCircle } from "lucide-react";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { buildAssetVersionReference } from "../../../../../assets/asset-version-references";
-import { CanvasCreateProjectModal } from "../../../../../canvas/components/canvas-create-project-modal";
 import { useCanvasStore, type CanvasProject } from "../../../../../canvas/stores/use-canvas-store";
 import { useProductionBibleStore } from "../../../../../canvas/stores/use-production-bible-store";
 import { useScriptStore } from "../../../../../canvas/stores/use-script-store";
 import { useStoryboardStore } from "../../../../../canvas/stores/use-storyboard-store";
 import type { ScriptEpisode, ScriptScene } from "../../../../../canvas/utils/script-management";
 import { canvasEpisodeContextFromEpisode } from "../../../../../canvas/utils/canvas-episode-context";
-import type { CanvasProjectPreset } from "../../../../../canvas/utils/canvas-project-preset";
+import { buildCanvasProjectPresetFromConfig } from "../../../../../canvas/utils/canvas-project-preset";
 import type { ProductionBibleItem } from "../../../../../canvas/utils/production-bible";
 import type { StoryboardTableShot } from "../../../../../canvas/utils/storyboard-management";
 import { workflowStageDetail, type AgentWorkflowStage } from "../../../../agent-workflow-presets";
@@ -127,7 +126,6 @@ export default function EpisodeProductionWorkbenchPage() {
     const effectiveConfig = useEffectiveConfig();
     const checkAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const [scriptDraft, setScriptDraft] = useState("");
-    const [createCanvasOpen, setCreateCanvasOpen] = useState(false);
     const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
     const [sceneReviewNotes, setSceneReviewNotes] = useState<Record<string, string>>({});
     const [selectedSceneKey, setSelectedSceneKey] = useState("");
@@ -228,6 +226,15 @@ export default function EpisodeProductionWorkbenchPage() {
         workflowRuns,
     });
 
+    const createBoundCanvas = useCallback(() => {
+        if (!project || !episode) return "";
+        const canvasId = createCanvas(`${episode.title} 承接画布`, buildCanvasProjectPresetFromConfig(effectiveConfig, project.preset), { projectId: project.id, episodeContext: canvasEpisodeContextFromEpisode(project.id, episode, stageSceneRows) });
+        attachCanvas(project.id, canvasId);
+        message.success("已创建承接画布");
+        router.push(`/canvas/${canvasId}`);
+        return canvasId;
+    }, [attachCanvas, createCanvas, effectiveConfig, episode, message, project, router, stageSceneRows]);
+
     const { confirmApplyPreview, generatePreview, openCanvasOrCreate, summarizeStoryboardScenes } = useEpisodeWorkbenchPreviewActions({
         applyProductionBiblePreview,
         applyStoryboardPreview,
@@ -238,7 +245,7 @@ export default function EpisodeProductionWorkbenchPage() {
         modal,
         router,
         setApplyingPreviewIds,
-        setCreateCanvasOpen,
+        onCreateCanvas: createBoundCanvas,
         summarizeApprovedStoryboardScenes,
         workflowAppliedPreviewItemIds,
         workflowRun,
@@ -259,14 +266,6 @@ export default function EpisodeProductionWorkbenchPage() {
     const saveScript = () => {
         updateEpisode(episode.id, { summary: scriptDraft });
         message.success("本集剧本已保存");
-    };
-
-    const createBoundCanvas = (title: string, preset: CanvasProjectPreset) => {
-        const canvasId = createCanvas(title, preset, { projectId: project.id, episodeContext: canvasEpisodeContextFromEpisode(project.id, episode, stageSceneRows) });
-        attachCanvas(project.id, canvasId);
-        setCreateCanvasOpen(false);
-        message.success("已创建承接画布");
-        router.push(`/canvas/${canvasId}`);
     };
 
     const updateDirectorReviewState = (rowId: string, state: DirectorReviewState) => {
@@ -302,8 +301,8 @@ export default function EpisodeProductionWorkbenchPage() {
     };
     const importCanvasPackage = (pkg: CanvasHandoffImportTarget) => {
         if (!boundCanvas) {
-            message.info("请先创建承接画布，再导入生产包节点组。");
-            setCreateCanvasOpen(true);
+            message.info("已先创建承接画布，请进入画布后再导入生产包节点组。");
+            createBoundCanvas();
             return;
         }
         let previewGenerationReason = "";
@@ -358,7 +357,7 @@ export default function EpisodeProductionWorkbenchPage() {
                 directorReviewStates={directorReviewStates}
                 onApplyPreview={confirmApplyPreview}
                 onBackProject={() => router.push(`/projects/${project.id}`)}
-                onCreateCanvas={() => setCreateCanvasOpen(true)}
+                onCreateCanvas={createBoundCanvas}
                 onGeneratePreview={generatePreview}
                 onImportCanvasPackage={importCanvasPackage}
                 onModuleChange={setActiveModule}
@@ -386,16 +385,6 @@ export default function EpisodeProductionWorkbenchPage() {
                 workflowRun={workflowRun}
             />
             <EpisodeDetailDrawer onClose={() => setDetailRecord(null)} record={detailRecord} />
-            <CanvasCreateProjectModal
-                open={createCanvasOpen}
-                defaultTitle={`${episode.title} 承接画布`}
-                initialPreset={project.preset}
-                config={effectiveConfig}
-                modalTitle="创建承接画布"
-                helperText="这一步会把当前集绑定到新画布，用于承接分镜头表、Seedance 提示词和视频配置节点；不会自动生成图片或视频。"
-                onCancel={() => setCreateCanvasOpen(false)}
-                onCreate={createBoundCanvas}
-            />
         </main>
     );
 
@@ -691,6 +680,7 @@ function EpisodeProductionShell({
                                 appliedPreviewItemIds={appliedPreviewItemIds}
                                 applyingPreviewIds={applyingPreviewIds}
                                 currentSceneState={currentSceneState}
+                                hasCanvas={Boolean(boundCanvas)}
                                 onApplyPreview={onApplyPreview}
                                 onApproveStoryboardScene={onApproveStoryboardScene}
                                 onGeneratePreview={onGeneratePreview}
@@ -875,6 +865,8 @@ function buildDirectorModuleConfig(input: {
     const output = input.stageOutputs["director-analysis"];
     const digest = output ? buildStageOutputDigest("director-analysis", output) : undefined;
     const display = input.workflowRun ? summarizeWorkflowStageDisplayState(input.workflowRun, "director-analysis", []) : undefined;
+    const stageState = input.workflowRun?.stageStates.find((stage) => stage.stageId === "director-analysis");
+    const errorMessage = display?.displayStatus === "error" ? stageState?.errorMessage : "";
     const status = output ? "已完成" : input.hasScript ? workflowDisplayText(display) : "待生成";
     const tone = episodeToneFromWorkflow(display, output ? "green" : input.hasScript ? "cyan" : "amber");
     const fullBody = output ? output.rawText : "尚未生成导演分析。";
@@ -914,12 +906,12 @@ function buildDirectorModuleConfig(input: {
         filters: ["全部", "已完成", "已确认", "已采用", "待确认", "待采用", "待生成"],
         headers: ["项目", "分析内容", "来源", "状态", "操作"],
         rows,
-        subtitle: "确认这一集的戏剧方向、情绪节奏、风险提示和分镜建议；完整分析进入详情抽屉查看。",
+        subtitle: errorMessage ? `上次运行失败：${errorMessage}。请检查 AI 配置、额度或网络后重新运行。` : "确认这一集的戏剧方向、情绪节奏、风险提示和分镜建议；完整分析进入详情抽屉查看。",
         summary: [
             { label: "阶段状态", tone, value: status },
             { label: "输出", value: output ? "1" : "0" },
             { label: "风险提示", tone: output ? (riskConfirmed ? "green" : "amber") : "slate", value: output ? (riskConfirmed ? "已确认" : "待确认") : "未生成" },
-            { label: "操作", tone: input.hasScript ? "cyan" : "amber", value: input.hasScript ? "可运行" : "缺剧本" },
+            { label: "操作", tone: display?.displayStatus === "error" ? "amber" : input.hasScript ? "cyan" : "amber", value: display?.displayStatus === "error" && input.hasScript ? "可重试" : input.hasScript ? "可运行" : "缺剧本" },
         ],
         title: "导演分析模块",
     };

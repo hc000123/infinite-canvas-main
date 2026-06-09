@@ -30,7 +30,7 @@ const aspectOptions = [
 
 type ImageSettingsPanelProps = {
     config: AiConfig;
-    onConfigChange: (key: "quality" | "size" | "count", value: string) => void;
+    onConfigChange: <K extends ImageSettingsKey>(key: K, value: AiConfig[K]) => void;
     theme: CanvasTheme;
     showTitle?: boolean;
     className?: string;
@@ -38,11 +38,14 @@ type ImageSettingsPanelProps = {
     quickCount?: number;
     compact?: boolean;
 };
+type ImageSettingsKey = "quality" | "size" | "count" | "thinkingMode" | "reasoningEffort";
 
 export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, className = "w-[320px] space-y-4 rounded-2xl px-1 py-0.5", maxCount = 15, quickCount = 10, compact = false }: ImageSettingsPanelProps) {
     const quality = config.quality || "auto";
     const count = Math.max(1, Math.min(maxCount, Math.floor(Math.abs(Number(config.count)) || 1)));
     const activeSize = config.size || "auto";
+    const imageModel = config.imageModel || config.model;
+    const thinkingSupported = supportsImageThinkingModel(imageModel);
     const selectedAspect = aspectOptions.find((item) => (item.size || item.value) === activeSize || item.value === activeSize);
     const dimensions = readSizeDimensions(activeSize, selectedAspect || aspectOptions[0]);
     const selectAspect = (value: string) => {
@@ -69,6 +72,36 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     </div>
                 </div>
                 <div className={compact ? "space-y-2" : "space-y-2.5"}>
+                    <SettingTitle color={theme.node.muted}>思考模式</SettingTitle>
+                    <div className="rounded-xl border p-2" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}>
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                            <div className="min-w-0 text-xs leading-5" style={{ color: theme.node.muted }}>
+                                {thinkingSupported ? "当前模型可使用思考参数" : "仅支持思考参数的模型生效"}
+                            </div>
+                            <div className="grid shrink-0 grid-cols-2 gap-1">
+                                <SmallOptionPill selected={config.thinkingMode !== "true"} theme={theme} onClick={() => onConfigChange("thinkingMode", "false")}>
+                                    关
+                                </SmallOptionPill>
+                                <SmallOptionPill selected={config.thinkingMode === "true"} theme={theme} onClick={() => onConfigChange("thinkingMode", "true")}>
+                                    开
+                                </SmallOptionPill>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-4 gap-1.5 opacity-100">
+                            {[
+                                { value: "minimal", label: "极低" },
+                                { value: "low", label: "低" },
+                                { value: "medium", label: "中" },
+                                { value: "high", label: "高" },
+                            ].map((item) => (
+                                <SmallOptionPill key={item.value} selected={config.reasoningEffort === item.value} disabled={config.thinkingMode !== "true"} theme={theme} onClick={() => onConfigChange("reasoningEffort", item.value as AiConfig["reasoningEffort"])}>
+                                    {item.label}
+                                </SmallOptionPill>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+                <div className={compact ? "space-y-2" : "space-y-2.5"}>
                     <SettingTitle color={theme.node.muted}>尺寸</SettingTitle>
                     <div className={compact ? "grid grid-cols-[1fr_auto_1fr] items-center gap-1.5" : "grid grid-cols-[1fr_auto_1fr] items-center gap-2.5"}>
                         <DimensionInput prefix="W" value={dimensions.width} disabled={activeSize === "auto"} theme={theme} onChange={(value) => updateDimension("width", value)} />
@@ -78,17 +111,16 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                 </div>
                 <div className={compact ? "space-y-2" : "space-y-2.5"}>
                     <SettingTitle color={theme.node.muted}>宽高比</SettingTitle>
-                    <div className={compact ? "grid grid-cols-4 gap-1.5" : "grid grid-cols-4 gap-2.5"}>
+                    <div className={compact ? "grid grid-cols-4 gap-1.5" : "grid grid-cols-4 gap-2"}>
                         {aspectOptions.map((item) => (
                             <button
                                 key={item.value}
                                 type="button"
-                                className={`flex cursor-pointer flex-col items-center justify-center border bg-transparent transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f80ff]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${compact ? "h-12 gap-0.5 rounded-lg text-xs" : "h-[72px] gap-1.5 rounded-xl text-sm"}`}
-                                style={{ borderColor: selectedAspect?.value === item.value ? theme.node.text : theme.node.stroke, background: "transparent", color: theme.node.text }}
+                                className={`cursor-pointer rounded-full border bg-transparent px-2 text-center transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f80ff]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${compact ? "h-8 text-xs" : "h-9 text-sm"}`}
+                                style={{ borderColor: selectedAspect?.value === item.value ? theme.node.text : theme.node.stroke, background: selectedAspect?.value === item.value ? theme.node.panel : "transparent", color: theme.node.text }}
                                 onMouseDown={(event) => event.stopPropagation()}
                                 onClick={() => selectAspect(item.value)}
                             >
-                                <AspectIcon type={item.icon} width={item.width} height={item.height} color={theme.node.text} />
                                 <span>{item.label}</span>
                             </button>
                         ))}
@@ -145,6 +177,21 @@ function OptionPill({ selected, theme, onClick, children }: { selected: boolean;
     );
 }
 
+function SmallOptionPill({ selected, disabled = false, theme, onClick, children }: { selected: boolean; disabled?: boolean; theme: CanvasTheme; onClick: () => void; children: ReactNode }) {
+    return (
+        <button
+            type="button"
+            disabled={disabled}
+            className="h-7 cursor-pointer rounded-full border px-2 text-xs transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f80ff]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+            style={{ background: selected ? theme.node.panel : "transparent", borderColor: selected ? theme.node.text : theme.node.stroke, color: theme.node.text }}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={onClick}
+        >
+            {children}
+        </button>
+    );
+}
+
 function DimensionInput({ prefix, value, disabled, theme, onChange }: { prefix: string; value: number; disabled: boolean; theme: CanvasTheme; onChange: (value: number | null) => void }) {
     return (
         <label className="flex h-9 overflow-hidden rounded-xl text-sm" style={{ background: theme.node.fill, color: theme.node.text, opacity: disabled ? 0.55 : 1 }}>
@@ -181,24 +228,17 @@ function CountInput({ value, max, theme, onChange }: { value: number; max: numbe
     );
 }
 
-function AspectIcon({ type, width, height, color }: { type: string; width: number; height: number; color: string }) {
-    if (type === "auto") return null;
-    const ratio = width / Math.max(1, height);
-    const boxWidth = ratio >= 1 ? 24 : Math.max(10, 24 * ratio);
-    const boxHeight = ratio >= 1 ? Math.max(10, 24 / ratio) : 24;
-    return (
-        <span className="grid h-7 w-9 place-items-center">
-            <span className="border-2" style={{ width: boxWidth, height: boxHeight, borderColor: color }} />
-        </span>
-    );
-}
-
 function SettingTitle({ children, color }: { children: string; color: string }) {
     return (
         <div className="text-xs font-medium" style={{ color }}>
             {children}
         </div>
     );
+}
+
+function supportsImageThinkingModel(model: string) {
+    const value = model.toLowerCase();
+    return value.includes("gemini-3") || value.includes("gemini-2.5") || value.includes("thinking");
 }
 
 function readSizeDimensions(size: string, fallback: { width: number; height: number }) {

@@ -2,10 +2,9 @@
 
 import { FileTextOutlined, HomeOutlined, LogoutOutlined, PictureOutlined, RobotOutlined, SettingOutlined, TransactionOutlined, UserOutlined } from "@ant-design/icons";
 import { Button, Flex, Layout, Menu, Typography, theme } from "antd";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { adminLayoutStyle } from "@/lib/app-theme";
@@ -28,6 +27,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     const user = useUserStore((state) => state.user);
     const isReady = useUserStore((state) => state.isReady);
     const logout = useUserStore((state) => state.clearSession);
+    const [pendingMenuKey, setPendingMenuKey] = useState("");
+    const [, startTransition] = useTransition();
     const activeKey = pathname.startsWith("/admin/settings")
         ? "/admin/settings"
         : pathname.startsWith("/admin/assets")
@@ -64,6 +65,14 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         }
     }, [isReady, router, token, user?.role]);
 
+    useEffect(() => {
+        adminMenus.forEach((item) => router.prefetch(item.key));
+    }, [router]);
+
+    useEffect(() => {
+        setPendingMenuKey("");
+    }, [pathname]);
+
     if (!isReady || !token || user?.role !== "admin") {
         return (
             <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: antToken.colorBgLayout }}>
@@ -83,15 +92,16 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 </Flex>
                 <Menu
                     mode="inline"
-                    selectedKeys={[activeKey]}
+                    selectedKeys={[pendingMenuKey || activeKey]}
+                    onClick={({ key }) => {
+                        if (key === activeKey) return;
+                        setPendingMenuKey(key);
+                        startTransition(() => router.push(key));
+                    }}
                     style={adminLayoutStyle.menu}
                     items={adminMenus.map((item) => ({
                         ...item,
-                        label: (
-                            <Link href={item.key} style={{ color: "inherit" }}>
-                                {item.label}
-                            </Link>
-                        ),
+                        label: item.label,
                         style: adminLayoutStyle.menuItem,
                     }))}
                 />

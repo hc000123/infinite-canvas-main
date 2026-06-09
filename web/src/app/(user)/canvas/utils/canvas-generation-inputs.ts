@@ -22,6 +22,7 @@ export type CanvasGenerationNodeLike = {
         volcengineAsset?: {
             assetId: string;
             status: string;
+            publicUrl?: string;
         };
     };
 };
@@ -29,6 +30,7 @@ export type CanvasGenerationNodeLike = {
 export type CanvasGenerationConnectionLike = {
     fromNodeId: string;
     toNodeId: string;
+    toHandle?: string;
 };
 
 export type NodeGenerationContext = {
@@ -90,7 +92,7 @@ export function buildCanvasGenerationInputs(nodeId: string, nodes: CanvasGenerat
         if (text) return [{ nodeId: node.id, type: "text", title: node.title, text }];
         return [];
     });
-    return applySeedanceImageRoles(inputs, target);
+    return applySeedanceImageRoles(inputs, target, connections.filter((connection) => connection.toNodeId === nodeId));
 }
 
 function readNodeTextInput(node: CanvasGenerationNodeLike) {
@@ -117,12 +119,14 @@ function readReferenceVideo(node: CanvasGenerationNodeLike): ReferenceVideo | nu
     const assetUri = activeVolcengineAssetURI(node.metadata.volcengineAsset);
     const volcengineAssetId = node.metadata.volcengineAsset?.assetId;
     const volcengineAssetStatus = node.metadata.volcengineAsset?.status;
+    const volcenginePublicUrl = node.metadata.volcengineAsset?.status === "Active" ? node.metadata.volcengineAsset?.publicUrl : "";
     return {
         id: node.id,
         name: `${node.title || node.id}.mp4`,
         type: node.metadata.mimeType || "video/mp4",
         url: node.metadata.videoUrl || node.metadata.cacheUrl || node.metadata.content,
         storageKey: node.metadata.videoUrl || node.metadata.cacheUrl ? undefined : node.metadata.storageKey,
+        ...(volcenginePublicUrl ? { volcenginePublicUrl } : {}),
         ...(assetUri ? { assetUri } : {}),
         ...(volcengineAssetId ? { volcengineAssetId, volcengineAssetStatus } : {}),
     };
@@ -146,7 +150,7 @@ function audioExtension(mimeType?: string) {
     return subtype;
 }
 
-function applySeedanceImageRoles(inputs: NodeGenerationInput[], target?: CanvasGenerationNodeLike) {
+function applySeedanceImageRoles(inputs: NodeGenerationInput[], target: CanvasGenerationNodeLike | undefined, connections: CanvasGenerationConnectionLike[]) {
     let imageIndex = 0;
     return inputs.map((input) => {
         if (!input.image) return input;
@@ -155,15 +159,16 @@ function applySeedanceImageRoles(inputs: NodeGenerationInput[], target?: CanvasG
             ...input,
             image: {
                 ...input.image,
-                seedanceRole: resolveSeedanceImageRole(target, input.nodeId, index),
+                seedanceRole: resolveSeedanceImageRole(target, connections, input.nodeId, index),
             },
         };
     });
 }
 
-function resolveSeedanceImageRole(target: CanvasGenerationNodeLike | undefined, nodeId: string, index: number): ReferenceImageRole {
+function resolveSeedanceImageRole(target: CanvasGenerationNodeLike | undefined, connections: CanvasGenerationConnectionLike[], nodeId: string, index: number): ReferenceImageRole {
     const configuredRole = target?.metadata?.referenceRoles?.find((item) => item.kind === "image" && item.nodeId === nodeId)?.role;
-    return normalizeSeedanceImageRole(configuredRole) || defaultSeedanceImageRole(index, target?.metadata?.videoReferenceImageMode);
+    const connectionRole = connections.find((connection) => connection.fromNodeId === nodeId && (connection.toHandle === "first_frame" || connection.toHandle === "last_frame"))?.toHandle;
+    return normalizeSeedanceImageRole(configuredRole) || normalizeSeedanceImageRole(connectionRole) || defaultSeedanceImageRole(index, target?.metadata?.videoReferenceImageMode);
 }
 
 function getOrderedUpstreamNodes(nodeId: string, nodes: CanvasGenerationNodeLike[], connections: CanvasGenerationConnectionLike[]) {

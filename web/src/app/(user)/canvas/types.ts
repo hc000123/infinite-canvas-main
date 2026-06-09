@@ -53,6 +53,7 @@ export type CanvasNodeMetadata = {
     seed?: string;
     videoPromptReviewEnabled?: string;
     returnLastFrame?: string;
+    channelMode?: "remote" | "local";
     provider?: "openai" | "volcengine-ark";
     actionType?: CanvasVideoActionType;
     videoActionType?: CanvasVideoActionType;
@@ -192,6 +193,8 @@ export type CanvasConnection = {
     id: string;
     fromNodeId: string;
     toNodeId: string;
+    fromHandle?: string;
+    toHandle?: string;
 };
 
 export type CanvasAssistantReference = {
@@ -237,6 +240,7 @@ export type CanvasAssistantSession = {
 export type ConnectionHandle = {
     nodeId: string;
     handleType: "source" | "target";
+    handleId?: string;
 };
 
 export type SelectionBox = {

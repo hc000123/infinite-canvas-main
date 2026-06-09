@@ -13,16 +13,21 @@ import { fetchAssetLibrary, type AssetLibraryItem } from "@/services/api/assets"
 import { buildInsertAssetPayload, type InsertAssetPayload } from "../utils/asset-insert-payload";
 
 export type AssetPickerTab = "my-assets" | "library";
+type AssetPickerKind = InsertAssetPayload["kind"];
+type AssetKindOption<T extends string = AssetPickerKind | "all"> = { label: string; value: T };
 export type { InsertAssetPayload } from "../utils/asset-insert-payload";
 
 type Props = {
     open: boolean;
+    title?: string;
     defaultTab?: AssetPickerTab;
+    defaultKind?: AssetPickerKind | "all";
+    allowedKinds?: AssetPickerKind[];
     onInsert: (payload: InsertAssetPayload) => void;
     onClose: () => void;
 };
 
-export function AssetPickerModal({ open, defaultTab = "my-assets", onInsert, onClose }: Props) {
+export function AssetPickerModal({ open, title = "选择素材", defaultTab = "my-assets", defaultKind = "all", allowedKinds, onInsert, onClose }: Props) {
     const [activeTab, setActiveTab] = useState<AssetPickerTab>(defaultTab);
 
     useEffect(() => {
@@ -30,13 +35,13 @@ export function AssetPickerModal({ open, defaultTab = "my-assets", onInsert, onC
     }, [open, defaultTab]);
 
     return (
-        <Modal title="选择素材" open={open} onCancel={onClose} footer={null} width={860} destroyOnHidden styles={{ body: { padding: "0 24px 24px", minHeight: 480 } }}>
+        <Modal title={title} open={open} onCancel={onClose} footer={null} width={860} destroyOnHidden styles={{ body: { padding: "0 24px 24px", minHeight: 480 } }}>
             <Tabs
                 activeKey={activeTab}
                 onChange={(key) => setActiveTab(key as AssetPickerTab)}
                 items={[
-                    { key: "my-assets", label: "我的素材", children: <MyAssetsTab onInsert={onInsert} /> },
-                    { key: "library", label: "素材库", children: <LibraryTab onInsert={onInsert} /> },
+                    { key: "my-assets", label: "我的素材", children: <MyAssetsTab allowedKinds={allowedKinds} defaultKind={defaultKind} onInsert={onInsert} /> },
+                    { key: "library", label: "素材库", children: <LibraryTab allowedKinds={allowedKinds} defaultKind={defaultKind} onInsert={onInsert} /> },
                 ]}
             />
         </Modal>
@@ -45,7 +50,7 @@ export function AssetPickerModal({ open, defaultTab = "my-assets", onInsert, onC
 
 const PAGE_SIZE = 8;
 
-const kindOptions = [
+const kindOptions: AssetKindOption[] = [
     { label: "全部", value: "all" },
     { label: "文本", value: "text" },
     { label: "图片", value: "image" },
@@ -53,12 +58,13 @@ const kindOptions = [
     { label: "音频", value: "audio" },
 ];
 
-function LibraryTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => void }) {
+function LibraryTab({ allowedKinds, defaultKind = "all", onInsert }: { allowedKinds?: AssetPickerKind[]; defaultKind?: AssetPickerKind | "all"; onInsert: (payload: InsertAssetPayload) => void }) {
     const { message } = App.useApp();
     const [keyword, setKeyword] = useState("");
-    const [kindFilter, setKindFilter] = useState("");
+    const [kindFilter, setKindFilter] = useState(defaultKind === "all" ? "" : defaultKind);
     const [page, setPage] = useState(1);
     const [inserting, setInserting] = useState<string | null>(null);
+    const options = remoteAssetKindOptions(allowedKinds);
 
     const query = useQuery({
         queryKey: ["asset-picker-library", keyword, kindFilter, page],
@@ -111,15 +117,9 @@ function LibraryTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => v
                     }}
                 />
                 <div className="flex gap-1.5">
-                    {[
-                        { label: "全部", value: "" },
-                        { label: "文本", value: "text" },
-                        { label: "图片", value: "image" },
-                        { label: "视频", value: "video" },
-                        { label: "音频", value: "audio" },
-                    ].map((opt) => (
+                    {options.map((opt) => (
                         <Tag.CheckableTag
-                            key={opt.value || "all"}
+                            key={opt.value}
                             checked={kindFilter === opt.value}
                             className={cn("prompt-filter-tag", kindFilter === opt.value && "is-active")}
                             onChange={() => {
@@ -216,19 +216,21 @@ function assetTypeLabel(type: string) {
     return "文本";
 }
 
-function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => void }) {
+function MyAssetsTab({ allowedKinds, defaultKind = "all", onInsert }: { allowedKinds?: AssetPickerKind[]; defaultKind?: AssetPickerKind | "all"; onInsert: (payload: InsertAssetPayload) => void }) {
     const assets = useAssetStore((state) => state.assets);
     const [keyword, setKeyword] = useState("");
-    const [kindFilter, setKindFilter] = useState("all");
+    const [kindFilter, setKindFilter] = useState(defaultKind);
     const [page, setPage] = useState(1);
+    const allowedKindSet = useMemo(() => new Set(allowedKinds || ["text", "image", "video", "audio"]), [allowedKinds]);
+    const options = assetKindOptions(allowedKinds);
 
     const filtered = useMemo(() => {
         const query = keyword.trim().toLowerCase();
         return assets
-            .filter((a) => a.kind === "text" || a.kind === "image" || a.kind === "video" || a.kind === "audio")
+            .filter((a) => allowedKindSet.has(a.kind))
             .filter((a) => kindFilter === "all" || a.kind === kindFilter)
             .filter((a) => !query || [a.title, ...(a.tags || [])].join(" ").toLowerCase().includes(query));
-    }, [assets, keyword, kindFilter]);
+    }, [allowedKindSet, assets, keyword, kindFilter]);
 
     const visible = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
 
@@ -255,7 +257,7 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
                     }}
                 />
                 <div className="flex gap-1.5">
-                    {kindOptions.map((opt) => (
+                    {options.map((opt) => (
                         <Tag.CheckableTag
                             key={opt.value}
                             checked={kindFilter === opt.value}
@@ -295,6 +297,17 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
             )}
         </div>
     );
+}
+
+function assetKindOptions(allowedKinds?: AssetPickerKind[]): AssetKindOption[] {
+    const allowed = new Set(allowedKinds || ["text", "image", "video", "audio"]);
+    return kindOptions
+        .filter((item) => item.value !== "all" || allowed.size > 1)
+        .filter((item) => item.value === "all" || allowed.has(item.value));
+}
+
+function remoteAssetKindOptions(allowedKinds?: AssetPickerKind[]): AssetKindOption<string>[] {
+    return assetKindOptions(allowedKinds).map((item) => ({ ...item, value: item.value === "all" ? "" : item.value }));
 }
 
 function assetLibraryVolcengineMetadata(asset: AssetLibraryItem): VolcengineAssetMetadata | undefined {

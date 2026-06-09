@@ -270,7 +270,8 @@ test("selects Seedance asset URI before regular image URL", () => {
     assert.equal(seedanceAssetURIFromImageReference({ dataUrl: "data:image/png;base64,aaa" }), "");
 });
 
-test("selects Seedance asset URI before regular video URL", () => {
+test("selects Volcengine public URL before regular video URL", () => {
+    assert.equal(seedanceAssetURIFromVideoReference({ volcenginePublicUrl: "https://example.com/reference.mp4", assetUri: "asset://asset-video", url: "blob:video" }), "https://example.com/reference.mp4");
     assert.equal(seedanceAssetURIFromVideoReference({ assetUri: "asset://asset-video", url: "blob:video" }), "asset://asset-video");
     assert.equal(seedanceAssetURIFromVideoReference({ url: "asset://asset-video" }), "asset://asset-video");
     assert.equal(seedanceAssetURIFromVideoReference({ url: "blob:video" }), "");

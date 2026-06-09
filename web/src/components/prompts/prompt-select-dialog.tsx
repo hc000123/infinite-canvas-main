@@ -164,10 +164,10 @@ export function PromptSelectDialog({
     };
 
     return (
-        <Modal title="提示词库" open={open} onCancel={() => onOpenChange(false)} footer={null} width={1040} centered>
+        <Modal className="dark studio-modal" title="提示词库" open={open} onCancel={() => onOpenChange(false)} footer={null} width={1040} centered>
             <div data-canvas-no-zoom onWheelCapture={(event) => event.stopPropagation()}>
                 <div className="mx-auto flex max-w-2xl gap-2">
-                    <Input className="min-w-0 flex-1" size="large" prefix={<Search className="size-4 text-stone-400" />} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="按标题查询" />
+                    <Input className="studio-command-input min-w-0 flex-1" size="large" prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="按标题查询" />
                     <Button size="large" type="primary" icon={<Plus className="size-4" />} onClick={openCreatePrompt}>
                         新建
                     </Button>
@@ -258,7 +258,7 @@ export function PromptSelectDialog({
 function PromptFilterRow({ label, children }: { label: string; children: ReactNode }) {
     return (
         <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-            <div className="pt-2 text-xs font-medium text-stone-500 dark:text-stone-400">{label}</div>
+            <div className="pt-2 text-sm font-medium text-[var(--studio-text-secondary)]">{label}</div>
             <div className="flex flex-wrap gap-2">{children}</div>
         </div>
     );
@@ -276,7 +276,7 @@ function PromptCreateDialog({ open, form, categories, saving, onCancel, onSave }
     const categoryOptions = categories.filter((category) => category !== ALL_PROMPTS_OPTION).map((category) => ({ label: category, value: category }));
 
     return (
-        <Modal title="新建提示词" open={open} width={720} onCancel={onCancel} onOk={() => void onSave()} okText="保存" cancelText="取消" confirmLoading={saving} destroyOnHidden>
+        <Modal className="dark studio-modal" title="新建提示词" open={open} width={720} onCancel={onCancel} onOk={() => void onSave()} okText="保存" cancelText="取消" confirmLoading={saving} destroyOnHidden>
             <Form form={form} layout="vertical" requiredMark={false}>
                 <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
                     <Input />

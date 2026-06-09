@@ -62,6 +62,7 @@ type UseCanvasGenerationFlowActionsOptions = {
     generateVideoNode: (input: {
         nodeId: string;
         sourceNode?: CanvasNodeData;
+        sourceConnections: CanvasConnection[];
         effectivePrompt: string;
         generationConfig: AiConfig;
         videoPlan: ReturnType<typeof buildVideoGenerationPlan>;
@@ -116,7 +117,8 @@ export function useCanvasGenerationFlowActions({
                 buildNodeGenerationContext(nodeId, generationNodes, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : prompt),
             );
             const effectivePrompt = generationContext.prompt.trim();
-            const markSourceStatus = sourceNode?.type !== CanvasNodeType.Image && !editingTextNode;
+            const isCompletedVideoSource = sourceNode?.type === CanvasNodeType.Video && Boolean(sourceNode.metadata?.content);
+            const markSourceStatus = sourceNode?.type !== CanvasNodeType.Image && !editingTextNode && !isCompletedVideoSource;
             if (!effectivePrompt && mode === "text") {
                 setRunningNodeId(null);
                 return { ok: false, errorDetails: "提示词为空" };
@@ -160,9 +162,10 @@ export function useCanvasGenerationFlowActions({
                         contextReferences: { images: generationContext.referenceImages, videos: generationContext.referenceVideos, audios: generationContext.referenceAudios, inputs: generationContext.referenceInputs },
                         storedVariantReferences: { images: storedVariantImages || [], videos: storedVariantVideos || [], audios: storedVariantAudios || [], inputs: sourceReferenceInputs },
                     });
+                    const videoEffectivePrompt = withFrameReferencePrompt(effectivePrompt, videoPlan.references.images);
                     if (shouldRunVideoPromptReview(generationConfig)) {
                         const review = reviewVideoPromptBeforeGeneration({
-                            prompt: effectivePrompt,
+                            prompt: videoEffectivePrompt,
                             seconds: generationConfig.videoSeconds,
                             taskMode: generationConfig.videoTaskMode,
                             referenceImageMode: generationConfig.videoReferenceImageMode,
@@ -180,7 +183,8 @@ export function useCanvasGenerationFlowActions({
                     const videoResult = await generateVideoNode({
                         nodeId,
                         sourceNode,
-                        effectivePrompt,
+                        sourceConnections: connectionsRef.current.filter((connection) => connection.toNodeId === nodeId),
+                        effectivePrompt: videoEffectivePrompt,
                         generationConfig,
                         videoPlan,
                         setPendingChildIds: (ids) => {
@@ -251,4 +255,16 @@ export function useCanvasGenerationFlowActions({
     );
 
     return { handleGenerateNode };
+}
+
+function withFrameReferencePrompt(prompt: string, images: Array<{ seedanceRole?: string }>) {
+    const notes = images
+        .map((image, index) => {
+            if (image.seedanceRole === "first_frame") return `参考图${index + 1}作为视频首帧`;
+            if (image.seedanceRole === "last_frame") return `参考图${index + 1}作为视频尾帧`;
+            return "";
+        })
+        .filter(Boolean);
+    if (!notes.length || prompt.includes("首尾帧设置：")) return prompt;
+    return `${prompt}\n\n首尾帧设置：${notes.join("，")}。请严格保持首帧到尾帧的主体一致性、动作连续和画面风格一致。`;
 }

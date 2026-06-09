@@ -2,18 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, AudioLines, Image as ImageIcon, LoaderCircle, Video } from "lucide-react";
-import { Button, Segmented } from "antd";
+import { Button } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
+import { inferRemoteVideoProtocol } from "@/services/api/ai-channel-boundary";
 import { defaultConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { buildCanvasVideoConfig } from "../utils/canvas-video-config";
+import { buildCanvasVideoChannelPatch, buildCanvasVideoConfig, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
 import { promptPreviewNoZoomProps, promptPreviewTextareaClass, promptPreviewTextareaStyle } from "../utils/canvas-prompt-preview";
 import { applyReferenceMention, filterReferenceMentions, findReferenceMentionTrigger, type CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasPromptLibrary } from "./canvas-prompt-library";
+import { CanvasVideoChannelPicker } from "./canvas-video-channel-picker";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata } from "../types";
 
@@ -33,11 +35,13 @@ type CanvasNodePromptPanelProps = {
 export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChange, onConfigChange, onGenerate, onImageSettingsOpenChange, referenceMentionOptions = [] }: CanvasNodePromptPanelProps) {
     const localConfig = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
+    const publicSettings = useConfigStore((state) => state.publicSettings);
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const mode = defaultMode(node.type);
-    const globalConfig = effectiveConfig.channelMode === "local" ? localConfig : effectiveConfig;
+    const allowCustomChannel = publicSettings?.modelChannel?.allowCustomChannel !== false;
+    const globalConfig = resolveCanvasVideoChannelConfig(localConfig, effectiveConfig, publicSettings?.modelChannel, mode === "video" ? node.metadata?.channelMode : undefined);
     const config = buildNodeConfig(globalConfig, node, mode);
     const hasTextContent = node.type === CanvasNodeType.Text && Boolean(node.metadata?.content?.trim());
     const hasImageContent = node.type === CanvasNodeType.Image && Boolean(node.metadata?.content);
@@ -46,7 +50,7 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
     const [prompt, setPrompt] = useState(isEditingExistingContent ? "" : node.metadata?.prompt || "");
     const [caret, setCaret] = useState(0);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, count: mode === "image" ? config.count : 1 });
+    const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "image" ? config.count : 1 });
     const mentionTrigger = mode === "video" ? findReferenceMentionTrigger(prompt, caret) : null;
     const mentionMatches = useMemo(() => (mentionTrigger ? filterReferenceMentions(referenceMentionOptions, mentionTrigger.query).slice(0, 6) : []), [mentionTrigger?.query, mentionTrigger?.start, referenceMentionOptions]);
 
@@ -146,16 +150,16 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                 ) : null}
             </div>
 
-            <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                <div className={`grid min-w-0 items-center gap-2 ${mode === "text" ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-[auto_minmax(0,1fr)_156px]"}`}>
+            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
+                <div className="flex min-w-[220px] flex-1 flex-wrap items-center gap-2">
                     <CanvasPromptLibrary projectId={projectId} nodeGroup={mode} onSelect={updatePrompt} />
                     {mode === "image" ? (
                         <>
-                            <ModelPicker className="h-10 !min-w-0" fullWidth config={config} modelType="image" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />
+                            <ModelPicker className="h-10 !min-w-[140px] flex-1" fullWidth config={config} modelType="image" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />
                             <CanvasImageSettingsPopover
                                 config={config}
                                 placement="topLeft"
-                                buttonClassName="!h-10 !w-[156px] !max-w-[156px] !justify-start !rounded-full !px-3"
+                                buttonClassName="!h-10 !w-[156px] !max-w-full !justify-start !rounded-full !px-3"
                                 onConfigChange={(key, value) => onConfigChange(node.id, key === "count" ? { count: Number(value) || 1 } : { [key]: value })}
                                 onMissingConfig={() => openConfigDialog(true)}
                                 onOpenChange={onImageSettingsOpenChange}
@@ -163,17 +167,25 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                         </>
                     ) : mode === "video" ? (
                         <>
-                            <ModelPicker className="h-10 !min-w-0" fullWidth config={config} modelType="video" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />
+                            {allowCustomChannel ? (
+                                <CanvasVideoChannelPicker
+                                    value={config.channelMode}
+                                    disabled={isRunning}
+                                    onChange={(channelMode) => onConfigChange(node.id, buildCanvasVideoChannelPatch(resolveCanvasVideoChannelConfig(localConfig, effectiveConfig, publicSettings?.modelChannel, channelMode)))}
+                                />
+                            ) : null}
+                            <ModelPicker className="h-10 !min-w-[120px] flex-1" fullWidth config={config} modelType="video" value={config.model} onChange={(model) => onConfigChange(node.id, videoModelPatch(config, model))} onMissingConfig={() => openConfigDialog(true)} />
                             <CanvasVideoSettingsPopover
                                 config={config}
                                 showTaskMode
                                 hasSourceVideo={hasSourceVideo}
-                                buttonClassName="!h-10 !w-[156px] !max-w-[156px] !justify-start !rounded-full !px-3"
+                                disabled={isRunning}
+                                buttonClassName={`!h-10 !justify-start !rounded-full !px-3 ${allowCustomChannel ? "!w-[142px]" : "!w-[156px]"} !max-w-full`}
                                 onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))}
                             />
                         </>
                     ) : (
-                        <ModelPicker className="h-10 !min-w-0" fullWidth config={config} modelType="text" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />
+                        <ModelPicker className="h-10 !min-w-[140px] flex-1" fullWidth config={config} modelType="text" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />
                     )}
                 </div>
                 <Button type="primary" className="!h-10 !min-w-[84px] shrink-0 !rounded-full !px-3" disabled={isRunning || !prompt.trim()} onClick={submit} aria-label="生成">
@@ -240,4 +252,11 @@ function videoConfigPatch(key: keyof AiConfig, value: string): Partial<CanvasNod
     if (key === "videoSeed") return { seed: value };
     if (key === "videoPromptReviewEnabled") return { videoPromptReviewEnabled: value };
     return { [key]: value } as Partial<CanvasNodeMetadata>;
+}
+
+function videoModelPatch(config: AiConfig, model: string): Partial<CanvasNodeMetadata> {
+    return {
+        model,
+        provider: config.channelMode === "local" ? "openai" : inferRemoteVideoProtocol(model, "openai"),
+    };
 }

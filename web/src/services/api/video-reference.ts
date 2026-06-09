@@ -67,7 +67,8 @@ export function seedanceAssetURIFromImageReference(image: { assetUri?: string; u
     return "";
 }
 
-export function seedanceAssetURIFromVideoReference(video: { assetUri?: string; url?: string }) {
+export function seedanceAssetURIFromVideoReference(video: { assetUri?: string; url?: string; volcenginePublicUrl?: string }) {
+    if (video.volcenginePublicUrl?.startsWith("http")) return video.volcenginePublicUrl;
     if (video.assetUri) return video.assetUri;
     if (video.url?.startsWith("asset://")) return video.url;
     return "";
@@ -143,7 +144,7 @@ export function buildSeedanceVideoTaskPayload(config: SeedanceVideoTaskConfig, p
 }
 
 function resolveSeedanceRequestModel(config: SeedanceVideoTaskConfig) {
-    return (config.seedanceEndpointId || config.model || config.seedanceModel || config.videoModel || "").trim();
+    return (config.model || config.seedanceModel || config.videoModel || config.seedanceEndpointId || "").trim();
 }
 
 function normalizeSeedanceImageReference(input: SeedanceReferenceInput) {

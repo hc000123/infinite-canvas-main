@@ -170,7 +170,7 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 	isArkVideoTask := service.IsVolcengineArkProtocol(channel.Protocol) && path == "/videos"
 	if isArkVideoTask {
 		upstreamPath = "/contents/generations/tasks"
-		upstreamBody, upstreamContentType, err = service.BuildArkVideoCreateRequest(body, contentType)
+		upstreamBody, upstreamContentType, err = service.BuildArkVideoCreateRequestForModel(body, contentType, service.ModelChannelEndpointForModel(channel, modelName))
 		if err != nil {
 			log.Printf("AI proxy build ark video request failed: model=%s err=%v", modelName, err)
 			Fail(w, err.Error())
@@ -419,18 +419,18 @@ func proxyArkVideoContent(w http.ResponseWriter, ctx context.Context, videoURL s
 	response, err := client.Do(request)
 	if err != nil {
 		log.Printf("Ark video content download failed: url=%s err=%v", safeLogURL(videoURL), err)
-		Fail(w, "视频下载失败")
+		Fail(w, "视频下载失败：服务器无法访问火山返回的视频地址")
 		return false
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= http.StatusBadRequest {
 		log.Printf("Ark video content upstream error: url=%s status=%d", safeLogURL(videoURL), response.StatusCode)
-		Fail(w, "视频下载失败")
+		Fail(w, fmt.Sprintf("视频下载失败：火山视频地址返回 %d", response.StatusCode))
 		return false
 	}
 	if err := validateProxyVideoContentResponse(response); err != nil {
 		log.Printf("Ark video content rejected upstream response: url=%s err=%v", safeLogURL(videoURL), err)
-		Fail(w, "视频下载失败")
+		Fail(w, fmt.Sprintf("视频下载失败：%s", videoContentRejectMessage(err)))
 		return false
 	}
 	for key, values := range response.Header {
@@ -459,6 +459,17 @@ func validateProxyVideoContentResponse(response *http.Response) error {
 		return errors.New("video content type is not allowed")
 	}
 	return nil
+}
+
+func videoContentRejectMessage(err error) string {
+	switch err.Error() {
+	case "video content is too large":
+		return "视频文件超过 200 MB"
+	case "video content type is not allowed":
+		return "返回内容不是视频文件"
+	default:
+		return "返回内容不可用"
+	}
 }
 
 func validateProxyDownloadURL(ctx context.Context, rawURL string) error {

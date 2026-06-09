@@ -32,6 +32,14 @@ type arkVideoCreateFields struct {
 }
 
 func BuildArkVideoCreateRequest(body []byte, contentType string) ([]byte, string, error) {
+	return buildArkVideoCreateRequest(body, contentType, "")
+}
+
+func BuildArkVideoCreateRequestForModel(body []byte, contentType string, modelName string) ([]byte, string, error) {
+	return buildArkVideoCreateRequest(body, contentType, modelName)
+}
+
+func buildArkVideoCreateRequest(body []byte, contentType string, upstreamModelName string) ([]byte, string, error) {
 	fields := arkVideoCreateFields{}
 	if strings.HasPrefix(contentType, "multipart/form-data") {
 		form, err := readArkMultipartForm(body, contentType)
@@ -49,6 +57,9 @@ func BuildArkVideoCreateRequest(body []byte, contentType string) ([]byte, string
 			return nil, "", err
 		}
 		fields = arkVideoFieldsFromMap(payload)
+	}
+	if strings.TrimSpace(upstreamModelName) != "" {
+		fields.ModelName = strings.TrimSpace(upstreamModelName)
 	}
 	payload, err := buildArkVideoPayload(fields, true)
 	if err != nil {

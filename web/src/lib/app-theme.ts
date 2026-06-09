@@ -59,9 +59,9 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             colorFillTertiary: dark ? "rgba(255, 255, 255, 0.055)" : "rgba(15, 23, 42, 0.04)",
             colorBorder: dark ? "#262b36" : "rgba(15, 23, 42, 0.12)",
             colorBorderSecondary: dark ? "#202633" : "rgba(15, 23, 42, 0.08)",
-            colorText: dark ? "#f2f4f8" : "#171717",
-            colorTextSecondary: dark ? "#aeb6c6" : "#475569",
-            colorTextTertiary: dark ? "#768092" : "#64748b",
+            colorText: dark ? "#f7f9fc" : "#171717",
+            colorTextSecondary: dark ? "#c7cede" : "#475569",
+            colorTextTertiary: dark ? "#9aa3b4" : "#64748b",
             colorError: dark ? "#ff6b81" : "#dc2626",
             colorSuccess: dark ? "#57d57f" : "#16a34a",
             colorWarning: dark ? "#d6a74a" : "#d97706",
@@ -70,6 +70,24 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             Button: {
                 primaryShadow: "none",
                 defaultShadow: "none",
+                defaultBg: dark ? "#151821" : "#ffffff",
+                defaultBorderColor: dark ? "#303642" : "rgba(15, 23, 42, 0.14)",
+                defaultColor: dark ? "#d7deeb" : "#334155",
+            },
+            Card: {
+                colorBgContainer: dark ? "#151821" : "#ffffff",
+                colorBorderSecondary: dark ? "#262b36" : "rgba(15, 23, 42, 0.1)",
+                boxShadowTertiary: "none",
+            },
+            Drawer: {
+                colorBgElevated: dark ? "#151821" : "#ffffff",
+                footerPaddingBlock: 12,
+                footerPaddingInline: 16,
+            },
+            Input: {
+                activeBorderColor: color.primary,
+                hoverBorderColor: dark ? "#343b49" : "rgba(15, 23, 42, 0.22)",
+                colorBgContainer: dark ? "#101217" : "#ffffff",
             },
             Menu: {
                 itemActiveBg: color.menuBg,
@@ -85,9 +103,20 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
                 optionSelectedBg: color.selectSelectedBg,
                 optionSelectedColor: color.selectText,
             },
+            Tabs: {
+                itemActiveColor: color.primary,
+                itemHoverColor: color.primaryHover,
+                itemSelectedColor: color.primary,
+                inkBarColor: color.primary,
+            },
             Table: {
                 rowSelectedBg: color.tableSelectedBg,
                 rowSelectedHoverBg: color.tableSelectedHoverBg,
+                borderColor: dark ? "#262b36" : "rgba(15, 23, 42, 0.1)",
+                headerBg: dark ? "#191d26" : "#f8fafc",
+            },
+            Tooltip: {
+                colorBgSpotlight: dark ? "#1b202a" : "#111827",
             },
         },
     };

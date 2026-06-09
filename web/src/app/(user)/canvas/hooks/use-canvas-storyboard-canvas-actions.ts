@@ -99,7 +99,7 @@ export function useCanvasStoryboardCanvasActions({
                 position: { x: center.x - 520, y: center.y - 160 },
                 config: {
                     provider: canvasAiConfig.videoProtocol === "volcengine-ark" ? "volcengine-ark" : "openai",
-                    model: canvasAiConfig.videoProtocol === "volcengine-ark" ? canvasAiConfig.seedanceEndpointId || canvasAiConfig.seedanceModel || canvasAiConfig.videoModel || canvasAiConfig.model : canvasAiConfig.videoModel || canvasAiConfig.model,
+                    model: canvasAiConfig.videoProtocol === "volcengine-ark" ? canvasAiConfig.seedanceModel || canvasAiConfig.videoModel || canvasAiConfig.model : canvasAiConfig.videoModel || canvasAiConfig.model,
                     size: canvasAiConfig.size,
                     seconds: canvasAiConfig.videoSeconds,
                     vquality: canvasAiConfig.vquality,
@@ -123,7 +123,6 @@ export function useCanvasStoryboardCanvasActions({
             assets,
             attachStoryboardShotCanvasNodes,
             canvasAiConfig.model,
-            canvasAiConfig.seedanceEndpointId,
             canvasAiConfig.seedanceModel,
             canvasAiConfig.size,
             canvasAiConfig.videoModel,
@@ -160,7 +159,7 @@ export function useCanvasStoryboardCanvasActions({
                 position: { x: center.x - 520, y: center.y - 160 },
                 config: {
                     provider: canvasAiConfig.videoProtocol === "volcengine-ark" ? "volcengine-ark" : "openai",
-                    model: canvasAiConfig.videoProtocol === "volcengine-ark" ? canvasAiConfig.seedanceEndpointId || canvasAiConfig.seedanceModel || canvasAiConfig.videoModel || canvasAiConfig.model : canvasAiConfig.videoModel || canvasAiConfig.model,
+                    model: canvasAiConfig.videoProtocol === "volcengine-ark" ? canvasAiConfig.seedanceModel || canvasAiConfig.videoModel || canvasAiConfig.model : canvasAiConfig.videoModel || canvasAiConfig.model,
                     size: canvasAiConfig.size,
                     seconds: canvasAiConfig.videoSeconds,
                     vquality: canvasAiConfig.vquality,
@@ -184,7 +183,6 @@ export function useCanvasStoryboardCanvasActions({
             assets,
             attachShotGroupCanvasNodes,
             canvasAiConfig.model,
-            canvasAiConfig.seedanceEndpointId,
             canvasAiConfig.seedanceModel,
             canvasAiConfig.size,
             canvasAiConfig.videoModel,

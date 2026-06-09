@@ -2,8 +2,9 @@
 
 import { useMemo } from "react";
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 
+import { localForageStorage } from "@/lib/localforage-storage";
 import { normalizeSeedanceImageRoleMode, type SeedanceImageRoleMode } from "@/services/api/video-reference";
 import { apiGet } from "@/services/api/request";
 import type { AdminPublicSettings } from "@/services/api/admin";
@@ -68,7 +69,7 @@ export const defaultConfig: AiConfig = {
     textModel: (useDevDefaults && (process.env.NEXT_PUBLIC_DEV_AI_TEXT_MODEL || process.env.NEXT_PUBLIC_DEV_AI_MODEL)) || "gpt-5.5",
     videoSeconds: "6",
     vquality: "720",
-    videoGenerateAudio: "false",
+    videoGenerateAudio: "true",
     videoWatermark: "false",
     videoSeed: "",
     videoPromptReviewEnabled: "true",
@@ -103,20 +104,39 @@ type ConfigStore = {
     clearPromptContinue: () => void;
 };
 
+const configStorage: PersistStorage<ConfigStore> = {
+    getItem: async (name) => {
+        const value = (await localForageStorage.getItem(name)) || (typeof window === "undefined" ? null : window.localStorage.getItem(name));
+        return value ? (JSON.parse(value) as StorageValue<ConfigStore>) : null;
+    },
+    setItem: async (name, value) => {
+        await localForageStorage.setItem(name, JSON.stringify(value));
+        if (typeof window !== "undefined") window.localStorage.removeItem(name);
+    },
+    removeItem: async (name) => {
+        await localForageStorage.removeItem(name);
+        if (typeof window !== "undefined") window.localStorage.removeItem(name);
+    },
+};
+
 export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null) {
     const channelMode = modelChannel ? resolveEffectiveChannelMode(config.channelMode, modelChannel.allowCustomChannel) : "remote";
     const localVideoProtocol = resolveAllowedVideoProtocol("local", config.videoProtocol);
     if (channelMode === "local" || !modelChannel) {
         return { ...config, channelMode, videoProtocol: localVideoProtocol, videoModel: config.videoModel };
     }
-    const models = modelChannel.availableModels;
+    const models = uniqueModels(modelChannel.availableModels.map(normalizeVisibleRemoteVideoModel).filter(Boolean));
     const classifiedModels = classifyAiModels(models);
-    const fallbackModel = modelChannel.defaultModel || models[0] || "";
-    const videoModel = models.includes(config.videoModel) ? config.videoModel : modelChannel.defaultVideoModel || fallbackModel;
+    const fallbackModel = (modelChannel.defaultModel && models.includes(modelChannel.defaultModel) ? modelChannel.defaultModel : models[0]) || "";
+    const normalizedDefaultVideoModel = normalizeVisibleRemoteVideoModel(modelChannel.defaultVideoModel);
+    const defaultVideoModel = normalizedDefaultVideoModel && models.includes(normalizedDefaultVideoModel) ? normalizedDefaultVideoModel : "";
+    const videoCandidates = uniqueModels([defaultVideoModel, ...classifiedModels.videoModels, normalizeVisibleRemoteVideoModel(config.seedanceModel)]).filter(Boolean);
+    const videoModel = models.includes(config.videoModel) && classifiedModels.videoModels.includes(config.videoModel) ? config.videoModel : videoCandidates[0] || "";
+    const videoProtocol = inferRemoteVideoProtocol(videoModel, config.videoProtocol);
     return {
         ...config,
         channelMode,
-        videoProtocol: inferRemoteVideoProtocol(videoModel, config.videoProtocol),
+        videoProtocol,
         models,
         imageModels: classifiedModels.imageModels,
         videoModels: classifiedModels.videoModels,
@@ -124,8 +144,8 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
         model: models.includes(config.model) ? config.model : fallbackModel,
         imageModel: models.includes(config.imageModel) ? config.imageModel : modelChannel.defaultImageModel || fallbackModel,
         videoModel,
+        seedanceModel: videoProtocol === "volcengine-ark" ? videoModel : config.seedanceModel,
         textModel: models.includes(config.textModel) ? config.textModel : modelChannel.defaultTextModel || fallbackModel,
-        systemPrompt: modelChannel.systemPrompt,
     };
 }
 
@@ -173,6 +193,7 @@ export const useConfigStore = create<ConfigStore>()(
         }),
         {
             name: CONFIG_STORE_KEY,
+            storage: configStorage,
             partialize: (state) => ({ config: state.config }),
             merge: (persisted, current) => {
                 const config = { ...defaultConfig, ...((persisted as Partial<ConfigStore>).config || {}) };
@@ -198,7 +219,7 @@ export const useConfigStore = create<ConfigStore>()(
                         textModels: Array.isArray(config.textModels) && config.textModels.length ? config.textModels : classifiedModels.textModels,
                         videoSeconds: config.videoSeconds || "6",
                         vquality: config.vquality || "720",
-                        videoGenerateAudio: config.videoGenerateAudio || "false",
+                        videoGenerateAudio: config.videoGenerateAudio === "false" ? "true" : config.videoGenerateAudio || "true",
                         videoWatermark: config.videoWatermark || "false",
                         videoSeed: config.videoSeed || "",
                         videoPromptReviewEnabled: config.videoPromptReviewEnabled === "false" ? "false" : "true",
@@ -245,7 +266,7 @@ export function buildApiUrl(baseUrl: string, path: string, protocol: AiConfig["v
 }
 
 export function resolveSeedanceRequestModel(config: Pick<AiConfig, "seedanceEndpointId" | "seedanceModel" | "videoModel" | "model">) {
-    return (config.seedanceEndpointId || config.seedanceModel || config.videoModel || config.model).trim();
+    return (config.model || config.seedanceModel || config.videoModel || config.seedanceEndpointId).trim();
 }
 
 export function classifyAiModels(models: string[]) {
@@ -278,4 +299,15 @@ function uniqueModels(models: string[]) {
             seen.add(model);
             return true;
         });
+}
+
+function isEndpointModel(model: string) {
+    return model.trim().toLowerCase().startsWith("ep-");
+}
+
+function normalizeVisibleRemoteVideoModel(model: string) {
+    const value = model.trim();
+    if (!value || isEndpointModel(value)) return "";
+    if (/^doubao-seedance-2-0-\d+$/i.test(value)) return "doubao-seedance-2-0";
+    return value;
 }

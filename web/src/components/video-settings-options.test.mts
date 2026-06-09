@@ -30,8 +30,9 @@ test("shows image control only for generate mode", () => {
 test("keeps continue compatible but out of visible image control options", () => {
     assert.deepEqual(
         seedanceReferenceImageModeOptions.map((option) => option.label),
-        ["普通参考", "作为首帧", "首尾帧"],
+        ["普通参考", "首尾帧"],
     );
+    assert.equal(visibleSeedanceReferenceImageMode("first_frame"), "first_last_frame");
     assert.equal(visibleSeedanceReferenceImageMode("continue"), "reference");
 });
 

@@ -38,7 +38,7 @@ export function buildCanvasProjectPresetFromConfig(config: AiConfig, patch: Canv
 export function applyCanvasProjectPresetToConfig(config: AiConfig, preset?: CanvasProjectPreset): AiConfig {
     if (!preset) return config;
     const provider = config.channelMode === "local" ? "openai" : preset.defaultVideoProvider || config.videoProtocol;
-    const videoModel = preset.defaultVideoModel || (provider === "volcengine-ark" ? config.seedanceEndpointId || config.seedanceModel : config.videoModel);
+    const videoModel = normalizeVisibleVideoModel(preset.defaultVideoModel) || (provider === "volcengine-ark" ? normalizeVisibleVideoModel(config.seedanceModel) || firstVisibleSeedanceModel(config) : config.videoModel);
     return {
         ...config,
         size: normalizeCanvasProjectPresetRatio(preset.ratio || config.size),
@@ -48,8 +48,8 @@ export function applyCanvasProjectPresetToConfig(config: AiConfig, preset?: Canv
         textModel: preset.defaultTextModel || config.textModel,
         videoProtocol: provider,
         videoModel: provider === "openai" ? videoModel || config.videoModel : config.videoModel,
-        seedanceModel: provider === "volcengine-ark" && !isSeedanceEndpointModel(videoModel) ? videoModel || config.seedanceModel : config.seedanceModel,
-        seedanceEndpointId: provider === "volcengine-ark" && isSeedanceEndpointModel(videoModel) ? videoModel : config.seedanceEndpointId,
+        seedanceModel: provider === "volcengine-ark" ? videoModel || config.seedanceModel : config.seedanceModel,
+        seedanceEndpointId: config.seedanceEndpointId,
     };
 }
 

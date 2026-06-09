@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Camera, CheckCircle2, Download, Eye, EyeOff, FileText, Image as ImageIcon, Info, Maximize2, MessageSquare, RefreshCw, Scissors, Sparkles, Upload, Video } from "lucide-react";
+import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Download, Eye, EyeOff, FileText, Image as ImageIcon, Info, Maximize2, MessageSquare, RefreshCw, Scissors, Sparkles, Upload, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
@@ -20,6 +20,8 @@ export type CanvasInspectorView = "context" | "assistant" | "records";
 type CanvasContextInspectorProps = {
     view: CanvasInspectorView;
     onViewChange: (view: CanvasInspectorView) => void;
+    collapsed: boolean;
+    onCollapsedChange: (collapsed: boolean) => void;
     title: string;
     episodeLabel: string;
     productionLabel: string;
@@ -67,6 +69,8 @@ type CanvasContextInspectorProps = {
 export function CanvasContextInspector({
     view,
     onViewChange,
+    collapsed,
+    onCollapsedChange,
     title,
     episodeLabel,
     productionLabel,
@@ -113,6 +117,23 @@ export function CanvasContextInspector({
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const activeView = view === "assistant" && !assistantSlot ? "context" : view;
 
+    if (collapsed) {
+        return (
+            <aside className="relative flex h-full w-10 shrink-0 items-start justify-center border-l pt-3" style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}>
+                <button
+                    type="button"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                    style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel, color: theme.node.text }}
+                    onClick={() => onCollapsedChange(false)}
+                    title="展开右侧面板"
+                    aria-label="展开右侧面板"
+                >
+                    <ChevronLeft className="size-4" />
+                </button>
+            </aside>
+        );
+    }
+
     return (
         <aside className="relative flex h-full w-[420px] shrink-0 flex-col border-l" style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}>
             <div className="border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
@@ -128,17 +149,29 @@ export function CanvasContextInspector({
                             </span>
                         </div>
                     </div>
-                    <button
-                        type="button"
-                        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition hover:opacity-85"
-                        style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel, color: theme.node.text }}
-                        onClick={onOpenEpisodeWorkbench}
-                    >
-                        <FileText className="size-3.5" />
-                        本集流程
-                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                        <button
+                            type="button"
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition hover:opacity-85"
+                            style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel, color: theme.node.text }}
+                            onClick={onOpenEpisodeWorkbench}
+                        >
+                            <FileText className="size-3.5" />
+                            本集流程
+                        </button>
+                        <button
+                            type="button"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                            style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel, color: theme.node.text }}
+                            onClick={() => onCollapsedChange(true)}
+                            title="收起右侧面板"
+                            aria-label="收起右侧面板"
+                        >
+                            <ChevronRight className="size-4" />
+                        </button>
+                    </div>
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-1 rounded-lg p-1" style={{ background: theme.node.fill }}>
+                <div className="mt-3 grid grid-cols-3 gap-1 rounded-lg border p-1" style={{ background: "rgba(15, 23, 42, 0.18)", borderColor: theme.node.stroke }}>
                     <InspectorTab label="内容" active={activeView === "context"} onClick={() => onViewChange("context")} />
                     <InspectorTab
                         label="助手"
@@ -467,8 +500,19 @@ function summarizeShotNodes(nodes: CanvasNodeData[]) {
 function InspectorTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
-        <button type="button" className="h-8 rounded-md text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70" style={{ background: active ? theme.toolbar.panel : "transparent", color: active ? theme.node.text : theme.node.muted }} onClick={onClick}>
+        <button
+            type="button"
+            className="relative h-8 rounded-md text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+            style={{
+                background: active ? "rgba(111, 168, 255, 0.16)" : "transparent",
+                border: active ? `1px solid ${theme.node.selected}` : "1px solid transparent",
+                color: active ? theme.node.selected : theme.node.muted,
+            }}
+            aria-current={active ? "page" : undefined}
+            onClick={onClick}
+        >
             {label}
+            {active ? <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full" style={{ background: theme.node.selected }} /> : null}
         </button>
     );
 }

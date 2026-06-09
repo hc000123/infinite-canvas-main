@@ -37,7 +37,7 @@ type CanvasNodeProps = {
     onMouseDown: (event: React.MouseEvent, nodeId: string) => void;
     onHoverStart: (nodeId: string) => void;
     onHoverEnd: (nodeId: string) => void;
-    onConnectStart: (event: React.MouseEvent, nodeId: string, handleType: "source" | "target") => void;
+    onConnectStart: (event: React.MouseEvent, nodeId: string, handleType: "source" | "target", handleId?: string) => void;
     onResize: (nodeId: string, width: number, height: number, position?: Position) => void;
     onContentChange: (nodeId: string, content: string) => void;
     onToggleBatch?: (nodeId: string) => void;
@@ -115,6 +115,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const isBatchRoot = data.type === CanvasNodeType.Image && Boolean(data.metadata?.isBatchRoot) && batchCount > 1;
     const isBatchChild = data.type === CanvasNodeType.Image && Boolean(data.metadata?.batchRootId);
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
+    const showFrameReferenceHandles = data.type === CanvasNodeType.Video && data.metadata?.videoReferenceImageMode === "first_last_frame";
     const packageAccent = "rgba(34,211,238,.86)";
     const packageAccentSoft = "rgba(34,211,238,.24)";
     const imageBorderColor = isActive ? selectionBlue : isProductionPackageActive ? packageAccent : isRelated && !isBatchChild ? theme.node.muted : "transparent";
@@ -338,6 +339,12 @@ export const CanvasNode = React.memo(function CanvasNode({
 
             <ConnectionHandleDot side="left" visible={hovered || isSelected || isConnecting} onMouseDown={(event) => onConnectStart(event, data.id, "target")} />
             <ConnectionHandleDot side="right" visible={data.type !== CanvasNodeType.Config && (hovered || isSelected || isConnecting)} onMouseDown={(event) => onConnectStart(event, data.id, "source")} />
+            {showFrameReferenceHandles ? (
+                <>
+                    <FrameReferenceHandle label="首帧" side="first" visible={hovered || isSelected || isConnecting} onMouseDown={(event) => onConnectStart(event, data.id, "target", "first_frame")} />
+                    <FrameReferenceHandle label="尾帧" side="last" visible={hovered || isSelected || isConnecting} onMouseDown={(event) => onConnectStart(event, data.id, "target", "last_frame")} />
+                </>
+            ) : null}
 
             {showPanel && renderPanel && data.type !== CanvasNodeType.Config && data.type !== CanvasNodeType.Audio ? <div className="absolute left-1/2 top-full z-[70] w-[500px] -translate-x-1/2 pt-4">{renderPanel(data)}</div> : null}
         </div>
@@ -1027,6 +1034,28 @@ function ConnectionHandleDot({ side, visible, onMouseDown }: { side: "left" | "r
             onMouseDown={onMouseDown}
         >
             <div className="size-3 rounded-full border-2 transition-transform hover:scale-125" style={{ background: theme.node.panel, borderColor: theme.node.muted }} />
+        </div>
+    );
+}
+
+function FrameReferenceHandle({ label, side, visible, onMouseDown }: { label: string; side: "first" | "last"; visible: boolean; onMouseDown: (event: React.MouseEvent) => void }) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const left = side === "first" ? "35%" : "65%";
+
+    return (
+        <div
+            className={`absolute top-0 z-40 flex size-12 -translate-x-1/2 -translate-y-1/2 cursor-crosshair items-center justify-center transition-opacity duration-150 ${
+                visible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+            }`}
+            style={{ left }}
+            onMouseDown={onMouseDown}
+            title={`${label}输入`}
+            aria-label={`${label}输入`}
+        >
+            <span className="pointer-events-none absolute bottom-8 rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none shadow-[0_8px_24px_rgba(0,0,0,.16)] backdrop-blur-md" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
+                {label}
+            </span>
+            <span className="size-3 rounded-full border-2 transition-transform hover:scale-125" style={{ background: theme.node.panel, borderColor: theme.node.activeStroke }} />
         </div>
     );
 }

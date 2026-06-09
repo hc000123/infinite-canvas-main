@@ -27,6 +27,7 @@ import {
     canApplyWorkflowMappingPreviewToVideoNodes,
     canGenerateWorkflowMappingPreview,
     approveAgentRun,
+    bindAgentWorkflowRunCanvas,
     completeAgentWorkflowStageRun,
     createAgentWorkflowRunRecord,
     createAgentRunRecord,
@@ -123,6 +124,15 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                 const existing = get().workflowRuns.find((run) => run.projectId === projectId && run.canvasId === canvasId && run.episodeId === episodeId && run.workflowId === preset.workflowId);
                 if (existing) return existing.id;
                 const now = new Date().toISOString();
+                const unboundExisting = canvasId
+                    ? get().workflowRuns.find((run) => run.projectId === projectId && !run.canvasId && run.episodeId === episodeId && run.workflowId === preset.workflowId)
+                    : undefined;
+                if (unboundExisting && canvasId) {
+                    set((state) => ({
+                        workflowRuns: state.workflowRuns.map((run) => (run.id === unboundExisting.id ? bindAgentWorkflowRunCanvas(run, canvasId, now) : run)),
+                    }));
+                    return unboundExisting.id;
+                }
                 const id = `agent-workflow-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
                 const workflowRun = createAgentWorkflowRunRecord({ preset, projectId, canvasId, episodeId, id, now });
                 set((state) => ({ workflowRuns: [workflowRun, ...state.workflowRuns] }));

@@ -4,10 +4,12 @@ import type { CanvasConnection, CanvasNodeData, ConnectionHandle, Position } fro
 
 export function ConnectionPath({ connection, from, to, active, onSelect }: { connection: CanvasConnection; from: CanvasNodeData; to: CanvasNodeData; active: boolean; onSelect: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const startX = from.position.x + from.width;
-    const startY = from.position.y + from.height / 2;
-    const endX = to.position.x;
-    const endY = to.position.y + to.height / 2;
+    const start = connectionPoint(from, "source", connection.fromHandle);
+    const end = connectionPoint(to, "target", connection.toHandle);
+    const startX = start.x;
+    const startY = start.y;
+    const endX = end.x;
+    const endY = end.y;
     const dx = Math.abs(endX - startX);
     const curvature = Math.max(dx * 0.5, 50);
     const pathD = `M ${startX} ${startY} C ${startX + curvature} ${startY}, ${endX - curvature} ${endY}, ${endX} ${endY}`;
@@ -42,12 +44,23 @@ export function ActiveConnectionPath({ node, handle, mouseWorld }: { node?: Canv
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     if (!node) return null;
 
-    const startX = handle.handleType === "source" ? node.position.x + node.width : mouseWorld.x;
-    const startY = handle.handleType === "source" ? node.position.y + node.height / 2 : mouseWorld.y;
-    const endX = handle.handleType === "source" ? mouseWorld.x : node.position.x;
-    const endY = handle.handleType === "source" ? mouseWorld.y : node.position.y + node.height / 2;
+    const nodePoint = connectionPoint(node, handle.handleType, handle.handleId);
+    const startX = handle.handleType === "source" ? nodePoint.x : mouseWorld.x;
+    const startY = handle.handleType === "source" ? nodePoint.y : mouseWorld.y;
+    const endX = handle.handleType === "source" ? mouseWorld.x : nodePoint.x;
+    const endY = handle.handleType === "source" ? mouseWorld.y : nodePoint.y;
     const distance = Math.abs(endX - startX);
     const pathD = `M ${startX} ${startY} C ${startX + distance * 0.5} ${startY}, ${endX - distance * 0.5} ${endY}, ${endX} ${endY}`;
 
     return <path d={pathD} stroke={theme.node.activeStroke} strokeWidth="2" fill="none" strokeDasharray="5,5" />;
+}
+
+function connectionPoint(node: CanvasNodeData, handleType: "source" | "target", handleId?: string): Position {
+    if (handleType === "target" && (handleId === "first_frame" || handleId === "last_frame")) {
+        return {
+            x: node.position.x + node.width * (handleId === "first_frame" ? 0.35 : 0.65),
+            y: node.position.y,
+        };
+    }
+    return handleType === "source" ? { x: node.position.x + node.width, y: node.position.y + node.height / 2 } : { x: node.position.x, y: node.position.y + node.height / 2 };
 }

@@ -863,10 +863,12 @@ type CanvasConnection = {
   id: string;
   fromNodeId: string;
   toNodeId: string;
+  fromHandle?: string;
+  toHandle?: string;
 };
 ```
 
-连线只保存节点 ID，不保存端口坐标。渲染时根据节点位置和尺寸计算路径。
+连线默认只保存节点 ID，不保存端口坐标。需要区分语义端口时可保存 `fromHandle / toHandle`，例如视频节点首尾帧模式会用 `toHandle: "first_frame" | "last_frame"` 标记图片接入首帧或尾帧。渲染时根据节点位置、尺寸和端口语义计算路径。
 
 删除节点时会同步删除以该节点为起点或终点的连线。删除图片组根节点时，会把对应子节点一起删除。
 

@@ -52,6 +52,7 @@ export function EpisodeStoryboardPackagePage({
     applyingPreviewIds,
     currentSceneState,
     episode,
+    hasCanvas,
     onApplyPreview,
     onApproveStoryboardScene,
     onGeneratePreview,
@@ -68,6 +69,7 @@ export function EpisodeStoryboardPackagePage({
     applyingPreviewIds: Record<string, boolean>;
     currentSceneState?: AgentWorkflowSceneRunState;
     episode: ScriptEpisode;
+    hasCanvas: boolean;
     onApplyPreview: (preview: AgentWorkflowMappingPreview) => void;
     onApproveStoryboardScene: () => void;
     onGeneratePreview: (stageId: string, targetLabel: string) => void;
@@ -102,6 +104,7 @@ export function EpisodeStoryboardPackagePage({
     const videoPreview = latestPreview(previews, "video_node");
     const storyboardCounts = storyboardPreview ? previewCounts(storyboardPreview, appliedPreviewItemIds) : { pending: 0, total: 0 };
     const videoCounts = videoPreview ? previewCounts(videoPreview, appliedPreviewItemIds) : { pending: 0, total: 0 };
+    const handoffDisabledReason = hasCanvas ? "" : "先创建承接画布";
     const sceneNeedsReview = currentSceneState?.status === "review";
     const hasApprovedScenes = Boolean(currentSceneState?.status === "approved" || segments.some((segment) => segment.status === "已确认" || segment.packages.some((pkg) => pkg.status === "已确认")));
 
@@ -150,12 +153,13 @@ export function EpisodeStoryboardPackagePage({
                     <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" onClick={() => onGeneratePreview("seedance-storyboard", "分镜表和视频节点预览")}>
                         生成预览
                     </Button>
-                    <Button disabled={!storyboardPreview || storyboardCounts.pending <= 0} loading={Boolean(storyboardPreview && applyingPreviewIds[storyboardPreview.previewId])} onClick={() => storyboardPreview && onApplyPreview(storyboardPreview)}>
+                    <Button disabled={Boolean(handoffDisabledReason) || !storyboardPreview || storyboardCounts.pending <= 0} loading={Boolean(storyboardPreview && applyingPreviewIds[storyboardPreview.previewId])} onClick={() => storyboardPreview && onApplyPreview(storyboardPreview)}>
                         写入分镜表 {storyboardCounts.pending ? storyboardCounts.pending : ""}
                     </Button>
-                    <Button type="primary" disabled={!videoPreview || videoCounts.pending <= 0} loading={Boolean(videoPreview && applyingPreviewIds[videoPreview.previewId])} onClick={() => videoPreview && onApplyPreview(videoPreview)}>
+                    <Button type="primary" disabled={Boolean(handoffDisabledReason) || !videoPreview || videoCounts.pending <= 0} loading={Boolean(videoPreview && applyingPreviewIds[videoPreview.previewId])} onClick={() => videoPreview && onApplyPreview(videoPreview)}>
                         创建视频节点 {videoCounts.pending ? videoCounts.pending : ""}
                     </Button>
+                    {handoffDisabledReason ? <span className="self-center text-xs text-amber-300">{handoffDisabledReason}</span> : null}
                 </div>
             </div>
 

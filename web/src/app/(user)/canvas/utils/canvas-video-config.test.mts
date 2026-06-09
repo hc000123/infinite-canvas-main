@@ -66,6 +66,7 @@ test("video provider patch resets node model to the selected provider default", 
 test("video mode patch starts config nodes with the active video provider model", () => {
     assert.deepEqual(buildCanvasVideoModePatch(baseConfig), {
         generationMode: "video",
+        channelMode: "local",
         provider: "openai",
         model: "openai-video-model",
         size: "1:1",
@@ -84,6 +85,7 @@ test("video mode patch starts config nodes with the active video provider model"
     });
     assert.deepEqual(buildCanvasVideoModePatch(cloudConfig), {
         generationMode: "video",
+        channelMode: "remote",
         provider: "volcengine-ark",
         model: "ep-seedance-endpoint",
         size: "1:1",
@@ -100,6 +102,26 @@ test("video mode patch starts config nodes with the active video provider model"
         videoExtendDirection: "forward",
         videoReferenceImageMode: "reference",
     });
+});
+
+test("video node can pin a channel different from current global channel", () => {
+    const remoteNodeConfig = buildCanvasVideoConfig(baseConfig, {
+        channelMode: "remote",
+        provider: "volcengine-ark",
+        model: "ep-node",
+    });
+    assert.equal(remoteNodeConfig.channelMode, "remote");
+    assert.equal(remoteNodeConfig.videoProtocol, "volcengine-ark");
+    assert.equal(remoteNodeConfig.model, "ep-node");
+
+    const localNodeConfig = buildCanvasVideoConfig(cloudConfig, {
+        channelMode: "local",
+        provider: "volcengine-ark",
+        model: "local-video-node",
+    });
+    assert.equal(localNodeConfig.channelMode, "local");
+    assert.equal(localNodeConfig.videoProtocol, "openai");
+    assert.equal(localNodeConfig.model, "local-video-node");
 });
 
 test("video mode patch clamps Seedance duration from global defaults", () => {

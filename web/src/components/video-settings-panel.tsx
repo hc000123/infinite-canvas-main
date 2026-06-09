@@ -101,7 +101,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                 ) : null}
                 {isSeedance && showImageControl ? (
                     <SettingGroup title="图片控制" color={theme.node.muted}>
-                        <div className="grid grid-cols-3 gap-2.5">
+                        <div className="grid grid-cols-2 gap-2.5">
                             {seedanceReferenceImageModeOptions.map((item) => (
                                 <OptionPill key={item.value} selected={referenceImageMode === item.value} theme={theme} onClick={() => onConfigChange("videoReferenceImageMode", item.value)}>
                                     {item.label}
@@ -147,7 +147,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                                     {value}s
                                 </OptionPill>
                             ))}
-                            <NumberInput value={seconds} min={secondLimits.min} max={secondLimits.max} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
+                            <SecondNumberInput value={seconds} min={secondLimits.min} max={secondLimits.max} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
                         </div>
                     )}
                 </SettingGroup>
@@ -276,16 +276,33 @@ function SecondRangeControl({ value, min, max, theme, onChange }: { value: strin
             </div>
             <div className="grid grid-cols-[minmax(0,1fr)_72px] items-center gap-3">
                 <input type="range" min={min} max={max} step={1} value={value} className="h-8 w-full cursor-pointer accent-[#2f80ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f80ff]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent" onChange={(event) => onChange(event.target.value)} onMouseDown={(event) => event.stopPropagation()} />
-                <NumberInput
+                <SecondNumberInput
                     value={value}
                     min={min}
                     max={max}
                     theme={theme}
-                    className="h-8 rounded-lg border bg-transparent px-2 text-center text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2f80ff]/70 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     onChange={onChange}
                 />
             </div>
         </div>
+    );
+}
+
+function SecondNumberInput({ value, min, max, theme, onChange }: { value: string; min: number; max?: number; theme: CanvasTheme; onChange: (value: string) => void }) {
+    return (
+        <label className="flex h-9 items-center rounded-full border px-3 text-sm focus-within:ring-2 focus-within:ring-inset focus-within:ring-[#2f80ff]/70" style={{ borderColor: theme.node.stroke, color: theme.node.text }}>
+            <input
+                type="number"
+                min={min}
+                max={max}
+                className="min-w-0 flex-1 bg-transparent text-center outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                style={{ color: theme.node.text, WebkitTextFillColor: theme.node.text }}
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                onMouseDown={(event) => event.stopPropagation()}
+            />
+            <span className="shrink-0 opacity-70">s</span>
+        </label>
     );
 }
 

@@ -27,7 +27,7 @@ export function PromptCard({
     return (
         <Card
             hoverable
-            className="overflow-hidden"
+            className="studio-card overflow-hidden"
             styles={{ body: { padding: 0 } }}
             cover={
                 <button type="button" className="block w-full text-left" onClick={onOpen}>
@@ -38,28 +38,28 @@ export function PromptCard({
             <button type="button" className="block w-full text-left" onClick={onOpen}>
                 <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
-                        <h2 className="line-clamp-1 text-sm font-semibold text-stone-950 dark:text-stone-100">{item.title}</h2>
-                        <span className="shrink-0 text-xs text-stone-400 dark:text-stone-500">{formatPromptDate(item.updatedAt)}</span>
+                        <h2 className="line-clamp-1 text-sm font-semibold text-[var(--studio-text-primary)]">{item.title}</h2>
+                        <span className="shrink-0 text-xs text-[var(--studio-text-muted)]">{formatPromptDate(item.updatedAt)}</span>
                     </div>
-                    <p className="mt-2 line-clamp-3 text-xs leading-5 text-stone-600 dark:text-stone-400">{item.prompt}</p>
+                    <p className="mt-2 line-clamp-3 text-xs leading-5 text-[var(--studio-text-secondary)]">{item.prompt}</p>
                     <div className="mt-3 flex flex-wrap gap-1.5">
                         {item.metadata?.nodeGroup ? (
-                            <Tag className="m-0 text-[11px]" color="purple">
+                            <Tag className="studio-tag text-[11px]">
                                 {promptNodeGroupLabel(item.metadata.nodeGroup)}
                             </Tag>
                         ) : null}
                         {item.metadata?.type ? (
-                            <Tag className="m-0 text-[11px]" color="blue">
+                            <Tag className="studio-tag text-[11px]">
                                 {promptTypeLabel(item.metadata.type)}
                             </Tag>
                         ) : null}
                         {item.metadata?.favorite ? (
-                            <Tag className="m-0 text-[11px]" color="gold">
+                            <Tag className="studio-tag text-[11px]">
                                 常用
                             </Tag>
                         ) : null}
                         {item.tags.map((tag) => (
-                            <Tag key={tag} className="m-0 text-[11px]">
+                            <Tag key={tag} className="studio-tag text-[11px]">
                                 {tag}
                             </Tag>
                         ))}

@@ -35,8 +35,16 @@ export function CanvasToolButton({
     const iconSize = size === "md" ? "size-9 rounded-lg" : "size-8 rounded-lg";
     const hoverActive = hovered && !disabled && !active;
 
+    const tooltipText = title || label;
+
     return (
-        <Tooltip title={title || label} placement="top" mouseEnterDelay={0.2}>
+        <Tooltip
+            title={<span style={{ color: theme.node.text }}>{tooltipText}</span>}
+            placement="top"
+            mouseEnterDelay={0.2}
+            overlayClassName="canvas-tool-tooltip"
+            overlayInnerStyle={{ color: theme.node.text }}
+        >
             <button
                 type="button"
                 className={`group relative grid ${buttonSize} place-items-center transition disabled:cursor-not-allowed`}
@@ -45,7 +53,7 @@ export function CanvasToolButton({
                 onClick={onClick}
                 onMouseEnter={() => setHovered(true)}
                 onMouseLeave={() => setHovered(false)}
-                aria-label={title || label}
+                aria-label={tooltipText}
             >
                 <span
                     className={`grid ${iconSize} place-items-center transition`}

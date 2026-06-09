@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Download, FolderPlus, LayoutDashboard, Library, PencilLine, Search, Trash2, Upload } from "lucide-react";
+import { BookOpen, Download, FolderPlus, LayoutDashboard, Library, PencilLine, Plus, Search, Trash2, Upload } from "lucide-react";
 import { Suspense, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { App, Button, Checkbox, Empty, Form, Input, Modal, Pagination, Select, Tag } from "antd";
@@ -885,89 +885,89 @@ function AssetsPageContent() {
     }, [processingReviewIds, token, volcengineAssetEnabled, validAssets]);
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-background text-stone-900 dark:text-stone-100">
+        <div className="flex h-full flex-col overflow-hidden bg-[var(--studio-shell-bg)] text-[var(--studio-text-primary)]">
             <main
-                className="relative min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] px-6 py-8 [background-size:16px_16px] dark:bg-[radial-gradient(rgba(245,245,244,.14)_1px,transparent_1px)]"
+                className="studio-shell relative min-h-0 flex-1 overflow-y-auto px-6 py-8"
                 onDragEnter={handleUploadDragEnter}
                 onDragLeave={handleUploadDragLeave}
                 onDragOver={handleUploadDragOver}
                 onDrop={handleUploadDrop}
             >
                 {isDraggingUpload ? (
-                    <div className="pointer-events-none fixed inset-0 z-[1000] grid place-items-center bg-background/70 backdrop-blur-sm">
-                        <div className="grid min-h-40 w-[min(420px,calc(100vw-48px))] place-items-center rounded-xl border-2 border-dashed border-stone-400 bg-background/95 p-8 text-center shadow-2xl dark:border-stone-600">
+                    <div className="pointer-events-none fixed inset-0 z-[1000] grid place-items-center bg-[rgba(15,17,23,.72)] backdrop-blur-sm">
+                        <div className="studio-panel grid min-h-40 w-[min(420px,calc(100vw-48px))] place-items-center border-2 border-dashed border-[var(--studio-accent)] p-8 text-center">
                             <div>
-                                <Upload className="mx-auto size-8 text-stone-500" />
-                                <div className="mt-3 text-sm font-medium text-stone-900 dark:text-stone-100">松开上传{activeFolderId ? `到「${folderMap.get(activeFolderId)?.name || "当前文件夹"}」` : ""}</div>
+                                <Upload className="mx-auto size-8 text-[var(--studio-accent)]" />
+                                <div className="mt-3 text-sm font-medium text-[var(--studio-text-primary)]">松开上传{activeFolderId ? `到「${folderMap.get(activeFolderId)?.name || "当前文件夹"}」` : ""}</div>
                             </div>
                         </div>
                     </div>
                 ) : null}
-                <div className="pb-8">
-                    <div className="mx-auto max-w-5xl text-center">
-                        <h1 className="text-4xl font-semibold tracking-tight text-stone-950 dark:text-stone-100">我的素材</h1>
-                        <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">收藏常用文本、图片、视频和音频，按类型、标题和标签快速查找。</p>
-                    </div>
+                <div className="mx-auto max-w-7xl pb-8">
+                    <header className="flex flex-col gap-5 border-b border-[var(--studio-border-subtle)] pb-5 lg:flex-row lg:items-end lg:justify-between">
+                        <div className="min-w-0">
+                            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--studio-accent)]">Asset Library</div>
+                            <h1 className="mt-2 text-3xl font-semibold leading-tight tracking-normal text-[var(--studio-text-primary)]">我的素材</h1>
+                            <p className="mt-2 max-w-2xl text-[15px] leading-6 text-[var(--studio-text-secondary)]">统一管理图片、视频、音频与文本资产，快速定位项目引用、画布归类和生成来源。</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button className="studio-toolbar-button" icon={<Download className="size-4" />} onClick={() => void exportAllAssets()}>
+                                导出全部
+                            </Button>
+                            <Button className="studio-toolbar-button" icon={<Upload className="size-4" />} onClick={() => assetInputRef.current?.click()}>
+                                导入素材
+                            </Button>
+                            <Button className="studio-primary-action" type="primary" icon={<Plus className="size-4" />} onClick={openCreate}>
+                                新增素材
+                            </Button>
+                        </div>
+                    </header>
 
-                    <div className="mx-auto mt-8 w-full max-w-2xl">
-                        <Input.Search
-                            className="w-full"
+                    <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,560px)_1fr] lg:items-center">
+                        <Input
+                            className="studio-command-input w-full"
                             size="large"
                             allowClear
-                            prefix={<Search className="size-4 text-stone-400" />}
+                            prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />}
                             value={keyword}
                             placeholder="搜索标题、内容、标签或来源"
                             onChange={(event) => {
                                 setPage(1);
                                 setKeyword(event.target.value);
                             }}
-                            onSearch={(value) => {
-                                setPage(1);
-                                setKeyword(value);
-                            }}
                         />
+                        <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--studio-text-secondary)] lg:justify-end">
+                            <span className="font-medium text-[var(--studio-text-primary)]">{filteredAssets.length}</span>
+                            <span>个素材匹配当前条件</span>
+                            <span className="h-4 w-px bg-[var(--studio-border-subtle)]" />
+                            <span>{selectedAssets.length} 个已选</span>
+                        </div>
                     </div>
 
-                    <div className="mx-auto mt-6 grid max-w-6xl gap-3 text-left">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-center">
-                                <div className="text-xs font-medium text-stone-500 dark:text-stone-400">类型</div>
-                                <div className="flex flex-wrap gap-2">
-                                    {kindOptions.map((option) => (
-                                        <Tag.CheckableTag
-                                            key={option.value}
-                                            checked={kindFilter === option.value}
-                                            className={cn("prompt-filter-tag", kindFilter === option.value && "is-active")}
-                                            onChange={() => {
-                                                setPage(1);
-                                                setKindFilter(option.value as AssetKind | "all");
-                                            }}
-                                        >
-                                            {option.label}
-                                        </Tag.CheckableTag>
-                                    ))}
-                                </div>
-                            </div>
+                    <div className="studio-panel-muted mt-5 grid gap-4 p-5 text-left">
+                        <div className="grid gap-3 sm:grid-cols-[64px_minmax(0,1fr)] sm:items-center">
+                            <div className="text-sm font-medium text-[var(--studio-text-secondary)]">类型</div>
                             <div className="flex flex-wrap gap-2">
-                                <Button size="small" icon={<Download className="size-3.5" />} disabled={!selectedAssets.length} onClick={() => void exportSelectedAssets()}>
-                                    导出选中{selectedAssets.length ? ` ${selectedAssets.length}` : ""}
-                                </Button>
-                                <Button size="small" icon={<Download className="size-3.5" />} onClick={() => void exportAllAssets()}>
-                                    导出全部
-                                </Button>
-                                <Button size="small" icon={<Upload className="size-3.5" />} onClick={() => assetInputRef.current?.click()}>
-                                    导入素材
-                                </Button>
-                                <Button size="small" type="primary" onClick={openCreate}>
-                                    新增素材
-                                </Button>
+                                {kindOptions.map((option) => (
+                                    <Tag.CheckableTag
+                                        key={option.value}
+                                        checked={kindFilter === option.value}
+                                        className={cn("prompt-filter-tag", kindFilter === option.value && "is-active")}
+                                        onChange={() => {
+                                            setPage(1);
+                                            setKindFilter(option.value as AssetKind | "all");
+                                        }}
+                                    >
+                                        {option.label}
+                                    </Tag.CheckableTag>
+                                ))}
                             </div>
                         </div>
-                        <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-center">
-                            <div className="text-xs font-medium text-stone-500 dark:text-stone-400">项目</div>
+                        <div className="grid gap-3 sm:grid-cols-[64px_minmax(0,1fr)] sm:items-center">
+                            <div className="text-sm font-medium text-[var(--studio-text-secondary)]">项目</div>
                             <div className="flex flex-wrap items-center gap-2">
                                 <Select
-                                    size="small"
+                                    size="middle"
                                     allowClear
                                     showSearch
                                     className="min-w-48"
@@ -983,7 +983,7 @@ function AssetsPageContent() {
                                     }}
                                 />
                                 <Select
-                                    size="small"
+                                    size="middle"
                                     allowClear
                                     showSearch
                                     className="min-w-48"
@@ -998,7 +998,7 @@ function AssetsPageContent() {
                                     }}
                                 />
                                 <Select
-                                    size="small"
+                                    size="middle"
                                     className="min-w-36"
                                     value={projectLibraryFilter}
                                     disabled={!projectContextFilter}
@@ -1013,7 +1013,7 @@ function AssetsPageContent() {
                                     }}
                                 />
                                 <Select
-                                    size="small"
+                                    size="middle"
                                     className="min-w-36"
                                     value={referenceVersionFilter}
                                     disabled={!projectContextFilter}
@@ -1027,16 +1027,16 @@ function AssetsPageContent() {
                                         clearSelectedOutdatedUsages();
                                     }}
                                 />
-                                <Button size="small" icon={<BookOpen className="size-3.5" />} disabled={!selectedProductionBibleProject} onClick={() => setProductionBibleOpen(true)}>
+                                <Button size="middle" icon={<BookOpen className="size-3.5" />} disabled={!selectedProductionBibleProject} onClick={() => setProductionBibleOpen(true)}>
                                     项目设定库
                                 </Button>
                             </div>
                         </div>
-                        <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-center">
-                            <div className="text-xs font-medium text-stone-500 dark:text-stone-400">画布</div>
+                        <div className="grid gap-3 sm:grid-cols-[64px_minmax(0,1fr)] sm:items-center">
+                            <div className="text-sm font-medium text-[var(--studio-text-secondary)]">画布</div>
                             <div className="flex flex-wrap items-center gap-2">
                                 <Select
-                                    size="small"
+                                    size="middle"
                                     allowClear
                                     showSearch
                                     className="min-w-56"
@@ -1050,11 +1050,11 @@ function AssetsPageContent() {
                                         setCanvasLibraryFilter(value || "");
                                     }}
                                 />
-                                <span className="text-xs text-stone-500 dark:text-stone-400">先选择画布再导入，新素材会自动归到该画布；已有素材可多选归类到多个画布。</span>
+                                <span className="text-[13px] leading-5 text-[var(--studio-text-muted)]">先选择画布再导入，新素材会自动归到该画布；已有素材可多选归类到多个画布。</span>
                             </div>
                         </div>
-                        <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                            <div className="pt-1 text-xs font-medium text-stone-500 dark:text-stone-400">文件夹</div>
+                        <div className="grid gap-3 sm:grid-cols-[64px_minmax(0,1fr)] sm:items-start">
+                            <div className="pt-1 text-sm font-medium text-[var(--studio-text-secondary)]">文件夹</div>
                             <div className="flex flex-wrap items-center gap-2">
                                 <Tag.CheckableTag
                                     checked={folderFilter === "all"}
@@ -1089,7 +1089,7 @@ function AssetsPageContent() {
                                         {folder.name} {folderCounts[folder.id] || 0}
                                     </Tag.CheckableTag>
                                 ))}
-                                <Button size="small" icon={<FolderPlus className="size-3.5" />} onClick={openCreateFolder}>
+                                <Button size="middle" icon={<FolderPlus className="size-3.5" />} onClick={openCreateFolder}>
                                     新建文件夹
                                 </Button>
                                 {activeFolderId && folderMap.has(activeFolderId) ? (
@@ -1100,11 +1100,11 @@ function AssetsPageContent() {
                                 ) : null}
                             </div>
                         </div>
-                        <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                            <div className="pt-1 text-xs font-medium text-stone-500 dark:text-stone-400">生成</div>
+                        <div className="grid gap-3 sm:grid-cols-[64px_minmax(0,1fr)] sm:items-start">
+                            <div className="pt-1 text-sm font-medium text-[var(--studio-text-secondary)]">生成</div>
                             <div className="grid gap-2 md:grid-cols-4">
                                 <Select
-                                    size="small"
+                                    size="middle"
                                     allowClear
                                     placeholder="来源"
                                     value={generationSourceFilter}
@@ -1115,7 +1115,7 @@ function AssetsPageContent() {
                                     }}
                                 />
                                 <Select
-                                    size="small"
+                                    size="middle"
                                     allowClear
                                     placeholder="生成方式"
                                     value={generationActionFilter}
@@ -1126,7 +1126,7 @@ function AssetsPageContent() {
                                     }}
                                 />
                                 <Select
-                                    size="small"
+                                    size="middle"
                                     allowClear
                                     showSearch
                                     placeholder="模型 / 供应商"
@@ -1139,7 +1139,7 @@ function AssetsPageContent() {
                                     }}
                                 />
                                 <Select
-                                    size="small"
+                                    size="middle"
                                     value={generationTaskFilter}
                                     options={[
                                         { label: "全部任务", value: "all" },
@@ -1169,68 +1169,81 @@ function AssetsPageContent() {
                         />
                     ) : null}
                     {referenceVersionFilter !== "outdated" ? (
-                        <div className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-background/95 px-4 py-3 shadow-sm dark:border-stone-800 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="min-w-0">
-                                <div className="text-sm font-medium text-stone-900 dark:text-stone-100">已选择 {selectedAssets.length} 个</div>
-                                <div className="mt-1 truncate text-xs text-stone-500 dark:text-stone-400">
-                                    {selectedAssetSummary} · 当前筛选 {filteredAssets.length} 个，已选 {selectedInFilteredCount} 个
+                        <div className="grid gap-3">
+                            <div className="studio-panel flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0 text-sm text-[var(--studio-text-secondary)]">
+                                    当前筛选 <span className="font-semibold text-[var(--studio-text-primary)]">{filteredAssets.length}</span> 个素材
+                                    {selectedInFilteredCount ? <span className="ml-2 text-[var(--studio-text-muted)]">已选 {selectedInFilteredCount} 个</span> : null}
+                                </div>
+                                <div className="flex shrink-0 flex-wrap gap-2">
+                                    <Select
+                                        size="middle"
+                                        className="w-32"
+                                        value={sortMode}
+                                        options={[
+                                            { label: "默认排序", value: "default" },
+                                            { label: "最近更新", value: "updated_desc" },
+                                            { label: "最近生成", value: "generation_desc" },
+                                            { label: "创建时间", value: "created_desc" },
+                                            { label: "标题 A-Z", value: "title_asc" },
+                                        ]}
+                                        onChange={(value) => {
+                                            setPage(1);
+                                            setSortMode(value);
+                                        }}
+                                    />
+                                    <Button size="middle" disabled={!filteredAssets.length || allFilteredSelected} onClick={selectFilteredAssets}>
+                                        全选当前结果
+                                    </Button>
                                 </div>
                             </div>
-                            <div className="flex shrink-0 flex-wrap gap-2">
-                                <Select
-                                    size="small"
-                                    className="w-32"
-                                    value={sortMode}
-                                    options={[
-                                        { label: "默认排序", value: "default" },
-                                        { label: "最近更新", value: "updated_desc" },
-                                        { label: "最近生成", value: "generation_desc" },
-                                        { label: "创建时间", value: "created_desc" },
-                                        { label: "标题 A-Z", value: "title_asc" },
-                                    ]}
-                                    onChange={(value) => {
-                                        setPage(1);
-                                        setSortMode(value);
-                                    }}
-                                />
-                                <Button size="small" disabled={!filteredAssets.length || allFilteredSelected} onClick={selectFilteredAssets}>
-                                    全选当前结果
-                                </Button>
-                                <Button size="small" disabled={!selectedAssets.length} onClick={openBulkMove}>
-                                    移动文件夹
-                                </Button>
-                                <Button size="small" disabled={!selectedAssets.length} onClick={openBulkTag}>
-                                    添加标签
-                                </Button>
-                                {projectContextFilter ? (
-                                    <>
-                                        <Button size="small" icon={<Library className="size-3.5" />} disabled={!selectedAssets.length} onClick={addSelectedToProjectLibrary}>
-                                            加入项目库
+                            {selectedAssets.length ? (
+                                <div className="studio-panel flex flex-col gap-4 border-[var(--studio-accent-soft)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="min-w-0">
+                                        <div className="text-base font-semibold text-[var(--studio-text-primary)]">已选择 {selectedAssets.length} 个素材</div>
+                                        <div className="mt-1 truncate text-[13px] text-[var(--studio-text-muted)]">{selectedAssetSummary}</div>
+                                    </div>
+                                    <div className="flex shrink-0 flex-wrap gap-2">
+                                        <Button size="middle" icon={<Download className="size-3.5" />} onClick={() => void exportSelectedAssets()}>
+                                            导出选中
                                         </Button>
-                                        <Button size="small" disabled={!selectedAssets.length} onClick={removeSelectedFromProjectLibrary}>
-                                            移出项目库
+                                        <Button size="middle" onClick={openBulkMove}>
+                                            移动文件夹
                                         </Button>
-                                    </>
-                                ) : null}
-                                <Button size="small" icon={<LayoutDashboard className="size-3.5" />} disabled={!selectedAssets.length || !canvasOptions.length} onClick={() => openBulkCanvasLibrary("add")}>
-                                    归类画布
-                                </Button>
-                                <Button size="small" disabled={!selectedAssets.length || !canvasOptions.length} onClick={() => openBulkCanvasLibrary("remove")}>
-                                    移出画布
-                                </Button>
-                                <Button size="small" disabled={!selectedVolcengineSubmitAssets.length || bulkReviewAction !== ""} loading={bulkReviewAction === "submit"} onClick={() => void submitSelectedVolcengineReviews()}>
-                                    批量加白{selectedVolcengineSubmitAssets.length ? ` ${selectedVolcengineSubmitAssets.length}` : ""}
-                                </Button>
-                                <Button size="small" disabled={!selectedVolcengineRefreshAssets.length || bulkReviewAction !== ""} loading={bulkReviewAction === "refresh"} onClick={() => void refreshSelectedVolcengineReviews()}>
-                                    批量刷新{selectedVolcengineRefreshAssets.length ? ` ${selectedVolcengineRefreshAssets.length}` : ""}
-                                </Button>
-                                <Button size="small" danger icon={<Trash2 className="size-3.5" />} disabled={!selectedAssets.length} onClick={openBulkDelete}>
-                                    删除选中
-                                </Button>
-                                <Button size="small" disabled={!selectedAssets.length} onClick={clearSelectedAssets}>
-                                    清空选择
-                                </Button>
-                            </div>
+                                        <Button size="middle" onClick={openBulkTag}>
+                                            添加标签
+                                        </Button>
+                                        {projectContextFilter ? (
+                                            <>
+                                                <Button size="middle" icon={<Library className="size-3.5" />} onClick={addSelectedToProjectLibrary}>
+                                                    发送到项目库
+                                                </Button>
+                                                <Button size="middle" onClick={removeSelectedFromProjectLibrary}>
+                                                    移出项目库
+                                                </Button>
+                                            </>
+                                        ) : null}
+                                        <Button size="middle" icon={<LayoutDashboard className="size-3.5" />} disabled={!canvasOptions.length} onClick={() => openBulkCanvasLibrary("add")}>
+                                            发送到画布
+                                        </Button>
+                                        <Button size="middle" disabled={!canvasOptions.length} onClick={() => openBulkCanvasLibrary("remove")}>
+                                            移出画布
+                                        </Button>
+                                        <Button size="middle" disabled={!selectedVolcengineSubmitAssets.length || bulkReviewAction !== ""} loading={bulkReviewAction === "submit"} onClick={() => void submitSelectedVolcengineReviews()}>
+                                            提交加白{selectedVolcengineSubmitAssets.length ? ` ${selectedVolcengineSubmitAssets.length}` : ""}
+                                        </Button>
+                                        <Button size="middle" disabled={!selectedVolcengineRefreshAssets.length || bulkReviewAction !== ""} loading={bulkReviewAction === "refresh"} onClick={() => void refreshSelectedVolcengineReviews()}>
+                                            刷新加白{selectedVolcengineRefreshAssets.length ? ` ${selectedVolcengineRefreshAssets.length}` : ""}
+                                        </Button>
+                                        <Button size="middle" danger icon={<Trash2 className="size-3.5" />} onClick={openBulkDelete}>
+                                            删除选中
+                                        </Button>
+                                        <Button size="middle" onClick={clearSelectedAssets}>
+                                            清空选择
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : null}
                         </div>
                     ) : null}
                     {referenceVersionFilter !== "outdated" ? (
@@ -1460,13 +1473,13 @@ function OutdatedReferencesPanel({
                     <div className="mt-1 text-xs text-stone-500 dark:text-stone-400">只会更新画布节点、分镜条目或设定库绑定中的版本引用，不修改素材本体。</div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <Button size="small" disabled={!usages.length || selectedIds.size === usages.length} onClick={onSelectAll}>
+                    <Button size="middle" disabled={!usages.length || selectedIds.size === usages.length} onClick={onSelectAll}>
                         全选
                     </Button>
-                    <Button size="small" disabled={!selectedIds.size} onClick={onClear}>
+                    <Button size="middle" disabled={!selectedIds.size} onClick={onClear}>
                         清空
                     </Button>
-                    <Button size="small" type="primary" disabled={!selectedIds.size} onClick={onOpenBatch}>
+                    <Button size="middle" type="primary" disabled={!selectedIds.size} onClick={onOpenBatch}>
                         批量更新{selectedIds.size ? ` ${selectedIds.size}` : ""}
                     </Button>
                 </div>
@@ -1485,7 +1498,7 @@ function OutdatedReferencesPanel({
                             </div>
                             <div className="mt-1 break-words pl-7 text-xs text-stone-500 dark:text-stone-400">{[usage.projectTitle, usage.contextTitle, outdatedUsageRoleLabel(usage), `素材：${usage.assetTitle}`].filter(Boolean).join(" · ")}</div>
                         </div>
-                        <Button size="small" onClick={() => onUpdateOne(usage)}>
+                        <Button size="middle" onClick={() => onUpdateOne(usage)}>
                             更新到最新版
                         </Button>
                     </div>

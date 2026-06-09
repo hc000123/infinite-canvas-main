@@ -35,7 +35,7 @@ test("summarizes public-only Volcengine asset config as admin-only details", () 
 });
 
 test("explains asset review config is separate from Seedance video channel keys", () => {
-    assert.match(VOLCENGINE_ASSET_CONFIG_NOTICE, /加白配置不同于 Seedance 生成渠道/);
+    assert.match(VOLCENGINE_ASSET_CONFIG_NOTICE, /加白配置不同于 Seedance 视频生成渠道/);
     assert.match(VOLCENGINE_ASSET_CONFIG_NOTICE, /填一次即可/);
-    assert.match(VOLCENGINE_ASSET_CONFIG_NOTICE, /本地直连\/云端渠道只影响视频生成 Key/);
+    assert.match(VOLCENGINE_ASSET_CONFIG_NOTICE, /视频生成渠道不影响素材加白配置/);
 });

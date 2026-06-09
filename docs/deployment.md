@@ -22,6 +22,37 @@
 
 Docker 部署会在同一个容器里启动 Go 后端和 Next 服务，因此默认不需要单独设置 `API_BASE_URL`。如果改成前后端分离部署，就必须显式配置。
 
+## Docker 健康检查与持久化
+
+Docker 镜像会同时启动 Go API 和 Next.js 页面服务，并内置 `/api/health` 健康检查。部署后可用下面命令确认状态：
+
+```bash
+docker compose ps
+curl https://你的域名/api/health
+```
+
+`/api/health` 应返回：
+
+```text
+ok
+```
+
+如果 Go API 或 Next.js 任一进程退出，容器会整体退出，避免只剩页面服务存活但 `/api/*` 全部 502。正式部署时必须挂载 `/app/data`，否则 SQLite 数据、公开素材和提示词缓存会随容器重建丢失。
+
+单容器部署默认只暴露 Next.js 的 `3000` 端口，Go 的 `8080` 只在容器内被 Next API 代理访问。公开视频 / 图片素材给外部平台拉取时，优先验证公网路径：
+
+```text
+https://你的域名/api/uploaded-assets/...
+```
+
+不要只验证 `/uploaded-assets/...`。如果后台的公网素材访问地址配置成不经过 `/api` 的路径，在线上单端口部署中可能无法访问。
+
+正式公网部署不要使用默认 `.env` 值，至少需要修改：
+
+- `ADMIN_PASSWORD`
+- `JWT_SECRET`
+- 如改用 MySQL / PostgreSQL，还需要修改 `STORAGE_DRIVER` 和 `DATABASE_DSN`
+
 ## 免费版说明
 
 默认使用 Render 免费 Web Service：
@@ -94,7 +125,11 @@ npm run desktop:dist:mac:arm64
 npm run desktop:dist:mac:x64
 ```
 
-macOS 包同样会内置 Go 后端和 Next.js standalone 服务，运行数据保存在系统用户数据目录。当前本地构建的 `.dmg` 只做本机 ad-hoc 签名，未做 Apple Developer ID 签名和公证；通过微信、浏览器下载等方式分发后，macOS 可能会因为隔离属性提示“已损坏”或拦截打开。
+macOS 包同样会内置 Go 后端和 Next.js standalone 服务，运行数据保存在系统用户数据目录。当前本地构建的 `.dmg` 只做本机 ad-hoc 签名，未做 Apple Developer ID 签名和公证；通过微信、浏览器下载等方式分发后，macOS 可能会因为隔离属性、App Translocation 或 Gatekeeper 提示“已损坏”或拦截打开。
+
+当前 `0.2.82` x64 DMG 验收中，DMG 可挂载，卷内 app 的版本、架构和核心资源 hash 与 `web/release/mac/眨眼之间.app` 一致。直接启动 `web/release/mac/眨眼之间.app` 以及移除 DMG 文件隔离属性后重新挂载复制出的 app，均能启动内置 3130 / 8180 服务；`127.0.0.1:8180/api/health` 返回 `ok`，`127.0.0.1:3130/login` 返回 200。
+
+但保留下载 / 微信隔离属性的 DMG 或 app 仍会被 `spctl --assess --type execute` 判定为 `rejected`，并可能触发 App Translocation，导致桌面服务未进入健康态。正式分发前需要完成 Developer ID 签名和 notarization，或至少在目标机器按下面方式去除隔离属性后重新验证启动。
 
 如果确认来源可信，可先把应用拖到 `/Applications`，再执行：
 
@@ -104,4 +139,4 @@ xattr -dr com.apple.quarantine "/Applications/眨眼之间.app"
 
 如果需要对外分发且不希望出现 Gatekeeper 提示，需要配置 Apple Developer ID 证书并完成 notarization 后重新打包。
 
-如果桌面端启动失败，启动日志会写到系统用户数据目录的 `desktop.log`，macOS 默认路径类似 `~/Library/Application Support/眨眼之间/desktop.log`。
+如果桌面端启动失败，启动日志会写到系统用户数据目录的 `desktop.log`，macOS 默认路径类似 `~/Library/Application Support/blink-workbench-desktop/desktop.log`。

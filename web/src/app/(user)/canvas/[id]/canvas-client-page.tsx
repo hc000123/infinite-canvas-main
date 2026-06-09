@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, AudioLines, Home, ImageIcon, List, Menu, MessageSquare, Plus, Redo2, Settings2, Trash2, Undo2, Upload, Video } from "lucide-react";
+import { ArrowLeft, AudioLines, Home, ImageIcon, List, Menu, MessageSquare, Plus, Redo2, Save, Settings2, Trash2, Undo2, Upload, Video } from "lucide-react";
 
 import { recordAiTaskFrontendArtifact } from "@/services/api/ai-task-trace";
 import { refreshVideoTask } from "@/services/api/video";
@@ -88,6 +88,8 @@ import { useCanvasStore } from "../stores/use-canvas-store";
 import { useAssetBreakdownStore } from "../stores/use-asset-breakdown-store";
 import { useImageBriefStore } from "../stores/use-image-brief-store";
 import { useProductionBibleStore } from "../stores/use-production-bible-store";
+
+type AppModal = ReturnType<typeof App.useApp>["modal"];
 import { useStoryboardStore } from "../stores/use-storyboard-store";
 import { useGenerationQueueStore } from "../stores/use-generation-queue-store";
 import { useCreativeProjectStore } from "../../projects/use-creative-project-store";
@@ -225,7 +227,7 @@ function ConnectionCreateOption({ theme, icon, title, description, onClick }: { 
 }
 
 function InfiniteCanvasPage() {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const params = useParams<{ id: string }>();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -264,6 +266,7 @@ function InfiniteCanvasPage() {
     const createProject = useCanvasStore((state) => state.createProject);
     const openProject = useCanvasStore((state) => state.openProject);
     const updateProject = useCanvasStore((state) => state.updateProject);
+    const flushProjects = useCanvasStore((state) => state.flushProjects);
     const renameProject = useCanvasStore((state) => state.renameProject);
     const deleteProjects = useCanvasStore((state) => state.deleteProjects);
     const currentProject = useCanvasStore((state) => state.projects.find((project) => project.id === canvasId));
@@ -314,6 +317,7 @@ function InfiniteCanvasPage() {
     const [assistantCollapsed, setAssistantCollapsed] = useState(true);
     const [assistantMounted, setAssistantMounted] = useState(false);
     const [inspectorView, setInspectorView] = useState<CanvasInspectorView>("context");
+    const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
     const [activeTimelineShotId, setActiveTimelineShotId] = useState("");
     const [activeProductionPackageId, setActiveProductionPackageId] = useState("");
     const [titleEditing, setTitleEditing] = useState(false);
@@ -771,6 +775,13 @@ function InfiniteCanvasPage() {
         router.push("/projects");
     }, [canvasId, cleanupAssetImages, deleteProjects, router]);
 
+    const saveCurrentProject = useCallback(async () => {
+        if (!currentProject) return;
+        updateProject(canvasId, { nodes, connections, chatSessions, activeChatId, backgroundMode, showImageInfo, viewport });
+        await flushProjects();
+        message.success("画布已保存");
+    }, [activeChatId, backgroundMode, canvasId, chatSessions, connections, currentProject, flushProjects, message, nodes, showImageInfo, updateProject, viewport]);
+
     const openEpisodeWorkbench = useCallback(() => {
         if (currentProject?.projectId && currentProject.episodeId) {
             router.push(`/projects/${currentProject.projectId}/episodes/${currentProject.episodeId}/workbench`);
@@ -994,6 +1005,7 @@ function InfiniteCanvasPage() {
         event.preventDefault();
         setContextMenu(null);
     }, []);
+    const confirmVideoPromptReviewWithTheme = useCallback((review: PromptReviewResult) => confirmVideoPromptReview(review, modal), [modal]);
 
     const { handleGenerateNode } = useCanvasGenerationFlowActions({
         assets,
@@ -1008,7 +1020,7 @@ function InfiniteCanvasPage() {
         generateImageNode,
         generateVideoNode,
         generateTextNode,
-        confirmVideoPromptReview,
+        confirmVideoPromptReview: confirmVideoPromptReviewWithTheme,
     });
 
     useCanvasGenerationQueueRunner({
@@ -1261,19 +1273,21 @@ function InfiniteCanvasPage() {
                     onHome={() => router.push("/projects")}
                     onCreateProject={createAndOpenProject}
                     onDeleteProject={deleteCurrentProject}
+                    onSaveProject={saveCurrentProject}
                     onImportImage={() => handleUploadRequest()}
                     onOpenEpisodeScript={openEpisodeWorkbench}
                     onUndo={undoCanvas}
                     onRedo={redoCanvas}
-                    assistantCollapsed={assistantCollapsed}
+                    assistantActive={assistantMounted && inspectorView === "assistant" && !isInspectorCollapsed}
                     onExpandAssistant={() => {
                         setAssistantMounted(true);
                         setAssistantCollapsed(false);
+                        setIsInspectorCollapsed(false);
                         setInspectorView("assistant");
                     }}
                 />
 
-                <CanvasProductionPackageBar packages={productionPackages} activePackageId={activeProductionPackageId} onSelect={focusProductionPackage} />
+                <CanvasProductionPackageBar packages={productionPackages} activePackageId={activeProductionPackageId} inspectorCollapsed={isInspectorCollapsed} onSelect={focusProductionPackage} />
 
                 <InfiniteCanvas
                     containerRef={containerRef}
@@ -1612,6 +1626,8 @@ function InfiniteCanvasPage() {
             <CanvasContextInspector
                 view={inspectorView}
                 onViewChange={setInspectorView}
+                collapsed={isInspectorCollapsed}
+                onCollapsedChange={setIsInspectorCollapsed}
                 title={currentProject?.title || "未命名画布"}
                 episodeLabel={canvasEpisodeLabel(currentProject)}
                 productionLabel={episodeProductionLabel}
@@ -1690,11 +1706,11 @@ function InfiniteCanvasPage() {
     );
 }
 
-function CanvasProductionPackageBar({ packages, activePackageId, onSelect }: { packages: CanvasProductionPackageSummary[]; activePackageId: string; onSelect: (productionPackage: CanvasProductionPackageSummary) => void }) {
+function CanvasProductionPackageBar({ packages, activePackageId, inspectorCollapsed, onSelect }: { packages: CanvasProductionPackageSummary[]; activePackageId: string; inspectorCollapsed: boolean; onSelect: (productionPackage: CanvasProductionPackageSummary) => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     if (!packages.length) return null;
     return (
-        <div className="pointer-events-none absolute left-4 right-[440px] top-16 z-40 flex justify-center">
+        <div className={`pointer-events-none absolute left-4 ${inspectorCollapsed ? "right-14" : "right-[440px]"} top-16 z-40 flex justify-center`}>
             <div className="pointer-events-auto flex max-w-full gap-2 overflow-x-auto rounded-xl border p-1.5 backdrop-blur-md" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }} data-canvas-no-zoom>
                 {packages.map((item) => {
                     const active = item.id === activePackageId;
@@ -1737,11 +1753,12 @@ function CanvasTopBar({
     onHome,
     onCreateProject,
     onDeleteProject,
+    onSaveProject,
     onImportImage,
     onOpenEpisodeScript,
     onUndo,
     onRedo,
-    assistantCollapsed,
+    assistantActive,
     onExpandAssistant,
 }: {
     title: string;
@@ -1761,11 +1778,12 @@ function CanvasTopBar({
     onHome: () => void;
     onCreateProject: () => void;
     onDeleteProject: () => void;
+    onSaveProject: () => void;
     onImportImage: () => void;
     onOpenEpisodeScript: () => void;
     onUndo: () => void;
     onRedo: () => void;
-    assistantCollapsed: boolean;
+    assistantActive: boolean;
     onExpandAssistant: () => void;
 }) {
     const colorTheme = useThemeStore((state) => state.theme);
@@ -1805,6 +1823,7 @@ function CanvasTopBar({
                                 { key: "projects", icon: <Home className="size-4" />, label: "项目工作台", onClick: onHome },
                                 { type: "divider" },
                                 { key: "new", icon: <Plus className="size-4" />, label: "新建画布", onClick: onCreateProject },
+                                { key: "save", icon: <Save className="size-4" />, label: "保存画布", onClick: onSaveProject },
                                 { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
                                 { type: "divider" },
                                 { key: "import", icon: <Upload className="size-4" />, label: "导入图片", onClick: onImportImage },
@@ -1871,6 +1890,7 @@ function CanvasTopBar({
                 <div className="pointer-events-auto flex items-center gap-1.5">
                     <UserStatusActions
                         variant="canvas"
+                        showConfig={false}
                         accountOpen={accountOpen}
                         onAccountOpenChange={setAccountOpen}
                         accountRef={accountRef}
@@ -1880,20 +1900,16 @@ function CanvasTopBar({
                             setAccountOpen(false);
                         }}
                     />
-                    {assistantCollapsed ? (
-                        <>
-                            <span className="h-6 w-px" style={{ background: theme.toolbar.border }} />
-                            <Button
-                                type="text"
-                                className="!h-10 !rounded-xl !px-3 !font-medium"
-                                style={{ background: theme.toolbar.panel, color: theme.node.text, boxShadow: "0 10px 30px rgba(28,25,23,.10)" }}
-                                icon={<MessageSquare className="size-4" />}
-                                onClick={onExpandAssistant}
-                            >
-                                助手
-                            </Button>
-                        </>
-                    ) : null}
+                    <span className="h-6 w-px" style={{ background: theme.toolbar.border }} />
+                    <Button
+                        type="text"
+                        className="!h-10 !rounded-xl !px-3 !font-medium"
+                        style={{ background: assistantActive ? theme.toolbar.activeBg : theme.toolbar.panel, color: assistantActive ? theme.toolbar.activeText : theme.node.text, boxShadow: "0 10px 30px rgba(28,25,23,.10)" }}
+                        icon={<MessageSquare className="size-4" />}
+                        onClick={onExpandAssistant}
+                    >
+                        助手
+                    </Button>
                 </div>
             </div>
             <Modal title="快捷键" open={shortcutsOpen} onCancel={() => setShortcutsOpen(false)} footer={null} centered>
@@ -2029,17 +2045,19 @@ function shouldRememberVideoDefaults(node: CanvasNodeData | undefined, patch: Pa
     if (node?.type !== CanvasNodeType.Config) return false;
     if (patch.generationMode === "video") return true;
     if (node.metadata?.generationMode !== "video") return false;
-    return ["provider", "model", "size", "seconds", "duration", "vquality", "generateAudio", "watermark", "seed", "returnLastFrame", "videoReferenceImageMode"].some((key) => key in patch);
+    return ["channelMode", "provider", "model", "size", "seconds", "duration", "vquality", "generateAudio", "watermark", "seed", "returnLastFrame", "videoReferenceImageMode"].some((key) => key in patch);
 }
 
-function normalizeConnection(firstNodeId: string, secondNodeId: string, nodes: CanvasNodeData[], firstHandleType: "source" | "target") {
+function normalizeConnection(firstNodeId: string, secondNodeId: string, nodes: CanvasNodeData[], firstHandleType: "source" | "target", firstHandleId?: string) {
     const first = nodes.find((node) => node.id === firstNodeId);
     const second = nodes.find((node) => node.id === secondNodeId);
     if (!first || !second || first.id === second.id) return null;
     if (first.type === CanvasNodeType.Config && second.type === CanvasNodeType.Config) return null;
+    const targetHandle = firstHandleType === "target" ? firstHandleId : undefined;
     if (second.type === CanvasNodeType.Config) return { fromNodeId: first.id, toNodeId: second.id };
-    if (first.type === CanvasNodeType.Config && firstHandleType === "target") return { fromNodeId: second.id, toNodeId: first.id };
+    if (first.type === CanvasNodeType.Config && firstHandleType === "target") return { fromNodeId: second.id, toNodeId: first.id, toHandle: targetHandle };
     if (first.type === CanvasNodeType.Config) return { fromNodeId: first.id, toNodeId: second.id };
+    if (firstHandleType === "target") return { fromNodeId: second.id, toNodeId: first.id, toHandle: targetHandle };
     return { fromNodeId: first.id, toNodeId: second.id };
 }
 
@@ -2052,9 +2070,9 @@ function getInputSummary(inputs: NodeGenerationInput[]) {
     };
 }
 
-function confirmVideoPromptReview(review: PromptReviewResult) {
+function confirmVideoPromptReview(review: PromptReviewResult, modal: AppModal) {
     return new Promise<boolean>((resolve) => {
-        Modal.confirm({
+        modal.confirm({
             title: review.level === "risk" ? "提示词自审发现高风险" : "提示词自审提醒",
             centered: true,
             okText: "仍然生成",

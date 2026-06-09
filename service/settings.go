@@ -75,6 +75,7 @@ func AdminTestChannelModel(index *int, channel model.ModelChannel, modelName str
 func normalizeSettings(settings model.Settings) model.Settings {
 	settings.Public = normalizePublicSetting(settings.Public)
 	settings.Private = normalizePrivateSetting(settings.Private)
+	settings.Public.ModelChannel = normalizePublicModelChannelWithPrivate(settings.Public.ModelChannel, settings.Private.Channels)
 	settings.Public.VolcengineAsset.Enabled = settings.Private.VolcengineAsset.Enabled
 	return settings
 }
@@ -109,12 +110,86 @@ func ModelCost(modelName string) (int, error) {
 		return 0, err
 	}
 	modelName = strings.TrimSpace(modelName)
-	for _, item := range normalizePublicSetting(settings.Public).ModelChannel.ModelCosts {
-		if item.Model == modelName {
-			return item.Credits, nil
+	public := normalizeSettings(settings).Public.ModelChannel
+	if cost, ok := modelCostByName(public.ModelCosts, modelName); ok {
+		return cost, nil
+	}
+	if strings.HasPrefix(strings.ToLower(modelName), "ep-") {
+		for _, channel := range normalizePrivateSetting(settings.Private).Channels {
+			channel = normalizeModelChannel(channel)
+			if !modelMatchesArkEndpoint(channel, modelName) {
+				continue
+			}
+			for _, candidate := range append([]string{public.DefaultVideoModel}, channel.Models...) {
+				if cost, ok := modelCostByName(public.ModelCosts, candidate); ok {
+					return cost, nil
+				}
+			}
 		}
 	}
 	return 0, nil
+}
+
+func modelCostByName(items []model.ModelCost, modelName string) (int, bool) {
+	modelName = strings.TrimSpace(modelName)
+	for _, item := range normalizePublicSetting(model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{ModelCosts: items}}).ModelChannel.ModelCosts {
+		if item.Model == modelName {
+			return item.Credits, true
+		}
+	}
+	return 0, false
+}
+
+func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetting, channels []model.ModelChannel) model.PublicModelChannelSetting {
+	endpointModels := map[string][]string{}
+	for _, channel := range channels {
+		channel = normalizeModelChannel(channel)
+		if !IsVolcengineArkProtocol(channel.Protocol) {
+			continue
+		}
+		appendEndpointModels := func(endpointID string, models []string) {
+			endpointID = strings.TrimSpace(endpointID)
+			if endpointID == "" {
+				return
+			}
+			endpointModels[endpointID] = uniqueModelNames(append(endpointModels[endpointID], models...))
+		}
+		appendEndpointModels(channel.EndpointID, channel.Models)
+		for _, item := range channel.EndpointMappings {
+			appendEndpointModels(item.EndpointID, []string{item.Model})
+		}
+	}
+	resolveModels := func(modelName string) []string {
+		modelName = strings.TrimSpace(modelName)
+		if strings.HasPrefix(strings.ToLower(modelName), "ep-") {
+			return endpointModels[modelName]
+		}
+		if modelName == "" {
+			return nil
+		}
+		return []string{modelName}
+	}
+	nextModels := []string{}
+	for _, item := range public.AvailableModels {
+		nextModels = append(nextModels, resolveModels(item)...)
+	}
+	public.AvailableModels = uniqueModelNames(nextModels)
+	nextCosts := []model.ModelCost{}
+	seenCosts := map[string]bool{}
+	for _, item := range public.ModelCosts {
+		for _, modelName := range resolveModels(item.Model) {
+			if seenCosts[modelName] {
+				continue
+			}
+			seenCosts[modelName] = true
+			nextCosts = append(nextCosts, model.ModelCost{Model: modelName, Credits: item.Credits})
+		}
+	}
+	public.ModelCosts = nextCosts
+	if models := resolveModels(public.DefaultVideoModel); len(models) > 0 {
+		public.DefaultVideoModel = models[0]
+	}
+	return public
 }
 
 func normalizePrivateSetting(setting model.PrivateSetting) model.PrivateSetting {
@@ -124,13 +199,7 @@ func normalizePrivateSetting(setting model.PrivateSetting) model.PrivateSetting 
 	setting.PromptSync = normalizePromptSyncSetting(setting.PromptSync)
 	setting.VolcengineAsset = normalizeVolcengineAssetSetting(setting.VolcengineAsset)
 	for i := range setting.Channels {
-		setting.Channels[i].Protocol = normalizeModelProtocol(setting.Channels[i].Protocol)
-		if setting.Channels[i].Models == nil {
-			setting.Channels[i].Models = []string{}
-		}
-		if setting.Channels[i].Weight <= 0 {
-			setting.Channels[i].Weight = 1
-		}
+		setting.Channels[i] = normalizeModelChannel(setting.Channels[i])
 	}
 	return setting
 }
@@ -142,6 +211,8 @@ func hidePrivateAPIKeys(settings model.Settings) model.Settings {
 		}
 	}
 	settings.Private.Auth.LinuxDo.ClientSecret = ""
+	settings.Private.VolcengineAsset.AccessKeyConfigured = strings.TrimSpace(settings.Private.VolcengineAsset.AccessKey) != ""
+	settings.Private.VolcengineAsset.SecretKeyConfigured = strings.TrimSpace(settings.Private.VolcengineAsset.SecretKey) != ""
 	settings.Private.VolcengineAsset.AccessKey = ""
 	settings.Private.VolcengineAsset.SecretKey = ""
 	return settings
@@ -180,6 +251,8 @@ func keepPrivateVolcengineAssetSecrets(settings *model.Settings, saved model.Set
 func normalizeVolcengineAssetSetting(setting model.VolcengineAssetSetting) model.VolcengineAssetSetting {
 	setting.AccessKey = strings.TrimSpace(setting.AccessKey)
 	setting.SecretKey = strings.TrimSpace(setting.SecretKey)
+	setting.AccessKeyConfigured = setting.AccessKeyConfigured || setting.AccessKey != ""
+	setting.SecretKeyConfigured = setting.SecretKeyConfigured || setting.SecretKey != ""
 	setting.ProjectName = strings.TrimSpace(setting.ProjectName)
 	if setting.ProjectName == "" {
 		setting.ProjectName = "default"
@@ -238,13 +311,95 @@ func BuildModelChannelURL(channel model.ModelChannel, path string) string {
 
 func normalizeModelChannel(channel model.ModelChannel) model.ModelChannel {
 	channel.Protocol = normalizeModelProtocol(channel.Protocol)
+	channel.EndpointID = strings.TrimSpace(channel.EndpointID)
 	if channel.Models == nil {
 		channel.Models = []string{}
 	}
+	models := make([]string, 0, len(channel.Models))
+	legacyEndpointID := ""
+	for _, item := range channel.Models {
+		modelName := strings.TrimSpace(item)
+		if modelName == "" {
+			continue
+		}
+		if strings.HasPrefix(strings.ToLower(modelName), "ep-") {
+			if legacyEndpointID == "" {
+				legacyEndpointID = modelName
+			}
+			continue
+		}
+		models = append(models, modelName)
+	}
+	if channel.EndpointID == "" {
+		channel.EndpointID = legacyEndpointID
+	}
+	if IsVolcengineArkProtocol(channel.Protocol) {
+		channel.EndpointMappings = normalizeEndpointMappings(channel.EndpointMappings, models, channel.EndpointID)
+		if len(channel.EndpointMappings) > 0 {
+			models = make([]string, 0, len(channel.EndpointMappings))
+			for _, item := range channel.EndpointMappings {
+				models = append(models, item.Model)
+			}
+			if channel.EndpointID == "" {
+				channel.EndpointID = channel.EndpointMappings[0].EndpointID
+			}
+		}
+	} else {
+		channel.EndpointID = ""
+		channel.EndpointMappings = []model.ModelEndpointMapping{}
+	}
+	channel.Models = uniqueModelNames(models)
 	if channel.Weight <= 0 {
 		channel.Weight = 1
 	}
 	return channel
+}
+
+func normalizeEndpointMappings(mappings []model.ModelEndpointMapping, fallbackModels []string, fallbackEndpointID string) []model.ModelEndpointMapping {
+	result := make([]model.ModelEndpointMapping, 0, len(mappings))
+	seen := map[string]bool{}
+	appendMapping := func(modelName string, endpointID string) {
+		modelName = strings.TrimSpace(modelName)
+		endpointID = strings.TrimSpace(endpointID)
+		if modelName == "" || endpointID == "" || seen[modelName] {
+			return
+		}
+		seen[modelName] = true
+		result = append(result, model.ModelEndpointMapping{Model: modelName, EndpointID: endpointID})
+	}
+	for _, item := range mappings {
+		appendMapping(item.Model, item.EndpointID)
+	}
+	if len(result) == 0 && strings.TrimSpace(fallbackEndpointID) != "" {
+		for _, item := range fallbackModels {
+			appendMapping(item, fallbackEndpointID)
+		}
+	}
+	return result
+}
+
+func uniqueModelNames(models []string) []string {
+	result := []string{}
+	seen := map[string]bool{}
+	for _, item := range models {
+		modelName := strings.TrimSpace(item)
+		if modelName == "" || seen[modelName] {
+			continue
+		}
+		seen[modelName] = true
+		result = append(result, modelName)
+	}
+	return result
+}
+
+func ModelChannelEndpointForModel(channel model.ModelChannel, modelName string) string {
+	channel = normalizeModelChannel(channel)
+	for _, item := range channel.EndpointMappings {
+		if strings.TrimSpace(item.Model) == strings.TrimSpace(modelName) {
+			return strings.TrimSpace(item.EndpointID)
+		}
+	}
+	return strings.TrimSpace(channel.EndpointID)
 }
 
 func IsVolcengineArkProtocol(protocol string) bool {
@@ -335,7 +490,11 @@ func testAdminChannelModel(channel model.ModelChannel, modelName string) (string
 		return "", errors.New("缺少模型名称")
 	}
 	if IsVolcengineArkProtocol(channel.Protocol) {
-		return "火山方舟协议渠道已通过基础校验", nil
+		endpointID := ModelChannelEndpointForModel(channel, modelName)
+		if endpointID == "" {
+			return "", errors.New("缺少火山 Endpoint / EP")
+		}
+		return fmt.Sprintf("本地模型 %s 将使用火山 EP %s；EP 实际绑定模型以火山后台为准", modelName, endpointID), nil
 	}
 	body, _ := json.Marshal(map[string]any{
 		"model": modelName,
@@ -415,8 +574,14 @@ func (err safeMessageError) SafeMessage() string {
 
 func modelChannelsForModel(channels []model.ModelChannel, modelName string) []model.ModelChannel {
 	result := []model.ModelChannel{}
+	modelName = strings.TrimSpace(modelName)
 	for _, channel := range channels {
+		channel = normalizeModelChannel(channel)
 		if !channel.Enabled || channel.BaseURL == "" || channel.APIKey == "" {
+			continue
+		}
+		if modelMatchesArkEndpoint(channel, modelName) {
+			result = append(result, channel)
 			continue
 		}
 		for _, item := range channel.Models {
@@ -427,4 +592,23 @@ func modelChannelsForModel(channels []model.ModelChannel, modelName string) []mo
 		}
 	}
 	return result
+}
+
+func modelMatchesArkEndpoint(channel model.ModelChannel, modelName string) bool {
+	if !IsVolcengineArkProtocol(channel.Protocol) {
+		return false
+	}
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" {
+		return false
+	}
+	if strings.TrimSpace(channel.EndpointID) == modelName {
+		return true
+	}
+	for _, item := range channel.EndpointMappings {
+		if strings.TrimSpace(item.EndpointID) == modelName {
+			return true
+		}
+	}
+	return false
 }

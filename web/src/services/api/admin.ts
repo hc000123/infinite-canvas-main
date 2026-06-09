@@ -281,10 +281,17 @@ export type AdminModelChannel = {
     name: string;
     baseUrl: string;
     apiKey: string;
+    endpointId: string;
+    endpointMappings: AdminModelEndpointMapping[];
     models: string[];
     weight: number;
     enabled: boolean;
     remark: string;
+};
+
+export type AdminModelEndpointMapping = {
+    model: string;
+    endpointId: string;
 };
 
 export type AdminPublicModelChannelSettings = {
@@ -309,6 +316,8 @@ export type AdminPrivateVolcengineAssetSettings = {
     enabled: boolean;
     accessKey: string;
     secretKey: string;
+    accessKeyConfigured: boolean;
+    secretKeyConfigured: boolean;
     projectName: string;
     region: string;
     assetGroupId: string;

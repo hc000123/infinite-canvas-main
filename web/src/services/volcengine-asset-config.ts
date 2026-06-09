@@ -5,7 +5,7 @@ export type VolcengineAssetConfigSummaryInput = {
     assetGroupId?: string;
 };
 
-export const VOLCENGINE_ASSET_CONFIG_NOTICE = "加白配置不同于 Seedance 生成渠道，填一次即可；本地直连/云端渠道只影响视频生成 Key。";
+export const VOLCENGINE_ASSET_CONFIG_NOTICE = "加白配置不同于 Seedance 视频生成渠道，填一次即可；视频生成渠道不影响素材加白配置。";
 
 export function summarizeVolcengineAssetConfig(setting?: VolcengineAssetConfigSummaryInput, options: { showDetails?: boolean } = {}) {
     const showDetails = options.showDetails !== false && Boolean(setting);

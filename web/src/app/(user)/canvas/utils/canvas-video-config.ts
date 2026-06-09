@@ -1,9 +1,11 @@
-import type { AiConfig } from "@/stores/use-config-store";
+import { resolveEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import type { AdminPublicSettings } from "@/services/api/admin";
 import { normalizeSeedanceImageRoleMode } from "../../../../services/api/video-reference.ts";
 import type { CanvasNodeMetadata } from "../types";
 
 export type CanvasVideoProvider = AiConfig["videoProtocol"];
 type CanvasVideoDefaultKey =
+    | "channelMode"
     | "videoProtocol"
     | "videoModel"
     | "seedanceModel"
@@ -19,11 +21,13 @@ type CanvasVideoDefaultKey =
     | "videoReferenceImageMode";
 
 export function buildCanvasVideoConfig(config: AiConfig, metadata?: CanvasNodeMetadata): AiConfig {
-    const provider = resolveCanvasVideoProvider(config, metadata);
-    const model = resolveCanvasVideoModel(config, provider, metadata);
+    const channelMode = metadata?.channelMode || config.channelMode;
+    const provider = resolveCanvasVideoProvider({ ...config, channelMode }, metadata);
+    const model = resolveCanvasVideoModel({ ...config, channelMode }, provider, metadata);
     const seconds = normalizeCanvasVideoSeconds(metadata?.seconds || metadata?.duration || config.videoSeconds, provider);
     return {
         ...config,
+        channelMode,
         videoProtocol: provider,
         model,
         videoModel: provider === "openai" ? model : config.videoModel,
@@ -31,7 +35,7 @@ export function buildCanvasVideoConfig(config: AiConfig, metadata?: CanvasNodeMe
         size: metadata?.size || config.size,
         videoSeconds: seconds,
         vquality: metadata?.vquality || config.vquality,
-        videoGenerateAudio: metadata?.generateAudio || "false",
+        videoGenerateAudio: metadata?.generateAudio || config.videoGenerateAudio || "true",
         videoWatermark: metadata?.watermark || config.videoWatermark,
         videoSeed: metadata?.seed || config.videoSeed,
         videoPromptReviewEnabled: metadata?.videoPromptReviewEnabled || config.videoPromptReviewEnabled || "true",
@@ -51,18 +55,34 @@ export function buildCanvasVideoProviderPatch(config: AiConfig, provider: Canvas
     };
 }
 
+export function resolveCanvasVideoChannelConfig(localConfig: AiConfig, effectiveConfig: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null | undefined, channelMode?: AiConfig["channelMode"]) {
+    if (channelMode === "local") return { ...localConfig, channelMode: "local" as const, videoProtocol: "openai" as const };
+    if (channelMode === "remote") return resolveEffectiveConfig({ ...localConfig, channelMode: "remote" }, modelChannel || null);
+    return effectiveConfig.channelMode === "local" ? localConfig : effectiveConfig;
+}
+
+export function buildCanvasVideoChannelPatch(config: AiConfig): Pick<CanvasNodeMetadata, "channelMode" | "provider" | "model"> {
+    const provider = resolveCanvasVideoProvider(config);
+    return {
+        channelMode: config.channelMode,
+        provider,
+        model: resolveCanvasVideoModel(config, provider),
+    };
+}
+
 export function buildCanvasVideoModePatch(config: AiConfig): Partial<CanvasNodeMetadata> {
     const provider = resolveCanvasVideoProvider(config);
     const seconds = normalizeCanvasVideoSeconds(config.videoSeconds, provider);
     return {
         generationMode: "video",
+        channelMode: config.channelMode,
         provider,
         model: resolveCanvasVideoModel(config, provider),
         size: config.size,
         seconds,
         duration: seconds,
         vquality: config.vquality,
-        generateAudio: "false",
+        generateAudio: config.videoGenerateAudio || "true",
         watermark: config.videoWatermark,
         seed: config.videoSeed,
         videoPromptReviewEnabled: config.videoPromptReviewEnabled || "true",
@@ -75,15 +95,16 @@ export function buildCanvasVideoModePatch(config: AiConfig): Partial<CanvasNodeM
 }
 
 export function buildCanvasVideoDefaultsPatch(config: AiConfig, metadata: Partial<CanvasNodeMetadata>) {
-    const provider = config.channelMode === "local" ? "openai" : metadata.provider || config.videoProtocol || "openai";
+    const channelMode = metadata.channelMode || config.channelMode;
+    const provider = channelMode === "local" ? "openai" : metadata.provider || config.videoProtocol || "openai";
     const patch: Partial<Pick<AiConfig, CanvasVideoDefaultKey>> = {};
-    if (metadata.provider && config.channelMode !== "local") patch.videoProtocol = metadata.provider;
+    if (metadata.channelMode) patch.channelMode = metadata.channelMode;
+    if (metadata.provider && channelMode !== "local") patch.videoProtocol = metadata.provider;
     if (metadata.model) {
         if (provider === "volcengine-ark") {
-            if (metadata.model.toLowerCase().startsWith("ep-")) patch.seedanceEndpointId = metadata.model;
-            else patch.seedanceModel = metadata.model;
+            if (!isSeedanceEndpointModel(metadata.model)) patch.seedanceModel = metadata.model;
         } else {
-            patch.videoModel = metadata.model;
+            if (channelMode !== "remote" || isVideoModelName(metadata.model)) patch.videoModel = metadata.model;
         }
     }
     if (metadata.size) patch.size = metadata.size;
@@ -100,11 +121,24 @@ export function buildCanvasVideoDefaultsPatch(config: AiConfig, metadata: Partia
 
 function resolveCanvasVideoProvider(config: AiConfig, metadata?: CanvasNodeMetadata): CanvasVideoProvider {
     if (config.channelMode === "local") return "openai";
+    const metadataModel = metadata?.model?.trim() || "";
+    if (metadataModel && !isSeedanceEndpointModel(metadataModel) && !isVideoModelName(metadataModel)) return config.videoProtocol || "openai";
     return metadata?.provider || config.videoProtocol || "openai";
 }
 
 function resolveCanvasVideoModel(config: AiConfig, provider: CanvasVideoProvider, metadata?: CanvasNodeMetadata) {
-    return metadata?.model?.trim() || (provider === "volcengine-ark" ? config.seedanceEndpointId || config.seedanceModel : config.videoModel) || config.model;
+    const metadataModel = metadata?.model?.trim() || "";
+    if (metadataModel && !(provider === "volcengine-ark" && isSeedanceEndpointModel(metadataModel)) && (config.channelMode !== "remote" || isVideoModelName(metadataModel))) return metadataModel;
+    return (provider === "volcengine-ark" ? config.seedanceModel : config.videoModel) || config.model;
+}
+
+function isSeedanceEndpointModel(model?: string) {
+    return model?.trim().toLowerCase().startsWith("ep-") || false;
+}
+
+function isVideoModelName(model?: string) {
+    const name = model?.trim().toLowerCase() || "";
+    return ["seedance", "video", "veo", "sora", "kling", "hailuo", "runway", "wan"].some((keyword) => name.includes(keyword));
 }
 
 function normalizeCanvasVideoSeconds(value: string, provider: CanvasVideoProvider) {

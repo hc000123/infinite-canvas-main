@@ -108,7 +108,7 @@ test("filters assets by kind, folder, project references and keyword", () => {
             projectReferencedAssetIds: new Set(["asset-b"]),
             searchText,
         }).map((asset) => asset.id),
-        ["asset-a", "asset-b"],
+        ["asset-a", "asset-b", "asset-c"],
     );
 });
 
@@ -150,7 +150,7 @@ test("filters project context assets by shared project library membership", () =
             projectReferencedAssetIds: new Set(),
             searchText: (asset) => asset.title,
         }).map((asset) => asset.id),
-        ["manual-shared", "generated"],
+        ["manual-shared", "generated", "other"],
     );
     assert.deepEqual(
         filterAssetList(assets, {
@@ -176,7 +176,7 @@ test("filters project context assets by shared project library membership", () =
             projectReferencedAssetIds: new Set(),
             searchText: (asset) => asset.title,
         }).map((asset) => asset.id),
-        ["generated"],
+        ["generated", "other"],
     );
 });
 

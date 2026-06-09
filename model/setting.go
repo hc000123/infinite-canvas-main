@@ -18,14 +18,21 @@ const (
 
 // ModelChannel 模型渠道配置。
 type ModelChannel struct {
-	Protocol string   `json:"protocol"`
-	Name     string   `json:"name"`
-	BaseURL  string   `json:"baseUrl"`
-	APIKey   string   `json:"apiKey"`
-	Models   []string `json:"models"`
-	Weight   int      `json:"weight"`
-	Enabled  bool     `json:"enabled"`
-	Remark   string   `json:"remark"`
+	Protocol         string                 `json:"protocol"`
+	Name             string                 `json:"name"`
+	BaseURL          string                 `json:"baseUrl"`
+	APIKey           string                 `json:"apiKey"`
+	EndpointID       string                 `json:"endpointId"`
+	EndpointMappings []ModelEndpointMapping `json:"endpointMappings"`
+	Models           []string               `json:"models"`
+	Weight           int                    `json:"weight"`
+	Enabled          bool                   `json:"enabled"`
+	Remark           string                 `json:"remark"`
+}
+
+type ModelEndpointMapping struct {
+	Model      string `json:"model"`
+	EndpointID string `json:"endpointId"`
 }
 
 // ModelCost 模型算力点配置。
@@ -67,13 +74,15 @@ type PublicVolcengineAssetSetting struct {
 }
 
 type VolcengineAssetSetting struct {
-	Enabled            bool   `json:"enabled"`
-	AccessKey          string `json:"accessKey"`
-	SecretKey          string `json:"secretKey"`
-	ProjectName        string `json:"projectName"`
-	Region             string `json:"region"`
-	AssetGroupID       string `json:"assetGroupId"`
-	PublicAssetBaseURL string `json:"publicAssetBaseUrl"`
+	Enabled             bool   `json:"enabled"`
+	AccessKey           string `json:"accessKey"`
+	SecretKey           string `json:"secretKey"`
+	AccessKeyConfigured bool   `json:"accessKeyConfigured"`
+	SecretKeyConfigured bool   `json:"secretKeyConfigured"`
+	ProjectName         string `json:"projectName"`
+	Region              string `json:"region"`
+	AssetGroupID        string `json:"assetGroupId"`
+	PublicAssetBaseURL  string `json:"publicAssetBaseUrl"`
 }
 
 // PrivateSetting 私有配置。

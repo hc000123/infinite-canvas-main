@@ -6,13 +6,15 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AudioLines, Edit3, Eye, Imag
 import { App, Button, Empty, Input, Modal, Segmented } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
+import { inferRemoteVideoProtocol } from "@/services/api/ai-channel-boundary";
 import { defaultConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { defaultSeedanceImageRole, normalizeSeedanceImageRole, seedanceReferenceLabel, seedanceReferenceLabelRange } from "@/services/api/video-reference";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { buildCanvasVideoConfig, buildCanvasVideoModePatch } from "../utils/canvas-video-config";
+import { buildCanvasVideoChannelPatch, buildCanvasVideoConfig, buildCanvasVideoModePatch, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
+import { CanvasVideoChannelPicker } from "./canvas-video-channel-picker";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import type { NodeGenerationInput } from "./canvas-node-generation";
 import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata } from "../types";
@@ -35,14 +37,16 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
     const [editingText, setEditingText] = useState("");
     const localConfig = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
+    const publicSettings = useConfigStore((state) => state.publicSettings);
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const mode = node.metadata?.generationMode || "image";
-    const globalConfig = effectiveConfig.channelMode === "local" ? localConfig : effectiveConfig;
+    const allowCustomChannel = publicSettings?.modelChannel?.allowCustomChannel !== false;
+    const globalConfig = resolveCanvasVideoChannelConfig(localConfig, effectiveConfig, publicSettings?.modelChannel, mode === "video" ? node.metadata?.channelMode : undefined);
     const config = buildNodeConfig(globalConfig, node, mode);
     const count = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(node.metadata?.count || 3)) || 1)));
-    const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, count: mode === "image" ? count : 1 });
+    const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "image" ? count : 1 });
     const chipStyle = { background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text };
     const textInputs = inputs.filter((input) => input.type === "text");
     const imageInputs = inputs.filter((input) => input.type === "image");
@@ -155,17 +159,28 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
                 </button>
             </div>
 
-            <div className={`mb-2 grid min-w-0 cursor-default items-center gap-2 ${mode === "text" ? "grid-cols-1" : "grid-cols-[minmax(0,1fr)_148px]"}`} onMouseDown={(event) => event.stopPropagation()}>
-                <ModelPicker className="canvas-compact-control h-10" config={config} modelType={mode} value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} fullWidth />
-                {mode === "video" ? (
-                    <CanvasVideoSettingsPopover
-                        config={config}
-                        placement="topRight"
-                        showTaskMode
-                        hasSourceVideo={hasSourceVideo}
-                        buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2"
-                        onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))}
+            <div className={`mb-2 grid min-w-0 cursor-default items-center gap-2 ${mode === "text" ? "grid-cols-1" : mode === "video" && allowCustomChannel ? "grid-cols-[88px_minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)_148px]"}`} onMouseDown={(event) => event.stopPropagation()}>
+                {mode === "video" && allowCustomChannel ? (
+                    <CanvasVideoChannelPicker
+                        className="!rounded-lg"
+                        value={config.channelMode}
+                        disabled={isRunning}
+                        onChange={(channelMode) => onConfigChange(node.id, buildCanvasVideoChannelPatch(resolveCanvasVideoChannelConfig(localConfig, effectiveConfig, publicSettings?.modelChannel, channelMode)))}
                     />
+                ) : null}
+                <ModelPicker className="canvas-compact-control h-10" config={config} modelType={mode} value={config.model} onChange={(model) => onConfigChange(node.id, mode === "video" ? videoModelPatch(config, model) : { model })} onMissingConfig={() => openConfigDialog(true)} fullWidth />
+                {mode === "video" ? (
+                    <div className={allowCustomChannel ? "col-span-2" : ""}>
+                        <CanvasVideoSettingsPopover
+                            config={config}
+                            placement="topRight"
+                            showTaskMode
+                            hasSourceVideo={hasSourceVideo}
+                            disabled={isRunning}
+                            buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2"
+                            onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))}
+                        />
+                    </div>
                 ) : mode === "image" ? (
                     <CanvasImageSettingsPopover
                         config={config}
@@ -547,4 +562,11 @@ function videoConfigPatch(key: keyof AiConfig, value: string): Partial<CanvasNod
     if (key === "videoPromptReviewEnabled") return { videoPromptReviewEnabled: value };
     if (key === "videoReferenceImageMode") return { videoReferenceImageMode: value as CanvasNodeMetadata["videoReferenceImageMode"] };
     return { [key]: value } as Partial<CanvasNodeMetadata>;
+}
+
+function videoModelPatch(config: AiConfig, model: string): Partial<CanvasNodeMetadata> {
+    return {
+        model,
+        provider: config.channelMode === "local" ? "openai" : inferRemoteVideoProtocol(model, "openai"),
+    };
 }

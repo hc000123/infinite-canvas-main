@@ -3,13 +3,11 @@ import axios from "axios";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { imageToDataUrl } from "@/services/image-storage";
 import { resolveMediaUrl } from "@/services/file-storage";
-import { shouldAttachLocalVolcengineCredentials } from "@/services/api/ai-channel-boundary";
 import { AI_REQUEST_TIMEOUT_MS, AI_VIDEO_CONTENT_TIMEOUT_MS, AI_VIDEO_MAX_POLL_ATTEMPTS, AI_VIDEO_POLL_INTERVAL_MS, aiApiUrl, aiHeaders, delay, normalizeAiError, refreshRemoteUser } from "@/services/api/ai-provider";
 import { isRemoteOrInlineMediaUrl, normalizeSeedanceRatio, normalizeSeedanceResolution, normalizeSeedanceSeed, normalizeVideoResolution, normalizeVideoSeconds, normalizeVideoSize } from "@/services/api/video-normalizers";
 import { buildSeedanceVideoTaskPayload, seedanceAssetURIFromImageReference, seedanceAssetURIFromVideoReference, type SeedanceImageReferenceInput, type SeedanceOrderedReferenceInput } from "@/services/api/video-reference";
 import { aiTaskTraceHeaders, readAiTaskLedgerFromHeaders, type AiTaskLedger, type AiTaskTrace } from "@/services/api/ai-task-trace";
 import { type AiConfig } from "@/stores/use-config-store";
-import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio } from "@/types/audio";
 import type { ReferenceVideo } from "@/types/video";
@@ -160,7 +158,11 @@ async function requestOpenAICompatibleVideoGeneration(config: AiConfig, prompt: 
     const model = config.model || config.videoModel;
     const normalizedReferences = normalizeVideoGenerationReferences(references);
     try {
-        const task = await pollVideoTask(await createVideoTask(config, prompt, normalizedReferences, model, options.trace), (taskId) => queryVideoTask(config, taskId, model), options);
+        assertVideoConfigReady(config, model);
+        const initialTask = await createVideoTask(config, prompt, normalizedReferences, model, options.trace).catch((error) => {
+            throw new Error(normalizeAiError(error, "视频任务创建失败"));
+        });
+        const task = await pollVideoTask(initialTask, (taskId) => queryVideoTask(config, taskId, model), options);
         const blob = await fetchVideoContent(config, model, task).catch((error) => {
             if (isTransientVideoRequestError(error)) throw new RecoverableVideoTaskError("网络中断，视频已生成，恢复连接后会继续回填。", task, error);
             throw error;
@@ -174,15 +176,18 @@ async function requestOpenAICompatibleVideoGeneration(config: AiConfig, prompt: 
     }
 }
 
+function assertVideoConfigReady(config: AiConfig, model: string) {
+    if (!model.trim()) throw new Error("视频模型未配置，请先选择视频模型");
+    if (config.channelMode === "remote") return;
+    if (!config.baseUrl.trim()) throw new Error("本地直连 Base URL 未配置，请先在 AI 配置中填写");
+    if (!config.apiKey.trim()) throw new Error("本地直连 API Key 未配置，请先在 AI 配置中填写");
+}
+
 async function createVideoTask(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string, trace?: AiTaskTrace) {
     const body = await buildVideoPayload(config, prompt, references, model);
-    const url = config.channelMode === "local" ? `/api/v1/videos` : aiApiUrl(config, "/videos");
-    const localToken = useUserStore.getState().token;
+    const url = aiApiUrl(config, "/videos");
     const response = await axios.post<ApiVideoResponse>(url, body, {
-        headers:
-            config.channelMode === "local"
-                ? { Authorization: `Bearer ${localToken}`, ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }) }
-                : { ...aiHeaders(config), ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...aiTaskTraceHeaders(config, trace) },
+        headers: { ...aiHeaders(config), ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...(config.channelMode === "remote" ? aiTaskTraceHeaders(config, trace) : {}) },
         timeout: AI_REQUEST_TIMEOUT_MS,
     });
     const task = mergeVideoTaskLedger(normalizeVideoTask(unwrapVideoResponse(response.data)), readAiTaskLedgerFromHeaders(response.headers));
@@ -191,14 +196,13 @@ async function createVideoTask(config: AiConfig, prompt: string, references: Nor
 }
 
 async function queryVideoTask(config: AiConfig, taskId: string, model: string) {
-    const url = config.channelMode === "local" ? `/api/v1/videos/${taskId}` : aiApiUrl(config, `/videos/${taskId}`);
+    const url = aiApiUrl(config, `/videos/${taskId}`);
     const params: Record<string, string> = {};
     if (config.channelMode === "remote") {
         params.model = model;
     }
-    const localToken = useUserStore.getState().token;
     const response = await axios.get<ApiVideoResponse>(url, {
-        headers: config.channelMode === "local" ? localVideoHeaders(config, localToken) : aiHeaders(config),
+        headers: aiHeaders(config),
         params,
         timeout: AI_REQUEST_TIMEOUT_MS,
     });
@@ -370,20 +374,7 @@ function blobToDataUrl(blob: Blob) {
 }
 
 async function fetchVideoContent(config: AiConfig, model: string, task: NormalizedVideoTask) {
-    if (config.channelMode === "local" && task.videoUrl) {
-        return fetchVideoViaProxy(config, task.id);
-    }
     return fetchVideoContentDirect(config, model, task.id);
-}
-
-async function fetchVideoViaProxy(config: AiConfig, taskId: string) {
-    const localToken = useUserStore.getState().token;
-    const content = await axios.get<Blob>(`/api/v1/videos/${taskId}/content`, {
-        headers: localVideoHeaders(config, localToken),
-        responseType: "blob",
-        timeout: AI_VIDEO_CONTENT_TIMEOUT_MS,
-    });
-    return content.data;
 }
 
 async function fetchVideoContentDirect(config: AiConfig, model: string, taskId: string) {
@@ -394,18 +385,6 @@ async function fetchVideoContentDirect(config: AiConfig, model: string, taskId: 
         timeout: AI_VIDEO_CONTENT_TIMEOUT_MS,
     });
     return content.data;
-}
-
-export function localVideoHeaders(config: AiConfig, token: string) {
-    return {
-        Authorization: `Bearer ${token}`,
-        ...(shouldAttachLocalVolcengineCredentials(config.channelMode, config.videoProtocol)
-            ? {
-                  "X-Volcengine-Api-Key": config.volcengineApiKey,
-                  "X-Volcengine-Base-Url": config.volcengineBaseUrl,
-              }
-            : {}),
-    };
 }
 
 function unwrapVideoResponse(payload: ApiVideoResponse): VideoResponse {

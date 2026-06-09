@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { AppTopNav } from "@/components/layout/app-top-nav";
 import { ProjectWorkspaceShell } from "./projects/project-workspace-shell";
 
-const workspaceShellPaths = ["/image", "/video", "/prompts", "/assets"];
+const workspaceShellPaths = ["/canvas", "/image", "/video", "/prompts", "/assets"];
 
 export default function UserLayout({ children }: { children: ReactNode }) {
     const pathname = usePathname();

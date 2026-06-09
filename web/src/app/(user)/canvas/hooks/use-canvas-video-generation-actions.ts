@@ -43,6 +43,7 @@ type UseCanvasVideoGenerationActionsOptions = {
 type GenerateVideoNodeInput = {
     nodeId: string;
     sourceNode?: CanvasNodeData;
+    sourceConnections: CanvasConnection[];
     effectivePrompt: string;
     generationConfig: AiConfig;
     videoPlan: VideoGenerationPlan;
@@ -64,7 +65,7 @@ export function useCanvasVideoGenerationActions({
     archiveGeneratedAsset,
 }: UseCanvasVideoGenerationActionsOptions) {
     const generateVideoNode = useCallback(
-        async ({ nodeId, sourceNode, effectivePrompt, generationConfig, videoPlan, setPendingChildIds }: GenerateVideoNodeInput) => {
+        async ({ nodeId, sourceNode, sourceConnections, effectivePrompt, generationConfig, videoPlan, setPendingChildIds }: GenerateVideoNodeInput) => {
             if (videoPlan.sourceVideoRequiredError) {
                 const errorDetails = videoPlan.sourceVideoRequiredError;
                 const failedAt = Date.now();
@@ -80,7 +81,8 @@ export function useCanvasVideoGenerationActions({
                 return { pendingChildIds: [], ok: false, errorDetails };
             }
 
-            const spec = nodeSizeFromRatio(generationConfig.size, NODE_DEFAULT_SIZE[CanvasNodeType.Video].width, NODE_DEFAULT_SIZE[CanvasNodeType.Video].height) || NODE_DEFAULT_SIZE[CanvasNodeType.Video];
+            const resultSpec = nodeSizeFromRatio(generationConfig.size, NODE_DEFAULT_SIZE[CanvasNodeType.Video].width, NODE_DEFAULT_SIZE[CanvasNodeType.Video].height) || NODE_DEFAULT_SIZE[CanvasNodeType.Video];
+            const pendingSpec = NODE_DEFAULT_SIZE[CanvasNodeType.Video];
             const generationStartedAt = Date.now();
             const createdAt = new Date(generationStartedAt).toISOString();
             const generationMetadata = {
@@ -97,11 +99,12 @@ export function useCanvasVideoGenerationActions({
                 productionPackageTitle: sourceNode?.metadata?.productionPackageTitle,
                 ...buildNextProductionVideoVersionMetadata(getNodes(), sourceNode, createdAt),
             };
-            const { videoId, videoNode, isEmptyVideoNode, connection } = createVideoGenerationNode({
+            const { videoId, videoNode, isEmptyVideoNode, connections } = createVideoGenerationNode({
                 nodeId,
                 sourceNode,
+                sourceConnections,
                 prompt: effectivePrompt,
-                spec,
+                spec: pendingSpec,
                 metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, generationStartedAt, ...generationMetadata },
             });
             useStoryboardStore.getState().markShotGenerating({ storyboardShotId: generationMetadata.storyboardShotId, nodeId: videoId });
@@ -110,7 +113,7 @@ export function useCanvasVideoGenerationActions({
             setNodes((prev) =>
                 isEmptyVideoNode ? prev.map((node) => (node.id === nodeId ? { ...node, ...videoNode } : node)) : [...prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), videoNode],
             );
-            if (connection) setConnections((prev) => [...prev, connection]);
+            if (connections.length) setConnections((prev) => [...prev, ...connections]);
 
             try {
                 const trace = buildCanvasAiTaskTrace({ projectId, canvasId, nodeId: videoId, metadata: generationMetadata });
@@ -126,7 +129,7 @@ export function useCanvasVideoGenerationActions({
                     trace,
                 );
                 const cachedVideo = await cacheUploadedCanvasMedia(video, `${videoId}.mp4`);
-                const videoSize = fitNodeSize(video.width || spec.width, video.height || spec.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
+                const videoSize = fitNodeSize(video.width || resultSpec.width, video.height || resultSpec.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
                 const finalVideoNode = buildCompletedVideoNode({
                     videoNode,
                     videoSize,
@@ -170,9 +173,6 @@ export function useCanvasVideoGenerationActions({
                 const latestTaskId = useStoryboardStore.getState().shots.find((shot) => shot.id === generationMetadata.storyboardShotId)?.lastTaskId;
                 useStoryboardStore.getState().markShotFailed({ storyboardShotId: generationMetadata.storyboardShotId, nodeId: videoId, taskId: latestTaskId, errorMessage });
                 useStoryboardStore.getState().markShotGroupFailed({ shotGroupId: generationMetadata.shotGroupId, taskId: latestTaskId, errorMessage });
-                if (connection) {
-                    setConnections((prev) => prev.filter((item) => item.id !== connection.id));
-                }
                 throw new Error(errorMessage);
             }
         },

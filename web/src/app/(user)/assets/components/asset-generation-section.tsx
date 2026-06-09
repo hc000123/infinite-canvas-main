@@ -23,10 +23,12 @@ export function AssetGenerationSection({ asset }: { asset: Asset }) {
     if (asset.kind !== "image" && asset.kind !== "video") return null;
     const generations = assetGenerationRecords(asset);
     return (
-        <section className="rounded-lg border border-stone-200 p-4 dark:border-stone-800">
+        <section className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
             <div className="flex items-center justify-between gap-3">
-                <Typography.Text strong>生成信息</Typography.Text>
-                {generations.length ? <Tag className="m-0">{generations.length} 条记录</Tag> : null}
+                <Typography.Text strong className="!text-[var(--studio-text-primary)]">
+                    生成信息
+                </Typography.Text>
+                {generations.length ? <Tag className="studio-tag">{generations.length} 条记录</Tag> : null}
             </div>
             {!generations.length ? (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无生成信息" className="!my-4" />
@@ -71,15 +73,15 @@ function GenerationCard({ generation, index, copyText }: { generation: AssetGene
     }, [aiTaskId]);
 
     return (
-        <div className="rounded-md bg-stone-50 p-3 text-sm dark:bg-stone-900/70">
+        <div className="rounded-md bg-[var(--studio-elevated-bg)] p-3 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <Space size={[4, 4]} wrap>
-                    <Tag className="m-0">{assetGenerationSourceLabel(readString(generation.source))}</Tag>
-                    <Tag className="m-0">{assetGenerationActionLabel(readString(generation.actionType))}</Tag>
-                    {readString(generation.provider) ? <Tag className="m-0">{readString(generation.provider)}</Tag> : null}
-                    {readString(generation.model) ? <Tag className="m-0">{readString(generation.model)}</Tag> : null}
+                    <Tag className="studio-tag">{assetGenerationSourceLabel(readString(generation.source))}</Tag>
+                    <Tag className="studio-tag">{assetGenerationActionLabel(readString(generation.actionType))}</Tag>
+                    {readString(generation.provider) ? <Tag className="studio-tag">{readString(generation.provider)}</Tag> : null}
+                    {readString(generation.model) ? <Tag className="studio-tag">{readString(generation.model)}</Tag> : null}
                 </Space>
-                <Typography.Text type="secondary" className="text-xs">
+                <Typography.Text className="text-sm !text-[var(--studio-text-muted)]">
                     #{index + 1}
                 </Typography.Text>
             </div>
@@ -111,14 +113,14 @@ function GenerationCard({ generation, index, copyText }: { generation: AssetGene
             {config ? (
                 <div className="mt-3">
                     <div className="mb-1 flex items-center justify-between gap-2">
-                        <Typography.Text type="secondary" className="text-xs">
+                        <Typography.Text className="text-sm !text-[var(--studio-text-secondary)]">
                             生成参数
                         </Typography.Text>
-                        <Button size="small" type="text" icon={<Copy className="size-3.5" />} onClick={() => copyText(JSON.stringify(config, null, 2), "生成参数已复制")}>
+                        <Button size="middle" type="text" icon={<Copy className="size-3.5" />} onClick={() => copyText(JSON.stringify(config, null, 2), "生成参数已复制")}>
                             复制 JSON
                         </Button>
                     </div>
-                    <pre className="max-h-44 overflow-auto rounded-md bg-background p-3 text-xs leading-5 text-stone-700 dark:text-stone-200">{JSON.stringify(config, null, 2)}</pre>
+                    <pre className="max-h-44 overflow-auto rounded-md bg-[var(--studio-panel-bg)] p-3 text-xs leading-5 text-[var(--studio-text-secondary)]">{JSON.stringify(config, null, 2)}</pre>
                 </div>
             ) : null}
         </div>
@@ -128,32 +130,32 @@ function GenerationCard({ generation, index, copyText }: { generation: AssetGene
 function AssetVersionList({ versions }: { versions: AssetGenerationVersionRecord[] }) {
     if (!versions.length) return null;
     return (
-        <div className="rounded-md bg-stone-50 p-3 dark:bg-stone-900/70">
+        <div className="rounded-md bg-[var(--studio-elevated-bg)] p-3">
             <div className="flex items-center justify-between gap-2">
-                <Typography.Text type="secondary" className="text-xs">
+                <Typography.Text className="text-sm !text-[var(--studio-text-secondary)]">
                     版本预留
                 </Typography.Text>
-                <Typography.Text type="secondary" className="text-xs">
+                <Typography.Text className="text-sm !text-[var(--studio-text-muted)]">
                     基于现有生成记录推导
                 </Typography.Text>
             </div>
             <div className="mt-2 space-y-1.5">
                 {versions.map((version) => (
-                    <div key={version.id} className="flex flex-wrap items-center gap-2 rounded-md bg-background px-3 py-2 text-xs">
-                        <Tag className="m-0" color={version.isLatest ? "blue" : undefined}>
+                    <div key={version.id} className="flex flex-wrap items-center gap-2 rounded-md bg-[var(--studio-panel-bg)] px-3 py-2 text-sm">
+                        <Tag className="studio-tag">
                             {version.isLatest ? "当前版本" : "历史版本"}
                         </Tag>
-                        <Typography.Text className="text-xs">{version.label}</Typography.Text>
-                        <Typography.Text type="secondary" className="text-xs">
+                        <Typography.Text className="text-sm !text-[var(--studio-text-primary)]">{version.label}</Typography.Text>
+                        <Typography.Text className="text-sm !text-[var(--studio-text-secondary)]">
                             {version.actionLabel}
                         </Typography.Text>
                         {version.modelProvider ? (
-                            <Typography.Text type="secondary" className="break-all text-xs">
+                            <Typography.Text className="break-all text-sm !text-[var(--studio-text-muted)]">
                                 {version.modelProvider}
                             </Typography.Text>
                         ) : null}
                         {version.taskId ? (
-                            <Typography.Text type="secondary" className="break-all text-xs">
+                            <Typography.Text className="break-all text-sm !text-[var(--studio-text-muted)]">
                                 task: {version.taskId}
                             </Typography.Text>
                         ) : null}
@@ -168,12 +170,12 @@ function SourceLineage({ items }: { items: ReturnType<typeof assetGenerationLine
     if (!items.length) return null;
     return (
         <div className="mt-3">
-            <Typography.Text type="secondary" className="block text-xs">
+            <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">
                 来源链路
             </Typography.Text>
             <div className="mt-2 flex flex-wrap gap-1.5">
                 {items.map((item) => (
-                    <Tag key={item.key} className="m-0 max-w-full whitespace-normal break-all">
+                    <Tag key={item.key} className="studio-tag max-w-full whitespace-normal break-all">
                         {item.label}: {item.value}
                     </Tag>
                 ))}
@@ -189,10 +191,10 @@ function InfoGrid({ items }: { items: Array<[string, string]> }) {
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {visible.map(([label, value]) => (
                 <div key={label} className="min-w-0">
-                    <Typography.Text type="secondary" className="block text-xs">
+                    <Typography.Text className="block text-sm !text-[var(--studio-text-muted)]">
                         {label}
                     </Typography.Text>
-                    <Typography.Text className="block break-words text-xs">{value}</Typography.Text>
+                    <Typography.Text className="block break-words text-sm !text-[var(--studio-text-primary)]">{value}</Typography.Text>
                 </div>
             ))}
         </div>
@@ -204,14 +206,14 @@ function PromptBlock({ title, text, onCopy }: { title: string; text: string; onC
     return (
         <div className="mt-3">
             <div className="mb-1 flex items-center justify-between gap-2">
-                <Typography.Text type="secondary" className="text-xs">
+                <Typography.Text className="text-sm font-medium !text-[var(--studio-text-secondary)]">
                     {title}
                 </Typography.Text>
-                <Button size="small" type="text" icon={<Copy className="size-3.5" />} onClick={onCopy}>
+                <Button size="middle" type="text" icon={<Copy className="size-3.5" />} onClick={onCopy}>
                     复制
                 </Button>
             </div>
-            <Typography.Paragraph className="!mb-0 max-h-32 overflow-auto whitespace-pre-wrap rounded-md bg-background p-3 !text-xs !leading-5">{text}</Typography.Paragraph>
+            <Typography.Paragraph className="!mb-0 max-h-32 overflow-auto whitespace-pre-wrap rounded-md bg-[var(--studio-panel-bg)] p-3 !text-sm !leading-6 !text-[var(--studio-text-primary)]">{text}</Typography.Paragraph>
         </div>
     );
 }
@@ -221,13 +223,13 @@ function ReferenceList({ references }: { references: unknown }) {
     if (!items.length) return null;
     return (
         <div className="mt-3">
-            <Typography.Text type="secondary" className="block text-xs">
+            <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">
                 引用素材
             </Typography.Text>
             <div className="mt-2 space-y-1.5">
                 {items.map((item, index) => (
-                    <div key={`${item.kind}-${index}`} className="rounded-md bg-background px-3 py-2 text-xs">
-                        <Tag className="m-0 mr-2">{referenceKindLabel(item.kind)}</Tag>
+                    <div key={`${item.kind}-${index}`} className="rounded-md bg-[var(--studio-panel-bg)] px-3 py-2 text-sm text-[var(--studio-text-secondary)]">
+                        <Tag className="studio-tag mr-2">{referenceKindLabel(item.kind)}</Tag>
                         <span className="break-words">{item.text}</span>
                     </div>
                 ))}

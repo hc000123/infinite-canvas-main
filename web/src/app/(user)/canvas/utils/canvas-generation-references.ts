@@ -100,6 +100,7 @@ export function sourceNodeReferenceVideos(node: CanvasNodeData | null | undefine
     const assetUri = activeVolcengineAssetURI(node.metadata.volcengineAsset);
     const volcengineAssetId = node.metadata.volcengineAsset?.assetId;
     const volcengineAssetStatus = node.metadata.volcengineAsset?.status;
+    const volcenginePublicUrl = node.metadata.volcengineAsset?.status === "Active" ? node.metadata.volcengineAsset?.publicUrl : "";
     return [
         {
             id: node.id,
@@ -107,6 +108,7 @@ export function sourceNodeReferenceVideos(node: CanvasNodeData | null | undefine
             type: node.metadata.mimeType || "video/mp4",
             url,
             storageKey: node.metadata.videoUrl || node.metadata.cacheUrl ? undefined : node.metadata.storageKey,
+            ...(volcenginePublicUrl ? { volcenginePublicUrl } : {}),
             ...(assetUri ? { assetUri } : {}),
             ...(volcengineAssetId ? { volcengineAssetId, volcengineAssetStatus } : {}),
         },

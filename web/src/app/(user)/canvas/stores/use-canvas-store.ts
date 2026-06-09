@@ -36,6 +36,7 @@ type CanvasStore = {
     openProject: (id: string) => CanvasProject | null;
     renameProject: (id: string, title: string) => void;
     deleteProjects: (ids: string[]) => void;
+    flushProjects: () => Promise<void>;
     updateProject: (
         id: string,
         patch: Partial<Pick<CanvasProject, "projectId" | "episodeId" | "episodeTitle" | "scriptId" | "scriptSnapshot" | "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport" | "preset">>,
@@ -47,6 +48,18 @@ const CANVAS_STORE_KEY = "infinite-canvas:canvas_store";
 type PersistedCanvasState = Pick<CanvasStore, "projects">;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let queuedPersistState: PersistedCanvasState | null = null;
+let queuedPersistWrite: { name: string; value: StorageValue<CanvasStore> } | null = null;
+
+async function flushQueuedCanvasStore() {
+    if (!queuedPersistWrite) return;
+    if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+    }
+    const write = queuedPersistWrite;
+    queuedPersistWrite = null;
+    await localForageStorage.setItem(write.name, JSON.stringify(write.value));
+}
 
 const canvasStorage: PersistStorage<CanvasStore> = {
     getItem: async (name) => {
@@ -60,10 +73,10 @@ const canvasStorage: PersistStorage<CanvasStore> = {
         const nextState = value.state as PersistedCanvasState;
         if (queuedPersistState && queuedPersistState.projects === nextState.projects) return;
         queuedPersistState = nextState;
+        queuedPersistWrite = { name, value };
         if (saveTimer) clearTimeout(saveTimer);
         saveTimer = setTimeout(() => {
-            saveTimer = null;
-            void localForageStorage.setItem(name, JSON.stringify(value));
+            void flushQueuedCanvasStore();
         }, 400);
     },
     removeItem: (name) => localForageStorage.removeItem(name),
@@ -135,6 +148,7 @@ export const useCanvasStore = create<CanvasStore>()(
                     const projects = state.projects.filter((project) => !ids.includes(project.id));
                     return { projects };
                 }),
+            flushProjects: flushQueuedCanvasStore,
             updateProject: (id, patch) =>
                 set((state) => ({
                     projects: state.projects.map((project) => (project.id === id ? { ...project, ...patch, updatedAt: new Date().toISOString() } : project)),

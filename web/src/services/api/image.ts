@@ -192,14 +192,12 @@ function parseStreamChunk(chunk: string, onDelta: (value: string) => void) {
     if (deltaText) onDelta(deltaText);
 }
 
-function withSystemPrompt(config: AiConfig, prompt: string) {
-    const systemPrompt = config.systemPrompt.trim();
-    return systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+function withSystemPrompt(_config: AiConfig, prompt: string) {
+    return prompt;
 }
 
-function withSystemMessage(config: AiConfig, messages: ChatCompletionMessage[]) {
-    const systemPrompt = config.systemPrompt.trim();
-    return systemPrompt ? [{ role: "system" as const, content: systemPrompt }, ...messages] : messages;
+function withSystemMessage(_config: AiConfig, messages: ChatCompletionMessage[]) {
+    return messages;
 }
 
 export async function requestGeneration(config: AiConfig, prompt: string, trace?: AiTaskTrace, localTask?: LocalImageTaskTrace) {
@@ -207,6 +205,19 @@ export async function requestGeneration(config: AiConfig, prompt: string, trace?
     const quality = normalizeQuality(config.quality);
     const requestSize = resolveRequestSize(quality, config.size);
     const localTaskId = startLocalImageTask(config, prompt, n, requestSize, localTask);
+    if (shouldUseGeminiImageChatAdapter(config.model)) {
+        try {
+            const response = await postGeminiImageEdit(config, prompt, [], { n, quality, size: requestSize }, trace);
+            const images = withTaskMetadata(parseImagePayload(response.data), readAiTaskLedgerFromHeaders(response.headers), localTaskId);
+            completeLocalImageTask(localTaskId, images.length, requestSize, localTask?.outputSummary);
+            refreshRemoteUser(config);
+            return images;
+        } catch (error) {
+            const reason = normalizeAiError(error, "请求失败");
+            failLocalImageTask(localTaskId, reason, requestSize);
+            throw new Error(reason);
+        }
+    }
     try {
         const response = await postImageGeneration(
             config,

@@ -368,6 +368,11 @@ export function createAgentWorkflowRunRecord({ preset, projectId, canvasId, epis
     );
 }
 
+export function bindAgentWorkflowRunCanvas(workflowRun: AgentWorkflowRunRecord, canvasId: string, now: string): AgentWorkflowRunRecord {
+    if (!canvasId || workflowRun.canvasId === canvasId) return workflowRun;
+    return { ...workflowRun, canvasId, updatedAt: now };
+}
+
 export function startAgentWorkflowStageRun(workflowRun: AgentWorkflowRunRecord, stageId: string, runnerRunId: string, now: string): AgentWorkflowRunRecord {
     const checked = refreshWorkflowStageBlocks(workflowRun, now);
     const stageState = checked.stageStates.find((stage) => stage.stageId === stageId);

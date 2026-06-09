@@ -103,7 +103,6 @@ export function filterAssetList(assets: Asset[], filters: AssetListFilters) {
                 action: filters.generationActionFilter,
                 modelProvider: filters.generationModelProviderFilter,
                 taskId: filters.generationTaskFilter,
-                projectId: filters.projectContextFilter && !inProjectLibrary ? filters.projectContextFilter : undefined,
                 referencedAssetIds: filters.projectReferencedAssetIds,
             })
         )

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, type Dispatch, type SetStateAction } from "react";
+import axios from "axios";
 import { saveAs } from "file-saver";
 
 import { cacheCanvasMedia } from "@/services/api/media-cache";
@@ -34,7 +35,7 @@ export function useCanvasMediaCache({ token, message, setNodes }: { token?: stri
                     return;
                 }
                 try {
-                    const blob = await resolveCanvasMediaBlob(node);
+                    const blob = await resolveCanvasMediaBlob(node, token);
                     if (blob) {
                         const cached = await cacheCanvasMedia(blob, filename, token);
                         setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, cacheUrl: cached.url, cachePath: cached.path, cacheFilename: cached.filename || filename } } : item)));
@@ -43,7 +44,7 @@ export function useCanvasMediaCache({ token, message, setNodes }: { token?: stri
                         return;
                     }
                 } catch (error) {
-                    message.error(error instanceof Error ? error.message : "缓存视频失败");
+                    message.error(readCanvasDownloadError(error, node.type === CanvasNodeType.Video ? "下载视频失败" : "下载音频失败"));
                     return;
                 }
             }
@@ -106,16 +107,60 @@ function triggerCanvasDownload(url: string, filename: string) {
     link.remove();
 }
 
-async function resolveCanvasMediaBlob(node: CanvasNodeData) {
+async function resolveCanvasMediaBlob(node: CanvasNodeData, token?: string) {
     if (node.metadata?.storageKey) {
         const stored = await getMediaBlob(node.metadata.storageKey);
         if (stored) return stored;
     }
     const url = await resolveMediaUrl(node.metadata?.storageKey, node.metadata?.content || "");
     if (!url) return null;
+    if (isRemoteHttpUrl(url)) return fetchVideoThroughProxy(url, token);
     const response = await fetch(url);
     if (!response.ok) throw new Error("读取本地媒体失败");
     return response.blob();
+}
+
+async function fetchVideoThroughProxy(videoUrl: string, token?: string) {
+    if (!token) throw new Error("请先登录后再下载远程视频");
+    const response = await axios.post<Blob>(
+        "/api/v1/proxy/video-download",
+        { video_url: videoUrl },
+        {
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            responseType: "blob",
+            timeout: 300_000,
+        },
+    );
+    await assertCanvasDownloadBlob(response.data);
+    return response.data;
+}
+
+async function assertCanvasDownloadBlob(blob: Blob) {
+    const type = blob.type.toLowerCase();
+    if (!type.includes("json") && !type.includes("text")) return;
+    let payload: { code?: number; msg?: string; message?: string; error?: { message?: string } };
+    try {
+        payload = JSON.parse(await blob.text()) as { code?: number; msg?: string; message?: string; error?: { message?: string } };
+    } catch {
+        throw new Error("远程视频下载失败");
+    }
+    throw new Error(payload.msg || payload.error?.message || payload.message || "远程视频下载失败");
+}
+
+function isRemoteHttpUrl(url: string) {
+    return /^https?:\/\//i.test(url);
+}
+
+function readCanvasDownloadError(error: unknown, fallback: string) {
+    if (axios.isAxiosError(error)) {
+        if (error.code === "ECONNABORTED") return `${fallback}：请求超时`;
+        return error.response?.status ? `${fallback}：${error.response.status}` : `${fallback}：网络连接失败`;
+    }
+    if (error instanceof Error && error.message && error.message !== "Failed to fetch") {
+        if (error.message.includes("仅支持缓存视频或音频文件")) return `${fallback}：远程视频地址返回的不是视频，可能已过期`;
+        return error.message;
+    }
+    return fallback;
 }
 
 function canvasMediaExtension(node: CanvasNodeData, content: string) {

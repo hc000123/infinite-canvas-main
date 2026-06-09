@@ -23,9 +23,9 @@ type UseEpisodeWorkbenchPreviewActionsOptions = {
     generateWorkflowMappingPreview: (workflowRunId: string, stageId: string) => { ok: boolean; reason?: string };
     message: WorkbenchMessage;
     modal: WorkbenchModal;
+    onCreateCanvas: () => void;
     router: { push: (href: string) => void };
     setApplyingPreviewIds: Dispatch<SetStateAction<Record<string, boolean>>>;
-    setCreateCanvasOpen: Dispatch<SetStateAction<boolean>>;
     summarizeApprovedStoryboardScenes: (workflowRunId: string) => { ok: boolean; reason?: string; sceneCount?: number };
     workflowAppliedPreviewItemIds: string[];
     workflowRun?: AgentWorkflowRunRecord;
@@ -39,9 +39,9 @@ export function useEpisodeWorkbenchPreviewActions({
     generateWorkflowMappingPreview,
     message,
     modal,
+    onCreateCanvas,
     router,
     setApplyingPreviewIds,
-    setCreateCanvasOpen,
     summarizeApprovedStoryboardScenes,
     workflowAppliedPreviewItemIds,
     workflowRun,
@@ -96,7 +96,7 @@ export function useEpisodeWorkbenchPreviewActions({
         [applyProductionBiblePreview, applyStoryboardPreview, applyVideoNodePreview, boundCanvas?.nodes, message, modal, setApplyingPreviewIds, workflowAppliedPreviewItemIds],
     );
 
-    const openCanvasOrCreate = useCallback(() => (boundCanvas ? router.push(`/canvas/${boundCanvas.id}`) : setCreateCanvasOpen(true)), [boundCanvas, router, setCreateCanvasOpen]);
+    const openCanvasOrCreate = useCallback(() => (boundCanvas ? router.push(`/canvas/${boundCanvas.id}`) : onCreateCanvas()), [boundCanvas, onCreateCanvas, router]);
 
     return { confirmApplyPreview, generatePreview, openCanvasOrCreate, summarizeStoryboardScenes };
 }

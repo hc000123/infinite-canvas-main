@@ -67,7 +67,7 @@ export function AssetEditorModal({
     onReadMediaFile,
 }: AssetEditorModalProps) {
     return (
-        <Modal title={editingAsset ? "编辑素材" : "新增素材"} open={open} width={980} onCancel={onCancel} onOk={() => void onSave()} okText="保存" cancelText="取消" destroyOnHidden>
+        <Modal className="dark studio-modal" title={editingAsset ? "编辑素材" : "新增素材"} open={open} width={980} onCancel={onCancel} onOk={() => void onSave()} okText="保存" cancelText="取消" destroyOnHidden>
             <div className="grid gap-6 pt-1 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", tags: [] }}>
                     <Form.Item name="kind" label="类型">
@@ -168,11 +168,11 @@ function AssetContentForm({
     if (formKind === "image") {
         return (
             <Form.Item label="图片内容" required>
-                <div className="rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700">
+                <div className="rounded-md border border-dashed border-[var(--studio-border-strong)] bg-[var(--studio-panel-muted-bg)] p-4">
                     <Button icon={<Upload className="size-4" />} onClick={() => imageInputRef.current?.click()}>
                         选择图片文件
                     </Button>
-                    <Typography.Text type="secondary" className="ml-3 text-xs">
+                    <Typography.Text className="ml-3 text-sm !text-[var(--studio-text-muted)]">
                         {imageDraft ? `${imageDraft.width}x${imageDraft.height} · ${formatBytes(imageDraft.bytes)}` : "未选择图片"}
                     </Typography.Text>
                 </div>
@@ -182,11 +182,11 @@ function AssetContentForm({
 
     return (
         <Form.Item label={formKind === "video" ? "视频内容" : "音频内容"} required>
-            <div className="rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700">
+            <div className="rounded-md border border-dashed border-[var(--studio-border-strong)] bg-[var(--studio-panel-muted-bg)] p-4">
                 <Button icon={<Upload className="size-4" />} onClick={() => mediaInputRef.current?.click()}>
                     {formKind === "video" ? "选择视频文件" : "选择音频文件"}
                 </Button>
-                <Typography.Text type="secondary" className="ml-3 text-xs">
+                <Typography.Text className="ml-3 text-sm !text-[var(--studio-text-muted)]">
                     {mediaDraft ? `${formatBytes(mediaDraft.bytes)} · ${mediaDraft.mimeType}` : formKind === "video" ? "未选择视频" : "未选择音频"}
                 </Typography.Text>
             </div>
@@ -196,33 +196,35 @@ function AssetContentForm({
 
 function AssetEditorPreview({ formKind, coverUrl, title, tags, content, imageDraft, mediaDraft }: { formKind: AssetKind; coverUrl: string; title: string; tags: string[]; content: string; imageDraft: ImageDraft; mediaDraft: MediaDraft }) {
     return (
-        <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 dark:border-stone-800 dark:bg-stone-950">
-            <Typography.Text strong>预览</Typography.Text>
-            <div className="mt-3 overflow-hidden rounded-lg border border-stone-200 bg-background dark:border-stone-800">
+        <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
+            <Typography.Text strong className="!text-[var(--studio-text-primary)]">
+                预览
+            </Typography.Text>
+            <div className="mt-3 overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-elevated-bg)]">
                 {formKind === "video" && mediaDraft ? (
                     <video src={mediaDraft.url} controls className="aspect-[4/3] w-full bg-black object-contain" />
                 ) : formKind === "audio" && mediaDraft ? (
-                    <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 dark:bg-stone-900">
+                    <div className="flex aspect-[4/3] items-center justify-center bg-[var(--studio-shell-bg)] p-5">
                         <audio src={mediaDraft.url} controls className="w-full" />
                     </div>
                 ) : coverUrl || imageDraft?.dataUrl ? (
                     <img src={coverUrl || imageDraft?.dataUrl} alt="" className="aspect-[4/3] w-full object-cover" />
                 ) : (
-                    <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm text-stone-500 dark:bg-stone-900">{content || "暂无封面"}</div>
+                    <div className="flex aspect-[4/3] items-center justify-center bg-[var(--studio-shell-bg)] p-5 text-center text-sm text-[var(--studio-text-muted)]">{content || "暂无封面"}</div>
                 )}
                 <div className="p-4">
-                    <Typography.Text strong ellipsis className="block">
+                    <Typography.Text strong ellipsis className="block !text-[var(--studio-text-primary)]">
                         {title || "未命名素材"}
                     </Typography.Text>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                         {tags.length ? (
                             tags.map((tag) => (
-                                <Tag key={tag} className="m-0">
+                                <Tag key={tag} className="studio-tag">
                                     {tag}
                                 </Tag>
                             ))
                         ) : (
-                            <Tag className="m-0">未打标签</Tag>
+                            <Tag className="studio-tag">未打标签</Tag>
                         )}
                     </div>
                 </div>

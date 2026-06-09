@@ -5,6 +5,10 @@ data
 web/.next
 web/node_modules
 web/out
+web/build
+web/release
+tool-page-screenshots*
+*.zip
 *.log
 .env*
 !.env.example

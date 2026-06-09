@@ -25,11 +25,11 @@ export function ModelPicker({ config, value, onChange, className, fullWidth = fa
     const [open, setOpen] = useState(false);
     const [keyword, setKeyword] = useState("");
     const modelOptions = useMemo(() => resolveModelOptions(config, modelType), [config, modelType]);
-    const options = useMemo(() => buildModelPickerOptions({ models: modelOptions, value }), [modelOptions, value]);
+    const current = normalizePickerValue(config, modelType, value, modelOptions);
+    const options = useMemo(() => buildModelPickerOptions({ models: modelOptions, value: current }), [modelOptions, current]);
     const filteredOptions = useMemo(() => filterModelPickerOptions(options, keyword), [keyword, options]);
     const optionGroups = useMemo(() => groupModelPickerOptions(filteredOptions), [filteredOptions]);
     const customModel = resolveCustomModelCandidate(keyword, options, allowCustomModel);
-    const current = value || "";
     const emptyText = keyword.trim() ? (config.channelMode === "remote" ? "暂无匹配模型" : "没有匹配的模型") : config.channelMode === "remote" ? "暂无可用模型" : allowCustomModel ? "输入模型 ID 后回车使用" : "请先到配置里拉取模型列表";
 
     useEffect(() => {
@@ -154,9 +154,30 @@ export function ModelPicker({ config, value, onChange, className, fullWidth = fa
 
 function resolveModelOptions(config: AiConfig, modelType?: AiModelKind) {
     if (modelType === "image" && config.imageModels?.length) return config.imageModels;
-    if (modelType === "video" && config.videoModels?.length) return config.videoModels;
+    if (modelType === "video") return uniquePickerModels([...(config.videoModels || []), config.videoProtocol === "volcengine-ark" ? config.seedanceModel : config.videoModel]).filter((model) => model && !isEndpointModel(model));
     if (modelType === "text" && config.textModels?.length) return config.textModels;
     return config.models || [];
+}
+
+function normalizePickerValue(config: AiConfig, modelType: AiModelKind | undefined, value: string | undefined, models: string[]) {
+    const current = value || "";
+    if (modelType !== "video" || config.channelMode !== "remote") return current;
+    return current && models.includes(current) && !isEndpointModel(current) ? current : models[0] || "";
+}
+
+function uniquePickerModels(models: Array<string | undefined>) {
+    const seen = new Set<string>();
+    return models
+        .map((model) => model?.trim() || "")
+        .filter((model) => {
+            if (!model || seen.has(model)) return false;
+            seen.add(model);
+            return true;
+        });
+}
+
+function isEndpointModel(model: string) {
+    return model.trim().toLowerCase().startsWith("ep-");
 }
 
 function ModelOptionButton({ model, active, onSelect }: { model: string; active: boolean; onSelect: () => void }) {

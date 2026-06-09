@@ -3,9 +3,24 @@ import { nanoid } from "nanoid";
 import { NODE_DEFAULT_SIZE } from "../constants.ts";
 import type { CanvasConnection, CanvasNodeData, CanvasNodeMetadata } from "../types.ts";
 
-export function createVideoGenerationNode({ nodeId, sourceNode, prompt, spec, metadata }: { nodeId: string; sourceNode?: CanvasNodeData; prompt: string; spec: { width: number; height: number }; metadata: CanvasNodeMetadata }) {
+export function createVideoGenerationNode({
+    nodeId,
+    sourceNode,
+    prompt,
+    spec,
+    metadata,
+    sourceConnections = [],
+}: {
+    nodeId: string;
+    sourceNode?: CanvasNodeData;
+    prompt: string;
+    spec: { width: number; height: number };
+    metadata: CanvasNodeMetadata;
+    sourceConnections?: CanvasConnection[];
+}) {
     const isEmptyVideoNode = sourceNode?.type === "video" && !sourceNode.metadata?.content;
     const isVariantNode = metadata.relationType === "variant" || metadata.videoActionType === "variant" || metadata.actionType === "variant";
+    const inheritsSourceInputs = sourceNode?.type === "video" && Boolean(sourceNode.metadata?.content) && sourceConnections.length > 0;
     const videoId = isEmptyVideoNode ? nodeId : nanoid();
     const parent = sourceNode?.position || { x: 0, y: 0 };
     const videoNode: CanvasNodeData = {
@@ -18,7 +33,8 @@ export function createVideoGenerationNode({ nodeId, sourceNode, prompt, spec, me
         metadata,
     };
     const connection: CanvasConnection | null = isEmptyVideoNode || isVariantNode || !sourceNode ? null : { id: nanoid(), fromNodeId: nodeId, toNodeId: videoId };
-    return { videoId, videoNode, isEmptyVideoNode, connection };
+    const inheritedConnections = inheritsSourceInputs ? sourceConnections.map((item) => ({ ...item, id: nanoid(), toNodeId: videoId })) : [];
+    return { videoId, videoNode, isEmptyVideoNode, connections: [...inheritedConnections, ...(connection ? [connection] : [])] };
 }
 
 export function createImageGenerationNodes({ nodeId, sourceNode, prompt, count, metadata }: { nodeId: string; sourceNode?: CanvasNodeData; prompt: string; count: number; metadata: CanvasNodeMetadata }) {

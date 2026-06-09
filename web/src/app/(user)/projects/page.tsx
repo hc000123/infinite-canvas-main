@@ -2,8 +2,8 @@
 
 import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { App, Button, Input } from "antd";
-import { Archive, CheckCircle2, ChevronDown, Clock3, Edit3, Filter, Folder, Grid2X2, LayoutList, MoreHorizontal, PauseCircle, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { App, Button, Input, Tooltip } from "antd";
+import { Archive, ChevronDown, Clock3, Edit3, Filter, Folder, Grid2X2, LayoutList, MoreHorizontal, PauseCircle, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasCreateProjectModal } from "../canvas/components/canvas-create-project-modal";
@@ -21,14 +21,9 @@ type ProjectCardView = {
 
 type ProjectVisualMeta = {
     coverUrl: string;
-    episodeCount: number;
-    genre: string;
-    progress: number;
-    progressClass: string;
-    shotText: string;
     statusClass: string;
     statusIcon: ReactNode;
-    statusLabel: "进行中" | "已完成" | "暂停中" | "草稿";
+    statusLabel: "进行中" | "暂停中" | "草稿";
 };
 
 const coverUrls = [
@@ -42,7 +37,8 @@ const coverUrls = [
     "https://images.unsplash.com/photo-1587953427769-4b6d2f840bf6?auto=format&fit=crop&w=900&q=80",
 ];
 
-const genres = ["科幻", "剧情", "古装", "奇幻", "悬疑", "文艺", "战争", "青春"];
+const createProjectButtonClass =
+    "border-0 !bg-[var(--studio-accent)] !text-[var(--primary-foreground)] shadow-none hover:!bg-[var(--studio-accent-hover)] hover:!text-[var(--primary-foreground)] focus:!text-[var(--primary-foreground)] active:!text-[var(--primary-foreground)] disabled:!bg-[var(--studio-accent)] disabled:!text-[var(--primary-foreground)] disabled:!opacity-60";
 
 export default function ProjectsPage() {
     const router = useRouter();
@@ -74,14 +70,13 @@ export default function ProjectsPage() {
     const filteredCards = useMemo(() => {
         const keyword = searchText.trim().toLowerCase();
         if (!keyword) return projectCards;
-        return projectCards.filter(({ project, meta }) => `${project.title} ${project.description} ${meta.genre} ${canvasProjectPresetSummary(project.preset)}`.toLowerCase().includes(keyword));
+        return projectCards.filter(({ project, meta }) => `${project.title} ${project.description} ${meta.statusLabel} ${canvasProjectPresetSummary(project.preset)}`.toLowerCase().includes(keyword));
     }, [projectCards, searchText]);
     const stats = useMemo(() => {
         const countByStatus = (status: ProjectVisualMeta["statusLabel"]) => projectCards.filter((card) => card.meta.statusLabel === status).length;
         return {
             all: projectCards.length,
             running: countByStatus("进行中"),
-            done: countByStatus("已完成"),
             paused: countByStatus("暂停中"),
             draft: countByStatus("草稿"),
         };
@@ -110,33 +105,33 @@ export default function ProjectsPage() {
 
     return (
         <>
-            <section className="h-full min-h-0 overflow-y-auto bg-[radial-gradient(circle_at_20%_0%,rgba(20,184,166,0.12),transparent_28%),linear-gradient(180deg,#0b111b_0%,#080d14_100%)] py-7">
+            <section className="studio-shell h-full min-h-0 overflow-y-auto py-7">
                     <header className="flex flex-wrap items-start justify-between gap-5 2xl:flex-nowrap">
                         <div>
-                            <h1 className="text-3xl font-semibold leading-tight tracking-normal text-white">项目工作台</h1>
-                            <p className="mt-2 text-sm leading-6 text-slate-400">管理你的影视创作项目与进度</p>
+                            <h1 className="text-3xl font-semibold leading-tight tracking-normal text-[var(--studio-text-primary)]">项目工作台</h1>
+                            <p className="mt-2 text-sm leading-6 text-[var(--studio-text-secondary)]">管理你的影视创作项目与进度</p>
                         </div>
                         <div className="flex shrink-0 items-center gap-3">
                             <Input
                                 value={searchText}
                                 onChange={(event) => setSearchText(event.target.value)}
                                 placeholder="搜索项目名称、简介、标签…"
-                                prefix={<Search className="size-4 text-slate-500" />}
-                                className="h-11 w-[340px] max-w-full rounded-lg border-slate-700/80 bg-[#0b111b]/80 text-slate-100 placeholder:text-slate-500"
+                                prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />}
+                                className="h-11 w-[340px] max-w-full rounded-lg border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)] placeholder:text-[var(--studio-text-muted)]"
                                 style={{ width: 340 }}
                             />
-                            <Button className="h-11 border-slate-700/80 bg-[#0b111b]/80 text-slate-100" icon={<Filter className="size-4" />}>
+                            <Button className="h-11 border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)]" icon={<Filter className="size-4" />}>
                                 筛选
                             </Button>
-                            <div className="flex h-11 overflow-hidden rounded-lg border border-slate-700/80 bg-[#0b111b]/80 p-1">
-                                <button type="button" className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 ${viewMode === "grid" ? "bg-cyan-500/18 text-cyan-300 ring-1 ring-cyan-400/35" : "text-slate-400 hover:text-white"}`} onClick={() => setViewMode("grid")} aria-label="网格视图">
+                            <div className="flex h-11 overflow-hidden rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-1">
+                                <button type="button" className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] ${viewMode === "grid" ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-muted)] hover:text-[var(--studio-text-primary)]"}`} onClick={() => setViewMode("grid")} aria-label="网格视图">
                                     <Grid2X2 className="size-4" />
                                 </button>
-                                <button type="button" className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 ${viewMode === "list" ? "bg-cyan-500/18 text-cyan-300 ring-1 ring-cyan-400/35" : "text-slate-400 hover:text-white"}`} onClick={() => setViewMode("list")} aria-label="列表视图">
+                                <button type="button" className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] ${viewMode === "list" ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-muted)] hover:text-[var(--studio-text-primary)]"}`} onClick={() => setViewMode("list")} aria-label="列表视图">
                                     <LayoutList className="size-4" />
                                 </button>
                             </div>
-                            <Button className="h-11 border-0 bg-cyan-500 px-5 text-slate-950 shadow-[0_14px_34px_rgba(6,182,212,0.28)] hover:!bg-cyan-400" icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)} disabled={!hydrated}>
+                            <Button className={`h-11 px-5 ${createProjectButtonClass}`} icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)} disabled={!hydrated}>
                                 新建项目
                                 <ChevronDown className="ml-1 size-4" />
                             </Button>
@@ -146,7 +141,7 @@ export default function ProjectsPage() {
                     <ProjectStatsBar stats={stats} />
 
                     {!hydrated ? (
-                        <section className="mt-7 flex min-h-[420px] items-center justify-center rounded-lg border border-slate-700/70 bg-slate-900/45 text-sm text-slate-400">正在加载项目...</section>
+                        <section className="studio-panel mt-7 flex min-h-[420px] items-center justify-center text-sm text-[var(--studio-text-muted)]">正在加载项目...</section>
                     ) : filteredCards.length ? (
                         <>
                             <div className={`mt-7 ${viewMode === "grid" ? "grid gap-5 lg:grid-cols-2 2xl:grid-cols-4" : "grid gap-4"}`}>
@@ -177,11 +172,11 @@ export default function ProjectsPage() {
                             <ProjectPagination count={filteredCards.length} />
                         </>
                     ) : (
-                        <section className="mt-7 flex min-h-[420px] flex-col items-center justify-center rounded-lg border border-slate-700/70 bg-slate-900/45 text-center">
-                            <Folder className="size-11 text-slate-500" />
-                            <h2 className="mt-4 text-xl font-medium text-white">没有匹配的项目</h2>
-                            <p className="mt-3 text-sm text-slate-400">可以清空搜索条件，或新建一个项目开始制作。</p>
-                            <Button className="mt-6 border-0 bg-cyan-500 text-slate-950 hover:!bg-cyan-400" icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
+                        <section className="studio-panel mt-7 flex min-h-[420px] flex-col items-center justify-center text-center">
+                            <Folder className="size-11 text-[var(--studio-text-muted)]" />
+                            <h2 className="mt-4 text-xl font-medium text-[var(--studio-text-primary)]">没有匹配的项目</h2>
+                            <p className="mt-3 text-sm text-[var(--studio-text-secondary)]">可以清空搜索条件，或新建一个项目开始制作。</p>
+                            <Button className={`mt-6 ${createProjectButtonClass}`} icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
                                 新建项目
                             </Button>
                         </section>
@@ -204,32 +199,30 @@ export default function ProjectsPage() {
     );
 }
 
-function ProjectStatsBar({ stats }: { stats: { all: number; draft: number; done: number; paused: number; running: number } }) {
+function ProjectStatsBar({ stats }: { stats: { all: number; draft: number; paused: number; running: number } }) {
     return (
-        <section className="mt-8 grid gap-4 rounded-lg border border-slate-700/70 bg-[linear-gradient(135deg,rgba(30,41,59,0.74),rgba(15,23,42,0.64))] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.22)] md:grid-cols-5">
+        <section className="studio-panel mt-8 grid gap-4 p-5 md:grid-cols-4">
             <ProjectStat icon={<Folder className="size-5" />} label="全部项目" value={stats.all} tone="slate" />
             <ProjectStat icon={<Clock3 className="size-5" />} label="进行中" value={stats.running} tone="cyan" />
-            <ProjectStat icon={<CheckCircle2 className="size-5" />} label="已完成" value={stats.done} tone="green" />
             <ProjectStat icon={<PauseCircle className="size-5" />} label="暂停中" value={stats.paused} tone="amber" />
             <ProjectStat icon={<Edit3 className="size-5" />} label="草稿" value={stats.draft} tone="blue" />
         </section>
     );
 }
 
-function ProjectStat({ icon, label, value, tone }: { icon: ReactNode; label: string; value: number; tone: "amber" | "blue" | "cyan" | "green" | "slate" }) {
+function ProjectStat({ icon, label, value, tone }: { icon: ReactNode; label: string; value: number; tone: "amber" | "blue" | "cyan" | "slate" }) {
     const toneClass = {
-        amber: "bg-amber-400/14 text-amber-300",
-        blue: "bg-sky-400/14 text-sky-300",
-        cyan: "bg-cyan-400/14 text-cyan-300",
-        green: "bg-emerald-400/14 text-emerald-300",
-        slate: "bg-slate-400/14 text-slate-300",
+        amber: "bg-amber-400/14 text-[var(--studio-warning)]",
+        blue: "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]",
+        cyan: "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]",
+        slate: "bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]",
     }[tone];
     return (
-        <div className="flex items-center gap-4 border-slate-700/70 md:border-r md:last:border-r-0">
+        <div className="flex items-center gap-4 border-[var(--studio-border-subtle)] md:border-r md:last:border-r-0">
             <span className={`grid size-11 place-items-center rounded-lg ${toneClass}`}>{icon}</span>
             <div>
-                <div className="text-sm text-slate-400">{label}</div>
-                <div className="mt-1 text-2xl font-semibold leading-none text-white">{value}</div>
+                <div className="text-sm text-[var(--studio-text-secondary)]">{label}</div>
+                <div className="mt-1 text-2xl font-semibold leading-none text-[var(--studio-text-primary)]">{value}</div>
             </div>
         </div>
     );
@@ -276,7 +269,7 @@ function ProjectCard({
 
     return (
         <article
-            className={`group overflow-hidden rounded-lg border border-slate-700/80 bg-[linear-gradient(180deg,rgba(30,41,59,0.82),rgba(15,23,42,0.82))] shadow-[0_18px_50px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:border-cyan-400/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080d14] ${openable ? "cursor-pointer" : ""} ${listMode ? "grid md:grid-cols-[320px_minmax(0,1fr)]" : ""}`}
+            className={`group overflow-hidden rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] shadow-[var(--studio-shadow)] transition hover:-translate-y-0.5 hover:border-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--studio-shell-bg)] ${openable ? "cursor-pointer" : ""} ${listMode ? "grid md:grid-cols-[320px_minmax(0,1fr)]" : ""}`}
             role={openable ? "link" : undefined}
             tabIndex={openable ? 0 : undefined}
             aria-label={openable ? `打开项目 ${project.title}` : undefined}
@@ -292,44 +285,29 @@ function ProjectCard({
                         {meta.statusLabel}
                     </span>
                 </div>
-                <button type="button" className="absolute right-3 top-3 grid size-8 place-items-center rounded-md bg-black/45 text-slate-100 backdrop-blur transition hover:bg-black/70" aria-label="更多操作">
-                    <MoreHorizontal className="size-5" />
-                </button>
+                <Tooltip title="更多操作">
+                    <button type="button" className="absolute right-3 top-3 grid size-8 place-items-center rounded-md border border-[var(--studio-border-subtle)] bg-[rgba(21,24,33,.72)] text-[var(--studio-text-primary)] backdrop-blur transition hover:bg-[rgba(21,24,33,.92)]" aria-label="更多操作" title="更多操作">
+                        <MoreHorizontal className="size-5" />
+                    </button>
+                </Tooltip>
             </div>
 
             <div className="p-4">
                 <div className="min-w-0">
-                    {editing ? <Input value={editingTitle} autoFocus onChange={(event) => onEditingTitleChange(event.target.value)} onPressEnter={onSave} /> : <h2 className="break-words text-xl font-semibold leading-7 text-white">{project.title}</h2>}
-                    <p className="mt-1 break-words text-sm leading-6 text-slate-400">
-                        {meta.genre} · 短片 · {meta.episodeCount}集
-                    </p>
-                    <p className="mt-2 break-words text-xs leading-5 text-slate-500">{canvasProjectPresetSummary(project.preset)}</p>
-                    {project.description ? <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">{project.description}</p> : null}
+                    {editing ? <Input value={editingTitle} autoFocus onChange={(event) => onEditingTitleChange(event.target.value)} onPressEnter={onSave} /> : <h2 className="break-words text-xl font-semibold leading-7 text-[var(--studio-text-primary)]">{project.title}</h2>}
+                    {project.description ? <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--studio-text-secondary)]">{project.description}</p> : null}
+                    <p className="mt-2 break-words text-xs leading-5 text-[var(--studio-text-muted)]">{canvasProjectPresetSummary(project.preset)}</p>
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                    <span className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-950/25 px-3 py-1.5 text-xs text-slate-300">
+                    <span className="inline-flex items-center gap-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-1.5 text-xs text-[var(--studio-text-secondary)]">
                         <Folder className="size-3.5" />
                         画布 {canvasCount}
                     </span>
-                    <span className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-950/25 px-3 py-1.5 text-xs text-slate-300">
-                        <Edit3 className="size-3.5" />
-                        分镜 {meta.shotText}
-                    </span>
                 </div>
 
-                <div className="mt-4">
-                    <div className="mb-2 flex items-center justify-between text-sm">
-                        <span className="text-slate-400">总体进度</span>
-                        <span className={meta.progress >= 100 ? "text-emerald-300" : "text-slate-200"}>{meta.progress}%</span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-slate-800">
-                        <div className={`h-full rounded-full ${meta.progressClass}`} style={{ width: `${meta.progress}%` }} />
-                    </div>
-                </div>
-
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-700/70 pt-3">
-                    <span className="text-xs text-slate-500">更新时间：{formatProjectDate(project.updatedAt)}</span>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--studio-border-subtle)] pt-3">
+                    <span className="text-xs text-[var(--studio-text-muted)]">更新时间：{formatProjectDate(project.updatedAt)}</span>
                     <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
                         {editing ? (
                             <>
@@ -346,9 +324,9 @@ function ProjectCard({
                             </Button>
                         ) : (
                             <>
-                                <Button type="text" size="small" shape="circle" icon={<Edit3 className="size-4" />} onClick={onEdit} aria-label="重命名" />
-                                <Button type="text" size="small" shape="circle" icon={<Archive className="size-4" />} onClick={onArchive} aria-label="归档" />
-                                <Button type="text" size="small" shape="circle" icon={<Trash2 className="size-4" />} danger onClick={onDelete} aria-label="删除" />
+                                <ProjectActionIconButton title="重命名项目" icon={<Edit3 className="size-4" />} onClick={onEdit} />
+                                <ProjectActionIconButton title="归档项目" icon={<Archive className="size-4" />} onClick={onArchive} />
+                                <ProjectActionIconButton title="删除项目" icon={<Trash2 className="size-4" />} danger onClick={onDelete} />
                             </>
                         )}
                     </div>
@@ -358,32 +336,40 @@ function ProjectCard({
     );
 }
 
+function ProjectActionIconButton({ title, icon, danger, onClick }: { title: string; icon: ReactNode; danger?: boolean; onClick: () => void }) {
+    return (
+        <Tooltip title={title}>
+            <Button type="text" size="small" shape="circle" icon={icon} danger={danger} onClick={onClick} aria-label={title} />
+        </Tooltip>
+    );
+}
+
 function ProjectPagination({ count }: { count: number }) {
     return (
-        <footer className="mt-8 flex flex-wrap items-center justify-between gap-4 text-sm text-slate-400">
+        <footer className="mt-8 flex flex-wrap items-center justify-between gap-4 text-sm text-[var(--studio-text-secondary)]">
             <span>共 {count} 项</span>
             <div className="flex items-center gap-3">
-                <Button size="small" className="border-slate-700 bg-slate-900/80 text-slate-400" disabled>
+                <Button size="small" className="border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-muted)]" disabled>
                     ‹
                 </Button>
-                <Button size="small" className="border-cyan-400/35 bg-cyan-500/18 text-cyan-300">
+                <Button size="small" className="border-[var(--studio-border-strong)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]">
                     1
                 </Button>
-                <Button size="small" className="border-slate-700 bg-slate-900/80 text-slate-300">
+                <Button size="small" className="border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-secondary)]">
                     2
                 </Button>
-                <Button size="small" className="border-slate-700 bg-slate-900/80 text-slate-300">
+                <Button size="small" className="border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-secondary)]">
                     3
                 </Button>
-                <Button size="small" className="border-slate-700 bg-slate-900/80 text-slate-300">
+                <Button size="small" className="border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-secondary)]">
                     ›
                 </Button>
-                <Button size="small" className="border-slate-700 bg-slate-900/80 text-slate-300">
+                <Button size="small" className="border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-secondary)]">
                     10 条/页
                     <ChevronDown className="ml-1 size-3.5" />
                 </Button>
                 <span>跳至</span>
-                <Input value="1" readOnly className="h-8 w-16 rounded-md border-slate-700 bg-slate-900/80 text-center text-slate-200" />
+                <Input value="1" readOnly className="h-8 w-16 rounded-md border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-center text-[var(--studio-text-primary)]" />
                 <span>页</span>
             </div>
         </footer>
@@ -394,36 +380,17 @@ function projectVisualMeta(project: CreativeProject, index: number, canvasCount:
     if (project.status === "archived") {
         return {
             coverUrl: coverUrls[index % coverUrls.length],
-            episodeCount: Math.max(4, canvasCount * 4 + index + 3),
-            genre: genres[index % genres.length],
-            progress: 10 + ((index * 5) % 18),
-            progressClass: "bg-sky-400",
-            shotText: `${Math.max(8, canvasCount * 8)}/--`,
-            statusClass: "border-sky-400/45 bg-sky-400/15 text-sky-200",
-            statusIcon: <Edit3 className="size-3.5" />,
-            statusLabel: "草稿",
+            statusClass: "border-amber-400/45 bg-amber-400/15 text-[var(--studio-warning)]",
+            statusIcon: <PauseCircle className="size-3.5" />,
+            statusLabel: "暂停中",
         };
     }
-    const running = [
-        { label: "进行中" as const, progress: 68, progressClass: "bg-cyan-400", statusClass: "border-cyan-400/45 bg-cyan-400/15 text-cyan-200", icon: <Clock3 className="size-3.5" /> },
-        { label: "进行中" as const, progress: 72, progressClass: "bg-cyan-400", statusClass: "border-cyan-400/45 bg-cyan-400/15 text-cyan-200", icon: <Clock3 className="size-3.5" /> },
-        { label: "草稿" as const, progress: 80, progressClass: "bg-amber-400", statusClass: "border-amber-400/45 bg-amber-400/15 text-amber-200", icon: <Edit3 className="size-3.5" /> },
-        { label: "已完成" as const, progress: 100, progressClass: "bg-emerald-400", statusClass: "border-emerald-400/45 bg-emerald-400/15 text-emerald-200", icon: <CheckCircle2 className="size-3.5" /> },
-        { label: "暂停中" as const, progress: 40, progressClass: "bg-sky-400", statusClass: "border-slate-400/45 bg-slate-400/15 text-slate-200", icon: <PauseCircle className="size-3.5" /> },
-    ];
-    const status = running[index % running.length];
-    const totalShots = Math.max(40, (canvasCount || 1) * 60 + index * 22);
-    const doneShots = Math.round((totalShots * status.progress) / 100);
+    const hasCanvas = canvasCount > 0;
     return {
         coverUrl: coverUrls[index % coverUrls.length],
-        episodeCount: Math.max(4, canvasCount * 6 + index + 5),
-        genre: genres[index % genres.length],
-        progress: status.progress,
-        progressClass: status.progressClass,
-        shotText: `${doneShots}/${totalShots}`,
-        statusClass: status.statusClass,
-        statusIcon: status.icon,
-        statusLabel: status.label,
+        statusClass: hasCanvas ? "border-[var(--studio-border-strong)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]" : "border-[var(--studio-border-strong)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]",
+        statusIcon: hasCanvas ? <Clock3 className="size-3.5" /> : <Edit3 className="size-3.5" />,
+        statusLabel: hasCanvas ? "进行中" : "草稿",
     };
 }
 
