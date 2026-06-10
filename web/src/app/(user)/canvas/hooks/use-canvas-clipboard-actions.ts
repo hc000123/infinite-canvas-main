@@ -10,6 +10,7 @@ type UseCanvasClipboardActionsOptions = {
     selectedNodeIdsRef: RefObject<Set<string>>;
     getCanvasCenter: () => Position;
     createImageFileNode: (file: File, position: Position) => Promise<unknown>;
+    createFileNodes: (files: File[], position: Position) => Promise<unknown>;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setConnections: Dispatch<SetStateAction<CanvasConnection[]>>;
     setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
@@ -19,12 +20,18 @@ type UseCanvasClipboardActionsOptions = {
     showSuccess: (text: string) => void;
 };
 
+type ClipboardPasteEvent = {
+    clipboardData: DataTransfer | null;
+    preventDefault: () => void;
+};
+
 export function useCanvasClipboardActions({
     nodesRef,
     connectionsRef,
     selectedNodeIdsRef,
     getCanvasCenter,
     createImageFileNode,
+    createFileNodes,
     setNodes,
     setConnections,
     setSelectedNodeIds,
@@ -102,5 +109,27 @@ export function useCanvasClipboardActions({
         if (createTextNodeFromClipboard(text)) showSuccess("已从剪切板添加文本");
     }, [createImageFileNode, createTextNodeFromClipboard, getCanvasCenter, showSuccess]);
 
-    return { copySelectedNodes, pasteCopiedNodes, pasteSystemClipboard };
+    const pasteClipboardEvent = useCallback(
+        (event: ClipboardPasteEvent) => {
+            const clipboardData = event.clipboardData;
+            if (!clipboardData) return false;
+            const files = Array.from(clipboardData.files).filter((file) => file.type.startsWith("image/") || file.type.startsWith("video/") || file.type.startsWith("audio/"));
+            if (files.length) {
+                event.preventDefault();
+                void createFileNodes(files, getCanvasCenter());
+                showSuccess(files.length > 1 ? `已从剪切板添加 ${files.length} 个素材` : "已从剪切板添加素材");
+                return true;
+            }
+            const text = clipboardData.getData("text/plain");
+            if (text.trim()) {
+                event.preventDefault();
+                if (createTextNodeFromClipboard(text)) showSuccess("已从剪切板添加文本");
+                return true;
+            }
+            return false;
+        },
+        [createFileNodes, createTextNodeFromClipboard, getCanvasCenter, showSuccess],
+    );
+
+    return { copySelectedNodes, pasteCopiedNodes, pasteSystemClipboard, pasteClipboardEvent };
 }

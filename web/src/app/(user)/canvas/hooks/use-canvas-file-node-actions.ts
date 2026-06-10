@@ -7,6 +7,8 @@ import { placeCanvasNodeAwayFromNodes } from "../utils/canvas-node-placement";
 import type { CanvasNodeData, CanvasNodeMetadata, Position } from "../types";
 
 type UploadTarget = { nodeId?: string; position?: Position } | null;
+const BATCH_MEDIA_NODE_SIZE = { width: 340, height: 240 };
+const BATCH_MEDIA_NODE_GAP = 24;
 
 type UseCanvasFileNodeActionsOptions = {
     containerRef: RefObject<HTMLDivElement | null>;
@@ -44,7 +46,7 @@ export function useCanvasFileNodeActions({
     toAudioMetadata,
 }: UseCanvasFileNodeActionsOptions) {
     const createImageFileNode = useCallback(
-        async (file: File, position: Position) => {
+        async (file: File, position: Position, forcedSize?: { width: number; height: number }) => {
             const image = await uploadImage(file);
             const id = `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
             const newNode = placeCanvasNodeAwayFromNodes(
@@ -54,6 +56,7 @@ export function useCanvasFileNodeActions({
                     center: position,
                     file: image,
                     metadata: toImageMetadata(image),
+                    forcedSize,
                 }),
                 nodesRef.current,
             );
@@ -69,7 +72,7 @@ export function useCanvasFileNodeActions({
     );
 
     const createVideoFileNode = useCallback(
-        async (file: File, position: Position) => {
+        async (file: File, position: Position, forcedSize?: { width: number; height: number }) => {
             const video = await uploadMediaFile(file, "video");
             const id = `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
             const newNode = placeCanvasNodeAwayFromNodes(
@@ -79,6 +82,7 @@ export function useCanvasFileNodeActions({
                     center: position,
                     file: video,
                     metadata: toVideoMetadata(video),
+                    forcedSize,
                 }),
                 nodesRef.current,
             );
@@ -116,10 +120,10 @@ export function useCanvasFileNodeActions({
     );
 
     const createFileNode = useCallback(
-        (file: File, position: Position) => {
+        (file: File, position: Position, forcedSize?: { width: number; height: number }) => {
             if (file.type.startsWith("audio/")) return createAudioFileNode(file, position);
-            if (file.type.startsWith("video/")) return createVideoFileNode(file, position);
-            return createImageFileNode(file, position);
+            if (file.type.startsWith("video/")) return createVideoFileNode(file, position, forcedSize);
+            return createImageFileNode(file, position, forcedSize);
         },
         [createAudioFileNode, createImageFileNode, createVideoFileNode],
     );
@@ -127,8 +131,9 @@ export function useCanvasFileNodeActions({
     const createFileNodes = useCallback(
         async (files: File[], position: Position) => {
             const ids: string[] = [];
+            const batchSize = files.length > 1 ? BATCH_MEDIA_NODE_SIZE : undefined;
             for (const [index, file] of files.entries()) {
-                const id = await createFileNode(file, getBatchDropPosition(position, index));
+                const id = await createFileNode(file, getBatchDropPosition(position, index, batchSize), batchSize);
                 if (id) ids.push(id);
             }
             if (ids.length > 1) {
@@ -244,6 +249,7 @@ export function useCanvasFileNodeActions({
         createImageFileNode,
         createVideoFileNode,
         createAudioFileNode,
+        createFileNodes,
         handleUploadRequest,
         handleImageInputChange,
         handleDrop,
@@ -260,9 +266,9 @@ function getCanvasCenterFromContainer(containerRef: RefObject<HTMLDivElement | n
     return screenToCanvas((rect?.left || 0) + size.width / 2, (rect?.top || 0) + size.height / 2);
 }
 
-function getBatchDropPosition(position: Position, index: number): Position {
+function getBatchDropPosition(position: Position, index: number, size = BATCH_MEDIA_NODE_SIZE): Position {
     return {
-        x: position.x + (index % 4) * 220,
-        y: position.y + Math.floor(index / 4) * 160,
+        x: position.x,
+        y: position.y + index * (size.height + BATCH_MEDIA_NODE_GAP),
     };
 }

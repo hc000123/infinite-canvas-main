@@ -229,7 +229,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
                 onCancel={() => setPreviewOpen(false)}
                 footer={null}
                 centered
-                width={860}
+                width={1040}
                 mask={{ closable: true }}
                 keyboard
                 destroyOnHidden
@@ -241,7 +241,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
             >
                 <div onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheelCapture={(event) => event.stopPropagation()}>
                     {hasPreviewContent ? (
-                        <div className="flex h-[min(66vh,580px)] flex-col gap-3 overflow-hidden">
+                        <div className="flex h-[min(72vh,700px)] flex-col gap-3 overflow-hidden">
                             <div className="shrink-0 space-y-3">
                                 {mode === "video" ? (
                                     <PreviewSection title="多模态参考" count={mediaInputs.length} empty="暂无参考素材">
@@ -428,9 +428,9 @@ function ImageSortCard({
 }) {
     if (!input.image) return null;
     return (
-        <div className={`${seedanceRole ? "w-36" : "w-24"} shrink-0 overflow-hidden rounded-lg border`} style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+        <div className={`${seedanceRole ? "w-48" : "w-36"} shrink-0 overflow-hidden rounded-lg border`} style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
             <div className="relative">
-                <img src={input.image.dataUrl} alt={input.title} className="aspect-square w-full object-cover" />
+                <img src={input.image.dataUrl} alt={input.title} className="aspect-[4/3] w-full bg-black/30 object-contain" />
                 <span className="absolute left-1 top-1 rounded bg-black/50 px-1 py-0.5 text-[9px] font-medium text-white">{seedanceReferenceLabel("image", imageIndex + 1)}</span>
                 <HorizontalOrderButtons index={orderIndex ?? imageIndex} total={orderTotal ?? imageTotal} onMove={(offset) => onMove(input, offset)} />
             </div>
@@ -472,7 +472,7 @@ function VideoSortCard({
 }) {
     if (!input.video) return null;
     return (
-        <div className="w-32 shrink-0 overflow-hidden rounded-lg border" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+        <div className="w-48 shrink-0 overflow-hidden rounded-lg border" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
             <div className="relative">
                 <video src={input.video.url} className="aspect-video w-full bg-black object-cover" muted playsInline />
                 <span className="absolute left-1 top-1 rounded bg-black/50 px-1 py-0.5 text-[9px] font-medium text-white">{seedanceReferenceLabel("video", videoIndex + 1)}</span>
@@ -502,7 +502,7 @@ function AudioSortCard({
 }) {
     if (!input.audio) return null;
     return (
-        <div className="w-40 shrink-0 overflow-hidden rounded-lg border" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+        <div className="w-48 shrink-0 overflow-hidden rounded-lg border" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
             <div className="relative flex aspect-video w-full flex-col items-center justify-center gap-1.5 px-2" style={{ background: `${theme.node.stroke}33` }}>
                 <AudioLines className="size-6 opacity-60" />
                 <span className="max-w-full truncate text-[10px] opacity-65">{input.title}</span>

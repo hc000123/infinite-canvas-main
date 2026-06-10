@@ -31,6 +31,7 @@ import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions
 import { buildInsertedMediaAssetNode } from "../utils/canvas-inserted-media-node";
 import { resetInterruptedGeneration } from "../utils/canvas-video-task-recovery";
 import { placeCanvasNodeAwayFromNodes } from "../utils/canvas-node-placement";
+import { cropImageToResolution } from "../utils/canvas-image-data";
 import { aiTaskIdFromGeneration, buildFrontendArtifactTrace } from "../utils/canvas-ai-task-trace";
 import { isHiddenBatchChild, isHiddenBatchConnectionEndpoint, setBatchPrimaryInNodes, toggleBatchExpandedInNodes } from "../utils/canvas-batch-nodes";
 import { applyCanvasProjectPresetToConfig } from "../utils/canvas-project-preset";
@@ -655,6 +656,7 @@ function InfiniteCanvasPage() {
     }, [collapsingBatchIds, nodes, size.height, size.width, viewport.k, viewport.x, viewport.y]);
 
     const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+    const frameReferencesByVideoId = useMemo(() => buildFrameReferencesByVideoId(nodes, connections), [connections, nodes]);
     const assetById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
     const assetTitleById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset.title])), [assets]);
     const { toolbarNode, infoNode, cropNode, angleNode, previewNode, hasNewAssetVersion } = useCanvasNodeToolbarState({
@@ -889,7 +891,7 @@ function InfiniteCanvasPage() {
         [addAssetOnce],
     );
 
-    const { createImageFileNode, handleUploadRequest, handleImageInputChange, handleDrop, pasteAssistantImage } = useCanvasFileNodeActions({
+    const { createImageFileNode, createFileNodes, handleUploadRequest, handleImageInputChange, handleDrop, pasteAssistantImage } = useCanvasFileNodeActions({
         containerRef,
         imageInputRef,
         uploadTargetRef,
@@ -919,12 +921,13 @@ function InfiniteCanvasPage() {
         setAssetPickerOpen,
     });
 
-    const { copySelectedNodes, pasteCopiedNodes, pasteSystemClipboard } = useCanvasClipboardActions({
+    const { copySelectedNodes, pasteCopiedNodes, pasteSystemClipboard, pasteClipboardEvent } = useCanvasClipboardActions({
         nodesRef,
         connectionsRef,
         selectedNodeIdsRef,
         getCanvasCenter,
         createImageFileNode,
+        createFileNodes,
         setNodes,
         setConnections,
         setSelectedNodeIds,
@@ -1023,6 +1026,36 @@ function InfiniteCanvasPage() {
         updateAsset,
         volcengineAssetEnabled,
     });
+
+    const normalizeVideoFrameReferences = useCallback(
+        async (_videoNode: CanvasNodeData, firstNode: CanvasNodeData, lastNode: CanvasNodeData) => {
+            const firstContent = firstNode.metadata?.content;
+            const lastContent = lastNode.metadata?.content;
+            const targetWidth = Math.round(firstNode.metadata?.naturalWidth || firstNode.width);
+            const targetHeight = Math.round(firstNode.metadata?.naturalHeight || firstNode.height);
+            if (!firstContent || !lastContent || !targetWidth || !targetHeight) {
+                message.warning("首尾帧缺少可裁切的图片内容");
+                return;
+            }
+            try {
+                const [firstDataUrl, lastDataUrl] = await Promise.all([cropImageToResolution(firstContent, targetWidth, targetHeight), cropImageToResolution(lastContent, targetWidth, targetHeight)]);
+                const [firstImage, lastImage] = await Promise.all([uploadImage(await (await fetch(firstDataUrl)).blob()), uploadImage(await (await fetch(lastDataUrl)).blob())]);
+                const firstSize = fitNodeSize(firstImage.width, firstImage.height);
+                const lastSize = fitNodeSize(lastImage.width, lastImage.height);
+                setNodes((prev) =>
+                    prev.map((node) => {
+                        if (node.id === firstNode.id) return { ...node, width: firstSize.width, height: firstSize.height, metadata: { ...node.metadata, ...imageMetadata(firstImage), status: "success", errorDetails: undefined } };
+                        if (node.id === lastNode.id) return { ...node, width: lastSize.width, height: lastSize.height, metadata: { ...node.metadata, ...imageMetadata(lastImage), status: "success", errorDetails: undefined } };
+                        return node;
+                    }),
+                );
+                message.success(`已将首尾帧统一裁切为 ${targetWidth} x ${targetHeight}`);
+            } catch (error) {
+                message.error(error instanceof Error ? `首尾帧统一裁切失败：${error.message}` : "首尾帧统一裁切失败");
+            }
+        },
+        [imageMetadata, message],
+    );
 
     const handleFontSizeChange = useCallback((nodeId: string, fontSize: number) => {
         setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, fontSize } } : node)));
@@ -1454,6 +1487,7 @@ function InfiniteCanvasPage() {
                     onCanvasDeselect={deselectCanvas}
                     onContextMenu={preventCanvasContextMenu}
                     onDrop={handleDrop}
+                    onPaste={(event) => pasteClipboardEvent(event)}
                 >
                     <svg className="absolute left-0 top-0 h-[10000px] w-[10000px] overflow-visible" style={{ pointerEvents: "none", transform: "translateZ(0)", zIndex: 0 }}>
                         {connections
@@ -1555,6 +1589,10 @@ function InfiniteCanvasPage() {
                             onGenerateImage={nodeToolActions.onGenerateImage}
                             onDownload={nodeToolActions.onDownload}
                             onViewImage={nodeToolActions.onViewImage}
+                            onReviewAsset={nodeToolActions.onReviewAsset}
+                            reviewSubmitting={submittingReviewNodeId === node.id}
+                            frameReferenceNodes={frameReferencesByVideoId.get(node.id)}
+                            onNormalizeFrameReferences={(videoNode, firstNode, lastNode) => void normalizeVideoFrameReferences(videoNode, firstNode, lastNode)}
                             onContextMenu={(event, id) => {
                                 event.preventDefault();
                                 event.stopPropagation();
@@ -2220,6 +2258,22 @@ function applyNodeConfigPatch(node: CanvasNodeData, patch: Partial<CanvasNodeMet
     const spec = node.type === CanvasNodeType.Video ? NODE_DEFAULT_SIZE[CanvasNodeType.Video] : NODE_DEFAULT_SIZE[CanvasNodeType.Image];
     const size = typeof patch.size === "string" && !node.metadata?.content ? nodeSizeFromRatio(patch.size, spec.width, spec.height) : null;
     return size && (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video) ? { ...next, ...size, position: { x: node.position.x + node.width / 2 - size.width / 2, y: node.position.y + node.height / 2 - size.height / 2 } } : next;
+}
+
+function buildFrameReferencesByVideoId(nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const references = new Map<string, { first?: CanvasNodeData; last?: CanvasNodeData }>();
+    connections.forEach((connection) => {
+        if (connection.toHandle !== "first_frame" && connection.toHandle !== "last_frame") return;
+        const from = nodeById.get(connection.fromNodeId);
+        const to = nodeById.get(connection.toNodeId);
+        if (from?.type !== CanvasNodeType.Image || to?.type !== CanvasNodeType.Video) return;
+        const current = references.get(to.id) || {};
+        if (connection.toHandle === "first_frame") current.first = from;
+        else current.last = from;
+        references.set(to.id, current);
+    });
+    return references;
 }
 
 function shouldRememberVideoDefaults(node: CanvasNodeData | undefined, patch: Partial<CanvasNodeMetadata>) {

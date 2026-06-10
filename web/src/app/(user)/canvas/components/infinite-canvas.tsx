@@ -16,10 +16,11 @@ type InfiniteCanvasProps = {
     onCanvasDeselect?: () => void;
     onContextMenu?: (event: React.MouseEvent) => void;
     onDrop?: (event: React.DragEvent<HTMLDivElement>) => void;
+    onPaste?: (event: React.ClipboardEvent<HTMLDivElement>) => void;
     children: React.ReactNode;
 };
 
-export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onCanvasMouseDown, onCanvasDoubleClick, onCanvasDeselect, onContextMenu, onDrop, children }: InfiniteCanvasProps) {
+export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onCanvasMouseDown, onCanvasDoubleClick, onCanvasDeselect, onContextMenu, onDrop, onPaste, children }: InfiniteCanvasProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const panState = useRef({
         isPanning: false,
@@ -185,6 +186,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
     return (
         <div
             ref={containerRef}
+            tabIndex={0}
             className="relative h-full w-full cursor-grab select-none overflow-hidden"
             style={{ background: theme.canvas.background }}
             onPointerDown={handlePointerDown}
@@ -192,6 +194,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
             onContextMenu={onContextMenu}
             onDragOver={(event) => event.preventDefault()}
             onDrop={onDrop}
+            onPaste={onPaste}
         >
             <CanvasGrid viewport={viewport} mode={backgroundMode} />
             <div

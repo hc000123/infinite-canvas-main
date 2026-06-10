@@ -25,6 +25,19 @@ export async function cropDataUrl(dataUrl: string, crop?: ImageCropRect) {
     return drawCrop(image, sx, sy, size, size);
 }
 
+export async function cropImageToResolution(dataUrl: string, width: number, height: number) {
+    const image = await loadImage(dataUrl);
+    const targetWidth = Math.max(1, Math.round(width));
+    const targetHeight = Math.max(1, Math.round(height));
+    const targetRatio = targetWidth / targetHeight;
+    const sourceRatio = image.width / image.height;
+    const sw = sourceRatio > targetRatio ? Math.round(image.height * targetRatio) : image.width;
+    const sh = sourceRatio > targetRatio ? image.height : Math.round(image.width / targetRatio);
+    const sx = Math.max(0, Math.floor((image.width - sw) / 2));
+    const sy = Math.max(0, Math.floor((image.height - sh) / 2));
+    return drawCrop(image, sx, sy, sw, sh, targetWidth, targetHeight);
+}
+
 export async function transformAngleDataUrl(dataUrl: string, params: ImageAngleTransform) {
     const image = await loadImage(dataUrl);
     const canvas = document.createElement("canvas");
@@ -65,10 +78,10 @@ export async function transformAngleDataUrl(dataUrl: string, params: ImageAngleT
     return canvas.toDataURL("image/png");
 }
 
-function drawCrop(image: HTMLImageElement, sx: number, sy: number, sw: number, sh: number) {
+function drawCrop(image: HTMLImageElement, sx: number, sy: number, sw: number, sh: number, width = sw, height = sh) {
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, sw);
-    canvas.height = Math.max(1, sh);
+    canvas.width = Math.max(1, width);
+    canvas.height = Math.max(1, height);
     const context = canvas.getContext("2d");
     if (!context) return image.src;
     context.drawImage(image, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);

@@ -48,7 +48,10 @@ COPY docker-entrypoint.mjs /app/docker-entrypoint.mjs
 ENV GIN_MODE=release
 ENV NODE_ENV=production
 ENV PROMPT_DATA_DIR=/app/data/prompts
-RUN mkdir -p /app/data/prompts
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /app/data/prompts
 
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD ["node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"]

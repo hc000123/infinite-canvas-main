@@ -114,6 +114,7 @@ export function CanvasCreateProjectModal({
                         <Select
                             options={[
                                 { label: "24fps", value: "24" },
+                                { label: "25fps", value: "25" },
                                 { label: "30fps", value: "30" },
                                 { label: "60fps", value: "60" },
                             ]}

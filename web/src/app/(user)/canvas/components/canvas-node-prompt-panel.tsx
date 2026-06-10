@@ -51,7 +51,7 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "image" ? config.count : 1 });
     const mentionTrigger = mode === "video" ? findReferenceMentionTrigger(prompt, caret) : null;
-    const mentionMatches = useMemo(() => (mentionTrigger ? filterReferenceMentions(referenceMentionOptions, mentionTrigger.query).slice(0, 6) : []), [mentionTrigger?.query, mentionTrigger?.start, referenceMentionOptions]);
+    const mentionMatches = useMemo(() => (mentionTrigger ? filterReferenceMentions(referenceMentionOptions, mentionTrigger.query).slice(0, 9) : []), [mentionTrigger?.query, mentionTrigger?.start, referenceMentionOptions]);
 
     useEffect(() => {
         setPrompt(isEditingExistingContent ? "" : node.metadata?.prompt || "");

@@ -11,6 +11,7 @@ type UploadedNodeInput<T> = {
     center: Position;
     file: T;
     metadata: CanvasNodeMetadata;
+    forcedSize?: { width: number; height: number };
 };
 
 type ReplaceUploadedNodeInput<T> = {
@@ -20,8 +21,8 @@ type ReplaceUploadedNodeInput<T> = {
     metadata: CanvasNodeMetadata;
 };
 
-export function buildUploadedImageFileNode({ id, title, center, file, metadata }: UploadedNodeInput<UploadedImage>): CanvasNodeData {
-    const size = fitNodeSize(file.width, file.height);
+export function buildUploadedImageFileNode({ id, title, center, file, metadata, forcedSize }: UploadedNodeInput<UploadedImage>): CanvasNodeData {
+    const size = forcedSize || fitNodeSize(file.width, file.height);
     return {
         id,
         type: "image" as CanvasNodeData["type"],
@@ -33,8 +34,8 @@ export function buildUploadedImageFileNode({ id, title, center, file, metadata }
     };
 }
 
-export function buildUploadedVideoFileNode({ id, title, center, file, metadata }: UploadedNodeInput<UploadedFile>): CanvasNodeData {
-    const size = videoNodeSize(file);
+export function buildUploadedVideoFileNode({ id, title, center, file, metadata, forcedSize }: UploadedNodeInput<UploadedFile>): CanvasNodeData {
+    const size = forcedSize || videoNodeSize(file);
     return {
         id,
         type: "video" as CanvasNodeData["type"],

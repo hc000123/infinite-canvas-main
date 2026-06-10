@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertTriangle, AudioLines, ChevronRight, FileText, Image as ImageIcon, RefreshCw, Settings2, Star, Video } from "lucide-react";
+import { AlertTriangle, AudioLines, ChevronRight, FileText, Image as ImageIcon, RefreshCw, Scissors, Settings2, ShieldCheck, Star, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
@@ -47,6 +47,10 @@ type CanvasNodeProps = {
     onGenerateImage?: (node: CanvasNodeData) => void;
     onDownload?: (node: CanvasNodeData) => void;
     onViewImage?: (node: CanvasNodeData) => void;
+    onReviewAsset?: (node: CanvasNodeData) => void;
+    reviewSubmitting?: boolean;
+    frameReferenceNodes?: { first?: CanvasNodeData; last?: CanvasNodeData };
+    onNormalizeFrameReferences?: (videoNode: CanvasNodeData, firstNode: CanvasNodeData, lastNode: CanvasNodeData) => void;
     onContextMenu: (event: React.MouseEvent, nodeId: string) => void;
 };
 
@@ -68,6 +72,10 @@ type NodeContentRendererProps = {
     onRefreshVideoTask?: (node: CanvasNodeData) => void;
     onGenerateImage?: (node: CanvasNodeData) => void;
     onDownload?: (node: CanvasNodeData) => void;
+    onReviewAsset?: (node: CanvasNodeData) => void;
+    reviewSubmitting?: boolean;
+    frameReferenceNodes?: { first?: CanvasNodeData; last?: CanvasNodeData };
+    onNormalizeFrameReferences?: (videoNode: CanvasNodeData, firstNode: CanvasNodeData, lastNode: CanvasNodeData) => void;
     onToggleBatch?: () => void;
     onSetBatchPrimary?: () => void;
 };
@@ -106,6 +114,10 @@ export const CanvasNode = React.memo(function CanvasNode({
     onGenerateImage,
     onDownload,
     onViewImage,
+    onReviewAsset,
+    reviewSubmitting = false,
+    frameReferenceNodes,
+    onNormalizeFrameReferences,
     onContextMenu,
 }: CanvasNodeProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -326,6 +338,10 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onRefreshVideoTask={onRefreshVideoTask}
                         onGenerateImage={onGenerateImage}
                         onDownload={onDownload}
+                        onReviewAsset={onReviewAsset}
+                        reviewSubmitting={reviewSubmitting}
+                        frameReferenceNodes={frameReferenceNodes}
+                        onNormalizeFrameReferences={onNormalizeFrameReferences}
                         onToggleBatch={() => onToggleBatch?.(data.id)}
                         onSetBatchPrimary={() => onSetBatchPrimary?.(data)}
                     />
@@ -354,8 +370,20 @@ export const CanvasNode = React.memo(function CanvasNode({
             <ConnectionHandleDot side="right" visible={data.type !== CanvasNodeType.Config && (hovered || isSelected || isConnecting)} onMouseDown={(event) => onConnectStart(event, data.id, "source")} />
             {showFrameReferenceHandles ? (
                 <>
-                    <FrameReferenceHandle label="首帧" side="first" visible={hovered || isSelected || isConnecting} onMouseDown={(event) => onConnectStart(event, data.id, "target", "first_frame")} />
-                    <FrameReferenceHandle label="尾帧" side="last" visible={hovered || isSelected || isConnecting} onMouseDown={(event) => onConnectStart(event, data.id, "target", "last_frame")} />
+                    <FrameReferenceHandle
+                        label="首帧"
+                        side="first"
+                        connected={Boolean(frameReferenceNodes?.first)}
+                        visible={hovered || isSelected || isConnecting || Boolean(frameReferenceNodes?.first)}
+                        onMouseDown={(event) => onConnectStart(event, data.id, "target", "first_frame")}
+                    />
+                    <FrameReferenceHandle
+                        label="尾帧"
+                        side="last"
+                        connected={Boolean(frameReferenceNodes?.last)}
+                        visible={hovered || isSelected || isConnecting || Boolean(frameReferenceNodes?.last)}
+                        onMouseDown={(event) => onConnectStart(event, data.id, "target", "last_frame")}
+                    />
                 </>
             ) : null}
 
@@ -675,6 +703,8 @@ function ImageNodeContent(props: NodeContentRendererProps) {
             batchRecovering={props.batchRecovering}
             onToggleBatch={props.onToggleBatch}
             onSetBatchPrimary={props.onSetBatchPrimary}
+            onReviewAsset={props.onReviewAsset}
+            reviewSubmitting={props.reviewSubmitting}
         />
     );
 }
@@ -697,18 +727,21 @@ function EmptyImageContent({ theme, isBatchRoot, batchCount, batchExpanded, batc
     return content;
 }
 
-function VideoNodeContent({ node, theme, onRefreshVideoTask }: NodeContentRendererProps) {
+function VideoNodeContent({ node, theme, onRefreshVideoTask, onReviewAsset, reviewSubmitting, frameReferenceNodes, onNormalizeFrameReferences }: NodeContentRendererProps) {
     const [detailsOpen, setDetailsOpen] = useState(false);
+    const frameStrip = <FrameReferenceStrip videoNode={node} theme={theme} frameReferenceNodes={frameReferenceNodes} onNormalizeFrameReferences={onNormalizeFrameReferences} />;
     if (!node.metadata?.content)
         return (
-            <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.placeholder }}>
+            <div className="relative flex h-full w-full flex-col items-center justify-center gap-3 rounded-[18px]" style={{ color: theme.node.placeholder }}>
                 <Video className="size-7 opacity-35" />
                 <span className="text-sm">空视频节点</span>
+                {frameStrip}
             </div>
         );
     return (
         <div className="relative h-full w-full rounded-[18px] bg-black">
             <video src={node.metadata.content} controls controlsList="nodownload" className="h-full w-full rounded-[18px] object-contain" data-canvas-no-zoom />
+            {frameStrip}
             {node.metadata?.taskId || node.metadata?.prompt ? (
                 <div className="absolute left-2.5 top-2.5 z-30 flex flex-wrap gap-1.5">
                     {node.metadata?.taskId ? (
@@ -731,6 +764,7 @@ function VideoNodeContent({ node, theme, onRefreshVideoTask }: NodeContentRender
                     <GeneratedPromptToggle node={node} theme={theme} variant="dark" />
                 </div>
             ) : null}
+            <MediaReviewButton node={node} theme={theme} submitting={reviewSubmitting} onReviewAsset={onReviewAsset} className="absolute right-2.5 top-2.5 z-30" dark />
             <VideoNodeStatusPill node={node} offsetTop={node.metadata?.taskId || node.metadata?.prompt ? 46 : 10} />
             {detailsOpen ? (
                 <div className="absolute left-2.5 top-12 z-40">
@@ -768,6 +802,102 @@ function VideoNodeStatusPill({ node, offsetTop }: { node: CanvasNodeData; offset
             <span className="max-w-full truncate rounded bg-black/50 px-2 py-1 text-[10px] font-medium leading-none text-white/90 backdrop-blur-sm">{text}</span>
         </div>
     );
+}
+
+function MediaReviewButton({
+    node,
+    theme,
+    submitting,
+    onReviewAsset,
+    className,
+    dark = false,
+}: {
+    node: CanvasNodeData;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    submitting?: boolean;
+    onReviewAsset?: (node: CanvasNodeData) => void;
+    className?: string;
+    dark?: boolean;
+}) {
+    if (!node.metadata?.content || !onReviewAsset) return null;
+    const review = node.metadata?.volcengineAsset;
+    const active = review?.status === "Active";
+    const processing = review?.status === "Processing" || submitting;
+    const label = active ? "已加白" : processing ? "加白中" : "加白";
+    return (
+        <button
+            type="button"
+            className={`${className || ""} inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-medium shadow-[0_8px_24px_rgba(0,0,0,.18)] backdrop-blur-md transition hover:scale-[1.03]`}
+            style={{ background: dark ? "rgba(0,0,0,.5)" : `${theme.toolbar.panel}d9`, borderColor: dark ? "rgba(255,255,255,.22)" : `${theme.toolbar.border}cc`, color: dark ? "#fff" : theme.node.text }}
+            onClick={(event) => {
+                event.stopPropagation();
+                onReviewAsset(node);
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            title={active ? "素材已完成加白" : "提交素材加白"}
+            aria-label="素材加白"
+        >
+            <ShieldCheck className={`size-3.5 ${processing ? "animate-pulse" : ""}`} />
+            {label}
+        </button>
+    );
+}
+
+function FrameReferenceStrip({
+    videoNode,
+    theme,
+    frameReferenceNodes,
+    onNormalizeFrameReferences,
+}: {
+    videoNode: CanvasNodeData;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    frameReferenceNodes?: { first?: CanvasNodeData; last?: CanvasNodeData };
+    onNormalizeFrameReferences?: (videoNode: CanvasNodeData, firstNode: CanvasNodeData, lastNode: CanvasNodeData) => void;
+}) {
+    const first = frameReferenceNodes?.first;
+    const last = frameReferenceNodes?.last;
+    if (!first && !last) return null;
+    const mismatch = Boolean(first && last && frameResolutionLabel(first) && frameResolutionLabel(last) && frameResolutionLabel(first) !== frameResolutionLabel(last));
+    return (
+        <div className="absolute inset-x-2.5 bottom-2.5 z-30 flex min-w-0 items-end gap-2">
+            <FrameReferenceThumb label="首帧" node={first} theme={theme} />
+            <FrameReferenceThumb label="尾帧" node={last} theme={theme} />
+            {mismatch && first && last ? (
+                <button
+                    type="button"
+                    className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-medium text-amber-100 shadow-[0_8px_24px_rgba(0,0,0,.18)] backdrop-blur-md transition hover:scale-[1.03]"
+                    style={{ background: "rgba(120,53,15,.78)", borderColor: "rgba(251,191,36,.38)" }}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onNormalizeFrameReferences?.(videoNode, first, last);
+                    }}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    title="首尾帧分辨率不一致，自动居中裁切到统一分辨率"
+                >
+                    <Scissors className="size-3.5" />
+                    统一裁切
+                </button>
+            ) : null}
+        </div>
+    );
+}
+
+function FrameReferenceThumb({ label, node, theme }: { label: string; node?: CanvasNodeData; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    return (
+        <div className="relative h-16 w-24 overflow-hidden rounded-lg border shadow-[0_8px_24px_rgba(0,0,0,.18)] backdrop-blur-md" style={{ background: `${theme.toolbar.panel}dd`, borderColor: theme.toolbar.border, color: theme.node.text }}>
+            {node?.metadata?.content ? <img src={node.metadata.content} alt={label} className="h-full w-full object-cover" draggable={false} /> : <div className="grid h-full w-full place-items-center text-[11px] opacity-45">未连接</div>}
+            <span className="absolute left-1 top-1 rounded bg-black/55 px-1.5 py-0.5 text-[9px] font-medium leading-none text-white">{label}</span>
+            {node ? <span className="absolute bottom-1 left-1 max-w-[88px] truncate rounded bg-black/55 px-1.5 py-0.5 text-[9px] leading-none text-white/90">{frameResolutionLabel(node) || "未知尺寸"}</span> : null}
+        </div>
+    );
+}
+
+function frameResolutionLabel(node: CanvasNodeData) {
+    const width = Math.round(node.metadata?.naturalWidth || 0);
+    const height = Math.round(node.metadata?.naturalHeight || 0);
+    return width > 0 && height > 0 ? `${width}x${height}` : "";
 }
 
 function videoNodeCompactStatus(node: CanvasNodeData) {
@@ -818,6 +948,8 @@ function ImageContent({
     batchRecovering,
     onToggleBatch,
     onSetBatchPrimary,
+    onReviewAsset,
+    reviewSubmitting,
 }: {
     node: CanvasNodeData;
     isBatchRoot: boolean;
@@ -827,6 +959,8 @@ function ImageContent({
     batchRecovering: boolean;
     onToggleBatch?: () => void;
     onSetBatchPrimary?: () => void;
+    onReviewAsset?: (node: CanvasNodeData) => void;
+    reviewSubmitting?: boolean;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const isBatchChild = Boolean(node.metadata?.batchRootId);
@@ -845,6 +979,7 @@ function ImageContent({
             <div className="absolute left-2.5 top-2.5 z-30">
                 <GeneratedPromptToggle node={node} theme={theme} />
             </div>
+            <MediaReviewButton node={node} theme={theme} submitting={reviewSubmitting} onReviewAsset={onReviewAsset} className="absolute bottom-2.5 left-2.5 z-30" />
             {isBatchRoot ? (
                 <button
                     type="button"
@@ -1038,25 +1173,25 @@ function ConnectionHandleDot({ side, visible, onMouseDown }: { side: "left" | "r
     );
 }
 
-function FrameReferenceHandle({ label, side, visible, onMouseDown }: { label: string; side: "first" | "last"; visible: boolean; onMouseDown: (event: React.MouseEvent) => void }) {
+function FrameReferenceHandle({ label, side, connected, visible, onMouseDown }: { label: string; side: "first" | "last"; connected: boolean; visible: boolean; onMouseDown: (event: React.MouseEvent) => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const left = side === "first" ? "35%" : "65%";
 
     return (
         <div
-            className={`absolute top-0 z-40 flex size-12 -translate-x-1/2 -translate-y-1/2 cursor-crosshair items-center justify-center transition-opacity duration-150 ${visible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
+            className={`absolute top-0 z-40 flex h-16 w-28 -translate-x-1/2 -translate-y-1/2 cursor-crosshair items-center justify-center transition-opacity duration-150 ${visible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
             style={{ left }}
             onMouseDown={onMouseDown}
             title={`${label}输入`}
             aria-label={`${label}输入`}
         >
             <span
-                className="pointer-events-none absolute bottom-8 rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none shadow-[0_8px_24px_rgba(0,0,0,.16)] backdrop-blur-md"
-                style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
+                className="pointer-events-none absolute bottom-10 rounded-md border px-2 py-1 text-[10px] font-medium leading-none shadow-[0_8px_24px_rgba(0,0,0,.16)] backdrop-blur-md"
+                style={{ background: connected ? theme.toolbar.activeBg : theme.toolbar.panel, borderColor: connected ? theme.node.activeStroke : theme.toolbar.border, color: connected ? theme.toolbar.activeText : theme.node.text }}
             >
                 {label}
             </span>
-            <span className="size-3 rounded-full border-2 transition-transform hover:scale-125" style={{ background: theme.node.panel, borderColor: theme.node.activeStroke }} />
+            <span className="size-4 rounded-full border-2 transition-transform hover:scale-125" style={{ background: theme.node.panel, borderColor: connected ? theme.node.activeStroke : theme.node.muted }} />
         </div>
     );
 }

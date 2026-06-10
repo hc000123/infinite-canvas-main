@@ -86,7 +86,7 @@ export function useCanvasConnections({
     );
 
     const connectNodes = useCallback(
-        (current: ConnectionHandle, targetNodeId: string) => {
+        (current: ConnectionHandle, targetNodeId: string, dropPosition?: Position) => {
             if (current.nodeId === targetNodeId) return;
 
             const connection = normalizeConnection(current.nodeId, targetNodeId, nodesRef.current, current.handleType, current.handleId);
@@ -94,6 +94,8 @@ export function useCanvasConnections({
                 showWarning("配置节点之间不能连接");
                 return;
             }
+            const frameHandle = inferFrameTargetHandle(current, connection, targetNodeId, nodesRef.current, dropPosition);
+            if (frameHandle) connection.toHandle = frameHandle;
             const { fromNodeId, toNodeId } = connection;
             const exists = connectionsRef.current.some((conn) => conn.fromNodeId === fromNodeId && conn.toNodeId === toNodeId && conn.fromHandle === connection.fromHandle && conn.toHandle === connection.toHandle);
             if (!exists) {
@@ -168,7 +170,7 @@ export function useCanvasConnections({
             if (!currentConnection) return;
             const targetNodeId = getConnectableNodeAtPoint(clientX, clientY, currentConnection) || connectionTargetNodeIdRef.current;
             if (targetNodeId) {
-                connectNodes(currentConnection, targetNodeId);
+                connectNodes(currentConnection, targetNodeId, screenToCanvas(clientX, clientY));
                 setConnecting(null);
                 return;
             }
@@ -205,6 +207,15 @@ export function useCanvasConnections({
         handleConnectStart,
         moveConnectionTarget,
     };
+}
+
+function inferFrameTargetHandle(current: ConnectionHandle, connection: ConnectionDraft, targetNodeId: string, nodes: CanvasNodeData[], dropPosition?: Position) {
+    if (connection.toHandle || current.handleType !== "source" || !dropPosition) return undefined;
+    const fromNode = nodes.find((node) => node.id === connection.fromNodeId);
+    const toNode = nodes.find((node) => node.id === targetNodeId);
+    if (fromNode?.type !== CanvasNodeType.Image || toNode?.type !== CanvasNodeType.Video || toNode.metadata?.videoReferenceImageMode !== "first_last_frame") return undefined;
+    const midpoint = toNode.position.x + toNode.width / 2;
+    return dropPosition.x <= midpoint ? "first_frame" : "last_frame";
 }
 
 function applyFrameConnectionMetadata(nodes: CanvasNodeData[], connection: ConnectionDraft): CanvasNodeData[] {
