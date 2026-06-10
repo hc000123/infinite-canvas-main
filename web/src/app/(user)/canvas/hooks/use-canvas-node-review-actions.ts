@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
 
 import { fetchVolcengineAssetStatus, submitVolcengineMediaAsset } from "@/services/api/volcengine-assets";
 import { getMediaBlob } from "@/services/file-storage";
@@ -31,6 +31,8 @@ type UseCanvasNodeReviewActionsOptions = {
 export function useCanvasNodeReviewActions({ token, message, nodes, nodesRef, setNodes, assets, addAssetOnce, updateAsset, volcengineAssetEnabled }: UseCanvasNodeReviewActionsOptions) {
     const [submittingReviewNodeId, setSubmittingReviewNodeId] = useState<string | null>(null);
     const [refreshingReviewNodeId, setRefreshingReviewNodeId] = useState<string | null>(null);
+    const submittingReviewNodeIdRef = useRef<string | null>(null);
+    const refreshingReviewNodeIdRef = useRef<string | null>(null);
     const processingReviewNodeIds = useMemo(() => volcengineReviewPollingKey(nodes), [nodes]);
 
     const syncNodeVolcengineReviewToAssets = useCallback(
@@ -51,6 +53,7 @@ export function useCanvasNodeReviewActions({ token, message, nodes, nodesRef, se
     const submitNodeVolcengineReview = useCallback(
         async (node: CanvasNodeData) => {
             if ((node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video) || !node.metadata?.content) return;
+            if (submittingReviewNodeIdRef.current === node.id) return;
             if (!volcengineAssetEnabled) {
                 message.warning("请先开启火山素材加白");
                 return;
@@ -59,6 +62,7 @@ export function useCanvasNodeReviewActions({ token, message, nodes, nodesRef, se
                 message.error("请先登录");
                 return;
             }
+            submittingReviewNodeIdRef.current = node.id;
             setSubmittingReviewNodeId(node.id);
             try {
                 const storedBlob = node.metadata.storageKey ? (node.type === CanvasNodeType.Image ? await getImageBlob(node.metadata.storageKey) : await getMediaBlob(node.metadata.storageKey)) : null;
@@ -82,6 +86,7 @@ export function useCanvasNodeReviewActions({ token, message, nodes, nodesRef, se
             } catch (error) {
                 message.error(error instanceof Error ? error.message : "提交加白失败");
             } finally {
+                submittingReviewNodeIdRef.current = null;
                 setSubmittingReviewNodeId(null);
             }
         },
@@ -92,12 +97,16 @@ export function useCanvasNodeReviewActions({ token, message, nodes, nodesRef, se
         async (node: CanvasNodeData, options: { silent?: boolean; showProgress?: boolean } = {}) => {
             const saved = node.metadata?.volcengineAsset;
             if ((node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video) || !saved?.assetId) return;
+            if (refreshingReviewNodeIdRef.current === node.id) return;
             if (!token) {
                 if (!options.silent) message.error("请先登录");
                 return;
             }
             const showProgress = options.showProgress || !options.silent;
-            if (showProgress) setRefreshingReviewNodeId(node.id);
+            if (showProgress) {
+                refreshingReviewNodeIdRef.current = node.id;
+                setRefreshingReviewNodeId(node.id);
+            }
             try {
                 const status = await fetchVolcengineAssetStatus(token, {
                     assetId: saved.assetId,
@@ -114,7 +123,10 @@ export function useCanvasNodeReviewActions({ token, message, nodes, nodesRef, se
             } catch (error) {
                 if (!options.silent) message.error(error instanceof Error ? error.message : "刷新加白状态失败");
             } finally {
-                if (showProgress) setRefreshingReviewNodeId((current) => (current === node.id ? null : current));
+                if (showProgress) {
+                    refreshingReviewNodeIdRef.current = null;
+                    setRefreshingReviewNodeId((current) => (current === node.id ? null : current));
+                }
             }
         },
         [message, setNodes, syncNodeVolcengineReviewToAssets, token],

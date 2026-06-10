@@ -1,15 +1,17 @@
+import { buildWorkflowMappingPreviews } from "../agent-runner-workflow-preview.ts";
 import {
-    buildWorkflowMappingPreviews,
     buildWorkflowStagePromptMessages,
     buildWorkflowTextRunOutput,
-    type AgentRunInput,
-    type AgentWorkflowMappingPreview,
-    type AgentWorkflowRunRecord,
-    type AgentWorkflowStageOutput,
     type WorkflowStagePromptBuildInput,
     type WorkflowStagePromptContext,
-    type WorkflowTextRunOutput,
-} from "../agent-runner.ts";
+} from "../agent-runner-workflow-prompt.ts";
+import type {
+    AgentRunInput,
+    AgentWorkflowMappingPreview,
+    AgentWorkflowRunRecord,
+    AgentWorkflowStageOutput,
+    WorkflowTextRunOutput,
+} from "../agent-runner-types.ts";
 import { workflowStageDetail, type AgentWorkflowPreset } from "../agent-workflow-presets.ts";
 
 export type SeedanceWorkflowAgentStageId = "director-analysis" | "art-design" | "seedance-storyboard";

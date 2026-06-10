@@ -140,7 +140,7 @@ function referenceUrl(image: ReferenceImage) {
 }
 
 function referenceVideoUrl(video: ReferenceVideo) {
-    return video.storageKey || (!video.url.startsWith("blob:") ? video.url : undefined);
+    return video.assetUri || video.storageKey || (!video.url.startsWith("blob:") ? video.url : undefined);
 }
 
 function referenceAudioUrl(audio: ReferenceAudio) {

@@ -7,9 +7,10 @@ import type { AiConfig } from "@/stores/use-config-store";
 
 import type { CanvasProject } from "../../../../../canvas/stores/use-canvas-store";
 import type { ScriptEpisode } from "../../../../../canvas/utils/script-management";
-import { workflowStageDetail, type AgentWorkflowPreset, type AgentWorkflowStage } from "../../../../agent-workflow-presets";
-import { buildWorkflowStageSourceFiles, type AgentRunInput, type AgentWorkflowRunRecord, type AgentWorkflowSceneRunState, type AgentWorkflowStageOutput } from "../../../../agent-runner";
+import type { AgentWorkflowPreset, AgentWorkflowStage } from "../../../../agent-workflow-presets";
+import type { AgentRunInput, AgentWorkflowRunRecord, AgentWorkflowSceneRunState, AgentWorkflowStageOutput } from "../../../../agent-runner-types";
 import { getSeedanceWorkflowAgentCore } from "../../../../workflow-agents/seedance-workflow-agents";
+import { buildEpisodeStageRunRequest, buildEpisodeStoryboardSceneRunRequest } from "./episode-workbench-run-input";
 import type { EpisodeSceneOption } from "./use-episode-workbench-state";
 
 type RunActionMessage = {
@@ -68,6 +69,40 @@ export function useEpisodeWorkbenchRunActions({
     const [runningStageIds, setRunningStageIds] = useState<Record<string, boolean>>({});
     const [, setRunningSceneKeys] = useState<Record<string, boolean>>({});
 
+    const executeWorkflowTextRun = async ({
+        promptMessages,
+        requestConfig,
+        runId,
+        stopRunning,
+        successMessage,
+        textModel,
+    }: {
+        promptMessages: NonNullable<AgentRunInput["promptMessages"]>;
+        requestConfig: AiConfig;
+        runId: string;
+        stopRunning: () => void;
+        successMessage: string;
+        textModel: string;
+    }) => {
+        if (!textModel || !checkAiConfigReady(effectiveConfig, textModel)) {
+            const reason = textModel ? "当前 API 配置或文本模型不可用" : "未配置文本模型";
+            failWorkflowTextRun(runId, reason);
+            stopRunning();
+            return message.warning(reason);
+        }
+        try {
+            const response = await requestImageQuestion(requestConfig, promptMessages, () => {});
+            completeWorkflowTextRun(runId, response || "没有返回内容");
+            message.success(successMessage);
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : "文本执行失败";
+            failWorkflowTextRun(runId, reason);
+            message.warning(reason);
+        } finally {
+            stopRunning();
+        }
+    };
+
     const runStage = async (stage: AgentWorkflowStage) => {
         if (!hasScript) {
             message.warning("请先导入本集剧本");
@@ -82,77 +117,30 @@ export function useEpisodeWorkbenchRunActions({
         }
         const core = getSeedanceWorkflowAgentCore(stage.stageId);
         if (!core) return message.error("缺少当前阶段 Agent Core");
-        const textModel = (effectiveConfig.textModel || effectiveConfig.model || "").trim();
-        const requestConfig = { ...effectiveConfig, model: textModel || effectiveConfig.model };
-        const directorSummary = stageOutputs["director-analysis"]?.summary || "";
-        const artSummary = stageOutputs["art-design"]?.summary || "";
-        const coreInput = core.buildInput({
-            preset,
-            inputSnapshot: {
-                projectId,
-                projectTitle,
-                canvasId: boundCanvas?.id,
-                episodeId,
-                episodeTitle: episode.title,
-                scriptSnapshot,
-                stageSummary: `${stage.inputSummary}；输出目标：${stage.outputSummary}`,
-                directorOutputSummary: directorSummary,
-                artDesignOutputSummary: artSummary,
-                storyboardRequirement:
-                    stage.qualityGateIds
-                        .map((gateId) => preset.qualityGates.find((gate) => gate.gateId === gateId)?.purpose)
-                        .filter(Boolean)
-                        .join("；") || stage.outputSummary,
-                assetNeedSummary: artSummary,
-            },
-        });
-        const sourceFiles = buildWorkflowStageSourceFiles(coreInput.skills, coreInput.qualityGates);
-        const promptMessages = core.buildPromptMessages(coreInput, preset);
-        const runInput: AgentRunInput = {
-            projectId,
-            canvasId: boundCanvas?.id,
+        const { promptMessages, requestConfig, runInput, textModel } = buildEpisodeStageRunRequest({
+            boundCanvas,
+            core,
+            effectiveConfig,
+            episode,
             episodeId,
-            episodeTitle: episode.title,
-            scriptId: projectId,
+            preset,
+            projectId,
+            projectTitle,
             scriptSnapshot,
-            sourceType: "episode_production_workbench",
-            sourceId: stage.stageId,
-            variables: { stageId: stage.stageId },
+            stage,
+            stageOutputs,
             workflowRunId,
-            workflowId: preset.workflowId,
-            workflowVersion: preset.version,
-            stageId: core.stageId,
-            agentId: core.agentId,
-            agentName: coreInput.agent.name,
-            sourcePresetId: preset.workflowId,
-            presetId: preset.workflowId,
-            inputSnapshot: { stageName: stage.name, stageSummary: stage.inputSummary },
-            promptMessages,
-            model: textModel,
-            provider: "openai-remote",
-            configSummary: JSON.stringify({ model: textModel, channelMode: "remote", textModelList: effectiveConfig.textModels, provider: "openai-remote" }, null, 2),
-            sourceFiles,
-            qualityGateIds: coreInput.qualityGates.map((gate) => gate.gateId),
-        };
+        });
         const runId = startWorkflowTextRun(runInput);
         setRunningStageIds((current) => ({ ...current, [stage.stageId]: true }));
-        if (!textModel || !checkAiConfigReady(effectiveConfig, textModel)) {
-            const reason = textModel ? "当前 API 配置或文本模型不可用" : "未配置文本模型";
-            failWorkflowTextRun(runId, reason);
-            setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
-            return message.warning(reason);
-        }
-        try {
-            const response = await requestImageQuestion(requestConfig, promptMessages, () => {});
-            completeWorkflowTextRun(runId, response || "没有返回内容");
-            message.success(`${stage.name} 草案已生成，待审核`);
-        } catch (error) {
-            const reason = error instanceof Error ? error.message : "文本执行失败";
-            failWorkflowTextRun(runId, reason);
-            message.warning(reason);
-        } finally {
-            setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
-        }
+        await executeWorkflowTextRun({
+            promptMessages,
+            requestConfig,
+            runId,
+            stopRunning: () => setRunningStageIds((current) => ({ ...current, [stage.stageId]: false })),
+            successMessage: `${stage.name} 草案已生成，待审核`,
+            textModel,
+        });
     };
 
     const runStoryboardScene = async () => {
@@ -168,91 +156,34 @@ export function useEpisodeWorkbenchRunActions({
         if (unfinishedScene) return message.warning(`请先完成当前场次审核：${unfinishedScene.sceneLabel}`);
         const core = getSeedanceWorkflowAgentCore(stage.stageId);
         if (!core) return message.error("缺少分镜师 Agent Core");
-        const textModel = (effectiveConfig.textModel || effectiveConfig.model || "").trim();
-        const requestConfig = { ...effectiveConfig, model: textModel || effectiveConfig.model };
-        const directorSummary = stageOutputs["director-analysis"]?.summary || "";
-        const artSummary = stageOutputs["art-design"]?.summary || "";
-        const sourceFiles = buildWorkflowStageSourceFiles(workflowStageDetail(preset, stage).skills, workflowStageDetail(preset, stage).qualityGates);
-        const coreInput = core.buildInput({
-            preset,
-            inputSnapshot: {
-                projectId,
-                projectTitle,
-                canvasId: boundCanvas?.id,
-                episodeId,
-                episodeTitle: episode.title,
-                scriptSnapshot,
-                stageSummary: "阶段三按场次 / 子场次推进；本次只处理当前选中场次。",
-                sceneKey: currentScene.sceneKey,
-                sceneLabel: currentScene.sceneLabel,
-                sceneScriptText: currentScene.scriptText,
-                sceneVisualDnaSummary: currentSceneState?.visualDnaSummary,
-                previousSceneSummary: previousApprovedSceneSummary(workflowRun?.sceneStates || [], currentScene.sceneKey),
-                directorOutputSummary: directorSummary,
-                artDesignOutputSummary: artSummary,
-                storyboardRequirement: "先输出场次视觉 DNA，再输出生成 P / 镜头 P 拆分表、单 P 任务卡、Seedance 提示词正文和工业化预检记录摘要。",
-                assetNeedSummary: artSummary,
-            },
-        });
-        const promptMessages = core.buildPromptMessages(coreInput, preset);
-        const runInput: AgentRunInput = {
-            projectId,
-            canvasId: boundCanvas?.id,
+        const { promptMessages, requestConfig, runInput, textModel } = buildEpisodeStoryboardSceneRunRequest({
+            boundCanvas,
+            core,
+            currentScene,
+            currentSceneState,
+            effectiveConfig,
+            episode,
             episodeId,
-            episodeTitle: episode.title,
-            scriptId: projectId,
-            scriptSnapshot: currentScene.scriptText || scriptSnapshot,
-            sourceType: "episode_production_workbench_scene",
-            sourceId: currentScene.sceneKey,
-            variables: { stageId: stage.stageId, sceneKey: currentScene.sceneKey, sceneLabel: currentScene.sceneLabel },
+            preset,
+            projectId,
+            projectTitle,
+            scriptSnapshot,
+            stage,
+            stageOutputs,
             workflowRunId,
-            workflowId: preset.workflowId,
-            workflowVersion: preset.version,
-            stageId: core.stageId,
-            agentId: core.agentId,
-            agentName: coreInput.agent.name,
-            sourcePresetId: preset.workflowId,
-            presetId: preset.workflowId,
-            inputSnapshot: { stageName: stage.name, sceneKey: currentScene.sceneKey, sceneLabel: currentScene.sceneLabel },
-            promptMessages,
-            model: textModel,
-            provider: "openai-remote",
-            configSummary: JSON.stringify({ model: textModel, channelMode: "remote", textModelList: effectiveConfig.textModels, provider: "openai-remote" }, null, 2),
-            sourceFiles,
-            qualityGateIds: coreInput.qualityGates.map((gate) => gate.gateId),
-        };
+            workflowSceneStates: workflowRun?.sceneStates || [],
+        });
         const runId = startWorkflowTextRun(runInput);
         setRunningSceneKeys((current) => ({ ...current, [currentScene.sceneKey]: true }));
-        if (!textModel || !checkAiConfigReady(effectiveConfig, textModel)) {
-            const reason = textModel ? "当前 API 配置或文本模型不可用" : "未配置文本模型";
-            failWorkflowTextRun(runId, reason);
-            setRunningSceneKeys((current) => ({ ...current, [currentScene.sceneKey]: false }));
-            return message.warning(reason);
-        }
-        try {
-            const response = await requestImageQuestion(requestConfig, promptMessages, () => {});
-            completeWorkflowTextRun(runId, response || "没有返回内容");
-            message.success(`${currentScene.sceneLabel} 草案已生成，待审核`);
-        } catch (error) {
-            const reason = error instanceof Error ? error.message : "文本执行失败";
-            failWorkflowTextRun(runId, reason);
-            message.warning(reason);
-        } finally {
-            setRunningSceneKeys((current) => ({ ...current, [currentScene.sceneKey]: false }));
-        }
+        await executeWorkflowTextRun({
+            promptMessages,
+            requestConfig,
+            runId,
+            stopRunning: () => setRunningSceneKeys((current) => ({ ...current, [currentScene.sceneKey]: false })),
+            successMessage: `${currentScene.sceneLabel} 草案已生成，待审核`,
+            textModel,
+        });
     };
 
     return { runStage, runStoryboardScene, runningStageIds };
-}
-
-function previousApprovedSceneSummary(sceneStates: AgentWorkflowSceneRunState[], sceneKey: string) {
-    const index = sceneStates.findIndex((scene) => scene.sceneKey === sceneKey);
-    const previous =
-        index > 0
-            ? sceneStates
-                  .slice(0, index)
-                  .reverse()
-                  .find((scene) => scene.status === "approved")
-            : undefined;
-    return previous ? `${previous.sceneLabel}：${previous.promptTextSummary || previous.promptPlanSummary || "已批准"}` : "";
 }

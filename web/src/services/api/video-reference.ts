@@ -68,9 +68,9 @@ export function seedanceAssetURIFromImageReference(image: { assetUri?: string; u
 }
 
 export function seedanceAssetURIFromVideoReference(video: { assetUri?: string; url?: string; volcenginePublicUrl?: string }) {
-    if (video.volcenginePublicUrl?.startsWith("http")) return video.volcenginePublicUrl;
     if (video.assetUri) return video.assetUri;
     if (video.url?.startsWith("asset://")) return video.url;
+    if (video.volcenginePublicUrl?.startsWith("http")) return video.volcenginePublicUrl;
     return "";
 }
 

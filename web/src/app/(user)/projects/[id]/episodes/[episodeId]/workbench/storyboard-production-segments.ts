@@ -2,7 +2,7 @@ import type { ScriptEpisode } from "../../../../../canvas/utils/script-managemen
 import type { StoryboardTableShot } from "../../../../../canvas/utils/storyboard-management";
 import type { EpisodeStatusTone } from "./components/episode-module-panel";
 
-type StoryboardPackageStatus = "已确认" | "待编辑" | "待审核" | "缺资产" | "超时" | "待承接";
+export type StoryboardPackageStatus = "已确认" | "待编辑" | "待审核" | "缺资产" | "超时" | "待承接";
 
 type StoryboardPackageShot = {
     action: string;

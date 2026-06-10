@@ -42,7 +42,7 @@ export function CanvasToolButton({
             <button
                 type="button"
                 className={`group relative grid ${buttonSize} place-items-center transition disabled:cursor-not-allowed`}
-                style={{ color: textColor, opacity: disabled ? 0.35 : 1 }}
+                style={{ color: textColor, opacity: disabled && !active ? 0.35 : 1 }}
                 disabled={disabled}
                 onClick={onClick}
                 onMouseEnter={() => setHovered(true)}

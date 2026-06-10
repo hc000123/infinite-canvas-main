@@ -81,6 +81,8 @@ func (realVolcengineObjectUploader) UploadObject(ctx context.Context, setting mo
 		tos.WithRegion(firstNonEmpty(target.Region, setting.Region)),
 		tos.WithCredentials(tos.NewStaticCredentials(setting.AccessKey, setting.SecretKey)),
 		tos.WithMaxRetryCount(3),
+		tos.WithRequestTimeout(AIVideoTaskTimeout),
+		tos.WithSocketTimeout(AIVideoTaskTimeout, AIVideoTaskTimeout),
 	)
 	if err != nil {
 		return safeMessageError{message: fmt.Sprintf("初始化火山 TOS 客户端失败：%s", err.Error())}

@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Alert, App, Button, Drawer, Empty, Form, Input, Modal, Select, Space } from "antd";
-import { Bot, FileText } from "lucide-react";
+import { App, Drawer, Form } from "antd";
 
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { preserveOrCreateAssetVersionReferences } from "../../assets/asset-version-references";
 import { defaultAgentConfigs, mergeAgentConfigs, projectAgentConfigOverrides } from "../../projects/agent-settings";
 import { useAgentSettingsStore } from "../../projects/use-agent-settings-store";
 import { useAgentRunnerStore } from "../../projects/use-agent-runner-store";
-import { listAgentRunsByEpisode, type AgentRunRecord } from "../../projects/agent-runner.ts";
+import { listAgentRunsByEpisode } from "../../projects/agent-runner.ts";
 import type { CanvasProject } from "../stores/use-canvas-store";
 import { useAssetBreakdownStore } from "../stores/use-asset-breakdown-store";
 import { useProductionBibleStore } from "../stores/use-production-bible-store";
@@ -29,16 +28,9 @@ import {
     validateEpisodeShotGroupSelection,
     workbenchModes,
 } from "../utils/episode-workbench";
-import { buildAssetBreakdownInputsFromAgentRun, buildAssetExtractorRunInput, buildLocalAssetExtractorDraftOutput, canRunAssetExtractor, shouldAllowAssetExtractorRun } from "../utils/agent-asset-extractor";
-import {
-    buildLocalStoryboardDirectorDraftOutput,
-    buildStoryboardDirectorRunInput,
-    buildStoryboardTableShotInputsFromAgentRun,
-    canRunStoryboardDirector,
-    shouldAllowStoryboardDirectorRun,
-    validateStoryboardDraftWriteMode,
-    type StoryboardDraftWriteMode,
-} from "../utils/agent-storyboard-director";
+import { canRunAssetExtractor, shouldAllowAssetExtractorRun } from "../utils/agent-asset-extractor";
+import { canRunStoryboardDirector, shouldAllowStoryboardDirectorRun } from "../utils/agent-storyboard-director";
+import { useEpisodeWorkbenchAgentActions } from "../hooks/use-episode-workbench-agent-actions";
 import { itemsForProductionBibleProject } from "../utils/production-bible";
 import type { CanvasNodeData } from "../types";
 import {
@@ -62,6 +54,8 @@ import type { ShotGroup, StoryboardTableShot } from "../utils/storyboard-managem
 import { findImageBriefForAssetBreakdown } from "../utils/episode-image-needs";
 import type { AssetBreakdownItem } from "../utils/asset-breakdown";
 import { buildShotGroupEpisodeReferenceCandidates, selectedEpisodeReferenceRefs, summarizeEpisodeReferenceCandidates } from "../utils/shot-group-episode-references";
+import { buildEpisodeSnapshot, EpisodeBindScriptModal, type BindFormValues } from "./episode-bind-script-modal";
+import { EpisodeWorkbenchAssetPreviewModal, EpisodeWorkbenchEmptyCanvas, EpisodeWorkbenchHeader } from "./episode-workbench-drawer-chrome";
 
 type Props = {
     open: boolean;
@@ -80,13 +74,6 @@ type Props = {
     onOpenAgentSettings?: () => void;
     onCreateCanvas?: () => void;
     promptBindWhenUnbound?: boolean;
-};
-
-type BindFormValues = {
-    mode: "none" | "existing" | "import";
-    episodeId?: string;
-    title?: string;
-    scriptText?: string;
 };
 
 const mediaKinds = new Set(["image", "video", "audio"]);
@@ -189,6 +176,26 @@ export function EpisodeWorkbenchDrawer({
     const storyboardDirectorConfig = useMemo(() => resolvedAgentConfigs.find((config) => config.kind === "storyboard_director"), [resolvedAgentConfigs]);
     const storyboardDirectorAvailability = shouldAllowStoryboardDirectorRun(storyboardDirectorConfig);
     const storyboardDirectorRunReadiness = canRunStoryboardDirector(activeCanvas);
+    const { applyAssetExtractionRun, applyStoryboardDirectorRun, runAssetExtraction, runStoryboardDirector } = useEpisodeWorkbenchAgentActions({
+        activeCanvas,
+        activeShots,
+        applyAgentTableShots,
+        assetExtractorAvailability,
+        assetExtractorConfig,
+        assetExtractorRunReadiness,
+        createAgentRun,
+        importAgentAssetDrafts,
+        markAgentRunApplied,
+        message,
+        modal,
+        onOpenAgentSettings,
+        projectId,
+        scriptDraft,
+        setSelectedShotIds,
+        storyboardDirectorAvailability,
+        storyboardDirectorConfig,
+        storyboardDirectorRunReadiness,
+    });
     const activeCanvasEpisodeId = activeCanvas?.episodeId;
     const activeCanvasIdForRuns = activeCanvas?.id;
     const activeAssetExtractorRuns = useMemo(
@@ -276,98 +283,6 @@ export function EpisodeWorkbenchDrawer({
         if (values.mode !== "none" && shouldConfirmEpisodeScriptReimport({ hasScriptSnapshot: Boolean(activeCanvas.scriptSnapshot?.trim()), tableShotCount: activeShots.length, shotGroupCount: activeShotGroups.length }))
             modal.confirm({ title: "重新绑定或导入剧本？", content: "已有剧本快照、分镜头和生成镜头组不会被静默覆盖；如需重新生成草案，需要之后手动确认。", okText: "确认更新", cancelText: "取消", onOk: apply });
         else apply();
-    };
-
-    const runStoryboardDirector = () => {
-        if (!activeCanvas) return message.warning("请先选择画布");
-        if (!storyboardDirectorRunReadiness.canRun) return message.warning(storyboardDirectorRunReadiness.reason);
-        if (!storyboardDirectorConfig || !storyboardDirectorAvailability.allowed) {
-            message.warning(storyboardDirectorAvailability.reason || "分镜导演 Agent 不可用");
-            onOpenAgentSettings?.();
-            return;
-        }
-        try {
-            const context = { projectId, canvas: { ...activeCanvas, scriptSnapshot: scriptDraft || activeCanvas.scriptSnapshot } };
-            createAgentRun(storyboardDirectorConfig, buildStoryboardDirectorRunInput(context), buildLocalStoryboardDirectorDraftOutput(context));
-            message.success("已创建分镜导演草案，请先审核再写入分镜头表");
-        } catch (error) {
-            message.warning(error instanceof Error ? error.message : "分镜导演 Agent 运行失败");
-        }
-    };
-
-    const runAssetExtraction = () => {
-        if (!activeCanvas) return message.warning("请先选择画布");
-        if (!assetExtractorRunReadiness.canRun) return message.warning(assetExtractorRunReadiness.reason);
-        if (!assetExtractorConfig || !assetExtractorAvailability.allowed) {
-            message.warning(assetExtractorAvailability.reason || "资产提取 Agent 不可用");
-            onOpenAgentSettings?.();
-            return;
-        }
-        try {
-            const context = { projectId, canvas: activeCanvas };
-            createAgentRun(assetExtractorConfig, buildAssetExtractorRunInput(context), buildLocalAssetExtractorDraftOutput(context));
-            message.success("已创建资产提取草案，请先审核再写入本集生图需求");
-        } catch (error) {
-            message.warning(error instanceof Error ? error.message : "资产提取 Agent 运行失败");
-        }
-    };
-
-    const applyAssetExtractionRun = (run: AgentRunRecord) => {
-        if (!activeCanvas?.episodeId) return message.warning("请先绑定或导入本集剧本");
-        try {
-            const drafts = buildAssetBreakdownInputsFromAgentRun(run, { projectId, canvas: activeCanvas });
-            if (!drafts.length) return message.warning("当前草案没有可写入的资产需求");
-            const apply = () => {
-                const count = importAgentAssetDrafts({ projectId, episodeId: activeCanvas.episodeId!, drafts });
-                markAgentRunApplied(run.id);
-                message.success(`已写入 ${count} 条本集生图需求，重复项会自动合并`);
-            };
-            modal.confirm({ title: "写入本集生图需求？", content: "将把已批准的资产草案写入资产拆解列表，不会自动创建 Brief、生成图片或扣费。重复资产会按同集同类同名合并。", okText: "写入", cancelText: "取消", onOk: apply });
-        } catch (error) {
-            message.warning(error instanceof Error ? error.message : "资产草案写入失败");
-        }
-    };
-
-    const applyStoryboardDirectorRun = (run: AgentRunRecord, mode?: StoryboardDraftWriteMode) => {
-        if (!activeCanvas?.episodeId) return message.warning("请先绑定或导入本集剧本");
-        const validation = validateStoryboardDraftWriteMode({ existingShotCount: activeShots.length, mode });
-        if (!validation.valid) {
-            const confirmationRef: { destroy?: () => void } = {};
-            const confirmation = modal.confirm({
-                title: "写入分镜头表",
-                content: "当前已有分镜头表，请选择追加到现有分镜后面，或覆盖当前本集分镜头表并清空对应生成镜头组。",
-                okText: "追加",
-                cancelText: "取消",
-                onOk: () => applyStoryboardDirectorRun(run, "append"),
-                footer: (_, { OkBtn, CancelBtn }) => (
-                    <>
-                        <Button
-                            danger
-                            onClick={() => {
-                                confirmationRef.destroy?.();
-                                applyStoryboardDirectorRun(run, "replace");
-                            }}
-                        >
-                            覆盖
-                        </Button>
-                        <CancelBtn />
-                        <OkBtn />
-                    </>
-                ),
-            });
-            confirmationRef.destroy = confirmation.destroy;
-            return;
-        }
-        try {
-            const shots = buildStoryboardTableShotInputsFromAgentRun(run, { projectId, canvas: activeCanvas });
-            if (!shots.length) return message.warning("当前草案没有可写入的分镜头");
-            const count = applyAgentTableShots({ projectId, canvasId: activeCanvas.id, episodeId: activeCanvas.episodeId, shots, mode: mode || "replace" });
-            markAgentRunApplied(run.id);
-            setSelectedShotIds([]);
-            message.success(`已${mode === "append" ? "追加" : "写入"} ${count} 条分镜头草案`);
-        } catch (error) {
-            message.warning(error instanceof Error ? error.message : "分镜草案写入失败");
-        }
     };
 
     const openNeedAsset = (asset: Asset) => {
@@ -466,32 +381,10 @@ export function EpisodeWorkbenchDrawer({
     return (
         <Drawer title="本集生产流程" open={open} onClose={onClose} size="min(1280px, calc(100vw - 24px))" destroyOnHidden>
             <div className="grid gap-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50/70 p-4 dark:border-stone-800 dark:bg-white/5">
-                    <div>
-                        <div className="text-sm text-stone-500">当前项目：{projectTitle}</div>
-                        <div className="mt-1 text-xl font-semibold">{activeCanvas?.episodeTitle || activeCanvas?.title || "未选择画布"}</div>
-                    </div>
-                    <Space wrap>
-                        <Select className="min-w-72" value={activeCanvas?.id} options={projectCanvases.map((canvas) => ({ label: `${canvasEpisodeLabel(canvas)} · ${canvas.title}`, value: canvas.id }))} onChange={setActiveCanvasId} />
-                        <Button icon={<FileText className="size-4" />} onClick={openBindModal}>
-                            绑定 / 导入剧本
-                        </Button>
-                        {onOpenAgentSettings ? (
-                            <Button icon={<Bot className="size-4" />} onClick={onOpenAgentSettings}>
-                                Agent 工作台
-                            </Button>
-                        ) : null}
-                    </Space>
-                </div>
+                <EpisodeWorkbenchHeader activeCanvas={activeCanvas} canvases={projectCanvases} projectTitle={projectTitle} onBindScript={openBindModal} onCanvasChange={setActiveCanvasId} onOpenAgentSettings={onOpenAgentSettings} />
 
                 {!activeCanvas ? (
-                    <Empty description="当前项目还没有画布">
-                        {onCreateCanvas ? (
-                            <Button type="primary" onClick={onCreateCanvas}>
-                                最后创建承接画布
-                            </Button>
-                        ) : null}
-                    </Empty>
+                    <EpisodeWorkbenchEmptyCanvas onCreateCanvas={onCreateCanvas} />
                 ) : (
                     <>
                         <EpisodeOverviewSection stats={stats} status={status} />
@@ -586,82 +479,17 @@ export function EpisodeWorkbenchDrawer({
 
             <TableShotFormModal open={shotFormOpen} editingShot={editingShot} assets={mediaAssets} onCancel={() => setShotFormOpen(false)} onSubmit={submitShot} />
             <ShotGroupFormModal open={shotGroupFormOpen} editingGroup={editingShotGroup} assets={mediaAssets} bibleItems={projectBibleItems} onCancel={() => setShotGroupFormOpen(false)} onSubmit={submitShotGroup} />
-            <Modal title={previewAsset?.title || "素材详情"} open={Boolean(previewAsset)} onCancel={() => setPreviewAsset(null)} footer={null} destroyOnHidden>
-                {previewAsset ? (
-                    <div className="space-y-3 text-sm">
-                        {previewAsset.coverUrl ? <img src={previewAsset.coverUrl} alt={previewAsset.title} className="max-h-96 w-full rounded-lg object-contain" /> : null}
-                        <div className="text-stone-500">素材 ID：{previewAsset.id}</div>
-                        <div className="text-stone-500">类型：{previewAsset.kind}</div>
-                    </div>
-                ) : null}
-            </Modal>
-            <Modal
-                title="绑定或导入本集剧本"
+            <EpisodeWorkbenchAssetPreviewModal asset={previewAsset} onClose={() => setPreviewAsset(null)} />
+            <EpisodeBindScriptModal
                 open={bindOpen}
+                form={bindForm}
+                episodeOptions={episodeOptions}
                 onCancel={() => {
                     setBindOpen(false);
                     setBindPromptDismissed(true);
                 }}
                 onOk={() => void applyBindEpisode()}
-                okText="确认"
-                cancelText="取消"
-                destroyOnHidden
-            >
-                <Alert
-                    className="mb-4"
-                    type="info"
-                    showIcon
-                    title="选择本集生产方式"
-                    description="剧本驱动生产用于拆资产和分镜；自由画布制作可以不绑定剧本继续创作；资产生产与复用可先沉淀角色图、场景图、道具图和氛围参考。确认后不会自动运行 Agent、生成分镜草案或触发生成扣费。"
-                />
-                <Form form={bindForm} layout="vertical" initialValues={{ mode: "import" }}>
-                    <Form.Item name="mode" label="剧本来源">
-                        <Select
-                            options={[
-                                { label: "不绑定剧本，继续自由画布制作", value: "none" },
-                                { label: "从项目已有分集选择", value: "existing" },
-                                { label: "粘贴 / 导入本集剧本", value: "import" },
-                            ]}
-                        />
-                    </Form.Item>
-                    <Form.Item noStyle shouldUpdate={(prev, next) => prev.mode !== next.mode}>
-                        {({ getFieldValue }) =>
-                            getFieldValue("mode") === "existing" ? (
-                                <Form.Item name="episodeId" label="已有分集" rules={[{ required: true, message: "请选择分集" }]}>
-                                    <Select options={episodeOptions} placeholder="选择项目分集" />
-                                </Form.Item>
-                            ) : getFieldValue("mode") === "import" ? (
-                                <>
-                                    <Form.Item name="title" label="本集标题" rules={[{ required: true, message: "请填写标题" }]}>
-                                        <Input placeholder="例如：第一集" />
-                                    </Form.Item>
-                                    <Form.Item name="scriptText" label="本集剧本" rules={[{ required: true, message: "请粘贴本集剧本" }]}>
-                                        <Input.TextArea rows={8} />
-                                    </Form.Item>
-                                </>
-                            ) : (
-                                <Alert type="success" showIcon title="自由画布制作" description="不绑定剧本也可以继续使用画布、素材、Brief 和视频生成节点。后续需要剧本驱动生产时，可随时从本集工作台重新绑定或导入。" />
-                            )
-                        }
-                    </Form.Item>
-                </Form>
-            </Modal>
+            />
         </Drawer>
     );
-}
-
-function buildEpisodeSnapshot(
-    episode: { title: string; summary: string; hook: string; turningPoint: string; cliffhanger: string; id: string },
-    scenes: Array<{ episodeId: string; order: number; location: string; beat: string; dialogue: string; emotion: string; durationHint: string }>,
-) {
-    const lines = [`# ${episode.title}`, episode.summary, episode.hook ? `钩子：${episode.hook}` : "", episode.turningPoint ? `转折：${episode.turningPoint}` : "", episode.cliffhanger ? `悬念：${episode.cliffhanger}` : ""].filter(Boolean);
-    const sceneText = scenes
-        .filter((scene) => scene.episodeId === episode.id)
-        .sort((a, b) => a.order - b.order)
-        .map((scene) =>
-            [`场次 ${scene.order}${scene.location ? `：${scene.location}` : ""}`, scene.beat, scene.dialogue ? `对白：${scene.dialogue}` : "", scene.emotion ? `情绪：${scene.emotion}` : "", scene.durationHint ? `时长：${scene.durationHint}` : ""]
-                .filter(Boolean)
-                .join("\n"),
-        );
-    return [...lines, ...sceneText].join("\n\n");
 }

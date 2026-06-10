@@ -4,6 +4,7 @@ import type { AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
 export const AI_REQUEST_TIMEOUT_MS = 120_000;
+export const AI_VIDEO_TASK_TIMEOUT_MS = 300_000;
 export const AI_VIDEO_CONTENT_TIMEOUT_MS = 300_000;
 export const AI_VIDEO_POLL_INTERVAL_MS = 2500;
 export const AI_VIDEO_MAX_POLL_ATTEMPTS = 240;

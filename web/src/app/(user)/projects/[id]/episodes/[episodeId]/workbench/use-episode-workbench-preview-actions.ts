@@ -3,7 +3,8 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 
 import type { CanvasProject } from "../../../../../canvas/stores/use-canvas-store";
-import { workflowMappingPreviewItemKey, type AgentWorkflowMappingPreview, type AgentWorkflowRunRecord } from "../../../../agent-runner";
+import { workflowMappingPreviewItemKey } from "../../../../agent-runner-workflow-apply-common";
+import type { AgentWorkflowMappingPreview, AgentWorkflowRunRecord } from "../../../../agent-runner-types";
 
 type WorkbenchMessage = {
     info: (content: string) => void;

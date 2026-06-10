@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"encoding/json"
 	"mime/multipart"
 	"testing"
 )
@@ -75,6 +76,62 @@ func TestReadArkLocalVideoConfigMultipartBuildsArkPayload(t *testing.T) {
 	}
 }
 
+func TestBuildArkVideoCreateRequestBackfillsMediaRoles(t *testing.T) {
+	body, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "ep-test",
+		"content": [
+			{"type": "text", "text": "生成短视频"},
+			{"type": "image_url", "image_url": {"url": "asset://image-id"}},
+			{"type": "video_url", "video_url": {"url": "asset://video-id"}},
+			{"type": "audio_url", "audio_url": {"url": "https://example.com/audio.mp3"}}
+		]
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error: %v", err)
+	}
+	payload := readJSONMap(t, body)
+	content, ok := payload["content"].([]any)
+	if !ok || len(content) != 4 {
+		t.Fatalf("content = %#v", payload["content"])
+	}
+	if role := content[1].(map[string]any)["role"]; role != "reference_image" {
+		t.Fatalf("image role = %#v, want reference_image", role)
+	}
+	if role := content[2].(map[string]any)["role"]; role != "reference_video" {
+		t.Fatalf("video role = %#v, want reference_video", role)
+	}
+	if role := content[3].(map[string]any)["role"]; role != "reference_audio" {
+		t.Fatalf("audio role = %#v, want reference_audio", role)
+	}
+}
+
+func TestReadArkLocalVideoConfigMultipartKeepsInputReferenceRole(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	writeMultipartField(t, writer, arkLocalAPIKeyField, "frontend-key")
+	writeMultipartField(t, writer, arkLocalBaseURLField, "https://ark.example.com/api/v3")
+	writeMultipartField(t, writer, "model", "ep-test")
+	writeMultipartField(t, writer, "prompt", "首尾帧生成")
+	writeMultipartField(t, writer, "input_reference_role[]", "first_frame")
+	writeMultipartFile(t, writer, "input_reference[]", "first.png", []byte("png-data"))
+	if err := writer.Close(); err != nil {
+		t.Fatalf("Close multipart writer: %v", err)
+	}
+
+	_, _, payload, err := ReadArkLocalVideoConfig(body.Bytes(), writer.FormDataContentType())
+	if err != nil {
+		t.Fatalf("ReadArkLocalVideoConfig returned error: %v", err)
+	}
+	content, ok := payload["content"].([]any)
+	if !ok || len(content) != 2 {
+		t.Fatalf("content = %#v", payload["content"])
+	}
+	image, ok := content[1].(map[string]any)
+	if !ok || image["type"] != "image_url" || image["role"] != "first_frame" {
+		t.Fatalf("image content = %#v", content[1])
+	}
+}
+
 func TestNormalizeArkVideoDurationKeepsSeedanceRange(t *testing.T) {
 	cases := map[string]int{
 		"":   6,
@@ -96,4 +153,24 @@ func writeMultipartField(t *testing.T, writer *multipart.Writer, key string, val
 	if err := writer.WriteField(key, value); err != nil {
 		t.Fatalf("WriteField %s: %v", key, err)
 	}
+}
+
+func writeMultipartFile(t *testing.T, writer *multipart.Writer, key string, filename string, data []byte) {
+	t.Helper()
+	file, err := writer.CreateFormFile(key, filename)
+	if err != nil {
+		t.Fatalf("CreateFormFile %s: %v", key, err)
+	}
+	if _, err := file.Write(data); err != nil {
+		t.Fatalf("Write file %s: %v", key, err)
+	}
+}
+
+func readJSONMap(t *testing.T, body []byte) map[string]any {
+	t.Helper()
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("Unmarshal JSON: %v", err)
+	}
+	return payload
 }

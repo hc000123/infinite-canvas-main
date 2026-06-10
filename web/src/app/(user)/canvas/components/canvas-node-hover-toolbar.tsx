@@ -56,6 +56,7 @@ type NodeToolbarAction =
           onClick: () => void;
           active?: boolean;
           danger?: boolean;
+          disabled?: boolean;
       }
     | {
           type: "divider";
@@ -107,7 +108,7 @@ export function CanvasNodeHoverToolbar({ node, viewport, onKeep, onLeave, action
                 action.type === "divider" ? (
                     <CanvasToolDivider key={action.key} size="md" />
                 ) : (
-                    <ToolbarAction key={action.key} title={action.title} label={action.label} icon={action.icon} onClick={action.onClick} active={action.active} danger={action.danger} />
+                    <ToolbarAction key={action.key} title={action.title} label={action.label} icon={action.icon} onClick={action.onClick} active={action.active} danger={action.danger} disabled={action.disabled} />
                 ),
             )}
         </div>
@@ -192,17 +193,21 @@ function appendReviewAction(items: NodeToolbarAction[], { node, actions, state, 
                   type: "button",
                   key: "refresh-review",
                   title: reviewProcessing ? "火山加白审核中，状态会自动刷新" : `火山加白状态：${volcengineStatusLabel(review.status)}`,
-                  label: volcengineReviewActionLabel(review.status),
+                  label: state.refreshingReview ? "刷新中" : volcengineReviewActionLabel(review.status),
                   icon: <RefreshCw className={`size-4 ${reviewProcessing || state.refreshingReview ? "animate-spin" : ""}`} />,
                   onClick: () => actions.onRefreshReview(node),
+                  active: review.status === "Active" || reviewProcessing || state.refreshingReview,
+                  disabled: state.refreshingReview,
               }
             : {
                   type: "button",
                   key: "review-asset",
                   title: hasVideo ? "提交视频火山素材加白" : "提交图片火山素材加白",
                   label: state.submittingReview ? "提交中" : "加白",
-                  icon: <ShieldCheck className="size-4" />,
+                  icon: <ShieldCheck className={`size-4 ${state.submittingReview ? "animate-pulse" : ""}`} />,
                   onClick: () => actions.onReviewAsset(node),
+                  active: state.submittingReview,
+                  disabled: state.submittingReview,
               },
     );
 }
@@ -254,6 +259,6 @@ function volcengineReviewActionLabel(status?: string) {
     return "加白状态";
 }
 
-function ToolbarAction({ title, label, icon, onClick, hint, active = false, danger = false }: { title: string; label: string; icon: ReactNode; onClick?: () => void; hint?: string; active?: boolean; danger?: boolean }) {
-    return <CanvasToolButton size="md" title={hint ? `${title} · ${hint}` : title} label={label} icon={icon} onClick={onClick} active={active} danger={danger} />;
+function ToolbarAction({ title, label, icon, onClick, hint, active = false, danger = false, disabled = false }: { title: string; label: string; icon: ReactNode; onClick?: () => void; hint?: string; active?: boolean; danger?: boolean; disabled?: boolean }) {
+    return <CanvasToolButton size="md" title={hint ? `${title} · ${hint}` : title} label={label} icon={icon} onClick={onClick} active={active} danger={danger} disabled={disabled} />;
 }

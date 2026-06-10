@@ -7,7 +7,7 @@ import { buildEpisodeScriptSnapshot } from "../../../../../canvas/utils/canvas-e
 import { orderedScriptScenes, type ScriptEpisode, type ScriptScene } from "../../../../../canvas/utils/script-management";
 import { orderedStoryboardTableShots, type StoryboardTableShot } from "../../../../../canvas/utils/storyboard-management";
 import { buildSeedanceWorkflowPreset, sortedWorkflowStages } from "../../../../agent-workflow-presets";
-import type { AgentWorkflowMappingPreview, AgentWorkflowRunRecord, AgentWorkflowStageOutput } from "../../../../agent-runner";
+import type { AgentWorkflowMappingPreview, AgentWorkflowRunRecord, AgentWorkflowStageOutput } from "../../../../agent-runner-types";
 
 export type EpisodeSceneOption = {
     sceneKey: string;

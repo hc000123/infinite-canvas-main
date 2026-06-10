@@ -4,6 +4,7 @@ import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction 
 
 import type { AiConfig } from "@/stores/use-config-store";
 import { buildCanvasVideoModePatch } from "../utils/canvas-video-config";
+import { buildProductionPackagePrompt } from "../utils/canvas-production-package-prompt";
 import { bindVideoNodeToProductionPackage, hideProductionVideoVersion, markCurrentProductionVideoVersion, type CanvasProductionPackageSummary, type CanvasProductionVideoVersion } from "../utils/canvas-production-packages";
 import { placeCanvasNodeAwayFromNodes, resolveRightwardNodePosition } from "../utils/canvas-node-placement";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type Position, type ViewportTransform } from "../types";
@@ -93,7 +94,7 @@ export function useCanvasProductionPackageActions({
                 k,
             });
         },
-        [nodesRef, setActiveProductionPackageId, setActiveTimelineShotId, setInspectorView, setSelectedConnectionId, setSelectedNodeIds, setViewport, size.height, size.width],
+        [nodesRef, setActiveProductionPackageId, setActiveTimelineShotId, setSelectedConnectionId, setSelectedNodeIds, setViewport, size.height, size.width],
     );
 
     const handlePreviewProductionVideoVersion = useCallback(
@@ -221,14 +222,4 @@ export function useCanvasProductionPackageActions({
         handleEditProductionPackagePrompt,
         handleBindSelectedVideoToProductionPackage,
     };
-}
-
-function buildProductionPackagePrompt(productionPackage: CanvasProductionPackageSummary, nodes: CanvasNodeData[]) {
-    const relatedText = nodes
-        .filter((node) => node.metadata?.productionPackageId === productionPackage.id)
-        .filter((node) => node.type === CanvasNodeType.Text || node.metadata?.productionPackageRole === "prompt")
-        .map((node) => String(node.metadata?.finalPrompt || node.metadata?.prompt || node.metadata?.content || "").trim())
-        .filter(Boolean);
-    if (relatedText.length) return relatedText.join("\n\n");
-    return [productionPackage.sceneName, productionPackage.title, productionPackage.shotRangeLabel && productionPackage.shotRangeLabel !== "-" ? `镜头 ${productionPackage.shotRangeLabel}` : ""].filter(Boolean).join("\n");
 }

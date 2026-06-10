@@ -2,11 +2,17 @@ import type { Asset, AssetWriteInput } from "./use-asset-store.ts";
 
 export async function buildBlobFingerprint(blob?: Blob | null) {
     if (!blob) return "";
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    const hash = await globalThis.crypto.subtle.digest("SHA-256", bytes);
-    return `sha256:${Array.from(new Uint8Array(hash))
-        .map((item) => item.toString(16).padStart(2, "0"))
-        .join("")}`;
+    const subtle = globalThis.crypto?.subtle;
+    if (!subtle) return "";
+    try {
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        const hash = await subtle.digest("SHA-256", bytes);
+        return `sha256:${Array.from(new Uint8Array(hash))
+            .map((item) => item.toString(16).padStart(2, "0"))
+            .join("")}`;
+    } catch {
+        return "";
+    }
 }
 
 export function fallbackAssetFingerprint(asset: AssetWriteInput | Asset) {

@@ -3,7 +3,7 @@ import axios from "axios";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { imageToDataUrl } from "@/services/image-storage";
 import { resolveMediaUrl } from "@/services/file-storage";
-import { AI_REQUEST_TIMEOUT_MS, AI_VIDEO_CONTENT_TIMEOUT_MS, AI_VIDEO_MAX_POLL_ATTEMPTS, AI_VIDEO_POLL_INTERVAL_MS, aiApiUrl, aiHeaders, delay, normalizeAiError, refreshRemoteUser } from "@/services/api/ai-provider";
+import { AI_REQUEST_TIMEOUT_MS, AI_VIDEO_CONTENT_TIMEOUT_MS, AI_VIDEO_MAX_POLL_ATTEMPTS, AI_VIDEO_POLL_INTERVAL_MS, AI_VIDEO_TASK_TIMEOUT_MS, aiApiUrl, aiHeaders, delay, normalizeAiError, refreshRemoteUser } from "@/services/api/ai-provider";
 import { isRemoteOrInlineMediaUrl, normalizeSeedanceRatio, normalizeSeedanceResolution, normalizeSeedanceSeed, normalizeVideoResolution, normalizeVideoSeconds, normalizeVideoSize } from "@/services/api/video-normalizers";
 import { buildSeedanceVideoTaskPayload, seedanceAssetURIFromImageReference, seedanceAssetURIFromVideoReference, type SeedanceImageReferenceInput, type SeedanceOrderedReferenceInput } from "@/services/api/video-reference";
 import { aiTaskTraceHeaders, readAiTaskLedgerFromHeaders, type AiTaskLedger, type AiTaskTrace } from "@/services/api/ai-task-trace";
@@ -185,7 +185,7 @@ async function createVideoTask(config: AiConfig, prompt: string, references: Nor
     const url = aiApiUrl(config, "/videos");
     const response = await axios.post<ApiVideoResponse>(url, body, {
         headers: { ...aiHeaders(config), ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...aiTaskTraceHeaders(config, trace) },
-        timeout: AI_REQUEST_TIMEOUT_MS,
+        timeout: AI_VIDEO_TASK_TIMEOUT_MS,
     });
     const task = mergeVideoTaskLedger(normalizeVideoTask(unwrapVideoResponse(response.data)), readAiTaskLedgerFromHeaders(response.headers));
     if (!task.id) throw new Error("视频接口没有返回任务 ID");
@@ -198,7 +198,7 @@ async function queryVideoTask(config: AiConfig, taskId: string, model: string) {
     const response = await axios.get<ApiVideoResponse>(url, {
         headers: aiHeaders(config),
         params,
-        timeout: AI_REQUEST_TIMEOUT_MS,
+        timeout: config.videoProtocol === "volcengine-ark" ? AI_VIDEO_TASK_TIMEOUT_MS : AI_REQUEST_TIMEOUT_MS,
     });
     return normalizeVideoTask(unwrapVideoResponse(response.data));
 }
@@ -277,7 +277,10 @@ export async function buildVideoPayload(config: AiConfig, prompt: string, refere
     const seed = normalizeSeedanceSeed(config.videoSeed);
     if (seed !== undefined) body.append("seed", String(seed));
     const files = await Promise.all(references.images.slice(0, 7).map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
-    files.forEach((file) => body.append("input_reference[]", file));
+    files.forEach((file, index) => {
+        body.append("input_reference[]", file);
+        body.append("input_reference_role[]", references.images[index]?.seedanceRole || "reference_image");
+    });
     return body;
 }
 

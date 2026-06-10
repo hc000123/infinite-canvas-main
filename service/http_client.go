@@ -7,6 +7,7 @@ import (
 
 const (
 	AIRequestTimeout      = 2 * time.Minute
+	AIVideoTaskTimeout    = 5 * time.Minute
 	AIVideoContentTimeout = 5 * time.Minute
 )
 

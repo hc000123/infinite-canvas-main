@@ -134,7 +134,8 @@ func arkVideoFieldsFromForm(form *multipart.Form, failOnFileError bool) (arkVide
 		Seed:            firstArkFormValue(form.Value, "seed"),
 		ReturnLastFrame: firstArkFormValue(form.Value, "return_last_frame"),
 	}
-	for _, header := range form.File["input_reference[]"] {
+	roles := form.Value["input_reference_role[]"]
+	for index, header := range form.File["input_reference[]"] {
 		dataURL, err := multipartArkFileDataURL(header)
 		if err != nil {
 			if failOnFileError {
@@ -142,7 +143,7 @@ func arkVideoFieldsFromForm(form *multipart.Form, failOnFileError bool) (arkVide
 			}
 			continue
 		}
-		fields.Content = append(fields.Content, arkImageContent(dataURL))
+		fields.Content = append(fields.Content, arkImageContent(dataURL, arkReferenceRoleAt(roles, index, "reference_image")))
 	}
 	return fields, nil
 }
@@ -155,6 +156,7 @@ func buildArkVideoPayload(fields arkVideoCreateFields, requirePrompt bool) (map[
 	if strings.TrimSpace(fields.Prompt) != "" {
 		content = append([]any{map[string]any{"type": "text", "text": fields.Prompt}}, content...)
 	}
+	content = normalizeArkVideoContentRoles(content)
 	if requirePrompt {
 		if strings.TrimSpace(fields.ModelName) == "" {
 			return nil, errors.New("缺少模型名称")
@@ -570,13 +572,61 @@ func multipartArkFileDataURL(header *multipart.FileHeader) (string, error) {
 	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(body), nil
 }
 
-func arkImageContent(imageURL string) map[string]any {
+func arkImageContent(imageURL string, role string) map[string]any {
 	return map[string]any{
 		"type": "image_url",
 		"image_url": map[string]string{
 			"url": imageURL,
 		},
+		"role": normalizeArkMediaContentRole("image_url", role),
 	}
+}
+
+func normalizeArkVideoContentRoles(content []any) []any {
+	for _, item := range content {
+		entry, ok := item.(map[string]any)
+		if !ok || strings.TrimSpace(fmt.Sprint(entry["role"])) != "" {
+			continue
+		}
+		if role := normalizeArkMediaContentRole(strings.TrimSpace(fmt.Sprint(entry["type"])), ""); role != "" {
+			entry["role"] = role
+		}
+	}
+	return content
+}
+
+func normalizeArkMediaContentRole(contentType string, role string) string {
+	switch strings.TrimSpace(role) {
+	case "first_frame", "last_frame", "reference_image":
+		if contentType == "image_url" {
+			return strings.TrimSpace(role)
+		}
+	case "source_video", "reference_video":
+		if contentType == "video_url" {
+			return strings.TrimSpace(role)
+		}
+	case "reference_audio":
+		if contentType == "audio_url" {
+			return strings.TrimSpace(role)
+		}
+	}
+	switch contentType {
+	case "image_url":
+		return "reference_image"
+	case "video_url":
+		return "reference_video"
+	case "audio_url":
+		return "reference_audio"
+	default:
+		return ""
+	}
+}
+
+func arkReferenceRoleAt(roles []string, index int, fallback string) string {
+	if index >= 0 && index < len(roles) && strings.TrimSpace(roles[index]) != "" {
+		return strings.TrimSpace(roles[index])
+	}
+	return fallback
 }
 
 func appendArkVideoControls(payload map[string]any, seconds string, size string, resolution string, generateAudio string, watermark string, seed string, returnLastFrame string) {

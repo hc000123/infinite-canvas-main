@@ -136,7 +136,7 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 				}
 				request.Header.Set("Authorization", "Bearer "+volcengineAPIKey)
 				request.Header.Set("Content-Type", "application/json")
-				copyArkVideoTaskResponseWithClient(w, request, newPublicNetworkHTTPClient(r.Context(), service.AIRequestTimeout, func(req *http.Request, via []*http.Request) error {
+				copyArkVideoTaskResponseWithClient(w, request, newPublicNetworkHTTPClient(r.Context(), service.AIVideoTaskTimeout, func(req *http.Request, via []*http.Request) error {
 					if len(via) >= 5 {
 						return http.ErrUseLastResponse
 					}
@@ -272,7 +272,7 @@ func proxyArkVideoGetRequest(w http.ResponseWriter, ctx context.Context, channel
 }
 
 func proxyArkVideoGetByConfig(w http.ResponseWriter, ctx context.Context, baseURL string, apiKey string, path string) {
-	proxyArkVideoGetByConfigWithClient(w, ctx, strings.TrimRight(baseURL, "/"), apiKey, path, nil)
+	proxyArkVideoGetByConfigWithClient(w, ctx, strings.TrimRight(baseURL, "/"), apiKey, path, &http.Client{Timeout: service.AIVideoTaskTimeout})
 }
 
 func proxyArkVideoGetByCustomConfig(w http.ResponseWriter, ctx context.Context, baseURL string, apiKey string, path string) {
@@ -282,7 +282,7 @@ func proxyArkVideoGetByCustomConfig(w http.ResponseWriter, ctx context.Context, 
 		Fail(w, "AI 接口请求失败")
 		return
 	}
-	proxyArkVideoGetByConfigWithClient(w, ctx, validBaseURL, apiKey, path, newPublicNetworkHTTPClient(ctx, service.AIRequestTimeout, func(req *http.Request, via []*http.Request) error {
+	proxyArkVideoGetByConfigWithClient(w, ctx, validBaseURL, apiKey, path, newPublicNetworkHTTPClient(ctx, service.AIVideoTaskTimeout, func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 5 {
 			return http.ErrUseLastResponse
 		}
@@ -345,7 +345,7 @@ func proxyArkVideoGetByConfigWithClient(w http.ResponseWriter, ctx context.Conte
 }
 
 func copyArkVideoTaskResponse(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onSuccess ...func(int, []byte, []byte)) {
-	copyArkVideoTaskResponseWithClient(w, request, nil, onFailure, onSuccess...)
+	copyArkVideoTaskResponseWithClient(w, request, &http.Client{Timeout: service.AIVideoTaskTimeout}, onFailure, onSuccess...)
 }
 
 func copyArkVideoTaskResponseWithClient(w http.ResponseWriter, request *http.Request, client *http.Client, onFailure func(string, []byte), onSuccess ...func(int, []byte, []byte)) {
