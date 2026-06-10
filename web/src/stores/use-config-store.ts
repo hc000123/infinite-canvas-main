@@ -125,12 +125,14 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
     if (channelMode === "local" || !modelChannel) {
         return { ...config, channelMode, videoProtocol: localVideoProtocol, videoModel: config.videoModel };
     }
-    const models = uniqueModels(modelChannel.availableModels.map(normalizeVisibleRemoteVideoModel).filter(Boolean));
+    const models = uniqueModels(
+        [modelChannel.defaultModel, modelChannel.defaultImageModel, modelChannel.defaultVideoModel, modelChannel.defaultTextModel, ...modelChannel.availableModels].map(normalizeVisibleRemoteVideoModel).filter(Boolean),
+    );
     const classifiedModels = classifyAiModels(models);
     const fallbackModel = (modelChannel.defaultModel && models.includes(modelChannel.defaultModel) ? modelChannel.defaultModel : models[0]) || "";
     const normalizedDefaultVideoModel = normalizeVisibleRemoteVideoModel(modelChannel.defaultVideoModel);
     const defaultVideoModel = normalizedDefaultVideoModel && models.includes(normalizedDefaultVideoModel) ? normalizedDefaultVideoModel : "";
-    const videoCandidates = uniqueModels([defaultVideoModel, ...classifiedModels.videoModels, normalizeVisibleRemoteVideoModel(config.seedanceModel)]).filter(Boolean);
+    const videoCandidates = uniqueModels([defaultVideoModel, ...classifiedModels.videoModels]).filter(Boolean);
     const videoModel = models.includes(config.videoModel) && classifiedModels.videoModels.includes(config.videoModel) ? config.videoModel : videoCandidates[0] || "";
     const videoProtocol = inferRemoteVideoProtocol(videoModel, config.videoProtocol);
     return {
@@ -279,7 +281,7 @@ export function classifyAiModels(models: string[]) {
             videoModels.push(model);
             return;
         }
-        if (["gpt-image", "image", "imagen", "seedream", "dall-e", "dalle", "flux", "sdxl", "stable-diffusion", "midjourney"].some((keyword) => name.includes(keyword))) {
+        if (["gpt-image", "image", "imagen", "seedream", "banana", "dall-e", "dalle", "flux", "sdxl", "stable-diffusion", "midjourney"].some((keyword) => name.includes(keyword))) {
             imageModels.push(model);
             return;
         }

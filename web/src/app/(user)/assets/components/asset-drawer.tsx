@@ -125,7 +125,7 @@ export function AssetDrawer({
                     {canvasLibraryEntries.length ? (
                         <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4 text-sm">
                             <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">
-                                画布归类
+                                历史画布引用
                             </Typography.Text>
                             <div className="mt-2 flex flex-wrap gap-2">
                                 {canvasLibraryEntries.map((entry) => (

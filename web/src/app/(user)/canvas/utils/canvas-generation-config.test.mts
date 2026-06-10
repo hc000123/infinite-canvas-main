@@ -116,6 +116,42 @@ test("builds video generation config from duration metadata when seconds is miss
     assert.equal(config.videoSeconds, "9");
 });
 
+test("ignores non-video node duration metadata when building video config", () => {
+    const config = buildGenerationConfig(
+        { ...baseConfig, channelMode: "remote", videoSeconds: "6" },
+        {
+            id: "source-image",
+            type: "image",
+            title: "参考图",
+            position: { x: 0, y: 0 },
+            width: 100,
+            height: 100,
+            metadata: { provider: "volcengine-ark", model: "image-model", duration: "10" },
+        },
+        "video",
+        baseConfig,
+    );
+
+    assert.equal(config.videoSeconds, "6");
+
+    const explicitSeconds = buildGenerationConfig(
+        { ...baseConfig, channelMode: "remote", videoSeconds: "6" },
+        {
+            id: "source-image",
+            type: "image",
+            title: "参考图",
+            position: { x: 0, y: 0 },
+            width: 100,
+            height: 100,
+            metadata: { provider: "volcengine-ark", model: "image-model", seconds: "8", duration: "10" },
+        },
+        "video",
+        baseConfig,
+    );
+
+    assert.equal(explicitSeconds.videoSeconds, "8");
+});
+
 test("builds retry config from saved image generation metadata", () => {
     const config = buildRetryGenerationConfig({
         config: baseConfig,

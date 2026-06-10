@@ -48,6 +48,7 @@ const emptySettings: AdminSettings = {
     },
 };
 const emptyChannel: AdminModelChannel = { protocol: "openai", name: "", baseUrl: "", apiKey: "", endpointId: "", endpointMappings: [], models: [], weight: 1, enabled: true, remark: "" };
+const savedSecretExtra = "已保存的密钥不会在刷新后回显明文；留空保存会继续使用后台已保存的密钥，只在输入新值时替换。";
 
 type SettingsTabKey = "public" | "private";
 type EditorMode = "visual" | "json";
@@ -586,18 +587,24 @@ export default function AdminSettingsPage() {
                                             <Tag color={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "secretKey") ? "success" : "default"}>{isVolcengineAssetKeyConfigured(privateVolcengineAsset, "secretKey") ? "Secret Key 已保存" : "Secret Key 未填写"}</Tag>
                                         </Space>
                                         <Row gutter={16}>
+                                            <Form.Item name={["private", "volcengineAsset", "accessKeyConfigured"]} valuePropName="checked" hidden>
+                                                <Switch />
+                                            </Form.Item>
+                                            <Form.Item name={["private", "volcengineAsset", "secretKeyConfigured"]} valuePropName="checked" hidden>
+                                                <Switch />
+                                            </Form.Item>
                                             <Col xs={24} md={6}>
                                                 <Form.Item name={["private", "volcengineAsset", "enabled"]} label="开启素材审核" valuePropName="checked">
                                                     <Switch />
                                                 </Form.Item>
                                             </Col>
                                             <Col xs={24} md={9}>
-                                                <Form.Item name={["private", "volcengineAsset", "accessKey"]} label="访问密钥 Access Key">
+                                                <Form.Item name={["private", "volcengineAsset", "accessKey"]} label="访问密钥 Access Key" extra={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "accessKey") ? savedSecretExtra : "未保存，请填写 Access Key。"}>
                                                     <Input.Password placeholder={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "accessKey") ? "已保存，留空不修改" : "请输入 Access Key"} />
                                                 </Form.Item>
                                             </Col>
                                             <Col xs={24} md={9}>
-                                                <Form.Item name={["private", "volcengineAsset", "secretKey"]} label="密钥 Secret Key">
+                                                <Form.Item name={["private", "volcengineAsset", "secretKey"]} label="密钥 Secret Key" extra={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "secretKey") ? savedSecretExtra : "未保存，请填写 Secret Key。"}>
                                                     <Input.Password placeholder={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "secretKey") ? "已保存，留空不修改" : "请输入 Secret Key"} />
                                                 </Form.Item>
                                             </Col>

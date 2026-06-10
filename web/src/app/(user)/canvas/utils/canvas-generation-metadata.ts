@@ -84,7 +84,7 @@ export function videoTaskMetadata(task: NormalizedVideoTask): CanvasNodeMetadata
         seed: task.seed === undefined ? undefined : String(task.seed),
         resolution: task.resolution,
         ratio: task.ratio,
-        duration: task.duration === undefined ? undefined : String(task.duration),
+        taskDuration: task.duration === undefined ? undefined : String(task.duration),
         generateAudio: task.generateAudio === undefined ? undefined : String(task.generateAudio),
         watermark: task.watermark === undefined ? undefined : String(task.watermark),
         aiTaskId: task.aiTaskId,

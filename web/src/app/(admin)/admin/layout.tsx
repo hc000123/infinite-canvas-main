@@ -1,6 +1,6 @@
 "use client";
 
-import { FileTextOutlined, HomeOutlined, LogoutOutlined, PictureOutlined, RobotOutlined, SettingOutlined, TransactionOutlined, UserOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, FileTextOutlined, HomeOutlined, LogoutOutlined, PictureOutlined, RobotOutlined, SettingOutlined, TransactionOutlined, UserOutlined } from "@ant-design/icons";
 import { Button, Flex, Layout, Menu, Typography, theme } from "antd";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
@@ -73,6 +73,14 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         setPendingMenuKey("");
     }, [pathname]);
 
+    const goBack = () => {
+        if (window.history.length > 1) {
+            router.back();
+            return;
+        }
+        router.push("/projects");
+    };
+
     if (!isReady || !token || user?.role !== "admin") {
         return (
             <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: antToken.colorBgLayout }}>
@@ -106,6 +114,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                     }))}
                 />
                 <Flex vertical gap={8} style={{ position: "absolute", bottom: 0, insetInline: 0, padding: 12, borderTop: `1px solid ${antToken.colorBorder}`, background: antToken.colorBgContainer }}>
+                    <Button block icon={<ArrowLeftOutlined />} onClick={goBack}>
+                        返回上一页
+                    </Button>
                     <Button block icon={<HomeOutlined />} href="/projects">
                         前往项目
                     </Button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Download, FolderPlus, LayoutDashboard, Library, PencilLine, Plus, Search, Trash2, Upload } from "lucide-react";
+import { Download, FolderPlus, Library, PencilLine, Plus, Search, Trash2, Upload } from "lucide-react";
 import { Suspense, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { App, Button, Checkbox, Empty, Form, Input, Modal, Pagination, Select, Tag } from "antd";
@@ -16,13 +16,11 @@ import { cn } from "@/lib/utils";
 import { useAssetStore, type Asset, type AssetFolder, type AssetKind, type ImageAsset, type VideoAsset, type VolcengineAssetMetadata } from "@/stores/use-asset-store";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
-import { ProductionBibleDrawer } from "../canvas/components/production-bible-drawer";
 import { useProductionBibleStore } from "../canvas/stores/use-production-bible-store";
 import { useStoryboardStore } from "../canvas/stores/use-storyboard-store";
 import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { useCreativeProjectStore } from "../projects/use-creative-project-store";
 import { assetGenerationFilterOptions } from "./asset-generation";
-import { buildAddCanvasLibraryAssetPatch, buildRemoveCanvasLibraryAssetPatch } from "./asset-canvas-library";
 import { buildProjectLibraryAssetPatch, buildRemoveProjectLibraryAssetPatch } from "./asset-project-library";
 import { assetVersionRecords, buildAssetVersionedUpdatePatch, buildRestoreAssetVersionPatch, type AssetVersionRecord } from "./asset-version-history";
 import {
@@ -104,6 +102,7 @@ function AssetsPageContent() {
     const updateAsset = useAssetStore((state) => state.updateAsset);
     const removeAsset = useAssetStore((state) => state.removeAsset);
     const addFolder = useAssetStore((state) => state.addFolder);
+    const ensureProjectFolder = useAssetStore((state) => state.ensureProjectFolder);
     const updateFolder = useAssetStore((state) => state.updateFolder);
     const removeFolder = useAssetStore((state) => state.removeFolder);
     const token = useUserStore((state) => state.token);
@@ -117,7 +116,7 @@ function AssetsPageContent() {
     const [generationTaskFilter, setGenerationTaskFilter] = useState<"all" | "with" | "without">("all");
     const [projectContextFilter, setProjectContextFilter] = useState(searchParams.get("projectId") || "");
     const [projectLibraryFilter, setProjectLibraryFilter] = useState<ProjectLibraryFilter>("all");
-    const [canvasLibraryFilter, setCanvasLibraryFilter] = useState("");
+    const canvasLibraryFilter = "";
     const [referenceVersionFilter, setReferenceVersionFilter] = useState<ReferenceVersionFilter>("all");
     const [storyboardGroupFilter, setStoryboardGroupFilter] = useState("");
     const [sortMode, setSortMode] = useState<AssetSortMode>("default");
@@ -137,16 +136,11 @@ function AssetsPageContent() {
     const [folderName, setFolderName] = useState("");
     const [isDraggingUpload, setIsDraggingUpload] = useState(false);
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(() => new Set());
-    const [productionBibleProjectId, setProductionBibleProjectId] = useState("");
-    const [productionBibleOpen, setProductionBibleOpen] = useState(false);
     const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
     const [bulkMoveFolderId, setBulkMoveFolderId] = useState<string | undefined>();
     const [bulkTagOpen, setBulkTagOpen] = useState(false);
     const [bulkTags, setBulkTags] = useState<string[]>([]);
     const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
-    const [bulkCanvasOpen, setBulkCanvasOpen] = useState(false);
-    const [bulkCanvasMode, setBulkCanvasMode] = useState<"add" | "remove">("add");
-    const [bulkCanvasIds, setBulkCanvasIds] = useState<string[]>([]);
     const [bulkReviewAction, setBulkReviewAction] = useState<"submit" | "refresh" | "">("");
     const [selectedOutdatedUsageIds, setSelectedOutdatedUsageIds] = useState<Set<string>>(() => new Set());
     const [bulkOutdatedOpen, setBulkOutdatedOpen] = useState(false);
@@ -158,11 +152,24 @@ function AssetsPageContent() {
     const validAssets = useMemo(() => supportedAssetList(assets), [assets]);
     const folderMap = useMemo(() => new Map(folders.map((folder) => [folder.id, folder])), [folders]);
     const folderCounts = useMemo(() => countFolderAssets(validAssets), [validAssets]);
-    const folderOptions = useMemo(() => [{ label: "未分组", value: "" }, ...folders.map((folder) => ({ label: folder.name, value: folder.id }))], [folders]);
-    const canvasOptions = useMemo(() => projects.map((project) => ({ label: project.title || "未命名画布", value: project.id })), [projects]);
+    const regularFolders = useMemo(() => folders.filter((folder) => !folder.projectId), [folders]);
+    const projectFolderRows = useMemo(
+        () =>
+            creativeProjects
+                .map((project) => ({ project, folder: folders.find((folder) => folder.projectId === project.id) }))
+                .filter((item): item is { project: (typeof creativeProjects)[number]; folder: AssetFolder } => Boolean(item.folder)),
+        [creativeProjects, folders],
+    );
+    const folderOptions = useMemo(
+        () => [
+            { label: "未分组", value: "" },
+            ...projectFolderRows.map(({ project, folder }) => ({ label: `项目 / ${project.title || folder.name}`, value: folder.id })),
+            ...regularFolders.map((folder) => ({ label: folder.name, value: folder.id })),
+        ],
+        [projectFolderRows, regularFolders],
+    );
     const canvasLibraryTitles = useMemo(() => Object.fromEntries(projects.map((project) => [project.id, project.title || "未命名画布"])), [projects]);
     const projectContexts = useMemo(() => buildAssetProjectContexts(creativeProjects, projects), [creativeProjects, projects]);
-    const projectOptions = useMemo(() => projectContexts.map((project) => ({ label: project.title, value: project.id })), [projectContexts]);
     const projectLibraryProjectTitles = useMemo(() => Object.fromEntries(projectContexts.map((project) => [project.id, project.title])), [projectContexts]);
     const previewAssetUsageReferences = useMemo(() => {
         if (!previewAsset) return [];
@@ -181,10 +188,6 @@ function AssetsPageContent() {
                 .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, "zh-Hans-CN"))
                 .map((group) => ({ label: group.title || "未命名分镜组", value: group.id })),
         [projectContextFilter, storyboardGroups],
-    );
-    const selectedProductionBibleProject = useMemo(
-        () => projectContexts.find((project) => project.id === (projectContextFilter || productionBibleProjectId)) || projectContexts[0] || null,
-        [projectContexts, productionBibleProjectId, projectContextFilter],
     );
     const generationFilterOptions = useMemo(() => assetGenerationFilterOptions(validAssets), [validAssets]);
     const projectReferencedAssetIds = useMemo(() => {
@@ -257,6 +260,10 @@ function AssetsPageContent() {
     const processingReviewIds = useMemo(() => volcengineReviewPollingKey(validAssets), [validAssets]);
 
     useEffect(() => {
+        creativeProjects.forEach((project) => ensureProjectFolder(project.id, project.title || "未命名项目"));
+    }, [creativeProjects, ensureProjectFolder]);
+
+    useEffect(() => {
         const maxPage = Math.max(1, Math.ceil(filteredAssets.length / pageSize));
         setPage((value) => Math.min(value, maxPage));
     }, [filteredAssets.length, pageSize]);
@@ -268,17 +275,10 @@ function AssetsPageContent() {
     useEffect(() => {
         const nextProjectId = searchParams.get("projectId") || "";
         if (!nextProjectId) return;
+        const projectFolder = projectFolderRows.find((item) => item.project.id === nextProjectId)?.folder;
         setProjectContextFilter(nextProjectId);
-        setProductionBibleProjectId(nextProjectId);
-    }, [searchParams]);
-
-    useEffect(() => {
-        if (!projectContexts.length) {
-            if (productionBibleProjectId) setProductionBibleProjectId("");
-            return;
-        }
-        if (!productionBibleProjectId || !projectContexts.some((project) => project.id === productionBibleProjectId)) setProductionBibleProjectId(projectContexts[0]?.id || "");
-    }, [projectContexts, productionBibleProjectId]);
+        if (projectFolder) setFolderFilter(projectFolder.id);
+    }, [projectFolderRows, searchParams]);
 
     useEffect(() => {
         if (storyboardGroupFilter && !storyboardGroupOptions.some((option) => option.value === storyboardGroupFilter)) setStoryboardGroupFilter("");
@@ -558,7 +558,7 @@ function AssetsPageContent() {
     };
 
     const addSelectedToProjectLibrary = () => {
-        if (!projectContextFilter) return message.warning("请先选择项目上下文");
+        if (!projectContextFilter) return message.warning("请先选择项目文件夹");
         if (!selectedAssets.length) return message.warning("请先选择素材");
         const now = new Date().toISOString();
         selectedAssets.forEach((asset) => updateAsset(asset.id, buildProjectLibraryAssetPatch(asset, projectContextFilter, now)));
@@ -566,28 +566,10 @@ function AssetsPageContent() {
     };
 
     const removeSelectedFromProjectLibrary = () => {
-        if (!projectContextFilter) return message.warning("请先选择项目上下文");
+        if (!projectContextFilter) return message.warning("请先选择项目文件夹");
         if (!selectedAssets.length) return message.warning("请先选择素材");
         selectedAssets.forEach((asset) => updateAsset(asset.id, buildRemoveProjectLibraryAssetPatch(asset, projectContextFilter)));
         message.success(`已移出项目共享库：${selectedAssets.length} 个素材`);
-    };
-
-    const openBulkCanvasLibrary = (mode: "add" | "remove") => {
-        if (!selectedAssets.length) return message.warning("请先选择素材");
-        setBulkCanvasMode(mode);
-        setBulkCanvasIds(mode === "remove" && canvasLibraryFilter ? [canvasLibraryFilter] : []);
-        setBulkCanvasOpen(true);
-    };
-
-    const applyBulkCanvasLibrary = () => {
-        if (!bulkCanvasIds.length) return message.warning("请选择画布");
-        const now = new Date().toISOString();
-        selectedAssets.forEach((asset) => {
-            const patch = bulkCanvasMode === "add" ? buildAddCanvasLibraryAssetPatch(asset, bulkCanvasIds, now) : buildRemoveCanvasLibraryAssetPatch(asset, bulkCanvasIds);
-            updateAsset(asset.id, patch);
-        });
-        setBulkCanvasOpen(false);
-        message.success(`${bulkCanvasMode === "add" ? "已归类到画布" : "已移出画布归类"}：${selectedAssets.length} 个素材`);
     };
 
     const updateOutdatedUsageToLatest = (usage: OutdatedAssetVersionUsage) => {
@@ -655,16 +637,8 @@ function AssetsPageContent() {
         }
         try {
             const result = await importAssetFileList(fileList, { folderId: activeFolderId, addAssetOnce });
-            if (canvasLibraryFilter) {
-                const now = new Date().toISOString();
-                const importedIds = new Set(result.assetIds);
-                useAssetStore
-                    .getState()
-                    .assets.filter((asset) => importedIds.has(asset.id))
-                    .forEach((asset) => updateAsset(asset.id, buildAddCanvasLibraryAssetPatch(asset, [canvasLibraryFilter], now)));
-            }
             setPage(1);
-            message.success(`${assetImportSuccessMessage(result.count, activeFolderId ? folderMap.get(activeFolderId)?.name || "当前文件夹" : "")}${canvasLibraryFilter ? `，已归类到「${canvasLibraryTitles[canvasLibraryFilter] || "当前画布"}」` : ""}`);
+            message.success(assetImportSuccessMessage(result.count, activeFolderId ? folderMap.get(activeFolderId)?.name || "当前文件夹" : ""));
         } catch (error) {
             message.error(error instanceof Error ? error.message : "导入失败，请选择有效的素材压缩包或媒体文件");
         } finally {
@@ -908,7 +882,7 @@ function AssetsPageContent() {
                         <div className="min-w-0">
                             <div className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--studio-accent)]">Asset Library</div>
                             <h1 className="mt-2 text-3xl font-semibold leading-tight tracking-normal text-[var(--studio-text-primary)]">我的素材</h1>
-                            <p className="mt-2 max-w-2xl text-[15px] leading-6 text-[var(--studio-text-secondary)]">统一管理图片、视频、音频与文本资产，快速定位项目引用、画布归类和生成来源。</p>
+                            <p className="mt-2 max-w-2xl text-[15px] leading-6 text-[var(--studio-text-secondary)]">统一管理图片、视频、音频与文本资产，快速定位项目文件夹、引用关系和生成来源。</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
                             <Button className="studio-toolbar-button" icon={<Download className="size-4" />} onClick={() => void exportAllAssets()}>
@@ -966,22 +940,39 @@ function AssetsPageContent() {
                         <div className="grid gap-3 sm:grid-cols-[64px_minmax(0,1fr)] sm:items-center">
                             <div className="text-sm font-medium text-[var(--studio-text-secondary)]">项目</div>
                             <div className="flex flex-wrap items-center gap-2">
-                                <Select
-                                    size="middle"
-                                    allowClear
-                                    showSearch
-                                    className="min-w-48"
-                                    placeholder="项目上下文筛选"
-                                    value={projectContextFilter || undefined}
-                                    options={projectOptions}
-                                    optionFilterProp="label"
-                                    disabled={!projectOptions.length}
-                                    onChange={(value) => {
+                                <Tag.CheckableTag
+                                    checked={!projectContextFilter && folderFilter === "all"}
+                                    className={cn("prompt-filter-tag", !projectContextFilter && folderFilter === "all" && "is-active")}
+                                    onChange={() => {
                                         setPage(1);
-                                        setProjectContextFilter(value || "");
-                                        if (value) setProductionBibleProjectId(value);
+                                        setProjectContextFilter("");
+                                        setFolderFilter("all");
+                                        setStoryboardGroupFilter("");
+                                        setProjectLibraryFilter("all");
+                                        setReferenceVersionFilter("all");
+                                        clearSelectedOutdatedUsages();
                                     }}
-                                />
+                                >
+                                    全部项目 {validAssets.length}
+                                </Tag.CheckableTag>
+                                {projectFolderRows.map(({ project, folder }) => (
+                                    <Tag.CheckableTag
+                                        key={project.id}
+                                        checked={folderFilter === folder.id}
+                                        className={cn("prompt-filter-tag", folderFilter === folder.id && "is-active")}
+                                        onChange={() => {
+                                            setPage(1);
+                                            setProjectContextFilter(project.id);
+                                            setFolderFilter(folder.id);
+                                            setStoryboardGroupFilter("");
+                                            setProjectLibraryFilter("all");
+                                            setReferenceVersionFilter("all");
+                                            clearSelectedOutdatedUsages();
+                                        }}
+                                    >
+                                        {project.title || folder.name} {folderCounts[folder.id] || 0}
+                                    </Tag.CheckableTag>
+                                ))}
                                 <Select
                                     size="middle"
                                     allowClear
@@ -1027,30 +1018,6 @@ function AssetsPageContent() {
                                         clearSelectedOutdatedUsages();
                                     }}
                                 />
-                                <Button size="middle" icon={<BookOpen className="size-3.5" />} disabled={!selectedProductionBibleProject} onClick={() => setProductionBibleOpen(true)}>
-                                    项目设定库
-                                </Button>
-                            </div>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-[64px_minmax(0,1fr)] sm:items-center">
-                            <div className="text-sm font-medium text-[var(--studio-text-secondary)]">画布</div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                <Select
-                                    size="middle"
-                                    allowClear
-                                    showSearch
-                                    className="min-w-56"
-                                    placeholder="按画布归类筛选"
-                                    value={canvasLibraryFilter || undefined}
-                                    options={canvasOptions}
-                                    optionFilterProp="label"
-                                    disabled={!canvasOptions.length}
-                                    onChange={(value) => {
-                                        setPage(1);
-                                        setCanvasLibraryFilter(value || "");
-                                    }}
-                                />
-                                <span className="text-[13px] leading-5 text-[var(--studio-text-muted)]">先选择画布再导入，新素材会自动归到该画布；已有素材可多选归类到多个画布。</span>
                             </div>
                         </div>
                         <div className="grid gap-3 sm:grid-cols-[64px_minmax(0,1fr)] sm:items-start">
@@ -1061,6 +1028,7 @@ function AssetsPageContent() {
                                     className={cn("prompt-filter-tag", folderFilter === "all" && "is-active")}
                                     onChange={() => {
                                         setPage(1);
+                                        setProjectContextFilter("");
                                         setFolderFilter("all");
                                     }}
                                 >
@@ -1071,18 +1039,20 @@ function AssetsPageContent() {
                                     className={cn("prompt-filter-tag", folderFilter === "root" && "is-active")}
                                     onChange={() => {
                                         setPage(1);
+                                        setProjectContextFilter("");
                                         setFolderFilter("root");
                                     }}
                                 >
                                     未分组 {folderCounts.root || 0}
                                 </Tag.CheckableTag>
-                                {folders.map((folder) => (
+                                {regularFolders.map((folder) => (
                                     <Tag.CheckableTag
                                         key={folder.id}
                                         checked={folderFilter === folder.id}
                                         className={cn("prompt-filter-tag", folderFilter === folder.id && "is-active")}
                                         onChange={() => {
                                             setPage(1);
+                                            setProjectContextFilter("");
                                             setFolderFilter(folder.id);
                                         }}
                                     >
@@ -1092,7 +1062,7 @@ function AssetsPageContent() {
                                 <Button size="middle" icon={<FolderPlus className="size-3.5" />} onClick={openCreateFolder}>
                                     新建文件夹
                                 </Button>
-                                {activeFolderId && folderMap.has(activeFolderId) ? (
+                                {activeFolderId && regularFolders.some((folder) => folder.id === activeFolderId) ? (
                                     <>
                                         <AssetIconButton title="重命名文件夹" icon={<PencilLine className="size-3.5" />} onClick={() => openEditFolder(folderMap.get(activeFolderId)!)} />
                                         <AssetIconButton title="删除文件夹" icon={<Trash2 className="size-3.5" />} danger onClick={() => deleteFolder(folderMap.get(activeFolderId)!)} />
@@ -1223,12 +1193,6 @@ function AssetsPageContent() {
                                                 </Button>
                                             </>
                                         ) : null}
-                                        <Button size="middle" icon={<LayoutDashboard className="size-3.5" />} disabled={!canvasOptions.length} onClick={() => openBulkCanvasLibrary("add")}>
-                                            发送到画布
-                                        </Button>
-                                        <Button size="middle" disabled={!canvasOptions.length} onClick={() => openBulkCanvasLibrary("remove")}>
-                                            移出画布
-                                        </Button>
                                         <Button size="middle" disabled={!selectedVolcengineSubmitAssets.length || bulkReviewAction !== ""} loading={bulkReviewAction === "submit"} onClick={() => void submitSelectedVolcengineReviews()}>
                                             提交加白{selectedVolcengineSubmitAssets.length ? ` ${selectedVolcengineSubmitAssets.length}` : ""}
                                         </Button>
@@ -1331,10 +1295,6 @@ function AssetsPageContent() {
                 onRestoreVersion={(asset, versionId) => void restoreAssetVersion(asset, versionId)}
             />
 
-            {selectedProductionBibleProject ? (
-                <ProductionBibleDrawer open={productionBibleOpen} projectId={selectedProductionBibleProject.id} projectTitle={selectedProductionBibleProject.title || "未命名画布"} onClose={() => setProductionBibleOpen(false)} />
-            ) : null}
-
             <input ref={assetInputRef} type="file" multiple accept="application/zip,.zip,image/*,video/*,audio/*" className="hidden" onChange={(event) => void importAssetFiles(event.target.files || undefined)} />
 
             <Modal title={editingFolder ? "重命名文件夹" : "新建文件夹"} open={folderDialogOpen} onCancel={() => setFolderDialogOpen(false)} onOk={saveFolder} okText="保存" cancelText="取消" destroyOnHidden>
@@ -1357,23 +1317,6 @@ function AssetsPageContent() {
 
             <Modal title="批量删除素材" open={bulkDeleteOpen} onCancel={() => setBulkDeleteOpen(false)} onOk={applyBulkDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消" destroyOnHidden>
                 确定删除已选择的 {selectedAssets.length} 个素材吗？删除后会从我的素材中移除。
-            </Modal>
-
-            <Modal
-                title={bulkCanvasMode === "add" ? "归类到画布" : "移出画布归类"}
-                open={bulkCanvasOpen}
-                onCancel={() => setBulkCanvasOpen(false)}
-                onOk={applyBulkCanvasLibrary}
-                okText={bulkCanvasMode === "add" ? "归类" : "移出"}
-                cancelText="取消"
-                destroyOnHidden
-            >
-                <div className="space-y-3">
-                    <div className="text-sm text-stone-500">
-                        将 {selectedAssets.length} 个素材{bulkCanvasMode === "add" ? "归类到以下画布。素材只保存一份，可同时属于多个画布。" : "从以下画布归类中移出，不会删除素材本体。"}
-                    </div>
-                    <Select mode="multiple" className="w-full" allowClear showSearch placeholder="选择一个或多个画布" value={bulkCanvasIds} options={canvasOptions} optionFilterProp="label" onChange={(value) => setBulkCanvasIds(value)} />
-                </div>
             </Modal>
 
             <Modal title="批量更新过期引用" open={bulkOutdatedOpen} onCancel={() => setBulkOutdatedOpen(false)} onOk={applySelectedOutdatedUsages} okText="更新到最新版" cancelText="取消" destroyOnHidden>

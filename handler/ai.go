@@ -416,7 +416,7 @@ func proxyArkVideoContent(w http.ResponseWriter, ctx context.Context, videoURL s
 			return validateProxyDownloadURL(ctx, req.URL.String())
 		},
 	)
-	response, err := client.Do(request)
+	response, err := doVideoContentRequestWithRetry(client, request)
 	if err != nil {
 		log.Printf("Ark video content download failed: url=%s err=%v", safeLogURL(videoURL), err)
 		Fail(w, "视频下载失败：服务器无法访问火山返回的视频地址")
@@ -448,6 +448,28 @@ func proxyArkVideoContent(w http.ResponseWriter, ctx context.Context, videoURL s
 		return false
 	}
 	return true
+}
+
+func doVideoContentRequestWithRetry(client *http.Client, request *http.Request) (*http.Response, error) {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-request.Context().Done():
+				return nil, request.Context().Err()
+			case <-time.After(time.Duration(attempt) * 800 * time.Millisecond):
+			}
+		}
+		response, err := client.Do(request.Clone(request.Context()))
+		if err == nil {
+			return response, nil
+		}
+		if response != nil && response.Body != nil {
+			_ = response.Body.Close()
+		}
+		lastErr = err
+	}
+	return nil, lastErr
 }
 
 func validateProxyVideoContentResponse(response *http.Response) error {
@@ -540,6 +562,7 @@ func validatePublicProxyIP(ip net.IP) error {
 
 func newPublicNetworkHTTPClient(ctx context.Context, timeout time.Duration, checkRedirect func(*http.Request, []*http.Request) error) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
 	dialer := &net.Dialer{}
 	transport.DialContext = func(dialCtx context.Context, network string, address string) (net.Conn, error) {
 		conn, err := dialer.DialContext(dialCtx, network, address)

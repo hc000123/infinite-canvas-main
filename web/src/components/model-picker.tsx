@@ -153,9 +153,16 @@ export function ModelPicker({ config, value, onChange, className, fullWidth = fa
 }
 
 function resolveModelOptions(config: AiConfig, modelType?: AiModelKind) {
-    if (modelType === "image" && config.imageModels?.length) return config.imageModels;
-    if (modelType === "video") return uniquePickerModels([...(config.videoModels || []), config.videoProtocol === "volcengine-ark" ? config.seedanceModel : config.videoModel]).filter((model) => model && !isEndpointModel(model));
-    if (modelType === "text" && config.textModels?.length) return config.textModels;
+    if (modelType === "image") return config.imageModels?.length ? config.imageModels : config.models || [];
+    if (modelType === "video") {
+        const videoModels = config.videoModels || [];
+        if (videoModels.length) {
+            const currentConfiguredModel = config.channelMode === "remote" ? "" : config.videoProtocol === "volcengine-ark" ? config.seedanceModel : config.videoModel;
+            return uniquePickerModels([...videoModels, currentConfiguredModel]).filter((model) => model && !isEndpointModel(model));
+        }
+        return (config.models || []).filter((model) => !isEndpointModel(model));
+    }
+    if (modelType === "text") return config.textModels?.length ? config.textModels : config.models || [];
     return config.models || [];
 }
 

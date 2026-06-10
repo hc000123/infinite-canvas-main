@@ -137,6 +137,11 @@ test("video config normalizes duration by provider capability", () => {
     assert.equal(buildCanvasVideoConfig({ ...baseConfig, videoProtocol: "openai" }, { provider: "openai", seconds: "20" }).videoSeconds, "20");
 });
 
+test("video config ignores completed task duration when editable seconds exist", () => {
+    assert.equal(buildCanvasVideoConfig(cloudConfig, { provider: "volcengine-ark", taskId: "task-1", seconds: "6", duration: "10" }).videoSeconds, "6");
+    assert.equal(buildCanvasVideoConfig({ ...cloudConfig, videoSeconds: "6" }, { provider: "volcengine-ark", taskId: "task-1", duration: "10" }).videoSeconds, "6");
+});
+
 test("video config keeps audio off by default but preserves explicit node choice", () => {
     assert.equal(buildCanvasVideoConfig({ ...cloudConfig, videoGenerateAudio: "true" }, { provider: "volcengine-ark" }).videoGenerateAudio, "false");
     assert.equal(buildCanvasVideoConfig(cloudConfig, { provider: "volcengine-ark", generateAudio: "true" }).videoGenerateAudio, "true");

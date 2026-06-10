@@ -24,7 +24,8 @@ export function buildCanvasVideoConfig(config: AiConfig, metadata?: CanvasNodeMe
     const channelMode = metadata?.channelMode || config.channelMode;
     const provider = resolveCanvasVideoProvider({ ...config, channelMode }, metadata);
     const model = resolveCanvasVideoModel({ ...config, channelMode }, provider, metadata);
-    const seconds = normalizeCanvasVideoSeconds(metadata?.seconds || metadata?.duration || config.videoSeconds, provider);
+    const metadataDuration = metadata?.taskId ? "" : metadata?.duration;
+    const seconds = normalizeCanvasVideoSeconds(metadata?.seconds || metadataDuration || config.videoSeconds, provider);
     return {
         ...config,
         channelMode,

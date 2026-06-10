@@ -150,6 +150,7 @@ export type CanvasNodeMetadata = {
     lastFrameStorageKey?: string;
     taskCreatedAt?: number;
     taskUpdatedAt?: number;
+    taskDuration?: string;
     executionExpiresAfter?: number;
     videoUrlExpiresAt?: number;
     localStoredAt?: string;

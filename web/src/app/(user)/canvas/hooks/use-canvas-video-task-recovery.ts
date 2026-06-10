@@ -23,9 +23,10 @@ type UseCanvasVideoTaskRecoveryOptions = {
     cacheUploadedCanvasMedia: (file: UploadedFile, filename: string) => Promise<Partial<CanvasNodeMetadata>>;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
+    archiveRecoveredVideoNode: (node: CanvasNodeData, generationConfig: AiConfig, prompt?: string) => Promise<string | void | undefined>;
 };
 
-export function useCanvasVideoTaskRecovery({ projectLoaded, nodesRef, recoveringVideoTaskIdsRef, canvasAiConfig, cacheUploadedCanvasMedia, setNodes, toVideoMetadata }: UseCanvasVideoTaskRecoveryOptions) {
+export function useCanvasVideoTaskRecovery({ projectLoaded, nodesRef, recoveringVideoTaskIdsRef, canvasAiConfig, cacheUploadedCanvasMedia, setNodes, toVideoMetadata, archiveRecoveredVideoNode }: UseCanvasVideoTaskRecoveryOptions) {
     useEffect(() => {
         if (!projectLoaded) return;
         const recoveryTaskIds = new Set(
@@ -47,6 +48,7 @@ export function useCanvasVideoTaskRecovery({ projectLoaded, nodesRef, recovering
                     cacheUploadedCanvasMedia,
                     setNodes,
                     toVideoMetadata,
+                    archiveRecoveredVideoNode,
                 }).finally(() => {
                     recoveringVideoTaskIdsRef.current.delete(taskId);
                 });
@@ -60,7 +62,7 @@ export function useCanvasVideoTaskRecovery({ projectLoaded, nodesRef, recovering
             window.clearInterval(timer);
             window.removeEventListener("online", recoverNodes);
         };
-    }, [cacheUploadedCanvasMedia, canvasAiConfig, nodesRef, projectLoaded, recoveringVideoTaskIdsRef, setNodes, toVideoMetadata]);
+    }, [archiveRecoveredVideoNode, cacheUploadedCanvasMedia, canvasAiConfig, nodesRef, projectLoaded, recoveringVideoTaskIdsRef, setNodes, toVideoMetadata]);
 }
 
 async function recoverVideoTaskNode({
@@ -69,12 +71,14 @@ async function recoverVideoTaskNode({
     cacheUploadedCanvasMedia,
     setNodes,
     toVideoMetadata,
+    archiveRecoveredVideoNode,
 }: {
     node: CanvasNodeData;
     canvasAiConfig: AiConfig;
     cacheUploadedCanvasMedia: (file: UploadedFile, filename: string) => Promise<Partial<CanvasNodeMetadata>>;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
+    archiveRecoveredVideoNode: (node: CanvasNodeData, generationConfig: AiConfig, prompt?: string) => Promise<string | void | undefined>;
 }) {
     try {
         const generationConfig = buildGenerationConfig(canvasAiConfig, node, "video", defaultConfig);
@@ -102,27 +106,33 @@ async function recoverVideoTaskNode({
         const video = await uploadMediaFile(await fetchVideoTaskContent(generationConfig, task), "video");
         const cachedVideo = await cacheUploadedCanvasMedia(video, `${node.id}.mp4`);
         const videoSize = fitNodeSize(video.width || node.width || NODE_DEFAULT_SIZE[CanvasNodeType.Video].width, video.height || node.height || NODE_DEFAULT_SIZE[CanvasNodeType.Video].height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
+        const completedVideoNode: CanvasNodeData = {
+            ...node,
+            width: videoSize.width,
+            height: videoSize.height,
+            position: { x: node.position.x + node.width / 2 - videoSize.width / 2, y: node.position.y + node.height / 2 - videoSize.height / 2 },
+            metadata: {
+                ...node.metadata,
+                ...toVideoMetadata(video),
+                ...cachedVideo,
+                ...videoTaskMetadata(task),
+                status: NODE_STATUS_SUCCESS,
+                taskStatus: "succeeded",
+                errorDetails: undefined,
+            },
+        };
         setNodes((prev) =>
             prev.map((item) =>
                 item.id === node.id
                     ? {
-                          ...item,
-                          width: videoSize.width,
-                          height: videoSize.height,
+                          ...completedVideoNode,
                           position: { x: item.position.x + item.width / 2 - videoSize.width / 2, y: item.position.y + item.height / 2 - videoSize.height / 2 },
-                          metadata: {
-                              ...item.metadata,
-                              ...toVideoMetadata(video),
-                              ...cachedVideo,
-                              ...videoTaskMetadata(task),
-                              status: NODE_STATUS_SUCCESS,
-                              taskStatus: "succeeded",
-                              errorDetails: undefined,
-                          },
+                          metadata: { ...item.metadata, ...completedVideoNode.metadata },
                       }
                     : item,
             ),
         );
+        await archiveRecoveredVideoNode(completedVideoNode, generationConfig, completedVideoNode.metadata?.prompt || "").catch(() => undefined);
     } catch (error) {
         setNodes((prev) =>
             prev.map((item) =>

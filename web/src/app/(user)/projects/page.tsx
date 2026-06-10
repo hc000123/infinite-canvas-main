@@ -6,6 +6,7 @@ import { App, Button, Input, Tooltip } from "antd";
 import { Archive, ChevronDown, Clock3, Edit3, Folder, Grid2X2, LayoutList, PauseCircle, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 
 import { useEffectiveConfig } from "@/stores/use-config-store";
+import { useAssetStore } from "@/stores/use-asset-store";
 import { CanvasCreateProjectModal } from "../canvas/components/canvas-create-project-modal";
 import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../canvas/utils/canvas-project-preset";
@@ -57,6 +58,7 @@ export default function ProjectsPage() {
     const archiveProject = useCreativeProjectStore((state) => state.archiveProject);
     const restoreProject = useCreativeProjectStore((state) => state.restoreProject);
     const deleteProject = useCreativeProjectStore((state) => state.deleteProject);
+    const ensureProjectFolder = useAssetStore((state) => state.ensureProjectFolder);
     const canvases = useCanvasStore((state) => state.projects);
     const updateCanvasProject = useCanvasStore((state) => state.updateProject);
     const sortedProjects = useMemo(() => [...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)), [projects]);
@@ -89,6 +91,7 @@ export default function ProjectsPage() {
 
     const createAndOpen = (title: string, preset: CanvasProjectPreset) => {
         const id = createProject({ title, preset });
+        ensureProjectFolder(id, title);
         setCreateOpen(false);
         router.push(`/projects/${id}`);
     };
@@ -160,6 +163,7 @@ export default function ProjectsPage() {
                                         }}
                                         onSave={() => {
                                             renameProject(card.project.id, editingTitle);
+                                            ensureProjectFolder(card.project.id, editingTitle);
                                             setEditingId("");
                                         }}
                                         onCancel={() => setEditingId("")}
@@ -336,7 +340,7 @@ function ProjectCard({
 
 function ProjectActionIconButton({ title, icon, danger, onClick }: { title: string; icon: ReactNode; danger?: boolean; onClick: () => void }) {
     return (
-        <Tooltip title={<span className="text-slate-50">{title}</span>} overlayClassName="project-card-action-tooltip" overlayInnerStyle={{ color: "#f8fafc" }}>
+        <Tooltip title={<span className="text-slate-50">{title}</span>} classNames={{ root: "project-card-action-tooltip" }} styles={{ container: { color: "#f8fafc" } }}>
             <Button type="text" size="small" shape="circle" icon={icon} danger={danger} onClick={onClick} aria-label={title} />
         </Tooltip>
     );

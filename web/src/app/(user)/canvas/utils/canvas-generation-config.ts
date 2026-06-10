@@ -6,7 +6,7 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
     const defaultModel = mode === "image" ? config.imageModel : mode === "video" ? config.videoModel : config.textModel;
     if (mode === "video") {
         return {
-            ...buildCanvasVideoConfig(config, node?.metadata),
+            ...buildCanvasVideoConfig(config, videoGenerationMetadata(node)),
             count: String(node?.metadata?.count || config.count || defaults.count),
         };
     }
@@ -21,6 +21,15 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
         videoWatermark: node?.metadata?.watermark || config.videoWatermark || defaults.videoWatermark,
         videoSeed: node?.metadata?.seed || config.videoSeed || defaults.videoSeed,
         count: String(node?.metadata?.count || (mode === "image" ? 3 : config.count) || defaults.count),
+    };
+}
+
+function videoGenerationMetadata(node: CanvasNodeData | undefined): CanvasNodeMetadata | undefined {
+    if (!node?.metadata) return undefined;
+    if (node.type === "config" || node.type === "video") return node.metadata;
+    return {
+        ...node.metadata,
+        duration: node.metadata.seconds ? node.metadata.duration : undefined,
     };
 }
 

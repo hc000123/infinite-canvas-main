@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Modal } from "antd";
-import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Download, Eye, EyeOff, FileText, Image as ImageIcon, Info, Maximize2, MessageSquare, RefreshCw, Scissors, Sparkles, Upload, Video } from "lucide-react";
+import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Download, Eye, EyeOff, FileText, Image as ImageIcon, Info, Link2, Maximize2, MessageSquare, RefreshCw, Scissors, Sparkles, Upload, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
@@ -30,6 +30,7 @@ type CanvasContextInspectorProps = {
     stats: EpisodeWorkbenchStats;
     selectedNode: CanvasNodeData | null;
     selectedProductionPackage?: CanvasProductionPackageSummary | null;
+    selectedVideoNode?: CanvasNodeData | null;
     selectedShot?: StoryboardTableShot | null;
     selectedShotGroups?: ShotGroup[];
     selectedShotNodes?: CanvasNodeData[];
@@ -50,6 +51,8 @@ type CanvasContextInspectorProps = {
     onDownloadProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
     onSetCurrentProductionVideoVersion: (packageId: string, nodeId: string) => void;
     onHideProductionVideoVersion: (nodeId: string) => void;
+    onBindSelectedVideoToProductionPackage: (packageId: string, nodeId: string) => void;
+    onInsertProductionPackageConfigNode: (packageId: string) => void;
     onInfo: (node: CanvasNodeData) => void;
     onEditText: (node: CanvasNodeData) => void;
     onToggleDialog: (node: CanvasNodeData) => void;
@@ -76,6 +79,7 @@ export function CanvasContextInspector({
     stats,
     selectedNode,
     selectedProductionPackage,
+    selectedVideoNode,
     selectedShot,
     selectedShotGroups = [],
     selectedShotNodes = [],
@@ -96,6 +100,8 @@ export function CanvasContextInspector({
     onDownloadProductionVideoVersion,
     onSetCurrentProductionVideoVersion,
     onHideProductionVideoVersion,
+    onBindSelectedVideoToProductionPackage,
+    onInsertProductionPackageConfigNode,
     onInfo,
     onEditText,
     onToggleDialog,
@@ -219,11 +225,14 @@ export function CanvasContextInspector({
             ) : selectedProductionPackage ? (
                 <ProductionPackageContentView
                     productionPackage={selectedProductionPackage}
+                    selectedVideoNode={selectedVideoNode}
                     theme={theme}
                     onPreviewProductionVideoVersion={onPreviewProductionVideoVersion}
                     onDownloadProductionVideoVersion={onDownloadProductionVideoVersion}
                     onSetCurrentProductionVideoVersion={onSetCurrentProductionVideoVersion}
                     onHideProductionVideoVersion={onHideProductionVideoVersion}
+                    onBindSelectedVideoToProductionPackage={onBindSelectedVideoToProductionPackage}
+                    onInsertProductionPackageConfigNode={onInsertProductionPackageConfigNode}
                 />
             ) : selectedShot ? (
                 <ShotInspector
@@ -701,28 +710,30 @@ function ProductionPackageInfoContent({
 
 function ProductionPackageContentView({
     productionPackage,
+    selectedVideoNode,
     theme,
     onPreviewProductionVideoVersion,
     onDownloadProductionVideoVersion,
     onSetCurrentProductionVideoVersion,
     onHideProductionVideoVersion,
+    onBindSelectedVideoToProductionPackage,
+    onInsertProductionPackageConfigNode,
 }: {
     productionPackage: CanvasProductionPackageSummary;
+    selectedVideoNode?: CanvasNodeData | null;
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     onPreviewProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
     onDownloadProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
     onSetCurrentProductionVideoVersion: (packageId: string, nodeId: string) => void;
     onHideProductionVideoVersion: (nodeId: string) => void;
+    onBindSelectedVideoToProductionPackage: (packageId: string, nodeId: string) => void;
+    onInsertProductionPackageConfigNode: (packageId: string) => void;
 }) {
     return (
         <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
             <ProductionPackageBindingSection productionPackage={productionPackage} theme={theme} />
-            <section className="mt-3 rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
-                <div className="text-sm font-semibold">画布绑定方式</div>
-                <div className="mt-2 text-xs leading-5" style={{ color: theme.node.muted }}>
-                    可在上方 P 卡片把配置节点放入画布；选中一个已有视频节点后，可用 P 卡片上的绑定按钮把它加入这个生产包。
-                </div>
-            </section>
+            <ProductionPackageSlotSection productionPackage={productionPackage} selectedVideoNode={selectedVideoNode} theme={theme} onBindSelectedVideoToProductionPackage={onBindSelectedVideoToProductionPackage} onInsertProductionPackageConfigNode={onInsertProductionPackageConfigNode} />
+            <ProductionPackageSourceSection productionPackage={productionPackage} theme={theme} onInsertProductionPackageConfigNode={onInsertProductionPackageConfigNode} />
             <VideoVersionsSection
                 productionPackage={productionPackage}
                 theme={theme}
@@ -731,6 +742,87 @@ function ProductionPackageContentView({
                 onSetCurrent={onSetCurrentProductionVideoVersion}
                 onHide={onHideProductionVideoVersion}
             />
+        </div>
+    );
+}
+
+function ProductionPackageSlotSection({
+    productionPackage,
+    selectedVideoNode,
+    theme,
+    onBindSelectedVideoToProductionPackage,
+    onInsertProductionPackageConfigNode,
+}: {
+    productionPackage: CanvasProductionPackageSummary;
+    selectedVideoNode?: CanvasNodeData | null;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onBindSelectedVideoToProductionPackage: (packageId: string, nodeId: string) => void;
+    onInsertProductionPackageConfigNode: (packageId: string) => void;
+}) {
+    const current = productionPackage.currentVersion;
+    const selectedVideoTitle = selectedVideoNode ? selectedVideoNode.title || "选中视频节点" : "";
+    return (
+        <section className="mt-3 rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+            <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold">结果填充槽</div>
+                <span className="rounded-md border px-2 py-1 text-xs" style={{ borderColor: current ? "rgba(34,211,238,.72)" : theme.node.stroke, color: current ? "rgb(103,232,249)" : theme.node.muted }}>
+                    {current ? "已填充" : "待填充"}
+                </span>
+            </div>
+            <div className="rounded-xl border border-dashed p-3" style={{ borderColor: current ? "rgba(34,211,238,.72)" : theme.node.stroke, background: theme.node.panel }}>
+                <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border" style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel }}>
+                        <Video className="size-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium">{current ? `${current.label} · ${current.node.title}` : "最终视频节点"}</div>
+                        <div className="mt-1 text-xs leading-5" style={{ color: theme.node.muted }}>
+                            {current ? `${current.status} · ${current.duration || "未记录时长"}` : selectedVideoNode ? `已选中：${selectedVideoTitle}` : "先在画布上选中一个已生成视频节点，再填入这个槽位。"}
+                        </div>
+                    </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                    <SmallInspectorButton icon={<Link2 className="size-3.5" />} label={current ? "替换为选中视频" : "填入选中视频"} onClick={() => selectedVideoNode && onBindSelectedVideoToProductionPackage(productionPackage.id, selectedVideoNode.id)} theme={theme} disabled={!selectedVideoNode} />
+                    <SmallInspectorButton icon={<Video className="size-3.5" />} label={productionPackage.configNodeId ? "定位配置节点" : "新建视频配置"} onClick={() => onInsertProductionPackageConfigNode(productionPackage.id)} theme={theme} />
+                </div>
+            </div>
+        </section>
+    );
+}
+
+function ProductionPackageSourceSection({ productionPackage, theme, onInsertProductionPackageConfigNode }: { productionPackage: CanvasProductionPackageSummary; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onInsertProductionPackageConfigNode: (packageId: string) => void }) {
+    return (
+        <section className="mt-3 rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+            <div className="mb-2 text-sm font-semibold">内容素材</div>
+            <div className="space-y-2">
+                <SourceRow icon={<FileText className="size-4" />} title="剧情内容" value={productionPackage.sceneName} detail={`镜头范围：${productionPackage.shotRangeLabel}`} theme={theme} />
+                <SourceRow icon={<MessageSquare className="size-4" />} title="提示词 / 视频配置" value={productionPackage.configNodeId ? "已放入画布" : "待创建"} detail="可生成视频配置节点后继续编辑提示词和参考输入。" theme={theme} />
+                <SourceRow icon={<ImageIcon className="size-4" />} title="参考资产" value={`${Math.max(0, productionPackage.nodeIds.length - productionPackage.versions.length)} 个关联节点`} detail="可从画布节点、素材库或生产包配置继续补齐参考图、音频和文本。" theme={theme} />
+            </div>
+            <div className="mt-3">
+                <SmallInspectorButton icon={<Upload className="size-3.5" />} label="导入为视频配置节点" onClick={() => onInsertProductionPackageConfigNode(productionPackage.id)} theme={theme} />
+            </div>
+        </section>
+    );
+}
+
+function SourceRow({ icon, title, value, detail, theme }: { icon: ReactNode; title: string; value: string; detail: string; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    return (
+        <div className="flex gap-2 rounded-lg border p-2" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md" style={{ background: theme.toolbar.panel, color: theme.node.muted }}>
+                {icon}
+            </div>
+            <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="font-medium">{title}</span>
+                    <span className="max-w-[160px] truncate" style={{ color: theme.node.muted }}>
+                        {value}
+                    </span>
+                </div>
+                <div className="mt-1 text-xs leading-5" style={{ color: theme.node.muted }}>
+                    {detail}
+                </div>
+            </div>
         </div>
     );
 }

@@ -111,10 +111,11 @@ export function useCanvasGenerationFlowActions({
             }
 
             setRunningNodeId(nodeId);
+            const nodePrompt = String(prompt || sourceNode?.metadata?.prompt || sourceNode?.metadata?.finalPrompt || "").trim();
             const sourceTextContent = sourceNode?.type === CanvasNodeType.Text ? sourceNode.metadata?.content?.trim() || "" : "";
             const editingTextNode = mode === "text" && Boolean(sourceTextContent);
             const generationContext = await hydrateNodeGenerationContext(
-                buildNodeGenerationContext(nodeId, generationNodes, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : prompt),
+                buildNodeGenerationContext(nodeId, generationNodes, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${nodePrompt}` : nodePrompt),
             );
             const effectivePrompt = generationContext.prompt.trim();
             const isCompletedVideoSource = sourceNode?.type === CanvasNodeType.Video && Boolean(sourceNode.metadata?.content);
@@ -124,14 +125,14 @@ export function useCanvasGenerationFlowActions({
                 return { ok: false, errorDetails: "提示词为空" };
             }
             let pendingChildIds: string[] = [];
-            if (markSourceStatus) setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, prompt, status: NODE_STATUS_LOADING, errorDetails: undefined } } : node)));
+            if (markSourceStatus) setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, prompt: nodePrompt, status: NODE_STATUS_LOADING, errorDetails: undefined } } : node)));
 
             try {
                 if (mode === "image") {
                     const imageResult = await generateImageNode({
                         nodeId,
                         sourceNode,
-                        prompt,
+                        prompt: nodePrompt,
                         effectivePrompt,
                         generationConfig,
                         contextReferenceImages: generationContext.referenceImages,
@@ -199,7 +200,7 @@ export function useCanvasGenerationFlowActions({
                 const textResult = await generateTextNode({
                     nodeId,
                     sourceNode,
-                    prompt,
+                    prompt: nodePrompt,
                     effectivePrompt,
                     generationConfig,
                     generationContext,

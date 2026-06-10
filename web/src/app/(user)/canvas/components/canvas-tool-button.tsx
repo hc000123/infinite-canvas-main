@@ -42,8 +42,8 @@ export function CanvasToolButton({
             title={<span style={{ color: theme.node.text }}>{tooltipText}</span>}
             placement="top"
             mouseEnterDelay={0.2}
-            overlayClassName="canvas-tool-tooltip"
-            overlayInnerStyle={{ color: theme.node.text }}
+            classNames={{ root: "canvas-tool-tooltip" }}
+            styles={{ container: { color: theme.node.text } }}
         >
             <button
                 type="button"

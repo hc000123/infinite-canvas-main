@@ -6,10 +6,10 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, AudioLines, FilePlus2, FileText, Home, ImageIcon, Link2, List, Menu, MessageSquare, Plus, Redo2, Save, Settings2, Trash2, Undo2, Upload, Video } from "lucide-react";
 
 import { recordAiTaskFrontendArtifact } from "@/services/api/ai-task-trace";
-import { refreshVideoTask } from "@/services/api/video";
+import { fetchVideoTaskContent, refreshVideoTask } from "@/services/api/video";
 import { defaultConfig, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
-import { resolveMediaUrl, type UploadedFile } from "@/services/file-storage";
+import { resolveMediaUrl, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { readImageMeta } from "@/lib/image-utils";
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
@@ -22,6 +22,7 @@ import { removeVariantVideoConnections } from "../utils/canvas-connection-cleanu
 import { buildGenerationConfig } from "../utils/canvas-generation-config";
 import { buildCanvasVideoDefaultsPatch } from "../utils/canvas-video-config";
 import { videoTaskMetadata } from "../utils/canvas-generation-metadata";
+import { buildGeneratedVideoAsset } from "../utils/canvas-generated-asset";
 import { canvasNodeToAsset } from "../utils/canvas-assets";
 import { canvasAssetReferenceMetadata } from "../utils/canvas-asset-reference";
 import { canvasEpisodeContextFromCanvas, canvasEpisodeLabel } from "../utils/canvas-episode-context";
@@ -60,7 +61,7 @@ import { useCanvasToolbarActions } from "../hooks/use-canvas-toolbar-actions";
 import { useCanvasVideoGenerationActions } from "../hooks/use-canvas-video-generation-actions";
 import { useCanvasVideoTaskRecovery } from "../hooks/use-canvas-video-task-recovery";
 import { App, Button, Dropdown, Modal } from "antd";
-import { NODE_DEFAULT_SIZE, getNodeSpec } from "../constants";
+import { NODE_DEFAULT_SIZE, VIDEO_NODE_MAX_HEIGHT, VIDEO_NODE_MAX_WIDTH, getNodeSpec } from "../constants";
 import { ActiveConnectionPath, ConnectionPath } from "../components/canvas-connections";
 import { CanvasConfigNodePanel } from "../components/canvas-config-node-panel";
 import { CanvasAssistantPanel } from "../components/canvas-assistant-panel";
@@ -247,6 +248,7 @@ function InfiniteCanvasPage() {
     const volcengineAssetEnabled = useConfigStore((state) => state.publicSettings?.volcengineAsset?.enabled === true);
     const token = useUserStore((state) => state.token);
     const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
+    const ensureProjectFolder = useAssetStore((state) => state.ensureProjectFolder);
     const updateAsset = useAssetStore((state) => state.updateAsset);
     const cleanupAssetImages = useAssetStore((state) => state.cleanupImages);
     const assets = useAssetStore((state) => state.assets);
@@ -318,6 +320,7 @@ function InfiniteCanvasPage() {
     const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
     const [activeTimelineShotId, setActiveTimelineShotId] = useState("");
     const [activeProductionPackageId, setActiveProductionPackageId] = useState("");
+    const [lastSelectedVideoNodeId, setLastSelectedVideoNodeId] = useState("");
     const [titleEditing, setTitleEditing] = useState(false);
     const [titleDraft, setTitleDraft] = useState("");
     const [collapsingBatchIds, setCollapsingBatchIds] = useState<Set<string>>(new Set());
@@ -334,7 +337,8 @@ function InfiniteCanvasPage() {
     const showCanvasSuccess = useCallback((text: string) => message.success(text), [message]);
     const archiveGeneratedAsset = useCallback(
         async (asset: Parameters<typeof addAssetOnce>[0]) => {
-            const assetId = await addAssetOnce(asset);
+            const archivedAsset = asset.kind === "video" ? { ...asset, folderId: asset.folderId || ensureProjectFolder(workspaceProjectId, workspaceProjectTitle) } : asset;
+            const assetId = await addAssetOnce(archivedAsset);
             const generation = asset.metadata?.generation as Record<string, unknown> | undefined;
             const aiTaskId = aiTaskIdFromGeneration(generation);
             if (aiTaskId) {
@@ -367,7 +371,26 @@ function InfiniteCanvasPage() {
             }
             return assetId;
         },
-        [addAssetOnce, canvasId, workspaceProjectId],
+        [addAssetOnce, canvasId, ensureProjectFolder, workspaceProjectId, workspaceProjectTitle],
+    );
+    const archiveGeneratedVideoNode = useCallback(
+        async (node: CanvasNodeData, generationConfig: AiConfig, prompt = node.metadata?.prompt || "") => {
+            const effectivePrompt = node.metadata?.finalPrompt || prompt;
+            const asset = buildGeneratedVideoAsset(node, {
+                projectId: workspaceProjectId,
+                projectTitle: workspaceProjectTitle,
+                projectPreset: currentProject?.preset,
+                episodeContext: canvasEpisodeContext,
+                prompt,
+                effectivePrompt,
+                config: generationConfig,
+                createdAt: node.metadata?.finishedAt || node.metadata?.localStoredAt || new Date().toISOString(),
+            });
+            const assetId = asset ? await archiveGeneratedAsset(asset).catch(() => undefined) : undefined;
+            if (typeof assetId === "string") setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, sourceAssetId: assetId } } : item)));
+            return assetId;
+        },
+        [archiveGeneratedAsset, canvasEpisodeContext, currentProject?.preset, workspaceProjectId, workspaceProjectTitle],
     );
     const { generateImageNode } = useCanvasImageGenerationActions({
         setNodes,
@@ -486,6 +509,7 @@ function InfiniteCanvasPage() {
         cacheUploadedCanvasMedia,
         setNodes,
         toVideoMetadata: videoMetadata,
+        archiveRecoveredVideoNode: archiveGeneratedVideoNode,
     });
 
     useEffect(() => {
@@ -645,6 +669,8 @@ function InfiniteCanvasPage() {
     });
     const hasMultipleSelectedNodes = selectedNodeIds.size > 1;
     const selectedInspectorNode = selectedNodeIds.size === 1 ? nodeById.get(Array.from(selectedNodeIds)[0]) || null : null;
+    const selectedVideoNode = selectedInspectorNode?.type === CanvasNodeType.Video && selectedInspectorNode.metadata?.content ? selectedInspectorNode : null;
+    const packageSlotVideoNode = selectedVideoNode || (lastSelectedVideoNodeId ? nodeById.get(lastSelectedVideoNodeId) || null : null);
     const activeNodeId = hasMultipleSelectedNodes ? null : hoveredNodeId || (selectedNodeIds.size === 1 ? Array.from(selectedNodeIds)[0] : null);
     const batchChildCountById = useMemo(() => {
         const map = new Map<string, number>();
@@ -681,6 +707,10 @@ function InfiniteCanvasPage() {
         activeProductionPackageId,
         setActiveProductionPackageId,
     });
+
+    useEffect(() => {
+        if (selectedVideoNode) setLastSelectedVideoNodeId(selectedVideoNode.id);
+    }, [selectedVideoNode]);
 
     const { handleTimelineShotSelect, addStoryboardGroupToCanvas, addShotGroupToCanvas } = useCanvasStoryboardCanvasActions({
         assets,
@@ -1047,6 +1077,40 @@ function InfiniteCanvasPage() {
             try {
                 const generationConfig = buildGenerationConfig(canvasAiConfig, node, "video", defaultConfig);
                 const task = await refreshVideoTask(generationConfig, node.metadata.taskId);
+                if (task.status === "succeeded") {
+                    const video = await uploadMediaFile(await fetchVideoTaskContent(generationConfig, task), "video");
+                    const cachedVideo = await cacheUploadedCanvasMedia(video, `${node.id}.mp4`);
+                    const videoSize = fitNodeSize(video.width || node.width || NODE_DEFAULT_SIZE[CanvasNodeType.Video].width, video.height || node.height || NODE_DEFAULT_SIZE[CanvasNodeType.Video].height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
+                    const completedVideoNode: CanvasNodeData = {
+                        ...node,
+                        width: videoSize.width,
+                        height: videoSize.height,
+                        position: { x: node.position.x + node.width / 2 - videoSize.width / 2, y: node.position.y + node.height / 2 - videoSize.height / 2 },
+                        metadata: {
+                            ...node.metadata,
+                            ...videoMetadata(video),
+                            ...cachedVideo,
+                            ...videoTaskMetadata(task),
+                            status: "success",
+                            taskStatus: "succeeded",
+                            errorDetails: undefined,
+                        },
+                    };
+                    setNodes((prev) =>
+                        prev.map((item) =>
+                            item.id === node.id
+                                ? {
+                                      ...completedVideoNode,
+                                      position: { x: item.position.x + item.width / 2 - videoSize.width / 2, y: item.position.y + item.height / 2 - videoSize.height / 2 },
+                                      metadata: { ...item.metadata, ...completedVideoNode.metadata },
+                                  }
+                                : item,
+                        ),
+                    );
+                    await archiveGeneratedVideoNode(completedVideoNode, generationConfig, completedVideoNode.metadata?.prompt || "");
+                    message.success("视频已回填");
+                    return;
+                }
                 setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, ...videoTaskMetadata(task), errorDetails: task.errorMessage } } : item)));
                 message.success(`任务状态：${task.status}`);
             } catch (error) {
@@ -1055,7 +1119,7 @@ function InfiniteCanvasPage() {
                 setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, errorDetails } } : item)));
             }
         },
-        [canvasAiConfig, message],
+        [archiveGeneratedVideoNode, cacheUploadedCanvasMedia, canvasAiConfig, message, videoMetadata],
     );
 
     const { handleRetryNode } = useCanvasGenerationRetryActions({
@@ -1291,7 +1355,7 @@ function InfiniteCanvasPage() {
                     packages={productionPackages}
                     activePackageId={activeProductionPackageId}
                     inspectorCollapsed={isInspectorCollapsed}
-                    selectedVideoNodeId={selectedInspectorNode?.type === CanvasNodeType.Video && selectedInspectorNode.metadata?.content ? selectedInspectorNode.id : ""}
+                    selectedVideoNodeId={packageSlotVideoNode?.type === CanvasNodeType.Video && packageSlotVideoNode.metadata?.content ? packageSlotVideoNode.id : ""}
                     onSelect={(productionPackage) => {
                         focusProductionPackage(productionPackage);
                         setAssistantMounted(true);
@@ -1616,6 +1680,7 @@ function InfiniteCanvasPage() {
                 stats={episodeWorkbenchStats}
                 selectedNode={selectedInspectorNode}
                 selectedProductionPackage={inspectorProductionPackage}
+                selectedVideoNode={packageSlotVideoNode?.type === CanvasNodeType.Video && packageSlotVideoNode.metadata?.content ? packageSlotVideoNode : null}
                 selectedShot={activeTimelineShot}
                 selectedShotGroups={activeTimelineShotGroups}
                 selectedShotNodes={activeTimelineNodes}
@@ -1667,6 +1732,8 @@ function InfiniteCanvasPage() {
                 onDownloadProductionVideoVersion={handleDownloadProductionVideoVersion}
                 onSetCurrentProductionVideoVersion={handleSetCurrentProductionVideoVersion}
                 onHideProductionVideoVersion={handleHideProductionVideoVersion}
+                onBindSelectedVideoToProductionPackage={handleBindSelectedVideoToProductionPackage}
+                onInsertProductionPackageConfigNode={handleInsertProductionPackageConfigNode}
                 onInfo={(node) => setInfoNodeId(node.id)}
                 onEditText={openTextEditor}
                 onToggleDialog={(node) => setDialogNodeId((current) => (current === node.id ? null : node.id))}
@@ -1736,7 +1803,16 @@ function CanvasProductionPackageBar({
                             title={`${item.label} · ${item.title}`}
                         >
                             <button type="button" className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70" onClick={() => onSelect(item)}>
-                                <div className="truncate text-sm font-semibold">{item.label}</div>
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="truncate text-sm font-semibold">{item.label}</div>
+                                    <span
+                                        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border"
+                                        style={{ borderColor: active ? activePackageStyle.border : theme.node.stroke, background: active ? activePackageStyle.border : "transparent" }}
+                                        aria-hidden
+                                    >
+                                        {active ? <span className="h-1.5 w-1.5 rounded-full bg-white" /> : null}
+                                    </span>
+                                </div>
                                 <div className="mt-1 truncate text-xs" style={{ color: active ? activePackageStyle.muted : theme.node.muted }}>
                                     {item.statusLabel}
                                 </div>
@@ -1753,7 +1829,7 @@ function CanvasProductionPackageBar({
                                     title={item.configNodeId ? "查看生产包配置节点" : "将生产包配置放入画布"}
                                 >
                                     <FilePlus2 className="size-3" />
-                                    {item.configNodeId ? "配置" : "放入"}
+                                    {item.configNodeId ? "配置节点" : "新建配置"}
                                 </button>
                                 {selectedVideoNodeId ? (
                                     <button

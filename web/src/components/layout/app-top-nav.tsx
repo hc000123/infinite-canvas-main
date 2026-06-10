@@ -46,8 +46,11 @@ export function AppTopNav() {
                                     />
                                 </span>
                                 <span className="grid gap-1">
-                                    <span className="text-base font-semibold">眨眼之间</span>
-                                    <span className="text-[10px] font-medium leading-none tracking-[0.18em] text-stone-400 dark:text-stone-500">创作中枢</span>
+                                    <span className="flex items-center gap-2 text-base font-semibold">
+                                        AI · 画布
+                                        <span className="rounded-md border border-teal-700/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-teal-700 dark:border-teal-200/25 dark:text-teal-200">本地版</span>
+                                    </span>
+                                    <span className="text-[10px] font-medium leading-none text-stone-400 dark:text-stone-500">让想法成为影像</span>
                                 </span>
                             </Link>
 

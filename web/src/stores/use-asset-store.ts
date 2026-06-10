@@ -21,6 +21,7 @@ export type AssetWriteInput = Asset extends infer T ? (T extends Asset ? Omit<T,
 export type AssetFolder = {
     id: string;
     name: string;
+    projectId?: string;
     createdAt: string;
     updatedAt: string;
 };
@@ -47,6 +48,7 @@ type AssetStore = {
     updateAsset: (id: string, patch: Partial<Omit<Asset, "id" | "createdAt">>) => void;
     removeAsset: (id: string) => void;
     addFolder: (name: string) => string;
+    ensureProjectFolder: (projectId: string, name: string) => string;
     updateFolder: (id: string, name: string) => void;
     removeFolder: (id: string) => void;
     cleanupImages: (extra?: unknown) => void;
@@ -127,6 +129,22 @@ export const useAssetStore = create<AssetStore>()(
                 const now = new Date().toISOString();
                 const id = nanoid();
                 set((state) => ({ folders: [...state.folders, { id, name: name.trim(), createdAt: now, updatedAt: now }] }));
+                return id;
+            },
+            ensureProjectFolder: (projectId, name) => {
+                const title = name.trim() || "未命名项目";
+                const now = new Date().toISOString();
+                let id = "";
+                set((state) => {
+                    const existing = state.folders.find((folder) => folder.projectId === projectId);
+                    if (existing) {
+                        id = existing.id;
+                        if (existing.name === title) return {};
+                        return { folders: state.folders.map((folder) => (folder.id === existing.id ? { ...folder, name: title, updatedAt: now } : folder)) };
+                    }
+                    id = nanoid();
+                    return { folders: [...state.folders, { id, name: title, projectId, createdAt: now, updatedAt: now }] };
+                });
                 return id;
             },
             updateFolder: (id, name) =>

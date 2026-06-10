@@ -271,6 +271,7 @@
     .ant-tooltip,
     .ant-tooltip .ant-tooltip-content,
     .ant-tooltip .ant-tooltip-inner,
+    .ant-tooltip .ant-tooltip-inner *,
     .ant-tooltip-inner {
         color: #f8fafc !important;
     }
