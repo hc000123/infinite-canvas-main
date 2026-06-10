@@ -207,13 +207,13 @@ export function useCanvasConnections({
     };
 }
 
-function applyFrameConnectionMetadata(nodes: CanvasNodeData[], connection: ConnectionDraft) {
+function applyFrameConnectionMetadata(nodes: CanvasNodeData[], connection: ConnectionDraft): CanvasNodeData[] {
     if (connection.toHandle !== "first_frame" && connection.toHandle !== "last_frame") return nodes;
     const fromNode = nodes.find((node) => node.id === connection.fromNodeId);
     const toNode = nodes.find((node) => node.id === connection.toNodeId);
     if (fromNode?.type !== CanvasNodeType.Image || toNode?.type !== CanvasNodeType.Video) return nodes;
     let changed = false;
-    const next = nodes.map((node) => {
+    const next = nodes.map((node): CanvasNodeData => {
         if (node.id !== connection.toNodeId) return node;
         const role = connection.toHandle!;
         const referenceRoles = [
