@@ -17,7 +17,7 @@ import { useEpisodeWorkbenchState } from "./use-episode-workbench-state";
 import { useEpisodeWorkbenchPreviewActions } from "./use-episode-workbench-preview-actions";
 import { useEpisodeWorkbenchRunActions } from "./use-episode-workbench-run-actions";
 import { useEpisodeWorkbenchUiState } from "./use-episode-workbench-ui-state";
-import type { CanvasHandoffImportTarget } from "./components/episode-canvas-handoff-page";
+import type { CanvasHandoffImportTarget } from "./components/episode-canvas-handoff-utils";
 import { EpisodeDetailDrawer } from "./components/episode-module-panel";
 import { EpisodeProductionShell } from "./components/episode-production-shell";
 import { findVideoPreviewItemIdsForPackage, latestPreview, padEpisodeOrder } from "./episode-workbench-display";

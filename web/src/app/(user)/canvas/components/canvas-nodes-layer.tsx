@@ -13,7 +13,7 @@ import { CanvasNode } from "./canvas-node";
 import { CanvasNodePromptPanel } from "./canvas-node-prompt-panel";
 
 type Props = {
-    activeNodeId: string;
+    activeNodeId: string | null;
     activeProductionPackageId: string;
     activeTimelineNodeIds: Set<string>;
     batchChildCountById: Map<string, number>;
@@ -45,7 +45,7 @@ type Props = {
     workspaceProjectId: string;
     handleConfigNodeChange: (nodeId: string, patch: Partial<CanvasNodeMetadata>) => void;
     handleConnectStart: (event: MouseEvent, nodeId: string, handleType: "source" | "target", handleId?: string) => void;
-    handleGenerateNode: (nodeId: string, mode: CanvasGenerationMode, prompt: string) => void | Promise<void>;
+    handleGenerateNode: (nodeId: string, mode: CanvasGenerationMode, prompt: string) => void | Promise<unknown>;
     handleNodeContentChange: (nodeId: string, content: string) => void;
     handleNodeMouseDown: (event: MouseEvent, nodeId: string) => void;
     handleNodePromptChange: (nodeId: string, prompt: string) => void;

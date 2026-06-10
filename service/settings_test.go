@@ -101,6 +101,19 @@ func TestArkEndpointIDUsesDefaultVideoModelCost(t *testing.T) {
 	}
 }
 
+func TestVisibleSeedanceModelUsesVersionedModelCost(t *testing.T) {
+	setupAITaskTestDB(t)
+	saveArkEndpointSettings(t)
+
+	credits, err := ModelCost("doubao-seedance-2-0")
+	if err != nil {
+		t.Fatalf("ModelCost returned error: %v", err)
+	}
+	if credits != 300 {
+		t.Fatalf("credits = %d, want 300", credits)
+	}
+}
+
 func TestPublicSettingsReplacesArkEndpointWithModelName(t *testing.T) {
 	setupAITaskTestDB(t)
 	savePublicEndpointSettings(t)

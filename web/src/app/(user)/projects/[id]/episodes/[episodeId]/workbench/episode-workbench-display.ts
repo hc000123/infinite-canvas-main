@@ -4,7 +4,7 @@ import { workflowMappingPreviewItemKey } from "../../../../agent-runner-workflow
 import type { AgentWorkflowMappingPreview } from "../../../../agent-runner-types";
 import { workflowStageStatusLabel, type WorkflowStageDisplayState } from "../../../../agent-runner-workflow-display";
 import type { EpisodeStatusTone } from "./components/episode-module-panel";
-import type { CanvasHandoffImportTarget } from "./components/episode-canvas-handoff-page";
+import type { CanvasHandoffImportTarget } from "./components/episode-canvas-handoff-utils";
 import type { EpisodeSceneOption } from "./use-episode-workbench-state";
 
 export const stageCopy: Record<string, { title: string; agent: string; input: string; output: string; previewTargets: Array<AgentWorkflowMappingPreview["targetType"]> }> = {

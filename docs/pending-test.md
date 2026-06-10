@@ -10,6 +10,21 @@
 
 上线前总判断集中记录在 `docs/release-acceptance-report.md`；本文档继续作为版本待验收明细索引。
 
+#### v0.2.89：本地 Docker 完整验收与真实 AI 链路回归
+
+- 入口：`docker-compose.local.yml`、`/projects`、`/assets`、`/prompts`、`/image`、`/canvas/:id`、`/api/v1/images/generations`、`/api/v1/videos`。
+- 本次实现：
+  - 修复 Docker 生产构建暴露的前端类型问题，确保本地镜像能完成 Next.js 生产构建并启动。
+  - 修复 Ark 视频 content 缺少 `role` 时的后端兜底判断，避免 `role` 缺失被误判成已有值。
+  - Seedance 带日期后缀模型会在公开模型与扣费表中归一到 `doubao-seedance-2-0`，保证前端可见模型名也能匹配 300 额度成本。
+  - 本地 Docker 已验证健康检查、登录、项目页、素材页、提示词页、生图页、项目详情、画布页、真实生图、Seedance 视频创建 / 轮询 / 下载代理链路。
+- 验收步骤：
+  1. 执行 `docker compose -f docker-compose.local.yml up -d --build`，确认容器状态为 healthy，`/api/health` 返回 `ok`。
+  2. 登录后打开 `/projects`、`/assets`、`/prompts`、`/image` 和任一 `/canvas/:id`，确认页面无控制台错误。
+  3. 在生图工作台发起一次真实图片生成，确认 `/api/v1/images/generations` 成功并生成结果图。
+  4. 发起一次 Seedance 文生视频，确认任务可创建、轮询到成功，并能通过 `/api/v1/videos/:id/content` 下载 MP4。
+  5. 打开公开设置或视频生成面板，确认 `doubao-seedance-2-0` 对应成本为 300。
+
 #### v0.2.89：Seedance 首尾帧、加白素材和长请求链路修复
 
 - 入口：`/canvas/:id` 图片 / 视频参考生成 Seedance 视频，尤其是首帧 / 尾帧模式。

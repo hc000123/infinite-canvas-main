@@ -585,7 +585,7 @@ func arkImageContent(imageURL string, role string) map[string]any {
 func normalizeArkVideoContentRoles(content []any) []any {
 	for _, item := range content {
 		entry, ok := item.(map[string]any)
-		if !ok || strings.TrimSpace(fmt.Sprint(entry["role"])) != "" {
+		if !ok || arkContentRoleFilled(entry) {
 			continue
 		}
 		if role := normalizeArkMediaContentRole(strings.TrimSpace(fmt.Sprint(entry["type"])), ""); role != "" {
@@ -593,6 +593,11 @@ func normalizeArkVideoContentRoles(content []any) []any {
 		}
 	}
 	return content
+}
+
+func arkContentRoleFilled(entry map[string]any) bool {
+	role, ok := entry["role"]
+	return ok && role != nil && strings.TrimSpace(fmt.Sprint(role)) != ""
 }
 
 func normalizeArkMediaContentRole(contentType string, role string) string {

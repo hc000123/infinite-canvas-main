@@ -257,6 +257,7 @@ function ImageContent({
     batchRecovering: boolean;
     onToggleBatch?: () => void;
     onSetBatchPrimary?: () => void;
+    onReviewAsset?: (node: CanvasNodeData) => void;
     reviewSubmitting?: boolean;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];

@@ -14,7 +14,8 @@ import {
     type AgentWorkflowStageOutput,
 } from "../../../../../agent-runner-types";
 import { summarizeWorkflowStageDisplayState } from "../../../../../agent-runner-workflow-display";
-import { EpisodeCanvasHandoffPage, type CanvasHandoffImportTarget } from "./episode-canvas-handoff-page";
+import { EpisodeCanvasHandoffPage } from "./episode-canvas-handoff-page";
+import type { CanvasHandoffImportTarget } from "./episode-canvas-handoff-utils";
 import { EpisodeStoryboardPackagePage } from "./episode-storyboard-package-page";
 import { EpisodeAssetsModulePage } from "./episode-assets-module-page";
 import { EpisodeModulePanel, type EpisodeDetailRecord } from "./episode-module-panel";

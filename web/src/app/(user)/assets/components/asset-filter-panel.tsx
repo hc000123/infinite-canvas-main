@@ -59,7 +59,7 @@ export function AssetFilterPanel({
     onReferenceVersionFilterChange,
     onStoryboardGroupFilterChange,
 }: {
-    activeFolderId: string;
+    activeFolderId?: string;
     filteredCount: number;
     folderCounts: Record<string, number>;
     folderFilter: string;

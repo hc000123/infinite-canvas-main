@@ -4,8 +4,8 @@ import { Button, Empty, Modal, Select, Space } from "antd";
 import { Bot, FileText } from "lucide-react";
 
 import type { Asset } from "@/stores/use-asset-store";
-import type { CanvasProject } from "../stores/use-canvas-store";
 import { canvasEpisodeLabel } from "../utils/canvas-episode-context";
+import type { EpisodeWorkbenchCanvas } from "../utils/episode-workbench";
 
 export function EpisodeWorkbenchHeader({
     activeCanvas,
@@ -15,8 +15,8 @@ export function EpisodeWorkbenchHeader({
     onOpenAgentSettings,
     projectTitle,
 }: {
-    activeCanvas?: CanvasProject;
-    canvases: CanvasProject[];
+    activeCanvas?: EpisodeWorkbenchCanvas;
+    canvases: EpisodeWorkbenchCanvas[];
     onBindScript: () => void;
     onCanvasChange: (canvasId: string) => void;
     onOpenAgentSettings?: () => void;

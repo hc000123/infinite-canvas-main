@@ -103,7 +103,7 @@ export function CanvasPageOverlays({
 
             {angleNode?.metadata?.content ? <CanvasNodeAngleDialog dataUrl={angleNode.metadata.content} open={Boolean(angleNode)} onClose={onCloseAngle} onConfirm={(params) => onGenerateAngleNode(angleNode, params)} /> : null}
 
-            <CanvasImagePreviewModal node={previewNode} onClose={onClosePreview} />
+            <CanvasImagePreviewModal node={previewNode || undefined} onClose={onClosePreview} />
 
             <ClearCanvasConfirmModal open={clearConfirmOpen} onCancel={onCloseClearConfirm} onConfirm={onClearCanvas} />
 

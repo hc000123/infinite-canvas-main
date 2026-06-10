@@ -127,8 +127,9 @@ func ModelCost(modelName string) (int, error) {
 
 func modelCostByName(items []model.ModelCost, modelName string) (int, bool) {
 	modelName = strings.TrimSpace(modelName)
+	normalizedModelName := normalizeVisibleArkModelName(modelName)
 	for _, item := range normalizePublicSetting(model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{ModelCosts: items}}).ModelChannel.ModelCosts {
-		if item.Model == modelName {
+		if item.Model == modelName || (normalizedModelName != "" && normalizeVisibleArkModelName(item.Model) == normalizedModelName) {
 			return item.Credits, true
 		}
 	}
@@ -159,6 +160,9 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 		if strings.HasPrefix(strings.ToLower(modelName), "ep-") {
 			return endpointModels[modelName]
 		}
+		if normalized := normalizeVisibleArkModelName(modelName); normalized != "" {
+			return []string{normalized}
+		}
 		if modelName == "" {
 			return nil
 		}
@@ -185,6 +189,27 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 		public.DefaultVideoModel = models[0]
 	}
 	return public
+}
+
+func normalizeVisibleArkModelName(modelName string) string {
+	value := strings.TrimSpace(modelName)
+	const seedancePrefix = "doubao-seedance-2-0-"
+	if strings.HasPrefix(strings.ToLower(value), seedancePrefix) && allDigits(value[len(seedancePrefix):]) {
+		return "doubao-seedance-2-0"
+	}
+	return value
+}
+
+func allDigits(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, item := range value {
+		if item < '0' || item > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizePrivateSetting(setting model.PrivateSetting) model.PrivateSetting {
