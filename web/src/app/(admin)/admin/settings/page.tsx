@@ -55,6 +55,7 @@ type EditorMode = "visual" | "json";
 type ModelSelectTabKey = "new" | "current";
 type AutoSaveStatus = "idle" | "saving" | "saved" | "error";
 type ChannelFormValues = AdminModelChannel & { endpointId?: string };
+type ChannelTableItem = AdminModelChannel & { _index: number; _rowKey: string };
 
 export default function AdminSettingsPage() {
     const token = useUserStore((state) => state.token);
@@ -634,7 +635,7 @@ export default function AdminSettingsPage() {
                                 <Button type="primary" icon={<PlusOutlined />} onClick={() => openChannelDrawer(null)}>
                                     新增渠道
                                 </Button>
-                                <Table
+                                <Table<ChannelTableItem>
                                     rowKey="_rowKey"
                                     pagination={false}
                                     dataSource={channelTableData}
@@ -655,7 +656,7 @@ export default function AdminSettingsPage() {
                                         {
                                             title: "模型",
                                             dataIndex: "models",
-                                            render: (value: string[], item: AdminModelChannel) => {
+                                            render: (value: string[], item: ChannelTableItem) => {
                                                 const mappings = channelEndpointMappings(item);
                                                 const firstMapping = mappings[0];
                                                 return (
