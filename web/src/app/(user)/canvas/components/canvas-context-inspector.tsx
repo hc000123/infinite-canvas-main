@@ -525,14 +525,14 @@ function InspectorTab({ label, active, onClick }: { label: string; active: boole
             className="relative h-8 rounded-md text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
             style={{
                 background: active ? "rgba(111, 168, 255, 0.16)" : "transparent",
-                border: active ? `1px solid ${theme.node.selected}` : "1px solid transparent",
-                color: active ? theme.node.selected : theme.node.muted,
+                border: active ? `1px solid ${theme.node.activeStroke}` : "1px solid transparent",
+                color: active ? theme.node.activeStroke : theme.node.muted,
             }}
             aria-current={active ? "page" : undefined}
             onClick={onClick}
         >
             {label}
-            {active ? <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full" style={{ background: theme.node.selected }} /> : null}
+            {active ? <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full" style={{ background: theme.node.activeStroke }} /> : null}
         </button>
     );
 }
