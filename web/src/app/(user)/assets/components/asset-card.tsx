@@ -82,7 +82,11 @@ export function AssetCard({
                     ) : (
                         <div className="flex aspect-[4/3] items-center justify-center bg-[var(--studio-panel-muted-bg)] p-5 text-center text-sm leading-6 text-[var(--studio-text-secondary)]">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>
                     )}
-                    {mediaInfo ? <span className="absolute bottom-2 right-2 max-w-[calc(100%-16px)] truncate rounded-md border border-[var(--studio-border-subtle)] bg-[rgba(21,24,33,.78)] px-2 py-1 text-[11px] font-medium leading-none text-[var(--studio-text-primary)] backdrop-blur-sm">{mediaInfo}</span> : null}
+                    {mediaInfo ? (
+                        <span className="absolute bottom-2 right-2 max-w-[calc(100%-16px)] truncate rounded-md border border-[var(--studio-border-subtle)] bg-[rgba(21,24,33,.78)] px-2 py-1 text-[11px] font-medium leading-none text-[var(--studio-text-primary)] backdrop-blur-sm">
+                            {mediaInfo}
+                        </span>
+                    ) : null}
                 </div>
             }
         >
@@ -91,9 +95,7 @@ export function AssetCard({
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                             <h2 className="line-clamp-1 text-base font-semibold leading-6 text-[var(--studio-text-primary)]">{asset.title}</h2>
-                            <Typography.Text className="mt-1 block text-sm !text-[var(--studio-text-secondary)]">
-                                {asset.source || "未标注来源"}
-                            </Typography.Text>
+                            <Typography.Text className="mt-1 block text-sm !text-[var(--studio-text-secondary)]">{asset.source || "未标注来源"}</Typography.Text>
                         </div>
                         <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
                             <Tag className="studio-tag text-xs">{assetKindLabel(asset.kind)}</Tag>
@@ -158,10 +160,7 @@ export function AssetIconButton({ title, icon, danger, loading, onClick }: { tit
             <Button
                 type="text"
                 size="small"
-                className={cn(
-                    "!h-8 !w-8 !min-w-8 !bg-transparent !p-0 !text-[var(--studio-text-secondary)] hover:!bg-[var(--studio-accent-soft)] hover:!text-[var(--studio-accent)]",
-                    danger && "hover:!bg-rose-500/10 hover:!text-[var(--studio-danger)]",
-                )}
+                className={cn("!h-8 !w-8 !min-w-8 !bg-transparent !p-0 !text-[var(--studio-text-secondary)] hover:!bg-[var(--studio-accent-soft)] hover:!text-[var(--studio-accent)]", danger && "hover:!bg-rose-500/10 hover:!text-[var(--studio-danger)]")}
                 danger={danger}
                 icon={icon}
                 loading={loading}

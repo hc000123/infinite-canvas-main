@@ -301,9 +301,7 @@ function MyAssetsTab({ allowedKinds, defaultKind = "all", onInsert }: { allowedK
 
 function assetKindOptions(allowedKinds?: AssetPickerKind[]): AssetKindOption[] {
     const allowed = new Set(allowedKinds || ["text", "image", "video", "audio"]);
-    return kindOptions
-        .filter((item) => item.value !== "all" || allowed.size > 1)
-        .filter((item) => item.value === "all" || allowed.has(item.value));
+    return kindOptions.filter((item) => item.value !== "all" || allowed.size > 1).filter((item) => item.value === "all" || allowed.has(item.value));
 }
 
 function remoteAssetKindOptions(allowedKinds?: AssetPickerKind[]): AssetKindOption<string>[] {

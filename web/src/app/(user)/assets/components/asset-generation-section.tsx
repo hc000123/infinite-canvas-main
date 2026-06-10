@@ -81,9 +81,7 @@ function GenerationCard({ generation, index, copyText }: { generation: AssetGene
                     {readString(generation.provider) ? <Tag className="studio-tag">{readString(generation.provider)}</Tag> : null}
                     {readString(generation.model) ? <Tag className="studio-tag">{readString(generation.model)}</Tag> : null}
                 </Space>
-                <Typography.Text className="text-sm !text-[var(--studio-text-muted)]">
-                    #{index + 1}
-                </Typography.Text>
+                <Typography.Text className="text-sm !text-[var(--studio-text-muted)]">#{index + 1}</Typography.Text>
             </div>
 
             <InfoGrid
@@ -113,9 +111,7 @@ function GenerationCard({ generation, index, copyText }: { generation: AssetGene
             {config ? (
                 <div className="mt-3">
                     <div className="mb-1 flex items-center justify-between gap-2">
-                        <Typography.Text className="text-sm !text-[var(--studio-text-secondary)]">
-                            生成参数
-                        </Typography.Text>
+                        <Typography.Text className="text-sm !text-[var(--studio-text-secondary)]">生成参数</Typography.Text>
                         <Button size="middle" type="text" icon={<Copy className="size-3.5" />} onClick={() => copyText(JSON.stringify(config, null, 2), "生成参数已复制")}>
                             复制 JSON
                         </Button>
@@ -132,33 +128,17 @@ function AssetVersionList({ versions }: { versions: AssetGenerationVersionRecord
     return (
         <div className="rounded-md bg-[var(--studio-elevated-bg)] p-3">
             <div className="flex items-center justify-between gap-2">
-                <Typography.Text className="text-sm !text-[var(--studio-text-secondary)]">
-                    版本预留
-                </Typography.Text>
-                <Typography.Text className="text-sm !text-[var(--studio-text-muted)]">
-                    基于现有生成记录推导
-                </Typography.Text>
+                <Typography.Text className="text-sm !text-[var(--studio-text-secondary)]">版本预留</Typography.Text>
+                <Typography.Text className="text-sm !text-[var(--studio-text-muted)]">基于现有生成记录推导</Typography.Text>
             </div>
             <div className="mt-2 space-y-1.5">
                 {versions.map((version) => (
                     <div key={version.id} className="flex flex-wrap items-center gap-2 rounded-md bg-[var(--studio-panel-bg)] px-3 py-2 text-sm">
-                        <Tag className="studio-tag">
-                            {version.isLatest ? "当前版本" : "历史版本"}
-                        </Tag>
+                        <Tag className="studio-tag">{version.isLatest ? "当前版本" : "历史版本"}</Tag>
                         <Typography.Text className="text-sm !text-[var(--studio-text-primary)]">{version.label}</Typography.Text>
-                        <Typography.Text className="text-sm !text-[var(--studio-text-secondary)]">
-                            {version.actionLabel}
-                        </Typography.Text>
-                        {version.modelProvider ? (
-                            <Typography.Text className="break-all text-sm !text-[var(--studio-text-muted)]">
-                                {version.modelProvider}
-                            </Typography.Text>
-                        ) : null}
-                        {version.taskId ? (
-                            <Typography.Text className="break-all text-sm !text-[var(--studio-text-muted)]">
-                                task: {version.taskId}
-                            </Typography.Text>
-                        ) : null}
+                        <Typography.Text className="text-sm !text-[var(--studio-text-secondary)]">{version.actionLabel}</Typography.Text>
+                        {version.modelProvider ? <Typography.Text className="break-all text-sm !text-[var(--studio-text-muted)]">{version.modelProvider}</Typography.Text> : null}
+                        {version.taskId ? <Typography.Text className="break-all text-sm !text-[var(--studio-text-muted)]">task: {version.taskId}</Typography.Text> : null}
                     </div>
                 ))}
             </div>
@@ -170,9 +150,7 @@ function SourceLineage({ items }: { items: ReturnType<typeof assetGenerationLine
     if (!items.length) return null;
     return (
         <div className="mt-3">
-            <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">
-                来源链路
-            </Typography.Text>
+            <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">来源链路</Typography.Text>
             <div className="mt-2 flex flex-wrap gap-1.5">
                 {items.map((item) => (
                     <Tag key={item.key} className="studio-tag max-w-full whitespace-normal break-all">
@@ -191,9 +169,7 @@ function InfoGrid({ items }: { items: Array<[string, string]> }) {
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {visible.map(([label, value]) => (
                 <div key={label} className="min-w-0">
-                    <Typography.Text className="block text-sm !text-[var(--studio-text-muted)]">
-                        {label}
-                    </Typography.Text>
+                    <Typography.Text className="block text-sm !text-[var(--studio-text-muted)]">{label}</Typography.Text>
                     <Typography.Text className="block break-words text-sm !text-[var(--studio-text-primary)]">{value}</Typography.Text>
                 </div>
             ))}
@@ -206,9 +182,7 @@ function PromptBlock({ title, text, onCopy }: { title: string; text: string; onC
     return (
         <div className="mt-3">
             <div className="mb-1 flex items-center justify-between gap-2">
-                <Typography.Text className="text-sm font-medium !text-[var(--studio-text-secondary)]">
-                    {title}
-                </Typography.Text>
+                <Typography.Text className="text-sm font-medium !text-[var(--studio-text-secondary)]">{title}</Typography.Text>
                 <Button size="middle" type="text" icon={<Copy className="size-3.5" />} onClick={onCopy}>
                     复制
                 </Button>
@@ -223,9 +197,7 @@ function ReferenceList({ references }: { references: unknown }) {
     if (!items.length) return null;
     return (
         <div className="mt-3">
-            <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">
-                引用素材
-            </Typography.Text>
+            <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">引用素材</Typography.Text>
             <div className="mt-2 space-y-1.5">
                 {items.map((item, index) => (
                     <div key={`${item.kind}-${index}`} className="rounded-md bg-[var(--studio-panel-bg)] px-3 py-2 text-sm text-[var(--studio-text-secondary)]">

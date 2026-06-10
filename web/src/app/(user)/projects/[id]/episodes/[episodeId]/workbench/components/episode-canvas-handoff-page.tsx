@@ -131,7 +131,10 @@ export function EpisodeCanvasHandoffPage({
                     { label: "4. 在画布生成", text: "确认后手动触发视频任务", tone: "slate" },
                     { label: "5. 结果回流", text: "写入项目资产库并追踪来源", tone: "slate" },
                 ].map((step) => (
-                    <div key={step.label} className={`rounded-lg border px-4 py-3 transition ${step.active ? "border-cyan-400/70 bg-cyan-400/12 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]" : step.tone === "green" ? "border-emerald-500/35 bg-emerald-500/[0.06]" : "border-slate-800 bg-slate-950/45"}`}>
+                    <div
+                        key={step.label}
+                        className={`rounded-lg border px-4 py-3 transition ${step.active ? "border-cyan-400/70 bg-cyan-400/12 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]" : step.tone === "green" ? "border-emerald-500/35 bg-emerald-500/[0.06]" : "border-slate-800 bg-slate-950/45"}`}
+                    >
                         <div className={`text-sm font-semibold ${episodeToneTextClass(step.tone as EpisodeStatusTone)}`}>{step.label}</div>
                         <div className="mt-2 break-words text-xs leading-5 text-slate-500">{step.text}</div>
                     </div>
@@ -180,14 +183,7 @@ export function EpisodeCanvasHandoffPage({
                         onPreview={(row) => setSelectedPackageId(row.pkg.id)}
                     />
                 </div>
-                <CanvasHandoffPreviewPanel
-                    boundCanvas={boundCanvas}
-                    row={selectedRow}
-                    onCreateCanvas={onCreateCanvas}
-                    onImport={importPackage}
-                    onOpenCanvas={onOpenCanvas}
-                    onOpenStoryboard={onOpenStoryboard}
-                />
+                <CanvasHandoffPreviewPanel boundCanvas={boundCanvas} row={selectedRow} onCreateCanvas={onCreateCanvas} onImport={importPackage} onOpenCanvas={onOpenCanvas} onOpenStoryboard={onOpenStoryboard} />
             </div>
         </section>
     );

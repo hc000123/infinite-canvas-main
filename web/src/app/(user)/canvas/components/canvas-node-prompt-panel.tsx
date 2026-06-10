@@ -167,7 +167,15 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                         </>
                     ) : mode === "video" ? (
                         <>
-                            <ModelPicker className="h-10 !min-w-[120px] flex-1" fullWidth config={config} modelType="video" value={config.model} onChange={(model) => onConfigChange(node.id, videoModelPatch(config, model))} onMissingConfig={() => openConfigDialog(true)} />
+                            <ModelPicker
+                                className="h-10 !min-w-[120px] flex-1"
+                                fullWidth
+                                config={config}
+                                modelType="video"
+                                value={config.model}
+                                onChange={(model) => onConfigChange(node.id, videoModelPatch(config, model))}
+                                onMissingConfig={() => openConfigDialog(true)}
+                            />
                             <CanvasVideoSettingsPopover
                                 config={config}
                                 showTaskMode

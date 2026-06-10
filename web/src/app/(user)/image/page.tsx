@@ -309,10 +309,7 @@ export default function ImagePage() {
             const savedAsset = useAssetStore.getState().assets.find((asset) => asset.id === assetId);
             const nextRefs = linkedBibleItem.assetRefs.some((ref) => ref.assetId === assetId)
                 ? linkedBibleItem.assetRefs
-                : [
-                      ...linkedBibleItem.assetRefs,
-                      savedAsset ? { assetId, assetVersion: buildAssetVersionReference(savedAsset), role: "generated_reference" } : { assetId, role: "generated_reference" },
-                  ];
+                : [...linkedBibleItem.assetRefs, savedAsset ? { assetId, assetVersion: buildAssetVersionReference(savedAsset), role: "generated_reference" } : { assetId, role: "generated_reference" }];
             updateProductionBibleItem(linkedBibleItem.id, { assetRefs: nextRefs });
         }
         if (sourceContext.briefId) {
@@ -782,7 +779,9 @@ function LogPanel({
                         onClick={() => onPreviewLog(log)}
                     />
                 ))}
-                {!logs.length ? <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-[var(--studio-border-strong)] bg-[rgba(20,28,40,0.42)] text-center text-sm text-[var(--studio-text-muted)]">暂无生成记录</div> : null}
+                {!logs.length ? (
+                    <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-[var(--studio-border-strong)] bg-[rgba(20,28,40,0.42)] text-center text-sm text-[var(--studio-text-muted)]">暂无生成记录</div>
+                ) : null}
             </div>
         </>
     );
@@ -811,20 +810,12 @@ function LogCard({ log, selected, active, onSelectedChange, onClick }: { log: Ge
                 </div>
                 <div className="grid gap-2 pl-6">
                     <div className="flex flex-wrap gap-1">
-                        <Tag className="studio-tag flex h-6 items-center px-1.5 text-xs leading-none">
-                            成功 {log.successCount ?? log.imageCount}
-                        </Tag>
-                        {log.failCount ? (
-                            <Tag className="studio-tag flex h-6 items-center !border-red-900/60 px-1.5 text-xs !text-red-300 leading-none">
-                                失败 {log.failCount}
-                            </Tag>
-                        ) : null}
+                        <Tag className="studio-tag flex h-6 items-center px-1.5 text-xs leading-none">成功 {log.successCount ?? log.imageCount}</Tag>
+                        {log.failCount ? <Tag className="studio-tag flex h-6 items-center !border-red-900/60 px-1.5 text-xs !text-red-300 leading-none">失败 {log.failCount}</Tag> : null}
                     </div>
                     <div className="flex flex-wrap gap-1">
                         <Tag className="studio-tag flex h-6 items-center px-1.5 text-xs leading-none">{log.imageCount} 张</Tag>
-                        <Tag className="studio-tag flex h-6 items-center px-1.5 text-xs leading-none">
-                            {formatDuration(log.durationMs)}
-                        </Tag>
+                        <Tag className="studio-tag flex h-6 items-center px-1.5 text-xs leading-none">{formatDuration(log.durationMs)}</Tag>
                     </div>
                     <div className="flex">
                         <Tag className="studio-tag flex h-6 items-center px-1.5 text-xs leading-none">{log.time}</Tag>

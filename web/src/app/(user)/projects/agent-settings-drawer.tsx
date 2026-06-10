@@ -344,286 +344,286 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
                     },
                     !settingsOnly
                         ? {
-                        key: "workflow",
-                        label: "工作流执行",
-                        children: (
-                            <Card
-                                size="small"
-                                title={
-                                    <span className="inline-flex items-center gap-2">
-                                        <Workflow className="size-4" /> Seedance 工作流
-                                    </span>
-                                }
-                                extra={<Tag className="m-0">内置流程</Tag>}
-                            >
-                                <Alert className="mb-4" type="info" showIcon title="仅运行文本草案；图片、视频生成与业务写入仍需人工确认。" />
-                                <div className="grid gap-4">
-                                    <div>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <span className="text-base font-semibold">{selectedWorkflowPreset.name}</span>
-                                            <Tag className="m-0">v{selectedWorkflowPreset.version}</Tag>
-                                            <Tag className="m-0">阶段 {selectedWorkflowStages.length}</Tag>
-                                            <Tag className="m-0">Agent {selectedWorkflowPreset.agents.length}</Tag>
-                                            <Tag className="m-0">质量门 {selectedWorkflowPreset.qualityGates.length}</Tag>
-                                            {selectedWorkflowRun ? <Tag className="m-0">当前阶段：{workflowStageName(selectedWorkflowStages, selectedWorkflowRun.currentStageId)}</Tag> : null}
-                                        </div>
-                                        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-stone-50 px-3 py-2 text-sm dark:bg-white/5">
-                                            {selectedWorkflowStages.map((stage) => {
-                                                const index = selectedWorkflowStages.findIndex((item) => item.stageId === stage.stageId);
-                                                return (
-                                                    <span key={stage.stageId} className="inline-flex items-center gap-2">
-                                                        <Tag className="m-0">阶段 {stage.order}</Tag>
-                                                        <span className="font-medium">{stage.name}</span>
-                                                        {index < selectedWorkflowStages.length - 1 ? <span className="text-stone-400">→</span> : null}
-                                                    </span>
-                                                );
-                                            })}
-                                            <span className="text-stone-400">→</span>
-                                            <Tag className="m-0">生成预览</Tag>
-                                            <span className="text-stone-400">→</span>
-                                            <Tag className="m-0">确认写入</Tag>
-                                        </div>
-                                    </div>
+                              key: "workflow",
+                              label: "工作流执行",
+                              children: (
+                                  <Card
+                                      size="small"
+                                      title={
+                                          <span className="inline-flex items-center gap-2">
+                                              <Workflow className="size-4" /> Seedance 工作流
+                                          </span>
+                                      }
+                                      extra={<Tag className="m-0">内置流程</Tag>}
+                                  >
+                                      <Alert className="mb-4" type="info" showIcon title="仅运行文本草案；图片、视频生成与业务写入仍需人工确认。" />
+                                      <div className="grid gap-4">
+                                          <div>
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                  <span className="text-base font-semibold">{selectedWorkflowPreset.name}</span>
+                                                  <Tag className="m-0">v{selectedWorkflowPreset.version}</Tag>
+                                                  <Tag className="m-0">阶段 {selectedWorkflowStages.length}</Tag>
+                                                  <Tag className="m-0">Agent {selectedWorkflowPreset.agents.length}</Tag>
+                                                  <Tag className="m-0">质量门 {selectedWorkflowPreset.qualityGates.length}</Tag>
+                                                  {selectedWorkflowRun ? <Tag className="m-0">当前阶段：{workflowStageName(selectedWorkflowStages, selectedWorkflowRun.currentStageId)}</Tag> : null}
+                                              </div>
+                                              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-stone-50 px-3 py-2 text-sm dark:bg-white/5">
+                                                  {selectedWorkflowStages.map((stage) => {
+                                                      const index = selectedWorkflowStages.findIndex((item) => item.stageId === stage.stageId);
+                                                      return (
+                                                          <span key={stage.stageId} className="inline-flex items-center gap-2">
+                                                              <Tag className="m-0">阶段 {stage.order}</Tag>
+                                                              <span className="font-medium">{stage.name}</span>
+                                                              {index < selectedWorkflowStages.length - 1 ? <span className="text-stone-400">→</span> : null}
+                                                          </span>
+                                                      );
+                                                  })}
+                                                  <span className="text-stone-400">→</span>
+                                                  <Tag className="m-0">生成预览</Tag>
+                                                  <span className="text-stone-400">→</span>
+                                                  <Tag className="m-0">确认写入</Tag>
+                                              </div>
+                                          </div>
 
-                                    <div className="grid gap-3">
-                                        {selectedWorkflowStages.map((stage) => {
-                                            const detail = workflowStageDetail(selectedWorkflowPreset, stage);
-                                            const stageState = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId);
-                                            const displayState = selectedWorkflowRun ? summarizeWorkflowStageDisplayState(selectedWorkflowRun, stage.stageId) : undefined;
-                                            const mappingPreviewStatus = selectedWorkflowRun ? canGenerateWorkflowMappingPreview(selectedWorkflowRun, stage.stageId) : { allowed: false, reason: "尚未初始化 workflow run" };
-                                            const stagePreviews = selectedStagePreviews.filter((preview) => preview.sourceStageId === stage.stageId);
-                                            const qualityGateResults = selectedWorkflowRun
-                                                ? evaluateWorkflowQualityGates({ manifest: qualityGateManifest, workflowRun: selectedWorkflowRun, stageId: stage.stageId, outputs: workflowOutputs, evidences: workflowEvidences })
-                                                : [];
-                                            const errorCount = qualityGateResults.filter((result) => result.status === "error").length;
-                                            const warningCount = qualityGateResults.filter((result) => result.status === "warning").length;
-                                            const dependencySummary = summarizeWorkflowDependencies(selectedWorkflowStages, selectedWorkflowRun, stage.stageId);
-                                            const isExpanded = expandedStageIds.includes(stage.stageId);
-                                            return (
-                                                <details
-                                                    key={stage.stageId}
-                                                    open={isExpanded}
-                                                    className="rounded-lg border border-stone-200 p-3 dark:border-stone-800"
-                                                    onToggle={(event) => {
-                                                        const nextOpen = event.currentTarget.open;
-                                                        setExpandedStageIds((current) => (nextOpen ? (current.includes(stage.stageId) ? current : [...current, stage.stageId]) : current.filter((item) => item !== stage.stageId)));
-                                                    }}
-                                                >
-                                                    <summary className="cursor-pointer list-none">
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <Tag className="m-0">阶段 {stage.order}</Tag>
-                                                            <span className="font-medium">{stage.name}</span>
-                                                            <Tag className="m-0">{workflowStageStatusLabel(displayState?.displayStatus || "idle")}</Tag>
-                                                            {displayState?.hasSceneStates ? <Tag className="m-0">{displayState.summaryText}</Tag> : null}
-                                                            {selectedWorkflowRun?.currentStageId === stage.stageId && displayState?.displayStatus !== "approved" ? (
-                                                                <Tag className="m-0" color="blue">
-                                                                    当前阶段
-                                                                </Tag>
-                                                            ) : null}
-                                                            {detail.agent ? <Tag className="m-0">{detail.agent.name}</Tag> : null}
-                                                            <Tag className="m-0">预览 {stagePreviews.length}</Tag>
-                                                            <Tag className="m-0" color={errorCount ? "red" : "green"}>
-                                                                error {errorCount}
-                                                            </Tag>
-                                                            <Tag className="m-0" color={warningCount ? "orange" : "default"}>
-                                                                warning {warningCount}
-                                                            </Tag>
-                                                        </div>
-                                                        <div className="mt-2 flex flex-wrap gap-3 text-xs text-stone-500">
-                                                            <span>输入：{stage.inputSummary}</span>
-                                                            <span>输出：{stage.outputSummary}</span>
-                                                        </div>
-                                                        {displayState?.blockedReason ? <div className="mt-2 text-xs text-amber-600">阻塞原因：{displayState.blockedReason}</div> : null}
-                                                        {dependencySummary ? <div className="mt-1 text-xs text-stone-500">前置依赖：{dependencySummary}</div> : null}
-                                                        {stageState?.errorMessage ? <div className="mt-1 text-xs text-rose-500">错误：{stageState.errorMessage}</div> : null}
-                                                    </summary>
+                                          <div className="grid gap-3">
+                                              {selectedWorkflowStages.map((stage) => {
+                                                  const detail = workflowStageDetail(selectedWorkflowPreset, stage);
+                                                  const stageState = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId);
+                                                  const displayState = selectedWorkflowRun ? summarizeWorkflowStageDisplayState(selectedWorkflowRun, stage.stageId) : undefined;
+                                                  const mappingPreviewStatus = selectedWorkflowRun ? canGenerateWorkflowMappingPreview(selectedWorkflowRun, stage.stageId) : { allowed: false, reason: "尚未初始化 workflow run" };
+                                                  const stagePreviews = selectedStagePreviews.filter((preview) => preview.sourceStageId === stage.stageId);
+                                                  const qualityGateResults = selectedWorkflowRun
+                                                      ? evaluateWorkflowQualityGates({ manifest: qualityGateManifest, workflowRun: selectedWorkflowRun, stageId: stage.stageId, outputs: workflowOutputs, evidences: workflowEvidences })
+                                                      : [];
+                                                  const errorCount = qualityGateResults.filter((result) => result.status === "error").length;
+                                                  const warningCount = qualityGateResults.filter((result) => result.status === "warning").length;
+                                                  const dependencySummary = summarizeWorkflowDependencies(selectedWorkflowStages, selectedWorkflowRun, stage.stageId);
+                                                  const isExpanded = expandedStageIds.includes(stage.stageId);
+                                                  return (
+                                                      <details
+                                                          key={stage.stageId}
+                                                          open={isExpanded}
+                                                          className="rounded-lg border border-stone-200 p-3 dark:border-stone-800"
+                                                          onToggle={(event) => {
+                                                              const nextOpen = event.currentTarget.open;
+                                                              setExpandedStageIds((current) => (nextOpen ? (current.includes(stage.stageId) ? current : [...current, stage.stageId]) : current.filter((item) => item !== stage.stageId)));
+                                                          }}
+                                                      >
+                                                          <summary className="cursor-pointer list-none">
+                                                              <div className="flex flex-wrap items-center gap-2">
+                                                                  <Tag className="m-0">阶段 {stage.order}</Tag>
+                                                                  <span className="font-medium">{stage.name}</span>
+                                                                  <Tag className="m-0">{workflowStageStatusLabel(displayState?.displayStatus || "idle")}</Tag>
+                                                                  {displayState?.hasSceneStates ? <Tag className="m-0">{displayState.summaryText}</Tag> : null}
+                                                                  {selectedWorkflowRun?.currentStageId === stage.stageId && displayState?.displayStatus !== "approved" ? (
+                                                                      <Tag className="m-0" color="blue">
+                                                                          当前阶段
+                                                                      </Tag>
+                                                                  ) : null}
+                                                                  {detail.agent ? <Tag className="m-0">{detail.agent.name}</Tag> : null}
+                                                                  <Tag className="m-0">预览 {stagePreviews.length}</Tag>
+                                                                  <Tag className="m-0" color={errorCount ? "red" : "green"}>
+                                                                      error {errorCount}
+                                                                  </Tag>
+                                                                  <Tag className="m-0" color={warningCount ? "orange" : "default"}>
+                                                                      warning {warningCount}
+                                                                  </Tag>
+                                                              </div>
+                                                              <div className="mt-2 flex flex-wrap gap-3 text-xs text-stone-500">
+                                                                  <span>输入：{stage.inputSummary}</span>
+                                                                  <span>输出：{stage.outputSummary}</span>
+                                                              </div>
+                                                              {displayState?.blockedReason ? <div className="mt-2 text-xs text-amber-600">阻塞原因：{displayState.blockedReason}</div> : null}
+                                                              {dependencySummary ? <div className="mt-1 text-xs text-stone-500">前置依赖：{dependencySummary}</div> : null}
+                                                              {stageState?.errorMessage ? <div className="mt-1 text-xs text-rose-500">错误：{stageState.errorMessage}</div> : null}
+                                                          </summary>
 
-                                                    <div className="mt-3 grid gap-3">
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <Tag className="m-0">{stage.purpose}</Tag>
-                                                            {detail.skills.length ? <Tag className="m-0">技能 {detail.skills.length}</Tag> : null}
-                                                            {detail.qualityGates.length ? <Tag className="m-0">质量门 {detail.qualityGates.length}</Tag> : null}
-                                                        </div>
-                                                        {detail.agent ? (
-                                                            <details className="rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-600 dark:bg-white/5 dark:text-stone-300">
-                                                                <summary className="cursor-pointer font-medium text-stone-600 dark:text-stone-300">查看阶段说明与 Agent</summary>
-                                                                <div className="mt-2 grid gap-1.5">
-                                                                    <div>{detail.agent.role}</div>
-                                                                    <div>{detail.agent.responsibility}</div>
-                                                                    <div className="text-stone-500">系统提示摘要：{detail.agent.systemPromptSummary}</div>
-                                                                    <div className="text-stone-500">来源：{detail.agent.sourceFile}</div>
-                                                                </div>
-                                                            </details>
-                                                        ) : null}
-                                                        <WorkflowStageStatePanel stageId={stage.stageId} workflowRun={selectedWorkflowRun} workflowOutputs={workflowOutputs} workflowEvidences={workflowEvidences} />
-                                                        <WorkflowQualityGatePanel
-                                                            stageId={stage.stageId}
-                                                            workflowRun={selectedWorkflowRun}
-                                                            manifest={qualityGateManifest}
-                                                            gateResults={qualityGateResults}
-                                                            onMarkReadingsRead={() => {
-                                                                if (!selectedWorkflowRun) {
-                                                                    message.warning("尚未初始化 workflow run");
-                                                                    return;
-                                                                }
-                                                                const result = markWorkflowStageReadingsRead(selectedWorkflowRun.id, stage.stageId);
-                                                                if (!result.ok) message.warning(result.reason || "无法生成规范读取记录");
-                                                                else message.success(`已按 manifest 标记 ${result.count || 0} 条规范读取记录`);
-                                                            }}
-                                                        />
-                                                        {stagePreviews.length ? (
-                                                            <WorkflowMappingPreviewPanel
-                                                                previews={stagePreviews}
-                                                                appliedPreviewItemIds={workflowAppliedPreviewItemIds}
-                                                                applyingPreviewIds={applyingPreviewIds}
-                                                                hasCanvasContext={Boolean(canvasId && onApplyVideoPreviewNodes)}
-                                                                hasStoryboardContext={Boolean(canvasId && episodeId)}
-                                                                onApplyProductionBiblePreview={(preview) => {
-                                                                    const creatableCount = preview.items.filter((item) => item.targetType === "production_bible" && item.action === "create").length;
-                                                                    modal.confirm({
-                                                                        title: "确认写入设定库",
-                                                                        content: `将把 ${creatableCount} 条设定草案写入设定库。不会写入分镜头表，不会创建或修改画布节点。`,
-                                                                        okText: "确认写入",
-                                                                        cancelText: "取消",
-                                                                        onOk: () => {
-                                                                            setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: true }));
-                                                                            try {
-                                                                                const result = applyProductionBiblePreview(preview.previewId);
-                                                                                if (!result.ok) {
-                                                                                    message.warning(result.reason || "当前预览不能写入设定库");
-                                                                                    return;
-                                                                                }
-                                                                                message.success(`已写入 ${result.appliedCount || 0} 条设定库条目`);
-                                                                                if (result.warnings.length) message.info(result.warnings.join("；"));
-                                                                            } finally {
-                                                                                setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
-                                                                            }
-                                                                        },
-                                                                    });
-                                                                }}
-                                                                onApplyStoryboardPreview={(preview) => {
-                                                                    const creatableCount = preview.items.filter((item) => item.targetType === "storyboard_table" && item.action === "create").length;
-                                                                    modal.confirm({
-                                                                        title: "确认写入分镜头表",
-                                                                        content: `将追加 ${creatableCount} 条分镜草案到当前本集分镜头表。不会写入设定库，不会创建或修改画布节点。`,
-                                                                        okText: "确认写入",
-                                                                        cancelText: "取消",
-                                                                        onOk: () => {
-                                                                            setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: true }));
-                                                                            try {
-                                                                                const result = applyStoryboardPreview(preview.previewId);
-                                                                                if (!result.ok) {
-                                                                                    message.warning(result.reason || "当前预览不能写入分镜头表");
-                                                                                    return;
-                                                                                }
-                                                                                message.success(`已追加 ${result.appliedCount || 0} 条分镜头表条目`);
-                                                                                if (result.warnings.length) message.info(result.warnings.join("；"));
-                                                                            } finally {
-                                                                                setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
-                                                                            }
-                                                                        },
-                                                                    });
-                                                                }}
-                                                                onApplyVideoNodePreview={(preview) => {
-                                                                    const creatableCount = preview.items.filter((item) => item.targetType === "video_node" && item.action !== "skip").length;
-                                                                    modal.confirm({
-                                                                        title: "确认创建视频配置节点",
-                                                                        content: `将根据当前预览在当前画布创建或更新 ${creatableCount} 个视频配置节点，不会开始视频生成，不会扣费，也不会写入设定库或分镜头表。`,
-                                                                        okText: "确认创建",
-                                                                        cancelText: "取消",
-                                                                        onOk: () => {
-                                                                            setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: true }));
-                                                                            try {
-                                                                                const result = applyVideoNodePreview(preview.previewId, { existingNodes: canvasNodes });
-                                                                                if (!result.ok) {
-                                                                                    message.warning(result.reason || "当前预览不能创建视频配置节点");
-                                                                                    return;
-                                                                                }
-                                                                                if (result.nextNodes && result.focusNodeIds?.length) {
-                                                                                    onApplyVideoPreviewNodes?.({ nodes: result.nextNodes, focusNodeIds: result.focusNodeIds });
-                                                                                }
-                                                                                message.success(`已创建或更新 ${result.appliedCount || 0} 个视频配置节点`);
-                                                                                if (result.warnings.length) message.info(result.warnings.join("；"));
-                                                                            } finally {
-                                                                                setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
-                                                                            }
-                                                                        },
-                                                                    });
-                                                                }}
-                                                            />
-                                                        ) : null}
-                                                        {stageState?.status === "review" ? (
-                                                            <div className="grid gap-2 rounded-md bg-stone-50 p-2 dark:bg-white/5">
-                                                                <Input.TextArea
-                                                                    rows={2}
-                                                                    value={reviewNotes[stage.stageId] || ""}
-                                                                    placeholder="可选：填写本阶段审核备注"
-                                                                    onChange={(event) => setReviewNotes((current) => ({ ...current, [stage.stageId]: event.target.value }))}
-                                                                />
-                                                                <Space size={6} wrap>
-                                                                    <Button
-                                                                        size="small"
-                                                                        type="primary"
-                                                                        onClick={() => {
-                                                                            const runnerRunId = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.runnerRunId;
-                                                                            if (runnerRunId) approveRun(runnerRunId, reviewNotes[stage.stageId]);
-                                                                        }}
-                                                                    >
-                                                                        批准阶段
-                                                                    </Button>
-                                                                    <Button
-                                                                        size="small"
-                                                                        danger
-                                                                        onClick={() => {
-                                                                            const runnerRunId = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.runnerRunId;
-                                                                            if (runnerRunId) rejectRun(runnerRunId, reviewNotes[stage.stageId]);
-                                                                        }}
-                                                                    >
-                                                                        驳回阶段
-                                                                    </Button>
-                                                                </Space>
-                                                            </div>
-                                                        ) : null}
-                                                        <Space size={[6, 6]} wrap>
-                                                            <Button
-                                                                size="small"
-                                                                disabled={!mappingPreviewStatus.allowed}
-                                                                onClick={() => {
-                                                                    if (!selectedWorkflowRun) return;
-                                                                    const result = generateWorkflowMappingPreview(selectedWorkflowRun.id, stage.stageId);
-                                                                    if (!result.ok) message.warning(result.reason || "当前阶段不能生成映射预览");
-                                                                    else message.success(`已生成 ${stage.name} 的映射预览`);
-                                                                }}
-                                                            >
-                                                                生成预览
-                                                            </Button>
-                                                            <Button size="small" type="primary" disabled={stageState?.status === "blocked"} loading={Boolean(runningStageIds[stage.stageId])} onClick={() => void runWorkflowStageText(stage.stageId)}>
-                                                                运行草案
-                                                            </Button>
-                                                            {!mappingPreviewStatus.allowed ? <span className="text-xs text-stone-500">{mappingPreviewStatus.reason}</span> : null}
-                                                        </Space>
-                                                    </div>
-                                                </details>
-                                            );
-                                        })}
-                                    </div>
+                                                          <div className="mt-3 grid gap-3">
+                                                              <div className="flex flex-wrap items-center gap-2">
+                                                                  <Tag className="m-0">{stage.purpose}</Tag>
+                                                                  {detail.skills.length ? <Tag className="m-0">技能 {detail.skills.length}</Tag> : null}
+                                                                  {detail.qualityGates.length ? <Tag className="m-0">质量门 {detail.qualityGates.length}</Tag> : null}
+                                                              </div>
+                                                              {detail.agent ? (
+                                                                  <details className="rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-600 dark:bg-white/5 dark:text-stone-300">
+                                                                      <summary className="cursor-pointer font-medium text-stone-600 dark:text-stone-300">查看阶段说明与 Agent</summary>
+                                                                      <div className="mt-2 grid gap-1.5">
+                                                                          <div>{detail.agent.role}</div>
+                                                                          <div>{detail.agent.responsibility}</div>
+                                                                          <div className="text-stone-500">系统提示摘要：{detail.agent.systemPromptSummary}</div>
+                                                                          <div className="text-stone-500">来源：{detail.agent.sourceFile}</div>
+                                                                      </div>
+                                                                  </details>
+                                                              ) : null}
+                                                              <WorkflowStageStatePanel stageId={stage.stageId} workflowRun={selectedWorkflowRun} workflowOutputs={workflowOutputs} workflowEvidences={workflowEvidences} />
+                                                              <WorkflowQualityGatePanel
+                                                                  stageId={stage.stageId}
+                                                                  workflowRun={selectedWorkflowRun}
+                                                                  manifest={qualityGateManifest}
+                                                                  gateResults={qualityGateResults}
+                                                                  onMarkReadingsRead={() => {
+                                                                      if (!selectedWorkflowRun) {
+                                                                          message.warning("尚未初始化 workflow run");
+                                                                          return;
+                                                                      }
+                                                                      const result = markWorkflowStageReadingsRead(selectedWorkflowRun.id, stage.stageId);
+                                                                      if (!result.ok) message.warning(result.reason || "无法生成规范读取记录");
+                                                                      else message.success(`已按 manifest 标记 ${result.count || 0} 条规范读取记录`);
+                                                                  }}
+                                                              />
+                                                              {stagePreviews.length ? (
+                                                                  <WorkflowMappingPreviewPanel
+                                                                      previews={stagePreviews}
+                                                                      appliedPreviewItemIds={workflowAppliedPreviewItemIds}
+                                                                      applyingPreviewIds={applyingPreviewIds}
+                                                                      hasCanvasContext={Boolean(canvasId && onApplyVideoPreviewNodes)}
+                                                                      hasStoryboardContext={Boolean(canvasId && episodeId)}
+                                                                      onApplyProductionBiblePreview={(preview) => {
+                                                                          const creatableCount = preview.items.filter((item) => item.targetType === "production_bible" && item.action === "create").length;
+                                                                          modal.confirm({
+                                                                              title: "确认写入设定库",
+                                                                              content: `将把 ${creatableCount} 条设定草案写入设定库。不会写入分镜头表，不会创建或修改画布节点。`,
+                                                                              okText: "确认写入",
+                                                                              cancelText: "取消",
+                                                                              onOk: () => {
+                                                                                  setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: true }));
+                                                                                  try {
+                                                                                      const result = applyProductionBiblePreview(preview.previewId);
+                                                                                      if (!result.ok) {
+                                                                                          message.warning(result.reason || "当前预览不能写入设定库");
+                                                                                          return;
+                                                                                      }
+                                                                                      message.success(`已写入 ${result.appliedCount || 0} 条设定库条目`);
+                                                                                      if (result.warnings.length) message.info(result.warnings.join("；"));
+                                                                                  } finally {
+                                                                                      setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
+                                                                                  }
+                                                                              },
+                                                                          });
+                                                                      }}
+                                                                      onApplyStoryboardPreview={(preview) => {
+                                                                          const creatableCount = preview.items.filter((item) => item.targetType === "storyboard_table" && item.action === "create").length;
+                                                                          modal.confirm({
+                                                                              title: "确认写入分镜头表",
+                                                                              content: `将追加 ${creatableCount} 条分镜草案到当前本集分镜头表。不会写入设定库，不会创建或修改画布节点。`,
+                                                                              okText: "确认写入",
+                                                                              cancelText: "取消",
+                                                                              onOk: () => {
+                                                                                  setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: true }));
+                                                                                  try {
+                                                                                      const result = applyStoryboardPreview(preview.previewId);
+                                                                                      if (!result.ok) {
+                                                                                          message.warning(result.reason || "当前预览不能写入分镜头表");
+                                                                                          return;
+                                                                                      }
+                                                                                      message.success(`已追加 ${result.appliedCount || 0} 条分镜头表条目`);
+                                                                                      if (result.warnings.length) message.info(result.warnings.join("；"));
+                                                                                  } finally {
+                                                                                      setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
+                                                                                  }
+                                                                              },
+                                                                          });
+                                                                      }}
+                                                                      onApplyVideoNodePreview={(preview) => {
+                                                                          const creatableCount = preview.items.filter((item) => item.targetType === "video_node" && item.action !== "skip").length;
+                                                                          modal.confirm({
+                                                                              title: "确认创建视频配置节点",
+                                                                              content: `将根据当前预览在当前画布创建或更新 ${creatableCount} 个视频配置节点，不会开始视频生成，不会扣费，也不会写入设定库或分镜头表。`,
+                                                                              okText: "确认创建",
+                                                                              cancelText: "取消",
+                                                                              onOk: () => {
+                                                                                  setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: true }));
+                                                                                  try {
+                                                                                      const result = applyVideoNodePreview(preview.previewId, { existingNodes: canvasNodes });
+                                                                                      if (!result.ok) {
+                                                                                          message.warning(result.reason || "当前预览不能创建视频配置节点");
+                                                                                          return;
+                                                                                      }
+                                                                                      if (result.nextNodes && result.focusNodeIds?.length) {
+                                                                                          onApplyVideoPreviewNodes?.({ nodes: result.nextNodes, focusNodeIds: result.focusNodeIds });
+                                                                                      }
+                                                                                      message.success(`已创建或更新 ${result.appliedCount || 0} 个视频配置节点`);
+                                                                                      if (result.warnings.length) message.info(result.warnings.join("；"));
+                                                                                  } finally {
+                                                                                      setApplyingPreviewIds((current) => ({ ...current, [preview.previewId]: false }));
+                                                                                  }
+                                                                              },
+                                                                          });
+                                                                      }}
+                                                                  />
+                                                              ) : null}
+                                                              {stageState?.status === "review" ? (
+                                                                  <div className="grid gap-2 rounded-md bg-stone-50 p-2 dark:bg-white/5">
+                                                                      <Input.TextArea
+                                                                          rows={2}
+                                                                          value={reviewNotes[stage.stageId] || ""}
+                                                                          placeholder="可选：填写本阶段审核备注"
+                                                                          onChange={(event) => setReviewNotes((current) => ({ ...current, [stage.stageId]: event.target.value }))}
+                                                                      />
+                                                                      <Space size={6} wrap>
+                                                                          <Button
+                                                                              size="small"
+                                                                              type="primary"
+                                                                              onClick={() => {
+                                                                                  const runnerRunId = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.runnerRunId;
+                                                                                  if (runnerRunId) approveRun(runnerRunId, reviewNotes[stage.stageId]);
+                                                                              }}
+                                                                          >
+                                                                              批准阶段
+                                                                          </Button>
+                                                                          <Button
+                                                                              size="small"
+                                                                              danger
+                                                                              onClick={() => {
+                                                                                  const runnerRunId = selectedWorkflowRun?.stageStates.find((item) => item.stageId === stage.stageId)?.runnerRunId;
+                                                                                  if (runnerRunId) rejectRun(runnerRunId, reviewNotes[stage.stageId]);
+                                                                              }}
+                                                                          >
+                                                                              驳回阶段
+                                                                          </Button>
+                                                                      </Space>
+                                                                  </div>
+                                                              ) : null}
+                                                              <Space size={[6, 6]} wrap>
+                                                                  <Button
+                                                                      size="small"
+                                                                      disabled={!mappingPreviewStatus.allowed}
+                                                                      onClick={() => {
+                                                                          if (!selectedWorkflowRun) return;
+                                                                          const result = generateWorkflowMappingPreview(selectedWorkflowRun.id, stage.stageId);
+                                                                          if (!result.ok) message.warning(result.reason || "当前阶段不能生成映射预览");
+                                                                          else message.success(`已生成 ${stage.name} 的映射预览`);
+                                                                      }}
+                                                                  >
+                                                                      生成预览
+                                                                  </Button>
+                                                                  <Button size="small" type="primary" disabled={stageState?.status === "blocked"} loading={Boolean(runningStageIds[stage.stageId])} onClick={() => void runWorkflowStageText(stage.stageId)}>
+                                                                      运行草案
+                                                                  </Button>
+                                                                  {!mappingPreviewStatus.allowed ? <span className="text-xs text-stone-500">{mappingPreviewStatus.reason}</span> : null}
+                                                              </Space>
+                                                          </div>
+                                                      </details>
+                                                  );
+                                              })}
+                                          </div>
 
-                                    <details>
-                                        <summary className="cursor-pointer text-sm text-stone-500">查看 preset 来源与文件清单</summary>
-                                        <div className="mt-2 grid gap-2 text-xs text-stone-500">
-                                            <div>说明：{selectedWorkflowPreset.description}</div>
-                                            <div>来源目录：{selectedWorkflowPreset.sourceRoot}</div>
-                                            {selectedWorkflowPreset.sourceFiles.map((file) => (
-                                                <div key={file.path} className="rounded-md bg-stone-50 px-2 py-1 dark:bg-white/5">
-                                                    [{sourceCategoryLabel(file.category)}] {file.path}：{file.summary}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </details>
-                                </div>
-                            </Card>
-                        ),
-                    }
+                                          <details>
+                                              <summary className="cursor-pointer text-sm text-stone-500">查看 preset 来源与文件清单</summary>
+                                              <div className="mt-2 grid gap-2 text-xs text-stone-500">
+                                                  <div>说明：{selectedWorkflowPreset.description}</div>
+                                                  <div>来源目录：{selectedWorkflowPreset.sourceRoot}</div>
+                                                  {selectedWorkflowPreset.sourceFiles.map((file) => (
+                                                      <div key={file.path} className="rounded-md bg-stone-50 px-2 py-1 dark:bg-white/5">
+                                                          [{sourceCategoryLabel(file.category)}] {file.path}：{file.summary}
+                                                      </div>
+                                                  ))}
+                                              </div>
+                                          </details>
+                                      </div>
+                                  </Card>
+                              ),
+                          }
                         : undefined,
                     {
                         key: "quick-agents",
@@ -811,42 +811,44 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
                                     </Card>
                                 </div>
 
-                                {!settingsOnly ? <Card size="small" title="草案记录">
-                                    {recentRuns.length ? (
-                                        <div className="grid gap-3">
-                                            {recentRuns.map((run) => (
-                                                <Card key={run.id} size="small" className="bg-stone-50/70 dark:bg-white/5">
-                                                    <div className="min-w-0">
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <Tag className="m-0">{agentRunKindLabel(run.agentKind)}</Tag>
-                                                            <Tag className="m-0">{agentRunStatusLabel(run.status)}</Tag>
-                                                            <Tag className="m-0">配置 v{run.agentConfigVersion}</Tag>
-                                                            {run.input.workflowId ? <Tag className="m-0">workflow {run.input.workflowId}</Tag> : null}
-                                                            {run.input.stageId ? <Tag className="m-0">stage {run.input.stageId}</Tag> : null}
-                                                            {run.input.episodeTitle ? <Tag className="m-0">{run.input.episodeTitle}</Tag> : null}
+                                {!settingsOnly ? (
+                                    <Card size="small" title="草案记录">
+                                        {recentRuns.length ? (
+                                            <div className="grid gap-3">
+                                                {recentRuns.map((run) => (
+                                                    <Card key={run.id} size="small" className="bg-stone-50/70 dark:bg-white/5">
+                                                        <div className="min-w-0">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <Tag className="m-0">{agentRunKindLabel(run.agentKind)}</Tag>
+                                                                <Tag className="m-0">{agentRunStatusLabel(run.status)}</Tag>
+                                                                <Tag className="m-0">配置 v{run.agentConfigVersion}</Tag>
+                                                                {run.input.workflowId ? <Tag className="m-0">workflow {run.input.workflowId}</Tag> : null}
+                                                                {run.input.stageId ? <Tag className="m-0">stage {run.input.stageId}</Tag> : null}
+                                                                {run.input.episodeTitle ? <Tag className="m-0">{run.input.episodeTitle}</Tag> : null}
+                                                            </div>
+                                                            <div className="mt-2 text-sm font-medium">{run.workflowTextOutput?.summary || run.draftOutput.summary}</div>
+                                                            {run.status === "error" || run.status === "failed" ? <div className="mt-1 text-xs text-rose-500">{run.errorMessage || "执行失败"}</div> : null}
+                                                            <div className="mt-1 text-xs text-stone-500">
+                                                                来源：{run.input.sourceType}
+                                                                {run.input.sourceId ? ` / ${run.input.sourceId}` : ""} · {run.createdAt}
+                                                                {run.input.agentId ? ` · agent ${run.input.agentId}` : ""}
+                                                                {run.input.model ? ` · model ${run.input.model}` : ""}
+                                                            </div>
                                                         </div>
-                                                        <div className="mt-2 text-sm font-medium">{run.workflowTextOutput?.summary || run.draftOutput.summary}</div>
-                                                        {run.status === "error" || run.status === "failed" ? <div className="mt-1 text-xs text-rose-500">{run.errorMessage || "执行失败"}</div> : null}
-                                                        <div className="mt-1 text-xs text-stone-500">
-                                                            来源：{run.input.sourceType}
-                                                            {run.input.sourceId ? ` / ${run.input.sourceId}` : ""} · {run.createdAt}
-                                                            {run.input.agentId ? ` · agent ${run.input.agentId}` : ""}
-                                                            {run.input.model ? ` · model ${run.input.model}` : ""}
-                                                        </div>
-                                                    </div>
-                                                    <details className="mt-3">
-                                                        <summary className="cursor-pointer text-xs text-stone-500">查看草案 / workflow 文本产物</summary>
-                                                        <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-stone-950 p-3 text-xs text-stone-50">
-                                                            {JSON.stringify({ draftOutput: run.draftOutput, workflowTextOutput: run.workflowTextOutput, proposedActions: run.proposedActions }, null, 2)}
-                                                        </pre>
-                                                    </details>
-                                                </Card>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="rounded-lg bg-stone-50 p-4 text-sm text-stone-500 dark:bg-white/5">暂无草案记录。可以先选择一个 Agent，点击“创建预览 Run”生成本地草案记录。</div>
-                                    )}
-                                </Card> : null}
+                                                        <details className="mt-3">
+                                                            <summary className="cursor-pointer text-xs text-stone-500">查看草案 / workflow 文本产物</summary>
+                                                            <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-stone-950 p-3 text-xs text-stone-50">
+                                                                {JSON.stringify({ draftOutput: run.draftOutput, workflowTextOutput: run.workflowTextOutput, proposedActions: run.proposedActions }, null, 2)}
+                                                            </pre>
+                                                        </details>
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="rounded-lg bg-stone-50 p-4 text-sm text-stone-500 dark:bg-white/5">暂无草案记录。可以先选择一个 Agent，点击“创建预览 Run”生成本地草案记录。</div>
+                                        )}
+                                    </Card>
+                                ) : null}
                             </div>
                         ),
                     },
@@ -873,11 +875,32 @@ function AgentModelSettingsPanel({
         { label: "生图", value: effectiveConfig.imageModel || effectiveConfig.model || "未配置" },
         { label: "视频", value: effectiveConfig.videoProtocol === "volcengine-ark" ? effectiveConfig.seedanceModel || effectiveConfig.videoModel || "未配置" : effectiveConfig.videoModel || "未配置" },
     ];
-    const visibleModels = uniqueModelNames([...(effectiveConfig.textModels || []), ...(effectiveConfig.imageModels || []), ...(effectiveConfig.videoModels || []), effectiveConfig.model, effectiveConfig.textModel, effectiveConfig.imageModel, effectiveConfig.videoModel, effectiveConfig.seedanceModel]);
+    const visibleModels = uniqueModelNames([
+        ...(effectiveConfig.textModels || []),
+        ...(effectiveConfig.imageModels || []),
+        ...(effectiveConfig.videoModels || []),
+        effectiveConfig.model,
+        effectiveConfig.textModel,
+        effectiveConfig.imageModel,
+        effectiveConfig.videoModel,
+        effectiveConfig.seedanceModel,
+    ]);
 
     return (
         <div className="grid gap-4">
-            <Card size="small" title={<span className="inline-flex items-center gap-2"><Settings2 className="size-4" /> 通用模型配置</span>} extra={<Button size="small" onClick={onOpenFullConfig}>打开完整配置</Button>}>
+            <Card
+                size="small"
+                title={
+                    <span className="inline-flex items-center gap-2">
+                        <Settings2 className="size-4" /> 通用模型配置
+                    </span>
+                }
+                extra={
+                    <Button size="small" onClick={onOpenFullConfig}>
+                        打开完整配置
+                    </Button>
+                }
+            >
                 <Alert className="mb-4" type="info" showIcon title="这里保存的是全局默认模型和通用生成参数" description="Agent、工作流、画布配置节点都会优先读取这些默认值；单个 Agent 或单个画布节点仍可在自己的面板里临时覆盖。" />
                 <div className="grid gap-3 md:grid-cols-3">
                     {modelSummary.map((item) => (
@@ -928,7 +951,16 @@ function AgentModelSettingsPanel({
                                 <Select value={config.count} onChange={(value) => setConfigValue("count", value)} options={["1", "2", "3", "4"].map((value) => ({ label: `${value} 张`, value }))} />
                             </FieldLabel>
                             <FieldLabel label="思考强度">
-                                <Select value={config.reasoningEffort} onChange={(value) => setConfigValue("reasoningEffort", value as AiConfig["reasoningEffort"])} options={[{ label: "极低", value: "minimal" }, { label: "低", value: "low" }, { label: "中", value: "medium" }, { label: "高", value: "high" }]} />
+                                <Select
+                                    value={config.reasoningEffort}
+                                    onChange={(value) => setConfigValue("reasoningEffort", value as AiConfig["reasoningEffort"])}
+                                    options={[
+                                        { label: "极低", value: "minimal" },
+                                        { label: "低", value: "low" },
+                                        { label: "中", value: "medium" },
+                                        { label: "高", value: "high" },
+                                    ]}
+                                />
                             </FieldLabel>
                         </div>
                     </section>
@@ -937,7 +969,14 @@ function AgentModelSettingsPanel({
                         <div className="font-medium">视频默认参数</div>
                         <div className="mt-3 grid gap-3">
                             <FieldLabel label="视频协议">
-                                <Select value={config.videoProtocol} onChange={(value) => setConfigValue("videoProtocol", value as AiConfig["videoProtocol"])} options={[{ label: "OpenAI 兼容", value: "openai" }, { label: "火山 Ark / Seedance", value: "volcengine-ark" }]} />
+                                <Select
+                                    value={config.videoProtocol}
+                                    onChange={(value) => setConfigValue("videoProtocol", value as AiConfig["videoProtocol"])}
+                                    options={[
+                                        { label: "OpenAI 兼容", value: "openai" },
+                                        { label: "火山 Ark / Seedance", value: "volcengine-ark" },
+                                    ]}
+                                />
                             </FieldLabel>
                             <div className="grid gap-3 md:grid-cols-2">
                                 <FieldLabel label="清晰度">
@@ -949,10 +988,24 @@ function AgentModelSettingsPanel({
                             </div>
                             <div className="grid gap-3 md:grid-cols-2">
                                 <FieldLabel label="生成音频">
-                                    <Select value={config.videoGenerateAudio} onChange={(value) => setConfigValue("videoGenerateAudio", value)} options={[{ label: "开启", value: "true" }, { label: "关闭", value: "false" }]} />
+                                    <Select
+                                        value={config.videoGenerateAudio}
+                                        onChange={(value) => setConfigValue("videoGenerateAudio", value)}
+                                        options={[
+                                            { label: "开启", value: "true" },
+                                            { label: "关闭", value: "false" },
+                                        ]}
+                                    />
                                 </FieldLabel>
                                 <FieldLabel label="水印">
-                                    <Select value={config.videoWatermark} onChange={(value) => setConfigValue("videoWatermark", value)} options={[{ label: "关闭", value: "false" }, { label: "开启", value: "true" }]} />
+                                    <Select
+                                        value={config.videoWatermark}
+                                        onChange={(value) => setConfigValue("videoWatermark", value)}
+                                        options={[
+                                            { label: "关闭", value: "false" },
+                                            { label: "开启", value: "true" },
+                                        ]}
+                                    />
                                 </FieldLabel>
                             </div>
                             <FieldLabel label="Seedance Endpoint ID">
@@ -965,7 +1018,15 @@ function AgentModelSettingsPanel({
                 <details className="mt-4 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
                     <summary className="cursor-pointer text-sm font-medium">当前可见模型列表</summary>
                     <div className="mt-3 flex flex-wrap gap-2">
-                        {visibleModels.length ? visibleModels.map((model) => <Tag key={model} className="m-0">{model}</Tag>) : <span className="text-sm text-stone-500">暂无模型列表；请先在后台系统设置中维护模型渠道。</span>}
+                        {visibleModels.length ? (
+                            visibleModels.map((model) => (
+                                <Tag key={model} className="m-0">
+                                    {model}
+                                </Tag>
+                            ))
+                        ) : (
+                            <span className="text-sm text-stone-500">暂无模型列表；请先在后台系统设置中维护模型渠道。</span>
+                        )}
                     </div>
                 </details>
             </Card>

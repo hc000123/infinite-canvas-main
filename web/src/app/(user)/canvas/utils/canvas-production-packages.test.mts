@@ -50,10 +50,7 @@ test("builds production package tabs from table shots when shot groups are not r
     const packages = buildCanvasProductionPackages({
         shotGroups: [],
         tableShots: [shot("shot-1", 1), shot("shot-2", 2)],
-        nodes: [
-            node("config-1", "config", { storyboardShotId: "shot-1", storyboardRole: "video_config" }),
-            node("video-1", "video", { storyboardShotId: "shot-1", status: "success", productionVideoVersionNumber: 1 }),
-        ],
+        nodes: [node("config-1", "config", { storyboardShotId: "shot-1", storyboardRole: "video_config" }), node("video-1", "video", { storyboardShotId: "shot-1", status: "success", productionVideoVersionNumber: 1 })],
     });
 
     assert.equal(packages.length, 2);

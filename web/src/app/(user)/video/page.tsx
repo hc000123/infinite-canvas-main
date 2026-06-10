@@ -199,12 +199,7 @@ export default function VideoPage() {
                 <section className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
                     <div className="min-h-0 overflow-hidden rounded-lg border border-white/10 bg-white/[0.035]">
                         <div className="border-b border-white/10 px-3 pt-2">
-                            <Tabs
-                                activeKey={filter}
-                                onChange={(key) => setFilter(key as FilterKey)}
-                                items={filters.map((item) => ({ key: item.key, label: item.label }))}
-                                className="video-review-tabs"
-                            />
+                            <Tabs activeKey={filter} onChange={(key) => setFilter(key as FilterKey)} items={filters.map((item) => ({ key: item.key, label: item.label }))} className="video-review-tabs" />
                         </div>
                         <div className="thin-scrollbar min-h-0 overflow-x-auto">
                             <div className="min-w-[980px]">
@@ -292,12 +287,7 @@ export default function VideoPage() {
 function PromptDetail({ item, onChange }: { item: ProductionPackage; onChange: (prompt: string) => void }) {
     return (
         <div className="thin-scrollbar max-h-[calc(100vh-250px)] space-y-4 overflow-y-auto pb-4">
-            <Input.TextArea
-                value={item.prompt}
-                onChange={(event) => onChange(event.target.value)}
-                autoSize={{ minRows: 8, maxRows: 12 }}
-                className="!border-white/10 !bg-black/20 !text-stone-100 placeholder:!text-stone-600"
-            />
+            <Input.TextArea value={item.prompt} onChange={(event) => onChange(event.target.value)} autoSize={{ minRows: 8, maxRows: 12 }} className="!border-white/10 !bg-black/20 !text-stone-100 placeholder:!text-stone-600" />
             <div className="grid gap-2">
                 {Object.entries(item.tags).map(([label, value]) => (
                     <div key={label} className="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-md border border-white/[0.07] bg-white/[0.035] px-3 py-2 text-sm">
@@ -368,7 +358,13 @@ function RiskDetail({ item }: { item: ProductionPackage }) {
         <div className="space-y-3 pb-4">
             {item.risks.map((risk) => (
                 <div key={risk.text} className="flex gap-3 rounded-md border border-white/[0.07] bg-white/[0.035] px-3 py-2.5 text-sm">
-                    {risk.level === "提示" ? <Check className="mt-0.5 size-4 shrink-0 text-emerald-300" /> : risk.level === "注意" ? <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-300" /> : <RotateCcw className="mt-0.5 size-4 shrink-0 text-amber-300" />}
+                    {risk.level === "提示" ? (
+                        <Check className="mt-0.5 size-4 shrink-0 text-emerald-300" />
+                    ) : risk.level === "注意" ? (
+                        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-300" />
+                    ) : (
+                        <RotateCcw className="mt-0.5 size-4 shrink-0 text-amber-300" />
+                    )}
                     <div>
                         <div className="text-xs text-stone-500">{risk.level}</div>
                         <div className="mt-1 text-stone-100">{risk.text}</div>

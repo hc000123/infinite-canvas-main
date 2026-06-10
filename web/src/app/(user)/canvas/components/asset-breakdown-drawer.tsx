@@ -10,14 +10,7 @@ import type { CanvasProject } from "../stores/use-canvas-store";
 import { useAssetBreakdownStore } from "../stores/use-asset-breakdown-store";
 import { useImageBriefStore } from "../stores/use-image-brief-store";
 import { useProductionBibleStore } from "../stores/use-production-bible-store";
-import {
-    buildAssetBreakdownAssetMetadata,
-    buildAssetBreakdownProductionBibleAssetRefs,
-    matchProductionBibleItem,
-    type AssetBreakdownItem,
-    type AssetBreakdownKind,
-    type AssetBreakdownWriteInput,
-} from "../utils/asset-breakdown";
+import { buildAssetBreakdownAssetMetadata, buildAssetBreakdownProductionBibleAssetRefs, matchProductionBibleItem, type AssetBreakdownItem, type AssetBreakdownKind, type AssetBreakdownWriteInput } from "../utils/asset-breakdown";
 import { canvasEpisodeLabel } from "../utils/canvas-episode-context";
 import { itemsForProductionBibleProject, type ProductionBibleItem } from "../utils/production-bible";
 import { AssetBreakdownCard } from "./asset-breakdown-card";

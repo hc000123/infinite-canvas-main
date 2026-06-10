@@ -117,11 +117,7 @@ export function EpisodeModulePanel({
 function EpisodeDenseTable({ columns, emptyText, headers, onOpenDetail, rows }: { columns: string; emptyText: string; headers: string[]; onOpenDetail: (record: EpisodeDetailRecord) => void; rows: EpisodeModuleRow[] }) {
     const [expandedRowIds, setExpandedRowIds] = useState<Record<string, boolean>>({});
     if (!rows.length) {
-        return (
-            <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-5 py-10 text-center text-sm text-slate-500">
-                {emptyText}
-            </div>
-        );
+        return <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-5 py-10 text-center text-sm text-slate-500">{emptyText}</div>;
     }
     return (
         <div className="overflow-x-auto rounded-xl border border-slate-800 bg-[#070d13]/90">
@@ -141,11 +137,7 @@ function EpisodeDenseTable({ columns, emptyText, headers, onOpenDetail, rows }: 
                                     <div key={index} className={`min-w-0 ${expanded ? "self-start" : "self-center"}`}>
                                         <div className={`break-words whitespace-pre-wrap leading-6 text-slate-200 ${expanded ? "" : "max-h-[4.5rem] overflow-hidden"}`}>{cell}</div>
                                         {expandable && index === 1 ? (
-                                            <button
-                                                type="button"
-                                                className="mt-1 block text-xs font-medium text-cyan-300 hover:text-cyan-100"
-                                                onClick={() => setExpandedRowIds((current) => ({ ...current, [row.id]: !expanded }))}
-                                            >
+                                            <button type="button" className="mt-1 block text-xs font-medium text-cyan-300 hover:text-cyan-100" onClick={() => setExpandedRowIds((current) => ({ ...current, [row.id]: !expanded }))}>
                                                 {expanded ? "收起内容" : "展开内容"}
                                             </button>
                                         ) : null}

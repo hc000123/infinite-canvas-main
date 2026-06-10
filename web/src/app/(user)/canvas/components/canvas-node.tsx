@@ -270,7 +270,13 @@ export const CanvasNode = React.memo(function CanvasNode({
                 style={{
                     background: hasImageContent || hasVideoContent || hasAudioContent ? "transparent" : theme.node.fill,
                     borderColor: hasImageContent ? imageBorderColor : isActive ? selectionBlue : isProductionPackageActive ? packageAccent : isRelated ? theme.node.muted : theme.node.stroke,
-                    boxShadow: isActive ? `0 0 0 1px ${selectionBlue}55` : isProductionPackageActive ? `0 0 0 1px ${packageAccentSoft}, 0 18px 48px rgba(0,0,0,.14)` : isRelated && !isBatchChild ? `0 0 0 1px ${theme.node.muted}55, 0 18px 48px rgba(0,0,0,.14)` : undefined,
+                    boxShadow: isActive
+                        ? `0 0 0 1px ${selectionBlue}55`
+                        : isProductionPackageActive
+                          ? `0 0 0 1px ${packageAccentSoft}, 0 18px 48px rgba(0,0,0,.14)`
+                          : isRelated && !isBatchChild
+                            ? `0 0 0 1px ${theme.node.muted}55, 0 18px 48px rgba(0,0,0,.14)`
+                            : undefined,
                 }}
                 onMouseDown={(event) => onMouseDown(event, data.id)}
                 onDoubleClick={(event) => {
@@ -1038,15 +1044,16 @@ function FrameReferenceHandle({ label, side, visible, onMouseDown }: { label: st
 
     return (
         <div
-            className={`absolute top-0 z-40 flex size-12 -translate-x-1/2 -translate-y-1/2 cursor-crosshair items-center justify-center transition-opacity duration-150 ${
-                visible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
-            }`}
+            className={`absolute top-0 z-40 flex size-12 -translate-x-1/2 -translate-y-1/2 cursor-crosshair items-center justify-center transition-opacity duration-150 ${visible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
             style={{ left }}
             onMouseDown={onMouseDown}
             title={`${label}输入`}
             aria-label={`${label}输入`}
         >
-            <span className="pointer-events-none absolute bottom-8 rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none shadow-[0_8px_24px_rgba(0,0,0,.16)] backdrop-blur-md" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
+            <span
+                className="pointer-events-none absolute bottom-8 rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none shadow-[0_8px_24px_rgba(0,0,0,.16)] backdrop-blur-md"
+                style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
+            >
                 {label}
             </span>
             <span className="size-3 rounded-full border-2 transition-transform hover:scale-125" style={{ background: theme.node.panel, borderColor: theme.node.activeStroke }} />

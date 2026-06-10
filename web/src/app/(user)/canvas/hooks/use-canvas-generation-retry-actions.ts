@@ -263,7 +263,26 @@ export function useCanvasGenerationRetryActions({
                 setRunningNodeId(null);
             }
         },
-        [archiveGeneratedAsset, cacheUploadedCanvasMedia, canvasAiConfig, canvasEpisodeContext, canvasId, connectionsRef, imageMetadata, isAiConfigReady, message, nodesRef, openConfigDialog, projectPreset, retryTextNode, setNodes, setRunningNodeId, videoMetadata, workspaceProjectId, workspaceProjectTitle],
+        [
+            archiveGeneratedAsset,
+            cacheUploadedCanvasMedia,
+            canvasAiConfig,
+            canvasEpisodeContext,
+            canvasId,
+            connectionsRef,
+            imageMetadata,
+            isAiConfigReady,
+            message,
+            nodesRef,
+            openConfigDialog,
+            projectPreset,
+            retryTextNode,
+            setNodes,
+            setRunningNodeId,
+            videoMetadata,
+            workspaceProjectId,
+            workspaceProjectTitle,
+        ],
     );
 
     return { handleRetryNode };

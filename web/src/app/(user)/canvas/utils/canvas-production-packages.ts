@@ -88,7 +88,17 @@ export function productionPackageRoleLabel(role: CanvasProductionPackageRole) {
     return labels[role];
 }
 
-export function buildCanvasProductionPackages({ shotGroups, tableShots, nodes, fallbackPackages = [] }: { shotGroups: ShotGroup[]; tableShots: StoryboardTableShot[]; nodes: CanvasNodeData[]; fallbackPackages?: CanvasProductionPackageSeed[] }): CanvasProductionPackageSummary[] {
+export function buildCanvasProductionPackages({
+    shotGroups,
+    tableShots,
+    nodes,
+    fallbackPackages = [],
+}: {
+    shotGroups: ShotGroup[];
+    tableShots: StoryboardTableShot[];
+    nodes: CanvasNodeData[];
+    fallbackPackages?: CanvasProductionPackageSeed[];
+}): CanvasProductionPackageSummary[] {
     const tableShotById = new Map(tableShots.map((shot) => [shot.id, shot]));
     const packageIds = new Set(shotGroups.map((group) => group.id));
     const seedById = new Map(fallbackPackages.map((item) => [item.id, item]));

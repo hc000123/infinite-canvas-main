@@ -6,13 +6,7 @@ import { Plus } from "lucide-react";
 
 import { useAssetStore } from "@/stores/use-asset-store";
 import { preserveOrCreateAssetVersionReferences, updateAssetRefListToLatest } from "../../assets/asset-version-references";
-import {
-    itemsForProductionBibleProject,
-    productionBibleKindLabel,
-    productionBibleKindOptions,
-    type ProductionBibleItem,
-    type ProductionBibleKind,
-} from "../utils/production-bible";
+import { itemsForProductionBibleProject, productionBibleKindLabel, productionBibleKindOptions, type ProductionBibleItem, type ProductionBibleKind } from "../utils/production-bible";
 import { useProductionBibleStore } from "../stores/use-production-bible-store";
 import { useImageBriefStore } from "../stores/use-image-brief-store";
 import type { CanvasProject } from "../stores/use-canvas-store";

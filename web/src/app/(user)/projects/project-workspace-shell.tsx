@@ -54,7 +54,10 @@ function ProjectWorkspaceTopBar() {
                         <div className="whitespace-nowrap text-lg font-semibold tracking-normal" style={{ color: "var(--studio-text-primary)" }}>
                             AI · 画布
                         </div>
-                        <span className="shrink-0 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] font-semibold leading-none" style={{ borderColor: "color-mix(in srgb, var(--studio-accent) 35%, transparent)", background: "var(--studio-accent-soft)", color: "var(--studio-accent)" }}>
+                        <span
+                            className="shrink-0 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] font-semibold leading-none"
+                            style={{ borderColor: "color-mix(in srgb, var(--studio-accent) 35%, transparent)", background: "var(--studio-accent-soft)", color: "var(--studio-accent)" }}
+                        >
                             本地版
                         </span>
                     </div>
@@ -72,13 +75,33 @@ function ProjectWorkspaceTopBar() {
             </nav>
 
             <div className="relative flex shrink-0 items-center gap-2">
-                <VersionReleaseModal className="hidden h-10 shrink-0 cursor-pointer items-center rounded-lg border px-3 text-xs font-semibold transition hover:border-[var(--studio-accent)] hover:bg-[var(--studio-accent-soft)] sm:inline-flex" style={{ borderColor: "var(--studio-border-strong)", background: "var(--studio-panel-muted-bg)", color: "var(--studio-text-muted)" }} />
-                <button type="button" className="flex h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition hover:border-[var(--studio-accent)] hover:bg-[var(--studio-accent-soft)]" style={{ borderColor: "var(--studio-border-strong)", background: "var(--studio-panel-muted-bg)", color: "var(--studio-text-secondary)" }} onClick={handleOpenConfig} aria-label="设置" title="设置">
+                <VersionReleaseModal
+                    className="hidden h-10 shrink-0 cursor-pointer items-center rounded-lg border px-3 text-xs font-semibold transition hover:border-[var(--studio-accent)] hover:bg-[var(--studio-accent-soft)] sm:inline-flex"
+                    style={{ borderColor: "var(--studio-border-strong)", background: "var(--studio-panel-muted-bg)", color: "var(--studio-text-muted)" }}
+                />
+                <button
+                    type="button"
+                    className="flex h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition hover:border-[var(--studio-accent)] hover:bg-[var(--studio-accent-soft)]"
+                    style={{ borderColor: "var(--studio-border-strong)", background: "var(--studio-panel-muted-bg)", color: "var(--studio-text-secondary)" }}
+                    onClick={handleOpenConfig}
+                    aria-label="设置"
+                    title="设置"
+                >
                     <Settings2 className="size-4" />
                     <span className="whitespace-nowrap">设置</span>
                 </button>
-                <button type="button" className="flex h-10 min-w-0 items-center gap-2 rounded-lg border px-2 text-left transition hover:border-[var(--studio-accent)] hover:bg-[var(--studio-accent-soft)]" style={{ borderColor: "var(--studio-border-strong)", background: "var(--studio-panel-muted-bg)" }} onClick={() => setAccountOpen((value) => !value)} aria-expanded={accountOpen} aria-label="账号菜单">
-                    <div className="grid size-7 shrink-0 place-items-center rounded-md border text-xs font-semibold" style={{ borderColor: "color-mix(in srgb, var(--studio-accent) 30%, transparent)", background: "var(--studio-accent-soft)", color: "var(--studio-accent)" }}>
+                <button
+                    type="button"
+                    className="flex h-10 min-w-0 items-center gap-2 rounded-lg border px-2 text-left transition hover:border-[var(--studio-accent)] hover:bg-[var(--studio-accent-soft)]"
+                    style={{ borderColor: "var(--studio-border-strong)", background: "var(--studio-panel-muted-bg)" }}
+                    onClick={() => setAccountOpen((value) => !value)}
+                    aria-expanded={accountOpen}
+                    aria-label="账号菜单"
+                >
+                    <div
+                        className="grid size-7 shrink-0 place-items-center rounded-md border text-xs font-semibold"
+                        style={{ borderColor: "color-mix(in srgb, var(--studio-accent) 30%, transparent)", background: "var(--studio-accent-soft)", color: "var(--studio-accent)" }}
+                    >
                         {userInitial}
                     </div>
                     <div className="hidden min-w-0 sm:block">
@@ -101,12 +124,20 @@ function ProjectWorkspaceTopBar() {
                             </div>
                         </div>
                         {user ? (
-                            <button type="button" className="mt-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-[var(--studio-text-muted)] transition hover:bg-rose-500/10 hover:text-[var(--studio-danger)]" onClick={handleLogout}>
+                            <button
+                                type="button"
+                                className="mt-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-[var(--studio-text-muted)] transition hover:bg-rose-500/10 hover:text-[var(--studio-danger)]"
+                                onClick={handleLogout}
+                            >
                                 <LogOut className="size-4" />
                                 <span>退出当前账号</span>
                             </button>
                         ) : (
-                            <button type="button" className="mt-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-[var(--studio-text-muted)] transition hover:bg-[var(--studio-accent-soft)] hover:text-[var(--studio-accent)]" onClick={handleLogin}>
+                            <button
+                                type="button"
+                                className="mt-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-[var(--studio-text-muted)] transition hover:bg-[var(--studio-accent-soft)] hover:text-[var(--studio-accent)]"
+                                onClick={handleLogin}
+                            >
                                 <LogIn className="size-4" />
                                 <span>登录</span>
                             </button>

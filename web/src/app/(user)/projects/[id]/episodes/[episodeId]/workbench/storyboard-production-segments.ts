@@ -81,7 +81,10 @@ export function buildStoryboardProductionSegments({
             order: index + 1,
             packages,
             scriptRange: `原剧本 P${padEpisodeOrder(firstShot.order)} - P${padEpisodeOrder(lastShot.order)}`,
-            scriptText: group.shots.map((shot) => shot.scriptText).filter(Boolean).join("\n\n"),
+            scriptText: group.shots
+                .map((shot) => shot.scriptText)
+                .filter(Boolean)
+                .join("\n\n"),
             status,
             title: group.name,
             tone: segmentToneFromStatus(status),
@@ -111,7 +114,13 @@ function buildStoryboardPackageFromShots({ packageOrder, segmentId, shots }: { p
     const duration = shots.reduce((total, shot) => total + (shot.estimatedDuration || 3), 0);
     const assetLabels = storyboardPackageAssetLabels(shots);
     const title = shots[0]?.title || `生产包 ${packageOrder}`;
-    const summary = listSafeText(shots.map((shot) => shot.visualDescription || shot.action || shot.scriptText).filter(Boolean).join("；"), "待补充生产包内容。");
+    const summary = listSafeText(
+        shots
+            .map((shot) => shot.visualDescription || shot.action || shot.scriptText)
+            .filter(Boolean)
+            .join("；"),
+        "待补充生产包内容。",
+    );
     const status = storyboardPackageStatusFromShots({ assetLabels, duration, shots });
     return {
         assetLabels,
@@ -119,7 +128,10 @@ function buildStoryboardPackageFromShots({ packageOrder, segmentId, shots }: { p
         id: `package-${segmentId}-${packageOrder}`,
         order: packageOrder,
         promptSummary: `${shots[0]?.sceneName || "本段"}，${summary}，镜头保持电影级写实、低对比深色影像质感，动作与视线方向连续。`,
-        scriptText: shots.map((shot) => shot.scriptText).filter(Boolean).join("\n\n"),
+        scriptText: shots
+            .map((shot) => shot.scriptText)
+            .filter(Boolean)
+            .join("\n\n"),
         segmentId,
         shots: shots.map((shot, index) => ({
             action: shot.visualDescription || shot.action || shot.scriptText || "待补充镜头内容。",
@@ -138,14 +150,7 @@ function buildStoryboardPackageFromShots({ packageOrder, segmentId, shots }: { p
 }
 
 function storyboardPackageAssetLabels(shots: StoryboardTableShot[]) {
-    return uniqueTextList(
-        shots.flatMap((shot) => [
-            ...shot.characters,
-            ...(shot.assetNeeds || []),
-            ...(shot.assetRefs || []).map((ref) => ref.sourceLabel || ref.role),
-            ...(shot.productionBibleRefs || []).map((ref) => ref.kind),
-        ]),
-    )
+    return uniqueTextList(shots.flatMap((shot) => [...shot.characters, ...(shot.assetNeeds || []), ...(shot.assetRefs || []).map((ref) => ref.sourceLabel || ref.role), ...(shot.productionBibleRefs || []).map((ref) => ref.kind)]))
         .filter(Boolean)
         .slice(0, 8);
 }
@@ -180,7 +185,6 @@ function storyboardPackageTone(status: StoryboardPackageStatus): EpisodeStatusTo
     if (status === "缺资产" || status === "待审核") return "amber";
     return "slate";
 }
-
 
 function listSafeText(text: string, fallback: string) {
     const value = text.trim();

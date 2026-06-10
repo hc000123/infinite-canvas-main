@@ -79,14 +79,7 @@ type NodeToolbarContext = {
     reviewProcessing: boolean;
 };
 
-export function CanvasNodeHoverToolbar({
-    node,
-    viewport,
-    onKeep,
-    onLeave,
-    actions: toolbarActions,
-    state,
-}: CanvasNodeHoverToolbarProps) {
+export function CanvasNodeHoverToolbar({ node, viewport, onKeep, onLeave, actions: toolbarActions, state }: CanvasNodeHoverToolbarProps) {
     const colorTheme = useThemeStore((state) => state.theme);
     const theme = canvasThemes[colorTheme];
 
@@ -121,15 +114,7 @@ export function CanvasNodeHoverToolbar({
     );
 }
 
-function buildNodeToolbarActions({
-    node,
-    actions,
-    state,
-}: {
-    node: CanvasNodeData;
-    actions: CanvasNodeHoverToolbarActions;
-    state: CanvasNodeHoverToolbarState;
-}) {
+function buildNodeToolbarActions({ node, actions, state }: { node: CanvasNodeData; actions: CanvasNodeHoverToolbarActions; state: CanvasNodeHoverToolbarState }) {
     const isImage = node.type === CanvasNodeType.Image;
     const isVideo = node.type === CanvasNodeType.Video;
     const isAudio = node.type === CanvasNodeType.Audio;
@@ -176,9 +161,18 @@ function appendAssetActions(items: NodeToolbarAction[], context: NodeToolbarCont
     const { node, actions, state, hasImage, hasVideo, hasAudio, isText } = context;
     const hasMedia = hasImage || hasVideo || hasAudio;
 
-    if (hasMedia) items.push({ type: "button", key: "download", title: hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片", label: hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片", icon: <Download className="size-5" />, onClick: () => actions.onDownload(node) });
+    if (hasMedia)
+        items.push({
+            type: "button",
+            key: "download",
+            title: hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片",
+            label: hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片",
+            icon: <Download className="size-5" />,
+            onClick: () => actions.onDownload(node),
+        });
     if (hasMedia || isText) items.push({ type: "button", key: "save-asset", title: "加入我的素材", label: "存素材", icon: <FolderPlus className="size-4" />, onClick: () => actions.onSaveAsset(node) });
-    if (state.hasNewAssetVersion) items.push({ type: "button", key: "update-asset-reference", title: "素材有新版本可用，仅更新当前节点的引用版本记录", label: "有新版本", icon: <RefreshCw className="size-4" />, onClick: () => actions.onUpdateAssetReference(node), active: true });
+    if (state.hasNewAssetVersion)
+        items.push({ type: "button", key: "update-asset-reference", title: "素材有新版本可用，仅更新当前节点的引用版本记录", label: "有新版本", icon: <RefreshCw className="size-4" />, onClick: () => actions.onUpdateAssetReference(node), active: true });
 }
 
 function appendGenerationActions(items: NodeToolbarAction[], context: NodeToolbarContext) {
@@ -231,7 +225,16 @@ function appendMediaManagementActions(items: NodeToolbarAction[], context: NodeT
     if (isImage) items.push({ type: "button", key: "upload-image", title: hasImage ? "替换图片" : "上传图片", label: hasImage ? "替换图片" : "上传图片", icon: <Upload className="size-4" />, onClick: () => actions.onUpload(node) });
     if (isVideo) items.push({ type: "button", key: "upload-video", title: hasVideo ? "替换视频" : "上传视频", label: hasVideo ? "替换视频" : "上传视频", icon: <Video className="size-4" />, onClick: () => actions.onUpload(node) });
     if (isAudio) items.push({ type: "button", key: "upload-audio", title: hasAudio ? "替换音频" : "上传音频", label: hasAudio ? "替换音频" : "上传音频", icon: <AudioLines className="size-4" />, onClick: () => actions.onUpload(node) });
-    if (hasImage) items.push({ type: "button", key: "toggle-free-resize", title: node.metadata?.freeResize ? "切换为等比缩放" : "切换为自由比例", label: node.metadata?.freeResize ? "自由比例" : "锁比例", icon: node.metadata?.freeResize ? <LockOpen className="size-4" /> : <Lock className="size-4" />, onClick: () => actions.onToggleFreeResize(node), active: node.metadata?.freeResize });
+    if (hasImage)
+        items.push({
+            type: "button",
+            key: "toggle-free-resize",
+            title: node.metadata?.freeResize ? "切换为等比缩放" : "切换为自由比例",
+            label: node.metadata?.freeResize ? "自由比例" : "锁比例",
+            icon: node.metadata?.freeResize ? <LockOpen className="size-4" /> : <Lock className="size-4" />,
+            onClick: () => actions.onToggleFreeResize(node),
+            active: node.metadata?.freeResize,
+        });
     if (hasImage) items.push({ type: "button", key: "crop", title: "裁剪并生成新节点", label: "裁剪", icon: <Scissors className="size-4" />, onClick: () => actions.onCrop(node) });
     if (hasImage) items.push({ type: "button", key: "angle", title: "生成角度", label: "多角度", icon: <Camera className="size-4" />, onClick: () => actions.onAngle(node) });
     if (hasImage) items.push({ type: "button", key: "view-image", title: "查看图片详情", label: "查看大图", icon: <Maximize2 className="size-4" />, onClick: () => actions.onViewImage(node) });

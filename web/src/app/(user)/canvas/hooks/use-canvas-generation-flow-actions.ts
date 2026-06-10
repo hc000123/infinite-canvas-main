@@ -12,15 +12,7 @@ import { directVideoReferenceInputs } from "../utils/canvas-generation-metadata"
 import { syncCanvasVolcengineAssetsFromLibrary } from "../utils/canvas-volcengine-asset-sync";
 import { reviewVideoPromptBeforeGeneration, shouldRunVideoPromptReview, type PromptReviewResult } from "../utils/canvas-prompt-review";
 import { buildVideoGenerationPlan, shouldCreateVideoVariant } from "../utils/canvas-video-generation-plan";
-import {
-    resolveStoredAudioReferences,
-    resolveStoredImageReferences,
-    resolveStoredVideoReferences,
-    sourceNodeReferenceAudios,
-    sourceNodeReferenceImages,
-    sourceNodeReferenceVideos,
-    storedVideoReferenceInputs,
-} from "../utils/canvas-generation-references";
+import { resolveStoredAudioReferences, resolveStoredImageReferences, resolveStoredVideoReferences, sourceNodeReferenceAudios, sourceNodeReferenceImages, sourceNodeReferenceVideos, storedVideoReferenceInputs } from "../utils/canvas-generation-references";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../types";
 
 const NODE_STATUS_ERROR = "error" as const;

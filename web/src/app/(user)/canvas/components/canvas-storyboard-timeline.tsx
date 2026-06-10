@@ -35,9 +35,17 @@ export function CanvasStoryboardTimeline({ shots, shotGroups, nodes, activeShotI
 
     return (
         <div className="pointer-events-none absolute inset-x-4 bottom-20 z-40 flex justify-center">
-            <div className="pointer-events-auto flex max-w-[min(1100px,calc(100%-32px))] items-stretch gap-2 rounded-xl border px-2 py-2 shadow-[0_14px_34px_rgba(28,25,23,.12)] backdrop-blur" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
+            <div
+                className="pointer-events-auto flex max-w-[min(1100px,calc(100%-32px))] items-stretch gap-2 rounded-xl border px-2 py-2 shadow-[0_14px_34px_rgba(28,25,23,.12)] backdrop-blur"
+                style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
+            >
                 <div className="flex w-32 shrink-0 flex-col gap-1.5">
-                    <button type="button" className="inline-flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg text-xs transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70" style={{ background: theme.node.fill, color: theme.node.muted }} onClick={onOpenWorkbench}>
+                    <button
+                        type="button"
+                        className="inline-flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg text-xs transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                        style={{ background: theme.node.fill, color: theme.node.muted }}
+                        onClick={onOpenWorkbench}
+                    >
                         <Film className="size-4" />
                         分镜检查
                     </button>
@@ -68,7 +76,13 @@ export function CanvasStoryboardTimeline({ shots, shotGroups, nodes, activeShotI
                                 onClick={() => onSelectShot(shot, node?.id)}
                             >
                                 <div className="grid h-full place-items-center rounded-md" style={{ background: node?.metadata?.content ? "transparent" : theme.node.panel }}>
-                                    {node?.type === "image" && node.metadata?.content ? <img src={node.metadata.content} alt={`镜头 ${shot.order}`} className="h-full w-full rounded-md object-cover" /> : node?.type === "video" && node.metadata?.content ? <Video className="size-5" /> : <span className="text-xs font-semibold tabular-nums">镜{shot.order}</span>}
+                                    {node?.type === "image" && node.metadata?.content ? (
+                                        <img src={node.metadata.content} alt={`镜头 ${shot.order}`} className="h-full w-full rounded-md object-cover" />
+                                    ) : node?.type === "video" && node.metadata?.content ? (
+                                        <Video className="size-5" />
+                                    ) : (
+                                        <span className="text-xs font-semibold tabular-nums">镜{shot.order}</span>
+                                    )}
                                 </div>
                                 <div className="min-w-0">
                                     <div className="text-xs font-semibold">镜头 {shot.order}</div>

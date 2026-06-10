@@ -118,15 +118,13 @@ const configStorage: PersistStorage<ConfigStore> = {
     },
 };
 
-export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null) {
+export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null): AiConfig {
     const channelMode = "remote";
     const localVideoProtocol = resolveAllowedVideoProtocol("local", config.videoProtocol);
     if (!modelChannel) {
         return { ...config, channelMode, videoProtocol: localVideoProtocol, videoModel: config.videoModel };
     }
-    const models = uniqueModels(
-        [modelChannel.defaultModel, modelChannel.defaultImageModel, modelChannel.defaultVideoModel, modelChannel.defaultTextModel, ...modelChannel.availableModels].map(normalizeVisibleRemoteVideoModel).filter(Boolean),
-    );
+    const models = uniqueModels([modelChannel.defaultModel, modelChannel.defaultImageModel, modelChannel.defaultVideoModel, modelChannel.defaultTextModel, ...modelChannel.availableModels].map(normalizeVisibleRemoteVideoModel).filter(Boolean));
     const classifiedModels = classifyAiModels(models);
     const fallbackModel = (modelChannel.defaultModel && models.includes(modelChannel.defaultModel) ? modelChannel.defaultModel : models[0]) || "";
     const normalizedDefaultVideoModel = normalizeVisibleRemoteVideoModel(modelChannel.defaultVideoModel);
@@ -237,7 +235,7 @@ export const useConfigStore = create<ConfigStore>()(
     ),
 );
 
-export function useEffectiveConfig() {
+export function useEffectiveConfig(): AiConfig {
     const config = useConfigStore((state) => state.config);
     const modelChannel = useConfigStore((state) => state.publicSettings?.modelChannel || null);
     return useMemo(() => resolveEffectiveConfig(config, modelChannel), [config, modelChannel]);

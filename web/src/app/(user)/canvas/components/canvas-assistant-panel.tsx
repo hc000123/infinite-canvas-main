@@ -21,14 +21,7 @@ import { DiaTextReveal } from "@/components/ui/dia-text-reveal";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { type CanvasAssistantImage, type CanvasAssistantMessage, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData } from "../types";
-import {
-    buildAssistantCanvasActionPreview,
-    executeAssistantCanvasReadAction,
-    parseAssistantCanvasActionSuggestion,
-    validateAssistantCanvasAction,
-    type AssistantCanvasAction,
-    type AssistantCanvasReadAction,
-} from "../utils/canvas-assistant-actions";
+import { buildAssistantCanvasActionPreview, executeAssistantCanvasReadAction, parseAssistantCanvasActionSuggestion, validateAssistantCanvasAction, type AssistantCanvasAction, type AssistantCanvasReadAction } from "../utils/canvas-assistant-actions";
 import { buildAssistantReferences } from "../utils/canvas-assistant-references";
 import { useCanvasAssistantSessions } from "../hooks/use-canvas-assistant-sessions";
 import { AssistantMessages, AssistantReferenceChip } from "./canvas-assistant-messages";
@@ -249,150 +242,150 @@ export function CanvasAssistantPanel({
 
     const content = (
         <>
-                {!embedded ? <button type="button" className="absolute inset-y-0 left-0 z-40 w-4 -translate-x-1/2 cursor-col-resize" onMouseDown={startResize} aria-label="调整右侧面板宽度" /> : null}
-                <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                        <Sparkles className="size-4" />
-                        {view === "history" ? "历史记录" : "画布助手"}
-                    </div>
-                    <div className="flex items-center gap-1">
-                        {view === "history" ? (
-                            <>
-                                <Tooltip title="删除选中">
-                                    <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Trash2 className="size-4" />} disabled={!checkedChatIds.length} onClick={() => setDeleteChatIds(checkedChatIds)} />
-                                </Tooltip>
-                                <Tooltip title="删除全部">
-                                    <Button
-                                        type="text"
-                                        shape="circle"
-                                        className="!h-8 !w-8 !min-w-8"
-                                        style={iconButtonStyle}
-                                        icon={<X className="size-4" />}
-                                        disabled={!historySessions.length}
-                                        onClick={() => setDeleteChatIds(historySessions.map((session) => session.id))}
-                                    />
-                                </Tooltip>
-                            </>
-                        ) : null}
-                        <Tooltip title={view === "history" ? "返回对话" : "历史记录"}>
-                            <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<History className="size-4" />} onClick={() => setView(view === "history" ? "chat" : "history")} />
-                        </Tooltip>
-                        <Tooltip title="新对话">
-                            <Button
-                                type="text"
-                                shape="circle"
-                                className="!h-8 !w-8 !min-w-8"
-                                style={iconButtonStyle}
-                                icon={<Plus className="size-4" />}
-                                disabled={!hasMessages}
-                                onClick={() => {
-                                    startChatSession();
-                                    setView("chat");
-                                }}
-                            />
-                        </Tooltip>
-                        <Tooltip title="配置">
-                            <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Settings2 className="size-4" />} onClick={() => openConfigDialog(false)} />
-                        </Tooltip>
-                        <Tooltip title="收起对话">
-                            <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<PanelRightClose className="size-4" />} onClick={collapse} />
-                        </Tooltip>
-                    </div>
+            {!embedded ? <button type="button" className="absolute inset-y-0 left-0 z-40 w-4 -translate-x-1/2 cursor-col-resize" onMouseDown={startResize} aria-label="调整右侧面板宽度" /> : null}
+            <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
+                <div className="flex items-center gap-2 text-sm font-medium">
+                    <Sparkles className="size-4" />
+                    {view === "history" ? "历史记录" : "画布助手"}
                 </div>
-
-                <div className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+                <div className="flex items-center gap-1">
                     {view === "history" ? (
-                        <AssistantHistory
-                            sessions={historySessions}
-                            activeSession={activeSession}
-                            checkedIds={checkedChatIds.filter((id) => historySessions.some((session) => session.id === id))}
-                            onToggleChecked={(id, checked) => setCheckedChatIds((prev) => (checked ? [...new Set([...prev, id])] : prev.filter((item) => item !== id)))}
-                            onOpen={(id) => {
-                                setActiveSessionId(id);
+                        <>
+                            <Tooltip title="删除选中">
+                                <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Trash2 className="size-4" />} disabled={!checkedChatIds.length} onClick={() => setDeleteChatIds(checkedChatIds)} />
+                            </Tooltip>
+                            <Tooltip title="删除全部">
+                                <Button
+                                    type="text"
+                                    shape="circle"
+                                    className="!h-8 !w-8 !min-w-8"
+                                    style={iconButtonStyle}
+                                    icon={<X className="size-4" />}
+                                    disabled={!historySessions.length}
+                                    onClick={() => setDeleteChatIds(historySessions.map((session) => session.id))}
+                                />
+                            </Tooltip>
+                        </>
+                    ) : null}
+                    <Tooltip title={view === "history" ? "返回对话" : "历史记录"}>
+                        <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<History className="size-4" />} onClick={() => setView(view === "history" ? "chat" : "history")} />
+                    </Tooltip>
+                    <Tooltip title="新对话">
+                        <Button
+                            type="text"
+                            shape="circle"
+                            className="!h-8 !w-8 !min-w-8"
+                            style={iconButtonStyle}
+                            icon={<Plus className="size-4" />}
+                            disabled={!hasMessages}
+                            onClick={() => {
+                                startChatSession();
                                 setView("chat");
                             }}
-                            onDelete={(id) => setDeleteChatIds([id])}
                         />
-                    ) : messages.length ? (
-                        <AssistantMessages
-                            messages={messages}
-                            nodes={nodes}
-                            connections={connections}
-                            onRetry={retryMessage}
-                            onInsertImage={onInsertImage}
-                            onInsertText={onInsertText}
-                            onApplyAssistantActions={(message) => {
-                                if (!message.assistantActions?.length) return;
-                                const applied = onApplyAssistantActions(message.assistantActions);
-                                if (applied) updateMessage(activeSession?.id || "", message.id, { assistantActionStatus: "applied", assistantActionAppliedAt: new Date().toISOString() });
-                            }}
-                            onCancelAssistantActions={(message) => updateMessage(activeSession?.id || "", message.id, { assistantActionStatus: "cancelled" })}
-                        />
-                    ) : (
-                        <div className="flex h-full flex-col items-center justify-center px-1 text-center">
-                            <div className="relative font-serif text-4xl font-bold italic tracking-normal" style={{ color: theme.node.text }}>
-                                <span>眨眼之间</span>
-                                <DiaTextReveal className="absolute inset-0" colors={["#A97CF8", "#F38CB8", "#FDCC92"]} textColor="transparent" duration={1.8} startOnView={false} text="眨眼之间" />
-                            </div>
-                            <div className="mt-3 text-base tracking-wide opacity-60">一眨眼，把灵感铺成画布</div>
-                        </div>
-                    )}
+                    </Tooltip>
+                    <Tooltip title="配置">
+                        <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Settings2 className="size-4" />} onClick={() => openConfigDialog(false)} />
+                    </Tooltip>
+                    <Tooltip title="收起对话">
+                        <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<PanelRightClose className="size-4" />} onClick={collapse} />
+                    </Tooltip>
                 </div>
+            </div>
 
-                {view === "chat" ? (
-                    <AssistantComposer
-                        mode={mode}
-                        prompt={prompt}
-                        isRunning={isRunning}
-                        references={selectedReferences}
-                        config={effectiveConfig}
-                        onModeChange={setMode}
-                        onPromptChange={setPrompt}
-                        onSubmit={submit}
-                        onConfigChange={updateConfig}
-                        onMissingConfig={() => openConfigDialog(true)}
-                        onCreateDebugActionPreview={createDebugActionPreview}
-                        onSummarizeCanvas={() => runReadAction({ id: nanoid(), kind: "read", type: "canvas.summarize", reason: "总结当前画布" })}
-                        onExplainSelectedNodes={() => {
-                            const nodeIds = Array.from(selectedNodeIds);
-                            if (!nodeIds.length) {
-                                appendAssistantMessage({ id: nanoid(), role: "assistant", mode: "ask", text: "请先选中一个节点，我再解释它的上下游关系。" }, { skipCanvasHistory: true });
-                                return;
-                            }
-                            runReadAction({ id: nanoid(), kind: "read", type: "node.explain_context", reason: "解释选中节点上下游", payload: { nodeIds } });
+            <div className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+                {view === "history" ? (
+                    <AssistantHistory
+                        sessions={historySessions}
+                        activeSession={activeSession}
+                        checkedIds={checkedChatIds.filter((id) => historySessions.some((session) => session.id === id))}
+                        onToggleChecked={(id, checked) => setCheckedChatIds((prev) => (checked ? [...new Set([...prev, id])] : prev.filter((item) => item !== id)))}
+                        onOpen={(id) => {
+                            setActiveSessionId(id);
+                            setView("chat");
                         }}
-                        onRemoveReference={(id) => {
-                            setRemovedReferenceIds((prev) => new Set(prev).add(id));
-                            if (selectedNodeIds.has(id)) onSelectNodeIds(new Set(Array.from(selectedNodeIds).filter((nodeId) => nodeId !== id)));
-                        }}
-                        onPasteImage={onPasteImage}
-                        modelCosts={modelCosts}
+                        onDelete={(id) => setDeleteChatIds([id])}
                     />
-                ) : null}
+                ) : messages.length ? (
+                    <AssistantMessages
+                        messages={messages}
+                        nodes={nodes}
+                        connections={connections}
+                        onRetry={retryMessage}
+                        onInsertImage={onInsertImage}
+                        onInsertText={onInsertText}
+                        onApplyAssistantActions={(message) => {
+                            if (!message.assistantActions?.length) return;
+                            const applied = onApplyAssistantActions(message.assistantActions);
+                            if (applied) updateMessage(activeSession?.id || "", message.id, { assistantActionStatus: "applied", assistantActionAppliedAt: new Date().toISOString() });
+                        }}
+                        onCancelAssistantActions={(message) => updateMessage(activeSession?.id || "", message.id, { assistantActionStatus: "cancelled" })}
+                    />
+                ) : (
+                    <div className="flex h-full flex-col items-center justify-center px-1 text-center">
+                        <div className="relative font-serif text-4xl font-bold italic tracking-normal" style={{ color: theme.node.text }}>
+                            <span>眨眼之间</span>
+                            <DiaTextReveal className="absolute inset-0" colors={["#A97CF8", "#F38CB8", "#FDCC92"]} textColor="transparent" duration={1.8} startOnView={false} text="眨眼之间" />
+                        </div>
+                        <div className="mt-3 text-base tracking-wide opacity-60">一眨眼，把灵感铺成画布</div>
+                    </div>
+                )}
+            </div>
 
-                <Modal
-                    title="删除对话记录？"
-                    open={deleteChatIds.length > 0}
-                    centered
-                    onCancel={() => setDeleteChatIds([])}
-                    footer={
-                        <>
-                            <Button onClick={() => setDeleteChatIds([])}>取消</Button>
-                            <Button
-                                danger
-                                type="primary"
-                                onClick={() => {
-                                    deleteChatIds.length === historySessions.length ? clearSessions() : removeSessions(deleteChatIds);
-                                    setDeleteChatIds([]);
-                                }}
-                            >
-                                删除
-                            </Button>
-                        </>
-                    }
-                >
-                    <p className="text-sm opacity-60">将删除 {deleteChatIds.length} 条对话记录，此操作不可撤销。</p>
-                </Modal>
+            {view === "chat" ? (
+                <AssistantComposer
+                    mode={mode}
+                    prompt={prompt}
+                    isRunning={isRunning}
+                    references={selectedReferences}
+                    config={effectiveConfig}
+                    onModeChange={setMode}
+                    onPromptChange={setPrompt}
+                    onSubmit={submit}
+                    onConfigChange={updateConfig}
+                    onMissingConfig={() => openConfigDialog(true)}
+                    onCreateDebugActionPreview={createDebugActionPreview}
+                    onSummarizeCanvas={() => runReadAction({ id: nanoid(), kind: "read", type: "canvas.summarize", reason: "总结当前画布" })}
+                    onExplainSelectedNodes={() => {
+                        const nodeIds = Array.from(selectedNodeIds);
+                        if (!nodeIds.length) {
+                            appendAssistantMessage({ id: nanoid(), role: "assistant", mode: "ask", text: "请先选中一个节点，我再解释它的上下游关系。" }, { skipCanvasHistory: true });
+                            return;
+                        }
+                        runReadAction({ id: nanoid(), kind: "read", type: "node.explain_context", reason: "解释选中节点上下游", payload: { nodeIds } });
+                    }}
+                    onRemoveReference={(id) => {
+                        setRemovedReferenceIds((prev) => new Set(prev).add(id));
+                        if (selectedNodeIds.has(id)) onSelectNodeIds(new Set(Array.from(selectedNodeIds).filter((nodeId) => nodeId !== id)));
+                    }}
+                    onPasteImage={onPasteImage}
+                    modelCosts={modelCosts}
+                />
+            ) : null}
+
+            <Modal
+                title="删除对话记录？"
+                open={deleteChatIds.length > 0}
+                centered
+                onCancel={() => setDeleteChatIds([])}
+                footer={
+                    <>
+                        <Button onClick={() => setDeleteChatIds([])}>取消</Button>
+                        <Button
+                            danger
+                            type="primary"
+                            onClick={() => {
+                                deleteChatIds.length === historySessions.length ? clearSessions() : removeSessions(deleteChatIds);
+                                setDeleteChatIds([]);
+                            }}
+                        >
+                            删除
+                        </Button>
+                    </>
+                }
+            >
+                <p className="text-sm opacity-60">将删除 {deleteChatIds.length} 条对话记录，此操作不可撤销。</p>
+            </Modal>
         </>
     );
 

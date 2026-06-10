@@ -79,9 +79,7 @@ export function AssetDrawer({
                         </Space>
                     </div>
                     <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
-                        <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">
-                            内容
-                        </Typography.Text>
+                        <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">内容</Typography.Text>
                         {asset.kind === "text" ? (
                             <Typography.Paragraph className="mt-2 whitespace-pre-wrap !text-[var(--studio-text-primary)]">{asset.data.content}</Typography.Paragraph>
                         ) : asset.kind === "video" ? (
@@ -106,9 +104,7 @@ export function AssetDrawer({
                     ) : null}
                     {projectLibraryEntries.length ? (
                         <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4 text-sm">
-                            <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">
-                                项目共享库
-                            </Typography.Text>
+                            <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">项目共享库</Typography.Text>
                             <div className="mt-2 space-y-2">
                                 {projectLibraryEntries.map((entry) => (
                                     <div key={entry.projectId} className="rounded-md bg-[var(--studio-elevated-bg)] px-3 py-2">
@@ -124,9 +120,7 @@ export function AssetDrawer({
                     ) : null}
                     {canvasLibraryEntries.length ? (
                         <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4 text-sm">
-                            <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">
-                                历史画布引用
-                            </Typography.Text>
+                            <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">历史画布引用</Typography.Text>
                             <div className="mt-2 flex flex-wrap gap-2">
                                 {canvasLibraryEntries.map((entry) => (
                                     <Tag key={entry.canvasId} className="studio-tag">
@@ -163,9 +157,7 @@ export function AssetDrawer({
                     </Space>
                     {(asset.kind === "image" || asset.kind === "video") && asset.metadata?.volcengineAsset ? (
                         <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4 text-sm">
-                            <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">
-                                火山素材
-                            </Typography.Text>
+                            <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">火山素材</Typography.Text>
                             <Typography.Paragraph copyable className="!mb-0 !mt-2 !text-[var(--studio-text-primary)]">
                                 {asset.metadata.volcengineAsset.assetId}
                             </Typography.Paragraph>
@@ -207,9 +199,7 @@ function AssetVersionHistory({
     return (
         <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4 text-sm">
             <div className="flex items-center justify-between gap-3">
-                <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">
-                    版本历史
-                </Typography.Text>
+                <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">版本历史</Typography.Text>
                 <Space size={4} wrap>
                     {versions.length ? <Tag className="studio-tag">{versions.length} 个版本</Tag> : null}
                     {usageReferences.length ? <Tag className="studio-tag">{usageReferences.length} 处引用</Tag> : null}
@@ -227,9 +217,7 @@ function AssetVersionHistory({
                                             v{version.versionNumber}
                                         </Typography.Text>
                                         {version.isCurrent ? <Tag className="studio-tag">当前版本</Tag> : null}
-                                        <Typography.Text className="text-sm !text-[var(--studio-text-muted)]">
-                                            {version.changeNote || "版本更新"}
-                                        </Typography.Text>
+                                        <Typography.Text className="text-sm !text-[var(--studio-text-muted)]">{version.changeNote || "版本更新"}</Typography.Text>
                                     </div>
                                     <Typography.Text className="mt-1 block break-words text-sm !text-[var(--studio-text-muted)]">
                                         {assetVersionMediaSummary(version)}
@@ -252,9 +240,7 @@ function AssetVersionHistory({
             ) : null}
             {usageReferences.length ? (
                 <div className="mt-4 border-t border-[var(--studio-border-subtle)] pt-3">
-                    <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">
-                        被引用对象
-                    </Typography.Text>
+                    <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">被引用对象</Typography.Text>
                     <div className="mt-2 space-y-2">
                         {usageReferences.map((usage) => (
                             <div key={usage.id} className="rounded-md bg-[var(--studio-elevated-bg)] px-3 py-2">

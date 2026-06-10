@@ -310,7 +310,10 @@ function ShotInspector({
     onSelectShot?: (shot: StoryboardTableShot, nodeId?: string) => void;
     onOpenEpisodeWorkbench: () => void;
 }) {
-    const prompt = groups.map((group) => group.effectivePrompt || group.prompt).filter(Boolean).join("\n\n");
+    const prompt = groups
+        .map((group) => group.effectivePrompt || group.prompt)
+        .filter(Boolean)
+        .join("\n\n");
     const refs = groups.flatMap((group) => [...group.assetRefs, ...group.audioRefs]);
     const nodeStatus = summarizeShotNodes(nodes);
     const title = readableShotTitle(shot, checklistShots);
@@ -495,7 +498,9 @@ function RawSourceSection({ items, theme, expanded = false }: { items: ShotReada
 function StatusRow({ label, title, meta, theme }: { label: string; title: string; meta: string; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     return (
         <div className="rounded-lg border px-2 py-1.5 text-xs leading-5" style={{ background: theme.node.panel, borderColor: theme.node.stroke }}>
-            <div style={{ color: theme.node.muted }}>{label} · {meta}</div>
+            <div style={{ color: theme.node.muted }}>
+                {label} · {meta}
+            </div>
             <div className="break-words font-medium">{title}</div>
         </div>
     );
@@ -664,9 +669,15 @@ function NodeInspector({
                 {node.type === CanvasNodeType.Text ? <InspectorAction icon={<FileText className="size-4" />} label="编辑文字" onClick={() => onEditText(node)} theme={theme} /> : null}
                 {node.type === CanvasNodeType.Text ? <InspectorAction icon={<ImageIcon className="size-4" />} label="用文本生图" onClick={() => onGenerateImage(node)} theme={theme} /> : null}
                 {canOpenGenerateSettings ? <InspectorAction icon={<MessageSquare className="size-4" />} label="生成设置" onClick={() => onToggleDialog(node)} theme={theme} /> : null}
-                {(node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && hasMedia ? <InspectorAction icon={<Download className="size-4" />} label="下载" onClick={() => onDownload(node)} theme={theme} /> : null}
-                {(node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && hasMedia ? <InspectorAction icon={<Sparkles className="size-4" />} label="存素材" onClick={() => onSaveAsset(node)} theme={theme} /> : null}
-                {(node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) ? <InspectorAction icon={<Upload className="size-4" />} label={hasMedia ? "替换素材" : "上传素材"} onClick={() => onUpload(node)} theme={theme} /> : null}
+                {(node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && hasMedia ? (
+                    <InspectorAction icon={<Download className="size-4" />} label="下载" onClick={() => onDownload(node)} theme={theme} />
+                ) : null}
+                {(node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && hasMedia ? (
+                    <InspectorAction icon={<Sparkles className="size-4" />} label="存素材" onClick={() => onSaveAsset(node)} theme={theme} />
+                ) : null}
+                {node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio ? (
+                    <InspectorAction icon={<Upload className="size-4" />} label={hasMedia ? "替换素材" : "上传素材"} onClick={() => onUpload(node)} theme={theme} />
+                ) : null}
                 {node.type === CanvasNodeType.Image && hasMedia ? <InspectorAction icon={<Scissors className="size-4" />} label="裁剪" onClick={() => onCrop(node)} theme={theme} /> : null}
                 {node.type === CanvasNodeType.Image && hasMedia ? <InspectorAction icon={<Camera className="size-4" />} label="多角度" onClick={() => onAngle(node)} theme={theme} /> : null}
                 {node.type === CanvasNodeType.Image && hasMedia ? <InspectorAction icon={<Maximize2 className="size-4" />} label="查看大图" onClick={() => onViewImage(node)} theme={theme} /> : null}
@@ -733,7 +744,13 @@ function ProductionPackageContentView({
     return (
         <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
             <ProductionPackageBindingSection productionPackage={productionPackage} theme={theme} />
-            <ProductionPackageSlotSection productionPackage={productionPackage} selectedVideoNode={selectedVideoNode} theme={theme} onBindSelectedVideoToProductionPackage={onBindSelectedVideoToProductionPackage} onInsertProductionPackageConfigNode={onInsertProductionPackageConfigNode} />
+            <ProductionPackageSlotSection
+                productionPackage={productionPackage}
+                selectedVideoNode={selectedVideoNode}
+                theme={theme}
+                onBindSelectedVideoToProductionPackage={onBindSelectedVideoToProductionPackage}
+                onInsertProductionPackageConfigNode={onInsertProductionPackageConfigNode}
+            />
             <ProductionPackageSourceSection productionPackage={productionPackage} theme={theme} onInsertProductionPackageConfigNode={onInsertProductionPackageConfigNode} />
             <VideoVersionsSection
                 productionPackage={productionPackage}
@@ -783,7 +800,13 @@ function ProductionPackageSlotSection({
                     </div>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                    <SmallInspectorButton icon={<Link2 className="size-3.5" />} label={current ? "替换为选中视频" : "填入选中视频"} onClick={() => selectedVideoNode && onBindSelectedVideoToProductionPackage(productionPackage.id, selectedVideoNode.id)} theme={theme} disabled={!selectedVideoNode} />
+                    <SmallInspectorButton
+                        icon={<Link2 className="size-3.5" />}
+                        label={current ? "替换为选中视频" : "填入选中视频"}
+                        onClick={() => selectedVideoNode && onBindSelectedVideoToProductionPackage(productionPackage.id, selectedVideoNode.id)}
+                        theme={theme}
+                        disabled={!selectedVideoNode}
+                    />
                     <SmallInspectorButton icon={<Video className="size-3.5" />} label={productionPackage.configNodeId ? "定位配置节点" : "新建视频配置"} onClick={() => onInsertProductionPackageConfigNode(productionPackage.id)} theme={theme} />
                 </div>
             </div>
@@ -791,14 +814,28 @@ function ProductionPackageSlotSection({
     );
 }
 
-function ProductionPackageSourceSection({ productionPackage, theme, onInsertProductionPackageConfigNode }: { productionPackage: CanvasProductionPackageSummary; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onInsertProductionPackageConfigNode: (packageId: string) => void }) {
+function ProductionPackageSourceSection({
+    productionPackage,
+    theme,
+    onInsertProductionPackageConfigNode,
+}: {
+    productionPackage: CanvasProductionPackageSummary;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onInsertProductionPackageConfigNode: (packageId: string) => void;
+}) {
     return (
         <section className="mt-3 rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
             <div className="mb-2 text-sm font-semibold">内容素材</div>
             <div className="space-y-2">
                 <SourceRow icon={<FileText className="size-4" />} title="剧情内容" value={productionPackage.sceneName} detail={`镜头范围：${productionPackage.shotRangeLabel}`} theme={theme} />
                 <SourceRow icon={<MessageSquare className="size-4" />} title="提示词 / 视频配置" value={productionPackage.configNodeId ? "已放入画布" : "待创建"} detail="可生成视频配置节点后继续编辑提示词和参考输入。" theme={theme} />
-                <SourceRow icon={<ImageIcon className="size-4" />} title="参考资产" value={`${Math.max(0, productionPackage.nodeIds.length - productionPackage.versions.length)} 个关联节点`} detail="可从画布节点、素材库或生产包配置继续补齐参考图、音频和文本。" theme={theme} />
+                <SourceRow
+                    icon={<ImageIcon className="size-4" />}
+                    title="参考资产"
+                    value={`${Math.max(0, productionPackage.nodeIds.length - productionPackage.versions.length)} 个关联节点`}
+                    detail="可从画布节点、素材库或生产包配置继续补齐参考图、音频和文本。"
+                    theme={theme}
+                />
             </div>
             <div className="mt-3">
                 <SmallInspectorButton icon={<Upload className="size-3.5" />} label="导入为视频配置节点" onClick={() => onInsertProductionPackageConfigNode(productionPackage.id)} theme={theme} />
@@ -838,7 +875,10 @@ function ProductionPackageBindingSection({ productionPackage, currentNode, theme
                         {productionPackage.label} · {productionPackage.title}
                     </div>
                 </div>
-                <span className="shrink-0 rounded-md border px-2 py-1 text-xs" style={{ borderColor: productionPackage.currentVersion ? "rgba(34,211,238,.72)" : theme.node.stroke, color: productionPackage.currentVersion ? "rgb(103,232,249)" : theme.node.muted }}>
+                <span
+                    className="shrink-0 rounded-md border px-2 py-1 text-xs"
+                    style={{ borderColor: productionPackage.currentVersion ? "rgba(34,211,238,.72)" : theme.node.stroke, color: productionPackage.currentVersion ? "rgb(103,232,249)" : theme.node.muted }}
+                >
                     {productionPackage.statusLabel}
                 </span>
             </div>
@@ -912,7 +952,13 @@ function VideoVersionsSection({
                             <div className="mt-3 flex flex-wrap gap-2">
                                 <SmallInspectorButton icon={<Eye className="size-3.5" />} label="预览" onClick={() => onPreview(version)} theme={theme} />
                                 <SmallInspectorButton icon={<Download className="size-3.5" />} label="导出" onClick={() => onDownload(version)} theme={theme} disabled={!version.node.metadata?.content} />
-                                <SmallInspectorButton icon={<CheckCircle2 className="size-3.5" />} label="设为当前" onClick={() => onSetCurrent(productionPackage.id, version.nodeId)} theme={theme} disabled={version.isCurrent || version.hidden || version.node.metadata?.status !== "success"} />
+                                <SmallInspectorButton
+                                    icon={<CheckCircle2 className="size-3.5" />}
+                                    label="设为当前"
+                                    onClick={() => onSetCurrent(productionPackage.id, version.nodeId)}
+                                    theme={theme}
+                                    disabled={version.isCurrent || version.hidden || version.node.metadata?.status !== "success"}
+                                />
                                 <SmallInspectorButton icon={<EyeOff className="size-3.5" />} label="隐藏" onClick={() => onHide(version.nodeId)} theme={theme} disabled={version.hidden} />
                             </div>
                         </div>
@@ -993,7 +1039,13 @@ function RecordsView({ selectedNode, selectedShot, theme }: { selectedNode: Canv
     return (
         <div className="thin-scrollbar max-h-[70vh] overflow-y-auto px-1 py-1">
             {shotRawParts.length ? <RawSourceSection items={shotRawParts} theme={theme} expanded /> : null}
-            {selectedNode ? <MetadataSummary node={selectedNode} theme={theme} expanded /> : !shotRawParts.length ? <div className="mt-3 text-sm" style={{ color: theme.node.muted }}>选中节点或镜头后可查看任务和元信息。</div> : null}
+            {selectedNode ? (
+                <MetadataSummary node={selectedNode} theme={theme} expanded />
+            ) : !shotRawParts.length ? (
+                <div className="mt-3 text-sm" style={{ color: theme.node.muted }}>
+                    选中节点或镜头后可查看任务和元信息。
+                </div>
+            ) : null}
         </div>
     );
 }

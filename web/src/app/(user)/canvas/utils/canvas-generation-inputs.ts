@@ -92,7 +92,11 @@ export function buildCanvasGenerationInputs(nodeId: string, nodes: CanvasGenerat
         if (text) return [{ nodeId: node.id, type: "text", title: node.title, text }];
         return [];
     });
-    return applySeedanceImageRoles(inputs, target, connections.filter((connection) => connection.toNodeId === nodeId));
+    return applySeedanceImageRoles(
+        inputs,
+        target,
+        connections.filter((connection) => connection.toNodeId === nodeId),
+    );
 }
 
 function readNodeTextInput(node: CanvasGenerationNodeLike) {

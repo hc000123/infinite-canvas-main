@@ -128,10 +128,20 @@ export default function ProjectsPage() {
                             style={{ width: 340 }}
                         />
                         <div className="flex h-11 overflow-hidden rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-1">
-                            <button type="button" className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] ${viewMode === "grid" ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-muted)] hover:text-[var(--studio-text-primary)]"}`} onClick={() => setViewMode("grid")} aria-label="网格视图">
+                            <button
+                                type="button"
+                                className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] ${viewMode === "grid" ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-muted)] hover:text-[var(--studio-text-primary)]"}`}
+                                onClick={() => setViewMode("grid")}
+                                aria-label="网格视图"
+                            >
                                 <Grid2X2 className="size-4" />
                             </button>
-                            <button type="button" className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] ${viewMode === "list" ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-muted)] hover:text-[var(--studio-text-primary)]"}`} onClick={() => setViewMode("list")} aria-label="列表视图">
+                            <button
+                                type="button"
+                                className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] ${viewMode === "list" ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-muted)] hover:text-[var(--studio-text-primary)]"}`}
+                                onClick={() => setViewMode("list")}
+                                aria-label="列表视图"
+                            >
                                 <LayoutList className="size-4" />
                             </button>
                         </div>
@@ -142,50 +152,50 @@ export default function ProjectsPage() {
                     </div>
                 </header>
 
-                    <ProjectStatsBar activeFilter={statusFilter} onFilterChange={setStatusFilter} stats={stats} />
+                <ProjectStatsBar activeFilter={statusFilter} onFilterChange={setStatusFilter} stats={stats} />
 
-                    {!hydrated ? (
-                        <section className="studio-panel mt-7 flex min-h-[420px] items-center justify-center text-sm text-[var(--studio-text-muted)]">正在加载项目...</section>
-                    ) : filteredCards.length ? (
-                        <>
-                            <div className={`mt-7 ${viewMode === "grid" ? "grid gap-5 lg:grid-cols-2 2xl:grid-cols-4" : "grid gap-4"}`}>
-                                {filteredCards.map((card) => (
-                                    <ProjectCard
-                                        key={card.project.id}
-                                        card={card}
-                                        editing={editingId === card.project.id}
-                                        editingTitle={editingTitle}
-                                        listMode={viewMode === "list"}
-                                        onEditingTitleChange={setEditingTitle}
-                                        onEdit={() => {
-                                            setEditingId(card.project.id);
-                                            setEditingTitle(card.project.title);
-                                        }}
-                                        onSave={() => {
-                                            renameProject(card.project.id, editingTitle);
-                                            ensureProjectFolder(card.project.id, editingTitle);
-                                            setEditingId("");
-                                        }}
-                                        onCancel={() => setEditingId("")}
-                                        onArchive={() => archiveProject(card.project.id)}
-                                        onRestore={() => restoreProject(card.project.id)}
-                                        onDelete={() => removeProject(card.project)}
-                                        onOpen={() => router.push(`/projects/${card.project.id}`)}
-                                    />
-                                ))}
-                            </div>
-                            <ProjectPagination count={filteredCards.length} />
-                        </>
-                    ) : (
-                        <section className="studio-panel mt-7 flex min-h-[420px] flex-col items-center justify-center text-center">
-                            <Folder className="size-11 text-[var(--studio-text-muted)]" />
-                            <h2 className="mt-4 text-xl font-medium text-[var(--studio-text-primary)]">没有匹配的项目</h2>
-                            <p className="mt-3 text-sm text-[var(--studio-text-secondary)]">可以清空搜索条件，或新建一个项目开始制作。</p>
-                            <Button className={`mt-6 ${createProjectButtonClass}`} icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
-                                新建项目
-                            </Button>
-                        </section>
-                    )}
+                {!hydrated ? (
+                    <section className="studio-panel mt-7 flex min-h-[420px] items-center justify-center text-sm text-[var(--studio-text-muted)]">正在加载项目...</section>
+                ) : filteredCards.length ? (
+                    <>
+                        <div className={`mt-7 ${viewMode === "grid" ? "grid gap-5 lg:grid-cols-2 2xl:grid-cols-4" : "grid gap-4"}`}>
+                            {filteredCards.map((card) => (
+                                <ProjectCard
+                                    key={card.project.id}
+                                    card={card}
+                                    editing={editingId === card.project.id}
+                                    editingTitle={editingTitle}
+                                    listMode={viewMode === "list"}
+                                    onEditingTitleChange={setEditingTitle}
+                                    onEdit={() => {
+                                        setEditingId(card.project.id);
+                                        setEditingTitle(card.project.title);
+                                    }}
+                                    onSave={() => {
+                                        renameProject(card.project.id, editingTitle);
+                                        ensureProjectFolder(card.project.id, editingTitle);
+                                        setEditingId("");
+                                    }}
+                                    onCancel={() => setEditingId("")}
+                                    onArchive={() => archiveProject(card.project.id)}
+                                    onRestore={() => restoreProject(card.project.id)}
+                                    onDelete={() => removeProject(card.project)}
+                                    onOpen={() => router.push(`/projects/${card.project.id}`)}
+                                />
+                            ))}
+                        </div>
+                        <ProjectPagination count={filteredCards.length} />
+                    </>
+                ) : (
+                    <section className="studio-panel mt-7 flex min-h-[420px] flex-col items-center justify-center text-center">
+                        <Folder className="size-11 text-[var(--studio-text-muted)]" />
+                        <h2 className="mt-4 text-xl font-medium text-[var(--studio-text-primary)]">没有匹配的项目</h2>
+                        <p className="mt-3 text-sm text-[var(--studio-text-secondary)]">可以清空搜索条件，或新建一个项目开始制作。</p>
+                        <Button className={`mt-6 ${createProjectButtonClass}`} icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
+                            新建项目
+                        </Button>
+                    </section>
+                )}
             </section>
 
             <CanvasCreateProjectModal
@@ -296,7 +306,11 @@ function ProjectCard({
 
             <div className="p-4">
                 <div className="min-w-0">
-                    {editing ? <Input value={editingTitle} autoFocus onChange={(event) => onEditingTitleChange(event.target.value)} onPressEnter={onSave} /> : <h2 className="break-words text-xl font-semibold leading-7 text-[var(--studio-text-primary)]">{project.title}</h2>}
+                    {editing ? (
+                        <Input value={editingTitle} autoFocus onChange={(event) => onEditingTitleChange(event.target.value)} onPressEnter={onSave} />
+                    ) : (
+                        <h2 className="break-words text-xl font-semibold leading-7 text-[var(--studio-text-primary)]">{project.title}</h2>
+                    )}
                     {project.description ? <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--studio-text-secondary)]">{project.description}</p> : null}
                     <p className="mt-2 break-words text-xs leading-5 text-[var(--studio-text-muted)]">{canvasProjectPresetSummary(project.preset)}</p>
                 </div>

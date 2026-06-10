@@ -122,7 +122,26 @@ export function useCanvasNodeCrudActions({
             setContextMenu((current) => (current && allIds.has(current.nodeId) ? null : current));
             cleanupCanvasFiles({ projectId: canvasId, nodes: nodesRef.current.filter((node) => !allIds.has(node.id)), chatSessions });
         },
-        [canvasId, chatSessions, cleanupCanvasFiles, nodesRef, setAngleNodeId, setConnections, setContextMenu, setCropNodeId, setDialogNodeId, setEditingNodeId, setHoveredNodeId, setInfoNodeId, setNodes, setPreviewNodeId, setRunningNodeId, setSelectedConnectionId, setSelectedNodeIds, setToolbarNodeId],
+        [
+            canvasId,
+            chatSessions,
+            cleanupCanvasFiles,
+            nodesRef,
+            setAngleNodeId,
+            setConnections,
+            setContextMenu,
+            setCropNodeId,
+            setDialogNodeId,
+            setEditingNodeId,
+            setHoveredNodeId,
+            setInfoNodeId,
+            setNodes,
+            setPreviewNodeId,
+            setRunningNodeId,
+            setSelectedConnectionId,
+            setSelectedNodeIds,
+            setToolbarNodeId,
+        ],
     );
 
     const deselectCanvas = useCallback(() => {

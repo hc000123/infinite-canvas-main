@@ -579,8 +579,12 @@ export default function AdminSettingsPage() {
                                             前缀，会在提交前自动上传到对应桶路径，再提交到火山方舟私域虚拟人像素材资产库。
                                         </Typography.Text>
                                         <Space size={8} wrap>
-                                            <Tag color={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "accessKey") ? "success" : "default"}>{isVolcengineAssetKeyConfigured(privateVolcengineAsset, "accessKey") ? "Access Key 已保存" : "Access Key 未填写"}</Tag>
-                                            <Tag color={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "secretKey") ? "success" : "default"}>{isVolcengineAssetKeyConfigured(privateVolcengineAsset, "secretKey") ? "Secret Key 已保存" : "Secret Key 未填写"}</Tag>
+                                            <Tag color={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "accessKey") ? "success" : "default"}>
+                                                {isVolcengineAssetKeyConfigured(privateVolcengineAsset, "accessKey") ? "Access Key 已保存" : "Access Key 未填写"}
+                                            </Tag>
+                                            <Tag color={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "secretKey") ? "success" : "default"}>
+                                                {isVolcengineAssetKeyConfigured(privateVolcengineAsset, "secretKey") ? "Secret Key 已保存" : "Secret Key 未填写"}
+                                            </Tag>
                                         </Space>
                                         <Row gutter={16}>
                                             <Form.Item name={["private", "volcengineAsset", "accessKeyConfigured"]} valuePropName="checked" hidden>
@@ -595,12 +599,20 @@ export default function AdminSettingsPage() {
                                                 </Form.Item>
                                             </Col>
                                             <Col xs={24} md={9}>
-                                                <Form.Item name={["private", "volcengineAsset", "accessKey"]} label="访问密钥 Access Key" extra={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "accessKey") ? savedSecretExtra : "未保存，请填写 Access Key。"}>
+                                                <Form.Item
+                                                    name={["private", "volcengineAsset", "accessKey"]}
+                                                    label="访问密钥 Access Key"
+                                                    extra={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "accessKey") ? savedSecretExtra : "未保存，请填写 Access Key。"}
+                                                >
                                                     <Input.Password placeholder={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "accessKey") ? "已保存，留空不修改" : "请输入 Access Key"} />
                                                 </Form.Item>
                                             </Col>
                                             <Col xs={24} md={9}>
-                                                <Form.Item name={["private", "volcengineAsset", "secretKey"]} label="密钥 Secret Key" extra={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "secretKey") ? savedSecretExtra : "未保存，请填写 Secret Key。"}>
+                                                <Form.Item
+                                                    name={["private", "volcengineAsset", "secretKey"]}
+                                                    label="密钥 Secret Key"
+                                                    extra={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "secretKey") ? savedSecretExtra : "未保存，请填写 Secret Key。"}
+                                                >
                                                     <Input.Password placeholder={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "secretKey") ? "已保存，留空不修改" : "请输入 Secret Key"} />
                                                 </Form.Item>
                                             </Col>
@@ -787,14 +799,7 @@ export default function AdminSettingsPage() {
                                                                 </Form.Item>
                                                             </Col>
                                                             <Col span={2}>
-                                                                <Button
-                                                                    aria-label="删除映射"
-                                                                    disabled={fields.length <= 1}
-                                                                    danger
-                                                                    icon={<DeleteOutlined />}
-                                                                    style={{ marginTop: index === 0 ? 30 : 0 }}
-                                                                    onClick={() => remove(field.name)}
-                                                                />
+                                                                <Button aria-label="删除映射" disabled={fields.length <= 1} danger icon={<DeleteOutlined />} style={{ marginTop: index === 0 ? 30 : 0 }} onClick={() => remove(field.name)} />
                                                             </Col>
                                                         </Row>
                                                     ))}

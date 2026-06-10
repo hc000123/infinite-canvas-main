@@ -80,7 +80,10 @@ function parseLooseJson(text: string): unknown {
 }
 
 function stripMarkdownFence(text: string) {
-    return text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    return text
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/\s*```$/i, "")
+        .trim();
 }
 
 function extractJsonBlock(text: string) {

@@ -9,10 +9,12 @@ export function findDigestSection(digest: ReturnType<typeof buildStageOutputDige
 }
 
 export function findOutputKeywordLine(text: string, keywords: string[]) {
-    return text
-        .split(/\r?\n/g)
-        .map(normalizeOutputLine)
-        .find((line) => keywords.some((keyword) => line.includes(keyword))) || "";
+    return (
+        text
+            .split(/\r?\n/g)
+            .map(normalizeOutputLine)
+            .find((line) => keywords.some((keyword) => line.includes(keyword))) || ""
+    );
 }
 
 export function StageOutputDigest({ stageId, output }: { stageId: string; output: AgentWorkflowStageOutput }) {

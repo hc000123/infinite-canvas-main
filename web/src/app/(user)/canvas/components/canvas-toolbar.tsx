@@ -24,13 +24,7 @@ type CanvasToolbarItem =
           id: string;
       };
 
-export function CanvasToolbar({
-    actions,
-    state,
-}: {
-    actions: CanvasToolbarActions;
-    state: CanvasToolbarState;
-}) {
+export function CanvasToolbar({ actions, state }: { actions: CanvasToolbarActions; state: CanvasToolbarState }) {
     const colorTheme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
     const theme = canvasThemes[colorTheme];
@@ -50,7 +44,9 @@ export function CanvasToolbar({
     return (
         <div className="pointer-events-none absolute bottom-5 z-50 flex justify-center" style={{ left: 300, right: 16 }}>
             <div className="thin-scrollbar pointer-events-auto flex h-14 max-w-full items-center gap-1 overflow-x-auto rounded-xl border px-2 shadow-lg backdrop-blur [&>*]:shrink-0" style={dockStyle}>
-                {tools.map((tool) => (tool.type === "divider" ? <CanvasToolDivider key={tool.id} /> : <CanvasToolButton key={tool.id} label={tool.label} icon={tool.icon} onClick={tool.onClick} active={tool.active} disabled={tool.disabled} danger={tool.danger} />))}
+                {tools.map((tool) =>
+                    tool.type === "divider" ? <CanvasToolDivider key={tool.id} /> : <CanvasToolButton key={tool.id} label={tool.label} icon={tool.icon} onClick={tool.onClick} active={tool.active} disabled={tool.disabled} danger={tool.danger} />,
+                )}
             </div>
 
             {appearanceOpen ? (
@@ -94,17 +90,7 @@ export type CanvasToolbarState = {
     showImageInfo: boolean;
 };
 
-function buildToolbarItems({
-    actions,
-    state,
-    appearanceOpen,
-    onAppearanceClick,
-}: {
-    actions: CanvasToolbarActions;
-    state: CanvasToolbarState;
-    appearanceOpen: boolean;
-    onAppearanceClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
-}) {
+function buildToolbarItems({ actions, state, appearanceOpen, onAppearanceClick }: { actions: CanvasToolbarActions; state: CanvasToolbarState; appearanceOpen: boolean; onAppearanceClick: (event: ReactMouseEvent<HTMLButtonElement>) => void }) {
     const { selectedCount, canUndo, canRedo } = state;
     const { onAddImage, onAddVideo, onAddAudio, onAddText, onAddConfig, onUndo, onRedo, onUpload, onDelete, onClear, onDeselect, onOpenAssets, onOpenEpisodeWorkbench } = actions;
     const items: CanvasToolbarItem[] = [

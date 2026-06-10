@@ -17,17 +17,7 @@ type CanvasToolbarActionsOptions = {
     setAssetPickerOpen: Dispatch<SetStateAction<boolean>>;
 };
 
-export function useCanvasToolbarActions({
-    createNode,
-    handleUploadRequest,
-    deleteNodes,
-    deselectCanvas,
-    openEpisodeWorkbench,
-    selectedNodeIds,
-    setClearConfirmOpen,
-    setAssetPickerTab,
-    setAssetPickerOpen,
-}: CanvasToolbarActionsOptions) {
+export function useCanvasToolbarActions({ createNode, handleUploadRequest, deleteNodes, deselectCanvas, openEpisodeWorkbench, selectedNodeIds, setClearConfirmOpen, setAssetPickerTab, setAssetPickerOpen }: CanvasToolbarActionsOptions) {
     return useMemo(
         () => ({
             onAddText: () => createNode(CanvasNodeType.Text),

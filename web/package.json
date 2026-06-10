@@ -45,7 +45,7 @@
         "lucide-react": "^1.16.0",
         "motion": "^12.38.0",
         "nanoid": "^5.1.11",
-        "next": "16.2.3",
+        "next": "16.2.9",
         "radix-ui": "^1.4.3",
         "react": "19.2.5",
         "react-dom": "19.2.5",
@@ -62,7 +62,7 @@
         "@types/react-dom": "19.1.9",
         "autoprefixer": "^10.5.0",
         "eslint": "^9.39.1",
-        "eslint-config-next": "^16.2.7",
+        "eslint-config-next": "^16.2.9",
         "eslint-config-prettier": "^10.1.8",
         "knip": "^6.16.0",
         "oxlint": "^1.68.0",
@@ -70,5 +70,8 @@
         "prettier": "^3.8.3",
         "tailwindcss": "^4.3.0",
         "typescript": "^5"
+    },
+    "overrides": {
+        "postcss": "$postcss"
     }
 }

@@ -692,7 +692,20 @@ function InfiniteCanvasPage() {
         });
         return map;
     }, [nodeById, nodes]);
-    const { episodeWorkbenchStats, episodeProductionLabel, timelineShots, timelineShotGroups, activeTimelineShot, activeTimelineShotGroups, activeTimelineNodeIds, activeTimelineNodes, productionPackages, productionPackageLabelMap, inspectorProductionPackage, relatedHighlight } = useCanvasProductionWorkbenchState({
+    const {
+        episodeWorkbenchStats,
+        episodeProductionLabel,
+        timelineShots,
+        timelineShotGroups,
+        activeTimelineShot,
+        activeTimelineShotGroups,
+        activeTimelineNodeIds,
+        activeTimelineNodes,
+        productionPackages,
+        productionPackageLabelMap,
+        inspectorProductionPackage,
+        relatedHighlight,
+    } = useCanvasProductionWorkbenchState({
         canvasId,
         currentProject,
         creativeProject,
@@ -1345,7 +1358,16 @@ function InfiniteCanvasPage() {
         ],
     );
 
-    const { focusProductionPackage, handlePreviewProductionVideoVersion, handleDownloadProductionVideoVersion, handleSetCurrentProductionVideoVersion, handleHideProductionVideoVersion, handleInsertProductionPackageConfigNode, handleEditProductionPackagePrompt, handleBindSelectedVideoToProductionPackage } = useCanvasProductionPackageActions({
+    const {
+        focusProductionPackage,
+        handlePreviewProductionVideoVersion,
+        handleDownloadProductionVideoVersion,
+        handleSetCurrentProductionVideoVersion,
+        handleHideProductionVideoVersion,
+        handleInsertProductionPackageConfigNode,
+        handleEditProductionPackagePrompt,
+        handleBindSelectedVideoToProductionPackage,
+    } = useCanvasProductionPackageActions({
         canvasAiConfig,
         productionPackages,
         nodesRef,
@@ -1599,14 +1621,7 @@ function InfiniteCanvasPage() {
                     }}
                 />
 
-                <CanvasStoryboardTimeline
-                    shots={timelineShots}
-                    shotGroups={timelineShotGroups}
-                    nodes={nodes}
-                    activeShotId={activeTimelineShotId}
-                    onOpenWorkbench={openEpisodeWorkbench}
-                    onSelectShot={handleTimelineShotSelect}
-                />
+                <CanvasStoryboardTimeline shots={timelineShots} shotGroups={timelineShotGroups} nodes={nodes} activeShotId={activeTimelineShotId} onOpenWorkbench={openEpisodeWorkbench} onSelectShot={handleTimelineShotSelect} />
 
                 {isMiniMapOpen ? <Minimap nodes={nodes} viewport={viewport} viewportSize={size} onViewportChange={setViewport} /> : null}
 
@@ -1865,7 +1880,11 @@ function CanvasProductionPackageBar({
                                     <button
                                         type="button"
                                         className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
-                                        style={{ background: active ? activePackageStyle.actionBackground : theme.toolbar.panel, borderColor: active ? activePackageStyle.border : theme.node.stroke, color: active ? activePackageStyle.text : theme.node.muted }}
+                                        style={{
+                                            background: active ? activePackageStyle.actionBackground : theme.toolbar.panel,
+                                            borderColor: active ? activePackageStyle.border : theme.node.stroke,
+                                            color: active ? activePackageStyle.text : theme.node.muted,
+                                        }}
                                         onClick={() => onBindVideo(item.id, selectedVideoNodeId)}
                                         title={`将选中视频绑定到 ${item.label}`}
                                         aria-label={`将选中视频绑定到 ${item.label}`}
@@ -1991,7 +2010,12 @@ function CanvasTopBar({
                             ],
                         }}
                     >
-                        <button type="button" className="grid size-9 place-items-center rounded-full transition hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 dark:hover:bg-white/10" style={{ color: theme.node.text }} aria-label="打开画布菜单">
+                        <button
+                            type="button"
+                            className="grid size-9 place-items-center rounded-full transition hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 dark:hover:bg-white/10"
+                            style={{ color: theme.node.text }}
+                            aria-label="打开画布菜单"
+                        >
                             <Menu className="size-5" />
                         </button>
                     </Dropdown>

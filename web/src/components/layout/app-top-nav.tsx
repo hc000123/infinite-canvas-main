@@ -24,7 +24,12 @@ export function AppTopNav() {
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
     const isReady = useUserStore((state) => state.isReady);
-    const hideHeader = /^\/canvas\/[^/]+/.test(pathname) || ["/image", "/video", "/prompts", "/assets"].some((path) => pathname === path || pathname.startsWith(`${path}/`)) || pathname === "/projects" || pathname.startsWith("/projects/") || pathname.startsWith("/login");
+    const hideHeader =
+        /^\/canvas\/[^/]+/.test(pathname) ||
+        ["/image", "/video", "/prompts", "/assets"].some((path) => pathname === path || pathname.startsWith(`${path}/`)) ||
+        pathname === "/projects" ||
+        pathname.startsWith("/projects/") ||
+        pathname.startsWith("/login");
     const slug = pathname.split("/").filter(Boolean)[0];
     const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
     const themeToggleLabel = theme === "dark" ? "切换到全局浅色主题" : "切换到全局深色主题";

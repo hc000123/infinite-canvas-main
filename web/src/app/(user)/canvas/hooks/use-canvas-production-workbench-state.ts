@@ -59,17 +59,23 @@ export function useCanvasProductionWorkbenchState({
                     const metadata = node.metadata;
                     return Boolean(
                         metadata?.storyboardTableShotIds?.includes(activeTimelineShotId) ||
-                            metadata?.storyboardShotId === activeTimelineShotId ||
-                            (metadata?.shotGroupId && groupIds.has(metadata.shotGroupId)) ||
-                            (metadata?.storyboardShotGroupId && groupIds.has(metadata.storyboardShotGroupId)),
+                        metadata?.storyboardShotId === activeTimelineShotId ||
+                        (metadata?.shotGroupId && groupIds.has(metadata.shotGroupId)) ||
+                        (metadata?.storyboardShotGroupId && groupIds.has(metadata.storyboardShotGroupId)),
                     );
                 })
                 .map((node) => node.id),
         );
     }, [activeTimelineShotGroups, activeTimelineShotId, nodes]);
     const activeTimelineNodes = useMemo(() => nodes.filter((node) => activeTimelineNodeIds.has(node.id)), [activeTimelineNodeIds, nodes]);
-    const fallbackProductionPackages = useMemo(() => buildCanvasFallbackProductionPackages(canvasId, currentProject?.episodeTitle || creativeProject?.title || currentProject?.title || "项目画布"), [canvasId, creativeProject?.title, currentProject?.episodeTitle, currentProject?.title]);
-    const productionPackages = useMemo(() => buildCanvasProductionPackages({ shotGroups: timelineShotGroups, tableShots: timelineShots, nodes, fallbackPackages: fallbackProductionPackages }), [fallbackProductionPackages, nodes, timelineShotGroups, timelineShots]);
+    const fallbackProductionPackages = useMemo(
+        () => buildCanvasFallbackProductionPackages(canvasId, currentProject?.episodeTitle || creativeProject?.title || currentProject?.title || "项目画布"),
+        [canvasId, creativeProject?.title, currentProject?.episodeTitle, currentProject?.title],
+    );
+    const productionPackages = useMemo(
+        () => buildCanvasProductionPackages({ shotGroups: timelineShotGroups, tableShots: timelineShots, nodes, fallbackPackages: fallbackProductionPackages }),
+        [fallbackProductionPackages, nodes, timelineShotGroups, timelineShots],
+    );
     const productionPackageLabelMap = useMemo(() => packageLabelById(productionPackages), [productionPackages]);
     const selectedNodeProductionPackageId = selectedInspectorNode ? getNodeProductionPackageId(selectedInspectorNode) : "";
     const inspectorProductionPackage = useMemo(() => {

@@ -43,21 +43,9 @@ export function PromptCard({
                     </div>
                     <p className="mt-2 line-clamp-3 text-xs leading-5 text-[var(--studio-text-secondary)]">{item.prompt}</p>
                     <div className="mt-3 flex flex-wrap gap-1.5">
-                        {item.metadata?.nodeGroup ? (
-                            <Tag className="studio-tag text-[11px]">
-                                {promptNodeGroupLabel(item.metadata.nodeGroup)}
-                            </Tag>
-                        ) : null}
-                        {item.metadata?.type ? (
-                            <Tag className="studio-tag text-[11px]">
-                                {promptTypeLabel(item.metadata.type)}
-                            </Tag>
-                        ) : null}
-                        {item.metadata?.favorite ? (
-                            <Tag className="studio-tag text-[11px]">
-                                常用
-                            </Tag>
-                        ) : null}
+                        {item.metadata?.nodeGroup ? <Tag className="studio-tag text-[11px]">{promptNodeGroupLabel(item.metadata.nodeGroup)}</Tag> : null}
+                        {item.metadata?.type ? <Tag className="studio-tag text-[11px]">{promptTypeLabel(item.metadata.type)}</Tag> : null}
+                        {item.metadata?.favorite ? <Tag className="studio-tag text-[11px]">常用</Tag> : null}
                         {item.tags.map((tag) => (
                             <Tag key={tag} className="studio-tag text-[11px]">
                                 {tag}

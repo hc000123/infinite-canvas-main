@@ -137,7 +137,11 @@ export function EpisodeAssetsModulePage({
                         </Button>
                     </div>
                     <div className="mt-4">
-                        {reviewOutput ? <StageOutputDigest stageId="art-design" output={reviewOutput} /> : <div className="rounded-lg border border-amber-400/20 bg-slate-950/45 p-3 text-sm text-amber-100/70">当前没有可审核的资产分析输出，请先运行资产分析。</div>}
+                        {reviewOutput ? (
+                            <StageOutputDigest stageId="art-design" output={reviewOutput} />
+                        ) : (
+                            <div className="rounded-lg border border-amber-400/20 bg-slate-950/45 p-3 text-sm text-amber-100/70">当前没有可审核的资产分析输出，请先运行资产分析。</div>
+                        )}
                     </div>
                 </div>
             ) : null}
@@ -222,10 +226,18 @@ function EpisodeAssetTable({ assets, onOpenProcess, selectedAssetId }: { assets:
                                     <EpisodeStatusPill status={asset.status} tone={asset.tone} />
                                 </div>
                                 <div className="flex self-center" onClick={(event) => event.stopPropagation()}>
-                                    <button type="button" className="rounded-l-md border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-100" onClick={() => onOpenProcess(asset, "bind")}>
+                                    <button
+                                        type="button"
+                                        className="rounded-l-md border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-100"
+                                        onClick={() => onOpenProcess(asset, "bind")}
+                                    >
                                         绑定
                                     </button>
-                                    <button type="button" className="rounded-r-md border border-l-0 border-slate-700 bg-slate-900/80 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-100" onClick={() => onOpenProcess(asset, "generate")}>
+                                    <button
+                                        type="button"
+                                        className="rounded-r-md border border-l-0 border-slate-700 bg-slate-900/80 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-100"
+                                        onClick={() => onOpenProcess(asset, "generate")}
+                                    >
                                         生成
                                     </button>
                                 </div>
@@ -287,10 +299,18 @@ function EpisodeAssetProcessDrawer({
                     <EpisodeStatusPill status={asset.status} tone={asset.tone} />
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-2">
-                    <button type="button" className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${mode === "bind" ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:text-slate-200"}`} onClick={() => onModeChange("bind")}>
+                    <button
+                        type="button"
+                        className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${mode === "bind" ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:text-slate-200"}`}
+                        onClick={() => onModeChange("bind")}
+                    >
                         绑定已有资产
                     </button>
-                    <button type="button" className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${mode === "generate" ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:text-slate-200"}`} onClick={() => onModeChange("generate")}>
+                    <button
+                        type="button"
+                        className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${mode === "generate" ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:text-slate-200"}`}
+                        onClick={() => onModeChange("generate")}
+                    >
                         生成参考图
                     </button>
                 </div>

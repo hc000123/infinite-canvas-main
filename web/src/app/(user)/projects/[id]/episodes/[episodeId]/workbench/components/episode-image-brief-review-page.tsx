@@ -206,14 +206,24 @@ export function EpisodeImageBriefReviewPage({
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-2">
                     {(["待审核", "待补素材", "可生成", "已生成", "已回流"] as EpisodeBriefStatusTab[]).map((item) => (
-                        <button key={item} type="button" className={`rounded-md border px-3 py-1.5 text-sm transition ${statusTab === item ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:border-slate-600 hover:text-slate-200"}`} onClick={() => setStatusTab(item)}>
+                        <button
+                            key={item}
+                            type="button"
+                            className={`rounded-md border px-3 py-1.5 text-sm transition ${statusTab === item ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:border-slate-600 hover:text-slate-200"}`}
+                            onClick={() => setStatusTab(item)}
+                        >
                             {item}
                         </button>
                     ))}
                 </div>
                 <div className="flex flex-wrap gap-2">
                     {(["全部", "角色图", "场景图", "道具图", "服装图", "氛围图"] as EpisodeBriefFilter[]).map((item) => (
-                        <button key={item} type="button" className={`rounded-md border px-3 py-1.5 text-sm transition ${typeFilter === item ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:border-slate-600 hover:text-slate-200"}`} onClick={() => setTypeFilter(item)}>
+                        <button
+                            key={item}
+                            type="button"
+                            className={`rounded-md border px-3 py-1.5 text-sm transition ${typeFilter === item ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:border-slate-600 hover:text-slate-200"}`}
+                            onClick={() => setTypeFilter(item)}
+                        >
                             {item}
                         </button>
                     ))}
@@ -230,7 +240,17 @@ export function EpisodeImageBriefReviewPage({
                     onSelect={(row) => setSelectedRowId(row.id)}
                     onOpenAssets={onOpenAssets}
                 />
-                <EpisodeBriefDetailPanel assetsById={assetsById} promptDraft={promptDraft} row={selectedRow} onGenerateReference={generateReference} onPromptDraftChange={setPromptDraft} onSavePrompt={savePrompt} onSetPrimaryAsset={setPrimaryAsset} onEnsureBrief={ensureBrief} onSyncSource={syncSource} />
+                <EpisodeBriefDetailPanel
+                    assetsById={assetsById}
+                    promptDraft={promptDraft}
+                    row={selectedRow}
+                    onGenerateReference={generateReference}
+                    onPromptDraftChange={setPromptDraft}
+                    onSavePrompt={savePrompt}
+                    onSetPrimaryAsset={setPrimaryAsset}
+                    onEnsureBrief={ensureBrief}
+                    onSyncSource={syncSource}
+                />
             </div>
         </section>
     );
@@ -298,7 +318,12 @@ function EpisodeBriefReviewTable({
                                         <Button size="small" className="!border-slate-700 !bg-slate-950/55 !text-slate-200" icon={<Pencil className="size-3.5" />} onClick={() => onSelect(row)}>
                                             编辑
                                         </Button>
-                                        <Button size="small" className="!border-slate-700 !bg-slate-950/55 !text-slate-200" icon={<ImagePlus className="size-3.5" />} onClick={row.brief?.referenceAssets.length ? () => onGenerateReference(row) : onOpenAssets}>
+                                        <Button
+                                            size="small"
+                                            className="!border-slate-700 !bg-slate-950/55 !text-slate-200"
+                                            icon={<ImagePlus className="size-3.5" />}
+                                            onClick={row.brief?.referenceAssets.length ? () => onGenerateReference(row) : onOpenAssets}
+                                        >
                                             {row.brief?.referenceAssets.length ? "生成参考图" : "补素材"}
                                         </Button>
                                         <Button size="small" className="!border-slate-700 !bg-slate-950/55 !text-slate-200" icon={<Eye className="size-3.5" />} onClick={() => onSelect(row)}>
@@ -401,7 +426,9 @@ function EpisodeBriefDetailPanel({
                         <div className="grid gap-2">
                             {resultAssets.map((asset) => (
                                 <div key={asset.id} className="grid grid-cols-[64px_minmax(0,1fr)] gap-3 rounded-lg border border-slate-800 bg-slate-950/45 p-2">
-                                    <div className="flex h-14 w-16 items-center justify-center overflow-hidden rounded-md bg-slate-900 text-xs text-slate-500">{asset.coverUrl ? <img src={asset.coverUrl} alt={asset.title} className="h-full w-full object-cover" /> : "结果"}</div>
+                                    <div className="flex h-14 w-16 items-center justify-center overflow-hidden rounded-md bg-slate-900 text-xs text-slate-500">
+                                        {asset.coverUrl ? <img src={asset.coverUrl} alt={asset.title} className="h-full w-full object-cover" /> : "结果"}
+                                    </div>
                                     <div className="min-w-0">
                                         <div className="break-words text-sm font-semibold text-slate-100">{asset.title}</div>
                                         <div className="mt-1 text-xs text-slate-500">{asset.id === brief?.primaryAssetId ? "主参考图" : "生成结果"}</div>

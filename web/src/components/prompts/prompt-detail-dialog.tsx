@@ -48,30 +48,22 @@ export function PromptDetailDialog({
                         <div className="grid gap-5 md:grid-cols-[300px_minmax(0,1fr)]">
                             <div className="space-y-3">
                                 <img src={prompt.coverUrl} alt={prompt.title} className="aspect-[4/3] w-full rounded-lg object-cover" />
-                                {prompt.preview ? <pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3 text-xs leading-5 text-[var(--studio-text-secondary)]">{prompt.preview}</pre> : null}
+                                {prompt.preview ? (
+                                    <pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3 text-xs leading-5 text-[var(--studio-text-secondary)]">
+                                        {prompt.preview}
+                                    </pre>
+                                ) : null}
                             </div>
                             <div className="min-w-0">
                                 <div className="flex flex-wrap gap-1.5">
-                                    {prompt.metadata?.nodeGroup ? (
-                                        <Tag className="studio-tag">
-                                            {promptNodeGroupLabel(prompt.metadata.nodeGroup)}
-                                        </Tag>
-                                    ) : null}
-                                    {prompt.metadata?.type ? (
-                                        <Tag className="studio-tag">
-                                            {promptTypeLabel(prompt.metadata.type)}
-                                        </Tag>
-                                    ) : null}
+                                    {prompt.metadata?.nodeGroup ? <Tag className="studio-tag">{promptNodeGroupLabel(prompt.metadata.nodeGroup)}</Tag> : null}
+                                    {prompt.metadata?.type ? <Tag className="studio-tag">{promptTypeLabel(prompt.metadata.type)}</Tag> : null}
                                     {prompt.metadata?.scenario ? <Tag className="studio-tag">场景：{prompt.metadata.scenario}</Tag> : null}
                                     {prompt.metadata?.provider ? <Tag className="studio-tag">供应商：{prompt.metadata.provider}</Tag> : null}
                                     {prompt.metadata?.model ? <Tag className="studio-tag">模型：{prompt.metadata.model}</Tag> : null}
                                     {prompt.metadata?.inputKind ? <Tag className="studio-tag">输入：{inputOutputKindLabel(prompt.metadata.inputKind)}</Tag> : null}
                                     {prompt.metadata?.outputKind ? <Tag className="studio-tag">输出：{inputOutputKindLabel(prompt.metadata.outputKind)}</Tag> : null}
-                                    {prompt.metadata?.favorite ? (
-                                        <Tag className="studio-tag">
-                                            常用
-                                        </Tag>
-                                    ) : null}
+                                    {prompt.metadata?.favorite ? <Tag className="studio-tag">常用</Tag> : null}
                                     {prompt.tags.map((tag) => (
                                         <Tag key={tag} className="studio-tag">
                                             {tag}

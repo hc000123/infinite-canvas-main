@@ -128,10 +128,7 @@ export default function PromptsPage() {
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-[var(--studio-shell-bg)] text-[var(--studio-text-primary)]">
-            <main
-                className="studio-shell min-h-0 flex-1 overflow-y-auto px-6 py-8"
-                onScroll={handleListScroll}
-            >
+            <main className="studio-shell min-h-0 flex-1 overflow-y-auto px-6 py-8" onScroll={handleListScroll}>
                 <div className="pb-8">
                     <div className="mx-auto max-w-5xl text-center">
                         <h1 className="text-4xl font-semibold tracking-normal text-[var(--studio-text-primary)]">提示词中心</h1>
@@ -145,7 +142,14 @@ export default function PromptsPage() {
                     {!query.isLoading ? (
                         <>
                             <div className="mx-auto mt-8 flex w-full max-w-3xl gap-3">
-                                <Input size="large" className="min-w-0 flex-1 rounded-lg border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)] placeholder:text-[var(--studio-text-muted)]" prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} value={titleKeyword} placeholder="按标题查询" onChange={(event) => setTitleKeyword(event.target.value)} />
+                                <Input
+                                    size="large"
+                                    className="min-w-0 flex-1 rounded-lg border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)] placeholder:text-[var(--studio-text-muted)]"
+                                    prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />}
+                                    value={titleKeyword}
+                                    placeholder="按标题查询"
+                                    onChange={(event) => setTitleKeyword(event.target.value)}
+                                />
                                 <Button size="large" type="primary" icon={<Plus className="size-4" />} onClick={openCreatePrompt}>
                                     新建提示词
                                 </Button>
@@ -236,9 +240,7 @@ export default function PromptsPage() {
                                 </Button>
                             </Empty>
                         ) : null}
-                        <div className="mx-auto mt-6 max-w-7xl text-center text-xs text-[var(--studio-text-muted)]">
-                            {query.isFetchingNextPage ? "加载中..." : query.hasNextPage ? "继续向下滚动加载更多" : promptItems.length > 0 ? "已经到底了" : null}
-                        </div>
+                        <div className="mx-auto mt-6 max-w-7xl text-center text-xs text-[var(--studio-text-muted)]">{query.isFetchingNextPage ? "加载中..." : query.hasNextPage ? "继续向下滚动加载更多" : promptItems.length > 0 ? "已经到底了" : null}</div>
                     </div>
                 ) : null}
             </main>

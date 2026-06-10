@@ -175,7 +175,15 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
             ) : null}
 
             <div className="grid min-w-0 shrink-0 cursor-default gap-1.5" onMouseDown={(event) => event.stopPropagation()}>
-                <ModelPicker className="canvas-compact-control h-8 !rounded-lg !px-2 !text-xs" config={config} modelType={mode} value={config.model} onChange={(model) => onConfigChange(node.id, mode === "video" ? videoModelPatch(config, model) : { model })} onMissingConfig={() => openConfigDialog(true)} fullWidth />
+                <ModelPicker
+                    className="canvas-compact-control h-8 !rounded-lg !px-2 !text-xs"
+                    config={config}
+                    modelType={mode}
+                    value={config.model}
+                    onChange={(model) => onConfigChange(node.id, mode === "video" ? videoModelPatch(config, model) : { model })}
+                    onMissingConfig={() => openConfigDialog(true)}
+                    fullWidth
+                />
                 {mode === "image" ? <ModelThinkingSettings className="w-full justify-start" compact config={config} model={config.model} theme={theme} onConfigChange={(key, value) => onConfigChange(node.id, { [key]: value })} /> : null}
                 {mode === "video" ? (
                     <CanvasVideoSettingsPopover

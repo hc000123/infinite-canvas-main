@@ -38,13 +38,7 @@ export function CanvasToolButton({
     const tooltipText = title || label;
 
     return (
-        <Tooltip
-            title={<span style={{ color: theme.node.text }}>{tooltipText}</span>}
-            placement="top"
-            mouseEnterDelay={0.2}
-            classNames={{ root: "canvas-tool-tooltip" }}
-            styles={{ container: { color: theme.node.text } }}
-        >
+        <Tooltip title={<span style={{ color: theme.node.text }}>{tooltipText}</span>} placement="top" mouseEnterDelay={0.2} classNames={{ root: "canvas-tool-tooltip" }} styles={{ container: { color: theme.node.text } }}>
             <button
                 type="button"
                 className={`group relative grid ${buttonSize} place-items-center transition disabled:cursor-not-allowed`}

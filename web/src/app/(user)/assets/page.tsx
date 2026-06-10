@@ -154,18 +154,11 @@ function AssetsPageContent() {
     const folderCounts = useMemo(() => countFolderAssets(validAssets), [validAssets]);
     const regularFolders = useMemo(() => folders.filter((folder) => !folder.projectId), [folders]);
     const projectFolderRows = useMemo(
-        () =>
-            creativeProjects
-                .map((project) => ({ project, folder: folders.find((folder) => folder.projectId === project.id) }))
-                .filter((item): item is { project: (typeof creativeProjects)[number]; folder: AssetFolder } => Boolean(item.folder)),
+        () => creativeProjects.map((project) => ({ project, folder: folders.find((folder) => folder.projectId === project.id) })).filter((item): item is { project: (typeof creativeProjects)[number]; folder: AssetFolder } => Boolean(item.folder)),
         [creativeProjects, folders],
     );
     const folderOptions = useMemo(
-        () => [
-            { label: "未分组", value: "" },
-            ...projectFolderRows.map(({ project, folder }) => ({ label: `项目 / ${project.title || folder.name}`, value: folder.id })),
-            ...regularFolders.map((folder) => ({ label: folder.name, value: folder.id })),
-        ],
+        () => [{ label: "未分组", value: "" }, ...projectFolderRows.map(({ project, folder }) => ({ label: `项目 / ${project.title || folder.name}`, value: folder.id })), ...regularFolders.map((folder) => ({ label: folder.name, value: folder.id }))],
         [projectFolderRows, regularFolders],
     );
     const canvasLibraryTitles = useMemo(() => Object.fromEntries(projects.map((project) => [project.id, project.title || "未命名画布"])), [projects]);
@@ -860,13 +853,7 @@ function AssetsPageContent() {
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-[var(--studio-shell-bg)] text-[var(--studio-text-primary)]">
-            <main
-                className="studio-shell relative min-h-0 flex-1 overflow-y-auto px-6 py-8"
-                onDragEnter={handleUploadDragEnter}
-                onDragLeave={handleUploadDragLeave}
-                onDragOver={handleUploadDragOver}
-                onDrop={handleUploadDrop}
-            >
+            <main className="studio-shell relative min-h-0 flex-1 overflow-y-auto px-6 py-8" onDragEnter={handleUploadDragEnter} onDragLeave={handleUploadDragLeave} onDragOver={handleUploadDragOver} onDrop={handleUploadDrop}>
                 {isDraggingUpload ? (
                     <div className="pointer-events-none fixed inset-0 z-[1000] grid place-items-center bg-[rgba(15,17,23,.72)] backdrop-blur-sm">
                         <div className="studio-panel grid min-h-40 w-[min(420px,calc(100vw-48px))] place-items-center border-2 border-dashed border-[var(--studio-accent)] p-8 text-center">

@@ -124,9 +124,7 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                 const existing = get().workflowRuns.find((run) => run.projectId === projectId && run.canvasId === canvasId && run.episodeId === episodeId && run.workflowId === preset.workflowId);
                 if (existing) return existing.id;
                 const now = new Date().toISOString();
-                const unboundExisting = canvasId
-                    ? get().workflowRuns.find((run) => run.projectId === projectId && !run.canvasId && run.episodeId === episodeId && run.workflowId === preset.workflowId)
-                    : undefined;
+                const unboundExisting = canvasId ? get().workflowRuns.find((run) => run.projectId === projectId && !run.canvasId && run.episodeId === episodeId && run.workflowId === preset.workflowId) : undefined;
                 if (unboundExisting && canvasId) {
                     set((state) => ({
                         workflowRuns: state.workflowRuns.map((run) => (run.id === unboundExisting.id ? bindAgentWorkflowRunCanvas(run, canvasId, now) : run)),

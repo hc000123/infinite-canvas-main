@@ -388,7 +388,6 @@ export default function EpisodeProductionWorkbenchPage() {
             <EpisodeDetailDrawer onClose={() => setDetailRecord(null)} record={detailRecord} />
         </main>
     );
-
 }
 
 const episodeModules: Array<{ key: EpisodeModuleKey; label: string }> = [
@@ -720,7 +719,9 @@ function EpisodeModuleTabs({ activeModule, onChange, tabs }: { activeModule: Epi
                         title={tab.status.detail || tab.status.text}
                     >
                         <span className="flex items-center gap-2">
-                            <span className={`grid size-6 shrink-0 place-items-center rounded-md border text-xs font-semibold ${active ? "border-cyan-300/70 bg-cyan-300/15 text-cyan-100" : "border-slate-700 bg-slate-900/70 text-slate-400"}`}>{tab.step}</span>
+                            <span className={`grid size-6 shrink-0 place-items-center rounded-md border text-xs font-semibold ${active ? "border-cyan-300/70 bg-cyan-300/15 text-cyan-100" : "border-slate-700 bg-slate-900/70 text-slate-400"}`}>
+                                {tab.step}
+                            </span>
                             <span className="min-w-0 flex-1 truncate text-base font-semibold">{tab.label}</span>
                         </span>
                         <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${episodeModuleNavToneClass(tab.status.tone)}`}>{tab.status.text}</span>
@@ -968,17 +969,7 @@ function buildEpisodeExtractedAssets({
     });
 }
 
-function findProductionBibleItemForPreviewItem({
-    item,
-    preview,
-    productionBibleItems,
-    projectId,
-}: {
-    item: AgentWorkflowMappingPreviewItem;
-    preview: AgentWorkflowMappingPreview;
-    productionBibleItems: ProductionBibleItem[];
-    projectId: string;
-}) {
+function findProductionBibleItemForPreviewItem({ item, preview, productionBibleItems, projectId }: { item: AgentWorkflowMappingPreviewItem; preview: AgentWorkflowMappingPreview; productionBibleItems: ProductionBibleItem[]; projectId: string }) {
     return productionBibleItems.find((entry) => {
         if (entry.projectId !== projectId) return false;
         const source = entry.metadata?.source;
@@ -1289,7 +1280,12 @@ function buildCanvasModuleConfig(input: {
         : [
               {
                   actionLabel: input.boundCanvas ? "进入" : "创建",
-                  cells: ["承接画布", input.boundCanvas ? input.boundCanvas.title : "未绑定画布", input.boundCanvas ? `${input.boundCanvas.nodes.length} 节点` : "待创建", input.episodeTableShots.length ? `${input.episodeTableShots.length} 镜头待承接` : "待分镜"],
+                  cells: [
+                      "承接画布",
+                      input.boundCanvas ? input.boundCanvas.title : "未绑定画布",
+                      input.boundCanvas ? `${input.boundCanvas.nodes.length} 节点` : "待创建",
+                      input.episodeTableShots.length ? `${input.episodeTableShots.length} 镜头待承接` : "待分镜",
+                  ],
                   detail: { body: input.boundCanvas ? `画布：${input.boundCanvas.title}\n节点：${input.boundCanvas.nodes.length}` : "当前集尚未绑定承接画布。", title: "承接画布" },
                   highlight: !input.boundCanvas,
                   id: "canvas-binding",
@@ -1523,19 +1519,11 @@ function workflowDisplayText(display?: WorkflowStageDisplaySummary) {
     return workflowStageStatusLabel(display.displayStatus);
 }
 
-function buildAssetStageActionHint({
-    display,
-    hasOutput,
-    isRunning,
-    previewPending,
-    previewTotal,
-}: {
-    display?: WorkflowStageDisplaySummary;
-    hasOutput: boolean;
-    isRunning: boolean;
-    previewPending: number;
-    previewTotal: number;
-}): { blocked?: boolean; text: string; tone: EpisodeStatusTone } {
+function buildAssetStageActionHint({ display, hasOutput, isRunning, previewPending, previewTotal }: { display?: WorkflowStageDisplaySummary; hasOutput: boolean; isRunning: boolean; previewPending: number; previewTotal: number }): {
+    blocked?: boolean;
+    text: string;
+    tone: EpisodeStatusTone;
+} {
     if (isRunning || display?.displayStatus === "running") return { text: "资产分析正在运行，等待 Agent 返回结果。", tone: "cyan" };
     if (display?.displayStatus === "blocked") return { blocked: true, text: `暂不可运行，${formatBlockedReason(display.blockedReason)}。`, tone: "amber" };
     if (display?.displayStatus === "error") return { text: "上次资产分析失败，请查看错误后重新运行。", tone: "red" };

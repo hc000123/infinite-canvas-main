@@ -398,16 +398,7 @@ export default function CreativeProjectDetailPage() {
                 onTabChange={setActiveTab}
             />
 
-            <Modal
-                className="studio-modal"
-                title="编辑项目"
-                open={projectEditOpen}
-                onCancel={() => setProjectEditOpen(false)}
-                onOk={saveProjectEdit}
-                okText="保存"
-                cancelText="取消"
-                destroyOnHidden
-            >
+            <Modal className="studio-modal" title="编辑项目" open={projectEditOpen} onCancel={() => setProjectEditOpen(false)} onOk={saveProjectEdit} okText="保存" cancelText="取消" destroyOnHidden>
                 <div className="grid gap-4">
                     <label className="grid gap-2">
                         <span className="text-sm text-[var(--studio-text-secondary)]">项目名称</span>
@@ -419,16 +410,7 @@ export default function CreativeProjectDetailPage() {
                     </label>
                 </div>
             </Modal>
-            <Modal
-                className="studio-modal"
-                title="导入本集剧本"
-                open={episodeImportOpen}
-                onCancel={() => setEpisodeImportOpen(false)}
-                onOk={() => void importEpisodeAndOpen()}
-                okText="导入并进入生产流程"
-                cancelText="取消"
-                destroyOnHidden
-            >
+            <Modal className="studio-modal" title="导入本集剧本" open={episodeImportOpen} onCancel={() => setEpisodeImportOpen(false)} onOk={() => void importEpisodeAndOpen()} okText="导入并进入生产流程" cancelText="取消" destroyOnHidden>
                 <Form form={episodeImportForm} layout="vertical" initialValues={{ title: `第 ${projectEpisodes.length + 1} 集`, scriptText: "" }} requiredMark={false}>
                     <Form.Item name="title" label="本集标题" rules={[{ required: true, message: "请填写本集标题" }]}>
                         <Input placeholder="例如：第一集" />
@@ -531,11 +513,7 @@ function ProjectEpisodeBoard({
             <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--studio-border-subtle)] px-8 py-4">
                 <nav className="flex flex-wrap items-center gap-4">
                     <ProjectDetailNavButton active={activeTab === "episodes"} label="分集" onClick={() => onTabChange("episodes")} />
-                    <ProjectDetailNavButton
-                        active={activeTab === "canvas"}
-                        label="画布"
-                        onClick={() => onTabChange("canvas")}
-                    />
+                    <ProjectDetailNavButton active={activeTab === "canvas"} label="画布" onClick={() => onTabChange("canvas")} />
                 </nav>
 
                 <div className="flex min-w-0 flex-1 justify-center">
@@ -568,7 +546,16 @@ function ProjectEpisodeBoard({
                 </div>
 
                 {activeTab === "canvas" ? (
-                    <ProjectCanvasList canvases={canvases} unboundCanvases={unboundCanvases} bindingCanvasId={bindingCanvasId} onBindCanvas={onBindCanvas} onBindingCanvasChange={onBindingCanvasChange} onCreateCanvas={onCreateCanvas} onEditCanvasPreset={onEditCanvasPreset} onOpenCanvas={onOpenCanvasById} />
+                    <ProjectCanvasList
+                        canvases={canvases}
+                        unboundCanvases={unboundCanvases}
+                        bindingCanvasId={bindingCanvasId}
+                        onBindCanvas={onBindCanvas}
+                        onBindingCanvasChange={onBindingCanvasChange}
+                        onCreateCanvas={onCreateCanvas}
+                        onEditCanvasPreset={onEditCanvasPreset}
+                        onOpenCanvas={onOpenCanvasById}
+                    />
                 ) : (
                     <>
                         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -618,13 +605,7 @@ function ProjectCanvasList({
                 <div className="flex flex-wrap gap-3">
                     {unboundCanvases.length ? (
                         <div className="flex min-w-[320px] gap-2">
-                            <Select
-                                className="min-w-0 flex-1"
-                                value={bindingCanvasId || undefined}
-                                placeholder="绑定旧画布"
-                                options={unboundCanvases.map((canvas) => ({ value: canvas.id, label: canvas.title }))}
-                                onChange={onBindingCanvasChange}
-                            />
+                            <Select className="min-w-0 flex-1" value={bindingCanvasId || undefined} placeholder="绑定旧画布" options={unboundCanvases.map((canvas) => ({ value: canvas.id, label: canvas.title }))} onChange={onBindingCanvasChange} />
                             <Button disabled={!bindingCanvasId} onClick={onBindCanvas}>
                                 绑定
                             </Button>
@@ -733,7 +714,11 @@ function ProjectProgressCard({ counts, currentEpisode, progress, total }: { coun
 
 function EpisodeFilterButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
     return (
-        <button type="button" className={`h-9 rounded-md border px-4 text-sm font-medium transition ${active ? "border-[var(--studio-accent)] bg-[var(--studio-panel-bg)] text-[var(--studio-accent)] shadow-[inset_0_-2px_0_var(--studio-accent)]" : "border-[var(--studio-border-subtle)] bg-transparent text-[var(--studio-text-secondary)] hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"}`} onClick={onClick}>
+        <button
+            type="button"
+            className={`h-9 rounded-md border px-4 text-sm font-medium transition ${active ? "border-[var(--studio-accent)] bg-[var(--studio-panel-bg)] text-[var(--studio-accent)] shadow-[inset_0_-2px_0_var(--studio-accent)]" : "border-[var(--studio-border-subtle)] bg-transparent text-[var(--studio-text-secondary)] hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"}`}
+            onClick={onClick}
+        >
             {label}
         </button>
     );
@@ -816,7 +801,12 @@ function ProjectEpisodeTable({ rows, onOpenCanvas, onOpenEpisode }: { rows: Proj
 }
 
 function EpisodeStatusBadge({ status }: { status: ProjectEpisodeBoardRow["status"] }) {
-    const className = status === "已完成" ? "border-emerald-400/40 bg-emerald-400/12 text-emerald-300" : status === "进行中" ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]" : "border-amber-400/40 bg-amber-400/12 text-amber-300";
+    const className =
+        status === "已完成"
+            ? "border-emerald-400/40 bg-emerald-400/12 text-emerald-300"
+            : status === "进行中"
+              ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]"
+              : "border-amber-400/40 bg-amber-400/12 text-amber-300";
     return <span className={`w-fit rounded-md border px-2.5 py-1 text-sm font-semibold ${className}`}>{status}</span>;
 }
 
@@ -830,9 +820,7 @@ function ProjectEpisodeEmpty({ onCreate, onCreateCanvas }: { onCreate: () => voi
                     <Button type="primary" icon={<Plus className="size-4" />} onClick={onCreate}>
                         新建分集
                     </Button>
-                    <Button onClick={onCreateCanvas}>
-                        创建画布
-                    </Button>
+                    <Button onClick={onCreateCanvas}>创建画布</Button>
                 </div>
             </div>
         </section>
@@ -902,7 +890,9 @@ function ProjectCommandCenter({
                             生产主线
                         </div>
                         <h2 className="mt-2 text-2xl font-semibold text-[var(--studio-text-primary)]">{primaryEpisodeLabel || "先建立本集内容"}</h2>
-                        <p className="mt-2 text-base leading-6 text-[var(--studio-text-secondary)]">{primaryEpisodeLabel ? (primaryEpisodeReady ? "剧本已就绪，可进入导演分析、服化道和 Seedance 分镜流程。" : "当前集还缺少剧本文本，先补齐剧本再进入生产流程。") : "项目页先围绕单集推进，避免在画布、分镜和素材入口之间来回找。"}</p>
+                        <p className="mt-2 text-base leading-6 text-[var(--studio-text-secondary)]">
+                            {primaryEpisodeLabel ? (primaryEpisodeReady ? "剧本已就绪，可进入导演分析、服化道和 Seedance 分镜流程。" : "当前集还缺少剧本文本，先补齐剧本再进入生产流程。") : "项目页先围绕单集推进，避免在画布、分镜和素材入口之间来回找。"}
+                        </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <Button type="primary" icon={<Workflow className="size-4" />} onClick={onOpenPrimaryEpisode}>
@@ -1089,7 +1079,11 @@ function OverviewStatChip({ label, value, tone = "default", onClick }: { label: 
         <button
             type="button"
             className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition hover:border-[var(--studio-border-strong)] ${
-                tone === "danger" ? "border-red-400/35 bg-red-400/10 text-red-300" : tone === "warning" ? "border-amber-400/35 bg-amber-400/10 text-amber-300" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]"
+                tone === "danger"
+                    ? "border-red-400/35 bg-red-400/10 text-red-300"
+                    : tone === "warning"
+                      ? "border-amber-400/35 bg-amber-400/10 text-amber-300"
+                      : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]"
             }`}
             onClick={onClick}
         >
@@ -1106,12 +1100,7 @@ function agentTaskStatusLabel(status: string) {
 
 function EntryCard({ icon, title, description, disabled, onOpen }: { icon: ReactNode; title: string; description: string; disabled?: boolean; onOpen?: () => void }) {
     return (
-        <button
-            type="button"
-            disabled={disabled}
-            className="studio-panel-muted p-4 text-left transition enabled:hover:border-[var(--studio-border-strong)] disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={onOpen}
-        >
+        <button type="button" disabled={disabled} className="studio-panel-muted p-4 text-left transition enabled:hover:border-[var(--studio-border-strong)] disabled:cursor-not-allowed disabled:opacity-50" onClick={onOpen}>
             <div className="flex items-center gap-2 text-base font-semibold text-[var(--studio-text-primary)]">
                 {icon}
                 {title}

@@ -175,15 +175,11 @@
 
 @layer utilities {
     .studio-shell {
-        background:
-            linear-gradient(180deg, rgba(49, 95, 159, 0.05) 0%, transparent 220px),
-            var(--studio-shell-bg);
+        background: linear-gradient(180deg, rgba(49, 95, 159, 0.05) 0%, transparent 220px), var(--studio-shell-bg);
     }
 
     .dark .studio-shell {
-        background:
-            linear-gradient(180deg, rgba(111, 168, 255, 0.045) 0%, transparent 240px),
-            var(--studio-shell-bg);
+        background: linear-gradient(180deg, rgba(111, 168, 255, 0.045) 0%, transparent 240px), var(--studio-shell-bg);
     }
 
     .studio-panel {

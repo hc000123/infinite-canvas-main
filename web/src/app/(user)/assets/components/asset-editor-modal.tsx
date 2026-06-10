@@ -172,9 +172,7 @@ function AssetContentForm({
                     <Button icon={<Upload className="size-4" />} onClick={() => imageInputRef.current?.click()}>
                         选择图片文件
                     </Button>
-                    <Typography.Text className="ml-3 text-sm !text-[var(--studio-text-muted)]">
-                        {imageDraft ? `${imageDraft.width}x${imageDraft.height} · ${formatBytes(imageDraft.bytes)}` : "未选择图片"}
-                    </Typography.Text>
+                    <Typography.Text className="ml-3 text-sm !text-[var(--studio-text-muted)]">{imageDraft ? `${imageDraft.width}x${imageDraft.height} · ${formatBytes(imageDraft.bytes)}` : "未选择图片"}</Typography.Text>
                 </div>
             </Form.Item>
         );
@@ -186,9 +184,7 @@ function AssetContentForm({
                 <Button icon={<Upload className="size-4" />} onClick={() => mediaInputRef.current?.click()}>
                     {formKind === "video" ? "选择视频文件" : "选择音频文件"}
                 </Button>
-                <Typography.Text className="ml-3 text-sm !text-[var(--studio-text-muted)]">
-                    {mediaDraft ? `${formatBytes(mediaDraft.bytes)} · ${mediaDraft.mimeType}` : formKind === "video" ? "未选择视频" : "未选择音频"}
-                </Typography.Text>
+                <Typography.Text className="ml-3 text-sm !text-[var(--studio-text-muted)]">{mediaDraft ? `${formatBytes(mediaDraft.bytes)} · ${mediaDraft.mimeType}` : formKind === "video" ? "未选择视频" : "未选择音频"}</Typography.Text>
             </div>
         </Form.Item>
     );

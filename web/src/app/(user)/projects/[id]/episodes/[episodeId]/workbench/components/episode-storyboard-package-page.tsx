@@ -153,10 +153,19 @@ export function EpisodeStoryboardPackagePage({
                     <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" onClick={() => onGeneratePreview("seedance-storyboard", "分镜表和视频节点预览")}>
                         生成预览
                     </Button>
-                    <Button disabled={Boolean(handoffDisabledReason) || !storyboardPreview || storyboardCounts.pending <= 0} loading={Boolean(storyboardPreview && applyingPreviewIds[storyboardPreview.previewId])} onClick={() => storyboardPreview && onApplyPreview(storyboardPreview)}>
+                    <Button
+                        disabled={Boolean(handoffDisabledReason) || !storyboardPreview || storyboardCounts.pending <= 0}
+                        loading={Boolean(storyboardPreview && applyingPreviewIds[storyboardPreview.previewId])}
+                        onClick={() => storyboardPreview && onApplyPreview(storyboardPreview)}
+                    >
                         写入分镜表 {storyboardCounts.pending ? storyboardCounts.pending : ""}
                     </Button>
-                    <Button type="primary" disabled={Boolean(handoffDisabledReason) || !videoPreview || videoCounts.pending <= 0} loading={Boolean(videoPreview && applyingPreviewIds[videoPreview.previewId])} onClick={() => videoPreview && onApplyPreview(videoPreview)}>
+                    <Button
+                        type="primary"
+                        disabled={Boolean(handoffDisabledReason) || !videoPreview || videoCounts.pending <= 0}
+                        loading={Boolean(videoPreview && applyingPreviewIds[videoPreview.previewId])}
+                        onClick={() => videoPreview && onApplyPreview(videoPreview)}
+                    >
                         创建视频节点 {videoCounts.pending ? videoCounts.pending : ""}
                     </Button>
                     {handoffDisabledReason ? <span className="self-center text-xs text-amber-300">{handoffDisabledReason}</span> : null}
@@ -244,7 +253,11 @@ function StoryboardPackageList({
                             <div className="self-center">
                                 <EpisodeStatusPill status={segment.status} tone={segment.tone} />
                             </div>
-                            <button type="button" className="self-center rounded-md border border-slate-700 bg-slate-900/80 px-2 py-2 text-sm font-medium text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-100" onClick={() => segment.packages[0] && onOpenPackage(segment.packages[0], "script")}>
+                            <button
+                                type="button"
+                                className="self-center rounded-md border border-slate-700 bg-slate-900/80 px-2 py-2 text-sm font-medium text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-100"
+                                onClick={() => segment.packages[0] && onOpenPackage(segment.packages[0], "script")}
+                            >
                                 查看原文
                             </button>
                         </div>
@@ -295,7 +308,11 @@ function StoryboardPackageList({
                                                 <StoryboardPackageActionButton label="导入画布" onClick={() => onAction("导入画布承接")} />
                                             </div>
                                         </div>
-                                        <button type="button" className="mx-5 my-2 rounded-md border border-dashed border-cyan-500/40 bg-cyan-400/[0.04] px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/[0.08]" onClick={() => onAction(`在 P${padEpisodeOrder(pkg.order)} 后插入生产包`)}>
+                                        <button
+                                            type="button"
+                                            className="mx-5 my-2 rounded-md border border-dashed border-cyan-500/40 bg-cyan-400/[0.04] px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/[0.08]"
+                                            onClick={() => onAction(`在 P${padEpisodeOrder(pkg.order)} 后插入生产包`)}
+                                        >
                                             + 在 P{padEpisodeOrder(pkg.order)} 后插入生产包
                                         </button>
                                     </div>
@@ -362,13 +379,20 @@ function StoryboardPackageProcessDrawer({
                     <EpisodeStatusPill status={pkg.status} tone={pkg.tone} />
                 </div>
                 <div className="mt-4 grid grid-cols-4 gap-2">
-                    {([
-                        ["shots", "包内镜头"],
-                        ["script", "原剧本"],
-                        ["prompt", "提示词"],
-                        ["assets", "资产"],
-                    ] as Array<[StoryboardPackageDrawerTab, string]>).map(([key, label]) => (
-                        <button key={key} type="button" className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${activeTab === key ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:text-slate-200"}`} onClick={() => onChangeTab(key)}>
+                    {(
+                        [
+                            ["shots", "包内镜头"],
+                            ["script", "原剧本"],
+                            ["prompt", "提示词"],
+                            ["assets", "资产"],
+                        ] as Array<[StoryboardPackageDrawerTab, string]>
+                    ).map(([key, label]) => (
+                        <button
+                            key={key}
+                            type="button"
+                            className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${activeTab === key ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:text-slate-200"}`}
+                            onClick={() => onChangeTab(key)}
+                        >
                             {label}
                         </button>
                     ))}
@@ -537,9 +561,7 @@ function filterStoryboardPackage(pkg: StoryboardProductionPackage, filter: Story
 }
 
 function latestPreview(previews: AgentWorkflowMappingPreview[], targetType: AgentWorkflowMappingPreview["targetType"]) {
-    return previews
-        .filter((preview) => preview.targetType === targetType)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    return previews.filter((preview) => preview.targetType === targetType).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 }
 
 function previewCounts(preview: AgentWorkflowMappingPreview, appliedPreviewItemIds: string[]) {
