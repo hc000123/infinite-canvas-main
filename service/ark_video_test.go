@@ -75,6 +75,22 @@ func TestReadArkLocalVideoConfigMultipartBuildsArkPayload(t *testing.T) {
 	}
 }
 
+func TestNormalizeArkVideoDurationKeepsSeedanceRange(t *testing.T) {
+	cases := map[string]int{
+		"":   6,
+		"3":  4,
+		"4":  4,
+		"5":  5,
+		"10": 10,
+		"16": 15,
+	}
+	for input, want := range cases {
+		if got := normalizeArkVideoDuration(input); got != want {
+			t.Fatalf("normalizeArkVideoDuration(%q) = %d, want %d", input, got, want)
+		}
+	}
+}
+
 func writeMultipartField(t *testing.T, writer *multipart.Writer, key string, value string) {
 	t.Helper()
 	if err := writer.WriteField(key, value); err != nil {

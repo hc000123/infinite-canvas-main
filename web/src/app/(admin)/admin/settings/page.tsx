@@ -526,11 +526,6 @@ export default function AdminSettingsPage() {
                                         </Form.Item>
                                     </Col>
                                     <Col span={24}>
-                                        <Form.Item name={["public", "modelChannel", "allowCustomChannel"]} label="是否允许用户自定义渠道" extra="开启后，前端可提供走后端渠道和用户自定义 baseUrl 直连两种模式" valuePropName="checked">
-                                            <Switch />
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={24}>
                                         <Form.Item name={["public", "auth", "allowRegister"]} label="是否允许用户注册" extra="关闭后隐藏注册入口，注册接口也会拒绝新用户创建" valuePropName="checked">
                                             <Switch />
                                         </Form.Item>

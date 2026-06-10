@@ -11,12 +11,11 @@ import { defaultConfig, useConfigStore, useEffectiveConfig, type AiConfig } from
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { buildCanvasVideoChannelPatch, buildCanvasVideoConfig, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
+import { buildCanvasVideoConfig, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
 import { promptPreviewNoZoomProps, promptPreviewTextareaClass, promptPreviewTextareaStyle } from "../utils/canvas-prompt-preview";
 import { applyReferenceMention, filterReferenceMentions, findReferenceMentionTrigger, type CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasPromptLibrary } from "./canvas-prompt-library";
-import { CanvasVideoChannelPicker } from "./canvas-video-channel-picker";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata } from "../types";
 
@@ -41,7 +40,6 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const mode = defaultMode(node.type);
-    const allowCustomChannel = publicSettings?.modelChannel?.allowCustomChannel !== false;
     const globalConfig = resolveCanvasVideoChannelConfig(localConfig, effectiveConfig, publicSettings?.modelChannel, mode === "video" ? node.metadata?.channelMode : undefined);
     const config = buildNodeConfig(globalConfig, node, mode);
     const hasTextContent = node.type === CanvasNodeType.Text && Boolean(node.metadata?.content?.trim());
@@ -169,20 +167,13 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                         </>
                     ) : mode === "video" ? (
                         <>
-                            {allowCustomChannel ? (
-                                <CanvasVideoChannelPicker
-                                    value={config.channelMode}
-                                    disabled={isRunning}
-                                    onChange={(channelMode) => onConfigChange(node.id, buildCanvasVideoChannelPatch(resolveCanvasVideoChannelConfig(localConfig, effectiveConfig, publicSettings?.modelChannel, channelMode)))}
-                                />
-                            ) : null}
                             <ModelPicker className="h-10 !min-w-[120px] flex-1" fullWidth config={config} modelType="video" value={config.model} onChange={(model) => onConfigChange(node.id, videoModelPatch(config, model))} onMissingConfig={() => openConfigDialog(true)} />
                             <CanvasVideoSettingsPopover
                                 config={config}
                                 showTaskMode
                                 hasSourceVideo={hasSourceVideo}
                                 disabled={isRunning}
-                                buttonClassName={`!h-10 !justify-start !rounded-full !px-3 ${allowCustomChannel ? "!w-[142px]" : "!w-[156px]"} !max-w-full`}
+                                buttonClassName="!h-10 !w-[142px] !max-w-full !justify-start !rounded-full !px-3"
                                 onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))}
                             />
                         </>
@@ -259,6 +250,6 @@ function videoConfigPatch(key: keyof AiConfig, value: string): Partial<CanvasNod
 function videoModelPatch(config: AiConfig, model: string): Partial<CanvasNodeMetadata> {
     return {
         model,
-        provider: config.channelMode === "local" ? "openai" : inferRemoteVideoProtocol(model, "openai"),
+        provider: inferRemoteVideoProtocol(model, config.videoProtocol || "openai"),
     };
 }

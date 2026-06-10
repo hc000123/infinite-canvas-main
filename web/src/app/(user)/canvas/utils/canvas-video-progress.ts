@@ -15,6 +15,7 @@ const steps = ["创建任务", "排队", "生成", "回填", "完成"];
 export function buildCanvasVideoProgress(metadata: CanvasNodeMetadata | undefined, nodeStatus?: CanvasNodeStatus): CanvasVideoProgress {
     const taskStatus = normalizeVideoTaskStatus(metadata?.taskStatus || metadata?.rawTaskStatus);
     const elapsedSeconds = videoElapsedSeconds(metadata, Date.now(), nodeStatus);
+    if (metadata?.content) return progress("succeeded", "完成", 100, 5);
     if (nodeStatus === "error" || taskStatus === "failed") return failedProgress(metadata);
     if (taskStatus === "cancelled") return progress("cancelled", "已取消", 100, 4);
     if (nodeStatus === "success" || taskStatus === "succeeded") return progress(nodeStatus === "success" ? "succeeded" : "caching", nodeStatus === "success" ? "完成" : "回填视频", nodeStatus === "success" ? 100 : 92, nodeStatus === "success" ? 5 : 4);
@@ -32,7 +33,7 @@ export function videoElapsedSeconds(metadata: CanvasNodeMetadata | undefined, no
 
 export function isVideoElapsedTerminal(metadata: CanvasNodeMetadata | undefined, nodeStatus?: CanvasNodeStatus) {
     const taskStatus = normalizeVideoTaskStatus(metadata?.taskStatus || metadata?.rawTaskStatus);
-    return nodeStatus === "error" || nodeStatus === "success" || taskStatus === "failed" || taskStatus === "cancelled" || taskStatus === "succeeded";
+    return Boolean(metadata?.content) || nodeStatus === "error" || nodeStatus === "success" || taskStatus === "failed" || taskStatus === "cancelled" || taskStatus === "succeeded";
 }
 
 export function videoElapsedEndAt(metadata: CanvasNodeMetadata | undefined, nodeStatus?: CanvasNodeStatus) {

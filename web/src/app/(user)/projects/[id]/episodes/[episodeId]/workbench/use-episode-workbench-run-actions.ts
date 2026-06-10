@@ -3,7 +3,6 @@
 import { useState } from "react";
 
 import { requestImageQuestion } from "@/services/api/image";
-import { completeLocalTextTask, failLocalTextTask, startLocalTextTask, summarizeLocalTaskText } from "@/services/local-ai-task-log";
 import type { AiConfig } from "@/stores/use-config-store";
 
 import type { CanvasProject } from "../../../../../canvas/stores/use-canvas-store";
@@ -136,8 +135,8 @@ export function useEpisodeWorkbenchRunActions({
             inputSnapshot: { stageName: stage.name, stageSummary: stage.inputSummary },
             promptMessages,
             model: textModel,
-            provider: `openai-${effectiveConfig.channelMode}`,
-            configSummary: JSON.stringify({ model: textModel, baseUrl: effectiveConfig.baseUrl, channelMode: effectiveConfig.channelMode, textModelList: effectiveConfig.textModels }, null, 2),
+            provider: "openai-remote",
+            configSummary: JSON.stringify({ model: textModel, channelMode: "remote", textModelList: effectiveConfig.textModels, provider: "openai-remote" }, null, 2),
             sourceFiles,
             qualityGateIds: coreInput.qualityGates.map((gate) => gate.gateId),
         };
@@ -149,21 +148,13 @@ export function useEpisodeWorkbenchRunActions({
             setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
             return message.warning(reason);
         }
-        let localTaskId: string | undefined;
         try {
-            localTaskId = startLocalTextTask(requestConfig, {
-                ...runInput,
-                sourceType: "workflow_text_stage",
-                inputSummary: summarizeLocalTaskText(`${stage.name}：${stage.inputSummary}\n${scriptSnapshot}`),
-            });
             const response = await requestImageQuestion(requestConfig, promptMessages, () => {});
             completeWorkflowTextRun(runId, response || "没有返回内容");
-            completeLocalTextTask(localTaskId, response || "没有返回内容");
             message.success(`${stage.name} 草案已生成，待审核`);
         } catch (error) {
             const reason = error instanceof Error ? error.message : "文本执行失败";
             failWorkflowTextRun(runId, reason);
-            failLocalTextTask(localTaskId, reason);
             message.warning(reason);
         } finally {
             setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
@@ -231,8 +222,8 @@ export function useEpisodeWorkbenchRunActions({
             inputSnapshot: { stageName: stage.name, sceneKey: currentScene.sceneKey, sceneLabel: currentScene.sceneLabel },
             promptMessages,
             model: textModel,
-            provider: `openai-${effectiveConfig.channelMode}`,
-            configSummary: JSON.stringify({ model: textModel, baseUrl: effectiveConfig.baseUrl, channelMode: effectiveConfig.channelMode, textModelList: effectiveConfig.textModels }, null, 2),
+            provider: "openai-remote",
+            configSummary: JSON.stringify({ model: textModel, channelMode: "remote", textModelList: effectiveConfig.textModels, provider: "openai-remote" }, null, 2),
             sourceFiles,
             qualityGateIds: coreInput.qualityGates.map((gate) => gate.gateId),
         };
@@ -244,21 +235,13 @@ export function useEpisodeWorkbenchRunActions({
             setRunningSceneKeys((current) => ({ ...current, [currentScene.sceneKey]: false }));
             return message.warning(reason);
         }
-        let localTaskId: string | undefined;
         try {
-            localTaskId = startLocalTextTask(requestConfig, {
-                ...runInput,
-                sourceType: "workflow_text_stage",
-                inputSummary: summarizeLocalTaskText(`${stage.name}：${currentScene.sceneLabel}\n${currentScene.scriptText || scriptSnapshot}`),
-            });
             const response = await requestImageQuestion(requestConfig, promptMessages, () => {});
             completeWorkflowTextRun(runId, response || "没有返回内容");
-            completeLocalTextTask(localTaskId, response || "没有返回内容");
             message.success(`${currentScene.sceneLabel} 草案已生成，待审核`);
         } catch (error) {
             const reason = error instanceof Error ? error.message : "文本执行失败";
             failWorkflowTextRun(runId, reason);
-            failLocalTextTask(localTaskId, reason);
             message.warning(reason);
         } finally {
             setRunningSceneKeys((current) => ({ ...current, [currentScene.sceneKey]: false }));

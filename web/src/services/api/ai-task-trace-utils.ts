@@ -33,8 +33,7 @@ export type FrontendArtifactTrace = AiTaskTrace & {
     createdAt?: string;
 };
 
-export function aiTaskTraceHeaders(config: AiConfig, trace?: AiTaskTrace): Record<string, string> {
-    if (config.channelMode !== "remote") return {};
+export function aiTaskTraceHeaders(_config: AiConfig, trace?: AiTaskTrace): Record<string, string> {
     const compact = compactTrace(trace);
     return compact ? { "X-Infinite-Canvas-Trace": JSON.stringify(compact) } : {};
 }

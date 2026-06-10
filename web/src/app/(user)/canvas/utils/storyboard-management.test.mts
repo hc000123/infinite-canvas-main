@@ -384,6 +384,8 @@ test("plans shot group video config node with agent trace and fixed asset versio
     assert.equal(node?.metadata?.sourceType, "shot_group");
     assert.equal(node?.metadata?.episodeTitle, "第一集");
     assert.equal(node?.metadata?.shotGroupId, "sg-1");
+    assert.equal(node?.metadata?.seconds, "8");
+    assert.equal(node?.metadata?.duration, "8");
     assert.deepEqual(node?.metadata?.references, ["asset:asset-image"]);
     assert.deepEqual(node?.metadata?.videoReferences, ["asset:asset-video"]);
     assert.deepEqual(node?.metadata?.audioReferences, ["asset:asset-audio"]);

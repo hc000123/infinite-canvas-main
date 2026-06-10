@@ -197,3 +197,14 @@ test("summarizes shot group generation status from canvas nodes", () => {
     assert.equal(summaries[0].aiTaskId, "aitask-1");
     assert.equal(summaries[0].credits, 6);
 });
+
+test("treats shot group as succeeded when related video node has content", () => {
+    const summaries = buildShotGroupGenerationSummaries({
+        shotGroups: [group({ status: "error", taskId: "task-1", errorMessage: "Request failed with status code 401" })],
+        tableShots: [shot("s-1", 1), shot("s-2", 2)],
+        nodes: [{ id: "video-1", type: "video", title: "视频", position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { shotGroupId: "sg-1", content: "blob:video", status: "success", taskId: "task-1", errorDetails: "Request failed with status code 401" } }],
+    });
+
+    assert.equal(summaries[0].status, "succeeded");
+    assert.equal(summaries[0].errorMessage, undefined);
+});

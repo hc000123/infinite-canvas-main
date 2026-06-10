@@ -21,7 +21,7 @@ test("parses nested AI config packages with only supported fields", () => {
         }),
     );
 
-    assert.equal(result.patch.channelMode, "local");
+    assert.equal(result.patch.channelMode, "remote");
     assert.equal(result.patch.baseUrl, "https://api.example.com");
     assert.equal(result.patch.apiKey, "sk-test");
     assert.equal(result.patch.videoGenerateAudio, "false");
@@ -34,7 +34,7 @@ test("parses nested AI config packages with only supported fields", () => {
 test("template is importable", () => {
     const result = parseAiConfigPackage(createAiConfigPackageTemplate());
 
-    assert.equal(result.patch.channelMode, "local");
+    assert.equal(result.patch.channelMode, "remote");
     assert.equal(result.patch.baseUrl, "https://api.openai.com");
     assert.ok(result.importedKeys.includes("apiKey"));
 });

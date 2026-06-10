@@ -10,14 +10,8 @@ type UseCanvasKeyboardShortcutsOptions = {
     setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
     setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
     setContextMenu: Dispatch<SetStateAction<ContextMenuState | null>>;
-    setHoveredNodeId: Dispatch<SetStateAction<string | null>>;
-    setToolbarNodeId: Dispatch<SetStateAction<string | null>>;
-    setDialogNodeId: Dispatch<SetStateAction<string | null>>;
-    setEditingNodeId: Dispatch<SetStateAction<string | null>>;
-    setInfoNodeId: Dispatch<SetStateAction<string | null>>;
-    setCropNodeId: Dispatch<SetStateAction<string | null>>;
     clearSelectionBox: () => void;
-    cancelPendingConnectionCreate: () => void;
+    closeCanvasOverlays: () => void;
     undoCanvas: () => void;
     redoCanvas: () => void;
     copySelectedNodes: () => void;
@@ -34,14 +28,8 @@ export function useCanvasKeyboardShortcuts({
     setSelectedNodeIds,
     setSelectedConnectionId,
     setContextMenu,
-    setHoveredNodeId,
-    setToolbarNodeId,
-    setDialogNodeId,
-    setEditingNodeId,
-    setInfoNodeId,
-    setCropNodeId,
     clearSelectionBox,
-    cancelPendingConnectionCreate,
+    closeCanvasOverlays,
     undoCanvas,
     redoCanvas,
     copySelectedNodes,
@@ -104,21 +92,15 @@ export function useCanvasKeyboardShortcuts({
                 setSelectedConnectionId(null);
                 setContextMenu(null);
                 clearSelectionBox();
-                cancelPendingConnectionCreate();
-                setHoveredNodeId(null);
-                setToolbarNodeId(null);
-                setDialogNodeId(null);
-                setEditingNodeId(null);
-                setInfoNodeId(null);
-                setCropNodeId(null);
+                closeCanvasOverlays();
             }
         };
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [
-        cancelPendingConnectionCreate,
         clearSelectionBox,
+        closeCanvasOverlays,
         copySelectedNodes,
         deleteNodes,
         nodesRef,
@@ -129,14 +111,8 @@ export function useCanvasKeyboardShortcuts({
         selectedNodeIdsRef,
         setConnections,
         setContextMenu,
-        setCropNodeId,
-        setDialogNodeId,
-        setEditingNodeId,
-        setHoveredNodeId,
-        setInfoNodeId,
         setSelectedConnectionId,
         setSelectedNodeIds,
-        setToolbarNodeId,
         undoCanvas,
     ]);
 }

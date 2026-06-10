@@ -31,13 +31,15 @@ test("builds project preset from current config and patch", () => {
     assert.equal(preset.defaultVideoProvider, "volcengine-ark");
 });
 
-test("built-in HD presets do not lock video duration to 10 seconds", () => {
-    const hdPresets = canvasProjectPresetOptions.filter((item) => item.key.startsWith("hd-"));
-    assert.ok(hdPresets.length);
-    assert.deepEqual(hdPresets.map((item) => item.preset.defaultDuration), ["6", "6"]);
+test("built-in presets use 6 seconds as the video duration default", () => {
+    assert.ok(canvasProjectPresetOptions.length);
+    assert.deepEqual(
+        canvasProjectPresetOptions.map((item) => item.preset.defaultDuration),
+        ["6", "6", "6", "6", "6"],
+    );
 });
 
-test("applies project preset to effective AI config", () => {
+test("applies project preset to effective AI config and migrates legacy 10s duration", () => {
     const next = applyCanvasProjectPresetToConfig(config, {
         resolution: "1080",
         ratio: "16:9",
@@ -50,7 +52,7 @@ test("applies project preset to effective AI config", () => {
 
     assert.equal(next.size, "16:9");
     assert.equal(next.vquality, "1080");
-    assert.equal(next.videoSeconds, "10");
+    assert.equal(next.videoSeconds, "6");
     assert.equal(next.imageModel, "preset-image");
     assert.equal(next.textModel, "preset-text");
     assert.equal(next.videoProtocol, "volcengine-ark");
@@ -58,7 +60,7 @@ test("applies project preset to effective AI config", () => {
     assert.equal(next.seedanceEndpointId, "ep-seedance");
 });
 
-test("local project presets keep video provider OpenAI compatible", () => {
+test("local project presets keep the same video provider as cloud presets", () => {
     const next = applyCanvasProjectPresetToConfig(
         { ...config, channelMode: "local", videoProtocol: "openai" },
         {
@@ -67,9 +69,9 @@ test("local project presets keep video provider OpenAI compatible", () => {
         },
     );
 
-    assert.equal(next.videoProtocol, "openai");
-    assert.equal(next.videoModel, "doubao-seedance-2-0-260128");
-    assert.equal(next.seedanceModel, "seedance-model");
+    assert.equal(next.videoProtocol, "volcengine-ark");
+    assert.equal(next.videoModel, "video-model");
+    assert.equal(next.seedanceModel, "doubao-seedance-2-0-260128");
 });
 
 test("normalizes legacy pixel sizes into aspect ratios", () => {
@@ -84,8 +86,8 @@ test("builds model options without exposing Seedance endpoint ids", () => {
 });
 
 test("summarizes and serializes project preset", () => {
-    const preset = { resolution: "720", ratio: "9:16", fps: "24", defaultDuration: "8" };
+    const preset = { resolution: "720", ratio: "9:16", fps: "24", defaultDuration: "6" };
 
-    assert.equal(canvasProjectPresetSummary(preset), "720p · 9:16 · 24fps · 8s");
+    assert.equal(canvasProjectPresetSummary(preset), "720p · 9:16 · 24fps · 6s");
     assert.deepEqual(canvasProjectPresetConfig(preset), preset);
 });

@@ -18,7 +18,7 @@ export function normalizeVideoResolution(value: string) {
 }
 
 export function normalizeSeedanceDuration(value: string) {
-    const seconds = Math.floor(Number(value) || 5);
+    const seconds = Math.floor(Number(value) || 6);
     return Math.max(4, Math.min(15, seconds));
 }
 

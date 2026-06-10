@@ -6,7 +6,7 @@ import { AudioLines, Camera, Download, FolderPlus, Image as ImageIcon, Info, Loc
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasToolButton, CanvasToolDivider } from "./canvas-tool-button";
-import { CanvasNodeType, type CanvasNodeData, type ViewportTransform } from "../types";
+import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type ViewportTransform } from "../types";
 
 type CanvasNodeHoverToolbarProps = {
     node: CanvasNodeData | null;
@@ -62,6 +62,23 @@ type NodeToolbarAction =
           key: string;
       };
 
+type NodeToolbarContext = {
+    node: CanvasNodeData;
+    actions: CanvasNodeHoverToolbarActions;
+    state: CanvasNodeHoverToolbarState;
+    isImage: boolean;
+    isVideo: boolean;
+    isAudio: boolean;
+    isText: boolean;
+    hasImage: boolean;
+    hasVideo: boolean;
+    hasAudio: boolean;
+    canOpenDialog: boolean;
+    canRetry: boolean;
+    review?: CanvasNodeMetadata["volcengineAsset"];
+    reviewProcessing: boolean;
+};
+
 export function CanvasNodeHoverToolbar({
     node,
     viewport,
@@ -113,29 +130,6 @@ function buildNodeToolbarActions({
     actions: CanvasNodeHoverToolbarActions;
     state: CanvasNodeHoverToolbarState;
 }) {
-    const {
-        onInfo,
-        onEditText,
-        onDecreaseFont,
-        onIncreaseFont,
-        onToggleDialog,
-        onGenerateImage,
-        onUpload,
-        onDownload,
-        onSaveAsset,
-        onUpdateAssetReference,
-        onContinueVideo,
-        onCaptureVideoFrame,
-        onReviewAsset,
-        onRefreshReview,
-        onCrop,
-        onAngle,
-        onViewImage,
-        onRetry,
-        onToggleFreeResize,
-        onDelete,
-    } = actions;
-    const { hasNewAssetVersion, submittingReview, refreshingReview } = state;
     const isImage = node.type === CanvasNodeType.Image;
     const isVideo = node.type === CanvasNodeType.Video;
     const isAudio = node.type === CanvasNodeType.Audio;
@@ -149,53 +143,98 @@ function buildNodeToolbarActions({
     const hasSpecificTools = canRetry || isText || isImage || isVideo || isAudio || isConfig;
     const review = node.metadata?.volcengineAsset;
     const reviewProcessing = review?.status === "Processing";
-    const items: NodeToolbarAction[] = [{ type: "button", key: "info", title: "查看节点信息", label: "信息", icon: <Info className="size-4" />, onClick: () => onInfo(node) }];
+    const context: NodeToolbarContext = {
+        node,
+        actions,
+        state,
+        isImage,
+        isVideo,
+        isAudio,
+        isText,
+        hasImage,
+        hasVideo,
+        hasAudio,
+        canOpenDialog,
+        canRetry,
+        review,
+        reviewProcessing,
+    };
+    const items: NodeToolbarAction[] = [{ type: "button", key: "info", title: "查看节点信息", label: "信息", icon: <Info className="size-4" />, onClick: () => actions.onInfo(node) }];
 
     if (hasSpecificTools) items.push({ type: "divider", key: "primary-divider" });
-    if (hasImage || hasVideo || hasAudio) items.push({ type: "button", key: "download", title: hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片", label: hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片", icon: <Download className="size-5" />, onClick: () => onDownload(node) });
-    if (hasImage || hasVideo || hasAudio || isText) items.push({ type: "button", key: "save-asset", title: "加入我的素材", label: "存素材", icon: <FolderPlus className="size-4" />, onClick: () => onSaveAsset(node) });
-    if (hasNewAssetVersion) items.push({ type: "button", key: "update-asset-reference", title: "素材有新版本可用，仅更新当前节点的引用版本记录", label: "有新版本", icon: <RefreshCw className="size-4" />, onClick: () => onUpdateAssetReference(node), active: true });
-    if (canRetry) items.push({ type: "button", key: "retry", title: "重新生成", label: "重试", icon: <RefreshCw className="size-4" />, onClick: () => onRetry(node) });
-    if (hasImage || hasVideo) {
-        items.push(
-            review?.assetId
-                ? {
-                      type: "button",
-                      key: "refresh-review",
-                      title: reviewProcessing ? "火山加白审核中，状态会自动刷新" : `火山加白状态：${volcengineStatusLabel(review.status)}`,
-                      label: volcengineReviewActionLabel(review.status),
-                      icon: <RefreshCw className={`size-4 ${reviewProcessing || refreshingReview ? "animate-spin" : ""}`} />,
-                      onClick: () => onRefreshReview(node),
-                  }
-                : {
-                      type: "button",
-                      key: "review-asset",
-                      title: hasVideo ? "提交视频火山素材加白" : "提交图片火山素材加白",
-                      label: submittingReview ? "提交中" : "加白",
-                      icon: <ShieldCheck className="size-4" />,
-                      onClick: () => onReviewAsset(node),
-                  },
-        );
-    }
-    if (hasVideo) items.push({ type: "button", key: "capture-video-frame", title: "截取当前预览帧", label: "截帧", icon: <ImageIcon className="size-4" />, onClick: () => onCaptureVideoFrame(node) });
-    if (hasVideo && node.metadata?.lastFrameUrl) items.push({ type: "button", key: "continue-video", title: "续写下一段", label: "续写", icon: <Video className="size-4" />, onClick: () => onContinueVideo(node) });
-    if (isText) items.push({ type: "button", key: "edit-text", title: "编辑文本", label: "编辑文字", icon: <Pencil className="size-4" />, onClick: () => onEditText(node) });
-    if (isText) items.push({ type: "button", key: "generate-image", title: "用文本生图", label: "生图", icon: <ImageIcon className="size-4" />, onClick: () => onGenerateImage(node) });
-    if (canOpenDialog) items.push({ type: "button", key: "toggle-dialog", title: "打开生成设置", label: "生成设置", icon: <Settings2 className="size-4" />, onClick: () => onToggleDialog(node) });
-    if (isText) items.push({ type: "button", key: "decrease-font", title: "减小字号", label: "缩小", icon: <Minus className="size-4" />, onClick: () => onDecreaseFont(node) });
-    if (isText) items.push({ type: "button", key: "increase-font", title: "增大字号", label: "放大", icon: <Plus className="size-4" />, onClick: () => onIncreaseFont(node) });
-    if (isImage || isVideo || isAudio) items.push({ type: "divider", key: "media-manage-divider" });
-    if (isImage) items.push({ type: "button", key: "upload-image", title: hasImage ? "替换图片" : "上传图片", label: hasImage ? "替换图片" : "上传图片", icon: <Upload className="size-4" />, onClick: () => onUpload(node) });
-    if (isVideo) items.push({ type: "button", key: "upload-video", title: hasVideo ? "替换视频" : "上传视频", label: hasVideo ? "替换视频" : "上传视频", icon: <Video className="size-4" />, onClick: () => onUpload(node) });
-    if (isAudio) items.push({ type: "button", key: "upload-audio", title: hasAudio ? "替换音频" : "上传音频", label: hasAudio ? "替换音频" : "上传音频", icon: <AudioLines className="size-4" />, onClick: () => onUpload(node) });
-    if (hasImage) items.push({ type: "button", key: "toggle-free-resize", title: node.metadata?.freeResize ? "切换为等比缩放" : "切换为自由比例", label: node.metadata?.freeResize ? "自由比例" : "锁比例", icon: node.metadata?.freeResize ? <LockOpen className="size-4" /> : <Lock className="size-4" />, onClick: () => onToggleFreeResize(node), active: node.metadata?.freeResize });
-    if (hasImage) items.push({ type: "button", key: "crop", title: "裁剪并生成新节点", label: "裁剪", icon: <Scissors className="size-4" />, onClick: () => onCrop(node) });
-    if (hasImage) items.push({ type: "button", key: "angle", title: "生成角度", label: "多角度", icon: <Camera className="size-4" />, onClick: () => onAngle(node) });
-    if (hasImage) items.push({ type: "button", key: "view-image", title: "查看图片详情", label: "查看大图", icon: <Maximize2 className="size-4" />, onClick: () => onViewImage(node) });
+    appendAssetActions(items, context);
+    appendGenerationActions(items, context);
+    appendTextActions(items, context);
+    appendMediaManagementActions(items, context);
     items.push({ type: "divider", key: "danger-divider" });
-    items.push({ type: "button", key: "delete", title: "移除节点", label: "删除", icon: <Trash2 className="size-4" />, onClick: () => onDelete(node), danger: true });
+    items.push({ type: "button", key: "delete", title: "移除节点", label: "删除", icon: <Trash2 className="size-4" />, onClick: () => actions.onDelete(node), danger: true });
 
     return items;
+}
+
+function appendAssetActions(items: NodeToolbarAction[], context: NodeToolbarContext) {
+    const { node, actions, state, hasImage, hasVideo, hasAudio, isText } = context;
+    const hasMedia = hasImage || hasVideo || hasAudio;
+
+    if (hasMedia) items.push({ type: "button", key: "download", title: hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片", label: hasAudio ? "下载音频" : hasVideo ? "下载视频" : "下载图片", icon: <Download className="size-5" />, onClick: () => actions.onDownload(node) });
+    if (hasMedia || isText) items.push({ type: "button", key: "save-asset", title: "加入我的素材", label: "存素材", icon: <FolderPlus className="size-4" />, onClick: () => actions.onSaveAsset(node) });
+    if (state.hasNewAssetVersion) items.push({ type: "button", key: "update-asset-reference", title: "素材有新版本可用，仅更新当前节点的引用版本记录", label: "有新版本", icon: <RefreshCw className="size-4" />, onClick: () => actions.onUpdateAssetReference(node), active: true });
+}
+
+function appendGenerationActions(items: NodeToolbarAction[], context: NodeToolbarContext) {
+    const { node, actions, hasImage, hasVideo, canRetry, canOpenDialog } = context;
+
+    if (canRetry) items.push({ type: "button", key: "retry", title: "重新生成", label: "重试", icon: <RefreshCw className="size-4" />, onClick: () => actions.onRetry(node) });
+    if (hasImage || hasVideo) appendReviewAction(items, context);
+    if (hasVideo) items.push({ type: "button", key: "capture-video-frame", title: "截取当前预览帧", label: "截帧", icon: <ImageIcon className="size-4" />, onClick: () => actions.onCaptureVideoFrame(node) });
+    if (hasVideo && node.metadata?.lastFrameUrl) items.push({ type: "button", key: "continue-video", title: "续写下一段", label: "续写", icon: <Video className="size-4" />, onClick: () => actions.onContinueVideo(node) });
+    if (canOpenDialog) items.push({ type: "button", key: "toggle-dialog", title: "打开生成设置", label: "生成设置", icon: <Settings2 className="size-4" />, onClick: () => actions.onToggleDialog(node) });
+}
+
+function appendReviewAction(items: NodeToolbarAction[], { node, actions, state, hasVideo, review, reviewProcessing }: NodeToolbarContext) {
+    items.push(
+        review?.assetId
+            ? {
+                  type: "button",
+                  key: "refresh-review",
+                  title: reviewProcessing ? "火山加白审核中，状态会自动刷新" : `火山加白状态：${volcengineStatusLabel(review.status)}`,
+                  label: volcengineReviewActionLabel(review.status),
+                  icon: <RefreshCw className={`size-4 ${reviewProcessing || state.refreshingReview ? "animate-spin" : ""}`} />,
+                  onClick: () => actions.onRefreshReview(node),
+              }
+            : {
+                  type: "button",
+                  key: "review-asset",
+                  title: hasVideo ? "提交视频火山素材加白" : "提交图片火山素材加白",
+                  label: state.submittingReview ? "提交中" : "加白",
+                  icon: <ShieldCheck className="size-4" />,
+                  onClick: () => actions.onReviewAsset(node),
+              },
+    );
+}
+
+function appendTextActions(items: NodeToolbarAction[], { node, actions, isText }: NodeToolbarContext) {
+    if (!isText) return;
+
+    items.push(
+        { type: "button", key: "edit-text", title: "编辑文本", label: "编辑文字", icon: <Pencil className="size-4" />, onClick: () => actions.onEditText(node) },
+        { type: "button", key: "generate-image", title: "用文本生图", label: "生图", icon: <ImageIcon className="size-4" />, onClick: () => actions.onGenerateImage(node) },
+        { type: "button", key: "decrease-font", title: "减小字号", label: "缩小", icon: <Minus className="size-4" />, onClick: () => actions.onDecreaseFont(node) },
+        { type: "button", key: "increase-font", title: "增大字号", label: "放大", icon: <Plus className="size-4" />, onClick: () => actions.onIncreaseFont(node) },
+    );
+}
+
+function appendMediaManagementActions(items: NodeToolbarAction[], context: NodeToolbarContext) {
+    const { node, actions, isImage, isVideo, isAudio, hasImage, hasVideo, hasAudio } = context;
+
+    if (isImage || isVideo || isAudio) items.push({ type: "divider", key: "media-manage-divider" });
+    if (isImage) items.push({ type: "button", key: "upload-image", title: hasImage ? "替换图片" : "上传图片", label: hasImage ? "替换图片" : "上传图片", icon: <Upload className="size-4" />, onClick: () => actions.onUpload(node) });
+    if (isVideo) items.push({ type: "button", key: "upload-video", title: hasVideo ? "替换视频" : "上传视频", label: hasVideo ? "替换视频" : "上传视频", icon: <Video className="size-4" />, onClick: () => actions.onUpload(node) });
+    if (isAudio) items.push({ type: "button", key: "upload-audio", title: hasAudio ? "替换音频" : "上传音频", label: hasAudio ? "替换音频" : "上传音频", icon: <AudioLines className="size-4" />, onClick: () => actions.onUpload(node) });
+    if (hasImage) items.push({ type: "button", key: "toggle-free-resize", title: node.metadata?.freeResize ? "切换为等比缩放" : "切换为自由比例", label: node.metadata?.freeResize ? "自由比例" : "锁比例", icon: node.metadata?.freeResize ? <LockOpen className="size-4" /> : <Lock className="size-4" />, onClick: () => actions.onToggleFreeResize(node), active: node.metadata?.freeResize });
+    if (hasImage) items.push({ type: "button", key: "crop", title: "裁剪并生成新节点", label: "裁剪", icon: <Scissors className="size-4" />, onClick: () => actions.onCrop(node) });
+    if (hasImage) items.push({ type: "button", key: "angle", title: "生成角度", label: "多角度", icon: <Camera className="size-4" />, onClick: () => actions.onAngle(node) });
+    if (hasImage) items.push({ type: "button", key: "view-image", title: "查看图片详情", label: "查看大图", icon: <Maximize2 className="size-4" />, onClick: () => actions.onViewImage(node) });
 }
 
 function volcengineStatusLabel(status?: string) {

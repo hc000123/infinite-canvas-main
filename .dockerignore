@@ -1,5 +1,6 @@
 .git
 .idea
+.DS_Store
 docs
 data
 web/.next
@@ -7,8 +8,16 @@ web/node_modules
 web/out
 web/build
 web/release
+web/tsconfig.tsbuildinfo
+web/desktop/app/node_modules
+web/desktop/app/dist
+web/desktop/app/release
+coverage
+*.tsbuildinfo
 tool-page-screenshots*
+packaged
 *.zip
+*.tar.gz
 *.log
 .env*
 !.env.example

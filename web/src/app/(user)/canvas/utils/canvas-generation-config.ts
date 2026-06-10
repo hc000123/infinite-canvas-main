@@ -1,4 +1,4 @@
-import type { AiConfig } from "@/stores/use-config-store";
+import type { AiConfig } from "../../../../stores/use-config-store.ts";
 import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata } from "../types.ts";
 import { buildCanvasVideoConfig } from "./canvas-video-config.ts";
 

@@ -19,6 +19,20 @@ test("keeps loading video nodes with task id resumable after returning to canvas
     assert.equal(restored[2].metadata?.status, "error");
 });
 
+test("clears stale generation errors from completed media nodes on restore", () => {
+    const nodes = [
+        { id: "video-content", type: "video", title: "已回填视频", position: { x: 0, y: 0 }, width: 420, height: 236, metadata: { content: "blob:video", status: "loading", errorDetails: "Request failed with status code 401" } },
+        { id: "image-content", type: "image", title: "已回填图片", position: { x: 0, y: 0 }, width: 340, height: 240, metadata: { content: "blob:image", status: "error", errorDetails: "旧错误" } },
+    ];
+
+    const restored = resetInterruptedGeneration(nodes);
+
+    assert.equal(restored[0].metadata?.status, "success");
+    assert.equal(restored[0].metadata?.errorDetails, undefined);
+    assert.equal(restored[1].metadata?.status, "success");
+    assert.equal(restored[1].metadata?.errorDetails, undefined);
+});
+
 test("finds unfinished video task nodes for automatic recovery refresh", () => {
     const nodes = [
         { id: "video-task", type: "video", title: "生成中视频", position: { x: 0, y: 0 }, width: 420, height: 236, metadata: { status: "loading", taskId: "task-1", taskStatus: "running" } },

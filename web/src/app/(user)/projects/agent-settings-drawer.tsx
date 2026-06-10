@@ -6,7 +6,6 @@ import { Bot, Copy, RotateCcw, Save, Settings2, Workflow } from "lucide-react";
 
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { requestImageQuestion } from "@/services/api/image";
-import { completeLocalTextTask, failLocalTextTask, startLocalTextTask, summarizeLocalTaskText } from "@/services/local-ai-task-log";
 import {
     canInvokeAgentConfig,
     defaultAgentConfig,
@@ -155,8 +154,8 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
     const effectiveConfig = useEffectiveConfig();
     const workflowTextModel = (effectiveConfig.textModel || effectiveConfig.model || "").trim();
     const selectedAgentModel = selectedConfig.modelPreference.trim() && selectedConfig.modelPreference !== "default" ? selectedConfig.modelPreference.trim() : workflowTextModel || "未配置";
-    const textApiReady = Boolean(workflowTextModel) && (effectiveConfig.channelMode === "remote" || Boolean(effectiveConfig.baseUrl.trim() && effectiveConfig.apiKey.trim()));
-    const textChannelLabel = effectiveConfig.channelMode === "remote" ? "后端托管文本通道" : "本地 OpenAI 兼容文本通道";
+    const textApiReady = Boolean(workflowTextModel);
+    const textChannelLabel = "后端托管文本通道";
 
     useEffect(() => {
         form.setFieldsValue(configToForm(selectedConfig));
@@ -284,14 +283,13 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
             },
             promptMessages,
             model: workflowTextModel,
-            provider: `openai-${effectiveConfig.channelMode}`,
+            provider: "openai-remote",
             configSummary: JSON.stringify(
                 {
                     model: workflowTextModel,
-                    baseUrl: effectiveConfig.baseUrl,
-                    channelMode: effectiveConfig.channelMode,
+                    channelMode: "remote",
                     textModelList: effectiveConfig.textModels,
-                    provider: effectiveConfig.channelMode === "remote" ? "openai-remote" : "openai-local",
+                    provider: "openai-remote",
                 },
                 null,
                 2,
@@ -308,33 +306,13 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
             setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
             return;
         }
-        if (requestConfig.channelMode === "local" && !requestConfig.apiKey.trim()) {
-            failWorkflowTextRun(runId, "本地模式缺少 API Key，无法发起文本调用。请先检查 AI 配置。");
-            message.warning("文本执行未完成：本地模式缺少 API Key。");
-            setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
-            return;
-        }
-        if (requestConfig.channelMode === "local" && !requestConfig.baseUrl.trim()) {
-            failWorkflowTextRun(runId, "本地模式缺少 API Base URL，无法发起文本调用。请先检查 AI 配置。");
-            message.warning("文本执行未完成：本地模式缺少 API Base URL。");
-            setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
-            return;
-        }
-        let localTaskId: string | undefined;
         try {
-            localTaskId = startLocalTextTask(requestConfig, {
-                ...runInput,
-                sourceType: "workflow_text_stage",
-                inputSummary: summarizeLocalTaskText(`${stage.name}：${stage.inputSummary}`),
-            });
             const response = await requestImageQuestion(requestConfig, promptMessages, () => {});
             completeWorkflowTextRun(runId, response || "没有返回内容");
-            completeLocalTextTask(localTaskId, response || "没有返回内容");
             message.success(`阶段 ${stage.name} 文本草案已生成，状态为“待审核”。`);
         } catch (error) {
             const reason = error instanceof Error ? error.message : "文本执行失败";
             failWorkflowTextRun(runId, reason);
-            failLocalTextTask(localTaskId, reason);
             message.warning(reason);
         } finally {
             setRunningStageIds((current) => ({ ...current, [stage.stageId]: false }));
@@ -912,18 +890,10 @@ function AgentModelSettingsPanel({
 
                 <div className="mt-4 grid gap-4 lg:grid-cols-2">
                     <section className="rounded-lg border border-stone-200 p-4 dark:border-stone-800">
-                        <div className="font-medium">渠道</div>
+                        <div className="font-medium">模型渠道</div>
                         <div className="mt-3 grid gap-3">
-                            <FieldLabel label="渠道模式">
-                                <Select value={config.channelMode} onChange={(value) => setConfigValue("channelMode", value as AiConfig["channelMode"])} options={[{ label: "本地直连", value: "local" }, { label: "云端渠道", value: "remote" }]} />
-                            </FieldLabel>
-                            <FieldLabel label="本地 OpenAI 兼容 Base URL">
-                                <Input value={config.baseUrl} onChange={(event) => setConfigValue("baseUrl", event.target.value)} placeholder="https://api.openai.com" />
-                            </FieldLabel>
-                            <FieldLabel label="本地 OpenAI 兼容 API Key">
-                                <Input.Password value={config.apiKey} onChange={(event) => setConfigValue("apiKey", event.target.value)} placeholder="仅本地直连时使用" />
-                            </FieldLabel>
-                            {config.channelMode === "remote" ? <div className="rounded-md bg-stone-50 px-3 py-2 text-xs text-stone-500 dark:bg-white/5">云端渠道使用后台维护的模型、额度和密钥；这里的本地 API Key 不会被云端读取。</div> : null}
+                            <div className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600 dark:bg-white/5 dark:text-stone-300">统一由后端模型渠道转发请求；接口地址、API Key、模型映射、额度和任务日志都在后台系统设置中维护。</div>
+                            <Button onClick={onOpenFullConfig}>打开完整配置</Button>
                         </div>
                     </section>
 
@@ -995,7 +965,7 @@ function AgentModelSettingsPanel({
                 <details className="mt-4 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
                     <summary className="cursor-pointer text-sm font-medium">当前可见模型列表</summary>
                     <div className="mt-3 flex flex-wrap gap-2">
-                        {visibleModels.length ? visibleModels.map((model) => <Tag key={model} className="m-0">{model}</Tag>) : <span className="text-sm text-stone-500">暂无模型列表；本地直连可直接填写模型名，云端渠道由后台维护。</span>}
+                        {visibleModels.length ? visibleModels.map((model) => <Tag key={model} className="m-0">{model}</Tag>) : <span className="text-sm text-stone-500">暂无模型列表；请先在后台系统设置中维护模型渠道。</span>}
                     </div>
                 </details>
             </Card>

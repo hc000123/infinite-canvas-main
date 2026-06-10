@@ -92,9 +92,9 @@ test("builds video generation config through provider-aware video config", () =>
         "video",
         baseConfig,
     );
-    assert.equal(localConfig.videoProtocol, "openai");
+    assert.equal(localConfig.videoProtocol, "volcengine-ark");
     assert.equal(localConfig.model, "node-endpoint");
-    assert.equal(localConfig.videoSeconds, "20");
+    assert.equal(localConfig.videoSeconds, "15");
 });
 
 test("builds video generation config from duration metadata when seconds is missing", () => {

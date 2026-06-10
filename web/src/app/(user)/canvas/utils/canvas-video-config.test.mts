@@ -54,8 +54,8 @@ test("video provider patch resets node model to the selected provider default", 
         model: "openai-video-model",
     });
     assert.deepEqual(buildCanvasVideoProviderPatch(baseConfig, "volcengine-ark"), {
-        provider: "openai",
-        model: "openai-video-model",
+        provider: "volcengine-ark",
+        model: "ep-seedance-endpoint",
     });
     assert.deepEqual(buildCanvasVideoProviderPatch(cloudConfig, "volcengine-ark"), {
         provider: "volcengine-ark",
@@ -66,9 +66,9 @@ test("video provider patch resets node model to the selected provider default", 
 test("video mode patch starts config nodes with the active video provider model", () => {
     assert.deepEqual(buildCanvasVideoModePatch(baseConfig), {
         generationMode: "video",
-        channelMode: "local",
-        provider: "openai",
-        model: "openai-video-model",
+        channelMode: "remote",
+        provider: "volcengine-ark",
+        model: "ep-seedance-endpoint",
         size: "1:1",
         seconds: "6",
         duration: "6",
@@ -104,7 +104,7 @@ test("video mode patch starts config nodes with the active video provider model"
     });
 });
 
-test("video node can pin a channel different from current global channel", () => {
+test("video node always uses the backend channel even when metadata is stale", () => {
     const remoteNodeConfig = buildCanvasVideoConfig(baseConfig, {
         channelMode: "remote",
         provider: "volcengine-ark",
@@ -119,8 +119,8 @@ test("video node can pin a channel different from current global channel", () =>
         provider: "volcengine-ark",
         model: "local-video-node",
     });
-    assert.equal(localNodeConfig.channelMode, "local");
-    assert.equal(localNodeConfig.videoProtocol, "openai");
+    assert.equal(localNodeConfig.channelMode, "remote");
+    assert.equal(localNodeConfig.videoProtocol, "volcengine-ark");
     assert.equal(localNodeConfig.model, "local-video-node");
 });
 
@@ -189,11 +189,13 @@ test("builds global video defaults from config node metadata changes", () => {
         },
     );
     assert.deepEqual(buildCanvasVideoDefaultsPatch({ ...baseConfig, videoProtocol: "openai" }, { provider: "openai", model: "openai-next", seconds: "20" }), {
+        videoProtocol: "openai",
         videoModel: "openai-next",
         videoSeconds: "20",
     });
     assert.deepEqual(buildCanvasVideoDefaultsPatch(baseConfig, { provider: "volcengine-ark", model: "seedance-local", seconds: "20" }), {
-        videoModel: "seedance-local",
-        videoSeconds: "20",
+        videoProtocol: "volcengine-ark",
+        seedanceModel: "seedance-local",
+        videoSeconds: "15",
     });
 });

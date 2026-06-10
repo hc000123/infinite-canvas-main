@@ -18,6 +18,14 @@ test("marks succeeded task as caching until node content is saved", () => {
     assert.equal(buildCanvasVideoProgress({ taskStatus: "succeeded" }, "success").stage, "succeeded");
 });
 
+test("treats saved video content as completed even with stale loading error metadata", () => {
+    const progress = buildCanvasVideoProgress({ content: "blob:video", taskStatus: "succeeded", errorDetails: "Request failed with status code 401" }, "loading");
+
+    assert.equal(progress.stage, "succeeded");
+    assert.equal(progress.label, "完成");
+    assert.equal(progress.percent, 100);
+});
+
 test("keeps failed creation progress at the creation stage before task id exists", () => {
     assert.deepEqual(buildCanvasVideoProgress({ generationStartedAt: Date.now() - 120_000 }, "error"), { stage: "failed", label: "创建失败", percent: 8, currentStep: 1, steps: ["创建任务", "排队", "生成", "回填", "完成"] });
     assert.deepEqual(buildCanvasVideoProgress({ taskId: "task-1", taskStatus: "failed" }, "error"), { stage: "failed", label: "生成失败", percent: 72, currentStep: 3, steps: ["创建任务", "排队", "生成", "回填", "完成"] });

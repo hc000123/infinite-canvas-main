@@ -70,7 +70,7 @@ import { CanvasNodeContextMenu } from "../components/canvas-context-menu";
 import { CanvasNodeAngleDialog } from "../components/canvas-node-angle-dialog";
 import { CanvasNodeCropDialog } from "../components/canvas-node-crop-dialog";
 import { buildNodeGenerationInputs, type NodeGenerationInput } from "../components/canvas-node-generation";
-import { CanvasNodeHoverToolbar } from "../components/canvas-node-hover-toolbar";
+import { CanvasNodeHoverToolbar, type CanvasNodeHoverToolbarActions } from "../components/canvas-node-hover-toolbar";
 import { CanvasNodeInfoModal } from "../components/canvas-node-info-modal";
 import { InfiniteCanvas } from "../components/infinite-canvas";
 import { Minimap } from "../components/canvas-mini-map";
@@ -277,7 +277,7 @@ function InfiniteCanvasPage() {
     const workspaceProjectId = currentProject?.projectId || canvasId;
     const workspaceProjectTitle = creativeProject?.title || currentProject?.title || "未命名画布";
     const canvasEpisodeContext = useMemo(() => canvasEpisodeContextFromCanvas(currentProject), [currentProject]);
-    const canvasAiConfig = useMemo(() => applyCanvasProjectPresetToConfig(effectiveConfig.channelMode === "local" ? config : effectiveConfig, currentProject?.preset), [config, currentProject?.preset, effectiveConfig]);
+    const canvasAiConfig = useMemo(() => applyCanvasProjectPresetToConfig(effectiveConfig, currentProject?.preset), [currentProject?.preset, effectiveConfig]);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [nodes, setNodes] = useState<CanvasNodeData[]>([]);
     const { downloadNodeMedia, cacheUploadedCanvasMedia } = useCanvasMediaCache({ token, message, setNodes });
@@ -820,7 +820,7 @@ function InfiniteCanvasPage() {
             return;
         }
         router.push("/projects");
-    }, [currentProject?.episodeId, currentProject?.projectId, router]);
+    }, [currentProject, router]);
     const returnTarget = useMemo(() => {
         if (currentProject?.projectId && currentProject.episodeId) {
             return { href: `/projects/${currentProject.projectId}/episodes/${currentProject.episodeId}/workbench`, label: "返回本集生产流程" };
@@ -900,9 +900,8 @@ function InfiniteCanvasPage() {
         handleUploadRequest,
         deleteNodes,
         deselectCanvas,
+        openEpisodeWorkbench,
         selectedNodeIds,
-        currentProject,
-        router,
         setClearConfirmOpen,
         setAssetPickerTab,
         setAssetPickerOpen,
@@ -923,6 +922,18 @@ function InfiniteCanvasPage() {
         showSuccess: showCanvasSuccess,
     });
 
+    const closeCanvasOverlays = useCallback(() => {
+        cancelPendingConnectionCreate();
+        setHoveredNodeId(null);
+        setToolbarNodeId(null);
+        setDialogNodeId(null);
+        setEditingNodeId(null);
+        setInfoNodeId(null);
+        setCropNodeId(null);
+        setAngleNodeId(null);
+        setPreviewNodeId(null);
+    }, [cancelPendingConnectionCreate]);
+
     useCanvasKeyboardShortcuts({
         nodesRef,
         selectedNodeIdsRef,
@@ -931,14 +942,8 @@ function InfiniteCanvasPage() {
         setSelectedNodeIds,
         setSelectedConnectionId,
         setContextMenu,
-        setHoveredNodeId,
-        setToolbarNodeId,
-        setDialogNodeId,
-        setEditingNodeId,
-        setInfoNodeId,
-        setCropNodeId,
         clearSelectionBox,
-        cancelPendingConnectionCreate,
+        closeCanvasOverlays,
         undoCanvas,
         redoCanvas,
         copySelectedNodes,
@@ -1294,6 +1299,52 @@ function InfiniteCanvasPage() {
         [assetById, message],
     );
 
+    const nodeToolActions = useMemo<CanvasNodeHoverToolbarActions>(
+        () => ({
+            onInfo: (node) => setInfoNodeId(node.id),
+            onEditText: openTextEditor,
+            onDecreaseFont: (node) => handleFontSizeChange(node.id, Math.max(10, (node.metadata?.fontSize || 14) - 2)),
+            onIncreaseFont: (node) => handleFontSizeChange(node.id, Math.min(32, (node.metadata?.fontSize || 14) + 2)),
+            onToggleDialog: (node) => setDialogNodeId((current) => (current === node.id ? null : node.id)),
+            onGenerateImage: generateImageFromTextNode,
+            onUpload: (node) => handleUploadRequest(node.id),
+            onDownload: downloadNodeMedia,
+            onSaveAsset: (node) => void saveNodeAsset(node),
+            onUpdateAssetReference: updateCanvasNodeAssetReference,
+            onContinueVideo: (node) => void handleContinueVideoNode(node),
+            onCaptureVideoFrame: (node) => void captureVideoCurrentFrame(node),
+            onReviewAsset: (node) => void submitNodeVolcengineReview(node),
+            onRefreshReview: (node) => void refreshNodeVolcengineReview(node),
+            onCrop: (node) => setCropNodeId(node.id),
+            onAngle: (node) => setAngleNodeId(node.id),
+            onViewImage: (node) => setPreviewNodeId(node.id),
+            onRetry: (node) => void handleRetryNode(node),
+            onToggleFreeResize: (node) => toggleNodeFreeResize(node.id),
+            onDelete: (node) => deleteNodes(new Set([node.id])),
+        }),
+        [
+            captureVideoCurrentFrame,
+            deleteNodes,
+            downloadNodeMedia,
+            generateImageFromTextNode,
+            handleContinueVideoNode,
+            handleFontSizeChange,
+            handleRetryNode,
+            handleUploadRequest,
+            openTextEditor,
+            refreshNodeVolcengineReview,
+            saveNodeAsset,
+            setAngleNodeId,
+            setCropNodeId,
+            setDialogNodeId,
+            setInfoNodeId,
+            setPreviewNodeId,
+            submitNodeVolcengineReview,
+            toggleNodeFreeResize,
+            updateCanvasNodeAssetReference,
+        ],
+    );
+
     const { focusProductionPackage, handlePreviewProductionVideoVersion, handleDownloadProductionVideoVersion, handleSetCurrentProductionVideoVersion, handleHideProductionVideoVersion, handleInsertProductionPackageConfigNode, handleEditProductionPackagePrompt, handleBindSelectedVideoToProductionPackage } = useCanvasProductionPackageActions({
         canvasAiConfig,
         productionPackages,
@@ -1478,11 +1529,11 @@ function InfiniteCanvasPage() {
                             onContentChange={handleNodeContentChange}
                             onToggleBatch={toggleBatchExpanded}
                             onSetBatchPrimary={setBatchPrimary}
-                            onRetry={(node) => void handleRetryNode(node)}
+                            onRetry={nodeToolActions.onRetry}
                             onRefreshVideoTask={(node) => void handleRefreshVideoTask(node)}
-                            onGenerateImage={generateImageFromTextNode}
-                            onDownload={(node) => void downloadNodeMedia(node)}
-                            onViewImage={(node) => setPreviewNodeId(node.id)}
+                            onGenerateImage={nodeToolActions.onGenerateImage}
+                            onDownload={nodeToolActions.onDownload}
+                            onViewImage={nodeToolActions.onViewImage}
                             onContextMenu={(event, id) => {
                                 event.preventDefault();
                                 event.stopPropagation();
@@ -1523,28 +1574,7 @@ function InfiniteCanvasPage() {
                     viewport={viewport}
                     onKeep={keepNodeToolbar}
                     onLeave={hideNodeToolbar}
-                    actions={{
-                        onInfo: (node) => setInfoNodeId(node.id),
-                        onEditText: openTextEditor,
-                        onDecreaseFont: (node) => handleFontSizeChange(node.id, Math.max(10, (node.metadata?.fontSize || 14) - 2)),
-                        onIncreaseFont: (node) => handleFontSizeChange(node.id, Math.min(32, (node.metadata?.fontSize || 14) + 2)),
-                        onToggleDialog: (node) => setDialogNodeId((current) => (current === node.id ? null : node.id)),
-                        onGenerateImage: generateImageFromTextNode,
-                        onUpload: (node) => handleUploadRequest(node.id),
-                        onDownload: downloadNodeMedia,
-                        onSaveAsset: (node) => void saveNodeAsset(node),
-                        onUpdateAssetReference: updateCanvasNodeAssetReference,
-                        onContinueVideo: (node) => void handleContinueVideoNode(node),
-                        onCaptureVideoFrame: (node) => void captureVideoCurrentFrame(node),
-                        onReviewAsset: (node) => void submitNodeVolcengineReview(node),
-                        onRefreshReview: (node) => void refreshNodeVolcengineReview(node),
-                        onCrop: (node) => setCropNodeId(node.id),
-                        onAngle: (node) => setAngleNodeId(node.id),
-                        onViewImage: (node) => setPreviewNodeId(node.id),
-                        onRetry: (node) => void handleRetryNode(node),
-                        onToggleFreeResize: (node) => toggleNodeFreeResize(node.id),
-                        onDelete: (node) => deleteNodes(new Set([node.id])),
-                    }}
+                    actions={nodeToolActions}
                     state={{
                         hasNewAssetVersion,
                         submittingReview: toolbarNode ? submittingReviewNodeId === toolbarNode.id : false,
@@ -1734,18 +1764,18 @@ function InfiniteCanvasPage() {
                 onHideProductionVideoVersion={handleHideProductionVideoVersion}
                 onBindSelectedVideoToProductionPackage={handleBindSelectedVideoToProductionPackage}
                 onInsertProductionPackageConfigNode={handleInsertProductionPackageConfigNode}
-                onInfo={(node) => setInfoNodeId(node.id)}
-                onEditText={openTextEditor}
-                onToggleDialog={(node) => setDialogNodeId((current) => (current === node.id ? null : node.id))}
-                onGenerateImage={generateImageFromTextNode}
-                onUpload={(node) => handleUploadRequest(node.id)}
-                onDownload={(node) => void downloadNodeMedia(node)}
-                onSaveAsset={(node) => void saveNodeAsset(node)}
-                onRetry={(node) => void handleRetryNode(node)}
-                onContinueVideo={(node) => void handleContinueVideoNode(node)}
-                onCrop={(node) => setCropNodeId(node.id)}
-                onAngle={(node) => setAngleNodeId(node.id)}
-                onViewImage={(node) => setPreviewNodeId(node.id)}
+                onInfo={nodeToolActions.onInfo}
+                onEditText={nodeToolActions.onEditText}
+                onToggleDialog={nodeToolActions.onToggleDialog}
+                onGenerateImage={nodeToolActions.onGenerateImage}
+                onUpload={nodeToolActions.onUpload}
+                onDownload={nodeToolActions.onDownload}
+                onSaveAsset={nodeToolActions.onSaveAsset}
+                onRetry={nodeToolActions.onRetry}
+                onContinueVideo={nodeToolActions.onContinueVideo}
+                onCrop={nodeToolActions.onCrop}
+                onAngle={nodeToolActions.onAngle}
+                onViewImage={nodeToolActions.onViewImage}
             />
         </main>
     );

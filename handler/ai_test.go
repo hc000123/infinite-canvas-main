@@ -103,9 +103,23 @@ func TestCloudVideoProxyIgnoresFrontendVolcengineKey(t *testing.T) {
 	}
 }
 
-func TestLocalArkVideoProxyRejectsUnsafeBaseURL(t *testing.T) {
+func TestLegacyLocalArkVideoPayloadUsesBackendChannel(t *testing.T) {
 	setupAIHandlerTestDB(t)
-	saveAIHandlerSettings(t, true, "https://backend.example.com")
+	upstreamCalled := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalled = true
+		if auth := r.Header.Get("Authorization"); auth != "Bearer backend-key" {
+			t.Fatalf("authorization = %q, want backend key", auth)
+		}
+		body, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(body), "frontend-key") || strings.Contains(string(body), "_volcengine_api_key") {
+			t.Fatalf("upstream body contains frontend supplier key: %s", string(body))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"task-backend-only","status":"queued"}`))
+	}))
+	defer upstream.Close()
+	saveAIHandlerSettings(t, true, upstream.URL)
 
 	body := []byte(`{
 		"model": "ep-test",
@@ -123,8 +137,8 @@ func TestLocalArkVideoProxyRejectsUnsafeBaseURL(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "AI 接口请求失败") {
-		t.Fatalf("body = %s, want AI failure", rec.Body.String())
+	if !upstreamCalled {
+		t.Fatal("backend channel upstream was not called")
 	}
 }
 

@@ -29,6 +29,13 @@ test("keeps remote default video model visible when it is missing from available
     assert.deepEqual(result.videoModels, ["doubao-seedance-2-0"]);
 });
 
+test("falls back to backend channel when public model channel is unavailable", () => {
+    const result = resolveEffectiveConfig({ ...defaultConfig, channelMode: "local", videoProtocol: "volcengine-ark" }, null);
+
+    assert.equal(result.channelMode, "remote");
+    assert.equal(result.videoProtocol, "volcengine-ark");
+});
+
 test("does not leak stale local seedance model into remote video models", () => {
     const result = resolveEffectiveConfig(
         { ...defaultConfig, channelMode: "remote", seedanceModel: "chat_fast_video", videoModel: "chat_fast_video" },

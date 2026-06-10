@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import type { ReactNode } from "react";
+import { theme as antdTheme } from "antd";
 import { Plus, Trash2 } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -35,9 +36,10 @@ export function CanvasNodeContextMenu({ menu, onClose, onDuplicate, onDelete }: 
 
 function MenuButton({ icon, label, onClick, danger = false }: { icon: ReactNode; label: string; onClick?: () => void; danger?: boolean }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const { token } = antdTheme.useToken();
 
     return (
-        <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70" style={{ color: danger ? "#f87171" : theme.node.text }} onClick={onClick}>
+        <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70" style={{ color: danger ? token.colorError : theme.node.text }} onClick={onClick}>
             {icon}
             <span>{label}</span>
         </button>

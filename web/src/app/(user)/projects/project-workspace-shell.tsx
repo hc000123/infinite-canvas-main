@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { CircleDot, FileText, Folder, Home, ImagePlus, LogIn, LogOut, Settings2, UserRound } from "lucide-react";
 
+import { VersionReleaseModal } from "@/components/layout/version-release-modal";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
@@ -71,6 +72,7 @@ function ProjectWorkspaceTopBar() {
             </nav>
 
             <div className="relative flex shrink-0 items-center gap-2">
+                <VersionReleaseModal className="hidden h-10 shrink-0 cursor-pointer items-center rounded-lg border px-3 text-xs font-semibold transition hover:border-[var(--studio-accent)] hover:bg-[var(--studio-accent-soft)] sm:inline-flex" style={{ borderColor: "var(--studio-border-strong)", background: "var(--studio-panel-muted-bg)", color: "var(--studio-text-muted)" }} />
                 <button type="button" className="flex h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition hover:border-[var(--studio-accent)] hover:bg-[var(--studio-accent-soft)]" style={{ borderColor: "var(--studio-border-strong)", background: "var(--studio-panel-muted-bg)", color: "var(--studio-text-secondary)" }} onClick={handleOpenConfig} aria-label="设置" title="设置">
                     <Settings2 className="size-4" />
                     <span className="whitespace-nowrap">设置</span>

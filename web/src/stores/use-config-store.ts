@@ -4,11 +4,11 @@ import { useMemo } from "react";
 import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 
-import { localForageStorage } from "@/lib/localforage-storage";
-import { normalizeSeedanceImageRoleMode, type SeedanceImageRoleMode } from "@/services/api/video-reference";
-import { apiGet } from "@/services/api/request";
-import type { AdminPublicSettings } from "@/services/api/admin";
-import { inferRemoteVideoProtocol, resolveAllowedVideoProtocol, resolveEffectiveChannelMode } from "@/services/api/ai-channel-boundary";
+import { localForageStorage } from "../lib/localforage-storage.ts";
+import { normalizeSeedanceImageRoleMode, type SeedanceImageRoleMode } from "../services/api/video-reference.ts";
+import { apiGet } from "../services/api/request.ts";
+import type { AdminPublicSettings } from "../services/api/admin.ts";
+import { inferRemoteVideoProtocol, resolveAllowedVideoProtocol } from "../services/api/ai-channel-boundary.ts";
 
 export type AiModelKind = "image" | "video" | "text";
 
@@ -51,11 +51,10 @@ export type AiConfig = {
 export const CONFIG_STORE_KEY = "infinite-canvas:ai_config_store";
 
 const useDevDefaults = process.env.NODE_ENV === "development";
-const devChannelMode: AiConfig["channelMode"] | "" = useDevDefaults && process.env.NEXT_PUBLIC_DEV_AI_CHANNEL_MODE === "remote" ? "remote" : useDevDefaults && process.env.NEXT_PUBLIC_DEV_AI_CHANNEL_MODE === "local" ? "local" : "";
 const devVideoProtocol: AiConfig["videoProtocol"] | "" = useDevDefaults && process.env.NEXT_PUBLIC_DEV_AI_VIDEO_PROTOCOL === "volcengine-ark" ? "volcengine-ark" : "";
 
 export const defaultConfig: AiConfig = {
-    channelMode: devChannelMode || "local",
+    channelMode: "remote",
     videoProtocol: devVideoProtocol || "openai",
     baseUrl: (useDevDefaults && process.env.NEXT_PUBLIC_DEV_AI_BASE_URL) || "https://api.openai.com",
     apiKey: (useDevDefaults && process.env.NEXT_PUBLIC_DEV_AI_API_KEY) || "",
@@ -120,9 +119,9 @@ const configStorage: PersistStorage<ConfigStore> = {
 };
 
 export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null) {
-    const channelMode = modelChannel ? resolveEffectiveChannelMode(config.channelMode, modelChannel.allowCustomChannel) : "remote";
+    const channelMode = "remote";
     const localVideoProtocol = resolveAllowedVideoProtocol("local", config.videoProtocol);
-    if (channelMode === "local" || !modelChannel) {
+    if (!modelChannel) {
         return { ...config, channelMode, videoProtocol: localVideoProtocol, videoModel: config.videoModel };
     }
     const models = uniqueModels(
@@ -151,12 +150,11 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
     };
 }
 
-function isAiConfigReady(config: AiConfig, model: string) {
+function isAiConfigReady(_config: AiConfig, model: string) {
     const modelName = model.trim();
     if (!modelName) return false;
     if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_DEV_SKIP_AI_CONFIG !== "false") return true;
-    if (config.channelMode === "remote") return true;
-    return Boolean(config.baseUrl.trim() && config.apiKey.trim());
+    return true;
 }
 
 export const useConfigStore = create<ConfigStore>()(
@@ -196,7 +194,7 @@ export const useConfigStore = create<ConfigStore>()(
         {
             name: CONFIG_STORE_KEY,
             storage: configStorage,
-            partialize: (state) => ({ config: state.config }),
+            partialize: (state) => ({ config: state.config }) as StorageValue<ConfigStore>["state"],
             merge: (persisted, current) => {
                 const config = { ...defaultConfig, ...((persisted as Partial<ConfigStore>).config || {}) };
                 const classifiedModels = classifyAiModels(config.models);
@@ -204,8 +202,8 @@ export const useConfigStore = create<ConfigStore>()(
                     ...current,
                     config: {
                         ...config,
-                        channelMode: config.channelMode || defaultConfig.channelMode,
-                        videoProtocol: config.channelMode === "local" ? "openai" : config.videoProtocol || defaultConfig.videoProtocol,
+                        channelMode: "remote",
+                        videoProtocol: config.videoProtocol || defaultConfig.videoProtocol,
                         baseUrl: config.baseUrl || defaultConfig.baseUrl,
                         apiKey: config.apiKey || defaultConfig.apiKey,
                         volcengineBaseUrl: config.volcengineBaseUrl || defaultConfig.volcengineBaseUrl,

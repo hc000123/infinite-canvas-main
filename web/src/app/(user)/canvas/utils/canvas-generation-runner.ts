@@ -33,8 +33,9 @@ export async function runCanvasVideoGeneration(config: AiConfig, prompt: string,
             trace,
         });
     } catch (error) {
-        if (completedTask?.id && completedTask.status !== "failed" && completedTask.status !== "cancelled") {
-            throw new RecoverableVideoTaskError("视频任务已创建，后续同步失败，刷新后会继续回填。", completedTask, error);
+        const task = completedTask as NormalizedVideoTask | null;
+        if (task?.id && task.status !== "failed" && task.status !== "cancelled") {
+            throw new RecoverableVideoTaskError("视频任务已创建，后续同步失败，刷新后会继续回填。", task, error);
         }
         throw error;
     }

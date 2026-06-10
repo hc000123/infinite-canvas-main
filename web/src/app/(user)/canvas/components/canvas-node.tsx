@@ -361,6 +361,7 @@ export const CanvasNode = React.memo(function CanvasNode({
 function NodeContent(props: NodeContentRendererProps) {
     if (props.node.type === CanvasNodeType.Config && props.renderNodeContent) return props.renderNodeContent(props.node);
     if (props.isBatchRoot) return <ImageNodeContent {...props} />;
+    if (props.node.type === CanvasNodeType.Video && props.node.metadata?.content) return <VideoNodeContent {...props} />;
     if (props.node.metadata?.status === "loading") return <LoadingContent node={props.node} theme={props.theme} onRefreshVideoTask={props.onRefreshVideoTask} showPanel={props.showPanel} />;
     if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} onRefreshVideoTask={props.onRefreshVideoTask} showPanel={props.showPanel} />;
 
@@ -482,6 +483,7 @@ function VideoTaskProgressPanel({ node, theme, onRefreshVideoTask, children, com
     const taskId = node.metadata?.taskId || "";
     const rows = videoTaskDetailRows(node, elapsedSeconds);
     const isFailed = progress.stage === "failed";
+    const showErrorDetails = Boolean(node.metadata?.errorDetails && !node.metadata?.content);
     const prompt = node.metadata?.prompt?.trim();
     return (
         <div
@@ -516,14 +518,14 @@ function VideoTaskProgressPanel({ node, theme, onRefreshVideoTask, children, com
                     </div>
                 ))}
             </div>
-            {node.metadata?.errorDetails ? (
+            {showErrorDetails ? (
                 <div
                     className={`${isFailed ? "thin-scrollbar max-h-28 overflow-auto whitespace-pre-wrap break-words text-[13px] leading-5" : "line-clamp-2 text-xs leading-5"} mt-3 rounded-lg border px-2.5 py-2 text-red-300`}
                     style={{ borderColor: theme.node.stroke, background: isFailed ? "rgba(127,29,29,.18)" : undefined }}
                     data-canvas-no-zoom
                     onWheel={(event) => event.stopPropagation()}
                 >
-                    {node.metadata.errorDetails}
+                    {node.metadata?.errorDetails}
                 </div>
             ) : null}
             {isFailed && prompt && !showPanel ? (

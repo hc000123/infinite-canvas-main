@@ -14,20 +14,20 @@ export type CanvasProjectPreset = {
 export type CanvasProjectPresetModelKind = "image" | "video" | "text";
 
 export const canvasProjectPresetOptions = [
-    { key: "vertical-drama", label: "竖屏短剧", preset: { resolution: "720", ratio: "9:16", fps: "24", defaultDuration: "8", defaultVideoProvider: "volcengine-ark" } },
-    { key: "landscape-film", label: "横屏短片", preset: { resolution: "720", ratio: "16:9", fps: "24", defaultDuration: "8", defaultVideoProvider: "volcengine-ark" } },
+    { key: "vertical-drama", label: "竖屏短剧", preset: { resolution: "720", ratio: "9:16", fps: "24", defaultDuration: "6", defaultVideoProvider: "volcengine-ark" } },
+    { key: "landscape-film", label: "横屏短片", preset: { resolution: "720", ratio: "16:9", fps: "24", defaultDuration: "6", defaultVideoProvider: "volcengine-ark" } },
     { key: "square-social", label: "方形社媒", preset: { resolution: "720", ratio: "1:1", fps: "24", defaultDuration: "6", defaultVideoProvider: "openai" } },
     { key: "hd-landscape", label: "高清横屏", preset: { resolution: "1080", ratio: "16:9", fps: "30", defaultDuration: "6", defaultVideoProvider: "volcengine-ark" } },
     { key: "hd-vertical", label: "高清竖屏", preset: { resolution: "1080", ratio: "9:16", fps: "30", defaultDuration: "6", defaultVideoProvider: "volcengine-ark" } },
 ] satisfies Array<{ key: string; label: string; preset: CanvasProjectPreset }>;
 
 export function buildCanvasProjectPresetFromConfig(config: AiConfig, patch: CanvasProjectPreset = {}): CanvasProjectPreset {
-    const provider = config.channelMode === "local" ? "openai" : patch.defaultVideoProvider || config.videoProtocol || "openai";
+    const provider = patch.defaultVideoProvider || config.videoProtocol || "openai";
     return {
         resolution: patch.resolution || config.vquality || "720",
         ratio: normalizeCanvasProjectPresetRatio(patch.ratio || config.size || "16:9"),
         fps: patch.fps || "24",
-        defaultDuration: patch.defaultDuration || config.videoSeconds || "6",
+        defaultDuration: normalizeCanvasProjectPresetDuration(patch.defaultDuration || config.videoSeconds),
         defaultImageModel: patch.defaultImageModel || config.imageModel || config.model,
         defaultVideoModel: normalizeVisibleVideoModel(patch.defaultVideoModel) || (provider === "volcengine-ark" ? normalizeVisibleVideoModel(config.seedanceModel) || firstVisibleSeedanceModel(config) : config.videoModel) || config.model,
         defaultTextModel: patch.defaultTextModel || config.textModel || config.model,
@@ -37,13 +37,13 @@ export function buildCanvasProjectPresetFromConfig(config: AiConfig, patch: Canv
 
 export function applyCanvasProjectPresetToConfig(config: AiConfig, preset?: CanvasProjectPreset): AiConfig {
     if (!preset) return config;
-    const provider = config.channelMode === "local" ? "openai" : preset.defaultVideoProvider || config.videoProtocol;
+    const provider = preset.defaultVideoProvider || config.videoProtocol;
     const videoModel = normalizeVisibleVideoModel(preset.defaultVideoModel) || (provider === "volcengine-ark" ? normalizeVisibleVideoModel(config.seedanceModel) || firstVisibleSeedanceModel(config) : config.videoModel);
     return {
         ...config,
         size: normalizeCanvasProjectPresetRatio(preset.ratio || config.size),
         vquality: preset.resolution || config.vquality,
-        videoSeconds: preset.defaultDuration || config.videoSeconds,
+        videoSeconds: normalizeCanvasProjectPresetDuration(preset.defaultDuration || config.videoSeconds),
         imageModel: preset.defaultImageModel || config.imageModel,
         textModel: preset.defaultTextModel || config.textModel,
         videoProtocol: provider,
@@ -51,6 +51,11 @@ export function applyCanvasProjectPresetToConfig(config: AiConfig, preset?: Canv
         seedanceModel: provider === "volcengine-ark" ? videoModel || config.seedanceModel : config.seedanceModel,
         seedanceEndpointId: config.seedanceEndpointId,
     };
+}
+
+function normalizeCanvasProjectPresetDuration(value?: string) {
+    const duration = String(value || "").trim();
+    return duration === "10" ? "6" : duration || "6";
 }
 
 export function canvasProjectPresetSummary(preset?: CanvasProjectPreset) {

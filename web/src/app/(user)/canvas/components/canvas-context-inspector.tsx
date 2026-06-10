@@ -627,6 +627,7 @@ function NodeInspector({
     const downstreamCount = connections.filter((connection) => connection.fromNodeId === node.id).length;
     const prompt = readablePrompt(node);
     const hasMedia = Boolean(node.metadata?.content);
+    const showErrorDetails = Boolean(node.metadata?.errorDetails && !hasMedia);
     const canOpenGenerateSettings = node.type === CanvasNodeType.Config || ((node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video) && !hasMedia);
     return (
         <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
@@ -656,7 +657,7 @@ function NodeInspector({
 
             {node.type === CanvasNodeType.Config ? <ConfigInputsSection inputs={inputs} theme={theme} /> : null}
             {prompt ? <TextSection title={node.type === CanvasNodeType.Text ? "完整文本" : "完整提示词"} text={prompt} theme={theme} /> : null}
-            {node.metadata?.errorDetails ? <TextSection title="失败原因" text={node.metadata.errorDetails} theme={theme} danger /> : null}
+            {showErrorDetails ? <TextSection title="失败原因" text={node.metadata?.errorDetails || ""} theme={theme} danger /> : null}
 
             <div className="mt-3 grid grid-cols-2 gap-2">
                 <InspectorAction icon={<Info className="size-4" />} label="节点信息" onClick={() => onInfo(node)} theme={theme} />
@@ -1081,6 +1082,7 @@ function nodeTypeLabel(node: CanvasNodeData) {
 }
 
 function nodeStatusLabel(node: CanvasNodeData) {
+    if (node.metadata?.content && (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio)) return "成功";
     const status = node.metadata?.status || "idle";
     if (status === "loading") return "生成中";
     if (status === "success") return "成功";

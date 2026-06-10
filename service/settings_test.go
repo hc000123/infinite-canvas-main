@@ -51,14 +51,14 @@ func TestSaveSettingsKeepsSavedChannelAPIKeyWhenMaskSubmitted(t *testing.T) {
 
 func TestIsCustomChannelAllowedReadsPublicSetting(t *testing.T) {
 	setupAITaskTestDB(t)
-	saveSettingsForBoundaryTest(t, false, "sk-real")
+	saveSettingsForBoundaryTest(t, true, "sk-real")
 
 	allowed, err := IsCustomChannelAllowed()
 	if err != nil {
 		t.Fatalf("IsCustomChannelAllowed returned error: %v", err)
 	}
 	if allowed {
-		t.Fatal("custom channel should be disabled")
+		t.Fatal("custom channel should stay disabled even when legacy settings contain true")
 	}
 }
 

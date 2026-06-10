@@ -345,7 +345,7 @@ function startLocalImageTask(config: AiConfig, prompt: string, imageCount: numbe
         channelMode: config.channelMode,
         requestType: "image",
         inputSummary: trace.inputSummary || summarizeText(prompt),
-        outputSummary: "本地直连生图调用中",
+        outputSummary: "生图调用中",
         imageCount,
         imageSize: requestedSize || config.size,
         requestedImageSize: requestedSize || config.size,
@@ -440,19 +440,5 @@ export async function requestImageQuestion(config: AiConfig, messages: ChatCompl
 }
 
 export async function fetchImageModels(config: AiConfig) {
-    if (config.channelMode === "remote") return config.models;
-    try {
-        const response = await axios.get<{ data?: Array<{ id?: string }>; error?: { message?: string } }>(aiApiUrl(config, "/models", "openai"), {
-            headers: {
-                Authorization: `Bearer ${config.apiKey}`,
-            },
-            timeout: AI_REQUEST_TIMEOUT_MS,
-        });
-        return (response.data.data || [])
-            .map((model) => model.id)
-            .filter((id): id is string => Boolean(id))
-            .sort((a, b) => a.localeCompare(b));
-    } catch (error) {
-        throw new Error(normalizeAiError(error, "读取模型失败"));
-    }
+    return config.models;
 }

@@ -59,7 +59,7 @@ export function createAiConfigPackageTemplate() {
         {
             schema: "blink-workbench.ai-config.v1",
             aiConfig: {
-                channelMode: "local",
+                channelMode: "remote",
                 baseUrl: "https://api.openai.com",
                 apiKey: "sk-...",
                 imageModel: "gpt-image-2",
@@ -92,7 +92,7 @@ function configPackageSource(input: unknown): Record<string, unknown> {
 function normalizeConfigPackageValue(key: keyof AiConfig, value: unknown) {
     if (value === undefined || value === null) return undefined;
     if (listKeys.has(key)) return normalizeStringList(value);
-    if (key === "channelMode") return value === "remote" ? "remote" : value === "local" ? "local" : undefined;
+    if (key === "channelMode") return value === "remote" || value === "local" ? "remote" : undefined;
     if (key === "videoProtocol") return value === "volcengine-ark" ? "volcengine-ark" : value === "openai" ? "openai" : undefined;
     if (key === "videoTaskMode") return value === "edit" || value === "extend" ? value : value === "generate" ? "generate" : undefined;
     if (key === "videoEditType") return value === "add" || value === "remove" || value === "inpaint" ? value : value === "replace" ? "replace" : undefined;

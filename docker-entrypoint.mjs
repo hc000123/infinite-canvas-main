@@ -28,7 +28,7 @@ function stop(exitCode = 0) {
             if (!child.killed) child.kill("SIGKILL");
         }
         process.exit(exitCode);
-    }, 2500).unref();
+    }, 2500);
 }
 
 process.on("SIGINT", () => stop(130));

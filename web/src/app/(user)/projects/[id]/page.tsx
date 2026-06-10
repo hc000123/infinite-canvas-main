@@ -29,7 +29,6 @@ import { collectProjectAssetReferences, filterProjectAssetReferences, type Proje
 import { buildProjectOverviewDashboard, projectOverviewActionHref, type ProjectOverviewActionTarget, type ProjectOverviewDashboard } from "../project-overview-dashboard";
 import { editableCanvasPreset } from "../project-canvas-preset";
 import { agentKindLabel, agentRiskLabel } from "../agent-workbench";
-import { LocalAiTaskLogPanel } from "../components/local-ai-task-log-panel";
 import { useAgentTaskStore } from "../use-agent-task-store";
 import { useCreativeProjectStore } from "../use-creative-project-store";
 
@@ -756,58 +755,61 @@ function ProjectEpisodeTable({ rows, onOpenCanvas, onOpenEpisode }: { rows: Proj
                 <span>操作</span>
             </div>
             <div className="divide-y divide-[var(--studio-border-subtle)]">
-                {rows.map((row) => (
-                    <div
-                        key={row.id}
-                        role="button"
-                        tabIndex={0}
-                        className={`grid w-full cursor-pointer grid-cols-[90px_minmax(180px,1.5fr)_100px_90px_80px_80px_80px_170px_112px] items-center gap-4 px-5 py-4 text-left transition hover:bg-[rgba(255,255,255,0.025)] ${row.filterStatus === "running" ? "border-l-4 border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] pl-4" : ""}`}
-                        onClick={() => onOpenEpisode(row.id)}
-                        onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") onOpenEpisode(row.id);
-                        }}
-                    >
-                        <span className="text-base font-semibold text-[var(--studio-text-muted)]">第 {formatEpisodeOrder(row.order)} 集</span>
-                        <span className="min-w-0">
-                            <span className="block break-words text-base font-semibold leading-6 text-[var(--studio-text-primary)]">{row.title}</span>
-                            <span className="mt-1 block text-sm text-[var(--studio-text-muted)]">{row.progress ? `最近更新 ${formatEpisodeDate(row.updatedAt)}` : "尚未开始"}</span>
-                        </span>
-                        <EpisodeStatusBadge status={row.status} />
-                        <span className="text-base font-semibold text-[var(--studio-text-secondary)]">{row.stage}</span>
-                        <span className="text-base font-semibold text-[var(--studio-text-secondary)]">{row.shotText}</span>
-                        <span className="text-base font-semibold text-[var(--studio-text-secondary)]">{row.canvasCount || "-"}</span>
-                        <span className="text-base font-semibold text-[var(--studio-text-secondary)]">{row.videoCount || "-"}</span>
-                        <span className="flex items-center gap-4">
-                            <span className="h-2 w-24 rounded-full bg-[var(--studio-elevated-bg)]">
-                                <span className="block h-full rounded-full bg-[linear-gradient(90deg,var(--studio-accent),var(--studio-success))]" style={{ width: `${row.progress}%` }} />
+                {rows.map((row) => {
+                    const primaryCanvasId = row.primaryCanvasId;
+                    return (
+                        <div
+                            key={row.id}
+                            role="button"
+                            tabIndex={0}
+                            className={`grid w-full cursor-pointer grid-cols-[90px_minmax(180px,1.5fr)_100px_90px_80px_80px_80px_170px_112px] items-center gap-4 px-5 py-4 text-left transition hover:bg-[rgba(255,255,255,0.025)] ${row.filterStatus === "running" ? "border-l-4 border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] pl-4" : ""}`}
+                            onClick={() => onOpenEpisode(row.id)}
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") onOpenEpisode(row.id);
+                            }}
+                        >
+                            <span className="text-base font-semibold text-[var(--studio-text-muted)]">第 {formatEpisodeOrder(row.order)} 集</span>
+                            <span className="min-w-0">
+                                <span className="block break-words text-base font-semibold leading-6 text-[var(--studio-text-primary)]">{row.title}</span>
+                                <span className="mt-1 block text-sm text-[var(--studio-text-muted)]">{row.progress ? `最近更新 ${formatEpisodeDate(row.updatedAt)}` : "尚未开始"}</span>
                             </span>
-                            <span className="w-12 text-sm font-semibold text-[var(--studio-text-muted)]">{row.progress}%</span>
-                        </span>
-                        {row.primaryCanvasId ? (
-                            <Button
-                                size="small"
-                                type="primary"
-                                icon={<Maximize2 className="size-3.5" />}
-                                onClick={(event) => {
-                                    event.stopPropagation();
-                                    onOpenCanvas(row.primaryCanvasId);
-                                }}
-                            >
-                                进入画布
-                            </Button>
-                        ) : (
-                            <Button
-                                size="small"
-                                onClick={(event) => {
-                                    event.stopPropagation();
-                                    onOpenEpisode(row.id);
-                                }}
-                            >
-                                进入流程
-                            </Button>
-                        )}
-                    </div>
-                ))}
+                            <EpisodeStatusBadge status={row.status} />
+                            <span className="text-base font-semibold text-[var(--studio-text-secondary)]">{row.stage}</span>
+                            <span className="text-base font-semibold text-[var(--studio-text-secondary)]">{row.shotText}</span>
+                            <span className="text-base font-semibold text-[var(--studio-text-secondary)]">{row.canvasCount || "-"}</span>
+                            <span className="text-base font-semibold text-[var(--studio-text-secondary)]">{row.videoCount || "-"}</span>
+                            <span className="flex items-center gap-4">
+                                <span className="h-2 w-24 rounded-full bg-[var(--studio-elevated-bg)]">
+                                    <span className="block h-full rounded-full bg-[linear-gradient(90deg,var(--studio-accent),var(--studio-success))]" style={{ width: `${row.progress}%` }} />
+                                </span>
+                                <span className="w-12 text-sm font-semibold text-[var(--studio-text-muted)]">{row.progress}%</span>
+                            </span>
+                            {primaryCanvasId ? (
+                                <Button
+                                    size="small"
+                                    type="primary"
+                                    icon={<Maximize2 className="size-3.5" />}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        onOpenCanvas(primaryCanvasId);
+                                    }}
+                                >
+                                    进入画布
+                                </Button>
+                            ) : (
+                                <Button
+                                    size="small"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        onOpenEpisode(row.id);
+                                    }}
+                                >
+                                    进入流程
+                                </Button>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
         </section>
     );

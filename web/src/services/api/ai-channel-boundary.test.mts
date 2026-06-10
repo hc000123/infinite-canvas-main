@@ -8,8 +8,8 @@ test("forces remote mode when cloud settings disable custom channels", () => {
     assert.equal(resolveEffectiveChannelMode("remote", false), "remote");
 });
 
-test("keeps requested mode when custom channels are allowed", () => {
-    assert.equal(resolveEffectiveChannelMode("local", true), "local");
+test("always uses backend channel even when custom channels are allowed", () => {
+    assert.equal(resolveEffectiveChannelMode("local", true), "remote");
     assert.equal(resolveEffectiveChannelMode("remote", true), "remote");
 });
 
@@ -18,14 +18,15 @@ test("remote mode never uses browser local AI keys", () => {
     assert.equal(shouldAttachLocalVolcengineCredentials("remote", "volcengine-ark"), false);
 });
 
-test("local mode can use browser local OpenAI compatible keys only", () => {
-    assert.equal(shouldUseBrowserAIKey("local"), true);
+test("local mode no longer uses browser local AI keys", () => {
+    assert.equal(shouldUseBrowserAIKey("local"), false);
     assert.equal(shouldAttachLocalVolcengineCredentials("local", "volcengine-ark"), false);
     assert.equal(shouldAttachLocalVolcengineCredentials("local", "openai"), false);
 });
 
-test("local mode forces OpenAI compatible video protocol", () => {
-    assert.equal(resolveAllowedVideoProtocol("local", "volcengine-ark"), "openai");
+test("local and remote modes keep the selected video protocol", () => {
+    assert.equal(resolveAllowedVideoProtocol("local", "volcengine-ark"), "volcengine-ark");
+    assert.equal(resolveAllowedVideoProtocol("local", "openai"), "openai");
     assert.equal(resolveAllowedVideoProtocol("remote", "volcengine-ark"), "volcengine-ark");
 });
 

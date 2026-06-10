@@ -26,12 +26,7 @@ func PublicSettings() (model.PublicSetting, error) {
 }
 
 func IsCustomChannelAllowed() (bool, error) {
-	settings, err := repository.GetSettings()
-	if err != nil {
-		return false, err
-	}
-	public := normalizePublicSetting(settings.Public)
-	return public.ModelChannel.AllowCustomChannel != nil && *public.ModelChannel.AllowCustomChannel, nil
+	return false, nil
 }
 
 func AdminSettings() (model.Settings, error) {
@@ -94,8 +89,8 @@ func normalizePublicSetting(setting model.PublicSetting) model.PublicSetting {
 		}
 	}
 	if setting.ModelChannel.AllowCustomChannel == nil {
-		disabled := false
-		setting.ModelChannel.AllowCustomChannel = &disabled
+		enabled := false
+		setting.ModelChannel.AllowCustomChannel = &enabled
 	}
 	if setting.Auth.AllowRegister == nil {
 		enabled := true

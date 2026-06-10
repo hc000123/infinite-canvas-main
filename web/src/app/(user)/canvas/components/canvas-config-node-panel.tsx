@@ -13,9 +13,8 @@ import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { defaultSeedanceImageRole, normalizeSeedanceImageRole, seedanceReferenceLabel, seedanceReferenceLabelRange } from "@/services/api/video-reference";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { buildCanvasVideoChannelPatch, buildCanvasVideoConfig, buildCanvasVideoModePatch, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
+import { buildCanvasVideoConfig, buildCanvasVideoModePatch, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
-import { CanvasVideoChannelPicker } from "./canvas-video-channel-picker";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import type { NodeGenerationInput } from "./canvas-node-generation";
 import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata } from "../types";
@@ -43,7 +42,6 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const mode = node.metadata?.generationMode || "image";
-    const allowCustomChannel = publicSettings?.modelChannel?.allowCustomChannel !== false;
     const globalConfig = resolveCanvasVideoChannelConfig(localConfig, effectiveConfig, publicSettings?.modelChannel, mode === "video" ? node.metadata?.channelMode : undefined);
     const config = buildNodeConfig(globalConfig, node, mode);
     const count = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(node.metadata?.count || 3)) || 1)));
@@ -177,14 +175,6 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
             ) : null}
 
             <div className="grid min-w-0 shrink-0 cursor-default gap-1.5" onMouseDown={(event) => event.stopPropagation()}>
-                {mode === "video" && allowCustomChannel ? (
-                    <CanvasVideoChannelPicker
-                        className="!h-8 !rounded-lg"
-                        value={config.channelMode}
-                        disabled={isRunning}
-                        onChange={(channelMode) => onConfigChange(node.id, buildCanvasVideoChannelPatch(resolveCanvasVideoChannelConfig(localConfig, effectiveConfig, publicSettings?.modelChannel, channelMode)))}
-                    />
-                ) : null}
                 <ModelPicker className="canvas-compact-control h-8 !rounded-lg !px-2 !text-xs" config={config} modelType={mode} value={config.model} onChange={(model) => onConfigChange(node.id, mode === "video" ? videoModelPatch(config, model) : { model })} onMissingConfig={() => openConfigDialog(true)} fullWidth />
                 {mode === "image" ? <ModelThinkingSettings className="w-full justify-start" compact config={config} model={config.model} theme={theme} onConfigChange={(key, value) => onConfigChange(node.id, { [key]: value })} /> : null}
                 {mode === "video" ? (
@@ -594,6 +584,6 @@ function videoConfigPatch(key: keyof AiConfig, value: string): Partial<CanvasNod
 function videoModelPatch(config: AiConfig, model: string): Partial<CanvasNodeMetadata> {
     return {
         model,
-        provider: config.channelMode === "local" ? "openai" : inferRemoteVideoProtocol(model, "openai"),
+        provider: inferRemoteVideoProtocol(model, config.videoProtocol || "openai"),
     };
 }

@@ -1,20 +1,20 @@
 export type AiChannelMode = "remote" | "local";
 export type AiProviderProtocol = "openai" | "volcengine-ark";
 
-export function resolveEffectiveChannelMode(channelMode: AiChannelMode, allowCustomChannel?: boolean) {
-    return allowCustomChannel === false ? "remote" : channelMode;
+export function resolveEffectiveChannelMode(_channelMode: AiChannelMode, _allowCustomChannel?: boolean) {
+    return "remote";
 }
 
-export function shouldUseBrowserAIKey(channelMode: AiChannelMode) {
-    return channelMode === "local";
-}
-
-export function shouldAttachLocalVolcengineCredentials(channelMode: AiChannelMode, protocol: AiProviderProtocol) {
+export function shouldUseBrowserAIKey(_channelMode: AiChannelMode) {
     return false;
 }
 
-export function resolveAllowedVideoProtocol(channelMode: AiChannelMode, protocol: AiProviderProtocol) {
-    return channelMode === "local" ? "openai" : protocol;
+export function shouldAttachLocalVolcengineCredentials(_channelMode: AiChannelMode, _protocol: AiProviderProtocol) {
+    return false;
+}
+
+export function resolveAllowedVideoProtocol(_channelMode: AiChannelMode, protocol: AiProviderProtocol) {
+    return protocol;
 }
 
 export function inferRemoteVideoProtocol(model: string, fallback: AiProviderProtocol = "openai"): AiProviderProtocol {

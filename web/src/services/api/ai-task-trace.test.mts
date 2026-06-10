@@ -3,11 +3,9 @@ import test from "node:test";
 
 import { aiTaskLedgerFromGeneration, aiTaskTraceHeaders, buildGenerationTaskLedger, generationTaskSummary, readAiTaskLedgerFromHeaders } from "./ai-task-trace-utils.ts";
 
-test("only attaches ai task trace header for remote channel", () => {
+test("attaches ai task trace header through the unified backend channel", () => {
     const trace = { projectId: "project-1", canvasId: "canvas-1", nodeId: "node-1", shotIds: ["shot-1"] };
-    assert.deepEqual(aiTaskTraceHeaders({ channelMode: "local" } as any, trace), {});
-
-    const headers = aiTaskTraceHeaders({ channelMode: "remote" } as any, trace);
+    const headers = aiTaskTraceHeaders({ channelMode: "local" } as any, trace);
     assert.ok(headers["X-Infinite-Canvas-Trace"]);
     assert.deepEqual(JSON.parse(headers["X-Infinite-Canvas-Trace"]), {
         projectId: "project-1",

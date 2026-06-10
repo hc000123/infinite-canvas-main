@@ -60,7 +60,6 @@ export function buildCanvasFallbackProductionPackages(canvasId: string, title: s
 }
 
 export function getNodeProductionPackageId(node?: CanvasNodeData | null) {
-    const metadata = node?.metadata;
     return explicitNodeProductionPackageId(node) || fallbackNodeProductionPackageId(node);
 }
 
@@ -173,7 +172,7 @@ export function buildNextProductionVideoVersionMetadata(nodes: CanvasNodeData[],
     };
 }
 
-export function markCurrentProductionVideoVersion(nodes: CanvasNodeData[], packageId: string, nodeId: string) {
+export function markCurrentProductionVideoVersion(nodes: CanvasNodeData[], packageId: string, nodeId: string): CanvasNodeData[] {
     return nodes.map((node) => {
         if (getNodeProductionPackageId(node) !== packageId || node.type !== "video") return node;
         return {
@@ -187,7 +186,7 @@ export function markCurrentProductionVideoVersion(nodes: CanvasNodeData[], packa
     });
 }
 
-export function bindVideoNodeToProductionPackage(nodes: CanvasNodeData[], productionPackage: CanvasProductionPackageSummary, nodeId: string, createdAt: string) {
+export function bindVideoNodeToProductionPackage(nodes: CanvasNodeData[], productionPackage: CanvasProductionPackageSummary, nodeId: string, createdAt: string): CanvasNodeData[] {
     const target = nodes.find((node) => node.id === nodeId);
     if (!target || target.type !== "video") return nodes;
     const alreadyInPackage = getNodeProductionPackageId(target) === productionPackage.id;
@@ -202,7 +201,7 @@ export function bindVideoNodeToProductionPackage(nodes: CanvasNodeData[], produc
                       productionPackageId: productionPackage.id,
                       productionPackageLabel: productionPackage.label,
                       productionPackageTitle: productionPackage.title,
-                      productionPackageRole: "video_result",
+                      productionPackageRole: "video_result" as const,
                       productionVideoVersionId: versionId,
                       productionVideoVersionNumber: versionNumber,
                       productionVideoVersionCreatedAt: node.metadata?.productionVideoVersionCreatedAt || node.metadata?.finishedAt || node.metadata?.localStoredAt || createdAt,
@@ -215,7 +214,7 @@ export function bindVideoNodeToProductionPackage(nodes: CanvasNodeData[], produc
     return target.metadata?.status === "success" ? markCurrentProductionVideoVersion(next, productionPackage.id, nodeId) : next;
 }
 
-export function hideProductionVideoVersion(nodes: CanvasNodeData[], nodeId: string) {
+export function hideProductionVideoVersion(nodes: CanvasNodeData[], nodeId: string): CanvasNodeData[] {
     const target = nodes.find((node) => node.id === nodeId);
     const packageId = getNodeProductionPackageId(target);
     const hidden = nodes.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, productionVideoVersionHidden: true, isCurrentProductionVersion: false } } : node));

@@ -144,7 +144,7 @@ export function buildSeedanceVideoTaskPayload(config: SeedanceVideoTaskConfig, p
 }
 
 function resolveSeedanceRequestModel(config: SeedanceVideoTaskConfig) {
-    return (config.model || config.seedanceModel || config.videoModel || config.seedanceEndpointId || "").trim();
+    return (config.seedanceEndpointId || config.model || config.seedanceModel || config.videoModel || "").trim();
 }
 
 function normalizeSeedanceImageReference(input: SeedanceReferenceInput) {

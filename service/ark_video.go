@@ -607,15 +607,9 @@ func normalizeArkVideoDuration(value string) int {
 	var seconds int
 	_, _ = fmt.Sscan(value, &seconds)
 	if seconds <= 0 {
-		return 5
+		return 6
 	}
-	if seconds <= 5 {
-		return 5
-	}
-	if seconds <= 10 {
-		return 10
-	}
-	return 15
+	return max(4, min(15, seconds))
 }
 
 func normalizeArkVideoRatio(value string) string {

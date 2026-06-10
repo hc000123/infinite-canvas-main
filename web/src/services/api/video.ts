@@ -176,18 +176,15 @@ async function requestOpenAICompatibleVideoGeneration(config: AiConfig, prompt: 
     }
 }
 
-function assertVideoConfigReady(config: AiConfig, model: string) {
+function assertVideoConfigReady(_config: AiConfig, model: string) {
     if (!model.trim()) throw new Error("视频模型未配置，请先选择视频模型");
-    if (config.channelMode === "remote") return;
-    if (!config.baseUrl.trim()) throw new Error("本地直连 Base URL 未配置，请先在 AI 配置中填写");
-    if (!config.apiKey.trim()) throw new Error("本地直连 API Key 未配置，请先在 AI 配置中填写");
 }
 
 async function createVideoTask(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string, trace?: AiTaskTrace) {
     const body = await buildVideoPayload(config, prompt, references, model);
     const url = aiApiUrl(config, "/videos");
     const response = await axios.post<ApiVideoResponse>(url, body, {
-        headers: { ...aiHeaders(config), ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...(config.channelMode === "remote" ? aiTaskTraceHeaders(config, trace) : {}) },
+        headers: { ...aiHeaders(config), ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...aiTaskTraceHeaders(config, trace) },
         timeout: AI_REQUEST_TIMEOUT_MS,
     });
     const task = mergeVideoTaskLedger(normalizeVideoTask(unwrapVideoResponse(response.data)), readAiTaskLedgerFromHeaders(response.headers));
@@ -197,10 +194,7 @@ async function createVideoTask(config: AiConfig, prompt: string, references: Nor
 
 async function queryVideoTask(config: AiConfig, taskId: string, model: string) {
     const url = aiApiUrl(config, `/videos/${taskId}`);
-    const params: Record<string, string> = {};
-    if (config.channelMode === "remote") {
-        params.model = model;
-    }
+    const params: Record<string, string> = { model };
     const response = await axios.get<ApiVideoResponse>(url, {
         headers: aiHeaders(config),
         params,
@@ -380,7 +374,7 @@ async function fetchVideoContent(config: AiConfig, model: string, task: Normaliz
 async function fetchVideoContentDirect(config: AiConfig, model: string, taskId: string) {
     const content = await axios.get<Blob>(aiApiUrl(config, `/videos/${taskId}/content`), {
         headers: aiHeaders(config),
-        params: config.channelMode === "remote" ? { model } : undefined,
+        params: { model },
         responseType: "blob",
         timeout: AI_VIDEO_CONTENT_TIMEOUT_MS,
     });

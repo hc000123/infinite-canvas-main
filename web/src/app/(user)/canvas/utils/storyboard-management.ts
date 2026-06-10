@@ -741,7 +741,7 @@ export function planShotGroupCanvasInsert({
             size: config.size,
             seconds: config.seconds,
             vquality: config.vquality,
-            duration: String(group.totalDuration || config.seconds || ""),
+            duration: config.seconds,
             ratio: config.size,
             sourceType: "shot_group",
             sourceId: group.id,

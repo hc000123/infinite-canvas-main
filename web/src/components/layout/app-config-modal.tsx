@@ -21,9 +21,7 @@ export function AppConfigModal() {
     const user = useUserStore((state) => state.user);
     const effectiveConfig = useEffectiveConfig();
     const modelChannel = publicSettings?.modelChannel;
-    const allowCustomChannel = modelChannel?.allowCustomChannel === true;
-    const effectiveMode = allowCustomChannel ? config.channelMode : "remote";
-    const modelConfig = effectiveMode === "remote" ? effectiveConfig : config;
+    const modelConfig = effectiveConfig;
     const videoModel = modelConfig.videoModel;
     const isAdmin = user?.role === "admin";
     const showAdminSettingsEntry = isAdmin;
@@ -36,7 +34,7 @@ export function AppConfigModal() {
         const hasModelConfig = Boolean(modelConfig.imageModel.trim() && videoModel.trim() && modelConfig.textModel.trim());
         setConfigDialogOpen(false);
         if (!hasModelConfig) return;
-        if (!allowCustomChannel && config.channelMode !== "remote") updateConfig("channelMode", "remote");
+        if (config.channelMode !== "remote") updateConfig("channelMode", "remote");
         message.success(shouldPromptContinue ? "配置已保存，请继续刚才的请求" : "配置已保存");
         clearPromptContinue();
     };
@@ -68,27 +66,9 @@ export function AppConfigModal() {
         >
             <div className="pt-1">
                 <Form layout="vertical" requiredMark={false}>
-                    {allowCustomChannel ? (
-                        <Form.Item label="渠道模式" className="mb-4">
-                            <Segmented
-                                block
-                                size="middle"
-                                value={effectiveMode}
-                                onChange={(value) => updateConfig("channelMode", value as AiConfig["channelMode"])}
-                                options={[
-                                    { label: "本地直连", value: "local" },
-                                    { label: "云端渠道", value: "remote" },
-                                ]}
-                            />
-                        </Form.Item>
-                    ) : null}
                     <div className="mb-4 rounded-lg border border-stone-200 p-3 text-sm text-stone-500 dark:border-stone-800">
-                        <div className="font-medium text-stone-900 dark:text-stone-100">{effectiveMode === "remote" ? "云端渠道" : "本地直连"}</div>
-                        <div className="mt-1">
-                            {effectiveMode === "remote"
-                                ? `由系统后台渠道转发请求，当前可用 ${modelChannel?.availableModels.length || 0} 个模型。接口、密钥、模型映射、额度、任务日志和素材审核都在后台维护。`
-                                : "本地直连的接口、密钥和模型清单统一到后台系统设置维护，前台只选择使用哪个模型。"}
-                        </div>
+                        <div className="font-medium text-stone-900 dark:text-stone-100">模型渠道</div>
+                        <div className="mt-1">由后端统一转发请求，当前可用 {modelChannel?.availableModels.length || 0} 个模型。接口、密钥、模型映射、额度、任务日志和素材审核都在后台维护。</div>
                         {showAdminSettingsEntry ? (
                             <Button className="mt-3" size="small" onClick={openAdminSettings}>
                                 去后台设置
@@ -106,38 +86,36 @@ export function AppConfigModal() {
                             <ModelPicker config={modelConfig} modelType="text" value={modelConfig.textModel} onChange={(model) => updateConfig("textModel", model)} fullWidth />
                         </Form.Item>
                     </div>
-                    {effectiveMode === "local" ? (
-                        <div className="mb-0 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
-                            <div className="mb-3 flex items-center justify-between gap-3">
-                                <div>
-                                    <div className="text-sm font-medium">思考模式</div>
-                                    <div className="mt-1 text-xs text-stone-500">用于支持 reasoning_effort 的 OpenAI 兼容 Chat Completions 模型。</div>
-                                </div>
-                                <Segmented
-                                    size="small"
-                                    value={config.thinkingMode}
-                                    onChange={(value) => updateConfig("thinkingMode", value as AiConfig["thinkingMode"])}
-                                    options={[
-                                        { label: "关闭", value: "false" },
-                                        { label: "开启", value: "true" },
-                                    ]}
-                                />
+                    <div className="mb-0 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                            <div>
+                                <div className="text-sm font-medium">思考模式</div>
+                                <div className="mt-1 text-xs text-stone-500">用于支持 reasoning_effort 的 OpenAI 兼容 Chat Completions 模型。</div>
                             </div>
                             <Segmented
-                                block
-                                size="middle"
-                                disabled={config.thinkingMode !== "true"}
-                                value={config.reasoningEffort}
-                                onChange={(value) => updateConfig("reasoningEffort", value as AiConfig["reasoningEffort"])}
+                                size="small"
+                                value={config.thinkingMode}
+                                onChange={(value) => updateConfig("thinkingMode", value as AiConfig["thinkingMode"])}
                                 options={[
-                                    { label: "极低", value: "minimal" },
-                                    { label: "低", value: "low" },
-                                    { label: "中", value: "medium" },
-                                    { label: "高", value: "high" },
+                                    { label: "关闭", value: "false" },
+                                    { label: "开启", value: "true" },
                                 ]}
                             />
                         </div>
-                    ) : null}
+                        <Segmented
+                            block
+                            size="middle"
+                            disabled={config.thinkingMode !== "true"}
+                            value={config.reasoningEffort}
+                            onChange={(value) => updateConfig("reasoningEffort", value as AiConfig["reasoningEffort"])}
+                            options={[
+                                { label: "极低", value: "minimal" },
+                                { label: "低", value: "low" },
+                                { label: "中", value: "medium" },
+                                { label: "高", value: "high" },
+                            ]}
+                        />
+                    </div>
                 </Form>
             </div>
         </Modal>

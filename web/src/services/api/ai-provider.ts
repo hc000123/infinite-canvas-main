@@ -1,7 +1,6 @@
 import axios from "axios";
 
-import { shouldUseBrowserAIKey } from "@/services/api/ai-channel-boundary";
-import { buildApiUrl, defaultConfig, type AiConfig } from "@/stores/use-config-store";
+import type { AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
 export const AI_REQUEST_TIMEOUT_MS = 120_000;
@@ -12,27 +11,20 @@ export const AI_VIDEO_MAX_POLL_ATTEMPTS = 240;
 export type AiProviderProtocol = AiConfig["videoProtocol"];
 const reasoningEfforts = new Set<AiConfig["reasoningEffort"]>(["minimal", "low", "medium", "high"]);
 
-export function aiApiUrl(config: AiConfig, path: string, protocol: AiProviderProtocol = "openai") {
-    const baseUrl = protocol === "volcengine-ark" ? config.volcengineBaseUrl || defaultConfig.volcengineBaseUrl : config.baseUrl;
-    return config.channelMode === "remote" ? `/api/v1${path}` : buildApiUrl(baseUrl, path, protocol);
+export function aiApiUrl(_config: AiConfig, path: string, _protocol: AiProviderProtocol = "openai") {
+    return `/api/v1${path}`;
 }
 
-export function aiHeaders(config: AiConfig, contentType?: string, protocol: AiProviderProtocol = "openai") {
+export function aiHeaders(_config: AiConfig, contentType?: string, _protocol: AiProviderProtocol = "openai") {
     const token = useUserStore.getState().token;
-    const apiKey = protocol === "volcengine-ark" ? config.volcengineApiKey : config.apiKey;
-    return shouldUseBrowserAIKey(config.channelMode)
-        ? {
-              Authorization: `Bearer ${apiKey}`,
-              ...(contentType ? { "Content-Type": contentType } : {}),
-          }
-        : {
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-              ...(contentType ? { "Content-Type": contentType } : {}),
-          };
+    return {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(contentType ? { "Content-Type": contentType } : {}),
+    };
 }
 
-export function refreshRemoteUser(config: AiConfig) {
-    if (config.channelMode === "remote") void useUserStore.getState().hydrateUser();
+export function refreshRemoteUser(_config: AiConfig) {
+    void useUserStore.getState().hydrateUser();
 }
 
 export function aiReasoningPayload(config: AiConfig) {

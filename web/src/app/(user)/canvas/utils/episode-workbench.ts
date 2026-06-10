@@ -147,6 +147,7 @@ export function buildShotGroupGenerationSummaries({ shotGroups, tableShots, node
         const relatedNodes = nodes.filter((node) => node.metadata?.shotGroupId === row.group.id || node.metadata?.storyboardShotGroupId === row.group.id);
         const videoNode = relatedNodes.find((node) => node.type === "video") || relatedNodes.find((node) => node.type === "config");
         const status = deriveShotGroupRuntimeStatus(row.group, videoNode);
+        const hasError = status === "failed" || status === "retry_needed";
         return {
             group: row.group,
             shots: row.shots,
@@ -157,7 +158,7 @@ export function buildShotGroupGenerationSummaries({ shotGroups, tableShots, node
             aiTaskId: videoNode?.metadata?.aiTaskId,
             aiTaskStatus: videoNode?.metadata?.aiTaskStatus,
             credits: videoNode?.metadata?.aiTaskCredits,
-            errorMessage: videoNode?.metadata?.errorDetails || row.group.errorMessage,
+            errorMessage: hasError ? videoNode?.metadata?.errorDetails || row.group.errorMessage : undefined,
             resultAssetIds: row.group.resultAssetIds,
             primaryAssetId: row.group.primaryAssetId,
             referenceAssetCount: Array.isArray(videoNode?.metadata?.referenceAssets) ? videoNode.metadata.referenceAssets.length : 0,
@@ -167,6 +168,7 @@ export function buildShotGroupGenerationSummaries({ shotGroups, tableShots, node
 }
 
 export function deriveShotGroupRuntimeStatus(group: ShotGroup, node?: CanvasNodeData): ShotGroupGenerationSummary["status"] {
+    if (node?.type === "video" && node.metadata?.content) return "succeeded";
     if (node?.metadata?.status === "loading" || group.status === "generating") return "generating";
     if (node?.metadata?.status === "success" || group.status === "done") return "succeeded";
     if (node?.metadata?.status === "error" || group.status === "error") return group.taskId || node?.metadata?.taskId ? "retry_needed" : "failed";

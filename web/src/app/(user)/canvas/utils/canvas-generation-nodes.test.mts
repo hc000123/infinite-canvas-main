@@ -27,7 +27,7 @@ test("creates regenerated video variants without a canvas connection", () => {
         },
     });
 
-    assert.equal(result.connection, null);
+    assert.deepEqual(result.connections, []);
     assert.equal(result.videoNode.metadata?.relationType, "variant");
     assert.equal(result.videoNode.metadata?.variantOfNodeId, sourceNode.id);
     assert.equal(result.videoNode.position.x, sourceNode.position.x + 48);

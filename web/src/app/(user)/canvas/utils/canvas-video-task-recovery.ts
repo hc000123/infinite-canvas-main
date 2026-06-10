@@ -2,6 +2,16 @@ import type { CanvasNodeData, CanvasNodeMetadata } from "../types.ts";
 
 export function resetInterruptedGeneration(nodes: CanvasNodeData[]) {
     return nodes.map((node) => {
+        if (isCompletedMediaNodeWithStaleStatus(node)) {
+            return {
+                ...node,
+                metadata: {
+                    ...node.metadata,
+                    status: "success" as const,
+                    errorDetails: undefined,
+                },
+            };
+        }
         if (node.metadata?.status !== "loading") return node;
         if (node.type === "video" && node.metadata.taskId) return node;
         return {
@@ -13,6 +23,10 @@ export function resetInterruptedGeneration(nodes: CanvasNodeData[]) {
             },
         };
     });
+}
+
+function isCompletedMediaNodeWithStaleStatus(node: CanvasNodeData) {
+    return (node.type === "image" || node.type === "video" || node.type === "audio") && Boolean(node.metadata?.content) && (node.metadata?.status !== "success" || Boolean(node.metadata?.errorDetails));
 }
 
 export function recoverableVideoTaskNodes(nodes: CanvasNodeData[]) {

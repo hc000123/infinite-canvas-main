@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 
 import { ImageSettingsTheme } from "@/components/image-settings-panel";
-import { isSeedanceVideoProtocol, resolveSeedanceTaskModeForSource, seedanceReferenceImageModeOptions, shouldShowSeedanceImageControl, visibleSeedanceReferenceImageMode, visibleSeedanceTaskModeOptions } from "@/components/video-settings-options";
+import { resolveSeedanceTaskModeForSource, seedanceReferenceImageModeOptions, shouldShowSeedanceImageControl, visibleSeedanceReferenceImageMode, visibleSeedanceTaskModeOptions } from "@/components/video-settings-options";
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import type { AiConfig } from "@/stores/use-config-store";
 
@@ -21,7 +21,6 @@ const ratioOptions = [
     { value: "adaptive", label: "自适应", width: 0, height: 0 },
 ];
 
-const openAISecondOptions = [5, 6, 10, 15, 20];
 const editTypeOptions = [
     { value: "replace", label: "替换" },
     { value: "add", label: "添加" },
@@ -46,8 +45,6 @@ type VideoSettingsPanelProps = {
 };
 
 export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = true, showTaskMode = false, hasSourceVideo = false, className = "w-[320px] space-y-4 rounded-2xl px-1 py-0.5" }: VideoSettingsPanelProps) {
-    const isSeedance = isSeedanceVideoConfig(config);
-    const secondOptions = openAISecondOptions;
     const secondLimits = videoSecondsLimits(config);
     const seconds = normalizeVideoSecondsValue(config.videoSeconds, config);
     const ratio = normalizeVideoRatioValue(config.size);
@@ -61,16 +58,16 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const referenceImageMode = visibleSeedanceReferenceImageMode(config.videoReferenceImageMode);
 
     useEffect(() => {
-        if (!isSeedance || !showTaskMode || hasSourceVideo || (config.videoTaskMode !== "edit" && config.videoTaskMode !== "extend")) return;
+        if (!showTaskMode || hasSourceVideo || (config.videoTaskMode !== "edit" && config.videoTaskMode !== "extend")) return;
         onConfigChange("videoTaskMode", "generate");
-    }, [config.videoTaskMode, hasSourceVideo, isSeedance, onConfigChange, showTaskMode]);
+    }, [config.videoTaskMode, hasSourceVideo, onConfigChange, showTaskMode]);
 
     return (
         <ImageSettingsTheme theme={theme}>
             <div className={className} style={{ color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()}>
                 {showTitle ? <div className="text-lg font-semibold">视频设置</div> : null}
-                {isSeedance ? <div className="text-xs leading-5 opacity-55">生成新视频时可用图片控制首帧/首尾帧。续写请从已完成视频节点的“续写”按钮进入。</div> : null}
-                {showTaskMode && isSeedance ? (
+                <div className="text-xs leading-5 opacity-55">生成新视频时可用图片控制首帧/首尾帧。续写请从已完成视频节点的“续写”按钮进入。</div>
+                {showTaskMode ? (
                     <SettingGroup title="生成方式" color={theme.node.muted}>
                         <div className={`grid gap-2.5 ${hasSourceVideo ? "grid-cols-3" : "grid-cols-1"}`}>
                             {taskOptions.map((item) => (
@@ -99,7 +96,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                         ) : null}
                     </SettingGroup>
                 ) : null}
-                {isSeedance && showImageControl ? (
+                {showImageControl ? (
                     <SettingGroup title="图片控制" color={theme.node.muted}>
                         <div className="grid grid-cols-2 gap-2.5">
                             {seedanceReferenceImageModeOptions.map((item) => (
@@ -138,40 +135,27 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     </div>
                 </SettingGroup>
                 <SettingGroup title="秒数" color={theme.node.muted}>
-                    {isSeedance ? (
-                        <SecondRangeControl value={seconds} min={secondLimits.min} max={secondLimits.max} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
-                    ) : (
-                        <div className="grid grid-cols-3 gap-2.5">
-                            {secondOptions.map((value) => (
-                                <OptionPill key={value} selected={seconds === String(value)} theme={theme} onClick={() => onConfigChange("videoSeconds", String(value))}>
-                                    {value}s
-                                </OptionPill>
-                            ))}
-                            <SecondNumberInput value={seconds} min={secondLimits.min} max={secondLimits.max} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
-                        </div>
-                    )}
+                    <SecondRangeControl value={seconds} min={secondLimits.min} max={secondLimits.max} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
                 </SettingGroup>
-                {isSeedance ? (
-                    <SettingGroup title="Ark 参数" color={theme.node.muted}>
-                        <div className="grid grid-cols-2 gap-2.5">
-                            <ToggleSwitch checked={generateAudio} label="生成音频" theme={theme} onChange={(checked) => onConfigChange("videoGenerateAudio", String(checked))} />
-                            <ToggleSwitch checked={watermark} label="水印" theme={theme} onChange={(checked) => onConfigChange("videoWatermark", String(checked))} />
-                        </div>
-                        <label className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm" style={{ background: theme.node.fill, color: theme.node.text }}>
-                            <span className="shrink-0" style={{ color: theme.node.muted }}>
-                                seed
-                            </span>
-                            <NumberInput
-                                value={config.videoSeed || ""}
-                                min={0}
-                                placeholder="随机"
-                                theme={theme}
-                                className="h-8 flex-1 rounded-lg border bg-transparent px-3 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2f80ff]/70 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                onChange={(value) => onConfigChange("videoSeed", value)}
-                            />
-                        </label>
-                    </SettingGroup>
-                ) : null}
+                <SettingGroup title="生成参数" color={theme.node.muted}>
+                    <div className="grid grid-cols-2 gap-2.5">
+                        <ToggleSwitch checked={generateAudio} label="生成音频" theme={theme} onChange={(checked) => onConfigChange("videoGenerateAudio", String(checked))} />
+                        <ToggleSwitch checked={watermark} label="水印" theme={theme} onChange={(checked) => onConfigChange("videoWatermark", String(checked))} />
+                    </div>
+                    <label className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm" style={{ background: theme.node.fill, color: theme.node.text }}>
+                        <span className="shrink-0" style={{ color: theme.node.muted }}>
+                            seed
+                        </span>
+                        <NumberInput
+                            value={config.videoSeed || ""}
+                            min={0}
+                            placeholder="随机"
+                            theme={theme}
+                            className="h-8 flex-1 rounded-lg border bg-transparent px-3 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2f80ff]/70 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            onChange={(value) => onConfigChange("videoSeed", value)}
+                        />
+                    </label>
+                </SettingGroup>
                 <SettingGroup title="生成辅助" color={theme.node.muted}>
                     <ToggleSwitch checked={promptReviewEnabled} label="生成前提示词自审" theme={theme} onChange={(checked) => onConfigChange("videoPromptReviewEnabled", String(checked))} />
                 </SettingGroup>
@@ -196,17 +180,13 @@ export type VideoSecondsConfig = Pick<AiConfig, "channelMode" | "videoProtocol">
 
 export function normalizeVideoSecondsValue(value: string, config?: VideoSecondsConfig) {
     const limits = videoSecondsLimits(config);
-    const fallback = isSeedanceVideoConfig(config) ? 5 : 6;
+    const fallback = 6;
     const seconds = Math.floor(Number(value) || fallback);
     return String(Math.max(limits.min, Math.min(limits.max, seconds)));
 }
 
-function videoSecondsLimits(config?: VideoSecondsConfig) {
-    return isSeedanceVideoConfig(config) ? { min: 4, max: 15 } : { min: 1, max: 20 };
-}
-
-function isSeedanceVideoConfig(config?: VideoSecondsConfig) {
-    return isSeedanceVideoProtocol(config);
+function videoSecondsLimits(_config?: VideoSecondsConfig) {
+    return { min: 4, max: 15 };
 }
 
 export function normalizeVideoSizeValue(value: string) {
