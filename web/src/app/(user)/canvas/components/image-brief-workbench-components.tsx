@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { Button, Card, Form, Input, Modal, Popconfirm, Select, Segmented, Space, Tag } from "antd";
 import { Clipboard, ImagePlus, Pencil, Star, Trash2 } from "lucide-react";
 

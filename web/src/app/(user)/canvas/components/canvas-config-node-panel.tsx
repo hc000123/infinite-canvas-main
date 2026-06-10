@@ -272,7 +272,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
                                     <PreviewSection title="图片参考" count={imageInputs.length} empty="暂无图片参考">
                                         <div className="thin-scrollbar flex gap-1.5 overflow-x-auto pb-1">
                                             {imageInputs.map((input, index) => (
-                                                <ImageSortCard key={input.nodeId} input={input} imageIndex={index} imageTotal={imageInputs.length} inputs={inputs} theme={theme} onMove={moveInput} />
+                                                <ImageSortCard key={input.nodeId} input={input} imageIndex={index} imageTotal={imageInputs.length} theme={theme} onMove={moveInput} />
                                             ))}
                                         </div>
                                     </PreviewSection>
@@ -284,7 +284,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
                                         <div className="space-y-1.5">
                                             {ownPrompt ? <OwnPromptPreviewCard prompt={ownPrompt} theme={theme} /> : null}
                                             {textInputs.map((input, index) => (
-                                                <TextSortCard key={input.nodeId} input={input} textIndex={index} textTotal={textInputs.length} inputs={inputs} theme={theme} onMove={moveInput} onEdit={startTextEdit} />
+                                                <TextSortCard key={input.nodeId} input={input} textIndex={index} textTotal={textInputs.length} theme={theme} onMove={moveInput} onEdit={startTextEdit} />
                                             ))}
                                         </div>
                                     </PreviewSection>
@@ -351,7 +351,6 @@ function TextSortCard({
     input,
     textIndex,
     textTotal,
-    inputs,
     theme,
     onMove,
     onEdit,
@@ -359,7 +358,6 @@ function TextSortCard({
     input: NodeGenerationInput;
     textIndex: number;
     textTotal: number;
-    inputs: NodeGenerationInput[];
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     onMove: (input: NodeGenerationInput, offset: number) => void;
     onEdit: (input: NodeGenerationInput) => void;
@@ -401,9 +399,8 @@ function MediaSortCard({
     onRoleChange?: (role: ReferenceImageRole) => void;
     onMove: (input: NodeGenerationInput, offset: number) => void;
 }) {
-    if (input.type === "image")
-        return <ImageSortCard input={input} imageIndex={imageIndex} imageTotal={mediaTotal} orderIndex={mediaIndex} orderTotal={mediaTotal} inputs={[]} theme={theme} seedanceRole={seedanceRole} onRoleChange={onRoleChange} onMove={onMove} />;
-    if (input.type === "video") return <VideoSortCard input={input} videoIndex={videoIndex} videoTotal={mediaTotal} orderIndex={mediaIndex} orderTotal={mediaTotal} inputs={[]} theme={theme} onMove={onMove} />;
+    if (input.type === "image") return <ImageSortCard input={input} imageIndex={imageIndex} imageTotal={mediaTotal} orderIndex={mediaIndex} orderTotal={mediaTotal} theme={theme} seedanceRole={seedanceRole} onRoleChange={onRoleChange} onMove={onMove} />;
+    if (input.type === "video") return <VideoSortCard input={input} videoIndex={videoIndex} videoTotal={mediaTotal} orderIndex={mediaIndex} orderTotal={mediaTotal} theme={theme} onMove={onMove} />;
     if (input.type === "audio") return <AudioSortCard input={input} audioIndex={audioIndex} audioTotal={mediaTotal} orderIndex={mediaIndex} orderTotal={mediaTotal} theme={theme} onMove={onMove} />;
     return null;
 }
@@ -414,7 +411,6 @@ function ImageSortCard({
     imageTotal,
     orderIndex,
     orderTotal,
-    inputs,
     theme,
     seedanceRole,
     onRoleChange,
@@ -425,7 +421,6 @@ function ImageSortCard({
     imageTotal: number;
     orderIndex?: number;
     orderTotal?: number;
-    inputs: NodeGenerationInput[];
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     seedanceRole?: ReferenceImageRole;
     onRoleChange?: (role: ReferenceImageRole) => void;
@@ -464,7 +459,6 @@ function VideoSortCard({
     videoTotal,
     orderIndex,
     orderTotal,
-    inputs,
     theme,
     onMove,
 }: {
@@ -473,7 +467,6 @@ function VideoSortCard({
     videoTotal: number;
     orderIndex?: number;
     orderTotal?: number;
-    inputs: NodeGenerationInput[];
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     onMove: (input: NodeGenerationInput, offset: number) => void;
 }) {

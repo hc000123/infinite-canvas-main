@@ -1,7 +1,7 @@
 "use client";
 
 import { Download, FolderPlus, Library, PencilLine, Plus, Search, Trash2, Upload } from "lucide-react";
-import { Suspense, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { App, Button, Checkbox, Empty, Form, Input, Modal, Pagination, Select, Tag } from "antd";
 import { saveAs } from "file-saver";
@@ -25,7 +25,6 @@ import { buildProjectLibraryAssetPatch, buildRemoveProjectLibraryAssetPatch } fr
 import { assetVersionRecords, buildAssetVersionedUpdatePatch, buildRestoreAssetVersionPatch, type AssetVersionRecord } from "./asset-version-history";
 import {
     collectOutdatedAssetVersionUsages,
-    outdatedUsageLabel,
     selectedOutdatedUsageSummary,
     updateCanvasProjectAssetReferenceToLatest,
     updateProductionBibleAssetReferenceToLatest,
@@ -352,21 +351,24 @@ function AssetsPageContent() {
 
         if (values.kind === "text") {
             const asset = { ...base, kind: "text" as const, data: { content: (values.content || "").trim() } };
-            editingAsset ? updateEditedAsset(editingAsset, asset) : addAsset(asset);
+            if (editingAsset) updateEditedAsset(editingAsset, asset);
+            else addAsset(asset);
         } else if (values.kind === "image") {
             if (!imageDraft) {
                 message.error("请选择图片文件");
                 return;
             }
             const asset = { ...base, kind: "image" as const, data: imageDraft };
-            editingAsset ? updateEditedAsset(editingAsset, asset) : await addAssetOnce(asset);
+            if (editingAsset) updateEditedAsset(editingAsset, asset);
+            else await addAssetOnce(asset);
         } else {
             if (!mediaDraft) {
                 message.error(values.kind === "video" ? "请选择视频文件" : "请选择音频文件");
                 return;
             }
             const asset = { ...base, kind: values.kind, data: mediaDraft } as Parameters<typeof addAsset>[0];
-            editingAsset ? updateEditedAsset(editingAsset, asset) : await addAssetOnce(asset);
+            if (editingAsset) updateEditedAsset(editingAsset, asset);
+            else await addAssetOnce(asset);
         }
 
         message.success(editingAsset ? "素材已更新" : "素材已保存");
@@ -708,14 +710,17 @@ function AssetsPageContent() {
         setDeletingAsset(null);
     };
 
-    const updateVolcengineMetadata = (asset: ImageAsset | VideoAsset, volcengineAsset: VolcengineAssetMetadata) => {
-        const metadata = {
-            ...(asset.metadata || {}),
-            volcengineAsset,
-        };
-        updateAsset(asset.id, { metadata });
-        setPreviewAsset((current) => (current?.id === asset.id ? ({ ...current, metadata } as Asset) : current));
-    };
+    const updateVolcengineMetadata = useCallback(
+        (asset: ImageAsset | VideoAsset, volcengineAsset: VolcengineAssetMetadata) => {
+            const metadata = {
+                ...(asset.metadata || {}),
+                volcengineAsset,
+            };
+            updateAsset(asset.id, { metadata });
+            setPreviewAsset((current) => (current?.id === asset.id ? ({ ...current, metadata } as Asset) : current));
+        },
+        [updateAsset],
+    );
 
     const submitVolcengineReviewAsset = async (asset: ImageAsset | VideoAsset) => {
         const storedBlob = asset.data.storageKey ? (asset.kind === "image" ? await getImageBlob(asset.data.storageKey) : await getMediaBlob(asset.data.storageKey)) : null;
@@ -800,33 +805,36 @@ function AssetsPageContent() {
         }
     };
 
-    const refreshImageReview = async (asset: Asset, options: { silent?: boolean; showProgress?: boolean } = {}) => {
-        if ((asset.kind !== "image" && asset.kind !== "video") || !asset.metadata?.volcengineAsset?.assetId) return;
-        if (!token) {
-            if (!options.silent) message.error("请先登录");
-            return;
-        }
-        const showProgress = options.showProgress || !options.silent;
-        if (showProgress) setRefreshingReviewId(asset.id);
-        try {
-            const saved = asset.metadata.volcengineAsset;
-            const status = await fetchVolcengineAssetStatus(token, {
-                assetId: saved.assetId,
-                projectName: saved.projectName,
-            });
-            const next: VolcengineAssetMetadata = mergeVolcengineReviewStatus(saved, status);
-            updateVolcengineMetadata(asset, next);
-            const statusText = `当前状态：${volcengineStatusLabel(next.status)}${next.error ? `：${next.error}` : ""}`;
-            if (!options.silent) {
-                if (next.status === "Failed") message.error(statusText);
-                else message.success(statusText);
+    const refreshImageReview = useCallback(
+        async (asset: Asset, options: { silent?: boolean; showProgress?: boolean } = {}) => {
+            if ((asset.kind !== "image" && asset.kind !== "video") || !asset.metadata?.volcengineAsset?.assetId) return;
+            if (!token) {
+                if (!options.silent) message.error("请先登录");
+                return;
             }
-        } catch (error) {
-            if (!options.silent) message.error(error instanceof Error ? error.message : "刷新失败");
-        } finally {
-            if (showProgress) setRefreshingReviewId((current) => (current === asset.id ? null : current));
-        }
-    };
+            const showProgress = options.showProgress || !options.silent;
+            if (showProgress) setRefreshingReviewId(asset.id);
+            try {
+                const saved = asset.metadata.volcengineAsset;
+                const status = await fetchVolcengineAssetStatus(token, {
+                    assetId: saved.assetId,
+                    projectName: saved.projectName,
+                });
+                const next: VolcengineAssetMetadata = mergeVolcengineReviewStatus(saved, status);
+                updateVolcengineMetadata(asset, next);
+                const statusText = `当前状态：${volcengineStatusLabel(next.status)}${next.error ? `：${next.error}` : ""}`;
+                if (!options.silent) {
+                    if (next.status === "Failed") message.error(statusText);
+                    else message.success(statusText);
+                }
+            } catch (error) {
+                if (!options.silent) message.error(error instanceof Error ? error.message : "刷新失败");
+            } finally {
+                if (showProgress) setRefreshingReviewId((current) => (current === asset.id ? null : current));
+            }
+        },
+        [message, token, updateVolcengineMetadata],
+    );
 
     useEffect(() => {
         if (!token || !volcengineAssetEnabled || !processingReviewIds) return;
@@ -849,7 +857,7 @@ function AssetsPageContent() {
             cancelled = true;
             window.clearInterval(timer);
         };
-    }, [processingReviewIds, token, volcengineAssetEnabled, validAssets]);
+    }, [processingReviewIds, refreshImageReview, token, volcengineAssetEnabled, validAssets]);
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-[var(--studio-shell-bg)] text-[var(--studio-text-primary)]">

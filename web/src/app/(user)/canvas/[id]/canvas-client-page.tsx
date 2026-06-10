@@ -37,7 +37,7 @@ import { applyCanvasProjectPresetToConfig } from "../utils/canvas-project-preset
 import { getNodeProductionPackageId, getNodeProductionPackageRole, productionPackageRoleLabel, type CanvasProductionPackageSummary } from "../utils/canvas-production-packages";
 import type { PromptReviewResult } from "../utils/canvas-prompt-review";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
-import { useCanvasConnections, type CanvasPendingConnectionCreate } from "../hooks/use-canvas-connections";
+import { useCanvasConnections } from "../hooks/use-canvas-connections";
 import { useCanvasClipboardActions } from "../hooks/use-canvas-clipboard-actions";
 import { useCanvasFileNodeActions } from "../hooks/use-canvas-file-node-actions";
 import { useCanvasHistory } from "../hooks/use-canvas-history";
@@ -75,7 +75,7 @@ import { CanvasNodeInfoModal } from "../components/canvas-node-info-modal";
 import { InfiniteCanvas } from "../components/infinite-canvas";
 import { Minimap } from "../components/canvas-mini-map";
 import { CanvasNode } from "../components/canvas-node";
-import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "../components/canvas-node-prompt-panel";
+import { CanvasNodePromptPanel } from "../components/canvas-node-prompt-panel";
 import { CanvasToolbar } from "../components/canvas-toolbar";
 import { CanvasStoryboardTimeline } from "../components/canvas-storyboard-timeline";
 import { AssetPickerModal, type AssetPickerTab } from "../components/asset-picker-modal";
@@ -93,7 +93,7 @@ type AppModal = ReturnType<typeof App.useApp>["modal"];
 import { useStoryboardStore } from "../stores/use-storyboard-store";
 import { useGenerationQueueStore } from "../stores/use-generation-queue-store";
 import { useCreativeProjectStore } from "../../projects/use-creative-project-store";
-import { CanvasNodeType, type CanvasAssistantImage, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type ConnectionHandle, type ContextMenuState, type Position, type ViewportTransform } from "../types";
+import { CanvasNodeType, type CanvasAssistantImage, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type ContextMenuState, type Position, type ViewportTransform } from "../types";
 
 const NODE_STATUS_SUCCESS = "success" as const;
 
@@ -240,7 +240,6 @@ function InfiniteCanvasPage() {
     const toolbarHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const handledFocusNodeIdRef = useRef("");
 
-    const config = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const updateConfig = useConfigStore((state) => state.updateConfig);
@@ -301,8 +300,8 @@ function InfiniteCanvasPage() {
     const [scriptManagerOpen, setScriptManagerOpen] = useState(false);
     const [storyboardManagerOpen, setStoryboardManagerOpen] = useState(false);
     const [imageBriefOpen, setImageBriefOpen] = useState(false);
-    const [imageBriefInitialId, setImageBriefInitialId] = useState("");
-    const [imageBriefOpenRequestId, setImageBriefOpenRequestId] = useState(0);
+    const imageBriefInitialId = "";
+    const imageBriefOpenRequestId = 0;
     const [storyboardInitialGroupId, setStoryboardInitialGroupId] = useState("");
     const [projectLoaded, setProjectLoaded] = useState(false);
     const [toolbarNodeId, setToolbarNodeId] = useState<string | null>(null);
@@ -314,7 +313,7 @@ function InfiniteCanvasPage() {
     const [cropNodeId, setCropNodeId] = useState<string | null>(null);
     const [angleNodeId, setAngleNodeId] = useState<string | null>(null);
     const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
-    const [assistantCollapsed, setAssistantCollapsed] = useState(true);
+    const [, setAssistantCollapsed] = useState(true);
     const [assistantMounted, setAssistantMounted] = useState(false);
     const [inspectorView, setInspectorView] = useState<CanvasInspectorView>("context");
     const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
@@ -619,7 +618,7 @@ function InfiniteCanvasPage() {
             }
             setToolbarNodeId(nodeId);
         },
-        [nodeImageSettingsOpen],
+        [nodeDraggingRef, nodeImageSettingsOpen],
     );
 
     const hideNodeToolbar = useCallback(() => {
@@ -1137,7 +1136,7 @@ function InfiniteCanvasPage() {
                 setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, errorDetails } } : item)));
             }
         },
-        [archiveGeneratedVideoNode, cacheUploadedCanvasMedia, canvasAiConfig, message, videoMetadata],
+        [archiveGeneratedVideoNode, cacheUploadedCanvasMedia, canvasAiConfig, message],
     );
 
     const { handleRetryNode } = useCanvasGenerationRetryActions({

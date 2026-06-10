@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { App, Button, Drawer, Empty, Form, Input, Modal, Select, Tag } from "antd";
-import { AlertTriangle, Bot, BookOpen, Boxes, Clapperboard, ExternalLink, FileText, Images, Library, ListVideo, Maximize2, Plus, ScrollText, Save, SlidersHorizontal, Sparkles, Workflow } from "lucide-react";
+import { AlertTriangle, Bot, Clapperboard, ExternalLink, Library, ListVideo, Maximize2, Plus, ScrollText, Save, Workflow } from "lucide-react";
 
 import { useAssetStore, type Asset, type AssetKind } from "@/stores/use-asset-store";
 import { useEffectiveConfig } from "@/stores/use-config-store";
@@ -85,11 +85,11 @@ export default function CreativeProjectDetailPage() {
     const [descriptionDraft, setDescriptionDraft] = useState(project?.description || "");
     const [episodeFilter, setEpisodeFilter] = useState<"all" | "done" | "draft" | "running">("all");
     const [bindingCanvasId, setBindingCanvasId] = useState("");
-    const [assetKindFilter, setAssetKindFilter] = useState<AssetKind | "all">("all");
-    const [referenceTypeFilter, setReferenceTypeFilter] = useState<ProjectAssetReferenceType | "all">("all");
+    const [assetKindFilter, _setAssetKindFilter] = useState<AssetKind | "all">("all");
+    const [referenceTypeFilter, _setReferenceTypeFilter] = useState<ProjectAssetReferenceType | "all">("all");
     const [versionStatusFilter, setVersionStatusFilter] = useState<ProjectAssetVersionFilter>("all");
-    const [assetLibraryFilter, setAssetLibraryFilter] = useState<ProjectAssetLibraryFilter>("all");
-    const [missingOnlyFilter, setMissingOnlyFilter] = useState(false);
+    const [assetLibraryFilter, _setAssetLibraryFilter] = useState<ProjectAssetLibraryFilter>("all");
+    const [_missingOnlyFilter, setMissingOnlyFilter] = useState(false);
     const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
     const [storyboardOpen, setStoryboardOpen] = useState(false);
     const [storyboardInitialGroupId, setStoryboardInitialGroupId] = useState("");
@@ -120,7 +120,7 @@ export default function CreativeProjectDetailPage() {
                 : [],
         [assets, bibleItems, canvasIds, canvases, project, storyboardGroups, storyboardShots],
     );
-    const overviewDashboard = useMemo(
+    const _overviewDashboard = useMemo(
         () =>
             project
                 ? buildProjectOverviewDashboard({
@@ -140,7 +140,7 @@ export default function CreativeProjectDetailPage() {
                 : null,
         [agentTasks, assetReferenceRows, assets, bibleItems, episodes, project, projectCanvases.length, queueItems, scenes, scripts, storyboardGroups, storyboardShots],
     );
-    const filteredAssetReferenceRows = useMemo(
+    const _filteredAssetReferenceRows = useMemo(
         () =>
             filterProjectAssetReferences(assetReferenceRows, {
                 assetKind: assetKindFilter,
@@ -150,7 +150,7 @@ export default function CreativeProjectDetailPage() {
             }),
         [assetKindFilter, assetLibraryFilter, assetReferenceRows, referenceTypeFilter, versionStatusFilter],
     );
-    const missingMaterialItems = useMemo(() => {
+    const _missingMaterialItems = useMemo(() => {
         if (!project) return [];
         const projectGroups = storyboardGroups.filter((group) => group.projectId === project.id);
         const groupIds = new Set(projectGroups.map((group) => group.id));
@@ -263,7 +263,7 @@ export default function CreativeProjectDetailPage() {
         );
     }
 
-    const saveDescription = () => {
+    const _saveDescription = () => {
         updateCreativeProject(project.id, { description: descriptionDraft });
         message.success("项目说明已保存");
     };
@@ -341,7 +341,7 @@ export default function CreativeProjectDetailPage() {
         setProductionBibleOpen(true);
     };
 
-    const runOverviewAction = (target: ProjectOverviewActionTarget) => {
+    const _runOverviewAction = (target: ProjectOverviewActionTarget) => {
         const href = projectOverviewActionHref(project.id, target);
         if (href) {
             router.push(href);
@@ -846,7 +846,7 @@ function formatProjectDate(value: string) {
     return new Date(value).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-function ProjectCommandCenter({
+function _ProjectCommandCenter({
     dashboard,
     descriptionDraft,
     hasCanvas,
@@ -972,7 +972,7 @@ function ProjectCommandStat({ label, value, tone = "default", onClick }: { label
     );
 }
 
-function ProjectOverviewDashboardView({ dashboard, onAction }: { dashboard: ProjectOverviewDashboard; onAction: (target: ProjectOverviewActionTarget) => void }) {
+function _ProjectOverviewDashboardView({ dashboard, onAction }: { dashboard: ProjectOverviewDashboard; onAction: (target: ProjectOverviewActionTarget) => void }) {
     const stats = dashboard.stats;
     const keyStats = [
         { icon: <Maximize2 className="size-3.5" />, label: "画布", value: stats.canvasCount, target: { type: "tab", tab: "canvas" } as ProjectOverviewActionTarget },
@@ -1098,7 +1098,7 @@ function agentTaskStatusLabel(status: string) {
     return "待确认";
 }
 
-function EntryCard({ icon, title, description, disabled, onOpen }: { icon: ReactNode; title: string; description: string; disabled?: boolean; onOpen?: () => void }) {
+function _EntryCard({ icon, title, description, disabled, onOpen }: { icon: ReactNode; title: string; description: string; disabled?: boolean; onOpen?: () => void }) {
     return (
         <button type="button" disabled={disabled} className="studio-panel-muted p-4 text-left transition enabled:hover:border-[var(--studio-border-strong)] disabled:cursor-not-allowed disabled:opacity-50" onClick={onOpen}>
             <div className="flex items-center gap-2 text-base font-semibold text-[var(--studio-text-primary)]">
@@ -1110,7 +1110,7 @@ function EntryCard({ icon, title, description, disabled, onOpen }: { icon: React
     );
 }
 
-function EntryLink({ icon, title, description, href }: { icon: ReactNode; title: string; description: string; href: string }) {
+function _EntryLink({ icon, title, description, href }: { icon: ReactNode; title: string; description: string; href: string }) {
     return (
         <Link href={href} className="studio-panel-muted p-4 text-left transition hover:border-[var(--studio-border-strong)]">
             <div className="flex items-center gap-2 text-base font-semibold text-[var(--studio-text-primary)]">
@@ -1131,7 +1131,7 @@ type ProjectMissingMaterialItem = {
     action: { type: "production-bible"; kind?: ProductionBibleKind } | { type: "storyboard"; groupId?: string; shotId?: string } | { type: "asset"; asset: Asset };
 };
 
-function ProjectAssetReferencesView({
+function _ProjectAssetReferencesView({
     rows,
     totalCount,
     filters,

@@ -176,7 +176,7 @@ export function deriveShotGroupRuntimeStatus(group: ShotGroup, node?: CanvasNode
     return "not_in_canvas";
 }
 
-export function buildEpisodeWorkbenchHref(projectId: string, canvasId?: string) {
+export function buildEpisodeWorkbenchHref(projectId: string, _canvasId?: string) {
     return `/projects/${projectId}`;
 }
 

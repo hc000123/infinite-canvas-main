@@ -83,7 +83,7 @@ export function useCanvasStoryboardCanvasActions({
     );
 
     const addStoryboardGroupToCanvas = useCallback(
-        (groupId: string, autoAssetRefs: StoryboardAssetRef[] = []) => {
+        (groupId: string, _autoAssetRefs: StoryboardAssetRef[] = []) => {
             const storyboardState = useStoryboardStore.getState();
             const group = storyboardState.groups.find((item) => item.id === groupId);
             const shots = storyboardState.shots.filter((shot) => shot.groupId === groupId);

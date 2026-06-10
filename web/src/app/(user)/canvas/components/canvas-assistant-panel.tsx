@@ -375,7 +375,8 @@ export function CanvasAssistantPanel({
                             danger
                             type="primary"
                             onClick={() => {
-                                deleteChatIds.length === historySessions.length ? clearSessions() : removeSessions(deleteChatIds);
+                                if (deleteChatIds.length === historySessions.length) clearSessions();
+                                else removeSessions(deleteChatIds);
                                 setDeleteChatIds([]);
                             }}
                         >

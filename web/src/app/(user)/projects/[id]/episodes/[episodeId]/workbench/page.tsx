@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Alert, App, Button, Card, Collapse, Empty, Input, Space, Tag } from "antd";
+import { Alert, App, Button, Card, Empty, Input, Space, Tag } from "antd";
 import { CheckCircle2, Play, XCircle } from "lucide-react";
 
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
@@ -18,9 +18,9 @@ import { canvasEpisodeContextFromEpisode } from "../../../../../canvas/utils/can
 import { buildCanvasProjectPresetFromConfig } from "../../../../../canvas/utils/canvas-project-preset";
 import type { ProductionBibleItem } from "../../../../../canvas/utils/production-bible";
 import type { StoryboardTableShot } from "../../../../../canvas/utils/storyboard-management";
-import { workflowStageDetail, type AgentWorkflowStage } from "../../../../agent-workflow-presets";
+import type { AgentWorkflowStage } from "../../../../agent-workflow-presets";
 import { useAgentRunnerStore } from "../../../../use-agent-runner-store";
-import { evaluateWorkflowQualityGates, getWorkflowStageRequiredReadings, type WorkflowGateCheckResult, type WorkflowRequiredReading } from "../../../../workflow-quality-gates";
+import type { WorkflowGateCheckResult, WorkflowRequiredReading } from "../../../../workflow-quality-gates";
 import {
     canGenerateWorkflowMappingPreview,
     getWorkflowStageSceneProgress,
@@ -42,9 +42,9 @@ import { useEpisodeWorkbenchRunActions } from "./use-episode-workbench-run-actio
 import { EpisodeAssetsModulePage } from "./components/episode-assets-module-page";
 import { EpisodeCanvasHandoffPage, type CanvasHandoffImportTarget } from "./components/episode-canvas-handoff-page";
 import { EpisodeStoryboardPackagePage } from "./components/episode-storyboard-package-page";
-import { EpisodeDetailDrawer, EpisodeModulePanel, EpisodeProgress, EpisodeStatusPill, episodeToneTextClass, type EpisodeDetailRecord, type EpisodeModuleConfig, type EpisodeModuleRow, type EpisodeStatusTone } from "./components/episode-module-panel";
+import { EpisodeDetailDrawer, EpisodeModulePanel, EpisodeProgress, EpisodeStatusPill, type EpisodeDetailRecord, type EpisodeModuleConfig, type EpisodeModuleRow, type EpisodeStatusTone } from "./components/episode-module-panel";
 import { buildStageOutputDigest, findDigestSection, findOutputKeywordLine, StageOutputDigest } from "./components/stage-output-digest";
-import { buildStoryboardProductionSegments, type StoryboardStorySegment } from "./storyboard-production-segments";
+import { buildStoryboardProductionSegments } from "./storyboard-production-segments";
 
 const stageCopy: Record<string, { title: string; agent: string; input: string; output: string; previewTargets: Array<AgentWorkflowMappingPreview["targetType"]> }> = {
     "director-analysis": {
@@ -109,30 +109,25 @@ export default function EpisodeProductionWorkbenchPage() {
     const storyboardTableShots = useStoryboardStore((state) => state.tableShots);
     const workflowRuns = useAgentRunnerStore((state) => state.workflowRuns);
     const workflowOutputs = useAgentRunnerStore((state) => state.workflowOutputs);
-    const workflowEvidences = useAgentRunnerStore((state) => state.workflowEvidences);
     const workflowMappingPreviews = useAgentRunnerStore((state) => state.workflowMappingPreviews);
     const workflowAppliedPreviewItemIds = useAgentRunnerStore((state) => state.workflowAppliedPreviewItemIds);
     const ensureWorkflowRun = useAgentRunnerStore((state) => state.ensureWorkflowRun);
-    const markWorkflowStageReadingsRead = useAgentRunnerStore((state) => state.markWorkflowStageReadingsRead);
     const summarizeApprovedStoryboardScenes = useAgentRunnerStore((state) => state.summarizeApprovedStoryboardScenes);
     const generateWorkflowMappingPreview = useAgentRunnerStore((state) => state.generateWorkflowMappingPreview);
     const applyProductionBiblePreview = useAgentRunnerStore((state) => state.applyProductionBiblePreview);
     const applyStoryboardPreview = useAgentRunnerStore((state) => state.applyStoryboardPreview);
     const applyVideoNodePreview = useAgentRunnerStore((state) => state.applyVideoNodePreview);
     const approveRun = useAgentRunnerStore((state) => state.approveRun);
-    const rejectRun = useAgentRunnerStore((state) => state.rejectRun);
     const startWorkflowTextRun = useAgentRunnerStore((state) => state.startWorkflowTextRun);
     const completeWorkflowTextRun = useAgentRunnerStore((state) => state.completeWorkflowTextRun);
     const failWorkflowTextRun = useAgentRunnerStore((state) => state.failWorkflowTextRun);
     const effectiveConfig = useEffectiveConfig();
     const checkAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const [scriptDraft, setScriptDraft] = useState("");
-    const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
-    const [sceneReviewNotes, setSceneReviewNotes] = useState<Record<string, string>>({});
+    const [sceneReviewNotes] = useState<Record<string, string>>({});
     const [selectedSceneKey, setSelectedSceneKey] = useState("");
-    const [subSceneKey, setSubSceneKey] = useState("");
+    const [subSceneKey] = useState("");
     const [applyingPreviewIds, setApplyingPreviewIds] = useState<Record<string, boolean>>({});
-    const [activeStageIds, setActiveStageIds] = useState<string[]>([]);
     const [activeModule, setActiveModule] = useState<EpisodeModuleKey>("director");
     const [detailRecord, setDetailRecord] = useState<EpisodeDetailRecord | null>(null);
     const [directorReviewStates, setDirectorReviewStates] = useState<Record<string, DirectorReviewState>>({});
@@ -185,19 +180,6 @@ export default function EpisodeProductionWorkbenchPage() {
         }
         if (!selectedSceneKey || !sceneOptions.some((scene) => scene.sceneKey === selectedSceneKey)) setSelectedSceneKey(sceneOptions[0].sceneKey);
     }, [sceneOptions, selectedSceneKey]);
-
-    useEffect(() => {
-        setActiveStageIds(
-            stages
-                .filter((stage) => {
-                    const stageState = workflowRun?.stageStates.find((item) => item.stageId === stage.stageId);
-                    const status = workflowRun ? summarizeWorkflowStageDisplayState(workflowRun, stage.stageId, stage.stageId === "seedance-storyboard" ? sceneOptions.map((scene) => scene.sceneKey) : []).displayStatus : stageState?.status;
-                    if (status === "approved") return Boolean(stageState?.outputId);
-                    return workflowRun?.currentStageId === stage.stageId || !status || status === "idle" || status === "review" || status === "running" || status === "rejected" || status === "error" || status === "blocked" || status === "partial";
-                })
-                .map((stage) => stage.stageId),
-        );
-    }, [sceneOptions, stages, workflowRun]);
 
     const selectedBaseScene = sceneOptions.find((scene) => scene.sceneKey === selectedSceneKey);
     const currentScene = selectedBaseScene ? withSubScene(selectedBaseScene, subSceneKey) : undefined;
@@ -1051,7 +1033,7 @@ function makeAssetPromptDraft({ description, name, promptSnippets, type }: { des
     return `${name}，${type}参考图，${description}，电影级写实质感，低对比深色影像风格，保持本集视觉连续性，清晰可作为后续分镜和画布承接参考。`;
 }
 
-function assetKindDisplay(kind: Asset["kind"]) {
+function _assetKindDisplay(kind: Asset["kind"]) {
     const labels: Record<Asset["kind"], string> = {
         audio: "音频",
         image: "图片",
@@ -1602,7 +1584,7 @@ function uniqueTextList(values: string[]) {
     return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
 
-function stageCollapseItem({
+function _stageCollapseItem({
     stage,
     workflowRun,
     output,
@@ -1758,7 +1740,7 @@ function stageCollapseItem({
     };
 }
 
-function StoryboardSceneWorkbench({
+function _StoryboardSceneWorkbench({
     scenes,
     selectedSceneKey,
     subSceneKey,
@@ -1938,7 +1920,7 @@ function PreviewList({
     );
 }
 
-function PreviewSummaryRow({
+function _PreviewSummaryRow({
     targetType,
     previews,
     appliedPreviewItemIds,
@@ -1981,7 +1963,7 @@ function PreviewSummaryRow({
     );
 }
 
-function TitleWithIcon({ icon, title }: { icon: React.ReactNode; title: string }) {
+function _TitleWithIcon({ icon, title }: { icon: React.ReactNode; title: string }) {
     return (
         <span className="inline-flex items-center gap-2">
             {icon}

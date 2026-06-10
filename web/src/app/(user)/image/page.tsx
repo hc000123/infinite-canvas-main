@@ -77,7 +77,6 @@ type ImageWorkbenchSourceContext = {
     title: string;
 };
 
-const LOG_STORE_KEY = "infinite-canvas:image_generation_logs";
 const logStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_generation_logs" });
 const emptyImageWorkbenchSourceContext: ImageWorkbenchSourceContext = {
     assetId: "",
@@ -269,7 +268,8 @@ export default function ImagePage() {
                     images: logImages,
                 }),
             );
-            successCount ? message.success("图片已生成") : message.error(failed?.reason instanceof Error ? failed.reason.message : "生成失败");
+            if (successCount) message.success("图片已生成");
+            else message.error(failed?.reason instanceof Error ? failed.reason.message : "生成失败");
         } finally {
             setRunning(false);
         }

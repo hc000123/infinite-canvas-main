@@ -17,7 +17,7 @@ import { useProductionBibleStore } from "../stores/use-production-bible-store";
 import { useStoryboardStore } from "../stores/use-storyboard-store";
 import type { CanvasProject } from "../stores/use-canvas-store";
 import type { CanvasNodeData } from "../types";
-import { ShotGroupFormModal, ShotGroupRowCard, StoryboardTableShotCard, TableShotFormModal, type ShotGroupFormValues, type TableShotFormValues } from "./storyboard-shot-group-components";
+import { ShotGroupFormModal, ShotGroupRowCard, StoryboardTableShotCard, TableShotFormModal } from "./storyboard-shot-group-components";
 import { buildGenerationQueuePlan, summarizeGenerationQueue, type GenerationQueueItem, type GenerationQueueMissingItem, type GenerationQueueSummary } from "../utils/generation-queue";
 import { itemsForProductionBibleProject, productionBibleKindLabel, type ProductionBibleItem } from "../utils/production-bible";
 import { buildStoryboardClipExportPlan, type StoryboardClipExportPlan } from "../utils/storyboard-clip-export";

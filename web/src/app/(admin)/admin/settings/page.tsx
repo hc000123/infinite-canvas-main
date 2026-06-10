@@ -2,9 +2,9 @@
 
 import { CheckCircleOutlined, DeleteOutlined, FormatPainterOutlined, LoadingOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
 import { json } from "@codemirror/lang-json";
-import { Alert, App, Button, Card, Checkbox, Col, Drawer, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Select, Space, Switch, Table, Tabs, Tag, Typography } from "antd";
+import { Alert, App, Button, Card, Checkbox, Col, Drawer, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Select, Space, Switch, Table, Tabs, Tag, Typography, type FormInstance } from "antd";
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorView } from "@uiw/react-codemirror";
 
 import { fetchAdminSettings, fetchChannelModels, saveAdminSettings, testChannelModel, type AdminModelChannel, type AdminModelCost, type AdminSettings } from "@/services/api/admin";
@@ -88,7 +88,8 @@ export default function AdminSettingsPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [modelCosts, setModelCosts] = useState<AdminModelCost[]>([]);
     const [knownModels, setKnownModels] = useState<string[]>([]);
-    const publicModels = Form.useWatch(["public", "modelChannel", "availableModels"], form) || [];
+    const watchedPublicModels = Form.useWatch(["public", "modelChannel", "availableModels"], form);
+    const publicModels = useMemo(() => watchedPublicModels || [], [watchedPublicModels]);
     const publicModelChannel = Form.useWatch(["public", "modelChannel"], form) || emptySettings.public.modelChannel;
     const privateVolcengineAsset = Form.useWatch(["private", "volcengineAsset"], form) || emptySettings.private.volcengineAsset;
     const publicModelOptions = useMemo(() => publicModels.map((item) => ({ label: item, value: item })), [publicModels]);
@@ -111,7 +112,7 @@ export default function AdminSettingsPage() {
     const privateConfigWarnings = useMemo(() => buildPrivateConfigWarnings(channels, privateVolcengineAsset), [channels, privateVolcengineAsset]);
     const activeWarnings = activeTab === "public" ? publicConfigWarnings : privateConfigWarnings;
 
-    const loadSettings = async () => {
+    const loadSettings = useCallback(async () => {
         if (!token) return;
         setIsLoading(true);
         try {
@@ -129,11 +130,11 @@ export default function AdminSettingsPage() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [form, message, token]);
 
     useEffect(() => {
         void loadSettings();
-    }, [token]);
+    }, [loadSettings]);
 
     const changeTab = (nextTab: SettingsTabKey) => {
         setActiveTab(nextTab);
@@ -1131,7 +1132,7 @@ function modelCostCredits(items: AdminSettings["public"]["modelChannel"]["modelC
     return items.find((item) => item.model === model)?.credits || 0;
 }
 
-function setModelCost(form: any, setModelCosts: (items: AdminModelCost[]) => void, model: string, credits: number) {
+function setModelCost(form: FormInstance<AdminSettings>, setModelCosts: (items: AdminModelCost[]) => void, model: string, credits: number) {
     const current = (form.getFieldValue(["public", "modelChannel", "modelCosts"]) || []) as AdminSettings["public"]["modelChannel"]["modelCosts"];
     const next = current.filter((item) => item.model !== model);
     next.push({ model, credits: Math.max(0, credits) });
@@ -1251,7 +1252,7 @@ function parseTabJson(tab: SettingsTabKey, value: string): AdminSettings[Setting
     }
 }
 
-async function collectSettings(form: any, editorMode: Record<SettingsTabKey, EditorMode>, jsonText: Record<SettingsTabKey, string>, message: { error: (value: string) => void }) {
+async function collectSettings(form: FormInstance<AdminSettings>, editorMode: Record<SettingsTabKey, EditorMode>, jsonText: Record<SettingsTabKey, string>, message: { error: (value: string) => void }) {
     const values = normalizeSettings(form.getFieldsValue(true) as AdminSettings);
     if (editorMode.public === "json") {
         const publicSetting = parseTabJson("public", jsonText.public);

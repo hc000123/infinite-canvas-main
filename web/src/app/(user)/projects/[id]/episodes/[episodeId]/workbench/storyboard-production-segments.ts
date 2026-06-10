@@ -42,10 +42,10 @@ export type StoryboardStorySegment = {
 };
 
 export function buildStoryboardProductionSegments({
-    episode,
+    episode: _episode,
     episodeTableShots,
     sceneOptions,
-    scriptSnapshot,
+    scriptSnapshot: _scriptSnapshot,
 }: {
     episode: ScriptEpisode;
     episodeTableShots: StoryboardTableShot[];

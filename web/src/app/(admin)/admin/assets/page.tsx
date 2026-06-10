@@ -3,7 +3,7 @@
 import { CopyOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, SafetyCertificateOutlined, SearchOutlined, SettingOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
 import { App, Button, Card, Col, Flex, Form, Image, Input, Modal, Row, Select, Space, Tag, Tooltip, Typography } from "antd";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useCopyText } from "@/hooks/use-copy-text";
 import { fetchAdminSettings, refreshAdminAssetVolcengineReview, submitAdminAssetVolcengineReview, type AdminAsset, type AdminSettings, uploadAdminAssetMedia } from "@/services/api/admin";
@@ -51,7 +51,7 @@ export default function AdminAssetsPage() {
 
     useEffect(() => setKeywordText(keyword), [keyword]);
 
-    const loadReviewSettings = async () => {
+    const loadReviewSettings = useCallback(async () => {
         if (!token) return;
         setIsReviewSettingsLoading(true);
         try {
@@ -62,11 +62,11 @@ export default function AdminAssetsPage() {
         } finally {
             setIsReviewSettingsLoading(false);
         }
-    };
+    }, [message, token]);
 
     useEffect(() => {
         void loadReviewSettings();
-    }, [token]);
+    }, [loadReviewSettings]);
 
     const saveAsset = async () => {
         const value = await form.validateFields();
