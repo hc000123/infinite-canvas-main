@@ -10,6 +10,20 @@
 
 上线前总判断集中记录在 `docs/release-acceptance-report.md`；本文档继续作为版本待验收明细索引。
 
+#### v0.2.89：画布工作流助手入口与独立工作流落地页
+
+- 入口：`/canvas/:id` 顶部工具栏、画布右侧助手面板、`/projects/:id/episodes/:episodeId/workbench`、`/projects/:id/episodes/:episodeId/workflow`。
+- 本次实现：
+  - 画布顶部新增“工作流助手”入口，会按当前绑定项目 / 分集跳转到独立工作流落地页。
+  - 画布右侧助手面板标题区和空状态增加工作流助手入口，方便从对话助手切到本集工作流承接。
+  - 本集生产台新增“工作流落地页”入口。
+  - 独立工作流落地页聚合本集工作流阶段状态、待落地预览、已写入数量、承接画布和分镜表统计。
+- 验收步骤：
+  1. 打开一个已绑定本集的画布，点击顶部“工作流助手”，确认跳转到 `/projects/:id/episodes/:episodeId/workflow`。
+  2. 打开画布右侧助手面板，点击标题区或空状态中的工作流入口，确认跳转一致。
+  3. 打开本集生产台，点击“工作流落地页”，确认页面能显示阶段进度、资产设定库 / 分镜头表 / 视频配置节点落地统计。
+  4. 在已有承接画布的分集上进入工作流落地页，点击“进入画布”，确认能回到对应画布。
+
 #### v0.2.89：本地 Docker 完整验收与真实 AI 链路回归
 
 - 入口：`docker-compose.local.yml`、`/projects`、`/assets`、`/prompts`、`/image`、`/canvas/:id`、`/api/v1/images/generations`、`/api/v1/videos`。

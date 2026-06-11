@@ -114,6 +114,18 @@ export function useCanvasPageActions({
         navigate("/projects");
     }, [currentProject, navigate]);
 
+    const openWorkflowAssistant = useCallback(() => {
+        if (currentProject?.projectId && currentProject.episodeId) {
+            navigate(`/projects/${currentProject.projectId}/episodes/${currentProject.episodeId}/workflow?canvasId=${encodeURIComponent(canvasId)}`);
+            return;
+        }
+        if (currentProject?.projectId) {
+            navigate(`/projects/${currentProject.projectId}`);
+            return;
+        }
+        navigate("/projects");
+    }, [canvasId, currentProject, navigate]);
+
     const returnTarget = useMemo(() => {
         if (currentProject?.projectId && currentProject.episodeId) {
             return { href: `/projects/${currentProject.projectId}/episodes/${currentProject.episodeId}/workbench`, label: "返回本集生产流程" };
@@ -140,6 +152,7 @@ export function useCanvasPageActions({
         deleteCurrentProject,
         finishTitleEditing,
         openEpisodeWorkbench,
+        openWorkflowAssistant,
         resetViewport,
         returnTarget,
         returnToParent,

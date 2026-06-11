@@ -39,6 +39,7 @@ type CanvasAssistantPanelProps = {
     onInsertText: (text: string) => void;
     onPasteImage: (file: File) => void;
     onApplyAssistantActions: (actions: AssistantCanvasAction[]) => boolean;
+    onOpenWorkflowAssistant?: () => void;
     onCollapseStart: () => void;
     onCollapse: () => void;
 };
@@ -59,6 +60,7 @@ export function CanvasAssistantPanel({
     onInsertText,
     onPasteImage,
     onApplyAssistantActions,
+    onOpenWorkflowAssistant,
     onCollapseStart,
     onCollapse,
 }: CanvasAssistantPanelProps) {
@@ -245,6 +247,7 @@ export function CanvasAssistantPanel({
                     startChatSession();
                     setView("chat");
                 }}
+                onOpenWorkflowAssistant={onOpenWorkflowAssistant}
                 onOpenConfig={() => openConfigDialog(false)}
                 onCollapse={collapse}
             />
@@ -278,7 +281,7 @@ export function CanvasAssistantPanel({
                         onCancelAssistantActions={(message) => updateMessage(activeSession?.id || "", message.id, { assistantActionStatus: "cancelled" })}
                     />
                 ) : (
-                    <CanvasAssistantEmptyState />
+                    <CanvasAssistantEmptyState onOpenWorkflowAssistant={onOpenWorkflowAssistant} />
                 )}
             </div>
 
