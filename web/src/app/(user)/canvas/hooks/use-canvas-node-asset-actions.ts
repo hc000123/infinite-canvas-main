@@ -28,10 +28,13 @@ export function useCanvasNodeAssetActions({
         async (node: CanvasNodeData) => {
             const asset = canvasNodeToAsset(node);
             if (!asset) return false;
-            await addAssetOnce(asset);
-            return true;
+            const assetId = await addAssetOnce(asset);
+            if (assetId && node.metadata?.sourceAssetId !== assetId) {
+                setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, ...canvasAssetReferenceMetadata({ sourceAssetId: assetId }) } } : item)));
+            }
+            return assetId;
         },
-        [addAssetOnce],
+        [addAssetOnce, setNodes],
     );
 
     const saveNodeAsset = useCallback(
