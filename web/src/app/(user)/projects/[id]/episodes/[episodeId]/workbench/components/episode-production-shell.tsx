@@ -305,6 +305,7 @@ export function EpisodeProductionShell({
                                 episode={episode}
                                 appliedPreviewItemIds={appliedPreviewItemIds}
                                 applyingPreviewIds={applyingPreviewIds}
+                                assetRows={assetRows}
                                 currentSceneState={currentSceneState}
                                 hasCanvas={Boolean(boundCanvas)}
                                 onApplyPreview={onApplyPreview}
@@ -332,7 +333,7 @@ export function EpisodeProductionShell({
                                 segments={packageSegments}
                             />
                         ) : (
-                            <EpisodeModulePanel config={moduleConfig} editorSlot={scriptEditor} filteredRows={filteredRows} activeFilter={activeFilter} onFilterChange={setActiveFilter} onOpenDetail={onOpenDetail} />
+                            <EpisodeModulePanel config={moduleConfig} editorSlot={scriptEditor} filteredRows={filteredRows} activeFilter={activeFilter} showRows={activeModule !== "script"} onFilterChange={setActiveFilter} onOpenDetail={onOpenDetail} />
                         )}
                     </div>
                 </div>
@@ -368,9 +369,9 @@ function buildWorkbenchFlowNotice({
     if (artDisplay?.displayStatus === "blocked" || artDisplay?.displayStatus === "error" || artDisplay?.displayStatus === "rejected") return { actionLabel: "处理资产阶段", module: "assets", text: artDisplay.blockedReason || artDisplay.summaryText || "资产与生图阶段存在阻塞，需要处理后才能进入分镜。", title: "流程卡在资产与生图", tone: "red" };
     if (!productionBiblePreview && artDisplay?.displayStatus !== "approved") return { actionLabel: "进入资产与生图", module: "assets", text: "导演分析已完成，下一步需要提取角色、场景、道具和服化道资产。", title: "下一步：资产与生图", tone: "cyan" };
     if (storyboardDisplay?.displayStatus === "running") return { actionLabel: "查看分镜阶段", module: "storyboard", text: "分镜生产包正在生成，可查看当前场次进度。", title: "正在等待分镜生产包", tone: "cyan" };
-    if (storyboardDisplay?.displayStatus === "blocked" || storyboardDisplay?.displayStatus === "error" || storyboardDisplay?.displayStatus === "rejected") return { actionLabel: "处理分镜阶段", module: "storyboard", text: storyboardDisplay.blockedReason || storyboardDisplay.summaryText || "分镜阶段存在阻塞，需要处理后才能承接到画布。", title: "流程卡在分镜生产包", tone: "red" };
-    if (!storyboardPreview) return { actionLabel: "进入分镜生产包", module: "storyboard", text: "资产阶段处理后，需要生成分镜生产包，再决定是否承接到画布。", title: "下一步：分镜生产包", tone: "cyan" };
-    if (!boundCanvas && !videoPreview) return { actionLabel: "进入画布承接", module: "canvas", text: "分镜生产包已准备好，下一步可创建承接画布或生成待落地节点预览。", title: "等待承接到画布", tone: "amber" };
+    if (storyboardDisplay?.displayStatus === "blocked" || storyboardDisplay?.displayStatus === "error" || storyboardDisplay?.displayStatus === "rejected") return { actionLabel: "处理分镜阶段", module: "storyboard", text: storyboardDisplay.blockedReason || storyboardDisplay.summaryText || "分镜阶段存在阻塞，需要处理后再生成视频配置。", title: "流程卡在分镜生产包", tone: "red" };
+    if (!storyboardPreview) return { actionLabel: "进入分镜生产包", module: "storyboard", text: "资产阶段处理后，需要生成分镜生产包，并在右侧确认视频提示词。", title: "下一步：分镜生产包", tone: "cyan" };
+    if (!videoPreview) return { actionLabel: "生成视频配置", module: "storyboard", text: "分镜生产包已准备好，下一步在分镜页统一生成视频配置；画布暂时只是可选出口。", title: "下一步：视频配置", tone: "cyan" };
     return undefined;
 }
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Button, Empty, Select, Tag } from "antd";
-import { Maximize2, Plus } from "lucide-react";
+import { Edit3, Maximize2, Plus } from "lucide-react";
 
 import { canvasEpisodeLabel } from "../../../canvas/utils/canvas-episode-context";
 import { canvasProjectPresetSummary } from "../../../canvas/utils/canvas-project-preset";
@@ -44,6 +44,7 @@ type ProjectEpisodeBoardProps = {
     onBindingCanvasChange: (canvasId: string) => void;
     onCreateCanvas: () => void;
     onEditCanvasPreset: (canvasId: string) => void;
+    onEditEpisodeTitle: (row: ProjectEpisodeBoardRow) => void;
     onEditProject: () => void;
     onFilterChange: (filter: EpisodeFilter) => void;
     onImportEpisode: () => void;
@@ -70,6 +71,7 @@ export function ProjectEpisodeBoard({
     onBindingCanvasChange,
     onCreateCanvas,
     onEditCanvasPreset,
+    onEditEpisodeTitle,
     onEditProject,
     onFilterChange,
     onImportEpisode,
@@ -138,7 +140,7 @@ export function ProjectEpisodeBoard({
                             </div>
                         </div>
 
-                        {rows.length ? <ProjectEpisodeTable rows={filteredRows} onOpenCanvas={onOpenCanvasById} onOpenEpisode={onOpenEpisode} /> : <ProjectEpisodeEmpty onCreate={onImportEpisode} onCreateCanvas={onCreateCanvas} />}
+                        {rows.length ? <ProjectEpisodeTable rows={filteredRows} onEditTitle={onEditEpisodeTitle} onOpenCanvas={onOpenCanvasById} onOpenEpisode={onOpenEpisode} /> : <ProjectEpisodeEmpty onCreate={onImportEpisode} onCreateCanvas={onCreateCanvas} />}
                     </>
                 )}
             </section>
@@ -294,7 +296,17 @@ function EpisodeFilterButton({ active, label, onClick }: { active: boolean; labe
     );
 }
 
-function ProjectEpisodeTable({ rows, onOpenCanvas, onOpenEpisode }: { rows: ProjectEpisodeBoardRow[]; onOpenCanvas: (canvasId: string) => void; onOpenEpisode: (episodeId: string) => void }) {
+function ProjectEpisodeTable({
+    rows,
+    onEditTitle,
+    onOpenCanvas,
+    onOpenEpisode,
+}: {
+    rows: ProjectEpisodeBoardRow[];
+    onEditTitle: (row: ProjectEpisodeBoardRow) => void;
+    onOpenCanvas: (canvasId: string) => void;
+    onOpenEpisode: (episodeId: string) => void;
+}) {
     if (!rows.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的分集" className="rounded-md border border-[var(--studio-border-subtle)] py-16 text-[var(--studio-text-muted)]" />;
     return (
         <section className="overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]">
@@ -318,14 +330,37 @@ function ProjectEpisodeTable({ rows, onOpenCanvas, onOpenEpisode }: { rows: Proj
                             role="button"
                             tabIndex={0}
                             className={`grid w-full cursor-pointer grid-cols-[90px_minmax(180px,1.5fr)_100px_90px_80px_80px_80px_170px_112px] items-center gap-4 px-5 py-4 text-left transition hover:bg-[rgba(255,255,255,0.025)] ${row.filterStatus === "running" ? "border-l-4 border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] pl-4" : ""}`}
-                            onClick={() => onOpenEpisode(row.id)}
+                            onClick={(event) => {
+                                if ((event.target as HTMLElement).closest("button,a,input,textarea,select")) return;
+                                onOpenEpisode(row.id);
+                            }}
                             onKeyDown={(event) => {
+                                if (event.currentTarget !== event.target) return;
                                 if (event.key === "Enter" || event.key === " ") onOpenEpisode(row.id);
                             }}
                         >
                             <span className="text-base font-semibold text-[var(--studio-text-muted)]">第 {formatEpisodeOrder(row.order)} 集</span>
                             <span className="min-w-0">
-                                <span className="block break-words text-base font-semibold leading-6 text-[var(--studio-text-primary)]">{row.title}</span>
+                                <span className="flex min-w-0 items-center gap-2">
+                                    <span className="min-w-0 break-words text-base font-semibold leading-6 text-[var(--studio-text-primary)]">{row.title}</span>
+                                    <button
+                                        type="button"
+                                        className="grid size-7 shrink-0 place-items-center rounded-md text-[var(--studio-text-muted)] transition hover:bg-[var(--studio-panel-bg)] hover:text-[var(--studio-accent)]"
+                                        title="修改标题"
+                                        aria-label={`修改 ${row.title} 标题`}
+                                        onMouseDown={(event) => {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            onEditTitle(row);
+                                        }}
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            onEditTitle(row);
+                                        }}
+                                    >
+                                        <Edit3 className="size-3.5" />
+                                    </button>
+                                </span>
                                 <span className="mt-1 block text-sm text-[var(--studio-text-muted)]">{row.progress ? `最近更新 ${formatEpisodeDate(row.updatedAt)}` : "尚未开始"}</span>
                             </span>
                             <EpisodeStatusBadge status={row.status} />

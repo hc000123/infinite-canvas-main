@@ -173,7 +173,7 @@ export function EpisodeAssetsModulePage({
             <div className="grid gap-3 md:grid-cols-5">
                 {[
                     { label: "角色", value: summary.characters },
-                    { label: "场景", value: summary.scenes },
+                    { label: "场景/场记", value: summary.scenes },
                     { label: "道具", value: summary.props },
                     { label: "服装", value: summary.costumes },
                     { label: "缺素材", tone: summary.missing ? "amber" : "green", value: summary.missing },

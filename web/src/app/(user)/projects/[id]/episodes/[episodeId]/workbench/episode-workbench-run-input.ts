@@ -2,11 +2,20 @@ import type { AiConfig } from "@/stores/use-config-store";
 
 import type { CanvasProject } from "../../../../../canvas/stores/use-canvas-store";
 import type { ScriptEpisode } from "../../../../../canvas/utils/script-management";
+import { agentSystemPromptContent, fillAgentPromptTemplate, type AgentConfig } from "../../../../agent-settings";
 import { workflowStageDetail, type AgentWorkflowPreset, type AgentWorkflowStage } from "../../../../agent-workflow-presets";
 import type { AgentRunInput, AgentWorkflowSceneRunState, AgentWorkflowStageOutput } from "../../../../agent-runner-types";
 import { buildWorkflowStageSourceFiles } from "../../../../agent-runner-workflow-prompt";
 import type { WorkflowAgentCore } from "../../../../workflow-agents/workflow-agent-core";
 import type { EpisodeSceneOption } from "./use-episode-workbench-state";
+
+const ASSET_CARD_FORMAT_RULES = `资产卡片整理硬规则：
+1. 输出必须是 JSON 对象，顶层只包含 assets 数组。
+2. 每个 assets 条目必须包含 kind、name、usage、description、prompt、sourceText、tags、needsImage、needsWhitelisting、riskNotes。
+3. kind 只能是 character / scene / prop / costume；场记、地点、空间、环境归 scene；服装、妆发、发型归 costume。
+4. name 只能是短名称，不能是提示词、长句、剧情摘要或“这是一份基于……”这类说明。
+5. description 写单一资产的视觉描述，prompt 写单一资产的生图提示词，sourceText 写来源依据，三者不能混在一起。
+6. 只要剧本里出现地点、空间或场记，就必须输出至少一条 scene 资产。`;
 
 type BaseRunRequestInput = {
     boundCanvas?: CanvasProject;
@@ -19,6 +28,7 @@ type BaseRunRequestInput = {
     projectTitle: string;
     scriptSnapshot: string;
     stage: AgentWorkflowStage;
+    agentConfig?: AgentConfig;
     stageOutputs: Record<string, AgentWorkflowStageOutput | undefined>;
     workflowRunId: string;
 };
@@ -34,10 +44,11 @@ export function buildEpisodeStageRunRequest({
     projectTitle,
     scriptSnapshot,
     stage,
+    agentConfig,
     stageOutputs,
     workflowRunId,
 }: BaseRunRequestInput) {
-    const textModel = workflowTextModel(effectiveConfig);
+    const textModel = workflowTextModel(effectiveConfig, agentConfig);
     const requestConfig = { ...effectiveConfig, model: textModel || effectiveConfig.model };
     const directorSummary = stageOutputs["director-analysis"]?.summary || "";
     const artSummary = stageOutputs["art-design"]?.summary || "";
@@ -62,7 +73,7 @@ export function buildEpisodeStageRunRequest({
         },
     });
     const sourceFiles = buildWorkflowStageSourceFiles(coreInput.skills, coreInput.qualityGates);
-    const promptMessages = core.buildPromptMessages(coreInput, preset);
+    const promptMessages = agentConfig ? buildConfiguredAgentPromptMessages(agentConfig, coreInput.inputSnapshot) : core.buildPromptMessages(coreInput, preset);
     const runInput: AgentRunInput = {
         projectId,
         canvasId: boundCanvas?.id,
@@ -78,7 +89,7 @@ export function buildEpisodeStageRunRequest({
         workflowVersion: preset.version,
         stageId: core.stageId,
         agentId: core.agentId,
-        agentName: coreInput.agent.name,
+        agentName: agentConfig?.name || coreInput.agent.name,
         sourcePresetId: preset.workflowId,
         presetId: preset.workflowId,
         inputSnapshot: { stageName: stage.name, stageSummary: stage.inputSummary },
@@ -105,6 +116,7 @@ export function buildEpisodeStoryboardSceneRunRequest({
     projectTitle,
     scriptSnapshot,
     stage,
+    agentConfig,
     stageOutputs,
     workflowRunId,
     workflowSceneStates,
@@ -113,7 +125,7 @@ export function buildEpisodeStoryboardSceneRunRequest({
     currentSceneState?: AgentWorkflowSceneRunState;
     workflowSceneStates: AgentWorkflowSceneRunState[];
 }) {
-    const textModel = workflowTextModel(effectiveConfig);
+    const textModel = workflowTextModel(effectiveConfig, agentConfig);
     const requestConfig = { ...effectiveConfig, model: textModel || effectiveConfig.model };
     const directorSummary = stageOutputs["director-analysis"]?.summary || "";
     const artSummary = stageOutputs["art-design"]?.summary || "";
@@ -140,7 +152,7 @@ export function buildEpisodeStoryboardSceneRunRequest({
             assetNeedSummary: artSummary,
         },
     });
-    const promptMessages = core.buildPromptMessages(coreInput, preset);
+    const promptMessages = agentConfig ? buildConfiguredAgentPromptMessages(agentConfig, coreInput.inputSnapshot) : core.buildPromptMessages(coreInput, preset);
     const runInput: AgentRunInput = {
         projectId,
         canvasId: boundCanvas?.id,
@@ -156,7 +168,7 @@ export function buildEpisodeStoryboardSceneRunRequest({
         workflowVersion: preset.version,
         stageId: core.stageId,
         agentId: core.agentId,
-        agentName: coreInput.agent.name,
+        agentName: agentConfig?.name || coreInput.agent.name,
         sourcePresetId: preset.workflowId,
         presetId: preset.workflowId,
         inputSnapshot: { stageName: stage.name, sceneKey: currentScene.sceneKey, sceneLabel: currentScene.sceneLabel },
@@ -170,8 +182,9 @@ export function buildEpisodeStoryboardSceneRunRequest({
     return { promptMessages, requestConfig, runInput, textModel };
 }
 
-function workflowTextModel(config: AiConfig) {
-    return (config.textModel || config.model || "").trim();
+function workflowTextModel(config: AiConfig, agentConfig?: AgentConfig) {
+    const preferredModel = agentConfig?.modelPreference.trim();
+    return (preferredModel && preferredModel !== "default" ? preferredModel : config.textModel || config.model || "").trim();
 }
 
 function workflowConfigSummary(textModel: string, config: AiConfig) {
@@ -188,4 +201,13 @@ function previousApprovedSceneSummary(sceneStates: AgentWorkflowSceneRunState[],
                   .find((scene) => scene.status === "approved")
             : undefined;
     return previous ? `${previous.sceneLabel}：${previous.promptTextSummary || previous.promptPlanSummary || "已批准"}` : "";
+}
+
+function buildConfiguredAgentPromptMessages(agentConfig: AgentConfig, snapshot: Record<string, unknown> | undefined) {
+    const systemContent = agentConfig.kind === "asset_extractor" ? `${agentSystemPromptContent(agentConfig)}\n\n${ASSET_CARD_FORMAT_RULES}` : agentSystemPromptContent(agentConfig);
+    const userContent = fillAgentPromptTemplate(agentConfig.userPromptTemplate, snapshot || {});
+    return [
+        { role: "system" as const, content: systemContent },
+        { role: "user" as const, content: agentConfig.kind === "asset_extractor" ? `${userContent}\n\n${ASSET_CARD_FORMAT_RULES}` : userContent },
+    ];
 }

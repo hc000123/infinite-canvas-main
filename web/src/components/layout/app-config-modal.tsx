@@ -1,9 +1,10 @@
 "use client";
 
-import { App, Button, Form, Modal, Segmented } from "antd";
+import { App, Button, Form, Modal, Segmented, Tabs } from "antd";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { AgentSettingsCenterPanel } from "@/app/(user)/projects/agent-settings-center-panel";
 import { ModelPicker } from "@/components/model-picker";
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -49,11 +50,11 @@ export function AppConfigModal() {
             title={
                 <div>
                     <div className="text-lg font-semibold">配置</div>
-                    <div className="mt-1 text-xs font-normal text-stone-500">模型和密钥</div>
+                    <div className="mt-1 text-xs font-normal text-stone-500">模型、密钥和 Agent 设定</div>
                 </div>
             }
             open={isConfigOpen}
-            width={760}
+            width={860}
             centered
             onCancel={() => setConfigDialogOpen(false)}
             footer={
@@ -65,58 +66,74 @@ export function AppConfigModal() {
             }
         >
             <div className="pt-1">
-                <Form layout="vertical" requiredMark={false}>
-                    <div className="mb-4 rounded-lg border border-stone-200 p-3 text-sm text-stone-500 dark:border-stone-800">
-                        <div className="font-medium text-stone-900 dark:text-stone-100">模型渠道</div>
-                        <div className="mt-1">由后端统一转发请求，当前可用 {modelChannel?.availableModels.length || 0} 个模型。接口、密钥、模型映射、额度、任务日志和素材审核都在后台维护。</div>
-                        {showAdminSettingsEntry ? (
-                            <Button className="mt-3" size="small" onClick={openAdminSettings}>
-                                去后台设置
-                            </Button>
-                        ) : null}
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-3">
-                        <Form.Item label="默认生图模型" className="mb-4">
-                            <ModelPicker config={modelConfig} modelType="image" value={modelConfig.imageModel} onChange={(model) => updateConfig("imageModel", model)} fullWidth />
-                        </Form.Item>
-                        <Form.Item label="默认视频模型" className="mb-4">
-                            <ModelPicker config={modelConfig} modelType="video" value={modelConfig.videoModel} onChange={(model) => updateConfig("videoModel", model)} fullWidth />
-                        </Form.Item>
-                        <Form.Item label="默认文本模型" className="mb-4">
-                            <ModelPicker config={modelConfig} modelType="text" value={modelConfig.textModel} onChange={(model) => updateConfig("textModel", model)} fullWidth />
-                        </Form.Item>
-                    </div>
-                    <div className="mb-0 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                            <div>
-                                <div className="text-sm font-medium">思考模式</div>
-                                <div className="mt-1 text-xs text-stone-500">用于支持 reasoning_effort 的 OpenAI 兼容 Chat Completions 模型。</div>
-                            </div>
-                            <Segmented
-                                size="small"
-                                value={config.thinkingMode}
-                                onChange={(value) => updateConfig("thinkingMode", value as AiConfig["thinkingMode"])}
-                                options={[
-                                    { label: "关闭", value: "false" },
-                                    { label: "开启", value: "true" },
-                                ]}
-                            />
-                        </div>
-                        <Segmented
-                            block
-                            size="middle"
-                            disabled={config.thinkingMode !== "true"}
-                            value={config.reasoningEffort}
-                            onChange={(value) => updateConfig("reasoningEffort", value as AiConfig["reasoningEffort"])}
-                            options={[
-                                { label: "极低", value: "minimal" },
-                                { label: "低", value: "low" },
-                                { label: "中", value: "medium" },
-                                { label: "高", value: "high" },
-                            ]}
-                        />
-                    </div>
-                </Form>
+                <Tabs
+                    defaultActiveKey="models"
+                    items={[
+                        {
+                            key: "models",
+                            label: "模型配置",
+                            children: (
+                                <Form layout="vertical" requiredMark={false}>
+                                    <div className="mb-4 rounded-lg border border-stone-200 p-3 text-sm text-stone-500 dark:border-stone-800">
+                                        <div className="font-medium text-stone-900 dark:text-stone-100">模型渠道</div>
+                                        <div className="mt-1">由后端统一转发请求，当前可用 {modelChannel?.availableModels.length || 0} 个模型。接口、密钥、模型映射、额度、任务日志和素材审核都在后台维护。</div>
+                                        {showAdminSettingsEntry ? (
+                                            <Button className="mt-3" size="small" onClick={openAdminSettings}>
+                                                去后台设置
+                                            </Button>
+                                        ) : null}
+                                    </div>
+                                    <div className="grid gap-4 md:grid-cols-3">
+                                        <Form.Item label="默认生图模型" className="mb-4">
+                                            <ModelPicker config={modelConfig} modelType="image" value={modelConfig.imageModel} onChange={(model) => updateConfig("imageModel", model)} fullWidth />
+                                        </Form.Item>
+                                        <Form.Item label="默认视频模型" className="mb-4">
+                                            <ModelPicker config={modelConfig} modelType="video" value={modelConfig.videoModel} onChange={(model) => updateConfig("videoModel", model)} fullWidth />
+                                        </Form.Item>
+                                        <Form.Item label="默认文本模型" className="mb-4">
+                                            <ModelPicker config={modelConfig} modelType="text" value={modelConfig.textModel} onChange={(model) => updateConfig("textModel", model)} fullWidth />
+                                        </Form.Item>
+                                    </div>
+                                    <div className="mb-0 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+                                        <div className="mb-3 flex items-center justify-between gap-3">
+                                            <div>
+                                                <div className="text-sm font-medium">思考模式</div>
+                                                <div className="mt-1 text-xs text-stone-500">用于支持 reasoning_effort 的 OpenAI 兼容 Chat Completions 模型。</div>
+                                            </div>
+                                            <Segmented
+                                                size="small"
+                                                value={config.thinkingMode}
+                                                onChange={(value) => updateConfig("thinkingMode", value as AiConfig["thinkingMode"])}
+                                                options={[
+                                                    { label: "关闭", value: "false" },
+                                                    { label: "开启", value: "true" },
+                                                ]}
+                                            />
+                                        </div>
+                                        <Segmented
+                                            block
+                                            size="middle"
+                                            disabled={config.thinkingMode !== "true"}
+                                            value={config.reasoningEffort}
+                                            onChange={(value) => updateConfig("reasoningEffort", value as AiConfig["reasoningEffort"])}
+                                            options={[
+                                                { label: "极低", value: "minimal" },
+                                                { label: "低", value: "low" },
+                                                { label: "中", value: "medium" },
+                                                { label: "高", value: "high" },
+                                            ]}
+                                        />
+                                    </div>
+                                </Form>
+                            ),
+                        },
+                        {
+                            key: "agents",
+                            label: "Agent 中心",
+                            children: <AgentSettingsCenterPanel />,
+                        },
+                    ]}
+                />
             </div>
         </Modal>
     );

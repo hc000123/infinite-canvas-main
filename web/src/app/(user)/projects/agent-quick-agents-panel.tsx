@@ -8,8 +8,10 @@ import type { AgentRunRecord } from "./agent-runner-types";
 import type { AgentConfigFormValues } from "./agent-settings-form";
 
 const agentKindOptions: Array<{ label: string; value: AgentConfigKind }> = [
-    { label: "资产提取 Agent", value: "asset_extractor" },
-    { label: "分镜导演 Agent", value: "storyboard_director" },
+    { label: "剧本优化 Agent", value: "script_optimizer" },
+    { label: "导演分析 Agent", value: "script_analyzer" },
+    { label: "资产分析 Agent", value: "asset_extractor" },
+    { label: "分镜生产 Agent", value: "storyboard_director" },
     { label: "生图 Brief Agent", value: "image_brief_builder" },
     { label: "视频提示词 Agent", value: "video_prompt_builder" },
     { label: "提示词质检 Agent", value: "prompt_reviewer" },
@@ -176,6 +178,12 @@ function AgentTemplatePreview({ selectedConfig }: { selectedConfig: AgentConfig 
             <details open>
                 <summary className="cursor-pointer text-xs text-stone-500">查看完整提示词与输出 Schema</summary>
                 <div className="mt-2 grid gap-2">
+                    {selectedConfig.skillSummary ? (
+                        <div>
+                            <div className="mb-1 text-xs text-stone-500">内置 Skill 摘要</div>
+                            <pre className="max-h-32 overflow-auto rounded-md bg-stone-950 p-3 text-xs leading-5 whitespace-pre-wrap text-stone-50">{selectedConfig.skillSummary}</pre>
+                        </div>
+                    ) : null}
                     <div>
                         <div className="mb-1 text-xs text-stone-500">系统提示词</div>
                         <pre className="max-h-40 overflow-auto rounded-md bg-stone-950 p-3 text-xs leading-5 whitespace-pre-wrap text-stone-50">{selectedConfig.systemPrompt}</pre>

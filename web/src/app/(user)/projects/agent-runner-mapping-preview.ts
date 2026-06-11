@@ -1,4 +1,5 @@
 import type { ProductionBibleKind } from "../canvas/utils/production-bible.ts";
+import { assetCardKindToProductionBibleKind, normalizeWorkflowAssetCard } from "./agent-runner-asset-card-skill.ts";
 import type { AgentWorkflowMappingPreviewItem } from "./agent-runner-types.ts";
 import { buildPreviewItems, readCandidateField, readCandidateTags, readCandidateText, readCandidateTitle, stringField, type WorkflowMappingAnalysis } from "./agent-runner-mapping-utils.ts";
 export { analyzeWorkflowStageOutput, numberField, objectListField, parseWorkflowMappingRawJson, stringField, stringListField } from "./agent-runner-mapping-utils.ts";
@@ -35,22 +36,32 @@ export function buildDirectorStoryboardPreviewItems(analysis: WorkflowMappingAna
 }
 
 export function buildArtDesignProductionBiblePreviewItems(analysis: WorkflowMappingAnalysis): AgentWorkflowMappingPreviewItem[] {
-    return buildPreviewItems(analysis.candidates.slice(0, 8), "production_bible", (item, index) => ({
-        title: readCandidateTitle(item, `美术设定 ${index + 1}`),
-        reason: "将服化道阶段产物映射为角色 / 场景 / 道具设定草案。",
-        sourceText: readCandidateText(item),
-        mappedFields: {
-            kind: inferBibleKind(item, "prop"),
-            name: readCandidateTitle(item, `设定 ${index + 1}`),
-            description: readCandidateText(item),
-            tags: readCandidateTags(item),
-            promptSnippets: {
-                positive: readCandidateField(item, "prompt") || readCandidateText(item),
-                consistency: readCandidateField(item, "style") || "",
+    return buildPreviewItems(analysis.candidates.slice(0, 12), "production_bible", (item, index) => {
+        const card = normalizeWorkflowAssetCard(item, index);
+        return {
+            title: card.name,
+            reason: card.reason,
+            sourceText: card.sourceText,
+            mappedFields: {
+                assetCardKind: card.kind,
+                kind: assetCardKindToProductionBibleKind(card.kind),
+                name: card.name,
+                description: card.description,
+                prompt: card.prompt,
+                riskNotes: card.riskNotes,
+                sourceText: card.sourceText,
+                tags: card.tags,
+                typeLabel: card.typeLabel,
+                usage: card.usage,
+                promptSnippets: {
+                    positive: card.prompt,
+                    negative: card.negativePrompt,
+                    consistency: card.consistency || card.usage,
+                },
             },
-        },
-        confidence: analysis.warnings.length ? 0.48 : 0.78,
-    }));
+            confidence: analysis.warnings.length ? Math.min(card.confidence, 0.52) : card.confidence,
+        };
+    });
 }
 
 export function mapPreviewKindToProductionBibleKind(value: unknown): ProductionBibleKind {

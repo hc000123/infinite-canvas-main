@@ -25,22 +25,23 @@ export function buildAssetsModuleConfig(input: {
     const rows: EpisodeModuleRow[] = preview?.items.length
         ? preview.items.map((item, index): EpisodeModuleRow => {
               const applied = input.appliedPreviewItemIds.includes(workflowMappingPreviewItemKey(preview, item.itemId));
-              const kind = productionBibleKindLabel(item.mappedFields.kind);
-              const fullDescription = mappedFieldText(item.mappedFields.description) || item.sourceText || item.reason;
+              const kind = mappedFieldText(item.mappedFields.typeLabel) || productionBibleKindLabel(item.mappedFields.kind);
+              const title = mappedFieldText(item.mappedFields.name) || item.title;
+              const fullDescription = mappedFieldText(item.mappedFields.description) || mappedFieldText(item.mappedFields.usage) || mappedFieldText(item.mappedFields.sourceText) || item.sourceText || item.reason;
               const description = listSafeText(fullDescription, "待确认资产简述。");
               const status = applied ? "已完成" : item.action === "skip" ? "待确认" : item.warnings.length ? "缺素材" : "待确认";
               return {
                   actionLabel: "查看",
-                  cells: [kind, item.title, description, `${referenceCount(item.mappedFields)} 图`],
+                  cells: [kind, title, description, `${referenceCount(item.mappedFields)} 图`],
                   detail: {
-                      body: [fullDescription, item.mappedFields.promptSnippets ? `\n提示词片段：\n${mappedFieldText(item.mappedFields.promptSnippets)}` : "", item.warnings.length ? `\n提示：${item.warnings.join("；")}` : ""].filter(Boolean).join("\n"),
+                      body: [fullDescription, item.mappedFields.promptSnippets ? `\n提示词片段：\n${mappedFieldText(item.mappedFields.promptSnippets)}` : "", mappedFieldText(item.mappedFields.sourceText) ? `\n来源片段：\n${mappedFieldText(item.mappedFields.sourceText)}` : "", item.warnings.length ? `\n提示：${item.warnings.join("；")}` : ""].filter(Boolean).join("\n"),
                       meta: [
                           { label: "类型", value: kind },
                           { label: "引用", value: `${referenceCount(item.mappedFields)} 图` },
                           { label: "状态", value: status },
                       ],
                       subtitle: item.reason,
-                      title: item.title,
+                      title,
                   },
                   highlight: status === "缺素材" || index === 0,
                   id: item.itemId,

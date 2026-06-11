@@ -98,7 +98,7 @@ export default function ProjectAgentWorkspacePage() {
 }
 
 function parseAgentKind(value: string | null): AgentConfigKind | undefined {
-    return ["asset_extractor", "storyboard_director", "image_brief_builder", "video_prompt_builder", "prompt_reviewer"].includes(value || "") ? (value as AgentConfigKind) : undefined;
+    return ["script_optimizer", "script_analyzer", "asset_extractor", "storyboard_director", "image_brief_builder", "video_prompt_builder", "prompt_reviewer"].includes(value || "") ? (value as AgentConfigKind) : undefined;
 }
 
 function parseAgentTab(value: string | null): "quick-agents" | "workflow" | undefined {

@@ -58,3 +58,24 @@ export function formToConfig(base: AgentConfig, values: AgentConfigFormValues, p
         updatedAt: new Date().toISOString(),
     };
 }
+
+export function formToGlobalConfig(base: AgentConfig, values: AgentConfigFormValues): AgentConfig {
+    return {
+        ...base,
+        id: `agent-config-global-${base.kind}`,
+        projectId: undefined,
+        name: values.name,
+        scenario: values.scenario || "",
+        enabled: values.enabled,
+        systemPrompt: values.systemPrompt,
+        userPromptTemplate: values.userPromptTemplate,
+        inputVariables: parseInputVariablesText(values.inputVariablesText || ""),
+        outputJsonExample: values.outputJsonExample || "",
+        modelPreference: values.modelPreference || "default",
+        temperature: values.temperature ?? 0.4,
+        maxOutputTokens: values.maxOutputTokens ?? 1800,
+        reasoningLevel: values.reasoningLevel,
+        writePolicy: values.writePolicy,
+        updatedAt: new Date().toISOString(),
+    };
+}

@@ -63,20 +63,21 @@ export function applyWorkflowMappingPreviewToProductionBible({
         }
         const record = item.mappedFields && typeof item.mappedFields === "object" ? (item.mappedFields as Record<string, unknown>) : {};
         const name = String(record.name || record.title || item.title || "未命名设定").trim();
-        const description = String(record.description || record.content || item.sourceText || "").trim();
+        const description = String(record.description || record.usage || record.content || item.sourceText || "").trim();
         const tags = Array.isArray(record.tags) ? record.tags.map((tag) => String(tag).trim()).filter(Boolean) : [];
+        const normalizedTags = Array.from(new Set([String(record.typeLabel || "").trim(), ...tags].filter(Boolean)));
         const promptSnippets = record.promptSnippets && typeof record.promptSnippets === "object" && !Array.isArray(record.promptSnippets) ? (record.promptSnippets as Record<string, unknown>) : {};
         const input: ProductionBibleWriteInput = {
             projectId: preview.projectId,
             kind: mapPreviewKindToProductionBibleKind(record.kind),
             name,
             description,
-            tags,
+            tags: normalizedTags,
             assetRefs: [],
             promptSnippets: {
-                positive: String(promptSnippets.positive || "").trim(),
-                negative: String(promptSnippets.negative || "").trim(),
-                consistency: String(promptSnippets.consistency || "").trim(),
+                positive: String(promptSnippets.positive || record.prompt || record.imagePrompt || "").trim(),
+                negative: String(promptSnippets.negative || record.negativePrompt || "").trim(),
+                consistency: String(promptSnippets.consistency || record.consistency || record.usage || "").trim(),
             },
             metadata: {
                 source: {

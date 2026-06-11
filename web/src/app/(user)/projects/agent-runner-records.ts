@@ -187,8 +187,10 @@ export function agentRunStatusLabel(status: AgentRunStatus) {
 }
 
 export function agentRunKindLabel(kind: AgentRunKind) {
+    if (kind === "script_optimizer") return "剧本优化";
+    if (kind === "script_analyzer") return "导演分析";
     if (kind === "asset_extractor") return "资产提取";
-    if (kind === "storyboard_director") return "分镜导演";
+    if (kind === "storyboard_director") return "分镜生产";
     if (kind === "image_brief_builder") return "生图 Brief";
     if (kind === "video_prompt_builder") return "视频提示词";
     if (kind === "workflow_text") return "文本工作流";

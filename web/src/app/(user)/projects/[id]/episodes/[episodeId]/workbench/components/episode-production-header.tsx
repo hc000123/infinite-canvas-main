@@ -50,9 +50,11 @@ export function EpisodeProductionHeader({
                     <Button className="!border-slate-700 !bg-slate-950/50 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" onClick={onBackProject}>
                         返回项目
                     </Button>
-                    <Button type="primary" onClick={onOpenCanvas}>
-                        {boundCanvas ? "进入画布" : "创建承接画布"}
-                    </Button>
+                    {boundCanvas ? (
+                        <Button type="primary" onClick={onOpenCanvas}>
+                            进入关联画布
+                        </Button>
+                    ) : null}
                 </div>
             </div>
         </header>

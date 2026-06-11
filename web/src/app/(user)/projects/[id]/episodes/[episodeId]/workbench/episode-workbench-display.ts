@@ -40,7 +40,6 @@ export const episodeModules: Array<{ key: EpisodeModuleKey; label: string }> = [
     { key: "director", label: "导演分析" },
     { key: "assets", label: "资产与生图" },
     { key: "storyboard", label: "分镜生产包" },
-    { key: "canvas", label: "画布承接" },
 ];
 
 export function latestPreview(previews: AgentWorkflowMappingPreview[], targetType: AgentWorkflowMappingPreview["targetType"]) {
@@ -72,7 +71,7 @@ export function buildEpisodePhaseText({
     videoPreview?: AgentWorkflowMappingPreview;
 }) {
     if (!hasScript) return "待导入剧本";
-    if (videoPreview || boundCanvas) return "画布承接准备";
+    if (videoPreview) return "视频配置待确认";
     if (storyboardPreview || episodeTableShots.length) return "分镜提示词审核";
     if (productionBiblePreview || artDisplay?.displayStatus === "approved") return "资产与生图待补齐";
     if (directorDisplay?.displayStatus && directorDisplay.displayStatus !== "idle") return `导演分析${workflowStageStatusLabel(directorDisplay.displayStatus)}`;
@@ -114,8 +113,8 @@ export function buildEpisodeNextActionText({
     if (assetCounts.pending) return `写入 ${assetCounts.pending} 条资产清单。`;
     if (storyboardDisplay?.displayStatus === "error" || storyboardDisplay?.displayStatus === "rejected") return "处理分镜生成异常，再重新推进分镜。";
     if (!storyboardPreview && !episodeTableShots.length) return "进入分镜生产包，生成分镜。";
-    if (!videoPreview && !boundCanvas) return "进入画布承接，把分镜放入画布。";
-    return "进入画布继续生成或检查视频版本。";
+    if (!videoPreview) return "在分镜生产包中生成统一视频配置。";
+    return "检查并确认本集视频配置。";
 }
 
 export function buildEpisodeModuleNavStatus({

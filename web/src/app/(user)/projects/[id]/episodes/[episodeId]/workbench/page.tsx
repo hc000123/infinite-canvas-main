@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { App, Button, Empty } from "antd";
 
@@ -13,6 +13,8 @@ import type { ScriptEpisode } from "../../../../../canvas/utils/script-managemen
 import { canvasEpisodeContextFromEpisode } from "../../../../../canvas/utils/canvas-episode-context";
 import { buildCanvasProjectPresetFromConfig } from "../../../../../canvas/utils/canvas-project-preset";
 import { useAgentRunnerStore } from "../../../../use-agent-runner-store";
+import { agentSystemPromptContent, canInvokeAgentConfig, defaultAgentConfigs, fillAgentPromptTemplate, mergeAgentConfigs } from "../../../../agent-settings";
+import { useAgentSettingsStore } from "../../../../use-agent-settings-store";
 import { useCreativeProjectStore } from "../../../../use-creative-project-store";
 import { useEpisodeWorkbenchState } from "./use-episode-workbench-state";
 import { useEpisodeWorkbenchPreviewActions } from "./use-episode-workbench-preview-actions";
@@ -51,6 +53,8 @@ export default function EpisodeProductionWorkbenchPage() {
     const startWorkflowTextRun = useAgentRunnerStore((state) => state.startWorkflowTextRun);
     const completeWorkflowTextRun = useAgentRunnerStore((state) => state.completeWorkflowTextRun);
     const failWorkflowTextRun = useAgentRunnerStore((state) => state.failWorkflowTextRun);
+    const globalAgentConfigs = useAgentSettingsStore((state) => state.globalConfigs);
+    const projectAgentConfigs = useAgentSettingsStore((state) => state.projectConfigs);
     const effectiveConfig = useEffectiveConfig();
     const checkAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const [scriptOptimizing, setScriptOptimizing] = useState(false);
@@ -66,6 +70,8 @@ export default function EpisodeProductionWorkbenchPage() {
         workflowRuns,
     });
     const directorOutputText = stageOutputs["director-analysis"]?.rawText || "";
+    const resolvedAgentConfigs = useMemo(() => mergeAgentConfigs(defaultAgentConfigs(), globalAgentConfigs, projectAgentConfigs[projectId] || []), [globalAgentConfigs, projectAgentConfigs, projectId]);
+    const scriptOptimizerConfig = useMemo(() => resolvedAgentConfigs.find((config) => config.kind === "script_optimizer"), [resolvedAgentConfigs]);
     const {
         activeModule,
         applyingPreviewIds,
@@ -104,6 +110,7 @@ export default function EpisodeProductionWorkbenchPage() {
         currentScene,
         currentSceneState,
         effectiveConfig,
+        resolvedAgentConfigs,
         ensureWorkflowRun,
         episode: episode as ScriptEpisode,
         episodeId,
@@ -165,39 +172,45 @@ export default function EpisodeProductionWorkbenchPage() {
             message.warning("请先导入或粘贴本集剧本。");
             return;
         }
-        const textModel = effectiveConfig.textModel || effectiveConfig.model;
+        const agentConfig = scriptOptimizerConfig;
+        if (!agentConfig) {
+            message.warning("未找到剧本优化 Agent 设定。");
+            return;
+        }
+        const callable = canInvokeAgentConfig(agentConfig);
+        if (!callable.callable) {
+            message.warning(callable.reason || "剧本优化 Agent 不可用。");
+            return;
+        }
+        const preferredModel = agentConfig.modelPreference.trim();
+        const textModel = preferredModel && preferredModel !== "default" ? preferredModel : effectiveConfig.textModel || effectiveConfig.model;
         if (!checkAiConfigReady(effectiveConfig, textModel)) {
             message.warning("请先配置可用的文本模型。");
             return;
         }
         const requestConfig = { ...effectiveConfig, model: textModel };
+        const variables = {
+            projectTitle: project?.title || "未命名项目",
+            episodeTitle: `第 ${padEpisodeOrder(episode.order)} 集 ${episode.title}`,
+            scriptSnapshot: sourceScript,
+            productionScriptRules: SCRIPT_OPTIMIZER_PRODUCTION_RULES,
+        };
         const promptMessages: ChatCompletionMessage[] = [
             {
                 role: "system",
-                content:
-                    "你是短剧制作工作流的剧本优化 Agent。你的任务是把原始剧本整理成后续导演分析、资产提取、分镜生产更容易稳定读取的版本。必须保留原剧情事实、人物关系、对白意图和关键转折，不新增无关剧情。只输出优化后的完整剧本正文，不要解释。",
+                content: `${agentSystemPromptContent(agentConfig)}\n\n${SCRIPT_OPTIMIZER_PRODUCTION_RULES}`,
             },
             {
                 role: "user",
-                content: [
-                    `项目：${project?.title || "未命名项目"}`,
-                    `集数：第 ${padEpisodeOrder(episode.order)} 集 ${episode.title}`,
-                    "请优化下面剧本：",
-                    sourceScript,
-                    "输出要求：",
-                    "1. 保持完整正文，不要拆成 JSON。",
-                    "2. 用清晰的场次、地点、时间、人物、动作、对白组织内容。",
-                    "3. 补足能帮助后续资产提取的视觉线索，但不要改动核心剧情。",
-                    "4. 不做导演讲戏，不输出分析意见。",
-                ].join("\n\n"),
+                content: `${fillAgentPromptTemplate(agentConfig.userPromptTemplate, variables)}\n\n${SCRIPT_OPTIMIZER_PRODUCTION_RULES}`,
             },
         ];
         setScriptOptimizing(true);
         try {
             const answer = await requestImageQuestion(requestConfig, promptMessages, (streamed) => {
-                if (streamed.trim()) setScriptDraft(streamed);
+                if (streamed.trim()) setScriptDraft(cleanOptimizedScriptText(streamed, episode.title));
             });
-            const optimized = answer.trim();
+            const optimized = cleanOptimizedScriptText(answer, episode.title);
             if (optimized) setScriptDraft(optimized);
             message.success("剧本优化完成，请确认后进入导演分析。");
         } catch (error) {
@@ -304,4 +317,35 @@ export default function EpisodeProductionWorkbenchPage() {
             <EpisodeDetailDrawer onClose={() => setDetailRecord(null)} record={detailRecord} />
         </main>
     );
+}
+
+const SCRIPT_OPTIMIZER_PRODUCTION_RULES =
+    "生产稿标准化硬性规则：\n" +
+    "1. 不要只做轻微润色，必须把原始剧本整理成后续导演分析可直接读取的标准生产稿。\n" +
+    "2. 删除重复标题、重复摘要、重复集数、粘贴残留；同一标题只保留一次。\n" +
+    "3. 每个场次必须使用清晰结构：场次编号 / 地点 / 时间 / 内外 / 出场人物 / 场记 / 动作视觉 / 对白。\n" +
+    "4. 场记必须描述空间、人物位置、关键道具、光线氛围和连续性，不要省略。\n" +
+    "5. 对白保留为“人物：对白”；动作视觉写成可读段落。\n" +
+    "6. 不做导演分析、不输出资产清单、不输出分镜提示词、不输出 JSON。";
+
+function cleanOptimizedScriptText(text: string, episodeTitle: string) {
+    const lines = text
+        .replace(/\r\n/g, "\n")
+        .replace(/(#{1,6}\s*第\s*\d+\s*集\s*摘要[:：]\s*){2,}/g, "# ")
+        .replace(/(第\s*\d+\s*集\s*摘要[:：]\s*){2,}/g, "$1")
+        .split("\n")
+        .map((line) => line.trimEnd());
+    const seenHeadings = new Set<string>();
+    const cleaned: string[] = [];
+    for (const line of lines) {
+        const normalized = line.replace(/^#+\s*/, "").trim();
+        const headingKey = normalized.replace(/\s+/g, "");
+        const isDuplicateHeading = /^第\s*\d+\s*集/.test(normalized) || normalized === episodeTitle.trim();
+        if (isDuplicateHeading) {
+            if (seenHeadings.has(headingKey)) continue;
+            seenHeadings.add(headingKey);
+        }
+        cleaned.push(line);
+    }
+    return cleaned.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }

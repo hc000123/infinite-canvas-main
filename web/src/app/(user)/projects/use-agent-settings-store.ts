@@ -16,6 +16,7 @@ type AgentSettingsStore = {
     resolvedProjectWorkflowPreset: (projectId: string, workflowId: string) => AgentWorkflowPreset | undefined;
     saveProjectConfig: (projectId: string, config: AgentConfig) => void;
     saveGlobalConfig: (config: AgentConfig) => void;
+    resetGlobalConfig: (kind: AgentConfigKind) => void;
     copyDefaultToProject: (projectId: string, kind: AgentConfigKind) => void;
     resetProjectConfig: (projectId: string, kind: AgentConfigKind) => void;
     saveProjectWorkflowSelection: (projectId: string, selection: AgentWorkflowPresetSelection) => void;
@@ -58,6 +59,10 @@ export const useAgentSettingsStore = create<AgentSettingsStore>()(
             saveGlobalConfig: (config) =>
                 set((state) => ({
                     globalConfigs: upsertConfig(state.globalConfigs, { ...normalizeAgentConfig(config), updatedAt: new Date().toISOString() }),
+                })),
+            resetGlobalConfig: (kind) =>
+                set((state) => ({
+                    globalConfigs: state.globalConfigs.filter((config) => config.kind !== kind),
                 })),
             copyDefaultToProject: (projectId, kind) =>
                 set((state) => ({

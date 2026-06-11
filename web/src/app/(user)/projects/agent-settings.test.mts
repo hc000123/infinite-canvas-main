@@ -18,11 +18,12 @@ test("builds default templates for all first-batch agent kinds", () => {
     const configs = defaultAgentConfigs("2026-01-01T00:00:00.000Z");
     assert.deepEqual(
         configs.map((config) => config.kind),
-        ["asset_extractor", "storyboard_director", "image_brief_builder", "video_prompt_builder", "prompt_reviewer"],
+        ["script_optimizer", "script_analyzer", "asset_extractor", "storyboard_director", "image_brief_builder", "video_prompt_builder", "prompt_reviewer"],
     );
     assert.ok(configs.every((config) => config.enabled));
     assert.ok(configs.every((config) => config.writePolicy === "confirm_before_write"));
     assert.ok(configs.every((config) => !config.kind.includes("seedance_workflow")));
+    assert.ok(configs.slice(0, 4).every((config) => config.skillSummary?.includes("Skill")));
 });
 
 test("merges global and project overrides by agent kind", () => {

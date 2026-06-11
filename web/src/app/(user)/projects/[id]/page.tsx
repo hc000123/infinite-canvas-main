@@ -36,10 +36,13 @@ export default function CreativeProjectDetailPage() {
     const episodes = useScriptStore((state) => state.episodes);
     const upsertScriptProject = useScriptStore((state) => state.upsertProject);
     const addEpisode = useScriptStore((state) => state.addEpisode);
+    const updateEpisode = useScriptStore((state) => state.updateEpisode);
     const [activeTab, setActiveTab] = useState("episodes");
     const [episodeImportOpen, setEpisodeImportOpen] = useState(false);
     const [projectEditOpen, setProjectEditOpen] = useState(false);
     const [editingCanvasPresetId, setEditingCanvasPresetId] = useState("");
+    const [editingEpisodeTitleId, setEditingEpisodeTitleId] = useState("");
+    const [episodeTitleDraft, setEpisodeTitleDraft] = useState("");
     const [titleDraft, setTitleDraft] = useState(project?.title || "");
     const [descriptionDraft, setDescriptionDraft] = useState(project?.description || "");
     const [episodeFilter, setEpisodeFilter] = useState<"all" | "done" | "draft" | "running">("all");
@@ -49,6 +52,7 @@ export default function CreativeProjectDetailPage() {
     const canvasIds = useMemo(() => (project ? canvasIdsForCreativeProject(project, canvases) : []), [canvases, project]);
     const projectCanvases = useMemo(() => canvases.filter((canvas) => canvasIds.includes(canvas.id)), [canvasIds, canvases]);
     const projectEpisodes = useMemo(() => episodes.filter((episode) => episode.projectId === projectId).sort((a, b) => a.order - b.order), [episodes, projectId]);
+    const editingEpisodeTitle = useMemo(() => projectEpisodes.find((episode) => episode.id === editingEpisodeTitleId), [editingEpisodeTitleId, projectEpisodes]);
     const editingCanvasPreset = useMemo(() => projectCanvases.find((canvas) => canvas.id === editingCanvasPresetId), [editingCanvasPresetId, projectCanvases]);
     const unboundCanvases = useMemo(() => unfiledCanvasProjects(canvases, project ? [project] : []), [canvases, project]);
     useEffect(() => {
@@ -126,6 +130,26 @@ export default function CreativeProjectDetailPage() {
         message.success("项目信息已保存");
     };
 
+    const openEpisodeTitleEdit = (row: ProjectEpisodeBoardRow) => {
+        setEditingEpisodeTitleId(row.id);
+        setEpisodeTitleDraft(row.title);
+    };
+
+    const saveEpisodeTitleEdit = () => {
+        const title = episodeTitleDraft.trim();
+        if (!editingEpisodeTitle) return;
+        if (!title) return message.warning("请填写分集标题");
+        updateEpisode(editingEpisodeTitle.id, { title });
+        setEditingEpisodeTitleId("");
+        setEpisodeTitleDraft("");
+        message.success("分集标题已保存");
+    };
+
+    const closeEpisodeTitleEdit = () => {
+        setEditingEpisodeTitleId("");
+        setEpisodeTitleDraft("");
+    };
+
     const importEpisodeAndOpen = async () => {
         const values = await episodeImportForm.validateFields();
         const scriptText = values.scriptText.trim();
@@ -181,6 +205,7 @@ export default function CreativeProjectDetailPage() {
                 onBindingCanvasChange={setBindingCanvasId}
                 onCreateCanvas={createCanvasAndOpen}
                 onEditCanvasPreset={setEditingCanvasPresetId}
+                onEditEpisodeTitle={openEpisodeTitleEdit}
                 onEditProject={() => setProjectEditOpen(true)}
                 onFilterChange={setEpisodeFilter}
                 onImportEpisode={() => setEpisodeImportOpen(true)}
@@ -200,6 +225,12 @@ export default function CreativeProjectDetailPage() {
                         <Input.TextArea value={descriptionDraft} rows={5} onChange={(event) => setDescriptionDraft(event.target.value)} />
                     </label>
                 </div>
+            </Modal>
+            <Modal className="studio-modal" title="修改分集标题" open={Boolean(editingEpisodeTitle)} onCancel={closeEpisodeTitleEdit} onOk={saveEpisodeTitleEdit} okText="保存" cancelText="取消" destroyOnHidden>
+                <label className="grid gap-2">
+                    <span className="text-sm text-[var(--studio-text-secondary)]">标题</span>
+                    <Input value={episodeTitleDraft} placeholder="例如：第 147 集" maxLength={80} showCount onChange={(event) => setEpisodeTitleDraft(event.target.value)} onPressEnter={saveEpisodeTitleEdit} />
+                </label>
             </Modal>
             <Modal className="studio-modal" title="导入本集剧本" open={episodeImportOpen} onCancel={() => setEpisodeImportOpen(false)} onOk={() => void importEpisodeAndOpen()} okText="导入并进入生产流程" cancelText="取消" destroyOnHidden>
                 <Form form={episodeImportForm} layout="vertical" initialValues={{ title: `第 ${projectEpisodes.length + 1} 集`, scriptText: "" }} requiredMark={false}>

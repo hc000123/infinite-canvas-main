@@ -46,11 +46,12 @@ function EpisodeAssetCard({
 }) {
     const inputRef = useRef<HTMLInputElement | null>(null);
     const [uploading, setUploading] = useState(false);
-    const coverAsset = asset.candidates.find((item) => item.kind === "image") || asset.candidates[0];
+    const coverAsset = asset.previewAsset;
     const coverUrl = coverAsset?.kind === "image" ? coverAsset.coverUrl || coverAsset.data.dataUrl : "";
     const review = coverAsset?.metadata?.volcengineAsset;
-    const reviewText = review?.status ? `加白：${review.status}` : coverAsset ? "可提交加白" : "待图片";
+    const reviewText = review?.status ? `加白：${review.status}` : coverAsset ? "可提交加白" : "待绑定图片";
     const reviewReady = Boolean(coverAsset);
+    const candidateImageCount = asset.candidates.filter((item) => item.kind === "image").length;
 
     const uploadSelectedFile = async (file?: File) => {
         if (!file) return;
@@ -71,9 +72,10 @@ function EpisodeAssetCard({
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={coverUrl} alt={asset.name} className="size-full object-cover" />
                     ) : (
-                        <div className="flex size-full flex-col items-center justify-center gap-2 border-b border-slate-800 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.12),transparent_55%),#071018] text-slate-500">
+                        <div className="flex size-full flex-col items-center justify-center gap-2 border-b border-slate-800 bg-[#071018] text-slate-500">
                             <ImageIcon className="size-9 text-slate-600" />
-                            <span className="text-sm">待生成 / 待上传图片</span>
+                            <span className="text-sm">未绑定预览图</span>
+                            <span className="px-4 text-center text-xs leading-5 text-slate-600">生成、上传或绑定素材后才显示封面</span>
                         </div>
                     )}
                     <div className="absolute left-3 top-3 rounded-md border border-slate-700/80 bg-slate-950/80 px-2 py-1 text-xs font-semibold text-cyan-100">{asset.type}</div>
@@ -91,8 +93,10 @@ function EpisodeAssetCard({
                         <p className="line-clamp-4 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">{asset.promptDraft || "暂无提示词，可先重新生成资产清单。"}</p>
                     </div>
                     <div className="flex flex-wrap gap-2 text-xs text-slate-500">
-                        <span>{asset.libraryMatchCount ? `素材库匹配 ${asset.libraryMatchCount}` : "素材库无匹配"}</span>
+                        {asset.boundAssetIds.length ? <span>已绑定 {asset.boundAssetIds.length} 个素材</span> : null}
+                        <span>{asset.libraryMatchCount ? `候选匹配 ${asset.libraryMatchCount}${candidateImageCount ? ` / 图片 ${candidateImageCount}` : ""}` : "素材库无候选"}</span>
                         {asset.referencedShotLabels.length ? <span>引用 {asset.referencedShotLabels.join("、")}</span> : null}
+                        {asset.sourceReason ? <span className="line-clamp-1 break-all">来源：{asset.sourceReason}</span> : null}
                     </div>
                 </div>
             </button>

@@ -7,6 +7,7 @@ import type { AiConfig } from "@/stores/use-config-store";
 
 import type { CanvasProject } from "../../../../../canvas/stores/use-canvas-store";
 import type { ScriptEpisode } from "../../../../../canvas/utils/script-management";
+import { canInvokeAgentConfig, type AgentConfig, type AgentConfigKind } from "../../../../agent-settings";
 import type { AgentWorkflowPreset, AgentWorkflowStage } from "../../../../agent-workflow-presets";
 import type { AgentRunInput, AgentWorkflowRunRecord, AgentWorkflowSceneRunState, AgentWorkflowStageOutput } from "../../../../agent-runner-types";
 import { getSeedanceWorkflowAgentCore } from "../../../../workflow-agents/seedance-workflow-agents";
@@ -25,6 +26,7 @@ type UseEpisodeWorkbenchRunActionsOptions = {
     currentScene?: EpisodeSceneOption;
     currentSceneState?: AgentWorkflowSceneRunState;
     effectiveConfig: AiConfig;
+    resolvedAgentConfigs: AgentConfig[];
     ensureWorkflowRun: (input: { projectId: string; canvasId?: string; episodeId: string; preset: AgentWorkflowPreset }) => string;
     episode: ScriptEpisode;
     episodeId: string;
@@ -49,6 +51,7 @@ export function useEpisodeWorkbenchRunActions({
     currentScene,
     currentSceneState,
     effectiveConfig,
+    resolvedAgentConfigs,
     ensureWorkflowRun,
     episode,
     episodeId,
@@ -136,12 +139,17 @@ export function useEpisodeWorkbenchRunActions({
         }
         const core = getSeedanceWorkflowAgentCore(stage.stageId);
         if (!core) return message.error("缺少当前阶段 Agent Core");
+        const agentConfig = resolvedAgentConfigs.find((config) => config.kind === workflowStageAgentKind(stage.stageId));
+        if (!agentConfig) return message.error("缺少当前阶段 Agent 设定");
+        const callable = canInvokeAgentConfig(agentConfig);
+        if (!callable.callable) return message.warning(callable.reason || "当前阶段 Agent 不可用");
         const { promptMessages, requestConfig, runInput, textModel } = buildEpisodeStageRunRequest({
             boundCanvas,
             core,
             effectiveConfig,
             episode,
             episodeId,
+            agentConfig,
             preset,
             projectId,
             projectTitle,
@@ -178,6 +186,10 @@ export function useEpisodeWorkbenchRunActions({
         if (unfinishedScene) return message.warning(`请先完成当前场次审核：${unfinishedScene.sceneLabel}`);
         const core = getSeedanceWorkflowAgentCore(stage.stageId);
         if (!core) return message.error("缺少分镜师 Agent Core");
+        const agentConfig = resolvedAgentConfigs.find((config) => config.kind === workflowStageAgentKind(stage.stageId));
+        if (!agentConfig) return message.error("缺少分镜阶段 Agent 设定");
+        const callable = canInvokeAgentConfig(agentConfig);
+        if (!callable.callable) return message.warning(callable.reason || "分镜阶段 Agent 不可用");
         const { promptMessages, requestConfig, runInput, textModel } = buildEpisodeStoryboardSceneRunRequest({
             boundCanvas,
             core,
@@ -186,6 +198,7 @@ export function useEpisodeWorkbenchRunActions({
             effectiveConfig,
             episode,
             episodeId,
+            agentConfig,
             preset,
             projectId,
             projectTitle,
@@ -211,4 +224,11 @@ export function useEpisodeWorkbenchRunActions({
     };
 
     return { cancelStage, runStage, runStoryboardScene, runningStageIds };
+}
+
+function workflowStageAgentKind(stageId: string): AgentConfigKind {
+    if (stageId === "director-analysis") return "script_analyzer";
+    if (stageId === "art-design") return "asset_extractor";
+    if (stageId === "seedance-storyboard") return "storyboard_director";
+    return "script_analyzer";
 }

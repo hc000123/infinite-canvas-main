@@ -10,6 +10,7 @@ export type OpenImageWorkbenchPayload = { assetId?: string; briefId?: string; pr
 
 export type EpisodeAssetRow = {
     canGenerate: boolean;
+    boundAssetIds: string[];
     candidates: Asset[];
     description: string;
     episodeLabel: string;
@@ -18,6 +19,7 @@ export type EpisodeAssetRow = {
     name: string;
     productionBibleItem?: ProductionBibleItem;
     promptDraft: string;
+    previewAsset?: Asset;
     referencedShotLabels: string[];
     sourceReason: string;
     status: "已绑定" | "待绑定" | "待生成" | "待确认" | "缺素材";

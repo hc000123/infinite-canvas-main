@@ -54,6 +54,7 @@ export function EpisodeModulePanel({
     config,
     editorSlot,
     filteredRows,
+    showRows = true,
     onFilterChange,
     onOpenDetail,
 }: {
@@ -61,6 +62,7 @@ export function EpisodeModulePanel({
     config: EpisodeModuleConfig;
     editorSlot?: ReactNode;
     filteredRows: EpisodeModuleRow[];
+    showRows?: boolean;
     onFilterChange: (filter: string) => void;
     onOpenDetail: (record: EpisodeDetailRecord) => void;
 }) {
@@ -99,22 +101,26 @@ export function EpisodeModulePanel({
                 </div>
                 {editorSlot}
                 {config.runningPreview ? <EpisodeRunningPreview preview={config.runningPreview} /> : null}
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap gap-2">
-                        {config.filters.map((filter) => (
-                            <button
-                                key={filter}
-                                type="button"
-                                className={`rounded-md border px-3 py-1.5 text-sm transition ${activeFilter === filter ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/35 text-slate-500 hover:text-slate-200"}`}
-                                onClick={() => onFilterChange(filter)}
-                            >
-                                {filter}
-                            </button>
-                        ))}
-                    </div>
-                    <div className="text-sm text-slate-500">当前显示 {filteredRows.length} 条</div>
-                </div>
-                <EpisodeDenseTable columns={config.columns} emptyText={config.emptyText} headers={config.headers} onOpenDetail={onOpenDetail} rows={filteredRows} />
+                {showRows ? (
+                    <>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-wrap gap-2">
+                                {config.filters.map((filter) => (
+                                    <button
+                                        key={filter}
+                                        type="button"
+                                        className={`rounded-md border px-3 py-1.5 text-sm transition ${activeFilter === filter ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/35 text-slate-500 hover:text-slate-200"}`}
+                                        onClick={() => onFilterChange(filter)}
+                                    >
+                                        {filter}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="text-sm text-slate-500">当前显示 {filteredRows.length} 条</div>
+                        </div>
+                        <EpisodeDenseTable columns={config.columns} emptyText={config.emptyText} headers={config.headers} onOpenDetail={onOpenDetail} rows={filteredRows} />
+                    </>
+                ) : null}
             </div>
         </section>
     );
