@@ -22,7 +22,7 @@ type UseCanvasFileNodeActionsOptions = {
     setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
     setDialogNodeId: Dispatch<SetStateAction<string | null>>;
     showSuccess: (text: string) => void;
-    addCanvasNodeToAssets: (node: CanvasNodeData) => Promise<boolean>;
+    addCanvasNodeToAssets: (node: CanvasNodeData) => Promise<string | false>;
     toImageMetadata: (image: UploadedImage) => CanvasNodeMetadata;
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
     toAudioMetadata: (audio: UploadedFile) => CanvasNodeMetadata;

@@ -38,6 +38,7 @@ type Props = {
     onOpenAssets: () => void;
     onOpenAssistant: () => void;
     onOpenEpisodeWorkbench: () => void;
+    onOpenWorkflowAssistant: () => void;
     onPasteImage: (file: File) => void;
     onPreviewProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
     onSelectNodeIds: (ids: Set<string>) => void;
@@ -93,6 +94,7 @@ export function CanvasSideInspector({
     onOpenAssets,
     onOpenAssistant,
     onOpenEpisodeWorkbench,
+    onOpenWorkflowAssistant,
     onPasteImage,
     onPreviewProductionVideoVersion,
     onSelectNodeIds,
@@ -146,6 +148,7 @@ export function CanvasSideInspector({
                         embedded
                         projectId={projectId}
                         canvasId={canvasId}
+                        canvasTitle={title}
                         episodeId={canvasEpisodeId}
                         nodes={nodes}
                         connections={connections}
@@ -158,6 +161,7 @@ export function CanvasSideInspector({
                         onInsertText={onInsertText}
                         onPasteImage={onPasteImage}
                         onApplyAssistantActions={onApplyAssistantActions}
+                        onOpenWorkflowAssistant={onOpenWorkflowAssistant}
                         onCollapseStart={onAssistantCollapseStart}
                         onCollapse={onAssistantCollapse}
                     />

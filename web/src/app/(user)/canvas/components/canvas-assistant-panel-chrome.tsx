@@ -1,6 +1,6 @@
 "use client";
 
-import { History, PanelRightClose, Plus, Settings2, Sparkles, Trash2, X } from "lucide-react";
+import { History, PanelRightClose, Plus, Settings2, Sparkles, Trash2, Workflow, X } from "lucide-react";
 import { Button, Modal, Tooltip } from "antd";
 
 import { DiaTextReveal } from "@/components/ui/dia-text-reveal";
@@ -16,11 +16,12 @@ type CanvasAssistantHeaderProps = {
     onDeleteAll: () => void;
     onToggleView: () => void;
     onStartChat: () => void;
+    onOpenWorkflowAssistant?: () => void;
     onOpenConfig: () => void;
     onCollapse: () => void;
 };
 
-export function CanvasAssistantHeader({ view, checkedCount, historyCount, canStartChat, onDeleteSelected, onDeleteAll, onToggleView, onStartChat, onOpenConfig, onCollapse }: CanvasAssistantHeaderProps) {
+export function CanvasAssistantHeader({ view, checkedCount, historyCount, canStartChat, onDeleteSelected, onDeleteAll, onToggleView, onStartChat, onOpenWorkflowAssistant, onOpenConfig, onCollapse }: CanvasAssistantHeaderProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const iconButtonStyle = { color: theme.node.muted };
 
@@ -41,6 +42,11 @@ export function CanvasAssistantHeader({ view, checkedCount, historyCount, canSta
                         </Tooltip>
                     </>
                 ) : null}
+                {onOpenWorkflowAssistant ? (
+                    <Tooltip title="工作流助手">
+                        <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Workflow className="size-4" />} onClick={onOpenWorkflowAssistant} />
+                    </Tooltip>
+                ) : null}
                 <Tooltip title={view === "history" ? "返回对话" : "历史记录"}>
                     <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<History className="size-4" />} onClick={onToggleView} />
                 </Tooltip>
@@ -58,7 +64,7 @@ export function CanvasAssistantHeader({ view, checkedCount, historyCount, canSta
     );
 }
 
-export function CanvasAssistantEmptyState() {
+export function CanvasAssistantEmptyState({ onOpenWorkflowAssistant }: { onOpenWorkflowAssistant?: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
 
     return (
@@ -68,6 +74,11 @@ export function CanvasAssistantEmptyState() {
                 <DiaTextReveal className="absolute inset-0" colors={["#A97CF8", "#F38CB8", "#FDCC92"]} textColor="transparent" duration={1.8} startOnView={false} text="眨眼之间" />
             </div>
             <div className="mt-3 text-base tracking-wide opacity-60">一眨眼，把灵感铺成画布</div>
+            {onOpenWorkflowAssistant ? (
+                <Button className="mt-5 !rounded-xl" icon={<Workflow className="size-4" />} onClick={onOpenWorkflowAssistant}>
+                    打开工作流助手
+                </Button>
+            ) : null}
         </div>
     );
 }

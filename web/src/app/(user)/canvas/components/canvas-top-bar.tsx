@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Home, Menu, MessageSquare, Plus, Redo2, Save, Trash2, Undo2, Upload } from "lucide-react";
+import { ArrowLeft, Home, Menu, MessageSquare, Plus, Redo2, Save, Trash2, Undo2, Upload, Workflow } from "lucide-react";
 import { Button, Dropdown, Modal } from "antd";
 
 import { UserStatusActions } from "@/components/layout/user-status-actions";
@@ -27,6 +27,7 @@ export function CanvasTopBar({
     onSaveProject,
     onImportImage,
     onOpenEpisodeScript,
+    onOpenWorkflowAssistant,
     onUndo,
     onRedo,
     assistantActive,
@@ -52,6 +53,7 @@ export function CanvasTopBar({
     onSaveProject: () => void;
     onImportImage: () => void;
     onOpenEpisodeScript: () => void;
+    onOpenWorkflowAssistant: () => void;
     onUndo: () => void;
     onRedo: () => void;
     assistantActive: boolean;
@@ -177,6 +179,15 @@ export function CanvasTopBar({
                         }}
                     />
                     <span className="h-6 w-px" style={{ background: theme.toolbar.border }} />
+                    <Button
+                        type="text"
+                        className="!h-10 !rounded-xl !px-3 !font-medium"
+                        style={{ background: theme.toolbar.panel, color: theme.node.text, boxShadow: "0 10px 30px rgba(28,25,23,.10)" }}
+                        icon={<Workflow className="size-4" />}
+                        onClick={onOpenWorkflowAssistant}
+                    >
+                        工作流助手
+                    </Button>
                     <Button
                         type="text"
                         className="!h-10 !rounded-xl !px-3 !font-medium"

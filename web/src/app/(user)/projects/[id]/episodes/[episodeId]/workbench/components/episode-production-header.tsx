@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "antd";
+import { Workflow } from "lucide-react";
 
 import type { CanvasProject } from "../../../../../../canvas/stores/use-canvas-store";
 import type { ScriptEpisode } from "../../../../../../canvas/utils/script-management";
@@ -43,6 +44,9 @@ export function EpisodeProductionHeader({
                     <p className="mt-2 break-words text-sm leading-6 text-slate-500">建议下一步：{nextActionText}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    <Button className="!border-slate-700 !bg-slate-950/50 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" href={`/projects/${project.id}/episodes/${episode.id}/workflow`} icon={<Workflow className="size-4" />}>
+                        工作流落地页
+                    </Button>
                     <Button className="!border-slate-700 !bg-slate-950/50 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" onClick={onBackProject}>
                         返回项目
                     </Button>

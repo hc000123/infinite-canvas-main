@@ -410,7 +410,7 @@ function InfiniteCanvasPage() {
         setEditRequestNonce,
     });
 
-    const { createAndOpenProject, deleteCurrentProject, finishTitleEditing, openEpisodeWorkbench, resetViewport, returnTarget, returnToParent, saveCurrentProject, setZoomScale, startTitleEditing } = useCanvasPageActions({
+    const { createAndOpenProject, deleteCurrentProject, finishTitleEditing, openEpisodeWorkbench, openWorkflowAssistant, resetViewport, returnTarget, returnToParent, saveCurrentProject, setZoomScale, startTitleEditing } = useCanvasPageActions({
         activeChatId,
         attachCanvasToCreativeProject,
         backgroundMode,
@@ -742,6 +742,7 @@ function InfiniteCanvasPage() {
                     onSaveProject={saveCurrentProject}
                     onImportImage={() => handleUploadRequest()}
                     onOpenEpisodeScript={openEpisodeWorkbench}
+                    onOpenWorkflowAssistant={openWorkflowAssistant}
                     onUndo={undoCanvas}
                     onRedo={redoCanvas}
                     assistantActive={assistantMounted && inspectorView === "assistant" && !isInspectorCollapsed}
@@ -968,6 +969,7 @@ function InfiniteCanvasPage() {
                 onOpenAssets={inspectorPanelActions.openAssetPicker}
                 onOpenAssistant={inspectorPanelActions.openAssistant}
                 onOpenEpisodeWorkbench={openEpisodeWorkbench}
+                onOpenWorkflowAssistant={openWorkflowAssistant}
                 onPasteImage={pasteAssistantImage}
                 onPreviewProductionVideoVersion={handlePreviewProductionVideoVersion}
                 onSelectNodeIds={setSelectedNodeIds}

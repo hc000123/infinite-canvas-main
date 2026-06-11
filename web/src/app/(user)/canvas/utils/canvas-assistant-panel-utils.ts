@@ -49,14 +49,14 @@ export async function buildAssistantReferenceImages(refs: CanvasAssistantReferen
     return Promise.all(refs.filter((item) => item.dataUrl).map(async (item) => ({ id: item.id, name: `${item.title}.png`, type: "image/png", dataUrl: await imageToDataUrl(item), storageKey: item.storageKey })));
 }
 
-export async function buildChatMessages(messages: CanvasAssistantMessage[]): Promise<ChatCompletionMessage[]> {
-    return Promise.all(
+export async function buildChatMessages(messages: CanvasAssistantMessage[], systemContext?: string): Promise<ChatCompletionMessage[]> {
+    const chatMessages: ChatCompletionMessage[] = await Promise.all(
         messages.map(async (message, index) => {
-            if (message.role === "assistant") return { role: "assistant", content: message.text };
-            if (index !== messages.length - 1) return { role: "user", content: message.text };
+            if (message.role === "assistant") return { role: "assistant" as const, content: message.text };
+            if (index !== messages.length - 1) return { role: "user" as const, content: message.text };
             const refs = message.references || [];
             return {
-                role: "user",
+                role: "user" as const,
                 content: [
                     ...refs.flatMap((item) => (item.text ? [{ type: "text" as const, text: item.text }] : [])),
                     { type: "text", text: message.text },
@@ -65,6 +65,7 @@ export async function buildChatMessages(messages: CanvasAssistantMessage[]): Pro
             };
         }),
     );
+    return systemContext?.trim() ? [{ role: "system", content: systemContext.trim() }, ...chatMessages] : chatMessages;
 }
 
 export function updateLocalImageResultSize(localAiTaskId: string, width: number, height: number) {
