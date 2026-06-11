@@ -57,6 +57,10 @@ export default function EpisodeWorkflowLandingPage() {
     const sceneKeys = useMemo(() => buildExpectedSceneKeys(episodeTableShots, stageSceneRows), [episodeTableShots, stageSceneRows]);
     const stageDisplays = useMemo(() => stages.map((stage) => (workflowRun ? summarizeWorkflowStageDisplayState(workflowRun, stage.stageId, stage.stageId === "seedance-storyboard" ? sceneKeys : []) : undefined)), [sceneKeys, stages, workflowRun]);
     const runDisplay = useMemo(() => (workflowRun ? summarizeWorkflowRunDisplayState(workflowRun, { "seedance-storyboard": sceneKeys }) : undefined), [sceneKeys, workflowRun]);
+    const artStageOutput = stageOutput(workflowRun, workflowOutputs, "art-design");
+    const storyboardStageOutput = stageOutput(workflowRun, workflowOutputs, "seedance-storyboard");
+    const artDisplay = stageDisplays.find((display) => display?.stageId === "art-design");
+    const storyboardDisplay = stageDisplays.find((display) => display?.stageId === "seedance-storyboard");
     const approvedStageCount = stageDisplays.filter((display) => display?.displayStatus === "approved").length;
     const progress = stages.length ? Math.round((approvedStageCount / stages.length) * 100) : 0;
 
@@ -183,9 +187,9 @@ export default function EpisodeWorkflowLandingPage() {
                 </section>
 
                 <section className="grid gap-4 md:grid-cols-3">
-                    <LandingTargetCard icon={<FileText className="size-5" />} title="资产设定库" stageId="art-design" preview={productionBiblePreview} appliedPreviewItemIds={workflowAppliedPreviewItemIds} hasCanvas={Boolean(boundCanvas)} applying={Boolean(productionBiblePreview && applyingPreviewIds[productionBiblePreview.previewId])} onApply={applyPreview} onGeneratePreview={generatePreview} />
-                    <LandingTargetCard icon={<Clapperboard className="size-5" />} title="分镜头表" stageId="seedance-storyboard" preview={storyboardPreview} appliedPreviewItemIds={workflowAppliedPreviewItemIds} hasCanvas={Boolean(boundCanvas)} applying={Boolean(storyboardPreview && applyingPreviewIds[storyboardPreview.previewId])} onApply={applyPreview} onGeneratePreview={generatePreview} />
-                    <LandingTargetCard icon={<PanelTop className="size-5" />} title="视频配置节点" stageId="seedance-storyboard" preview={videoPreview} appliedPreviewItemIds={workflowAppliedPreviewItemIds} hasCanvas={Boolean(boundCanvas)} applying={Boolean(videoPreview && applyingPreviewIds[videoPreview.previewId])} onApply={applyPreview} onGeneratePreview={generatePreview} />
+                    <LandingTargetCard icon={<FileText className="size-5" />} title="资产设定库" stageId="art-design" preview={productionBiblePreview} appliedPreviewItemIds={workflowAppliedPreviewItemIds} hasCanvas={Boolean(boundCanvas)} applying={Boolean(productionBiblePreview && applyingPreviewIds[productionBiblePreview.previewId])} previewGenerationReason={previewGenerationDisabledReason(artStageOutput, artDisplay)} onApply={applyPreview} onGeneratePreview={generatePreview} />
+                    <LandingTargetCard icon={<Clapperboard className="size-5" />} title="分镜头表" stageId="seedance-storyboard" preview={storyboardPreview} appliedPreviewItemIds={workflowAppliedPreviewItemIds} hasCanvas={Boolean(boundCanvas)} applying={Boolean(storyboardPreview && applyingPreviewIds[storyboardPreview.previewId])} previewGenerationReason={previewGenerationDisabledReason(storyboardStageOutput, storyboardDisplay)} onApply={applyPreview} onGeneratePreview={generatePreview} />
+                    <LandingTargetCard icon={<PanelTop className="size-5" />} title="视频配置节点" stageId="seedance-storyboard" preview={videoPreview} appliedPreviewItemIds={workflowAppliedPreviewItemIds} hasCanvas={Boolean(boundCanvas)} applying={Boolean(videoPreview && applyingPreviewIds[videoPreview.previewId])} previewGenerationReason={previewGenerationDisabledReason(storyboardStageOutput, storyboardDisplay)} onApply={applyPreview} onGeneratePreview={generatePreview} />
                 </section>
 
                 <section className="rounded-2xl border border-slate-800/80 bg-slate-950/70">
@@ -229,6 +233,7 @@ function LandingTargetCard({
     onApply,
     onGeneratePreview,
     preview,
+    previewGenerationReason,
     stageId,
     title,
 }: {
@@ -239,6 +244,7 @@ function LandingTargetCard({
     onApply: (preview: AgentWorkflowMappingPreview) => void;
     onGeneratePreview: (stageId: string, label: string) => void;
     preview?: AgentWorkflowMappingPreview;
+    previewGenerationReason: string;
     stageId: string;
     title: string;
 }) {
@@ -264,11 +270,11 @@ function LandingTargetCard({
                         {disabledReason ? "暂不可写入" : previewActionLabel(preview.targetType)}
                     </Button>
                 ) : (
-                    <Button className="!h-9 !border-slate-700 !bg-slate-900/70 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" onClick={() => onGeneratePreview(stageId, title)}>
-                        生成预览
+                    <Button className="!h-9 !border-slate-700 !bg-slate-900/70 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" disabled={Boolean(previewGenerationReason)} title={previewGenerationReason} onClick={() => onGeneratePreview(stageId, title)}>
+                        {previewGenerationReason ? "待阶段产物" : "生成预览"}
                     </Button>
                 )}
-                {disabledReason ? <span className="flex items-center text-xs text-slate-500">{disabledReason}</span> : null}
+                {disabledReason || previewGenerationReason ? <span className="flex items-center text-xs text-slate-500">{disabledReason || previewGenerationReason}</span> : null}
             </div>
         </div>
     );
@@ -342,6 +348,15 @@ function findWorkflowRun(workflowRuns: AgentWorkflowRunRecord[], projectId: stri
 function stageOutput(workflowRun: AgentWorkflowRunRecord | undefined, outputs: AgentWorkflowStageOutput[], stageId: string) {
     const stageState = workflowRun?.stageStates.find((stage) => stage.stageId === stageId);
     return stageState?.outputId ? outputs.find((output) => output.outputId === stageState.outputId) : outputs.find((output) => output.workflowRunId === workflowRun?.id && output.stageId === stageId);
+}
+
+function previewGenerationDisabledReason(output?: AgentWorkflowStageOutput, display?: ReturnType<typeof summarizeWorkflowStageDisplayState>) {
+    if (output) return "";
+    if (display?.displayStatus === "running") return "阶段运行中，完成后才能生成预览";
+    if (display?.displayStatus === "review" || display?.displayStatus === "partial") return "阶段待确认，批准后才能生成预览";
+    if (display?.displayStatus === "blocked") return "需先在生产台处理阻塞阶段";
+    if (display?.displayStatus === "error" || display?.displayStatus === "rejected") return "需先在生产台处理阶段异常";
+    return "需先在生产台生成并批准阶段产物";
 }
 
 function buildExpectedSceneKeys(tableShots: Array<{ sceneId?: string; sceneName: string }>, scriptScenes: Array<{ id: string }>) {

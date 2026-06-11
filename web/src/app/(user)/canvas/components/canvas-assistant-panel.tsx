@@ -17,6 +17,7 @@ import { executeAssistantCanvasReadAction, parseAssistantCanvasActionSuggestion,
 import { buildAssistantReferenceImages, buildChatMessages, buildDebugAssistantActions, summarizeLocalImageInput, updateLocalImageResultSize } from "../utils/canvas-assistant-panel-utils";
 import { buildAssistantReferences } from "../utils/canvas-assistant-references";
 import { buildCanvasAssistantWorkflowContext } from "../utils/canvas-assistant-workflow-context";
+import { buildWorkflowAssistantActionSuggestion } from "../utils/canvas-assistant-workflow-actions";
 import { useCanvasAssistantSessions } from "../hooks/use-canvas-assistant-sessions";
 import { AssistantMessages } from "./canvas-assistant-messages";
 import { CanvasAssistantComposer, type AssistantMode } from "./canvas-assistant-composer";
@@ -78,6 +79,7 @@ export function CanvasAssistantPanel({
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const creativeProject = useCreativeProjectStore((state) => state.projects.find((item) => item.id === projectId));
     const workflowRuns = useAgentRunnerStore((state) => state.workflowRuns);
+    const workflowOutputs = useAgentRunnerStore((state) => state.workflowOutputs);
     const workflowMappingPreviews = useAgentRunnerStore((state) => state.workflowMappingPreviews);
     const workflowAppliedPreviewItemIds = useAgentRunnerStore((state) => state.workflowAppliedPreviewItemIds);
     const [width, setWidth] = useState(390);
@@ -195,7 +197,16 @@ export function CanvasAssistantPanel({
     const submit = async () => {
         const text = prompt.trim();
         if (!text || isRunning) return;
-        const suggestion = parseAssistantCanvasActionSuggestion({ text, nodes, connections, selectedNodeIds: Array.from(selectedNodeIds) });
+        const suggestion =
+            buildWorkflowAssistantActionSuggestion({
+                appliedPreviewItemIds: workflowAppliedPreviewItemIds,
+                connections,
+                nodes,
+                outputs: workflowOutputs,
+                previews: workflowMappingPreviews,
+                text,
+                workflowRun: workflowContext.workflowRun,
+            }) || parseAssistantCanvasActionSuggestion({ text, nodes, connections, selectedNodeIds: Array.from(selectedNodeIds) });
         if (suggestion?.actions.length) {
             setPrompt("");
             appendAssistantMessage({
