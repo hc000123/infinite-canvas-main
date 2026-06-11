@@ -3,6 +3,7 @@ import { useEffect, type Dispatch, type RefObject, type SetStateAction } from "r
 import type { CanvasConnection, CanvasNodeData, ContextMenuState } from "../types";
 
 type UseCanvasKeyboardShortcutsOptions = {
+    containerRef: RefObject<HTMLDivElement | null>;
     nodesRef: RefObject<CanvasNodeData[]>;
     selectedNodeIdsRef: RefObject<Set<string>>;
     selectedConnectionId: string | null;
@@ -21,6 +22,7 @@ type UseCanvasKeyboardShortcutsOptions = {
 };
 
 export function useCanvasKeyboardShortcuts({
+    containerRef,
     nodesRef,
     selectedNodeIdsRef,
     selectedConnectionId,
@@ -39,7 +41,7 @@ export function useCanvasKeyboardShortcuts({
 }: UseCanvasKeyboardShortcutsOptions) {
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) return;
+            if (shouldIgnoreCanvasShortcut(event, containerRef.current)) return;
 
             const key = event.key.toLowerCase();
             const isModifierShortcut = event.metaKey || event.ctrlKey;
@@ -101,6 +103,7 @@ export function useCanvasKeyboardShortcuts({
     }, [
         clearSelectionBox,
         closeCanvasOverlays,
+        containerRef,
         copySelectedNodes,
         deleteNodes,
         nodesRef,
@@ -115,4 +118,19 @@ export function useCanvasKeyboardShortcuts({
         setSelectedNodeIds,
         undoCanvas,
     ]);
+}
+
+function shouldIgnoreCanvasShortcut(event: KeyboardEvent, canvasRoot: HTMLElement | null) {
+    const target = event.target instanceof Element ? event.target : null;
+    const activeElement = document.activeElement instanceof Element ? document.activeElement : null;
+    const element = target || activeElement;
+    const key = event.key.toLowerCase();
+    const canvasHasFocus = Boolean(canvasRoot && activeElement && (activeElement === canvasRoot || canvasRoot.contains(activeElement)));
+
+    if (element?.closest("input, textarea, select, button, a, [contenteditable='true'], [role='textbox'], [data-canvas-shortcut-scope='ignore']")) return true;
+    if (element?.closest(".ant-modal, .ant-drawer, .ant-dropdown, .ant-popover, .ant-picker-dropdown, .ant-select-dropdown")) return true;
+    if (document.querySelector(".ant-modal-root .ant-modal, .ant-drawer-content-wrapper")) return true;
+    if (!canvasHasFocus) return true;
+    if ((event.metaKey || event.ctrlKey) && key === "c" && window.getSelection()?.toString().trim()) return true;
+    return false;
 }

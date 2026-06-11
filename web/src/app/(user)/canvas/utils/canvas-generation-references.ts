@@ -117,13 +117,18 @@ export function sourceNodeReferenceVideos(node: CanvasNodeData | null | undefine
 
 export function sourceNodeReferenceAudios(node: CanvasNodeData | null | undefined) {
     if (!node || node.type !== CanvasNodeType.Audio || !node.metadata?.content) return [];
+    const assetUri = activeVolcengineAssetURI(node.metadata.volcengineAsset);
+    const volcengineAssetId = node.metadata.volcengineAsset?.assetId;
+    const volcengineAssetStatus = node.metadata.volcengineAsset?.status;
     return [
         {
             id: node.id,
             name: `${node.title || node.id}.${audioExtension(node.metadata.mimeType)}`,
             type: node.metadata.mimeType || "audio/mpeg",
-            url: node.metadata.content,
-            storageKey: node.metadata.storageKey,
+            url: assetUri || node.metadata.content,
+            storageKey: assetUri ? undefined : node.metadata.storageKey,
+            ...(assetUri ? { assetUri } : {}),
+            ...(volcengineAssetId ? { volcengineAssetId, volcengineAssetStatus } : {}),
         },
     ];
 }

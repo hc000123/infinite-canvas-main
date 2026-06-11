@@ -533,6 +533,7 @@ function InfiniteCanvasPage() {
     });
 
     useCanvasKeyboardShortcuts({
+        containerRef,
         nodesRef,
         selectedNodeIdsRef,
         selectedConnectionId,

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { App, Button, Empty } from "antd";
 
+import { requestImageQuestion, type ChatCompletionMessage } from "@/services/api/image";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useCanvasStore } from "../../../../../canvas/stores/use-canvas-store";
 import { useScriptStore } from "../../../../../canvas/stores/use-script-store";
@@ -52,6 +53,7 @@ export default function EpisodeProductionWorkbenchPage() {
     const failWorkflowTextRun = useAgentRunnerStore((state) => state.failWorkflowTextRun);
     const effectiveConfig = useEffectiveConfig();
     const checkAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
+    const [scriptOptimizing, setScriptOptimizing] = useState(false);
     const { boundCanvas, episodeTableShots, hasScript, preset, previews, sceneOptions, scriptSnapshot, stageOutputs, stages, stageSceneRows, workflowRun } = useEpisodeWorkbenchState({
         canvases,
         episode,
@@ -96,7 +98,7 @@ export default function EpisodeProductionWorkbenchPage() {
         ensureWorkflowRun({ projectId, canvasId: boundCanvas?.id, episodeId, preset });
     }, [boundCanvas?.id, ensureWorkflowRun, episode, episodeId, preset, project, projectId]);
 
-    const { runStage, runStoryboardScene, runningStageIds } = useEpisodeWorkbenchRunActions({
+    const { cancelStage, runStage, runStoryboardScene, runningStageIds } = useEpisodeWorkbenchRunActions({
         boundCanvas,
         checkAiConfigReady,
         currentScene,
@@ -157,9 +159,58 @@ export default function EpisodeProductionWorkbenchPage() {
         );
     }
 
+    const optimizeScript = async () => {
+        const sourceScript = scriptDraft.trim();
+        if (!sourceScript) {
+            message.warning("请先导入或粘贴本集剧本。");
+            return;
+        }
+        const textModel = effectiveConfig.textModel || effectiveConfig.model;
+        if (!checkAiConfigReady(effectiveConfig, textModel)) {
+            message.warning("请先配置可用的文本模型。");
+            return;
+        }
+        const requestConfig = { ...effectiveConfig, model: textModel };
+        const promptMessages: ChatCompletionMessage[] = [
+            {
+                role: "system",
+                content:
+                    "你是短剧制作工作流的剧本优化 Agent。你的任务是把原始剧本整理成后续导演分析、资产提取、分镜生产更容易稳定读取的版本。必须保留原剧情事实、人物关系、对白意图和关键转折，不新增无关剧情。只输出优化后的完整剧本正文，不要解释。",
+            },
+            {
+                role: "user",
+                content: [
+                    `项目：${project?.title || "未命名项目"}`,
+                    `集数：第 ${padEpisodeOrder(episode.order)} 集 ${episode.title}`,
+                    "请优化下面剧本：",
+                    sourceScript,
+                    "输出要求：",
+                    "1. 保持完整正文，不要拆成 JSON。",
+                    "2. 用清晰的场次、地点、时间、人物、动作、对白组织内容。",
+                    "3. 补足能帮助后续资产提取的视觉线索，但不要改动核心剧情。",
+                    "4. 不做导演讲戏，不输出分析意见。",
+                ].join("\n\n"),
+            },
+        ];
+        setScriptOptimizing(true);
+        try {
+            const answer = await requestImageQuestion(requestConfig, promptMessages, (streamed) => {
+                if (streamed.trim()) setScriptDraft(streamed);
+            });
+            const optimized = answer.trim();
+            if (optimized) setScriptDraft(optimized);
+            message.success("剧本优化完成，请确认后进入导演分析。");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "剧本优化失败");
+        } finally {
+            setScriptOptimizing(false);
+        }
+    };
+
     const saveScript = () => {
         updateEpisode(episode.id, { summary: scriptDraft });
-        message.success("本集剧本已保存");
+        setActiveModule("director");
+        message.success("剧本已确认，进入导演分析。");
     };
 
     const importCanvasPackage = (pkg: CanvasHandoffImportTarget) => {
@@ -228,18 +279,21 @@ export default function EpisodeProductionWorkbenchPage() {
                 onOpenDetail={setDetailRecord}
                 onApproveStageReview={approveStageReview}
                 onApproveStoryboardScene={approveCurrentStoryboardScene}
+                onCancelStage={cancelStage}
                 onUpdateDirectorReviewState={updateDirectorReviewState}
                 onRunStage={(stageId) => {
                     const stage = stages.find((item) => item.stageId === stageId);
                     if (stage) void runStage(stage);
                 }}
                 onRunStoryboardScene={() => void runStoryboardScene()}
+                onOptimizeScript={() => void optimizeScript()}
                 onSaveScript={saveScript}
                 onSummarizeStoryboardScenes={summarizeStoryboardScenes}
                 project={project}
                 previews={previews}
                 runningStageIds={runningStageIds}
                 sceneOptions={sceneOptions}
+                scriptOptimizing={scriptOptimizing}
                 scriptDraft={scriptDraft}
                 scriptSnapshot={scriptSnapshot}
                 setScriptDraft={setScriptDraft}

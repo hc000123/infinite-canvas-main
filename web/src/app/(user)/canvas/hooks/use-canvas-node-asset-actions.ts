@@ -29,12 +29,16 @@ export function useCanvasNodeAssetActions({
             const asset = canvasNodeToAsset(node);
             if (!asset) return false;
             const assetId = await addAssetOnce(asset);
-            if (assetId && node.metadata?.sourceAssetId !== assetId) {
-                setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, ...canvasAssetReferenceMetadata({ sourceAssetId: assetId }) } } : item)));
+            if (assetId) {
+                const storedAsset = assetById.get(assetId);
+                const volcengineAsset = storedAsset?.kind === node.type ? storedAsset.metadata?.volcengineAsset : undefined;
+                if (node.metadata?.sourceAssetId !== assetId || (volcengineAsset?.assetId && node.metadata?.volcengineAsset?.assetId !== volcengineAsset.assetId)) {
+                    setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, ...canvasAssetReferenceMetadata({ sourceAssetId: assetId }), ...(volcengineAsset ? { volcengineAsset } : {}) } } : item)));
+                }
             }
             return assetId;
         },
-        [addAssetOnce, setNodes],
+        [addAssetOnce, assetById, setNodes],
     );
 
     const saveNodeAsset = useCallback(

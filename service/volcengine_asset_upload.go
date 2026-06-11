@@ -208,12 +208,15 @@ func validateVolcengineMedia(file multipart.File, header *multipart.FileHeader) 
 		}
 		return volcengineMediaFile{Bytes: imageFile.Bytes, Ext: imageFile.Ext, MimeType: imageFile.MimeType, AssetType: "Image"}, nil
 	}
-	if assetType != model.AssetTypeVideo {
-		return volcengineMediaFile{}, safeMessageError{message: "仅支持图片或视频素材加白"}
+	if assetType != model.AssetTypeVideo && assetType != model.AssetTypeAudio {
+		return volcengineMediaFile{}, safeMessageError{message: "仅支持图片、视频或音频素材加白"}
 	}
 	ext := strings.TrimPrefix(assetUploadExt(mimeType, header.Filename), ".")
 	if ext == "" || ext == "bin" {
-		return volcengineMediaFile{}, safeMessageError{message: "视频格式需为 mp4、mov、m4v 或 webm"}
+		return volcengineMediaFile{}, safeMessageError{message: "素材格式需为 mp4、mov、m4v、webm、mp3、wav、m4a 或 ogg"}
+	}
+	if assetType == model.AssetTypeAudio {
+		return volcengineMediaFile{Bytes: data, Ext: ext, MimeType: mimeType, AssetType: "Audio"}, nil
 	}
 	return volcengineMediaFile{Bytes: data, Ext: ext, MimeType: mimeType, AssetType: "Video"}, nil
 }
@@ -348,6 +351,8 @@ func saveVolcenginePublicMedia(ctx context.Context, setting model.VolcengineAsse
 	dirName := "images"
 	if mediaFile.AssetType == "Video" {
 		dirName = "videos"
+	} else if mediaFile.AssetType == "Audio" {
+		dirName = "audios"
 	}
 	dir := filepath.Join(config.Cfg.PublicAssetDir, dirName)
 	if err := os.MkdirAll(dir, 0755); err != nil {

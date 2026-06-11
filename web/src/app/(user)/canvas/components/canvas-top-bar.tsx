@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Home, Menu, MessageSquare, Plus, Redo2, Save, Trash2, Undo2, Upload, Workflow } from "lucide-react";
+import { ArrowLeft, Home, Keyboard, Menu, MessageSquare, Plus, Redo2, Save, Trash2, Undo2, Upload, Workflow } from "lucide-react";
 import { Button, Dropdown, Modal } from "antd";
 
-import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 
@@ -62,9 +61,7 @@ export function CanvasTopBar({
     const colorTheme = useThemeStore((state) => state.theme);
     const theme = canvasThemes[colorTheme];
     const titleRef = useRef<HTMLDivElement>(null);
-    const accountRef = useRef<HTMLDivElement>(null);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
-    const [accountOpen, setAccountOpen] = useState(false);
 
     useEffect(() => {
         if (!isTitleEditing) return;
@@ -74,15 +71,6 @@ export function CanvasTopBar({
         document.addEventListener("pointerdown", close, true);
         return () => document.removeEventListener("pointerdown", close, true);
     }, [isTitleEditing, onFinishTitleEditing]);
-
-    useEffect(() => {
-        if (!accountOpen) return;
-        const close = (event: PointerEvent) => {
-            if (!accountRef.current?.contains(event.target as Node)) setAccountOpen(false);
-        };
-        document.addEventListener("pointerdown", close, true);
-        return () => document.removeEventListener("pointerdown", close, true);
-    }, [accountOpen]);
 
     return (
         <>
@@ -103,6 +91,7 @@ export function CanvasTopBar({
                                 { type: "divider" },
                                 { key: "undo", disabled: !canUndo, icon: <Undo2 className="size-4" />, label: <MenuLabel text="撤销" shortcut="⌘ Z" />, onClick: onUndo },
                                 { key: "redo", disabled: !canRedo, icon: <Redo2 className="size-4" />, label: <MenuLabel text="重做" shortcut="⌘ ⇧ Z / ⌘ Y" />, onClick: onRedo },
+                                { key: "shortcuts", icon: <Keyboard className="size-4" />, label: "快捷键", onClick: () => setShortcutsOpen(true) },
                             ],
                         }}
                     >
@@ -166,19 +155,6 @@ export function CanvasTopBar({
                 </div>
 
                 <div className="pointer-events-auto flex items-center gap-1.5">
-                    <UserStatusActions
-                        variant="canvas"
-                        showConfig={false}
-                        accountOpen={accountOpen}
-                        onAccountOpenChange={setAccountOpen}
-                        accountRef={accountRef}
-                        getPopupContainer={(node) => node.parentElement || document.body}
-                        onOpenShortcuts={() => {
-                            setShortcutsOpen(true);
-                            setAccountOpen(false);
-                        }}
-                    />
-                    <span className="h-6 w-px" style={{ background: theme.toolbar.border }} />
                     <Button
                         type="text"
                         className="!h-10 !rounded-xl !px-3 !font-medium"

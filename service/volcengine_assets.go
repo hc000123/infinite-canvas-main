@@ -177,8 +177,8 @@ func SubmitAdminAssetVolcengineReview(ctx context.Context, assetID string) (mode
 	if err != nil {
 		return model.Asset{}, err
 	}
-	if asset.Type != model.AssetTypeImage && asset.Type != model.AssetTypeVideo {
-		return model.Asset{}, safeMessageError{message: "只有图片或视频素材可以提交加白"}
+	if asset.Type != model.AssetTypeImage && asset.Type != model.AssetTypeVideo && asset.Type != model.AssetTypeAudio {
+		return model.Asset{}, safeMessageError{message: "只有图片、视频或音频素材可以提交加白"}
 	}
 	submission, err := SubmitVolcengineMediaAssetURL(ctx, firstNonEmpty(asset.URL, asset.CoverURL), asset.Title, asset.VolcengineGroupID, asset.Title, asset.Type)
 	if err != nil {
@@ -423,6 +423,9 @@ func mapFromMap(data map[string]interface{}, key string) map[string]interface{} 
 func volcengineCreateAssetType(mediaType model.AssetType) string {
 	if mediaType == model.AssetTypeVideo {
 		return "Video"
+	}
+	if mediaType == model.AssetTypeAudio {
+		return "Audio"
 	}
 	return "Image"
 }

@@ -92,6 +92,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
         const target = event.target instanceof Element ? event.target : null;
         if (target?.closest("[data-canvas-no-zoom]")) return;
         if (target?.closest("[data-connection-create-menu]")) return;
+        event.currentTarget.focus({ preventScroll: true });
         const isBackgroundClick = !target?.closest("[data-node-id],[data-connection-id]");
 
         if (event.button === 0 && !event.ctrlKey && !event.metaKey && isBackgroundClick) {
@@ -186,6 +187,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
     return (
         <div
             ref={containerRef}
+            data-canvas-root="true"
             tabIndex={0}
             className="relative h-full w-full cursor-grab select-none overflow-hidden"
             style={{ background: theme.canvas.background }}

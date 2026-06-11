@@ -37,8 +37,8 @@ export function useCanvasVideoFrameNormalization({
                 const lastSize = fitNodeSize(lastImage.width, lastImage.height);
                 setNodes((prev) =>
                     prev.map((node) => {
-                        if (node.id === firstNode.id) return { ...node, width: firstSize.width, height: firstSize.height, metadata: { ...node.metadata, ...toImageMetadata(firstImage), status: "success", errorDetails: undefined } };
-                        if (node.id === lastNode.id) return { ...node, width: lastSize.width, height: lastSize.height, metadata: { ...node.metadata, ...toImageMetadata(lastImage), status: "success", errorDetails: undefined } };
+                        if (node.id === firstNode.id) return { ...node, width: firstSize.width, height: firstSize.height, metadata: { ...node.metadata, ...toImageMetadata(firstImage), status: "success", errorDetails: undefined, sourceAssetId: undefined, assetVersion: undefined, assetReferenceMode: undefined, volcengineAsset: undefined } };
+                        if (node.id === lastNode.id) return { ...node, width: lastSize.width, height: lastSize.height, metadata: { ...node.metadata, ...toImageMetadata(lastImage), status: "success", errorDetails: undefined, sourceAssetId: undefined, assetVersion: undefined, assetReferenceMode: undefined, volcengineAsset: undefined } };
                         return node;
                     }),
                 );

@@ -95,11 +95,11 @@ test("builds Seedance edit payload with the upstream video as source content", (
         ],
     );
 
-    assert.equal(payload.task_mode, "edit");
-    assert.equal(payload.edit_type, "remove");
+    assert.equal("task_mode" in payload, false);
+    assert.equal("edit_type" in payload, false);
     assert.deepEqual(payload.content, [
         { type: "text", text: "移除画面里的路牌" },
-        { type: "video_url", video_url: { url: "source-video-url" }, role: "source_video" },
+        { type: "video_url", video_url: { url: "source-video-url" }, role: "reference_video" },
         { type: "image_url", image_url: { url: "mask-image-url" }, role: "reference_image" },
     ]);
 });
@@ -121,14 +121,72 @@ test("builds Seedance extend payload with source video and direction", () => {
         [{ type: "video", url: "source-video-url" }],
     );
 
-    assert.equal(payload.task_mode, "extend");
-    assert.equal(payload.extend_direction, "backward");
+    assert.equal("task_mode" in payload, false);
+    assert.equal("extend_direction" in payload, false);
     assert.deepEqual(payload.content, [
         { type: "text", text: "向前补出镜头开始前的街道环境" },
-        { type: "video_url", video_url: { url: "source-video-url" }, role: "source_video" },
+        { type: "video_url", video_url: { url: "source-video-url" }, role: "reference_video" },
     ]);
     assert.equal(payload.resolution, "1080p");
     assert.equal(payload.generate_audio, true);
+});
+
+test("caps Seedance Fast model resolution to official 720p maximum", () => {
+    const payload = buildSeedanceVideoTaskPayload(
+        {
+            model: "doubao-seedance-2-0-fast-260128",
+            videoSeconds: "8",
+            size: "16:9",
+            vquality: "1080",
+            videoGenerateAudio: "false",
+            videoWatermark: "false",
+            videoSeed: "",
+        },
+        "prompt",
+        [],
+    );
+
+    assert.equal(payload.resolution, "720p");
+});
+
+test("keeps official Seedance 21:9 ratio", () => {
+    const payload = buildSeedanceVideoTaskPayload(
+        {
+            model: "doubao-seedance-2-0-260128",
+            videoSeconds: "8",
+            size: "21:9",
+            vquality: "720",
+            videoGenerateAudio: "false",
+            videoWatermark: "false",
+            videoSeed: "",
+        },
+        "prompt",
+        [],
+    );
+
+    assert.equal(payload.ratio, "21:9");
+});
+
+test("rejects unsupported Seedance audio-only references", () => {
+    assert.throws(
+        () =>
+            buildSeedanceVideoTaskPayload(
+                {
+                    model: "doubao-seedance-2-0-260128",
+                    videoSeconds: "8",
+                    size: "16:9",
+                    vquality: "720",
+                    videoGenerateAudio: "true",
+                    videoWatermark: "false",
+                    videoSeed: "",
+                },
+                "只参考音频生成",
+                [],
+                [],
+                ["audio-url"],
+            ),
+        /不支持纯音频或文本加音频输入/,
+    );
 });
 
 test("normalizes Seedance duration to the supported 4 to 15 second range", () => {
@@ -270,8 +328,8 @@ test("selects Seedance asset URI before regular image URL", () => {
     assert.equal(seedanceAssetURIFromImageReference({ dataUrl: "data:image/png;base64,aaa" }), "");
 });
 
-test("selects Volcengine public URL before regular video URL", () => {
-    assert.equal(seedanceAssetURIFromVideoReference({ volcenginePublicUrl: "https://example.com/reference.mp4", assetUri: "asset://asset-video", url: "blob:video" }), "https://example.com/reference.mp4");
+test("selects active Seedance asset URI before public video URL", () => {
+    assert.equal(seedanceAssetURIFromVideoReference({ volcenginePublicUrl: "https://example.com/reference.mp4", assetUri: "asset://asset-video", url: "blob:video" }), "asset://asset-video");
     assert.equal(seedanceAssetURIFromVideoReference({ assetUri: "asset://asset-video", url: "blob:video" }), "asset://asset-video");
     assert.equal(seedanceAssetURIFromVideoReference({ url: "asset://asset-video" }), "asset://asset-video");
     assert.equal(seedanceAssetURIFromVideoReference({ url: "blob:video" }), "");

@@ -29,11 +29,14 @@ export function buildEpisodeModuleConfig(input: {
     onOpenCanvas: () => void;
     onApproveStageReview: (stageId: string, note: string) => void;
     onUpdateDirectorReviewState: (rowId: string, state: DirectorReviewState) => void;
+    onCancelStage: (stageId: string) => void;
+    onOptimizeScript: () => void;
     onRunStage: (stageId: string) => void;
     onRunStoryboardScene: () => void;
     onSaveScript: () => void;
     previews: AgentWorkflowMappingPreview[];
     runningStageIds: Record<string, boolean>;
+    scriptOptimizing: boolean;
     sceneOptions: EpisodeSceneOption[];
     scriptDraft: string;
     scriptSnapshot: string;

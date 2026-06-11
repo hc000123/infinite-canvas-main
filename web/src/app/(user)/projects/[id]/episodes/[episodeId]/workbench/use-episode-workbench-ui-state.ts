@@ -53,7 +53,7 @@ export function useEpisodeWorkbenchUiState({ approveRun, directorOutputText, epi
             return;
         }
         if (!initialModuleSynced) {
-            setActiveModule("director");
+            setActiveModule("script");
             setInitialModuleSynced(true);
         }
     }, [hasScript, initialModuleSynced]);

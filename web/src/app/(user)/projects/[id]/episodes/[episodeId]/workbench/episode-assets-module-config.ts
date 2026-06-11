@@ -7,6 +7,7 @@ import { latestPreview, listSafeText, mappedFieldText, previewCounts, production
 export function buildAssetsModuleConfig(input: {
     appliedPreviewItemIds: string[];
     applyingPreviewIds: Record<string, boolean>;
+    onCancelStage: (stageId: string) => void;
     onApplyPreview: (preview: AgentWorkflowMappingPreview) => void;
     onApproveStageReview: (stageId: string, note: string) => void;
     onGeneratePreview: (stageId: string, targetLabel: string) => void;
@@ -20,6 +21,7 @@ export function buildAssetsModuleConfig(input: {
     const counts = preview ? previewCounts(preview, input.appliedPreviewItemIds) : { applied: 0, pending: 0, total: 0 };
     const display = input.workflowRun ? summarizeWorkflowStageDisplayState(input.workflowRun, "art-design", []) : undefined;
     const needsReview = display?.displayStatus === "review";
+    const isRunning = Boolean(input.runningStageIds["art-design"]) || display?.displayStatus === "running";
     const rows: EpisodeModuleRow[] = preview?.items.length
         ? preview.items.map((item, index): EpisodeModuleRow => {
               const applied = input.appliedPreviewItemIds.includes(workflowMappingPreviewItemKey(preview, item.itemId));
@@ -59,10 +61,11 @@ export function buildAssetsModuleConfig(input: {
                   ]
                 : []),
             {
+                danger: isRunning,
                 label: input.stageOutputs["art-design"] ? "生成资产清单" : "运行资产分析",
-                loading: Boolean(input.runningStageIds["art-design"]),
-                onClick: () => (input.stageOutputs["art-design"] ? input.onGeneratePreview("art-design", "设定库预览") : input.onRunStage("art-design")),
+                onClick: () => (isRunning ? input.onCancelStage("art-design") : input.stageOutputs["art-design"] ? input.onGeneratePreview("art-design", "设定库预览") : input.onRunStage("art-design")),
                 primary: !needsReview,
+                ...(isRunning ? { label: "取消运行", primary: false } : {}),
             },
             {
                 disabled: !preview || counts.pending <= 0,
@@ -76,6 +79,22 @@ export function buildAssetsModuleConfig(input: {
         filters: ["全部", "已完成", "待确认", "缺素材", "待生成"],
         headers: ["类型", "资产", "简述", "引用", "状态", "操作"],
         rows,
+        notice:
+            display?.displayStatus === "blocked"
+                ? { text: display.blockedReason || "前置阶段尚未完成确认。", title: "资产阶段暂时无法继续", tone: "amber" }
+                : display?.displayStatus === "error"
+                  ? { text: display.summaryText || "资产分析运行失败，请检查配置后重试。", title: "资产阶段运行失败", tone: "red" }
+                  : needsReview
+                    ? { text: "资产分析已有阶段产物，先批准资产清单，再写入设定库或继续分镜。", title: "资产清单待确认", tone: "amber" }
+                    : isRunning
+                      ? { text: "正在提取角色、场景、道具和服化道信息；你可以等待结果，也可以取消后重新发送。", title: "资产分析运行中", tone: "cyan" }
+                      : undefined,
+        runningPreview: isRunning
+            ? {
+                  title: "资产分析实时预览",
+                  lines: ["读取导演分析结果和剧本，提取角色、场景、道具、服装等资产。", "整理可用于生图的描述、参考图缺口和设定库候选项。", "返回后会先展示资产清单，不会自动生成图片。"],
+              }
+            : undefined,
         subtitle: "从剧本和导演分析中提取角色、场景、道具、服装等资产；只展示清单，完整描述进入详情。",
         summary: [
             { label: "资产项", tone: preview ? "cyan" : "slate", value: String(counts.total || rows.length) },

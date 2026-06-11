@@ -8,6 +8,7 @@ import type { DirectorReviewState } from "./episode-module-config";
 export function buildDirectorModuleConfig(input: {
     directorReviewStates: Record<string, DirectorReviewState>;
     hasScript: boolean;
+    onCancelStage: (stageId: string) => void;
     onUpdateDirectorReviewState: (rowId: string, state: DirectorReviewState) => void;
     onRunStage: (stageId: string) => void;
     runningStageIds: Record<string, boolean>;
@@ -25,10 +26,12 @@ export function buildDirectorModuleConfig(input: {
     const directorApproved = display?.displayStatus === "approved";
     const riskConfirmed = directorApproved || input.directorReviewStates["director-risk"] === "confirmed";
     const storyboardAdopted = directorApproved || input.directorReviewStates["director-storyboard"] === "adopted";
+    const isRunning = Boolean(input.runningStageIds["director-analysis"]) || display?.displayStatus === "running";
+    const pendingText = output && !riskConfirmed ? "导演分析已完成，但“风险提示”还待确认。确认后才能安心进入资产与生图。" : output && !storyboardAdopted ? "导演分析已完成，但“分镜建议”还未采用。采用后下一步会更明确。" : "";
     const riskSummary = buildDirectorRiskSummary(fullBody);
     const rows: EpisodeModuleRow[] = [
-        directorRow("director-target", "本集目标", digest?.summary || "待确认本集叙事目标。", status, tone, fullBody, output ? undefined : () => input.onRunStage("director-analysis")),
-        directorRow("director-rhythm", "情绪节奏", findDigestSection(digest, ["导演讲戏", "导演分析"]) || "待输出情绪节奏。", status, tone, fullBody, output ? undefined : () => input.onRunStage("director-analysis")),
+        directorRow("director-target", "本集目标", digest?.summary || "待确认本集叙事目标。", status, tone, fullBody, undefined),
+        directorRow("director-rhythm", "情绪节奏", findDigestSection(digest, ["导演讲戏", "导演分析"]) || "待输出情绪节奏。", status, tone, fullBody, undefined),
         directorRow(
             "director-risk",
             "风险提示",
@@ -36,7 +39,7 @@ export function buildDirectorModuleConfig(input: {
             output ? (riskConfirmed ? "已确认" : "待确认") : status,
             output ? (riskConfirmed ? "green" : "amber") : tone,
             fullBody,
-            output ? undefined : () => input.onRunStage("director-analysis"),
+            undefined,
             Boolean(output && !riskConfirmed),
             output && !riskConfirmed ? "查看" : undefined,
             output && !riskConfirmed ? { label: "确认风险提示", onClick: () => input.onUpdateDirectorReviewState("director-risk", "confirmed"), primary: true } : undefined,
@@ -48,26 +51,43 @@ export function buildDirectorModuleConfig(input: {
             output ? (storyboardAdopted ? "已采用" : "待采用") : status,
             output ? (storyboardAdopted ? "green" : "cyan") : tone,
             fullBody,
-            output && !storyboardAdopted ? () => input.onUpdateDirectorReviewState("director-storyboard", "adopted") : output ? undefined : () => input.onRunStage("director-analysis"),
+            output && !storyboardAdopted ? () => input.onUpdateDirectorReviewState("director-storyboard", "adopted") : undefined,
             false,
             output && !storyboardAdopted ? "采用" : undefined,
         ),
     ];
     return {
-        actions: [{ disabled: !input.hasScript, label: output ? "重新分析" : "运行分析", loading: Boolean(input.runningStageIds["director-analysis"]), onClick: () => input.onRunStage("director-analysis"), primary: true }],
+        actions: [
+            isRunning
+                ? { danger: true, disabled: false, label: "取消运行", onClick: () => input.onCancelStage("director-analysis") }
+                : { disabled: !input.hasScript, label: output ? "重新分析" : "运行分析", onClick: () => input.onRunStage("director-analysis"), primary: true },
+        ],
         columns: "120px minmax(300px,1fr) 90px 90px 80px",
-        emptyText: "暂无导演分析记录",
+        emptyText: "暂无导演讲戏记录",
         filters: ["全部", "已完成", "已确认", "已采用", "待确认", "待采用", "待生成"],
         headers: ["项目", "分析内容", "来源", "状态", "操作"],
         rows,
-        subtitle: errorMessage ? `上次运行失败：${errorMessage}。请检查 AI 配置、额度或网络后重新运行。` : "确认这一集的戏剧方向、情绪节奏、风险提示和分镜建议；完整分析进入详情抽屉查看。",
+        notice: errorMessage
+            ? { text: errorMessage, title: "导演分析运行失败", tone: "red" }
+            : pendingText
+              ? { actionLabel: !riskConfirmed ? "查看风险提示" : "采用分镜建议", onAction: !riskConfirmed ? undefined : () => input.onUpdateDirectorReviewState("director-storyboard", "adopted"), text: pendingText, title: "当前无法直接进入下一步", tone: "amber" }
+              : isRunning
+                ? { text: "正在生成导演分析。你可以等待结果，也可以取消后修改剧本重新发送。", title: "导演分析运行中", tone: "cyan" }
+                : undefined,
+        runningPreview: isRunning
+            ? {
+                  title: "导演讲戏 Agent 正在处理",
+                  lines: ["正在阅读已确认剧本，提炼本集目标、人物关系和核心冲突。", "正在用导演视角讲清情绪节奏、爽点/反转点、表演与摄影处理。", "结果会先进入待确认状态，不会自动推进到扣费的图片或视频生成。"],
+              }
+            : undefined,
+        subtitle: errorMessage ? `上次运行失败：${errorMessage}。请检查 AI 配置、额度或网络后重新运行。` : "像导演给服化道、摄影、美术和分镜讲戏一样，说明剧情重点、情绪节奏、表演方向和生成风险。",
         summary: [
             { label: "阶段状态", tone, value: status },
             { label: "输出", value: output ? "1" : "0" },
             { label: "风险提示", tone: output ? (riskConfirmed ? "green" : "amber") : "slate", value: output ? (riskConfirmed ? "已确认" : "待确认") : "未生成" },
-            { label: "操作", tone: display?.displayStatus === "error" ? "amber" : input.hasScript ? "cyan" : "amber", value: display?.displayStatus === "error" && input.hasScript ? "可重试" : input.hasScript ? "可运行" : "缺剧本" },
+            { label: "下一步", tone: pendingText ? "amber" : display?.displayStatus === "error" ? "amber" : input.hasScript ? "cyan" : "amber", value: pendingText ? "处理确认项" : display?.displayStatus === "error" && input.hasScript ? "可重试" : input.hasScript ? "查看结果" : "缺剧本" },
         ],
-        title: "导演分析模块",
+        title: "导演讲戏分析",
     };
 }
 

@@ -22,7 +22,9 @@ type UseCanvasClipboardActionsOptions = {
 
 type ClipboardPasteEvent = {
     clipboardData: DataTransfer | null;
+    currentTarget?: EventTarget | null;
     preventDefault: () => void;
+    target?: EventTarget | null;
 };
 
 export function useCanvasClipboardActions({
@@ -111,6 +113,9 @@ export function useCanvasClipboardActions({
 
     const pasteClipboardEvent = useCallback(
         (event: ClipboardPasteEvent) => {
+            const currentTarget = event.currentTarget instanceof Element ? event.currentTarget : null;
+            const target = event.target instanceof Element ? event.target : null;
+            if (currentTarget && target && target !== currentTarget) return false;
             const clipboardData = event.clipboardData;
             if (!clipboardData) return false;
             const files = Array.from(clipboardData.files).filter((file) => file.type.startsWith("image/") || file.type.startsWith("video/") || file.type.startsWith("audio/"));

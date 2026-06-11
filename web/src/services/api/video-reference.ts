@@ -4,8 +4,6 @@ export type SeedanceImageRole = "reference_image" | "first_frame" | "last_frame"
 export type SeedanceImageRoleMode = "reference" | "first_frame" | "first_last_frame" | "continue";
 export type SeedanceVideoRole = "reference_video" | "source_video";
 export type SeedanceVideoTaskMode = "generate" | "edit" | "extend";
-export type SeedanceVideoEditType = "replace" | "add" | "remove" | "inpaint";
-export type SeedanceVideoExtendDirection = "forward" | "backward";
 export type SeedanceImageReferenceInput = string | { url: string; role?: SeedanceImageRole };
 export type SeedanceOrderedReferenceInput = { type: "image"; url: string; role?: SeedanceImageRole } | { type: "video"; url: string } | { type: "audio"; url: string };
 export type SeedanceReferenceInput = SeedanceImageReferenceInput | SeedanceOrderedReferenceInput;
@@ -97,6 +95,7 @@ export function normalizeSeedanceImageRoleMode(mode?: string): SeedanceImageRole
 }
 
 export function buildSeedanceContent(prompt: string, imageUrls: SeedanceReferenceInput[], videoUrls: string[] = [], audioUrls: string[] = []): SeedanceContentItem[] {
+    validateSeedanceReferenceMix(imageUrls, videoUrls, audioUrls);
     if (imageUrls.some(isOrderedSeedanceReference)) {
         return [
             { type: "text", text: normalizeSeedancePromptReferenceMentions(prompt) },
@@ -125,19 +124,17 @@ export function buildSeedanceContent(prompt: string, imageUrls: SeedanceReferenc
 
 export function buildSeedanceVideoTaskPayload(config: SeedanceVideoTaskConfig, prompt: string, imageUrls: SeedanceReferenceInput[], videoUrls: string[] = [], audioUrls: string[] = []) {
     const taskMode = normalizeSeedanceVideoTaskMode(config.videoTaskMode);
+    const model = resolveSeedanceRequestModel(config);
     const payload: Record<string, unknown> = {
-        model: resolveSeedanceRequestModel(config),
+        model,
         content: taskMode === "generate" ? buildSeedanceContent(prompt, imageUrls, videoUrls, audioUrls) : buildSeedanceDerivedContent(prompt, imageUrls, videoUrls, audioUrls),
         duration: normalizeSeedanceDuration(config.videoSeconds || ""),
         ratio: normalizeSeedanceRatio(config.size || ""),
-        resolution: normalizeSeedanceResolution(config.vquality || ""),
+        resolution: normalizeSeedanceResolution(config.vquality || "", resolveSeedanceCapabilityModel(config, model)),
         generate_audio: config.videoGenerateAudio === "true",
         watermark: config.videoWatermark === "true",
         return_last_frame: config.returnLastFrame === "true",
     };
-    if (taskMode !== "generate") payload.task_mode = taskMode;
-    if (taskMode === "edit") payload.edit_type = normalizeSeedanceVideoEditType(config.videoEditType);
-    if (taskMode === "extend") payload.extend_direction = normalizeSeedanceVideoExtendDirection(config.videoExtendDirection);
     const seed = normalizeSeedanceSeed(config.videoSeed || "");
     if (seed !== undefined) payload.seed = seed;
     return payload;
@@ -145,6 +142,10 @@ export function buildSeedanceVideoTaskPayload(config: SeedanceVideoTaskConfig, p
 
 function resolveSeedanceRequestModel(config: SeedanceVideoTaskConfig) {
     return (config.seedanceEndpointId || config.model || config.seedanceModel || config.videoModel || "").trim();
+}
+
+function resolveSeedanceCapabilityModel(config: SeedanceVideoTaskConfig, requestModel: string) {
+    return (config.seedanceModel || config.model || config.videoModel || requestModel).trim();
 }
 
 function normalizeSeedanceImageReference(input: SeedanceReferenceInput) {
@@ -190,6 +191,7 @@ function seedanceContentItemFromReference(reference: SeedanceOrderedReferenceInp
 }
 
 function buildSeedanceDerivedContent(prompt: string, imageUrls: SeedanceReferenceInput[], videoUrls: string[], audioUrls: string[]): SeedanceContentItem[] {
+    validateSeedanceReferenceMix(imageUrls, videoUrls, audioUrls);
     const orderedInputs = imageUrls.some(isOrderedSeedanceReference)
         ? normalizeOrderedSeedanceReferences([...imageUrls, ...videoUrls.map((url) => ({ type: "video" as const, url })), ...audioUrls.map((url) => ({ type: "audio" as const, url }))])
         : [
@@ -200,27 +202,20 @@ function buildSeedanceDerivedContent(prompt: string, imageUrls: SeedanceReferenc
                   .map((image) => ({ type: "image" as const, url: image.url, role: image.role })),
               ...audioUrls.filter(Boolean).map((url) => ({ type: "audio" as const, url })),
           ];
-    let sourceVideoSelected = false;
     return [
         { type: "text", text: normalizeSeedancePromptReferenceMentions(prompt) },
-        ...orderedInputs.flatMap((reference): SeedanceContentItem[] => {
-            if (reference.type === "video" && !sourceVideoSelected) {
-                sourceVideoSelected = true;
-                return [{ type: "video_url", video_url: { url: reference.url }, role: "source_video" }];
-            }
-            return [seedanceContentItemFromReference(reference)];
-        }),
+        ...orderedInputs.map(seedanceContentItemFromReference),
     ];
+}
+
+function validateSeedanceReferenceMix(imageUrls: SeedanceReferenceInput[], videoUrls: string[], audioUrls: string[]) {
+    const ordered = imageUrls.some(isOrderedSeedanceReference) ? normalizeOrderedSeedanceReferences([...imageUrls, ...videoUrls.map((url) => ({ type: "video" as const, url })), ...audioUrls.map((url) => ({ type: "audio" as const, url }))]) : [];
+    const hasAudio = ordered.length ? ordered.some((reference) => reference.type === "audio") : audioUrls.some(Boolean);
+    if (!hasAudio) return;
+    const hasVisual = ordered.length ? ordered.some((reference) => reference.type === "image" || reference.type === "video") : imageUrls.some((input) => Boolean(normalizeSeedanceImageReference(input))) || videoUrls.some(Boolean);
+    if (!hasVisual) throw new Error("Seedance 2.0 不支持纯音频或文本加音频输入，请至少添加图片或视频参考");
 }
 
 function normalizeSeedanceVideoTaskMode(mode?: string): SeedanceVideoTaskMode {
     return mode === "edit" || mode === "extend" ? mode : "generate";
-}
-
-function normalizeSeedanceVideoEditType(type?: string): SeedanceVideoEditType {
-    return type === "add" || type === "remove" || type === "inpaint" ? type : "replace";
-}
-
-function normalizeSeedanceVideoExtendDirection(direction?: string): SeedanceVideoExtendDirection {
-    return direction === "backward" ? "backward" : "forward";
 }

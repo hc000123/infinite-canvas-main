@@ -78,7 +78,7 @@ test("builds a safe image filename for review upload", () => {
 test("shows the review action for image and video assets", () => {
     assert.equal(shouldShowVolcengineReviewAction("image"), true);
     assert.equal(shouldShowVolcengineReviewAction("video"), true);
-    assert.equal(shouldShowVolcengineReviewAction("audio"), false);
+    assert.equal(shouldShowVolcengineReviewAction("audio"), true);
     assert.equal(shouldShowVolcengineReviewAction("text"), false);
 });
 

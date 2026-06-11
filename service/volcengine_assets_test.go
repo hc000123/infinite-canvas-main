@@ -258,6 +258,59 @@ func TestSubmitVolcengineMediaAssetAcceptsVideo(t *testing.T) {
 	}
 }
 
+func TestSubmitVolcengineMediaAssetAcceptsAudio(t *testing.T) {
+	tmp := t.TempDir()
+	oldStorageDriver := config.Cfg.StorageDriver
+	oldDatabaseDSN := config.Cfg.DatabaseDSN
+	oldPublicAssetDir := config.Cfg.PublicAssetDir
+	t.Cleanup(func() {
+		config.Cfg.StorageDriver = oldStorageDriver
+		config.Cfg.DatabaseDSN = oldDatabaseDSN
+		config.Cfg.PublicAssetDir = oldPublicAssetDir
+		repository.ResetForTest()
+	})
+
+	config.Cfg.StorageDriver = "sqlite"
+	config.Cfg.DatabaseDSN = filepath.Join(tmp, "test.db")
+	config.Cfg.PublicAssetDir = filepath.Join(tmp, "public-assets")
+	repository.ResetForTest()
+
+	_, err := repository.SaveSettings(model.Settings{
+		Private: model.PrivateSetting{
+			VolcengineAsset: model.VolcengineAssetSetting{
+				Enabled:            true,
+				AccessKey:          "ak-test",
+				SecretKey:          "sk-test",
+				ProjectName:        "project-test",
+				Region:             "cn-beijing",
+				PublicAssetBaseURL: "https://example.com/uploaded-assets",
+			},
+		},
+	}, now())
+	if err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+
+	fake := &fakeVolcengineAssetClient{createGroupID: "group-test", createAssetID: "asset-audio"}
+	setVolcengineAssetClientForTest(t, fake)
+	header := &multipart.FileHeader{Filename: "reference.mp3", Size: int64(len("audio-bytes"))}
+	header.Header = textproto.MIMEHeader{"Content-Type": {"audio/mpeg"}}
+
+	result, err := SubmitVolcengineMediaAsset(context.Background(), testMultipartFile{Reader: bytes.NewReader([]byte("audio-bytes"))}, header, "音频参考", "", "")
+	if err != nil {
+		t.Fatalf("SubmitVolcengineMediaAsset returned error: %v", err)
+	}
+	if result.AssetID != "asset-audio" || result.Status != "Processing" {
+		t.Fatalf("result = %#v", result)
+	}
+	if fake.assetType != "Audio" {
+		t.Fatalf("assetType = %q", fake.assetType)
+	}
+	if !strings.HasPrefix(result.PublicURL, "https://example.com/uploaded-assets/audios/") {
+		t.Fatalf("PublicURL = %q", result.PublicURL)
+	}
+}
+
 func TestSaveVolcenginePublicImageUploadsToTOSPublicBaseURL(t *testing.T) {
 	tmp := t.TempDir()
 	oldPublicAssetDir := config.Cfg.PublicAssetDir

@@ -85,6 +85,10 @@ export function replaceNodeWithUploadedImageFile({ currentNode, title, file, met
             references: undefined,
             primaryImageId: undefined,
             imageBatchExpanded: undefined,
+            sourceAssetId: undefined,
+            assetVersion: undefined,
+            assetReferenceMode: undefined,
+            volcengineAsset: undefined,
         },
     };
 }
@@ -98,7 +102,7 @@ export function replaceNodeWithUploadedVideoFile({ currentNode, title, file, met
         position: centeredPosition(nodeCenter(currentNode), size),
         width: size.width,
         height: size.height,
-        metadata: { ...currentNode.metadata, ...metadata, errorDetails: undefined },
+        metadata: clearReplacedMediaMetadata({ ...currentNode.metadata, ...metadata, errorDetails: undefined }),
     };
 }
 
@@ -111,7 +115,17 @@ export function replaceNodeWithUploadedAudioFile({ currentNode, title, metadata 
         position: centeredPosition(nodeCenter(currentNode), spec),
         width: spec.width,
         height: spec.height,
-        metadata: { ...currentNode.metadata, ...metadata, errorDetails: undefined },
+        metadata: clearReplacedMediaMetadata({ ...currentNode.metadata, ...metadata, errorDetails: undefined }),
+    };
+}
+
+function clearReplacedMediaMetadata(metadata: CanvasNodeMetadata): CanvasNodeMetadata {
+    return {
+        ...metadata,
+        sourceAssetId: undefined,
+        assetVersion: undefined,
+        assetReferenceMode: undefined,
+        volcengineAsset: undefined,
     };
 }
 

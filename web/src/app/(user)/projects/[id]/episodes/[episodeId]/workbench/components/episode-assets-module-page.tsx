@@ -22,10 +22,13 @@ export function EpisodeAssetsModulePage({
     onApplyPreview,
     onApproveStageReview,
     onBindAsset,
+    onCancelStage,
     onGeneratePreview,
+    onOpenDirector,
     onOpenImageWorkbench,
     onPrepareGenerate,
     onRunStage,
+    onUploadAssetImage,
     preview,
     projectTitle,
     runningStageIds,
@@ -40,10 +43,13 @@ export function EpisodeAssetsModulePage({
     onApplyPreview: (preview: AgentWorkflowMappingPreview) => void;
     onApproveStageReview: (stageId: string, note: string) => void;
     onBindAsset: (row: EpisodeAssetRow, asset: Asset) => void;
+    onCancelStage: (stageId: string) => void;
     onGeneratePreview: (stageId: string, targetLabel: string) => void;
+    onOpenDirector: () => void;
     onOpenImageWorkbench: (payload: OpenImageWorkbenchPayload) => void;
     onPrepareGenerate: () => void;
     onRunStage: (stageId: string) => void;
+    onUploadAssetImage: (row: EpisodeAssetRow, file: File) => Promise<void>;
     preview?: AgentWorkflowMappingPreview;
     projectTitle: string;
     runningStageIds: Record<string, boolean>;
@@ -59,8 +65,13 @@ export function EpisodeAssetsModulePage({
     const summary = summarizeEpisodeExtractedAssets(assets);
     const previewCountsResult = preview ? previewCounts(preview, appliedPreviewItemIds) : { applied: 0, pending: 0, total: 0 };
     const stageDisplay = workflowRun ? summarizeWorkflowStageDisplayState(workflowRun, "art-design", []) : undefined;
-    const needsReview = stageDisplay?.displayStatus === "review";
     const reviewOutput = stageOutputs["art-design"];
+    const canApproveReview = Boolean(reviewOutput && stageDisplay?.stageStatus === "review" && !preview);
+    const hasOutputStateMismatch = Boolean(reviewOutput && stageDisplay?.stageStatus !== "review" && stageDisplay?.displayStatus !== "approved" && !preview);
+    const isRunning = Boolean(runningStageIds["art-design"]) || stageDisplay?.displayStatus === "running";
+    const assetBlocked = Boolean(stageActionHint.blocked);
+    const assetPrimaryActionLabel = assetBlocked ? "去确认导演分析" : isRunning ? "取消运行" : canApproveReview ? "确认资产分析结果" : hasOutputStateMismatch ? "重新运行资产分析" : stageOutputs["art-design"] ? "生成资产清单" : "运行资产分析";
+    const runAssetPrimaryAction = () => (assetBlocked ? onOpenDirector() : isRunning ? onCancelStage("art-design") : canApproveReview ? onApproveStageReview("art-design", "资产清单已确认。") : hasOutputStateMismatch ? onRunStage("art-design") : stageOutputs["art-design"] ? onGeneratePreview("art-design", "设定库预览") : onRunStage("art-design"));
 
     useEffect(() => {
         if (!assets.length) {
@@ -93,11 +104,11 @@ export function EpisodeAssetsModulePage({
                     <div className="flex flex-wrap gap-2">
                         <Button
                             className="!border-slate-700 !bg-slate-950/55 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100"
-                            disabled={stageActionHint.blocked}
-                            onClick={() => (stageOutputs["art-design"] ? onGeneratePreview("art-design", "设定库预览") : onRunStage("art-design"))}
-                            loading={Boolean(runningStageIds["art-design"])}
+                            danger={isRunning}
+                            onClick={runAssetPrimaryAction}
+                            type={!preview || previewCountsResult.pending <= 0 ? "primary" : "default"}
                         >
-                            {stageOutputs["art-design"] ? "刷新资产清单" : "运行资产分析"}
+                            {assetPrimaryActionLabel}
                         </Button>
                         <Button type="primary" disabled={!preview || previewCountsResult.pending <= 0} loading={Boolean(preview && applyingPreviewIds[preview.previewId])} onClick={() => preview && onApplyPreview(preview)}>
                             写入设定库 {previewCountsResult.pending ? previewCountsResult.pending : ""}
@@ -107,12 +118,29 @@ export function EpisodeAssetsModulePage({
                 </div>
             </div>
 
-            {needsReview ? (
+            {isRunning ? (
+                <div className="rounded-2xl border border-cyan-400/25 bg-cyan-400/[0.07] p-4">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-cyan-100">
+                        <span className="size-2 animate-pulse rounded-full bg-cyan-300" />
+                        资产分析实时预览
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-3">
+                        {["正在从剧本和导演分析中识别角色、场景、道具和服装。", "正在整理可写入设定库的资产清单和参考图缺口。", "结果返回后会先展示清单，不会自动生成图片或视频。"].map((line, index) => (
+                            <div key={line} className="rounded-lg border border-cyan-400/10 bg-slate-950/35 px-3 py-2 text-sm leading-6 text-slate-300">
+                                <span className="mr-2 text-xs font-semibold text-cyan-200">{index + 1}</span>
+                                {line}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
+
+            {canApproveReview ? (
                 <div className="rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
                             <div className="text-base font-semibold text-amber-100">待确认资产清单草案</div>
-                            <div className="mt-1 text-sm leading-6 text-amber-100/70">请先核对下方资产分析内容。确认后，本阶段会标记为已批准，才继续刷新资产清单或写入设定库。</div>
+                            <div className="mt-1 text-sm leading-6 text-amber-100/70">请先核对下方资产分析内容。确认后，本阶段会标记为已批准，下一步再生成资产清单或写入设定库。</div>
                         </div>
                         <Button type="primary" disabled={!reviewOutput} onClick={() => onApproveStageReview("art-design", "资产清单已确认。")}>
                             确认这份资产清单
@@ -124,6 +152,20 @@ export function EpisodeAssetsModulePage({
                         ) : (
                             <div className="rounded-lg border border-amber-400/20 bg-slate-950/45 p-3 text-sm text-amber-100/70">当前没有可审核的资产分析输出，请先运行资产分析。</div>
                         )}
+                    </div>
+                </div>
+            ) : null}
+
+            {hasOutputStateMismatch ? (
+                <div className="rounded-2xl border border-rose-400/30 bg-rose-400/[0.06] p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <div className="text-base font-semibold text-rose-100">资产阶段状态不一致</div>
+                            <div className="mt-1 text-sm leading-6 text-rose-100/75">检测到资产分析产物，但当前阶段不是可确认状态。请重新运行资产分析，避免用旧产物继续生成资产清单。</div>
+                        </div>
+                        <Button danger onClick={() => onRunStage("art-design")}>
+                            重新运行资产分析
+                        </Button>
                     </div>
                 </div>
             ) : null}
@@ -143,6 +185,30 @@ export function EpisodeAssetsModulePage({
                 ))}
             </div>
 
+            {!isRunning && !assets.length ? (
+                <div className="rounded-2xl border border-cyan-400/25 bg-cyan-400/[0.07] p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="min-w-0">
+                            <div className="text-base font-semibold text-cyan-100">{assetBlocked ? "下一步：先确认导演分析" : canApproveReview ? "下一步：确认资产分析结果" : hasOutputStateMismatch ? "下一步：重新运行资产分析" : stageOutputs["art-design"] ? "下一步：生成资产清单" : "下一步：运行资产分析"}</div>
+                            <div className="mt-1 max-w-3xl break-words text-sm leading-6 text-cyan-100/75">
+                                {assetBlocked
+                                    ? stageActionHint.text
+                                    : canApproveReview
+                                      ? "资产分析结果已经返回，但还没有确认。先确认这份结果，确认后系统才允许把它转换成可写入设定库的资产清单。"
+                                    : hasOutputStateMismatch
+                                      ? "当前有旧产物，但阶段状态不是可批准状态。为了避免继续使用异常产物，请重新运行资产分析。"
+                                    : stageOutputs["art-design"]
+                                      ? "资产分析结果已经有了，但还没有转换成可阅读、可写入设定库的资产清单。点击生成后，下方会出现角色、场景、道具和服化道条目。"
+                                    : "这里还没有资产结果。点击运行后，系统会从剧本和导演分析中提取角色、场景、道具和服化道，不会自动生成图片。"}
+                            </div>
+                        </div>
+                        <Button type="primary" onClick={runAssetPrimaryAction}>
+                            {assetPrimaryActionLabel}
+                        </Button>
+                    </div>
+                </div>
+            ) : null}
+
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_430px]">
                 <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-[#091018]/88">
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
@@ -160,7 +226,19 @@ export function EpisodeAssetsModulePage({
                         </div>
                         <div className="text-sm text-slate-500">当前显示 {filteredAssets.length} 条</div>
                     </div>
-                    <EpisodeAssetTable assets={filteredAssets} selectedAssetId={selectedAsset?.id || ""} onOpenProcess={openAssetProcess} />
+                    <EpisodeAssetTable
+                        assets={filteredAssets}
+                        onGenerateImage={(asset) =>
+                            onOpenImageWorkbench({
+                                assetId: asset.productionBibleItem?.id || asset.id,
+                                prompt: asset.promptDraft || asset.description || asset.name,
+                                title: asset.name,
+                            })
+                        }
+                        onOpenProcess={openAssetProcess}
+                        onUploadImage={onUploadAssetImage}
+                        selectedAssetId={selectedAsset?.id || ""}
+                    />
                 </div>
                 <EpisodeAssetProcessDrawer asset={selectedAsset} mode={processMode} onBindAsset={onBindAsset} onModeChange={setProcessMode} onOpenImageWorkbench={onOpenImageWorkbench} onPrepareGenerate={onPrepareGenerate} />
             </div>

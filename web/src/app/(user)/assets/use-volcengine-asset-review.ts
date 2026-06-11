@@ -7,7 +7,7 @@ import { buildVolcengineMediaFilename, isVolcengineReviewProcessing, mergeVolcen
 import type { Asset, VolcengineAssetMetadata } from "@/stores/use-asset-store";
 import { fetchImageBlob, volcengineStatusLabel } from "./asset-utils";
 
-type VolcengineReviewableAsset = Extract<Asset, { kind: "image" | "video" }>;
+type VolcengineReviewableAsset = Extract<Asset, { kind: "image" | "video" | "audio" }>;
 
 type AssetReviewMessage = {
     error: (text: string) => void;
@@ -54,7 +54,7 @@ export function useVolcengineAssetReview({
     const submitVolcengineReviewAsset = async (asset: VolcengineReviewableAsset) => {
         const storedBlob = asset.data.storageKey ? (asset.kind === "image" ? await getImageBlob(asset.data.storageKey) : await getMediaBlob(asset.data.storageKey)) : null;
         const blob = storedBlob || (await fetchImageBlob(asset.kind === "image" ? asset.data.dataUrl : asset.data.url));
-        if (!blob) throw new Error(asset.kind === "image" ? "没有找到图片文件" : "没有找到视频文件");
+        if (!blob) throw new Error(asset.kind === "image" ? "没有找到图片文件" : asset.kind === "audio" ? "没有找到音频文件" : "没有找到视频文件");
         const saved = asset.metadata?.volcengineAsset;
         const result = await submitVolcengineMediaAsset(token!, {
             file: blob,
@@ -68,7 +68,7 @@ export function useVolcengineAssetReview({
 
     const refreshImageReview = useCallback(
         async (asset: Asset, options: { silent?: boolean; showProgress?: boolean } = {}) => {
-            if ((asset.kind !== "image" && asset.kind !== "video") || !asset.metadata?.volcengineAsset?.assetId) return;
+            if ((asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio") || !asset.metadata?.volcengineAsset?.assetId) return;
             if (!token) {
                 if (!options.silent) message.error("请先登录");
                 return;
@@ -98,7 +98,7 @@ export function useVolcengineAssetReview({
     );
 
     const submitImageReview = async (asset: Asset) => {
-        if (asset.kind !== "image" && asset.kind !== "video") return;
+        if (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio") return;
         if (!volcengineAssetEnabled) {
             message.warning("请先在配置里开启火山人像加白");
             return;

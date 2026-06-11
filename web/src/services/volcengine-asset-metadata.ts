@@ -41,8 +41,8 @@ export function buildVolcengineImageFilename(title: string, fallbackId: string, 
     return buildVolcengineMediaFilename(title, fallbackId, mimeType, "image");
 }
 
-export function buildVolcengineMediaFilename(title: string, fallbackId: string, mimeType?: string, kind: "image" | "video" = "image") {
-    const fallback = kind === "video" ? "video" : "image";
+export function buildVolcengineMediaFilename(title: string, fallbackId: string, mimeType?: string, kind: "image" | "video" | "audio" = "image") {
+    const fallback = kind === "video" ? "video" : kind === "audio" ? "audio" : "image";
     const safeBase = (title || fallbackId || fallback).trim().replace(/[\\/:*?"<>|]+/g, "_") || fallback;
     const ext = mediaExtension(mimeType, kind);
     return `${safeBase}.${ext}`;
@@ -69,12 +69,12 @@ export function volcengineReviewPollingKey(items: Array<{ id: string; metadata?:
 }
 
 export function shouldShowVolcengineReviewAction(kind: string) {
-    return kind === "image" || kind === "video";
+    return kind === "image" || kind === "video" || kind === "audio";
 }
 
-function mediaExtension(mimeType?: string, kind: "image" | "video" = "image") {
+function mediaExtension(mimeType?: string, kind: "image" | "video" | "audio" = "image") {
     const subtype = mimeType?.split(";")[0]?.split("/")[1]?.toLowerCase();
-    if (!subtype) return kind === "video" ? "mp4" : "png";
+    if (!subtype) return kind === "video" ? "mp4" : kind === "audio" ? "mp3" : "png";
     if (subtype === "jpeg") return "jpeg";
     if (subtype === "quicktime") return "mov";
     if (subtype === "x-m4v") return "m4v";

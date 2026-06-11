@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { requestImageQuestion } from "@/services/api/image";
 import type { AiConfig } from "@/stores/use-config-store";
@@ -68,8 +68,11 @@ export function useEpisodeWorkbenchRunActions({
 }: UseEpisodeWorkbenchRunActionsOptions) {
     const [runningStageIds, setRunningStageIds] = useState<Record<string, boolean>>({});
     const [, setRunningSceneKeys] = useState<Record<string, boolean>>({});
+    const activeRunIdsRef = useRef<Record<string, string>>({});
+    const canceledRunIdsRef = useRef<Record<string, boolean>>({});
 
     const executeWorkflowTextRun = async ({
+        runKey,
         promptMessages,
         requestConfig,
         runId,
@@ -77,6 +80,7 @@ export function useEpisodeWorkbenchRunActions({
         successMessage,
         textModel,
     }: {
+        runKey: string;
         promptMessages: NonNullable<AgentRunInput["promptMessages"]>;
         requestConfig: AiConfig;
         runId: string;
@@ -92,15 +96,30 @@ export function useEpisodeWorkbenchRunActions({
         }
         try {
             const response = await requestImageQuestion(requestConfig, promptMessages, () => {});
+            if (canceledRunIdsRef.current[runId] || activeRunIdsRef.current[runKey] !== runId) return;
             completeWorkflowTextRun(runId, response || "没有返回内容");
             message.success(successMessage);
         } catch (error) {
+            if (canceledRunIdsRef.current[runId] || activeRunIdsRef.current[runKey] !== runId) return;
             const reason = error instanceof Error ? error.message : "文本执行失败";
             failWorkflowTextRun(runId, reason);
             message.warning(reason);
         } finally {
+            if (activeRunIdsRef.current[runKey] === runId) delete activeRunIdsRef.current[runKey];
+            delete canceledRunIdsRef.current[runId];
             stopRunning();
         }
+    };
+
+    const cancelStage = (stageId: string) => {
+        const runKey = `stage:${stageId}`;
+        const runId = activeRunIdsRef.current[runKey];
+        if (!runId) return message.warning("当前阶段没有运行中的任务");
+        canceledRunIdsRef.current[runId] = true;
+        delete activeRunIdsRef.current[runKey];
+        failWorkflowTextRun(runId, "用户已取消本次运行，可修改内容后重新发送。");
+        setRunningStageIds((current) => ({ ...current, [stageId]: false }));
+        message.warning("已取消本次运行；如果外部模型稍后返回，旧结果不会覆盖当前内容。");
     };
 
     const runStage = async (stage: AgentWorkflowStage) => {
@@ -132,8 +151,11 @@ export function useEpisodeWorkbenchRunActions({
             workflowRunId,
         });
         const runId = startWorkflowTextRun(runInput);
+        const runKey = `stage:${stage.stageId}`;
+        activeRunIdsRef.current[runKey] = runId;
         setRunningStageIds((current) => ({ ...current, [stage.stageId]: true }));
         await executeWorkflowTextRun({
+            runKey,
             promptMessages,
             requestConfig,
             runId,
@@ -174,8 +196,11 @@ export function useEpisodeWorkbenchRunActions({
             workflowSceneStates: workflowRun?.sceneStates || [],
         });
         const runId = startWorkflowTextRun(runInput);
+        const runKey = `scene:${currentScene.sceneKey}`;
+        activeRunIdsRef.current[runKey] = runId;
         setRunningSceneKeys((current) => ({ ...current, [currentScene.sceneKey]: true }));
         await executeWorkflowTextRun({
+            runKey,
             promptMessages,
             requestConfig,
             runId,
@@ -185,5 +210,5 @@ export function useEpisodeWorkbenchRunActions({
         });
     };
 
-    return { runStage, runStoryboardScene, runningStageIds };
+    return { cancelStage, runStage, runStoryboardScene, runningStageIds };
 }

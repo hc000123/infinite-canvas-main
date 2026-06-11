@@ -190,7 +190,23 @@ export function workflowDisplayText(display?: WorkflowStageDisplaySummary) {
     return workflowStageStatusLabel(display.displayStatus);
 }
 
-export function buildAssetStageActionHint({ display, hasOutput, isRunning, previewPending, previewTotal }: { display?: WorkflowStageDisplaySummary; hasOutput: boolean; isRunning: boolean; previewPending: number; previewTotal: number }): {
+export function buildAssetStageActionHint({
+    display,
+    hasOutput,
+    isRunning,
+    outputHasStateMismatch,
+    outputNeedsReview,
+    previewPending,
+    previewTotal,
+}: {
+    display?: WorkflowStageDisplaySummary;
+    hasOutput: boolean;
+    isRunning: boolean;
+    outputHasStateMismatch?: boolean;
+    outputNeedsReview?: boolean;
+    previewPending: number;
+    previewTotal: number;
+}): {
     blocked?: boolean;
     text: string;
     tone: EpisodeStatusTone;
@@ -199,9 +215,11 @@ export function buildAssetStageActionHint({ display, hasOutput, isRunning, previ
     if (display?.displayStatus === "blocked") return { blocked: true, text: `暂不可运行，${formatBlockedReason(display.blockedReason)}。`, tone: "amber" };
     if (display?.displayStatus === "error") return { text: "上次资产分析失败，请查看错误后重新运行。", tone: "red" };
     if (display?.displayStatus === "rejected") return { text: "资产清单已驳回，可重新运行生成新结果。", tone: "red" };
+    if (outputHasStateMismatch) return { text: "检测到旧资产产物，但阶段状态不可确认。请重新运行资产分析，避免继续使用异常结果。", tone: "red" };
+    if (outputNeedsReview) return { text: "资产分析结果已返回，下一步请先确认这份结果；确认后才能生成资产清单。", tone: "amber" };
     if (previewPending > 0) return { text: `已有资产清单，${previewPending} 项待写入设定库。`, tone: "amber" };
     if (previewTotal > 0) return { text: `资产清单已处理完成，共 ${previewTotal} 项。`, tone: "green" };
-    if (hasOutput) return { text: "资产分析已完成，可刷新资产清单或写入设定库。", tone: "cyan" };
+    if (hasOutput) return { text: "资产分析已完成，下一步请生成资产清单；生成后再写入设定库。", tone: "cyan" };
     if (display?.displayStatus === "review") return { text: "资产清单待审核，可生成资产清单。", tone: "cyan" };
     if (display?.displayStatus === "approved") return { text: "资产与生图阶段已批准，可继续处理生图需求。", tone: "green" };
     return { text: "可运行，将从剧本和导演分析中提取角色、场景、道具和服装。", tone: "slate" };

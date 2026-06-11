@@ -37,7 +37,7 @@ export function useCanvasNodeReviewActions({ token, message, nodes, nodesRef, se
 
     const syncNodeVolcengineReviewToAssets = useCallback(
         async (node: CanvasNodeData, volcengineAsset: NonNullable<CanvasNodeMetadata["volcengineAsset"]>) => {
-            if (node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video) return;
+            if (node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) return;
             const updatedNode = { ...node, metadata: { ...node.metadata, volcengineAsset } };
             const sourceAsset = node.metadata?.sourceAssetId ? assets.find((asset) => asset.id === node.metadata?.sourceAssetId && asset.kind === node.type) : null;
             if (sourceAsset) {
@@ -52,7 +52,7 @@ export function useCanvasNodeReviewActions({ token, message, nodes, nodesRef, se
 
     const submitNodeVolcengineReview = useCallback(
         async (node: CanvasNodeData) => {
-            if ((node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video) || !node.metadata?.content) return;
+            if ((node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) || !node.metadata?.content) return;
             if (submittingReviewNodeIdRef.current === node.id) return;
             if (!volcengineAssetEnabled) {
                 message.warning("请先开启火山素材加白");
@@ -68,10 +68,10 @@ export function useCanvasNodeReviewActions({ token, message, nodes, nodesRef, se
                 const storedBlob = node.metadata.storageKey ? (node.type === CanvasNodeType.Image ? await getImageBlob(node.metadata.storageKey) : await getMediaBlob(node.metadata.storageKey)) : null;
                 const blob = storedBlob || (await fetchCanvasBlob(node.metadata.content));
                 if (!blob) {
-                    message.error(node.type === CanvasNodeType.Image ? "没有找到图片文件" : "没有找到视频文件");
+                    message.error(node.type === CanvasNodeType.Image ? "没有找到图片文件" : node.type === CanvasNodeType.Audio ? "没有找到音频文件" : "没有找到视频文件");
                     return;
                 }
-                const title = node.metadata.prompt || node.title || (node.type === CanvasNodeType.Image ? "画布图片" : "画布视频");
+                const title = node.metadata.prompt || node.title || (node.type === CanvasNodeType.Image ? "画布图片" : node.type === CanvasNodeType.Audio ? "画布音频" : "画布视频");
                 const result = await submitVolcengineMediaAsset(token, {
                     file: blob,
                     filename: buildVolcengineMediaFilename(title, node.id, node.metadata.mimeType || blob.type, node.type),
@@ -96,7 +96,7 @@ export function useCanvasNodeReviewActions({ token, message, nodes, nodesRef, se
     const refreshNodeVolcengineReview = useCallback(
         async (node: CanvasNodeData, options: { silent?: boolean; showProgress?: boolean } = {}) => {
             const saved = node.metadata?.volcengineAsset;
-            if ((node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video) || !saved?.assetId) return;
+            if ((node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) || !saved?.assetId) return;
             if (refreshingReviewNodeIdRef.current === node.id) return;
             if (!token) {
                 if (!options.silent) message.error("请先登录");

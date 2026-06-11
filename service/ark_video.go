@@ -169,7 +169,10 @@ func buildArkVideoPayload(fields arkVideoCreateFields, requirePrompt bool) (map[
 		"model":   fields.ModelName,
 		"content": content,
 	}
-	appendArkVideoControls(payload, fields.Duration, fields.Ratio, fields.Resolution, fields.GenerateAudio, fields.Watermark, fields.Seed, fields.ReturnLastFrame)
+	if err := validateArkSeedanceReferenceMix(content); err != nil {
+		return nil, err
+	}
+	appendArkVideoControls(payload, fields.ModelName, fields.Duration, fields.Ratio, fields.Resolution, fields.GenerateAudio, fields.Watermark, fields.Seed, fields.ReturnLastFrame)
 	return payload, nil
 }
 
@@ -585,19 +588,14 @@ func arkImageContent(imageURL string, role string) map[string]any {
 func normalizeArkVideoContentRoles(content []any) []any {
 	for _, item := range content {
 		entry, ok := item.(map[string]any)
-		if !ok || arkContentRoleFilled(entry) {
+		if !ok {
 			continue
 		}
-		if role := normalizeArkMediaContentRole(strings.TrimSpace(fmt.Sprint(entry["type"])), ""); role != "" {
+		if role := normalizeArkMediaContentRole(strings.TrimSpace(fmt.Sprint(entry["type"])), strings.TrimSpace(fmt.Sprint(entry["role"]))); role != "" {
 			entry["role"] = role
 		}
 	}
 	return content
-}
-
-func arkContentRoleFilled(entry map[string]any) bool {
-	role, ok := entry["role"]
-	return ok && role != nil && strings.TrimSpace(fmt.Sprint(role)) != ""
 }
 
 func normalizeArkMediaContentRole(contentType string, role string) string {
@@ -606,9 +604,13 @@ func normalizeArkMediaContentRole(contentType string, role string) string {
 		if contentType == "image_url" {
 			return strings.TrimSpace(role)
 		}
-	case "source_video", "reference_video":
+	case "reference_video":
 		if contentType == "video_url" {
 			return strings.TrimSpace(role)
+		}
+	case "source_video":
+		if contentType == "video_url" {
+			return "reference_video"
 		}
 	case "reference_audio":
 		if contentType == "audio_url" {
@@ -634,14 +636,35 @@ func arkReferenceRoleAt(roles []string, index int, fallback string) string {
 	return fallback
 }
 
-func appendArkVideoControls(payload map[string]any, seconds string, size string, resolution string, generateAudio string, watermark string, seed string, returnLastFrame string) {
+func validateArkSeedanceReferenceMix(content []any) error {
+	hasAudio := false
+	hasVisual := false
+	for _, item := range content {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		switch strings.TrimSpace(fmt.Sprint(entry["type"])) {
+		case "audio_url":
+			hasAudio = true
+		case "image_url", "video_url":
+			hasVisual = true
+		}
+	}
+	if hasAudio && !hasVisual {
+		return errors.New("Seedance 2.0 不支持纯音频或文本加音频输入，请至少添加图片或视频参考")
+	}
+	return nil
+}
+
+func appendArkVideoControls(payload map[string]any, modelName string, seconds string, size string, resolution string, generateAudio string, watermark string, seed string, returnLastFrame string) {
 	if duration := normalizeArkVideoDuration(seconds); duration > 0 {
 		payload["duration"] = duration
 	}
 	if ratio := normalizeArkVideoRatio(size); ratio != "" {
 		payload["ratio"] = ratio
 	}
-	if normalizedResolution := normalizeArkVideoResolution(resolution); normalizedResolution != "" {
+	if normalizedResolution := normalizeArkVideoResolution(resolution, modelName); normalizedResolution != "" {
 		payload["resolution"] = normalizedResolution
 	}
 	if value, ok := arkOptionalBool(generateAudio); ok {
@@ -670,12 +693,14 @@ func normalizeArkVideoDuration(value string) int {
 func normalizeArkVideoRatio(value string) string {
 	trimmed := strings.TrimSpace(value)
 	switch trimmed {
-	case "16:9", "9:16", "1:1", "4:3", "3:4", "adaptive":
+	case "21:9", "16:9", "9:16", "1:1", "4:3", "3:4", "adaptive":
 		return trimmed
 	case "auto":
 		return "adaptive"
 	case "1280x720", "1792x1024":
 		return "16:9"
+	case "2560x1080", "1920x810":
+		return "21:9"
 	case "720x1280", "1024x1792":
 		return "9:16"
 	case "1024x1024":
@@ -691,6 +716,9 @@ func normalizeArkVideoRatio(value string) string {
 	if width*9 == height*16 {
 		return "16:9"
 	}
+	if width*9 == height*21 {
+		return "21:9"
+	}
 	if width*3 == height*4 {
 		return "4:3"
 	}
@@ -705,7 +733,10 @@ func normalizeArkVideoRatio(value string) string {
 	return ""
 }
 
-func normalizeArkVideoResolution(value string) string {
+func normalizeArkVideoResolution(value string, modelName string) string {
+	if strings.Contains(strings.ToLower(modelName), "seedance-2-0-fast") {
+		return "720p"
+	}
 	trimmed := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(value)), "p")
 	var resolution int
 	_, _ = fmt.Sscan(trimmed, &resolution)

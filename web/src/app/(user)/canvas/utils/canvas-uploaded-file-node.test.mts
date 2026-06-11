@@ -10,12 +10,23 @@ const baseNode = {
     position: { x: 100, y: 100 },
     width: 300,
     height: 200,
-    metadata: {
-        status: "error",
-        errorDetails: "旧错误",
-        isBatchRoot: true,
-        model: "old-model",
-        primaryImageId: "image-old",
+        metadata: {
+            status: "error",
+            errorDetails: "旧错误",
+            sourceAssetId: "old-asset",
+            assetReferenceMode: "fixed-version",
+            volcengineAsset: {
+                assetId: "old-volcengine-asset",
+                groupId: "group",
+                projectName: "default",
+                status: "Active",
+                publicUrl: "https://example.com/old.png",
+                submittedAt: "2026-06-01T00:00:00Z",
+                updatedAt: "2026-06-01T00:00:00Z",
+            },
+            isBatchRoot: true,
+            model: "old-model",
+            primaryImageId: "image-old",
     },
 };
 
@@ -61,6 +72,9 @@ test("replaces image nodes without moving and clears image generation metadata",
     assert.equal(next.metadata?.errorDetails, undefined);
     assert.equal(next.metadata?.isBatchRoot, undefined);
     assert.equal(next.metadata?.model, undefined);
+    assert.equal(next.metadata?.sourceAssetId, undefined);
+    assert.equal(next.metadata?.assetReferenceMode, undefined);
+    assert.equal(next.metadata?.volcengineAsset, undefined);
 });
 
 test("replaces video nodes around the original node center", () => {
@@ -75,4 +89,7 @@ test("replaces video nodes around the original node center", () => {
     assert.deepEqual([next.width, next.height], [420, 236.25]);
     assert.deepEqual(next.position, { x: 40, y: 81.875 });
     assert.equal(next.metadata?.errorDetails, undefined);
+    assert.equal(next.metadata?.sourceAssetId, undefined);
+    assert.equal(next.metadata?.assetReferenceMode, undefined);
+    assert.equal(next.metadata?.volcengineAsset, undefined);
 });

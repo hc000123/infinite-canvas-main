@@ -356,6 +356,7 @@ async function videoToDataUrl(video: ReferenceVideo) {
 }
 
 async function audioToDataUrl(audio: ReferenceAudio) {
+    if (audio.assetUri) return audio.assetUri;
     const url = audio.url || (await resolveMediaUrl(audio.storageKey, ""));
     if (!url || isRemoteOrInlineMediaUrl(url)) return url;
     return blobToDataUrl(await (await fetch(url)).blob());

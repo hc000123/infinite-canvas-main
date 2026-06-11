@@ -105,6 +105,37 @@ func TestBuildArkVideoCreateRequestBackfillsMediaRoles(t *testing.T) {
 	}
 }
 
+func TestBuildArkVideoCreateRequestNormalizesLegacySourceVideoRole(t *testing.T) {
+	body, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-0-260128",
+		"content": [
+			{"type": "text", "text": "编辑参考视频"},
+			{"type": "video_url", "video_url": {"url": "asset://video-id"}, "role": "source_video"}
+		]
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error: %v", err)
+	}
+	payload := readJSONMap(t, body)
+	content := payload["content"].([]any)
+	if role := content[1].(map[string]any)["role"]; role != "reference_video" {
+		t.Fatalf("video role = %#v, want reference_video", role)
+	}
+}
+
+func TestBuildArkVideoCreateRequestRejectsAudioOnlySeedanceInput(t *testing.T) {
+	_, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-0-260128",
+		"content": [
+			{"type": "text", "text": "只参考音频生成"},
+			{"type": "audio_url", "audio_url": {"url": "asset://audio-id"}}
+		]
+	}`), "application/json")
+	if err == nil || err.Error() != "Seedance 2.0 不支持纯音频或文本加音频输入，请至少添加图片或视频参考" {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestReadArkLocalVideoConfigMultipartKeepsInputReferenceRole(t *testing.T) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
@@ -145,6 +176,22 @@ func TestNormalizeArkVideoDurationKeepsSeedanceRange(t *testing.T) {
 		if got := normalizeArkVideoDuration(input); got != want {
 			t.Fatalf("normalizeArkVideoDuration(%q) = %d, want %d", input, got, want)
 		}
+	}
+}
+
+func TestNormalizeArkVideoControlsKeepOfficialSeedanceLimits(t *testing.T) {
+	body, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-0-fast-260128",
+		"content": [{"type": "text", "text": "生成短视频"}],
+		"ratio": "21:9",
+		"resolution": "1080"
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error: %v", err)
+	}
+	payload := readJSONMap(t, body)
+	if payload["ratio"] != "21:9" || payload["resolution"] != "720p" {
+		t.Fatalf("payload controls = %#v", payload)
 	}
 }
 

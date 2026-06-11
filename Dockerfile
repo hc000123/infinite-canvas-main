@@ -48,7 +48,8 @@ COPY docker-entrypoint.mjs /app/docker-entrypoint.mjs
 ENV GIN_MODE=release
 ENV NODE_ENV=production
 ENV PROMPT_DATA_DIR=/app/data/prompts
-RUN apt-get update \
+RUN sed -i 's|http://deb.debian.org/debian-security|http://mirrors.aliyun.com/debian-security|g; s|http://deb.debian.org/debian|http://mirrors.aliyun.com/debian|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /app/data/prompts
