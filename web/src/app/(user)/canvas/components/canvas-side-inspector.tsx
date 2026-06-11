@@ -148,6 +148,7 @@ export function CanvasSideInspector({
                         embedded
                         projectId={projectId}
                         canvasId={canvasId}
+                        canvasTitle={title}
                         episodeId={canvasEpisodeId}
                         nodes={nodes}
                         connections={connections}

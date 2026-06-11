@@ -10,10 +10,13 @@ import { requestEdit, requestGeneration, requestImageQuestion } from "@/services
 import { uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { useAgentRunnerStore } from "../../projects/use-agent-runner-store";
+import { useCreativeProjectStore } from "../../projects/use-creative-project-store";
 import { type CanvasAssistantImage, type CanvasAssistantMessage, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData } from "../types";
 import { executeAssistantCanvasReadAction, parseAssistantCanvasActionSuggestion, type AssistantCanvasAction, type AssistantCanvasReadAction } from "../utils/canvas-assistant-actions";
 import { buildAssistantReferenceImages, buildChatMessages, buildDebugAssistantActions, summarizeLocalImageInput, updateLocalImageResultSize } from "../utils/canvas-assistant-panel-utils";
 import { buildAssistantReferences } from "../utils/canvas-assistant-references";
+import { buildCanvasAssistantWorkflowContext } from "../utils/canvas-assistant-workflow-context";
 import { useCanvasAssistantSessions } from "../hooks/use-canvas-assistant-sessions";
 import { AssistantMessages } from "./canvas-assistant-messages";
 import { CanvasAssistantComposer, type AssistantMode } from "./canvas-assistant-composer";
@@ -27,6 +30,7 @@ type CanvasAssistantPanelProps = {
     embedded?: boolean;
     projectId: string;
     canvasId: string;
+    canvasTitle: string;
     episodeId?: string;
     nodes: CanvasNodeData[];
     connections: CanvasConnection[];
@@ -48,6 +52,7 @@ export function CanvasAssistantPanel({
     embedded = false,
     projectId,
     canvasId,
+    canvasTitle,
     episodeId,
     nodes,
     connections,
@@ -71,6 +76,10 @@ export function CanvasAssistantPanel({
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
+    const creativeProject = useCreativeProjectStore((state) => state.projects.find((item) => item.id === projectId));
+    const workflowRuns = useAgentRunnerStore((state) => state.workflowRuns);
+    const workflowMappingPreviews = useAgentRunnerStore((state) => state.workflowMappingPreviews);
+    const workflowAppliedPreviewItemIds = useAgentRunnerStore((state) => state.workflowAppliedPreviewItemIds);
     const [width, setWidth] = useState(390);
     const [mode, setMode] = useState<AssistantMode>("image");
     const [prompt, setPrompt] = useState("");
@@ -101,6 +110,22 @@ export function CanvasAssistantPanel({
     const selectedNodeKey = useMemo(() => Array.from(selectedNodeIds).sort().join(","), [selectedNodeIds]);
     const allSelectedReferences = useMemo(() => buildAssistantReferences(nodes, selectedNodeIds, connections), [connections, nodes, selectedNodeIds]);
     const selectedReferences = useMemo(() => allSelectedReferences.filter((item) => !removedReferenceIds.has(item.id)), [allSelectedReferences, removedReferenceIds]);
+    const workflowContext = useMemo(
+        () =>
+            buildCanvasAssistantWorkflowContext({
+                appliedPreviewItemIds: workflowAppliedPreviewItemIds,
+                canvasId,
+                canvasTitle,
+                connections,
+                creativeProject,
+                episodeId,
+                nodes,
+                previews: workflowMappingPreviews,
+                projectId,
+                workflowRuns,
+            }),
+        [canvasId, canvasTitle, connections, creativeProject, episodeId, nodes, projectId, workflowAppliedPreviewItemIds, workflowMappingPreviews, workflowRuns],
+    );
 
     useEffect(() => {
         setRemovedReferenceIds(new Set());
@@ -156,7 +181,7 @@ export function CanvasAssistantPanel({
                 return;
             }
 
-            const answer = await requestImageQuestion(requestConfig, await buildChatMessages([...history, userMessage]), (streamed) => {
+            const answer = await requestImageQuestion(requestConfig, await buildChatMessages([...history, userMessage], workflowContext.text), (streamed) => {
                 updateMessage(session.id, assistantId, { text: streamed, isLoading: false });
             });
             updateMessage(session.id, assistantId, { text: answer, isLoading: false });
@@ -207,7 +232,7 @@ export function CanvasAssistantPanel({
 
     const runReadAction = (action: AssistantCanvasReadAction) => {
         const result = executeAssistantCanvasReadAction(action, nodes, connections);
-        appendAssistantMessage({ id: nanoid(), role: "assistant", mode: "ask", text: result.text }, { skipCanvasHistory: true });
+        appendAssistantMessage({ id: nanoid(), role: "assistant", mode: "ask", text: [result.text, action.type === "canvas.summarize" ? workflowContext.text : ""].filter(Boolean).join("\n\n") }, { skipCanvasHistory: true });
     };
 
     const startResize = () => {
@@ -253,6 +278,12 @@ export function CanvasAssistantPanel({
             />
 
             <div className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+                <div className="rounded-xl border px-3 py-2 text-xs leading-5" style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel, color: theme.node.muted }}>
+                    <span className="font-medium" style={{ color: theme.node.text }}>
+                        工作流上下文
+                    </span>
+                    <span className="ml-2">{workflowContext.summary}</span>
+                </div>
                 {view === "history" ? (
                     <CanvasAssistantHistory
                         sessions={historySessions}
