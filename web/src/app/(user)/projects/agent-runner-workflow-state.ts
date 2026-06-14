@@ -18,7 +18,7 @@ export {
     reviewAgentWorkflowSceneRun,
     startAgentWorkflowSceneRun,
     validateAgentWorkflowSceneOutput,
-} from "./agent-runner-workflow-scene-state";
+} from "./agent-runner-workflow-scene-state.ts";
 
 export function createAgentWorkflowRunRecord({ preset, projectId, canvasId, episodeId, id, now }: { preset: AgentWorkflowPreset; projectId: string; canvasId?: string; episodeId?: string; id: string; now: string }): AgentWorkflowRunRecord {
     const stages = orderedWorkflowPresetStages(preset);
@@ -54,10 +54,10 @@ export function bindAgentWorkflowRunCanvas(workflowRun: AgentWorkflowRunRecord, 
     return { ...workflowRun, canvasId, updatedAt: now };
 }
 
-export function startAgentWorkflowStageRun(workflowRun: AgentWorkflowRunRecord, stageId: string, runnerRunId: string, now: string): AgentWorkflowRunRecord {
+export function startAgentWorkflowStageRun(workflowRun: AgentWorkflowRunRecord, stageId: string, runnerRunId: string, now: string, options?: { allowBlocked?: boolean }): AgentWorkflowRunRecord {
     const checked = refreshWorkflowStageBlocks(workflowRun, now);
     const stageState = checked.stageStates.find((stage) => stage.stageId === stageId);
-    if (!stageState || stageState.status === "blocked") return checked;
+    if (!stageState || (stageState.status === "blocked" && !options?.allowBlocked)) return checked;
     return {
         ...checked,
         currentStageId: stageId,

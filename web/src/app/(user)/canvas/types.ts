@@ -105,6 +105,20 @@ export type CanvasNodeMetadata = {
     finalPrompt?: string;
     sourceType?: "asset_breakdown" | "production_bible" | "storyboard" | "manual" | "shot_group" | "workflow_mapping_preview";
     sourceId?: string;
+    canvasSource?: {
+        projectId?: string;
+        projectTitle?: string;
+        canvasId: string;
+        canvasTitle?: string;
+        nodeId: string;
+        sourceNodeId?: string;
+        sourceAssetId?: string;
+        prompt?: string;
+        generationParams?: Record<string, unknown>;
+        cropRect?: { x: number; y: number; width: number; height: number };
+        originalImage?: { nodeId: string; storageKey?: string; url?: string };
+        import?: { fileName: string; order: number; batchId?: string };
+    };
     productionBibleItemId?: string;
     workflowSource?: {
         sourceType: "workflow_mapping_preview";

@@ -10,6 +10,7 @@ import { useCanvasStore } from "../../canvas/stores/use-canvas-store";
 import { useScriptStore } from "../../canvas/stores/use-script-store";
 import { useStoryboardStore } from "../../canvas/stores/use-storyboard-store";
 import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../../canvas/utils/canvas-project-preset";
+import { videoWorkflowEpisodeKey, videoWorkflowHref, videoWorkflowProjectSlug } from "../../original-workflow/video-workflow-routing";
 import { canvasIdsForCreativeProject, unfiledCanvasProjects } from "../creative-projects";
 import { editableCanvasPreset } from "../project-canvas-preset";
 import { useCreativeProjectStore } from "../use-creative-project-store";
@@ -156,11 +157,18 @@ export default function CreativeProjectDetailPage() {
         const title = values.title.trim() || `第 ${projectEpisodes.length + 1} 集`;
         if (!scriptText) return message.warning("请粘贴本集剧本");
         upsertScriptProject(project.id, scriptText);
-        const episodeId = addEpisode({ projectId: project.id, order: projectEpisodes.length + 1, title, summary: scriptText, hook: "", turningPoint: "", cliffhanger: "" });
+        const order = projectEpisodes.length + 1;
+        const episodeId = addEpisode({ projectId: project.id, order, title, summary: scriptText, hook: "", turningPoint: "", cliffhanger: "" });
+        try {
+            await syncVideoWorkflowScript(order, scriptText);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "同步视频工作流剧本失败");
+            return;
+        }
         setEpisodeImportOpen(false);
         episodeImportForm.resetFields();
         message.success("已导入本集剧本");
-        router.push(`/projects/${project.id}/episodes/${episodeId}/workbench`);
+        router.push(videoWorkflowHref(order, project.id, episodeId));
     };
 
     const createCanvasAndOpen = () => {
@@ -183,6 +191,28 @@ export default function CreativeProjectDetailPage() {
         updateCanvas(editingCanvasPreset.id, { preset });
         setEditingCanvasPresetId("");
         message.success("画布预设已保存");
+    };
+
+    const openEpisodeWorkflow = async (episodeId: string) => {
+        const episode = projectEpisodes.find((item) => item.id === episodeId);
+        if (!episode) return;
+        try {
+            await syncVideoWorkflowScript(episode.order, episode.summary);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "同步视频工作流剧本失败");
+            return;
+        }
+        router.push(videoWorkflowHref(episode.order, project.id, episode.id));
+    };
+
+    const syncVideoWorkflowScript = async (order: number, content: string) => {
+        const episode = videoWorkflowEpisodeKey(order, project.id);
+        const response = await fetch("/api/original-workflow", {
+            body: JSON.stringify({ action: "save-script", content, episode, projectSlug: videoWorkflowProjectSlug(project.id) }),
+            headers: { "Content-Type": "application/json" },
+            method: "POST",
+        });
+        if (!response.ok) throw new Error("同步视频工作流剧本失败");
     };
 
     return (
@@ -210,7 +240,7 @@ export default function CreativeProjectDetailPage() {
                 onFilterChange={setEpisodeFilter}
                 onImportEpisode={() => setEpisodeImportOpen(true)}
                 onOpenCanvasById={(canvasId) => router.push(`/canvas/${canvasId}`)}
-                onOpenEpisode={(episodeId) => router.push(`/projects/${project.id}/episodes/${episodeId}/workbench`)}
+                onOpenEpisode={openEpisodeWorkflow}
                 onTabChange={setActiveTab}
             />
 
@@ -232,13 +262,13 @@ export default function CreativeProjectDetailPage() {
                     <Input value={episodeTitleDraft} placeholder="例如：第 147 集" maxLength={80} showCount onChange={(event) => setEpisodeTitleDraft(event.target.value)} onPressEnter={saveEpisodeTitleEdit} />
                 </label>
             </Modal>
-            <Modal className="studio-modal" title="导入本集剧本" open={episodeImportOpen} onCancel={() => setEpisodeImportOpen(false)} onOk={() => void importEpisodeAndOpen()} okText="导入并进入生产流程" cancelText="取消" destroyOnHidden>
+            <Modal className="studio-modal" title="导入本集剧本" open={episodeImportOpen} onCancel={() => setEpisodeImportOpen(false)} onOk={() => void importEpisodeAndOpen()} okText="导入并进入视频工作流" cancelText="取消" destroyOnHidden>
                 <Form form={episodeImportForm} layout="vertical" initialValues={{ title: `第 ${projectEpisodes.length + 1} 集`, scriptText: "" }} requiredMark={false}>
                     <Form.Item name="title" label="本集标题" rules={[{ required: true, message: "请填写本集标题" }]}>
                         <Input placeholder="例如：第一集" />
                     </Form.Item>
                     <Form.Item name="scriptText" label="本集剧本" rules={[{ required: true, message: "请粘贴本集剧本" }]}>
-                        <Input.TextArea rows={10} placeholder="先导入剧本并进入本集生产流程；画布会在最后写入结果时再创建或绑定。" />
+                        <Input.TextArea rows={10} placeholder="先导入剧本并进入视频工作流；画布会在最后写入结果时再创建或绑定。" />
                     </Form.Item>
                 </Form>
             </Modal>

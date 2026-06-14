@@ -19,6 +19,7 @@ export function useAssetPageStores() {
         projects: useCanvasStore((state) => state.projects),
         removeAsset: useAssetStore((state) => state.removeAsset),
         removeFolder: useAssetStore((state) => state.removeFolder),
+        removeProductionBibleItem: useProductionBibleStore((state) => state.removeItem),
         storyboardGroups: useStoryboardStore((state) => state.groups),
         storyboardShots: useStoryboardStore((state) => state.shots),
         token: useUserStore((state) => state.token),

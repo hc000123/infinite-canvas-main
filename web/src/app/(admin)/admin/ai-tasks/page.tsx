@@ -147,7 +147,7 @@ export default function AdminAITasksPage() {
 
     return (
         <main style={{ padding: 24 }}>
-            <Space direction="vertical" size={16} style={{ width: "100%" }}>
+            <Space orientation="vertical" size={16} style={{ width: "100%" }}>
                 <Card variant="borderless">
                     <Form layout="vertical">
                         <Row gutter={16} align="bottom">
@@ -251,7 +251,7 @@ export default function AdminAITasksPage() {
 
             <Drawer title="AI 任务详情" open={Boolean(detailId)} size={820} onClose={closeDetail} loading={isDetailLoading}>
                 {detail ? (
-                    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
                         <Descriptions bordered size="small" column={2}>
                             <Descriptions.Item label="任务 ID" span={2}>
                                 <Typography.Text copyable>{detail.task.id}</Typography.Text>

@@ -20,17 +20,18 @@ type UseEpisodeWorkbenchUiStateOptions = {
     episodeId: string;
     hasScript: boolean;
     message: WorkbenchUiMessage;
+    requestedModule?: EpisodeModuleKey;
     sceneOptions: EpisodeSceneOption[];
     scriptSnapshot: string;
     workflowRun?: AgentWorkflowRunRecord;
 };
 
-export function useEpisodeWorkbenchUiState({ approveRun, directorOutputText, episodeExists, episodeId, hasScript, message, sceneOptions, scriptSnapshot, workflowRun }: UseEpisodeWorkbenchUiStateOptions) {
+export function useEpisodeWorkbenchUiState({ approveRun, directorOutputText, episodeExists, episodeId, hasScript, message, requestedModule, sceneOptions, scriptSnapshot, workflowRun }: UseEpisodeWorkbenchUiStateOptions) {
     const [scriptDraft, setScriptDraft] = useState("");
     const [selectedSceneKey, setSelectedSceneKey] = useState("");
     const [subSceneKey] = useState("");
     const [applyingPreviewIds, setApplyingPreviewIds] = useState<Record<string, boolean>>({});
-    const [activeModule, setActiveModule] = useState<EpisodeModuleKey>("director");
+    const [activeModule, setActiveModule] = useState<EpisodeModuleKey>(requestedModule || "director");
     const [detailRecord, setDetailRecord] = useState<EpisodeDetailRecord | null>(null);
     const [directorReviewStates, setDirectorReviewStates] = useState<Record<string, DirectorReviewState>>({});
     const [initialModuleSynced, setInitialModuleSynced] = useState(false);
@@ -40,8 +41,13 @@ export function useEpisodeWorkbenchUiState({ approveRun, directorOutputText, epi
     }, [episodeExists, scriptSnapshot]);
 
     useEffect(() => {
-        setInitialModuleSynced(false);
-    }, [episodeId]);
+        setInitialModuleSynced(Boolean(requestedModule));
+        if (requestedModule) setActiveModule(requestedModule);
+    }, [episodeId, requestedModule]);
+
+    useEffect(() => {
+        if (requestedModule) setActiveModule(requestedModule);
+    }, [requestedModule]);
 
     useEffect(() => {
         setDirectorReviewStates({});
@@ -52,11 +58,15 @@ export function useEpisodeWorkbenchUiState({ approveRun, directorOutputText, epi
             setActiveModule("script");
             return;
         }
+        if (requestedModule) {
+            setActiveModule(requestedModule);
+            return;
+        }
         if (!initialModuleSynced) {
             setActiveModule("script");
             setInitialModuleSynced(true);
         }
-    }, [hasScript, initialModuleSynced]);
+    }, [hasScript, initialModuleSynced, requestedModule]);
 
     useEffect(() => {
         if (!sceneOptions.length) {

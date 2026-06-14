@@ -75,6 +75,10 @@ export function useCanvasProjectLifecycle({
             navigateToProjects();
             return;
         }
+        if (!project.projectId) {
+            navigateToProjects();
+            return;
+        }
 
         const restore = async () => {
             const restoredNodes = await hydrateCanvasImages(resetInterruptedGeneration(project.nodes));

@@ -67,6 +67,8 @@ docker compose -f docker-compose.local.yml up -d --build
 ## 文档
 
 - [功能介绍](docs/features.md)
+- [创作工作流程](docs/workflow.md)
+- [API 渠道与 Agent 绑定规则](docs/api-channel-workflow.md)
 - [部署说明](docs/deployment.md)
 - [画布节点操作手册](docs/canvas-node-manual.md)
 - [画布快捷键](docs/canvas-shortcuts.md)

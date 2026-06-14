@@ -132,8 +132,8 @@ export function CanvasNodesLayer({
                     batchRecovering={collapsingBatchIds.has(node.id)}
                     batchMotion={batchMotionById.get(node.id)}
                     showImageInfo={showImageInfo}
-                    productionPackageBadge={productionNodeBadge(node, productionPackages, productionPackageLabelMap)}
-                    isProductionPackageActive={Boolean(getNodeProductionPackageId(node) && getNodeProductionPackageId(node) === activeProductionPackageId)}
+                    productionPackageBadge={productionPackages.length ? productionNodeBadge(node, productionPackages, productionPackageLabelMap) : ""}
+                    isProductionPackageActive={Boolean(productionPackages.length && getNodeProductionPackageId(node) && getNodeProductionPackageId(node) === activeProductionPackageId)}
                     renderPanel={(panelNode) => (
                         <CanvasNodePromptPanel
                             node={panelNode}

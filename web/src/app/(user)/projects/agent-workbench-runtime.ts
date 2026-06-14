@@ -1,4 +1,4 @@
-import { agentSkillRegistry, defaultAgentSkill } from "./agent-workbench-skills";
+import { agentSkillRegistry, defaultAgentSkill } from "./agent-workbench-skills.ts";
 import type { AgentRiskLevel, AgentSkill, AgentSkillApplyContext, AgentTask, AgentTaskKind, AgentTaskTargetRef, AgentWorkbenchInput } from "./agent-workbench-types";
 
 export function skillsForAgentKind(kind: AgentTaskKind) {

@@ -71,8 +71,8 @@ export function EpisodeCanvasHandoffPage({
     };
 
     return (
-        <section className="grid gap-5">
-            <div className="grid gap-4 border-b border-slate-800 pb-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+        <section className="grid gap-4">
+            <div className="grid gap-4 rounded-xl border border-white/[0.07] bg-[#070b10]/80 px-5 py-4 shadow-[0_16px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
                 <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
                         <span>{projectTitle}</span>
@@ -81,14 +81,14 @@ export function EpisodeCanvasHandoffPage({
                         <span>/</span>
                         <span className="text-cyan-300">画布承接</span>
                     </div>
-                    <h2 className="mt-2 break-words text-3xl font-semibold leading-tight text-slate-50">{episode.title} · 画布承接</h2>
+                    <h2 className="mt-2 break-words text-2xl font-semibold leading-tight text-slate-50">{episode.title} · 画布承接</h2>
                     <p className="mt-2 break-words text-sm leading-6 text-slate-500">将已确认的 15 秒生产包导入画布节点组，进入完整画布后再逐一检查节点、资产、提示词和配置。</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" onClick={onCreateCanvas}>
+                    <Button className="!rounded-xl !border-white/10 !bg-white/[0.04] !text-slate-200 hover:!border-cyan-400/60 hover:!text-cyan-100" onClick={onCreateCanvas}>
                         创建新承接画布
                     </Button>
-                    <Button type="primary" disabled={!selectedRow?.canImport} onClick={() => importPackage(selectedRow)}>
+                    <Button className="!rounded-xl" type="primary" disabled={!selectedRow?.canImport} onClick={() => importPackage(selectedRow)}>
                         导入选中生产包
                     </Button>
                 </div>
@@ -104,7 +104,7 @@ export function EpisodeCanvasHandoffPage({
                 ].map((step) => (
                     <div
                         key={step.label}
-                        className={`rounded-lg border px-4 py-3 transition ${step.active ? "border-cyan-400/70 bg-cyan-400/12 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]" : step.tone === "green" ? "border-emerald-500/35 bg-emerald-500/[0.06]" : "border-slate-800 bg-slate-950/45"}`}
+                        className={`rounded-lg border px-4 py-3 transition ${step.active ? "border-cyan-400/70 bg-cyan-400/12 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]" : step.tone === "green" ? "border-emerald-500/35 bg-emerald-500/[0.06]" : "border-white/[0.07] bg-white/[0.03]"}`}
                     >
                         <div className={`text-sm font-semibold ${episodeToneTextClass(step.tone as EpisodeStatusTone)}`}>{step.label}</div>
                         <div className="mt-2 break-words text-xs leading-5 text-slate-500">{step.text}</div>
@@ -120,7 +120,7 @@ export function EpisodeCanvasHandoffPage({
                     { label: "缺资产", value: summary.missingAssets, tone: summary.missingAssets ? "amber" : "green" },
                     { label: "承接画布", value: summary.canvasCount, tone: summary.canvasCount ? "green" : "amber" },
                 ].map((item) => (
-                    <div key={item.label} className="rounded-lg border border-slate-800 bg-slate-950/45 px-4 py-3">
+                    <div key={item.label} className="rounded-lg border border-white/[0.07] bg-white/[0.03] px-4 py-3">
                         <div className="text-xs text-slate-500">{item.label}</div>
                         <div className={`mt-1 text-2xl font-semibold ${episodeToneTextClass(item.tone as EpisodeStatusTone)}`}>{item.value}</div>
                     </div>
@@ -128,15 +128,15 @@ export function EpisodeCanvasHandoffPage({
             </div>
 
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_450px]">
-                <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-[#091018]/88">
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
+                <div className="min-w-0 overflow-hidden rounded-xl border border-white/[0.07] bg-[#070b10]/78 shadow-[0_16px_60px_rgba(0,0,0,0.20)] backdrop-blur-xl">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] px-5 py-4">
                         <h3 className="text-lg font-semibold text-slate-50">生产包导入状态</h3>
                         <div className="flex flex-wrap gap-2">
                             {(["全部", "待导入", "已导入", "缺资产", "已进入画布", "已生成", "已回流"] as CanvasHandoffFilter[]).map((item) => (
                                 <button
                                     key={item}
                                     type="button"
-                                    className={`rounded-md border px-3 py-1.5 text-sm transition ${filter === item ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:border-slate-600 hover:text-slate-200"}`}
+                                    className={`rounded-lg border px-3 py-1.5 text-sm transition ${filter === item ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-white/[0.08] bg-white/[0.025] text-slate-500 hover:border-cyan-400/45 hover:text-slate-200"}`}
                                     onClick={() => setFilter(item)}
                                 >
                                     {item}

@@ -1,5 +1,4 @@
 import type { StoryboardTableShot } from "../../../../../canvas/utils/storyboard-management";
-import { workflowMappingPreviewItemKey } from "../../../../agent-runner-workflow-apply-common";
 import type { AgentWorkflowMappingPreview, AgentWorkflowRunRecord, AgentWorkflowSceneRunState } from "../../../../agent-runner-types";
 import { summarizeWorkflowStageDisplayState } from "../../../../agent-runner-workflow-display";
 import { EpisodeProgress, type EpisodeModuleConfig, type EpisodeModuleRow } from "./components/episode-module-panel";

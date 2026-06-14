@@ -1,7 +1,7 @@
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { useState } from "react";
 import { Segmented, Switch } from "antd";
-import { AudioLines, CircleDot, Eraser, FolderOpen, Grid2x2, Hand, Image as ImageIcon, Info, Moon, Palette, Redo2, ScrollText, Settings2, Square, Sun, Trash2, Type, Undo2, Upload, Video } from "lucide-react";
+import { CircleDot, Grid2x2, Hand, Info, Moon, Palette, Redo2, Square, Sun, Trash2, Undo2 } from "lucide-react";
 
 import { canvasThemes, type CanvasBackgroundMode, type CanvasColorTheme } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -92,21 +92,12 @@ export type CanvasToolbarState = {
 
 function buildToolbarItems({ actions, state, appearanceOpen, onAppearanceClick }: { actions: CanvasToolbarActions; state: CanvasToolbarState; appearanceOpen: boolean; onAppearanceClick: (event: ReactMouseEvent<HTMLButtonElement>) => void }) {
     const { selectedCount, canUndo, canRedo } = state;
-    const { onAddImage, onAddVideo, onAddAudio, onAddText, onAddConfig, onUndo, onRedo, onUpload, onDelete, onClear, onDeselect, onOpenAssets, onOpenEpisodeWorkbench } = actions;
+    const { onUndo, onRedo, onDelete, onDeselect } = actions;
     const items: CanvasToolbarItem[] = [
         { type: "button", id: "tool-hand", label: "移动/选择", icon: <Hand className="size-4.5" />, active: !selectedCount, onClick: onDeselect },
         { type: "button", id: "tool-undo", label: "撤销", icon: <Undo2 className="size-4.5" />, disabled: !canUndo, onClick: onUndo },
         { type: "button", id: "tool-redo", label: "重做", icon: <Redo2 className="size-4.5" />, disabled: !canRedo, onClick: onRedo },
-        { type: "divider", id: "divider-create" },
-        { type: "button", id: "tool-text", label: "文本", icon: <Type className="size-4.5" />, onClick: onAddText },
-        { type: "button", id: "tool-image", label: "图片", icon: <ImageIcon className="size-4.5" />, onClick: onAddImage },
-        { type: "button", id: "tool-video", label: "视频", icon: <Video className="size-4.5" />, onClick: onAddVideo },
-        { type: "button", id: "tool-audio", label: "音频", icon: <AudioLines className="size-4.5" />, onClick: onAddAudio },
-        { type: "button", id: "tool-config", label: "生成配置", icon: <Settings2 className="size-4.5" />, onClick: onAddConfig },
-        { type: "button", id: "tool-upload", label: "上传素材", icon: <Upload className="size-4.5" />, onClick: onUpload },
-        { type: "divider", id: "divider-assets" },
-        { type: "button", id: "tool-assets", label: "素材", icon: <FolderOpen className="size-4.5" />, onClick: onOpenAssets },
-        { type: "button", id: "tool-episode-workbench", label: "本集生产流程", icon: <ScrollText className="size-4.5" />, onClick: onOpenEpisodeWorkbench },
+        { type: "divider", id: "divider-style" },
         { type: "button", id: "tool-style", label: "外观设置", icon: <Palette className="size-4.5" />, active: appearanceOpen, onClick: onAppearanceClick },
     ];
 
@@ -114,7 +105,6 @@ function buildToolbarItems({ actions, state, appearanceOpen, onAppearanceClick }
         items.push({ type: "divider", id: "divider-selection" }, { type: "button", id: "tool-delete", label: "删除选中", icon: <Trash2 className="size-4.5" />, onClick: onDelete, danger: true });
     }
 
-    items.push({ type: "divider", id: "divider-clear" }, { type: "button", id: "tool-clear", label: "清空画布", icon: <Eraser className="size-4.5" />, onClick: onClear, danger: true });
     return items;
 }
 

@@ -15,7 +15,7 @@ import { buildRetryGenerationConfig } from "../utils/canvas-generation-config";
 import { buildRetryImageGenerationMetadata, buildVideoGenerationMetadata, buildVideoReferenceInput, videoTaskMetadata } from "../utils/canvas-generation-metadata";
 import { findRetrySourceNode, resolveMetadataReferences, resolveStoredAudioReferences, resolveStoredImageReferences, resolveStoredVideoReferences, sourceNodeReferenceImages, storedVideoReferenceInputs } from "../utils/canvas-generation-references";
 import { runCanvasImageGeneration, runCanvasVideoGeneration } from "../utils/canvas-generation-runner";
-import { buildGeneratedVideoAsset } from "../utils/canvas-generated-asset";
+import { buildGeneratedImageAsset, buildGeneratedVideoAsset } from "../utils/canvas-generated-asset";
 import { aiTaskLedgerNodeMetadata, buildCanvasAiTaskTraceFromNode } from "../utils/canvas-ai-task-trace";
 import type { CanvasEpisodeContext } from "../utils/canvas-episode-context";
 import type { CanvasProjectPreset } from "../utils/canvas-project-preset";
@@ -126,14 +126,14 @@ export function useCanvasGenerationRetryActions({
                     item.id === node.id
                         ? {
                               ...item,
-                              metadata: { ...item.metadata, status: NODE_STATUS_LOADING, errorDetails: undefined, ...(generationStartedAt ? { generationStartedAt, taskStatus: undefined, rawTaskStatus: undefined } : {}) },
+                              metadata: { ...item.metadata, ...retryingVideoTaskMetadata(item.type), status: NODE_STATUS_LOADING, errorDetails: undefined, ...(generationStartedAt ? { generationStartedAt } : {}) },
                           }
                         : item,
                 ),
             );
             if (node.type === CanvasNodeType.Video) {
-                useStoryboardStore.getState().markShotGenerating({ storyboardShotId: node.metadata?.storyboardShotId, nodeId: node.id, taskId: node.metadata?.taskId });
-                useStoryboardStore.getState().markShotGroupGenerating({ shotGroupId: node.metadata?.shotGroupId, taskId: node.metadata?.taskId });
+                useStoryboardStore.getState().markShotGenerating({ storyboardShotId: node.metadata?.storyboardShotId, nodeId: node.id });
+                useStoryboardStore.getState().markShotGroupGenerating({ shotGroupId: node.metadata?.shotGroupId });
             }
 
             try {
@@ -192,6 +192,7 @@ export function useCanvasGenerationRetryActions({
                     if (finalVideoNode) {
                         const asset = buildGeneratedVideoAsset(finalVideoNode, {
                             projectId: workspaceProjectId,
+                            canvasId,
                             projectTitle: workspaceProjectTitle,
                             projectPreset,
                             episodeContext: canvasEpisodeContext,
@@ -215,6 +216,13 @@ export function useCanvasGenerationRetryActions({
                 const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
                 const imageSize = fitNodeSize(uploadedImage.width, uploadedImage.height, imageConfig.width, imageConfig.height);
                 const generationMetadata = buildRetryImageGenerationMetadata(savedImageMetadata, generationConfig, useReferenceImages, retryReferenceImages);
+                const completedNode = buildCompletedImageNode({
+                    imageNode: node,
+                    imageSize,
+                    imageMetadata: { ...imageMetadata(uploadedImage), ...aiTaskLedgerNodeMetadata(uploadedImage.aiTask) },
+                    generationMetadata,
+                    prompt,
+                });
                 setNodes((prev) =>
                     prev.map((item) =>
                         item.id === node.id
@@ -228,6 +236,19 @@ export function useCanvasGenerationRetryActions({
                             : item,
                     ),
                 );
+                const asset = buildGeneratedImageAsset(completedNode, {
+                    canvasId,
+                    projectId: workspaceProjectId,
+                    projectTitle: workspaceProjectTitle,
+                    projectPreset,
+                    episodeContext: canvasEpisodeContext,
+                    prompt,
+                    effectivePrompt: prompt,
+                    config: generationConfig,
+                    createdAt: new Date().toISOString(),
+                });
+                const assetId = asset ? await archiveGeneratedAsset(asset).catch(() => undefined) : undefined;
+                if (typeof assetId === "string") setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, sourceAssetId: assetId } } : item)));
             } catch (error) {
                 const errorDetails = error instanceof Error ? error.message : "生成失败";
                 const failedAt = Date.now();
@@ -286,4 +307,27 @@ export function useCanvasGenerationRetryActions({
     );
 
     return { handleRetryNode };
+}
+
+function retryingVideoTaskMetadata(nodeType: CanvasNodeType): CanvasNodeMetadata {
+    if (nodeType !== CanvasNodeType.Video) return {};
+    return {
+        taskId: undefined,
+        taskStatus: undefined,
+        rawTaskStatus: undefined,
+        taskCreatedAt: undefined,
+        taskUpdatedAt: undefined,
+        executionExpiresAfter: undefined,
+        videoUrlExpiresAt: undefined,
+        videoUrl: undefined,
+        lastFrameUrl: undefined,
+        aiTaskId: undefined,
+        upstreamTaskId: undefined,
+        aiTaskStatus: undefined,
+        aiTaskCredits: undefined,
+        creditLogId: undefined,
+        creditsRefunded: undefined,
+        refundedAt: undefined,
+        finishedAt: undefined,
+    };
 }

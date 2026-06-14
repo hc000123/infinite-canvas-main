@@ -1,21 +1,11 @@
-"use client";
+import { Suspense, type ReactNode } from "react";
 
-import type { ReactNode } from "react";
-import { usePathname } from "next/navigation";
-
-import { AppTopNav } from "@/components/layout/app-top-nav";
-import { ProjectWorkspaceShell } from "./projects/project-workspace-shell";
-
-const workspaceShellPaths = ["/canvas", "/image", "/video", "/prompts", "/assets"];
+import { UserLayoutClient } from "./user-layout-client";
 
 export default function UserLayout({ children }: { children: ReactNode }) {
-    const pathname = usePathname();
-    const useWorkspaceShell = workspaceShellPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
-
     return (
-        <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
-            <AppTopNav />
-            <div className="min-h-0 flex-1 overflow-hidden">{useWorkspaceShell ? <ProjectWorkspaceShell>{children}</ProjectWorkspaceShell> : children}</div>
-        </div>
+        <Suspense fallback={null}>
+            <UserLayoutClient>{children}</UserLayoutClient>
+        </Suspense>
     );
 }

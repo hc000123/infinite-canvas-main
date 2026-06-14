@@ -12,7 +12,7 @@ export type VolcengineReviewMetadata = {
 };
 
 export function volcengineReviewMetadataFromSubmission(submission: VolcengineAssetSubmission): VolcengineReviewMetadata {
-    return {
+    return normalizeVolcengineReviewMetadata({
         assetId: submission.assetId,
         groupId: submission.groupId,
         projectName: submission.projectName,
@@ -21,11 +21,11 @@ export function volcengineReviewMetadataFromSubmission(submission: VolcengineAss
         publicUrl: submission.publicUrl,
         submittedAt: submission.submittedAt,
         updatedAt: submission.updatedAt,
-    };
+    });
 }
 
 export function mergeVolcengineReviewStatus(saved: VolcengineReviewMetadata, status: VolcengineAssetStatus): VolcengineReviewMetadata {
-    return {
+    return normalizeVolcengineReviewMetadata({
         ...saved,
         assetId: status.assetId || saved.assetId,
         groupId: status.groupId || saved.groupId,
@@ -34,6 +34,17 @@ export function mergeVolcengineReviewStatus(saved: VolcengineReviewMetadata, sta
         error: status.error || (status.status === "Failed" ? saved.error : ""),
         publicUrl: status.publicUrl || saved.publicUrl,
         updatedAt: status.updatedAt || new Date().toISOString(),
+    });
+}
+
+export function normalizeVolcengineReviewMetadata(metadata: VolcengineReviewMetadata): VolcengineReviewMetadata {
+    if (metadata.status !== "Processing" && metadata.status !== "Active") return metadata;
+    if (metadata.assetId?.trim()) return metadata;
+    return {
+        ...metadata,
+        status: "Failed",
+        error: metadata.error || "火山接口没有返回素材 ID，请重新提交加白",
+        updatedAt: metadata.updatedAt || new Date().toISOString(),
     };
 }
 
@@ -59,6 +70,14 @@ export function activeVolcengineAssetURI(metadata?: { assetId?: string; status?:
 
 export function isVolcengineReviewProcessing(metadata?: { assetId?: string; status?: string }) {
     return Boolean(metadata?.assetId?.trim() && metadata.status === "Processing");
+}
+
+export function canSubmitVolcengineReview(metadata?: { status?: string }) {
+    return metadata?.status !== "Processing" && metadata?.status !== "Active";
+}
+
+export function canRefreshVolcengineReview(metadata?: { assetId?: string; status?: string }) {
+    return Boolean(metadata?.assetId?.trim()) && !canSubmitVolcengineReview(metadata);
 }
 
 export function volcengineReviewPollingKey(items: Array<{ id: string; metadata?: { volcengineAsset?: { assetId?: string; status?: string } } }>) {

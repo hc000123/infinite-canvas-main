@@ -11,12 +11,46 @@ export type ScriptEpisode = {
     order: number;
     title: string;
     summary: string;
+    structuredScript?: StructuredEpisodeScript;
     hook: string;
     turningPoint: string;
     cliffhanger: string;
     sceneIds: string[];
     createdAt: string;
     updatedAt: string;
+};
+
+export type StructuredScriptBeat = {
+    type: "action" | "dialogue" | "visual" | "note";
+    text: string;
+    speaker?: string;
+};
+
+export type StructuredScriptSceneAssets = {
+    characters: string[];
+    locations: string[];
+    props: string[];
+    costumes: string[];
+    mood: string[];
+};
+
+export type StructuredScriptScene = {
+    sceneId: string;
+    location: string;
+    timeOfDay: string;
+    space: string;
+    characters: string[];
+    sceneNote: string;
+    beats: StructuredScriptBeat[];
+    assets: StructuredScriptSceneAssets;
+};
+
+export type StructuredEpisodeScript = {
+    schemaVersion: "episode-script.v1";
+    episodeTitle: string;
+    summary: string;
+    characters: string[];
+    scenes: StructuredScriptScene[];
 };
 
 export type ScriptScene = {
@@ -43,6 +77,7 @@ export function normalizeScriptEpisode(input: ScriptEpisodeWriteInput): ScriptEp
         ...input,
         title: input.title.trim() || "未命名集数",
         summary: input.summary.trim(),
+        structuredScript: normalizeStructuredEpisodeScript(input.structuredScript),
         hook: input.hook.trim(),
         turningPoint: input.turningPoint.trim(),
         cliffhanger: input.cliffhanger.trim(),
@@ -105,6 +140,91 @@ export function parseScriptScenesFromText(text: string) {
                 durationHint: extractLabeledValue(body, ["时长"]) || "",
             };
         });
+}
+
+export function normalizeStructuredEpisodeScript(value: unknown): StructuredEpisodeScript | undefined {
+    if (!value || typeof value !== "object") return undefined;
+    const payload = value as Record<string, unknown>;
+    const scenes = Array.isArray(payload.scenes) ? payload.scenes.map(normalizeStructuredScriptScene).filter((scene): scene is StructuredScriptScene => Boolean(scene)) : [];
+    if (!scenes.length) return undefined;
+    return {
+        schemaVersion: "episode-script.v1",
+        episodeTitle: stringValue(payload.episodeTitle || payload.title),
+        summary: stringValue(payload.summary),
+        characters: uniqueStrings([...arrayStrings(payload.characters), ...scenes.flatMap((scene) => scene.characters)]),
+        scenes,
+    };
+}
+
+export function structuredEpisodeScriptToText(script: StructuredEpisodeScript) {
+    return [`# ${script.episodeTitle || "结构化剧本"}`, script.summary ? `摘要：${script.summary}` : "", ...script.scenes.map(structuredScriptSceneToText)].filter(Boolean).join("\n\n");
+}
+
+export function structuredScriptSceneToText(scene: StructuredScriptScene) {
+    const title = [scene.sceneId, scene.location, scene.timeOfDay, scene.space, scene.characters.join("、")].filter(Boolean).join(" / ");
+    const beats = scene.beats
+        .map((beat) => {
+            if (beat.type === "dialogue" && beat.speaker) return `${beat.speaker}：${beat.text}`;
+            return beat.text;
+        })
+        .filter(Boolean)
+        .join("\n");
+    return [`## ${title || "未命名场次"}`, scene.sceneNote ? `场记：${scene.sceneNote}` : "", beats].filter(Boolean).join("\n");
+}
+
+function normalizeStructuredScriptScene(value: unknown, index: number): StructuredScriptScene | undefined {
+    if (!value || typeof value !== "object") return undefined;
+    const payload = value as Record<string, unknown>;
+    const beats = Array.isArray(payload.beats) ? payload.beats.map(normalizeStructuredScriptBeat).filter((beat): beat is StructuredScriptBeat => Boolean(beat)) : [];
+    const sceneNote = stringValue(payload.sceneNote || payload.note || payload.description);
+    if (!beats.length && !sceneNote) return undefined;
+    return {
+        sceneId: stringValue(payload.sceneId || payload.id || payload.sceneKey) || `scene-${index + 1}`,
+        location: stringValue(payload.location),
+        timeOfDay: stringValue(payload.timeOfDay || payload.time),
+        space: stringValue(payload.space || payload.interiorExterior),
+        characters: arrayStrings(payload.characters),
+        sceneNote,
+        beats,
+        assets: normalizeStructuredScriptSceneAssets(payload.assets),
+    };
+}
+
+function normalizeStructuredScriptBeat(value: unknown): StructuredScriptBeat | undefined {
+    if (!value || typeof value !== "object") return undefined;
+    const payload = value as Record<string, unknown>;
+    const text = stringValue(payload.text || payload.content);
+    if (!text) return undefined;
+    return {
+        type: normalizeBeatType(stringValue(payload.type)),
+        text,
+        speaker: stringValue(payload.speaker) || undefined,
+    };
+}
+
+function normalizeStructuredScriptSceneAssets(value: unknown): StructuredScriptSceneAssets {
+    const payload = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+    return {
+        characters: arrayStrings(payload.characters),
+        locations: arrayStrings(payload.locations || payload.scenes),
+        props: arrayStrings(payload.props),
+        costumes: arrayStrings(payload.costumes),
+        mood: arrayStrings(payload.mood),
+    };
+}
+
+function normalizeBeatType(value: string): StructuredScriptBeat["type"] {
+    if (value === "dialogue" || value === "visual" || value === "note") return value;
+    return "action";
+}
+
+function stringValue(value: unknown) {
+    return typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
+}
+
+function arrayStrings(value: unknown) {
+    if (!Array.isArray(value)) return [];
+    return uniqueStrings(value.map(stringValue).filter(Boolean));
 }
 
 function extractLabeledValue(text: string, labels: string[]) {

@@ -4,16 +4,17 @@ import { useMemo } from "react";
 
 import type { CanvasProject } from "../../../../../canvas/stores/use-canvas-store";
 import { buildEpisodeScriptSnapshot } from "../../../../../canvas/utils/canvas-episode-context";
-import { orderedScriptScenes, type ScriptEpisode, type ScriptScene } from "../../../../../canvas/utils/script-management";
+import { orderedScriptScenes, structuredScriptSceneToText, type ScriptEpisode, type ScriptScene, type StructuredEpisodeScript } from "../../../../../canvas/utils/script-management";
 import { orderedStoryboardTableShots, type StoryboardTableShot } from "../../../../../canvas/utils/storyboard-management";
 import { buildSeedanceWorkflowPreset, sortedWorkflowStages } from "../../../../agent-workflow-presets";
 import type { AgentWorkflowMappingPreview, AgentWorkflowRunRecord, AgentWorkflowStageOutput } from "../../../../agent-runner-types";
+import { findEpisodeWorkflowRun } from "../workflow-run-selection";
 
 export type EpisodeSceneOption = {
     sceneKey: string;
     sceneLabel: string;
     scriptText: string;
-    source: "storyboard_table" | "script_scene" | "script_text";
+    source: "storyboard_table" | "script_scene" | "structured_script" | "script_text";
 };
 
 type UseEpisodeWorkbenchStateOptions = {
@@ -35,11 +36,8 @@ export function useEpisodeWorkbenchState({ canvases, episode, episodeId, project
     const scriptSnapshot = useMemo(() => (episode ? buildEpisodeScriptSnapshot(episode, stageSceneRows) : ""), [episode, stageSceneRows]);
     const boundCanvas = useMemo(() => canvases.find((canvas) => canvas.projectId === projectId && canvas.episodeId === episodeId), [canvases, episodeId, projectId]);
     const episodeTableShots = useMemo(() => (boundCanvas ? orderedStoryboardTableShots(storyboardTableShots, boundCanvas.id, episodeId) : []), [boundCanvas, episodeId, storyboardTableShots]);
-    const sceneOptions = useMemo(() => buildEpisodeSceneOptions({ tableShots: episodeTableShots, scriptScenes: stageSceneRows, scriptSnapshot }), [episodeTableShots, scriptSnapshot, stageSceneRows]);
-    const workflowRun = useMemo(
-        () => workflowRuns.find((run) => run.projectId === projectId && run.canvasId === boundCanvas?.id && run.episodeId === episodeId && run.workflowId === preset.workflowId),
-        [boundCanvas?.id, episodeId, preset.workflowId, projectId, workflowRuns],
-    );
+    const sceneOptions = useMemo(() => buildEpisodeSceneOptions({ tableShots: episodeTableShots, scriptScenes: stageSceneRows, scriptSnapshot, structuredScript: episode?.structuredScript }), [episode?.structuredScript, episodeTableShots, scriptSnapshot, stageSceneRows]);
+    const workflowRun = useMemo(() => findEpisodeWorkflowRun({ canvasId: boundCanvas?.id, episodeId, projectId, workflowId: preset.workflowId, workflowRuns }), [boundCanvas?.id, episodeId, preset.workflowId, projectId, workflowRuns]);
     const previews = useMemo(() => (workflowRun ? workflowMappingPreviews.filter((preview) => preview.workflowRunId === workflowRun.id) : []), [workflowMappingPreviews, workflowRun]);
     const stageOutputs = useMemo(() => Object.fromEntries(stages.map((stage) => [stage.stageId, stageOutput(workflowRun, workflowOutputs, stage.stageId)])), [stages, workflowOutputs, workflowRun]);
     const hasScript = Boolean(scriptSnapshot.trim());
@@ -68,10 +66,12 @@ function buildEpisodeSceneOptions({
     tableShots,
     scriptScenes,
     scriptSnapshot,
+    structuredScript,
 }: {
     tableShots: Array<{ sceneId?: string; sceneName: string; scriptText: string }>;
     scriptScenes: Array<{ id: string; order: number; location: string; beat: string; dialogue: string; emotion: string }>;
     scriptSnapshot: string;
+    structuredScript?: StructuredEpisodeScript;
 }): EpisodeSceneOption[] {
     if (tableShots.length) {
         const sceneMap = new Map<string, EpisodeSceneOption>();
@@ -90,6 +90,14 @@ function buildEpisodeSceneOptions({
             sceneLabel: `${scene.order}. ${scene.location || "未命名场次"}`,
             scriptText: [scene.beat, scene.dialogue, scene.emotion].filter(Boolean).join("\n"),
             source: "script_scene",
+        }));
+    }
+    if (structuredScript?.scenes.length) {
+        return structuredScript.scenes.map((scene, index) => ({
+            sceneKey: scene.sceneId || slugSceneKey(scene.location || scene.sceneNote, index),
+            sceneLabel: [scene.sceneId, scene.location, scene.timeOfDay, scene.space].filter(Boolean).join(" / ") || `scene-${index + 1}`,
+            scriptText: structuredScriptSceneToText(scene),
+            source: "structured_script",
         }));
     }
     return extractSceneOptionsFromScriptText(scriptSnapshot);

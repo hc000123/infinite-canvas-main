@@ -48,7 +48,7 @@ type Props = {
     onCloseScriptManager: () => void;
     onCloseStoryboardManager: () => void;
     onCreateBriefImageConfig: (brief: ImageBrief, canvasId?: string) => void;
-    onCropImageNode: (node: CanvasNodeData, crop: CanvasImageCropRect) => void;
+    onCropImageNode: (node: CanvasNodeData, crop: CanvasImageCropRect, mode?: "single" | "grid") => void;
     onGenerateAngleNode: (node: CanvasNodeData, params: CanvasImageAngleParams) => void;
     onImageInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
     onOpenStoryboardGroup: (groupId: string) => void;
@@ -99,7 +99,9 @@ export function CanvasPageOverlays({
 
             <CanvasNodeInfoModal node={infoNode} open={Boolean(infoNode)} onClose={onCloseInfo} />
 
-            {cropNode?.metadata?.content ? <CanvasNodeCropDialog dataUrl={cropNode.metadata.content} open={Boolean(cropNode)} onClose={onCloseCrop} onConfirm={(crop) => onCropImageNode(cropNode, crop)} /> : null}
+            {cropNode?.metadata?.content ? (
+                <CanvasNodeCropDialog dataUrl={cropNode.metadata.content} open={Boolean(cropNode)} onClose={onCloseCrop} onConfirm={(crop) => onCropImageNode(cropNode, crop)} onConfirmGrid={() => onCropImageNode(cropNode, { x: 0, y: 0, width: 1, height: 1 }, "grid")} />
+            ) : null}
 
             {angleNode?.metadata?.content ? <CanvasNodeAngleDialog dataUrl={angleNode.metadata.content} open={Boolean(angleNode)} onClose={onCloseAngle} onConfirm={(params) => onGenerateAngleNode(angleNode, params)} /> : null}
 

@@ -30,6 +30,7 @@ type CanvasMessage = {
 };
 
 type UseCanvasNodeDerivativeActionsOptions = {
+    addCanvasNodeToAssets: (node: CanvasNodeData) => Promise<string | false>;
     nodesRef: RefObject<CanvasNodeData[]>;
     connectionsRef: RefObject<CanvasConnection[]>;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
@@ -45,7 +46,9 @@ type UseCanvasNodeDerivativeActionsOptions = {
     openConfigDialog: (open?: boolean) => void;
     isAiConfigReady: (config: AiConfig, model: string) => boolean;
     canvasId: string;
+    canvasTitle: string;
     workspaceProjectId: string;
+    workspaceProjectTitle: string;
     canvasEpisodeContext: CanvasEpisodeContext | null | undefined;
     message: CanvasMessage;
     createNode: (type: CanvasNodeType, position: Position, metadata?: CanvasNodeMetadata) => CanvasNodeData;
@@ -53,6 +56,7 @@ type UseCanvasNodeDerivativeActionsOptions = {
 };
 
 export function useCanvasNodeDerivativeActions({
+    addCanvasNodeToAssets,
     nodesRef,
     connectionsRef,
     setNodes,
@@ -68,31 +72,52 @@ export function useCanvasNodeDerivativeActions({
     openConfigDialog,
     isAiConfigReady,
     canvasId,
+    canvasTitle,
     workspaceProjectId,
+    workspaceProjectTitle,
     canvasEpisodeContext,
     message,
     createNode,
     imageMetadata,
 }: UseCanvasNodeDerivativeActionsOptions) {
     const cropImageNode = useCallback(
-        async (node: CanvasNodeData, crop: CanvasImageCropRect) => {
+        async (node: CanvasNodeData, crop: CanvasImageCropRect, mode: "single" | "grid" = "single") => {
             if (!node.metadata?.content) return;
-            const cropped = await cropDataUrl(node.metadata.content, crop);
-            const image = await uploadImage(cropped);
-            const childId = nanoid();
-            const child = buildCroppedImageNode({
-                sourceNode: node,
-                childId,
-                imageSize: image,
-                imageMetadata: imageMetadata(image),
-            });
-            setNodes((prev) => [...prev, child]);
-            setConnections((prev) => [...prev, { id: nanoid(), fromNodeId: node.id, toNodeId: childId }]);
-            setSelectedNodeIds(new Set([childId]));
-            setDialogNodeId(childId);
+            const crops = mode === "grid" ? buildGridCrops() : [crop];
+            const children: CanvasNodeData[] = [];
+            const connections: CanvasConnection[] = [];
+            for (const [index, item] of crops.entries()) {
+                const cropped = await cropDataUrl(node.metadata.content, item);
+                const image = await uploadImage(cropped);
+                const childId = nanoid();
+                const child = buildCroppedImageNode({
+                    sourceNode: node,
+                    childId,
+                    imageSize: image,
+                    imageMetadata: imageMetadata(image),
+                    crop: item,
+                    index,
+                    total: crops.length,
+                    canvasSource: {
+                        projectId: workspaceProjectId,
+                        projectTitle: workspaceProjectTitle,
+                        canvasId,
+                        canvasTitle,
+                        nodeId: childId,
+                    },
+                });
+                children.push(child);
+                connections.push({ id: nanoid(), fromNodeId: node.id, toNodeId: childId });
+            }
+            setNodes((prev) => [...prev, ...children]);
+            setConnections((prev) => [...prev, ...connections]);
+            await Promise.all(children.map((child) => addCanvasNodeToAssets(child)));
+            const childIds = children.map((child) => child.id);
+            setSelectedNodeIds(new Set(childIds));
+            setDialogNodeId(childIds[0] || null);
             setCropNodeId(null);
         },
-        [imageMetadata, setConnections, setCropNodeId, setDialogNodeId, setNodes, setSelectedNodeIds],
+        [addCanvasNodeToAssets, canvasId, canvasTitle, imageMetadata, setConnections, setCropNodeId, setDialogNodeId, setNodes, setSelectedNodeIds, workspaceProjectId, workspaceProjectTitle],
     );
 
     const generateAngleNode = useCallback(
@@ -115,6 +140,21 @@ export function useCanvasNodeDerivativeActions({
                 imageSpec: imageConfig,
                 generationMetadata,
             });
+            child.metadata = {
+                ...child.metadata,
+                canvasSource: {
+                    projectId: workspaceProjectId,
+                    projectTitle: workspaceProjectTitle,
+                    canvasId,
+                    canvasTitle,
+                    nodeId: childId,
+                    sourceNodeId: node.id,
+                    sourceAssetId: node.metadata?.sourceAssetId,
+                    prompt: child.metadata?.prompt,
+                    generationParams: generationConfig,
+                    originalImage: { nodeId: node.id, storageKey: node.metadata?.storageKey, url: node.metadata?.content },
+                },
+            };
             const prompt = child.metadata?.prompt || buildAnglePrompt(params);
             setAngleNodeId(null);
             setRunningNodeId(childId);
@@ -134,7 +174,9 @@ export function useCanvasNodeDerivativeActions({
                 const uploaded = await uploadImage(image.dataUrl);
                 if (image.localAiTaskId) updateLocalImageResultSize(image.localAiTaskId, uploaded.width, uploaded.height);
                 const size = fitNodeSize(uploaded.width, uploaded.height, imageConfig.width, imageConfig.height);
-                setNodes((prev) => prev.map((item) => (item.id === childId ? buildCompletedImageNode({ imageNode: item, imageSize: size, imageMetadata: imageMetadata(uploaded), generationMetadata, prompt }) : item)));
+                const finalNode = buildCompletedImageNode({ imageNode: child, imageSize: size, imageMetadata: imageMetadata(uploaded), generationMetadata, prompt });
+                setNodes((prev) => prev.map((item) => (item.id === childId ? finalNode : item)));
+                await addCanvasNodeToAssets(finalNode);
             } catch (error) {
                 const errorDetails = error instanceof Error ? error.message : "生成失败";
                 setNodes((prev) => prev.map((item) => (item.id === childId ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails } } : item)));
@@ -142,7 +184,7 @@ export function useCanvasNodeDerivativeActions({
                 setRunningNodeId(null);
             }
         },
-        [canvasAiConfig, canvasEpisodeContext, canvasId, defaultConfig, imageMetadata, isAiConfigReady, openConfigDialog, setAngleNodeId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedNodeIds, workspaceProjectId],
+        [addCanvasNodeToAssets, canvasAiConfig, canvasEpisodeContext, canvasId, defaultConfig, imageMetadata, isAiConfigReady, openConfigDialog, setAngleNodeId, setConnections, setDialogNodeId, setNodes, setRunningNodeId, setSelectedNodeIds, workspaceProjectId],
     );
 
     const handleContinueVideoNode = useCallback(
@@ -251,6 +293,14 @@ export function useCanvasNodeDerivativeActions({
         captureVideoCurrentFrame,
         generateImageFromTextNode,
     };
+}
+
+function buildGridCrops(): CanvasImageCropRect[] {
+    return Array.from({ length: 9 }, (_, index) => {
+        const column = index % 3;
+        const row = Math.floor(index / 3);
+        return { x: column / 3, y: row / 3, width: 1 / 3, height: 1 / 3 };
+    });
 }
 
 async function fetchCanvasImageBlob(url: string) {

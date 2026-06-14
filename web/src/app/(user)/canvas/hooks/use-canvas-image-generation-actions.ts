@@ -130,7 +130,7 @@ export function useCanvasImageGenerationActions({
                                 height: imageSize.height,
                                 metadata: { ...targetNode.metadata, ...metadata },
                             },
-                            { projectId, projectTitle, projectPreset, episodeContext, prompt, effectivePrompt, config: generationConfig, createdAt },
+                            { canvasId, projectId, projectTitle, projectPreset, episodeContext, prompt, effectivePrompt, config: generationConfig, createdAt },
                         );
                         if (asset) void archiveGeneratedAsset(asset).catch(() => undefined);
                         hasSuccess = true;

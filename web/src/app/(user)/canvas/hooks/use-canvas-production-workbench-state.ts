@@ -14,6 +14,7 @@ type UseCanvasProductionWorkbenchStateOptions = {
     canvasId: string;
     currentProject?: CanvasProject | null;
     creativeProject?: CreativeProject | null;
+    productionPackagesEnabled?: boolean;
     storyboardTableShots: StoryboardTableShot[];
     storyboardShotGroups: ShotGroup[];
     assetBreakdownItems: AssetBreakdownItem[];
@@ -30,6 +31,7 @@ export function useCanvasProductionWorkbenchState({
     canvasId,
     currentProject,
     creativeProject,
+    productionPackagesEnabled = true,
     storyboardTableShots,
     storyboardShotGroups,
     assetBreakdownItems,
@@ -69,15 +71,15 @@ export function useCanvasProductionWorkbenchState({
     }, [activeTimelineShotGroups, activeTimelineShotId, nodes]);
     const activeTimelineNodes = useMemo(() => nodes.filter((node) => activeTimelineNodeIds.has(node.id)), [activeTimelineNodeIds, nodes]);
     const fallbackProductionPackages = useMemo(
-        () => buildCanvasFallbackProductionPackages(canvasId, currentProject?.episodeTitle || creativeProject?.title || currentProject?.title || "项目画布"),
-        [canvasId, creativeProject?.title, currentProject?.episodeTitle, currentProject?.title],
+        () => (productionPackagesEnabled ? buildCanvasFallbackProductionPackages(canvasId, currentProject?.episodeTitle || creativeProject?.title || currentProject?.title || "项目画布") : []),
+        [canvasId, creativeProject?.title, currentProject?.episodeTitle, currentProject?.title, productionPackagesEnabled],
     );
     const productionPackages = useMemo(
-        () => buildCanvasProductionPackages({ shotGroups: timelineShotGroups, tableShots: timelineShots, nodes, fallbackPackages: fallbackProductionPackages }),
-        [fallbackProductionPackages, nodes, timelineShotGroups, timelineShots],
+        () => (productionPackagesEnabled ? buildCanvasProductionPackages({ shotGroups: timelineShotGroups, tableShots: timelineShots, nodes, fallbackPackages: fallbackProductionPackages }) : []),
+        [fallbackProductionPackages, nodes, productionPackagesEnabled, timelineShotGroups, timelineShots],
     );
     const productionPackageLabelMap = useMemo(() => packageLabelById(productionPackages), [productionPackages]);
-    const selectedNodeProductionPackageId = selectedInspectorNode ? getNodeProductionPackageId(selectedInspectorNode) : "";
+    const selectedNodeProductionPackageId = productionPackagesEnabled && selectedInspectorNode ? getNodeProductionPackageId(selectedInspectorNode) : "";
     const inspectorProductionPackage = useMemo(() => {
         const packageId = selectedNodeProductionPackageId || (selectedInspectorNode ? "" : activeProductionPackageId);
         return packageId ? productionPackages.find((item) => item.id === packageId) || null : null;
@@ -106,6 +108,10 @@ export function useCanvasProductionWorkbenchState({
     }, [activeNodeId, activeProductionPackageNodeIds, activeTimelineNodeIds, connections]);
 
     useEffect(() => {
+        if (!productionPackagesEnabled) {
+            if (activeProductionPackageId) setActiveProductionPackageId("");
+            return;
+        }
         if (!productionPackages.length) {
             if (activeProductionPackageId) setActiveProductionPackageId("");
             return;
@@ -113,7 +119,7 @@ export function useCanvasProductionWorkbenchState({
         if (!activeProductionPackageId || !productionPackages.some((item) => item.id === activeProductionPackageId)) {
             setActiveProductionPackageId(productionPackages[0].id);
         }
-    }, [activeProductionPackageId, productionPackages, setActiveProductionPackageId]);
+    }, [activeProductionPackageId, productionPackages, productionPackagesEnabled, setActiveProductionPackageId]);
 
     return {
         episodeWorkbenchStats,

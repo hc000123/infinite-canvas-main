@@ -4,8 +4,11 @@ import test from "node:test";
 import {
     buildVolcengineImageFilename,
     buildVolcengineMediaFilename,
+    canRefreshVolcengineReview,
+    canSubmitVolcengineReview,
     isVolcengineReviewProcessing,
     mergeVolcengineReviewStatus,
+    normalizeVolcengineReviewMetadata,
     shouldShowVolcengineReviewAction,
     volcengineReviewMetadataFromSubmission,
     volcengineReviewPollingKey,
@@ -69,6 +72,22 @@ test("merges GetAsset status without losing existing submission fields", () => {
     });
 });
 
+test("marks Active review without asset id as failed", () => {
+    const metadata = normalizeVolcengineReviewMetadata({
+        assetId: "",
+        groupId: "group-test",
+        projectName: "default",
+        status: "Active",
+        error: "",
+        publicUrl: "https://example.com/portrait.jpeg",
+        submittedAt: "2026-06-01T12:00:00+08:00",
+        updatedAt: "2026-06-01T12:00:09+08:00",
+    });
+
+    assert.equal(metadata.status, "Failed");
+    assert.match(metadata.error || "", /素材 ID/);
+});
+
 test("builds a safe image filename for review upload", () => {
     assert.equal(buildVolcengineImageFilename("角色/头像:测试", "node-1", "image/jpeg"), "角色_头像_测试.jpeg");
     assert.equal(buildVolcengineImageFilename("", "node-1", ""), "node-1.png");
@@ -86,6 +105,15 @@ test("detects only submitted reviews that are still processing", () => {
     assert.equal(isVolcengineReviewProcessing({ assetId: "asset-test", status: "Processing" }), true);
     assert.equal(isVolcengineReviewProcessing({ assetId: "asset-test", status: "Active" }), false);
     assert.equal(isVolcengineReviewProcessing({ assetId: "", status: "Processing" }), false);
+});
+
+test("allows resubmitting failed reviews instead of only refreshing them", () => {
+    assert.equal(canSubmitVolcengineReview({ status: "Failed" }), true);
+    assert.equal(canSubmitVolcengineReview({ status: "Active" }), false);
+    assert.equal(canSubmitVolcengineReview({ status: "Processing" }), false);
+    assert.equal(canRefreshVolcengineReview({ assetId: "asset-test", status: "Failed" }), false);
+    assert.equal(canRefreshVolcengineReview({ assetId: "asset-test", status: "Active" }), true);
+    assert.equal(canRefreshVolcengineReview({ assetId: "asset-test", status: "Processing" }), true);
 });
 
 test("builds a stable polling key for processing reviews", () => {

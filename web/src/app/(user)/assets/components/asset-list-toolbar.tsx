@@ -9,46 +9,62 @@ type BulkReviewAction = "submit" | "refresh" | "";
 
 export function AssetListToolbar({
     allFilteredSelected,
+    allVisibleProductionBibleSelected,
     bulkReviewAction,
     filteredCount,
+    productionBibleCount,
     projectContextFilter,
     selectedCount,
     selectedInFilteredCount,
+    selectedProductionBibleCount,
+    selectedProductionBibleInVisibleCount,
+    selectedProductionBibleSummary,
     selectedSummary,
     selectedVolcengineRefreshCount,
     selectedVolcengineSubmitCount,
     sortMode,
     onAddToProjectLibrary,
     onBulkDelete,
+    onBulkDeleteProductionBibleItems,
     onBulkMove,
     onBulkTag,
     onClearSelected,
+    onClearSelectedProductionBibleItems,
     onExportSelected,
     onRefreshSelectedReviews,
     onRemoveFromProjectLibrary,
     onSelectFiltered,
+    onSelectVisibleProductionBibleItems,
     onSortModeChange,
     onSubmitSelectedReviews,
 }: {
     allFilteredSelected: boolean;
+    allVisibleProductionBibleSelected: boolean;
     bulkReviewAction: BulkReviewAction;
     filteredCount: number;
+    productionBibleCount: number;
     projectContextFilter: string;
     selectedCount: number;
     selectedInFilteredCount: number;
+    selectedProductionBibleCount: number;
+    selectedProductionBibleInVisibleCount: number;
+    selectedProductionBibleSummary: string;
     selectedSummary: string;
     selectedVolcengineRefreshCount: number;
     selectedVolcengineSubmitCount: number;
     sortMode: AssetSortMode;
     onAddToProjectLibrary: () => void;
     onBulkDelete: () => void;
+    onBulkDeleteProductionBibleItems: () => void;
     onBulkMove: () => void;
     onBulkTag: () => void;
     onClearSelected: () => void;
+    onClearSelectedProductionBibleItems: () => void;
     onExportSelected: () => void;
     onRefreshSelectedReviews: () => void;
     onRemoveFromProjectLibrary: () => void;
     onSelectFiltered: () => void;
+    onSelectVisibleProductionBibleItems: () => void;
     onSortModeChange: (value: AssetSortMode) => void;
     onSubmitSelectedReviews: () => void;
 }) {
@@ -57,7 +73,14 @@ export function AssetListToolbar({
             <div className="studio-panel flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 text-sm text-[var(--studio-text-secondary)]">
                     当前筛选 <span className="font-semibold text-[var(--studio-text-primary)]">{filteredCount}</span> 个素材
+                    {productionBibleCount ? (
+                        <>
+                            {" / "}
+                            <span className="font-semibold text-[var(--studio-text-primary)]">{productionBibleCount}</span> 个设定
+                        </>
+                    ) : null}
                     {selectedInFilteredCount ? <span className="ml-2 text-[var(--studio-text-muted)]">已选 {selectedInFilteredCount} 个</span> : null}
+                    {selectedProductionBibleInVisibleCount ? <span className="ml-2 text-[var(--studio-text-muted)]">已选设定 {selectedProductionBibleInVisibleCount} 个</span> : null}
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
                     <Select
@@ -74,10 +97,31 @@ export function AssetListToolbar({
                         onChange={(value) => onSortModeChange(value as AssetSortMode)}
                     />
                     <Button size="middle" disabled={!filteredCount || allFilteredSelected} onClick={onSelectFiltered}>
-                        全选当前结果
+                        全选当前素材
                     </Button>
+                    {productionBibleCount ? (
+                        <Button size="middle" disabled={allVisibleProductionBibleSelected} onClick={onSelectVisibleProductionBibleItems}>
+                            全选当前设定
+                        </Button>
+                    ) : null}
                 </div>
             </div>
+            {selectedProductionBibleCount ? (
+                <div className="studio-panel flex flex-col gap-4 border-[var(--studio-accent-soft)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                        <div className="text-base font-semibold text-[var(--studio-text-primary)]">已选择 {selectedProductionBibleCount} 个设定</div>
+                        <div className="mt-1 truncate text-[13px] text-[var(--studio-text-muted)]">{selectedProductionBibleSummary}</div>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                        <Button size="middle" danger icon={<Trash2 className="size-3.5" />} onClick={onBulkDeleteProductionBibleItems}>
+                            删除选中设定
+                        </Button>
+                        <Button size="middle" onClick={onClearSelectedProductionBibleItems}>
+                            清空设定选择
+                        </Button>
+                    </div>
+                </div>
+            ) : null}
             {selectedCount ? (
                 <div className="studio-panel flex flex-col gap-4 border-[var(--studio-accent-soft)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">

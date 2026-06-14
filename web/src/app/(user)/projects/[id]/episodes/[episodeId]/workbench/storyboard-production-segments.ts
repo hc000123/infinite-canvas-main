@@ -1,5 +1,7 @@
 import type { ScriptEpisode } from "../../../../../canvas/utils/script-management";
 import type { StoryboardTableShot } from "../../../../../canvas/utils/storyboard-management";
+import { analyzeWorkflowStageOutput, buildStoryboardTablePreviewItems, numberField, stringField, stringListField } from "../../../../agent-runner-mapping-preview";
+import type { AgentWorkflowStageOutput } from "../../../../agent-runner-types";
 import type { EpisodeStatusTone } from "./components/episode-module-panel";
 
 export type StoryboardPackageStatus = "已确认" | "待编辑" | "待审核" | "缺资产" | "超时" | "待承接";
@@ -90,6 +92,69 @@ export function buildStoryboardProductionSegments({
             tone: segmentToneFromStatus(status),
         };
     });
+}
+
+export function buildStoryboardProductionSegmentsFromWorkflowOutput({
+    episode,
+    output,
+    sceneOptions,
+    scriptSnapshot,
+}: {
+    episode: ScriptEpisode;
+    output?: AgentWorkflowStageOutput;
+    sceneOptions: Array<{ sceneKey: string; sceneLabel: string }>;
+    scriptSnapshot: string;
+}): StoryboardStorySegment[] {
+    if (!output) return [];
+    const analysis = analyzeWorkflowStageOutput(output, "storyboard_table");
+    if (analysis.warnings.some((warning) => warning.includes("fallback") || warning.includes("未找到可映射的业务数组"))) return [];
+    const items = buildStoryboardTablePreviewItems(analysis).filter((item) => item.action !== "skip");
+    const shots: StoryboardTableShot[] = items.map((item, index) => {
+        const record = item.mappedFields && typeof item.mappedFields === "object" && !Array.isArray(item.mappedFields) ? (item.mappedFields as Record<string, unknown>) : {};
+        const order = index + 1;
+        return {
+            id: `workflow-shot-${output.outputId}-${item.itemId}`,
+            projectId: "",
+            canvasId: "",
+            episodeId: episode.id,
+            sceneId: stringField(record.sceneId),
+            sceneName: stringField(record.sceneName) || sceneOptions[0]?.sceneLabel || `场次 ${order}`,
+            location: stringField(record.location),
+            timeOfDay: stringField(record.timeOfDay),
+            order,
+            title: stringField(record.title) || item.title || `镜头 ${order}`,
+            scriptText: stringField(record.scriptText) || item.sourceText,
+            visualDescription: stringField(record.visualDescription) || item.sourceText,
+            characters: stringListField(record.characters),
+            dialogue: stringField(record.dialogue),
+            action: stringField(record.action) || item.sourceText,
+            emotion: stringField(record.emotion),
+            shotSize: stringField(record.shotSize),
+            cameraMovement: stringField(record.cameraMovement),
+            estimatedDuration: numberField(record.estimatedDuration, 3),
+            assetNeeds: stringListField(record.assetNeeds),
+            assetRefs: [],
+            productionBibleRefs: [],
+            sourceType: "workflow_output_preview",
+            workflowSource: {
+                sourceType: "workflow_mapping_preview",
+                workflowId: "",
+                workflowRunId: output.workflowRunId,
+                workflowVersion: "",
+                stageId: output.stageId,
+                agentId: "",
+                sourceOutputId: output.outputId,
+                previewId: `${output.outputId}:storyboard_table`,
+                previewItemId: item.itemId,
+                sourceFiles: output.sourceFiles,
+                qualityGateIds: output.qualityGateIds,
+                createdFromText: item.sourceText.slice(0, 500),
+            },
+            createdAt: output.createdAt,
+            updatedAt: output.createdAt,
+        };
+    });
+    return buildStoryboardProductionSegments({ episode, episodeTableShots: shots, sceneOptions, scriptSnapshot });
 }
 
 function splitShotsIntoProductionPackages(shots: StoryboardTableShot[]) {

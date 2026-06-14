@@ -25,7 +25,7 @@ export function CanvasHandoffTable({
     return (
         <div className="max-h-[calc(100vh-430px)] min-h-[520px] overflow-auto">
             <div className="min-w-[800px]">
-                <div className="grid grid-cols-[56px_minmax(150px,1fr)_112px_50px_50px_72px_76px_126px] gap-2 border-b border-slate-800/70 px-5 py-3 text-xs font-medium text-slate-500">
+                <div className="grid grid-cols-[56px_minmax(150px,1fr)_112px_50px_50px_72px_76px_126px] gap-2 border-b border-white/[0.07] px-5 py-3 text-xs font-medium text-slate-500">
                     <div>生产包</div>
                     <div>内容</div>
                     <div>所属剧情段落</div>
@@ -35,7 +35,7 @@ export function CanvasHandoffTable({
                     <div>承接状态</div>
                     <div>操作</div>
                 </div>
-                <div className="divide-y divide-slate-800/80">
+                <div className="divide-y divide-white/[0.06]">
                     {rows.map((row) => {
                         const selected = row.pkg.id === selectedPackageId;
                         return (
@@ -94,11 +94,11 @@ export function CanvasHandoffPreviewPanel({
     onOpenStoryboard: () => void;
     row?: CanvasHandoffPackageRow;
 }) {
-    if (!row) return <aside className="rounded-2xl border border-slate-800 bg-[#091018]/88 p-5 text-sm text-slate-500">请选择一个生产包查看导入预览。</aside>;
+    if (!row) return <aside className="rounded-xl border border-white/[0.07] bg-[#070b10]/78 p-5 text-sm text-slate-500 shadow-[0_16px_60px_rgba(0,0,0,0.20)] backdrop-blur-xl">请选择一个生产包查看导入预览。</aside>;
     const allAssetsBound = row.status !== "缺资产" && row.pkg.assetLabels.length > 0;
     return (
-        <aside className="rounded-2xl border border-slate-800 bg-[#091018]/92 shadow-[0_18px_80px_rgba(0,0,0,0.28)] xl:sticky xl:top-5">
-            <div className="border-b border-slate-800 p-5">
+        <aside className="rounded-xl border border-white/[0.07] bg-[#070b10]/84 shadow-[0_18px_70px_rgba(0,0,0,0.24)] backdrop-blur-xl xl:sticky xl:top-5">
+            <div className="border-b border-white/[0.07] p-5">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                         <h3 className="text-2xl font-semibold text-slate-50">导入预览</h3>
@@ -111,7 +111,7 @@ export function CanvasHandoffPreviewPanel({
             </div>
             <div className="grid max-h-[calc(100vh-260px)] gap-5 overflow-auto p-5">
                 <CanvasHandoffNodePreview row={row} />
-                <div className="rounded-lg border border-slate-800 bg-slate-950/45">
+                <div className="rounded-lg border border-white/[0.07] bg-white/[0.03]">
                     {[
                         ["所属段落", `S${padEpisodeOrder(row.segment.order)} · ${row.segment.title}`],
                         ["预计时长", `${row.pkg.duration} 秒`],
@@ -120,26 +120,26 @@ export function CanvasHandoffPreviewPanel({
                         ["承接画布", boundCanvas ? boundCanvas.title : "未创建"],
                         ["导入后", "创建剧本、资产、提示词、配置和结果占位节点"],
                     ].map(([label, value]) => (
-                        <div key={label} className="grid grid-cols-[92px_minmax(0,1fr)] gap-3 border-b border-slate-800 px-4 py-3 text-sm last:border-b-0">
+                        <div key={label} className="grid grid-cols-[92px_minmax(0,1fr)] gap-3 border-b border-white/[0.07] px-4 py-3 text-sm last:border-b-0">
                             <div className="text-slate-500">{label}</div>
                             <div className="break-words font-semibold text-slate-100">{value}</div>
                         </div>
                     ))}
                 </div>
-                <div className="rounded-lg border border-slate-800 bg-slate-950/45 p-4">
+                <div className="rounded-lg border border-white/[0.07] bg-white/[0.03] p-4">
                     <div className="text-sm font-semibold text-slate-100">重要限制</div>
                     <div className="mt-2 break-words text-sm leading-6 text-slate-500">当前页面只负责导入画布节点组和查看承接状态；最终节点检查和视频生成必须进入完整画布后手动完成。</div>
                 </div>
             </div>
-            <div className="border-t border-slate-800 p-5">
+            <div className="border-t border-white/[0.07] p-5">
                 <div className="grid gap-2">
-                    <Button type="primary" disabled={!row.canImport} onClick={() => onImport(row)}>
+                    <Button className="!rounded-xl" type="primary" disabled={!row.canImport} onClick={() => onImport(row)}>
                         导入 P{padEpisodeOrder(row.pkg.order)} 到画布
                     </Button>
-                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={boundCanvas ? onOpenCanvas : onCreateCanvas}>
+                    <Button className="!rounded-xl !border-white/10 !bg-white/[0.04] !text-slate-200 hover:!border-cyan-400/60 hover:!text-cyan-100" onClick={boundCanvas ? onOpenCanvas : onCreateCanvas}>
                         {boundCanvas ? "进入完整画布" : "先创建承接画布"}
                     </Button>
-                    <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={onOpenStoryboard}>
+                    <Button className="!rounded-xl !border-white/10 !bg-white/[0.04] !text-slate-200 hover:!border-cyan-400/60 hover:!text-cyan-100" onClick={onOpenStoryboard}>
                         返回分镜生产包
                     </Button>
                 </div>
@@ -153,7 +153,7 @@ function CanvasHandoffActionButton({ disabled, label, onClick, primary }: { disa
         <button
             type="button"
             disabled={disabled}
-            className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${primary ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100 hover:bg-cyan-400/20" : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-400/70 hover:text-cyan-100"}`}
+            className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${primary ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100 hover:bg-cyan-400/20" : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-cyan-400/70 hover:text-cyan-100"}`}
             onClick={onClick}
         >
             {label}
@@ -169,8 +169,8 @@ function CanvasHandoffNodePreview({ row }: { row: CanvasHandoffPackageRow }) {
         { className: "left-[10%] bottom-[12%] border-slate-500/45 bg-slate-400/[0.04]", label: "结果占位", sub: "生成后回流" },
     ];
     return (
-        <div className="overflow-hidden rounded-lg border border-slate-800 bg-[#050a0f]">
-            <div className="border-b border-slate-800 px-4 py-3 text-sm font-semibold text-slate-100">导入后会创建的画布节点</div>
+        <div className="overflow-hidden rounded-lg border border-white/[0.07] bg-[#050a0f]">
+            <div className="border-b border-white/[0.07] px-4 py-3 text-sm font-semibold text-slate-100">导入后会创建的画布节点</div>
             <div className="relative h-64 bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:28px_28px]">
                 <div className="absolute left-[27%] top-[26%] h-px w-[29%] rotate-[20deg] bg-cyan-400/30" />
                 <div className="absolute left-[58%] top-[52%] h-px w-[26%] rotate-[24deg] bg-cyan-400/30" />

@@ -77,6 +77,7 @@ export function useCanvasGeneratedAssetArchive({
             const effectivePrompt = node.metadata?.finalPrompt || prompt;
             const asset = buildGeneratedVideoAsset(node, {
                 projectId: workspaceProjectId,
+                canvasId,
                 projectTitle: workspaceProjectTitle,
                 projectPreset,
                 episodeContext: canvasEpisodeContext,

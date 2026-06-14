@@ -394,7 +394,7 @@ function ProjectEpisodeTable({
                                         onOpenEpisode(row.id);
                                     }}
                                 >
-                                    进入流程
+                                    视频工作流
                                 </Button>
                             )}
                         </div>
@@ -420,7 +420,7 @@ function ProjectEpisodeEmpty({ onCreate, onCreateCanvas }: { onCreate: () => voi
         <section className="grid min-h-80 place-items-center rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-6 py-16 text-center">
             <div>
                 <h2 className="text-2xl font-semibold text-[var(--studio-text-primary)]">还没有分集</h2>
-                <p className="mt-3 max-w-xl text-base leading-7 text-[var(--studio-text-secondary)]">先新建或导入第一集剧本，后续导演分析、分镜审核、画布承接都会围绕分集推进。</p>
+                <p className="mt-3 max-w-xl text-base leading-7 text-[var(--studio-text-secondary)]">先新建或导入第一集剧本，后续导演分析、分镜审核、视频生成都会围绕分集推进。</p>
                 <div className="mt-6 flex justify-center gap-3">
                     <Button type="primary" icon={<Plus className="size-4" />} onClick={onCreate}>
                         新建分集

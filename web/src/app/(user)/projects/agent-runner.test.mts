@@ -186,7 +186,7 @@ test("validates draft output shape and builds write preview helpers", () => {
         agentRunId: "run-trace",
         agentKind: "storyboard_director",
         agentConfigId: "agent-config-storyboard_director",
-        agentConfigVersion: "1.0.0",
+        agentConfigVersion: "1.1.0",
     });
     assert.equal(canWriteAgentRun(run), false);
     assert.equal(canWriteAgentRun(approveAgentRun(run, "now")), true);
@@ -194,7 +194,7 @@ test("validates draft output shape and builds write preview helpers", () => {
         status: "ready_for_review",
         itemCount: 1,
         warningCount: 1,
-        configVersionLabel: "配置 v1.0.0",
+        configVersionLabel: "配置 v1.1.0",
         summary: "分镜草案",
     });
 });
@@ -543,6 +543,35 @@ test("stage3 scene output must contain visual dna prompt plan prompt text and pr
     assert.deepEqual(validation.errors, ["缺少场次视觉 DNA", "缺少生成 P / 镜头 P 拆分表摘要", "缺少单 P 任务卡 / Seedance 提示词", "缺少工业化预检记录摘要"]);
 });
 
+test("stage3 scene output accepts shots as production package and prompt source", () => {
+    const run = createWorkflowTextRunRecord({
+        input: { ...workflowInputBase, workflowId: workflowPreset.workflowId, workflowVersion: workflowPreset.version, stageId: "seedance-storyboard", agentId: "storyboard-artist", variables: { stageId: "seedance-storyboard", sceneKey: "scene-shots" } },
+        id: "runner-scene-shots",
+        now: "2026-01-13T00:05:00.000Z",
+    });
+    const completed = setWorkflowTextRunCompleted(
+        run,
+        JSON.stringify({
+            summary: "卧房分镜生产包",
+            sceneVisualDna: { lighting: "冷色月光从窗外透入", emotionKeywords: "警觉，试探" },
+            industrialPrecheckSummary: "已完成平台合规性与工业化生产预检。",
+            shots: [
+                {
+                    sceneName: "魏南风卧房",
+                    title: "拔线装睡",
+                    visualDescription: "魏南风迅速拔掉手腕上的发光线缆，拉起被子闭眼装睡。",
+                    seedancePrompt: "夜晚昏暗的卧室内，@魏南风 迅速拔掉发光线缆并装睡。",
+                },
+            ],
+        }),
+        "2026-01-13T00:06:00.000Z",
+    );
+    const output = buildAgentWorkflowStageOutput({ workflowRunId: "workflow-scene-shots", runnerRun: completed, outputId: "output-scene-shots", now: "2026-01-13T00:06:00.000Z" })!;
+    const validation = validateAgentWorkflowSceneOutput(output);
+    assert.equal(validation.valid, true);
+    assert.match(validation.summaries.promptTextSummary, /夜晚昏暗的卧室/);
+});
+
 test("stage3 mapping preview requires an approved scene aggregate output", () => {
     const { workflowRun } = buildApprovedWorkflowStageFixture("art-design", '{"summary":"美术设定"}', "ev-scene-preview-upstream", "out-scene-preview-upstream", "art-designer");
     const sceneOutput = {
@@ -826,7 +855,7 @@ test("structured output is preferred and rawText fallback keeps warning", () => 
     const structuredPreview = buildWorkflowMappingPreviews({ workflowRun: structured.workflowRun, stageId: "art-design", output: structured.output, now: "2026-01-12T00:03:00.000Z" });
     const rawPreview = buildWorkflowMappingPreviews({ workflowRun: raw.workflowRun, stageId: "art-design", output: raw.output, now: "2026-01-12T00:03:00.000Z" });
     assert.equal(rawPreview[0].warnings.includes("当前预览基于原始文本 fallback 生成，结构化解析不足，请人工筛选后再写入。"), true);
-    assert.equal(structuredPreview[0].items[0].mappedFields.description, "结构化描述");
+    assert.equal(structuredPreview[0].items[0].mappedFields.description, "结构化描述；作为本集人物形象参考，用于后续生图、分镜和视频生成保持一致。");
 });
 
 test("rawText json code block maps only production bible business arrays and filters metadata fields", () => {
@@ -914,7 +943,7 @@ test("structured output is preferred over rawText json block", () => {
 
     assert.equal(preview.items.length, 1);
     assert.equal(preview.items[0].mappedFields.name, "结构化角色");
-    assert.equal(preview.items[0].mappedFields.description, "优先采用");
+    assert.equal(preview.items[0].mappedFields.description, "优先采用；作为本集人物形象参考，用于后续生图、分镜和视频生成保持一致。");
 });
 
 test("mapping preview does not write production bible storyboard or canvas nodes", () => {

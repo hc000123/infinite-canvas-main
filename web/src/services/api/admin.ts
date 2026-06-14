@@ -277,6 +277,7 @@ export async function deleteAdminAsset(token: string, id: string) {
 }
 
 export type AdminModelChannel = {
+    id: string;
     protocol: "openai" | "volcengine-ark";
     name: string;
     baseUrl: string;
@@ -284,6 +285,8 @@ export type AdminModelChannel = {
     endpointId: string;
     endpointMappings: AdminModelEndpointMapping[];
     models: string[];
+    capabilities: string[];
+    environment: "dev" | "test" | "prod";
     weight: number;
     enabled: boolean;
     remark: string;
@@ -297,6 +300,8 @@ export type AdminModelEndpointMapping = {
 export type AdminPublicModelChannelSettings = {
     availableModels: string[];
     modelCosts: AdminModelCost[];
+    modelTextEndpoints: AdminModelTextEndpoint[];
+    modelProtocols?: AdminModelProtocol[];
     defaultModel: string;
     defaultImageModel: string;
     defaultVideoModel: string;
@@ -308,6 +313,16 @@ export type AdminPublicModelChannelSettings = {
 export type AdminModelCost = {
     model: string;
     credits: number;
+};
+
+export type AdminModelTextEndpoint = {
+    model: string;
+    endpointType: "chat_completions" | "responses";
+};
+
+export type AdminModelProtocol = {
+    model: string;
+    protocol: "openai" | "volcengine-ark";
 };
 
 export type AdminPublicVolcengineAssetSettings = { enabled: boolean };

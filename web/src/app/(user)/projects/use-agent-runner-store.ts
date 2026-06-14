@@ -8,12 +8,7 @@ import type { CanvasNodeData, Position } from "../canvas/types";
 import type { AgentConfig } from "./agent-settings";
 import type { AgentWorkflowPreset } from "./agent-workflow-presets";
 import { buildSeedanceQualityGateManifest, buildWorkflowReadingRecords } from "./workflow-quality-gates";
-import {
-    applyProductionBiblePreviewToStores,
-    applyStoryboardPreviewToStores,
-    applyVideoNodePreviewToStores,
-    nextAppliedPreviewItemIds,
-} from "./agent-runner-store-preview";
+import { applyProductionBiblePreviewToStores, applyStoryboardPreviewToStores, applyVideoNodePreviewToStores, nextAppliedPreviewItemIds } from "./agent-runner-store-preview";
 import { markStartedWorkflowStageReadings, updateRunReviewState } from "./agent-runner-store-review";
 import { getSeedanceWorkflowAgentCore } from "./workflow-agents/seedance-workflow-agents";
 import { normalizeAgentRunnerPersistedState } from "./agent-runner-store-normalizers";
@@ -29,15 +24,7 @@ import {
     setWorkflowTextRunFailed,
     updateAgentRunDraft,
 } from "./agent-runner-records";
-import type {
-    AgentRunInput,
-    AgentRunKind,
-    AgentRunRecord,
-    AgentWorkflowMappingPreview,
-    AgentWorkflowReviewEvidence,
-    AgentWorkflowRunRecord,
-    AgentWorkflowStageOutput,
-} from "./agent-runner-types";
+import type { AgentRunInput, AgentRunKind, AgentRunRecord, AgentWorkflowMappingPreview, AgentWorkflowReviewEvidence, AgentWorkflowRunRecord, AgentWorkflowStageOutput } from "./agent-runner-types";
 import { buildWorkflowMappingPreviews, canGenerateWorkflowMappingPreview } from "./agent-runner-workflow-preview";
 import {
     bindAgentWorkflowRunCanvas,
@@ -58,6 +45,7 @@ type AgentRunnerStore = {
     workflowMappingPreviews: AgentWorkflowMappingPreview[];
     workflowAppliedPreviewItemIds: string[];
     ensureWorkflowRun: (input: { projectId: string; canvasId?: string; episodeId?: string; preset: AgentWorkflowPreset }) => string;
+    saveWorkflowStageResult: (workflowRunId: string, stageId: string) => { ok: boolean; reason?: string; savedAt?: string };
     markWorkflowStageReadingsRead: (workflowRunId: string, stageId: string) => { ok: boolean; reason?: string; count?: number };
     summarizeApprovedStoryboardScenes: (workflowRunId: string) => { ok: boolean; reason?: string; outputId?: string; sceneCount?: number };
     generateWorkflowMappingPreview: (workflowRunId: string, stageId: string) => { ok: boolean; reason?: string; previewIds?: string[] };
@@ -71,6 +59,9 @@ type AgentRunnerStore = {
     startWorkflowTextRun: (input: AgentRunInput) => string;
     completeWorkflowTextRun: (id: string, rawText: string) => void;
     failWorkflowTextRun: (id: string, errorMessage: string) => void;
+    interruptWorkflowStageRun: (workflowRunId: string, stageId: string, errorMessage: string) => void;
+    interruptWorkflowSceneRun: (workflowRunId: string, stageId: string, sceneKey: string, errorMessage: string) => void;
+    clearWorkflowSceneStates: (workflowRunId: string, stageId: string) => void;
     updateDraft: (id: string, draftOutput: unknown) => void;
     approveRun: (id: string, reviewerNote?: string) => void;
     rejectRun: (id: string, reviewerNote?: string) => void;
@@ -105,8 +96,16 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
             workflowMappingPreviews: [],
             workflowAppliedPreviewItemIds: [],
             ensureWorkflowRun: ({ projectId, canvasId, episodeId, preset }) => {
-                const existing = get().workflowRuns.find((run) => run.projectId === projectId && run.canvasId === canvasId && run.episodeId === episodeId && run.workflowId === preset.workflowId);
-                if (existing) return existing.id;
+                const existing = pickReusableWorkflowRun(get().workflowRuns, { canvasId, episodeId, projectId, workflowId: preset.workflowId });
+                if (existing) {
+                    if ((canvasId && !existing.canvasId) || (episodeId && !existing.episodeId)) {
+                        const now = new Date().toISOString();
+                        set((state) => ({
+                            workflowRuns: state.workflowRuns.map((run) => (run.id === existing.id ? bindReusableWorkflowRunContext(run, { canvasId, episodeId, now }) : run)),
+                        }));
+                    }
+                    return existing.id;
+                }
                 const now = new Date().toISOString();
                 const unboundExisting = canvasId ? get().workflowRuns.find((run) => run.projectId === projectId && !run.canvasId && run.episodeId === episodeId && run.workflowId === preset.workflowId) : undefined;
                 if (unboundExisting && canvasId) {
@@ -119,6 +118,19 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                 const workflowRun = createAgentWorkflowRunRecord({ preset, projectId, canvasId, episodeId, id, now });
                 set((state) => ({ workflowRuns: [workflowRun, ...state.workflowRuns] }));
                 return id;
+            },
+            saveWorkflowStageResult: (workflowRunId, stageId) => {
+                const workflowRun = get().workflowRuns.find((run) => run.id === workflowRunId);
+                if (!workflowRun) return { ok: false, reason: "未找到 workflow run" };
+                const stageState = workflowRun.stageStates.find((stage) => stage.stageId === stageId);
+                if (!stageState) return { ok: false, reason: "未找到阶段状态" };
+                const output = stageState.outputId ? get().workflowOutputs.find((item) => item.outputId === stageState.outputId) : get().workflowOutputs.find((item) => item.workflowRunId === workflowRunId && item.stageId === stageId);
+                if (!output) return { ok: false, reason: "当前阶段还没有可保存的结果" };
+                const now = new Date().toISOString();
+                set((state) => ({
+                    workflowRuns: state.workflowRuns.map((run) => (run.id === workflowRunId ? { ...run, currentStageId: stageId, updatedAt: now } : run)),
+                }));
+                return { ok: true, savedAt: now };
             },
             markWorkflowStageReadingsRead: (workflowRunId, stageId) => {
                 const workflowRun = get().workflowRuns.find((run) => run.id === workflowRunId);
@@ -224,30 +236,59 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                 set((state) => {
                     const now = new Date().toISOString();
                     const completedRun = state.runs.find((run) => run.id === id);
-                    if (!completedRun) return state;
+                    if (!completedRun || completedRun.status !== "running") return state;
                     const run = setWorkflowTextRunCompleted(completedRun, rawText, now);
                     const workflowRunId = run.input.workflowRunId;
                     const outputId = workflowRunId ? `workflow-output-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` : "";
                     const output = workflowRunId ? buildAgentWorkflowStageOutput({ workflowRunId, runnerRun: run, outputId, now }) : undefined;
+                    let runs = state.runs.map((item) => (item.id === id ? run : item));
+                    const workflowOutputs = output ? [output, ...state.workflowOutputs] : state.workflowOutputs;
+                    let workflowRuns = output
+                        ? state.workflowRuns.map((workflowRun) =>
+                              workflowRun.id === workflowRunId
+                                  ? typeof run.input.variables.sceneKey === "string"
+                                      ? completeAgentWorkflowSceneRun(workflowRun, { stageId: run.input.stageId!, sceneKey: run.input.variables.sceneKey, output, now })
+                                      : completeAgentWorkflowStageRun(workflowRun, output, now)
+                                  : workflowRun,
+                          )
+                        : state.workflowRuns;
+                    let workflowEvidences = state.workflowEvidences;
+                    let workflowMappingPreviews = state.workflowMappingPreviews;
+                    if (output && run.input.stageId === "art-design" && typeof run.input.variables.sceneKey !== "string") {
+                        const reviewed = updateRunReviewState(
+                            {
+                                runs,
+                                workflowRuns,
+                                workflowOutputs,
+                                workflowEvidences,
+                            },
+                            id,
+                            "approved",
+                            "资产分析完成，自动确认。",
+                        );
+                        runs = reviewed.runs || runs;
+                        workflowRuns = reviewed.workflowRuns || workflowRuns;
+                        workflowEvidences = reviewed.workflowEvidences || workflowEvidences;
+                        const approvedWorkflowRun = workflowRuns.find((item) => item.id === workflowRunId);
+                        if (approvedWorkflowRun) {
+                            const core = getSeedanceWorkflowAgentCore("art-design");
+                            const previews = core ? core.buildMappingPreviews(output, { workflowRun: approvedWorkflowRun, now }) : buildWorkflowMappingPreviews({ workflowRun: approvedWorkflowRun, stageId: "art-design", output, now });
+                            workflowMappingPreviews = [...workflowMappingPreviews.filter((item) => !previews.some((preview) => preview.previewId === item.previewId)), ...previews];
+                        }
+                    }
                     return {
-                        runs: state.runs.map((item) => (item.id === id ? run : item)),
-                        workflowOutputs: output ? [output, ...state.workflowOutputs] : state.workflowOutputs,
-                        workflowRuns: output
-                            ? state.workflowRuns.map((workflowRun) =>
-                                  workflowRun.id === workflowRunId
-                                      ? typeof run.input.variables.sceneKey === "string"
-                                          ? completeAgentWorkflowSceneRun(workflowRun, { stageId: run.input.stageId!, sceneKey: run.input.variables.sceneKey, output, now })
-                                          : completeAgentWorkflowStageRun(workflowRun, output, now)
-                                      : workflowRun,
-                              )
-                            : state.workflowRuns,
+                        runs,
+                        workflowOutputs,
+                        workflowRuns,
+                        workflowEvidences,
+                        workflowMappingPreviews,
                     };
                 }),
             failWorkflowTextRun: (id, errorMessage) =>
                 set((state) => {
                     const now = new Date().toISOString();
                     const failedRun = state.runs.find((run) => run.id === id);
-                    if (!failedRun) return state;
+                    if (!failedRun || failedRun.status !== "running") return state;
                     const run = setWorkflowTextRunFailed(failedRun, errorMessage, now);
                     return {
                         runs: state.runs.map((item) => (item.id === id ? run : item)),
@@ -261,6 +302,46 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
                                           : workflowRun,
                                   )
                                 : state.workflowRuns,
+                    };
+                }),
+            interruptWorkflowStageRun: (workflowRunId, stageId, errorMessage) =>
+                set((state) => {
+                    const now = new Date().toISOString();
+                    const workflowRun = state.workflowRuns.find((run) => run.id === workflowRunId);
+                    if (!workflowRun) return state;
+                    const stageState = workflowRun.stageStates.find((stage) => stage.stageId === stageId);
+                    const runnerRunId = stageState?.runnerRunId || `agent-run-interrupted-${Date.now()}`;
+                    return {
+                        runs: state.runs.map((run) => (run.id === runnerRunId ? setWorkflowTextRunFailed(run, errorMessage, now) : run)),
+                        workflowRuns: state.workflowRuns.map((run) => (run.id === workflowRunId ? failAgentWorkflowStageRun(run, stageId, runnerRunId, errorMessage, now) : run)),
+                    };
+                }),
+            interruptWorkflowSceneRun: (workflowRunId, stageId, sceneKey, errorMessage) =>
+                set((state) => {
+                    const now = new Date().toISOString();
+                    const workflowRun = state.workflowRuns.find((run) => run.id === workflowRunId);
+                    if (!workflowRun) return state;
+                    const stageState = workflowRun.stageStates.find((stage) => stage.stageId === stageId);
+                    const sceneState = workflowRun.sceneStates?.find((scene) => scene.stageId === stageId && scene.sceneKey === sceneKey);
+                    const runnerRunId = sceneState?.runnerRunId || stageState?.runnerRunId || `agent-run-interrupted-${Date.now()}`;
+                    return {
+                        runs: state.runs.map((run) => (run.id === runnerRunId ? setWorkflowTextRunFailed(run, errorMessage, now) : run)),
+                        workflowRuns: state.workflowRuns.map((run) => (run.id === workflowRunId ? failAgentWorkflowSceneRun(run, stageId, sceneKey, runnerRunId, errorMessage, now) : run)),
+                    };
+                }),
+            clearWorkflowSceneStates: (workflowRunId, stageId) =>
+                set((state) => {
+                    const now = new Date().toISOString();
+                    return {
+                        workflowRuns: state.workflowRuns.map((run) =>
+                            run.id === workflowRunId
+                                ? {
+                                      ...run,
+                                      sceneStates: (run.sceneStates || []).filter((scene) => scene.stageId !== stageId),
+                                      updatedAt: now,
+                                  }
+                                : run,
+                        ),
                     };
                 }),
             updateDraft: (id, draftOutput) =>
@@ -296,3 +377,32 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
         },
     ),
 );
+
+function pickReusableWorkflowRun(workflowRuns: AgentWorkflowRunRecord[], { canvasId, episodeId, projectId, workflowId }: { canvasId?: string; episodeId?: string; projectId: string; workflowId: string }) {
+    const candidates = workflowRuns.filter(
+        (run) => run.projectId === projectId && run.workflowId === workflowId && (run.episodeId === episodeId || (!run.episodeId && canvasId && run.canvasId === canvasId)) && (!canvasId || !run.canvasId || run.canvasId === canvasId),
+    );
+    if (!candidates.length) return undefined;
+    return [...candidates].sort((a, b) => reusableWorkflowRunScore(b, canvasId) - reusableWorkflowRunScore(a, canvasId) || b.updatedAt.localeCompare(a.updatedAt))[0];
+}
+
+function bindReusableWorkflowRunContext(run: AgentWorkflowRunRecord, { canvasId, episodeId, now }: { canvasId?: string; episodeId?: string; now: string }) {
+    const next = canvasId && !run.canvasId ? bindAgentWorkflowRunCanvas(run, canvasId, now) : { ...run, updatedAt: now };
+    return episodeId && !next.episodeId ? { ...next, episodeId, updatedAt: now } : next;
+}
+
+function reusableWorkflowRunScore(run: AgentWorkflowRunRecord, canvasId?: string) {
+    let score = 0;
+    score += run.stageStates.reduce((total, stage) => {
+        if (stage.outputId) total += 1000;
+        if (stage.status === "approved") total += 500;
+        else if (stage.status === "review") total += 400;
+        else if (stage.status === "running") total += 250;
+        else if (stage.status === "error" || stage.status === "rejected") total += 150;
+        if (stage.stageId === "director-analysis" && ["approved", "review"].includes(stage.status)) total += 300;
+        return total;
+    }, 0);
+    if (canvasId && run.canvasId === canvasId) score += 50;
+    if (!run.canvasId) score += 10;
+    return score;
+}

@@ -18,6 +18,7 @@ const (
 
 // ModelChannel 模型渠道配置。
 type ModelChannel struct {
+	ID               string                 `json:"id"`
 	Protocol         string                 `json:"protocol"`
 	Name             string                 `json:"name"`
 	BaseURL          string                 `json:"baseUrl"`
@@ -25,6 +26,8 @@ type ModelChannel struct {
 	EndpointID       string                 `json:"endpointId"`
 	EndpointMappings []ModelEndpointMapping `json:"endpointMappings"`
 	Models           []string               `json:"models"`
+	Capabilities     []string               `json:"capabilities"`
+	Environment      string                 `json:"environment"`
 	Weight           int                    `json:"weight"`
 	Enabled          bool                   `json:"enabled"`
 	Remark           string                 `json:"remark"`
@@ -41,16 +44,28 @@ type ModelCost struct {
 	Credits int    `json:"credits"`
 }
 
+type ModelTextEndpointType struct {
+	Model        string `json:"model"`
+	EndpointType string `json:"endpointType"`
+}
+
+type ModelProtocolType struct {
+	Model    string `json:"model"`
+	Protocol string `json:"protocol"`
+}
+
 // PublicModelChannelSetting 公开模型渠道配置。
 type PublicModelChannelSetting struct {
-	AvailableModels    []string    `json:"availableModels"`
-	ModelCosts         []ModelCost `json:"modelCosts"`
-	DefaultModel       string      `json:"defaultModel"`
-	DefaultImageModel  string      `json:"defaultImageModel"`
-	DefaultVideoModel  string      `json:"defaultVideoModel"`
-	DefaultTextModel   string      `json:"defaultTextModel"`
-	SystemPrompt       string      `json:"systemPrompt"`
-	AllowCustomChannel *bool       `json:"allowCustomChannel"`
+	AvailableModels    []string                `json:"availableModels"`
+	ModelCosts         []ModelCost             `json:"modelCosts"`
+	ModelTextEndpoints []ModelTextEndpointType `json:"modelTextEndpoints"`
+	ModelProtocols     []ModelProtocolType     `json:"modelProtocols"`
+	DefaultModel       string                  `json:"defaultModel"`
+	DefaultImageModel  string                  `json:"defaultImageModel"`
+	DefaultVideoModel  string                  `json:"defaultVideoModel"`
+	DefaultTextModel   string                  `json:"defaultTextModel"`
+	SystemPrompt       string                  `json:"systemPrompt"`
+	AllowCustomChannel *bool                   `json:"allowCustomChannel"`
 }
 
 // PublicSetting 公开配置。

@@ -231,6 +231,9 @@ function AgentTemplateEditForm({ form }: { form: FormInstance<AgentConfigFormVal
                     <Input.TextArea rows={8} />
                 </Form.Item>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                    <Form.Item name="channelId" label="API 渠道 ID">
+                        <Input placeholder="留空走项目 / 全局默认" />
+                    </Form.Item>
                     <Form.Item name="modelPreference" label="模型偏好">
                         <Input placeholder="default / gpt-... / doubao-..." />
                     </Form.Item>
@@ -258,6 +261,26 @@ function AgentTemplateEditForm({ form }: { form: FormInstance<AgentConfigFormVal
                         />
                     </Form.Item>
                 </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                    <Form.Item name="estimatedCredits" label="单次预估费用">
+                        <InputNumber className="w-full" min={0} step={1} />
+                    </Form.Item>
+                    <Form.Item name="timeoutSeconds" label="超时秒数">
+                        <InputNumber className="w-full" min={30} max={1800} step={30} />
+                    </Form.Item>
+                    <Form.Item name="concurrencyLimit" label="并发限制">
+                        <InputNumber className="w-full" min={1} max={10} step={1} />
+                    </Form.Item>
+                    <Form.Item name="allowFallback" label="允许 fallback" valuePropName="checked">
+                        <Switch checkedChildren="允许" unCheckedChildren="阻断" />
+                    </Form.Item>
+                    <Form.Item name="allowBatch" label="允许批量" valuePropName="checked">
+                        <Switch checkedChildren="允许" unCheckedChildren="禁用" />
+                    </Form.Item>
+                </div>
+                <Form.Item name="fallbackChannelIdsText" label="Fallback 渠道 ID" extra="每行一个渠道 ID；只有启用 fallback 时才会使用。">
+                    <Input.TextArea rows={2} />
+                </Form.Item>
             </Form>
         </details>
     );

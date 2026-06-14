@@ -5,6 +5,7 @@ import type { CanvasNodeData, Position } from "../types.ts";
 import type { AssetBreakdownItem } from "./asset-breakdown";
 import type { ProductionBibleAssetRef, ProductionBibleItem } from "./production-bible";
 import type { ShotGroup, StoryboardAssetRef, StoryboardTableShot } from "./storyboard-management";
+import { buildCharacterImagePrompt } from "./character-image-prompt.ts";
 
 export type ImageBriefKind = "scene" | "character" | "prop" | "mood";
 export type ImageBriefSourceType = "asset_breakdown" | "production_bible" | "storyboard" | "manual";
@@ -124,6 +125,11 @@ export function buildImageBriefPrompt(brief: Pick<ImageBrief, "kind" | "title" |
         .filter(([, value]) => nonEmpty(value))
         .map(([key, value]) => `${fieldLabel(key)}：${value.trim()}`);
     const referenceLines = brief.referenceAssets.length ? [`参考素材：${brief.referenceAssets.map((ref) => `${ref.role || "reference"}(${ref.assetId})`).join("、")}`] : [];
+    if (brief.kind === "character")
+        return buildCharacterImagePrompt({
+            title: brief.title,
+            description: [brief.scriptText.trim() ? `剧本依据：${brief.scriptText.trim()}` : "", ...fieldLines, ...referenceLines].filter(Boolean).join("\n"),
+        });
     return [
         `请生成一张短剧制作参考${kindLabels[brief.kind]}。`,
         `标题：${brief.title.trim() || "未命名 Brief"}`,

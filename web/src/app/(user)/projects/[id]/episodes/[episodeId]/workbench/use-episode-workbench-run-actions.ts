@@ -31,6 +31,8 @@ type UseEpisodeWorkbenchRunActionsOptions = {
     episode: ScriptEpisode;
     episodeId: string;
     failWorkflowTextRun: (runId: string, reason: string) => void;
+    interruptWorkflowStageRun: (workflowRunId: string, stageId: string, reason: string) => void;
+    interruptWorkflowSceneRun: (workflowRunId: string, stageId: string, sceneKey: string, reason: string) => void;
     hasScript: boolean;
     message: RunActionMessage;
     preset: AgentWorkflowPreset;
@@ -56,6 +58,8 @@ export function useEpisodeWorkbenchRunActions({
     episode,
     episodeId,
     failWorkflowTextRun,
+    interruptWorkflowStageRun,
+    interruptWorkflowSceneRun,
     hasScript,
     message,
     preset,
@@ -70,7 +74,8 @@ export function useEpisodeWorkbenchRunActions({
     workflowRuns,
 }: UseEpisodeWorkbenchRunActionsOptions) {
     const [runningStageIds, setRunningStageIds] = useState<Record<string, boolean>>({});
-    const [, setRunningSceneKeys] = useState<Record<string, boolean>>({});
+    const [runningStageDrafts, setRunningStageDrafts] = useState<Record<string, string>>({});
+    const [runningSceneKeys, setRunningSceneKeys] = useState<Record<string, boolean>>({});
     const activeRunIdsRef = useRef<Record<string, string>>({});
     const canceledRunIdsRef = useRef<Record<string, boolean>>({});
 
@@ -98,18 +103,29 @@ export function useEpisodeWorkbenchRunActions({
             return message.warning(reason);
         }
         try {
-            const response = await requestImageQuestion(requestConfig, promptMessages, () => {});
-            if (canceledRunIdsRef.current[runId] || activeRunIdsRef.current[runKey] !== runId) return;
+            const response = await requestImageQuestion(requestConfig, promptMessages, (streamed) => {
+                const stageId = runKey.startsWith("stage:") ? runKey.slice("stage:".length) : "";
+                if (stageId && activeRunIdsRef.current[runKey] === runId && !canceledRunIdsRef.current[runId]) {
+                    setRunningStageDrafts((current) => ({ ...current, [stageId]: streamed }));
+                }
+            });
+            const activeRunId = activeRunIdsRef.current[runKey];
+            if (canceledRunIdsRef.current[runId] || (activeRunId && activeRunId !== runId)) return;
             completeWorkflowTextRun(runId, response || "没有返回内容");
             message.success(successMessage);
         } catch (error) {
-            if (canceledRunIdsRef.current[runId] || activeRunIdsRef.current[runKey] !== runId) return;
+            const activeRunId = activeRunIdsRef.current[runKey];
+            if (canceledRunIdsRef.current[runId] || (activeRunId && activeRunId !== runId)) return;
             const reason = error instanceof Error ? error.message : "文本执行失败";
             failWorkflowTextRun(runId, reason);
             message.warning(reason);
         } finally {
             if (activeRunIdsRef.current[runKey] === runId) delete activeRunIdsRef.current[runKey];
             delete canceledRunIdsRef.current[runId];
+            if (runKey.startsWith("stage:")) {
+                const stageId = runKey.slice("stage:".length);
+                setRunningStageDrafts((current) => ({ ...current, [stageId]: "" }));
+            }
             stopRunning();
         }
     };
@@ -117,12 +133,46 @@ export function useEpisodeWorkbenchRunActions({
     const cancelStage = (stageId: string) => {
         const runKey = `stage:${stageId}`;
         const runId = activeRunIdsRef.current[runKey];
-        if (!runId) return message.warning("当前阶段没有运行中的任务");
+        if (!runId) {
+            const stageState = workflowRun?.stageStates.find((stage) => stage.stageId === stageId);
+            if (workflowRun && stageState?.status === "running") {
+                interruptWorkflowStageRun(workflowRun.id, stageId, "上一次运行已中断，可修改内容后重新发送。");
+                setRunningStageIds((current) => ({ ...current, [stageId]: false }));
+                setRunningStageDrafts((current) => ({ ...current, [stageId]: "" }));
+                return message.warning("已清理上一次未结束的运行状态，可重新发送。");
+            }
+            return message.warning("当前阶段没有运行中的任务");
+        }
         canceledRunIdsRef.current[runId] = true;
         delete activeRunIdsRef.current[runKey];
         failWorkflowTextRun(runId, "用户已取消本次运行，可修改内容后重新发送。");
         setRunningStageIds((current) => ({ ...current, [stageId]: false }));
+        setRunningStageDrafts((current) => ({ ...current, [stageId]: "" }));
         message.warning("已取消本次运行；如果外部模型稍后返回，旧结果不会覆盖当前内容。");
+    };
+
+    const cancelStoryboardScene = () => {
+        const runningScene = workflowRun?.sceneStates?.find((scene) => scene.stageId === "seedance-storyboard" && scene.status === "running");
+        const targetScene = currentSceneState?.status === "running" ? currentSceneState : runningScene;
+        const sceneKey = targetScene?.sceneKey || currentScene?.sceneKey || "";
+        if (!sceneKey) return cancelStage("seedance-storyboard");
+        const runKey = `scene:${sceneKey}`;
+        const runId = activeRunIdsRef.current[runKey];
+        if (!runId) {
+            if (workflowRun && targetScene?.status === "running") {
+                interruptWorkflowSceneRun(workflowRun.id, "seedance-storyboard", sceneKey, "上一次分镜场次运行已中断，可重新发送。");
+                setRunningSceneKeys((current) => ({ ...current, [sceneKey]: false }));
+                setRunningStageIds((current) => ({ ...current, "seedance-storyboard": false }));
+                setRunningStageDrafts((current) => ({ ...current, "seedance-storyboard": "" }));
+                return message.warning("已清理上一次未结束的分镜场次，可重新生成。");
+            }
+            return cancelStage("seedance-storyboard");
+        }
+        canceledRunIdsRef.current[runId] = true;
+        delete activeRunIdsRef.current[runKey];
+        failWorkflowTextRun(runId, "用户已取消本次分镜场次运行，可修改内容后重新发送。");
+        setRunningSceneKeys((current) => ({ ...current, [sceneKey]: false }));
+        message.warning("已取消当前分镜场次；如果外部模型稍后返回，旧结果不会覆盖当前内容。");
     };
 
     const runStage = async (stage: AgentWorkflowStage) => {
@@ -133,7 +183,8 @@ export function useEpisodeWorkbenchRunActions({
         const workflowRunId = ensureWorkflowRun({ projectId, canvasId: boundCanvas?.id, episodeId, preset });
         const currentRun = workflowRuns.find((run) => run.id === workflowRunId) || workflowRun;
         const stageState = currentRun?.stageStates.find((item) => item.stageId === stage.stageId);
-        if (stageState?.status === "blocked") {
+        const allowBlockedStageRun = canRunBlockedEpisodeStage(stage.stageId, stageState, hasScript);
+        if (stageState?.status === "blocked" && !allowBlockedStageRun) {
             message.warning(stageState.blockedReason || "前置阶段未批准");
             return;
         }
@@ -158,10 +209,12 @@ export function useEpisodeWorkbenchRunActions({
             stageOutputs,
             workflowRunId,
         });
+        if (allowBlockedStageRun) runInput.variables.allowBlockedStageRun = true;
         const runId = startWorkflowTextRun(runInput);
         const runKey = `stage:${stage.stageId}`;
         activeRunIdsRef.current[runKey] = runId;
         setRunningStageIds((current) => ({ ...current, [stage.stageId]: true }));
+        setRunningStageDrafts((current) => ({ ...current, [stage.stageId]: "" }));
         await executeWorkflowTextRun({
             runKey,
             promptMessages,
@@ -223,7 +276,7 @@ export function useEpisodeWorkbenchRunActions({
         });
     };
 
-    return { cancelStage, runStage, runStoryboardScene, runningStageIds };
+    return { cancelStage, cancelStoryboardScene, runStage, runStoryboardScene, runningSceneKeys, runningStageDrafts, runningStageIds };
 }
 
 function workflowStageAgentKind(stageId: string): AgentConfigKind {
@@ -231,4 +284,8 @@ function workflowStageAgentKind(stageId: string): AgentConfigKind {
     if (stageId === "art-design") return "asset_extractor";
     if (stageId === "seedance-storyboard") return "storyboard_director";
     return "script_analyzer";
+}
+
+function canRunBlockedEpisodeStage(stageId: string, stageState: AgentWorkflowRunRecord["stageStates"][number] | undefined, hasScript: boolean) {
+    return Boolean(hasScript && stageId === "art-design" && stageState?.status === "blocked" && stageState.dependsOnStageIds.includes("director-analysis"));
 }

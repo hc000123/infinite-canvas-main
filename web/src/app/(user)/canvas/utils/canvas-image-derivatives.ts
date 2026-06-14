@@ -18,18 +18,51 @@ export type CanvasImageAngleParams = {
 
 type ImageSize = { width: number; height: number };
 
-export function buildCroppedImageNode({ sourceNode, childId, imageSize, imageMetadata }: { sourceNode: CanvasNodeData; childId: string; imageSize: ImageSize; imageMetadata: CanvasNodeMetadata }): CanvasNodeData {
+export function buildCroppedImageNode({
+    sourceNode,
+    childId,
+    imageSize,
+    imageMetadata,
+    crop,
+    index = 0,
+    total = 1,
+    canvasSource,
+}: {
+    sourceNode: CanvasNodeData;
+    childId: string;
+    imageSize: ImageSize;
+    imageMetadata: CanvasNodeMetadata;
+    crop?: { x: number; y: number; width: number; height: number };
+    index?: number;
+    total?: number;
+    canvasSource?: CanvasNodeMetadata["canvasSource"];
+}): CanvasNodeData {
     const width = Math.min(sourceNode.width, Math.max(220, imageSize.width));
+    const column = total > 1 ? index % 3 : 0;
+    const row = total > 1 ? Math.floor(index / 3) : 0;
     return {
         id: childId,
         type: "image" as CanvasNodeData["type"],
-        title: "Cropped Image",
-        position: { x: sourceNode.position.x + sourceNode.width + 96, y: sourceNode.position.y },
+        title: total > 1 ? `九宫格裁切 ${index + 1}` : "裁切图片",
+        position: { x: sourceNode.position.x + sourceNode.width + 96 + column * (width + 24), y: sourceNode.position.y + row * (width * (imageSize.height / imageSize.width) + 24) },
         width,
         height: width * (imageSize.height / imageSize.width),
         metadata: {
             ...imageMetadata,
             prompt: sourceNode.metadata?.prompt,
+            sourceType: "manual",
+            sourceId: sourceNode.id,
+            canvasSource: canvasSource
+                ? {
+                      ...canvasSource,
+                      nodeId: childId,
+                      sourceNodeId: sourceNode.id,
+                      sourceAssetId: sourceNode.metadata?.sourceAssetId,
+                      prompt: sourceNode.metadata?.prompt,
+                      cropRect: crop,
+                      originalImage: { nodeId: sourceNode.id, storageKey: sourceNode.metadata?.storageKey, url: sourceNode.metadata?.content },
+                  }
+                : undefined,
         },
     };
 }

@@ -12,6 +12,7 @@ export function buildAssetsModuleConfig(input: {
     onApproveStageReview: (stageId: string, note: string) => void;
     onGeneratePreview: (stageId: string, targetLabel: string) => void;
     onRunStage: (stageId: string) => void;
+    onSaveStageResult: (stageId: string) => void;
     previews: AgentWorkflowMappingPreview[];
     runningStageIds: Record<string, boolean>;
     stageOutputs: Record<string, AgentWorkflowStageOutput | undefined>;
@@ -21,7 +22,13 @@ export function buildAssetsModuleConfig(input: {
     const counts = preview ? previewCounts(preview, input.appliedPreviewItemIds) : { applied: 0, pending: 0, total: 0 };
     const display = input.workflowRun ? summarizeWorkflowStageDisplayState(input.workflowRun, "art-design", []) : undefined;
     const needsReview = display?.displayStatus === "review";
-    const isRunning = Boolean(input.runningStageIds["art-design"]) || display?.displayStatus === "running";
+    const localRunning = Boolean(input.runningStageIds["art-design"]);
+    const staleRunning = display?.displayStatus === "running" && !localRunning;
+    const isRunning = localRunning;
+    const errorMessage = input.workflowRun?.stageStates.find((stage) => stage.stageId === "art-design")?.errorMessage;
+    const canRunBlockedAsset = Boolean(display?.displayStatus === "blocked" && input.workflowRun?.stageStates.find((stage) => stage.stageId === "art-design")?.dependsOnStageIds.includes("director-analysis"));
+    const blocked = display?.displayStatus === "blocked" && !canRunBlockedAsset;
+    const canRerunAssetAnalysis = Boolean((input.stageOutputs["art-design"] || preview) && !blocked && !isRunning && !staleRunning);
     const rows: EpisodeModuleRow[] = preview?.items.length
         ? preview.items.map((item, index): EpisodeModuleRow => {
               const applied = input.appliedPreviewItemIds.includes(workflowMappingPreviewItemKey(preview, item.itemId));
@@ -52,21 +59,25 @@ export function buildAssetsModuleConfig(input: {
         : assetPlaceholderRows();
     return {
         actions: [
-            ...(needsReview
+            {
+                danger: isRunning || staleRunning,
+                label: staleRunning ? "清理运行状态" : input.stageOutputs["art-design"] ? "生成资产清单" : "运行资产分析",
+                onClick: () => (staleRunning || isRunning ? input.onCancelStage("art-design") : input.stageOutputs["art-design"] ? input.onGeneratePreview("art-design", "设定库预览") : input.onRunStage("art-design")),
+                primary: !isRunning,
+                ...(isRunning ? { label: "取消运行", primary: false } : {}),
+            },
+            ...(canRerunAssetAnalysis
                 ? [
                       {
-                          label: "批准资产清单",
-                          onClick: () => input.onApproveStageReview("art-design", "资产清单已确认。"),
-                          primary: true,
+                          label: "重新提取资产",
+                          onClick: () => input.onRunStage("art-design"),
                       },
                   ]
                 : []),
             {
-                danger: isRunning,
-                label: input.stageOutputs["art-design"] ? "生成资产清单" : "运行资产分析",
-                onClick: () => (isRunning ? input.onCancelStage("art-design") : input.stageOutputs["art-design"] ? input.onGeneratePreview("art-design", "设定库预览") : input.onRunStage("art-design")),
-                primary: !needsReview,
-                ...(isRunning ? { label: "取消运行", primary: false } : {}),
+                disabled: (!input.stageOutputs["art-design"] && !preview) || isRunning,
+                label: "保存结果",
+                onClick: () => input.onSaveStageResult("art-design"),
             },
             {
                 disabled: !preview || counts.pending <= 0,
@@ -81,12 +92,16 @@ export function buildAssetsModuleConfig(input: {
         headers: ["类型", "资产", "简述", "引用", "状态", "操作"],
         rows,
         notice:
-            display?.displayStatus === "blocked"
+            display?.displayStatus === "blocked" && !canRunBlockedAsset
                 ? { text: display.blockedReason || "前置阶段尚未完成确认。", title: "资产阶段暂时无法继续", tone: "amber" }
+                : display?.displayStatus === "blocked"
+                  ? { text: "导演分析尚未确认，也可以直接基于剧本运行资产分析。", title: "可直接运行资产分析", tone: "cyan" }
                 : display?.displayStatus === "error"
-                  ? { text: display.summaryText || "资产分析运行失败，请检查配置后重试。", title: "资产阶段运行失败", tone: "red" }
+                  ? { text: errorMessage || display.summaryText || "资产分析运行失败，请检查配置后重试。", title: "资产阶段运行失败", tone: "red" }
+                  : staleRunning
+                    ? { text: "页面里已经没有正在等待的请求，但上一次阶段状态仍停在运行中。先清理后可重新运行资产分析。", title: "资产分析运行中断", tone: "amber" }
                   : needsReview
-                    ? { text: "资产分析已有阶段产物，先批准资产清单，再写入设定库或继续分镜。", title: "资产清单待确认", tone: "amber" }
+                    ? { text: "资产分析已返回，系统会直接整理成可写入设定库的资产清单。", title: "正在生成资产清单", tone: "cyan" }
                     : isRunning
                       ? { text: "正在提取角色、场景、道具和服化道信息；你可以等待结果，也可以取消后重新发送。", title: "资产分析运行中", tone: "cyan" }
                       : undefined,

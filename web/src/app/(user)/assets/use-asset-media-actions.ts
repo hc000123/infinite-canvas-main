@@ -8,6 +8,7 @@ import type { Asset } from "@/stores/use-asset-store";
 import { exportAssets } from "./asset-transfer";
 import { assetVersionFileName, resolveAssetVersionDownloadTarget, resolveRestoredAssetPatch } from "./asset-version-files";
 import { assetVersionRecords, buildRestoreAssetVersionPatch } from "./asset-version-history";
+import { workflowAssetPrompt } from "./workflow-asset-image";
 
 type Props = {
     message: {
@@ -41,7 +42,8 @@ export function useAssetMediaActions({ message, removeAsset, selectedAssets, set
 
     const copyAssetText = async (asset: Asset) => {
         if (asset.kind !== "text") return;
-        copyText(asset.data.content, "文本已复制");
+        const prompt = workflowAssetPrompt(asset);
+        copyText(prompt || asset.data.content, prompt ? "提示词已复制" : "文本已复制");
     };
 
     const downloadMedia = (asset: Asset) => {

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { App, Button, Form, Input, InputNumber, Select, Switch, Tag } from "antd";
 import { Bot, RotateCcw, Save } from "lucide-react";
 
+import { saveRemoteAgentConfig } from "@/services/api/agent-runs";
 import { canInvokeAgentConfig, defaultAgentConfig, defaultAgentConfigs, mergeAgentConfigs, validateAgentConfig, type AgentConfigKind } from "./agent-settings";
 import { configToForm, formToGlobalConfig, type AgentConfigFormValues } from "./agent-settings-form";
 import { useAgentSettingsStore } from "./use-agent-settings-store";
@@ -22,6 +23,7 @@ export function AgentSettingsCenterPanel() {
     const { message } = App.useApp();
     const [form] = Form.useForm<AgentConfigFormValues>();
     const [selectedKind, setSelectedKind] = useState<AgentConfigKind>("script_optimizer");
+    const [remoteSaving, setRemoteSaving] = useState(false);
     const globalConfigs = useAgentSettingsStore((state) => state.globalConfigs);
     const saveGlobalConfig = useAgentSettingsStore((state) => state.saveGlobalConfig);
     const resetGlobalConfig = useAgentSettingsStore((state) => state.resetGlobalConfig);
@@ -44,7 +46,15 @@ export function AgentSettingsCenterPanel() {
             return;
         }
         saveGlobalConfig(nextConfig);
-        message.success("Agent 全局设定已保存");
+        setRemoteSaving(true);
+        try {
+            await saveRemoteAgentConfig({ scope: "global", kind: nextConfig.kind, configJson: nextConfig });
+            message.success("Agent 全局设定已保存到后端");
+        } catch (error) {
+            message.warning(error instanceof Error ? `已保存本地草稿，后端同步失败：${error.message}` : "已保存本地草稿，后端同步失败");
+        } finally {
+            setRemoteSaving(false);
+        }
     };
 
     const restoreDefaultToForm = () => {
@@ -117,6 +127,9 @@ export function AgentSettingsCenterPanel() {
                             <Input.TextArea rows={5} />
                         </Form.Item>
                         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                            <Form.Item name="channelId" label="API 渠道 ID">
+                                <Input placeholder="留空走项目 / 全局默认" />
+                            </Form.Item>
                             <Form.Item name="modelPreference" label="模型偏好">
                                 <Input placeholder="default / gpt-..." />
                             </Form.Item>
@@ -144,6 +157,26 @@ export function AgentSettingsCenterPanel() {
                                 />
                             </Form.Item>
                         </div>
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                            <Form.Item name="estimatedCredits" label="单次预估费用">
+                                <InputNumber className="w-full" min={0} step={1} />
+                            </Form.Item>
+                            <Form.Item name="timeoutSeconds" label="超时秒数">
+                                <InputNumber className="w-full" min={30} max={1800} step={30} />
+                            </Form.Item>
+                            <Form.Item name="concurrencyLimit" label="并发限制">
+                                <InputNumber className="w-full" min={1} max={10} step={1} />
+                            </Form.Item>
+                            <Form.Item name="allowFallback" label="允许 fallback" valuePropName="checked">
+                                <Switch checkedChildren="允许" unCheckedChildren="阻断" />
+                            </Form.Item>
+                            <Form.Item name="allowBatch" label="允许批量" valuePropName="checked">
+                                <Switch checkedChildren="允许" unCheckedChildren="禁用" />
+                            </Form.Item>
+                        </div>
+                        <Form.Item name="fallbackChannelIdsText" label="Fallback 渠道 ID" extra="每行一个渠道 ID；只有启用 fallback 时才会使用，不会自动切到更贵渠道。">
+                            <Input.TextArea rows={2} />
+                        </Form.Item>
                     </div>
                 </details>
             </Form>
@@ -156,7 +189,7 @@ export function AgentSettingsCenterPanel() {
                 <Button danger disabled={!hasGlobalOverride} onClick={reset}>
                     移除自定义
                 </Button>
-                <Button type="primary" icon={<Save className="size-4" />} onClick={() => void save()}>
+                <Button type="primary" icon={<Save className="size-4" />} loading={remoteSaving} onClick={() => void save()}>
                     保存 Agent 设定
                 </Button>
             </div>

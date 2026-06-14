@@ -1,4 +1,5 @@
 import type { Asset } from "@/stores/use-asset-store";
+import { canRefreshVolcengineReview, canSubmitVolcengineReview } from "../../../services/volcengine-asset-metadata.ts";
 
 type VolcengineReviewableAsset = Extract<Asset, { kind: "image" | "video" }>;
 
@@ -37,11 +38,10 @@ function mergeTags(current: string[], incoming: string[]) {
 export function assetsForVolcengineSubmit(assets: Asset[]): VolcengineReviewableAsset[] {
     return assets.filter((asset) => {
         if (asset.kind !== "image" && asset.kind !== "video") return false;
-        const status = asset.metadata?.volcengineAsset?.status;
-        return status !== "Active" && status !== "Processing";
+        return canSubmitVolcengineReview(asset.metadata?.volcengineAsset);
     }) as VolcengineReviewableAsset[];
 }
 
 export function assetsForVolcengineRefresh(assets: Asset[]): VolcengineReviewableAsset[] {
-    return assets.filter((asset) => (asset.kind === "image" || asset.kind === "video") && Boolean(asset.metadata?.volcengineAsset?.assetId)) as VolcengineReviewableAsset[];
+    return assets.filter((asset) => (asset.kind === "image" || asset.kind === "video") && canRefreshVolcengineReview(asset.metadata?.volcengineAsset)) as VolcengineReviewableAsset[];
 }

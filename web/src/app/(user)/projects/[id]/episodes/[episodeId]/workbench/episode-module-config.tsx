@@ -34,8 +34,10 @@ export function buildEpisodeModuleConfig(input: {
     onRunStage: (stageId: string) => void;
     onRunStoryboardScene: () => void;
     onSaveScript: () => void;
+    onSaveStageResult: (stageId: string) => void;
     previews: AgentWorkflowMappingPreview[];
     runningStageIds: Record<string, boolean>;
+    runningStageDrafts: Record<string, string>;
     scriptOptimizing: boolean;
     sceneOptions: EpisodeSceneOption[];
     scriptDraft: string;

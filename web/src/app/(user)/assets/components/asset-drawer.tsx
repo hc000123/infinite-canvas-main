@@ -1,13 +1,14 @@
-import { Copy, Download, Folder, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
+import { Copy, Download, Folder, ImagePlus, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 import { Button, Drawer, Image, Space, Tag, Typography } from "antd";
 
-import { isVolcengineReviewProcessing, shouldShowVolcengineReviewAction } from "@/services/volcengine-asset-metadata";
+import { canSubmitVolcengineReview, isVolcengineReviewProcessing, shouldShowVolcengineReviewAction } from "@/services/volcengine-asset-metadata";
 import type { Asset } from "@/stores/use-asset-store";
 import { assetCanvasLibraryEntries } from "../asset-canvas-library";
 import { assetProjectLibraryEntries, projectLibraryRoleLabel, projectLibrarySyncStatusLabel } from "../asset-project-library";
 import { assetVersionMediaSummary, assetVersionRecords, type AssetVersionRecord } from "../asset-version-history";
 import type { AssetVersionUsageReference } from "../asset-version-references";
 import { assetKindDownloadLabel, assetKindLabel, assetMediaInfo, volcengineReviewActionLabel } from "../asset-utils";
+import { workflowAssetCanGenerate, workflowAssetInfo, workflowAssetPrompt } from "../workflow-asset-image";
 import { VolcengineAssetTag } from "./asset-card";
 import { AssetGenerationSection } from "./asset-generation-section";
 
@@ -21,6 +22,8 @@ export function AssetDrawer({
     submittingReview,
     onReview,
     onRefreshReview,
+    onGenerateWorkflowImage,
+    generatingWorkflowImage,
     projectLibraryProjectTitles,
     canvasLibraryTitles,
     usageReferences,
@@ -36,6 +39,8 @@ export function AssetDrawer({
     submittingReview: boolean;
     onReview: (asset: Asset) => void;
     onRefreshReview: (asset: Asset) => void;
+    onGenerateWorkflowImage: (asset: Asset) => void;
+    generatingWorkflowImage: boolean;
     projectLibraryProjectTitles?: Record<string, string>;
     canvasLibraryTitles?: Record<string, string>;
     usageReferences?: AssetVersionUsageReference[];
@@ -45,12 +50,32 @@ export function AssetDrawer({
     const cover = asset ? asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "") : "";
     const videoPreviewUrl = asset?.kind === "video" ? videoCoverUrl(asset.data.url) : "";
     const mediaInfo = asset ? assetMediaInfo(asset) : "";
+    const workflowInfo = workflowAssetInfo(asset);
+    const workflowPrompt = workflowAssetPrompt(asset);
+    const canGenerateWorkflowImage = workflowAssetCanGenerate(asset);
     const projectLibraryEntries = assetProjectLibraryEntries(asset);
     const canvasLibraryEntries = assetCanvasLibraryEntries(asset);
     const versionRecords = assetVersionRecords(asset);
     return (
-        <Drawer rootClassName="studio-workspace" title="素材详情" open={Boolean(asset)} size="large" onClose={onClose}>
-            {asset ? (
+        <Drawer rootClassName="studio-workspace" title="素材详情" open={Boolean(asset)} size={asset && workflowInfo ? undefined : "large"} width={asset && workflowInfo ? "min(560px, calc(100vw - 24px))" : undefined} onClose={onClose}>
+            {asset && workflowInfo ? (
+                <WorkflowAssetDrawerContent
+                    asset={asset}
+                    cover={cover}
+                    folderName={folderName}
+                    workflowPrompt={workflowPrompt}
+                    workflowInfo={workflowInfo}
+                    canGenerateWorkflowImage={canGenerateWorkflowImage}
+                    generatingWorkflowImage={generatingWorkflowImage}
+                    refreshingReview={refreshingReview}
+                    submittingReview={submittingReview}
+                    onCopy={onCopy}
+                    onDownload={onDownload}
+                    onGenerateWorkflowImage={onGenerateWorkflowImage}
+                    onRefreshReview={onRefreshReview}
+                    onReview={onReview}
+                />
+            ) : asset ? (
                 <div className="space-y-5">
                     {cover ? (
                         <Image src={cover} alt={asset.title} className="rounded-md" />
@@ -144,13 +169,13 @@ export function AssetDrawer({
                             </Button>
                         ) : null}
                         {shouldShowVolcengineReviewAction(asset.kind) ? (
-                            asset.metadata?.volcengineAsset?.assetId ? (
+                            asset.metadata?.volcengineAsset?.assetId && !canSubmitVolcengineReview(asset.metadata.volcengineAsset) ? (
                                 <Button icon={<RefreshCw className={`size-4 ${isVolcengineReviewProcessing(asset.metadata.volcengineAsset) && !refreshingReview ? "animate-spin" : ""}`} />} loading={refreshingReview} onClick={() => onRefreshReview(asset)}>
                                     {volcengineReviewActionLabel(asset.metadata.volcengineAsset.status)}
                                 </Button>
                             ) : (
                                 <Button icon={<ShieldCheck className="size-4" />} loading={submittingReview} onClick={() => onReview(asset)}>
-                                    提交加白
+                                    {asset.metadata?.volcengineAsset?.status === "Failed" ? "重新提交加白" : "提交加白"}
                                 </Button>
                             )
                         ) : null}
@@ -174,6 +199,137 @@ export function AssetDrawer({
                 </div>
             ) : null}
         </Drawer>
+    );
+}
+
+function WorkflowAssetDrawerContent({
+    asset,
+    cover,
+    folderName,
+    workflowPrompt,
+    workflowInfo,
+    canGenerateWorkflowImage,
+    generatingWorkflowImage,
+    refreshingReview,
+    submittingReview,
+    onCopy,
+    onDownload,
+    onGenerateWorkflowImage,
+    onRefreshReview,
+    onReview,
+}: {
+    asset: Asset;
+    cover: string;
+    folderName?: string;
+    workflowPrompt: string;
+    workflowInfo: NonNullable<ReturnType<typeof workflowAssetInfo>>;
+    canGenerateWorkflowImage: boolean;
+    generatingWorkflowImage: boolean;
+    refreshingReview: boolean;
+    submittingReview: boolean;
+    onCopy: (asset: Asset) => void;
+    onDownload: (asset: Asset) => void;
+    onGenerateWorkflowImage: (asset: Asset) => void;
+    onRefreshReview: (asset: Asset) => void;
+    onReview: (asset: Asset) => void;
+}) {
+    const mediaInfo = assetMediaInfo(asset);
+    const statusLabel = asset.kind === "image" || workflowInfo.status === "image_generated" ? "已生图" : "待生图";
+    const promptText = workflowPrompt || (asset.kind === "text" ? asset.data.content : "");
+    return (
+        <div className="space-y-4">
+            {cover ? <Image src={cover} alt={asset.title} className="rounded-md" /> : <WorkflowAssetLargePreview asset={asset} compact />}
+
+            <section className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                        <div className="mb-2 flex flex-wrap gap-1.5">
+                            <Tag className="studio-tag">视频工作流</Tag>
+                            <Tag className="studio-tag">{workflowInfo.type || assetKindLabel(asset.kind)}</Tag>
+                            <Tag className="studio-tag">{statusLabel}</Tag>
+                            {workflowInfo.episode ? <Tag className="studio-tag">{workflowInfo.episode}</Tag> : null}
+                            {folderName ? (
+                                <Tag className="studio-tag" icon={<Folder className="size-3" />}>
+                                    {folderName}
+                                </Tag>
+                            ) : null}
+                        </div>
+                        <Typography.Title level={4} className="!mb-0 !text-[var(--studio-text-primary)]">
+                            {asset.title}
+                        </Typography.Title>
+                        <Typography.Text className="mt-2 block text-sm !text-[var(--studio-text-muted)]">
+                            {[workflowInfo.sourcePath || asset.source, workflowInfo.assetId ? `素材ID ${workflowInfo.assetId}` : "", mediaInfo].filter(Boolean).join(" · ")}
+                        </Typography.Text>
+                    </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                    {canGenerateWorkflowImage ? (
+                        <Button type="primary" icon={<ImagePlus className="size-4" />} loading={generatingWorkflowImage} onClick={() => onGenerateWorkflowImage(asset)}>
+                            生成图片
+                        </Button>
+                    ) : null}
+                    {asset.kind === "text" ? (
+                        <Button icon={<Copy className="size-4" />} onClick={() => onCopy(asset)}>
+                            复制提示词
+                        </Button>
+                    ) : null}
+                    {asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" ? (
+                        <Button type="primary" icon={<Download className="size-4" />} onClick={() => onDownload(asset)}>
+                            {assetKindDownloadLabel(asset.kind)}
+                        </Button>
+                    ) : null}
+                    {shouldShowVolcengineReviewAction(asset.kind) ? (
+                        asset.metadata?.volcengineAsset?.assetId && !canSubmitVolcengineReview(asset.metadata.volcengineAsset) ? (
+                            <Button icon={<RefreshCw className={`size-4 ${isVolcengineReviewProcessing(asset.metadata.volcengineAsset) && !refreshingReview ? "animate-spin" : ""}`} />} loading={refreshingReview} onClick={() => onRefreshReview(asset)}>
+                                {volcengineReviewActionLabel(asset.metadata.volcengineAsset.status)}
+                            </Button>
+                        ) : (
+                            <Button icon={<ShieldCheck className="size-4" />} loading={submittingReview} onClick={() => onReview(asset)}>
+                                {asset.metadata?.volcengineAsset?.status === "Failed" ? "重新提交加白" : "提交加白"}
+                            </Button>
+                        )
+                    ) : null}
+                </div>
+            </section>
+
+            <details className="group rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
+                <summary className="cursor-pointer list-none text-sm font-medium text-[var(--studio-text-secondary)] transition hover:text-[var(--studio-text-primary)]">
+                    完整提示词
+                    <span className="ml-2 text-xs text-[var(--studio-text-muted)] group-open:hidden">展开查看</span>
+                    <span className="ml-2 hidden text-xs text-[var(--studio-text-muted)] group-open:inline">收起</span>
+                </summary>
+                <Typography.Paragraph className="!mb-0 !mt-3 max-h-72 overflow-auto whitespace-pre-wrap !text-sm !leading-6 !text-[var(--studio-text-primary)]">{promptText || "暂无提示词"}</Typography.Paragraph>
+            </details>
+        </div>
+    );
+}
+
+function WorkflowAssetLargePreview({ asset, compact = false }: { asset: Asset; compact?: boolean }) {
+    const info = workflowAssetInfo(asset);
+    const prompt = workflowAssetPrompt(asset);
+    return (
+        <div className={`${compact ? "min-h-40" : "min-h-72"} grid place-items-center rounded-md border border-[var(--studio-border-subtle)] bg-[linear-gradient(135deg,rgba(53,101,196,.2),rgba(18,112,84,.18))] p-6 text-center`}>
+            <div className="max-w-xl">
+                <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-md bg-white/10 text-white">
+                    <ImagePlus className="size-6" />
+                </div>
+                {compact ? (
+                    <Typography.Text className="!text-sm !text-[var(--studio-text-secondary)]">待生成预览图</Typography.Text>
+                ) : (
+                    <>
+                        <div className="mb-3 flex justify-center gap-2">
+                            <Tag className="studio-tag">视频工作流</Tag>
+                            <Tag className="studio-tag">{info?.type || "资产"}</Tag>
+                            <Tag className="studio-tag">待生图</Tag>
+                        </div>
+                        <Typography.Paragraph ellipsis={{ rows: 4 }} className="!mb-0 !text-sm !leading-6 !text-[var(--studio-text-secondary)]">
+                            {prompt || "待生成预览图"}
+                        </Typography.Paragraph>
+                    </>
+                )}
+            </div>
+        </div>
     );
 }
 

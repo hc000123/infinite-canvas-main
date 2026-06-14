@@ -140,7 +140,7 @@ export function useCanvasVideoGenerationActions({
                     prompt: effectivePrompt,
                 });
                 setNodes((prev) => applyCompletedVideoNodeToNodes(prev, finalVideoNode));
-                const asset = buildGeneratedVideoAsset(finalVideoNode, { projectId, projectTitle, projectPreset, episodeContext, prompt: effectivePrompt, effectivePrompt, config: generationConfig, createdAt });
+                const asset = buildGeneratedVideoAsset(finalVideoNode, { canvasId, projectId, projectTitle, projectPreset, episodeContext, prompt: effectivePrompt, effectivePrompt, config: generationConfig, createdAt });
                 const assetId = asset ? await archiveGeneratedAsset(asset).catch(() => undefined) : undefined;
                 if (typeof assetId === "string") {
                     setNodes((prev) => prev.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, sourceAssetId: assetId } } : node)));

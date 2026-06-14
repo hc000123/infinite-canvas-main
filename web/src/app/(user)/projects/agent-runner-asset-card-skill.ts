@@ -76,19 +76,46 @@ export function assetCardKindToProductionBibleKind(kind: WorkflowAssetCardKind):
 }
 
 function inferWorkflowAssetCardKind(item: unknown): WorkflowAssetCardKind {
-    const text = [
-        firstFieldText(item, ["kind", "type", "category", "group", "assetType", "asset_type"]),
-        firstFieldText(item, nameKeys),
-        readCandidateText(item),
-        readCandidateTags(item).join(" "),
-    ]
-        .join(" ")
-        .toLowerCase();
-    if (/(服装|服化|妆发|发型|衣着|costume|makeup|clothing|hair)/i.test(text)) return "costume";
-    if (/(场景|场记|地点|空间|环境|内景|外景|scene|location|environment|set)/i.test(text)) return "scene";
-    if (/(道具|物件|器物|prop|item|object)/i.test(text)) return "prop";
-    if (/(角色|人物|演员|主角|配角|character|person|actor)/i.test(text)) return "character";
+    const kindText = [firstFieldText(item, ["kind", "type", "category", "group", "assetType", "asset_type"]), readCandidateTags(item).join(" ")].join(" ").toLowerCase();
+    const contentText = stripNegativeAssetSignalText([firstFieldText(item, nameKeys), firstFieldText(item, promptKeys), readCandidateText(item)].join(" ").toLowerCase());
+    if (hasCharacterDesignSignal(contentText)) return "character";
+    if (hasScenePlanningSignal(contentText)) return "scene";
+    if (hasPropAssetSignal(contentText)) return "prop";
+    if (hasCostumeAssetSignal(kindText) || (!hasCharacterAssetSignal(contentText) && hasCostumeAssetSignal(contentText))) return "costume";
+    if (hasPropAssetSignal(kindText)) return "prop";
+    if (hasCharacterAssetSignal(contentText)) return "character";
+    if (hasSceneAssetSignal(kindText) || hasSceneAssetSignal(contentText)) return "scene";
     return "prop";
+}
+
+function stripNegativeAssetSignalText(text: string) {
+    return text
+        .replace(/\b(no|without)\s+(humans?|characters?|people|persons?|faces?|clothing|costumes?|limbs?|hands?)\b/gi, " ")
+        .replace(/禁止[^。；;,.，、\n]{0,20}(人物|角色|人类|脸|服装|肢体|手指)/g, " ");
+}
+
+function hasCharacterDesignSignal(text: string) {
+    return /(角色图|角色设定板|character design sheet|turnaround sheet|front view|side view|back view|portrait close-up|headshot)/i.test(text);
+}
+
+function hasScenePlanningSignal(text: string) {
+    return /(场景规划|场景参考图|场记|2x2|四宫格|top-down layout|scene planning|scene reference|environment reference|location reference)/i.test(text);
+}
+
+function hasCharacterAssetSignal(text: string) {
+    return /(角色|人物|演员|主角|配角|女主|男主|反派|爱人|男性|女性|男子|女子|青年|中年|老人|外貌|五官|脸型|肤色|发型|发色|眼神|妆容|身形|身材|体型|表演|character|person|actor|male|female|portrait|character design sheet|turnaround sheet|front view|side view|back view)/i.test(text);
+}
+
+function hasSceneAssetSignal(text: string) {
+    return /(场景|场记|地点|空间|环境|内景|外景|海底|仓库|道路|房间|scene|location|environment|set)/i.test(text);
+}
+
+function hasPropAssetSignal(text: string) {
+    return /(道具|物件|器物|工具|手持|prop|item|object)/i.test(text);
+}
+
+function hasCostumeAssetSignal(text: string) {
+    return /(服装|服化|妆发|发型|衣着|鞋子|costume|makeup|clothing|hair|wardrobe)/i.test(text);
 }
 
 function firstFieldText(item: unknown, keys: string[]) {

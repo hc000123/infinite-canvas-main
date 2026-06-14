@@ -1,5 +1,6 @@
 export type AiChannelMode = "remote" | "local";
 export type AiProviderProtocol = "openai" | "volcengine-ark";
+export type AiModelProtocol = { model: string; protocol: AiProviderProtocol };
 
 export function resolveEffectiveChannelMode(_channelMode: AiChannelMode, _allowCustomChannel?: boolean) {
     return "remote";
@@ -17,8 +18,10 @@ export function resolveAllowedVideoProtocol(_channelMode: AiChannelMode, protoco
     return protocol;
 }
 
-export function inferRemoteVideoProtocol(model: string, fallback: AiProviderProtocol = "openai"): AiProviderProtocol {
+export function inferRemoteVideoProtocol(model: string, fallback: AiProviderProtocol = "openai", modelProtocols: AiModelProtocol[] = []): AiProviderProtocol {
     const normalized = model.trim().toLowerCase();
     if (!normalized) return fallback;
-    return normalized.includes("seedance") || normalized.startsWith("ep-") ? "volcengine-ark" : fallback;
+    const configured = modelProtocols.find((item) => item.model.trim().toLowerCase() === normalized)?.protocol;
+    if (configured === "openai" || configured === "volcengine-ark") return configured;
+    return normalized.startsWith("ep-") ? "volcengine-ark" : fallback;
 }

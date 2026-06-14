@@ -142,6 +142,47 @@ func TestLegacyLocalArkVideoPayloadUsesBackendChannel(t *testing.T) {
 	}
 }
 
+func TestVideoPreflightChecksBackendArkChannel(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	upstreamCalled := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalled = true
+		if r.URL.Path != "/contents/generations/tasks/__infinite_canvas_probe__" {
+			t.Fatalf("path = %s, want ark preflight probe", r.URL.Path)
+		}
+		if auth := r.Header.Get("Authorization"); auth != "Bearer backend-key" {
+			t.Fatalf("authorization = %q, want backend key", auth)
+		}
+		http.Error(w, `{"error":{"message":"task not found"}}`, http.StatusNotFound)
+	}))
+	defer upstream.Close()
+	saveAIHandlerSettings(t, false, upstream.URL)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/videos/preflight?model=ep-test", nil)
+	req = req.WithContext(service.WithUser(req.Context(), model.AuthUser{ID: "user-video-preflight", Username: "video-preflight", Role: model.UserRoleUser}))
+	rec := httptest.NewRecorder()
+
+	AIVideoPreflight(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !upstreamCalled {
+		t.Fatal("upstream was not called")
+	}
+	if !strings.Contains(rec.Body.String(), `"protocol":"volcengine-ark"`) {
+		t.Fatalf("body = %s, want ark protocol", rec.Body.String())
+	}
+	for _, want := range []string{`"channelName":"ark-backend"`, `"baseUrl":"` + upstream.URL + `"`, `"endpointId":"ep-test"`} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Fatalf("body = %s, want %s", rec.Body.String(), want)
+		}
+	}
+	if strings.Contains(rec.Body.String(), "backend-key") {
+		t.Fatalf("preflight response leaked backend key: %s", rec.Body.String())
+	}
+}
+
 func TestNormalizeArkVideoTaskResponseKeepsTaskDetails(t *testing.T) {
 	source := []byte(`{
 		"id": "cgt-2026-test",

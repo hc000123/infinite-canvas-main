@@ -8,6 +8,7 @@ import type {
     AgentWorkflowStageOutput,
     WorkflowTextRunOutput,
 } from "./agent-runner-types";
+import { refreshWorkflowStageBlocks } from "./agent-runner-workflow-scene-utils";
 
 export type AgentRunnerPersistedState = {
     runs: AgentRunRecord[];
@@ -39,7 +40,8 @@ export function normalizeStoredRun(run: AgentRunRecord): AgentRunRecord {
 }
 
 export function normalizeStoredWorkflowRun(run: AgentWorkflowRunRecord): AgentWorkflowRunRecord {
-    return {
+    const now = new Date().toISOString();
+    return refreshWorkflowStageBlocks({
         id: run.id || "",
         projectId: run.projectId || "",
         canvasId: run.canvasId,
@@ -67,7 +69,7 @@ export function normalizeStoredWorkflowRun(run: AgentWorkflowRunRecord): AgentWo
                       stageId: record.stageId || stage.stageId || "",
                       sourceFile: record.sourceFile || "",
                       sourceType: record.sourceType || "rule",
-                      readAt: record.readAt || new Date().toISOString(),
+                      readAt: record.readAt || now,
                       status: record.status === "missing" || record.status === "skipped" ? record.status : "read",
                       note: record.note,
                       readingId: record.readingId,
@@ -75,9 +77,9 @@ export function normalizeStoredWorkflowRun(run: AgentWorkflowRunRecord): AgentWo
                 : [],
         })),
         sceneStates: Array.isArray(run.sceneStates) ? run.sceneStates.map(normalizeStoredWorkflowSceneState) : [],
-        createdAt: run.createdAt || new Date().toISOString(),
-        updatedAt: run.updatedAt || run.createdAt || new Date().toISOString(),
-    };
+        createdAt: run.createdAt || now,
+        updatedAt: run.updatedAt || run.createdAt || now,
+    }, now);
 }
 
 export function normalizeStoredWorkflowSceneState(scene: AgentWorkflowSceneRunState): AgentWorkflowSceneRunState {

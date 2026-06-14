@@ -47,10 +47,8 @@ export function GeneratedPromptToggle({ node, theme, variant = "panel" }: { node
 
 export function MediaReviewStatusBadge({
     node,
-    theme,
     submitting,
     className,
-    dark = false,
 }: {
     node: CanvasNodeData;
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
@@ -65,15 +63,43 @@ export function MediaReviewStatusBadge({
     const processing = review?.status === "Processing" || submitting;
     if (!review?.assetId && !processing) return null;
     const label = active ? "已加白" : failed ? "加白失败" : processing ? "加白中" : "待刷新";
+    const tone = active ? reviewBadgeTones.active : failed ? reviewBadgeTones.failed : processing ? reviewBadgeTones.processing : reviewBadgeTones.idle;
     return (
         <div
-            className={`${className || ""} pointer-events-none inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-medium shadow-[0_8px_24px_rgba(0,0,0,.18)] backdrop-blur-md`}
-            style={{ background: dark ? "rgba(0,0,0,.5)" : `${theme.toolbar.panel}d9`, borderColor: dark ? "rgba(255,255,255,.22)" : `${theme.toolbar.border}cc`, color: dark ? "#fff" : theme.node.text }}
+            className={`${className || ""} pointer-events-none inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold shadow-[0_10px_28px_rgba(0,0,0,.35),0_0_0_1px_rgba(255,255,255,.12)_inset] backdrop-blur-md`}
+            style={{ background: tone.background, borderColor: tone.border, color: tone.text }}
             title={active ? "素材已完成加白" : failed ? "素材加白失败" : "素材加白处理中"}
             aria-label="素材加白状态"
         >
-            <ShieldCheck className={`size-3.5 ${processing ? "animate-pulse" : ""}`} />
+            <ShieldCheck className={`size-3.5 ${processing ? "animate-pulse" : ""}`} style={{ color: tone.icon }} />
             {label}
         </div>
     );
 }
+
+const reviewBadgeTones = {
+    active: {
+        background: "rgba(6,78,59,.92)",
+        border: "rgba(52,211,153,.9)",
+        icon: "#86efac",
+        text: "#ecfdf5",
+    },
+    failed: {
+        background: "rgba(127,29,29,.94)",
+        border: "rgba(248,113,113,.92)",
+        icon: "#fecaca",
+        text: "#fff1f2",
+    },
+    processing: {
+        background: "rgba(120,53,15,.94)",
+        border: "rgba(251,191,36,.92)",
+        icon: "#fde68a",
+        text: "#fffbeb",
+    },
+    idle: {
+        background: "rgba(30,41,59,.94)",
+        border: "rgba(148,163,184,.9)",
+        icon: "#cbd5e1",
+        text: "#f8fafc",
+    },
+};

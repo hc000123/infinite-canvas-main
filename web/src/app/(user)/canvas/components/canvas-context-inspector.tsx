@@ -259,7 +259,6 @@ export function CanvasContextInspector({
                     theme={theme}
                     onSelectShot={onSelectShot}
                     onOpenAssets={onOpenAssets}
-                    onOpenEpisodeWorkbench={onOpenEpisodeWorkbench}
                     onOpenAssistant={() => {
                         onOpenAssistant();
                         onViewChange("assistant");
@@ -315,7 +314,6 @@ function CanvasOverview({
     theme,
     onSelectShot,
     onOpenAssets,
-    onOpenEpisodeWorkbench,
     onOpenAssistant,
 }: {
     hasEpisode: boolean;
@@ -327,15 +325,14 @@ function CanvasOverview({
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     onSelectShot?: (shot: StoryboardTableShot, nodeId?: string) => void;
     onOpenAssets: () => void;
-    onOpenEpisodeWorkbench: () => void;
     onOpenAssistant: () => void;
 }) {
     return (
         <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
             <section className="rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
-                <div className="text-sm font-semibold">{hasEpisode ? "承接批次概览" : "自由画布"}</div>
+                <div className="text-sm font-semibold">{hasEpisode ? "画布内容" : "自由画布"}</div>
                 <div className="mt-2 text-xs leading-5" style={{ color: theme.node.muted }}>
-                    {hasEpisode ? "画布用于承接已确认的分镜、提示词、参考素材和视频配置。检查后再执行生成。" : "当前画布未绑定集数，可继续自由编排文本、图片、视频、音频和配置节点。"}
+                    {hasEpisode ? "项目素材、设定和参考图统一在“我的素材”管理；画布只负责自由编排节点、连线和生成。" : "当前画布未绑定集数，可继续自由编排文本、图片、视频、音频和配置节点。"}
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                     <Stat label="分镜" value={stats.tableShotCount} theme={theme} />
@@ -346,7 +343,6 @@ function CanvasOverview({
             </section>
             <ShotChecklistSection shots={checklistShots} shotGroups={checklistShotGroups} nodes={checklistNodes} activeShotId={activeShotId} theme={theme} onSelectShot={onSelectShot} />
             <div className="mt-3 grid gap-2">
-                <InspectorAction icon={<FileText className="size-4" />} label={hasEpisode ? "返回本集生产流程" : "绑定或导入本集"} onClick={onOpenEpisodeWorkbench} theme={theme} />
                 <InspectorAction icon={<ImageIcon className="size-4" />} label="打开素材" onClick={onOpenAssets} theme={theme} />
                 <InspectorAction icon={<MessageSquare className="size-4" />} label="打开画布助手" onClick={onOpenAssistant} theme={theme} />
             </div>

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Home, Keyboard, Menu, MessageSquare, Plus, Redo2, Save, Trash2, Undo2, Upload, Workflow } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowLeft, FolderOpen, Home, ImagePlus, Keyboard, LayoutGrid, Menu, Plus, Redo2, Save, Settings, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown, Modal } from "antd";
 
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -26,11 +26,12 @@ export function CanvasTopBar({
     onSaveProject,
     onImportImage,
     onOpenEpisodeScript,
-    onOpenWorkflowAssistant,
+    onGenerateImage,
+    onOpenAssets,
+    onOrganizeCanvas,
+    onOpenSettings,
     onUndo,
     onRedo,
-    assistantActive,
-    onExpandAssistant,
 }: {
     title: string;
     episodeLabel: string;
@@ -52,11 +53,12 @@ export function CanvasTopBar({
     onSaveProject: () => void;
     onImportImage: () => void;
     onOpenEpisodeScript: () => void;
-    onOpenWorkflowAssistant: () => void;
+    onGenerateImage: () => void;
+    onOpenAssets: () => void;
+    onOrganizeCanvas: () => void;
+    onOpenSettings: () => void;
     onUndo: () => void;
     onRedo: () => void;
-    assistantActive: boolean;
-    onExpandAssistant: () => void;
 }) {
     const colorTheme = useThemeStore((state) => state.theme);
     const theme = canvasThemes[colorTheme];
@@ -155,24 +157,11 @@ export function CanvasTopBar({
                 </div>
 
                 <div className="pointer-events-auto flex items-center gap-1.5">
-                    <Button
-                        type="text"
-                        className="!h-10 !rounded-xl !px-3 !font-medium"
-                        style={{ background: theme.toolbar.panel, color: theme.node.text, boxShadow: "0 10px 30px rgba(28,25,23,.10)" }}
-                        icon={<Workflow className="size-4" />}
-                        onClick={onOpenWorkflowAssistant}
-                    >
-                        工作流助手
-                    </Button>
-                    <Button
-                        type="text"
-                        className="!h-10 !rounded-xl !px-3 !font-medium"
-                        style={{ background: assistantActive ? theme.toolbar.activeBg : theme.toolbar.panel, color: assistantActive ? theme.toolbar.activeText : theme.node.text, boxShadow: "0 10px 30px rgba(28,25,23,.10)" }}
-                        icon={<MessageSquare className="size-4" />}
-                        onClick={onExpandAssistant}
-                    >
-                        助手
-                    </Button>
+                    <TopAction icon={<ImagePlus className="size-4" />} label="生成图片" onClick={onGenerateImage} />
+                    <TopAction icon={<Upload className="size-4" />} label="导入" onClick={onImportImage} />
+                    <TopAction icon={<FolderOpen className="size-4" />} label="素材" onClick={onOpenAssets} />
+                    <TopAction icon={<LayoutGrid className="size-4" />} label="整理画布" onClick={onOrganizeCanvas} />
+                    <TopAction icon={<Settings className="size-4" />} label="设置" onClick={onOpenSettings} />
                 </div>
             </div>
             <Modal title="快捷键" open={shortcutsOpen} onCancel={() => setShortcutsOpen(false)} footer={null} centered>
@@ -193,6 +182,15 @@ export function CanvasTopBar({
                 </div>
             </Modal>
         </>
+    );
+}
+
+function TopAction({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    return (
+        <Button type="text" className="!h-10 !rounded-xl !px-3 !font-medium" style={{ color: theme.node.text }} icon={icon} onClick={onClick}>
+            {label}
+        </Button>
     );
 }
 

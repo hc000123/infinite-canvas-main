@@ -3,6 +3,7 @@ import type { Asset, AssetKind } from "@/stores/use-asset-store";
 import { assetGenerationSearchText } from "./asset-generation";
 import { projectLibrarySearchText } from "./asset-project-library";
 import { assetVersionRecords } from "./asset-version-history";
+import { workflowAssetSummary } from "./workflow-asset-image";
 
 export function volcengineStatusLabel(status: string) {
     if (status === "Active") return "已加白";
@@ -25,6 +26,8 @@ export async function fetchImageBlob(url: string) {
 }
 
 export function assetSummary(asset: Asset) {
+    const workflowSummary = workflowAssetSummary(asset);
+    if (workflowSummary) return workflowSummary;
     if (asset.kind === "text") return asset.data.content;
     return assetMediaInfo(asset);
 }

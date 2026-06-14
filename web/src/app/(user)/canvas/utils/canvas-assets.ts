@@ -15,7 +15,7 @@ export function canvasNodeToAsset(node: CanvasNodeData): CanvasAssetPayload | nu
             tags: [],
             source: "Canvas",
             data: { content },
-            metadata: { source: "canvas", nodeId: node.id },
+            metadata: { source: "canvas", nodeId: node.id, canvasSource: node.metadata?.canvasSource },
         };
     }
 
@@ -36,7 +36,7 @@ export function canvasNodeToAsset(node: CanvasNodeData): CanvasAssetPayload | nu
                 bytes: node.metadata.bytes || getDataUrlByteSize(dataUrl),
                 mimeType: node.metadata.mimeType || "image/png",
             },
-            metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt, volcengineAsset: node.metadata?.volcengineAsset },
+            metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt, canvasSource: node.metadata?.canvasSource, volcengineAsset: node.metadata?.volcengineAsset },
         };
     }
 
@@ -56,7 +56,7 @@ export function canvasNodeToAsset(node: CanvasNodeData): CanvasAssetPayload | nu
                 bytes: node.metadata.bytes || 0,
                 mimeType: node.metadata.mimeType || "video/mp4",
             },
-            metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt, volcengineAsset: node.metadata?.volcengineAsset },
+            metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt, canvasSource: node.metadata?.canvasSource, volcengineAsset: node.metadata?.volcengineAsset },
         };
     }
 
@@ -74,7 +74,7 @@ export function canvasNodeToAsset(node: CanvasNodeData): CanvasAssetPayload | nu
                 bytes: node.metadata.bytes || 0,
                 mimeType: node.metadata.mimeType || "audio/mpeg",
             },
-            metadata: { source: "canvas", nodeId: node.id },
+            metadata: { source: "canvas", nodeId: node.id, canvasSource: node.metadata?.canvasSource },
         };
     }
 

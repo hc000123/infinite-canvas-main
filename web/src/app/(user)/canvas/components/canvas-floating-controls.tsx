@@ -29,6 +29,7 @@ type Props = {
     nodeToolActions: CanvasNodeHoverToolbarActions;
     nodes: CanvasNodeData[];
     onOpenEpisodeWorkbench: () => void;
+    onCreateVideoFromImages: (nodes: CanvasNodeData[]) => void;
     onRedo: () => void;
     onResetViewport: () => void;
     onSelectShot: (shot: StoryboardTableShot, nodeId?: string) => void;
@@ -37,6 +38,7 @@ type Props = {
     onUndo: () => void;
     refreshingReviewNodeId: string | null;
     selectedNodeCount: number;
+    selectedNodeIds: Set<string>;
     setBackgroundMode: (mode: CanvasBackgroundMode) => void;
     setContextMenu: Dispatch<SetStateAction<ContextMenuState | null>>;
     setShowImageInfo: (show: boolean) => void;
@@ -68,6 +70,7 @@ export function CanvasFloatingControls({
     nodeToolActions,
     nodes,
     onOpenEpisodeWorkbench,
+    onCreateVideoFromImages,
     onRedo,
     onResetViewport,
     onSelectShot,
@@ -76,6 +79,7 @@ export function CanvasFloatingControls({
     onUndo,
     refreshingReviewNodeId,
     selectedNodeCount,
+    selectedNodeIds,
     setBackgroundMode,
     setContextMenu,
     setShowImageInfo,
@@ -130,7 +134,13 @@ export function CanvasFloatingControls({
             {contextMenu ? (
                 <CanvasNodeContextMenu
                     menu={contextMenu}
+                    nodes={nodes}
+                    selectedNodeIds={selectedNodeIds}
                     onClose={() => setContextMenu(null)}
+                    onCreateVideoFromImages={(imageNodes) => {
+                        onCreateVideoFromImages(imageNodes);
+                        setContextMenu(null);
+                    }}
                     onDuplicate={() => {
                         duplicateNode(contextMenu.nodeId);
                         setContextMenu(null);

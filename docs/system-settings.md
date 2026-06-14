@@ -71,11 +71,14 @@
 {
   "channels": [
     {
+      "id": "default-text",
       "protocol": "openai",
       "name": "默认渠道",
       "baseUrl": "https://api.example.com",
       "apiKey": "sk-xxx",
       "models": ["gpt-5.5", "gpt-image-2"],
+      "capabilities": ["text", "image"],
+      "environment": "dev",
       "weight": 1,
       "enabled": true,
       "remark": ""
@@ -95,18 +98,38 @@
 
 `channels` 每项字段：
 
-| 字段       | 类型     | 说明                                         |
-| ---------- | -------- | -------------------------------------------- |
-| `protocol` | string   | 协议，当前为 `openai`                        |
-| `name`     | string   | 渠道名称                                     |
-| `baseUrl`  | string   | OpenAI 兼容接口地址                          |
-| `apiKey`   | string   | 渠道密钥                                     |
-| `models`   | string[] | 该渠道可用模型                               |
-| `weight`   | number   | 渠道权重；同一模型有多个可用渠道时按权重随机 |
-| `enabled`  | boolean  | 是否启用                                     |
-| `remark`   | string   | 备注                                         |
+| 字段           | 类型     | 说明                                                                    |
+| -------------- | -------- | ----------------------------------------------------------------------- |
+| `id`           | string   | 渠道稳定 ID，Agent / 工作流阶段用它绑定具体渠道；为空时后端按名称生成   |
+| `protocol`     | string   | 协议，当前支持 `openai`、`volcengine-ark`                                |
+| `name`         | string   | 渠道名称                                                                |
+| `baseUrl`      | string   | OpenAI 兼容接口地址或火山 Ark 接口地址                                   |
+| `apiKey`       | string   | 渠道密钥，只允许后端使用；管理员接口只回显脱敏状态                       |
+| `endpointId`   | string   | 火山 Ark 旧字段；新配置优先用 `endpointMappings`                         |
+| `endpointMappings` | object[] | 火山 Ark 本地模型名到 Endpoint / EP 的映射                           |
+| `models`       | string[] | 该渠道可用模型                                                          |
+| `capabilities` | string[] | 渠道能力：`text`、`image`、`video`、`video_query`、`asset_review`、`preflight`、`cli_workflow` |
+| `environment`  | string   | 环境：`dev`、`test`、`prod`，用于避免测试误触正式高价 API                 |
+| `weight`       | number   | 未指定渠道且同一模型有多个可用渠道时按权重随机                            |
+| `enabled`      | boolean  | 是否启用                                                                |
+| `remark`       | string   | 备注                                                                    |
 
 后端调用模型时，会从已启用、已配置 `baseUrl` 和 `apiKey`、且 `models` 包含目标模型的渠道中选择一个。
+
+## Agent Run 与模型渠道
+
+Agent 中心仍是前端配置入口，但配置会同步保存到后端 `agent_config_records`。视频工作流阶段启动不再要求用户在浏览器里填写一次性 API Key，而是通过 `/api/v1/agent-runs` 创建后端任务。
+
+后端 Agent Run 的文本模型与渠道选择规则：
+
+1. Agent 配置可显式传入 `channelId`、`modelPreference`、`allowFallback`、`fallbackChannelIds`、`temperature`、`maxOutputTokens`、`estimatedCredits`、`timeoutSeconds`、`concurrencyLimit` 和 `allowBatch`。
+2. 如果 `modelPreference` 非空且不是 `default`，优先使用该模型名；否则读取 `public.modelChannel.defaultTextModel`，再回退到 `public.modelChannel.defaultModel`。
+3. 如果传入 `channelId`，后端只使用该渠道；该渠道未启用、缺少 `baseUrl/apiKey`、不包含模型或不具备 `text` 能力时，默认阻断。
+4. 只有 `allowFallback=true` 且传入 `fallbackChannelIds` 时，才按 fallback 列表寻找可用渠道；不会自动切到更贵或未授权渠道。
+5. 未传入 `channelId` 时，后端按模型名匹配 `private.channels` 中已启用、已配置 `baseUrl/apiKey`、具备 `text` 能力且包含该模型的渠道。
+6. 每次运行都会记录实际命中的渠道、模型、目标渠道、fallback 状态、请求快照、原始输出、结构化草案、耗时、预估费用和预扣费用。
+
+Agent Run 会保存请求 JSON、原始输出、可解析结构化草案、审核 JSON 和映射预览 JSON。成功后状态为 `needs_review`，只有用户确认后才能继续写入资产 / 分镜 / 视频生产包。模型调用按 `modelCosts` 预扣算力点，上游失败时返还。
 
 `promptSync` 字段当前仅保留为历史配置结构：
 

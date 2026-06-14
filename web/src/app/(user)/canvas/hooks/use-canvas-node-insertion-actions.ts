@@ -19,6 +19,8 @@ export function useCanvasNodeInsertionActions({
     addAssetOnce,
     assetById,
     canvasAiConfig,
+    canvasId,
+    canvasTitle,
     connectionsRef,
     containerRef,
     getCanvasCenter,
@@ -38,6 +40,8 @@ export function useCanvasNodeInsertionActions({
     toImageMetadata,
     toVideoMetadata,
     uploadTargetRef,
+    workspaceProjectId,
+    workspaceProjectTitle,
 }: UseCanvasNodeInsertionActionsOptions) {
     const { addCanvasNodeToAssets, saveNodeAsset, updateCanvasNodeAssetReference } = useCanvasNodeAssetActions({
         addAssetOnce,
@@ -46,6 +50,8 @@ export function useCanvasNodeInsertionActions({
         setNodes,
     });
     const fileNodeActions = useCanvasFileNodeActions({
+        canvasId,
+        canvasTitle,
         containerRef,
         imageInputRef,
         uploadTargetRef,
@@ -57,6 +63,8 @@ export function useCanvasNodeInsertionActions({
         setSelectedConnectionId,
         setDialogNodeId,
         showSuccess: showUploadSuccess,
+        workspaceProjectId,
+        workspaceProjectTitle,
         addCanvasNodeToAssets,
         toImageMetadata,
         toVideoMetadata,
@@ -87,6 +95,7 @@ export function useCanvasNodeInsertionActions({
     return {
         ...assistantWriteActions,
         ...fileNodeActions,
+        addCanvasNodeToAssets,
         createBriefImageConfigNode,
         saveNodeAsset,
         updateCanvasNodeAssetReference,

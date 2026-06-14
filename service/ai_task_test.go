@@ -66,6 +66,16 @@ func TestAITaskSuccessStoresSanitizedResponse(t *testing.T) {
 	}
 }
 
+func TestSanitizeAIJSONKeepsTextEventStream(t *testing.T) {
+	sanitized := SanitizeAIJSON([]byte(`data: {"choices":[{"delta":{"content":"优化稿"}}]}`), "text/event-stream")
+	if strings.Contains(sanitized, "media redacted") {
+		t.Fatalf("text event stream was redacted as media: %s", sanitized)
+	}
+	if !strings.Contains(sanitized, "优化稿") {
+		t.Fatalf("text event stream content was not preserved: %s", sanitized)
+	}
+}
+
 func TestAITaskFailureRefundUsesTaskRelatedID(t *testing.T) {
 	setupAITaskTestDB(t)
 

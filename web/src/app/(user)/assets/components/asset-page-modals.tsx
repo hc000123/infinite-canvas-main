@@ -2,6 +2,7 @@
 
 import { Input, Modal, Select } from "antd";
 import type { Asset, AssetFolder } from "@/stores/use-asset-store";
+import type { ProductionBibleItem } from "../../canvas/utils/production-bible";
 
 type FolderOption = { label: string; value: string };
 type OutdatedUsageConfirmItem = {
@@ -16,17 +17,22 @@ export function AssetPageModals({
     bulkMoveFolderId,
     bulkMoveOpen,
     bulkOutdatedOpen,
+    bulkProductionBibleDeleteOpen,
     bulkTagOpen,
     bulkTags,
     deletingAsset,
+    deletingProductionBibleItem,
     editingFolder,
     folderDialogOpen,
     folderName,
     folderOptions,
     selectedCount,
     selectedOutdatedUsageConfirmItems,
+    selectedProductionBibleCount,
+    selectedProductionBibleSummary,
     onApplyBulkDelete,
     onApplyBulkMove,
+    onApplyBulkProductionBibleDelete,
     onApplyBulkTags,
     onApplySelectedOutdatedUsages,
     onBulkMoveFolderChange,
@@ -34,10 +40,13 @@ export function AssetPageModals({
     onCancelBulkDelete,
     onCancelBulkMove,
     onCancelBulkOutdated,
+    onCancelBulkProductionBibleDelete,
     onCancelBulkTag,
     onCancelDeleteAsset,
+    onCancelDeleteProductionBibleItem,
     onCancelFolder,
     onConfirmDeleteAsset,
+    onConfirmDeleteProductionBibleItem,
     onFolderNameChange,
     onSaveFolder,
 }: {
@@ -45,17 +54,22 @@ export function AssetPageModals({
     bulkMoveFolderId?: string;
     bulkMoveOpen: boolean;
     bulkOutdatedOpen: boolean;
+    bulkProductionBibleDeleteOpen: boolean;
     bulkTagOpen: boolean;
     bulkTags: string[];
     deletingAsset: Asset | null;
+    deletingProductionBibleItem: ProductionBibleItem | null;
     editingFolder: AssetFolder | null;
     folderDialogOpen: boolean;
     folderName: string;
     folderOptions: FolderOption[];
     selectedCount: number;
     selectedOutdatedUsageConfirmItems: OutdatedUsageConfirmItem[];
+    selectedProductionBibleCount: number;
+    selectedProductionBibleSummary: string;
     onApplyBulkDelete: () => void;
     onApplyBulkMove: () => void;
+    onApplyBulkProductionBibleDelete: () => void;
     onApplyBulkTags: () => void;
     onApplySelectedOutdatedUsages: () => void;
     onBulkMoveFolderChange: (value?: string) => void;
@@ -63,10 +77,13 @@ export function AssetPageModals({
     onCancelBulkDelete: () => void;
     onCancelBulkMove: () => void;
     onCancelBulkOutdated: () => void;
+    onCancelBulkProductionBibleDelete: () => void;
     onCancelBulkTag: () => void;
     onCancelDeleteAsset: () => void;
+    onCancelDeleteProductionBibleItem: () => void;
     onCancelFolder: () => void;
     onConfirmDeleteAsset: () => void;
+    onConfirmDeleteProductionBibleItem: () => void;
     onFolderNameChange: (value: string) => void;
     onSaveFolder: () => void;
 }) {
@@ -94,6 +111,13 @@ export function AssetPageModals({
                 确定删除已选择的 {selectedCount} 个素材吗？删除后会从我的素材中移除。
             </Modal>
 
+            <Modal title="批量删除设定" open={bulkProductionBibleDeleteOpen} onCancel={onCancelBulkProductionBibleDelete} onOk={onApplyBulkProductionBibleDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消" destroyOnHidden>
+                <div className="space-y-2">
+                    <div>确定删除已选择的 {selectedProductionBibleCount} 个设定吗？删除后会从设定库中移除，但不会删除已经生成或上传的素材文件。</div>
+                    {selectedProductionBibleSummary ? <div className="text-sm text-stone-500 dark:text-stone-400">{selectedProductionBibleSummary}</div> : null}
+                </div>
+            </Modal>
+
             <Modal title="批量更新过期引用" open={bulkOutdatedOpen} onCancel={onCancelBulkOutdated} onOk={onApplySelectedOutdatedUsages} okText="更新到最新版" cancelText="取消" destroyOnHidden>
                 <div className="space-y-3">
                     <div className="text-sm text-stone-600 dark:text-stone-300">将更新以下 {selectedOutdatedUsageConfirmItems.length} 处引用。更新只修改引用方记录，不修改素材本体。</div>
@@ -112,6 +136,10 @@ export function AssetPageModals({
 
             <Modal title="删除素材" open={Boolean(deletingAsset)} onCancel={onCancelDeleteAsset} onOk={onConfirmDeleteAsset} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
                 确定删除「{deletingAsset?.title}」吗？删除后会从我的素材中移除。
+            </Modal>
+
+            <Modal title="删除设定" open={Boolean(deletingProductionBibleItem)} onCancel={onCancelDeleteProductionBibleItem} onOk={onConfirmDeleteProductionBibleItem} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
+                确定删除「{deletingProductionBibleItem?.name || "未命名设定"}」吗？删除后会从设定库中移除，但不会删除已经生成或上传的素材文件。
             </Modal>
         </>
     );

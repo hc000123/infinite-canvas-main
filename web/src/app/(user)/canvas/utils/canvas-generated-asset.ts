@@ -6,6 +6,7 @@ import type { CanvasEpisodeContext } from "./canvas-episode-context.ts";
 import { canvasProjectPresetConfig, type CanvasProjectPreset } from "./canvas-project-preset.ts";
 
 type CanvasGeneratedAssetContext = {
+    canvasId: string;
     projectId: string;
     projectTitle: string;
     prompt: string;
@@ -40,6 +41,14 @@ export function buildGeneratedImageAsset(node: CanvasNodeData, context: CanvasGe
             source: "canvas",
             nodeId: node.id,
             prompt: context.prompt,
+            canvasSource: node.metadata?.canvasSource || {
+                projectId: context.projectId,
+                projectTitle: context.projectTitle,
+                canvasId: context.canvasId,
+                nodeId: node.id,
+                prompt: context.prompt,
+                generationParams: buildAssetGenerationConfig(node.metadata, context.config, context.projectPreset),
+            },
             generation: buildGeneratedAssetMetadata(node, context, imageActionType(metadata), "openai"),
             sourceRefs: [node.id],
             volcengineAsset: metadata.volcengineAsset,
@@ -70,6 +79,14 @@ export function buildGeneratedVideoAsset(node: CanvasNodeData, context: CanvasGe
             source: "canvas",
             nodeId: node.id,
             prompt: context.prompt,
+            canvasSource: node.metadata?.canvasSource || {
+                projectId: context.projectId,
+                projectTitle: context.projectTitle,
+                canvasId: context.canvasId,
+                nodeId: node.id,
+                prompt: context.prompt,
+                generationParams: buildAssetGenerationConfig(node.metadata, context.config, context.projectPreset),
+            },
             generation: {
                 ...buildGeneratedAssetMetadata(node, context, videoActionType(metadata)),
                 ...buildGeneratedVideoStoryboardMetadata(metadata),

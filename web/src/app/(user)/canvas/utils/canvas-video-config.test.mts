@@ -143,9 +143,9 @@ test("video config ignores completed task duration when editable seconds exist",
 });
 
 test("video config keeps audio off by default but preserves explicit node choice", () => {
-    assert.equal(buildCanvasVideoConfig({ ...cloudConfig, videoGenerateAudio: "true" }, { provider: "volcengine-ark" }).videoGenerateAudio, "false");
+    assert.equal(buildCanvasVideoConfig({ ...cloudConfig, videoGenerateAudio: "true" }, { provider: "volcengine-ark" }).videoGenerateAudio, "true");
     assert.equal(buildCanvasVideoConfig(cloudConfig, { provider: "volcengine-ark", generateAudio: "true" }).videoGenerateAudio, "true");
-    assert.equal(buildCanvasVideoModePatch({ ...cloudConfig, videoGenerateAudio: "true" }).generateAudio, "false");
+    assert.equal(buildCanvasVideoModePatch({ ...cloudConfig, videoGenerateAudio: "true" }).generateAudio, "true");
 });
 
 test("video config restores Seedance task mode fields from node metadata", () => {

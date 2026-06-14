@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, FileText, ImagePlus, Images } from "lucide-react";
+import { BriefcaseBusiness, FileText, ImagePlus, Images, Workflow } from "lucide-react";
 
 export const navigationTools = [
     {
@@ -10,6 +10,11 @@ export const navigationTools = [
         slug: "image",
         label: "生图工作台",
         icon: ImagePlus,
+    },
+    {
+        slug: "original-workflow",
+        label: "视频工作流",
+        icon: Workflow,
     },
     {
         slug: "prompts",

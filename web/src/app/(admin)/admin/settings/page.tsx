@@ -1,8 +1,9 @@
 "use client";
 
-import { CheckCircleOutlined, DeleteOutlined, FormatPainterOutlined, LoadingOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, DeleteOutlined, FormatPainterOutlined, LoadingOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, SearchOutlined } from "@ant-design/icons";
 import { json } from "@codemirror/lang-json";
 import { Alert, App, Button, Card, Checkbox, Col, Drawer, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Select, Space, Switch, Table, Tabs, Tag, Typography, type FormInstance } from "antd";
+import type { InputRef } from "antd";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorView } from "@uiw/react-codemirror";
@@ -30,6 +31,7 @@ const emptySettings: AdminSettings = {
         modelChannel: {
             availableModels: [],
             modelCosts: [],
+            modelTextEndpoints: [],
             defaultModel: "",
             defaultImageModel: "",
             defaultVideoModel: "",
@@ -47,7 +49,7 @@ const emptySettings: AdminSettings = {
         volcengineAsset: { enabled: false, accessKey: "", secretKey: "", accessKeyConfigured: false, secretKeyConfigured: false, projectName: "default", region: "cn-beijing", assetGroupId: "", publicAssetBaseUrl: "" },
     },
 };
-const emptyChannel: AdminModelChannel = { protocol: "openai", name: "", baseUrl: "", apiKey: "", endpointId: "", endpointMappings: [], models: [], weight: 1, enabled: true, remark: "" };
+const emptyChannel: AdminModelChannel = { id: "", protocol: "openai", name: "", baseUrl: "", apiKey: "", endpointId: "", endpointMappings: [], models: [], capabilities: ["text"], environment: "dev", weight: 1, enabled: true, remark: "" };
 const savedSecretExtra = "已保存的密钥不会在刷新后回显明文；留空保存会继续使用后台已保存的密钥，只在输入新值时替换。";
 
 type SettingsTabKey = "public" | "private";
@@ -71,6 +73,9 @@ export default function AdminSettingsPage() {
     const [channelAutoSaveStatus, setChannelAutoSaveStatus] = useState<AutoSaveStatus>("idle");
     const channelAutoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const channelAutoSaveSeqRef = useRef(0);
+    const modelSelectSearchInputRef = useRef<InputRef>(null);
+    const modelSelectChannelDraftRef = useRef<ChannelFormValues | null>(null);
+    const enterpriseVideoFocusRef = useRef<HTMLDivElement>(null);
     const [testChannelIndex, setTestChannelIndex] = useState<number | null>(null);
     const [testKeyword, setTestKeyword] = useState("");
     const [selectedTestModels, setSelectedTestModels] = useState<string[]>([]);
@@ -86,10 +91,13 @@ export default function AdminSettingsPage() {
     const [isFetchingChannelModels, setIsFetchingChannelModels] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isEnterpriseVideoFocus, setIsEnterpriseVideoFocus] = useState(false);
     const [modelCosts, setModelCosts] = useState<AdminModelCost[]>([]);
     const [knownModels, setKnownModels] = useState<string[]>([]);
     const watchedPublicModels = Form.useWatch(["public", "modelChannel", "availableModels"], form);
+    const watchedModelTextEndpoints = Form.useWatch(["public", "modelChannel", "modelTextEndpoints"], form);
     const publicModels = useMemo(() => watchedPublicModels || [], [watchedPublicModels]);
+    const modelTextEndpoints = useMemo(() => normalizeModelTextEndpoints(watchedModelTextEndpoints || [], publicModels), [watchedModelTextEndpoints, publicModels]);
     const publicModelChannel = Form.useWatch(["public", "modelChannel"], form) || emptySettings.public.modelChannel;
     const privateVolcengineAsset = Form.useWatch(["private", "volcengineAsset"], form) || emptySettings.private.volcengineAsset;
     const publicModelOptions = useMemo(() => publicModels.map((item) => ({ label: item, value: item })), [publicModels]);
@@ -135,6 +143,22 @@ export default function AdminSettingsPage() {
     useEffect(() => {
         void loadSettings();
     }, [loadSettings]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        if (new URLSearchParams(window.location.search).get("focus") !== "enterprise-video") return;
+        setIsEnterpriseVideoFocus(true);
+        setActiveTab("private");
+        setEditorMode((current) => ({ ...current, private: "visual" }));
+        const timer = window.setTimeout(() => enterpriseVideoFocusRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 350);
+        return () => window.clearTimeout(timer);
+    }, []);
+
+    useEffect(() => {
+        if (!isModelSelectorOpen) return;
+        const timer = window.setTimeout(() => modelSelectSearchInputRef.current?.focus({ cursor: "all" }), 80);
+        return () => window.clearTimeout(timer);
+    }, [isModelSelectorOpen]);
 
     const changeTab = (nextTab: SettingsTabKey) => {
         setActiveTab(nextTab);
@@ -208,6 +232,19 @@ export default function AdminSettingsPage() {
         rememberModels(channel.models);
     };
 
+    const openEnterpriseVideoChannel = () => {
+        const arkIndex = channels.findIndex((channel) => normalizeChannel(channel).protocol === "volcengine-ark");
+        if (arkIndex >= 0) {
+            openChannelDrawer(arkIndex);
+            return;
+        }
+        setEditingChannelIndex(null);
+        setIsChannelDrawerOpen(true);
+        const model = defaultArkLocalModelName();
+        channelForm.setFieldsValue({ ...emptyChannel, name: "企业 Ark / Seedance", protocol: "volcengine-ark", baseUrl: "https://ark.cn-beijing.volces.com/api/v3", models: [model], endpointMappings: [{ model, endpointId: "" }], capabilities: ["text", "video", "video_query", "asset_review", "preflight"], environment: "prod" });
+        rememberModels([model]);
+    };
+
     const resetChannelDrawer = () => {
         setIsChannelDrawerOpen(false);
         setEditingChannelIndex(null);
@@ -271,7 +308,7 @@ export default function AdminSettingsPage() {
 
     const fetchChannelModelList = async () => {
         if (!token) return;
-        const channel = channelForm.getFieldsValue();
+        const channel = modelSelectChannelDraftRef.current || (channelForm.getFieldsValue(true) as ChannelFormValues);
         if (!channel?.baseUrl) {
             message.warning("请先填写接口地址");
             return;
@@ -301,6 +338,7 @@ export default function AdminSettingsPage() {
     };
 
     const openChannelModelSelector = (sourceModels?: string[]) => {
+        modelSelectChannelDraftRef.current = channelForm.getFieldsValue(true) as ChannelFormValues;
         const current = cleanChannelModels(channelForm.getFieldValue("models") || []);
         const source = cleanChannelModels(sourceModels !== undefined ? sourceModels : [...knownModels, ...current]);
         setModelSelectExisting(current);
@@ -316,6 +354,7 @@ export default function AdminSettingsPage() {
         setIsModelSelectorOpen(false);
         setModelSelectKeyword("");
         setModelSelectNewModel("");
+        modelSelectChannelDraftRef.current = null;
     };
 
     const confirmChannelModelSelector = () => {
@@ -407,6 +446,7 @@ export default function AdminSettingsPage() {
 
     const testChannel = testChannelIndex === null ? null : normalizeChannel(channels[testChannelIndex]);
     const testModels = visibleChannelModels(testChannel?.models || []).filter((model) => model.toLowerCase().includes(testKeyword.trim().toLowerCase()));
+    const isTestingArkChannel = testChannel?.protocol === "volcengine-ark";
 
     async function persistChannels(nextChannels: AdminModelChannel[], options: { silent?: boolean } = {}) {
         if (!token) return;
@@ -486,7 +526,7 @@ export default function AdminSettingsPage() {
                             className="mb-4"
                             type="error"
                             showIcon
-                            message="配置还没完整"
+                            title="配置还没完整"
                             description={
                                 <div>
                                     {activeWarnings.map((item) => (
@@ -530,6 +570,34 @@ export default function AdminSettingsPage() {
                                         <Form.Item name={["public", "auth", "allowRegister"]} label="是否允许用户注册" extra="关闭后隐藏注册入口，注册接口也会拒绝新用户创建" valuePropName="checked">
                                             <Switch />
                                         </Form.Item>
+                                    </Col>
+                                    <Col span={24}>
+                                        <Typography.Title level={5}>文本模型接口类型</Typography.Title>
+                                        <Table
+                                            rowKey="model"
+                                            pagination={false}
+                                            size="small"
+                                            dataSource={publicModels.map((model) => ({ model, endpointType: modelTextEndpointType(modelTextEndpoints, model) }))}
+                                            columns={[
+                                                { title: "模型", dataIndex: "model" },
+                                                {
+                                                    title: "文字 Agent 请求接口",
+                                                    dataIndex: "endpointType",
+                                                    width: 260,
+                                                    render: (_, item) => (
+                                                        <Select
+                                                            className="!w-full"
+                                                            value={item.endpointType}
+                                                            options={[
+                                                                { label: "Chat Completions (/chat/completions)", value: "chat_completions" },
+                                                                { label: "Responses (/responses)", value: "responses" },
+                                                            ]}
+                                                            onChange={(value) => setModelTextEndpoint(form, item.model, value)}
+                                                        />
+                                                    ),
+                                                },
+                                            ]}
+                                        />
                                     </Col>
                                     <Col span={24}>
                                         <Typography.Title level={5}>模型算力点</Typography.Title>
@@ -640,6 +708,26 @@ export default function AdminSettingsPage() {
                                         </Row>
                                     </Flex>
                                 </Card>
+                                <div ref={enterpriseVideoFocusRef}>
+                                    {isEnterpriseVideoFocus ? (
+                                        <Alert
+                                            showIcon
+                                            type="warning"
+                                            message="企业视频通道需要确认"
+                                            description="从视频生成预检失败进入。请编辑火山方舟 Ark 渠道，确认 API Key、Base URL、Seedance 本地模型名和火山 Endpoint / EP 映射后保存，再回到视频生成页重新预检。"
+                                            action={
+                                                <Space wrap>
+                                                    <Button size="small" type="primary" onClick={openEnterpriseVideoChannel}>
+                                                        编辑 Ark 渠道
+                                                    </Button>
+                                                    <Button size="small" href="/video">
+                                                        返回视频生成
+                                                    </Button>
+                                                </Space>
+                                            }
+                                        />
+                                    ) : null}
+                                </div>
                                 <Button type="primary" icon={<PlusOutlined />} onClick={() => openChannelDrawer(null)}>
                                     新增渠道
                                 </Button>
@@ -650,6 +738,7 @@ export default function AdminSettingsPage() {
                                     columns={[
                                         { title: "名称", dataIndex: "name", render: (value) => value || "未命名渠道" },
                                         { title: "协议", dataIndex: "protocol", width: 96, render: (value) => <Tag>{value || "openai"}</Tag> },
+                                        { title: "渠道 ID", dataIndex: "id", width: 160, render: (value) => <Typography.Text copyable ellipsis>{value || "保存后生成"}</Typography.Text> },
                                         {
                                             title: "状态",
                                             dataIndex: "enabled",
@@ -662,13 +751,26 @@ export default function AdminSettingsPage() {
                                             ),
                                         },
                                         {
+                                            title: "能力",
+                                            dataIndex: "capabilities",
+                                            width: 180,
+                                            render: (value: string[], item) => (
+                                                <Space size={4} wrap>
+                                                    {(value || []).slice(0, 3).map((capability) => (
+                                                        <Tag key={capability}>{capability}</Tag>
+                                                    ))}
+                                                    {item.environment ? <Tag color={item.environment === "prod" ? "red" : item.environment === "test" ? "gold" : "blue"}>{item.environment}</Tag> : null}
+                                                </Space>
+                                            ),
+                                        },
+                                        {
                                             title: "模型",
                                             dataIndex: "models",
                                             render: (value: string[], item: ChannelTableItem) => {
                                                 const mappings = channelEndpointMappings(item);
                                                 const firstMapping = mappings[0];
                                                 return (
-                                                    <Space direction="vertical" size={2} style={{ maxWidth: 360 }}>
+                                                    <Space orientation="vertical" size={2} style={{ maxWidth: 360 }}>
                                                         <Typography.Text ellipsis>
                                                             {item.protocol === "volcengine-ark" && firstMapping ? `${firstMapping.model} -> ${firstMapping.endpointId}${mappings.length > 1 ? `，+${mappings.length - 1}` : ""}` : modelSummary(value || [])}
                                                         </Typography.Text>
@@ -729,7 +831,7 @@ export default function AdminSettingsPage() {
                 <Drawer
                     title={editingChannelIndex === null ? "新增渠道" : "编辑渠道"}
                     open={isChannelDrawerOpen}
-                    size={560}
+                    size={isModelSelectorOpen ? 760 : 560}
                     onClose={closeChannelDrawer}
                     extra={
                         <Space size={12}>
@@ -741,8 +843,88 @@ export default function AdminSettingsPage() {
                     }
                     destroyOnHidden
                 >
-                    <Form form={channelForm} layout="vertical" requiredMark={false} initialValues={emptyChannel} onValuesChange={scheduleChannelAutoSave}>
-                        <Row gutter={16}>
+                    {isModelSelectorOpen ? (
+                        <Flex vertical gap={16}>
+                            <Flex justify="space-between" align="center" gap={12}>
+                                <Space size={12}>
+                                    <Typography.Title level={5} style={{ margin: 0 }}>
+                                        选择渠道模型
+                                    </Typography.Title>
+                                    <Typography.Text type="secondary">
+                                        已选择 {modelSelectSelected.length} / {uniqueModels([...modelSelectSource, ...modelSelectExisting]).length}
+                                    </Typography.Text>
+                                </Space>
+                                <Space>
+                                    <Button onClick={closeChannelModelSelector}>返回编辑</Button>
+                                    <Button type="primary" onClick={confirmChannelModelSelector}>
+                                        确定
+                                    </Button>
+                                </Space>
+                            </Flex>
+                            <Input
+                                ref={modelSelectSearchInputRef}
+                                allowClear
+                                prefix={<SearchOutlined />}
+                                placeholder="输入关键词搜索模型"
+                                size="large"
+                                value={modelSelectKeyword}
+                                onChange={(event) => setModelSelectKeyword(event.target.value)}
+                                onMouseDown={(event) => event.currentTarget.focus()}
+                            />
+                            <Flex gap={12} wrap>
+                                <Space.Compact style={{ flex: "1 1 360px" }}>
+                                    <Input value={modelSelectNewModel} placeholder="输入模型名称" onChange={(event) => setModelSelectNewModel(event.target.value)} onMouseDown={(event) => event.currentTarget.focus()} onPressEnter={addModelInSelector} />
+                                    <Button onClick={addModelInSelector}>增加模型</Button>
+                                </Space.Compact>
+                                <Button icon={<ReloadOutlined />} loading={isFetchingChannelModels} onClick={() => void fetchChannelModelList()}>
+                                    拉取模型列表
+                                </Button>
+                            </Flex>
+                            <Tabs
+                                activeKey={modelSelectTab}
+                                onChange={(key) => setModelSelectTab(key as ModelSelectTabKey)}
+                                items={[
+                                    { key: "new", label: `新获取的模型 (${modelSelectGroups.new.length})` },
+                                    { key: "current", label: `已有的模型 (${modelSelectGroups.current.length})` },
+                                ]}
+                            />
+                            <Flex justify="space-between" align="center" gap={12} wrap>
+                                <Typography.Text type="secondary">
+                                    当前列表已选择 {activeSelectedCount} / {activeModelSelectModels.length}
+                                </Typography.Text>
+                                <Space size={8}>
+                                    <Button size="small" disabled={!activeModelSelectModels.length || activeSelectedCount === activeModelSelectModels.length} onClick={selectActiveModels}>
+                                        全选当前列表
+                                    </Button>
+                                    <Button size="small" disabled={!activeSelectedCount} onClick={clearActiveModels}>
+                                        取消当前列表
+                                    </Button>
+                                </Space>
+                            </Flex>
+                            <div style={{ maxHeight: "calc(100vh - 360px)", overflowY: "auto", borderTop: "1px solid var(--ant-color-border-secondary)", paddingTop: 12 }}>
+                                {activeModelSelectModels.length ? (
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", columnGap: 24, rowGap: 12 }}>
+                                        {activeModelSelectModels.map((model) => (
+                                            <Checkbox key={model} checked={modelSelectSelected.includes(model)} onChange={(event) => toggleSelectedModel(model, event.target.checked)}>
+                                                <Typography.Text style={{ wordBreak: "break-all" }}>{model}</Typography.Text>
+                                            </Checkbox>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div style={{ padding: "48px 0", textAlign: "center" }}>
+                                        <Typography.Text type="secondary">没有匹配的模型</Typography.Text>
+                                    </div>
+                                )}
+                            </div>
+                        </Flex>
+                    ) : (
+                        <Form form={channelForm} layout="vertical" requiredMark={false} initialValues={emptyChannel} onValuesChange={scheduleChannelAutoSave}>
+                            <Row gutter={16}>
+                            <Col span={12}>
+                                <Form.Item name="id" label="渠道 ID" extra="Agent 可绑定这个 ID；留空保存时自动生成。">
+                                    <Input placeholder="例如 text-openai-main" />
+                                </Form.Item>
+                            </Col>
                             <Col span={12}>
                                 <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: "请输入渠道名称" }]}>
                                     <Input />
@@ -766,6 +948,33 @@ export default function AdminSettingsPage() {
                             <Col span={12}>
                                 <Form.Item name="enabled" label="启用" valuePropName="checked">
                                     <Switch />
+                                </Form.Item>
+                            </Col>
+                            <Col span={12}>
+                                <Form.Item name="environment" label="环境">
+                                    <Select
+                                        options={[
+                                            { label: "开发 dev", value: "dev" },
+                                            { label: "测试 test", value: "test" },
+                                            { label: "正式 prod", value: "prod" },
+                                        ]}
+                                    />
+                                </Form.Item>
+                            </Col>
+                            <Col span={12}>
+                                <Form.Item name="capabilities" label="渠道能力">
+                                    <Select
+                                        mode="multiple"
+                                        options={[
+                                            { label: "文本 Agent", value: "text" },
+                                            { label: "图片生成", value: "image" },
+                                            { label: "视频生成", value: "video" },
+                                            { label: "视频任务查询", value: "video_query" },
+                                            { label: "素材加白 / 预检", value: "asset_review" },
+                                            { label: "企业预检", value: "preflight" },
+                                            { label: "CLI Worker", value: "cli_workflow" },
+                                        ]}
+                                    />
                                 </Form.Item>
                             </Col>
                             <Col span={24}>
@@ -842,84 +1051,15 @@ export default function AdminSettingsPage() {
                                     <Input.TextArea rows={3} />
                                 </Form.Item>
                             </Col>
-                        </Row>
-                    </Form>
+                            </Row>
+                        </Form>
+                    )}
                 </Drawer>
                 <Modal
                     title={
-                        <Space size={12}>
-                            选择渠道模型
-                            <Typography.Text type="secondary">
-                                已选择 {modelSelectSelected.length} / {uniqueModels([...modelSelectSource, ...modelSelectExisting]).length}
-                            </Typography.Text>
-                        </Space>
-                    }
-                    open={isModelSelectorOpen}
-                    width={960}
-                    onCancel={closeChannelModelSelector}
-                    footer={
                         <Space>
-                            <Button onClick={closeChannelModelSelector}>取消</Button>
-                            <Button type="primary" onClick={confirmChannelModelSelector}>
-                                确定
-                            </Button>
-                        </Space>
-                    }
-                    destroyOnHidden
-                >
-                    <Flex vertical gap={14}>
-                        <Flex gap={12} wrap>
-                            <Input.Search placeholder="搜索模型" allowClear value={modelSelectKeyword} onChange={(event) => setModelSelectKeyword(event.target.value)} style={{ flex: "1 1 260px" }} />
-                            <Space.Compact style={{ flex: "1 1 320px" }}>
-                                <Input value={modelSelectNewModel} placeholder="输入模型名称" onChange={(event) => setModelSelectNewModel(event.target.value)} onPressEnter={addModelInSelector} />
-                                <Button onClick={addModelInSelector}>增加模型</Button>
-                                <Button icon={<ReloadOutlined />} loading={isFetchingChannelModels} onClick={() => void fetchChannelModelList()}>
-                                    拉取模型列表
-                                </Button>
-                            </Space.Compact>
-                        </Flex>
-                        <Tabs
-                            activeKey={modelSelectTab}
-                            onChange={(key) => setModelSelectTab(key as ModelSelectTabKey)}
-                            items={[
-                                { key: "new", label: `新获取的模型 (${modelSelectGroups.new.length})` },
-                                { key: "current", label: `已有的模型 (${modelSelectGroups.current.length})` },
-                            ]}
-                        />
-                        <Flex justify="space-between" align="center" gap={12} wrap>
-                            <Typography.Text type="secondary">
-                                当前列表已选择 {activeSelectedCount} / {activeModelSelectModels.length}
-                            </Typography.Text>
-                            <Space size={8}>
-                                <Button size="small" disabled={!activeModelSelectModels.length || activeSelectedCount === activeModelSelectModels.length} onClick={selectActiveModels}>
-                                    全选当前列表
-                                </Button>
-                                <Button size="small" disabled={!activeSelectedCount} onClick={clearActiveModels}>
-                                    取消当前列表
-                                </Button>
-                            </Space>
-                        </Flex>
-                        <div style={{ maxHeight: 420, overflowY: "auto", borderTop: "1px solid var(--ant-color-border-secondary)", paddingTop: 12 }}>
-                            {activeModelSelectModels.length ? (
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", columnGap: 24, rowGap: 12 }}>
-                                    {activeModelSelectModels.map((model) => (
-                                        <Checkbox key={model} checked={modelSelectSelected.includes(model)} onChange={(event) => toggleSelectedModel(model, event.target.checked)}>
-                                            <Typography.Text style={{ wordBreak: "break-all" }}>{model}</Typography.Text>
-                                        </Checkbox>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div style={{ padding: "48px 0", textAlign: "center" }}>
-                                    <Typography.Text type="secondary">没有匹配的模型</Typography.Text>
-                                </div>
-                            )}
-                        </div>
-                    </Flex>
-                </Modal>
-                <Modal
-                    title={
-                        <Space>
-                            {testChannel?.name || "渠道"} 渠道的模型测试<Typography.Text type="secondary">共 {visibleChannelModels(testChannel?.models || []).length} 个模型</Typography.Text>
+                            {testChannel?.name || "渠道"} 渠道的{isTestingArkChannel ? "企业视频预检" : "模型测试"}
+                            <Typography.Text type="secondary">共 {visibleChannelModels(testChannel?.models || []).length} 个模型</Typography.Text>
                         </Space>
                     }
                     open={testChannelIndex !== null}
@@ -929,14 +1069,16 @@ export default function AdminSettingsPage() {
                         <Space>
                             <Button onClick={closeTestDialog}>取消</Button>
                             <Button type="primary" disabled={!selectedTestModels.length || testingModels.length > 0} onClick={() => void batchTestModels()}>
-                                批量测试 {selectedTestModels.length} 个模型
+                                {isTestingArkChannel ? "批量预检" : "批量测试"} {selectedTestModels.length} 个模型
                             </Button>
                         </Space>
                     }
                     destroyOnHidden
                 >
                     <Flex vertical gap={12}>
-                        <Typography.Text type="secondary">测试会向选中模型发送一条 hi，用于确认渠道是否有响应。</Typography.Text>
+                        <Typography.Text type="secondary">
+                            {isTestingArkChannel ? "企业 Ark / Seedance 只验证 API Key、Base URL 和模型到火山 Endpoint / EP 的映射，不创建视频任务或扣除额度。" : "测试会向选中模型发送一条 hi，用于确认渠道是否有响应。"}
+                        </Typography.Text>
                         <Input.Search placeholder="搜索模型..." allowClear value={testKeyword} onChange={(event) => setTestKeyword(event.target.value)} />
                         <Table
                             rowKey="model"
@@ -974,7 +1116,7 @@ export default function AdminSettingsPage() {
                                     align: "right",
                                     render: (_, item) => (
                                         <Button size="small" loading={testingModels.includes(item.model)} onClick={() => void testModelOnline(item.model)}>
-                                            测试
+                                            {isTestingArkChannel ? "预检" : "测试"}
                                         </Button>
                                     ),
                                 },
@@ -1005,6 +1147,7 @@ function normalizePublicSetting(setting: Partial<AdminSettings["public"]> = {}):
             ...(setting.modelChannel || {}),
             availableModels: cleanChannelModels(setting.modelChannel?.availableModels || []),
             modelCosts: normalizeModelCosts(setting.modelChannel?.modelCosts || []),
+            modelTextEndpoints: normalizeModelTextEndpoints(setting.modelChannel?.modelTextEndpoints || [], setting.modelChannel?.availableModels || []),
         },
         auth: {
             allowRegister: setting.auth?.allowRegister !== false,
@@ -1015,6 +1158,23 @@ function normalizePublicSetting(setting: Partial<AdminSettings["public"]> = {}):
 
 function normalizeModelCosts(items: Partial<AdminSettings["public"]["modelChannel"]["modelCosts"][number]>[]) {
     return items.filter((item) => item.model && !isEndpointModel(item.model)).map((item) => ({ model: item.model || "", credits: Math.max(0, Number(item.credits) || 0) }));
+}
+
+function normalizeModelTextEndpoints(items: Partial<AdminSettings["public"]["modelChannel"]["modelTextEndpoints"][number]>[], models: string[]) {
+    const availableModels = cleanChannelModels(models);
+    const modelSet = new Set(availableModels);
+    const seen = new Set<string>();
+    const result = items
+        .map((item) => ({ model: item.model?.trim() || "", endpointType: normalizeTextEndpointType(item.endpointType, item.model || "") }))
+        .filter((item) => {
+            if (!item.model || seen.has(item.model) || (modelSet.size > 0 && !modelSet.has(item.model))) return false;
+            seen.add(item.model);
+            return true;
+        });
+    availableModels.forEach((model) => {
+        if (!seen.has(model)) result.push({ model, endpointType: defaultTextEndpointType(model) });
+    });
+    return result;
 }
 
 function normalizePrivateSetting(setting: Partial<AdminSettings["private"]> = {}): AdminSettings["private"] {
@@ -1054,6 +1214,7 @@ function normalizeChannel(item: Partial<AdminModelChannel> = {}): AdminModelChan
     const endpointId = protocol === "volcengine-ark" ? normalizeEndpointModel(item.endpointId) || legacyEndpointId : "";
     const endpointMappings = protocol === "volcengine-ark" ? normalizeEndpointMappings(item.endpointMappings, item.models, endpointId) : [];
     return {
+        id: (item.id || stableChannelId(item)).trim(),
         protocol,
         name: item.name || "",
         baseUrl: item.baseUrl || "",
@@ -1061,10 +1222,30 @@ function normalizeChannel(item: Partial<AdminModelChannel> = {}): AdminModelChan
         endpointId,
         endpointMappings,
         models: protocol === "volcengine-ark" ? endpointMappings.map((mapping) => mapping.model) : localChannelModels(item.models || [], protocol, endpointId),
+        capabilities: normalizeChannelCapabilities(item.capabilities, protocol),
+        environment: normalizeChannelEnvironment(item.environment),
         weight: Math.max(1, Number(item.weight) || 1),
         enabled: item.enabled !== false,
         remark: item.remark || "",
     };
+}
+
+function stableChannelId(item: Partial<AdminModelChannel>) {
+    const source = `${item.name || item.protocol || "channel"}-${item.baseUrl || ""}`.toLowerCase();
+    const value = source.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    return value || "model-channel";
+}
+
+function normalizeChannelCapabilities(value: string[] | undefined, protocol: AdminModelChannel["protocol"]) {
+    const fallback = protocol === "volcengine-ark" ? ["text", "video"] : ["text", "image"];
+    const allowed = new Set(["text", "image", "video", "video_query", "asset_review", "preflight", "cli", "cli_workflow"]);
+    const result = Array.from(new Set((value || []).map((item) => item.trim()).filter((item) => allowed.has(item))));
+    return result.length ? result : fallback;
+}
+
+function normalizeChannelEnvironment(value: AdminModelChannel["environment"] | undefined): AdminModelChannel["environment"] {
+    if (value === "test" || value === "prod") return value;
+    return "dev";
 }
 
 function normalizeEndpointMappings(mappings: Partial<AdminModelChannel["endpointMappings"][number]>[] = [], models: string[] = [], fallbackEndpointId = "") {
@@ -1132,12 +1313,31 @@ function modelCostCredits(items: AdminSettings["public"]["modelChannel"]["modelC
     return items.find((item) => item.model === model)?.credits || 0;
 }
 
+function modelTextEndpointType(items: AdminSettings["public"]["modelChannel"]["modelTextEndpoints"], model: string) {
+    return items.find((item) => item.model === model)?.endpointType || defaultTextEndpointType(model);
+}
+
 function setModelCost(form: FormInstance<AdminSettings>, setModelCosts: (items: AdminModelCost[]) => void, model: string, credits: number) {
     const current = (form.getFieldValue(["public", "modelChannel", "modelCosts"]) || []) as AdminSettings["public"]["modelChannel"]["modelCosts"];
     const next = current.filter((item) => item.model !== model);
     next.push({ model, credits: Math.max(0, credits) });
     form.setFieldValue(["public", "modelChannel", "modelCosts"], next);
     setModelCosts(next);
+}
+
+function setModelTextEndpoint(form: FormInstance<AdminSettings>, model: string, endpointType: AdminSettings["public"]["modelChannel"]["modelTextEndpoints"][number]["endpointType"]) {
+    const publicModels = cleanChannelModels(form.getFieldValue(["public", "modelChannel", "availableModels"]) || []);
+    const current = (form.getFieldValue(["public", "modelChannel", "modelTextEndpoints"]) || []) as AdminSettings["public"]["modelChannel"]["modelTextEndpoints"];
+    const next = normalizeModelTextEndpoints([...current.filter((item) => item.model !== model), { model, endpointType }], publicModels);
+    form.setFieldValue(["public", "modelChannel", "modelTextEndpoints"], next);
+}
+
+function normalizeTextEndpointType(value: unknown, model: string): AdminSettings["public"]["modelChannel"]["modelTextEndpoints"][number]["endpointType"] {
+    return value === "responses" || value === "chat_completions" ? value : defaultTextEndpointType(model);
+}
+
+function defaultTextEndpointType(model: string): AdminSettings["public"]["modelChannel"]["modelTextEndpoints"][number]["endpointType"] {
+    return model.trim().toLowerCase().includes("gpt-5.5") ? "responses" : "chat_completions";
 }
 
 function mergePrivateSecrets(input: AdminSettings, saved: AdminSettings): AdminSettings {
@@ -1271,6 +1471,7 @@ async function collectSettings(form: FormInstance<AdminSettings>, editorMode: Re
         values.private = privateSetting;
     }
     values.public.modelChannel.availableModels = filterModels(values.public.modelChannel.availableModels, collectChannelModels(values.private.channels));
+    values.public.modelChannel.modelTextEndpoints = normalizeModelTextEndpoints(values.public.modelChannel.modelTextEndpoints, values.public.modelChannel.availableModels);
     return normalizeSettings(values);
 }
 

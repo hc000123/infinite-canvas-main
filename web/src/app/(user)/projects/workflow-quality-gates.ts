@@ -1,6 +1,6 @@
 import { SEEDANCE_WORKFLOW_PRESET_ID, type AgentWorkflowPreset } from "./agent-workflow-presets.ts";
 import type { AgentWorkflowReviewEvidence, AgentWorkflowRunRecord, AgentWorkflowStageOutput } from "./agent-runner-types.ts";
-import { buildSeedanceRequiredReadings } from "./workflow-quality-gate-readings";
+import { buildSeedanceRequiredReadings } from "./workflow-quality-gate-readings.ts";
 
 export type WorkflowQualityGateSeverity = "error" | "warning";
 export type WorkflowQualityGateCheckKind = "manifest_only" | "required_reading" | "artifact_field" | "manual_review";

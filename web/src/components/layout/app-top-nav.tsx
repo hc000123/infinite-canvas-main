@@ -2,7 +2,7 @@
 
 import { Menu, Settings2 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
@@ -18,6 +18,7 @@ import { useState } from "react";
 
 export function AppTopNav() {
     const pathname = usePathname();
+    const searchParams = useSearchParams();
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const theme = useThemeStore((state) => state.theme);
@@ -33,6 +34,7 @@ export function AppTopNav() {
     const slug = pathname.split("/").filter(Boolean)[0];
     const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
     const themeToggleLabel = theme === "dark" ? "切换到全局浅色主题" : "切换到全局深色主题";
+    const getToolHref = (toolSlug: NavigationToolSlug) => (toolSlug === "assets" ? buildAssetsReturnHref(pathname, searchParams) : `/${toolSlug}`);
 
     return (
         <>
@@ -76,7 +78,7 @@ export function AppTopNav() {
                                     return (
                                         <Link
                                             key={tool.slug}
-                                            href={`/${tool.slug}`}
+                                            href={getToolHref(tool.slug)}
                                             className={cn(
                                                 "relative flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-sm leading-6 transition",
                                                 active
@@ -124,8 +126,23 @@ export function AppTopNav() {
                 </header>
             ) : null}
 
-            <MobileNavDrawer open={mobileNavOpen} activeToolSlug={activeToolSlug} onClose={() => setMobileNavOpen(false)} />
+            <MobileNavDrawer open={mobileNavOpen} activeToolSlug={activeToolSlug} getHref={getToolHref} onClose={() => setMobileNavOpen(false)} />
             <AppConfigModal />
         </>
     );
+}
+
+type SearchParamReader = {
+    toString: () => string;
+};
+
+function buildAssetsReturnHref(pathname: string, searchParams: SearchParamReader) {
+    if (pathname === "/assets" || pathname.startsWith("/assets/")) return "/assets";
+
+    const currentQuery = searchParams.toString();
+    const currentHref = currentQuery ? `${pathname}?${currentQuery}` : pathname;
+    const params = new URLSearchParams();
+    params.set("returnTo", currentHref);
+    params.set("returnLabel", "返回上一页");
+    return `/assets?${params.toString()}`;
 }

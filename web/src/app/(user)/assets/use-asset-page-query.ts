@@ -8,6 +8,7 @@ import type { ProductionBibleItem } from "../canvas/utils/production-bible";
 import type { StoryboardGroup, StoryboardShot } from "../canvas/utils/storyboard-management";
 import type { CreativeProject } from "../projects/creative-projects";
 import { assetGenerationFilterOptions } from "./asset-generation";
+import { buildAssetProjectResultGroups } from "./asset-project-groups";
 import { collectOutdatedAssetVersionUsages } from "./asset-version-outdated-references";
 import { collectAssetVersionUsageReferences } from "./asset-version-references";
 import {
@@ -71,6 +72,11 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
     const canvasLibraryTitles = useMemo(() => Object.fromEntries(projects.map((project) => [project.id, project.title || "未命名画布"])), [projects]);
     const projectContexts = useMemo(() => buildAssetProjectContexts(creativeProjects, projects), [creativeProjects, projects]);
     const projectLibraryProjectTitles = useMemo(() => Object.fromEntries(projectContexts.map((project) => [project.id, project.title])), [projectContexts]);
+    const projectReferenceIds = useMemo(() => Array.from(new Set([...projectContexts.map((project) => project.id), ...productionBibleItems.map((item) => item.projectId), ...storyboardGroups.map((group) => group.projectId)].filter(Boolean))), [productionBibleItems, projectContexts, storyboardGroups]);
+    const projectReferencedAssetIdsByProject = useMemo(
+        () => new Map(projectReferenceIds.map((projectId) => [projectId, collectProjectReferencedAssetIds(projectId, productionBibleItems, storyboardGroups, storyboardShots)])),
+        [productionBibleItems, projectReferenceIds, storyboardGroups, storyboardShots],
+    );
     const previewAssetUsageReferences = useMemo(() => {
         if (!previewAsset) return [];
         return collectAssetVersionUsageReferences(previewAsset, {
@@ -147,6 +153,27 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
         sortMode,
     ]);
     const visibleAssets = useMemo(() => paginateAssetList(filteredAssets, page, pageSize), [filteredAssets, page, pageSize]);
+    const visibleProductionBibleItems = useMemo(() => {
+        if (referenceVersionFilter !== "all" || kindFilter !== "all") return [];
+        if (generationSourceFilter || generationActionFilter || generationModelProviderFilter || generationTaskFilter !== "all" || storyboardGroupFilter || projectLibraryFilter !== "all") return [];
+        if (!projectContextFilter && folderFilter !== "all") return [];
+        const query = keyword.trim().toLowerCase();
+        return productionBibleItems
+            .filter((item) => (!projectContextFilter || item.projectId === projectContextFilter) && (!query || productionBibleSearchText(item).includes(query)))
+            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    }, [folderFilter, generationActionFilter, generationModelProviderFilter, generationSourceFilter, generationTaskFilter, keyword, kindFilter, productionBibleItems, projectContextFilter, projectLibraryFilter, referenceVersionFilter, storyboardGroupFilter]);
+    const visibleAssetGroups = useMemo(
+        () =>
+            buildAssetProjectResultGroups({
+                assets: visibleAssets,
+                folderMap,
+                productionBibleItems: visibleProductionBibleItems,
+                projectOrder: projectContexts.map((project) => project.id),
+                projectReferencedAssetIdsByProject,
+                projectTitles: projectLibraryProjectTitles,
+            }),
+        [folderMap, projectContexts, projectLibraryProjectTitles, projectReferencedAssetIdsByProject, visibleAssets, visibleProductionBibleItems],
+    );
 
     useEffect(() => {
         const maxPage = Math.max(1, Math.ceil(filteredAssets.length / pageSize));
@@ -221,6 +248,12 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
         storyboardGroupFilter,
         storyboardGroupOptions,
         validAssets,
+        visibleAssetGroups,
         visibleAssets,
+        visibleProductionBibleItems,
     };
+}
+
+function productionBibleSearchText(item: ProductionBibleItem) {
+    return [item.name, item.description, item.tags.join(" "), item.promptSnippets.positive || "", item.promptSnippets.negative || "", item.promptSnippets.consistency || ""].join(" ").toLowerCase();
 }

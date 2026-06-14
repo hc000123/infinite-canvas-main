@@ -3,7 +3,7 @@ import axios from "axios";
 import type { AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
-export const AI_REQUEST_TIMEOUT_MS = 120_000;
+export const AI_REQUEST_TIMEOUT_MS = 300_000;
 export const AI_VIDEO_TASK_TIMEOUT_MS = 300_000;
 export const AI_VIDEO_CONTENT_TIMEOUT_MS = 300_000;
 export const AI_VIDEO_POLL_INTERVAL_MS = 2500;
@@ -32,6 +32,12 @@ export function aiReasoningPayload(config: AiConfig) {
     if (config.thinkingMode !== "true") return {};
     const effort = reasoningEfforts.has(config.reasoningEffort) ? config.reasoningEffort : "medium";
     return { reasoning_effort: effort };
+}
+
+export function aiResponsesReasoningPayload(config: AiConfig) {
+    if (config.thinkingMode !== "true") return {};
+    const effort = reasoningEfforts.has(config.reasoningEffort) ? config.reasoningEffort : "medium";
+    return { reasoning: { effort } };
 }
 
 export function normalizeAiError(error: unknown, fallback: string) {

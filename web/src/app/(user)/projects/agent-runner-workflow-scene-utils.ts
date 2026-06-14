@@ -1,5 +1,5 @@
 import type { AgentWorkflowPreset } from "./agent-workflow-presets";
-import type { AgentWorkflowRunRecord, AgentWorkflowSceneRunState, AgentWorkflowStageOutput } from "./agent-runner-types";
+import type { AgentWorkflowRunRecord, AgentWorkflowSceneRunState, AgentWorkflowStageOutput, AgentWorkflowStageState } from "./agent-runner-types";
 import { parseWorkflowMappingRawJson, stringField } from "./agent-runner-mapping-preview.ts";
 import { workflowStageDisplayName } from "./agent-runner-workflow-display.ts";
 
@@ -7,8 +7,8 @@ export function summarizeWorkflowSceneOutput(output: AgentWorkflowStageOutput) {
     const record = output.structuredOutput && typeof output.structuredOutput === "object" && !Array.isArray(output.structuredOutput) ? (output.structuredOutput as Record<string, unknown>) : parseWorkflowMappingRawJson(output.rawText);
     return {
         visualDnaSummary: readSceneSummaryField(record, ["sceneVisualDna", "visualDna", "visualDnaSummary", "场次视觉DNA", "场次视觉 DNA"], output.rawText, ["场次视觉 DNA", "视觉 DNA"]),
-        promptPlanSummary: readSceneSummaryField(record, ["promptPlanSummary", "promptPlan", "shotPlan", "splitPlan", "生成P拆分表", "生成 P / 镜头 P 拆分表"], output.rawText, ["生成 P / 镜头 P 拆分表", "生成 P 拆分", "镜头 P 拆分表"]),
-        promptTextSummary: readSceneSummaryField(record, ["promptTextSummary", "seedancePrompt", "seedancePrompts", "singlePTaskCards", "taskCards", "items"], output.rawText, ["单 P 任务卡", "Seedance 提示词", "一键复制"]),
+        promptPlanSummary: readSceneSummaryField(record, ["promptPlanSummary", "promptPlan", "shotPlan", "splitPlan", "shots", "生成P拆分表", "生成 P / 镜头 P 拆分表"], output.rawText, ["生成 P / 镜头 P 拆分表", "生成 P 拆分", "镜头 P 拆分表"]),
+        promptTextSummary: readSceneSummaryField(record, ["promptTextSummary", "seedancePrompt", "seedancePrompts", "singlePTaskCards", "taskCards", "items", "shots"], output.rawText, ["单 P 任务卡", "Seedance 提示词", "一键复制"]),
         industrialPrecheckSummary: readSceneSummaryField(record, ["industrialPrecheckSummary", "industrialPrecheck", "precheckSummary", "工业化预检记录"], output.rawText, ["工业化预检记录", "工业化预检", "预检记录"]),
     };
 }
@@ -61,10 +61,16 @@ export function refreshWorkflowStageBlocks(workflowRun: AgentWorkflowRunRecord, 
         const missingDependency = stage.dependsOnStageIds.find((stageId) => stageById.get(stageId)?.status !== "approved");
         if (!missingDependency) {
             if (stage.status === "blocked") {
+                const restored = restoreBlockedStageProgress(stage);
                 changed = true;
-                return { ...stage, status: "idle" as const, blockedReason: undefined };
+                return restored;
             }
             return stage;
+        }
+        if (stageHasOwnProgress(stage)) {
+            const restored = stage.status === "blocked" ? restoreBlockedStageProgress(stage) : stage;
+            if (restored !== stage) changed = true;
+            return restored;
         }
         const blockedReason = `需先批准前置阶段：${stageNameById.get(missingDependency) || missingDependency}`;
         if (stage.status === "blocked" && stage.blockedReason === blockedReason) return stage;
@@ -85,6 +91,17 @@ export function stableWorkflowSnapshotHash(value: unknown) {
 
 export function orderedWorkflowPresetStages(preset: Pick<AgentWorkflowPreset, "stages">) {
     return [...preset.stages].sort((a, b) => a.order - b.order);
+}
+
+function stageHasOwnProgress(stage: AgentWorkflowStageState) {
+    return Boolean(stage.outputId || stage.runnerRunId || stage.evidenceIds.length || stage.approvedAt || stage.rejectedAt || ["running", "review", "approved", "rejected", "error"].includes(stage.status));
+}
+
+function restoreBlockedStageProgress(stage: AgentWorkflowStageState): AgentWorkflowStageState {
+    if (stage.evidenceIds.length || stage.approvedAt) return { ...stage, status: "approved", blockedReason: undefined };
+    if (stage.outputId) return { ...stage, status: "review", blockedReason: undefined };
+    if (stage.runnerRunId) return { ...stage, status: "error", errorMessage: stage.errorMessage || "上一次运行状态异常，可重新运行。", blockedReason: undefined };
+    return { ...stage, status: "idle", blockedReason: undefined };
 }
 
 function readSceneSummaryField(record: unknown, keys: string[], rawText: string, markers: string[]) {
@@ -109,7 +126,7 @@ function summarizeUnknownSceneValue(value: unknown): string {
     }
     if (value && typeof value === "object") {
         const record = value as Record<string, unknown>;
-        const direct = stringField(record.summary) || stringField(record.text) || stringField(record.prompt) || stringField(record.title) || stringField(record.description);
+        const direct = stringField(record.summary) || stringField(record.text) || stringField(record.seedancePrompt) || stringField(record.prompt) || stringField(record.videoPrompt) || stringField(record.visualDescription) || stringField(record.title) || stringField(record.description);
         if (direct) return direct;
         return Object.values(record)
             .map((item) => summarizeUnknownSceneValue(item))

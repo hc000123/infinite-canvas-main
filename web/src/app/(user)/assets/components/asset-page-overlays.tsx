@@ -4,6 +4,7 @@ import type { RefObject } from "react";
 import type { FormInstance } from "antd";
 
 import type { Asset, AssetFolder, AssetKind } from "@/stores/use-asset-store";
+import type { ProductionBibleItem } from "../../canvas/utils/production-bible";
 import type { AssetVersionUsageReference } from "../asset-version-references";
 import { AssetDrawer } from "./asset-drawer";
 import { AssetEditorModal, type AssetFormValues, type ImageDraft, type MediaDraft } from "./asset-editor-modal";
@@ -23,6 +24,7 @@ export function AssetPageOverlays({
     bulkMoveFolderId,
     bulkMoveOpen,
     bulkOutdatedOpen,
+    bulkProductionBibleDeleteOpen,
     bulkTagOpen,
     bulkTags,
     canvasLibraryTitles,
@@ -30,6 +32,7 @@ export function AssetPageOverlays({
     coverInputRef,
     coverUrl,
     deletingAsset,
+    deletingProductionBibleItem,
     editingAsset,
     editingFolder,
     folderDialogOpen,
@@ -44,16 +47,20 @@ export function AssetPageOverlays({
     mediaInputRef,
     previewAsset,
     previewAssetFolderName,
+    generatingWorkflowImage,
     projectLibraryProjectTitles,
     refreshingReview,
     selectedCount,
     selectedOutdatedUsageConfirmItems,
+    selectedProductionBibleCount,
+    selectedProductionBibleSummary,
     submittingReview,
     tags,
     title,
     usageReferences,
     onApplyBulkDelete,
     onApplyBulkMove,
+    onApplyBulkProductionBibleDelete,
     onApplyBulkTags,
     onApplySelectedOutdatedUsages,
     onBulkMoveFolderChange,
@@ -61,12 +68,15 @@ export function AssetPageOverlays({
     onCancelBulkDelete,
     onCancelBulkMove,
     onCancelBulkOutdated,
+    onCancelBulkProductionBibleDelete,
     onCancelBulkTag,
     onCancelDeleteAsset,
+    onCancelDeleteProductionBibleItem,
     onCancelFolder,
     onCloseAssetDrawer,
     onCloseEditor,
     onConfirmDeleteAsset,
+    onConfirmDeleteProductionBibleItem,
     onCopyAsset,
     onDownloadAsset,
     onDownloadVersion,
@@ -77,6 +87,7 @@ export function AssetPageOverlays({
     onReadImageFile,
     onReadMediaFile,
     onRefreshReview,
+    onGenerateWorkflowImage,
     onRestoreVersion,
     onReview,
     onSaveAsset,
@@ -87,6 +98,7 @@ export function AssetPageOverlays({
     bulkMoveFolderId?: string;
     bulkMoveOpen: boolean;
     bulkOutdatedOpen: boolean;
+    bulkProductionBibleDeleteOpen: boolean;
     bulkTagOpen: boolean;
     bulkTags: string[];
     canvasLibraryTitles: Record<string, string>;
@@ -94,6 +106,7 @@ export function AssetPageOverlays({
     coverInputRef: RefObject<HTMLInputElement | null>;
     coverUrl: string;
     deletingAsset: Asset | null;
+    deletingProductionBibleItem: ProductionBibleItem | null;
     editingAsset: Asset | null;
     editingFolder: AssetFolder | null;
     folderDialogOpen: boolean;
@@ -108,16 +121,20 @@ export function AssetPageOverlays({
     mediaInputRef: RefObject<HTMLInputElement | null>;
     previewAsset: Asset | null;
     previewAssetFolderName?: string;
+    generatingWorkflowImage: boolean;
     projectLibraryProjectTitles: Record<string, string>;
     refreshingReview: boolean;
     selectedCount: number;
     selectedOutdatedUsageConfirmItems: OutdatedUsageConfirmItem[];
+    selectedProductionBibleCount: number;
+    selectedProductionBibleSummary: string;
     submittingReview: boolean;
     tags: string[];
     title: string;
     usageReferences: AssetVersionUsageReference[];
     onApplyBulkDelete: () => void;
     onApplyBulkMove: () => void;
+    onApplyBulkProductionBibleDelete: () => void;
     onApplyBulkTags: () => void;
     onApplySelectedOutdatedUsages: () => void;
     onBulkMoveFolderChange: (value?: string) => void;
@@ -125,12 +142,15 @@ export function AssetPageOverlays({
     onCancelBulkDelete: () => void;
     onCancelBulkMove: () => void;
     onCancelBulkOutdated: () => void;
+    onCancelBulkProductionBibleDelete: () => void;
     onCancelBulkTag: () => void;
     onCancelDeleteAsset: () => void;
+    onCancelDeleteProductionBibleItem: () => void;
     onCancelFolder: () => void;
     onCloseAssetDrawer: () => void;
     onCloseEditor: () => void;
     onConfirmDeleteAsset: () => void;
+    onConfirmDeleteProductionBibleItem: () => void;
     onCopyAsset: (asset: Asset) => void;
     onDownloadAsset: (asset: Asset) => void;
     onDownloadVersion: (asset: Asset, versionId: string) => void;
@@ -141,6 +161,7 @@ export function AssetPageOverlays({
     onReadImageFile: (file?: File) => void | Promise<void>;
     onReadMediaFile: (file?: File) => void | Promise<void>;
     onRefreshReview: (asset: Asset) => void;
+    onGenerateWorkflowImage: (asset: Asset) => void;
     onRestoreVersion: (asset: Asset, versionId: string) => void;
     onReview: (asset: Asset) => void;
     onSaveAsset: () => void | Promise<void>;
@@ -175,12 +196,14 @@ export function AssetPageOverlays({
                 asset={previewAsset}
                 folderName={previewAssetFolderName}
                 refreshingReview={refreshingReview}
+                generatingWorkflowImage={generatingWorkflowImage}
                 onClose={onCloseAssetDrawer}
                 onCopy={onCopyAsset}
                 onDownload={onDownloadAsset}
                 submittingReview={submittingReview}
                 onReview={onReview}
                 onRefreshReview={onRefreshReview}
+                onGenerateWorkflowImage={onGenerateWorkflowImage}
                 projectLibraryProjectTitles={projectLibraryProjectTitles}
                 canvasLibraryTitles={canvasLibraryTitles}
                 usageReferences={usageReferences}
@@ -195,17 +218,22 @@ export function AssetPageOverlays({
                 bulkMoveFolderId={bulkMoveFolderId}
                 bulkMoveOpen={bulkMoveOpen}
                 bulkOutdatedOpen={bulkOutdatedOpen}
+                bulkProductionBibleDeleteOpen={bulkProductionBibleDeleteOpen}
                 bulkTagOpen={bulkTagOpen}
                 bulkTags={bulkTags}
                 deletingAsset={deletingAsset}
+                deletingProductionBibleItem={deletingProductionBibleItem}
                 editingFolder={editingFolder}
                 folderDialogOpen={folderDialogOpen}
                 folderName={folderName}
                 folderOptions={folderOptions}
                 selectedCount={selectedCount}
                 selectedOutdatedUsageConfirmItems={selectedOutdatedUsageConfirmItems}
+                selectedProductionBibleCount={selectedProductionBibleCount}
+                selectedProductionBibleSummary={selectedProductionBibleSummary}
                 onApplyBulkDelete={onApplyBulkDelete}
                 onApplyBulkMove={onApplyBulkMove}
+                onApplyBulkProductionBibleDelete={onApplyBulkProductionBibleDelete}
                 onApplyBulkTags={onApplyBulkTags}
                 onApplySelectedOutdatedUsages={onApplySelectedOutdatedUsages}
                 onBulkMoveFolderChange={onBulkMoveFolderChange}
@@ -213,10 +241,13 @@ export function AssetPageOverlays({
                 onCancelBulkDelete={onCancelBulkDelete}
                 onCancelBulkMove={onCancelBulkMove}
                 onCancelBulkOutdated={onCancelBulkOutdated}
+                onCancelBulkProductionBibleDelete={onCancelBulkProductionBibleDelete}
                 onCancelBulkTag={onCancelBulkTag}
                 onCancelDeleteAsset={onCancelDeleteAsset}
+                onCancelDeleteProductionBibleItem={onCancelDeleteProductionBibleItem}
                 onCancelFolder={onCancelFolder}
                 onConfirmDeleteAsset={onConfirmDeleteAsset}
+                onConfirmDeleteProductionBibleItem={onConfirmDeleteProductionBibleItem}
                 onFolderNameChange={onFolderNameChange}
                 onSaveFolder={onSaveFolder}
             />

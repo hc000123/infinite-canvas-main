@@ -1,15 +1,17 @@
 "use client";
 
-import { Download, Plus, Upload } from "lucide-react";
+import { ArrowLeft, Download, Plus, Upload } from "lucide-react";
 import { Button } from "antd";
 
 type Props = {
     onCreate: () => void;
     onExportAll: () => void;
     onImportClick: () => void;
+    returnHref: string;
+    returnLabel: string;
 };
 
-export function AssetPageHeader({ onCreate, onExportAll, onImportClick }: Props) {
+export function AssetPageHeader({ onCreate, onExportAll, onImportClick, returnHref, returnLabel }: Props) {
     return (
         <header className="flex flex-col gap-5 border-b border-[var(--studio-border-subtle)] pb-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
@@ -18,6 +20,9 @@ export function AssetPageHeader({ onCreate, onExportAll, onImportClick }: Props)
                 <p className="mt-2 max-w-2xl text-[15px] leading-6 text-[var(--studio-text-secondary)]">统一管理图片、视频、音频与文本资产，快速定位项目文件夹、引用关系和生成来源。</p>
             </div>
             <div className="flex flex-wrap gap-2">
+                <Button className="studio-toolbar-button" href={returnHref} icon={<ArrowLeft className="size-4" />}>
+                    {returnLabel}
+                </Button>
                 <Button className="studio-toolbar-button" icon={<Download className="size-4" />} onClick={onExportAll}>
                     导出全部
                 </Button>

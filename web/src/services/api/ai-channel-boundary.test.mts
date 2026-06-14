@@ -30,8 +30,13 @@ test("local and remote modes keep the selected video protocol", () => {
     assert.equal(resolveAllowedVideoProtocol("remote", "volcengine-ark"), "volcengine-ark");
 });
 
-test("remote video protocol can be inferred from Seedance model names", () => {
-    assert.equal(inferRemoteVideoProtocol("doubao-seedance-2-0-260128"), "volcengine-ark");
+test("remote video protocol only treats endpoint ids as Ark", () => {
+    assert.equal(inferRemoteVideoProtocol("doubao-seedance-2-0-260128"), "openai");
     assert.equal(inferRemoteVideoProtocol("ep-20260605-demo"), "volcengine-ark");
     assert.equal(inferRemoteVideoProtocol("grok-imagine-video"), "openai");
+});
+
+test("remote video protocol uses backend model protocol mapping first", () => {
+    assert.equal(inferRemoteVideoProtocol("doubao-seedance-2-0", "openai", [{ model: "doubao-seedance-2-0", protocol: "volcengine-ark" }]), "volcengine-ark");
+    assert.equal(inferRemoteVideoProtocol("doubao-seedance-2-0-260128", "volcengine-ark", [{ model: "doubao-seedance-2-0-260128", protocol: "openai" }]), "openai");
 });

@@ -2,32 +2,39 @@
 
 import { useEffect, useState } from "react";
 import { Button, Input } from "antd";
+import { Eye } from "lucide-react";
 
+import { useEffectiveConfig } from "@/stores/use-config-store";
 import type { Asset } from "@/stores/use-asset-store";
+import { episodeAssetImagePreset } from "../episode-asset-image-presets";
 import { assetKindDisplay, assetVersionSummary, filterAssetCandidates } from "./episode-assets-module-utils";
-import type { EpisodeAssetProcessMode, EpisodeAssetRow, OpenImageWorkbenchPayload } from "./episode-assets-module-types";
+import type { EpisodeAssetImageGenerationOptions, EpisodeAssetProcessMode, EpisodeAssetRow } from "./episode-assets-module-types";
 import { EpisodeStatusPill } from "./episode-module-panel";
 
 export function EpisodeAssetProcessDrawer({
     asset,
+    generating,
     mode,
     onBindAsset,
+    onGenerateImage,
     onModeChange,
-    onOpenImageWorkbench,
-    onPrepareGenerate,
+    onPreviewAsset,
 }: {
     asset?: EpisodeAssetRow;
+    generating: boolean;
     mode: EpisodeAssetProcessMode;
     onBindAsset: (row: EpisodeAssetRow, asset: Asset) => void;
+    onGenerateImage: (row: EpisodeAssetRow, options?: EpisodeAssetImageGenerationOptions) => Promise<string[]>;
     onModeChange: (mode: EpisodeAssetProcessMode) => void;
-    onOpenImageWorkbench: (payload: OpenImageWorkbenchPayload) => void;
-    onPrepareGenerate: () => void;
+    onPreviewAsset: (asset: Asset) => void;
 }) {
+    const effectiveConfig = useEffectiveConfig();
+    const defaultImageModel = effectiveConfig.imageModel || effectiveConfig.model;
     const [assetSearch, setAssetSearch] = useState("");
     const [kindFilter, setKindFilter] = useState<"全部" | "图片" | "文本" | "视频">("全部");
     const [selectedCandidateId, setSelectedCandidateId] = useState("");
     const [promptDraft, setPromptDraft] = useState("");
-    const [model, setModel] = useState("gpt-image-1");
+    const [model, setModel] = useState(defaultImageModel);
     const [size, setSize] = useState("1024x1024");
     const [count, setCount] = useState("2");
     const candidates = asset ? filterAssetCandidates(asset.candidates, assetSearch, kindFilter) : [];
@@ -38,7 +45,10 @@ export function EpisodeAssetProcessDrawer({
         setKindFilter("全部");
         setSelectedCandidateId(asset?.candidates[0]?.id || "");
         setPromptDraft(asset?.promptDraft || "");
-    }, [asset?.id]);
+        setModel(defaultImageModel);
+        setSize(asset ? episodeAssetImagePreset(asset.type).size : "1024x1024");
+        setCount("1");
+    }, [asset?.id, asset?.promptDraft, asset?.type, defaultImageModel]);
 
     if (!asset) {
         return <aside className="rounded-2xl border border-slate-800 bg-[#091018]/88 p-5 text-sm text-slate-500">请选择一条资产进行处理。</aside>;
@@ -87,6 +97,7 @@ export function EpisodeAssetProcessDrawer({
                         onAssetSearchChange={setAssetSearch}
                         onBindAsset={onBindAsset}
                         onKindFilterChange={setKindFilter}
+                        onPreviewAsset={onPreviewAsset}
                         onSelectedCandidateChange={setSelectedCandidateId}
                         selectedCandidate={selectedCandidate}
                     />
@@ -94,11 +105,11 @@ export function EpisodeAssetProcessDrawer({
                     <EpisodeAssetGeneratePanel
                         asset={asset}
                         count={count}
+                        generating={generating}
                         model={model}
                         onCountChange={setCount}
+                        onGenerateImage={onGenerateImage}
                         onModelChange={setModel}
-                        onOpenImageWorkbench={onOpenImageWorkbench}
-                        onPrepareGenerate={onPrepareGenerate}
                         onPromptDraftChange={setPromptDraft}
                         onSizeChange={setSize}
                         promptDraft={promptDraft}
@@ -118,6 +129,7 @@ function EpisodeAssetBindPanel({
     onAssetSearchChange,
     onBindAsset,
     onKindFilterChange,
+    onPreviewAsset,
     onSelectedCandidateChange,
     selectedCandidate,
 }: {
@@ -128,6 +140,7 @@ function EpisodeAssetBindPanel({
     onAssetSearchChange: (value: string) => void;
     onBindAsset: (row: EpisodeAssetRow, asset: Asset) => void;
     onKindFilterChange: (value: "全部" | "图片" | "文本" | "视频") => void;
+    onPreviewAsset: (asset: Asset) => void;
     onSelectedCandidateChange: (id: string) => void;
     selectedCandidate?: Asset;
 }) {
@@ -146,21 +159,27 @@ function EpisodeAssetBindPanel({
             <div className="grid max-h-[340px] gap-2 overflow-auto pr-1">
                 {candidates.length ? (
                     candidates.map((candidate) => (
-                        <button
-                            key={candidate.id}
-                            type="button"
-                            className={`grid grid-cols-[72px_minmax(0,1fr)] gap-3 rounded-lg border p-2 text-left transition ${selectedCandidate?.id === candidate.id ? "border-cyan-400/70 bg-cyan-400/[0.08]" : "border-slate-800 bg-slate-950/45 hover:border-slate-600"}`}
-                            onClick={() => onSelectedCandidateChange(candidate.id)}
-                        >
-                            <AssetCandidateThumb asset={candidate} />
-                            <div className="min-w-0">
-                                <div className="break-words text-sm font-semibold text-slate-100">{candidate.title}</div>
-                                <div className="mt-1 text-xs text-slate-500">
-                                    {assetKindDisplay(candidate.kind)} · {assetVersionSummary(candidate)}
+                        <div key={candidate.id} className="relative">
+                            <button
+                                type="button"
+                                className={`grid w-full grid-cols-[72px_minmax(0,1fr)] gap-3 rounded-lg border p-2 text-left transition ${selectedCandidate?.id === candidate.id ? "border-cyan-400/70 bg-cyan-400/[0.08]" : "border-slate-800 bg-slate-950/45 hover:border-slate-600"}`}
+                                onClick={() => onSelectedCandidateChange(candidate.id)}
+                            >
+                                <AssetCandidateThumb asset={candidate} />
+                                <div className="min-w-0">
+                                    <div className="break-words text-sm font-semibold text-slate-100">{candidate.title}</div>
+                                    <div className="mt-1 text-xs text-slate-500">
+                                        {assetKindDisplay(candidate.kind)} · {assetVersionSummary(candidate)}
+                                    </div>
+                                    {candidate.tags.length ? <div className="mt-1 break-words text-xs text-slate-500">{candidate.tags.slice(0, 4).join(" / ")}</div> : null}
                                 </div>
-                                {candidate.tags.length ? <div className="mt-1 break-words text-xs text-slate-500">{candidate.tags.slice(0, 4).join(" / ")}</div> : null}
-                            </div>
-                        </button>
+                            </button>
+                            {candidate.kind === "image" ? (
+                                <button type="button" aria-label={`预览 ${candidate.title}`} className="absolute left-2 top-2 grid h-16 w-[72px] place-items-center rounded-md bg-black/0 text-white opacity-0 transition hover:bg-black/35 hover:opacity-100 focus-visible:bg-black/35 focus-visible:opacity-100" onClick={() => onPreviewAsset(candidate)}>
+                                    <Eye className="size-5" />
+                                </button>
+                            ) : null}
+                        </div>
                     ))
                 ) : (
                     <div className="rounded-lg border border-slate-800 bg-slate-950/45 px-4 py-8 text-center text-sm text-slate-500">项目资产库暂无匹配候选。</div>
@@ -179,11 +198,11 @@ function EpisodeAssetBindPanel({
 function EpisodeAssetGeneratePanel({
     asset,
     count,
+    generating,
     model,
     onCountChange,
+    onGenerateImage,
     onModelChange,
-    onOpenImageWorkbench,
-    onPrepareGenerate,
     onPromptDraftChange,
     onSizeChange,
     promptDraft,
@@ -191,16 +210,17 @@ function EpisodeAssetGeneratePanel({
 }: {
     asset: EpisodeAssetRow;
     count: string;
+    generating: boolean;
     model: string;
     onCountChange: (value: string) => void;
+    onGenerateImage: (row: EpisodeAssetRow, options?: EpisodeAssetImageGenerationOptions) => Promise<string[]>;
     onModelChange: (value: string) => void;
-    onOpenImageWorkbench: (payload: OpenImageWorkbenchPayload) => void;
-    onPrepareGenerate: () => void;
     onPromptDraftChange: (value: string) => void;
     onSizeChange: (value: string) => void;
     promptDraft: string;
     size: string;
 }) {
+    const preset = episodeAssetImagePreset(asset.type);
     return (
         <div className="grid gap-4">
             <div className="grid gap-2">
@@ -221,13 +241,13 @@ function EpisodeAssetGeneratePanel({
                     <Input className="!bg-slate-950/70 !text-slate-100" value={count} onChange={(event) => onCountChange(event.target.value)} />
                 </label>
             </div>
-            <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm leading-6 text-slate-400">生成结果会先进入项目资产库，再绑定到当前提取资产；后续分镜和画布承接都引用资产库版本。</div>
+            <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/[0.07] p-3 text-sm leading-6 text-cyan-100/80">
+                当前类型预设：{preset.label}（{preset.size}）。{preset.description}
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm leading-6 text-slate-400">生成结果会先进入项目资产库；若该资产已写入设定库，会自动绑定到当前资产。</div>
             <div className="flex flex-wrap gap-2">
-                <Button type="primary" onClick={() => onOpenImageWorkbench({ assetId: asset.id, prompt: promptDraft || asset.promptDraft || asset.description, title: asset.name })}>
-                    进入生图工作台
-                </Button>
-                <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" onClick={onPrepareGenerate}>
-                    仅准备参数
+                <Button type="primary" loading={generating} disabled={!asset.canGenerate || !promptDraft.trim()} onClick={() => void onGenerateImage(asset, { count, model, prompt: promptDraft || asset.promptDraft || asset.description, size })}>
+                    生成并绑定
                 </Button>
             </div>
         </div>

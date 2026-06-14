@@ -9,19 +9,19 @@ import { episodeModuleNavToneClass, previewActionLabel, previewApplyDisabledReas
 
 export function EpisodeModuleTabs({ activeModule, onChange, tabs }: { activeModule: EpisodeModuleKey; onChange: (module: EpisodeModuleKey) => void; tabs: Array<{ key: EpisodeModuleKey; label: string; status: EpisodeModuleNavStatus; step: number }> }) {
     return (
-        <nav className="grid content-start gap-1.5 rounded-xl border border-slate-800 bg-slate-950/35 p-2">
+        <nav className="grid content-start gap-1 rounded-xl border border-white/[0.07] bg-[#070b10]/72 p-1.5 shadow-[0_12px_44px_rgba(0,0,0,0.18)] backdrop-blur-xl">
             {tabs.map((tab) => {
                 const active = tab.key === activeModule;
                 return (
                     <button
                         key={tab.key}
                         type="button"
-                        className={`rounded-lg border px-3 py-2.5 text-left transition ${active ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]" : "border-transparent bg-transparent text-slate-400 hover:border-slate-700 hover:bg-slate-950/45 hover:text-slate-100"}`}
+                        className={`rounded-lg border px-3 py-2.5 text-left transition ${active ? "border-cyan-400/55 bg-cyan-400/12 text-cyan-50 shadow-[inset_0_0_0_1px_rgba(34,211,238,0.10)]" : "border-transparent bg-transparent text-slate-400 hover:border-white/10 hover:bg-white/[0.035] hover:text-slate-100"}`}
                         onClick={() => onChange(tab.key)}
                         title={tab.status.detail || tab.status.text}
                     >
                         <span className="flex items-center gap-2">
-                            <span className={`grid size-6 shrink-0 place-items-center rounded-md border text-xs font-semibold ${active ? "border-cyan-300/70 bg-cyan-300/15 text-cyan-100" : "border-slate-700 bg-slate-900/70 text-slate-400"}`}>
+                            <span className={`grid size-6 shrink-0 place-items-center rounded-md border text-xs font-semibold ${active ? "border-cyan-300/60 bg-cyan-300/15 text-cyan-100" : "border-white/10 bg-white/[0.035] text-slate-400"}`}>
                                 {tab.step}
                             </span>
                             <span className="min-w-0 flex-1 truncate text-base font-semibold">{tab.label}</span>

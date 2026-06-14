@@ -7,10 +7,11 @@ import { persist, type PersistStorage, type StorageValue } from "zustand/middlew
 import { localForageStorage } from "../lib/localforage-storage.ts";
 import { normalizeSeedanceImageRoleMode, type SeedanceImageRoleMode } from "../services/api/video-reference.ts";
 import { apiGet } from "../services/api/request.ts";
-import type { AdminPublicSettings } from "../services/api/admin.ts";
+import type { AdminModelTextEndpoint, AdminPublicSettings } from "../services/api/admin.ts";
 import { inferRemoteVideoProtocol, resolveAllowedVideoProtocol } from "../services/api/ai-channel-boundary.ts";
 
 export type AiModelKind = "image" | "video" | "text";
+export type TextModelEndpointType = "chat_completions" | "responses";
 
 export type AiConfig = {
     channelMode: "remote" | "local";
@@ -43,6 +44,7 @@ export type AiConfig = {
     imageModels: string[];
     videoModels: string[];
     textModels: string[];
+    modelTextEndpoints: AdminModelTextEndpoint[];
     quality: string;
     size: string;
     count: string;
@@ -84,6 +86,7 @@ export const defaultConfig: AiConfig = {
     imageModels: [],
     videoModels: [],
     textModels: [],
+    modelTextEndpoints: [],
     quality: "auto",
     size: "1:1",
     count: "1",
@@ -96,7 +99,7 @@ type ConfigStore = {
     isConfigOpen: boolean;
     shouldPromptContinue: boolean;
     updateConfig: <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
-    loadPublicSettings: () => Promise<void>;
+    loadPublicSettings: (options?: { force?: boolean }) => Promise<void>;
     isAiConfigReady: (config: AiConfig, model: string) => boolean;
     openConfigDialog: (shouldPromptContinue?: boolean) => void;
     setConfigDialogOpen: (isOpen: boolean) => void;
@@ -129,9 +132,12 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
     const fallbackModel = (modelChannel.defaultModel && models.includes(modelChannel.defaultModel) ? modelChannel.defaultModel : models[0]) || "";
     const normalizedDefaultVideoModel = normalizeVisibleRemoteVideoModel(modelChannel.defaultVideoModel);
     const defaultVideoModel = normalizedDefaultVideoModel && models.includes(normalizedDefaultVideoModel) ? normalizedDefaultVideoModel : "";
+    const imageDefault = modelChannel.defaultImageModel && models.includes(modelChannel.defaultImageModel) ? modelChannel.defaultImageModel : "";
+    const textDefault = modelChannel.defaultTextModel && models.includes(modelChannel.defaultTextModel) ? modelChannel.defaultTextModel : "";
+    const modelTextEndpoints = normalizeModelTextEndpoints(modelChannel.modelTextEndpoints || [], models);
     const videoCandidates = uniqueModels([defaultVideoModel, ...classifiedModels.videoModels]).filter(Boolean);
-    const videoModel = models.includes(config.videoModel) && classifiedModels.videoModels.includes(config.videoModel) ? config.videoModel : videoCandidates[0] || "";
-    const videoProtocol = inferRemoteVideoProtocol(videoModel, config.videoProtocol);
+    const videoModel = videoCandidates[0] || "";
+    const videoProtocol = inferRemoteVideoProtocol(videoModel, config.videoProtocol, modelChannel.modelProtocols || []);
     return {
         ...config,
         channelMode,
@@ -140,11 +146,12 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
         imageModels: classifiedModels.imageModels,
         videoModels: classifiedModels.videoModels,
         textModels: classifiedModels.textModels,
+        modelTextEndpoints,
         model: models.includes(config.model) ? config.model : fallbackModel,
-        imageModel: models.includes(config.imageModel) ? config.imageModel : modelChannel.defaultImageModel || fallbackModel,
+        imageModel: imageDefault || fallbackModel,
         videoModel,
         seedanceModel: videoProtocol === "volcengine-ark" ? videoModel : config.seedanceModel,
-        textModel: models.includes(config.textModel) ? config.textModel : modelChannel.defaultTextModel || fallbackModel,
+        textModel: textDefault || fallbackModel,
     };
 }
 
@@ -170,8 +177,8 @@ export const useConfigStore = create<ConfigStore>()(
                         [key]: value,
                     },
                 })),
-            loadPublicSettings: async () => {
-                if (get().isPublicSettingsLoading) return;
+            loadPublicSettings: async (options = {}) => {
+                if (get().isPublicSettingsLoading && !options.force) return;
                 set({ isPublicSettingsLoading: true });
                 try {
                     set({ publicSettings: await apiGet<AdminPublicSettings>("/api/settings") });
@@ -215,6 +222,7 @@ export const useConfigStore = create<ConfigStore>()(
                         imageModels: Array.isArray(config.imageModels) && config.imageModels.length ? config.imageModels : classifiedModels.imageModels,
                         videoModels: Array.isArray(config.videoModels) && config.videoModels.length ? config.videoModels : classifiedModels.videoModels,
                         textModels: Array.isArray(config.textModels) && config.textModels.length ? config.textModels : classifiedModels.textModels,
+                        modelTextEndpoints: Array.isArray(config.modelTextEndpoints) ? config.modelTextEndpoints : [],
                         videoSeconds: config.videoSeconds || "6",
                         vquality: config.vquality || "720",
                         videoGenerateAudio: config.videoGenerateAudio === "false" ? "true" : config.videoGenerateAudio || "true",
@@ -264,7 +272,7 @@ export function buildApiUrl(baseUrl: string, path: string, protocol: AiConfig["v
 }
 
 export function resolveSeedanceRequestModel(config: Pick<AiConfig, "seedanceEndpointId" | "seedanceModel" | "videoModel" | "model">) {
-    return (config.model || config.seedanceModel || config.videoModel || config.seedanceEndpointId).trim();
+    return (config.seedanceEndpointId || config.seedanceModel || config.videoModel || config.model).trim();
 }
 
 export function classifyAiModels(models: string[]) {
@@ -288,6 +296,39 @@ export function classifyAiModels(models: string[]) {
     return { imageModels, videoModels, textModels };
 }
 
+export function textModelEndpointType(config: Pick<AiConfig, "modelTextEndpoints">, model: string): TextModelEndpointType {
+    const modelName = model.trim();
+    const configured = config.modelTextEndpoints.find((item) => item.model === modelName)?.endpointType;
+    if (configured === "responses" || configured === "chat_completions") return configured;
+    return defaultTextModelEndpointType(modelName);
+}
+
+function normalizeModelTextEndpoints(items: AdminModelTextEndpoint[], models: string[]) {
+    const availableModels = uniqueModels(models);
+    const modelSet = new Set(availableModels);
+    const seen = new Set<string>();
+    const result = items
+        .map((item) => ({ model: item.model.trim(), endpointType: normalizeTextModelEndpointType(item.endpointType, item.model) }))
+        .filter((item) => {
+            if (!item.model || seen.has(item.model) || !modelSet.has(item.model)) return false;
+            seen.add(item.model);
+            return true;
+        });
+    availableModels.forEach((model) => {
+        if (!seen.has(model)) result.push({ model, endpointType: defaultTextModelEndpointType(model) });
+    });
+    return result;
+}
+
+function normalizeTextModelEndpointType(value: string | undefined, model: string): TextModelEndpointType {
+    if (value === "responses" || value === "chat_completions") return value;
+    return defaultTextModelEndpointType(model);
+}
+
+function defaultTextModelEndpointType(model: string): TextModelEndpointType {
+    return model.trim().toLowerCase().includes("gpt-5.5") ? "responses" : "chat_completions";
+}
+
 function uniqueModels(models: string[]) {
     const seen = new Set<string>();
     return models
@@ -306,6 +347,5 @@ function isEndpointModel(model: string) {
 function normalizeVisibleRemoteVideoModel(model: string) {
     const value = model.trim();
     if (!value || isEndpointModel(value)) return "";
-    if (/^doubao-seedance-2-0-\d+$/i.test(value)) return "doubao-seedance-2-0";
     return value;
 }

@@ -85,9 +85,28 @@ type VideoResponse = {
     watermark?: boolean;
 };
 type ApiVideoResponse = VideoResponse | { code?: number; data?: VideoResponse | null; msg?: string };
+type VideoPreflightResponse = { channelName: string; model: string; protocol: string; baseUrl?: string; endpointId?: string; apiKeyConfigured?: boolean; apiKeyHint?: string };
+type ApiVideoPreflightResponse = { code?: number; data?: VideoPreflightResponse | null; msg?: string };
 
 export async function requestVideoGeneration(config: AiConfig, prompt: string, references: VideoGenerationReferences = [], options: VideoGenerationOptions = {}) {
     return requestOpenAICompatibleVideoGeneration(config, prompt, references, options);
+}
+
+export async function preflightVideoGeneration(config: AiConfig) {
+    if (config.videoProtocol !== "volcengine-ark") return undefined;
+    const model = config.seedanceEndpointId || config.seedanceModel || config.videoModel || config.model;
+    if (!model?.trim()) throw new Error("视频模型未配置，请先选择视频模型");
+    try {
+        const response = await axios.get<ApiVideoPreflightResponse>(aiApiUrl(config, "/videos/preflight"), {
+            headers: aiHeaders(config),
+            params: { model },
+            timeout: AI_REQUEST_TIMEOUT_MS,
+        });
+        if (response.data?.code && response.data.code !== 0) throw new Error(response.data.msg || "视频通道预检失败");
+        return response.data?.data || undefined;
+    } catch (error) {
+        throw new Error(normalizeAiError(error, "视频通道预检失败"));
+    }
 }
 
 export async function refreshVideoTask(config: AiConfig, taskId: string) {
@@ -261,6 +280,22 @@ function isTransientVideoRequestError(error: unknown) {
 export async function buildVideoPayload(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string) {
     if (config.videoProtocol === "volcengine-ark") {
         return buildSeedanceVideoPayload(config, prompt, references);
+    }
+    if (!references.images.length && !references.videos.length && !references.audios.length) {
+        const seed = normalizeSeedanceSeed(config.videoSeed);
+        return {
+            model,
+            prompt,
+            seconds: normalizeVideoSeconds(config.videoSeconds),
+            duration: normalizeVideoSeconds(config.videoSeconds),
+            ratio: normalizeSeedanceRatio(config.size),
+            size: normalizeVideoSize(config.size) || undefined,
+            resolution: normalizeSeedanceResolution(config.vquality),
+            resolution_name: normalizeVideoResolution(config.vquality),
+            generate_audio: config.videoGenerateAudio === "true",
+            watermark: config.videoWatermark === "true",
+            ...(seed === undefined ? {} : { seed }),
+        };
     }
     const body = new FormData();
     body.append("model", model);

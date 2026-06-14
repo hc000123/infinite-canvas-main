@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normalizeScriptScene, orderedScriptEpisodes, orderedScriptScenes, parseScriptScenesFromText, reorderScriptItems, type ScriptEpisode, type ScriptScene } from "./script-management.ts";
+import { normalizeStructuredEpisodeScript, normalizeScriptScene, orderedScriptEpisodes, orderedScriptScenes, parseScriptScenesFromText, reorderScriptItems, structuredEpisodeScriptToText, type ScriptEpisode, type ScriptScene } from "./script-management.ts";
 
 test("orders episodes and scenes by order", () => {
     const episodes: ScriptEpisode[] = [episode("ep-2", "project-1", 2), episode("ep-other", "project-2", 1), episode("ep-1", "project-1", 1)];
@@ -52,6 +52,34 @@ test("parses paragraph text into scene drafts", () => {
     assert.equal(drafts[0].emotion, "克制");
     assert.equal(drafts[1].dialogue, "我们终于毕业了");
     assert.equal(drafts[1].durationHint, "40 秒");
+});
+
+test("normalizes structured script and renders scene text", () => {
+    const structured = normalizeStructuredEpisodeScript({
+        episodeTitle: "第一集",
+        summary: "坠海后闪回仓库冲突",
+        characters: ["林秀妹"],
+        scenes: [
+            {
+                sceneId: "1-1",
+                location: "海里",
+                timeOfDay: "夜",
+                space: "外",
+                characters: ["林秀妹", "刘铮"],
+                sceneNote: "深海幽蓝，两人失重下坠。",
+                beats: [
+                    { type: "visual", text: "气泡上升，人物向下沉。" },
+                    { type: "dialogue", speaker: "林秀妹", text: "不要离开我。" },
+                ],
+                assets: { characters: ["林秀妹"], locations: ["深海"], props: [], costumes: [], mood: ["绝望"] },
+            },
+        ],
+    });
+
+    assert.ok(structured);
+    assert.equal(structured.schemaVersion, "episode-script.v1");
+    assert.deepEqual(structured.characters, ["林秀妹", "刘铮"]);
+    assert.match(structuredEpisodeScriptToText(structured), /林秀妹：不要离开我。/);
 });
 
 function episode(id: string, projectId: string, order: number): ScriptEpisode {

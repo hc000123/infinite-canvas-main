@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { defaultConfig } from "@/stores/use-config-store";
 import { canvasEpisodeLabel } from "../utils/canvas-episode-context";
@@ -34,7 +35,6 @@ import { useCanvasPageActions } from "../hooks/use-canvas-page-actions";
 import { useCanvasPageCallbacks } from "../hooks/use-canvas-page-callbacks";
 import { useCanvasProjectLifecycle } from "../hooks/use-canvas-project-lifecycle";
 import { useCanvasPageRuntimeEffects } from "../hooks/use-canvas-page-runtime-effects";
-import { useCanvasProductionPackageActions } from "../hooks/use-canvas-production-package-actions";
 import { useCanvasProductionWorkbenchState } from "../hooks/use-canvas-production-workbench-state";
 import { useCanvasRenderActions } from "../hooks/use-canvas-render-actions";
 import { useCanvasRuntimeConfig } from "../hooks/use-canvas-runtime-config";
@@ -49,12 +49,12 @@ import { useCanvasViewportGeometry } from "../hooks/use-canvas-viewport-geometry
 import { useCanvasWorkspaceStores } from "../hooks/use-canvas-workspace-stores";
 import { App } from "antd";
 import { CanvasConnectionsLayer } from "../components/canvas-connections-layer";
-import { CanvasProductionPackageBar } from "../components/canvas-production-package-bar";
 import { CanvasRefreshShell } from "../components/canvas-refresh-shell";
 import { CanvasInteractionOverlays } from "../components/canvas-interaction-overlays";
 import { CanvasTopBar } from "../components/canvas-top-bar";
 import { CanvasSideInspector } from "../components/canvas-side-inspector";
 import { CanvasPageOverlays } from "../components/canvas-page-overlays";
+import { CanvasPromptStartPanel, type CanvasPromptPresetKind } from "../components/canvas-prompt-start-panel";
 import { InfiniteCanvas } from "../components/infinite-canvas";
 import { CanvasNodesLayer } from "../components/canvas-nodes-layer";
 import { CanvasFloatingControls } from "../components/canvas-floating-controls";
@@ -86,7 +86,6 @@ function InfiniteCanvasPage() {
         deleteProjects,
         effectiveConfig,
         ensureProjectFolder,
-        ensureUnfiledProject,
         flushProjects,
         hydrated,
         isAiConfigReady,
@@ -246,6 +245,28 @@ function InfiniteCanvasPage() {
         viewportRef,
     });
 
+    const createPromptPresetFlow = useCallback(
+        (preset: { kind: CanvasPromptPresetKind; title: string; prompt: string }) => {
+            const center = getCanvasCenter();
+            const textNode = createCanvasNode(CanvasNodeType.Text, { x: center.x - 210, y: center.y }, { content: preset.prompt, prompt: preset.prompt, status: "success", sourceType: "manual" });
+            textNode.metadata = {
+                ...textNode.metadata,
+                canvasSource: { projectId: workspaceProjectId, projectTitle: workspaceProjectTitle, canvasId, canvasTitle: currentProject?.title || "未命名画布", nodeId: textNode.id, prompt: preset.prompt },
+            };
+            const configNode = createCanvasNode(CanvasNodeType.Config, { x: center.x + 260, y: center.y }, { prompt: "", model: canvasAiConfig.imageModel || canvasAiConfig.model, size: canvasAiConfig.size, count: preset.kind === "storyboard" ? 9 : 3, sourceType: "manual" });
+            configNode.metadata = {
+                ...configNode.metadata,
+                canvasSource: { projectId: workspaceProjectId, projectTitle: workspaceProjectTitle, canvasId, canvasTitle: currentProject?.title || "未命名画布", nodeId: configNode.id, prompt: preset.prompt },
+            };
+            setNodes((prev) => [...prev, textNode, configNode]);
+            setConnections((prev) => [...prev, { id: `connection-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, fromNodeId: textNode.id, toNodeId: configNode.id }]);
+            setSelectedNodeIds(new Set([configNode.id]));
+            setSelectedConnectionId(null);
+            setDialogNodeId(configNode.id);
+        },
+        [canvasAiConfig.imageModel, canvasAiConfig.model, canvasAiConfig.size, canvasId, currentProject?.title, getCanvasCenter, setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, workspaceProjectId, workspaceProjectTitle],
+    );
+
     const { connectingParams, connectionTargetNodeId, pendingConnectionCreate, pendingConnectionCreateRef, mouseWorld, cancelPendingConnectionCreate, createConnectedNode, finishConnection, handleConnectStart, moveConnectionTarget } = useCanvasConnections(
         {
             nodesRef,
@@ -285,7 +306,7 @@ function InfiniteCanvasPage() {
 
     const { batchChildCountById, batchMotionById, collapsingBatchIds, nodeById, openingBatchIds, setBatchPrimary, toggleBatchExpanded } = useCanvasBatchNodeUi({ nodes, nodesRef, setNodes });
 
-    const { activeNodeId, assetById, assetTitleById, frameReferencesByVideoId, packageSlotVideoNode, selectedInspectorNode, selectedVideoNode, visibleNodes } = useCanvasDerivedState({
+    const { activeNodeId, assetById, assetTitleById, frameReferencesByVideoId, selectedInspectorNode, selectedVideoNode, visibleNodes } = useCanvasDerivedState({
         assets,
         collapsingBatchIds,
         connections,
@@ -332,12 +353,12 @@ function InfiniteCanvasPage() {
         activeTimelineNodes,
         productionPackages,
         productionPackageLabelMap,
-        inspectorProductionPackage,
         relatedHighlight,
     } = useCanvasProductionWorkbenchState({
         canvasId,
         currentProject,
         creativeProject,
+        productionPackagesEnabled: false,
         storyboardTableShots,
         storyboardShotGroups,
         assetBreakdownItems,
@@ -410,6 +431,49 @@ function InfiniteCanvasPage() {
         setEditRequestNonce,
     });
 
+    const createVideoFromImages = useCallback(
+        (imageNodes: typeof nodes) => {
+            const references = imageNodes.filter((node) => node.type === CanvasNodeType.Image && node.metadata?.content);
+            if (references.length < 2) {
+                message.warning("请先框选至少两张图片");
+                return;
+            }
+            const right = Math.max(...references.map((node) => node.position.x + node.width));
+            const top = Math.min(...references.map((node) => node.position.y));
+            const videoNode = createCanvasNode(CanvasNodeType.Video, { x: right + 260, y: top + 150 }, {
+                prompt: "",
+                status: "idle",
+                videoReferenceImageMode: "first_last_frame",
+                referenceRoles: references.map((node, index) => ({ nodeId: node.id, kind: "image", role: index === 0 ? "first_frame" : index === references.length - 1 ? "last_frame" : "reference", index: index + 1 })),
+                referenceOrder: references.map((node, index) => ({ nodeId: node.id, kind: "image", index: index + 1 })),
+                canvasSource: {
+                    projectId: workspaceProjectId,
+                    projectTitle: workspaceProjectTitle,
+                    canvasId,
+                    canvasTitle: currentProject?.title || "未命名画布",
+                    nodeId: "",
+                    sourceNodeId: references[0]?.id,
+                    generationParams: { referenceCount: references.length, action: "create_video_node_from_images" },
+                },
+            });
+            const nextVideoNode = { ...videoNode, metadata: { ...videoNode.metadata, canvasSource: { ...videoNode.metadata?.canvasSource, nodeId: videoNode.id } } };
+            setNodes((prev) => [...prev, nextVideoNode]);
+            setConnections((prev) => [
+                ...prev,
+                ...references.map((node, index) => ({
+                    id: `connection-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
+                    fromNodeId: node.id,
+                    toNodeId: nextVideoNode.id,
+                    toHandle: index === 0 ? "first_frame" : index === references.length - 1 ? "last_frame" : undefined,
+                })),
+            ]);
+            setSelectedNodeIds(new Set([nextVideoNode.id]));
+            setSelectedConnectionId(null);
+            setDialogNodeId(nextVideoNode.id);
+        },
+        [canvasId, currentProject?.title, message, setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, workspaceProjectId, workspaceProjectTitle],
+    );
+
     const { createAndOpenProject, deleteCurrentProject, finishTitleEditing, openEpisodeWorkbench, openWorkflowAssistant, resetViewport, returnTarget, returnToParent, saveCurrentProject, setZoomScale, startTitleEditing } = useCanvasPageActions({
         activeChatId,
         attachCanvasToCreativeProject,
@@ -421,7 +485,6 @@ function InfiniteCanvasPage() {
         createProject,
         currentProject,
         deleteProjects,
-        ensureUnfiledProject,
         flushProjects,
         message,
         navigate: navigateCanvasPage,
@@ -449,6 +512,7 @@ function InfiniteCanvasPage() {
 
     const {
         applyAssistantActions,
+        addCanvasNodeToAssets,
         createBriefImageConfigNode,
         createFileNodes,
         createImageFileNode,
@@ -464,7 +528,9 @@ function InfiniteCanvasPage() {
     } = useCanvasNodeInsertionActions({
         addAssetOnce,
         assetById,
+        canvasId,
         canvasAiConfig,
+        canvasTitle: currentProject?.title || "未命名画布",
         connectionsRef,
         containerRef,
         getCanvasCenter,
@@ -484,6 +550,8 @@ function InfiniteCanvasPage() {
         toImageMetadata: imageMetadata,
         toVideoMetadata: videoMetadata,
         toAudioMetadata: audioMetadata,
+        workspaceProjectId,
+        workspaceProjectTitle,
     });
 
     const toolbarActions = useCanvasToolbarActions({
@@ -621,6 +689,7 @@ function InfiniteCanvasPage() {
             archiveGeneratedAsset,
         },
         derivative: {
+            addCanvasNodeToAssets,
             nodesRef,
             connectionsRef,
             setNodes,
@@ -636,7 +705,9 @@ function InfiniteCanvasPage() {
             openConfigDialog,
             isAiConfigReady,
             canvasId,
+            canvasTitle: currentProject?.title || "未命名画布",
             workspaceProjectId,
+            workspaceProjectTitle,
             canvasEpisodeContext,
             message,
             createNode: createCanvasNode,
@@ -661,36 +732,8 @@ function InfiniteCanvasPage() {
         },
     });
 
-    const {
-        focusProductionPackage,
-        handlePreviewProductionVideoVersion,
-        handleDownloadProductionVideoVersion,
-        handleSetCurrentProductionVideoVersion,
-        handleHideProductionVideoVersion,
-        handleInsertProductionPackageConfigNode,
-        handleEditProductionPackagePrompt,
-        handleBindSelectedVideoToProductionPackage,
-    } = useCanvasProductionPackageActions({
-        canvasAiConfig,
-        productionPackages,
-        nodesRef,
-        size,
-        viewportRef,
-        message,
-        downloadNodeMedia,
-        getAppendNodeCenter,
-        createCanvasNode,
-        setNodes,
-        setActiveTimelineShotId,
-        setActiveProductionPackageId,
-        setInspectorView,
-        setSelectedNodeIds,
-        setSelectedConnectionId,
-        setDialogNodeId,
-        setViewport,
-    });
     const inspectorPanelActions = useCanvasInspectorPanelActions({
-        focusProductionPackage,
+        focusProductionPackage: () => undefined,
         setAssetPickerOpen,
         setAssetPickerTab,
         setAssistantCollapsed,
@@ -743,22 +786,12 @@ function InfiniteCanvasPage() {
                     onSaveProject={saveCurrentProject}
                     onImportImage={() => handleUploadRequest()}
                     onOpenEpisodeScript={openEpisodeWorkbench}
-                    onOpenWorkflowAssistant={openWorkflowAssistant}
+                    onGenerateImage={() => createNode(CanvasNodeType.Config)}
+                    onOpenAssets={inspectorPanelActions.openAssetPicker}
+                    onOrganizeCanvas={resetViewport}
+                    onOpenSettings={() => openConfigDialog(true)}
                     onUndo={undoCanvas}
                     onRedo={redoCanvas}
-                    assistantActive={assistantMounted && inspectorView === "assistant" && !isInspectorCollapsed}
-                    onExpandAssistant={inspectorPanelActions.expandAssistantPanel}
-                />
-
-                <CanvasProductionPackageBar
-                    packages={productionPackages}
-                    activePackageId={activeProductionPackageId}
-                    inspectorCollapsed={isInspectorCollapsed}
-                    selectedVideoNodeId={packageSlotVideoNode?.type === CanvasNodeType.Video && packageSlotVideoNode.metadata?.content ? packageSlotVideoNode.id : ""}
-                    onSelect={inspectorPanelActions.selectProductionPackage}
-                    onInsertConfig={handleInsertProductionPackageConfigNode}
-                    onEditPrompt={handleEditProductionPackagePrompt}
-                    onBindVideo={handleBindSelectedVideoToProductionPackage}
                 />
 
                 <InfiniteCanvas
@@ -847,6 +880,8 @@ function InfiniteCanvasPage() {
                     />
                 </InfiniteCanvas>
 
+                {!nodes.length ? <CanvasPromptStartPanel onSelect={createPromptPresetFlow} /> : null}
+
                 <CanvasFloatingControls
                     activeTimelineShotId={activeTimelineShotId}
                     backgroundMode={backgroundMode}
@@ -864,6 +899,7 @@ function InfiniteCanvasPage() {
                     nodeToolActions={nodeToolActions}
                     nodes={nodes}
                     onOpenEpisodeWorkbench={openEpisodeWorkbench}
+                    onCreateVideoFromImages={createVideoFromImages}
                     onRedo={redoCanvas}
                     onResetViewport={resetViewport}
                     onSelectShot={handleTimelineShotSelect}
@@ -872,6 +908,7 @@ function InfiniteCanvasPage() {
                     onUndo={undoCanvas}
                     refreshingReviewNodeId={refreshingReviewNodeId}
                     selectedNodeCount={selectedNodeIds.size}
+                    selectedNodeIds={selectedNodeIds}
                     setBackgroundMode={setBackgroundMode}
                     setContextMenu={setContextMenu}
                     setShowImageInfo={setShowImageInfo}
@@ -920,7 +957,7 @@ function InfiniteCanvasPage() {
                     onCloseScriptManager={renderActions.closeScriptManager}
                     onCloseStoryboardManager={renderActions.closeStoryboardManager}
                     onCreateBriefImageConfig={createBriefImageConfigNode}
-                    onCropImageNode={(node, crop) => void cropImageNode(node, crop)}
+                    onCropImageNode={(node, crop, mode) => void cropImageNode(node, crop, mode)}
                     onGenerateAngleNode={(node, params) => void generateAngleNode(node, params)}
                     onImageInputChange={handleImageInputChange}
                     onOpenStoryboardGroup={renderActions.openStoryboardGroup}
@@ -948,11 +985,11 @@ function InfiniteCanvasPage() {
                 selectedCount={selectedNodeIds.size}
                 selectedNode={selectedInspectorNode}
                 selectedNodeIds={selectedNodeIds}
-                selectedProductionPackage={inspectorProductionPackage}
+                selectedProductionPackage={null}
                 selectedShot={activeTimelineShot}
                 selectedShotGroups={activeTimelineShotGroups}
                 selectedShotNodes={activeTimelineNodes}
-                selectedVideoNode={packageSlotVideoNode?.type === CanvasNodeType.Video && packageSlotVideoNode.metadata?.content ? packageSlotVideoNode : null}
+                selectedVideoNode={null}
                 sessions={chatSessions}
                 stats={episodeWorkbenchStats}
                 title={currentProject?.title || "未命名画布"}
@@ -960,23 +997,23 @@ function InfiniteCanvasPage() {
                 onApplyAssistantActions={applyAssistantActions}
                 onAssistantCollapse={inspectorPanelActions.collapseAssistant}
                 onAssistantCollapseStart={() => setAssistantCollapsed(true)}
-                onBindSelectedVideoToProductionPackage={handleBindSelectedVideoToProductionPackage}
+                onBindSelectedVideoToProductionPackage={() => undefined}
                 onCollapsedChange={setIsInspectorCollapsed}
-                onDownloadProductionVideoVersion={handleDownloadProductionVideoVersion}
-                onHideProductionVideoVersion={handleHideProductionVideoVersion}
+                onDownloadProductionVideoVersion={() => undefined}
+                onHideProductionVideoVersion={() => undefined}
                 onInsertImage={insertAssistantImage}
-                onInsertProductionPackageConfigNode={handleInsertProductionPackageConfigNode}
+                onInsertProductionPackageConfigNode={() => undefined}
                 onInsertText={insertAssistantText}
                 onOpenAssets={inspectorPanelActions.openAssetPicker}
                 onOpenAssistant={inspectorPanelActions.openAssistant}
                 onOpenEpisodeWorkbench={openEpisodeWorkbench}
                 onOpenWorkflowAssistant={openWorkflowAssistant}
                 onPasteImage={pasteAssistantImage}
-                onPreviewProductionVideoVersion={handlePreviewProductionVideoVersion}
+                onPreviewProductionVideoVersion={() => undefined}
                 onSelectNodeIds={setSelectedNodeIds}
                 onSelectShot={handleTimelineShotSelect}
                 onSessionsChange={handleAssistantSessionsChange}
-                onSetCurrentProductionVideoVersion={handleSetCurrentProductionVideoVersion}
+                onSetCurrentProductionVideoVersion={() => undefined}
                 onViewChange={setInspectorView}
             />
         </main>

@@ -4,6 +4,7 @@ import { type ReactNode } from "react";
 import { AudioLines, Camera, Download, FolderPlus, Image as ImageIcon, Info, Lock, LockOpen, Maximize2, Minus, Pencil, Plus, RefreshCw, Scissors, Settings2, ShieldCheck, Trash2, Upload, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
+import { canSubmitVolcengineReview } from "@/services/volcengine-asset-metadata";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasToolButton, CanvasToolDivider } from "./canvas-tool-button";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type ViewportTransform } from "../types";
@@ -187,8 +188,9 @@ function appendGenerationActions(items: NodeToolbarAction[], context: NodeToolba
 }
 
 function appendReviewAction(items: NodeToolbarAction[], { node, actions, state, hasVideo, review, reviewProcessing }: NodeToolbarContext) {
+    const submitReview = canSubmitVolcengineReview(review);
     items.push(
-        review?.assetId
+        review?.assetId && !submitReview
             ? {
                   type: "button",
                   key: "refresh-review",
@@ -202,8 +204,8 @@ function appendReviewAction(items: NodeToolbarAction[], { node, actions, state, 
             : {
                   type: "button",
                   key: "review-asset",
-                  title: hasVideo ? "提交视频火山素材加白" : "提交图片火山素材加白",
-                  label: state.submittingReview ? "提交中" : "加白",
+                  title: review?.status === "Failed" ? "重新提交火山素材加白" : hasVideo ? "提交视频火山素材加白" : "提交图片火山素材加白",
+                  label: state.submittingReview ? "提交中" : review?.status === "Failed" ? "重新加白" : "加白",
                   icon: <ShieldCheck className={`size-4 ${state.submittingReview ? "animate-pulse" : ""}`} />,
                   onClick: () => actions.onReviewAsset(node),
                   active: state.submittingReview,

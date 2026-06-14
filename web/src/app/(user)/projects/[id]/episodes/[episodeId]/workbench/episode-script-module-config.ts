@@ -15,8 +15,8 @@ export function buildScriptModuleConfig(input: {
 }): EpisodeModuleConfig {
     const characters = uniqueTextList(input.stageSceneRows.flatMap((scene) => scene.characterIds)).join("、") || "待导演分析确认";
     const sceneList = input.stageSceneRows.map((scene) => `第 ${padEpisodeOrder(scene.order)} 场 ${scene.location || "未标注地点"}：${scene.beat || scene.dialogue || "待补充"}`).join("\n") || "暂无结构化场次；可在详情查看剧本文本。";
-    const scriptBody = input.scriptSnapshot || input.scriptDraft || "暂无本集剧本。";
-    const scriptChanged = input.scriptDraft.trim() !== input.scriptSnapshot.trim();
+    const scriptChanged = isMeaningfulScriptDraftChange(input.scriptDraft, input.scriptSnapshot);
+    const scriptBody = input.scriptDraft || input.scriptSnapshot || "暂无本集剧本。";
     const scriptOptimizing = input.scriptOptimizing;
     const scriptOverview = extractEpisodeOverview(input.episode.summary || input.scriptSnapshot) || (input.hasScript ? `已导入本集剧本，完整正文 ${scriptBody.length} 字，点击查看。` : "尚未导入本集剧本。");
     const sceneListPreview = input.stageSceneRows.length ? `已整理 ${input.stageSceneRows.length} 个结构化场次，点击查看列表。` : "暂无结构化场次；可在详情查看剧本文本。";
@@ -75,7 +75,7 @@ export function buildScriptModuleConfig(input: {
         actions: input.hasScript
             ? [
                   { disabled: !input.scriptDraft.trim(), label: "AI 优化剧本", loading: scriptOptimizing, onClick: input.onOptimizeScript },
-                  { disabled: !input.scriptDraft.trim() || scriptOptimizing, label: scriptChanged ? "确认提交剧本" : "进入导演分析", onClick: input.onSaveScript, primary: true },
+                  ...(scriptChanged ? [{ disabled: !input.scriptDraft.trim() || scriptOptimizing, label: "确认提交剧本", onClick: input.onSaveScript, primary: true }] : []),
               ]
             : [{ disabled: !input.scriptDraft.trim(), label: "导入剧本", onClick: input.onSaveScript, primary: true }],
         columns: "110px minmax(300px,1fr) 80px 90px 80px",
@@ -83,17 +83,13 @@ export function buildScriptModuleConfig(input: {
         filters: ["全部", "已完成", "待确认", "待生成"],
         headers: ["类型", "内容", "引用", "状态", "操作"],
         rows,
-        notice: input.hasScript
+        notice: !input.hasScript
             ? {
-                  text: "这里负责把原始剧本整理成后续 Agent 更容易理解的输入。你可以先用 AI 优化，再直接在优化稿上修改，最后确认提交进入导演分析。",
-                  title: "剧本是后续工作流的输入源",
-                  tone: scriptOptimizing ? "cyan" : "slate",
-              }
-            : {
                   text: "请先导入或粘贴本集剧本。保存后再进行导演分析，避免后续 Agent 基于空输入运行。",
                   title: "缺少剧本输入",
                   tone: "amber",
-              },
+              }
+            : undefined,
         runningPreview: scriptOptimizing
             ? {
                   title: "剧本优化 Agent 正在处理",
@@ -109,4 +105,14 @@ export function buildScriptModuleConfig(input: {
         ],
         title: "剧本模块",
     };
+}
+
+function isMeaningfulScriptDraftChange(draft: string, snapshot: string) {
+    const normalizedDraft = normalizeComparableScriptText(draft);
+    const normalizedSnapshot = normalizeComparableScriptText(snapshot);
+    return Boolean(normalizedDraft && normalizedDraft !== normalizedSnapshot);
+}
+
+function normalizeComparableScriptText(text: string) {
+    return text.replace(/\s+/g, "").replace(/[，。！？；：、“”‘’《》（）()#\-—_]/g, "").trim();
 }

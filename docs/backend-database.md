@@ -17,6 +17,8 @@
 - `users`
 - `credit_logs`
 - `ai_tasks`
+- `agent_config_records`
+- `agent_runs`
 - `prompts`
 - `assets`
 - `settings`
@@ -140,6 +142,8 @@
 | -------------------- | -------- | ------------------------------------------------------------------ |
 | `availableModels`    | string[] | 系统可用模型列表                                                   |
 | `modelCosts`         | object[] | 模型算力点配置                                                     |
+| `modelTextEndpoints` | object[] | 文本模型使用的接口类型配置                                         |
+| `modelProtocols`     | object[] | 后端根据私有渠道推导出的模型协议映射，用于区分 OpenAI 兼容与 Ark   |
 | `defaultModel`       | string   | 默认模型                                                           |
 | `defaultImageModel`  | string   | 默认图片模型                                                       |
 | `defaultVideoModel`  | string   | 默认视频模型                                                       |
@@ -154,6 +158,13 @@
 | `model`   | string | 模型名称                                             |
 | `credits` | number | 每次后端模型接口调用前预扣的算力点，未配置默认不扣除 |
 
+`modelProtocols` 每项字段：
+
+| 字段       | 类型   | 说明                                      |
+| ---------- | ------ | ----------------------------------------- |
+| `model`    | string | 前端可见模型名称                          |
+| `protocol` | string | 该模型应使用的渠道协议：`openai` 或 `volcengine-ark` |
+
 `private.value` 当前字段：
 
 | 字段              | 类型     | 说明                                                         |
@@ -165,16 +176,21 @@
 
 `channels` 每项字段：
 
-| 字段       | 类型     | 说明                                       |
-| ---------- | -------- | ------------------------------------------ |
-| `protocol` | string   | 协议，当前支持 `openai`、`volcengine-ark`  |
-| `name`     | string   | 渠道名称                                   |
-| `baseUrl`  | string   | 渠道接口地址                               |
-| `apiKey`   | string   | 渠道密钥                                   |
-| `models`   | string[] | 渠道可用模型列表                           |
-| `weight`   | number   | 渠道权重，同一模型命中多个渠道时按权重随机 |
-| `enabled`  | bool     | 是否启用                                   |
-| `remark`   | string   | 备注                                       |
+| 字段               | 类型     | 说明                                                       |
+| ------------------ | -------- | ---------------------------------------------------------- |
+| `id`               | string   | 渠道稳定 ID，供 Agent / 工作流阶段绑定；为空时后端自动生成 |
+| `protocol`         | string   | 协议，当前支持 `openai`、`volcengine-ark`                  |
+| `name`             | string   | 渠道名称                                                   |
+| `baseUrl`          | string   | 渠道接口地址                                               |
+| `apiKey`           | string   | 渠道密钥，后台返回时隐藏                                   |
+| `endpointId`       | string   | Ark 渠道默认 Endpoint / EP                                 |
+| `endpointMappings` | object[] | Ark 渠道模型名到 Endpoint / EP 的映射                      |
+| `models`           | string[] | 渠道可用模型列表                                           |
+| `capabilities`     | string[] | 渠道能力：`text`、`image`、`video`、`video_query`、`asset_review`、`preflight`、`cli_workflow` |
+| `environment`      | string   | 环境：`dev`、`test`、`prod`                                |
+| `weight`           | number   | 未显式指定渠道时，同一模型命中多个渠道按权重随机           |
+| `enabled`          | bool     | 是否启用                                                   |
+| `remark`           | string   | 备注                                                       |
 
 `promptSync` 字段当前仅保留为历史配置结构：
 
@@ -244,6 +260,81 @@ M8 起，前台追溯信息不新增数据库字段，统一放入已脱敏 JSON
 | `GET /api/v1/ai-tasks/:id`             | 当前登录用户查看自己的 AI 任务账本摘要和关联算力点流水                                            |
 | `POST /api/v1/ai-tasks/:id/frontend-artifact` | 当前登录用户把前台生成产物 `assetId / nodeId / canvasId` 等反写到任务响应 JSON             |
 | `POST /api/admin/ai-tasks/:id/refund`  | 管理员对失败/取消或异常任务手动返还，已返还任务会拒绝重复返还                                     |
+
+### agent_config_records
+
+后端 Agent 配置表。用于把 Agent 中心的全局 / 项目 / 集数配置从浏览器本地存储逐步迁移到后端持久化。
+
+| 字段          | 类型   | 说明                                |
+| ------------- | ------ | ----------------------------------- |
+| `id`          | string | 主键，由用户、作用域、项目、集数和 Agent 类型组成 |
+| `user_id`     | string | 配置所属用户 ID                     |
+| `scope`       | string | 配置作用域：`global`、`project`、`episode` |
+| `project_id`  | string | 项目 ID，可为空                     |
+| `episode_id`  | string | 集数 ID，可为空                     |
+| `kind`        | string | Agent 类型，例如 `script_analyzer`、`asset_extractor` |
+| `config_json` | text   | 前端 AgentConfig 原始 JSON          |
+| `created_at`  | string | 创建时间                            |
+| `updated_at`  | string | 更新时间                            |
+
+用户接口：
+
+| 接口                       | 说明                    |
+| -------------------------- | ----------------------- |
+| `GET /api/v1/agent-configs` | 当前登录用户查询配置    |
+| `POST /api/v1/agent-configs` | 当前登录用户保存配置   |
+
+### agent_runs
+
+后端 Agent Run 表。用于保存视频工作流文本 Agent 的运行记录、阶段状态、审核结果和映射预览，替代云端主链路对浏览器 localforage、本机目录和 `.workflow-cache` 的依赖。
+
+| 字段                    | 类型   | 说明                                                          |
+| ----------------------- | ------ | ------------------------------------------------------------- |
+| `id`                    | string | 主键                                                          |
+| `user_id`               | string | 发起用户 ID                                                   |
+| `project_id`            | string | 项目 ID 或项目 slug                                           |
+| `episode_id`            | string | 集数 ID 或 `epXX`                                             |
+| `workflow_run_id`       | string | 工作流运行 ID                                                 |
+| `stage_id`              | string | 阶段 ID，例如 `stage1`、`stage2`、`stage3`                    |
+| `agent_kind`            | string | Agent 类型                                                    |
+| `model`                 | string | 实际请求模型                                                  |
+| `target_model`          | string | 用户或 Agent 配置期望使用的模型                              |
+| `channel_id`            | string | 实际命中的后台渠道 ID                                         |
+| `target_channel_id`     | string | 用户或 Agent 配置期望使用的渠道 ID                            |
+| `provider`              | string | 命中的后台模型渠道                                            |
+| `protocol`              | string | 渠道协议                                                      |
+| `allow_fallback`        | bool   | 本次运行是否允许 fallback                                     |
+| `fallback_used`         | bool   | 是否实际使用 fallback 渠道                                    |
+| `fallback_reason`       | string | fallback 原因                                                 |
+| `estimated_credits`     | number | Agent 配置中的单次预估费用                                    |
+| `timeout_seconds`       | number | 本次模型调用超时秒数                                          |
+| `concurrency_limit`     | number | Agent 配置中的并发限制                                        |
+| `allow_batch`           | bool   | Agent 配置是否允许批量运行                                    |
+| `status`                | string | `created`、`running`、`needs_review`、`approved`、`rejected`、`applied`、`failed` |
+| `write_policy`          | string | 写入策略，默认 `confirm_before_write`                         |
+| `requires_confirm`      | bool   | 是否需要用户确认后才能写入正式数据                            |
+| `credits`               | number | 本次预扣算力点                                                |
+| `request_json`          | text   | 模型请求快照                                                  |
+| `raw_output`            | text   | 模型原始输出                                                  |
+| `structured_draft_json` | text   | 从原始输出中解析出的 JSON 草案，可为空                        |
+| `review_json`           | text   | 用户审核结果或质量门结果                                      |
+| `mapping_preview_json`  | text   | 写入资产 / 分镜 / 视频生产包前的映射预览                      |
+| `error_message`         | text   | 失败原因                                                      |
+| `started_at`            | string | 模型调用开始时间                                              |
+| `duration_ms`           | number | 模型调用耗时毫秒                                              |
+| `confirmed_at`          | string | 用户确认或驳回时间                                            |
+| `applied_at`            | string | 写入正式数据时间                                              |
+| `finished_at`           | string | 模型调用完成时间                                              |
+| `created_at`            | string | 创建时间                                                      |
+| `updated_at`            | string | 更新时间                                                      |
+
+用户接口：
+
+| 接口                                 | 说明                                      |
+| ------------------------------------ | ----------------------------------------- |
+| `GET /api/v1/agent-runs`             | 当前登录用户按项目、集数、阶段等查询记录  |
+| `POST /api/v1/agent-runs`            | 创建后端 Agent Run 并调用文本模型         |
+| `POST /api/v1/agent-runs/:id/review` | 当前登录用户确认、驳回或标记已写入        |
 
 ### credit_logs
 

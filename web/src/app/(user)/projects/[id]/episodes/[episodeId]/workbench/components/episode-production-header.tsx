@@ -6,29 +6,38 @@ import { Workflow } from "lucide-react";
 
 import type { CanvasProject } from "../../../../../../canvas/stores/use-canvas-store";
 import type { ScriptEpisode } from "../../../../../../canvas/utils/script-management";
+import { videoWorkflowHref } from "../../../../../../original-workflow/video-workflow-routing";
 import { padEpisodeOrder } from "../episode-workbench-display";
 import { EpisodeStatusPill } from "./episode-module-panel";
 
 export function EpisodeProductionHeader({
     boundCanvas,
+    canRunFullWorkflow,
     currentPhase,
     episode,
+    fullWorkflowRunning,
+    legacyWorkflowVisible = true,
     nextActionText,
     onBackProject,
     onOpenCanvas,
+    onRunFullWorkflow,
     project,
 }: {
     boundCanvas?: CanvasProject;
+    canRunFullWorkflow: boolean;
     currentPhase: string;
     episode: ScriptEpisode;
+    fullWorkflowRunning: boolean;
+    legacyWorkflowVisible?: boolean;
     nextActionText: string;
     onBackProject: () => void;
     onOpenCanvas: () => void;
+    onRunFullWorkflow: () => void;
     project: { id: string; title: string };
 }) {
     return (
-        <header className="border-b border-slate-800/80 px-6 py-5 xl:px-8">
-            <div className="flex flex-wrap items-start justify-between gap-5">
+        <header className="border-b border-white/[0.06] bg-[#070b10]/82 px-5 py-4 backdrop-blur-xl xl:px-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500">
                         <Link href={`/projects/${project.id}`} className="text-cyan-300/85 hover:text-cyan-200">
@@ -44,14 +53,25 @@ export function EpisodeProductionHeader({
                     <p className="mt-2 break-words text-sm leading-6 text-slate-500">建议下一步：{nextActionText}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <Button className="!border-slate-700 !bg-slate-950/50 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" href={`/projects/${project.id}/episodes/${episode.id}/workflow`} icon={<Workflow className="size-4" />}>
-                        工作流落地页
-                    </Button>
-                    <Button className="!border-slate-700 !bg-slate-950/50 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" onClick={onBackProject}>
+                    {legacyWorkflowVisible ? (
+                        <>
+                            <Button className="!h-9 !rounded-xl !px-3" disabled={!canRunFullWorkflow} loading={fullWorkflowRunning} type="primary" onClick={onRunFullWorkflow}>
+                                完整工作流
+                            </Button>
+                            <Button className="!h-9 !rounded-xl !border-white/10 !bg-white/[0.035] !px-3 !text-slate-200 hover:!border-cyan-400/40 hover:!text-cyan-100" href={`/projects/${project.id}/episodes/${episode.id}/workflow`} icon={<Workflow className="size-4" />}>
+                                工作流落地页
+                            </Button>
+                        </>
+                    ) : (
+                        <Button className="!h-9 !rounded-xl !px-3" href={videoWorkflowHref(episode.order, project.id, episode.id)} icon={<Workflow className="size-4" />} type="primary">
+                            打开视频工作流
+                        </Button>
+                    )}
+                    <Button className="!h-9 !rounded-xl !border-white/10 !bg-white/[0.035] !px-3 !text-slate-200 hover:!border-cyan-400/40 hover:!text-cyan-100" onClick={onBackProject}>
                         返回项目
                     </Button>
-                    {boundCanvas ? (
-                        <Button type="primary" onClick={onOpenCanvas}>
+                    {legacyWorkflowVisible && boundCanvas ? (
+                        <Button className="!h-9 !rounded-xl !px-3" type="primary" onClick={onOpenCanvas}>
                             进入关联画布
                         </Button>
                     ) : null}

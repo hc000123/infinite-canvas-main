@@ -38,8 +38,26 @@ func AIChatCompletions(w http.ResponseWriter, r *http.Request) {
 	proxyAIRequest(w, r, "/chat/completions")
 }
 
+func AIResponses(w http.ResponseWriter, r *http.Request) {
+	proxyAIRequest(w, r, "/responses")
+}
+
 func AIVideos(w http.ResponseWriter, r *http.Request) {
 	proxyAIRequest(w, r, "/videos")
+}
+
+func AIVideoPreflight(w http.ResponseWriter, r *http.Request) {
+	if _, ok := service.UserFromContext(r.Context()); !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	modelName := r.URL.Query().Get("model")
+	result, err := service.PreflightModelChannel(modelName)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
 }
 
 func AIVideo(w http.ResponseWriter, r *http.Request, id string) {

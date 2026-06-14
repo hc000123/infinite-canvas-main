@@ -1,8 +1,9 @@
 import axios from "axios";
 
-import { type AiConfig } from "@/stores/use-config-store";
+import { collectChatCompletionText, collectChatCompletionTextFromRawResponse, parseChatCompletionStreamChunk } from "@/services/api/chat-response-text";
+import { textModelEndpointType, type AiConfig } from "@/stores/use-config-store";
 import { estimateImageCost, normalizeBillingNote } from "@/services/ai-local-billing";
-import { AI_REQUEST_TIMEOUT_MS, aiApiUrl, aiHeaders, aiReasoningPayload, normalizeAiError, refreshRemoteUser } from "@/services/api/ai-provider";
+import { AI_REQUEST_TIMEOUT_MS, aiApiUrl, aiHeaders, aiReasoningPayload, aiResponsesReasoningPayload, normalizeAiError, refreshRemoteUser } from "@/services/api/ai-provider";
 import { aiTaskTraceHeaders, readAiTaskLedgerFromHeaders, type AiTaskLedger, type AiTaskTrace } from "@/services/api/ai-task-trace";
 import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
@@ -179,17 +180,43 @@ function uniqueImageUrls(urls: string[]) {
 }
 
 function parseStreamChunk(chunk: string, onDelta: (value: string) => void) {
-    let deltaText = "";
+    const deltaText = parseChatCompletionStreamChunk(chunk);
+    if (deltaText) onDelta(deltaText);
+}
+
+function parseResponsesStreamChunk(chunk: string, onText: (value: string, mode: "delta" | "full") => void) {
     for (const eventBlock of chunk.split("\n\n")) {
         const data = eventBlock
             .split("\n")
             .find((line) => line.startsWith("data: "))
             ?.slice(6);
         if (!data || data === "[DONE]") continue;
-        const delta = (JSON.parse(data) as { choices?: Array<{ delta?: { content?: string } }> }).choices?.[0]?.delta?.content || "";
-        deltaText += delta;
+        let payload: Record<string, unknown>;
+        try {
+            payload = JSON.parse(data) as Record<string, unknown>;
+        } catch {
+            continue;
+        }
+        if (typeof payload.delta === "string") {
+            onText(payload.delta, "delta");
+            continue;
+        }
+        const fullText = collectResponsesOutputText(payload.response || payload);
+        if (fullText) onText(fullText, "full");
     }
-    if (deltaText) onDelta(deltaText);
+}
+
+function collectResponsesOutputText(value: unknown): string {
+    if (!value || typeof value !== "object") return "";
+    const payload = value as Record<string, unknown>;
+    if (typeof payload.output_text === "string") return payload.output_text;
+    if (Array.isArray(payload.output)) {
+        return payload.output
+            .flatMap((item) => (item && typeof item === "object" && Array.isArray((item as Record<string, unknown>).content) ? ((item as Record<string, unknown>).content as unknown[]) : []))
+            .map((item) => (item && typeof item === "object" && typeof (item as Record<string, unknown>).text === "string" ? ((item as Record<string, unknown>).text as string) : ""))
+            .join("");
+    }
+    return "";
 }
 
 function withSystemPrompt(_config: AiConfig, prompt: string) {
@@ -376,7 +403,12 @@ function summarizeText(value: string, maxLength = 180) {
     return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text || "暂无输入摘要";
 }
 
-export async function requestImageQuestion(config: AiConfig, messages: ChatCompletionMessage[], onDelta: (text: string) => void) {
+export async function requestImageQuestion(config: AiConfig, messages: ChatCompletionMessage[], onDelta?: (text: string) => void) {
+    if (textModelEndpointType(config, config.model) === "responses") return requestResponsesQuestion(config, messages, onDelta);
+    return requestChatQuestion(config, messages, onDelta);
+}
+
+async function requestChatQuestion(config: AiConfig, messages: ChatCompletionMessage[], onDelta?: (text: string) => void) {
     let buffer = "";
     let answer = "";
     let processedLength = 0;
@@ -394,6 +426,7 @@ export async function requestImageQuestion(config: AiConfig, messages: ChatCompl
                 headers: {
                     ...aiHeaders(config, "application/json"),
                 } as Record<string, string>,
+                timeout: AI_REQUEST_TIMEOUT_MS,
                 responseType: "text",
                 onDownloadProgress: (event) => {
                     const responseText = String(event.event?.target?.responseText || "");
@@ -405,31 +438,36 @@ export async function requestImageQuestion(config: AiConfig, messages: ChatCompl
                     for (const chunk of chunks) {
                         parseStreamChunk(chunk, (delta) => {
                             answer += delta;
-                            onDelta(answer);
+                            onDelta?.(answer);
                         });
                     }
                 },
             },
         );
-        if (typeof response.data === "object" && response.data && "code" in response.data && (response.data as { code?: number; msg?: string }).code !== 0) {
-            throw new Error((response.data as { msg?: string }).msg || "请求失败");
+        if (typeof response.data === "object" && response.data) {
+            const payload = response.data as { code?: number; msg?: string; error?: { message?: string } };
+            if ("code" in payload && payload.code !== 0) throw new Error(payload.msg || "请求失败");
+            if (payload.error?.message) throw new Error(payload.error.message);
+            if (!answer) answer = collectChatCompletionText(response.data);
         }
         if (typeof response.data === "string") {
             let apiError = "";
             try {
-                const payload = JSON.parse(response.data) as { code?: number; msg?: string };
+                const payload = JSON.parse(response.data) as { code?: number; msg?: string; error?: { message?: string } };
                 if (typeof payload.code === "number" && payload.code !== 0) {
                     apiError = payload.msg || "请求失败";
                 }
+                if (payload.error?.message) apiError = payload.error.message;
             } catch {
                 // ignore plain text stream content
             }
             if (apiError) throw new Error(apiError);
+            if (!answer) answer = collectChatCompletionTextFromRawResponse(response.data);
         }
         if (buffer) {
             parseStreamChunk(buffer, (delta) => {
                 answer += delta;
-                onDelta(answer);
+                onDelta?.(answer);
             });
         }
     } catch (error) {
@@ -437,6 +475,105 @@ export async function requestImageQuestion(config: AiConfig, messages: ChatCompl
     }
     refreshRemoteUser(config);
     return answer || "没有返回内容";
+}
+
+async function requestResponsesQuestion(config: AiConfig, messages: ChatCompletionMessage[], onDelta?: (text: string) => void) {
+    let buffer = "";
+    let answer = "";
+    let processedLength = 0;
+
+    try {
+        const response = await axios.post(
+            aiApiUrl(config, "/responses"),
+            {
+                model: config.model,
+                ...buildResponsesTextInput(messages),
+                stream: true,
+                ...aiResponsesReasoningPayload(config),
+            },
+            {
+                headers: {
+                    ...aiHeaders(config, "application/json"),
+                } as Record<string, string>,
+                timeout: AI_REQUEST_TIMEOUT_MS,
+                responseType: "text",
+                onDownloadProgress: (event) => {
+                    const responseText = String(event.event?.target?.responseText || "");
+                    const nextText = responseText.slice(processedLength);
+                    processedLength = responseText.length;
+                    buffer += nextText;
+                    const chunks = buffer.split("\n\n");
+                    buffer = chunks.pop() || "";
+                    for (const chunk of chunks) {
+                        parseResponsesStreamChunk(chunk, (text, mode) => {
+                            if (mode === "full") {
+                                if (!answer) answer = text;
+                            } else {
+                                answer += text;
+                            }
+                            onDelta?.(answer);
+                        });
+                    }
+                },
+            },
+        );
+        if (typeof response.data === "string") {
+            let apiError = "";
+            try {
+                const payload = JSON.parse(response.data) as { code?: number; msg?: string; error?: { message?: string } };
+                if (typeof payload.code === "number" && payload.code !== 0) apiError = payload.msg || "请求失败";
+                if (payload.error?.message) apiError = payload.error.message;
+                if (!answer) answer = collectResponsesOutputText(payload);
+            } catch {
+                // ignore plain text stream content
+            }
+            if (apiError) throw new Error(apiError);
+        }
+        if (buffer) {
+            parseResponsesStreamChunk(buffer, (text, mode) => {
+                if (mode === "full") {
+                    if (!answer) answer = text;
+                } else {
+                    answer += text;
+                }
+                onDelta?.(answer);
+            });
+        }
+    } catch (error) {
+        throw new Error(normalizeAiError(error, "请求失败"));
+    }
+    refreshRemoteUser(config);
+    return answer || "没有返回内容";
+}
+
+function buildResponsesTextInput(messages: ChatCompletionMessage[]) {
+    const instructions = messages
+        .filter((message) => message.role === "system")
+        .map((message) => responsesInstructionText(message.content))
+        .filter(Boolean)
+        .join("\n\n");
+    const input = messages.filter((message) => message.role !== "system").map((message) => ({ role: message.role, content: responsesContent(message.content) }));
+    return {
+        ...(instructions ? { instructions } : {}),
+        input,
+    };
+}
+
+function responsesInstructionText(content: ChatCompletionMessage["content"]) {
+    if (typeof content === "string") return content.trim();
+    return content
+        .map((item) => (item.type === "text" ? item.text : ""))
+        .filter(Boolean)
+        .join("\n")
+        .trim();
+}
+
+function responsesContent(content: ChatCompletionMessage["content"]) {
+    if (typeof content === "string") return content;
+    return content.map((item) => {
+        if (item.type === "text") return { type: "input_text", text: item.text };
+        return { type: "input_image", image_url: item.image_url.url };
+    });
 }
 
 export async function fetchImageModels(config: AiConfig) {

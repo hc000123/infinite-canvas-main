@@ -14,10 +14,17 @@ export type AgentConfigFormValues = {
     userPromptTemplate: string;
     inputVariablesText: string;
     outputJsonExample: string;
+    channelId: string;
     modelPreference: string;
     temperature: number;
     maxOutputTokens: number;
     reasoningLevel: AgentReasoningLevel;
+    estimatedCredits: number;
+    allowFallback: boolean;
+    fallbackChannelIdsText: string;
+    allowBatch: boolean;
+    timeoutSeconds: number;
+    concurrencyLimit: number;
     writePolicy: AgentWritePolicy;
 };
 
@@ -30,10 +37,17 @@ export function configToForm(config: AgentConfig): AgentConfigFormValues {
         userPromptTemplate: config.userPromptTemplate,
         inputVariablesText: formatInputVariablesText(config.inputVariables),
         outputJsonExample: config.outputJsonExample || config.outputJsonSchema || "",
+        channelId: config.channelId,
         modelPreference: config.modelPreference,
         temperature: config.temperature,
         maxOutputTokens: config.maxOutputTokens,
         reasoningLevel: config.reasoningLevel,
+        estimatedCredits: config.estimatedCredits,
+        allowFallback: config.allowFallback,
+        fallbackChannelIdsText: config.fallbackChannelIds.join("\n"),
+        allowBatch: config.allowBatch,
+        timeoutSeconds: config.timeoutSeconds,
+        concurrencyLimit: config.concurrencyLimit,
         writePolicy: config.writePolicy,
     };
 }
@@ -50,10 +64,17 @@ export function formToConfig(base: AgentConfig, values: AgentConfigFormValues, p
         userPromptTemplate: values.userPromptTemplate,
         inputVariables: parseInputVariablesText(values.inputVariablesText || ""),
         outputJsonExample: values.outputJsonExample || "",
+        channelId: values.channelId || "",
         modelPreference: values.modelPreference || "default",
         temperature: values.temperature ?? 0.4,
         maxOutputTokens: values.maxOutputTokens ?? 1800,
         reasoningLevel: values.reasoningLevel,
+        estimatedCredits: values.estimatedCredits ?? 0,
+        allowFallback: values.allowFallback === true,
+        fallbackChannelIds: parseFallbackChannelIdsText(values.fallbackChannelIdsText || ""),
+        allowBatch: values.allowBatch !== false,
+        timeoutSeconds: values.timeoutSeconds ?? 300,
+        concurrencyLimit: values.concurrencyLimit ?? 1,
         writePolicy: values.writePolicy,
         updatedAt: new Date().toISOString(),
     };
@@ -71,11 +92,30 @@ export function formToGlobalConfig(base: AgentConfig, values: AgentConfigFormVal
         userPromptTemplate: values.userPromptTemplate,
         inputVariables: parseInputVariablesText(values.inputVariablesText || ""),
         outputJsonExample: values.outputJsonExample || "",
+        channelId: values.channelId || "",
         modelPreference: values.modelPreference || "default",
         temperature: values.temperature ?? 0.4,
         maxOutputTokens: values.maxOutputTokens ?? 1800,
         reasoningLevel: values.reasoningLevel,
+        estimatedCredits: values.estimatedCredits ?? 0,
+        allowFallback: values.allowFallback === true,
+        fallbackChannelIds: parseFallbackChannelIdsText(values.fallbackChannelIdsText || ""),
+        allowBatch: values.allowBatch !== false,
+        timeoutSeconds: values.timeoutSeconds ?? 300,
+        concurrencyLimit: values.concurrencyLimit ?? 1,
         writePolicy: values.writePolicy,
         updatedAt: new Date().toISOString(),
     };
+}
+
+function parseFallbackChannelIdsText(value: string) {
+    const seen = new Set<string>();
+    return value
+        .split(/[\n,，]/)
+        .map((item) => item.trim())
+        .filter((item) => {
+            if (!item || seen.has(item)) return false;
+            seen.add(item);
+            return true;
+        });
 }

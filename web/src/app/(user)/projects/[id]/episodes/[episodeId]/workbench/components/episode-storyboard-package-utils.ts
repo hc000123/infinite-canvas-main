@@ -2,7 +2,6 @@ import { workflowMappingPreviewItemKey } from "../../../../../agent-runner-workf
 import type { AgentWorkflowMappingPreview } from "../../../../../agent-runner-types";
 import type { StoryboardPackageStatus, StoryboardProductionPackage, StoryboardStorySegment } from "../storyboard-production-segments";
 
-export type StoryboardPackageDrawerTab = "shots" | "script" | "prompt" | "assets";
 export type StoryboardPackageFilter = "全部" | StoryboardPackageStatus;
 
 export function summarizeStoryboardProductionSegments(segments: StoryboardStorySegment[]) {

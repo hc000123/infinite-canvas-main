@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { AgentSettingsCenterPanel } from "@/app/(user)/projects/agent-settings-center-panel";
-import { ModelPicker } from "@/components/model-picker";
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
@@ -18,7 +17,9 @@ export function AppConfigModal() {
     const shouldPromptContinue = useConfigStore((state) => state.shouldPromptContinue);
     const setConfigDialogOpen = useConfigStore((state) => state.setConfigDialogOpen);
     const clearPromptContinue = useConfigStore((state) => state.clearPromptContinue);
+    const loadPublicSettings = useConfigStore((state) => state.loadPublicSettings);
     const publicSettings = useConfigStore((state) => state.publicSettings);
+    const isPublicSettingsLoading = useConfigStore((state) => state.isPublicSettingsLoading);
     const user = useUserStore((state) => state.user);
     const effectiveConfig = useEffectiveConfig();
     const modelChannel = publicSettings?.modelChannel;
@@ -30,6 +31,13 @@ export function AppConfigModal() {
     useEffect(() => {
         if (isConfigOpen && showAdminSettingsEntry) router.prefetch("/admin/settings");
     }, [isConfigOpen, router, showAdminSettingsEntry]);
+
+    useEffect(() => {
+        if (!isConfigOpen) return;
+        void loadPublicSettings({ force: true });
+        const timer = window.setInterval(() => void loadPublicSettings({ force: true }), 5000);
+        return () => window.clearInterval(timer);
+    }, [isConfigOpen, loadPublicSettings]);
 
     const finishConfig = () => {
         const hasModelConfig = Boolean(modelConfig.imageModel.trim() && videoModel.trim() && modelConfig.textModel.trim());
@@ -77,6 +85,7 @@ export function AppConfigModal() {
                                     <div className="mb-4 rounded-lg border border-stone-200 p-3 text-sm text-stone-500 dark:border-stone-800">
                                         <div className="font-medium text-stone-900 dark:text-stone-100">模型渠道</div>
                                         <div className="mt-1">由后端统一转发请求，当前可用 {modelChannel?.availableModels.length || 0} 个模型。接口、密钥、模型映射、额度、任务日志和素材审核都在后台维护。</div>
+                                        {isPublicSettingsLoading ? <div className="mt-1 text-xs text-blue-500">正在同步后台配置...</div> : null}
                                         {showAdminSettingsEntry ? (
                                             <Button className="mt-3" size="small" onClick={openAdminSettings}>
                                                 去后台设置
@@ -85,13 +94,13 @@ export function AppConfigModal() {
                                     </div>
                                     <div className="grid gap-4 md:grid-cols-3">
                                         <Form.Item label="默认生图模型" className="mb-4">
-                                            <ModelPicker config={modelConfig} modelType="image" value={modelConfig.imageModel} onChange={(model) => updateConfig("imageModel", model)} fullWidth />
+                                            <SyncedModelValue value={modelConfig.imageModel} />
                                         </Form.Item>
                                         <Form.Item label="默认视频模型" className="mb-4">
-                                            <ModelPicker config={modelConfig} modelType="video" value={modelConfig.videoModel} onChange={(model) => updateConfig("videoModel", model)} fullWidth />
+                                            <SyncedModelValue value={modelConfig.videoModel} />
                                         </Form.Item>
                                         <Form.Item label="默认文本模型" className="mb-4">
-                                            <ModelPicker config={modelConfig} modelType="text" value={modelConfig.textModel} onChange={(model) => updateConfig("textModel", model)} fullWidth />
+                                            <SyncedModelValue value={modelConfig.textModel} />
                                         </Form.Item>
                                     </div>
                                     <div className="mb-0 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
@@ -137,4 +146,8 @@ export function AppConfigModal() {
             </div>
         </Modal>
     );
+}
+
+function SyncedModelValue({ value }: { value: string }) {
+    return <div className="flex h-8 min-w-0 items-center rounded-full border border-input bg-transparent px-3 text-sm text-stone-700 dark:text-stone-200">{value || "后台未设置"}</div>;
 }

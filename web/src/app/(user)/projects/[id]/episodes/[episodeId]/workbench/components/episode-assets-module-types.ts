@@ -7,6 +7,7 @@ export type EpisodeAssetProcessMode = "bind" | "generate";
 export type EpisodeAssetFilter = "全部" | "缺素材" | "已绑定" | "待生成" | "角色" | "场景" | "道具" | "服装";
 export type EpisodeStageActionHint = { blocked?: boolean; text: string; tone: EpisodeStatusTone };
 export type OpenImageWorkbenchPayload = { assetId?: string; briefId?: string; prompt: string; title?: string };
+export type EpisodeAssetImageGenerationOptions = { count?: string; model?: string; prompt?: string; size?: string };
 
 export type EpisodeAssetRow = {
     canGenerate: boolean;

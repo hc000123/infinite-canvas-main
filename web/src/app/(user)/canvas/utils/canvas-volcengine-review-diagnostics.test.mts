@@ -14,6 +14,13 @@ test("blocks Seedance video generation when a submitted image review is not acti
     assert.doesNotMatch(message, /已加白\.png/);
 });
 
+test("blocks Seedance video generation when review is Active without asset uri", () => {
+    const message = seedanceImageReviewBlockingError([{ id: "image-1", name: "虚报加白.png", type: "image/png", dataUrl: "blob:image", volcengineAssetStatus: "Active" }]);
+
+    assert.match(message, /虚报加白\.png/);
+    assert.match(message, /缺少 asset:\/\//);
+});
+
 test("adds review diagnostics to sensitive Ark image errors", () => {
     const message = appendSeedanceImageReviewDiagnostic("InputImageSensitiveContentDetected.PrivacyInformation", [
         { id: "image-1", name: "未加白.png", type: "image/png", dataUrl: "blob:image" },

@@ -6,7 +6,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { App, Button, Empty, Progress, Tag } from "antd";
 import { ArrowLeft, Clapperboard, FileText, PanelTop, Workflow } from "lucide-react";
 
-import { useCanvasStore, type CanvasProject } from "../../../../../canvas/stores/use-canvas-store";
+import { useCanvasStore } from "../../../../../canvas/stores/use-canvas-store";
 import { useScriptStore } from "../../../../../canvas/stores/use-script-store";
 import { useStoryboardStore } from "../../../../../canvas/stores/use-storyboard-store";
 import { buildEpisodeScriptSnapshot } from "../../../../../canvas/utils/canvas-episode-context";
@@ -18,6 +18,7 @@ import type { AgentWorkflowMappingPreview, AgentWorkflowRunRecord, AgentWorkflow
 import { useAgentRunnerStore } from "../../../../use-agent-runner-store";
 import { useCreativeProjectStore } from "../../../../use-creative-project-store";
 import { latestPreview, previewActionLabel, previewApplyDisabledReason, previewCounts } from "../workbench/episode-workbench-display";
+import { findEpisodeWorkflowRun } from "../workflow-run-selection";
 
 export default function EpisodeWorkflowLandingPage() {
     const params = useParams<{ id: string; episodeId: string }>();
@@ -49,7 +50,7 @@ export default function EpisodeWorkflowLandingPage() {
     const requestedCanvas = useMemo(() => canvases.find((canvas) => canvas.id === requestedCanvasId && canvas.projectId === projectId && canvas.episodeId === episodeId), [canvases, episodeId, projectId, requestedCanvasId]);
     const boundCanvas = useMemo(() => requestedCanvas || canvases.find((canvas) => canvas.projectId === projectId && canvas.episodeId === episodeId), [canvases, episodeId, projectId, requestedCanvas]);
     const episodeTableShots = useMemo(() => (boundCanvas ? orderedStoryboardTableShots(storyboardTableShots, boundCanvas.id, episodeId) : []), [boundCanvas, episodeId, storyboardTableShots]);
-    const workflowRun = useMemo(() => findWorkflowRun(workflowRuns, projectId, episodeId, preset.workflowId, boundCanvas), [boundCanvas, episodeId, preset.workflowId, projectId, workflowRuns]);
+    const workflowRun = useMemo(() => findEpisodeWorkflowRun({ canvasId: boundCanvas?.id, episodeId, projectId, workflowId: preset.workflowId, workflowRuns }), [boundCanvas?.id, episodeId, preset.workflowId, projectId, workflowRuns]);
     const previews = useMemo(() => (workflowRun ? workflowMappingPreviews.filter((preview) => preview.workflowRunId === workflowRun.id) : []), [workflowMappingPreviews, workflowRun]);
     const productionBiblePreview = latestPreview(previews, "production_bible");
     const storyboardPreview = latestPreview(previews, "storyboard_table");
@@ -339,10 +340,6 @@ function StageRow({
 
 function StatusTag({ status }: { status: AgentWorkflowDisplayStatus }) {
     return <Tag color={statusColor(status)}>{workflowStageStatusLabel(status)}</Tag>;
-}
-
-function findWorkflowRun(workflowRuns: AgentWorkflowRunRecord[], projectId: string, episodeId: string, workflowId: string, boundCanvas?: CanvasProject) {
-    return workflowRuns.find((run) => run.projectId === projectId && run.episodeId === episodeId && run.workflowId === workflowId && (boundCanvas ? run.canvasId === boundCanvas.id : !run.canvasId));
 }
 
 function stageOutput(workflowRun: AgentWorkflowRunRecord | undefined, outputs: AgentWorkflowStageOutput[], stageId: string) {

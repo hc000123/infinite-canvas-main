@@ -38,7 +38,7 @@ test("selects assets for batch Volcengine submit and refresh", () => {
     );
     assert.deepEqual(
         assetsForVolcengineRefresh(assets).map((item) => item.id),
-        ["video-failed", "image-active", "video-processing"],
+        ["image-active", "video-processing"],
     );
 });
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { classifyAiModels, defaultConfig, resolveEffectiveConfig } from "./use-config-store.ts";
+import { classifyAiModels, defaultConfig, resolveEffectiveConfig, resolveSeedanceRequestModel, textModelEndpointType } from "./use-config-store.ts";
 
 test("classifies nano banana models as image models", () => {
     const result = classifyAiModels(["nano-banana-pro", "nano-banana-2", "gemini-3.1-pro-preview"]);
@@ -16,6 +16,7 @@ test("keeps remote default video model visible when it is missing from available
         {
             availableModels: ["gpt-image-2", "gemini-3.1-pro-preview"],
             modelCosts: [],
+            modelTextEndpoints: [],
             defaultModel: "gpt-image-2",
             defaultImageModel: "gpt-image-2",
             defaultVideoModel: "doubao-seedance-2-0-260128",
@@ -25,8 +26,8 @@ test("keeps remote default video model visible when it is missing from available
         },
     );
 
-    assert.equal(result.videoModel, "doubao-seedance-2-0");
-    assert.deepEqual(result.videoModels, ["doubao-seedance-2-0"]);
+    assert.equal(result.videoModel, "doubao-seedance-2-0-260128");
+    assert.deepEqual(result.videoModels, ["doubao-seedance-2-0-260128"]);
 });
 
 test("falls back to backend channel when public model channel is unavailable", () => {
@@ -42,6 +43,8 @@ test("does not leak stale local seedance model into remote video models", () => 
         {
             availableModels: ["gpt-image-2", "gemini-3.1-pro-preview", "doubao-seedance-2-0"],
             modelCosts: [],
+            modelTextEndpoints: [],
+            modelProtocols: [{ model: "doubao-seedance-2-0", protocol: "volcengine-ark" }],
             defaultModel: "gpt-image-2",
             defaultImageModel: "gpt-image-2",
             defaultVideoModel: "doubao-seedance-2-0",
@@ -52,6 +55,55 @@ test("does not leak stale local seedance model into remote video models", () => 
     );
 
     assert.equal(result.videoModel, "doubao-seedance-2-0");
+    assert.equal(result.videoProtocol, "volcengine-ark");
     assert.equal(result.seedanceModel, "doubao-seedance-2-0");
     assert.deepEqual(result.videoModels, ["doubao-seedance-2-0"]);
+});
+
+test("uses enterprise Ark endpoint before visible Seedance model for video requests", () => {
+    assert.equal(
+        resolveSeedanceRequestModel({
+            seedanceEndpointId: "ep-enterprise",
+            seedanceModel: "doubao-seedance-2-0",
+            videoModel: "grok-imagine-video",
+            model: "gpt-5.5",
+        }),
+        "ep-enterprise",
+    );
+});
+
+test("uses backend default models before stale local model selections", () => {
+    const result = resolveEffectiveConfig(
+        {
+            ...defaultConfig,
+            channelMode: "remote",
+            imageModel: "gemini-3.1-flash-image-preview",
+            videoModel: "doubao-seedance-2-0-fast",
+            textModel: "gemini-3.1-pro-preview",
+        },
+        {
+            availableModels: ["gemini-3.1-flash-image-preview", "gpt-image-2", "gemini-3.1-pro-preview", "gpt-5.5-pro", "doubao-seedance-2-0", "doubao-seedance-2-0-fast"],
+            modelCosts: [],
+            modelTextEndpoints: [{ model: "gemini-3.1-pro-preview", endpointType: "chat_completions" }],
+            defaultModel: "gpt-image-2",
+            defaultImageModel: "gpt-image-2",
+            defaultVideoModel: "doubao-seedance-2-0",
+            defaultTextModel: "gpt-5.5-pro",
+            systemPrompt: "",
+            allowCustomChannel: true,
+        },
+    );
+
+    assert.equal(result.imageModel, "gpt-image-2");
+    assert.equal(result.videoModel, "doubao-seedance-2-0");
+    assert.equal(result.textModel, "gpt-5.5-pro");
+    assert.equal(textModelEndpointType(result, "gpt-5.5-pro"), "responses");
+    assert.equal(textModelEndpointType(result, "gemini-3.1-pro-preview"), "chat_completions");
+    assert.deepEqual(
+        result.modelTextEndpoints.filter((item) => item.model === "gpt-5.5-pro" || item.model === "gemini-3.1-pro-preview"),
+        [
+            { model: "gemini-3.1-pro-preview", endpointType: "chat_completions" },
+            { model: "gpt-5.5-pro", endpointType: "responses" },
+        ],
+    );
 });

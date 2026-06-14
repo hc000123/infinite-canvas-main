@@ -252,7 +252,7 @@ func AITaskTypeForPath(path string) string {
 		return "image_generation"
 	case "/images/edits":
 		return "image_edit"
-	case "/chat/completions":
+	case "/chat/completions", "/responses":
 		return "chat"
 	case "/videos":
 		return "video_create"
@@ -265,7 +265,7 @@ func inferAITaskKind(path string) string {
 	switch path {
 	case "/images/generations", "/images/edits":
 		return "image"
-	case "/chat/completions":
+	case "/chat/completions", "/responses":
 		return "chat"
 	case "/videos":
 		return "video"
@@ -280,7 +280,7 @@ func inferAITaskActionType(path string, body []byte, contentType string) string 
 		return "generate"
 	case "/images/edits":
 		return "edit"
-	case "/chat/completions":
+	case "/chat/completions", "/responses":
 		return "chat"
 	case "/videos":
 		if value := readAITaskStringField(body, contentType, "task_mode", "video_action_type", "action_type"); value != "" {
@@ -396,13 +396,24 @@ func sanitizeAIString(value string) string {
 		return value
 	}
 	lower := strings.ToLower(text)
-	if strings.HasPrefix(lower, "data:") || strings.HasPrefix(lower, "blob:") || strings.Contains(lower, ";base64,") {
+	if isMediaDataURL(lower) || strings.HasPrefix(lower, "blob:") || strings.Contains(lower, ";base64,") {
 		return "[media redacted]"
 	}
 	if len(text) > 512 && looksLikeBase64(text) {
 		return "[base64 redacted]"
 	}
 	return value
+}
+
+func isMediaDataURL(value string) bool {
+	if !strings.HasPrefix(value, "data:") {
+		return false
+	}
+	mediaType := strings.TrimSpace(strings.TrimPrefix(value, "data:"))
+	if strings.HasPrefix(mediaType, "{") || strings.HasPrefix(mediaType, "[") {
+		return false
+	}
+	return strings.Contains(mediaType, "/")
 }
 
 func isSensitiveAIKey(key string) bool {

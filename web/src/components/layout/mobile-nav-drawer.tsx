@@ -9,10 +9,11 @@ import { cn } from "@/lib/utils";
 type MobileNavDrawerProps = {
     open: boolean;
     activeToolSlug?: NavigationToolSlug;
+    getHref?: (slug: NavigationToolSlug) => string;
     onClose: () => void;
 };
 
-export function MobileNavDrawer({ open, activeToolSlug, onClose }: MobileNavDrawerProps) {
+export function MobileNavDrawer({ open, activeToolSlug, getHref, onClose }: MobileNavDrawerProps) {
     return (
         <Drawer title="眨眼之间" placement="left" size={280} open={open} onClose={onClose} className="md:hidden">
             <div className="space-y-1">
@@ -22,7 +23,7 @@ export function MobileNavDrawer({ open, activeToolSlug, onClose }: MobileNavDraw
                     return (
                         <Link
                             key={tool.slug}
-                            href={`/${tool.slug}`}
+                            href={getHref ? getHref(tool.slug) : `/${tool.slug}`}
                             onClick={onClose}
                             className={cn(
                                 "flex items-center gap-3 rounded-lg px-3 py-3 text-base transition",

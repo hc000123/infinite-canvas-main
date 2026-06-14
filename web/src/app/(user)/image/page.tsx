@@ -18,10 +18,11 @@ import { nanoid } from "nanoid";
 import { formatBytes, formatDuration, getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
 import { requestEdit, requestGeneration } from "@/services/api/image";
 import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
-import { useAssetStore } from "@/stores/use-asset-store";
+import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { useLocalAiTaskLogStore } from "@/stores/use-local-ai-task-log-store";
 import type { ReferenceImage } from "@/types/image";
 import { buildAssetVersionReference } from "../assets/asset-version-references";
+import { buildWorkflowGeneratedImagePatch, workflowAssetInfo } from "../assets/workflow-asset-image";
 import { useImageBriefStore } from "../canvas/stores/use-image-brief-store";
 import { useProductionBibleStore } from "../canvas/stores/use-production-bible-store";
 
@@ -71,9 +72,11 @@ type ImageWorkbenchSourceContext = {
     briefId: string;
     episodeId: string;
     episodeTitle: string;
+    libraryAssetId: string;
     projectId: string;
     projectTitle: string;
     prompt: string;
+    source: string;
     title: string;
 };
 
@@ -83,9 +86,11 @@ const emptyImageWorkbenchSourceContext: ImageWorkbenchSourceContext = {
     briefId: "",
     episodeId: "",
     episodeTitle: "",
+    libraryAssetId: "",
     projectId: "",
     projectTitle: "",
     prompt: "",
+    source: "",
     title: "",
 };
 
@@ -127,6 +132,7 @@ export default function ImagePage() {
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
+    const updateAsset = useAssetStore((state) => state.updateAsset);
     const addBriefResultAsset = useImageBriefStore((state) => state.addResultAsset);
     const productionBibleItems = useProductionBibleStore((state) => state.items);
     const updateProductionBibleItem = useProductionBibleStore((state) => state.updateItem);
@@ -287,30 +293,45 @@ export default function ImagePage() {
 
     const saveResultToAssets = async (image: GeneratedImage, index: number) => {
         const stored = await uploadImage(image.dataUrl);
-        const assetId = await addAssetOnce({
-            kind: "image",
-            title: `生成结果 ${index + 1}`,
-            coverUrl: stored.url,
-            tags: [],
-            source: "生图工作台",
-            data: { dataUrl: stored.url, storageKey: stored.storageKey, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType },
-            metadata: {
-                source: "image-page",
-                generation: { prompt, index: index + 1 },
-                projectId: sourceContext.projectId,
-                episodeId: sourceContext.episodeId,
-                imageBriefId: sourceContext.briefId,
-                assetBreakdownItemId: sourceContext.assetId,
-                productionBibleItemId: sourceContext.assetId,
-            },
-        });
+        const sourceAsset = sourceContext.libraryAssetId ? useAssetStore.getState().assets.find((asset) => asset.id === sourceContext.libraryAssetId) : undefined;
+        let assetId = "";
+        let savedAsset: Pick<Asset, "id" | "metadata" | "updatedAt"> | undefined;
+        if (sourceAsset && workflowAssetInfo(sourceAsset)) {
+            const now = new Date().toISOString();
+            const patch = buildWorkflowGeneratedImagePatch(sourceAsset, stored, { config: { ...effectiveConfig, model, count: "1" }, model });
+            updateAsset(sourceAsset.id, patch);
+            assetId = sourceAsset.id;
+            savedAsset = { id: sourceAsset.id, metadata: { ...(sourceAsset.metadata || {}), ...(patch.metadata || {}) }, updatedAt: now };
+        } else {
+            assetId = await addAssetOnce({
+                kind: "image",
+                title: `生成结果 ${index + 1}`,
+                coverUrl: stored.url,
+                tags: [],
+                source: "生图工作台",
+                data: { dataUrl: stored.url, storageKey: stored.storageKey, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType },
+                metadata: {
+                    source: "image-page",
+                    generation: { prompt, index: index + 1 },
+                    projectId: sourceContext.projectId,
+                    episodeId: sourceContext.episodeId,
+                    imageBriefId: sourceContext.briefId,
+                    assetBreakdownItemId: sourceContext.assetId,
+                    productionBibleItemId: sourceContext.assetId,
+                },
+            });
+            savedAsset = useAssetStore.getState().assets.find((asset) => asset.id === assetId);
+        }
         const linkedBibleItem = productionBibleItems.find((item) => item.id === sourceContext.assetId && (!sourceContext.projectId || item.projectId === sourceContext.projectId));
         if (linkedBibleItem) {
-            const savedAsset = useAssetStore.getState().assets.find((asset) => asset.id === assetId);
             const nextRefs = linkedBibleItem.assetRefs.some((ref) => ref.assetId === assetId)
                 ? linkedBibleItem.assetRefs
                 : [...linkedBibleItem.assetRefs, savedAsset ? { assetId, assetVersion: buildAssetVersionReference(savedAsset), role: "generated_reference" } : { assetId, role: "generated_reference" }];
             updateProductionBibleItem(linkedBibleItem.id, { assetRefs: nextRefs });
+        }
+        if (sourceAsset && workflowAssetInfo(sourceAsset)) {
+            message.success(linkedBibleItem ? "已回写到视频工作流素材卡，并绑定到设定库" : "已回写到视频工作流素材卡");
+            return;
         }
         if (sourceContext.briefId) {
             addBriefResultAsset(sourceContext.briefId, assetId);
@@ -444,13 +465,15 @@ export default function ImagePage() {
                                 <h1 className="mt-2 text-2xl font-semibold leading-tight text-[var(--studio-text-primary)]">生图工作台</h1>
                                 {sourceContextLabel ? <p className="mt-2 break-words text-sm leading-5 text-[var(--studio-text-secondary)]">来自：{sourceContextLabel}</p> : null}
                             </div>
-                            <div className="flex shrink-0 gap-2 lg:hidden">
-                                <Button icon={<History className="size-4" />} onClick={() => setLogsOpen(true)}>
-                                    记录
-                                </Button>
-                                <Button icon={<SlidersHorizontal className="size-4" />} onClick={() => setSettingsOpen(true)}>
-                                    参数
-                                </Button>
+                            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                                <div className="flex gap-2 lg:hidden">
+                                    <Button icon={<History className="size-4" />} onClick={() => setLogsOpen(true)}>
+                                        记录
+                                    </Button>
+                                    <Button icon={<SlidersHorizontal className="size-4" />} onClick={() => setSettingsOpen(true)}>
+                                        参数
+                                    </Button>
+                                </div>
                             </div>
                         </div>
 
@@ -788,6 +811,7 @@ function LogPanel({
 }
 
 function LogCard({ log, selected, active, onSelectedChange, onClick }: { log: GenerationLog; selected: boolean; active: boolean; onSelectedChange: (checked: boolean) => void; onClick: () => void }) {
+    const thumbnails = (log.thumbnails || []).filter((image) => image.trim());
     return (
         <button
             type="button"
@@ -799,9 +823,9 @@ function LogCard({ log, selected, active, onSelectedChange, onClick }: { log: Ge
                     <Checkbox className="mt-0.5" checked={selected} onClick={(event) => event.stopPropagation()} onChange={(event) => onSelectedChange(event.target.checked)} />
                     <div className="min-w-0">
                         <div className="truncate text-sm font-semibold leading-5 text-[var(--studio-text-primary)]">{log.title}</div>
-                        {log.thumbnails?.length ? (
+                        {thumbnails.length ? (
                             <div className="mt-2 flex gap-1 overflow-hidden">
-                                {log.thumbnails.slice(0, 4).map((image, index) => (
+                                {thumbnails.slice(0, 4).map((image, index) => (
                                     <img key={`${log.id}-${index}`} src={image} alt="" className="size-8 shrink-0 rounded-md object-cover" />
                                 ))}
                             </div>
@@ -871,7 +895,7 @@ async function normalizeLog(log: Partial<GenerationLog>, resolveMedia = true): P
         quality: log.quality || config.quality || "",
         status: log.status || "成功",
         images,
-        thumbnails: images.map((image) => image.dataUrl),
+        thumbnails: images.map((image) => image.dataUrl).filter((image) => image.trim()),
     };
 }
 
@@ -902,9 +926,11 @@ function parseImageWorkbenchSourceContext(): ImageWorkbenchSourceContext {
         briefId: params.get("briefId") || "",
         episodeId: params.get("episodeId") || "",
         episodeTitle: params.get("episodeTitle") || "",
+        libraryAssetId: params.get("libraryAssetId") || "",
         projectId: params.get("projectId") || "",
         projectTitle: params.get("projectTitle") || "",
         prompt: params.get("prompt") || "",
+        source: params.get("source") || "",
         title: params.get("title") || "",
     };
 }

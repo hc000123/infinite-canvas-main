@@ -51,7 +51,6 @@ export function latestPreview(previews: AgentWorkflowMappingPreview[], targetTyp
 
 export function buildEpisodePhaseText({
     artDisplay,
-    boundCanvas,
     directorDisplay,
     episodeTableShots,
     hasScript,
@@ -61,7 +60,6 @@ export function buildEpisodePhaseText({
     videoPreview,
 }: {
     artDisplay?: WorkflowStageDisplaySummary;
-    boundCanvas?: CanvasProject;
     directorDisplay?: WorkflowStageDisplaySummary;
     episodeTableShots: StoryboardTableShot[];
     hasScript: boolean;
@@ -74,6 +72,7 @@ export function buildEpisodePhaseText({
     if (videoPreview) return "视频配置待确认";
     if (storyboardPreview || episodeTableShots.length) return "分镜提示词审核";
     if (productionBiblePreview || artDisplay?.displayStatus === "approved") return "资产与生图待补齐";
+    if (artDisplay?.displayStatus && artDisplay.displayStatus !== "idle" && artDisplay.displayStatus !== "blocked") return `资产与生图${workflowStageStatusLabel(artDisplay.displayStatus)}`;
     if (directorDisplay?.displayStatus && directorDisplay.displayStatus !== "idle") return `导演分析${workflowStageStatusLabel(directorDisplay.displayStatus)}`;
     if (storyboardDisplay?.displayStatus === "running") return "分镜生成中";
     return "导演分析待启动";
@@ -82,7 +81,6 @@ export function buildEpisodePhaseText({
 export function buildEpisodeNextActionText({
     appliedPreviewItemIds,
     artDisplay,
-    boundCanvas,
     directorDisplay,
     episodeTableShots,
     hasScript,
@@ -93,7 +91,6 @@ export function buildEpisodeNextActionText({
 }: {
     appliedPreviewItemIds: string[];
     artDisplay?: WorkflowStageDisplaySummary;
-    boundCanvas?: CanvasProject;
     directorDisplay?: WorkflowStageDisplaySummary;
     episodeTableShots: StoryboardTableShot[];
     hasScript: boolean;
@@ -151,6 +148,7 @@ export function buildEpisodeModuleNavStatus({
             if (counts.pending) return { detail: `${counts.pending} 条资产清单待写入`, text: "待写入", tone: "amber" };
             return { text: "完成", tone: "green" };
         }
+        if (artDisplay?.displayStatus === "blocked") return { detail: "可直接运行资产分析", text: "待分析", tone: "cyan" };
         return compactWorkflowNavStatus(artDisplay, "待分析", "slate");
     }
     if (key === "storyboard") {
@@ -191,28 +189,36 @@ export function workflowDisplayText(display?: WorkflowStageDisplaySummary) {
 
 export function buildAssetStageActionHint({
     display,
+    errorMessage,
     hasOutput,
     isRunning,
     outputHasStateMismatch,
     outputNeedsReview,
     previewPending,
     previewTotal,
+    allowBlockedRun,
+    staleRunning,
 }: {
+    allowBlockedRun?: boolean;
     display?: WorkflowStageDisplaySummary;
+    errorMessage?: string;
     hasOutput: boolean;
     isRunning: boolean;
     outputHasStateMismatch?: boolean;
     outputNeedsReview?: boolean;
     previewPending: number;
     previewTotal: number;
+    staleRunning?: boolean;
 }): {
     blocked?: boolean;
     text: string;
     tone: EpisodeStatusTone;
 } {
+    if (staleRunning) return { text: "上一次资产分析没有正常结束，请先清理运行状态再重新发送。", tone: "amber" };
     if (isRunning || display?.displayStatus === "running") return { text: "资产分析正在运行，等待 Agent 返回结果。", tone: "cyan" };
+    if (display?.displayStatus === "blocked" && allowBlockedRun) return { text: "导演分析尚未确认，也可以直接基于剧本运行资产分析。", tone: "slate" };
     if (display?.displayStatus === "blocked") return { blocked: true, text: `暂不可运行，${formatBlockedReason(display.blockedReason)}。`, tone: "amber" };
-    if (display?.displayStatus === "error") return { text: "上次资产分析失败，请查看错误后重新运行。", tone: "red" };
+    if (display?.displayStatus === "error") return { text: errorMessage || "上次资产分析失败，请查看错误后重新运行。", tone: "red" };
     if (display?.displayStatus === "rejected") return { text: "资产清单已驳回，可重新运行生成新结果。", tone: "red" };
     if (outputHasStateMismatch) return { text: "检测到旧资产产物，但阶段状态不可确认。请重新运行资产分析，避免继续使用异常结果。", tone: "red" };
     if (outputNeedsReview) return { text: "资产分析结果已返回，下一步请先确认这份结果；确认后才能生成资产清单。", tone: "amber" };

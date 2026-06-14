@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Button, Modal } from "antd";
-import { Check, Lock, LockOpen, X } from "lucide-react";
+import { Check, Grid3X3, Lock, LockOpen, X } from "lucide-react";
 
 import { readImageMeta } from "@/lib/image-utils";
 
@@ -20,7 +20,7 @@ const handles: ResizeHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 const minSize = 0.06;
 const defaultCrop = { x: 0.12, y: 0.12, width: 0.76, height: 0.76 };
 
-export function CanvasNodeCropDialog({ dataUrl, open, onClose, onConfirm }: { dataUrl: string; open: boolean; onClose: () => void; onConfirm: (crop: CanvasImageCropRect) => void }) {
+export function CanvasNodeCropDialog({ dataUrl, open, onClose, onConfirm, onConfirmGrid }: { dataUrl: string; open: boolean; onClose: () => void; onConfirm: (crop: CanvasImageCropRect) => void; onConfirmGrid: () => void }) {
     const boxRef = useRef<HTMLDivElement>(null);
     const [crop, setCrop] = useState<CanvasImageCropRect>(defaultCrop);
     const [locked, setLocked] = useState(false);
@@ -91,6 +91,9 @@ export function CanvasNodeCropDialog({ dataUrl, open, onClose, onConfirm }: { da
 
                 <div className="flex items-center justify-end gap-2">
                     <Button onClick={() => setCrop(defaultCrop)}>重置</Button>
+                    <Button icon={<Grid3X3 className="size-4" />} onClick={onConfirmGrid}>
+                        九宫格裁切
+                    </Button>
                     <Button icon={<X className="size-4" />} onClick={onClose}>
                         取消
                     </Button>

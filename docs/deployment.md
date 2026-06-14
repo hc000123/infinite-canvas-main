@@ -18,9 +18,21 @@
 3. 在部署环境访问 `/api/health`，应返回 `ok`；如果返回 502 或“接口连接失败”，说明 Next 没连上 Go 后端。
 4. 在浏览器开发者工具 Network 里检查 `POST /api/v1/videos`：正常情况下应返回包含 `id` 和 `status=queued/running` 的任务对象。
 5. 云端渠道模式下，确认后台“系统设置”里已启用可用的火山 Ark / Seedance 渠道，并配置模型、Endpoint、API Key 和用户额度。
-6. 个人本地直连模式只适合本地或桌面使用；部署到公网网页时，浏览器本地 Key 仍在用户浏览器里，但请求链路、跨域和服务端代理可能和本机开发不同，商业云控版应优先使用云端代理。
+6. 公网和云服务器部署不要依赖浏览器本地 Key、用户本机目录、`codex exec` 或 `.workflow-cache` 作为主执行链路；模型请求应统一走后端模型渠道、任务记录和额度账本。
 
 Docker 部署会在同一个容器里启动 Go 后端和 Next 服务，因此默认不需要单独设置 `API_BASE_URL`。如果改成前后端分离部署，就必须显式配置。
+
+## 云端 Agent Run 主链路
+
+视频工作流的云端主链路使用后端 Agent Run API：
+
+- `GET /api/v1/agent-configs` / `POST /api/v1/agent-configs`：保存 Agent 中心配置，按用户、项目、集数隔离。
+- `GET /api/v1/agent-runs` / `POST /api/v1/agent-runs`：创建和查询文本 Agent 任务。
+- `POST /api/v1/agent-runs/:id/review`：用户确认、驳回或标记已写入。
+
+Agent Run 创建后由后端选择后台系统设置里的企业文本模型渠道，保存请求快照、原始输出、可解析 JSON 草案、审核结果和映射预览。成功状态停在 `needs_review`，用户确认后再写入资产库、分镜或视频生产包。
+
+本地 `codex exec` Runner 只作为桌面端或开发调试适配器保留，不作为云端多用户主执行链路。云端后续还需要继续补齐后台队列 worker、对象存储、质量门服务化、并发限制、租户权限和更细粒度额度扣费。
 
 ## Docker 健康检查与持久化
 

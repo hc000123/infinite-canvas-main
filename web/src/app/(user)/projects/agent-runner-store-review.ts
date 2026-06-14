@@ -28,7 +28,7 @@ export function markStartedWorkflowStageReadings(workflowRun: AgentWorkflowRunRe
                   runnerRunId,
                   now,
               })
-            : startAgentWorkflowStageRun(workflowRun, input.stageId, runnerRunId, now);
+            : startAgentWorkflowStageRun(workflowRun, input.stageId, runnerRunId, now, { allowBlocked: input.variables.allowBlockedStageRun === true });
     const stageState = started.stageStates.find((stage) => stage.stageId === input.stageId);
     if (!stageState || stageState.status === "blocked") return started;
     const records = buildWorkflowReadingRecords({

@@ -49,6 +49,7 @@ function reviewIssue(reference: ReviewableReference): ReviewIssue | null {
     const label = reference.name || reference.fallbackLabel;
     const assetId = reference.volcengineAssetId?.trim();
     const status = reference.volcengineAssetStatus?.trim();
+    if (status === "Active") return { text: `${label}（已标记 Active，但缺少 asset:// 素材 ID）`, blocking: true };
     if (assetId && status !== "Active") return { text: `${label}（加白状态：${status || "未知"}）`, blocking: true };
     return { text: `${label}（未以 asset:// 加白素材提交）`, blocking: false };
 }

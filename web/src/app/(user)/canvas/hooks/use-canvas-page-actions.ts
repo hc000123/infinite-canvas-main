@@ -19,7 +19,6 @@ export function useCanvasPageActions({
     createProject,
     currentProject,
     deleteProjects,
-    ensureUnfiledProject,
     flushProjects,
     message,
     navigate,
@@ -45,7 +44,6 @@ export function useCanvasPageActions({
     createProject: (title?: string, preset?: CanvasProject["preset"], options?: { projectId?: string }) => string;
     currentProject?: CanvasProject;
     deleteProjects: (ids: string[]) => void;
-    ensureUnfiledProject: (preset?: CanvasProject["preset"]) => string;
     flushProjects: () => Promise<void>;
     message: CanvasPageActionMessage;
     navigate: (href: string) => void;
@@ -83,11 +81,15 @@ export function useCanvasPageActions({
     );
 
     const createAndOpenProject = useCallback(() => {
-        const targetProjectId = currentProject?.projectId || ensureUnfiledProject(currentProject?.preset);
+        const targetProjectId = currentProject?.projectId;
+        if (!targetProjectId) {
+            navigate("/projects");
+            return;
+        }
         const id = createProject(`眨眼之间 ${useCanvasStore.getState().projects.length + 1}`, currentProject?.preset, { projectId: targetProjectId });
         attachCanvasToCreativeProject(targetProjectId, id);
         navigate(`/canvas/${id}`);
-    }, [attachCanvasToCreativeProject, createProject, currentProject?.preset, currentProject?.projectId, ensureUnfiledProject, navigate]);
+    }, [attachCanvasToCreativeProject, createProject, currentProject?.preset, currentProject?.projectId, navigate]);
 
     const deleteCurrentProject = useCallback(() => {
         deleteProjects([canvasId]);
