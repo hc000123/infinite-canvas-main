@@ -23,8 +23,8 @@ export function WorkflowMappingPreviewPanel({
     onApplyVideoNodePreview: (preview: AgentWorkflowMappingPreview) => void;
 }) {
     return (
-        <div className="mt-3 grid gap-2 rounded-md border border-dashed border-stone-200 p-3 dark:border-stone-700">
-            <div className="text-xs font-medium text-stone-500">映射预览</div>
+        <div className="mt-3 grid gap-2 rounded-md border border-dashed border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
+            <div className="text-xs font-medium text-[var(--studio-text-muted)]">映射预览</div>
             {previews.map((preview) => {
                 const creatableItems = preview.items.filter((item) => item.targetType === preview.targetType && item.action === "create");
                 const pendingCreatableItems = creatableItems.filter((item) => !appliedPreviewItemIds.includes(workflowMappingPreviewItemKey(preview, item.itemId)));
@@ -50,7 +50,7 @@ export function WorkflowMappingPreviewPanel({
                                   : "已写入分镜头表"
                               : "";
                 return (
-                    <div key={preview.previewId} className="rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-600 dark:bg-white/5 dark:text-stone-300">
+                    <div key={preview.previewId} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-2 text-xs leading-5 text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-border-strong)]">
                         <div className="flex flex-wrap items-center gap-2">
                             <Tag className="m-0">{preview.targetType}</Tag>
                             <span className="font-medium">{preview.title}</span>
@@ -79,12 +79,12 @@ export function WorkflowMappingPreviewPanel({
                         </div>
                         <div className="mt-1">{preview.summary}</div>
                         {preview.warnings.length ? <div className="mt-1 text-amber-600">提示：{preview.warnings.join("；")}</div> : null}
-                        {applyDisabledReason ? <div className="mt-1 text-stone-500">{applyDisabledReason}</div> : null}
+                        {applyDisabledReason ? <div className="mt-1 text-[var(--studio-text-muted)]">{applyDisabledReason}</div> : null}
                         <details className="mt-2">
-                            <summary className="cursor-pointer text-stone-500">查看条目与追溯</summary>
+                            <summary className="cursor-pointer text-[var(--studio-text-muted)]">查看条目与追溯</summary>
                             <div className="mt-2 grid gap-2">
                                 {preview.items.map((item) => (
-                                    <details key={item.itemId} className="rounded bg-white px-2 py-1.5 dark:bg-black/20">
+                                    <details key={item.itemId} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-2 py-1.5">
                                         <summary className="cursor-pointer list-none">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <Tag className="m-0">{item.action}</Tag>
@@ -94,7 +94,7 @@ export function WorkflowMappingPreviewPanel({
                                                         {preview.targetType === "production_bible" ? "已写入设定库" : preview.targetType === "storyboard_table" ? "已写入分镜头表" : "已创建视频配置节点"}
                                                     </Tag>
                                                 ) : null}
-                                                {typeof item.confidence === "number" ? <span className="text-stone-400">置信度 {item.confidence}</span> : null}
+                                                {typeof item.confidence === "number" ? <span className="text-[var(--studio-text-muted)]">置信度 {item.confidence}</span> : null}
                                                 {item.warnings.length ? (
                                                     <Tag className="m-0" color="orange">
                                                         warning {item.warnings.length}
@@ -104,18 +104,18 @@ export function WorkflowMappingPreviewPanel({
                                             <div className="mt-1">{item.reason}</div>
                                         </summary>
                                         <div className="mt-2 grid gap-2">
-                                            <div className="text-stone-500">来源：{item.sourceText}</div>
+                                            <div className="text-[var(--studio-text-muted)]">来源：{item.sourceText}</div>
                                             {item.warnings.length ? <div className="text-amber-600">{item.warnings.join("；")}</div> : null}
                                             <details>
-                                                <summary className="cursor-pointer text-stone-500">查看 mappedFields</summary>
-                                                <pre className="mt-2 overflow-auto rounded bg-stone-950 p-2 text-[11px] text-stone-50">{JSON.stringify(item.mappedFields, null, 2)}</pre>
+                                                <summary className="cursor-pointer text-[var(--studio-text-muted)]">查看 mappedFields</summary>
+                                                <pre className="mt-2 overflow-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] p-2 text-[11px] text-[var(--studio-text-primary)]">{JSON.stringify(item.mappedFields, null, 2)}</pre>
                                             </details>
                                         </div>
                                     </details>
                                 ))}
-                                <details className="rounded bg-white px-2 py-1.5 dark:bg-black/20">
-                                    <summary className="cursor-pointer text-stone-500">查看完整追溯信息</summary>
-                                    <div className="mt-2 grid gap-1 text-stone-500">
+                                <details className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-2 py-1.5">
+                                    <summary className="cursor-pointer text-[var(--studio-text-muted)]">查看完整追溯信息</summary>
+                                    <div className="mt-2 grid gap-1 text-[var(--studio-text-muted)]">
                                         <div>previewId：{preview.previewId}</div>
                                         <div>workflowRunId：{preview.workflowRunId}</div>
                                         <div>sourceStageId：{preview.sourceStageId}</div>

@@ -459,8 +459,8 @@ export default function ImagePage() {
                 </aside>
 
                 <section className="grid gap-3 lg:min-h-0 lg:grid-cols-[minmax(420px,1fr)_minmax(420px,480px)] lg:overflow-hidden 2xl:grid-cols-[minmax(520px,1fr)_minmax(460px,520px)]">
-                    <div className="thin-scrollbar flex flex-col rounded-lg border border-[var(--studio-border-subtle)] bg-[rgba(13,17,24,0.72)] p-4 lg:order-2 lg:min-h-0 lg:overflow-y-auto lg:p-5">
-                        <div className="mb-5 flex items-start justify-between gap-3 border-b border-white/[0.06] pb-4">
+                    <div className="thin-scrollbar flex flex-col rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-4 shadow-[var(--studio-shadow)] lg:order-2 lg:min-h-0 lg:overflow-y-auto lg:p-5">
+                        <div className="mb-5 flex items-start justify-between gap-3 border-b border-[var(--studio-border-subtle)] pb-4">
                             <div className="min-w-0">
                                 <div className="text-xs font-semibold tracking-normal text-[var(--studio-accent)]">图片生成</div>
                                 <h1 className="mt-2 text-2xl font-semibold leading-tight text-[var(--studio-text-primary)]">生图工作台</h1>
@@ -490,7 +490,7 @@ export default function ImagePage() {
                                 </div>
                                 <Input.TextArea
                                     ref={promptInputRef}
-                                    className="!rounded-lg !border-[var(--studio-border-subtle)] !bg-[rgba(20,28,40,0.72)] !p-4 !text-[15px] !leading-6"
+                                    className="!rounded-md !border-[var(--studio-border-subtle)] !bg-[var(--studio-control-bg)] !p-4 !text-[15px] !leading-6"
                                     value={prompt}
                                     onChange={(event) => setPrompt(event.target.value)}
                                     rows={6}
@@ -514,7 +514,7 @@ export default function ImagePage() {
                                     </div>
                                 </div>
                                 <div
-                                    className="hover-scrollbar hover-scrollbar-hint flex min-h-28 w-full min-w-0 max-w-full gap-2 overflow-x-scroll overflow-y-hidden rounded-lg border border-dashed border-[var(--studio-border-strong)] bg-[rgba(20,28,40,0.58)] p-2 pb-3 overscroll-x-contain"
+                                    className="hover-scrollbar hover-scrollbar-hint flex min-h-28 w-full min-w-0 max-w-full gap-2 overflow-x-scroll overflow-y-hidden rounded-md border border-dashed border-[var(--studio-border-strong)] bg-[var(--studio-panel-muted-bg)] p-2 pb-3 overscroll-x-contain"
                                     onWheel={(event) => {
                                         if (event.currentTarget.scrollWidth <= event.currentTarget.clientWidth) return;
                                         event.preventDefault();
@@ -526,7 +526,7 @@ export default function ImagePage() {
                                             <img src={item.dataUrl} alt={item.name} className="size-full object-cover" />
                                             <button
                                                 type="button"
-                                                className="absolute left-1 top-1 rounded bg-[rgba(8,12,20,.78)] px-1.5 py-0.5 text-xs font-medium text-white shadow-sm backdrop-blur transition hover:bg-[var(--studio-accent)]"
+                                                className="absolute left-1 top-1 rounded bg-[color-mix(in_srgb,var(--studio-panel-bg)_86%,transparent)] px-1.5 py-0.5 text-xs font-medium text-[var(--studio-text-primary)] shadow-sm backdrop-blur transition hover:bg-[var(--studio-accent)] hover:text-white"
                                                 onClick={() => insertReferenceToken(index)}
                                                 title={`插入 ${referenceToken(index)} 到提示词`}
                                                 aria-label={`插入 ${referenceToken(index)} 到提示词`}
@@ -535,7 +535,7 @@ export default function ImagePage() {
                                             </button>
                                             <button
                                                 type="button"
-                                                className="absolute right-1 top-1 hidden size-7 items-center justify-center rounded bg-[rgba(8,12,20,.72)] text-white backdrop-blur group-hover:flex"
+                                                className="absolute right-1 top-1 hidden size-7 items-center justify-center rounded bg-[color-mix(in_srgb,var(--studio-panel-bg)_86%,transparent)] text-[var(--studio-text-primary)] backdrop-blur transition hover:bg-[var(--studio-hover-bg)] group-hover:flex"
                                                 onClick={() => setReferences((value) => value.filter((ref) => ref.id !== item.id))}
                                                 aria-label="移除参考图"
                                             >
@@ -561,7 +561,7 @@ export default function ImagePage() {
                             </div>
                         </div>
 
-                        <div className="sticky bottom-0 z-10 -mx-4 mt-5 border-t border-white/[0.08] bg-[linear-gradient(180deg,rgba(13,17,24,0)_0%,rgba(13,17,24,0.96)_24%,rgba(13,17,24,0.98)_100%)] px-4 pb-1 pt-5 lg:-mx-5 lg:px-5">
+                        <div className="sticky bottom-0 z-10 -mx-4 mt-5 border-t border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] px-4 pb-1 pt-5 lg:-mx-5 lg:px-5">
                             <div className="mb-2 flex items-center justify-between gap-3 text-xs text-[var(--studio-text-muted)]">
                                 <span className="truncate">{prompt.trim() ? `将生成 ${generationCount} 张图片` : "先写一句画面描述，再开始生成"}</span>
                                 <span className="shrink-0">{running ? `已等待 ${formatDuration(elapsedMs)}` : effectiveConfig.size}</span>
@@ -572,8 +572,8 @@ export default function ImagePage() {
                         </div>
                     </div>
 
-                    <div className="thin-scrollbar flex min-h-[420px] flex-col rounded-lg border border-[var(--studio-border-subtle)] bg-[rgba(11,15,22,0.7)] p-4 lg:order-1 lg:min-h-0 lg:overflow-y-auto lg:p-5">
-                        <div className="mb-4 flex items-start justify-between gap-3 border-b border-white/[0.06] pb-4">
+                    <div className="thin-scrollbar flex min-h-[420px] flex-col rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-4 shadow-[var(--studio-shadow)] lg:order-1 lg:min-h-0 lg:overflow-y-auto lg:p-5">
+                        <div className="mb-4 flex items-start justify-between gap-3 border-b border-[var(--studio-border-subtle)] pb-4">
                             <div>
                                 <h2 className="text-2xl font-semibold text-[var(--studio-text-primary)]">生成结果</h2>
                                 <p className="mt-1 text-sm text-[var(--studio-text-muted)]">{results.length ? `${results.length} 个生成槽位` : "生成后的图片会显示在这里"}</p>
@@ -593,7 +593,7 @@ export default function ImagePage() {
                                 )}
                             </div>
                         ) : (
-                            <div className="flex min-h-[320px] flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-[var(--studio-border-strong)] bg-[rgba(20,28,40,0.42)] text-center lg:min-h-[560px]">
+                            <div className="flex min-h-[320px] flex-1 flex-col items-center justify-center rounded-md border border-dashed border-[var(--studio-border-strong)] bg-[var(--studio-panel-muted-bg)] text-center lg:min-h-[560px]">
                                 <ImagePlus className="mb-4 size-11 text-[var(--studio-text-muted)]" />
                                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有生成图片" />
                             </div>
@@ -669,8 +669,8 @@ function ResultImageCard({
     const aspectRatio = resultImageAspectRatio(image);
 
     return (
-        <div className="overflow-hidden rounded-lg border border-[var(--studio-border-subtle)] bg-[rgba(20,28,40,0.72)]">
-            <div className="overflow-hidden bg-[rgba(8,12,20,0.36)]" style={{ aspectRatio }}>
+        <div className="overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] transition hover:border-[var(--studio-border-strong)]">
+            <div className="overflow-hidden bg-[var(--studio-control-bg)]" style={{ aspectRatio }}>
                 <Image
                     src={image.dataUrl}
                     alt={`生成结果 ${index + 1}`}
@@ -721,7 +721,7 @@ function resultImageAspectRatio(image: Pick<GeneratedImage, "width" | "height">)
 
 function PendingImageCard() {
     return (
-        <div className="relative aspect-square overflow-hidden rounded-lg border border-dashed border-[var(--studio-border-strong)] bg-[rgba(20,28,40,0.5)]">
+        <div className="relative aspect-square overflow-hidden rounded-md border border-dashed border-[var(--studio-border-strong)] bg-[var(--studio-panel-muted-bg)]">
             <div
                 className="absolute inset-0 opacity-60"
                 style={{
@@ -825,7 +825,7 @@ function LogPanel({
                     />
                 ))}
                 {!logs.length ? (
-                    <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-[var(--studio-border-strong)] bg-[rgba(20,28,40,0.42)] text-center text-sm text-[var(--studio-text-muted)]">暂无生成记录</div>
+                    <div className="flex min-h-48 items-center justify-center rounded-md border border-dashed border-[var(--studio-border-strong)] bg-[var(--studio-panel-muted-bg)] text-center text-sm text-[var(--studio-text-muted)]">暂无生成记录</div>
                 ) : null}
             </div>
         </>
@@ -837,7 +837,7 @@ function LogCard({ log, selected, active, onSelectedChange, onClick }: { log: Ge
     return (
         <button
             type="button"
-            className={`group block w-full rounded-lg border p-3 text-left transition ${active ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] shadow-[0_10px_28px_rgba(49,95,159,0.16)]" : "border-[var(--studio-border-subtle)] bg-[rgba(20,28,40,0.46)] hover:border-[var(--studio-border-strong)] hover:bg-[rgba(28,38,54,0.68)]"}`}
+            className={`group block w-full rounded-md border p-3 text-left transition ${active ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] shadow-[0_0_0_1px_var(--studio-accent)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]"}`}
             onClick={onClick}
         >
             <div className="grid gap-3">

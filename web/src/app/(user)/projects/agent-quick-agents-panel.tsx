@@ -20,7 +20,7 @@ const agentKindOptions: Array<{ label: string; value: AgentConfigKind }> = [
 const panelClass = "rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)]";
 const mutedPanelClass = "rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]";
 const mutedTextClass = "text-[var(--studio-text-muted)]";
-const codeBlockClass = "overflow-auto rounded-md border border-[var(--studio-border-subtle)] bg-[#090d14] p-3 text-xs leading-5 whitespace-pre-wrap text-slate-100";
+const codeBlockClass = "overflow-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] p-3 text-xs leading-5 whitespace-pre-wrap text-[var(--studio-text-primary)]";
 
 export function AgentQuickAgentsPanel({
     callable,

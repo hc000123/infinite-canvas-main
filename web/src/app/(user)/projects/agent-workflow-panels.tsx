@@ -19,7 +19,7 @@ export { WorkflowMappingPreviewPanel } from "./agent-workflow-mapping-preview-pa
 const mutedPanelClass = "rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]";
 const innerPanelClass = "rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)]";
 const mutedTextClass = "text-[var(--studio-text-muted)]";
-const codeBlockClass = "overflow-auto rounded-md border border-[var(--studio-border-subtle)] bg-[#090d14] p-2 text-[11px] text-slate-100";
+const codeBlockClass = "overflow-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] p-2 text-[11px] text-[var(--studio-text-primary)]";
 
 export function WorkflowStageStatePanel({ stageId, workflowRun, workflowOutputs, workflowEvidences }: { stageId: string; workflowRun?: AgentWorkflowRunRecord; workflowOutputs: AgentWorkflowStageOutput[]; workflowEvidences: AgentWorkflowReviewEvidence[] }) {
     const stageState = workflowRun?.stageStates.find((stage) => stage.stageId === stageId);

@@ -26,12 +26,12 @@ export function buildStoryboardModuleConfig(input: {
                   actionLabel: "查看",
                   cells: [
                       <div key="shot">
-                          <div className="font-semibold text-slate-100">P{padEpisodeOrder(shot.order)}</div>
-                          <div className="text-xs text-slate-500">{shot.sceneName}</div>
+                          <div className="font-semibold text-[var(--studio-text-primary)]">P{padEpisodeOrder(shot.order)}</div>
+                          <div className="text-xs text-[var(--studio-text-muted)]">{shot.sceneName}</div>
                       </div>,
                       <div key="content">
-                          <div className="font-medium text-slate-100">{shot.title}</div>
-                          <div className="mt-1 text-slate-400">{listSafeText(shot.visualDescription || shot.scriptText, "待补充镜头内容")}</div>
+                          <div className="font-medium text-[var(--studio-text-primary)]">{shot.title}</div>
+                          <div className="mt-1 text-[var(--studio-text-secondary)]">{listSafeText(shot.visualDescription || shot.scriptText, "待补充镜头内容")}</div>
                       </div>,
                       shot.workflowSource ? "已生成" : shot.visualDescription ? "草案" : "待生成",
                       `${refCount} 项`,

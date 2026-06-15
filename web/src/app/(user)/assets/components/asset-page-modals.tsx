@@ -95,14 +95,14 @@ export function AssetPageModals({
 
             <Modal rootClassName="studio-modal" title="批量移动文件夹" open={bulkMoveOpen} onCancel={onCancelBulkMove} onOk={onApplyBulkMove} okText="移动" cancelText="取消" destroyOnHidden>
                 <div className="space-y-3">
-                    <div className="text-sm text-stone-500">将 {selectedCount} 个素材移动到：</div>
+                    <div className="text-sm text-[var(--studio-text-muted)]">将 {selectedCount} 个素材移动到：</div>
                     <Select className="w-full" allowClear placeholder="未分组" value={bulkMoveFolderId} options={folderOptions} onChange={(value) => onBulkMoveFolderChange(value || undefined)} />
                 </div>
             </Modal>
 
             <Modal rootClassName="studio-modal" title="批量添加标签" open={bulkTagOpen} onCancel={onCancelBulkTag} onOk={onApplyBulkTags} okText="添加" cancelText="取消" destroyOnHidden>
                 <div className="space-y-3">
-                    <div className="text-sm text-stone-500">为 {selectedCount} 个素材追加标签，已有标签会保留并自动去重。</div>
+                    <div className="text-sm text-[var(--studio-text-muted)]">为 {selectedCount} 个素材追加标签，已有标签会保留并自动去重。</div>
                     <Select mode="tags" className="w-full" placeholder="输入标签后回车" value={bulkTags} onChange={onBulkTagsChange} />
                 </div>
             </Modal>
@@ -114,18 +114,18 @@ export function AssetPageModals({
             <Modal rootClassName="studio-modal" title="批量删除设定" open={bulkProductionBibleDeleteOpen} onCancel={onCancelBulkProductionBibleDelete} onOk={onApplyBulkProductionBibleDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消" destroyOnHidden>
                 <div className="space-y-2">
                     <div>确定删除已选择的 {selectedProductionBibleCount} 个设定吗？删除后会从设定库中移除，但不会删除已经生成或上传的素材文件。</div>
-                    {selectedProductionBibleSummary ? <div className="text-sm text-stone-500 dark:text-stone-400">{selectedProductionBibleSummary}</div> : null}
+                    {selectedProductionBibleSummary ? <div className="text-sm text-[var(--studio-text-muted)]">{selectedProductionBibleSummary}</div> : null}
                 </div>
             </Modal>
 
             <Modal rootClassName="studio-modal" title="批量更新过期引用" open={bulkOutdatedOpen} onCancel={onCancelBulkOutdated} onOk={onApplySelectedOutdatedUsages} okText="更新到最新版" cancelText="取消" destroyOnHidden>
                 <div className="space-y-3">
-                    <div className="text-sm text-stone-600 dark:text-stone-300">将更新以下 {selectedOutdatedUsageConfirmItems.length} 处引用。更新只修改引用方记录，不修改素材本体。</div>
-                    <div className="max-h-72 space-y-2 overflow-y-auto rounded-lg border border-stone-200 p-2 dark:border-stone-800">
+                    <div className="text-sm text-[var(--studio-text-secondary)]">将更新以下 {selectedOutdatedUsageConfirmItems.length} 处引用。更新只修改引用方记录，不修改素材本体。</div>
+                    <div className="max-h-72 space-y-2 overflow-y-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-2">
                         {selectedOutdatedUsageConfirmItems.map((usage) => (
-                            <div key={usage.id} className="rounded-md bg-stone-50 px-3 py-2 text-sm dark:bg-stone-900/70">
-                                <div className="font-medium text-stone-900 dark:text-stone-100">{usage.label}</div>
-                                <div className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                            <div key={usage.id} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] px-3 py-2 text-sm">
+                                <div className="font-medium text-[var(--studio-text-primary)]">{usage.label}</div>
+                                <div className="mt-1 text-xs text-[var(--studio-text-muted)]">
                                     v{usage.currentVersionNumber || "?"} → v{usage.latestVersionNumber || "最新"}
                                 </div>
                             </div>

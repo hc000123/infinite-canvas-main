@@ -20,11 +20,11 @@ export function OutdatedReferencesPanel({
     onOpenBatch: () => void;
 }) {
     return (
-        <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/20">
+        <div className="rounded-md border border-amber-300/25 bg-amber-300/[0.08] px-4 py-3 shadow-[var(--studio-shadow)]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <div className="text-sm font-medium text-stone-900 dark:text-stone-100">过期引用 {usages.length} 处</div>
-                    <div className="mt-1 text-xs text-stone-500 dark:text-stone-400">只会更新画布、分镜、镜头组或设定库里的版本引用，不修改素材本体。</div>
+                    <div className="text-sm font-medium text-[var(--studio-text-primary)]">过期引用 {usages.length} 处</div>
+                    <div className="mt-1 text-xs text-[var(--studio-text-muted)]">只会更新画布、分镜、镜头组或设定库里的版本引用，不修改素材本体。</div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                     <Button size="middle" disabled={!usages.length || selectedIds.size === usages.length} onClick={onSelectAll}>
@@ -40,17 +40,17 @@ export function OutdatedReferencesPanel({
             </div>
             <div className="mt-3 space-y-2">
                 {usages.map((usage) => (
-                    <div key={usage.id} className="flex flex-col gap-3 rounded-md border border-stone-200 bg-background px-3 py-3 dark:border-stone-800 sm:flex-row sm:items-center sm:justify-between">
+                    <div key={usage.id} className="flex flex-col gap-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] px-3 py-3 transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                                 <Checkbox checked={selectedIds.has(usage.id)} onChange={() => onToggle(usage.id)} />
                                 <Tag className="m-0">{outdatedUsageKindLabel(usage)}</Tag>
-                                <span className="font-medium text-stone-900 dark:text-stone-100">{usage.objectTitle}</span>
+                                <span className="font-medium text-[var(--studio-text-primary)]">{usage.objectTitle}</span>
                                 <Tag color="gold">
                                     v{usage.assetVersion?.versionNumber || "?"} → v{usage.latestVersionNumber || "最新"}
                                 </Tag>
                             </div>
-                            <div className="mt-1 break-words pl-7 text-xs text-stone-500 dark:text-stone-400">{[usage.projectTitle, usage.contextTitle, outdatedUsageRoleLabel(usage), `素材：${usage.assetTitle}`].filter(Boolean).join(" · ")}</div>
+                            <div className="mt-1 break-words pl-7 text-xs text-[var(--studio-text-muted)]">{[usage.projectTitle, usage.contextTitle, outdatedUsageRoleLabel(usage), `素材：${usage.assetTitle}`].filter(Boolean).join(" · ")}</div>
                         </div>
                         <Button size="middle" onClick={() => onUpdateOne(usage)}>
                             更新到最新版

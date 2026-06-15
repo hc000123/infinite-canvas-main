@@ -817,19 +817,19 @@ function VideoPromptNodeCard({
     const readiness = workflowVideoGenerationReadiness(item, assets, videoProtocol);
     const showCanvasAction = item.generation?.status === "succeeded" || item.canvasStatus === "已生成";
     return (
-        <article className={cn("grid gap-4 rounded-lg border bg-[#0d1316] p-4 transition xl:grid-cols-[minmax(0,1fr)_260px]", selected ? "border-teal-300/40 shadow-[0_0_0_1px_rgba(94,234,212,0.14)]" : "border-white/10")} onClick={onSelect}>
+        <article className={cn("grid gap-4 rounded-md border bg-[var(--studio-panel-bg)] p-4 shadow-[var(--studio-shadow)] transition hover:border-[var(--studio-border-strong)] xl:grid-cols-[minmax(0,1fr)_260px]", selected ? "border-[var(--studio-accent)] shadow-[0_0_0_1px_var(--studio-accent)]" : "border-[var(--studio-border-subtle)]")} onClick={onSelect}>
             <div className="min-w-0 space-y-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-md border border-teal-300/25 bg-teal-300/10 px-2 py-1 text-sm font-semibold text-teal-100">{item.id}</span>
-                            <span className="text-sm text-stone-400">{item.duration}</span>
+                            <span className="rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] px-2 py-1 text-sm font-semibold text-[var(--studio-accent)]">{item.id}</span>
+                            <span className="text-sm text-[var(--studio-text-muted)]">{item.duration}</span>
                             <StatusTag label={item.promptStatus} />
                             <StatusTag label={item.assetStatus} />
                             <GenerationTag status={item.generation?.status} />
-                            {item.generationVersions?.length ? <Tag className="m-0 rounded border-white/15 bg-white/[0.04] px-1.5 py-0 text-xs leading-5 text-stone-300">{item.generationVersions.length} 版</Tag> : null}
+                            {item.generationVersions?.length ? <Tag className="m-0 rounded border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-1.5 py-0 text-xs leading-5 text-[var(--studio-text-secondary)]">{item.generationVersions.length} 版</Tag> : null}
                         </div>
-                        <h2 className="mt-2 break-words text-lg font-semibold leading-7 text-white">{item.segment}</h2>
+                        <h2 className="mt-2 break-words text-lg font-semibold leading-7 text-[var(--studio-text-primary)]">{item.segment}</h2>
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
                         {item.promptStatus !== "已确认" ? (
@@ -870,8 +870,8 @@ function VideoPromptNodeCard({
                 <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
                     <div className="min-w-0">
                         <div className="mb-2 flex items-center justify-between gap-3">
-                            <div className="text-xs font-semibold tracking-normal text-teal-200/70">提示词</div>
-                            <span className="text-xs text-stone-500">提示词和上方资产槽一一对照</span>
+                            <div className="text-xs font-semibold tracking-normal text-[var(--studio-accent)]">提示词</div>
+                            <span className="text-xs text-[var(--studio-text-muted)]">提示词和上方资产槽一一对照</span>
                         </div>
                         <PromptTextAreaWithReferencePreview
                             assets={assets}
@@ -946,31 +946,31 @@ function InlineAssetSlots({
                 const uploadKey = referenceSlotUploadKey(item.id, slot.name);
                 const uploading = uploadingReferenceKey === uploadKey;
                 return (
-                    <div key={slot.name} className="overflow-hidden rounded-md border border-white/[0.08] bg-white/[0.035]">
+                    <div key={slot.name} className="overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]">
                         <div className="grid grid-cols-[72px_minmax(0,1fr)]">
-                            <div className="aspect-square bg-black/25">
+                            <div className="aspect-square bg-[var(--studio-control-bg)]">
                                 {boundAsset?.kind === "image" ? (
                                     <img alt={boundAsset.title} className="h-full w-full object-cover" src={boundAsset.data.dataUrl} />
                                 ) : (
-                                    <div className="grid h-full place-items-center text-stone-600">
+                                    <div className="grid h-full place-items-center text-[var(--studio-text-muted)]">
                                         <Link2 className="size-5" />
                                     </div>
                                 )}
                             </div>
                             <div className="min-w-0 p-2">
-                                <div className="overflow-hidden text-sm leading-5 font-medium break-words text-stone-100 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]" title={slot.name}>
+                                <div className="overflow-hidden text-sm leading-5 font-medium break-words text-[var(--studio-text-primary)] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]" title={slot.name}>
                                     {slot.name}
                                 </div>
-                                {boundAsset?.title && boundAsset.title !== slot.name ? <div className="mt-0.5 truncate text-[11px] text-stone-500">已绑定：{boundAsset.title}</div> : null}
+                                {boundAsset?.title && boundAsset.title !== slot.name ? <div className="mt-0.5 truncate text-[11px] text-[var(--studio-text-muted)]">已绑定：{boundAsset.title}</div> : null}
                                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                                    <span className="rounded border border-white/10 px-1.5 py-0.5 text-[11px] text-stone-400">{slot.kind}</span>
+                                    <span className="rounded border border-[var(--studio-border-subtle)] px-1.5 py-0.5 text-[11px] text-[var(--studio-text-secondary)]">{slot.kind}</span>
                                     <StatusTag label={bound ? "完整" : "缺参考"} />
                                 </div>
-                                {boundAsset?.kind === "image" && boundAsset.metadata?.volcengineAsset?.status ? <div className="mt-1 truncate text-[11px] text-stone-500">加白：{String(boundAsset.metadata.volcengineAsset.status)}</div> : null}
+                                {boundAsset?.kind === "image" && boundAsset.metadata?.volcengineAsset?.status ? <div className="mt-1 truncate text-[11px] text-[var(--studio-text-muted)]">加白：{String(boundAsset.metadata.volcengineAsset.status)}</div> : null}
                             </div>
                         </div>
-                        <div className="flex flex-wrap gap-1.5 border-t border-white/[0.06] px-2 py-1.5">
-                            <label className={cn("inline-flex h-6 cursor-pointer items-center gap-1 rounded border border-white/10 bg-white/[0.04] px-2 text-xs leading-6 text-stone-200 transition hover:border-teal-300/45 hover:text-teal-100", uploading && "pointer-events-none opacity-60")} onClick={(event) => event.stopPropagation()}>
+                        <div className="flex flex-wrap gap-1.5 border-t border-[var(--studio-border-subtle)] px-2 py-1.5">
+                            <label className={cn("inline-flex h-6 cursor-pointer items-center gap-1 rounded border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-2 text-xs leading-6 text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]", uploading && "pointer-events-none opacity-60")} onClick={(event) => event.stopPropagation()}>
                                 {uploading ? <LoaderCircle className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
                                 <span>{uploading ? "上传中" : bound ? "替换" : "上传"}</span>
                                 <input
@@ -1046,26 +1046,26 @@ function PromptTextAreaWithReferencePreview({
                 onKeyUp={(event) => updateActiveRef(event.currentTarget)}
                 onSelect={(event) => updateActiveRef(event.currentTarget)}
                 autoSize={{ minRows: 7, maxRows: 14 }}
-                className="!border-white/10 !bg-black/20 !text-sm !leading-6 !text-stone-100 placeholder:!text-stone-600"
+                className="!rounded-md !border-[var(--studio-border-subtle)] !bg-[var(--studio-control-bg)] !text-sm !leading-6 !text-[var(--studio-text-primary)] placeholder:!text-[var(--studio-text-muted)]"
                 style={{ paddingBottom: isFocused && item.assets.length ? 74 : undefined }}
             />
             {isFocused && item.assets.length ? (
-                <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex gap-1.5 overflow-hidden rounded-md border border-teal-300/20 bg-[#071013]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,.35)] backdrop-blur">
+                <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex gap-1.5 overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-1.5 shadow-[var(--studio-shadow)] backdrop-blur">
                     {item.assets.map((slot) => {
                         const ref = slotReferenceRef(slot.name);
                         const boundAsset = resolveWorkflowReferenceAssetForName(item, slot.name, assets);
                         const previewUrl = assetPreviewUrl(boundAsset);
                         const active = activeRef === ref;
                         return (
-                            <div key={slot.name} className={cn("grid w-[118px] shrink-0 grid-cols-[34px_minmax(0,1fr)] gap-1.5 rounded border p-1", active ? "border-teal-300/70 bg-teal-300/15" : "border-white/10 bg-white/[0.04]")}>
-                                <div className="grid size-[34px] place-items-center overflow-hidden rounded bg-black/40">
+                            <div key={slot.name} className={cn("grid w-[118px] shrink-0 grid-cols-[34px_minmax(0,1fr)] gap-1.5 rounded border p-1", active ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]")}>
+                                <div className="grid size-[34px] place-items-center overflow-hidden rounded bg-[var(--studio-control-bg)]">
                                     {previewUrl ? <img src={previewUrl} alt={slot.name} className="h-full w-full object-cover" /> : <Link2 className="size-4 text-amber-200" />}
                                 </div>
                                 <div className="min-w-0">
-                                    <div className="truncate text-[11px] font-semibold text-teal-100" title={slot.name}>
+                                    <div className="truncate text-[11px] font-semibold text-[var(--studio-text-primary)]" title={slot.name}>
                                         {slot.name}
                                     </div>
-                                    <div className={cn("truncate text-[10px]", boundAsset ? "text-stone-400" : "text-amber-200")} title={boundAsset?.title || "缺参考"}>
+                                    <div className={cn("truncate text-[10px]", boundAsset ? "text-[var(--studio-text-muted)]" : "text-amber-200")} title={boundAsset?.title || "缺参考"}>
                                         {boundAsset?.title || "缺参考"}
                                     </div>
                                 </div>
@@ -1108,13 +1108,13 @@ function VideoNodeSettings({ baseConfig, item, onChange, onOpenConfig }: { baseC
     const config = buildPackageVideoConfig(baseConfig, item);
     const visibleModel = item.config.model || config.seedanceModel || config.videoModel || config.model;
     return (
-        <div className="space-y-3 rounded-md border border-white/[0.08] bg-white/[0.035] p-3" onClick={(event) => event.stopPropagation()}>
+        <div className="space-y-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3" onClick={(event) => event.stopPropagation()}>
             <div>
-                <div className="text-xs font-semibold tracking-normal text-teal-200/70">视频节点设置</div>
-                <div className="mt-1 text-xs leading-5 text-stone-500">与画布视频配置节点使用同一套参数。</div>
+                <div className="text-xs font-semibold tracking-normal text-[var(--studio-accent)]">视频节点设置</div>
+                <div className="mt-1 text-xs leading-5 text-[var(--studio-text-muted)]">与画布视频配置节点使用同一套参数。</div>
             </div>
             <ModelPicker
-                className="canvas-compact-control !h-8 !w-full !justify-start !rounded-lg !border-white/10 !bg-black/20 !px-2 !text-xs !text-stone-100"
+                className="canvas-compact-control !h-8 !w-full !justify-start !rounded-md !border-[var(--studio-border-subtle)] !bg-[var(--studio-control-bg)] !px-2 !text-xs !text-[var(--studio-text-primary)]"
                 config={config}
                 fullWidth
                 modelType="video"
@@ -1123,7 +1123,7 @@ function VideoNodeSettings({ baseConfig, item, onChange, onOpenConfig }: { baseC
                 onMissingConfig={onOpenConfig}
             />
             <CanvasVideoSettingsPopover
-                buttonClassName="canvas-compact-control !h-8 !w-full !justify-start !rounded-lg !border-white/10 !bg-black/20 !px-2 !text-xs !text-stone-100"
+                buttonClassName="canvas-compact-control !h-8 !w-full !justify-start !rounded-md !border-[var(--studio-border-subtle)] !bg-[var(--studio-control-bg)] !px-2 !text-xs !text-[var(--studio-text-primary)]"
                 config={config}
                 hasSourceVideo={false}
                 placement="bottomRight"
@@ -1142,9 +1142,9 @@ function VideoNodeSettings({ baseConfig, item, onChange, onOpenConfig }: { baseC
 
 function SettingSummaryChip({ label, value }: { label: string; value: string }) {
     return (
-        <div className="min-w-0 rounded border border-white/[0.08] bg-black/15 px-2 py-1.5">
-            <div className="truncate text-[11px] text-stone-500">{label}</div>
-            <div className="mt-0.5 truncate text-stone-200">{value}</div>
+        <div className="min-w-0 rounded border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-2 py-1.5">
+            <div className="truncate text-[11px] text-[var(--studio-text-muted)]">{label}</div>
+            <div className="mt-0.5 truncate text-[var(--studio-text-primary)]">{value}</div>
         </div>
     );
 }
@@ -1203,22 +1203,22 @@ function VideoNodeOutput({
     const nodeConfig = buildPackageVideoConfig(config, item);
     const generationError = item.generation?.status === "failed" ? normalizeVideoGenerationErrorMessage(item.generation.errorMessage || "视频生成失败，请打开详情查看原因。") : "";
     return (
-        <aside className="flex min-w-0 flex-col gap-3 rounded-md border border-white/[0.08] bg-black/15 p-3">
+        <aside className="flex min-w-0 flex-col gap-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
             <div className="flex items-center justify-between gap-2">
                 <div>
-                    <div className="text-xs font-semibold tracking-normal text-teal-200/70">生成结果</div>
-                    <div className="mt-1 text-sm text-stone-400">{generationStatusLabel(item.generation?.status)}</div>
+                    <div className="text-xs font-semibold tracking-normal text-[var(--studio-accent)]">生成结果</div>
+                    <div className="mt-1 text-sm text-[var(--studio-text-secondary)]">{generationStatusLabel(item.generation?.status)}</div>
                 </div>
                 <GenerationTag status={item.generation?.status} />
             </div>
             {video?.url ? (
-                <button type="button" className="overflow-hidden rounded-md border border-white/10 bg-black/40 text-left" onClick={onOpenDetail}>
+                <button type="button" className="overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] text-left transition hover:border-[var(--studio-border-strong)]" onClick={onOpenDetail}>
                     <video className="aspect-video w-full bg-black object-contain" src={video.url} />
-                    <div className="px-3 py-2 text-xs text-stone-400">点击查看详情 · {formatBytes(video.bytes)}</div>
+                    <div className="px-3 py-2 text-xs text-[var(--studio-text-secondary)]">点击查看详情 · {formatBytes(video.bytes)}</div>
                 </button>
             ) : (
-                <div className="grid aspect-video place-items-center rounded-md border border-dashed border-white/10 bg-white/[0.025] text-center text-sm text-stone-500">
-                    {loading ? <LoaderCircle className="size-6 animate-spin text-teal-200" /> : <Video className="size-6" />}
+                <div className="grid aspect-video place-items-center rounded-md border border-dashed border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] text-center text-sm text-[var(--studio-text-muted)]">
+                    {loading ? <LoaderCircle className="size-6 animate-spin text-[var(--studio-accent)]" /> : <Video className="size-6" />}
                 </div>
             )}
             <div className="grid gap-2">
@@ -1242,7 +1242,7 @@ function VideoNodeOutput({
                     视频通道配置
                 </Button>
             </div>
-            <div className="rounded-md border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-xs leading-5 text-stone-400">
+            <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-3 py-2 text-xs leading-5 text-[var(--studio-text-secondary)]">
                 {nodeConfig.videoProtocol === "volcengine-ark" ? "企业 Ark / Seedance" : "未切到企业 Ark"} · {videoRatioLabel(nodeConfig.size)} · {videoSecondsLabel(nodeConfig.videoSeconds, nodeConfig)} · {videoResolutionLabel(nodeConfig.vquality)}
             </div>
             {preflight ? (
@@ -1257,7 +1257,7 @@ function VideoNodeOutput({
                         生成失败
                     </div>
                     <div>{generationError}</div>
-                    <button type="button" className="mt-2 text-teal-200 hover:text-teal-100" onClick={onOpenDetail}>
+                    <button type="button" className="mt-2 text-[var(--studio-accent)] transition hover:text-[var(--studio-text-primary)]" onClick={onOpenDetail}>
                         查看详情
                     </button>
                 </div>
@@ -1306,7 +1306,7 @@ function VideoNodeDetailDrawer({
     if (!item) return null;
     return (
         <Drawer rootClassName="studio-modal" size={620} title={`${item.id} · 视频节点详情`} open={open} onClose={onClose}>
-            <div className="space-y-4 text-stone-100">
+            <div className="space-y-4 text-[var(--studio-text-primary)]">
                 <GenerationDetail item={item} loading={loading} onGenerate={() => onGenerate(item)} onOpenConfig={onOpenConfig} onSync={() => onSync(item)} />
                 <Collapse
                     className="video-detail-collapse"
@@ -1314,17 +1314,17 @@ function VideoNodeDetailDrawer({
                     items={[
                         {
                             key: "prompt",
-                            label: <span className="text-sm font-medium text-stone-100">生成使用的提示词</span>,
+                            label: <span className="text-sm font-medium text-[var(--studio-text-primary)]">生成使用的提示词</span>,
                             children: <PromptDetailText prompt={item.prompt} />,
                         },
                         {
                             key: "assets",
-                            label: <span className="text-sm font-medium text-stone-100">参考图与加白状态</span>,
+                            label: <span className="text-sm font-medium text-[var(--studio-text-primary)]">参考图与加白状态</span>,
                             children: <AssetDetail assets={assets} item={item} onRefreshReview={onRefreshReview} onSubmitReview={onSubmitReview} refreshingReviewId={refreshingReviewId} submittingReviewId={submittingReviewId} videoProtocol={videoProtocol} />,
                         },
                         {
                             key: "config",
-                            label: <span className="text-sm font-medium text-stone-100">视频通道与参数</span>,
+                            label: <span className="text-sm font-medium text-[var(--studio-text-primary)]">视频通道与参数</span>,
                             children: <ConfigDetail config={config} item={item} loading={preflightLoading} preflight={preflight} onPreflight={() => onPreflight(item)} />,
                         },
                     ]}
@@ -1335,7 +1335,7 @@ function VideoNodeDetailDrawer({
 }
 
 function PromptDetailText({ prompt }: { prompt: string }) {
-    return <div className="thin-scrollbar max-h-72 overflow-y-auto whitespace-pre-wrap rounded-md border border-white/[0.07] bg-black/20 px-3 py-2 text-sm leading-6 text-stone-200">{prompt}</div>;
+    return <div className="thin-scrollbar max-h-72 overflow-y-auto whitespace-pre-wrap rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-3 py-2 text-sm leading-6 text-[var(--studio-text-primary)]">{prompt}</div>;
 }
 
 function isEnterpriseBusy(checking: boolean, loading: boolean) {
@@ -1366,7 +1366,7 @@ function AssetDetail({
     return (
         <div className="space-y-3 pb-4">
             {item.workflowReferences?.length ? (
-                <div className="rounded-md border border-teal-300/15 bg-teal-300/[0.06] px-3 py-2 text-sm text-teal-100">
+                <div className="rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] px-3 py-2 text-sm text-[var(--studio-text-primary)]">
                     已匹配参考图 {summary.bound}/{summary.total}。已生图的视频工作流素材会随视频请求一起提交；缺失项仍按提示词文字生成。
                 </div>
             ) : null}
@@ -1391,11 +1391,11 @@ function AssetDetail({
                 const canReview = boundAsset && (boundAsset.kind === "image" || boundAsset.kind === "video" || boundAsset.kind === "audio");
                 const shouldSubmitReview = canReview ? canSubmitVolcengineReview(boundAsset.metadata?.volcengineAsset) : false;
                 return (
-                    <div key={asset.name} className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 rounded-md border border-white/[0.07] bg-white/[0.035] px-3 py-2.5 text-sm">
-                        <span className="text-stone-500">{asset.kind}</span>
+                    <div key={asset.name} className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2.5 text-sm transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]">
+                        <span className="text-[var(--studio-text-muted)]">{asset.kind}</span>
                         <div className="min-w-0">
                             <div className="flex items-center justify-between gap-2">
-                                <span className={cn("truncate", status === "缺失" ? "text-amber-200" : "text-stone-100")}>{asset.name}</span>
+                                <span className={cn("truncate", status === "缺失" ? "text-amber-200" : "text-[var(--studio-text-primary)]")}>{asset.name}</span>
                                 <StatusTag label={status === "缺失" ? "缺参考" : "完整"} />
                             </div>
                             {status === "缺失" ? (
@@ -1436,7 +1436,7 @@ function AssetDetail({
                     </div>
                 );
             })}
-            {!item.assets.length ? <div className="rounded-md border border-white/[0.07] bg-white/[0.035] px-3 py-6 text-center text-sm text-stone-500">当前生产包未声明参考资产。</div> : null}
+            {!item.assets.length ? <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-6 text-center text-sm text-[var(--studio-text-muted)]">当前生产包未声明参考资产。</div> : null}
         </div>
     );
 }
@@ -1460,11 +1460,11 @@ function ConfigDetail({ config, item, loading, onPreflight, preflight }: { confi
 
     return (
         <div className="space-y-3 pb-4">
-            <div className="rounded-md border border-teal-300/15 bg-teal-300/[0.06] px-3 py-2 text-sm text-teal-100">生成会调用当前全局 AI 设置里的真实视频通道；企业 Ark 模型和 EP 绑定在后台系统设置维护。</div>
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-white/[0.07] bg-white/[0.035] px-3 py-2">
+            <div className="rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] px-3 py-2 text-sm text-[var(--studio-text-primary)]">生成会调用当前全局 AI 设置里的真实视频通道；企业 Ark 模型和 EP 绑定在后台系统设置维护。</div>
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2">
                 <div>
-                    <div className="text-sm font-medium text-stone-100">企业视频通道预检</div>
-                    <div className="mt-1 text-xs text-stone-500">只验证企业 API Key、模型和 EP 绑定，不创建视频任务。</div>
+                    <div className="text-sm font-medium text-[var(--studio-text-primary)]">企业视频通道预检</div>
+                    <div className="mt-1 text-xs text-[var(--studio-text-muted)]">只验证企业 API Key、模型和 EP 绑定，不创建视频任务。</div>
                 </div>
                 <Button loading={loading} icon={<ShieldCheck className="size-4" />} onClick={onPreflight}>
                     预检企业 API
@@ -1491,9 +1491,9 @@ function ConfigDetail({ config, item, loading, onPreflight, preflight }: { confi
             ) : null}
             <div className="grid grid-cols-2 gap-2">
                 {entries.map(([label, value]) => (
-                    <div key={label} className="rounded-md border border-white/[0.07] bg-white/[0.035] px-3 py-2">
-                        <div className="text-xs text-stone-500">{label}</div>
-                        <div className="mt-1 text-sm text-stone-100">{value}</div>
+                    <div key={label} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2">
+                        <div className="text-xs text-[var(--studio-text-muted)]">{label}</div>
+                        <div className="mt-1 text-sm text-[var(--studio-text-primary)]">{value}</div>
                     </div>
                 ))}
             </div>
@@ -1512,18 +1512,18 @@ function GenerationDetail({ item, loading, onGenerate, onOpenConfig, onSync }: {
     return (
         <div className="thin-scrollbar max-h-[calc(100vh-250px)] space-y-4 overflow-y-auto pb-4">
             {video?.url ? (
-                <div className="overflow-hidden rounded-lg border border-white/10 bg-black/30">
+                <div className="overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)]">
                     <video className="aspect-video w-full bg-black object-contain" src={video.url} controls />
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 px-3 py-2 text-xs text-stone-400">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--studio-border-subtle)] px-3 py-2 text-xs text-[var(--studio-text-secondary)]">
                         <span>
                             {video.width}x{video.height} · {formatBytes(video.bytes)}
                         </span>
                         <div className="flex flex-wrap items-center gap-3">
-                            <button type="button" className="inline-flex items-center gap-1 text-teal-200 hover:text-teal-100" onClick={onGenerate}>
+                            <button type="button" className="inline-flex items-center gap-1 text-[var(--studio-accent)] transition hover:text-[var(--studio-text-primary)]" onClick={onGenerate}>
                                 <Play className="size-3.5" />
                                 生成新版本
                             </button>
-                            <a className="inline-flex items-center gap-1 text-teal-200 hover:text-teal-100" href={video.url} download={`${item.id}.mp4`}>
+                            <a className="inline-flex items-center gap-1 text-[var(--studio-accent)] transition hover:text-[var(--studio-text-primary)]" href={video.url} download={`${item.id}.mp4`}>
                                 <Download className="size-3.5" />
                                 下载视频
                             </a>
@@ -1531,10 +1531,10 @@ function GenerationDetail({ item, loading, onGenerate, onOpenConfig, onSync }: {
                     </div>
                 </div>
             ) : (
-                <div className="grid place-items-center rounded-lg border border-dashed border-white/10 bg-white/[0.025] px-4 py-12 text-center">
-                    {loading ? <LoaderCircle className="mb-3 size-7 animate-spin text-teal-200" /> : <Video className="mb-3 size-7 text-stone-500" />}
-                    <div className="text-sm font-medium text-stone-100">{loading ? "正在生成视频" : "还没有生成视频"}</div>
-                    <div className="mt-1 text-xs leading-5 text-stone-500">会调用真实视频接口，任务完成后自动保存到我的素材。</div>
+                <div className="grid place-items-center rounded-md border border-dashed border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-4 py-12 text-center">
+                    {loading ? <LoaderCircle className="mb-3 size-7 animate-spin text-[var(--studio-accent)]" /> : <Video className="mb-3 size-7 text-[var(--studio-text-muted)]" />}
+                    <div className="text-sm font-medium text-[var(--studio-text-primary)]">{loading ? "正在生成视频" : "还没有生成视频"}</div>
+                    <div className="mt-1 text-xs leading-5 text-[var(--studio-text-muted)]">会调用真实视频接口，任务完成后自动保存到我的素材。</div>
                     <Button className="mt-4" type="primary" loading={loading} icon={<Play className="size-4" />} onClick={onGenerate}>
                         生成视频
                     </Button>
@@ -1596,9 +1596,9 @@ function GenerationDetail({ item, loading, onGenerate, onOpenConfig, onSync }: {
 
 function InfoRow({ danger, label, value }: { danger?: boolean; label: string; value: string }) {
     return (
-        <div className="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-md border border-white/[0.07] bg-white/[0.035] px-3 py-2">
-            <span className="text-stone-500">{label}</span>
-            <span className={cn("break-all", danger ? "text-rose-200" : "text-stone-200")}>{value}</span>
+        <div className="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2">
+            <span className="text-[var(--studio-text-muted)]">{label}</span>
+            <span className={cn("break-all", danger ? "text-rose-200" : "text-[var(--studio-text-primary)]")}>{value}</span>
         </div>
     );
 }
@@ -1608,9 +1608,9 @@ function StatusTag({ label }: { label: PromptStatus | AssetStatus | CanvasStatus
         label === "已确认" || label === "完整" || label === "已生成"
             ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-200"
             : label === "待审核" || label === "已导入"
-              ? "border-teal-300/25 bg-teal-300/10 text-teal-200"
+              ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-accent)]"
               : label === "未导入"
-                ? "border-stone-400/20 bg-stone-400/10 text-stone-300"
+                ? "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]"
                 : "border-amber-300/25 bg-amber-300/10 text-amber-200";
 
     return <Tag className={cn("m-0 rounded px-1.5 py-0 text-xs leading-5", colorClass)}>{label}</Tag>;
@@ -1622,10 +1622,10 @@ function GenerationTag({ status }: { status?: PackageGenerationStatus }) {
         status === "succeeded"
             ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-200"
             : status === "running" || status === "queued" || status === "creating" || status === "checking"
-              ? "border-teal-300/25 bg-teal-300/10 text-teal-200"
+              ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-accent)]"
               : status === "failed" || status === "cancelled"
                 ? "border-rose-300/25 bg-rose-300/10 text-rose-200"
-                : "border-stone-400/20 bg-stone-400/10 text-stone-300";
+                : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]";
     return <Tag className={cn("m-0 rounded px-1.5 py-0 text-xs leading-5", colorClass)}>{label}</Tag>;
 }
 

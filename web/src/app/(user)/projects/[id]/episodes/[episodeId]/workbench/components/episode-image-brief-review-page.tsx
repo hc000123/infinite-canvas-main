@@ -138,20 +138,20 @@ export function EpisodeImageBriefReviewPage({
 
     return (
         <section className="grid gap-5">
-            <div className="grid gap-4 border-b border-slate-800 pb-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+            <div className="grid gap-4 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-5 shadow-[var(--studio-shadow)] backdrop-blur-xl xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
                 <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-[var(--studio-text-muted)]">
                         <span>{projectTitle}</span>
                         <span>/</span>
                         <span>第 {padEpisodeOrder(episode.order)} 集</span>
                         <span>/</span>
-                        <span className="text-cyan-300">生图需求</span>
+                        <span className="text-[var(--studio-accent)]">生图需求</span>
                     </div>
-                    <h2 className="mt-2 break-words text-3xl font-semibold leading-tight text-slate-50">生图需求审核台</h2>
-                    <p className="mt-2 break-words text-sm leading-6 text-slate-500">Agent 生成 Brief 草案，用户审核后生成参考图并回流项目资产库。</p>
+                    <h2 className="mt-2 break-words text-3xl font-semibold leading-tight text-[var(--studio-text-primary)]">生图需求审核台</h2>
+                    <p className="mt-2 break-words text-sm leading-6 text-[var(--studio-text-muted)]">Agent 生成 Brief 草案，用户审核后生成参考图并回流项目资产库。</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <Button type="primary" icon={<Bot className="size-4" />} onClick={runBriefAgent}>
+                    <Button className="!rounded-md" type="primary" icon={<Bot className="size-4" />} onClick={runBriefAgent}>
                         运行 Brief Agent
                     </Button>
                     <Dropdown
@@ -160,7 +160,7 @@ export function EpisodeImageBriefReviewPage({
                             onClick: manualSupplement,
                         }}
                     >
-                        <Button className="!border-slate-700 !bg-slate-950/55 !text-slate-200" icon={<MoreHorizontal className="size-4" />}>
+                        <Button className="!rounded-md" icon={<MoreHorizontal className="size-4" />}>
                             更多
                         </Button>
                     </Dropdown>
@@ -176,9 +176,9 @@ export function EpisodeImageBriefReviewPage({
                     { label: "已生成", value: statusCounts.generated },
                     { label: "已回流", value: statusCounts.synced },
                 ].map((item) => (
-                    <div key={item.label} className="rounded-lg border border-slate-800 bg-slate-950/45 px-4 py-3">
-                        <div className="text-xs text-slate-500">{item.label}</div>
-                        <div className="mt-1 text-2xl font-semibold text-cyan-100">{item.value}</div>
+                    <div key={item.label} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-4 py-3 transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]">
+                        <div className="text-xs text-[var(--studio-text-muted)]">{item.label}</div>
+                        <div className="mt-1 text-2xl font-semibold text-[var(--studio-text-primary)]">{item.value}</div>
                     </div>
                 ))}
             </div>
@@ -189,7 +189,7 @@ export function EpisodeImageBriefReviewPage({
                         <button
                             key={item}
                             type="button"
-                            className={`rounded-md border px-3 py-1.5 text-sm transition ${statusTab === item ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:border-slate-600 hover:text-slate-200"}`}
+                            className={`rounded-md border px-3 py-1.5 text-sm transition ${statusTab === item ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-accent)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] text-[var(--studio-text-muted)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]"}`}
                             onClick={() => setStatusTab(item)}
                         >
                             {item}
@@ -201,7 +201,7 @@ export function EpisodeImageBriefReviewPage({
                         <button
                             key={item}
                             type="button"
-                            className={`rounded-md border px-3 py-1.5 text-sm transition ${typeFilter === item ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-slate-800 bg-slate-950/40 text-slate-500 hover:border-slate-600 hover:text-slate-200"}`}
+                            className={`rounded-md border px-3 py-1.5 text-sm transition ${typeFilter === item ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-accent)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] text-[var(--studio-text-muted)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]"}`}
                             onClick={() => setTypeFilter(item)}
                         >
                             {item}

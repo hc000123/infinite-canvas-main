@@ -19,14 +19,14 @@ export function LocalAiTaskLogPanel({ projectId }: { projectId: string }) {
     );
 
     return (
-        <section className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
+        <section className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-4 shadow-[var(--studio-shadow)]">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <div className="flex items-center gap-2 text-base font-medium">
                         <ReceiptText className="size-5" />
                         本地 AI 任务
                     </div>
-                    <p className="mt-1 text-sm text-stone-500">追踪本地直连文本和生图调用；估算费用仅供参考，正式账单以外部模型平台为准。</p>
+                    <p className="mt-1 text-sm text-[var(--studio-text-muted)]">追踪本地直连文本和生图调用；估算费用仅供参考，正式账单以外部模型平台为准。</p>
                 </div>
                 <Tag className="m-0">{projectRecords.length} 条</Tag>
             </div>
@@ -34,7 +34,7 @@ export function LocalAiTaskLogPanel({ projectId }: { projectId: string }) {
             {projectRecords.length ? (
                 <div className="mt-4 grid gap-2">
                     {projectRecords.map((record) => (
-                        <button key={record.id} type="button" className="rounded-lg bg-stone-50 px-3 py-3 text-left transition hover:bg-stone-100 dark:bg-white/5 dark:hover:bg-white/10" onClick={() => setDetail(record)}>
+                        <button key={record.id} type="button" className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-3 text-left transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]" onClick={() => setDetail(record)}>
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
@@ -46,17 +46,17 @@ export function LocalAiTaskLogPanel({ projectId }: { projectId: string }) {
                                         </Tag>
                                         <span className="truncate text-sm font-medium">{sourceLabel(record)}</span>
                                     </div>
-                                    <div className="mt-2 line-clamp-1 text-xs text-stone-500">
+                                    <div className="mt-2 line-clamp-1 text-xs text-[var(--studio-text-muted)]">
                                         {formatTime(record.startedAt)} · {record.model} · {record.channelMode}
                                     </div>
                                 </div>
-                                <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-stone-500">
+                                <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-[var(--studio-text-muted)]">
                                     {record.requestType === "image" ? <Tag className="m-0">请求 {record.requestedImageSize || record.imageSize || "未知"}</Tag> : null}
                                     {record.resultImageSize ? <Tag className="m-0">返回 {record.resultImageSize}</Tag> : null}
                                     <Tag className="m-0">{formatCost(record)}</Tag>
                                 </div>
                             </div>
-                            <div className="mt-2 line-clamp-1 text-xs text-stone-500">{record.billingNote}</div>
+                            <div className="mt-2 line-clamp-1 text-xs text-[var(--studio-text-muted)]">{record.billingNote}</div>
                         </button>
                     ))}
                 </div>
@@ -102,8 +102,8 @@ function LocalAiTaskDetailDrawer({ record, onClose }: { record: LocalAiTaskRecor
 
 function DetailBlock({ title, value, pre, danger }: { title: string; value: string; pre?: boolean; danger?: boolean }) {
     return (
-        <div className={`rounded-lg border p-3 text-sm ${danger ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-950 dark:bg-rose-950/20 dark:text-rose-300" : "border-stone-200 dark:border-stone-800"}`}>
-            <div className="mb-1 text-xs text-stone-500">{title}</div>
+        <div className={`rounded-md border p-3 text-sm ${danger ? "border-rose-300/25 bg-rose-300/[0.08] text-rose-200" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-primary)]"}`}>
+            <div className="mb-1 text-xs text-[var(--studio-text-muted)]">{title}</div>
             <div className={pre ? "whitespace-pre-wrap break-words leading-6" : "break-words"}>{value}</div>
         </div>
     );

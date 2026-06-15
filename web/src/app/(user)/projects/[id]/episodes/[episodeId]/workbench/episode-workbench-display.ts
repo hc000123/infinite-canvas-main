@@ -176,7 +176,7 @@ export function episodeModuleNavToneClass(tone: EpisodeStatusTone) {
         cyan: "bg-cyan-400/10 text-cyan-100",
         green: "bg-emerald-400/10 text-emerald-200",
         red: "bg-rose-400/10 text-rose-200",
-        slate: "bg-slate-800/80 text-slate-400",
+        slate: "bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-muted)]",
     };
     return toneClass[tone];
 }
