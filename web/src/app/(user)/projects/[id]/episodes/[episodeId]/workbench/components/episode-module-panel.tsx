@@ -214,6 +214,7 @@ export function EpisodeStatusPill({ status, tone = "slate" }: { status: string; 
 export function EpisodeDetailDrawer({ onClose, record }: { onClose: () => void; record: EpisodeDetailRecord | null }) {
     return (
         <Drawer
+            rootClassName="studio-modal"
             className="[&_.ant-drawer-close]:!text-[var(--studio-text-secondary)]"
             open={Boolean(record)}
             title={<span className="text-[var(--studio-text-primary)]">{record?.title || "详情"}</span>}

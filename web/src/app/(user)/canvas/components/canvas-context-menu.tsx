@@ -41,7 +41,7 @@ export function CanvasNodeContextMenu({
 
     return (
         <div
-            className="fixed z-[80] min-w-44 overflow-hidden rounded-xl border py-1 shadow-[var(--studio-shadow)]"
+            className="fixed z-[80] min-w-44 overflow-hidden rounded-lg border py-1 shadow-[var(--studio-shadow)]"
             style={{ left: menu.x, top: menu.y, background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
             onPointerDown={(event) => event.stopPropagation()}
         >

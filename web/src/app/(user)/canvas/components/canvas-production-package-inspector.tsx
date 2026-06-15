@@ -102,11 +102,11 @@ function ProductionPackageSlotSection({
         <section className="mt-3 rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
             <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold">结果填充槽</div>
-                <span className="rounded-md border px-2 py-1 text-xs" style={{ borderColor: current ? "rgba(34,211,238,.72)" : theme.node.stroke, color: current ? "rgb(103,232,249)" : theme.node.muted }}>
+                <span className="rounded-md border px-2 py-1 text-xs" style={{ borderColor: current ? theme.node.activeStroke : theme.node.stroke, color: current ? theme.toolbar.activeText : theme.node.muted }}>
                     {current ? "已填充" : "待填充"}
                 </span>
             </div>
-            <div className="rounded-xl border border-dashed p-3" style={{ borderColor: current ? "rgba(34,211,238,.72)" : theme.node.stroke, background: theme.node.panel }}>
+            <div className="rounded-lg border border-dashed p-3" style={{ borderColor: current ? theme.node.activeStroke : theme.node.stroke, background: theme.node.panel }}>
                 <div className="flex items-start gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border" style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel }}>
                         <Video className="size-5" />
@@ -196,7 +196,7 @@ function ProductionPackageBindingSection({ productionPackage, currentNode, theme
                 </div>
                 <span
                     className="shrink-0 rounded-md border px-2 py-1 text-xs"
-                    style={{ borderColor: productionPackage.currentVersion ? "rgba(34,211,238,.72)" : theme.node.stroke, color: productionPackage.currentVersion ? "rgb(103,232,249)" : theme.node.muted }}
+                    style={{ borderColor: productionPackage.currentVersion ? theme.node.activeStroke : theme.node.stroke, color: productionPackage.currentVersion ? theme.toolbar.activeText : theme.node.muted }}
                 >
                     {productionPackage.statusLabel}
                 </span>
@@ -242,10 +242,10 @@ function VideoVersionsSection({
                     {versions.map((version) => (
                         <div
                             key={version.versionId}
-                            className="rounded-xl border p-3"
+                            className="rounded-lg border p-3"
                             style={{
-                                background: version.isCurrent ? "rgba(34,211,238,.12)" : theme.node.panel,
-                                borderColor: version.isCurrent ? "rgba(34,211,238,.72)" : theme.node.stroke,
+                                background: version.isCurrent ? theme.toolbar.activeBg : theme.node.panel,
+                                borderColor: version.isCurrent ? theme.node.activeStroke : theme.node.stroke,
                                 opacity: version.hidden ? 0.48 : 1,
                             }}
                         >
@@ -260,7 +260,7 @@ function VideoVersionsSection({
                                     </div>
                                 </div>
                                 {version.isCurrent ? (
-                                    <span className="shrink-0 rounded-md border px-2 py-1 text-xs" style={{ borderColor: "rgba(34,211,238,.72)", color: "rgb(103,232,249)" }}>
+                                    <span className="shrink-0 rounded-md border px-2 py-1 text-xs" style={{ borderColor: theme.node.activeStroke, color: theme.toolbar.activeText }}>
                                         已采用
                                     </span>
                                 ) : null}

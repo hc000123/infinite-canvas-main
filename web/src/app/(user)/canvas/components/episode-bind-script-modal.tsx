@@ -19,7 +19,7 @@ type EpisodeBindScriptModalProps = {
 
 export function EpisodeBindScriptModal({ open, form, episodeOptions, onCancel, onOk }: EpisodeBindScriptModalProps) {
     return (
-        <Modal title="绑定或导入本集剧本" open={open} onCancel={onCancel} onOk={onOk} okText="确认" cancelText="取消" destroyOnHidden>
+        <Modal rootClassName="studio-modal" title="绑定或导入本集剧本" open={open} onCancel={onCancel} onOk={onOk} okText="确认" cancelText="取消" destroyOnHidden>
             <Alert
                 className="mb-4"
                 type="info"

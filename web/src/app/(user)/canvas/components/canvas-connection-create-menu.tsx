@@ -21,7 +21,7 @@ export function ConnectionCreateMenu({
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
         <div
-            className="absolute z-[120] w-[300px] rounded-xl border p-3 shadow-[var(--studio-shadow)] backdrop-blur"
+            className="absolute z-[120] w-[300px] rounded-lg border p-3 shadow-[var(--studio-shadow)] backdrop-blur"
             data-connection-create-menu
             style={{ left: position.x, top: position.y, background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}
             onMouseDown={(event) => event.stopPropagation()}

@@ -72,7 +72,7 @@ export function CanvasCreateProjectModal({
     };
 
     return (
-        <Modal title={modalTitle} open={open} width={720} onCancel={onCancel} onOk={() => void submit()} okText={okText} cancelText="取消" destroyOnHidden>
+        <Modal rootClassName="studio-modal" title={modalTitle} open={open} width={720} onCancel={onCancel} onOk={() => void submit()} okText={okText} cancelText="取消" destroyOnHidden>
             <Form form={form} layout="vertical" requiredMark={false} className="pt-2">
                 {showTitleField ? (
                     <Form.Item name="title" label={nameLabel} rules={[{ required: true, message: `请输入${nameLabel}` }]}>

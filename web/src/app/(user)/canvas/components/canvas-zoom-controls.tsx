@@ -23,7 +23,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
 
     return (
         <div className="absolute bottom-5 left-14 z-50 sm:left-5" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-            <div className="flex h-14 items-center gap-1 rounded-xl border px-2 shadow-lg backdrop-blur" style={dockStyle}>
+            <div className="flex h-14 items-center gap-1 rounded-lg border px-2 shadow-[var(--studio-shadow)] backdrop-blur" style={dockStyle}>
                 <Tooltip title={isMiniMapOpen ? "关闭小地图" : "打开小地图"}>
                     <Button
                         type="text"

@@ -101,8 +101,8 @@ export const CanvasNode = React.memo(function CanvasNode({
     const isBatchChild = data.type === CanvasNodeType.Image && Boolean(data.metadata?.batchRootId);
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
     const showFrameReferenceHandles = data.type === CanvasNodeType.Video && data.metadata?.videoReferenceImageMode === "first_last_frame";
-    const packageAccent = "rgba(34,211,238,.86)";
-    const packageAccentSoft = "rgba(34,211,238,.24)";
+    const packageAccent = theme.node.activeStroke;
+    const packageAccentSoft = theme.toolbar.activeBg;
     const imageBorderColor = isActive ? theme.node.activeStroke : isProductionPackageActive ? packageAccent : isRelated && !isBatchChild ? theme.node.muted : "transparent";
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const resizeRef = useRef({
@@ -325,7 +325,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 {productionPackageBadge ? (
                     <div
                         className="pointer-events-none absolute left-2.5 top-2.5 z-30 max-w-[calc(100%-20px)] truncate rounded-lg border px-2 py-1 text-[11px] font-medium leading-none backdrop-blur-md"
-                        style={{ background: `${theme.toolbar.panel}dd`, borderColor: isProductionPackageActive ? packageAccent : theme.node.stroke, color: isProductionPackageActive ? "rgb(103,232,249)" : theme.node.muted }}
+                        style={{ background: `${theme.toolbar.panel}dd`, borderColor: isProductionPackageActive ? packageAccent : theme.node.stroke, color: isProductionPackageActive ? theme.toolbar.activeText : theme.node.muted }}
                     >
                         {productionPackageBadge}
                     </div>

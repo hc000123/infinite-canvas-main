@@ -24,28 +24,18 @@ export function CanvasProductionPackageBar({
     onEditPrompt: (packageId: string) => void;
     onBindVideo: (packageId: string, nodeId: string) => void;
 }) {
-    const colorTheme = useThemeStore((state) => state.theme);
-    const theme = canvasThemes[colorTheme];
-    const activePackageStyle =
-        colorTheme === "light"
-            ? {
-                  background: "rgba(219,234,254,.92)",
-                  border: "#2563eb",
-                  text: "#1e3a8a",
-                  muted: "#2563eb",
-                  actionBackground: "rgba(37,99,235,.10)",
-              }
-            : {
-                  background: "rgba(34,211,238,.14)",
-                  border: "rgba(34,211,238,.72)",
-                  text: "rgb(103,232,249)",
-                  muted: "rgb(165,243,252)",
-                  actionBackground: "rgba(34,211,238,.18)",
-              };
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const activePackageStyle = {
+        background: theme.toolbar.activeBg,
+        border: theme.node.activeStroke,
+        text: theme.toolbar.activeText,
+        muted: theme.toolbar.activeText,
+        actionBackground: theme.toolbar.itemHover,
+    };
     if (!packages.length) return null;
     return (
         <div className={`pointer-events-none absolute left-4 ${inspectorCollapsed ? "right-14" : "right-[440px]"} top-16 z-40 flex justify-center`}>
-            <div className="pointer-events-auto flex max-w-full gap-2 overflow-x-auto rounded-xl border p-1.5 backdrop-blur-md" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }} data-canvas-no-zoom>
+            <div className="pointer-events-auto flex max-w-full gap-2 overflow-x-auto rounded-lg border p-1.5 backdrop-blur-md" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }} data-canvas-no-zoom>
                 {packages.map((item) => {
                     const active = item.id === activePackageId;
                     const visibleVersionCount = item.versions.filter((version) => !version.hidden).length;
@@ -64,7 +54,7 @@ export function CanvasProductionPackageBar({
                                         style={{ borderColor: active ? activePackageStyle.border : theme.node.stroke, background: active ? activePackageStyle.border : "transparent" }}
                                         aria-hidden
                                     >
-                                        {active ? <span className="h-1.5 w-1.5 rounded-full bg-white" /> : null}
+                                        {active ? <span className="h-1.5 w-1.5 rounded-full" style={{ background: theme.node.panel }} /> : null}
                                     </span>
                                 </div>
                                 <div className="mt-1 truncate text-xs" style={{ color: active ? activePackageStyle.muted : theme.node.muted }}>

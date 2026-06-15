@@ -57,6 +57,7 @@ export function CanvasConfigNodePreview({
 }) {
     return (
         <Modal
+            rootClassName="studio-modal"
             title="输入预览"
             open={open}
             onCancel={onClose}

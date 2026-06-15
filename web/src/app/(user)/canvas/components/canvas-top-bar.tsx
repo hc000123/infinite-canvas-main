@@ -169,7 +169,7 @@ export function CanvasTopBar({
                     <TopAction icon={<Settings className="size-4" />} label="设置" onClick={onOpenSettings} />
                 </div>
             </div>
-            <Modal title="快捷键" open={shortcutsOpen} onCancel={() => setShortcutsOpen(false)} footer={null} centered>
+            <Modal rootClassName="studio-modal" title="快捷键" open={shortcutsOpen} onCancel={() => setShortcutsOpen(false)} footer={null} centered>
                 <div className="space-y-2 border-t pt-4 text-sm" style={{ borderColor: theme.node.stroke }}>
                     <Shortcut keys={["拖动画布"]} value="平移视图" />
                     <Shortcut keys={["滚轮"]} value="缩放画布" />
@@ -216,8 +216,8 @@ function Shortcut({ keys, value }: { keys: string[]; value: string }) {
                     <span key={`${key}-${index}`} className="flex items-center gap-1.5">
                         {index ? <span className="text-xs opacity-35">+</span> : null}
                         <kbd
-                            className="min-w-9 rounded-md border px-2.5 py-1.5 text-center text-xs font-medium leading-none shadow-[inset_0_-1px_0_rgba(0,0,0,.08),0_1px_2px_rgba(0,0,0,.06)]"
-                            style={{ borderColor: "rgba(120,113,108,.28)", background: "linear-gradient(#fff, rgba(245,245,244,.92))", color: "rgb(68,64,60)" }}
+                            className="min-w-9 rounded-md border px-2.5 py-1.5 text-center text-xs font-medium leading-none"
+                            style={{ borderColor: "var(--studio-border-subtle)", background: "var(--studio-control-bg)", color: "var(--studio-text-secondary)", boxShadow: "inset 0 -1px 0 var(--studio-border-subtle)" }}
                         >
                             {key}
                         </kbd>

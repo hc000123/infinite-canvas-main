@@ -379,7 +379,7 @@ export function EpisodeWorkbenchDrawer({
     };
 
     return (
-        <Drawer title="本集生产流程" open={open} onClose={onClose} size="min(1280px, calc(100vw - 24px))" destroyOnHidden>
+        <Drawer rootClassName="studio-modal" title="本集生产流程" open={open} onClose={onClose} size="min(1280px, calc(100vw - 24px))" destroyOnHidden>
             <div className="grid gap-4">
                 <EpisodeWorkbenchHeader activeCanvas={activeCanvas} canvases={projectCanvases} projectTitle={projectTitle} onBindScript={openBindModal} onCanvasChange={setActiveCanvasId} onOpenAgentSettings={onOpenAgentSettings} />
 

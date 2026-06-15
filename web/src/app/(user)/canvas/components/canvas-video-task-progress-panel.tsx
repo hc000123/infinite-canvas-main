@@ -65,8 +65,8 @@ export function VideoTaskProgressPanel({
             </div>
             {showErrorDetails ? (
                 <div
-                    className={`${isFailed ? "thin-scrollbar max-h-28 overflow-auto whitespace-pre-wrap break-words text-[13px] leading-5" : "line-clamp-2 text-xs leading-5"} mt-3 rounded-lg border px-2.5 py-2 text-red-300`}
-                    style={{ borderColor: theme.node.stroke, background: isFailed ? "rgba(127,29,29,.18)" : undefined }}
+                    className={`${isFailed ? "thin-scrollbar max-h-28 overflow-auto whitespace-pre-wrap break-words text-[13px] leading-5" : "line-clamp-2 text-xs leading-5"} mt-3 rounded-lg border px-2.5 py-2`}
+                    style={{ borderColor: isFailed ? "color-mix(in srgb, var(--studio-danger) 32%, transparent)" : theme.node.stroke, background: isFailed ? "color-mix(in srgb, var(--studio-danger) 14%, transparent)" : undefined, color: "var(--studio-danger)" }}
                     data-canvas-no-zoom
                     onWheel={(event) => event.stopPropagation()}
                 >

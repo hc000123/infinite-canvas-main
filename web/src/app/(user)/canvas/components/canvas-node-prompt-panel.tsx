@@ -86,7 +86,7 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
 
     return (
         <div
-            className="rounded-xl border p-3 shadow-[var(--studio-shadow)] backdrop-blur"
+            className="rounded-lg border p-3 shadow-[var(--studio-shadow)] backdrop-blur"
             style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}

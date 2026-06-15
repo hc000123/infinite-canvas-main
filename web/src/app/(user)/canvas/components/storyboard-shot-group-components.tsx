@@ -209,7 +209,7 @@ export function TableShotFormModal({
     }, [editingShot, form, open]);
 
     return (
-        <Modal title={editingShot ? "编辑分镜头" : "新增分镜头"} open={open} onCancel={onCancel} onOk={() => form.submit()} okText="保存" cancelText="取消" width={760} destroyOnHidden>
+        <Modal rootClassName="studio-modal" title={editingShot ? "编辑分镜头" : "新增分镜头"} open={open} onCancel={onCancel} onOk={() => form.submit()} okText="保存" cancelText="取消" width={760} destroyOnHidden>
             <Form
                 form={form}
                 layout="vertical"
@@ -318,7 +318,7 @@ export function ShotGroupFormModal({
     };
 
     return (
-        <Modal title="编辑视频生成镜头组" open={open} onCancel={onCancel} onOk={() => form.submit()} okText="保存" cancelText="取消" width={840} destroyOnHidden>
+        <Modal rootClassName="studio-modal" title="编辑视频生成镜头组" open={open} onCancel={onCancel} onOk={() => form.submit()} okText="保存" cancelText="取消" width={840} destroyOnHidden>
             <Form
                 form={form}
                 layout="vertical"

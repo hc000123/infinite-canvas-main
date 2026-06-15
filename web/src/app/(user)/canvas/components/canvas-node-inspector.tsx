@@ -177,7 +177,7 @@ export function MetadataSummary({ node, theme, expanded = false }: { node: Canva
 
 function TextSection({ title, text, theme, danger = false }: { title: string; text: string; theme: CanvasTheme; danger?: boolean }) {
     return (
-        <section className="mt-3 rounded-xl border p-3" style={{ background: danger ? "rgba(127,29,29,.14)" : theme.node.fill, borderColor: theme.node.stroke }}>
+        <section className="mt-3 rounded-xl border p-3" style={{ background: danger ? "color-mix(in srgb, var(--studio-danger) 14%, transparent)" : theme.node.fill, borderColor: danger ? "color-mix(in srgb, var(--studio-danger) 32%, transparent)" : theme.node.stroke }}>
             <div className="mb-2 text-sm font-semibold">{title}</div>
             <div className="thin-scrollbar max-h-[42vh] overflow-y-auto whitespace-pre-wrap break-words text-sm leading-6" data-canvas-no-zoom>
                 {text}

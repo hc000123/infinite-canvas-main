@@ -57,7 +57,7 @@ export function AssetBreakdownFormModal({
         });
     }, [defaultKind, editingItem, form, open]);
     return (
-        <Modal title={editingItem ? "编辑资产条目" : "新增资产条目"} open={open} onCancel={onCancel} onOk={() => void form.validateFields().then(onSubmit)} okText="保存" cancelText="取消" destroyOnHidden>
+        <Modal rootClassName="studio-modal" title={editingItem ? "编辑资产条目" : "新增资产条目"} open={open} onCancel={onCancel} onOk={() => void form.validateFields().then(onSubmit)} okText="保存" cancelText="取消" destroyOnHidden>
             <Form form={form} layout="vertical" requiredMark={false}>
                 <Form.Item name="kind" label="资产类型">
                     <Select options={kindOptions} />

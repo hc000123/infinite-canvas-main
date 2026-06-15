@@ -585,7 +585,7 @@ function ProjectDetailNavButton({ active, icon: Icon, label, onClick }: { active
         <button
             type="button"
             aria-pressed={active}
-            className={`inline-flex h-10 items-center gap-2 rounded-md border px-3 text-base font-semibold transition ${active ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-text-primary)] shadow-[0_0_0_1px_rgba(111,168,255,0.12)]" : "border-transparent text-[var(--studio-text-muted)] hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"}`}
+            className={`inline-flex h-10 items-center gap-2 rounded-md border px-3 text-base font-semibold transition ${active ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-text-primary)] shadow-[0_0_0_1px_var(--studio-focus-ring)]" : "border-transparent text-[var(--studio-text-muted)] hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"}`}
             onClick={onClick}
         >
             <Icon className="size-4" />

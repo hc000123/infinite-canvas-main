@@ -94,6 +94,7 @@ type CanvasAssistantDeleteModalProps = {
 export function CanvasAssistantDeleteModal({ count, deletingAll, onCancel, onClearAll, onRemoveSelected }: CanvasAssistantDeleteModalProps) {
     return (
         <Modal
+            rootClassName="studio-modal"
             title="删除对话记录？"
             open={count > 0}
             centered
