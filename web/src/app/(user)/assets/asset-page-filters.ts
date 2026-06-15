@@ -35,6 +35,19 @@ type StoryboardShotLike = {
     primaryAssetId?: string;
 };
 
+type StoryboardTableShotLike = {
+    projectId: string;
+    assetRefs: Array<{ assetId: string }>;
+};
+
+type ShotGroupLike = {
+    projectId: string;
+    assetRefs: Array<{ assetId: string }>;
+    audioRefs?: Array<{ assetId: string }>;
+    resultAssetIds?: string[];
+    primaryAssetId?: string;
+};
+
 export type AssetSortMode = "default" | "updated_desc" | "created_desc" | "generation_desc" | "title_asc";
 export type ProjectLibraryFilter = "all" | "shared" | "not_shared";
 
@@ -71,12 +84,14 @@ export function buildAssetProjectContexts(creativeProjects: CreativeProjectLike[
     ];
 }
 
-export function projectReferencedAssetIds(projectId: string, productionBibleItems: ProductionBibleAssetSource[], storyboardGroups: StoryboardGroupLike[], storyboardShots: StoryboardShotLike[]) {
+export function projectReferencedAssetIds(projectId: string, productionBibleItems: ProductionBibleAssetSource[], storyboardGroups: StoryboardGroupLike[], storyboardShots: StoryboardShotLike[], storyboardTableShots: StoryboardTableShotLike[] = [], shotGroups: ShotGroupLike[] = []) {
     if (!projectId) return new Set<string>();
     const groupIds = new Set(storyboardGroups.filter((group) => group.projectId === projectId).map((group) => group.id));
     return new Set<string>([
         ...productionBibleItems.filter((item) => item.projectId === projectId).flatMap((item) => item.assetRefs.map((ref) => ref.assetId)),
         ...storyboardShots.filter((shot) => groupIds.has(shot.groupId)).flatMap(storyboardShotAssetIds),
+        ...storyboardTableShots.filter((shot) => shot.projectId === projectId).flatMap((shot) => shot.assetRefs.map((ref) => ref.assetId)),
+        ...shotGroups.filter((group) => group.projectId === projectId).flatMap(shotGroupAssetIds),
     ]);
 }
 
@@ -155,6 +170,10 @@ function assetMatchesStoryboardGroup(asset: Asset, storyboardGroupId: string, re
 
 function storyboardShotAssetIds(shot: StoryboardShotLike) {
     return [...shot.assetRefs.map((ref) => ref.assetId), ...(shot.resultAssetIds || []), shot.primaryAssetId || ""].filter(Boolean);
+}
+
+function shotGroupAssetIds(group: ShotGroupLike) {
+    return [...group.assetRefs.map((ref) => ref.assetId), ...(group.audioRefs || []).map((ref) => ref.assetId), ...(group.resultAssetIds || []), group.primaryAssetId || ""].filter(Boolean);
 }
 
 function latestGenerationTime(asset: Asset) {

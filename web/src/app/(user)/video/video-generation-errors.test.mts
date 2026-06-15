@@ -18,3 +18,11 @@ test("detects enterprise ark api key failures as auth errors", () => {
     assert.equal(isVideoChannelUpstreamError(message), false);
     assert.match(normalizeVideoGenerationErrorMessage(message), /视频通道认证失败/);
 });
+
+test("normalizes sensitive content video errors into actionable copy", () => {
+    const message = normalizeVideoGenerationErrorMessage("InputTextSensitiveContentDetected：The request failed because the input text may contain sensitive information. Request id: 123456");
+
+    assert.match(message, /提示词触发平台内容审核/);
+    assert.match(message, /弱化高敏表达/);
+    assert.doesNotMatch(message, /Request id/);
+});

@@ -4,7 +4,7 @@ import test from "node:test";
 import type { Asset } from "@/stores/use-asset-store.ts";
 import type { CanvasProject } from "../canvas/stores/use-canvas-store.ts";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible.ts";
-import type { StoryboardGroup, StoryboardShot } from "../canvas/utils/storyboard-management.ts";
+import type { ShotGroup, StoryboardGroup, StoryboardShot, StoryboardTableShot } from "../canvas/utils/storyboard-management.ts";
 import { buildAssetVersionReference } from "../assets/asset-version-references.ts";
 import { collectProjectAssetReferences, filterProjectAssetReferences } from "./project-asset-references.ts";
 
@@ -29,6 +29,38 @@ test("aggregates project asset references from canvas, storyboard, bible, result
     assert.deepEqual(roleAsset.references.map((reference) => reference.type).sort(), ["canvas", "production-bible", "storyboard"]);
     assert.ok(resultAsset);
     assert.deepEqual(resultAsset.references.map((reference) => reference.type).sort(), ["generation-result", "generation-result"]);
+});
+
+test("aggregates current episode table shots and shot groups", () => {
+    const asset = imageAsset("asset-1", "角色图");
+    const result = videoAsset("asset-2", "镜头组成片");
+    const rows = collectProjectAssetReferences({
+        assets: [asset, result],
+        projectId: "project-1",
+        canvasProjects: [],
+        storyboardGroups: [],
+        storyboardShots: [],
+        storyboardTableShots: [storyboardTableShot("table-shot-1", asset)],
+        shotGroups: [shotGroup("shot-group-1", asset, result.id)],
+        productionBibleItems: [],
+    });
+
+    const roleAsset = rows.find((row) => row.asset.id === "asset-1");
+    const resultAsset = rows.find((row) => row.asset.id === "asset-2");
+
+    assert.ok(roleAsset);
+    assert.deepEqual(roleAsset.references.map((reference) => reference.id).sort(), ["shot-group:shot-group-1:asset-1:reference", "storyboard-table:table-shot-1:asset-1"]);
+    assert.deepEqual(
+        roleAsset.references.map((reference) => [reference.id, reference.canvasId, reference.episodeId]).sort(),
+        [
+            ["shot-group:shot-group-1:asset-1:reference", "canvas-1", "episode-1"],
+            ["storyboard-table:table-shot-1:asset-1", "canvas-1", "episode-1"],
+        ],
+    );
+    assert.ok(resultAsset);
+    assert.equal(resultAsset.references[0].type, "generation-result");
+    assert.equal(resultAsset.references[0].canvasId, "canvas-1");
+    assert.equal(resultAsset.references[0].episodeId, "episode-1");
 });
 
 test("filters project asset references by reference type", () => {
@@ -108,17 +140,26 @@ test("filters project asset references by project library status", () => {
 
 test("marks media assets with missing local storage keys", () => {
     const asset = videoAsset("asset-1", "丢失视频");
+    const availableAsset = videoAsset("asset-2", "可用视频");
     const rows = collectProjectAssetReferences({
-        assets: [asset],
+        assets: [asset, availableAsset],
         projectId: "project-1",
-        canvasProjects: [canvasWithAsset(asset, "canvas-1", "project-1")],
+        canvasProjects: [canvasWithAsset(asset, "canvas-1", "project-1"), canvasWithAsset(availableAsset, "canvas-2", "project-1")],
         storyboardGroups: [],
         storyboardShots: [],
         productionBibleItems: [],
         missingStorageKeys: new Set(["video:asset-1"]),
     });
 
-    assert.equal(rows[0].hasMissingLocalFile, true);
+    assert.equal(rows.find((row) => row.asset.id === "asset-1")?.hasMissingLocalFile, true);
+    assert.deepEqual(
+        filterProjectAssetReferences(rows, { fileStatus: "missing" }).map((row) => row.asset.id),
+        ["asset-1"],
+    );
+    assert.deepEqual(
+        filterProjectAssetReferences(rows, { fileStatus: "available" }).map((row) => row.asset.id),
+        ["asset-2"],
+    );
 });
 
 function imageAsset(id: string, title: string, patch: Partial<Asset> = {}): Asset {
@@ -208,6 +249,55 @@ function storyboardShot(id: string, asset: Asset, resultAssetId: string): Storyb
         resultAssetIds: [resultAssetId],
         primaryAssetId: resultAssetId,
         status: "done",
+        createdAt: "now",
+        updatedAt: "now",
+    };
+}
+
+function storyboardTableShot(id: string, asset: Asset): StoryboardTableShot {
+    return {
+        id,
+        projectId: "project-1",
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        sceneName: "第一场",
+        location: "内景",
+        timeOfDay: "夜",
+        order: 1,
+        title: "镜头 1",
+        scriptText: "",
+        visualDescription: "",
+        characters: [],
+        dialogue: "",
+        action: "",
+        emotion: "",
+        shotSize: "中景",
+        cameraMovement: "固定",
+        estimatedDuration: 6,
+        assetRefs: [{ assetId: asset.id, kind: "image", role: "reference", assetVersion: buildAssetVersionReference(asset) }],
+        productionBibleRefs: [],
+        createdAt: "now",
+        updatedAt: "now",
+    };
+}
+
+function shotGroup(id: string, asset: Asset, resultAssetId: string): ShotGroup {
+    return {
+        id,
+        projectId: "project-1",
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        sceneName: "第一场",
+        shotIds: ["table-shot-1"],
+        totalDuration: 6,
+        prompt: "",
+        effectivePrompt: "",
+        assetRefs: [{ assetId: asset.id, kind: "image", role: "reference", assetVersion: buildAssetVersionReference(asset) }],
+        audioRefs: [],
+        productionBibleRefs: [],
+        status: "done",
+        resultAssetIds: [resultAssetId],
+        primaryAssetId: resultAssetId,
         createdAt: "now",
         updatedAt: "now",
     };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import type { AssetPickerTab } from "../components/asset-picker-modal";
@@ -63,6 +63,10 @@ export function useCanvasPageLocalState() {
     const [lastSelectedVideoNodeId, setLastSelectedVideoNodeId] = useState("");
     const [titleEditing, setTitleEditing] = useState(false);
     const [titleDraft, setTitleDraft] = useState("");
+
+    useEffect(() => {
+        if (window.matchMedia("(max-width: 767px)").matches) setIsInspectorCollapsed(true);
+    }, []);
 
     return {
         activeChatId,

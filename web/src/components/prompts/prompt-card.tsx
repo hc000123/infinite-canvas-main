@@ -24,18 +24,22 @@ export function PromptCard({
     actionType?: "text" | "primary";
     extraAction?: ReactNode;
 }) {
+    const coverUrl = item.coverUrl.trim();
+
     return (
         <Card
             hoverable
             className="studio-card overflow-hidden"
             styles={{ body: { padding: 0 } }}
             cover={
-                <button type="button" className="block w-full text-left" onClick={onOpen}>
-                    <img src={item.coverUrl} alt={item.title} className="aspect-[4/3] w-full object-cover" />
-                </button>
+                coverUrl ? (
+                    <button type="button" className="block w-full text-left" aria-label={`查看提示词详情：${item.title}`} onClick={onOpen}>
+                        <img src={coverUrl} alt={item.title} className="aspect-[4/3] w-full object-cover" />
+                    </button>
+                ) : undefined
             }
         >
-            <button type="button" className="block w-full text-left" onClick={onOpen}>
+            <button type="button" className="block w-full text-left" aria-label={`查看提示词详情：${item.title}`} onClick={onOpen}>
                 <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
                         <h2 className="line-clamp-1 text-sm font-semibold text-[var(--studio-text-primary)]">{item.title}</h2>

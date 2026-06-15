@@ -65,6 +65,10 @@ func DB() (*gorm.DB, error) {
 			return
 		}
 		dbErr = cleanupLegacyBuiltinPrompts(db)
+		if dbErr != nil {
+			return
+		}
+		dbErr = seedSystemPrompts(db)
 	})
 	return db, dbErr
 }

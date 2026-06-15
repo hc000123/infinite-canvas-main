@@ -181,7 +181,7 @@ func ReplacePromptCategory(category model.PromptCategory, items []model.Prompt) 
 func applyPromptFilters(tx *gorm.DB, q model.Query) *gorm.DB {
 	if q.Keyword != "" {
 		like := "%" + q.Keyword + "%"
-		tx = tx.Where("title LIKE ? OR prompt LIKE ? OR preview LIKE ?", like, like, like)
+		tx = tx.Where("title LIKE ? OR prompt LIKE ? OR tags LIKE ?", like, like, like)
 	}
 	if isActivePromptOption(q.Category) {
 		tx = tx.Where("category = ?", q.Category)

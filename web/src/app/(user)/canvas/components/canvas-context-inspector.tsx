@@ -138,7 +138,10 @@ export function CanvasContextInspector({
     }
 
     return (
-        <aside className="relative flex h-full w-[420px] shrink-0 flex-col border-l" style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}>
+        <aside
+            className="fixed inset-y-0 right-0 z-[80] flex h-full w-[calc(100vw-16px)] max-w-[420px] shrink-0 flex-col border-l shadow-2xl md:relative md:z-auto md:w-[420px] md:shadow-none"
+            style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}
+        >
             <div className="border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -329,16 +332,23 @@ function CanvasOverview({
 }) {
     return (
         <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
-            <section className="rounded-xl border p-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
-                <div className="text-sm font-semibold">{hasEpisode ? "画布内容" : "自由画布"}</div>
-                <div className="mt-2 text-xs leading-5" style={{ color: theme.node.muted }}>
-                    {hasEpisode ? "项目素材、设定和参考图统一在“我的素材”管理；画布只负责自由编排节点、连线和生成。" : "当前画布未绑定集数，可继续自由编排文本、图片、视频、音频和配置节点。"}
+            <section className="rounded-xl border px-3 py-3" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <div className="text-sm font-semibold">{hasEpisode ? "画布内容" : "自由画布"}</div>
+                        <div className="mt-1 text-xs leading-5" style={{ color: theme.node.muted }}>
+                            {hasEpisode ? "素材、设定和参考图统一在“我的素材”管理；画布负责节点、连线和生成配置。" : "未绑定集数，可自由编排文本、图片、视频、音频和配置节点。"}
+                        </div>
+                    </div>
+                    <div className="shrink-0 rounded-md px-2 py-1 text-xs tabular-nums" style={{ background: theme.toolbar.panel, color: theme.node.muted }}>
+                        {stats.generatingCount} 生成中
+                    </div>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-3 grid grid-cols-4 gap-1.5">
                     <Stat label="分镜" value={stats.tableShotCount} theme={theme} />
                     <Stat label="生成组" value={stats.shotGroupCount} theme={theme} />
-                    <Stat label="生成中" value={stats.generatingCount} theme={theme} />
                     <Stat label="失败" value={stats.failedCount} theme={theme} />
+                    <Stat label="节点" value={checklistNodes.length} theme={theme} />
                 </div>
             </section>
             <ShotChecklistSection shots={checklistShots} shotGroups={checklistShotGroups} nodes={checklistNodes} activeShotId={activeShotId} theme={theme} onSelectShot={onSelectShot} />
@@ -368,11 +378,11 @@ function RecordsView({ selectedNode, selectedShot, theme }: { selectedNode: Canv
 
 function Stat({ label, value, theme }: { label: string; value: string | number; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     return (
-        <div className="rounded-lg border px-2 py-2" style={{ background: theme.node.panel, borderColor: theme.node.stroke }}>
-            <div className="text-[11px]" style={{ color: theme.node.muted }}>
+        <div className="rounded-md px-2 py-1.5" style={{ background: theme.node.panel }}>
+            <div className="text-[10px]" style={{ color: theme.node.muted }}>
                 {label}
             </div>
-            <div className="mt-1 text-sm font-semibold tabular-nums">{value}</div>
+            <div className="text-sm font-semibold tabular-nums">{value}</div>
         </div>
     );
 }

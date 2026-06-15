@@ -2,19 +2,26 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { App, Button, Empty, Form, Input, Modal } from "antd";
+import { App, Button, Empty, Form, Input, Modal, Spin } from "antd";
 
+import { useAssetStore } from "@/stores/use-asset-store";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasCreateProjectModal } from "../../canvas/components/canvas-create-project-modal";
+import { useGenerationQueueStore } from "../../canvas/stores/use-generation-queue-store";
 import { useCanvasStore } from "../../canvas/stores/use-canvas-store";
+import { useProductionBibleStore } from "../../canvas/stores/use-production-bible-store";
 import { useScriptStore } from "../../canvas/stores/use-script-store";
 import { useStoryboardStore } from "../../canvas/stores/use-storyboard-store";
+import { buildImportedEpisodeWriteInput, canvasEpisodeContextFromCreateBinding, type CanvasCreateScriptBinding } from "../../canvas/utils/canvas-episode-context";
 import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../../canvas/utils/canvas-project-preset";
 import { videoWorkflowEpisodeKey, videoWorkflowHref, videoWorkflowProjectSlug } from "../../original-workflow/video-workflow-routing";
 import { canvasIdsForCreativeProject, unfiledCanvasProjects } from "../creative-projects";
 import { editableCanvasPreset } from "../project-canvas-preset";
+import { collectProjectAssetReferences, filterProjectAssetReferences, type ProjectAssetReferenceFilters } from "../project-asset-references";
+import { buildProjectOverviewDashboard, type ProjectOverviewActionTarget } from "../project-overview-dashboard";
+import { useAgentTaskStore } from "../use-agent-task-store";
 import { useCreativeProjectStore } from "../use-creative-project-store";
-import { ProjectEpisodeBoard, type ProjectEpisodeBoardRow } from "./components/project-episode-board";
+import { ProjectEpisodeBoard, type ProjectDetailTab, type ProjectEpisodeBoardRow } from "./components/project-episode-board";
 
 type EpisodeImportFormValues = {
     title: string;
@@ -28,17 +35,27 @@ export default function CreativeProjectDetailPage() {
     const [episodeImportForm] = Form.useForm<EpisodeImportFormValues>();
     const effectiveConfig = useEffectiveConfig();
     const projectId = params.id;
+    const hydrated = useCreativeProjectStore((state) => state.hydrated);
     const project = useCreativeProjectStore((state) => state.projects.find((item) => item.id === projectId));
     const updateCreativeProject = useCreativeProjectStore((state) => state.updateProject);
     const attachCanvas = useCreativeProjectStore((state) => state.attachCanvas);
     const canvases = useCanvasStore((state) => state.projects);
     const createCanvas = useCanvasStore((state) => state.createProject);
     const updateCanvas = useCanvasStore((state) => state.updateProject);
+    const assets = useAssetStore((state) => state.assets);
+    const productionBibleItems = useProductionBibleStore((state) => state.items);
+    const generationQueueItems = useGenerationQueueStore((state) => state.items);
+    const agentTasks = useAgentTaskStore((state) => state.tasks);
+    const scriptProjects = useScriptStore((state) => state.projects);
     const episodes = useScriptStore((state) => state.episodes);
+    const scenes = useScriptStore((state) => state.scenes);
+    const scriptsHydrated = useScriptStore((state) => state.hydrated);
     const upsertScriptProject = useScriptStore((state) => state.upsertProject);
     const addEpisode = useScriptStore((state) => state.addEpisode);
     const updateEpisode = useScriptStore((state) => state.updateEpisode);
-    const [activeTab, setActiveTab] = useState("episodes");
+    const [activeTab, setActiveTab] = useState<ProjectDetailTab>("overview");
+    const [assetReferenceFilters, setAssetReferenceFilters] = useState<ProjectAssetReferenceFilters>({ assetKind: "all", fileStatus: "all", projectLibraryStatus: "all", referenceType: "all", versionStatus: "all" });
+    const [canvasCreateOpen, setCanvasCreateOpen] = useState(false);
     const [episodeImportOpen, setEpisodeImportOpen] = useState(false);
     const [projectEditOpen, setProjectEditOpen] = useState(false);
     const [editingCanvasPresetId, setEditingCanvasPresetId] = useState("");
@@ -48,6 +65,8 @@ export default function CreativeProjectDetailPage() {
     const [descriptionDraft, setDescriptionDraft] = useState(project?.description || "");
     const [episodeFilter, setEpisodeFilter] = useState<"all" | "done" | "draft" | "running">("all");
     const [bindingCanvasId, setBindingCanvasId] = useState("");
+    const storyboardGroups = useStoryboardStore((state) => state.groups);
+    const storyboardShots = useStoryboardStore((state) => state.shots);
     const storyboardTableShots = useStoryboardStore((state) => state.tableShots);
     const shotGroups = useStoryboardStore((state) => state.shotGroups);
     const canvasIds = useMemo(() => (project ? canvasIdsForCreativeProject(project, canvases) : []), [canvases, project]);
@@ -107,11 +126,58 @@ export default function CreativeProjectDetailPage() {
         if (!episodeRows.length) return 0;
         return Math.round(episodeRows.reduce((total, row) => total + row.progress, 0) / episodeRows.length);
     }, [episodeRows]);
+    const assetReferenceRows = useMemo(
+        () =>
+            project
+                ? collectProjectAssetReferences({
+                      assets,
+                      canvasIds,
+                      canvasProjects: canvases,
+                      productionBibleItems,
+                      projectId: project.id,
+                      projectTitle: project.title,
+                      shotGroups,
+                      storyboardGroups,
+                      storyboardShots,
+                      storyboardTableShots,
+                  })
+                : [],
+        [assets, canvasIds, canvases, productionBibleItems, project, shotGroups, storyboardGroups, storyboardShots, storyboardTableShots],
+    );
+    const filteredAssetReferenceRows = useMemo(() => filterProjectAssetReferences(assetReferenceRows, assetReferenceFilters), [assetReferenceFilters, assetReferenceRows]);
+    const overviewDashboard = useMemo(
+        () =>
+            buildProjectOverviewDashboard({
+                projectId,
+                canvasCount: projectCanvases.length,
+                scripts: scriptProjects,
+                episodes,
+                scenes,
+                storyboardGroups,
+                storyboardShots,
+                storyboardTableShots,
+                shotGroups,
+                productionBibleItems,
+                generationQueueItems,
+                assets,
+                assetReferenceRows,
+                agentTasks,
+            }),
+        [agentTasks, assetReferenceRows, assets, episodes, generationQueueItems, productionBibleItems, projectCanvases.length, projectId, scenes, scriptProjects, shotGroups, storyboardGroups, storyboardShots, storyboardTableShots],
+    );
 
     useEffect(() => {
         if (!episodeImportOpen) return;
         episodeImportForm.setFieldsValue({ title: `第 ${projectEpisodes.length + 1} 集`, scriptText: "" });
     }, [episodeImportForm, episodeImportOpen, projectEpisodes.length]);
+
+    if (!hydrated || !scriptsHydrated) {
+        return (
+            <main className="studio-workspace grid h-full place-items-center bg-[var(--studio-shell-bg)] px-6 py-10 text-[var(--studio-text-primary)]">
+                <Spin description="正在读取本地项目" />
+            </main>
+        );
+    }
 
     if (!project) {
         return (
@@ -171,11 +237,19 @@ export default function CreativeProjectDetailPage() {
         router.push(videoWorkflowHref(order, project.id, episodeId));
     };
 
-    const createCanvasAndOpen = () => {
-        const title = `${project.title} 画布 ${projectCanvases.length + 1}`;
-        const canvasId = createCanvas(title, project.preset, { projectId: project.id });
+    const createCanvasAndOpen = (title: string, preset: CanvasProjectPreset, scriptBinding?: CanvasCreateScriptBinding) => {
+        if (scriptBinding?.mode === "import" && !scriptBinding.scriptText.trim()) {
+            message.warning("请粘贴本集剧本");
+            return;
+        }
+        const importedEpisode = buildImportedEpisodeWriteInput(project.id, scriptBinding);
+        const importedEpisodeId = importedEpisode ? addEpisode({ ...importedEpisode, order: projectEpisodes.length + 1 }) : undefined;
+        if (importedEpisode?.summary) upsertScriptProject(project.id, importedEpisode.summary);
+        const episodeContext = canvasEpisodeContextFromCreateBinding(project.id, scriptBinding, importedEpisodeId);
+        const canvasId = createCanvas(title, preset, { projectId: project.id, episodeContext });
         attachCanvas(project.id, canvasId);
-        router.push(`/canvas/${canvasId}`);
+        setCanvasCreateOpen(false);
+        window.setTimeout(() => router.push(`/canvas/${canvasId}`), 0);
     };
 
     const bindCanvas = () => {
@@ -215,32 +289,93 @@ export default function CreativeProjectDetailPage() {
         if (!response.ok) throw new Error("同步视频工作流剧本失败");
     };
 
+    const openEpisodeWorkbench = (module: "assets" | "storyboard") => {
+        if (!currentEpisode) {
+            setActiveTab("episodes");
+            return;
+        }
+        router.push(`/projects/${project.id}/episodes/${currentEpisode.id}/workbench?module=${module}`);
+    };
+
+    const handleOverviewAction = (target: ProjectOverviewActionTarget) => {
+        if (target.type === "tab") {
+            setActiveTab(target.tab);
+            return;
+        }
+        if (target.type === "asset-references") {
+            setAssetReferenceFilters({
+                assetKind: "all",
+                fileStatus: target.missingOnly ? "missing" : "all",
+                projectLibraryStatus: "all",
+                referenceType: "all",
+                versionStatus: target.versionStatus || "all",
+            });
+            setActiveTab("asset-references");
+            return;
+        }
+        if (target.type === "assets-page") {
+            router.push(`/assets?projectId=${encodeURIComponent(project.id)}&returnTo=${encodeURIComponent(`/projects/${project.id}`)}&returnLabel=${encodeURIComponent("返回项目")}`);
+            return;
+        }
+        if (target.type === "agent") {
+            router.push(`/projects/${project.id}/agents`);
+            return;
+        }
+        if (target.type === "production-bible") {
+            openEpisodeWorkbench("assets");
+            return;
+        }
+        if (target.type === "storyboard") {
+            openEpisodeWorkbench("storyboard");
+            return;
+        }
+        if (target.type === "primary-canvas") {
+            if (currentEpisode?.primaryCanvasId) {
+                router.push(`/canvas/${currentEpisode.primaryCanvasId}`);
+                return;
+            }
+            if (currentEpisode) {
+                void openEpisodeWorkflow(currentEpisode.id);
+                return;
+            }
+            setEpisodeImportOpen(true);
+        }
+    };
+
     return (
         <main className="studio-workspace studio-shell h-full overflow-auto text-[var(--studio-text-primary)]">
             <ProjectEpisodeBoard
                 activeTab={activeTab}
+                assetReferenceFilters={assetReferenceFilters}
+                assetReferenceRows={assetReferenceRows}
                 currentEpisode={currentEpisode}
                 counts={episodeCounts}
                 description={project.description}
                 episodeFilter={episodeFilter}
+                filteredAssetReferenceRows={filteredAssetReferenceRows}
                 filteredRows={filteredEpisodeRows}
+                overview={overviewDashboard}
                 progress={projectProgress}
                 canvases={projectCanvases}
                 unboundCanvases={unboundCanvases}
                 bindingCanvasId={bindingCanvasId}
+                projectId={project.id}
                 projectTitle={project.title}
                 presetSummary={canvasProjectPresetSummary(project.preset)}
                 rows={episodeRows}
                 onBindCanvas={bindCanvas}
                 onBindingCanvasChange={setBindingCanvasId}
-                onCreateCanvas={createCanvasAndOpen}
+                onAssetReferenceFiltersChange={setAssetReferenceFilters}
+                onCreateCanvas={() => setCanvasCreateOpen(true)}
                 onEditCanvasPreset={setEditingCanvasPresetId}
                 onEditEpisodeTitle={openEpisodeTitleEdit}
+                onOpenAgentSettings={() => router.push(`/projects/${project.id}/agents`)}
                 onEditProject={() => setProjectEditOpen(true)}
                 onFilterChange={setEpisodeFilter}
                 onImportEpisode={() => setEpisodeImportOpen(true)}
                 onOpenCanvasById={(canvasId) => router.push(`/canvas/${canvasId}`)}
                 onOpenEpisode={openEpisodeWorkflow}
+                onOverviewAction={handleOverviewAction}
                 onTabChange={setActiveTab}
             />
 
@@ -272,6 +407,18 @@ export default function CreativeProjectDetailPage() {
                     </Form.Item>
                 </Form>
             </Modal>
+            <CanvasCreateProjectModal
+                open={canvasCreateOpen}
+                defaultTitle={`${project.title} 画布 ${projectCanvases.length + 1}`}
+                initialPreset={project.preset}
+                config={effectiveConfig}
+                modalTitle="新建项目画布"
+                namePlaceholder="例如：第一集主画布"
+                helperText="可先选择或导入本集剧本；画布会保存本集标题和剧本文本快照，后续分镜、素材和生成结果都能追溯到这一集。"
+                scriptOptions={{ projectId: project.id, episodes, scenes }}
+                onCancel={() => setCanvasCreateOpen(false)}
+                onCreate={createCanvasAndOpen}
+            />
             <CanvasCreateProjectModal
                 open={Boolean(editingCanvasPreset)}
                 defaultTitle={editingCanvasPreset?.title || project.title}

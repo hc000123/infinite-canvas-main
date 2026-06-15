@@ -9,6 +9,7 @@ test("imported copy-only package is ready for batch video generation", () => {
         duration: "8秒",
         episode: "ep05",
         id: "P01",
+        sourceProjectId: "project-1",
         prompt: "目标生成时长：8秒。雨夜街巷，镜头缓慢推进。",
         segment: "雨夜街巷",
         sourcePath: "outputs/ep05/02-seedance-copy-only.md",
@@ -19,6 +20,7 @@ test("imported copy-only package is ready for batch video generation", () => {
     assert.equal(item.canvasStatus, "未导入");
     assert.equal(item.assetStatus, "完整");
     assert.equal(item.duration, "8秒");
+    assert.equal(item.sourceProjectId, "project-1");
     assert.match(item.risks[0].text, /Copy-only/);
 });
 

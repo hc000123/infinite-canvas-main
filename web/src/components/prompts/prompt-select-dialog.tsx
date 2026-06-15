@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, Plus, Search } from "lucide-react";
-import { type ReactNode, type UIEvent, useEffect, useState } from "react";
+import { Check, ChevronDown, ChevronUp, Plus, Search, X } from "lucide-react";
+import { type ReactNode, type UIEvent, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { FormInstance } from "antd";
 import { App, Button, Checkbox, Col, Empty, Form, Input, Modal, Row, Select, Spin, Tag } from "antd";
@@ -21,6 +21,16 @@ const promptVariablePlaceholder = formatPromptVariablesText([
     { name: "角色", description: "主角设定", defaultValue: "魏梁" },
     { name: "场景", description: "发生地点" },
 ]);
+const SCENARIO_FILTER_COLLAPSED_COUNT = 8;
+const TAG_FILTER_COLLAPSED_COUNT = 12;
+
+function getVisibleFilterOptions(options: string[], expanded: boolean, selectedValues: string[], collapsedCount: number) {
+    if (expanded || options.length <= collapsedCount) return options;
+    const pinnedValues = selectedValues.filter((value) => value !== ALL_PROMPTS_OPTION && options.includes(value));
+    const selectedOutside = pinnedValues.filter((value) => !options.slice(0, collapsedCount).includes(value));
+    const baseCount = Math.max(options[0] === ALL_PROMPTS_OPTION ? 1 : 0, collapsedCount - selectedOutside.length);
+    return Array.from(new Set([...options.slice(0, baseCount), ...selectedOutside]));
+}
 
 export function PromptSelectDialog({
     open,
@@ -51,6 +61,8 @@ export function PromptSelectDialog({
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [createOpen, setCreateOpen] = useState(false);
     const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+    const [scenarioFiltersExpanded, setScenarioFiltersExpanded] = useState(false);
+    const [tagFiltersExpanded, setTagFiltersExpanded] = useState(false);
     const {
         query,
         items,
@@ -68,6 +80,10 @@ export function PromptSelectDialog({
         ...promptTypeOptions.map((item) => item.value).filter((value) => (!activeNodeGroup || allowedPurposeTypes.includes(value)) && (!allowedTypes?.length || allowedTypes.includes(value))),
         ...promptTypes.filter((value) => value !== ALL_PROMPTS_OPTION && (!activeNodeGroup || allowedPurposeTypes.includes(value)) && (!allowedTypes?.length || allowedTypes.includes(value)) && !promptTypeOptions.some((item) => item.value === value)),
     ];
+    const visibleScenarios = useMemo(() => getVisibleFilterOptions(scenarios, scenarioFiltersExpanded, selectedScenario === ALL_PROMPTS_OPTION ? [] : [selectedScenario], SCENARIO_FILTER_COLLAPSED_COUNT), [scenarios, scenarioFiltersExpanded, selectedScenario]);
+    const visiblePromptTags = useMemo(() => getVisibleFilterOptions(promptTags, tagFiltersExpanded, selectedTags, TAG_FILTER_COLLAPSED_COUNT), [promptTags, selectedTags, tagFiltersExpanded]);
+    const hiddenScenarioCount = Math.max(0, scenarios.length - visibleScenarios.length);
+    const hiddenTagCount = Math.max(0, promptTags.length - visiblePromptTags.length);
     const toggleTag = (tag: string) => {
         if (tag === ALL_PROMPTS_OPTION) return setSelectedTags([]);
         setSelectedTags((items) => (items.includes(tag) ? items.filter((item) => item !== tag) : [...items, tag]));
@@ -152,6 +168,8 @@ export function PromptSelectDialog({
         setSelectedNodeGroup(nodeGroup || ALL_PROMPTS_OPTION);
         setSelectedType(ALL_PROMPTS_OPTION);
         setSelectedScenario(ALL_PROMPTS_OPTION);
+        setScenarioFiltersExpanded(false);
+        setTagFiltersExpanded(false);
     }, [nodeGroup, open]);
 
     useEffect(() => {
@@ -164,12 +182,17 @@ export function PromptSelectDialog({
     };
 
     return (
-        <Modal className="studio-modal" title="提示词库" open={open} onCancel={() => onOpenChange(false)} footer={null} width={1040} centered>
+        <Modal className="studio-modal" title="提示词库" open={open} onCancel={() => onOpenChange(false)} footer={null} width={1040} centered styles={{ body: { maxHeight: "calc(100dvh - 160px)", overflowY: "auto" } }}>
             <div data-canvas-no-zoom onWheelCapture={(event) => event.stopPropagation()}>
-                <div className="mx-auto flex max-w-2xl gap-2">
-                    <Input className="studio-command-input min-w-0 flex-1" size="large" prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="按标题查询" />
-                    <Button size="large" type="primary" icon={<Plus className="size-4" />} onClick={openCreatePrompt}>
-                        新建
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 flex-1 gap-2 sm:max-w-2xl">
+                        <Input className="studio-command-input min-w-0 flex-1" size="large" prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索标题、内容或标签" />
+                        <Button size="large" type="primary" icon={<Plus className="size-4" />} onClick={openCreatePrompt}>
+                            新建
+                        </Button>
+                    </div>
+                    <Button size="large" icon={<X className="size-4" />} onClick={() => onOpenChange(false)}>
+                        关闭
                     </Button>
                 </div>
                 <div className="mt-5 grid gap-3">
@@ -206,11 +229,22 @@ export function PromptSelectDialog({
                         </PromptFilterTag>
                     </PromptFilterRow>
                     <PromptFilterRow label="场景">
-                        {scenarios.map((scenario) => (
+                        {visibleScenarios.map((scenario) => (
                             <PromptFilterTag key={scenario} checked={selectedScenario === scenario} onChange={() => setSelectedScenario(scenario)}>
                                 {scenario}
                             </PromptFilterTag>
                         ))}
+                        {scenarios.length > SCENARIO_FILTER_COLLAPSED_COUNT ? (
+                            <Button
+                                size="middle"
+                                type="text"
+                                className="!h-8 !px-2 !text-[var(--studio-text-secondary)] hover:!text-[var(--studio-text-primary)]"
+                                icon={scenarioFiltersExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                                onClick={() => setScenarioFiltersExpanded((value) => !value)}
+                            >
+                                {scenarioFiltersExpanded ? "收起场景" : `展开${hiddenScenarioCount ? ` ${hiddenScenarioCount} 个` : ""}场景`}
+                            </Button>
+                        ) : null}
                     </PromptFilterRow>
                     <PromptFilterRow label="来源">
                         {promptCategories.map((category) => (
@@ -220,7 +254,7 @@ export function PromptSelectDialog({
                         ))}
                     </PromptFilterRow>
                     <PromptFilterRow label="标签">
-                        {promptTags.map((tag) => {
+                        {visiblePromptTags.map((tag) => {
                             const active = tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag);
                             return (
                                 <PromptFilterTag key={tag} checked={active} onChange={() => toggleTag(tag)}>
@@ -228,6 +262,17 @@ export function PromptSelectDialog({
                                 </PromptFilterTag>
                             );
                         })}
+                        {promptTags.length > TAG_FILTER_COLLAPSED_COUNT ? (
+                            <Button
+                                size="middle"
+                                type="text"
+                                className="!h-8 !px-2 !text-[var(--studio-text-secondary)] hover:!text-[var(--studio-text-primary)]"
+                                icon={tagFiltersExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                                onClick={() => setTagFiltersExpanded((value) => !value)}
+                            >
+                                {tagFiltersExpanded ? "收起标签" : `展开${hiddenTagCount ? ` ${hiddenTagCount} 个` : ""}标签`}
+                            </Button>
+                        ) : null}
                     </PromptFilterRow>
                 </div>
                 <div className="thin-scrollbar mt-6 max-h-[520px] overflow-y-auto pr-2" data-canvas-no-zoom onScroll={handleListScroll} onWheelCapture={(event) => event.stopPropagation()}>
@@ -259,7 +304,7 @@ function PromptFilterRow({ label, children }: { label: string; children: ReactNo
     return (
         <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
             <div className="pt-2 text-sm font-medium text-[var(--studio-text-secondary)]">{label}</div>
-            <div className="flex flex-wrap gap-2">{children}</div>
+            <div className="flex flex-wrap items-center gap-2">{children}</div>
         </div>
     );
 }

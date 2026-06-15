@@ -87,6 +87,8 @@ function GenerationCard({ generation, index, copyText }: { generation: AssetGene
             <InfoGrid
                 items={[
                     ["画布项目", readString(generation.projectTitle) || readString(generation.projectId)],
+                    ["来源集数", readString(generation.sourceEpisode)],
+                    ["生产包", readString(generation.productionPackageId)],
                     ["分镜组", readString(generation.storyboardGroupId)],
                     ["分镜", readString(generation.storyboardShotId)],
                     ["来源节点", readString(generation.nodeId)],

@@ -4,12 +4,12 @@ import { assetInProjectLibrary } from "../assets/asset-project-library.ts";
 import type { GenerationQueueItem } from "../canvas/utils/generation-queue.ts";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible.ts";
 import type { ScriptEpisode, ScriptProject, ScriptScene } from "../canvas/utils/script-management.ts";
-import type { StoryboardGroup, StoryboardShot } from "../canvas/utils/storyboard-management.ts";
+import type { ShotGroup, StoryboardGroup, StoryboardShot, StoryboardTableShot } from "../canvas/utils/storyboard-management.ts";
 import type { AgentTask } from "./agent-workbench.ts";
 import type { ProjectAssetReferenceSummary } from "./project-asset-references.ts";
 
 export type ProjectOverviewActionTarget =
-    | { type: "tab"; tab: "canvas" | "workflow" | "asset-references" }
+    | { type: "tab"; tab: "episodes" | "canvas" | "asset-references" }
     | { type: "asset-references"; versionStatus?: "outdated"; missingOnly?: boolean }
     | { type: "assets-page" }
     | { type: "storyboard"; groupId?: string }
@@ -55,6 +55,8 @@ export function buildProjectOverviewDashboard(input: {
     scenes: ScriptScene[];
     storyboardGroups: StoryboardGroup[];
     storyboardShots: StoryboardShot[];
+    storyboardTableShots?: StoryboardTableShot[];
+    shotGroups?: ShotGroup[];
     productionBibleItems: ProductionBibleItem[];
     generationQueueItems: GenerationQueueItem[];
     assets: Asset[];
@@ -68,13 +70,20 @@ export function buildProjectOverviewDashboard(input: {
     const projectGroups = input.storyboardGroups.filter((item) => item.projectId === input.projectId);
     const groupIds = new Set(projectGroups.map((group) => group.id));
     const projectShots = input.storyboardShots.filter((item) => groupIds.has(item.groupId));
+    const projectTableShots = (input.storyboardTableShots || []).filter((item) => item.projectId === input.projectId);
+    const projectShotGroups = (input.shotGroups || []).filter((item) => item.projectId === input.projectId);
     const projectBibleItems = input.productionBibleItems.filter((item) => item.projectId === input.projectId);
     const projectQueueItems = input.generationQueueItems.filter((item) => item.projectId === input.projectId);
     const projectLibraryAssetCount = input.assets.filter((asset) => assetInProjectLibrary(asset, input.projectId)).length;
     const generatedVideoCount = input.assets.filter((asset) => asset.kind === "video" && assetBelongsToProject(asset, input.projectId, groupIds)).length;
-    const missingMaterialCount = projectBibleItems.filter((item) => !item.assetRefs.length).length + projectShots.filter((shot) => !shot.assetRefs.length).length + input.assetReferenceRows.filter((row) => row.hasMissingLocalFile).length;
+    const missingMaterialCount =
+        projectBibleItems.filter((item) => !item.assetRefs.length).length +
+        projectShots.filter((shot) => !shot.assetRefs.length).length +
+        projectTableShots.filter((shot) => !shot.assetRefs.length).length +
+        projectShotGroups.filter((group) => !group.assetRefs.length && !group.audioRefs.length).length +
+        input.assetReferenceRows.filter((row) => row.hasMissingLocalFile).length;
     const outdatedReferenceCount = input.assetReferenceRows.reduce((sum, row) => sum + row.references.filter((reference) => reference.hasOutdatedVersion).length, 0);
-    const failedGenerationCount = projectQueueItems.filter((item) => item.status === "failed").length + projectShots.filter((shot) => shot.status === "error").length;
+    const failedGenerationCount = projectQueueItems.filter((item) => item.status === "failed").length + projectShots.filter((shot) => shot.status === "error").length + projectShotGroups.filter((group) => group.status === "error").length;
     const exportableStoryboardGroups = projectGroups.filter((group) => projectShots.some((shot) => shot.groupId === group.id && Boolean(shot.primaryAssetId)));
     const recentAgentTasks = (input.agentTasks || [])
         .filter((task) => task.projectId === input.projectId)
@@ -85,8 +94,8 @@ export function buildProjectOverviewDashboard(input: {
         scriptProjectCount: projectScripts.length,
         episodeCount: projectEpisodes.length,
         sceneCount: projectScenes.length,
-        storyboardGroupCount: projectGroups.length,
-        storyboardShotCount: projectShots.length,
+        storyboardGroupCount: projectGroups.length + projectShotGroups.length,
+        storyboardShotCount: projectShots.length + projectTableShots.length,
         generationQueueCount: projectQueueItems.length,
         generatedVideoCount,
         failedGenerationCount,

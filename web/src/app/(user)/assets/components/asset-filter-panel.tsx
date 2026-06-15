@@ -1,6 +1,7 @@
 "use client";
 
-import { FolderPlus, PencilLine, Search, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, FolderPlus, PencilLine, Search, Trash2 } from "lucide-react";
 import { Button, Input, Select, Tag } from "antd";
 
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ const kindOptions = [
     { label: "视频", value: "video" },
     { label: "音频", value: "audio" },
 ];
+const PROJECT_FILTER_COLLAPSED_COUNT = 6;
 
 export function AssetFilterPanel({
     activeFolderId,
@@ -97,6 +99,15 @@ export function AssetFilterPanel({
     onStoryboardGroupFilterChange: (value: string) => void;
 }) {
     const activeRegularFolder = activeFolderId ? regularFolders.find((folder) => folder.id === activeFolderId) : undefined;
+    const [projectFiltersExpanded, setProjectFiltersExpanded] = useState(false);
+    const visibleProjectFolderRows = useMemo(() => {
+        if (projectFiltersExpanded || projectFolderRows.length <= PROJECT_FILTER_COLLAPSED_COUNT) return projectFolderRows;
+        const collapsedRows = projectFolderRows.slice(0, PROJECT_FILTER_COLLAPSED_COUNT);
+        const activeRow = projectFolderRows.find(({ folder, project }) => folder.id === folderFilter || project.id === projectContextFilter);
+        if (!activeRow || collapsedRows.some(({ project }) => project.id === activeRow.project.id)) return collapsedRows;
+        return [...collapsedRows.slice(0, PROJECT_FILTER_COLLAPSED_COUNT - 1), activeRow];
+    }, [folderFilter, projectContextFilter, projectFolderRows, projectFiltersExpanded]);
+    const hiddenProjectCount = Math.max(0, projectFolderRows.length - visibleProjectFolderRows.length);
     return (
         <>
             <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,560px)_1fr] lg:items-center">
@@ -137,7 +148,7 @@ export function AssetFilterPanel({
                         >
                             全部项目 {validAssetCount}
                         </Tag.CheckableTag>
-                        {projectFolderRows.map(({ project, folder }) => (
+                        {visibleProjectFolderRows.map(({ project, folder }) => (
                             <Tag.CheckableTag
                                 key={project.id}
                                 checked={folderFilter === folder.id}
@@ -154,6 +165,17 @@ export function AssetFilterPanel({
                                 {project.title || folder.name} {folderCounts[folder.id] || 0}
                             </Tag.CheckableTag>
                         ))}
+                        {projectFolderRows.length > PROJECT_FILTER_COLLAPSED_COUNT ? (
+                            <Button
+                                size="middle"
+                                type="text"
+                                className="!h-8 !px-2 !text-[var(--studio-text-secondary)] hover:!text-[var(--studio-text-primary)]"
+                                icon={projectFiltersExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                                onClick={() => setProjectFiltersExpanded((value) => !value)}
+                            >
+                                {projectFiltersExpanded ? "收起项目" : `展开${hiddenProjectCount ? ` ${hiddenProjectCount} 个` : ""}项目`}
+                            </Button>
+                        ) : null}
                         <Select size="middle" allowClear showSearch className="min-w-48" placeholder="分镜组筛选" value={storyboardGroupFilter || undefined} options={storyboardGroupOptions} optionFilterProp="label" disabled={!storyboardGroupOptions.length} onChange={(value) => onStoryboardGroupFilterChange(value || "")} />
                         <Select
                             size="middle"

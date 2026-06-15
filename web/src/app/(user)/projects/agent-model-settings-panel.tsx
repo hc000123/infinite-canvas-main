@@ -20,6 +20,7 @@ export function AgentModelSettingsPanel({ config, effectiveConfig, onConfigChang
         { label: "生图", value: effectiveConfig.imageModel || effectiveConfig.model || "未配置" },
         { label: "视频", value: effectiveConfig.videoProtocol === "volcengine-ark" ? effectiveConfig.seedanceModel || effectiveConfig.videoModel || "未配置" : effectiveConfig.videoModel || "未配置" },
     ];
+    const effectiveVideoModel = effectiveConfig.videoProtocol === "volcengine-ark" ? effectiveConfig.seedanceModel || effectiveConfig.videoModel : effectiveConfig.videoModel;
     const visibleModels = uniqueModelNames([
         ...(effectiveConfig.textModels || []),
         ...(effectiveConfig.imageModels || []),
@@ -47,6 +48,18 @@ export function AgentModelSettingsPanel({ config, effectiveConfig, onConfigChang
                 }
             >
                 <Alert className="mb-4" type="info" showIcon title="这里保存的是全局默认模型和通用生成参数" description="Agent、工作流、画布配置节点都会优先读取这些默认值；单个 Agent 或单个画布节点仍可在自己的面板里临时覆盖。" />
+                <div className="mb-4 grid gap-3 lg:grid-cols-[1.2fr_1fr]">
+                    <div className="rounded-lg border border-sky-400/30 bg-sky-400/10 p-3">
+                        <div className="text-xs font-medium text-sky-700 dark:text-sky-200">当前实际视频通道</div>
+                        <div className="mt-1 break-words text-base font-semibold">{videoProtocolLabel(effectiveConfig.videoProtocol)}</div>
+                        <div className="mt-1 break-words text-xs text-stone-500 dark:text-stone-400">后端模型渠道 · {effectiveVideoModel || "未配置模型"}</div>
+                    </div>
+                    <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-stone-800 dark:bg-white/5">
+                        <div className="text-xs font-medium text-stone-500">本地默认视频协议</div>
+                        <div className="mt-1 break-words text-base font-semibold">{videoProtocolLabel(config.videoProtocol)}</div>
+                        <div className="mt-1 text-xs text-stone-500 dark:text-stone-400">下方表单只保存本地默认参数；后台渠道优先生效。</div>
+                    </div>
+                </div>
                 <div className="grid gap-3 md:grid-cols-3">
                     {modelSummary.map((item) => (
                         <div key={item.label} className="rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-stone-800 dark:bg-white/5">
@@ -61,7 +74,6 @@ export function AgentModelSettingsPanel({ config, effectiveConfig, onConfigChang
                         <div className="font-medium">模型渠道</div>
                         <div className="mt-3 grid gap-3">
                             <div className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600 dark:bg-white/5 dark:text-stone-300">统一由后端模型渠道转发请求；接口地址、API Key、模型映射、额度和任务日志都在后台系统设置中维护。</div>
-                            <Button onClick={onOpenFullConfig}>打开完整配置</Button>
                         </div>
                     </section>
 
@@ -113,7 +125,7 @@ export function AgentModelSettingsPanel({ config, effectiveConfig, onConfigChang
                     <section className="rounded-lg border border-stone-200 p-4 dark:border-stone-800">
                         <div className="font-medium">视频默认参数</div>
                         <div className="mt-3 grid gap-3">
-                            <FieldLabel label="视频协议">
+                            <FieldLabel label="本地默认视频协议">
                                 <Select
                                     value={config.videoProtocol}
                                     onChange={(value) => setConfigValue("videoProtocol", value as AiConfig["videoProtocol"])}
@@ -186,6 +198,10 @@ function FieldLabel({ children, label }: { children: ReactNode; label: string })
             {children}
         </label>
     );
+}
+
+function videoProtocolLabel(value: AiConfig["videoProtocol"]) {
+    return value === "volcengine-ark" ? "火山 Ark / Seedance" : "OpenAI 兼容";
 }
 
 function uniqueModelNames(values: Array<string | undefined>) {

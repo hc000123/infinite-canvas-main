@@ -29,7 +29,7 @@ test("builds cropped image node beside the source image", () => {
 
     assert.equal(node.id, "crop-1");
     assert.equal(node.type, "image");
-    assert.equal(node.title, "Cropped Image");
+    assert.equal(node.title, "裁切图片");
     assert.deepEqual(node.position, { x: 516, y: 120 });
     assert.deepEqual([node.width, node.height], [320, 160]);
     assert.equal(node.metadata?.content, "blob:crop");

@@ -295,7 +295,7 @@ export default function AdminAssetsPage() {
                     options={{ density: true, setting: true, reload: () => void refreshAssets() }}
                     toolBarRender={() => [
                         <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => setEditingAsset({ type: "text", tags: [] })}>
-                            新增
+                            新增素材
                         </Button>,
                     ]}
                     pagination={{

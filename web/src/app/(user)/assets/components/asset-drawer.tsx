@@ -57,7 +57,7 @@ export function AssetDrawer({
     const canvasLibraryEntries = assetCanvasLibraryEntries(asset);
     const versionRecords = assetVersionRecords(asset);
     return (
-        <Drawer rootClassName="studio-workspace" title="素材详情" open={Boolean(asset)} size={asset && workflowInfo ? undefined : "large"} width={asset && workflowInfo ? "min(560px, calc(100vw - 24px))" : undefined} onClose={onClose}>
+        <Drawer rootClassName="studio-workspace" title="素材详情" open={Boolean(asset)} size={asset && workflowInfo ? "min(560px, calc(100vw - 24px))" : "large"} onClose={onClose}>
             {asset && workflowInfo ? (
                 <WorkflowAssetDrawerContent
                     asset={asset}
@@ -422,12 +422,15 @@ function AssetVersionHistory({
 function usageKindLabel(usage: AssetVersionUsageReference) {
     if (usage.kind === "canvas-node") return "画布节点";
     if (usage.kind === "storyboard-shot") return "分镜条目";
+    if (usage.kind === "storyboard-table-shot") return "分镜头表";
+    if (usage.kind === "shot-group") return "镜头组";
     return productionBibleKindLabel(usage.objectType);
 }
 
 function usageRoleLabel(usage: AssetVersionUsageReference) {
     if (usage.kind === "canvas-node") return canvasNodeTypeLabel(usage.role || usage.objectType);
     if (usage.kind === "storyboard-shot") return storyboardRefLabel(usage.role || usage.objectType);
+    if (usage.kind === "storyboard-table-shot" || usage.kind === "shot-group") return storyboardRefLabel(usage.role || usage.objectType);
     return productionBibleRefLabel(usage.role);
 }
 

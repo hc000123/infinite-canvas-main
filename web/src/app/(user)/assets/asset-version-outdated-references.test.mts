@@ -3,7 +3,15 @@ import test from "node:test";
 
 import type { Asset } from "@/stores/use-asset-store.ts";
 import { buildAssetVersionReference } from "./asset-version-references.ts";
-import { collectOutdatedAssetVersionUsages, selectedOutdatedUsageSummary, updateCanvasProjectAssetReferenceToLatest, updateProductionBibleAssetReferenceToLatest, updateStoryboardShotAssetReferenceToLatest } from "./asset-version-outdated-references.ts";
+import {
+    collectOutdatedAssetVersionUsages,
+    selectedOutdatedUsageSummary,
+    updateCanvasProjectAssetReferenceToLatest,
+    updateProductionBibleAssetReferenceToLatest,
+    updateShotGroupAssetReferenceToLatest,
+    updateStoryboardShotAssetReferenceToLatest,
+    updateStoryboardTableShotAssetReferenceToLatest,
+} from "./asset-version-outdated-references.ts";
 
 const versionOne = {
     id: "version-1",
@@ -125,9 +133,11 @@ test("selected outdated usage summary is stable for confirmation", () => {
     ]);
 });
 
-test("updates canvas, storyboard, and production bible references to latest with previous version history", () => {
+test("updates canvas, storyboard, shot group, and production bible references to latest with previous version history", () => {
     const oldReference = buildAssetVersionReference(assetV1(), "2026-06-03T00:00:00.000Z");
     const asset = assetV2();
+    const tableShot = storyboardTableShot(oldReference);
+    const shotGroup = shotGroupWithReferences(oldReference);
     const usage = collectOutdatedAssetVersionUsages(
         [asset],
         {
@@ -165,6 +175,8 @@ test("updates canvas, storyboard, and production bible references to latest with
                     updatedAt: "",
                 },
             ],
+            storyboardTableShots: [tableShot],
+            shotGroups: [shotGroup],
             productionBibleItems: [
                 { id: "bible-1", projectId: "project-1", kind: "character", name: "主角", description: "", tags: [], assetRefs: [{ assetId: "asset-1", role: "portrait", assetVersion: oldReference }], promptSnippets: {}, createdAt: "", updatedAt: "" },
             ],
@@ -174,6 +186,8 @@ test("updates canvas, storyboard, and production bible references to latest with
 
     const canvasUsage = usagesByKind(usage, "canvas-node");
     const shotUsage = usagesByKind(usage, "storyboard-shot");
+    const tableShotUsage = usagesByKind(usage, "storyboard-table-shot");
+    const shotGroupUsage = usagesByKind(usage, "shot-group");
     const bibleUsage = usagesByKind(usage, "production-bible");
     const nextCanvas = updateCanvasProjectAssetReferenceToLatest(
         {
@@ -214,6 +228,8 @@ test("updates canvas, storyboard, and production bible references to latest with
         asset,
         "2026-06-05T00:00:00.000Z",
     );
+    const nextTableShot = updateStoryboardTableShotAssetReferenceToLatest(tableShot, tableShotUsage, asset, "2026-06-05T00:00:00.000Z");
+    const nextShotGroup = updateShotGroupAssetReferenceToLatest(shotGroup, shotGroupUsage, asset, "2026-06-05T00:00:00.000Z");
     const nextBible = updateProductionBibleAssetReferenceToLatest(
         { id: "bible-1", projectId: "project-1", kind: "character", name: "主角", description: "", tags: [], assetRefs: [{ assetId: "asset-1", role: "portrait", assetVersion: oldReference }], promptSnippets: {}, createdAt: "", updatedAt: "" },
         bibleUsage,
@@ -231,12 +247,68 @@ test("updates canvas, storyboard, and production bible references to latest with
         nextShot.assetRefs[0].assetVersion?.previousVersions?.map((item) => item.versionNumber),
         [1],
     );
+    assert.equal(nextTableShot.assetRefs[0].assetVersion?.versionNumber, 2);
+    assert.deepEqual(
+        nextTableShot.assetRefs[0].assetVersion?.previousVersions?.map((item) => item.versionNumber),
+        [1],
+    );
+    assert.equal(nextShotGroup.assetRefs[0].assetVersion?.versionNumber, 2);
+    assert.deepEqual(
+        nextShotGroup.assetRefs[0].assetVersion?.previousVersions?.map((item) => item.versionNumber),
+        [1],
+    );
     assert.equal(nextBible.assetRefs[0].assetVersion?.versionNumber, 2);
     assert.deepEqual(
         nextBible.assetRefs[0].assetVersion?.previousVersions?.map((item) => item.versionNumber),
         [1],
     );
 });
+
+function storyboardTableShot(assetVersion: ReturnType<typeof buildAssetVersionReference>) {
+    return {
+        id: "table-shot-1",
+        projectId: "project-1",
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        sceneName: "办公室",
+        location: "",
+        timeOfDay: "",
+        order: 1,
+        title: "对峙镜头",
+        scriptText: "",
+        visualDescription: "",
+        characters: [],
+        dialogue: "",
+        action: "",
+        emotion: "",
+        shotSize: "",
+        cameraMovement: "",
+        estimatedDuration: 3,
+        assetRefs: [{ assetId: "asset-1", kind: "image" as const, role: "reference_image", assetVersion }],
+        createdAt: "",
+        updatedAt: "",
+    };
+}
+
+function shotGroupWithReferences(assetVersion: ReturnType<typeof buildAssetVersionReference>) {
+    return {
+        id: "shot-group-1",
+        projectId: "project-1",
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        sceneName: "办公室",
+        shotIds: ["table-shot-1"],
+        totalDuration: 3,
+        prompt: "",
+        effectivePrompt: "",
+        assetRefs: [{ assetId: "asset-1", kind: "image" as const, role: "reference_image", assetVersion }],
+        audioRefs: [],
+        status: "draft" as const,
+        resultAssetIds: [],
+        createdAt: "",
+        updatedAt: "",
+    };
+}
 
 function usagesByKind<T extends string>(usages: Array<{ kind: T }>, kind: T) {
     const usage = usages.find((item) => item.kind === kind);

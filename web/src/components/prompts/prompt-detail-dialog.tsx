@@ -29,6 +29,8 @@ export function PromptDetailDialog({
     const variables = useMemo(() => (prompt ? promptVariablesFromTemplate(prompt.prompt, prompt.metadata) : []), [prompt]);
     const [values, setValues] = useState<Record<string, string>>({});
     const finalPrompt = prompt ? renderPromptTemplate(prompt.prompt, values) : "";
+    const coverUrl = prompt?.coverUrl.trim() || "";
+    const hasPreviewPanel = Boolean(coverUrl || prompt?.preview);
 
     useEffect(() => {
         setValues(Object.fromEntries(variables.map((variable) => [variable.name, variable.defaultValue || ""])));
@@ -45,15 +47,17 @@ export function PromptDetailDialog({
             <Modal title={prompt?.title} open={Boolean(prompt)} onCancel={onClose} footer={null} width={860} className="studio-modal">
                 {prompt ? (
                     <>
-                        <div className="grid gap-5 md:grid-cols-[300px_minmax(0,1fr)]">
-                            <div className="space-y-3">
-                                <img src={prompt.coverUrl} alt={prompt.title} className="aspect-[4/3] w-full rounded-lg object-cover" />
-                                {prompt.preview ? (
-                                    <pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3 text-xs leading-5 text-[var(--studio-text-secondary)]">
-                                        {prompt.preview}
-                                    </pre>
-                                ) : null}
-                            </div>
+                        <div className={hasPreviewPanel ? "grid gap-5 md:grid-cols-[300px_minmax(0,1fr)]" : "grid gap-5"}>
+                            {hasPreviewPanel ? (
+                                <div className="space-y-3">
+                                    {coverUrl ? <img src={coverUrl} alt={prompt.title} className="aspect-[4/3] w-full rounded-lg object-cover" /> : null}
+                                    {prompt.preview ? (
+                                        <pre className="max-h-60 overflow-auto whitespace-pre-wrap rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3 text-xs leading-5 text-[var(--studio-text-secondary)]">
+                                            {prompt.preview}
+                                        </pre>
+                                    ) : null}
+                                </div>
+                            ) : null}
                             <div className="min-w-0">
                                 <div className="flex flex-wrap gap-1.5">
                                     {prompt.metadata?.nodeGroup ? <Tag className="studio-tag">{promptNodeGroupLabel(prompt.metadata.nodeGroup)}</Tag> : null}

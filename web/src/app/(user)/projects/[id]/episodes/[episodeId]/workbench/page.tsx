@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { App, Button, Empty } from "antd";
+import { App, Button, Empty, Spin } from "antd";
 
 import { requestImageQuestion, type ChatCompletionMessage } from "@/services/api/image";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
@@ -12,6 +12,7 @@ import { useStoryboardStore } from "../../../../../canvas/stores/use-storyboard-
 import { normalizeStructuredEpisodeScript, structuredEpisodeScriptToText, type ScriptEpisode, type StructuredEpisodeScript } from "../../../../../canvas/utils/script-management";
 import { canvasEpisodeContextFromEpisode } from "../../../../../canvas/utils/canvas-episode-context";
 import { buildCanvasProjectPresetFromConfig } from "../../../../../canvas/utils/canvas-project-preset";
+import { videoWorkflowEpisodeKey, videoWorkflowHref, videoWorkflowProjectSlug } from "../../../../../original-workflow/video-workflow-routing";
 import { useAgentRunnerStore } from "../../../../use-agent-runner-store";
 import { agentSystemPromptContent, canInvokeAgentConfig, defaultAgentConfigs, fillAgentPromptTemplate, mergeAgentConfigs } from "../../../../agent-settings";
 import { useAgentSettingsStore } from "../../../../use-agent-settings-store";
@@ -33,8 +34,10 @@ export default function EpisodeProductionWorkbenchPage() {
     const { message, modal } = App.useApp();
     const projectId = params.id;
     const episodeId = params.episodeId;
+    const projectHydrated = useCreativeProjectStore((state) => state.hydrated);
     const project = useCreativeProjectStore((state) => state.projects.find((item) => item.id === projectId));
     const attachCanvas = useCreativeProjectStore((state) => state.attachCanvas);
+    const scriptsHydrated = useScriptStore((state) => state.hydrated);
     const episode = useScriptStore((state) => state.episodes.find((item) => item.id === episodeId && item.projectId === projectId));
     const scenes = useScriptStore((state) => state.scenes);
     const updateEpisode = useScriptStore((state) => state.updateEpisode);
@@ -65,6 +68,7 @@ export default function EpisodeProductionWorkbenchPage() {
     const checkAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const [scriptOptimizing, setScriptOptimizing] = useState(false);
     const [fullWorkflowRunning, setFullWorkflowRunning] = useState(false);
+    const [openingOriginalWorkflow, setOpeningOriginalWorkflow] = useState(false);
     const [pendingStructuredScript, setPendingStructuredScript] = useState<StructuredEpisodeScript | undefined>();
     const { boundCanvas, episodeTableShots, hasScript, preset, previews, sceneOptions, scriptSnapshot, stageOutputs, stages, stageSceneRows, workflowRun } = useEpisodeWorkbenchState({
         canvases,
@@ -269,6 +273,14 @@ export default function EpisodeProductionWorkbenchPage() {
         startWorkflowTextRun,
     ]);
 
+    if (!projectHydrated || !scriptsHydrated) {
+        return (
+            <main className="grid h-full place-items-center bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
+                <Spin description="正在读取本地项目" />
+            </main>
+        );
+    }
+
     if (!project || !episode) {
         return (
             <main className="h-full overflow-auto bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
@@ -358,6 +370,28 @@ export default function EpisodeProductionWorkbenchPage() {
         message.success("剧本已确认，进入导演分析。");
     };
 
+    const openOriginalWorkflow = async () => {
+        const content = (scriptDraft || scriptSnapshot || episode.summary).trim();
+        if (!content) {
+            message.warning("请先导入或粘贴本集剧本。");
+            return;
+        }
+        setOpeningOriginalWorkflow(true);
+        try {
+            const response = await fetch("/api/original-workflow", {
+                body: JSON.stringify({ action: "save-script", content, episode: videoWorkflowEpisodeKey(episode.order, project.id), projectSlug: videoWorkflowProjectSlug(project.id) }),
+                headers: { "Content-Type": "application/json" },
+                method: "POST",
+            });
+            if (!response.ok) throw new Error("同步视频工作流剧本失败");
+            router.push(videoWorkflowHref(episode.order, project.id, episode.id));
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "同步视频工作流剧本失败");
+        } finally {
+            setOpeningOriginalWorkflow(false);
+        }
+    };
+
     const importCanvasPackage = (pkg: CanvasHandoffImportTarget) => {
         if (!boundCanvas) {
             message.info("已先创建承接画布，请进入画布后再导入生产包节点组。");
@@ -423,6 +457,7 @@ export default function EpisodeProductionWorkbenchPage() {
                 onModuleChange={setActiveModule}
                 onOpenCanvas={openCanvasOrCreate}
                 onOpenDetail={setDetailRecord}
+                onOpenOriginalWorkflow={() => void openOriginalWorkflow()}
                 onRunFullWorkflow={() => void runFullWorkflow()}
                 onApproveStageReview={approveStageReview}
                 onApproveStoryboardScene={approveCurrentStoryboardScene}
@@ -440,6 +475,7 @@ export default function EpisodeProductionWorkbenchPage() {
                 onSummarizeStoryboardScenes={summarizeStoryboardScenes}
                 project={project}
                 previews={previews}
+                openingOriginalWorkflow={openingOriginalWorkflow}
                 runningStageIds={runningStageIds}
                 runningSceneKeys={runningSceneKeys}
                 runningStageDrafts={runningStageDrafts}
@@ -572,7 +608,10 @@ function cleanOptimizedScriptText(text: string, episodeTitle: string) {
         }
         cleaned.push(line);
     }
-    return cleaned.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    return cleaned
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
 }
 
 function isMeaningfullyOptimizedScript(source: string, optimized: string) {
@@ -590,7 +629,10 @@ function isMeaningfullyOptimizedScript(source: string, optimized: string) {
 }
 
 function normalizeComparableScriptText(text: string) {
-    return text.replace(/\s+/g, "").replace(/[，。！？；：、“”‘’《》（）()#\-—_]/g, "").trim();
+    return text
+        .replace(/\s+/g, "")
+        .replace(/[，。！？；：、“”‘’《》（）()#\-—_]/g, "")
+        .trim();
 }
 
 function normalizedTextSimilarity(left: string, right: string) {

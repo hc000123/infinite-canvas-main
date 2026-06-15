@@ -19,6 +19,7 @@ import {
 } from "../utils/script-management";
 
 type ScriptStore = {
+    hydrated: boolean;
     projects: ScriptProject[];
     episodes: ScriptEpisode[];
     scenes: ScriptScene[];
@@ -55,6 +56,7 @@ const scriptStorage: PersistStorage<ScriptStore> = {
 export const useScriptStore = create<ScriptStore>()(
     persist(
         (set, get) => ({
+            hydrated: false,
             projects: [],
             episodes: [],
             scenes: [],
@@ -130,6 +132,9 @@ export const useScriptStore = create<ScriptStore>()(
             name: SCRIPT_STORE_KEY,
             storage: scriptStorage,
             partialize: (state) => ({ projects: state.projects, episodes: state.episodes, scenes: state.scenes }) as StorageValue<ScriptStore>["state"],
+            onRehydrateStorage: () => () => {
+                useScriptStore.setState({ hydrated: true });
+            },
         },
     ),
 );

@@ -95,6 +95,7 @@ export const defaultConfig: AiConfig = {
 type ConfigStore = {
     config: AiConfig;
     publicSettings: AdminPublicSettings | null;
+    hasLoadedPublicSettings: boolean;
     isPublicSettingsLoading: boolean;
     isConfigOpen: boolean;
     shouldPromptContinue: boolean;
@@ -167,6 +168,7 @@ export const useConfigStore = create<ConfigStore>()(
         (set, get) => ({
             config: defaultConfig,
             publicSettings: null,
+            hasLoadedPublicSettings: false,
             isPublicSettingsLoading: false,
             isConfigOpen: false,
             shouldPromptContinue: false,
@@ -181,12 +183,12 @@ export const useConfigStore = create<ConfigStore>()(
                 if (get().isPublicSettingsLoading && !options.force) return;
                 set({ isPublicSettingsLoading: true });
                 try {
-                    set({ publicSettings: await apiGet<AdminPublicSettings>("/api/settings") });
+                    set({ hasLoadedPublicSettings: true, publicSettings: await apiGet<AdminPublicSettings>("/api/settings") });
                 } catch (error) {
                     if (process.env.NODE_ENV === "development") {
                         console.warn("公共设置加载失败，已使用本地默认配置继续运行。", error);
                     }
-                    set({ publicSettings: null });
+                    set({ hasLoadedPublicSettings: true, publicSettings: null });
                 } finally {
                     set({ isPublicSettingsLoading: false });
                 }

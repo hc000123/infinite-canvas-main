@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { App, Button, Empty, Input, Spin, Tag } from "antd";
-import { CheckCircle2, ChevronRight, Clipboard, Download, FileText, FolderOpen, PackagePlus, Play, RefreshCw, Save, ShieldCheck, Square, TerminalSquare, TriangleAlert, Video, Wand2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronRight, Clipboard, Download, FileText, FolderOpen, PackagePlus, Play, RefreshCw, Save, ShieldCheck, Square, TerminalSquare, TriangleAlert, Video, Wand2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useCopyText } from "@/hooks/use-copy-text";
@@ -122,6 +122,7 @@ export default function OriginalWorkflowPage() {
     const effectiveConfig = useEffectiveConfig();
     const globalAgentConfigs = useAgentSettingsStore((state) => state.globalConfigs);
     const projectAgentConfigs = useAgentSettingsStore((state) => state.projectConfigs);
+    const hasLoadedPublicSettings = useConfigStore((state) => state.hasLoadedPublicSettings);
     const isPublicSettingsLoading = useConfigStore((state) => state.isPublicSettingsLoading);
     const loadPublicSettings = useConfigStore((state) => state.loadPublicSettings);
     const importedPackages = useVideoPackageStore((state) => state.importedPackages);
@@ -135,12 +136,21 @@ export default function OriginalWorkflowPage() {
     const [isEnterprisePreflightChecking, setIsEnterprisePreflightChecking] = useState(false);
     const [runningAction, setRunningAction] = useState("");
     const [syncedSourceScriptKey, setSyncedSourceScriptKey] = useState("");
+    const latestSnapshotRequestKeyRef = useRef("");
+    const requestedEpisode = searchParams.get("episode") || "";
+    const requestedProjectSlug = searchParams.get("projectSlug") || "";
     const sourceProjectId = searchParams.get("sourceProjectId") || "";
     const sourceEpisodeId = searchParams.get("sourceEpisodeId") || "";
+    const routeParamsPending = Boolean((requestedEpisode && requestedEpisode !== episode) || (requestedProjectSlug && requestedProjectSlug !== projectSlug));
     const sourceProject = useMemo(() => sourceProjects.find((item) => item.id === sourceProjectId), [sourceProjectId, sourceProjects]);
     const sourceEpisode = useMemo(() => sourceEpisodes.find((item) => item.id === sourceEpisodeId), [sourceEpisodeId, sourceEpisodes]);
-    const resolvedAgentConfigs = useMemo(() => mergeAgentConfigs(defaultAgentConfigs(), globalAgentConfigs, projectAgentConfigs[sourceProjectId] || projectAgentConfigs[projectSlug] || []), [globalAgentConfigs, projectAgentConfigs, projectSlug, sourceProjectId]);
+    const resolvedAgentConfigs = useMemo(
+        () => mergeAgentConfigs(defaultAgentConfigs(), globalAgentConfigs, projectAgentConfigs[sourceProjectId] || projectAgentConfigs[projectSlug] || []),
+        [globalAgentConfigs, projectAgentConfigs, projectSlug, sourceProjectId],
+    );
     const sourceScopeLabel = sourceProject || sourceEpisode ? `${sourceProject?.title || "未命名项目"} / ${sourceEpisode ? `第 ${String(sourceEpisode.order || 1).padStart(2, "0")} 集 · ${sourceEpisode.title}` : "未绑定分集"}` : "";
+    const sourceReturnHref = sourceProjectId ? (sourceEpisodeId ? `/projects/${encodeURIComponent(sourceProjectId)}/episodes/${encodeURIComponent(sourceEpisodeId)}/workbench` : `/projects/${encodeURIComponent(sourceProjectId)}`) : "";
+    const sourceReturnLabel = sourceEpisodeId ? "返回本集生产台" : "返回来源项目";
     const filesByKey = useMemo(() => new Map(snapshot?.files.map((file) => [file.key, file]) || []), [snapshot?.files]);
     const currentFile = filesByKey.get(activeFileKey);
     const visibleFileKeys = activeTab === "quality" ? [] : tabFileKeys[activeTab];
@@ -148,20 +158,37 @@ export default function OriginalWorkflowPage() {
     const editable = currentFile ? editableFileKeys.has(currentFile.key) : false;
     const currentReport = snapshot?.commandResult || snapshot?.latestJob;
     const copyOnlySyncState = useMemo(() => getCopyOnlySyncState(snapshot?.files || [], snapshot?.validations?.stage3), [snapshot?.files, snapshot?.validations?.stage3]);
+    const copyOnlySyncNotice = useMemo(() => copyOnlySyncState.notice.replace("{episode}", episode), [copyOnlySyncState.notice, episode]);
+    const hasCopyOnlyFile = Boolean(filesByKey.get("copyOnly")?.exists);
+    const canImportCopyOnly = hasCopyOnlyFile && !copyOnlySyncState.disabled;
+    const copyOnlyImportNotice = canImportCopyOnly ? "" : copyOnlySyncNotice;
     const workflowVideoPackageCount = useMemo(() => importedPackages.filter((item) => item.sourceEpisode === episode).length, [episode, importedPackages]);
+    const isPublicSettingsPending = isPublicSettingsLoading || !hasLoadedPublicSettings;
     const chainHealth = useMemo(
         () =>
             buildOriginalWorkflowChainHealth({
                 enterprisePreflight,
                 files: snapshot?.files || [],
-                isPublicSettingsLoading,
+                isPublicSettingsLoading: isPublicSettingsPending,
                 validations: snapshot?.validations,
                 videoPackageCount: workflowVideoPackageCount,
                 videoProtocol: effectiveConfig.videoProtocol,
             }),
-        [effectiveConfig.videoProtocol, enterprisePreflight, isPublicSettingsLoading, snapshot?.files, snapshot?.validations, workflowVideoPackageCount],
+        [effectiveConfig.videoProtocol, enterprisePreflight, isPublicSettingsPending, snapshot?.files, snapshot?.validations, workflowVideoPackageCount],
     );
-    const nextStep = useMemo(() => getOriginalWorkflowNextStep({ files: snapshot?.files || [], job: currentReport, rootExists: snapshot?.rootExists, validations: snapshot?.validations }), [currentReport, snapshot?.files, snapshot?.rootExists, snapshot?.validations]);
+    const nextStep = useMemo(
+        () => getOriginalWorkflowNextStep({ files: snapshot?.files || [], job: currentReport, rootExists: snapshot?.rootExists, validations: snapshot?.validations }),
+        [currentReport, snapshot?.files, snapshot?.rootExists, snapshot?.validations],
+    );
+    const isWorkflowReading = routeParamsPending || (!snapshot && loading);
+    const visibleNextStep: OriginalWorkflowNextStep = isWorkflowReading
+        ? {
+              actionLabel: "刷新状态",
+              description: "正在加载当前项目和集数的剧本、阶段产物和质量门结果。",
+              kind: "connect",
+              title: "正在读取工作流状态",
+          }
+        : nextStep;
     const stage2StartNotice = stageStartGateNotice("stage2", snapshot?.validations);
     const stage3StartNotice = stageStartGateNotice("stage3", snapshot?.validations);
     const stageStats = useMemo(
@@ -175,17 +202,32 @@ export default function OriginalWorkflowPage() {
     );
 
     useEffect(() => {
-        const requestedEpisode = searchParams.get("episode");
-        const requestedProjectSlug = searchParams.get("projectSlug");
+        let changed = false;
         if (requestedEpisode && requestedEpisode !== episode) setEpisode(requestedEpisode);
+        if (requestedEpisode && requestedEpisode !== episode) changed = true;
         if (requestedProjectSlug && requestedProjectSlug !== projectSlug) setProjectSlug(requestedProjectSlug);
-    }, [episode, projectSlug, searchParams, setEpisode, setProjectSlug]);
+        if (requestedProjectSlug && requestedProjectSlug !== projectSlug) changed = true;
+        if (!changed) return;
+        setSnapshot(undefined);
+        setActiveTab("script");
+        setActiveFileKey("script");
+        setDraft("");
+    }, [episode, projectSlug, requestedEpisode, requestedProjectSlug, setEpisode, setProjectSlug]);
 
     useEffect(() => {
+        if (!snapshot) return;
+        if (workflowSnapshotKey(snapshot.rootPath, snapshot.projectSlug, snapshot.episode) === workflowSnapshotKey(rootPath, projectSlug, episode)) return;
+        setSnapshot(undefined);
+    }, [episode, projectSlug, rootPath, snapshot]);
+
+    useEffect(() => {
+        if (routeParamsPending) return;
         if (!sourceEpisodeId) return;
         if (!sourceEpisode?.summary.trim()) return;
         const syncKey = `${sourceEpisode.id}:${sourceEpisode.updatedAt}:${episode}:${projectSlug}:${rootPath}`;
         if (syncKey === syncedSourceScriptKey) return;
+        const requestKey = workflowSnapshotKey(rootPath, projectSlug, episode);
+        latestSnapshotRequestKeyRef.current = requestKey;
         setSyncedSourceScriptKey(syncKey);
         void requestWorkflow<WorkflowSnapshot>("/api/original-workflow", {
             action: "save-script",
@@ -195,23 +237,28 @@ export default function OriginalWorkflowPage() {
             rootPath,
         })
             .then((data) => {
+                if (latestSnapshotRequestKeyRef.current !== requestKey) return;
                 setSnapshot(data);
                 message.success("已同步项目里的最新剧本到视频工作流");
             })
             .catch((error) => message.error(error instanceof Error ? error.message : "同步项目剧本失败"));
-    }, [episode, message, projectSlug, rootPath, sourceEpisode, sourceEpisodeId, syncedSourceScriptKey]);
+    }, [episode, message, projectSlug, rootPath, routeParamsPending, sourceEpisode, sourceEpisodeId, syncedSourceScriptKey]);
 
     const refresh = useCallback(async () => {
+        if (routeParamsPending) return;
+        const requestKey = workflowSnapshotKey(rootPath, projectSlug, episode);
+        latestSnapshotRequestKeyRef.current = requestKey;
         setLoading(true);
         try {
             const data = await requestWorkflow<WorkflowSnapshot>(`/api/original-workflow?${new URLSearchParams({ episode, projectSlug, rootPath }).toString()}`);
+            if (latestSnapshotRequestKeyRef.current !== requestKey) return;
             setSnapshot(data);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取工作流失败");
         } finally {
-            setLoading(false);
+            if (latestSnapshotRequestKeyRef.current === requestKey) setLoading(false);
         }
-    }, [episode, message, projectSlug, rootPath]);
+    }, [episode, message, projectSlug, rootPath, routeParamsPending]);
 
     useEffect(() => {
         void refresh();
@@ -243,6 +290,8 @@ export default function OriginalWorkflowPage() {
 
     const runAction = async (action: "cancel-latest-job" | "export-copy-only" | "save-file" | "save-script" | "start-stage" | "validate", options?: { fileKey?: string; stage?: "stage1" | "stage2" | "stage3" }) => {
         const actionKey = `${action}-${options?.stage || options?.fileKey || ""}`;
+        const requestKey = workflowSnapshotKey(rootPath, projectSlug, episode);
+        latestSnapshotRequestKeyRef.current = requestKey;
         setRunningAction(actionKey);
         try {
             const data = await requestWorkflow<WorkflowSnapshot>("/api/original-workflow", {
@@ -263,6 +312,7 @@ export default function OriginalWorkflowPage() {
                 rootPath,
                 stage: options?.stage,
             });
+            if (latestSnapshotRequestKeyRef.current !== requestKey) return data;
             setSnapshot(data);
             if (action === "validate" || action === "export-copy-only" || action === "start-stage" || action === "cancel-latest-job") setActiveTab("quality");
             if (isFailedCommand(data.commandResult)) message.error(failedActionLabel(action, options?.stage, data.commandResult));
@@ -293,7 +343,7 @@ export default function OriginalWorkflowPage() {
             sourceEpisodeId,
             sourceProjectId,
         });
-        if (!input.userPrompt.trim()) {
+        if (!input.userPrompt?.trim()) {
             message.warning("缺少可提交给云端 Agent 的阶段输入");
             return;
         }
@@ -371,15 +421,15 @@ export default function OriginalWorkflowPage() {
             if (!options?.quietMissing) message.warning("没有找到 Copy-only 提示词，请先完成 Stage 3 并导出 Copy-only");
             return 0;
         }
-        const count = upsertImportedPackages(parsed.map((item) => buildImportedVideoPackage({ ...item, references })));
+        const count = upsertImportedPackages(parsed.map((item) => buildImportedVideoPackage({ ...item, references, sourceProjectId })));
         message.success(`已同步 ${count} 条视频生产包`);
-        if (navigate) router.push(videoHref(episode, projectSlug));
+        if (navigate) router.push(videoHref(episode, { projectSlug, sourceEpisodeId, sourceProjectId }));
         return count;
     };
 
     const importCopyOnlyToVideo = () => {
         if (copyOnlySyncState.mode === "needs-stage3-validation") {
-            message.warning(copyOnlySyncState.notice);
+            message.warning(copyOnlySyncNotice);
             setActiveTab("quality");
             return;
         }
@@ -387,7 +437,7 @@ export default function OriginalWorkflowPage() {
     };
 
     const checkEnterpriseVideoApi = async () => {
-        if (isPublicSettingsLoading) {
+        if (isPublicSettingsPending) {
             message.info("正在读取企业视频配置，请稍后再试");
             return;
         }
@@ -417,17 +467,17 @@ export default function OriginalWorkflowPage() {
 
     const exportCopyOnlyToVideo = async () => {
         if (copyOnlySyncState.mode === "needs-stage3-validation") {
-            message.warning(copyOnlySyncState.notice);
+            message.warning(copyOnlySyncNotice);
             setActiveTab("quality");
             return;
         }
         if (copyOnlySyncState.mode === "blocked") {
-            message.warning(copyOnlySyncState.notice);
+            message.warning(copyOnlySyncNotice);
             setActiveTab("stage3");
             return;
         }
         if (copyOnlySyncState.mode === "sync-existing") {
-            message.info(copyOnlySyncState.notice);
+            message.info(copyOnlySyncNotice);
             syncCopyOnlyToVideo(snapshot);
             return;
         }
@@ -437,7 +487,7 @@ export default function OriginalWorkflowPage() {
         const count = syncCopyOnlyToVideo(data, { navigate: !failed, quietMissing: failed });
         if (failed && count > 0) {
             message.warning("导出脚本失败，但已使用现有 Copy-only 同步到视频生产包");
-            router.push(videoHref(episode, projectSlug));
+            router.push(videoHref(episode, { projectSlug, sourceEpisodeId, sourceProjectId }));
         }
     };
 
@@ -474,31 +524,36 @@ export default function OriginalWorkflowPage() {
             <div className="mx-auto flex h-full w-full max-w-[1540px] flex-col gap-4 px-5 py-4 xl:px-8">
                 <header className="shrink-0">
                     <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-normal text-[var(--studio-accent)]">
-                            <Wand2 className="size-4" />
-                            Seedance Video Workflow
-                        </div>
-                        <h1 className="mt-1 text-3xl font-semibold tracking-normal text-[var(--studio-text-primary)]">视频工作流控制台</h1>
-                        <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--studio-text-secondary)]">连接本地三阶段目录，保留 markdown 文件、格式锁、质量门和 Copy-only 导出。</p>
-                        {sourceScopeLabel ? (
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--studio-text-muted)]">
-                                <Tag color="blue">来源项目</Tag>
-                                <span className="min-w-0 break-words">{sourceScopeLabel}</span>
+                        <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold tracking-normal text-[var(--studio-accent)]">
+                                <Wand2 className="size-4" />
+                                Seedance 视频工作流
                             </div>
-                        ) : null}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void refresh()}>
-                            刷新
-                        </Button>
-                        <Button danger icon={<Square className="size-4" />} disabled={currentReport?.jobStatus !== "running"} loading={runningAction === "cancel-latest-job-"} onClick={() => void runAction("cancel-latest-job")}>
-                            停止 Runner
-                        </Button>
-                        <Button type="primary" icon={<Save className="size-4" />} disabled={!editable || !currentFile} loading={runningAction.startsWith("save")} onClick={saveCurrentFile}>
-                            保存当前稿
-                        </Button>
-                    </div>
+                            <h1 className="mt-1 text-3xl font-semibold tracking-normal text-[var(--studio-text-primary)]">视频工作流控制台</h1>
+                            <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--studio-text-secondary)]">连接本地三阶段目录，保留 markdown 文件、格式锁、质量门和 Copy-only 导出。</p>
+                            {sourceScopeLabel ? (
+                                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--studio-text-muted)]">
+                                    <Tag color="blue">来源项目</Tag>
+                                    <span className="min-w-0 break-words">{sourceScopeLabel}</span>
+                                </div>
+                            ) : null}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {sourceReturnHref ? (
+                                <Button icon={<ArrowLeft className="size-4" />} onClick={() => router.push(sourceReturnHref)}>
+                                    {sourceReturnLabel}
+                                </Button>
+                            ) : null}
+                            <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void refresh()}>
+                                刷新
+                            </Button>
+                            <Button danger icon={<Square className="size-4" />} disabled={currentReport?.jobStatus !== "running"} loading={runningAction === "cancel-latest-job-"} onClick={() => void runAction("cancel-latest-job")}>
+                                停止 Runner
+                            </Button>
+                            <Button type="primary" icon={<Save className="size-4" />} disabled={!editable || !currentFile} loading={runningAction.startsWith("save")} onClick={saveCurrentFile}>
+                                保存当前稿
+                            </Button>
+                        </div>
                     </div>
                 </header>
 
@@ -515,25 +570,37 @@ export default function OriginalWorkflowPage() {
                                     <LabeledInput label="项目目录" value={projectSlug} onChange={setProjectSlug} />
                                     <LabeledInput label="集数" value={episode} onChange={setEpisode} />
                                 </div>
-                                {sourceScopeLabel ? <div className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2 text-xs leading-5 text-[var(--studio-text-secondary)]">当前绑定：{sourceScopeLabel}</div> : null}
+                                {sourceScopeLabel ? (
+                                    <div className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2 text-xs leading-5 text-[var(--studio-text-secondary)]">当前绑定：{sourceScopeLabel}</div>
+                                ) : null}
                                 {snapshot?.episodes.length ? <div className="truncate text-xs text-[var(--studio-text-muted)]">已有集数：{snapshot.episodes.join(" / ")}</div> : null}
                             </div>
                             <div className="mt-4 flex items-center justify-between rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2 text-sm">
                                 <span className="text-[var(--studio-text-secondary)]">目录状态</span>
-                                <Tag color={snapshot?.rootExists ? "success" : "error"}>{snapshot?.rootExists ? "已连接" : "未找到"}</Tag>
+                                <Tag color={isWorkflowReading ? "processing" : snapshot?.rootExists ? "success" : "error"}>{isWorkflowReading ? "读取中" : snapshot?.rootExists ? "已连接" : "未找到"}</Tag>
                             </div>
                         </div>
 
-                        <WorkflowNextStepCard loading={loading || runningAction !== ""} onClick={runNextStep} step={nextStep} />
+                        <WorkflowNextStepCard loading={isWorkflowReading || loading || runningAction !== ""} onClick={isWorkflowReading ? () => void refresh() : runNextStep} step={visibleNextStep} />
 
-                        <WorkflowChainHealthCard
-                            health={chainHealth}
-                            onOpenConfig={() => router.push("/admin/settings?focus=enterprise-video")}
-                            onOpenVideo={() => router.push(videoHref(episode, projectSlug))}
-                            onPreflight={() => void checkEnterpriseVideoApi()}
-                            onSync={() => void exportCopyOnlyToVideo()}
-                            preflightLoading={isEnterprisePreflightChecking}
-                        />
+                        {isWorkflowReading ? (
+                            <div className="studio-panel p-4">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-[var(--studio-text-primary)]">
+                                    <RefreshCw className="size-4 text-[var(--studio-accent)]" />
+                                    链路自检
+                                </div>
+                                <p className="mt-2 text-xs leading-5 text-[var(--studio-text-muted)]">正在读取当前项目的剧本、阶段文件、质量门和视频配置。</p>
+                            </div>
+                        ) : (
+                            <WorkflowChainHealthCard
+                                health={chainHealth}
+                                onOpenConfig={() => router.push("/admin/settings?focus=enterprise-video")}
+                                onOpenVideo={() => router.push(videoHref(episode, { projectSlug, sourceEpisodeId, sourceProjectId }))}
+                                onPreflight={() => void checkEnterpriseVideoApi()}
+                                onSync={() => void exportCopyOnlyToVideo()}
+                                preflightLoading={isEnterprisePreflightChecking}
+                            />
+                        )}
 
                         <WorkflowDisclosure icon={<Wand2 className="size-4 text-[var(--studio-accent)]" />} title="云端 Agent Run API">
                             <div className="p-4">
@@ -541,9 +608,7 @@ export default function OriginalWorkflowPage() {
                                 <div className="mt-4 grid gap-3">
                                     <LabeledInput label="文本模型偏好" value={codexModel} onChange={setCodexModel} placeholder="留空使用后台默认文本模型" />
                                     {codexApiBaseUrl || codexApiKey ? (
-                                        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">
-                                            旧版浏览器内 Agent API Key 已不再作为云端主链路使用，请迁移到后台系统设置的私有模型渠道。
-                                        </div>
+                                        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">旧版浏览器内 Agent API Key 已不再作为云端主链路使用，请迁移到后台系统设置的私有模型渠道。</div>
                                     ) : null}
                                 </div>
                             </div>
@@ -583,16 +648,17 @@ export default function OriginalWorkflowPage() {
                                 <CommandButton label="校验 Stage 1" icon={<Play className="size-4" />} loading={runningAction === "validate-stage1"} onClick={() => void runAction("validate", { stage: "stage1" })} />
                                 <CommandButton label="校验 Stage 2" icon={<Play className="size-4" />} loading={runningAction === "validate-stage2"} onClick={() => void runAction("validate", { stage: "stage2" })} />
                                 <CommandButton label="校验 Stage 3" icon={<Play className="size-4" />} loading={runningAction === "validate-stage3"} onClick={() => void runAction("validate", { stage: "stage3" })} />
-                                {copyOnlySyncState.notice ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">{copyOnlySyncState.notice.replace("{episode}", episode)}</div> : null}
+                                {copyOnlySyncNotice ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">{copyOnlySyncNotice}</div> : null}
                                 <CommandButton disabled={copyOnlySyncState.disabled} label={copyOnlySyncState.label} icon={<Download className="size-4" />} loading={runningAction === "export-copy-only-"} onClick={() => void exportCopyOnlyToVideo()} />
                             </div>
                         </WorkflowDisclosure>
 
-                        <WorkflowDisclosure icon={<PackagePlus className="size-4 text-[var(--studio-accent)]" />} title="导入到工具">
+                        <WorkflowDisclosure defaultOpen icon={<PackagePlus className="size-4 text-[var(--studio-accent)]" />} title="导入到工具">
                             <div className="grid gap-2 p-4">
                                 {snapshot?.validations?.stage2?.state !== "passed" ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">{validationRequiredNotice("stage2")}</div> : null}
                                 <CommandButton disabled={snapshot?.validations?.stage2?.state !== "passed"} label="资产提示词 → 我的素材待生图卡" icon={<PackagePlus className="size-4" />} loading={false} onClick={importAssetPromptCards} />
-                                <CommandButton label="Copy-only → 视频生产包" icon={<Video className="size-4" />} loading={false} onClick={importCopyOnlyToVideo} />
+                                {copyOnlyImportNotice ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">{copyOnlyImportNotice}</div> : null}
+                                <CommandButton disabled={!canImportCopyOnly} label="Copy-only → 视频生产包" icon={<Video className="size-4" />} loading={false} onClick={importCopyOnlyToVideo} />
                             </div>
                         </WorkflowDisclosure>
                     </aside>
@@ -613,7 +679,7 @@ export default function OriginalWorkflowPage() {
                             </div>
                         </div>
 
-                        {loading && !snapshot ? (
+                        {isWorkflowReading ? (
                             <div className="grid flex-1 place-items-center">
                                 <Spin />
                             </div>
@@ -677,18 +743,26 @@ export default function OriginalWorkflowPage() {
     );
 }
 
+function workflowSnapshotKey(rootPath: string, projectSlug: string, episode: string) {
+    return `${rootPath}\n${projectSlug}\n${episode}`;
+}
+
 function LabeledInput({ label, onChange, password, placeholder, value }: { label: string; onChange: (value: string) => void; password?: boolean; placeholder?: string; value: string }) {
     return (
         <label className="grid gap-1.5">
             <span className="text-xs text-[var(--studio-text-muted)]">{label}</span>
-            {password ? <Input.Password visibilityToggle={false} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /> : <Input value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />}
+            {password ? (
+                <Input.Password visibilityToggle={false} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+            ) : (
+                <Input value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+            )}
         </label>
     );
 }
 
-function WorkflowDisclosure({ children, icon, title }: { children: ReactNode; icon: ReactNode; title: string }) {
+function WorkflowDisclosure({ children, defaultOpen, icon, title }: { children: ReactNode; defaultOpen?: boolean; icon: ReactNode; title: string }) {
     return (
-        <details className="studio-panel group overflow-hidden">
+        <details className="studio-panel group overflow-hidden" open={defaultOpen}>
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-[var(--studio-text-primary)] [&::-webkit-details-marker]:hidden">
                 <span className="flex min-w-0 items-center gap-2">
                     {icon}
@@ -826,9 +900,7 @@ function QualityPanel({ result }: { result?: CommandResult }) {
                     </div>
                 </div>
             ) : result.launchStatus === "guard_checked" ? (
-                <div className="rounded-lg border border-amber-500/60 bg-amber-500/10 p-3 text-sm leading-6 text-[var(--studio-text-primary)]">
-                    只完成了启动护栏检查，没有启动后台 Runner。通常是内容执行被锁定，或本机 runner 未接入。
-                </div>
+                <div className="rounded-lg border border-amber-500/60 bg-amber-500/10 p-3 text-sm leading-6 text-[var(--studio-text-primary)]">只完成了启动护栏检查，没有启动后台 Runner。通常是内容执行被锁定，或本机 runner 未接入。</div>
             ) : null}
             {result.launchInstruction ? (
                 <div className="rounded-lg border border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] p-3">
@@ -932,8 +1004,14 @@ function buildCloudStageRunInput(
     },
 ): CreateRemoteAgentRunInput {
     const script = filesByKey.get("script")?.content || "";
-    const stage1 = ["stage1A", "stage1B", "stage1C", "stage1D"].map((key) => filePromptBlock(filesByKey.get(key))).filter(Boolean).join("\n\n");
-    const stage2 = ["characters", "scenes"].map((key) => filePromptBlock(filesByKey.get(key))).filter(Boolean).join("\n\n");
+    const stage1 = ["stage1A", "stage1B", "stage1C", "stage1D"]
+        .map((key) => filePromptBlock(filesByKey.get(key)))
+        .filter(Boolean)
+        .join("\n\n");
+    const stage2 = ["characters", "scenes"]
+        .map((key) => filePromptBlock(filesByKey.get(key)))
+        .filter(Boolean)
+        .join("\n\n");
     const systemPrompt = cloudStageSystemPrompt(stage);
     const userPrompt = cloudStageUserPrompt(stage, { episode, projectSlug, script, stage1, stage2 });
     const preferredModel = agentConfig?.modelPreference?.trim();
@@ -1010,9 +1088,11 @@ function isFailedCommand(result?: CommandResult) {
     return Boolean(result?.exitCode && result.exitCode !== "0");
 }
 
-function videoHref(episode: string, projectSlug?: string) {
+function videoHref(episode: string, options: { projectSlug?: string; sourceEpisodeId?: string; sourceProjectId?: string } = {}) {
     const params = new URLSearchParams({ episode });
-    if (projectSlug) params.set("projectSlug", projectSlug);
+    if (options.projectSlug) params.set("projectSlug", options.projectSlug);
+    if (options.sourceProjectId) params.set("sourceProjectId", options.sourceProjectId);
+    if (options.sourceEpisodeId) params.set("sourceEpisodeId", options.sourceEpisodeId);
     return `/video?${params.toString()}`;
 }
 

@@ -2,7 +2,7 @@
 
 import { EyeOutlined, ReloadOutlined, RollbackOutlined, SearchOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { App, Button, Card, Col, DatePicker, Descriptions, Drawer, Form, Input, Row, Select, Space, Table, Tag, Typography } from "antd";
+import { App, Button, Card, Col, DatePicker, Descriptions, Drawer, Form, Input, Row, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 
@@ -119,9 +119,15 @@ export default function AdminAITasksPage() {
             align: "right",
             render: (_, item) => (
                 <Space size={4}>
-                    <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => openDetail(item.id)} />
-                    <Button type="text" size="small" icon={<ReloadOutlined />} disabled={!canRefresh(item)} onClick={() => void refreshTask(item.id)} />
-                    <Button type="text" size="small" danger icon={<RollbackOutlined />} disabled={!canRefund(item)} onClick={() => confirmRefund(item)} />
+                    <Tooltip title="查看详情">
+                        <Button aria-label="查看详情" type="text" size="small" icon={<EyeOutlined />} onClick={() => openDetail(item.id)} />
+                    </Tooltip>
+                    <Tooltip title="刷新状态">
+                        <Button aria-label="刷新状态" type="text" size="small" icon={<ReloadOutlined />} disabled={!canRefresh(item)} onClick={() => confirmRefresh(item)} />
+                    </Tooltip>
+                    <Tooltip title="手动返还">
+                        <Button aria-label="手动返还" type="text" size="small" danger icon={<RollbackOutlined />} disabled={!canRefund(item)} onClick={() => confirmRefund(item)} />
+                    </Tooltip>
                 </Space>
             ),
         },
@@ -142,6 +148,16 @@ export default function AdminAITasksPage() {
             okText: "返还",
             cancelText: "取消",
             onOk: () => refundTask(task.id),
+        });
+    }
+
+    function confirmRefresh(task: AdminAITask) {
+        modal.confirm({
+            title: "刷新任务状态？",
+            content: `将向上游同步任务 ${task.id} 的最新状态；如果上游已失败或取消，可能同步失败原因并触发失败返还。不会创建新的生成任务。`,
+            okText: "确认刷新",
+            cancelText: "取消",
+            onOk: () => refreshTask(task.id),
         });
     }
 
@@ -287,7 +303,7 @@ export default function AdminAITasksPage() {
                             </Descriptions.Item>
                         </Descriptions>
                         <Space>
-                            <Button icon={<ReloadOutlined />} disabled={!canRefresh(detail.task)} onClick={() => void refreshTask(detail.task.id)}>
+                            <Button icon={<ReloadOutlined />} disabled={!canRefresh(detail.task)} onClick={() => confirmRefresh(detail.task)}>
                                 刷新状态
                             </Button>
                             <Button danger icon={<RollbackOutlined />} disabled={!canRefund(detail.task)} onClick={() => confirmRefund(detail.task)}>

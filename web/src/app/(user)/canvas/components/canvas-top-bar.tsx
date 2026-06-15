@@ -76,8 +76,8 @@ export function CanvasTopBar({
 
     return (
         <>
-            <div className="pointer-events-none absolute left-0 right-0 top-0 z-50 flex h-16 items-center justify-between px-4">
-                <div className="pointer-events-auto flex min-w-0 items-center gap-3">
+            <div className="pointer-events-none absolute left-0 right-0 top-0 z-50 grid h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3">
+                <div className="pointer-events-auto flex min-w-0 items-center gap-2 overflow-hidden">
                     <Dropdown
                         trigger={["click"]}
                         menu={{
@@ -89,7 +89,11 @@ export function CanvasTopBar({
                                 { key: "save", icon: <Save className="size-4" />, label: "保存画布", onClick: onSaveProject },
                                 { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
                                 { type: "divider" },
+                                { key: "generate-image", icon: <ImagePlus className="size-4" />, label: "生成图片", onClick: onGenerateImage },
                                 { key: "import", icon: <Upload className="size-4" />, label: "导入图片", onClick: onImportImage },
+                                { key: "assets", icon: <FolderOpen className="size-4" />, label: "打开素材", onClick: onOpenAssets },
+                                { key: "organize", icon: <LayoutGrid className="size-4" />, label: "整理画布", onClick: onOrganizeCanvas },
+                                { key: "settings", icon: <Settings className="size-4" />, label: "设置", onClick: onOpenSettings },
                                 { type: "divider" },
                                 { key: "undo", disabled: !canUndo, icon: <Undo2 className="size-4" />, label: <MenuLabel text="撤销" shortcut="⌘ Z" />, onClick: onUndo },
                                 { key: "redo", disabled: !canRedo, icon: <Redo2 className="size-4" />, label: <MenuLabel text="重做" shortcut="⌘ ⇧ Z / ⌘ Y" />, onClick: onRedo },
@@ -107,16 +111,16 @@ export function CanvasTopBar({
                         </button>
                     </Dropdown>
 
-                    <div ref={titleRef} className="flex min-w-0 items-center gap-2">
+                    <div ref={titleRef} className="flex min-w-0 items-center gap-1.5 overflow-hidden">
                         <button
                             type="button"
-                            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 dark:hover:bg-white/10"
+                            className="grid size-8 shrink-0 place-items-center rounded-lg transition hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 dark:hover:bg-white/10"
                             style={{ color: theme.node.muted }}
                             onClick={onReturnParent}
+                            aria-label={returnLabel}
                             title={returnLabel}
                         >
-                            <ArrowLeft className="size-3.5" />
-                            {returnLabel}
+                            <ArrowLeft className="size-4" />
                         </button>
                         {isTitleEditing ? (
                             <input
@@ -128,13 +132,14 @@ export function CanvasTopBar({
                                     if (event.key === "Enter") onFinishTitleEditing();
                                     if (event.key === "Escape") onCancelTitleEditing();
                                 }}
-                                className="max-w-[280px] bg-transparent p-0 text-left text-lg font-semibold tracking-normal outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                                aria-label="画布名称"
+                                className="max-w-[320px] bg-transparent p-0 text-left text-base font-semibold tracking-normal outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
                                 style={{ color: theme.node.text }}
                             />
                         ) : (
                             <button
                                 type="button"
-                                className="max-w-[280px] truncate border-b border-dashed border-transparent text-left text-lg font-semibold tracking-normal transition hover:border-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                                className="min-w-0 max-w-[180px] truncate border-b border-dashed border-transparent text-left text-base font-semibold tracking-normal transition hover:border-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 sm:max-w-[320px]"
                                 onDoubleClick={onStartTitleEditing}
                                 title="双击修改画布名称"
                             >
@@ -143,20 +148,20 @@ export function CanvasTopBar({
                         )}
                         <button
                             type="button"
-                            className="max-w-[180px] truncate rounded-full px-2.5 py-1 text-xs transition hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 dark:hover:bg-white/10"
+                            className="max-w-[96px] truncate rounded-md px-2 py-1 text-xs transition hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 dark:hover:bg-white/10 sm:max-w-[150px]"
                             style={{ color: hasEpisode ? theme.node.text : theme.node.muted, background: hasEpisode ? theme.toolbar.panel : "transparent" }}
                             onClick={onOpenEpisodeScript}
                             title={hasEpisode ? "打开本集剧本" : "打开剧本工作台"}
                         >
                             {episodeLabel}
                         </button>
-                        <span className="max-w-[140px] truncate rounded-full px-2 py-1 text-xs" style={{ color: theme.node.muted, background: theme.toolbar.panel }}>
+                        <span className="hidden max-w-[120px] truncate rounded-md px-2 py-1 text-xs sm:inline-block" style={{ color: theme.node.muted, background: theme.toolbar.panel }}>
                             {episodeProductionLabel}
                         </span>
                     </div>
                 </div>
 
-                <div className="pointer-events-auto flex items-center gap-1.5">
+                <div className="pointer-events-auto hidden shrink-0 items-center gap-1 md:flex">
                     <TopAction icon={<ImagePlus className="size-4" />} label="生成图片" onClick={onGenerateImage} />
                     <TopAction icon={<Upload className="size-4" />} label="导入" onClick={onImportImage} />
                     <TopAction icon={<FolderOpen className="size-4" />} label="素材" onClick={onOpenAssets} />
@@ -188,8 +193,8 @@ export function CanvasTopBar({
 function TopAction({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
-        <Button type="text" className="!h-10 !rounded-xl !px-3 !font-medium" style={{ color: theme.node.text }} icon={icon} onClick={onClick}>
-            {label}
+        <Button type="text" className="!h-8 !rounded-lg !px-2 !text-sm !font-medium opacity-85 hover:!opacity-100 sm:!px-2.5" style={{ color: theme.node.text }} icon={icon} onClick={onClick} aria-label={label} title={label}>
+            <span className="hidden sm:inline">{label}</span>
         </Button>
     );
 }

@@ -24,7 +24,7 @@ export function OutdatedReferencesPanel({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <div className="text-sm font-medium text-stone-900 dark:text-stone-100">过期引用 {usages.length} 处</div>
-                    <div className="mt-1 text-xs text-stone-500 dark:text-stone-400">只会更新画布节点、分镜条目或设定库绑定中的版本引用，不修改素材本体。</div>
+                    <div className="mt-1 text-xs text-stone-500 dark:text-stone-400">只会更新画布、分镜、镜头组或设定库里的版本引用，不修改素材本体。</div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                     <Button size="middle" disabled={!usages.length || selectedIds.size === usages.length} onClick={onSelectAll}>
@@ -66,6 +66,8 @@ export function OutdatedReferencesPanel({
 function outdatedUsageKindLabel(usage: OutdatedAssetVersionUsage) {
     if (usage.kind === "canvas-node") return "画布节点";
     if (usage.kind === "storyboard-shot") return "分镜条目";
+    if (usage.kind === "storyboard-table-shot") return "分镜头表";
+    if (usage.kind === "shot-group") return "镜头组";
     if (usage.objectType === "character") return "设定库角色";
     if (usage.objectType === "scene") return "设定库场景";
     if (usage.objectType === "prop") return "设定库道具";
@@ -74,5 +76,6 @@ function outdatedUsageKindLabel(usage: OutdatedAssetVersionUsage) {
 
 function outdatedUsageRoleLabel(usage: OutdatedAssetVersionUsage) {
     if (usage.kind === "canvas-node") return usage.role ? `${usage.role} 节点` : "";
+    if (usage.kind === "storyboard-table-shot" || usage.kind === "shot-group") return usage.role || usage.objectType || "";
     return usage.role || usage.objectType || "";
 }

@@ -6,7 +6,6 @@ import { Input } from "antd";
 import type { CanvasProject } from "../../../../../../canvas/stores/use-canvas-store";
 import type { ScriptEpisode, ScriptScene, StructuredEpisodeScript } from "../../../../../../canvas/utils/script-management";
 import type { StoryboardTableShot } from "../../../../../../canvas/utils/storyboard-management";
-import { videoWorkflowHref } from "../../../../../../original-workflow/video-workflow-routing";
 import { type AgentWorkflowMappingPreview, type AgentWorkflowRunRecord, type AgentWorkflowSceneRunState, type AgentWorkflowStageOutput } from "../../../../../agent-runner-types";
 import { summarizeWorkflowStageDisplayState } from "../../../../../agent-runner-workflow-display";
 import { EpisodeCanvasHandoffPage } from "./episode-canvas-handoff-page";
@@ -42,6 +41,7 @@ export function EpisodeProductionShell({
     onModuleChange,
     onOpenCanvas,
     onOpenDetail,
+    onOpenOriginalWorkflow,
     onRunFullWorkflow,
     onApproveStageReview,
     onApproveStoryboardScene,
@@ -56,6 +56,7 @@ export function EpisodeProductionShell({
     onSummarizeStoryboardScenes,
     project,
     previews,
+    openingOriginalWorkflow = false,
     runningSceneKeys,
     runningStageIds,
     runningStageDrafts,
@@ -88,6 +89,7 @@ export function EpisodeProductionShell({
     onModuleChange: (module: EpisodeModuleKey) => void;
     onOpenCanvas: () => void;
     onOpenDetail: (record: EpisodeDetailRecord) => void;
+    onOpenOriginalWorkflow: () => void;
     onRunFullWorkflow: () => void;
     onApproveStageReview: (stageId: string, note: string) => void;
     onApproveStoryboardScene: () => void;
@@ -102,6 +104,7 @@ export function EpisodeProductionShell({
     onSummarizeStoryboardScenes: () => void;
     project: { id: string; title: string };
     previews: AgentWorkflowMappingPreview[];
+    openingOriginalWorkflow?: boolean;
     runningSceneKeys: Record<string, boolean>;
     runningStageIds: Record<string, boolean>;
     runningStageDrafts: Record<string, string>;
@@ -295,12 +298,14 @@ export function EpisodeProductionShell({
                 nextActionText={legacyWorkbenchVisible ? nextActionText : "本集生产台内置四阶段流程已暂时收起，请在独立视频工作流控制台运行导演 / 资产 / 分镜。"}
                 onBackProject={onBackProject}
                 onOpenCanvas={onOpenCanvas}
+                onOpenOriginalWorkflow={onOpenOriginalWorkflow}
                 onRunFullWorkflow={onRunFullWorkflow}
+                openingOriginalWorkflow={openingOriginalWorkflow}
                 project={project}
             />
             <div className="px-5 py-5 xl:px-6">
                 {!legacyWorkbenchVisible ? (
-                    <OriginalWorkflowReplacementPanel episode={episode} projectId={project.id} />
+                    <OriginalWorkflowReplacementPanel opening={openingOriginalWorkflow} onOpen={onOpenOriginalWorkflow} />
                 ) : topNotice ? (
                     <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 shadow-[0_12px_44px_rgba(0,0,0,0.18)] backdrop-blur-xl ${flowNoticeClass(topNotice.tone || "slate")}`}>
                         <div className="min-w-0">
@@ -386,16 +391,18 @@ export function EpisodeProductionShell({
     );
 }
 
-function OriginalWorkflowReplacementPanel({ episode, projectId }: { episode: ScriptEpisode; projectId: string }) {
+function OriginalWorkflowReplacementPanel({ opening, onOpen }: { opening: boolean; onOpen: () => void }) {
     return (
         <section className="rounded-2xl border border-cyan-400/25 bg-cyan-400/[0.055] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.22)]">
             <div className="max-w-3xl">
                 <div className="text-sm font-semibold text-cyan-100">本集生产台工作流已暂时收起</div>
-                <p className="mt-2 text-sm leading-6 text-slate-300">导演分析、资产提示词、Seedance 提示词和 Copy-only 拆分先统一交给独立“视频工作流”控制台处理。这里暂时只保留项目入口和关联画布入口，避免两套流程同时推进造成混乱。</p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                    导演分析、资产提示词、Seedance 提示词和 Copy-only 拆分先统一交给独立“视频工作流”控制台处理。资产图先行入口已迁移到 Stage 2，质量门通过后可在“导入到工具”里写入“我的素材待生图卡”。
+                </p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                    <a className="inline-flex h-9 items-center justify-center rounded-xl bg-cyan-400 px-3 text-sm font-semibold text-slate-950 hover:bg-cyan-300" href={videoWorkflowHref(episode.order, projectId, episode.id)}>
-                        打开视频工作流
-                    </a>
+                    <button type="button" className="inline-flex h-9 items-center justify-center rounded-xl bg-cyan-400 px-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60" disabled={opening} onClick={onOpen}>
+                        {opening ? "正在同步..." : "打开视频工作流"}
+                    </button>
                 </div>
             </div>
         </section>

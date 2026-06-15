@@ -97,5 +97,6 @@ test("summarizes and serializes project preset", () => {
     const preset = { resolution: "720", ratio: "9:16", fps: "24", defaultDuration: "6" };
 
     assert.equal(canvasProjectPresetSummary(preset), "720p · 9:16 · 24fps · 6s");
+    assert.equal(canvasProjectPresetSummary({ ...preset, resolution: "720p" }), "720p · 9:16 · 24fps · 6s");
     assert.deepEqual(canvasProjectPresetConfig(preset), preset);
 });

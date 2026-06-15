@@ -27,6 +27,10 @@ export function assetGenerationRecords(asset: Asset | null | undefined): AssetGe
     const metadata = asset?.metadata;
     if (!metadata) return [];
     const records = [...readGenerationList(metadata.generations), ...readGenerationList(metadata.generation)];
+    if (!records.length) {
+        const legacyVideoWorkflowGeneration = buildLegacyVideoWorkflowGeneration(asset);
+        if (legacyVideoWorkflowGeneration) records.push(legacyVideoWorkflowGeneration);
+    }
     return records.filter((record, index) => records.findIndex((item) => JSON.stringify(item) === JSON.stringify(record)) === index);
 }
 
@@ -63,6 +67,8 @@ export function assetGenerationLineage(generation: AssetGenerationRecord | undef
     const projectId = readString(generation.projectId);
     const storyboardGroupId = readString(generation.storyboardGroupId);
     const storyboardShotId = readString(generation.storyboardShotId);
+    const sourceEpisode = readString(generation.sourceEpisode);
+    const productionPackageId = readString(generation.productionPackageId);
     const nodeId = readString(generation.nodeId);
     const taskId = readString(generation.taskId);
     const aiTaskId = readString(generation.aiTaskId);
@@ -71,6 +77,8 @@ export function assetGenerationLineage(generation: AssetGenerationRecord | undef
     return [
         source ? { key: "source", label: "来源", value: assetGenerationSourceLabel(source) } : null,
         projectTitle || projectId ? { key: "project", label: "项目", value: [projectTitle, projectId].filter(Boolean).join(" · ") } : null,
+        sourceEpisode ? { key: "sourceEpisode", label: "集数", value: sourceEpisode } : null,
+        productionPackageId ? { key: "productionPackageId", label: "生产包", value: productionPackageId } : null,
         storyboardGroupId ? { key: "storyboardGroupId", label: "分镜组", value: storyboardGroupId } : null,
         storyboardShotId ? { key: "storyboardShotId", label: "分镜", value: storyboardShotId } : null,
         nodeId ? { key: "nodeId", label: "节点", value: nodeId } : null,
@@ -116,7 +124,7 @@ export function assetGenerationActionLabel(action: string) {
 export function assetGenerationSourceLabel(source: string) {
     if (source === "canvas") return "画布";
     if (source === "image-page") return "生图工作台";
-    if (source === "video-page") return "视频创作台";
+    if (source === "video-page") return "视频生产台";
     if (source === "asset-library") return "素材库";
     return source || "未知";
 }
@@ -163,6 +171,8 @@ export function assetGenerationSearchText(asset: Asset) {
             generation.source,
             generation.projectId,
             generation.projectTitle,
+            generation.sourceEpisode,
+            generation.productionPackageId,
             generation.nodeId,
             generation.storyboardGroupId,
             generation.storyboardShotId,
@@ -192,6 +202,36 @@ export function readRecord(value: unknown): AssetGenerationRecord | null {
     return value && typeof value === "object" && !Array.isArray(value) ? (value as AssetGenerationRecord) : null;
 }
 
+function buildLegacyVideoWorkflowGeneration(asset: Asset): AssetGenerationRecord | null {
+    if (asset.kind !== "video") return null;
+    const metadata = asset.metadata;
+    const videoGeneration = readRecord(metadata?.videoGeneration);
+    const aiTask = readRecord(metadata?.aiTask);
+    const originalWorkflow = readRecord(metadata?.originalWorkflow);
+    if (!videoGeneration && !aiTask && !originalWorkflow) return null;
+    return {
+        source: "video-page",
+        actionType: "generate",
+        prompt: asset.note || "",
+        effectivePrompt: asset.note || "",
+        model: readString(videoGeneration?.model),
+        provider: readString(videoGeneration?.protocol),
+        taskId: readString(aiTask?.upstreamTaskId) || readString(aiTask?.taskId),
+        upstreamTaskId: readString(aiTask?.upstreamTaskId) || readString(aiTask?.taskId),
+        aiTaskId: readString(aiTask?.aiTaskId),
+        aiTaskStatus: readString(aiTask?.aiTaskStatus),
+        aiTaskCredits: readNumber(aiTask?.aiTaskCredits),
+        creditLogId: readString(aiTask?.creditLogId),
+        creditsRefunded: readNumber(aiTask?.creditsRefunded),
+        finishedAt: readString(aiTask?.finishedAt),
+        refundedAt: readString(aiTask?.refundedAt),
+        sourceEpisode: readString(originalWorkflow?.sourceEpisode),
+        productionPackageId: readString(originalWorkflow?.packageId),
+        config: videoGeneration || {},
+        createdAt: asset.createdAt || asset.updatedAt,
+    };
+}
+
 function readGenerationList(value: unknown): AssetGenerationRecord[] {
     if (Array.isArray(value))
         return value.flatMap((item): AssetGenerationRecord[] => {
@@ -200,6 +240,10 @@ function readGenerationList(value: unknown): AssetGenerationRecord[] {
         });
     const record = readRecord(value);
     return record ? [record] : [];
+}
+
+function readNumber(value: unknown) {
+    return typeof value === "number" ? value : undefined;
 }
 
 function mapOptions(values: Map<string, string>) {

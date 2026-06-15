@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { App, Button, Empty, Progress, Tag } from "antd";
+import { App, Button, Empty, Progress, Spin, Tag } from "antd";
 import { ArrowLeft, Clapperboard, FileText, PanelTop, Workflow } from "lucide-react";
 
 import { useCanvasStore } from "../../../../../canvas/stores/use-canvas-store";
@@ -29,7 +29,9 @@ export default function EpisodeWorkflowLandingPage() {
     const episodeId = params.episodeId;
     const [applyingPreviewIds, setApplyingPreviewIds] = useState<Record<string, boolean>>({});
     const requestedCanvasId = searchParams.get("canvasId") || "";
+    const projectHydrated = useCreativeProjectStore((state) => state.hydrated);
     const project = useCreativeProjectStore((state) => state.projects.find((item) => item.id === projectId));
+    const scriptsHydrated = useScriptStore((state) => state.hydrated);
     const episode = useScriptStore((state) => state.episodes.find((item) => item.id === episodeId && item.projectId === projectId));
     const scenes = useScriptStore((state) => state.scenes);
     const canvases = useCanvasStore((state) => state.projects);
@@ -114,6 +116,14 @@ export default function EpisodeWorkflowLandingPage() {
         });
     };
 
+    if (!projectHydrated || !scriptsHydrated) {
+        return (
+            <main className="grid h-full place-items-center bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
+                <Spin description="正在读取本地项目" />
+            </main>
+        );
+    }
+
     if (!project || !episode) {
         return (
             <main className="h-full overflow-auto bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
@@ -147,7 +157,11 @@ export default function EpisodeWorkflowLandingPage() {
                         <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-slate-500">{episode.title} 的 Agent 阶段、产物预览和画布承接状态集中在这里，减少最后落地时来回切换。</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <Button className="!border-slate-700 !bg-slate-950/50 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" icon={<ArrowLeft className="size-4" />} onClick={() => router.push(`/projects/${project.id}/episodes/${episode.id}/workbench`)}>
+                        <Button
+                            className="!border-slate-700 !bg-slate-950/50 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100"
+                            icon={<ArrowLeft className="size-4" />}
+                            onClick={() => router.push(`/projects/${project.id}/episodes/${episode.id}/workbench`)}
+                        >
                             返回生产台
                         </Button>
                         <Button type="primary" icon={<PanelTop className="size-4" />} disabled={!boundCanvas} onClick={() => boundCanvas && router.push(`/canvas/${boundCanvas.id}`)}>
@@ -168,7 +182,7 @@ export default function EpisodeWorkflowLandingPage() {
                                 </div>
                                 <p className="mt-2 text-sm leading-6 text-slate-500">{runDisplay?.summaryText || "工作流尚未开始，进入生产台后可按阶段运行 Agent。"}</p>
                             </div>
-                            <Progress type="circle" percent={progress} size={76} strokeColor="#22d3ee" trailColor="rgba(51,65,85,.8)" format={() => `${approvedStageCount}/${stages.length}`} />
+                            <Progress type="circle" percent={progress} size={76} strokeColor="#22d3ee" railColor="rgba(51,65,85,.8)" format={() => `${approvedStageCount}/${stages.length}`} />
                         </div>
                         <div className="mt-5 grid gap-3 sm:grid-cols-3">
                             <MetricCard label="阶段完成" value={`${approvedStageCount}/${stages.length}`} />
@@ -188,9 +202,42 @@ export default function EpisodeWorkflowLandingPage() {
                 </section>
 
                 <section className="grid gap-4 md:grid-cols-3">
-                    <LandingTargetCard icon={<FileText className="size-5" />} title="资产设定库" stageId="art-design" preview={productionBiblePreview} appliedPreviewItemIds={workflowAppliedPreviewItemIds} hasCanvas={Boolean(boundCanvas)} applying={Boolean(productionBiblePreview && applyingPreviewIds[productionBiblePreview.previewId])} previewGenerationReason={previewGenerationDisabledReason(artStageOutput, artDisplay)} onApply={applyPreview} onGeneratePreview={generatePreview} />
-                    <LandingTargetCard icon={<Clapperboard className="size-5" />} title="分镜头表" stageId="seedance-storyboard" preview={storyboardPreview} appliedPreviewItemIds={workflowAppliedPreviewItemIds} hasCanvas={Boolean(boundCanvas)} applying={Boolean(storyboardPreview && applyingPreviewIds[storyboardPreview.previewId])} previewGenerationReason={previewGenerationDisabledReason(storyboardStageOutput, storyboardDisplay)} onApply={applyPreview} onGeneratePreview={generatePreview} />
-                    <LandingTargetCard icon={<PanelTop className="size-5" />} title="视频配置节点" stageId="seedance-storyboard" preview={videoPreview} appliedPreviewItemIds={workflowAppliedPreviewItemIds} hasCanvas={Boolean(boundCanvas)} applying={Boolean(videoPreview && applyingPreviewIds[videoPreview.previewId])} previewGenerationReason={previewGenerationDisabledReason(storyboardStageOutput, storyboardDisplay)} onApply={applyPreview} onGeneratePreview={generatePreview} />
+                    <LandingTargetCard
+                        icon={<FileText className="size-5" />}
+                        title="资产设定库"
+                        stageId="art-design"
+                        preview={productionBiblePreview}
+                        appliedPreviewItemIds={workflowAppliedPreviewItemIds}
+                        hasCanvas={Boolean(boundCanvas)}
+                        applying={Boolean(productionBiblePreview && applyingPreviewIds[productionBiblePreview.previewId])}
+                        previewGenerationReason={previewGenerationDisabledReason(artStageOutput, artDisplay)}
+                        onApply={applyPreview}
+                        onGeneratePreview={generatePreview}
+                    />
+                    <LandingTargetCard
+                        icon={<Clapperboard className="size-5" />}
+                        title="分镜头表"
+                        stageId="seedance-storyboard"
+                        preview={storyboardPreview}
+                        appliedPreviewItemIds={workflowAppliedPreviewItemIds}
+                        hasCanvas={Boolean(boundCanvas)}
+                        applying={Boolean(storyboardPreview && applyingPreviewIds[storyboardPreview.previewId])}
+                        previewGenerationReason={previewGenerationDisabledReason(storyboardStageOutput, storyboardDisplay)}
+                        onApply={applyPreview}
+                        onGeneratePreview={generatePreview}
+                    />
+                    <LandingTargetCard
+                        icon={<PanelTop className="size-5" />}
+                        title="视频配置节点"
+                        stageId="seedance-storyboard"
+                        preview={videoPreview}
+                        appliedPreviewItemIds={workflowAppliedPreviewItemIds}
+                        hasCanvas={Boolean(boundCanvas)}
+                        applying={Boolean(videoPreview && applyingPreviewIds[videoPreview.previewId])}
+                        previewGenerationReason={previewGenerationDisabledReason(storyboardStageOutput, storyboardDisplay)}
+                        onApply={applyPreview}
+                        onGeneratePreview={generatePreview}
+                    />
                 </section>
 
                 <section className="rounded-2xl border border-slate-800/80 bg-slate-950/70">
@@ -199,7 +246,16 @@ export default function EpisodeWorkflowLandingPage() {
                     </div>
                     <div className="divide-y divide-slate-800/80">
                         {stages.map((stage, index) => (
-                            <StageRow key={stage.stageId} stage={stage} order={index + 1} display={stageDisplays[index]} output={stageOutput(workflowRun, workflowOutputs, stage.stageId)} previews={previews.filter((preview) => preview.sourceStageId === stage.stageId)} onGeneratePreview={generatePreview} onOpenWorkbench={() => router.push(`/projects/${project.id}/episodes/${episode.id}/workbench`)} />
+                            <StageRow
+                                key={stage.stageId}
+                                stage={stage}
+                                order={index + 1}
+                                display={stageDisplays[index]}
+                                output={stageOutput(workflowRun, workflowOutputs, stage.stageId)}
+                                previews={previews.filter((preview) => preview.sourceStageId === stage.stageId)}
+                                onGeneratePreview={generatePreview}
+                                onOpenWorkbench={() => router.push(`/projects/${project.id}/episodes/${episode.id}/workbench`)}
+                            />
                         ))}
                     </div>
                 </section>
@@ -271,7 +327,12 @@ function LandingTargetCard({
                         {disabledReason ? "暂不可写入" : previewActionLabel(preview.targetType)}
                     </Button>
                 ) : (
-                    <Button className="!h-9 !border-slate-700 !bg-slate-900/70 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" disabled={Boolean(previewGenerationReason)} title={previewGenerationReason} onClick={() => onGeneratePreview(stageId, title)}>
+                    <Button
+                        className="!h-9 !border-slate-700 !bg-slate-900/70 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100"
+                        disabled={Boolean(previewGenerationReason)}
+                        title={previewGenerationReason}
+                        onClick={() => onGeneratePreview(stageId, title)}
+                    >
                         {previewGenerationReason ? "待阶段产物" : "生成预览"}
                     </Button>
                 )}

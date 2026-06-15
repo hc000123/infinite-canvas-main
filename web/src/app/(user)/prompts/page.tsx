@@ -1,9 +1,9 @@
 "use client";
 
-import { FolderPlus, Plus, Search } from "lucide-react";
-import { type UIEvent, useEffect, useState } from "react";
+import { ChevronDown, ChevronUp, FolderPlus, Plus, Search } from "lucide-react";
+import { type UIEvent, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { App, Button, Empty, Form, Input, Spin, Tag } from "antd";
+import { Alert, App, Button, Empty, Form, Input, Spin, Tag } from "antd";
 
 import { PromptCard } from "@/components/prompts/prompt-card";
 import { PromptCreateDialog, type PromptCreateFormValues } from "@/components/prompts/prompt-select-dialog";
@@ -16,6 +16,17 @@ import { saveAdminPrompt } from "@/services/api/admin";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { ALL_PROMPTS_OPTION, type Prompt } from "@/services/api/prompts";
+
+const SCENARIO_FILTER_COLLAPSED_COUNT = 8;
+const TAG_FILTER_COLLAPSED_COUNT = 12;
+
+function getVisibleFilterOptions(options: string[], expanded: boolean, selectedValues: string[], collapsedCount: number) {
+    if (expanded || options.length <= collapsedCount) return options;
+    const pinnedValues = selectedValues.filter((value) => value !== ALL_PROMPTS_OPTION && options.includes(value));
+    const selectedOutside = pinnedValues.filter((value) => !options.slice(0, collapsedCount).includes(value));
+    const baseCount = Math.max(options[0] === ALL_PROMPTS_OPTION ? 1 : 0, collapsedCount - selectedOutside.length);
+    return Array.from(new Set([...options.slice(0, baseCount), ...selectedOutside]));
+}
 
 export default function PromptsPage() {
     const { message } = App.useApp();
@@ -31,6 +42,8 @@ export default function PromptsPage() {
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [createOpen, setCreateOpen] = useState(false);
     const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+    const [scenarioFiltersExpanded, setScenarioFiltersExpanded] = useState(false);
+    const [tagFiltersExpanded, setTagFiltersExpanded] = useState(false);
     const addAsset = useAssetStore((state) => state.addAsset);
     const copyText = useCopyText();
     const {
@@ -43,7 +56,17 @@ export default function PromptsPage() {
         total: totalPrompts,
     } = usePromptList({ keyword: titleKeyword, tags: selectedTags, category: selectedCategory, type: selectedType, scenario: selectedScenario, favorite: favoriteOnly });
     const typeOptions = [ALL_PROMPTS_OPTION, ...promptTypeOptions.map((item) => item.value), ...promptTypes.filter((type) => type !== ALL_PROMPTS_OPTION && !promptTypeOptions.some((item) => item.value === type))];
+    const promptSummaryText = query.isLoading ? "正在读取提示词库..." : query.isError ? "提示词读取失败，请稍后重试。" : `共 ${totalPrompts} 条提示词，按标题、标签与分类快速查找灵感。`;
+    const showPromptContent = !query.isLoading && !query.isError;
+    const listFooterText = query.isFetchingNextPage ? "加载更多提示词..." : query.hasNextPage ? "继续向下滚动加载更多" : promptItems.length > 0 ? `已显示全部 ${promptItems.length} 条提示词` : null;
     const defaultCreateCategory = () => (selectedCategory !== ALL_PROMPTS_OPTION ? selectedCategory : promptCategoryOptions.find((category) => category !== ALL_PROMPTS_OPTION) || "system");
+    const visiblePromptScenarios = useMemo(
+        () => getVisibleFilterOptions(promptScenarios, scenarioFiltersExpanded, selectedScenario === ALL_PROMPTS_OPTION ? [] : [selectedScenario], SCENARIO_FILTER_COLLAPSED_COUNT),
+        [promptScenarios, scenarioFiltersExpanded, selectedScenario],
+    );
+    const visiblePromptTags = useMemo(() => getVisibleFilterOptions(promptTags, tagFiltersExpanded, selectedTags, TAG_FILTER_COLLAPSED_COUNT), [promptTags, selectedTags, tagFiltersExpanded]);
+    const hiddenScenarioCount = Math.max(0, promptScenarios.length - visiblePromptScenarios.length);
+    const hiddenTagCount = Math.max(0, promptTags.length - visiblePromptTags.length);
 
     useEffect(() => {
         if (query.isError) {
@@ -132,14 +155,29 @@ export default function PromptsPage() {
                 <div className="pb-8">
                     <div className="mx-auto max-w-5xl text-center">
                         <h1 className="text-4xl font-semibold tracking-normal text-[var(--studio-text-primary)]">提示词中心</h1>
-                        <p className="mt-3 text-sm text-[var(--studio-text-secondary)]">共 {totalPrompts} 条提示词，按标题、标签与分类快速查找灵感。</p>
+                        <p className="mt-3 text-sm text-[var(--studio-text-secondary)]">{promptSummaryText}</p>
                     </div>
                     {query.isLoading ? (
-                        <div className="studio-panel mx-auto mt-8 flex h-60 max-w-3xl items-center justify-center">
+                        <div className="studio-panel mx-auto mt-8 flex h-60 max-w-3xl flex-col items-center justify-center gap-3 text-sm text-[var(--studio-text-secondary)]">
                             <Spin />
+                            <span>正在读取提示词...</span>
                         </div>
                     ) : null}
-                    {!query.isLoading ? (
+                    {query.isError ? (
+                        <Alert
+                            className="mx-auto mt-8 max-w-3xl"
+                            type="error"
+                            showIcon
+                            message="提示词读取失败"
+                            description={query.error instanceof Error ? query.error.message : "请确认后端服务已启动后重试。"}
+                            action={
+                                <Button size="small" onClick={() => void query.refetch()}>
+                                    重试
+                                </Button>
+                            }
+                        />
+                    ) : null}
+                    {showPromptContent ? (
                         <>
                             <div className="mx-auto mt-8 flex w-full max-w-3xl gap-3">
                                 <Input
@@ -147,7 +185,7 @@ export default function PromptsPage() {
                                     className="min-w-0 flex-1 rounded-lg border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)] placeholder:text-[var(--studio-text-muted)]"
                                     prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />}
                                     value={titleKeyword}
-                                    placeholder="按标题查询"
+                                    placeholder="搜索标题、内容或标签"
                                     onChange={(event) => setTitleKeyword(event.target.value)}
                                 />
                                 <Button size="large" type="primary" icon={<Plus className="size-4" />} onClick={openCreatePrompt}>
@@ -188,18 +226,29 @@ export default function PromptsPage() {
                                 </div>
                                 <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
                                     <div className="pt-2 text-xs font-medium text-[var(--studio-text-muted)]">场景</div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {promptScenarios.map((scenario) => (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {visiblePromptScenarios.map((scenario) => (
                                             <Tag.CheckableTag key={scenario} checked={selectedScenario === scenario} className={cn("prompt-filter-tag", selectedScenario === scenario && "is-active")} onChange={() => setSelectedScenario(scenario)}>
                                                 {scenario}
                                             </Tag.CheckableTag>
                                         ))}
+                                        {promptScenarios.length > SCENARIO_FILTER_COLLAPSED_COUNT ? (
+                                            <Button
+                                                size="middle"
+                                                type="text"
+                                                className="!h-8 !px-2 !text-[var(--studio-text-secondary)] hover:!text-[var(--studio-text-primary)]"
+                                                icon={scenarioFiltersExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                                                onClick={() => setScenarioFiltersExpanded((value) => !value)}
+                                            >
+                                                {scenarioFiltersExpanded ? "收起场景" : `展开${hiddenScenarioCount ? ` ${hiddenScenarioCount} 个` : ""}场景`}
+                                            </Button>
+                                        ) : null}
                                     </div>
                                 </div>
                                 <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
                                     <div className="pt-2 text-xs font-medium text-[var(--studio-text-muted)]">标签</div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {promptTags.map((tag) => (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {visiblePromptTags.map((tag) => (
                                             <Tag.CheckableTag
                                                 key={tag}
                                                 checked={tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag)}
@@ -209,6 +258,17 @@ export default function PromptsPage() {
                                                 {tag}
                                             </Tag.CheckableTag>
                                         ))}
+                                        {promptTags.length > TAG_FILTER_COLLAPSED_COUNT ? (
+                                            <Button
+                                                size="middle"
+                                                type="text"
+                                                className="!h-8 !px-2 !text-[var(--studio-text-secondary)] hover:!text-[var(--studio-text-primary)]"
+                                                icon={tagFiltersExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                                                onClick={() => setTagFiltersExpanded((value) => !value)}
+                                            >
+                                                {tagFiltersExpanded ? "收起标签" : `展开${hiddenTagCount ? ` ${hiddenTagCount} 个` : ""}标签`}
+                                            </Button>
+                                        ) : null}
                                     </div>
                                 </div>
                             </div>
@@ -216,7 +276,7 @@ export default function PromptsPage() {
                     ) : null}
                 </div>
 
-                {!query.isLoading ? (
+                {showPromptContent ? (
                     <div>
                         <div className="mx-auto grid max-w-7xl gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                             {promptItems.map((item) => (
@@ -240,7 +300,7 @@ export default function PromptsPage() {
                                 </Button>
                             </Empty>
                         ) : null}
-                        <div className="mx-auto mt-6 max-w-7xl text-center text-xs text-[var(--studio-text-muted)]">{query.isFetchingNextPage ? "加载中..." : query.hasNextPage ? "继续向下滚动加载更多" : promptItems.length > 0 ? "已经到底了" : null}</div>
+                        <div className="mx-auto mt-6 max-w-7xl text-center text-xs text-[var(--studio-text-muted)]">{listFooterText}</div>
                     </div>
                 ) : null}
             </main>

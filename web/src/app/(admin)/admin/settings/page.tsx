@@ -241,7 +241,16 @@ export default function AdminSettingsPage() {
         setEditingChannelIndex(null);
         setIsChannelDrawerOpen(true);
         const model = defaultArkLocalModelName();
-        channelForm.setFieldsValue({ ...emptyChannel, name: "企业 Ark / Seedance", protocol: "volcengine-ark", baseUrl: "https://ark.cn-beijing.volces.com/api/v3", models: [model], endpointMappings: [{ model, endpointId: "" }], capabilities: ["text", "video", "video_query", "asset_review", "preflight"], environment: "prod" });
+        channelForm.setFieldsValue({
+            ...emptyChannel,
+            name: "企业 Ark / Seedance",
+            protocol: "volcengine-ark",
+            baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+            models: [model],
+            endpointMappings: [{ model, endpointId: "" }],
+            capabilities: ["text", "video", "video_query", "asset_review", "preflight"],
+            environment: "prod",
+        });
         rememberModels([model]);
     };
 
@@ -713,17 +722,19 @@ export default function AdminSettingsPage() {
                                         <Alert
                                             showIcon
                                             type="warning"
-                                            message="企业视频通道需要确认"
-                                            description="从视频生成预检失败进入。请编辑火山方舟 Ark 渠道，确认 API Key、Base URL、Seedance 本地模型名和火山 Endpoint / EP 映射后保存，再回到视频生成页重新预检。"
-                                            action={
-                                                <Space wrap>
-                                                    <Button size="small" type="primary" onClick={openEnterpriseVideoChannel}>
-                                                        编辑 Ark 渠道
-                                                    </Button>
-                                                    <Button size="small" href="/video">
-                                                        返回视频生成
-                                                    </Button>
-                                                </Space>
+                                            title="企业视频通道需要确认"
+                                            description={
+                                                <div className="space-y-3">
+                                                    <div>从视频生成预检失败进入。请编辑火山方舟 Ark 渠道，确认 API Key、Base URL、Seedance 本地模型名和火山 Endpoint / EP 映射后保存，再回到视频生成页重新预检。</div>
+                                                    <Space wrap>
+                                                        <Button size="small" type="primary" onClick={openEnterpriseVideoChannel}>
+                                                            编辑 Ark 渠道
+                                                        </Button>
+                                                        <Button size="small" href="/video">
+                                                            返回视频生成
+                                                        </Button>
+                                                    </Space>
+                                                </div>
                                             }
                                         />
                                     ) : null}
@@ -734,11 +745,21 @@ export default function AdminSettingsPage() {
                                 <Table<ChannelTableItem>
                                     rowKey="_rowKey"
                                     pagination={false}
+                                    scroll={{ x: 1320 }}
                                     dataSource={channelTableData}
                                     columns={[
-                                        { title: "名称", dataIndex: "name", render: (value) => value || "未命名渠道" },
+                                        { title: "名称", dataIndex: "name", width: 160, render: (value) => value || "未命名渠道" },
                                         { title: "协议", dataIndex: "protocol", width: 96, render: (value) => <Tag>{value || "openai"}</Tag> },
-                                        { title: "渠道 ID", dataIndex: "id", width: 160, render: (value) => <Typography.Text copyable ellipsis>{value || "保存后生成"}</Typography.Text> },
+                                        {
+                                            title: "渠道 ID",
+                                            dataIndex: "id",
+                                            width: 180,
+                                            render: (value) => (
+                                                <Typography.Text copyable ellipsis>
+                                                    {value || "保存后生成"}
+                                                </Typography.Text>
+                                            ),
+                                        },
                                         {
                                             title: "状态",
                                             dataIndex: "enabled",
@@ -766,6 +787,7 @@ export default function AdminSettingsPage() {
                                         {
                                             title: "模型",
                                             dataIndex: "models",
+                                            width: 360,
                                             render: (value: string[], item: ChannelTableItem) => {
                                                 const mappings = channelEndpointMappings(item);
                                                 const firstMapping = mappings[0];
@@ -836,9 +858,9 @@ export default function AdminSettingsPage() {
                     extra={
                         <Space size={12}>
                             <Typography.Text type={channelAutoSaveStatus === "error" ? "danger" : "secondary"} className="text-xs">
-                                {channelAutoSaveStatus === "saving" ? "保存中..." : channelAutoSaveStatus === "saved" ? "已自动保存" : channelAutoSaveStatus === "error" ? "自动保存失败" : "输入后自动保存"}
+                                {channelAutoSaveStatus === "saving" ? "保存中..." : channelAutoSaveStatus === "saved" ? "已保存" : channelAutoSaveStatus === "error" ? "保存失败" : "修改会自动保存"}
                             </Typography.Text>
-                            <Button onClick={closeChannelDrawer}>关闭</Button>
+                            <Button onClick={closeChannelDrawer}>完成</Button>
                         </Space>
                     }
                     destroyOnHidden
@@ -920,137 +942,137 @@ export default function AdminSettingsPage() {
                     ) : (
                         <Form form={channelForm} layout="vertical" requiredMark={false} initialValues={emptyChannel} onValuesChange={scheduleChannelAutoSave}>
                             <Row gutter={16}>
-                            <Col span={12}>
-                                <Form.Item name="id" label="渠道 ID" extra="Agent 可绑定这个 ID；留空保存时自动生成。">
-                                    <Input placeholder="例如 text-openai-main" />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: "请输入渠道名称" }]}>
-                                    <Input />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item name="protocol" label="协议">
-                                    <Select
-                                        options={[
-                                            { label: "OpenAI 兼容", value: "openai" },
-                                            { label: "火山方舟 Ark", value: "volcengine-ark" },
-                                        ]}
-                                    />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item name="weight" label="权重">
-                                    <InputNumber min={1} step={1} className="!w-full" />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item name="enabled" label="启用" valuePropName="checked">
-                                    <Switch />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item name="environment" label="环境">
-                                    <Select
-                                        options={[
-                                            { label: "开发 dev", value: "dev" },
-                                            { label: "测试 test", value: "test" },
-                                            { label: "正式 prod", value: "prod" },
-                                        ]}
-                                    />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item name="capabilities" label="渠道能力">
-                                    <Select
-                                        mode="multiple"
-                                        options={[
-                                            { label: "文本 Agent", value: "text" },
-                                            { label: "图片生成", value: "image" },
-                                            { label: "视频生成", value: "video" },
-                                            { label: "视频任务查询", value: "video_query" },
-                                            { label: "素材加白 / 预检", value: "asset_review" },
-                                            { label: "企业预检", value: "preflight" },
-                                            { label: "CLI Worker", value: "cli_workflow" },
-                                        ]}
-                                    />
-                                </Form.Item>
-                            </Col>
-                            <Col span={24}>
-                                <Form.Item name="baseUrl" label="接口地址" rules={[{ required: true, message: "请输入接口地址" }]}>
-                                    <Input />
-                                </Form.Item>
-                            </Col>
-                            {channelProtocol === "volcengine-ark" ? (
-                                <Col span={24}>
-                                    <Card size="small" title="Seedance 模型映射">
-                                        <Form.List name="endpointMappings">
-                                            {(fields, { add, remove }) => (
-                                                <Flex vertical gap={10}>
-                                                    <Flex justify="space-between" align="center" gap={12}>
-                                                        <Typography.Text type="secondary" className="text-xs">
-                                                            一个本地模型名称对应一个火山 EP；前端选择模型名，后台真实请求使用对应 EP。
-                                                        </Typography.Text>
-                                                        <Button size="small" icon={<PlusOutlined />} onClick={() => add({ model: "", endpointId: "" })}>
-                                                            添加选项
-                                                        </Button>
-                                                    </Flex>
-                                                    {fields.map((field, index) => (
-                                                        <Row key={field.key} gutter={8} align="top">
-                                                            <Col span={10}>
-                                                                <Form.Item name={[field.name, "model"]} label={index === 0 ? "本地模型名称" : ""} rules={[{ required: true, message: "请输入本地模型名称" }]}>
-                                                                    <Input placeholder="doubao-seedance-2-0-fast" />
-                                                                </Form.Item>
-                                                            </Col>
-                                                            <Col span={12}>
-                                                                <Form.Item name={[field.name, "endpointId"]} label={index === 0 ? "火山 Endpoint / EP" : ""} rules={[{ required: true, message: "请输入火山 Endpoint / EP" }]}>
-                                                                    <Input placeholder="ep-xxxxxxxxxxxxxxxx" />
-                                                                </Form.Item>
-                                                            </Col>
-                                                            <Col span={2}>
-                                                                <Button aria-label="删除映射" disabled={fields.length <= 1} danger icon={<DeleteOutlined />} style={{ marginTop: index === 0 ? 30 : 0 }} onClick={() => remove(field.name)} />
-                                                            </Col>
-                                                        </Row>
-                                                    ))}
-                                                </Flex>
-                                            )}
-                                        </Form.List>
-                                    </Card>
-                                </Col>
-                            ) : null}
-                            <Col span={24}>
-                                <Form.Item
-                                    name="apiKey"
-                                    label={
-                                        <Space size={8}>
-                                            API Key
-                                            <Tag color={hasNewChannelAPIKey ? "processing" : hasSavedChannelAPIKey ? "success" : "default"}>{hasNewChannelAPIKey ? "本次已输入新 Key" : hasSavedChannelAPIKey ? "已保存，留空不修改" : "未填写"}</Tag>
-                                        </Space>
-                                    }
-                                    extra={hasSavedChannelAPIKey && !hasNewChannelAPIKey ? "输入框留空会继续沿用后台已保存的 API Key；输入新值后会自动保存并覆盖。" : undefined}
-                                    rules={editingChannelIndex === null ? [{ required: true, message: "请输入 API Key" }] : []}
-                                >
-                                    <Input.Password placeholder={hasSavedChannelAPIKey ? "已保存，输入新 Key 才会覆盖" : "请输入 API Key"} />
-                                </Form.Item>
-                            </Col>
-                            {channelProtocol === "volcengine-ark" ? null : (
-                                <Col span={24}>
-                                    <Form.Item label="渠道可用模型">
-                                        <Space.Compact style={{ width: "100%" }}>
-                                            <Form.Item name="models" noStyle>
-                                                <Select mode="tags" maxTagCount="responsive" tokenSeparators={[",", "\n"]} options={knownModels.map((model) => ({ label: model, value: model }))} />
-                                            </Form.Item>
-                                            <Button onClick={() => openChannelModelSelector()}>选择模型</Button>
-                                        </Space.Compact>
+                                <Col span={12}>
+                                    <Form.Item name="id" label="渠道 ID" extra="Agent 可绑定这个 ID；留空保存时自动生成。">
+                                        <Input placeholder="例如 text-openai-main" />
                                     </Form.Item>
                                 </Col>
-                            )}
-                            <Col span={24}>
-                                <Form.Item name="remark" label="备注">
-                                    <Input.TextArea rows={3} />
-                                </Form.Item>
-                            </Col>
+                                <Col span={12}>
+                                    <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: "请输入渠道名称" }]}>
+                                        <Input />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="protocol" label="协议">
+                                        <Select
+                                            options={[
+                                                { label: "OpenAI 兼容", value: "openai" },
+                                                { label: "火山方舟 Ark", value: "volcengine-ark" },
+                                            ]}
+                                        />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="weight" label="权重">
+                                        <InputNumber min={1} step={1} className="!w-full" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="enabled" label="启用" valuePropName="checked">
+                                        <Switch />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="environment" label="环境">
+                                        <Select
+                                            options={[
+                                                { label: "开发 dev", value: "dev" },
+                                                { label: "测试 test", value: "test" },
+                                                { label: "正式 prod", value: "prod" },
+                                            ]}
+                                        />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="capabilities" label="渠道能力">
+                                        <Select
+                                            mode="multiple"
+                                            options={[
+                                                { label: "文本 Agent", value: "text" },
+                                                { label: "图片生成", value: "image" },
+                                                { label: "视频生成", value: "video" },
+                                                { label: "视频任务查询", value: "video_query" },
+                                                { label: "素材加白 / 预检", value: "asset_review" },
+                                                { label: "企业预检", value: "preflight" },
+                                                { label: "CLI Worker", value: "cli_workflow" },
+                                            ]}
+                                        />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={24}>
+                                    <Form.Item name="baseUrl" label="接口地址" rules={[{ required: true, message: "请输入接口地址" }]}>
+                                        <Input />
+                                    </Form.Item>
+                                </Col>
+                                {channelProtocol === "volcengine-ark" ? (
+                                    <Col span={24}>
+                                        <Card size="small" title="Seedance 模型映射">
+                                            <Form.List name="endpointMappings">
+                                                {(fields, { add, remove }) => (
+                                                    <Flex vertical gap={10}>
+                                                        <Flex justify="space-between" align="center" gap={12}>
+                                                            <Typography.Text type="secondary" className="text-xs">
+                                                                一个本地模型名称对应一个火山 EP；前端选择模型名，后台真实请求使用对应 EP。
+                                                            </Typography.Text>
+                                                            <Button size="small" icon={<PlusOutlined />} onClick={() => add({ model: "", endpointId: "" })}>
+                                                                添加选项
+                                                            </Button>
+                                                        </Flex>
+                                                        {fields.map((field, index) => (
+                                                            <Row key={field.key} gutter={8} align="top">
+                                                                <Col span={10}>
+                                                                    <Form.Item name={[field.name, "model"]} label={index === 0 ? "本地模型名称" : ""} rules={[{ required: true, message: "请输入本地模型名称" }]}>
+                                                                        <Input placeholder="doubao-seedance-2-0-fast" />
+                                                                    </Form.Item>
+                                                                </Col>
+                                                                <Col span={12}>
+                                                                    <Form.Item name={[field.name, "endpointId"]} label={index === 0 ? "火山 Endpoint / EP" : ""} rules={[{ required: true, message: "请输入火山 Endpoint / EP" }]}>
+                                                                        <Input placeholder="ep-xxxxxxxxxxxxxxxx" />
+                                                                    </Form.Item>
+                                                                </Col>
+                                                                <Col span={2}>
+                                                                    <Button aria-label="删除映射" disabled={fields.length <= 1} danger icon={<DeleteOutlined />} style={{ marginTop: index === 0 ? 30 : 0 }} onClick={() => remove(field.name)} />
+                                                                </Col>
+                                                            </Row>
+                                                        ))}
+                                                    </Flex>
+                                                )}
+                                            </Form.List>
+                                        </Card>
+                                    </Col>
+                                ) : null}
+                                <Col span={24}>
+                                    <Form.Item
+                                        name="apiKey"
+                                        label={
+                                            <Space size={8}>
+                                                API Key
+                                                <Tag color={hasNewChannelAPIKey ? "processing" : hasSavedChannelAPIKey ? "success" : "default"}>{hasNewChannelAPIKey ? "本次已输入新 Key" : hasSavedChannelAPIKey ? "已保存，留空不修改" : "未填写"}</Tag>
+                                            </Space>
+                                        }
+                                        extra={hasSavedChannelAPIKey && !hasNewChannelAPIKey ? "输入框留空会继续沿用后台已保存的 API Key；输入新值后会自动保存并覆盖。" : undefined}
+                                        rules={editingChannelIndex === null ? [{ required: true, message: "请输入 API Key" }] : []}
+                                    >
+                                        <Input.Password placeholder={hasSavedChannelAPIKey ? "已保存，输入新 Key 才会覆盖" : "请输入 API Key"} />
+                                    </Form.Item>
+                                </Col>
+                                {channelProtocol === "volcengine-ark" ? null : (
+                                    <Col span={24}>
+                                        <Form.Item label="渠道可用模型">
+                                            <Space.Compact style={{ width: "100%" }}>
+                                                <Form.Item name="models" noStyle>
+                                                    <Select mode="tags" maxTagCount="responsive" tokenSeparators={[",", "\n"]} options={knownModels.map((model) => ({ label: model, value: model }))} />
+                                                </Form.Item>
+                                                <Button onClick={() => openChannelModelSelector()}>选择模型</Button>
+                                            </Space.Compact>
+                                        </Form.Item>
+                                    </Col>
+                                )}
+                                <Col span={24}>
+                                    <Form.Item name="remark" label="备注">
+                                        <Input.TextArea rows={3} />
+                                    </Form.Item>
+                                </Col>
                             </Row>
                         </Form>
                     )}

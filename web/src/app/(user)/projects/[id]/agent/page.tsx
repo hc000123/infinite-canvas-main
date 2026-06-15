@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { App, Button, Empty, Tag } from "antd";
+import { App, Button, Empty, Spin, Tag } from "antd";
 import { nanoid } from "nanoid";
 import { Archive, Bot, Check, Clapperboard, FileText, Tags, X } from "lucide-react";
 
@@ -21,6 +21,7 @@ export default function ProjectAgentWorkbenchPage() {
     const params = useParams<{ id: string }>();
     const projectId = params.id;
     const { message } = App.useApp();
+    const hydrated = useCreativeProjectStore((state) => state.hydrated);
     const project = useCreativeProjectStore((state) => state.projects.find((item) => item.id === projectId));
     const assets = useAssetStore((state) => state.assets);
     const updateAsset = useAssetStore((state) => state.updateAsset);
@@ -44,6 +45,14 @@ export default function ProjectAgentWorkbenchPage() {
             .then((data) => setPrompts(data.items))
             .catch(() => setPrompts([]));
     }, []);
+
+    if (!hydrated) {
+        return (
+            <main className="grid h-full place-items-center bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
+                <Spin description="正在读取本地项目" />
+            </main>
+        );
+    }
 
     if (!project) {
         return (
@@ -168,7 +177,7 @@ function AgentStarter({ icon, title, description, onClick }: { icon: ReactNode; 
 }
 
 function AgentTaskCard({ task, onApply, onCancel }: { task: AgentTask; onApply: () => void; onCancel: () => void }) {
-    const disabled = task.status !== "pending";
+    const pending = task.status === "pending";
     return (
         <article className="rounded-xl border border-stone-200 p-5 dark:border-stone-800">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -182,18 +191,24 @@ function AgentTaskCard({ task, onApply, onCancel }: { task: AgentTask; onApply: 
                         <Tag className="m-0" color={task.riskLevel === "medium" ? "warning" : task.riskLevel === "high" ? "error" : "success"}>
                             {agentRiskLabel(task.riskLevel)}
                         </Tag>
-                        <Tag className="m-0">{task.status}</Tag>
+                        <Tag className="m-0" color={agentTaskStatusColor(task.status)}>
+                            {agentTaskStatusLabel(task.status)}
+                        </Tag>
                     </div>
                     <p className="mt-3 whitespace-pre-line text-sm leading-6 text-stone-600 dark:text-stone-400">{task.summary}</p>
                 </div>
-                <div className="flex shrink-0 gap-2">
-                    <Button size="small" icon={<Check className="size-3.5" />} disabled={disabled || !task.proposedActions.length} onClick={onApply}>
-                        确认
-                    </Button>
-                    <Button size="small" icon={<X className="size-3.5" />} disabled={disabled} onClick={onCancel}>
-                        取消
-                    </Button>
-                </div>
+                {pending ? (
+                    <div className="flex shrink-0 gap-2">
+                        <Button size="small" icon={<Check className="size-3.5" />} disabled={!task.proposedActions.length} onClick={onApply}>
+                            确认
+                        </Button>
+                        <Button size="small" icon={<X className="size-3.5" />} onClick={onCancel}>
+                            取消
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="shrink-0 rounded-md border border-stone-200 px-3 py-1 text-sm text-stone-500 dark:border-stone-800 dark:text-stone-400">{agentTaskStatusLabel(task.status)}</div>
+                )}
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <div>
@@ -230,6 +245,18 @@ function AgentTaskCard({ task, onApply, onCancel }: { task: AgentTask; onApply: 
             </div>
         </article>
     );
+}
+
+function agentTaskStatusLabel(status: AgentTask["status"]) {
+    if (status === "applied") return "已应用";
+    if (status === "cancelled") return "已取消";
+    return "待确认";
+}
+
+function agentTaskStatusColor(status: AgentTask["status"]) {
+    if (status === "applied") return "success";
+    if (status === "cancelled") return "default";
+    return "processing";
 }
 
 function readAgentTaskRefs(value: unknown) {

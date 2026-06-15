@@ -1,7 +1,7 @@
 import type { Asset } from "@/stores/use-asset-store";
 import type { CanvasProject } from "../canvas/stores/use-canvas-store.ts";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible.ts";
-import type { StoryboardGroup, StoryboardShot } from "../canvas/utils/storyboard-management.ts";
+import type { ShotGroup, StoryboardAssetRef, StoryboardGroup, StoryboardShot, StoryboardTableShot } from "../canvas/utils/storyboard-management.ts";
 import { collectAssetVersionUsageReferences, updateAssetReferenceToLatest, type AssetVersionUsageReference } from "./asset-version-references.ts";
 
 export type OutdatedAssetVersionUsage = AssetVersionUsageReference & {
@@ -14,6 +14,8 @@ export type AssetVersionOutdatedSources = {
     canvasProjects?: CanvasProject[];
     storyboardGroups?: StoryboardGroup[];
     storyboardShots?: StoryboardShot[];
+    storyboardTableShots?: StoryboardTableShot[];
+    shotGroups?: ShotGroup[];
     productionBibleItems?: ProductionBibleItem[];
     projectTitles?: Record<string, string>;
 };
@@ -68,16 +70,21 @@ export function updateCanvasProjectAssetReferenceToLatest(project: CanvasProject
 
 export function updateStoryboardShotAssetReferenceToLatest(shot: StoryboardShot, usage: OutdatedAssetVersionUsage, asset: Asset, now = new Date().toISOString()): StoryboardShot {
     if (usage.kind !== "storyboard-shot" || usage.objectId !== shot.id || usage.assetId !== asset.id) return shot;
-    let changed = false;
-    const assetRefs = shot.assetRefs.map((ref) => {
-        if (ref.assetId !== asset.id || !ref.assetVersion) return ref;
-        changed = true;
-        return {
-            ...ref,
-            assetVersion: updateAssetReferenceToLatest(ref.assetVersion, asset, now),
-        };
-    });
+    const { refs: assetRefs, changed } = updateStoryboardAssetRefsToLatest(shot.assetRefs, asset, now);
     return changed ? { ...shot, assetRefs } : shot;
+}
+
+export function updateStoryboardTableShotAssetReferenceToLatest(shot: StoryboardTableShot, usage: OutdatedAssetVersionUsage, asset: Asset, now = new Date().toISOString()): StoryboardTableShot {
+    if (usage.kind !== "storyboard-table-shot" || usage.objectId !== shot.id || usage.assetId !== asset.id) return shot;
+    const { refs: assetRefs, changed } = updateStoryboardAssetRefsToLatest(shot.assetRefs, asset, now);
+    return changed ? { ...shot, assetRefs } : shot;
+}
+
+export function updateShotGroupAssetReferenceToLatest(group: ShotGroup, usage: OutdatedAssetVersionUsage, asset: Asset, now = new Date().toISOString()): ShotGroup {
+    if (usage.kind !== "shot-group" || usage.objectId !== group.id || usage.assetId !== asset.id) return group;
+    const assetResult = updateStoryboardAssetRefsToLatest(group.assetRefs, asset, now);
+    const audioResult = updateStoryboardAssetRefsToLatest(group.audioRefs, asset, now);
+    return assetResult.changed || audioResult.changed ? { ...group, assetRefs: assetResult.refs, audioRefs: audioResult.refs } : group;
 }
 
 export function updateProductionBibleAssetReferenceToLatest(item: ProductionBibleItem, usage: OutdatedAssetVersionUsage, asset: Asset, now = new Date().toISOString()): ProductionBibleItem {
@@ -92,6 +99,19 @@ export function updateProductionBibleAssetReferenceToLatest(item: ProductionBibl
         };
     });
     return changed ? { ...item, assetRefs } : item;
+}
+
+function updateStoryboardAssetRefsToLatest(refs: StoryboardAssetRef[], asset: Asset, now: string) {
+    let changed = false;
+    const nextRefs = refs.map((ref) => {
+        if (ref.assetId !== asset.id || !ref.assetVersion) return ref;
+        changed = true;
+        return {
+            ...ref,
+            assetVersion: updateAssetReferenceToLatest(ref.assetVersion, asset, now),
+        };
+    });
+    return { refs: nextRefs, changed };
 }
 
 function latestAssetVersionNumber(asset: Asset) {

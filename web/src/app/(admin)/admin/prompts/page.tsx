@@ -230,7 +230,7 @@ export default function AdminPromptsPage() {
                             </Button>
                         ) : null,
                         <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => setEditingPrompt({ category: defaultCategory, tags: [], metadata: { nodeGroup: "image", type: "image" } })}>
-                            新增
+                            新增提示词
                         </Button>,
                     ]}
                     pagination={{

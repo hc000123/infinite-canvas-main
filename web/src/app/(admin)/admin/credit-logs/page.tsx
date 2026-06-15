@@ -2,7 +2,7 @@
 
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { Button, Card, Col, Form, Input, InputNumber, Modal, Row, Space, Tag, Tooltip, Typography } from "antd";
+import { Button, Card, Col, Form, Input, InputNumber, Modal, Row, Select, Space, Tag, Tooltip, Typography } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 
@@ -16,6 +16,7 @@ const creditLogTypeLabels: Record<string, string> = {
     ai_consume: "模型消费",
     ai_refund: "失败返还",
 };
+const creditLogTypeOptions = Object.entries(creditLogTypeLabels).map(([value, label]) => ({ label, value }));
 
 export default function AdminCreditLogsPage() {
     const { logs, keyword, page, pageSize, total, isLoading, searchLogs, changePage, changePageSize, resetFilters, refreshLogs, saveLog: saveAdminLog, deleteLog } = useAdminCreditLogs();
@@ -146,7 +147,7 @@ export default function AdminCreditLogsPage() {
                     options={{ density: true, setting: true, reload: () => void refreshLogs() }}
                     toolBarRender={() => [
                         <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => setEditingLog({ type: "admin_adjust", amount: 0, balance: 0 })}>
-                            新增
+                            新增日志
                         </Button>,
                     ]}
                     pagination={{
@@ -170,8 +171,8 @@ export default function AdminCreditLogsPage() {
                             </Form.Item>
                         </Col>
                         <Col span={12}>
-                            <Form.Item name="type" label="类型" rules={[{ required: true, message: "请输入类型" }]}>
-                                <Input />
+                            <Form.Item name="type" label="类型" rules={[{ required: true, message: "请选择类型" }]}>
+                                <Select options={creditLogTypeOptions} placeholder="选择变动类型" />
                             </Form.Item>
                         </Col>
                         <Col span={12}>

@@ -5,13 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { defaultConfig } from "@/stores/use-config-store";
 import { canvasEpisodeLabel } from "../utils/canvas-episode-context";
 import { isHiddenBatchChild } from "../utils/canvas-batch-nodes";
-import {
-    audioMetadata,
-    createCanvasNode,
-    imageMetadata,
-    normalizeConnection,
-    videoMetadata,
-} from "../utils/canvas-page-helpers";
+import { audioMetadata, createCanvasNode, imageMetadata, normalizeConnection, videoMetadata } from "../utils/canvas-page-helpers";
 import { useCanvasConnections } from "../hooks/use-canvas-connections";
 import { useCanvasClipboardActions } from "../hooks/use-canvas-clipboard-actions";
 import { useCanvasConfigNodeActions } from "../hooks/use-canvas-config-node-actions";
@@ -58,7 +52,7 @@ import { CanvasPromptStartPanel, type CanvasPromptPresetKind } from "../componen
 import { InfiniteCanvas } from "../components/infinite-canvas";
 import { CanvasNodesLayer } from "../components/canvas-nodes-layer";
 import { CanvasFloatingControls } from "../components/canvas-floating-controls";
-import { CanvasNodeType } from "../types";
+import { CanvasNodeType, type CanvasNodeData } from "../types";
 
 export default function CanvasPage() {
     const mounted = useCanvasMounted();
@@ -111,19 +105,100 @@ function InfiniteCanvasPage() {
     } = useCanvasWorkspaceStores(canvasId);
     const { canvasAiConfig, canvasEpisodeContext } = useCanvasRuntimeConfig(currentProject, effectiveConfig);
     const {
-        activeChatId, activeProductionPackageId, activeTimelineShotId, angleNodeId, assetPickerOpen, assetPickerTab, assistantMounted, backgroundMode,
-        chatSessions, clearConfirmOpen, connections, connectionsRef, containerRef, contextMenu, cropNodeId, dialogNodeId, didInitialCenterRef,
-        editRequestNonce, editingNodeId, handledFocusNodeIdRef, hoveredNodeId, imageBriefInitialId, imageBriefOpen, imageBriefOpenRequestId,
-        imageInputRef, infoNodeId, inspectorView, isInspectorCollapsed, isMiniMapOpen, lastSelectedVideoNodeId, nodeCreateMenuPosition,
-        nodeImageSettingsOpen, nodes, nodesRef, previewNodeId, processingQueueItemIdsRef, projectLoaded, recoveringVideoTaskIdsRef, runningNodeId,
-        scriptManagerOpen, selectedConnectionId, selectedNodeIds, selectedNodeIdsRef, setActiveChatId, setActiveProductionPackageId,
-        setActiveTimelineShotId, setAngleNodeId, setAssetPickerOpen, setAssetPickerTab, setAssistantCollapsed, setAssistantMounted, setBackgroundMode,
-        setChatSessions, setClearConfirmOpen, setConnections, setContextMenu, setCropNodeId, setDialogNodeId, setEditRequestNonce, setEditingNodeId,
-        setHoveredNodeId, setImageBriefOpen, setInfoNodeId, setInspectorView, setIsInspectorCollapsed, setIsMiniMapOpen, setLastSelectedVideoNodeId,
-        setNodeCreateMenuPosition, setNodeImageSettingsOpen, setNodes, setPreviewNodeId, setProjectLoaded, setRunningNodeId, setScriptManagerOpen,
-        setSelectedConnectionId, setSelectedNodeIds, setShowImageInfo, setSize, setStoryboardInitialGroupId, setStoryboardManagerOpen, setTitleDraft,
-        setTitleEditing, setToolbarNodeId, setViewport, showImageInfo, size, storyboardInitialGroupId, storyboardManagerOpen, titleDraft, titleEditing,
-        toolbarNodeId, uploadTargetRef, viewport, viewportRef,
+        activeChatId,
+        activeProductionPackageId,
+        activeTimelineShotId,
+        angleNodeId,
+        assetPickerOpen,
+        assetPickerTab,
+        assistantMounted,
+        backgroundMode,
+        chatSessions,
+        clearConfirmOpen,
+        connections,
+        connectionsRef,
+        containerRef,
+        contextMenu,
+        cropNodeId,
+        dialogNodeId,
+        didInitialCenterRef,
+        editRequestNonce,
+        editingNodeId,
+        handledFocusNodeIdRef,
+        hoveredNodeId,
+        imageBriefInitialId,
+        imageBriefOpen,
+        imageBriefOpenRequestId,
+        imageInputRef,
+        infoNodeId,
+        inspectorView,
+        isInspectorCollapsed,
+        isMiniMapOpen,
+        lastSelectedVideoNodeId,
+        nodeCreateMenuPosition,
+        nodeImageSettingsOpen,
+        nodes,
+        nodesRef,
+        previewNodeId,
+        processingQueueItemIdsRef,
+        projectLoaded,
+        recoveringVideoTaskIdsRef,
+        runningNodeId,
+        scriptManagerOpen,
+        selectedConnectionId,
+        selectedNodeIds,
+        selectedNodeIdsRef,
+        setActiveChatId,
+        setActiveProductionPackageId,
+        setActiveTimelineShotId,
+        setAngleNodeId,
+        setAssetPickerOpen,
+        setAssetPickerTab,
+        setAssistantCollapsed,
+        setAssistantMounted,
+        setBackgroundMode,
+        setChatSessions,
+        setClearConfirmOpen,
+        setConnections,
+        setContextMenu,
+        setCropNodeId,
+        setDialogNodeId,
+        setEditRequestNonce,
+        setEditingNodeId,
+        setHoveredNodeId,
+        setImageBriefOpen,
+        setInfoNodeId,
+        setInspectorView,
+        setIsInspectorCollapsed,
+        setIsMiniMapOpen,
+        setLastSelectedVideoNodeId,
+        setNodeCreateMenuPosition,
+        setNodeImageSettingsOpen,
+        setNodes,
+        setPreviewNodeId,
+        setProjectLoaded,
+        setRunningNodeId,
+        setScriptManagerOpen,
+        setSelectedConnectionId,
+        setSelectedNodeIds,
+        setShowImageInfo,
+        setSize,
+        setStoryboardInitialGroupId,
+        setStoryboardManagerOpen,
+        setTitleDraft,
+        setTitleEditing,
+        setToolbarNodeId,
+        setViewport,
+        showImageInfo,
+        size,
+        storyboardInitialGroupId,
+        storyboardManagerOpen,
+        titleDraft,
+        titleEditing,
+        toolbarNodeId,
+        uploadTargetRef,
+        viewport,
+        viewportRef,
     } = useCanvasPageLocalState();
     const { downloadNodeMedia, cacheUploadedCanvasMedia } = useCanvasMediaCache({ token, message, setNodes });
     const { historyState, resetHistory, undoCanvas, redoCanvas, pauseHistory, resumeHistory, skipNextHistoryCommit, getCleanupHistory } = useCanvasHistory({
@@ -253,7 +328,11 @@ function InfiniteCanvasPage() {
                 ...textNode.metadata,
                 canvasSource: { projectId: workspaceProjectId, projectTitle: workspaceProjectTitle, canvasId, canvasTitle: currentProject?.title || "未命名画布", nodeId: textNode.id, prompt: preset.prompt },
             };
-            const configNode = createCanvasNode(CanvasNodeType.Config, { x: center.x + 260, y: center.y }, { prompt: "", model: canvasAiConfig.imageModel || canvasAiConfig.model, size: canvasAiConfig.size, count: preset.kind === "storyboard" ? 9 : 3, sourceType: "manual" });
+            const configNode = createCanvasNode(
+                CanvasNodeType.Config,
+                { x: center.x + 260, y: center.y },
+                { prompt: "", model: canvasAiConfig.imageModel || canvasAiConfig.model, size: canvasAiConfig.size, count: preset.kind === "storyboard" ? 9 : 3, sourceType: "manual" },
+            );
             configNode.metadata = {
                 ...configNode.metadata,
                 canvasSource: { projectId: workspaceProjectId, projectTitle: workspaceProjectTitle, canvasId, canvasTitle: currentProject?.title || "未命名画布", nodeId: configNode.id, prompt: preset.prompt },
@@ -264,7 +343,21 @@ function InfiniteCanvasPage() {
             setSelectedConnectionId(null);
             setDialogNodeId(configNode.id);
         },
-        [canvasAiConfig.imageModel, canvasAiConfig.model, canvasAiConfig.size, canvasId, currentProject?.title, getCanvasCenter, setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, workspaceProjectId, workspaceProjectTitle],
+        [
+            canvasAiConfig.imageModel,
+            canvasAiConfig.model,
+            canvasAiConfig.size,
+            canvasId,
+            currentProject?.title,
+            getCanvasCenter,
+            setConnections,
+            setDialogNodeId,
+            setNodes,
+            setSelectedConnectionId,
+            setSelectedNodeIds,
+            workspaceProjectId,
+            workspaceProjectTitle,
+        ],
     );
 
     const { connectingParams, connectionTargetNodeId, pendingConnectionCreate, pendingConnectionCreateRef, mouseWorld, cancelPendingConnectionCreate, createConnectedNode, finishConnection, handleConnectStart, moveConnectionTarget } = useCanvasConnections(
@@ -342,34 +435,23 @@ function InfiniteCanvasPage() {
         angleNodeId,
         previewNodeId,
     });
-    const {
-        episodeWorkbenchStats,
-        episodeProductionLabel,
-        timelineShots,
-        timelineShotGroups,
-        activeTimelineShot,
-        activeTimelineShotGroups,
-        activeTimelineNodeIds,
-        activeTimelineNodes,
-        productionPackages,
-        productionPackageLabelMap,
-        relatedHighlight,
-    } = useCanvasProductionWorkbenchState({
-        canvasId,
-        currentProject,
-        creativeProject,
-        productionPackagesEnabled: false,
-        storyboardTableShots,
-        storyboardShotGroups,
-        assetBreakdownItems,
-        nodes,
-        connections,
-        selectedInspectorNode,
-        activeNodeId,
-        activeTimelineShotId,
-        activeProductionPackageId,
-        setActiveProductionPackageId,
-    });
+    const { episodeWorkbenchStats, episodeProductionLabel, timelineShots, timelineShotGroups, activeTimelineShot, activeTimelineShotGroups, activeTimelineNodeIds, activeTimelineNodes, productionPackages, productionPackageLabelMap, relatedHighlight } =
+        useCanvasProductionWorkbenchState({
+            canvasId,
+            currentProject,
+            creativeProject,
+            productionPackagesEnabled: false,
+            storyboardTableShots,
+            storyboardShotGroups,
+            assetBreakdownItems,
+            nodes,
+            connections,
+            selectedInspectorNode,
+            activeNodeId,
+            activeTimelineShotId,
+            activeProductionPackageId,
+            setActiveProductionPackageId,
+        });
 
     const { handleTimelineShotSelect, addStoryboardGroupToCanvas, addShotGroupToCanvas } = useCanvasStoryboardCanvasActions({
         assets,
@@ -440,23 +522,41 @@ function InfiniteCanvasPage() {
             }
             const right = Math.max(...references.map((node) => node.position.x + node.width));
             const top = Math.min(...references.map((node) => node.position.y));
-            const videoNode = createCanvasNode(CanvasNodeType.Video, { x: right + 260, y: top + 150 }, {
-                prompt: "",
-                status: "idle",
-                videoReferenceImageMode: "first_last_frame",
-                referenceRoles: references.map((node, index) => ({ nodeId: node.id, kind: "image", role: index === 0 ? "first_frame" : index === references.length - 1 ? "last_frame" : "reference", index: index + 1 })),
-                referenceOrder: references.map((node, index) => ({ nodeId: node.id, kind: "image", index: index + 1 })),
-                canvasSource: {
-                    projectId: workspaceProjectId,
-                    projectTitle: workspaceProjectTitle,
-                    canvasId,
-                    canvasTitle: currentProject?.title || "未命名画布",
-                    nodeId: "",
-                    sourceNodeId: references[0]?.id,
-                    generationParams: { referenceCount: references.length, action: "create_video_node_from_images" },
+            const videoNode = createCanvasNode(
+                CanvasNodeType.Video,
+                { x: right + 260, y: top + 150 },
+                {
+                    prompt: "",
+                    status: "idle",
+                    videoReferenceImageMode: "first_last_frame",
+                    referenceRoles: references.map((node, index) => ({ nodeId: node.id, kind: "image", role: index === 0 ? "first_frame" : index === references.length - 1 ? "last_frame" : "reference", index: index + 1 })),
+                    referenceOrder: references.map((node, index) => ({ nodeId: node.id, kind: "image", index: index + 1 })),
+                    canvasSource: {
+                        projectId: workspaceProjectId,
+                        projectTitle: workspaceProjectTitle,
+                        canvasId,
+                        canvasTitle: currentProject?.title || "未命名画布",
+                        nodeId: "",
+                        sourceNodeId: references[0]?.id,
+                        generationParams: { referenceCount: references.length, action: "create_video_node_from_images" },
+                    },
                 },
-            });
-            const nextVideoNode = { ...videoNode, metadata: { ...videoNode.metadata, canvasSource: { ...videoNode.metadata?.canvasSource, nodeId: videoNode.id } } };
+            );
+            const nextVideoNode: CanvasNodeData = {
+                ...videoNode,
+                metadata: {
+                    ...videoNode.metadata,
+                    canvasSource: {
+                        projectId: workspaceProjectId,
+                        projectTitle: workspaceProjectTitle,
+                        canvasId,
+                        canvasTitle: currentProject?.title || "未命名画布",
+                        nodeId: videoNode.id,
+                        sourceNodeId: references[0]?.id,
+                        generationParams: { referenceCount: references.length, action: "create_video_node_from_images" },
+                    },
+                },
+            };
             setNodes((prev) => [...prev, nextVideoNode]);
             setConnections((prev) => [
                 ...prev,

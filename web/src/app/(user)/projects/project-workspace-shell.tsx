@@ -1,10 +1,11 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { ArrowLeft, CircleDot } from "lucide-react";
+import { ArrowLeft, CircleDot, Menu } from "lucide-react";
 
+import { MobileNavDrawer } from "@/components/layout/mobile-nav-drawer";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
 
@@ -20,6 +21,7 @@ export function ProjectWorkspaceShell({ children }: { children: ReactNode }) {
 function ProjectWorkspaceTopBar() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const returnTarget = buildWorkspaceReturnTarget(searchParams);
     const slug = pathname.split("/").filter(Boolean)[0];
     const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
@@ -50,7 +52,18 @@ function ProjectWorkspaceTopBar() {
                         </span>
                     </Link>
 
-                    <nav className="thin-scrollbar ml-7 flex h-16 min-w-0 items-center gap-1 overflow-x-auto rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-1">
+                    <button
+                        type="button"
+                        className="ml-2 inline-flex size-9 shrink-0 items-center justify-center rounded-md transition hover:bg-[var(--studio-accent-soft)] hover:text-[var(--studio-accent)] md:hidden"
+                        style={{ color: "var(--studio-text-secondary)" }}
+                        onClick={() => setMobileNavOpen(true)}
+                        aria-label="打开导航菜单"
+                        title="导航菜单"
+                    >
+                        <Menu className="size-5" />
+                    </button>
+
+                    <nav className="thin-scrollbar ml-7 hidden h-16 min-w-0 items-center gap-1 overflow-x-auto rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-1 md:flex">
                         {navigationTools.map((tool) => {
                             const Icon = tool.icon;
                             return <ProjectWorkspaceLink key={tool.slug} icon={<Icon className="size-4" />} label={tool.label} href={getToolHref(tool.slug)} active={tool.slug === activeToolSlug} />;
@@ -62,7 +75,7 @@ function ProjectWorkspaceTopBar() {
                     {returnTarget ? (
                         <button
                             type="button"
-                            className="flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-sm font-medium transition hover:bg-[var(--studio-accent-soft)] hover:text-[var(--studio-accent)]"
+                            className="hidden h-8 shrink-0 items-center gap-2 rounded-md px-2 text-sm font-medium transition hover:bg-[var(--studio-accent-soft)] hover:text-[var(--studio-accent)] sm:flex"
                             style={{ color: "var(--studio-text-secondary)" }}
                             onClick={() => window.location.assign(returnTarget.href)}
                             title={returnTarget.label}
@@ -74,6 +87,7 @@ function ProjectWorkspaceTopBar() {
                     <UserStatusActions />
                 </div>
             </div>
+            <MobileNavDrawer open={mobileNavOpen} activeToolSlug={activeToolSlug} getHref={getToolHref} onClose={() => setMobileNavOpen(false)} />
         </header>
     );
 }
@@ -115,14 +129,16 @@ function ProjectWorkspaceLink({ icon, label, href, active }: { icon: ReactNode; 
     const iconStyle = { color: active ? "var(--studio-accent)" : "currentColor" };
 
     return (
-        <Link
+        <a
             href={href}
             className={`group relative flex h-9 shrink-0 items-center gap-2 rounded-md border px-3 text-sm leading-6 transition hover:bg-[var(--studio-panel-muted-bg)] ${active ? "font-semibold shadow-[inset_0_0_0_1px_rgba(125,211,252,0.12),0_10px_28px_rgba(56,189,248,0.10)]" : "font-medium"}`}
             style={active ? activeStyle : inactiveStyle}
         >
             <span className={`absolute inset-x-3 -bottom-px h-0.5 rounded-full transition ${active ? "bg-[var(--studio-accent)] opacity-100" : "bg-transparent opacity-0 group-hover:bg-[var(--studio-accent)] group-hover:opacity-100"}`} />
-            <span className="shrink-0 transition" style={iconStyle}>{icon}</span>
+            <span className="shrink-0 transition" style={iconStyle}>
+                {icon}
+            </span>
             <span className="whitespace-nowrap">{label}</span>
-        </Link>
+        </a>
     );
 }

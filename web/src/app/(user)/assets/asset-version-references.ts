@@ -22,7 +22,7 @@ export type AssetVersionReferenceHolder = {
     assetVersion?: AssetVersionReference;
 };
 
-export type AssetVersionUsageKind = "canvas-node" | "storyboard-shot" | "production-bible";
+export type AssetVersionUsageKind = "canvas-node" | "storyboard-shot" | "storyboard-table-shot" | "shot-group" | "production-bible";
 
 export type AssetVersionUsageReference = {
     id: string;
@@ -67,6 +67,23 @@ type StoryboardUsageShot = {
     assetRefs: Array<AssetVersionReferenceHolder & { kind?: string; role?: string }>;
 };
 
+type StoryboardTableUsageShot = {
+    id: string;
+    projectId: string;
+    order: number;
+    title?: string;
+    sceneName?: string;
+    assetRefs: Array<AssetVersionReferenceHolder & { kind?: string; role?: string }>;
+};
+
+type ShotGroupUsage = {
+    id: string;
+    projectId: string;
+    sceneName?: string;
+    assetRefs: Array<AssetVersionReferenceHolder & { kind?: string; role?: string }>;
+    audioRefs?: Array<AssetVersionReferenceHolder & { kind?: string; role?: string }>;
+};
+
 type ProductionBibleUsageItem = {
     id: string;
     projectId: string;
@@ -79,6 +96,8 @@ export type AssetVersionUsageSources = {
     canvasProjects?: CanvasUsageProject[];
     storyboardGroups?: StoryboardUsageGroup[];
     storyboardShots?: StoryboardUsageShot[];
+    storyboardTableShots?: StoryboardTableUsageShot[];
+    shotGroups?: ShotGroupUsage[];
     productionBibleItems?: ProductionBibleUsageItem[];
     projectTitles?: Record<string, string>;
 };
@@ -181,6 +200,44 @@ export function collectAssetVersionUsageReferences(asset: Pick<Asset, "id" | "up
         }
     }
 
+    for (const shot of sources.storyboardTableShots || []) {
+        shot.assetRefs.forEach((ref, index) => {
+            if (ref.assetId !== asset.id) return;
+            usages.push({
+                id: `storyboard-table:${shot.id}:${index}:${ref.assetId}`,
+                kind: "storyboard-table-shot",
+                objectId: shot.id,
+                objectTitle: shot.title || `镜头 ${shot.order}`,
+                contextTitle: shot.sceneName || "分镜头表",
+                projectId: shot.projectId,
+                projectTitle: projectTitles[shot.projectId],
+                role: ref.role,
+                objectType: ref.kind,
+                assetVersion: ref.assetVersion,
+                hasNewVersion: hasNewerAssetVersion(ref.assetVersion, asset),
+            });
+        });
+    }
+
+    for (const group of sources.shotGroups || []) {
+        [...group.assetRefs, ...(group.audioRefs || [])].forEach((ref, index) => {
+            if (ref.assetId !== asset.id) return;
+            usages.push({
+                id: `shot-group:${group.id}:${index}:${ref.assetId}`,
+                kind: "shot-group",
+                objectId: group.id,
+                objectTitle: group.sceneName || "镜头组",
+                contextTitle: "批量镜头组",
+                projectId: group.projectId,
+                projectTitle: projectTitles[group.projectId],
+                role: ref.role,
+                objectType: ref.kind,
+                assetVersion: ref.assetVersion,
+                hasNewVersion: hasNewerAssetVersion(ref.assetVersion, asset),
+            });
+        });
+    }
+
     for (const item of sources.productionBibleItems || []) {
         for (const ref of item.assetRefs) {
             if (ref.assetId !== asset.id) continue;
@@ -232,5 +289,7 @@ function stripReferenceHistory(reference: AssetVersionReference): AssetVersionRe
 function usageKindOrder(kind: AssetVersionUsageKind) {
     if (kind === "canvas-node") return 1;
     if (kind === "storyboard-shot") return 2;
-    return 3;
+    if (kind === "storyboard-table-shot") return 3;
+    if (kind === "shot-group") return 4;
+    return 5;
 }

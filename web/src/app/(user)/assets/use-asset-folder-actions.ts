@@ -13,12 +13,15 @@ type Props = {
         error: (content: string) => void;
         success: (content: string) => void;
     };
+    modal: {
+        confirm: (config: { cancelText: string; content: string; okButtonProps?: { danger?: boolean }; okText: string; onOk: () => void; title: string }) => void;
+    };
     removeFolder: (id: string) => void;
     setFolderFilter: (value: string | "all" | "root") => void;
     updateFolder: (id: string, name: string) => void;
 };
 
-export function useAssetFolderActions({ addFolder, creativeProjects, ensureProjectFolder, message, removeFolder, setFolderFilter, updateFolder }: Props) {
+export function useAssetFolderActions({ addFolder, creativeProjects, ensureProjectFolder, message, modal, removeFolder, setFolderFilter, updateFolder }: Props) {
     const [folderDialogOpen, setFolderDialogOpen] = useState(false);
     const [editingFolder, setEditingFolder] = useState<AssetFolder | null>(null);
     const [folderName, setFolderName] = useState("");
@@ -57,9 +60,18 @@ export function useAssetFolderActions({ addFolder, creativeProjects, ensureProje
     };
 
     const deleteFolder = (folder: AssetFolder) => {
-        removeFolder(folder.id);
-        setFolderFilter("all");
-        message.success("文件夹已删除，素材已移到未分组");
+        modal.confirm({
+            title: "删除文件夹？",
+            content: `只会删除「${folder.name}」文件夹，里面的素材会移到未分组。`,
+            okText: "删除文件夹",
+            okButtonProps: { danger: true },
+            cancelText: "取消",
+            onOk: () => {
+                removeFolder(folder.id);
+                setFolderFilter("all");
+                message.success("文件夹已删除，素材已移到未分组");
+            },
+        });
     };
 
     return {

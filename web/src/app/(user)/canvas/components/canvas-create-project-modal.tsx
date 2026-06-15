@@ -79,6 +79,42 @@ export function CanvasCreateProjectModal({
                         <Input placeholder={namePlaceholder} />
                     </Form.Item>
                 ) : null}
+                {scriptOptions ? (
+                    <div className="mb-4 rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
+                        <Typography.Text className="mb-3 block font-medium">本集剧本</Typography.Text>
+                        <Form.Item name="scriptSource" className="mb-3">
+                            <Select
+                                options={[
+                                    { label: "不绑定剧本", value: "none" },
+                                    { label: "从项目已有剧本分集选择", value: "existing" },
+                                    { label: "粘贴 / 导入本集剧本", value: "import" },
+                                ]}
+                            />
+                        </Form.Item>
+                        {scriptSource === "existing" ? (
+                            <Form.Item name="episodeId" label="选择本集" rules={[{ required: true, message: "请选择要绑定的分集" }]}>
+                                <Select
+                                    showSearch
+                                    placeholder={projectEpisodes.length ? "选择项目内已有分集" : "当前项目还没有分集"}
+                                    optionFilterProp="label"
+                                    disabled={!projectEpisodes.length}
+                                    options={projectEpisodes.map((episode) => ({ label: `第 ${episode.order} 集 · ${episode.title}`, value: episode.id }))}
+                                />
+                            </Form.Item>
+                        ) : null}
+                        {scriptSource === "import" ? (
+                            <>
+                                <Form.Item name="importedEpisodeTitle" label="本集标题" rules={[{ required: true, message: "请输入本集标题" }]}>
+                                    <Input placeholder="例如：第一集 毕业典礼" />
+                                </Form.Item>
+                                <Form.Item name="importedScriptText" label="本集剧本" rules={[{ required: true, message: "请粘贴本集剧本" }]}>
+                                    <Input.TextArea rows={7} placeholder="粘贴这一集的剧本正文。创建后会写入项目剧本分集，并保存一份画布快照。" />
+                                </Form.Item>
+                            </>
+                        ) : null}
+                    </div>
+                ) : null}
+                <Typography.Text className="mb-3 block font-medium">生成默认设置</Typography.Text>
                 <Form.Item name="presetKey" label="常用预设">
                     <Select
                         allowClear
@@ -150,41 +186,6 @@ export function CanvasCreateProjectModal({
                         <Select showSearch optionFilterProp="label" placeholder="选择文本模型" options={textModelOptions} />
                     </Form.Item>
                 </div>
-                {scriptOptions ? (
-                    <div className="mb-4 rounded-xl border border-stone-200 p-3 dark:border-stone-800">
-                        <Typography.Text className="mb-3 block font-medium">剧本来源</Typography.Text>
-                        <Form.Item name="scriptSource" className="mb-3">
-                            <Select
-                                options={[
-                                    { label: "不绑定剧本", value: "none" },
-                                    { label: "从项目已有剧本分集选择", value: "existing" },
-                                    { label: "粘贴 / 导入本集剧本", value: "import" },
-                                ]}
-                            />
-                        </Form.Item>
-                        {scriptSource === "existing" ? (
-                            <Form.Item name="episodeId" label="选择本集" rules={[{ required: true, message: "请选择要绑定的分集" }]}>
-                                <Select
-                                    showSearch
-                                    placeholder={projectEpisodes.length ? "选择项目内已有分集" : "当前项目还没有分集"}
-                                    optionFilterProp="label"
-                                    disabled={!projectEpisodes.length}
-                                    options={projectEpisodes.map((episode) => ({ label: `第 ${episode.order} 集 · ${episode.title}`, value: episode.id }))}
-                                />
-                            </Form.Item>
-                        ) : null}
-                        {scriptSource === "import" ? (
-                            <>
-                                <Form.Item name="importedEpisodeTitle" label="本集标题" rules={[{ required: true, message: "请输入本集标题" }]}>
-                                    <Input placeholder="例如：第一集 毕业典礼" />
-                                </Form.Item>
-                                <Form.Item name="importedScriptText" label="本集剧本" rules={[{ required: true, message: "请粘贴本集剧本" }]}>
-                                    <Input.TextArea rows={7} placeholder="粘贴这一集的剧本正文。创建后会写入项目剧本分集，并保存一份画布快照。" />
-                                </Form.Item>
-                            </>
-                        ) : null}
-                    </div>
-                ) : null}
                 <Typography.Text type="secondary" className="text-xs">
                     {helperText}
                 </Typography.Text>

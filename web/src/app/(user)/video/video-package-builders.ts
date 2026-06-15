@@ -4,7 +4,7 @@ import { activeVolcengineAssetURI } from "../../../services/volcengine-asset-met
 
 import type { AssetKind, ProductionPackage, WorkflowVideoReference } from "./use-video-package-store";
 
-export function buildImportedVideoPackage(input: { duration: string; episode: string; id: string; projectSlug?: string; prompt: string; references?: WorkflowVideoReference[]; segment: string; sourcePath: string }): ProductionPackage {
+export function buildImportedVideoPackage(input: { duration: string; episode: string; id: string; projectSlug?: string; sourceProjectId?: string; prompt: string; references?: WorkflowVideoReference[]; segment: string; sourcePath: string }): ProductionPackage {
     const duration = input.duration || inferDuration(input.prompt) || "6秒";
     const references = input.references || [];
     const usedReferences = referencesUsedByPrompt(input.prompt, references);
@@ -26,6 +26,7 @@ export function buildImportedVideoPackage(input: { duration: string; episode: st
         segment: input.segment,
         source: input.sourcePath,
         sourceEpisode: input.episode,
+        sourceProjectId: input.sourceProjectId,
         sourceProjectSlug: input.projectSlug,
         tags: summarizePromptTags(input.prompt),
         workflowReferences: packageReferences,

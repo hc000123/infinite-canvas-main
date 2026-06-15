@@ -60,7 +60,13 @@ function normalizeCanvasProjectPresetDuration(value?: string) {
 
 export function canvasProjectPresetSummary(preset?: CanvasProjectPreset) {
     if (!preset) return "未设置预设";
-    return [preset.resolution ? `${preset.resolution}p` : "", preset.ratio, preset.fps ? `${preset.fps}fps` : "", preset.defaultDuration ? `${preset.defaultDuration}s` : ""].filter(Boolean).join(" · ") || "未设置预设";
+    return [presetResolutionLabel(preset.resolution), preset.ratio, preset.fps ? `${preset.fps}fps` : "", preset.defaultDuration ? `${preset.defaultDuration}s` : ""].filter(Boolean).join(" · ") || "未设置预设";
+}
+
+function presetResolutionLabel(value?: string) {
+    const resolution = value?.trim();
+    if (!resolution) return "";
+    return resolution.toLowerCase().endsWith("p") ? resolution : `${resolution}p`;
 }
 
 export function canvasProjectPresetConfig(preset?: CanvasProjectPreset) {

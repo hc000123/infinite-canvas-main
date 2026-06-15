@@ -20,14 +20,18 @@ export function useAssetPageStores() {
         removeAsset: useAssetStore((state) => state.removeAsset),
         removeFolder: useAssetStore((state) => state.removeFolder),
         removeProductionBibleItem: useProductionBibleStore((state) => state.removeItem),
+        shotGroups: useStoryboardStore((state) => state.shotGroups),
         storyboardGroups: useStoryboardStore((state) => state.groups),
         storyboardShots: useStoryboardStore((state) => state.shots),
+        storyboardTableShots: useStoryboardStore((state) => state.tableShots),
         token: useUserStore((state) => state.token),
         updateAsset: useAssetStore((state) => state.updateAsset),
         updateCanvasProject: useCanvasStore((state) => state.updateProject),
         updateFolder: useAssetStore((state) => state.updateFolder),
         updateProductionBibleItem: useProductionBibleStore((state) => state.updateItem),
+        updateShotGroup: useStoryboardStore((state) => state.updateShotGroup),
         updateStoryboardShot: useStoryboardStore((state) => state.updateShot),
+        updateStoryboardTableShot: useStoryboardStore((state) => state.updateTableShot),
         volcengineAssetEnabled: useConfigStore((state) => state.publicSettings?.volcengineAsset?.enabled === true),
     };
 }

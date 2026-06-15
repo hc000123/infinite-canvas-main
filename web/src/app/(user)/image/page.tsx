@@ -461,7 +461,7 @@ export default function ImagePage() {
                     <div className="thin-scrollbar flex flex-col rounded-lg border border-[var(--studio-border-subtle)] bg-[rgba(13,17,24,0.72)] p-4 lg:order-2 lg:min-h-0 lg:overflow-y-auto lg:p-5">
                         <div className="mb-5 flex items-start justify-between gap-3 border-b border-white/[0.06] pb-4">
                             <div className="min-w-0">
-                                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--studio-accent)]">Image Studio</div>
+                                <div className="text-xs font-semibold tracking-normal text-[var(--studio-accent)]">图片生成</div>
                                 <h1 className="mt-2 text-2xl font-semibold leading-tight text-[var(--studio-text-primary)]">生图工作台</h1>
                                 {sourceContextLabel ? <p className="mt-2 break-words text-sm leading-5 text-[var(--studio-text-secondary)]">来自：{sourceContextLabel}</p> : null}
                             </div>
@@ -498,9 +498,9 @@ export default function ImagePage() {
                             </div>
 
                             <div className="min-w-0">
-                                <div className="mb-2 flex items-center justify-between gap-3">
+                                <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                     <span className="text-base font-semibold text-[var(--studio-text-primary)]">参考图</span>
-                                    <div className="flex gap-2">
+                                    <div className="flex flex-wrap gap-2">
                                         <Button size="middle" icon={<FolderPlus className="size-3.5" />} onClick={() => setAssetPickerOpen(true)}>
                                             素材库
                                         </Button>
@@ -560,7 +560,11 @@ export default function ImagePage() {
                             </div>
                         </div>
 
-                        <div className="mt-auto pt-6">
+                        <div className="sticky bottom-0 z-10 -mx-4 mt-5 border-t border-white/[0.08] bg-[linear-gradient(180deg,rgba(13,17,24,0)_0%,rgba(13,17,24,0.96)_24%,rgba(13,17,24,0.98)_100%)] px-4 pb-1 pt-5 lg:-mx-5 lg:px-5">
+                            <div className="mb-2 flex items-center justify-between gap-3 text-xs text-[var(--studio-text-muted)]">
+                                <span className="truncate">{prompt.trim() ? `将生成 ${generationCount} 张图片` : "先写一句画面描述，再开始生成"}</span>
+                                <span className="shrink-0">{running ? `已等待 ${formatDuration(elapsedMs)}` : effectiveConfig.size}</span>
+                            </div>
                             <Button type="primary" size="large" block icon={<Sparkles className="size-4" />} loading={running} disabled={!canGenerate || running} onClick={() => void generate()}>
                                 开始生成
                             </Button>

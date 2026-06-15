@@ -97,8 +97,12 @@ export function normalizeProductionBibleInput(input: ProductionBibleWriteInput):
     };
 }
 
+export function isReadableProductionBibleItem(item: Pick<ProductionBibleItem, "description" | "name">) {
+    return Boolean(item.name.trim() || item.description.trim()) && !looksLikeTechnicalJsonLine(item.name);
+}
+
 export function itemsForProductionBibleProject(items: ProductionBibleItem[], projectId: string, kind?: ProductionBibleKind) {
-    return items.filter((item) => item.projectId === projectId && (!kind || item.kind === kind)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return items.filter((item) => item.projectId === projectId && (!kind || item.kind === kind) && isReadableProductionBibleItem(item)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 function dedupeAssetRefs(refs: ProductionBibleAssetRef[]) {
@@ -115,4 +119,11 @@ function dedupeAssetRefs(refs: ProductionBibleAssetRef[]) {
 
 function uniqueStrings(values: string[]) {
     return Array.from(new Set(values));
+}
+
+function looksLikeTechnicalJsonLine(value: string) {
+    const text = value.trim();
+    if (!text) return false;
+    if (text === "{" || text === "}" || text === "[" || text === "]" || text.startsWith("```")) return true;
+    return /^["']?[A-Za-z_$][\w$-]*["']?\s*:/.test(text);
 }

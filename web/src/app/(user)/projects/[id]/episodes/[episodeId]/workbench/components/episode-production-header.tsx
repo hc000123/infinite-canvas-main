@@ -6,7 +6,6 @@ import { Workflow } from "lucide-react";
 
 import type { CanvasProject } from "../../../../../../canvas/stores/use-canvas-store";
 import type { ScriptEpisode } from "../../../../../../canvas/utils/script-management";
-import { videoWorkflowHref } from "../../../../../../original-workflow/video-workflow-routing";
 import { padEpisodeOrder } from "../episode-workbench-display";
 import { EpisodeStatusPill } from "./episode-module-panel";
 
@@ -20,7 +19,9 @@ export function EpisodeProductionHeader({
     nextActionText,
     onBackProject,
     onOpenCanvas,
+    onOpenOriginalWorkflow,
     onRunFullWorkflow,
+    openingOriginalWorkflow = false,
     project,
 }: {
     boundCanvas?: CanvasProject;
@@ -32,7 +33,9 @@ export function EpisodeProductionHeader({
     nextActionText: string;
     onBackProject: () => void;
     onOpenCanvas: () => void;
+    onOpenOriginalWorkflow: () => void;
     onRunFullWorkflow: () => void;
+    openingOriginalWorkflow?: boolean;
     project: { id: string; title: string };
 }) {
     return (
@@ -63,7 +66,7 @@ export function EpisodeProductionHeader({
                             </Button>
                         </>
                     ) : (
-                        <Button className="!h-9 !rounded-xl !px-3" href={videoWorkflowHref(episode.order, project.id, episode.id)} icon={<Workflow className="size-4" />} type="primary">
+                        <Button className="!h-9 !rounded-xl !px-3" icon={<Workflow className="size-4" />} loading={openingOriginalWorkflow} type="primary" onClick={onOpenOriginalWorkflow}>
                             打开视频工作流
                         </Button>
                     )}

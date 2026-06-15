@@ -161,3 +161,40 @@ test("usage collection reports canvas, storyboard, and production bible referenc
         ],
     );
 });
+
+test("usage collection reports storyboard table shot and shot group references", () => {
+    const asset = baseAsset();
+    const reference = buildAssetVersionReference(asset, "2026-06-03T00:00:00.000Z");
+
+    const usages = collectAssetVersionUsageReferences(asset, {
+        projectTitles: { "project-1": "竖屏短剧" },
+        storyboardTableShots: [
+            {
+                id: "table-shot-1",
+                projectId: "project-1",
+                order: 3,
+                title: "走廊对峙",
+                sceneName: "办公室",
+                assetRefs: [{ assetId: "asset-1", kind: "image", role: "reference_image", assetVersion: reference }],
+            },
+        ],
+        shotGroups: [
+            {
+                id: "shot-group-1",
+                projectId: "project-1",
+                sceneName: "办公室",
+                assetRefs: [{ assetId: "asset-1", kind: "video", role: "reference_video", assetVersion: reference }],
+                audioRefs: [{ assetId: "asset-1", kind: "audio", role: "reference_audio", assetVersion: reference }],
+            },
+        ],
+    });
+
+    assert.deepEqual(
+        usages.map((usage) => [usage.kind, usage.objectTitle, usage.contextTitle || "", usage.projectTitle || "", usage.role || ""]),
+        [
+            ["storyboard-table-shot", "走廊对峙", "办公室", "竖屏短剧", "reference_image"],
+            ["shot-group", "办公室", "批量镜头组", "竖屏短剧", "reference_video"],
+            ["shot-group", "办公室", "批量镜头组", "竖屏短剧", "reference_audio"],
+        ],
+    );
+});

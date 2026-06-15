@@ -15,7 +15,7 @@ export function AssetPageHeader({ onCreate, onExportAll, onImportClick, returnHr
     return (
         <header className="flex flex-col gap-5 border-b border-[var(--studio-border-subtle)] pb-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--studio-accent)]">Asset Library</div>
+                <div className="text-xs font-semibold tracking-normal text-[var(--studio-accent)]">素材库</div>
                 <h1 className="mt-2 text-3xl font-semibold leading-tight tracking-normal text-[var(--studio-text-primary)]">我的素材</h1>
                 <p className="mt-2 max-w-2xl text-[15px] leading-6 text-[var(--studio-text-secondary)]">统一管理图片、视频、音频与文本资产，快速定位项目文件夹、引用关系和生成来源。</p>
             </div>

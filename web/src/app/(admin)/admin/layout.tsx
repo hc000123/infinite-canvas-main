@@ -1,7 +1,7 @@
 "use client";
 
-import { ArrowLeftOutlined, FileTextOutlined, HomeOutlined, LogoutOutlined, PictureOutlined, RobotOutlined, SettingOutlined, TransactionOutlined, UserOutlined } from "@ant-design/icons";
-import { Button, Flex, Layout, Menu, Typography, theme } from "antd";
+import { ArrowLeftOutlined, FileTextOutlined, HomeOutlined, LogoutOutlined, MenuOutlined, PictureOutlined, RobotOutlined, SettingOutlined, TransactionOutlined, UserOutlined } from "@ant-design/icons";
+import { Button, Drawer, Flex, Grid, Layout, Menu, Spin, Typography, theme } from "antd";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useState, useTransition } from "react";
@@ -28,7 +28,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     const isReady = useUserStore((state) => state.isReady);
     const logout = useUserStore((state) => state.clearSession);
     const [pendingMenuKey, setPendingMenuKey] = useState("");
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [authWaitExpired, setAuthWaitExpired] = useState(false);
     const [, startTransition] = useTransition();
+    const screens = Grid.useBreakpoint();
+    const isCompact = screens.md === false;
     const activeKey = pathname.startsWith("/admin/settings")
         ? "/admin/settings"
         : pathname.startsWith("/admin/assets")
@@ -71,7 +75,17 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         setPendingMenuKey("");
+        setMobileMenuOpen(false);
     }, [pathname]);
+
+    useEffect(() => {
+        if (isReady) {
+            setAuthWaitExpired(false);
+            return;
+        }
+        const timer = window.setTimeout(() => setAuthWaitExpired(true), 6000);
+        return () => window.clearTimeout(timer);
+    }, [isReady]);
 
     const goBack = () => {
         if (window.history.length > 1) {
@@ -82,56 +96,108 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     };
 
     if (!isReady || !token || user?.role !== "admin") {
+        const fallbackTitle = !isReady ? (authWaitExpired ? "登录状态确认较慢" : "正在进入管理后台") : !token ? "请先登录管理员账号" : "当前账号没有管理后台权限";
+        const fallbackDescription = !isReady ? (authWaitExpired ? "你可以重新登录，或先回到项目工作台。" : "正在确认登录状态，请稍候。") : !token ? "登录后会自动回到管理后台。" : "你可以返回项目工作台继续使用。";
+
         return (
-            <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: antToken.colorBgLayout }}>
-                <span />
+            <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: antToken.colorBgLayout, padding: 24 }}>
+                <Flex vertical align="center" gap={16} style={{ textAlign: "center" }}>
+                    {!isReady ? <Spin /> : null}
+                    <Typography.Title level={4} style={{ margin: 0 }}>
+                        {fallbackTitle}
+                    </Typography.Title>
+                    <Typography.Text type="secondary">{fallbackDescription}</Typography.Text>
+                    {(isReady && !token) || authWaitExpired ? (
+                        <Button type="primary" href="/login?redirect=/admin">
+                            去登录
+                        </Button>
+                    ) : null}
+                    {(isReady && token && user?.role !== "admin") || authWaitExpired ? <Button href="/projects">前往项目</Button> : null}
+                </Flex>
             </div>
         );
     }
 
+    const menuItems = adminMenus.map((item) => ({
+        ...item,
+        label: item.label,
+        style: adminLayoutStyle.menuItem,
+    }));
+    const adminMenu = (
+        <Menu
+            mode="inline"
+            selectedKeys={[pendingMenuKey || activeKey]}
+            onClick={({ key }) => {
+                if (key === activeKey) return;
+                setPendingMenuKey(key);
+                startTransition(() => router.push(key));
+            }}
+            style={adminLayoutStyle.menu}
+            items={menuItems}
+        />
+    );
+    const sideActions = (
+        <Flex vertical gap={8}>
+            <Button block icon={<ArrowLeftOutlined />} onClick={goBack}>
+                返回上一页
+            </Button>
+            <Button block icon={<HomeOutlined />} href="/projects">
+                前往项目
+            </Button>
+            <Button block icon={<LogoutOutlined />} onClick={logout}>
+                退出登录
+            </Button>
+        </Flex>
+    );
+    const brand = (
+        <Flex align="center" gap={12} style={{ height: adminLayoutStyle.brandHeight, padding: "0 20px", borderBottom: `1px solid ${antToken.colorBorderSecondary}` }}>
+            <span aria-hidden style={{ display: "inline-block", width: 30, height: 30, background: antToken.colorText, WebkitMask: "url(/logo.svg) center / contain no-repeat", mask: "url(/logo.svg) center / contain no-repeat" }} />
+            <Typography.Text strong style={{ fontSize: 18, letterSpacing: 0 }}>
+                眨眼之间
+            </Typography.Text>
+        </Flex>
+    );
+    const drawerTitle = (
+        <Flex align="center" gap={10}>
+            <span aria-hidden style={{ display: "inline-block", width: 24, height: 24, background: antToken.colorText, WebkitMask: "url(/logo.svg) center / contain no-repeat", mask: "url(/logo.svg) center / contain no-repeat" }} />
+            <Typography.Text strong style={{ fontSize: 16, letterSpacing: 0 }}>
+                眨眼之间
+            </Typography.Text>
+        </Flex>
+    );
+
     return (
-        <Layout hasSider style={{ height: "100vh", overflow: "hidden", background: antToken.colorBgLayout }}>
-            <Layout.Sider width={adminLayoutStyle.siderWidth} style={{ height: "100vh", overflow: "hidden", background: antToken.colorBgContainer, borderRight: `1px solid ${antToken.colorBorder}` }}>
-                <Flex align="center" gap={12} style={{ height: adminLayoutStyle.brandHeight, padding: "0 20px", borderBottom: `1px solid ${antToken.colorBorderSecondary}` }}>
-                    <span aria-hidden style={{ display: "inline-block", width: 30, height: 30, background: antToken.colorText, WebkitMask: "url(/logo.svg) center / contain no-repeat", mask: "url(/logo.svg) center / contain no-repeat" }} />
-                    <Typography.Text strong style={{ fontSize: 18, letterSpacing: 0 }}>
-                        眨眼之间
-                    </Typography.Text>
-                </Flex>
-                <Menu
-                    mode="inline"
-                    selectedKeys={[pendingMenuKey || activeKey]}
-                    onClick={({ key }) => {
-                        if (key === activeKey) return;
-                        setPendingMenuKey(key);
-                        startTransition(() => router.push(key));
-                    }}
-                    style={adminLayoutStyle.menu}
-                    items={adminMenus.map((item) => ({
-                        ...item,
-                        label: item.label,
-                        style: adminLayoutStyle.menuItem,
-                    }))}
-                />
-                <Flex vertical gap={8} style={{ position: "absolute", bottom: 0, insetInline: 0, padding: 12, borderTop: `1px solid ${antToken.colorBorder}`, background: antToken.colorBgContainer }}>
-                    <Button block icon={<ArrowLeftOutlined />} onClick={goBack}>
-                        返回上一页
-                    </Button>
-                    <Button block icon={<HomeOutlined />} href="/projects">
-                        前往项目
-                    </Button>
-                    <Button block icon={<LogoutOutlined />} onClick={logout}>
-                        退出登录
-                    </Button>
-                </Flex>
-            </Layout.Sider>
+        <Layout hasSider={!isCompact} style={{ height: "100dvh", overflow: "hidden", background: antToken.colorBgLayout }}>
+            {!isCompact ? (
+                <Layout.Sider width={adminLayoutStyle.siderWidth} style={{ height: "100dvh", overflow: "hidden", background: antToken.colorBgContainer, borderRight: `1px solid ${antToken.colorBorder}` }}>
+                    {brand}
+                    {adminMenu}
+                    <div style={{ position: "absolute", bottom: 0, insetInline: 0, padding: 12, borderTop: `1px solid ${antToken.colorBorder}`, background: antToken.colorBgContainer }}>{sideActions}</div>
+                </Layout.Sider>
+            ) : (
+                <Drawer title={drawerTitle} placement="left" size={280} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} footer={sideActions} styles={{ body: { padding: 0 }, footer: { borderTop: `1px solid ${antToken.colorBorder}` } }}>
+                    {adminMenu}
+                </Drawer>
+            )}
             <Layout style={{ background: antToken.colorBgLayout }}>
                 <Layout.Header
-                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: adminLayoutStyle.headerHeight, padding: "0 24px", background: antToken.colorBgContainer, borderBottom: `1px solid ${antToken.colorBorder}` }}
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        height: adminLayoutStyle.headerHeight,
+                        padding: isCompact ? "0 12px" : "0 24px",
+                        background: antToken.colorBgContainer,
+                        borderBottom: `1px solid ${antToken.colorBorder}`,
+                    }}
                 >
-                    <Typography.Title level={5} style={{ margin: 0 }}>
-                        {pageTitle}
-                    </Typography.Title>
+                    <Flex align="center" gap={8} style={{ minWidth: 0 }}>
+                        {isCompact ? <Button aria-label="打开后台菜单" icon={<MenuOutlined />} onClick={() => setMobileMenuOpen(true)} /> : null}
+                        <Typography.Title level={5} style={{ margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {pageTitle}
+                        </Typography.Title>
+                    </Flex>
                     <Flex align="center" gap={4}>
                         <UserStatusActions showConfig={false} />
                     </Flex>

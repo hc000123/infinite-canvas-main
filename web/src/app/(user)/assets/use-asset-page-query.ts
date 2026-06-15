@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { Asset, AssetFolder, AssetKind } from "@/stores/use-asset-store";
 import type { CanvasProject } from "../canvas/stores/use-canvas-store";
-import type { ProductionBibleItem } from "../canvas/utils/production-bible";
-import type { StoryboardGroup, StoryboardShot } from "../canvas/utils/storyboard-management";
+import { isReadableProductionBibleItem, type ProductionBibleItem } from "../canvas/utils/production-bible";
+import type { ShotGroup, StoryboardGroup, StoryboardShot, StoryboardTableShot } from "../canvas/utils/storyboard-management";
 import type { CreativeProject } from "../projects/creative-projects";
 import { assetGenerationFilterOptions } from "./asset-generation";
 import { buildAssetProjectResultGroups } from "./asset-project-groups";
@@ -35,11 +35,13 @@ type Props = {
     previewAsset: Asset | null;
     productionBibleItems: ProductionBibleItem[];
     projects: CanvasProject[];
+    shotGroups: ShotGroup[];
     storyboardGroups: StoryboardGroup[];
     storyboardShots: StoryboardShot[];
+    storyboardTableShots: StoryboardTableShot[];
 };
 
-export function useAssetPageQuery({ assets, creativeProjects, folders, initialProjectId, previewAsset, productionBibleItems, projects, storyboardGroups, storyboardShots }: Props) {
+export function useAssetPageQuery({ assets, creativeProjects, folders, initialProjectId, previewAsset, productionBibleItems, projects, shotGroups, storyboardGroups, storyboardShots, storyboardTableShots }: Props) {
     const [keyword, setKeyword] = useState("");
     const [kindFilter, setKindFilter] = useState<AssetKind | "all">("all");
     const [folderFilter, setFolderFilter] = useState<string | "all" | "root">("all");
@@ -72,10 +74,13 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
     const canvasLibraryTitles = useMemo(() => Object.fromEntries(projects.map((project) => [project.id, project.title || "未命名画布"])), [projects]);
     const projectContexts = useMemo(() => buildAssetProjectContexts(creativeProjects, projects), [creativeProjects, projects]);
     const projectLibraryProjectTitles = useMemo(() => Object.fromEntries(projectContexts.map((project) => [project.id, project.title])), [projectContexts]);
-    const projectReferenceIds = useMemo(() => Array.from(new Set([...projectContexts.map((project) => project.id), ...productionBibleItems.map((item) => item.projectId), ...storyboardGroups.map((group) => group.projectId)].filter(Boolean))), [productionBibleItems, projectContexts, storyboardGroups]);
+    const projectReferenceIds = useMemo(
+        () => Array.from(new Set([...projectContexts.map((project) => project.id), ...productionBibleItems.map((item) => item.projectId), ...storyboardGroups.map((group) => group.projectId), ...storyboardTableShots.map((shot) => shot.projectId), ...shotGroups.map((group) => group.projectId)].filter(Boolean))),
+        [productionBibleItems, projectContexts, shotGroups, storyboardGroups, storyboardTableShots],
+    );
     const projectReferencedAssetIdsByProject = useMemo(
-        () => new Map(projectReferenceIds.map((projectId) => [projectId, collectProjectReferencedAssetIds(projectId, productionBibleItems, storyboardGroups, storyboardShots)])),
-        [productionBibleItems, projectReferenceIds, storyboardGroups, storyboardShots],
+        () => new Map(projectReferenceIds.map((projectId) => [projectId, collectProjectReferencedAssetIds(projectId, productionBibleItems, storyboardGroups, storyboardShots, storyboardTableShots, shotGroups)])),
+        [productionBibleItems, projectReferenceIds, shotGroups, storyboardGroups, storyboardShots, storyboardTableShots],
     );
     const previewAssetUsageReferences = useMemo(() => {
         if (!previewAsset) return [];
@@ -83,10 +88,12 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
             canvasProjects: projects,
             storyboardGroups,
             storyboardShots,
+            storyboardTableShots,
+            shotGroups,
             productionBibleItems,
             projectTitles: projectLibraryProjectTitles,
         });
-    }, [previewAsset, productionBibleItems, projectLibraryProjectTitles, projects, storyboardGroups, storyboardShots]);
+    }, [previewAsset, productionBibleItems, projectLibraryProjectTitles, projects, shotGroups, storyboardGroups, storyboardShots, storyboardTableShots]);
     const storyboardGroupOptions = useMemo(
         () =>
             storyboardGroups
@@ -97,8 +104,8 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
     );
     const generationFilterOptions = useMemo(() => assetGenerationFilterOptions(validAssets), [validAssets]);
     const projectReferencedAssetIds = useMemo(() => {
-        return collectProjectReferencedAssetIds(projectContextFilter, productionBibleItems, storyboardGroups, storyboardShots);
-    }, [productionBibleItems, projectContextFilter, storyboardGroups, storyboardShots]);
+        return collectProjectReferencedAssetIds(projectContextFilter, productionBibleItems, storyboardGroups, storyboardShots, storyboardTableShots, shotGroups);
+    }, [productionBibleItems, projectContextFilter, shotGroups, storyboardGroups, storyboardShots, storyboardTableShots]);
     const storyboardGroupAssetIds = useMemo(() => collectStoryboardGroupReferencedAssetIds(storyboardGroupFilter, storyboardShots), [storyboardGroupFilter, storyboardShots]);
     const outdatedAssetVersionUsages = useMemo(
         () =>
@@ -108,12 +115,14 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
                     canvasProjects: projects,
                     storyboardGroups,
                     storyboardShots,
+                    storyboardTableShots,
+                    shotGroups,
                     productionBibleItems,
                     projectTitles: projectLibraryProjectTitles,
                 },
                 projectContextFilter,
             ),
-        [validAssets, projects, storyboardGroups, storyboardShots, productionBibleItems, projectLibraryProjectTitles, projectContextFilter],
+        [validAssets, projects, shotGroups, storyboardGroups, storyboardShots, storyboardTableShots, productionBibleItems, projectLibraryProjectTitles, projectContextFilter],
     );
     const filteredAssets = useMemo(() => {
         return sortAssetList(
@@ -159,7 +168,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
         if (!projectContextFilter && folderFilter !== "all") return [];
         const query = keyword.trim().toLowerCase();
         return productionBibleItems
-            .filter((item) => (!projectContextFilter || item.projectId === projectContextFilter) && (!query || productionBibleSearchText(item).includes(query)))
+            .filter((item) => isReadableProductionBibleItem(item) && (!projectContextFilter || item.projectId === projectContextFilter) && (!query || productionBibleSearchText(item).includes(query)))
             .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     }, [folderFilter, generationActionFilter, generationModelProviderFilter, generationSourceFilter, generationTaskFilter, keyword, kindFilter, productionBibleItems, projectContextFilter, projectLibraryFilter, referenceVersionFilter, storyboardGroupFilter]);
     const visibleAssetGroups = useMemo(

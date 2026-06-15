@@ -137,7 +137,11 @@ func ListCreditLogs(q model.Query) ([]model.CreditLog, int64, error) {
 	tx := db.Model(&model.CreditLog{})
 	if keyword := strings.TrimSpace(q.Keyword); keyword != "" {
 		like := "%" + keyword + "%"
-		tx = tx.Where("user_id LIKE ? OR type LIKE ? OR remark LIKE ? OR related_id LIKE ?", like, like, like, like)
+		if types := creditLogTypesForKeyword(keyword); len(types) > 0 {
+			tx = tx.Where("user_id LIKE ? OR type LIKE ? OR type IN ? OR remark LIKE ? OR related_id LIKE ?", like, like, types, like, like)
+		} else {
+			tx = tx.Where("user_id LIKE ? OR type LIKE ? OR remark LIKE ? OR related_id LIKE ?", like, like, like, like)
+		}
 	}
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
@@ -154,6 +158,21 @@ func DeleteCreditLog(id string) error {
 		return err
 	}
 	return db.Delete(&model.CreditLog{}, "id = ?", id).Error
+}
+
+func creditLogTypesForKeyword(keyword string) []model.CreditLogType {
+	keyword = strings.ToLower(strings.TrimSpace(keyword))
+	result := []model.CreditLogType{}
+	if strings.Contains(keyword, "消费") {
+		result = append(result, model.CreditLogTypeAIConsume)
+	}
+	if strings.Contains(keyword, "返还") {
+		result = append(result, model.CreditLogTypeAIRefund)
+	}
+	if strings.Contains(keyword, "调整") || strings.Contains(keyword, "后台") {
+		result = append(result, model.CreditLogTypeAdminAdjust)
+	}
+	return result
 }
 
 // DeleteUser 删除指定用户。

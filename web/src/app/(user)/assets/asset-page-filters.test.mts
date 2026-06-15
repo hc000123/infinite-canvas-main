@@ -42,7 +42,7 @@ test("builds asset project contexts with creative projects before legacy canvase
     ]);
 });
 
-test("collects project referenced asset ids from production bible and storyboard shots", () => {
+test("collects project referenced asset ids from production bible, storyboard, table shots, and shot groups", () => {
     const refs = projectReferencedAssetIds(
         "project-1",
         [{ projectId: "project-1", assetRefs: [{ assetId: "asset-a" }, { assetId: "asset-b" }] }],
@@ -51,9 +51,17 @@ test("collects project referenced asset ids from production bible and storyboard
             { groupId: "group-1", assetRefs: [{ assetId: "asset-c" }], resultAssetIds: ["asset-result"], primaryAssetId: "asset-primary" },
             { groupId: "other-group", assetRefs: [{ assetId: "asset-x" }] },
         ],
+        [
+            { projectId: "project-1", assetRefs: [{ assetId: "asset-table" }] },
+            { projectId: "project-2", assetRefs: [{ assetId: "asset-table-other" }] },
+        ],
+        [
+            { projectId: "project-1", assetRefs: [{ assetId: "asset-group" }], audioRefs: [{ assetId: "asset-audio" }], resultAssetIds: ["asset-group-result"], primaryAssetId: "asset-group-primary" },
+            { projectId: "project-2", assetRefs: [{ assetId: "asset-group-other" }] },
+        ],
     );
 
-    assert.deepEqual([...refs].sort(), ["asset-a", "asset-b", "asset-c", "asset-primary", "asset-result"]);
+    assert.deepEqual([...refs].sort(), ["asset-a", "asset-audio", "asset-b", "asset-c", "asset-group", "asset-group-primary", "asset-group-result", "asset-primary", "asset-result", "asset-table"]);
     assert.deepEqual([...projectReferencedAssetIds("", [], [], [])], []);
 });
 

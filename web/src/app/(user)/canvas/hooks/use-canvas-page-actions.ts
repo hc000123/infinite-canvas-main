@@ -3,6 +3,7 @@ import { useCallback, useMemo, type Dispatch, type SetStateAction } from "react"
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { useCanvasStore, type CanvasProject } from "../stores/use-canvas-store";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "../types";
+import { canvasPageReturnTargetForProject, canvasVideoWorkflowHref, originalWorkflowHref, videoWorkflowEpisodeFromCanvasProject } from "./canvas-page-action-targets";
 
 type CanvasPageActionMessage = {
     success: (text: string) => void;
@@ -105,6 +106,11 @@ export function useCanvasPageActions({
     }, [activeChatId, backgroundMode, canvasId, chatSessions, connections, currentProject, flushProjects, message, nodes, showImageInfo, updateProject, viewport]);
 
     const openEpisodeWorkbench = useCallback(() => {
+        const videoWorkflowHref = canvasVideoWorkflowHref(currentProject);
+        if (videoWorkflowHref) {
+            navigate(videoWorkflowHref);
+            return;
+        }
         if (currentProject?.projectId && currentProject.episodeId) {
             navigate(`/projects/${currentProject.projectId}/episodes/${currentProject.episodeId}/workbench`);
             return;
@@ -117,6 +123,11 @@ export function useCanvasPageActions({
     }, [currentProject, navigate]);
 
     const openWorkflowAssistant = useCallback(() => {
+        const videoWorkflowEpisode = videoWorkflowEpisodeFromCanvasProject(currentProject);
+        if (videoWorkflowEpisode) {
+            navigate(originalWorkflowHref(videoWorkflowEpisode));
+            return;
+        }
         if (currentProject?.projectId && currentProject.episodeId) {
             navigate(`/projects/${currentProject.projectId}/episodes/${currentProject.episodeId}/workflow?canvasId=${encodeURIComponent(canvasId)}`);
             return;
@@ -128,13 +139,7 @@ export function useCanvasPageActions({
         navigate("/projects");
     }, [canvasId, currentProject, navigate]);
 
-    const returnTarget = useMemo(() => {
-        if (currentProject?.projectId && currentProject.episodeId) {
-            return { href: `/projects/${currentProject.projectId}/episodes/${currentProject.episodeId}/workbench`, label: "返回本集生产流程" };
-        }
-        if (currentProject?.projectId) return { href: `/projects/${currentProject.projectId}`, label: "返回项目详情" };
-        return { href: "/projects", label: "项目工作台" };
-    }, [currentProject?.episodeId, currentProject?.projectId]);
+    const returnTarget = useMemo(() => canvasPageReturnTargetForProject(currentProject), [currentProject]);
 
     const returnToParent = useCallback(() => navigate(returnTarget.href), [navigate, returnTarget.href]);
 

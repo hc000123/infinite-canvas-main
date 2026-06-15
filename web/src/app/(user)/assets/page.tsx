@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { App, Form } from "antd";
 
@@ -34,9 +34,10 @@ export default function AssetsPage() {
 }
 
 function AssetsPageContent() {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const searchParams = useSearchParams();
     const returnTarget = buildAssetsPageReturnTarget(searchParams);
+    const requestedAssetId = searchParams.get("assetId") || "";
     const [form] = Form.useForm<AssetFormValues>();
     const coverInputRef = useRef<HTMLInputElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
@@ -55,20 +56,34 @@ function AssetsPageContent() {
         removeAsset,
         removeFolder,
         removeProductionBibleItem,
+        shotGroups,
         storyboardGroups,
         storyboardShots,
+        storyboardTableShots,
         token,
         updateAsset,
         updateCanvasProject,
         updateFolder,
         updateProductionBibleItem,
+        updateShotGroup,
         updateStoryboardShot,
+        updateStoryboardTableShot,
         volcengineAssetEnabled,
     } = useAssetPageStores();
     const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
+    const [openedRequestedAssetId, setOpenedRequestedAssetId] = useState("");
     const [bulkOutdatedOpen, setBulkOutdatedOpen] = useState(false);
     const [deletingProductionBibleItem, setDeletingProductionBibleItem] = useState<ProductionBibleItem | null>(null);
     const [bulkProductionBibleDeleteOpen, setBulkProductionBibleDeleteOpen] = useState(false);
+
+    useEffect(() => {
+        if (!requestedAssetId || openedRequestedAssetId === requestedAssetId) return;
+        const asset = assets.find((item) => item.id === requestedAssetId);
+        if (!asset) return;
+        setPreviewAsset(asset);
+        setOpenedRequestedAssetId(requestedAssetId);
+    }, [assets, openedRequestedAssetId, requestedAssetId]);
+
     const {
         activeFolderId,
         activeFolderName,
@@ -124,14 +139,17 @@ function AssetsPageContent() {
         previewAsset,
         productionBibleItems,
         projects,
+        shotGroups,
         storyboardGroups,
         storyboardShots,
+        storyboardTableShots,
     });
     const { deleteFolder, editingFolder, folderDialogOpen, folderName, openCreateFolder, openEditFolder, saveFolder, setFolderDialogOpen, setFolderName } = useAssetFolderActions({
         addFolder,
         creativeProjects,
         ensureProjectFolder,
         message,
+        modal,
         removeFolder,
         setFolderFilter,
         updateFolder,
@@ -257,10 +275,14 @@ function AssetsPageContent() {
         removeOutdatedUsageIds,
         selectedOutdatedUsageItems,
         setBulkOutdatedOpen,
+        shotGroups,
         storyboardShots,
+        storyboardTableShots,
         updateCanvasProject,
         updateProductionBibleItem,
+        updateShotGroup,
         updateStoryboardShot,
+        updateStoryboardTableShot,
         validAssets,
     });
     const { confirmDelete, copyAssetText, deletingAsset, downloadAssetVersion, downloadMedia, exportAllAssets, exportSelectedAssets, restoreAssetVersion, setDeletingAsset } = useAssetMediaActions({

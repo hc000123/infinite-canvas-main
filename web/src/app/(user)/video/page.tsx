@@ -19,11 +19,21 @@ import { useUserStore } from "@/stores/use-user-store";
 import { useVolcengineAssetReview } from "../assets/use-volcengine-asset-review";
 import { buildAssetVersionedUpdatePatch } from "../assets/asset-version-history";
 import { NODE_DEFAULT_SIZE } from "../canvas/constants";
+import { useScriptStore } from "../canvas/stores/use-script-store";
 import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata } from "../canvas/types";
+import { useCreativeProjectStore } from "../projects/use-creative-project-store";
 import { formatVideoGenerationError, isVideoChannelAuthError, isVideoChannelUpstreamError, normalizeVideoGenerationErrorMessage, sanitizeVideoGenerationErrorMessage } from "./video-generation-errors";
-import { enterpriseVideoChannelReadiness, isWorkflowReferenceAssetBound, resolveWorkflowReferenceAssetForName, resolveWorkflowReferenceAssets, resolveWorkflowReferenceImages, workflowReferenceBindingSummary, workflowVideoGenerationReadiness } from "./video-package-builders";
-import { useVideoPackageStore, type AssetStatus, type CanvasStatus, type PackageGenerationStatus, type ProductionPackage, type PromptStatus } from "./use-video-package-store";
+import {
+    enterpriseVideoChannelReadiness,
+    isWorkflowReferenceAssetBound,
+    resolveWorkflowReferenceAssetForName,
+    resolveWorkflowReferenceAssets,
+    resolveWorkflowReferenceImages,
+    workflowReferenceBindingSummary,
+    workflowVideoGenerationReadiness,
+} from "./video-package-builders";
+import { useVideoPackageStore, type AssetStatus, type CanvasStatus, type PackageGeneration, type PackageGenerationStatus, type ProductionPackage, type PromptStatus } from "./use-video-package-store";
 
 type FilterKey = "all" | "review" | "missing" | "ready" | "imported" | "generated";
 type PackageUploadedVideo = UploadedFile & { aiTask?: AiTaskLedger };
@@ -144,10 +154,11 @@ const resolutionOptions = ["720p", "1080p"];
 const motionOptions = ["低", "中", "中高", "高"];
 
 export default function VideoPage() {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const searchParams = useSearchParams();
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
+    const hasLoadedPublicSettings = useConfigStore((state) => state.hasLoadedPublicSettings);
     const isPublicSettingsLoading = useConfigStore((state) => state.isPublicSettingsLoading);
     const loadPublicSettings = useConfigStore((state) => state.loadPublicSettings);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
@@ -163,6 +174,10 @@ export default function VideoPage() {
     const createCanvas = useCanvasStore((state) => state.createProject);
     const flushCanvases = useCanvasStore((state) => state.flushProjects);
     const updateCanvas = useCanvasStore((state) => state.updateProject);
+    const attachCanvas = useCreativeProjectStore((state) => state.attachCanvas);
+    const ensureUnfiledProject = useCreativeProjectStore((state) => state.ensureUnfiledProject);
+    const sourceProjects = useCreativeProjectStore((state) => state.projects);
+    const sourceEpisodes = useScriptStore((state) => state.episodes);
     const [demoPackages, setDemoPackages] = useState(initialPackages);
     const [, setReviewPreviewAsset] = useState<Asset | null>(null);
     const [selectedId, setSelectedId] = useState(initialPackages[1].id);
@@ -174,21 +189,30 @@ export default function VideoPage() {
 
     const targetEpisode = searchParams.get("episode") || "";
     const targetProjectSlug = searchParams.get("projectSlug") || "";
-    const scopedImportedPackages = targetEpisode ? importedPackages.filter((item) => item.sourceEpisode === targetEpisode) : importedPackages;
+    const sourceProjectId = searchParams.get("sourceProjectId") || "";
+    const sourceEpisodeId = searchParams.get("sourceEpisodeId") || "";
+    const scopedImportedPackages = useMemo(() => (targetEpisode ? importedPackages.filter((item) => item.sourceEpisode === targetEpisode) : importedPackages), [importedPackages, targetEpisode]);
     const hasImportedPackages = scopedImportedPackages.length > 0;
-    const packages = hasImportedPackages ? scopedImportedPackages : targetEpisode ? [] : demoPackages;
+    const packages = useMemo(() => (hasImportedPackages ? [...scopedImportedPackages] : targetEpisode ? [] : [...demoPackages]), [demoPackages, hasImportedPackages, scopedImportedPackages, targetEpisode]);
     const selected = packages.find((item) => item.id === selectedId) || packages[0];
     const detailPackage = packages.find((item) => item.id === detailPackageId) || null;
     const sourceProjectSlug = (hasImportedPackages ? packages[0]?.sourceProjectSlug : "") || targetProjectSlug;
+    const sourceProject = sourceProjectId ? sourceProjects.find((item) => item.id === sourceProjectId) : undefined;
+    const sourceEpisode = sourceEpisodeId ? sourceEpisodes.find((item) => item.id === sourceEpisodeId) : undefined;
+    const readableSourceLabel = sourceProject || sourceEpisode ? `${sourceProject?.title || "未命名项目"} / ${sourceEpisode ? `第 ${String(sourceEpisode.order || 1).padStart(2, "0")} 集 · ${sourceEpisode.title}` : "未绑定分集"}` : "";
     const visiblePackages = useMemo(() => packages.filter((item) => matchFilter(item, filter)), [packages, filter]);
-    const workflowReferenceAssets = useMemo(() => uniqueAssets(packages.flatMap((item) => resolveWorkflowReferenceAssets(item, libraryAssets))).filter((asset) => asset.kind === "image" || asset.kind === "video" || asset.kind === "audio"), [libraryAssets, packages]);
-    const sourceLabel = hasImportedPackages ? `视频工作流导入 / ${packages[0]?.sourceEpisode || "未标注集数"}` : targetEpisode ? `视频工作流导入 / ${targetEpisode}` : "霓虹之下 / 第 05 集 / 真相浮出";
+    const workflowReferenceAssets = useMemo(
+        () => uniqueAssets(packages.flatMap((item) => resolveWorkflowReferenceAssets(item, libraryAssets))).filter((asset) => asset.kind === "image" || asset.kind === "video" || asset.kind === "audio"),
+        [libraryAssets, packages],
+    );
+    const sourceLabel = hasImportedPackages ? `视频工作流导入 / ${readableSourceLabel || packages[0]?.sourceEpisode || "未标注集数"}` : targetEpisode ? `视频工作流导入 / ${readableSourceLabel || targetEpisode}` : "霓虹之下 / 第 05 集 / 真相浮出";
     const workflowCanvasKey = videoWorkflowCanvasKey(packages, targetEpisode);
     const workflowCanvas = useMemo(() => (workflowCanvasKey ? canvases.find((canvas) => canvas.episodeId === workflowCanvasKey) : undefined), [canvases, workflowCanvasKey]);
     const confirmedCount = packages.filter((item) => item.promptStatus === "已确认").length;
     const generatedCount = packages.filter((item) => item.canvasStatus === "已生成" || item.generation?.status === "succeeded").length;
     const missingCount = packages.filter((item) => item.assetStatus !== "完整").length;
     const reviewCount = packages.filter((item) => item.promptStatus === "待审核").length;
+    const isPublicSettingsPending = isPublicSettingsLoading || !hasLoadedPublicSettings;
 
     useEffect(() => {
         void loadPublicSettings();
@@ -226,7 +250,7 @@ export default function VideoPage() {
                             <Video className="mx-auto mb-4 size-9 text-stone-500" />
                             <h2 className="text-xl font-semibold text-white">这一集还没有视频生产包</h2>
                             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-400">请先回到视频工作流，完成 Stage 3 质量门并同步 Copy-only 到视频生成界面。</p>
-                            <Button className="mt-5" href={targetEpisode ? originalWorkflowHref(targetEpisode, sourceProjectSlug) : "/original-workflow"} type="primary">
+                            <Button className="mt-5" href={targetEpisode ? originalWorkflowHref(targetEpisode, { projectSlug: sourceProjectSlug, sourceEpisodeId, sourceProjectId }) : "/original-workflow"} type="primary">
                                 返回视频工作流
                             </Button>
                         </div>
@@ -244,7 +268,7 @@ export default function VideoPage() {
         updatePackage(item.id, { config: { ...item.config, ...patch } });
     };
     const requireEnterpriseVideoChannel = (config: AiConfig, targetId?: string) => {
-        const readiness = enterpriseVideoChannelReadiness({ isPublicSettingsLoading, videoProtocol: config.videoProtocol });
+        const readiness = enterpriseVideoChannelReadiness({ isPublicSettingsLoading: isPublicSettingsPending, videoProtocol: config.videoProtocol });
         if (readiness.status === "ready") return true;
         if (readiness.status === "checking") message.info(readiness.message);
         else {
@@ -286,9 +310,11 @@ export default function VideoPage() {
     const importPackagesToCanvas = (items: ProductionPackage[]) => {
         const sourceEpisode = videoWorkflowEpisodeLabel(items, targetEpisode);
         const canvasTitle = `视频工作流 ${sourceEpisode} 生产画布`;
+        const projectId = items.find((item) => item.sourceProjectId)?.sourceProjectId || sourceProjectId || ensureUnfiledProject();
         const canvasId =
             workflowCanvas?.id ||
             createCanvas(canvasTitle, undefined, {
+                projectId,
                 episodeContext: {
                     episodeId: workflowCanvasKey,
                     episodeTitle: sourceEpisode,
@@ -296,9 +322,11 @@ export default function VideoPage() {
                     scriptSnapshot: items.map((item) => `${item.id} ${item.segment}`).join("\n"),
                 },
             });
+        attachCanvas(projectId, canvasId);
         const currentCanvas = canvases.find((canvas) => canvas.id === canvasId) || workflowCanvas;
         const { focusNodeId, nodes } = mergeVideoPackagesIntoCanvasNodes(currentCanvas?.nodes || [], items, effectiveConfig);
         updateCanvas(canvasId, {
+            projectId,
             nodes,
             scriptSnapshot: packages.map((item) => `${item.id} ${item.segment}`).join("\n"),
         });
@@ -319,12 +347,9 @@ export default function VideoPage() {
         openCanvasImportResult(result, `${item.id} 已导入画布，正在进入`);
     };
     const savePackageVideoResult = async (item: ProductionPackage, config: AiConfig, video: PackageUploadedVideo, finalTask: NormalizedVideoTask | null) => {
-        const existingAsset = libraryAssets.find(
-            (asset) =>
-                asset.kind === "video" &&
-                readWorkflowPackageId(asset) === item.id &&
-                readWorkflowSourceEpisode(asset) === (item.sourceEpisode || ""),
-        );
+        const existingAsset = libraryAssets.find((asset) => asset.kind === "video" && readWorkflowPackageId(asset) === item.id && readWorkflowSourceEpisode(asset) === (item.sourceEpisode || ""));
+        const savedAt = new Date().toISOString();
+        const generation = buildPackageAssetGeneration(item, config, video, finalTask, savedAt);
         const assetInput = {
             coverUrl: "",
             data: {
@@ -338,6 +363,7 @@ export default function VideoPage() {
             kind: "video",
             metadata: {
                 aiTask: video.aiTask,
+                generation,
                 originalWorkflow: {
                     packageId: item.id,
                     source: item.source,
@@ -366,10 +392,11 @@ export default function VideoPage() {
                         metadata: {
                             ...(existingAsset.metadata || {}),
                             ...assetInput.metadata,
+                            generations: [...readGenerationList(existingAsset.metadata?.generations), generation],
                             generationVersions: [...readGenerationVersions(existingAsset), video.aiTask].filter(Boolean),
                         },
                     },
-                    new Date().toISOString(),
+                    savedAt,
                     `${item.id} 视频重新生成`,
                 ),
             );
@@ -383,7 +410,7 @@ export default function VideoPage() {
             status: "succeeded",
             taskId: finalTask?.id,
             taskStatus: finalTask?.status || "succeeded",
-            updatedAt: new Date().toISOString(),
+            updatedAt: savedAt,
             video: {
                 bytes: video.bytes,
                 height: video.height || 720,
@@ -563,6 +590,16 @@ export default function VideoPage() {
             await generatePackageVideo(item, { skipPreflight: true });
         }
     };
+    const confirmClearImportedPackages = () => {
+        modal.confirm({
+            title: "清空导入的视频生产包？",
+            content: "这只会移除当前本地导入的视频生产包列表，不会删除已归档素材、画布节点、生成任务或扣费记录。",
+            okText: "清空导入",
+            okButtonProps: { danger: true },
+            cancelText: "取消",
+            onOk: clearImportedPackages,
+        });
+    };
 
     return (
         <div className="min-h-full bg-[#090d0f] text-stone-100">
@@ -589,7 +626,7 @@ export default function VideoPage() {
                                 生成已确认项
                             </Button>
                             {hasImportedPackages ? (
-                                <Button danger icon={<Trash2 className="size-4" />} onClick={clearImportedPackages}>
+                                <Button danger icon={<Trash2 className="size-4" />} onClick={confirmClearImportedPackages}>
                                     清空导入
                                 </Button>
                             ) : null}
@@ -601,7 +638,12 @@ export default function VideoPage() {
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2">
                         <div className="flex flex-wrap gap-1.5">
                             {filters.map((item) => (
-                                <button key={item.key} type="button" className={cn("h-8 rounded-md px-3 text-sm transition", filter === item.key ? "bg-teal-300/15 text-teal-100 ring-1 ring-teal-300/30" : "text-stone-400 hover:bg-white/[0.05] hover:text-stone-100")} onClick={() => setFilter(item.key)}>
+                                <button
+                                    key={item.key}
+                                    type="button"
+                                    className={cn("h-8 rounded-md px-3 text-sm transition", filter === item.key ? "bg-teal-300/15 text-teal-100 ring-1 ring-teal-300/30" : "text-stone-400 hover:bg-white/[0.05] hover:text-stone-100")}
+                                    onClick={() => setFilter(item.key)}
+                                >
                                     {item.label}
                                 </button>
                             ))}
@@ -632,7 +674,7 @@ export default function VideoPage() {
                                     onSelect={() => setSelectedId(item.id)}
                                     onSubmitReview={submitImageReview}
                                     onSync={() => void syncPackageVideo(item)}
-                                    preflightLoading={isPreflightChecking || isPublicSettingsLoading}
+                                    preflightLoading={isPreflightChecking || isPublicSettingsPending}
                                     refreshingReviewId={refreshingReviewId}
                                     submittingReviewId={submittingReviewId}
                                 />
@@ -648,7 +690,7 @@ export default function VideoPage() {
                     loading={Boolean(detailPackage && generatingIds[detailPackage.id])}
                     open={Boolean(detailPackage)}
                     preflight={detailPackage && preflightState?.targetId === detailPackage.id ? preflightState : null}
-                    preflightLoading={isEnterpriseBusy(isPreflightChecking, isPublicSettingsLoading)}
+                    preflightLoading={isEnterpriseBusy(isPreflightChecking, isPublicSettingsPending)}
                     refreshingReviewId={refreshingReviewId}
                     submittingReviewId={submittingReviewId}
                     videoProtocol={effectiveConfig.videoProtocol}
@@ -734,11 +776,24 @@ function VideoPromptNodeCard({
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
                         {item.promptStatus !== "已确认" ? (
-                            <Button size="small" onClick={(event) => { event.stopPropagation(); onConfirm(); }}>
+                            <Button
+                                size="small"
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onConfirm();
+                                }}
+                            >
                                 确认
                             </Button>
                         ) : null}
-                        <Button size="small" icon={<Eye className="size-3.5" />} onClick={(event) => { event.stopPropagation(); onOpenDetail(); }}>
+                        <Button
+                            size="small"
+                            icon={<Eye className="size-3.5" />}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onOpenDetail();
+                            }}
+                        >
                             详情
                         </Button>
                     </div>
@@ -749,15 +804,30 @@ function VideoPromptNodeCard({
                 <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
                     <div className="min-w-0">
                         <div className="mb-2 flex items-center justify-between gap-3">
-                            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-200/70">Prompt</div>
+                            <div className="text-xs font-semibold tracking-normal text-teal-200/70">提示词</div>
                             <span className="text-xs text-stone-500">提示词和上方资产槽一一对照</span>
                         </div>
-                        <Input.TextArea value={item.prompt} onChange={(event) => onPromptChange(event.target.value)} autoSize={{ minRows: 7, maxRows: 14 }} className="!border-white/10 !bg-black/20 !text-sm !leading-6 !text-stone-100 placeholder:!text-stone-600" onClick={(event) => event.stopPropagation()} />
+                        <Input.TextArea
+                            value={item.prompt}
+                            onChange={(event) => onPromptChange(event.target.value)}
+                            autoSize={{ minRows: 7, maxRows: 14 }}
+                            className="!border-white/10 !bg-black/20 !text-sm !leading-6 !text-stone-100 placeholder:!text-stone-600"
+                            onClick={(event) => event.stopPropagation()}
+                        />
                     </div>
                     <VideoNodeSettings item={item} onChange={onConfigChange} />
                 </div>
 
-                <div className={cn("rounded-md border px-3 py-2 text-sm leading-6", readiness.status === "blocked" ? "border-amber-300/20 bg-amber-300/[0.08] text-amber-100" : readiness.status === "warning" ? "border-sky-300/20 bg-sky-300/[0.08] text-sky-100" : "border-emerald-300/15 bg-emerald-300/[0.06] text-emerald-100")}>
+                <div
+                    className={cn(
+                        "rounded-md border px-3 py-2 text-sm leading-6",
+                        readiness.status === "blocked"
+                            ? "border-amber-300/20 bg-amber-300/[0.08] text-amber-100"
+                            : readiness.status === "warning"
+                              ? "border-sky-300/20 bg-sky-300/[0.08] text-sky-100"
+                              : "border-emerald-300/15 bg-emerald-300/[0.06] text-emerald-100",
+                    )}
+                >
                     参考资产 {summary.bound}/{summary.total || item.assets.length}：{readiness.message}
                 </div>
             </div>
@@ -807,7 +877,13 @@ function InlineAssetSlots({
                     <div key={slot.name} className="overflow-hidden rounded-md border border-white/[0.08] bg-white/[0.035]">
                         <div className="grid grid-cols-[72px_minmax(0,1fr)]">
                             <div className="aspect-square bg-black/25">
-                                {boundAsset?.kind === "image" ? <img alt={boundAsset.title} className="h-full w-full object-cover" src={boundAsset.data.dataUrl} /> : <div className="grid h-full place-items-center text-stone-600"><Link2 className="size-5" /></div>}
+                                {boundAsset?.kind === "image" ? (
+                                    <img alt={boundAsset.title} className="h-full w-full object-cover" src={boundAsset.data.dataUrl} />
+                                ) : (
+                                    <div className="grid h-full place-items-center text-stone-600">
+                                        <Link2 className="size-5" />
+                                    </div>
+                                )}
                             </div>
                             <div className="min-w-0 p-2">
                                 <div className="truncate text-sm font-medium text-stone-100">{boundAsset?.title || slot.name}</div>
@@ -821,8 +897,12 @@ function InlineAssetSlots({
                         <div className="flex flex-wrap gap-1.5 border-t border-white/[0.06] px-2 py-1.5">
                             {!bound ? (
                                 <>
-                                    <Button size="small" href="/assets">补图</Button>
-                                    <Button size="small" href="/assets">绑定</Button>
+                                    <Button size="small" href="/assets">
+                                        补图
+                                    </Button>
+                                    <Button size="small" href="/assets">
+                                        绑定
+                                    </Button>
                                 </>
                             ) : null}
                             {canReview ? (
@@ -847,7 +927,7 @@ function InlineAssetSlots({
 function VideoNodeSettings({ item, onChange }: { item: ProductionPackage; onChange: (patch: PackageConfigPatch) => void }) {
     return (
         <div className="rounded-md border border-white/[0.08] bg-white/[0.035] p-3" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-teal-200/70">Node Settings</div>
+            <div className="mb-3 text-xs font-semibold tracking-normal text-teal-200/70">节点设置</div>
             <div className="grid grid-cols-2 gap-2">
                 <SettingSelect label="画幅" value={item.config.ratio} options={ratioOptions} onChange={(ratio) => onChange({ ratio })} />
                 <SettingSelect label="时长" value={item.config.duration} options={durationOptions} onChange={(duration) => onChange({ duration })} />
@@ -896,11 +976,12 @@ function VideoNodeOutput({
     showCanvasAction: boolean;
 }) {
     const video = item.generation?.video;
+    const generationError = item.generation?.status === "failed" ? normalizeVideoGenerationErrorMessage(item.generation.errorMessage || "视频生成失败，请打开详情查看原因。") : "";
     return (
         <aside className="flex min-w-0 flex-col gap-3 rounded-md border border-white/[0.08] bg-black/15 p-3">
             <div className="flex items-center justify-between gap-2">
                 <div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-200/70">Output</div>
+                    <div className="text-xs font-semibold tracking-normal text-teal-200/70">生成结果</div>
                     <div className="mt-1 text-sm text-stone-400">{generationStatusLabel(item.generation?.status)}</div>
                 </div>
                 <GenerationTag status={item.generation?.status} />
@@ -919,15 +1000,43 @@ function VideoNodeOutput({
                 <Button type="primary" icon={<Play className="size-4" />} loading={loading} onClick={onGenerate}>
                     {item.generation?.status === "succeeded" ? "生成新版本" : "生成视频"}
                 </Button>
-                {item.generation?.taskId && item.generation.status !== "succeeded" ? <Button icon={<RotateCcw className="size-4" />} loading={loading} onClick={onSync}>同步任务结果</Button> : null}
-                <Button icon={<ShieldCheck className="size-4" />} loading={preflightLoading} onClick={onPreflight}>预检企业 API</Button>
-                {showCanvasAction ? <Button icon={<SendToBack className="size-4" />} onClick={onImportCanvas}>承接到画布</Button> : null}
-                <Button icon={<Settings2 className="size-4" />} onClick={onOpenConfig}>视频通道配置</Button>
+                {item.generation?.taskId && item.generation.status !== "succeeded" ? (
+                    <Button icon={<RotateCcw className="size-4" />} loading={loading} onClick={onSync}>
+                        同步任务结果
+                    </Button>
+                ) : null}
+                <Button icon={<ShieldCheck className="size-4" />} loading={preflightLoading} onClick={onPreflight}>
+                    预检企业 API
+                </Button>
+                {showCanvasAction ? (
+                    <Button icon={<SendToBack className="size-4" />} onClick={onImportCanvas}>
+                        承接到画布
+                    </Button>
+                ) : null}
+                <Button icon={<Settings2 className="size-4" />} onClick={onOpenConfig}>
+                    视频通道配置
+                </Button>
             </div>
             <div className="rounded-md border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-xs leading-5 text-stone-400">
                 {config.videoProtocol === "volcengine-ark" ? "企业 Ark / Seedance" : "未切到企业 Ark"} · {item.config.ratio} · {item.config.duration} · {item.config.resolution}
             </div>
-            {preflight ? <div className={cn("rounded-md border px-3 py-2 text-xs leading-5", preflight.status === "passed" ? "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100" : "border-amber-300/20 bg-amber-300/[0.08] text-amber-100")}>{preflight.message}</div> : null}
+            {preflight ? (
+                <div className={cn("rounded-md border px-3 py-2 text-xs leading-5", preflight.status === "passed" ? "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100" : "border-amber-300/20 bg-amber-300/[0.08] text-amber-100")}>
+                    {preflight.message}
+                </div>
+            ) : null}
+            {generationError ? (
+                <div className="rounded-md border border-rose-300/20 bg-rose-300/[0.08] px-3 py-2 text-xs leading-5 text-rose-100">
+                    <div className="mb-1 flex items-center gap-1.5 font-medium">
+                        <TriangleAlert className="size-3.5" />
+                        生成失败
+                    </div>
+                    <div>{generationError}</div>
+                    <button type="button" className="mt-2 text-teal-200 hover:text-teal-100" onClick={onOpenDetail}>
+                        查看详情
+                    </button>
+                </div>
+            ) : null}
         </aside>
     );
 }
@@ -975,7 +1084,7 @@ function VideoNodeDetailDrawer({
 }) {
     if (!item) return null;
     return (
-        <Drawer className="studio-drawer" width={620} title={`${item.id} · 视频节点详情`} open={open} onClose={onClose}>
+        <Drawer className="studio-drawer" size={620} title={`${item.id} · 视频节点详情`} open={open} onClose={onClose}>
             <div className="space-y-4 text-stone-100">
                 <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
                     <div className="text-sm font-semibold text-white">{item.segment}</div>
@@ -988,7 +1097,7 @@ function VideoNodeDetailDrawer({
                 </div>
                 <GenerationDetail item={item} loading={loading} onGenerate={() => onGenerate(item)} onOpenConfig={onOpenConfig} onSync={() => onSync(item)} />
                 <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-teal-200/70">Final Prompt</div>
+                    <div className="mb-2 text-xs font-semibold tracking-normal text-teal-200/70">最终提示词</div>
                     <Input.TextArea value={item.prompt} onChange={(event) => onPromptChange(item, event.target.value)} autoSize={{ minRows: 7, maxRows: 14 }} className="!border-white/10 !bg-black/20 !text-sm !leading-6 !text-stone-100" />
                 </div>
                 <InlineAssetSlots assets={assets} item={item} onRefreshReview={onRefreshReview} onSubmitReview={onSubmitReview} refreshingReviewId={refreshingReviewId} submittingReviewId={submittingReviewId} />
@@ -1032,7 +1141,18 @@ function AssetDetail({
                     已匹配参考图 {summary.bound}/{summary.total}。已生图的视频工作流素材会随视频请求一起提交；缺失项仍按提示词文字生成。
                 </div>
             ) : null}
-            <div className={cn("rounded-md border px-3 py-2 text-sm leading-6", readiness.status === "blocked" ? "border-amber-300/20 bg-amber-300/[0.08] text-amber-100" : readiness.status === "warning" ? "border-sky-300/20 bg-sky-300/[0.08] text-sky-100" : "border-emerald-300/15 bg-emerald-300/[0.06] text-emerald-100")}>{readiness.message}</div>
+            <div
+                className={cn(
+                    "rounded-md border px-3 py-2 text-sm leading-6",
+                    readiness.status === "blocked"
+                        ? "border-amber-300/20 bg-amber-300/[0.08] text-amber-100"
+                        : readiness.status === "warning"
+                          ? "border-sky-300/20 bg-sky-300/[0.08] text-sky-100"
+                          : "border-emerald-300/15 bg-emerald-300/[0.06] text-emerald-100",
+                )}
+            >
+                {readiness.message}
+            </div>
             {reviewNotice ? <div className="rounded-md border border-amber-300/20 bg-amber-300/[0.08] px-3 py-2 text-sm leading-6 text-amber-100">{reviewNotice}</div> : null}
             {item.assets.map((asset) => {
                 const bound = isWorkflowReferenceAssetBound(item, asset.name, assets);
@@ -1072,7 +1192,12 @@ function AssetDetail({
                                             提交加白
                                         </Button>
                                     ) : (
-                                        <Button size="small" icon={<RefreshCw className={cn("size-3.5", refreshingReviewId === boundAsset.id && "animate-spin")} />} loading={refreshingReviewId === boundAsset.id} onClick={() => void onRefreshReview(boundAsset, { showProgress: true })}>
+                                        <Button
+                                            size="small"
+                                            icon={<RefreshCw className={cn("size-3.5", refreshingReviewId === boundAsset.id && "animate-spin")} />}
+                                            loading={refreshingReviewId === boundAsset.id}
+                                            onClick={() => void onRefreshReview(boundAsset, { showProgress: true })}
+                                        >
                                             刷新加白
                                         </Button>
                                     )}
@@ -1082,9 +1207,7 @@ function AssetDetail({
                     </div>
                 );
             })}
-            {!item.assets.length ? (
-                <div className="rounded-md border border-white/[0.07] bg-white/[0.035] px-3 py-6 text-center text-sm text-stone-500">当前生产包未声明参考资产。</div>
-            ) : null}
+            {!item.assets.length ? <div className="rounded-md border border-white/[0.07] bg-white/[0.035] px-3 py-6 text-center text-sm text-stone-500">当前生产包未声明参考资产。</div> : null}
         </div>
     );
 }
@@ -1244,28 +1367,6 @@ function InfoRow({ danger, label, value }: { danger?: boolean; label: string; va
         <div className="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-md border border-white/[0.07] bg-white/[0.035] px-3 py-2">
             <span className="text-stone-500">{label}</span>
             <span className={cn("break-all", danger ? "text-rose-200" : "text-stone-200")}>{value}</span>
-        </div>
-    );
-}
-
-function RiskDetail({ item }: { item: ProductionPackage }) {
-    return (
-        <div className="space-y-3 pb-4">
-            {item.risks.map((risk) => (
-                <div key={risk.text} className="flex gap-3 rounded-md border border-white/[0.07] bg-white/[0.035] px-3 py-2.5 text-sm">
-                    {risk.level === "提示" ? (
-                        <Check className="mt-0.5 size-4 shrink-0 text-emerald-300" />
-                    ) : risk.level === "注意" ? (
-                        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-300" />
-                    ) : (
-                        <RotateCcw className="mt-0.5 size-4 shrink-0 text-amber-300" />
-                    )}
-                    <div>
-                        <div className="text-xs text-stone-500">{risk.level}</div>
-                        <div className="mt-1 text-stone-100">{risk.text}</div>
-                    </div>
-                </div>
-            ))}
         </div>
     );
 }
@@ -1434,6 +1535,46 @@ function aiTaskLedgerFromVideoTask(task: NormalizedVideoTask): AiTaskLedger {
     };
 }
 
+function buildPackageAssetGeneration(item: ProductionPackage, config: AiConfig, video: PackageUploadedVideo, finalTask: NormalizedVideoTask | null, createdAt: string) {
+    const aiTask = video.aiTask;
+    return {
+        actionType: "generate",
+        aiTaskCredits: aiTask?.aiTaskCredits,
+        aiTaskId: aiTask?.aiTaskId,
+        aiTaskStatus: aiTask?.aiTaskStatus || finalTask?.status,
+        config: {
+            duration: config.videoSeconds,
+            generateAudio: config.videoGenerateAudio,
+            model: config.model,
+            provider: config.videoProtocol,
+            ratio: config.size,
+            resolution: config.vquality,
+            seconds: config.videoSeconds,
+            size: config.size,
+            videoTaskMode: config.videoTaskMode,
+            watermark: config.videoWatermark,
+        },
+        createdAt,
+        creditLogId: aiTask?.creditLogId,
+        creditsRefunded: aiTask?.creditsRefunded,
+        effectivePrompt: item.prompt,
+        finishedAt: aiTask?.finishedAt,
+        model: config.model,
+        productionPackageId: item.id,
+        productionPackageTitle: item.segment,
+        prompt: item.prompt,
+        provider: config.videoProtocol,
+        refundedAt: aiTask?.refundedAt,
+        source: "video-page",
+        sourceEpisode: item.sourceEpisode,
+        sourceProjectId: item.sourceProjectId,
+        sourceProjectSlug: item.sourceProjectSlug,
+        taskId: finalTask?.id || aiTask?.upstreamTaskId,
+        taskStatus: finalTask?.status || aiTask?.aiTaskStatus,
+        upstreamTaskId: finalTask?.upstreamTaskId || finalTask?.id || aiTask?.upstreamTaskId,
+    };
+}
+
 function resolvePackageVideoModel(config: AiConfig) {
     return (config.videoProtocol === "volcengine-ark" ? config.seedanceEndpointId || config.seedanceModel || config.videoModel || config.model : config.videoModel || config.model).trim();
 }
@@ -1471,9 +1612,11 @@ function packageResolution(value: string) {
     return value.match(/1080/) ? "1080" : "720";
 }
 
-function originalWorkflowHref(episode: string, projectSlug?: string) {
+function originalWorkflowHref(episode: string, options: { projectSlug?: string; sourceEpisodeId?: string; sourceProjectId?: string } = {}) {
     const params = new URLSearchParams({ episode });
-    if (projectSlug) params.set("projectSlug", projectSlug);
+    if (options.projectSlug) params.set("projectSlug", options.projectSlug);
+    if (options.sourceProjectId) params.set("sourceProjectId", options.sourceProjectId);
+    if (options.sourceEpisodeId) params.set("sourceEpisodeId", options.sourceEpisodeId);
     return `/original-workflow?${params.toString()}`;
 }
 
@@ -1500,4 +1643,10 @@ function readRecord(value: unknown): Record<string, unknown> | null {
 
 function readString(value: unknown) {
     return typeof value === "string" ? value : "";
+}
+
+function readGenerationList(value: unknown) {
+    if (Array.isArray(value)) return value.flatMap((item) => (readRecord(item) ? [item as Record<string, unknown>] : []));
+    const record = readRecord(value);
+    return record ? [record] : [];
 }

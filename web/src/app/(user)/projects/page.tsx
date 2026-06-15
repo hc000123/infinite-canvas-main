@@ -3,7 +3,7 @@
 import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { App, Button, Input, Tooltip } from "antd";
-import { Archive, ChevronDown, Clock3, Edit3, Folder, Grid2X2, LayoutList, PauseCircle, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { Archive, ArrowRight, ChevronDown, Clock3, Edit3, Folder, Grid2X2, LayoutList, PauseCircle, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { useAssetStore } from "@/stores/use-asset-store";
@@ -110,6 +110,16 @@ export default function ProjectsPage() {
         });
     };
 
+    const archiveProjectWithConfirm = (project: CreativeProject) => {
+        modal.confirm({
+            title: "归档项目？",
+            content: "项目会移到暂停中，可随时恢复；不会删除画布、素材、剧本或分镜数据。",
+            okText: "归档",
+            cancelText: "取消",
+            onOk: () => archiveProject(project.id),
+        });
+    };
+
     return (
         <>
             <section className="studio-shell h-full min-h-0 overflow-y-auto px-5 py-7 md:px-7 xl:px-8">
@@ -118,37 +128,38 @@ export default function ProjectsPage() {
                         <h1 className="text-3xl font-semibold leading-tight tracking-normal text-[var(--studio-text-primary)]">项目工作台</h1>
                         <p className="mt-2 text-sm leading-6 text-[var(--studio-text-secondary)]">管理你的影视创作项目与进度</p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-3">
+                    <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center xl:w-auto">
                         <Input
                             value={searchText}
                             onChange={(event) => setSearchText(event.target.value)}
                             placeholder="搜索项目名称、简介、标签…"
                             prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />}
-                            className="h-11 w-[340px] max-w-full rounded-lg border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)] placeholder:text-[var(--studio-text-muted)]"
-                            style={{ width: 340 }}
+                            className="h-11 w-full rounded-lg border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)] placeholder:text-[var(--studio-text-muted)] sm:w-[340px]"
                         />
-                        <div className="flex h-11 overflow-hidden rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-1">
-                            <button
-                                type="button"
-                                className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] ${viewMode === "grid" ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-muted)] hover:text-[var(--studio-text-primary)]"}`}
-                                onClick={() => setViewMode("grid")}
-                                aria-label="网格视图"
-                            >
-                                <Grid2X2 className="size-4" />
-                            </button>
-                            <button
-                                type="button"
-                                className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] ${viewMode === "list" ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-muted)] hover:text-[var(--studio-text-primary)]"}`}
-                                onClick={() => setViewMode("list")}
-                                aria-label="列表视图"
-                            >
-                                <LayoutList className="size-4" />
-                            </button>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex h-11 overflow-hidden rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-1">
+                                <button
+                                    type="button"
+                                    className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] ${viewMode === "grid" ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-muted)] hover:text-[var(--studio-text-primary)]"}`}
+                                    onClick={() => setViewMode("grid")}
+                                    aria-label="网格视图"
+                                >
+                                    <Grid2X2 className="size-4" />
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`grid size-9 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] ${viewMode === "list" ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-muted)] hover:text-[var(--studio-text-primary)]"}`}
+                                    onClick={() => setViewMode("list")}
+                                    aria-label="列表视图"
+                                >
+                                    <LayoutList className="size-4" />
+                                </button>
+                            </div>
+                            <Button className={`h-11 px-5 ${createProjectButtonClass}`} icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)} disabled={!hydrated}>
+                                新建项目
+                                <ChevronDown className="ml-1 size-4" />
+                            </Button>
                         </div>
-                        <Button className={`h-11 px-5 ${createProjectButtonClass}`} icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)} disabled={!hydrated}>
-                            新建项目
-                            <ChevronDown className="ml-1 size-4" />
-                        </Button>
                     </div>
                 </header>
 
@@ -177,7 +188,7 @@ export default function ProjectsPage() {
                                         setEditingId("");
                                     }}
                                     onCancel={() => setEditingId("")}
-                                    onArchive={() => archiveProject(card.project.id)}
+                                    onArchive={() => archiveProjectWithConfirm(card.project)}
                                     onRestore={() => restoreProject(card.project.id)}
                                     onDelete={() => removeProject(card.project)}
                                     onOpen={() => router.push(`/projects/${card.project.id}`)}
@@ -276,6 +287,7 @@ function ProjectCard({
     onOpen: () => void;
 }) {
     const { project, canvasCount, meta } = card;
+    const projectHref = `/projects/${project.id}`;
     const openable = !editing;
     const handleCardClick = (event: ReactMouseEvent<HTMLElement>) => {
         if (openable && shouldOpenProjectCardFromTarget(event.target)) onOpen();
@@ -335,11 +347,19 @@ function ProjectCard({
                                 </Button>
                             </>
                         ) : project.status === "archived" ? (
-                            <Button size="small" icon={<RotateCcw className="size-3.5" />} onClick={onRestore}>
-                                恢复
-                            </Button>
+                            <>
+                                <Button size="small" type="primary" icon={<ArrowRight className="size-3.5" />} href={projectHref}>
+                                    进入项目
+                                </Button>
+                                <Button size="small" icon={<RotateCcw className="size-3.5" />} onClick={onRestore}>
+                                    恢复
+                                </Button>
+                            </>
                         ) : (
                             <>
+                                <Button size="small" type="primary" icon={<ArrowRight className="size-3.5" />} href={projectHref}>
+                                    进入项目
+                                </Button>
                                 <ProjectActionIconButton title="重命名项目" icon={<Edit3 className="size-4" />} onClick={onEdit} />
                                 <ProjectActionIconButton title="归档项目" icon={<Archive className="size-4" />} onClick={onArchive} />
                                 <ProjectActionIconButton title="删除项目" icon={<Trash2 className="size-4" />} danger onClick={onDelete} />
@@ -362,32 +382,8 @@ function ProjectActionIconButton({ title, icon, danger, onClick }: { title: stri
 
 function ProjectPagination({ count }: { count: number }) {
     return (
-        <footer className="mt-8 flex flex-wrap items-center justify-between gap-4 text-sm text-[var(--studio-text-secondary)]">
+        <footer className="mt-8 text-sm text-[var(--studio-text-secondary)]">
             <span>共 {count} 项</span>
-            <div className="flex items-center gap-3">
-                <Button size="small" className="border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-muted)]" disabled>
-                    ‹
-                </Button>
-                <Button size="small" className="border-[var(--studio-border-strong)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]">
-                    1
-                </Button>
-                <Button size="small" className="border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-secondary)]">
-                    2
-                </Button>
-                <Button size="small" className="border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-secondary)]">
-                    3
-                </Button>
-                <Button size="small" className="border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-secondary)]">
-                    ›
-                </Button>
-                <Button size="small" className="border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-secondary)]">
-                    10 条/页
-                    <ChevronDown className="ml-1 size-3.5" />
-                </Button>
-                <span>跳至</span>
-                <Input value="1" readOnly className="h-8 w-16 rounded-md border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-center text-[var(--studio-text-primary)]" />
-                <span>页</span>
-            </div>
         </footer>
     );
 }

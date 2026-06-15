@@ -57,6 +57,7 @@ export type ProductionPackage = {
     risks: { level: "提示" | "注意" | "阻断"; text: string }[];
     source?: string;
     sourceEpisode?: string;
+    sourceProjectId?: string;
     sourceProjectSlug?: string;
     workflowReferences?: WorkflowVideoReference[];
 };

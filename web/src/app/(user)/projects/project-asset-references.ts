@@ -1,10 +1,10 @@
 import type { Asset, AssetKind } from "@/stores/use-asset-store";
 import { assetGenerationRecords, readString } from "../assets/asset-generation.ts";
 import { assetInProjectLibrary } from "../assets/asset-project-library.ts";
-import { collectAssetVersionUsageReferences, type AssetVersionUsageReference } from "../assets/asset-version-references.ts";
+import { collectAssetVersionUsageReferences, hasNewerAssetVersion, type AssetVersionUsageReference } from "../assets/asset-version-references.ts";
 import type { CanvasProject } from "../canvas/stores/use-canvas-store.ts";
 import type { ProductionBibleItem, ProductionBibleKind } from "../canvas/utils/production-bible.ts";
-import type { StoryboardGroup, StoryboardShot } from "../canvas/utils/storyboard-management.ts";
+import type { ShotGroup, StoryboardAssetRef, StoryboardGroup, StoryboardShot, StoryboardTableShot } from "../canvas/utils/storyboard-management.ts";
 
 export type ProjectAssetReferenceType = "canvas" | "storyboard" | "production-bible" | "generation-result";
 export type ProjectAssetVersionFilter = "all" | "outdated" | "latest";
@@ -17,6 +17,7 @@ export type ProjectAssetReferenceItem = {
     contextLabel?: string;
     role?: string;
     canvasId?: string;
+    episodeId?: string;
     nodeId?: string;
     storyboardGroupId?: string;
     storyboardShotId?: string;
@@ -43,12 +44,15 @@ export type ProjectAssetReferenceSources = {
     canvasProjects: CanvasProject[];
     storyboardGroups: StoryboardGroup[];
     storyboardShots: StoryboardShot[];
+    storyboardTableShots?: StoryboardTableShot[];
+    shotGroups?: ShotGroup[];
     productionBibleItems: ProductionBibleItem[];
     missingStorageKeys?: Set<string>;
 };
 
 export type ProjectAssetReferenceFilters = {
     assetKind?: AssetKind | "all";
+    fileStatus?: "all" | "missing" | "available";
     referenceType?: ProjectAssetReferenceType | "all";
     versionStatus?: ProjectAssetVersionFilter;
     projectLibraryStatus?: ProjectAssetLibraryFilter;
@@ -60,6 +64,8 @@ export function collectProjectAssetReferences(sources: ProjectAssetReferenceSour
     const projectGroups = sources.storyboardGroups.filter((group) => group.projectId === sources.projectId);
     const projectGroupIds = new Set(projectGroups.map((group) => group.id));
     const projectShots = sources.storyboardShots.filter((shot) => projectGroupIds.has(shot.groupId));
+    const projectTableShots = (sources.storyboardTableShots || []).filter((shot) => shot.projectId === sources.projectId);
+    const projectShotGroups = (sources.shotGroups || []).filter((group) => group.projectId === sources.projectId);
     const projectBibleItems = sources.productionBibleItems.filter((item) => item.projectId === sources.projectId);
     const projectTitles = sources.projectTitle ? { [sources.projectId]: sources.projectTitle } : {};
     const assetsById = new Map(sources.assets.map((asset) => [asset.id, asset]));
@@ -99,6 +105,42 @@ export function collectProjectAssetReferences(sources: ProjectAssetReferenceSour
         }
     }
 
+    for (const shot of projectTableShots) {
+        for (const ref of shot.assetRefs || []) {
+            const asset = assetsById.get(ref.assetId);
+            if (!asset) continue;
+            addReference(rows, asset, tableShotAssetRefToReference(shot, ref, asset), sources);
+        }
+    }
+
+    for (const group of projectShotGroups) {
+        for (const ref of [...(group.assetRefs || []), ...(group.audioRefs || [])]) {
+            const asset = assetsById.get(ref.assetId);
+            if (!asset) continue;
+            addReference(rows, asset, shotGroupAssetRefToReference(group, ref, asset), sources);
+        }
+        const resultAssetIds = uniqueStrings([...(group.resultAssetIds || []), group.primaryAssetId || ""]);
+        for (const assetId of resultAssetIds) {
+            const asset = assetsById.get(assetId);
+            if (!asset) continue;
+            addReference(
+                rows,
+                asset,
+                {
+                    id: `shot-group-result:${group.id}:${asset.id}`,
+                    type: "generation-result",
+                    label: group.sceneName || "生成镜头组",
+                    contextLabel: "生成镜头组",
+                    role: group.primaryAssetId === asset.id ? "主版本" : "生成结果",
+                    canvasId: group.canvasId,
+                    episodeId: group.episodeId,
+                    storyboardGroupId: group.id,
+                },
+                sources,
+            );
+        }
+    }
+
     for (const asset of sources.assets) {
         for (const generation of assetGenerationRecords(asset)) {
             const storyboardGroupId = readString(generation.storyboardGroupId);
@@ -118,6 +160,7 @@ export function collectProjectAssetReferences(sources: ProjectAssetReferenceSour
                     contextLabel: [group?.title, shot?.title].filter(Boolean).join(" · ") || readString(generation.projectTitle),
                     role: readString(generation.actionType) || "generate",
                     canvasId: readString(generation.canvasId),
+                    episodeId: readString(generation.episodeId),
                     nodeId: readString(generation.nodeId),
                     storyboardGroupId,
                     storyboardShotId,
@@ -133,6 +176,8 @@ export function collectProjectAssetReferences(sources: ProjectAssetReferenceSour
 export function filterProjectAssetReferences(rows: ProjectAssetReferenceSummary[], filters: ProjectAssetReferenceFilters) {
     return rows.filter((row) => {
         if (filters.assetKind && filters.assetKind !== "all" && row.asset.kind !== filters.assetKind) return false;
+        if (filters.fileStatus === "missing" && !row.hasMissingLocalFile) return false;
+        if (filters.fileStatus === "available" && row.hasMissingLocalFile) return false;
         if (filters.referenceType && filters.referenceType !== "all" && !row.references.some((reference) => reference.type === filters.referenceType)) return false;
         if (filters.versionStatus === "outdated" && !row.hasOutdatedVersion) return false;
         if (filters.versionStatus === "latest" && row.hasOutdatedVersion) return false;
@@ -189,6 +234,34 @@ function versionUsageToReference(usage: AssetVersionUsageReference): ProjectAsse
         productionBibleItemId: usage.objectId,
         productionBibleKind: usage.objectType as ProductionBibleKind,
         hasOutdatedVersion: usage.hasNewVersion,
+    };
+}
+
+function tableShotAssetRefToReference(shot: StoryboardTableShot, ref: StoryboardAssetRef, asset: Asset): ProjectAssetReferenceItem {
+    return {
+        id: `storyboard-table:${shot.id}:${ref.assetId}`,
+        type: "storyboard",
+        label: shot.title || `镜头 ${shot.order}`,
+        contextLabel: shot.sceneName || "分镜头表",
+        role: ref.role || ref.kind,
+        canvasId: shot.canvasId,
+        episodeId: shot.episodeId,
+        storyboardShotId: shot.id,
+        hasOutdatedVersion: hasNewerAssetVersion(ref.assetVersion, asset),
+    };
+}
+
+function shotGroupAssetRefToReference(group: ShotGroup, ref: StoryboardAssetRef, asset: Asset): ProjectAssetReferenceItem {
+    return {
+        id: `shot-group:${group.id}:${ref.assetId}:${ref.role || ref.kind}`,
+        type: "storyboard",
+        label: group.sceneName || "生成镜头组",
+        contextLabel: "生成镜头组",
+        role: ref.role || ref.kind,
+        canvasId: group.canvasId,
+        episodeId: group.episodeId,
+        storyboardGroupId: group.id,
+        hasOutdatedVersion: hasNewerAssetVersion(ref.assetVersion, asset),
     };
 }
 

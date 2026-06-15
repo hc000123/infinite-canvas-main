@@ -3,12 +3,14 @@
 import type { Asset } from "@/stores/use-asset-store";
 import type { CanvasProject } from "../canvas/stores/use-canvas-store";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible";
-import type { StoryboardShot } from "../canvas/utils/storyboard-management";
+import type { ShotGroup, StoryboardShot, StoryboardTableShot } from "../canvas/utils/storyboard-management";
 import { canvasProjectIdFromUsage } from "./asset-version-files";
 import {
     updateCanvasProjectAssetReferenceToLatest,
     updateProductionBibleAssetReferenceToLatest,
+    updateShotGroupAssetReferenceToLatest,
     updateStoryboardShotAssetReferenceToLatest,
+    updateStoryboardTableShotAssetReferenceToLatest,
     type OutdatedAssetVersionUsage,
 } from "./asset-version-outdated-references";
 
@@ -24,10 +26,14 @@ type Props = {
     removeOutdatedUsageIds: (ids: string[]) => void;
     selectedOutdatedUsageItems: OutdatedAssetVersionUsage[];
     setBulkOutdatedOpen: (open: boolean) => void;
+    shotGroups: ShotGroup[];
     storyboardShots: StoryboardShot[];
+    storyboardTableShots: StoryboardTableShot[];
     updateCanvasProject: (id: string, patch: Partial<Pick<CanvasProject, "nodes">>) => void;
     updateProductionBibleItem: (id: string, patch: Partial<Pick<ProductionBibleItem, "assetRefs">>) => void;
+    updateShotGroup: (id: string, patch: Partial<Pick<ShotGroup, "assetRefs" | "audioRefs">>) => void;
     updateStoryboardShot: (id: string, patch: Partial<Pick<StoryboardShot, "assetRefs">>) => void;
+    updateStoryboardTableShot: (id: string, patch: Partial<Pick<StoryboardTableShot, "assetRefs">>) => void;
     validAssets: Asset[];
 };
 
@@ -38,10 +44,14 @@ export function useAssetOutdatedReferenceActions({
     removeOutdatedUsageIds,
     selectedOutdatedUsageItems,
     setBulkOutdatedOpen,
+    shotGroups,
     storyboardShots,
+    storyboardTableShots,
     updateCanvasProject,
     updateProductionBibleItem,
+    updateShotGroup,
     updateStoryboardShot,
+    updateStoryboardTableShot,
     validAssets,
 }: Props) {
     const applyOutdatedUsageUpdates = (usages: OutdatedAssetVersionUsage[]) => {
@@ -66,6 +76,22 @@ export function useAssetOutdatedReferenceActions({
                 const next = updateStoryboardShotAssetReferenceToLatest(shot, usage, asset, now);
                 if (next !== shot) {
                     updateStoryboardShot(shot.id, { assetRefs: next.assetRefs });
+                    updated += 1;
+                }
+            } else if (usage.kind === "storyboard-table-shot") {
+                const shot = storyboardTableShots.find((item) => item.id === usage.objectId);
+                if (!shot) continue;
+                const next = updateStoryboardTableShotAssetReferenceToLatest(shot, usage, asset, now);
+                if (next !== shot) {
+                    updateStoryboardTableShot(shot.id, { assetRefs: next.assetRefs });
+                    updated += 1;
+                }
+            } else if (usage.kind === "shot-group") {
+                const group = shotGroups.find((item) => item.id === usage.objectId);
+                if (!group) continue;
+                const next = updateShotGroupAssetReferenceToLatest(group, usage, asset, now);
+                if (next !== group) {
+                    updateShotGroup(group.id, { assetRefs: next.assetRefs, audioRefs: next.audioRefs });
                     updated += 1;
                 }
             } else {

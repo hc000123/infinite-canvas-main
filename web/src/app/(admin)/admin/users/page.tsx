@@ -2,7 +2,7 @@
 
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { Avatar, Button, Card, Col, Divider, Flex, Form, Input, InputNumber, Modal, Row, Select, Space, Tag, Tooltip, Typography } from "antd";
+import { Avatar, Button, Card, Col, Divider, Flex, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Tag, Tooltip, Typography } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 
@@ -157,7 +157,7 @@ export default function AdminUsersPage() {
                     options={{ density: true, setting: true, reload: () => void refreshUsers() }}
                     toolBarRender={() => [
                         <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => setEditingUser({ role: "user", status: "active" })}>
-                            新增
+                            新增用户
                         </Button>,
                     ]}
                     pagination={{
@@ -218,7 +218,9 @@ export default function AdminUsersPage() {
                                             <Form.Item name="credits" noStyle>
                                                 <InputNumber min={0} precision={0} style={{ width: "100%" }} />
                                             </Form.Item>
-                                            <Button onClick={() => void saveCredits()}>调整</Button>
+                                            <Popconfirm title="调整算力点？" description="确认后会立即更新该用户可用算力点，并记录后台调整流水。" okText="确认调整" cancelText="取消" onConfirm={() => void saveCredits()}>
+                                                <Button>调整</Button>
+                                            </Popconfirm>
                                         </Space.Compact>
                                     </Form.Item>
                                 </Col>

@@ -53,11 +53,57 @@ const generatedVideo: Asset = {
     },
 };
 
+const legacyWorkflowVideo: Asset = {
+    id: "workflow-video",
+    kind: "video",
+    title: "ep05-P01 火把进入仓库",
+    coverUrl: "",
+    tags: ["视频工作流"],
+    source: "original-workflow-video",
+    note: "minimal test shot white mug",
+    createdAt: "2026-06-15T03:57:00.000Z",
+    updatedAt: "2026-06-15T03:58:00.000Z",
+    data: { url: "blob:workflow-video", storageKey: "media:workflow-video", width: 720, height: 1280, bytes: 100, mimeType: "video/mp4" },
+    metadata: {
+        aiTask: {
+            aiTaskCredits: 300,
+            aiTaskId: "aitask-1",
+            aiTaskStatus: "succeeded",
+            creditLogId: "credit-1",
+            upstreamTaskId: "cgt-1",
+        },
+        originalWorkflow: {
+            packageId: "ep05-P01",
+            sourceEpisode: "ep05",
+        },
+        videoGeneration: {
+            model: "doubao-seedance-2-0",
+            protocol: "volcengine-ark",
+            seconds: "4",
+            size: "9:16",
+        },
+    },
+};
+
 test("reads generation and generations records", () => {
     const records = assetGenerationRecords(generatedVideo);
 
     assert.equal(records.length, 2);
     assert.equal(latestAssetGeneration(generatedVideo)?.projectTitle, "毕业画布");
+});
+
+test("infers generation records from legacy video workflow asset metadata", () => {
+    const records = assetGenerationRecords(legacyWorkflowVideo);
+
+    assert.equal(records.length, 1);
+    assert.equal(records[0]?.source, "video-page");
+    assert.equal(records[0]?.prompt, "minimal test shot white mug");
+    assert.equal(records[0]?.productionPackageId, "ep05-P01");
+    assert.equal(records[0]?.sourceEpisode, "ep05");
+    assert.equal(records[0]?.aiTaskId, "aitask-1");
+    assert.equal(records[0]?.upstreamTaskId, "cgt-1");
+    assert.equal(records[0]?.model, "doubao-seedance-2-0");
+    assert.equal(records[0]?.provider, "volcengine-ark");
 });
 
 test("labels video generation actions in Chinese", () => {
@@ -114,4 +160,13 @@ test("generation search text includes prompts, task id and storyboard ids", () =
     assert.ok(text.includes("video-node"));
     assert.ok(text.includes("storyboard-group-1"));
     assert.ok(text.includes("storyboard-shot-1"));
+});
+
+test("legacy video workflow generation search includes package and task context", () => {
+    const text = assetGenerationSearchText(legacyWorkflowVideo);
+
+    assert.ok(text.includes("ep05-p01"));
+    assert.ok(text.includes("ep05"));
+    assert.ok(text.includes("cgt-1"));
+    assert.ok(text.includes("minimal test shot white mug"));
 });

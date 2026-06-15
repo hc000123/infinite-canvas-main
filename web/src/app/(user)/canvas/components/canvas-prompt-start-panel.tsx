@@ -43,27 +43,28 @@ export function CanvasPromptStartPanel({ onSelect }: { onSelect: (preset: { kind
 
     return (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-6">
-            <div className="pointer-events-auto w-full max-w-3xl rounded-2xl border p-4 shadow-xl backdrop-blur" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
-                <div className="px-2 pb-3">
-                    <div className="text-lg font-semibold">从文生图开始</div>
-                    <div className="mt-1 text-sm" style={{ color: theme.node.muted }}>
-                        选择一个项目内创作预设，先生成角色、场景、道具或宫格分镜。
+            <div className="pointer-events-auto w-full max-w-2xl rounded-xl border px-3 py-3 backdrop-blur" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}>
+                <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-2">
+                    <div className="text-sm font-semibold">从文生图开始</div>
+                    <div className="text-xs" style={{ color: theme.node.muted }}>
+                        选择预设后会创建提示词和生成配置节点
                     </div>
                 </div>
-                <div className="grid gap-2 md:grid-cols-4">
+                <div className="grid gap-1.5 md:grid-cols-4">
                     {presets.map((preset) => {
                         const Icon = preset.icon;
                         return (
                             <button
                                 key={preset.kind}
                                 type="button"
-                                className="min-h-32 rounded-xl border p-3 text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
-                                style={{ borderColor: theme.toolbar.border, background: theme.toolbar.itemHover }}
+                                className="min-h-20 rounded-lg px-3 py-2 text-left transition hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 dark:hover:bg-white/10"
                                 onClick={() => onSelect(preset)}
                             >
-                                <Icon className="size-5" />
-                                <div className="mt-3 text-base font-semibold">{preset.title}</div>
-                                <div className="mt-1 text-xs leading-5" style={{ color: theme.node.muted }}>
+                                <div className="flex items-center gap-2">
+                                    <Icon className="size-4 shrink-0" />
+                                    <div className="text-sm font-semibold">{preset.title}</div>
+                                </div>
+                                <div className="mt-1.5 text-xs leading-5" style={{ color: theme.node.muted }}>
                                     {preset.description}
                                 </div>
                             </button>

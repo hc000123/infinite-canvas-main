@@ -139,6 +139,7 @@ export function AssetResultsSection({
     onUpdateOutdatedUsage,
 }: Props) {
     const hasVisibleResults = visibleAssetGroups.some((group) => group.assets.length || group.productionBibleItems.length);
+    const showAssetPagination = filteredCount > pageSize;
     return (
         <div className="mx-auto flex max-w-7xl flex-col gap-5">
             {referenceVersionFilter === "outdated" ? (
@@ -192,7 +193,7 @@ export function AssetResultsSection({
                             <section key={group.id} className="grid gap-4 border-t border-[var(--studio-border-subtle)] pt-6 first:border-t-0 first:pt-0">
                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                                     <div className="min-w-0">
-                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--studio-accent)]">Project Library</div>
+                                        <div className="text-xs font-semibold tracking-normal text-[var(--studio-accent)]">项目素材库</div>
                                         <h2 className="mt-1 truncate text-xl font-semibold leading-7 text-[var(--studio-text-primary)]">{group.title}</h2>
                                     </div>
                                     <div className="flex flex-wrap gap-2 text-xs font-medium text-[var(--studio-text-secondary)]">
@@ -241,9 +242,11 @@ export function AssetResultsSection({
 
                     {!hasVisibleResults ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到素材或设定" className="py-20" /> : null}
 
-                    <div className="flex justify-center">
-                        <Pagination current={page} pageSize={pageSize} total={filteredCount} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={onPageChange} />
-                    </div>
+                    {showAssetPagination ? (
+                        <div className="flex justify-center">
+                            <Pagination current={page} pageSize={pageSize} total={filteredCount} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={onPageChange} />
+                        </div>
+                    ) : null}
                 </>
             ) : null}
         </div>

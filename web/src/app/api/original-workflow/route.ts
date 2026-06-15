@@ -27,8 +27,8 @@ const fileGroups: FileGroup[] = [
     { key: "stage1B", label: "01B Beat Board", paths: (episode: string) => [`outputs/${episode}/01B-beat-board.md`] },
     { key: "stage1C", label: "01C 导演分镜脚本", paths: (episode: string) => [`outputs/${episode}/01C-director-shot-script.md`] },
     { key: "stage1D", label: "01D 用户修改轨", paths: (episode: string) => [`outputs/${episode}/01D-shot-edit-track.md`] },
-    { key: "characters", label: "角色资产提示词", paths: () => ["assets/character-prompts.md"] },
-    { key: "scenes", label: "场景资产提示词", paths: () => ["assets/scene-prompts.md"] },
+    { key: "characters", label: "角色资产提示词", paths: (_episode: string, projectSlug: string) => projectWorkflowPaths(projectSlug, "assets/character-prompts.md") },
+    { key: "scenes", label: "场景资产提示词", paths: (_episode: string, projectSlug: string) => projectWorkflowPaths(projectSlug, "assets/scene-prompts.md") },
     { key: "stage3", label: "Stage 3 Seedance", paths: (episode: string) => [`outputs/${episode}/02-seedance-prompts.md`] },
     { key: "copyOnly", label: "Copy-only", paths: (episode: string) => [`outputs/${episode}/02-seedance-copy-only.md`] },
 ];
@@ -86,8 +86,11 @@ const stageLaunchConfig: Record<WorkflowStage, { action: string; instruction: (e
     },
     stage2: {
         action: "design",
-        instruction: () =>
-            "按 art_designer 角色要求执行，但不要 spawn_agent、不要 fork、不要 collab Wait，必须在当前 Codex exec 进程内直接完成。必须读取 original-prompt-format-lock 和 art-design-template。输出原格式 assets/character-prompts.md 与 assets/scene-prompts.md。不要输出 image-prompts 文件。",
+        instruction: (_episode, projectSlug) => {
+            const [charactersPath] = projectWorkflowPaths(projectSlug, "assets/character-prompts.md");
+            const [scenesPath] = projectWorkflowPaths(projectSlug, "assets/scene-prompts.md");
+            return `按 art_designer 角色要求执行，但不要 spawn_agent、不要 fork、不要 collab Wait，必须在当前 Codex exec 进程内直接完成。必须读取 original-prompt-format-lock 和 art-design-template。输出原格式 ${charactersPath} 与 ${scenesPath}。不要输出 image-prompts 文件。`;
+        },
     },
     stage3: {
         action: "prompt",
@@ -164,7 +167,7 @@ async function buildSnapshot(rootPath: string, episode: string, projectSlug: str
         episode,
         episodes: rootExists ? await listEpisodes(rootPath, projectSlug) : [],
         files,
-        latestJob: rootExists ? await readLatestJob(rootPath) : undefined,
+        latestJob: rootExists ? await readLatestJob(rootPath, episode) : undefined,
         projectSlug,
         rootExists,
         rootPath,
@@ -213,6 +216,11 @@ async function writeValidationSnapshot(rootPath: string, episode: string, stage:
 
 function validationPath(rootPath: string, episode: string, stage: WorkflowStage) {
     return resolveInside(rootPath, `.workflow-cache/web-validations/${episode}-${stage}.json`);
+}
+
+function projectWorkflowPaths(projectSlug: string, relativePath: string) {
+    const projectPath = `projects/${projectSlug}/${relativePath}`;
+    return projectSlug === "demo-project" ? [relativePath] : [projectPath];
 }
 
 function latestUpdatedAt(values: string[]) {
@@ -449,14 +457,24 @@ async function findRunningStageJob(rootPath: string, episode: string, stage: Wor
     return undefined;
 }
 
-async function readLatestJob(rootPath: string) {
+async function readLatestJob(rootPath: string, episode?: string) {
     const jobsDir = resolveInside(rootPath, ".workflow-cache/web-jobs");
     const entries = await readdir(jobsDir, { withFileTypes: true }).catch(() => []);
-    const latest = entries
+    const jobNames = entries
         .filter((entry) => entry.isDirectory() && entry.name.startsWith("web-stage"))
         .map((entry) => entry.name)
         .sort()
-        .pop();
+        .reverse();
+    let latest = "";
+    for (const jobName of jobNames) {
+        const statusPath = resolveInside(rootPath, `.workflow-cache/web-jobs/${jobName}/status.json`);
+        const statusRaw = await readFile(statusPath, "utf8").catch(() => "{}");
+        const status = JSON.parse(statusRaw) as { episode?: string };
+        if (!episode || status.episode === episode) {
+            latest = jobName;
+            break;
+        }
+    }
     if (!latest) return undefined;
     const jobDir = resolveInside(rootPath, `.workflow-cache/web-jobs/${latest}`);
     const statusPath = path.join(jobDir, "status.json");
@@ -520,7 +538,7 @@ export async function POST(request: NextRequest) {
             commandResult = await runPythonTool(rootPath, ["tools/workflow_validate.py", "--stage", stage, "--mode", "pre_review", "--episode", episode]);
             await writeValidationSnapshot(rootPath, episode, stage, commandResult);
         } else if (action === "cancel-latest-job") {
-            commandResult = await cancelLatestJob(rootPath);
+            commandResult = await cancelLatestJob(rootPath, episode);
         } else if (action === "start-stage") {
             const stage = (body.stage || "stage1") as WorkflowStage;
             const config = stageLaunchConfig[stage];
@@ -550,8 +568,8 @@ export async function POST(request: NextRequest) {
     }
 }
 
-async function cancelLatestJob(rootPath: string): Promise<CommandResult> {
-    const latest = await readLatestJob(rootPath);
+async function cancelLatestJob(rootPath: string, episode?: string): Promise<CommandResult> {
+    const latest = await readLatestJob(rootPath, episode);
     if (!latest?.statusPath) return { command: "取消后台 Runner", exitCode: "0", stderr: "", stdout: "没有可取消的后台任务。" };
     await cancelJob(latest.statusPath, "cancelled from web console");
     return { ...latest, command: "取消后台 Runner", jobStatus: "cancelled", stderr: "", stdout: "已取消后台任务。" };

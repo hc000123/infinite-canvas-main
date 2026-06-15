@@ -5,7 +5,7 @@ import type { Asset } from "@/stores/use-asset-store.ts";
 import type { GenerationQueueItem } from "../canvas/utils/generation-queue.ts";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible.ts";
 import type { ScriptEpisode, ScriptProject, ScriptScene } from "../canvas/utils/script-management.ts";
-import type { StoryboardGroup, StoryboardShot } from "../canvas/utils/storyboard-management.ts";
+import type { ShotGroup, StoryboardGroup, StoryboardShot, StoryboardTableShot } from "../canvas/utils/storyboard-management.ts";
 import { buildProjectOverviewDashboard, buildProjectOverviewSuggestions, projectOverviewActionHref } from "./project-overview-dashboard.ts";
 import type { ProjectAssetReferenceSummary } from "./project-asset-references.ts";
 
@@ -87,6 +87,31 @@ test("counts outdated references and missing materials", () => {
     );
 });
 
+test("counts current episode storyboard table shots and shot groups in overview stats", () => {
+    const dashboard = buildProjectOverviewDashboard({
+        projectId: "project-1",
+        canvasCount: 1,
+        scripts: [scriptProject()],
+        episodes: [episode("episode-1")],
+        scenes: [],
+        storyboardGroups: [],
+        storyboardShots: [],
+        storyboardTableShots: [tableShot("table-shot-1", { assetRefs: [] }), tableShot("table-shot-2", { assetRefs: [{ assetId: "image-1", kind: "image", role: "reference" }] })],
+        shotGroups: [shotGroup("shot-group-1", { status: "error", assetRefs: [], audioRefs: [] })],
+        productionBibleItems: [],
+        generationQueueItems: [],
+        assets: [],
+        assetReferenceRows: [],
+    });
+
+    assert.equal(dashboard.stats.storyboardGroupCount, 1);
+    assert.equal(dashboard.stats.storyboardShotCount, 2);
+    assert.equal(dashboard.stats.missingMaterialCount, 2);
+    assert.equal(dashboard.stats.failedGenerationCount, 1);
+    assert.ok(dashboard.suggestions.some((item) => item.id === "missing-materials"));
+    assert.ok(dashboard.suggestions.some((item) => item.id === "failed-generation"));
+});
+
 test("generates next-step suggestions from stats", () => {
     const suggestions = buildProjectOverviewSuggestions(
         {
@@ -155,6 +180,56 @@ function shot(id: string, groupId: string, patch: Partial<StoryboardShot> = {}):
         nodeRefs: [],
         resultAssetIds: [],
         status: "draft",
+        createdAt: "now",
+        updatedAt: "now",
+        ...patch,
+    };
+}
+
+function tableShot(id: string, patch: Partial<StoryboardTableShot> = {}): StoryboardTableShot {
+    return {
+        id,
+        projectId: "project-1",
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        sceneName: "第一场",
+        location: "",
+        timeOfDay: "",
+        order: 1,
+        title: "镜头",
+        scriptText: "",
+        visualDescription: "",
+        characters: [],
+        dialogue: "",
+        action: "",
+        emotion: "",
+        shotSize: "中景",
+        cameraMovement: "固定",
+        estimatedDuration: 6,
+        assetRefs: [],
+        productionBibleRefs: [],
+        createdAt: "now",
+        updatedAt: "now",
+        ...patch,
+    };
+}
+
+function shotGroup(id: string, patch: Partial<ShotGroup> = {}): ShotGroup {
+    return {
+        id,
+        projectId: "project-1",
+        canvasId: "canvas-1",
+        episodeId: "episode-1",
+        sceneName: "第一场",
+        shotIds: ["table-shot-1"],
+        totalDuration: 6,
+        prompt: "",
+        effectivePrompt: "",
+        assetRefs: [],
+        audioRefs: [],
+        productionBibleRefs: [],
+        status: "draft",
+        resultAssetIds: [],
         createdAt: "now",
         updatedAt: "now",
         ...patch,
