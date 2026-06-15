@@ -342,7 +342,7 @@ function LandingTargetCard({
 }
 
 function CountPill({ label, tone, value }: { label: string; tone: "amber" | "green" | "slate"; value: number }) {
-    const className = tone === "amber" ? "bg-amber-500/10 text-amber-700 dark:text-amber-200" : tone === "green" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-200" : "bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]";
+    const className = tone === "amber" ? "studio-semantic-warning studio-semantic-tag border" : tone === "green" ? "studio-semantic-success studio-semantic-tag border" : "bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]";
     return (
         <div className={`rounded-md px-3 py-2 ${className}`}>
             <div className="text-base font-semibold">{value}</div>

@@ -184,7 +184,7 @@ export function AgentSettingsCenterPanel() {
                 </details>
             </Form>
 
-            {!validation.valid ? <div className="rounded-md border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-200">{validation.errors.join("；")}</div> : null}
+            {!validation.valid ? <div className="studio-semantic-warning studio-semantic-notice rounded-md border p-3 text-sm">{validation.errors.join("；")}</div> : null}
             <div className="flex flex-wrap justify-end gap-2">
                 <Button icon={<RotateCcw className="size-4" />} onClick={restoreDefaultToForm}>
                     恢复默认

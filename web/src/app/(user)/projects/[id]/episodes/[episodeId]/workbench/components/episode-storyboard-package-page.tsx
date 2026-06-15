@@ -6,7 +6,7 @@ import { Button, Input } from "antd";
 import type { ScriptEpisode } from "../../../../../../canvas/utils/script-management";
 import type { AgentWorkflowMappingPreview, AgentWorkflowSceneRunState } from "../../../../../agent-runner-types";
 import type { StoryboardProductionPackage, StoryboardStorySegment } from "../storyboard-production-segments";
-import { episodeToneTextClass, type EpisodeStatusTone } from "./episode-module-panel";
+import { episodeToneSemanticClass, episodeToneTextClass, type EpisodeStatusTone } from "./episode-module-panel";
 import type { EpisodeAssetRow } from "./episode-assets-module-types";
 import { filterStoryboardPackage, latestPreview, padEpisodeOrder, previewCounts, summarizeStoryboardProductionSegments, type StoryboardPackageFilter } from "./episode-storyboard-package-utils";
 
@@ -118,10 +118,10 @@ export function EpisodeStoryboardPackagePage({
             </div>
 
             {staleRunning ? (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-400/30 bg-amber-400/[0.08] px-4 py-3 text-amber-100">
+                <div className="studio-semantic-warning studio-semantic-notice flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3">
                     <div className="min-w-0">
                         <div className="text-sm font-semibold">分镜生产包运行中断</div>
-                        <div className="mt-1 break-words text-sm leading-6 text-amber-100/80">检测到上一次分镜场次只剩本地运行状态，当前页面没有真实请求在执行。先清理后即可重新生成。</div>
+                        <div className="mt-1 break-words text-sm leading-6 opacity-80">检测到上一次分镜场次只剩本地运行状态，当前页面没有真实请求在执行。先清理后即可重新生成。</div>
                     </div>
                     <Button className="!rounded-md" danger onClick={onCancelStoryboardScene}>
                         清理运行状态
@@ -175,9 +175,7 @@ export function EpisodeStoryboardPackagePage({
                                 >
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="text-base font-semibold text-[var(--studio-text-primary)]">P{padEpisodeOrder(pkg.order)}</div>
-                                        <span
-                                            className={`rounded-md border px-2 py-0.5 text-xs ${pkg.tone === "red" ? "border-rose-400/45 text-rose-200" : pkg.tone === "amber" ? "border-amber-400/45 text-amber-200" : pkg.tone === "green" ? "border-emerald-400/45 text-emerald-200" : "border-[var(--studio-border-subtle)] text-[var(--studio-text-secondary)]"}`}
-                                        >
+                                        <span className={`studio-semantic-tag rounded-md border px-2 py-0.5 text-xs ${episodeToneSemanticClass(pkg.tone || "slate")}`}>
                                             {pkg.status}
                                         </span>
                                     </div>
@@ -225,7 +223,7 @@ export function EpisodeStoryboardPackagePage({
                         {matchedAssets.length ? (
                             matchedAssets.map((asset) => <StoryboardAssetCard key={asset.id} asset={asset} />)
                         ) : (
-                            <div className="rounded-lg border border-dashed border-amber-400/30 bg-amber-400/[0.06] px-4 py-8 text-center text-sm leading-6 text-amber-100">
+                            <div className="studio-semantic-warning studio-semantic-notice rounded-lg border border-dashed px-4 py-8 text-center text-sm leading-6">
                                 当前生产包还没有匹配到资产。先到“资产与生图”生成或绑定角色、场景、道具参考图，再回到这里完善分镜提示词。
                             </div>
                         )}
@@ -261,7 +259,7 @@ export function EpisodeStoryboardPackagePage({
                                         <div className="mt-3 whitespace-pre-wrap break-words rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-3 text-sm leading-6 text-[var(--studio-text-secondary)]">{shot.prompt}</div>
                                         <div className="mt-3 flex flex-wrap gap-2">
                                             {(matchedAssets.length ? matchedAssets : assetRows.slice(0, 3)).slice(0, 5).map((asset) => (
-                                                <span key={`${shot.id}-${asset.id}`} className="rounded-md border border-cyan-400/20 bg-cyan-400/[0.06] px-2 py-1 text-xs text-cyan-100">
+                                                <span key={`${shot.id}-${asset.id}`} className="studio-semantic-info studio-semantic-tag rounded-md border px-2 py-1 text-xs">
                                                     @{asset.name}
                                                 </span>
                                             ))}
@@ -299,13 +297,13 @@ function StoryboardAssetCard({ asset }: { asset: EpisodeAssetRow }) {
             <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-md border border-[var(--studio-border-subtle)] px-2 py-0.5 text-xs text-[var(--studio-text-secondary)]">{asset.type}</span>
-                    <span className={`rounded-md border px-2 py-0.5 text-xs ${asset.tone === "green" ? "border-emerald-400/45 text-emerald-200" : asset.tone === "amber" ? "border-amber-400/45 text-amber-200" : "border-cyan-400/45 text-cyan-100"}`}>
+                    <span className={`studio-semantic-tag rounded-md border px-2 py-0.5 text-xs ${episodeToneSemanticClass(asset.tone || "cyan")}`}>
                         {asset.status}
                     </span>
                 </div>
                 <div className="mt-2 break-words text-sm font-semibold text-[var(--studio-text-primary)]">{asset.name}</div>
                 <div className="mt-1 line-clamp-2 break-words text-xs leading-5 text-[var(--studio-text-muted)]">{asset.description}</div>
-                {asset.promptDraft ? <div className="mt-2 line-clamp-2 break-words text-xs leading-5 text-cyan-100/75">{asset.promptDraft}</div> : null}
+                {asset.promptDraft ? <div className="mt-2 line-clamp-2 break-words text-xs leading-5 text-[var(--studio-accent)] opacity-75">{asset.promptDraft}</div> : null}
             </div>
         </div>
     );

@@ -84,7 +84,7 @@ export function EpisodeTableSection({
                                         <Tag className="m-0">{run.draftOutput.items.length} 条草案</Tag>
                                     </div>
                                     <div className="mt-2 text-sm font-medium">{run.draftOutput.summary}</div>
-                                    {run.draftOutput.warnings.length ? <div className="mt-1 text-xs text-amber-600">{run.draftOutput.warnings.join("；")}</div> : null}
+                                    {run.draftOutput.warnings.length ? <div className="mt-1 text-xs text-[var(--studio-warning)]">{run.draftOutput.warnings.join("；")}</div> : null}
                                 </div>
                                 <Space size={6} wrap>
                                     <Button size="small" disabled={run.status !== "ready_for_review"} onClick={() => onApproveRun(run.id)}>
@@ -261,7 +261,7 @@ export function GenerationManagementSection({
                                 {summary.primaryAssetId ? <Tag className="m-0">主版本：{assetsById.get(summary.primaryAssetId)?.title || summary.primaryAssetId}</Tag> : null}
                                 {summary.referenceAssetCount ? <Tag className="m-0">参考资产 {summary.referenceAssetCount}</Tag> : null}
                             </Space>
-                            {summary.errorMessage ? <div className="mt-2 rounded-lg bg-red-50 p-2 text-xs leading-5 text-red-600 dark:bg-red-950/30 dark:text-red-300">{summary.errorMessage}</div> : null}
+                            {summary.errorMessage ? <div className="studio-semantic-danger studio-semantic-notice mt-2 rounded-lg border p-2 text-xs leading-5">{summary.errorMessage}</div> : null}
                             <Space className="mt-3" size={6} wrap>
                                 {summary.resultAssetIds.map((assetId) => {
                                     const asset = assetsById.get(assetId);

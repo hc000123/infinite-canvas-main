@@ -201,14 +201,7 @@ function isLongTableCell(cell: ReactNode) {
 }
 
 export function EpisodeStatusPill({ status, tone = "slate" }: { status: string; tone?: EpisodeStatusTone }) {
-    const toneClass: Record<EpisodeStatusTone, string> = {
-        amber: "border-amber-400/45 bg-amber-400/10 text-amber-200",
-        cyan: "border-cyan-400/55 bg-cyan-400/12 text-cyan-100",
-        green: "border-emerald-400/45 bg-emerald-400/10 text-emerald-200",
-        red: "border-rose-400/45 bg-rose-400/10 text-rose-200",
-        slate: "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]",
-    };
-    return <span className={`inline-flex w-fit items-center rounded-md border px-2.5 py-1 text-xs font-semibold ${toneClass[tone]}`}>{status}</span>;
+    return <span className={`studio-semantic-tag inline-flex w-fit items-center rounded-md border px-2.5 py-1 text-xs font-semibold ${episodeToneSemanticClass(tone)}`}>{status}</span>;
 }
 
 export function EpisodeDetailDrawer({ onClose, record }: { onClose: () => void; record: EpisodeDetailRecord | null }) {
@@ -273,11 +266,22 @@ export function EpisodeProgress({ label, value }: { label: string; value: number
 
 export function episodeToneTextClass(tone: EpisodeStatusTone) {
     const classes: Record<EpisodeStatusTone, string> = {
-        amber: "text-amber-200",
-        cyan: "text-cyan-100",
-        green: "text-emerald-200",
-        red: "text-rose-200",
+        amber: "text-[var(--studio-warning)]",
+        cyan: "text-[var(--studio-accent)]",
+        green: "text-[var(--studio-success)]",
+        red: "text-[var(--studio-danger)]",
         slate: "text-[var(--studio-text-primary)]",
+    };
+    return classes[tone];
+}
+
+export function episodeToneSemanticClass(tone: EpisodeStatusTone) {
+    const classes: Record<EpisodeStatusTone, string> = {
+        amber: "studio-semantic-warning",
+        cyan: "studio-semantic-info",
+        green: "studio-semantic-success",
+        red: "studio-semantic-danger",
+        slate: "studio-semantic-neutral",
     };
     return classes[tone];
 }

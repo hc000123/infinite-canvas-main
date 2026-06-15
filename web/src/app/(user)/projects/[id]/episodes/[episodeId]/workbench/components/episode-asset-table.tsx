@@ -180,7 +180,7 @@ function EpisodeAssetCard({
                     </button>
                 </div>
                 <div className="grid gap-2">
-                    <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-3 py-2 text-sm font-medium text-[var(--studio-text-secondary)] transition hover:border-amber-400/60 hover:bg-amber-400/10 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-45" disabled={!reviewReady || reviewing} onClick={() => void onReviewAsset(asset)} title={reviewReady ? "提交或刷新火山素材加白状态" : "请先生成、上传或绑定图片"}>
+                    <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-3 py-2 text-sm font-medium text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-warning)] hover:bg-[color-mix(in_srgb,var(--studio-warning)_10%,var(--studio-panel-bg))] hover:text-[var(--studio-warning)] disabled:cursor-not-allowed disabled:opacity-45" disabled={!reviewReady || reviewing} onClick={() => void onReviewAsset(asset)} title={reviewReady ? "提交或刷新火山素材加白状态" : "请先生成、上传或绑定图片"}>
                         <ShieldCheck className="size-4" />
                         {reviewing ? "处理中" : reviewText}
                     </button>

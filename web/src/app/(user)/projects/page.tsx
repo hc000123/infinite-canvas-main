@@ -238,7 +238,7 @@ function ProjectStatsBar({ activeFilter, onFilterChange, stats }: { activeFilter
 
 function ProjectStat({ active, icon, label, onClick, value, tone }: { active: boolean; icon: ReactNode; label: ProjectStatusFilter; onClick: () => void; value: number; tone: "amber" | "blue" | "cyan" | "slate" }) {
     const toneClass = {
-        amber: "bg-amber-400/14 text-[var(--studio-warning)]",
+        amber: "bg-[color-mix(in_srgb,var(--studio-warning)_14%,transparent)] text-[var(--studio-warning)]",
         blue: "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]",
         cyan: "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]",
         slate: "bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]",
@@ -309,8 +309,8 @@ function ProjectCard({
             onKeyDown={handleCardKeyDown}
         >
             <div className={`relative ${listMode ? "min-h-full" : "h-36"}`}>
-                <div className="absolute inset-0 bg-cover bg-center transition duration-500 group-hover:scale-[1.03]" style={{ backgroundImage: `linear-gradient(180deg,rgba(8,13,20,0.05),rgba(8,13,20,0.36)), url(${meta.coverUrl})` }} />
-                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.32))]" />
+                <div className="absolute inset-0 bg-cover bg-center transition duration-500 group-hover:scale-[1.03]" style={{ backgroundImage: `linear-gradient(180deg,var(--studio-media-overlay-soft),var(--studio-media-overlay)), url(${meta.coverUrl})` }} />
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,var(--studio-media-overlay-soft),var(--studio-media-overlay))]" />
                 <div className="absolute left-3 top-3">
                     <ProjectStatusBadge status={meta.statusLabel} />
                 </div>

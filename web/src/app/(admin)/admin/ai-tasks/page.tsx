@@ -351,7 +351,7 @@ const jsonBlockStyle = {
     overflow: "auto",
     padding: 12,
     borderRadius: 6,
-    background: "rgba(127,127,127,0.08)",
+    background: "var(--studio-panel-muted-bg)",
     whiteSpace: "pre-wrap" as const,
     wordBreak: "break-word" as const,
 };

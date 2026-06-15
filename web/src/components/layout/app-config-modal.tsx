@@ -88,7 +88,7 @@ export function AppConfigModal() {
                                     <div className="mb-4 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3 text-sm text-[var(--studio-text-secondary)]">
                                         <div className="font-medium text-[var(--studio-text-primary)]">模型渠道</div>
                                         <div className="mt-1">由后端统一转发请求，当前可用 {modelChannel?.availableModels.length || 0} 个模型。接口、密钥、模型映射、额度、任务日志和素材审核都在后台维护。</div>
-                                        {isPublicSettingsLoading ? <div className="mt-1 text-xs text-blue-500">正在同步后台配置...</div> : null}
+                                        {isPublicSettingsLoading ? <div className="mt-1 text-xs text-[var(--studio-accent)]">正在同步后台配置...</div> : null}
                                         {showAdminSettingsEntry ? (
                                             <Button className="mt-3" size="small" onClick={openAdminSettings}>
                                                 去后台设置

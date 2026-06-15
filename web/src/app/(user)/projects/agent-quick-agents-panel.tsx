@@ -308,7 +308,7 @@ function AgentDraftRunsPanel({ recentRuns }: { recentRuns: AgentRunRecord[] }) {
                                     {run.input.episodeTitle ? <Tag className="m-0">{run.input.episodeTitle}</Tag> : null}
                                 </div>
                                 <div className="mt-2 text-sm font-medium">{run.workflowTextOutput?.summary || run.draftOutput.summary}</div>
-                                {run.status === "error" || run.status === "failed" ? <div className="mt-1 text-xs text-rose-500">{run.errorMessage || "执行失败"}</div> : null}
+                                {run.status === "error" || run.status === "failed" ? <div className="mt-1 text-xs text-[var(--studio-danger)]">{run.errorMessage || "执行失败"}</div> : null}
                                 <div className={`mt-1 text-xs ${mutedTextClass}`}>
                                     来源：{run.input.sourceType}
                                     {run.input.sourceId ? ` / ${run.input.sourceId}` : ""} · {run.createdAt}

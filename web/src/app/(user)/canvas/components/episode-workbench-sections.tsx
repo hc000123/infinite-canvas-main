@@ -81,9 +81,9 @@ export function EpisodeScriptSection({
 function EpisodeStatCard({ label, value, tone = "default" }: { label: string; value: string | number; tone?: "default" | "warning" | "danger" }) {
     const toneClass =
         tone === "danger"
-            ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-300"
+            ? "studio-semantic-danger studio-semantic-notice"
             : tone === "warning"
-              ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-300"
+              ? "studio-semantic-warning studio-semantic-notice"
               : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)]";
     return (
         <div className={`rounded-md border p-3 ${toneClass}`}>

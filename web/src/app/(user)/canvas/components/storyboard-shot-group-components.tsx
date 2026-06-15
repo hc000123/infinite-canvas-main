@@ -162,7 +162,7 @@ export function ShotGroupRowCard({
                     ))}
                     {row.group.primaryAssetId ? <Tag className="m-0">主版本：{assetsById.get(row.group.primaryAssetId)?.title || row.group.primaryAssetId}</Tag> : null}
                 </Space>
-                {row.group.errorMessage ? <div className="rounded-lg bg-red-50 p-2 text-xs leading-5 text-red-600 dark:bg-red-950/30 dark:text-red-300">失败原因：{row.group.errorMessage}</div> : null}
+                {row.group.errorMessage ? <div className="studio-semantic-danger studio-semantic-notice rounded-lg border p-2 text-xs leading-5">失败原因：{row.group.errorMessage}</div> : null}
             </div>
         </Card>
     );

@@ -453,7 +453,7 @@ function ProductionBibleSummaryCard({ item, selected, onDelete, onSelect }: { it
                     <Tooltip title="删除设定">
                         <Button
                             aria-label={`删除设定 ${title}`}
-                            className="text-[var(--studio-text-muted)] hover:text-red-400"
+                            className="text-[var(--studio-text-muted)] hover:text-[var(--studio-danger)]"
                             danger
                             icon={<Trash2 size={14} />}
                             size="small"

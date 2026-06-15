@@ -611,7 +611,7 @@ export default function OriginalWorkflowPage() {
                                     onChange={(value) => setExecutionMode(value as OriginalWorkflowExecutionMode)}
                                 />
                                 {executionMode === "cloud-worker" ? (
-                                    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-200">
+                                    <div className="studio-semantic-warning studio-semantic-notice rounded-md border px-3 py-2 text-xs leading-5">
                                         上线前测试模式：阶段启动、质量门和导出会走后端 Worker 门禁；Worker 未接入时会阻断，不回退本地 Codex CLI。
                                     </div>
                                 ) : (
@@ -634,7 +634,7 @@ export default function OriginalWorkflowPage() {
                                         onClick={() => setActiveTab(tab.key)}
                                     >
                                         <span className="flex min-w-0 items-center gap-2">
-                                            {done ? <CheckCircle2 className="size-4 shrink-0 text-emerald-500" /> : <FileText className="size-4 shrink-0 text-[var(--studio-text-muted)]" />}
+                                            {done ? <CheckCircle2 className="size-4 shrink-0 text-[var(--studio-success)]" /> : <FileText className="size-4 shrink-0 text-[var(--studio-text-muted)]" />}
                                             <span className="truncate">{tab.label}</span>
                                         </span>
                                         <span className="font-mono text-xs text-[var(--studio-text-muted)]">{count}</span>
@@ -913,7 +913,7 @@ function QualityPanel({ result }: { result?: CommandResult }) {
                     </div>
                 </div>
             ) : result.launchStatus === "guard_checked" ? (
-                <div className="rounded-lg border border-amber-500/60 bg-amber-500/10 p-3 text-sm leading-6 text-[var(--studio-text-primary)]">只完成了启动护栏检查，没有启动后台 Runner。通常是内容执行被锁定，或本机 runner 未接入。</div>
+                <div className="studio-semantic-warning studio-semantic-notice rounded-lg border p-3 text-sm leading-6">只完成了启动护栏检查，没有启动后台 Runner。通常是内容执行被锁定，或本机 runner 未接入。</div>
             ) : null}
             {result.launchInstruction ? (
                 <div className="rounded-lg border border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] p-3">
@@ -948,17 +948,17 @@ function runnerStatusTitle(status?: string, reused?: boolean, health?: string) {
 }
 
 function runnerStatusClass(status?: string, health?: string) {
-    if (status === "failed") return "border-rose-500/60 bg-rose-500/10";
-    if (status === "cancelled") return "border-amber-500/60 bg-amber-500/10";
-    if (health === "stalled") return "border-amber-500/60 bg-amber-500/10";
-    return "border-emerald-500/60 bg-emerald-500/10";
+    if (status === "failed") return "studio-semantic-danger studio-semantic-notice";
+    if (status === "cancelled") return "studio-semantic-warning studio-semantic-notice";
+    if (health === "stalled") return "studio-semantic-warning studio-semantic-notice";
+    return "studio-semantic-success studio-semantic-notice";
 }
 
 function runnerStatusTextClass(status?: string, health?: string) {
-    if (status === "failed") return "text-rose-500";
-    if (status === "cancelled") return "text-amber-500";
-    if (health === "stalled") return "text-amber-500";
-    return "text-emerald-500";
+    if (status === "failed") return "text-[var(--studio-danger)]";
+    if (status === "cancelled") return "text-[var(--studio-warning)]";
+    if (health === "stalled") return "text-[var(--studio-warning)]";
+    return "text-[var(--studio-success)]";
 }
 
 function LogBlock({ title, value }: { title: string; value: string }) {

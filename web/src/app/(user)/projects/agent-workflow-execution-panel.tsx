@@ -162,9 +162,9 @@ export function AgentWorkflowExecutionPanel({
                                         <span>输入：{stage.inputSummary}</span>
                                         <span>输出：{stage.outputSummary}</span>
                                     </div>
-                                    {displayState?.blockedReason ? <div className="mt-2 text-xs text-amber-600">阻塞原因：{displayState.blockedReason}</div> : null}
+                                    {displayState?.blockedReason ? <div className="mt-2 text-xs text-[var(--studio-warning)]">阻塞原因：{displayState.blockedReason}</div> : null}
                                     {dependencySummary ? <div className={`mt-1 text-xs ${mutedTextClass}`}>前置依赖：{dependencySummary}</div> : null}
-                                    {stageState?.errorMessage ? <div className="mt-1 text-xs text-rose-500">错误：{stageState.errorMessage}</div> : null}
+                                    {stageState?.errorMessage ? <div className="mt-1 text-xs text-[var(--studio-danger)]">错误：{stageState.errorMessage}</div> : null}
                                 </summary>
 
                                 <div className="mt-3 grid gap-3">

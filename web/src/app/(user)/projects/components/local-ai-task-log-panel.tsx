@@ -102,7 +102,7 @@ function LocalAiTaskDetailDrawer({ record, onClose }: { record: LocalAiTaskRecor
 
 function DetailBlock({ title, value, pre, danger }: { title: string; value: string; pre?: boolean; danger?: boolean }) {
     return (
-        <div className={`rounded-md border p-3 text-sm ${danger ? "border-rose-300/25 bg-rose-300/[0.08] text-rose-200" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-primary)]"}`}>
+        <div className={`rounded-md border p-3 text-sm ${danger ? "studio-semantic-danger studio-semantic-notice" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-primary)]"}`}>
             <div className="mb-1 text-xs text-[var(--studio-text-muted)]">{title}</div>
             <div className={pre ? "whitespace-pre-wrap break-words leading-6" : "break-words"}>{value}</div>
         </div>

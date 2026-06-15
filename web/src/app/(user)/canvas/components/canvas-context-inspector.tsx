@@ -294,7 +294,7 @@ function InspectorTab({ label, active, onClick }: { label: string; active: boole
             type="button"
             className="relative h-8 rounded-md text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
             style={{
-                background: active ? "rgba(111, 168, 255, 0.16)" : "transparent",
+                background: active ? "var(--studio-active-bg)" : "transparent",
                 border: active ? `1px solid ${theme.node.activeStroke}` : "1px solid transparent",
                 color: active ? theme.node.activeStroke : theme.node.muted,
             }}

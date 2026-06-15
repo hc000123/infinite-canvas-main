@@ -37,8 +37,8 @@ export function WorkflowStageStatePanel({ stageId, workflowRun, workflowOutputs,
                 {latestEvidence ? <span>最近审核：{latestEvidence.createdAt}</span> : null}
             </div>
             <div>最近产物：{output?.summary || "暂无阶段产物"}</div>
-            {displayState?.blockedReason ? <div className="text-amber-600">阻塞原因：{displayState.blockedReason}</div> : null}
-            {stageState?.errorMessage ? <div className="text-rose-500">错误：{stageState.errorMessage}</div> : null}
+            {displayState?.blockedReason ? <div className="text-[var(--studio-warning)]">阻塞原因：{displayState.blockedReason}</div> : null}
+            {stageState?.errorMessage ? <div className="text-[var(--studio-danger)]">错误：{stageState.errorMessage}</div> : null}
             {output ? (
                 <details>
                     <summary className={`cursor-pointer ${mutedTextClass}`}>查看产物详情</summary>

@@ -66,7 +66,7 @@ export function PreviewList({
                             </Button>
                         </div>
                         <div className="mt-1 text-[var(--studio-text-secondary)]">{preview.summary}</div>
-                        {preview.warnings.length ? <div className="mt-1 text-amber-600">提示：{preview.warnings.join("；")}</div> : null}
+                        {preview.warnings.length ? <div className="mt-1 text-[var(--studio-warning)]">提示：{preview.warnings.join("；")}</div> : null}
                         {disabledReason ? <div className="mt-1 text-[var(--studio-text-muted)]">{disabledReason}</div> : null}
                         <details className="mt-2">
                             <summary className="cursor-pointer text-xs text-[var(--studio-text-muted)]">映射字段 / 流程追溯</summary>

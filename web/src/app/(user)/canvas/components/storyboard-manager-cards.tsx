@@ -90,7 +90,7 @@ export function StoryboardShotCard({ shot, assetsById, bibleById, onUpdateAssetR
                                 {hasNewVersion ? (
                                     <button
                                         type="button"
-                                        className="ml-1 text-amber-700 underline underline-offset-2 dark:text-amber-300"
+                                        className="ml-1 text-[var(--studio-warning)] underline underline-offset-2 transition hover:text-[var(--studio-accent-hover)]"
                                         onClick={(event) => {
                                             event.stopPropagation();
                                             onUpdateAssetRef(ref.assetId);
@@ -122,7 +122,7 @@ export function StoryboardShotCard({ shot, assetsById, bibleById, onUpdateAssetR
                         </div>
                     </div>
                 ) : null}
-                {shot.errorMessage ? <div className="rounded-lg bg-red-50 p-2 text-xs leading-5 text-red-600 dark:bg-red-950/30 dark:text-red-300">失败原因：{shot.errorMessage}</div> : null}
+                {shot.errorMessage ? <div className="studio-semantic-danger studio-semantic-notice rounded-lg border p-2 text-xs leading-5">失败原因：{shot.errorMessage}</div> : null}
             </div>
         </Card>
     );

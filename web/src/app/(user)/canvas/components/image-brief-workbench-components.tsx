@@ -89,7 +89,7 @@ export function ImageBriefCard({
                         </Tag>
                     ))}
                 </Space>
-                {brief.validationResult.messages.length ? <div className="rounded-lg bg-amber-50 p-2 text-xs leading-5 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">{brief.validationResult.messages.join(" / ")}</div> : null}
+                {brief.validationResult.messages.length ? <div className="studio-semantic-warning studio-semantic-notice rounded-lg border p-2 text-xs leading-5">{brief.validationResult.messages.join(" / ")}</div> : null}
                 <pre className="thin-scrollbar max-h-40 overflow-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3 text-xs leading-5 text-[var(--studio-text-secondary)]">{brief.finalPrompt || brief.prompt}</pre>
                 {brief.resultAssetIds.length ? <ImageBriefResultTags brief={brief} assetsById={assetsById} onOpenAsset={onOpenAsset} onSetPrimary={onSetPrimary} onSyncPrimary={onSyncPrimary} /> : null}
             </div>
@@ -214,12 +214,12 @@ function ImageBriefResultTags({
                             {summary.finalPrompt ? <div className="mt-1 line-clamp-2 text-[var(--studio-text-muted)]">{summary.finalPrompt}</div> : null}
                             <Space size={6} className="mt-1">
                                 {!summary.isPrimary ? (
-                                    <button type="button" className="text-blue-600 underline underline-offset-2 dark:text-blue-300" onClick={() => onSetPrimary(summary.assetId)}>
+                                    <button type="button" className="text-[var(--studio-accent)] underline underline-offset-2 transition hover:text-[var(--studio-accent-hover)]" onClick={() => onSetPrimary(summary.assetId)}>
                                         <Star className="inline size-3" /> 设为主参考
                                     </button>
                                 ) : null}
                                 {summary.isPrimary && onSyncPrimary ? (
-                                    <button type="button" className="text-blue-600 underline underline-offset-2 dark:text-blue-300" onClick={() => onSyncPrimary(summary.assetId)}>
+                                    <button type="button" className="text-[var(--studio-accent)] underline underline-offset-2 transition hover:text-[var(--studio-accent-hover)]" onClick={() => onSyncPrimary(summary.assetId)}>
                                         同步到来源
                                     </button>
                                 ) : null}

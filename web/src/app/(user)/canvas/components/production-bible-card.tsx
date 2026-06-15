@@ -69,7 +69,7 @@ export function ProductionBibleCard({
                                     {hasNewVersion ? (
                                         <button
                                             type="button"
-                                            className="ml-1 text-amber-700 underline underline-offset-2 dark:text-amber-300"
+                                            className="ml-1 text-[var(--studio-warning)] underline underline-offset-2 transition hover:text-[var(--studio-accent-hover)]"
                                             onClick={(event) => {
                                                 event.stopPropagation();
                                                 onUpdateAssetRef(ref.assetId);

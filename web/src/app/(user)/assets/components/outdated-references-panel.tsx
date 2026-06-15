@@ -20,7 +20,7 @@ export function OutdatedReferencesPanel({
     onOpenBatch: () => void;
 }) {
     return (
-        <div className="rounded-md border border-amber-300/25 bg-amber-300/[0.08] px-4 py-3 shadow-[var(--studio-shadow)]">
+        <div className="studio-semantic-warning studio-semantic-notice rounded-md border px-4 py-3 shadow-[var(--studio-shadow)]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <div className="text-sm font-medium text-[var(--studio-text-primary)]">过期引用 {usages.length} 处</div>

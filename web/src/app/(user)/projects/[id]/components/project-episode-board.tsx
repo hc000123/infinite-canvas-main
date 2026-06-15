@@ -304,7 +304,7 @@ type ProjectOverviewMetric = {
 
 function ProjectOverviewMetricCard({ metric, onAction }: { metric: ProjectOverviewMetric; onAction: (target: ProjectOverviewActionTarget) => void }) {
     const Icon = metric.icon;
-    const valueClass = metric.tone === "danger" ? "text-rose-300" : metric.tone === "warning" ? "text-amber-300" : "text-[var(--studio-text-primary)]";
+    const valueClass = metric.tone === "danger" ? "text-[var(--studio-danger)]" : metric.tone === "warning" ? "text-[var(--studio-warning)]" : "text-[var(--studio-text-primary)]";
     return (
         <button
             type="button"
@@ -412,7 +412,7 @@ function ProjectAssetReferencePanel({
 }
 
 function AssetReferenceStat({ label, tone = "default", value }: { label: string; tone?: "default" | "warning" | "danger"; value: number }) {
-    const valueClass = tone === "danger" ? "text-rose-300" : tone === "warning" ? "text-amber-300" : "text-[var(--studio-text-primary)]";
+    const valueClass = tone === "danger" ? "text-[var(--studio-danger)]" : tone === "warning" ? "text-[var(--studio-warning)]" : "text-[var(--studio-text-primary)]";
     return (
         <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-4 py-3">
             <div className="text-sm text-[var(--studio-text-muted)]">{label}</div>
@@ -666,7 +666,7 @@ function ProjectEpisodeTable({
                             return (
                                 <div
                                     key={row.id}
-                                    className={`grid grid-cols-[90px_minmax(180px,1.5fr)_100px_90px_80px_80px_80px_170px_190px] items-center gap-4 px-5 py-4 text-left transition hover:bg-[rgba(255,255,255,0.025)] ${isRunning ? "border-l-4 border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] pl-4" : ""}`}
+                                    className={`grid grid-cols-[90px_minmax(180px,1.5fr)_100px_90px_80px_80px_80px_170px_190px] items-center gap-4 px-5 py-4 text-left transition hover:bg-[var(--studio-hover-bg)] ${isRunning ? "border-l-4 border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] pl-4" : ""}`}
                                 >
                                     <span className="text-base font-semibold text-[var(--studio-text-muted)]">第 {formatEpisodeOrder(row.order)} 集</span>
                                     <span className="min-w-0">
@@ -847,10 +847,10 @@ function agentTaskStatusColor(status: "pending" | "applied" | "cancelled") {
 function EpisodeStatusBadge({ status }: { status: ProjectEpisodeBoardRow["status"] }) {
     const className =
         status === "已完成"
-            ? "border-emerald-400/40 bg-emerald-400/12 text-emerald-300"
+            ? "studio-semantic-success studio-semantic-tag"
             : status === "进行中"
               ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]"
-              : "border-amber-400/40 bg-amber-400/12 text-amber-300";
+              : "studio-semantic-warning studio-semantic-tag";
     return <span className={`w-fit rounded-md border px-2.5 py-1 text-sm font-semibold ${className}`}>{status}</span>;
 }
 

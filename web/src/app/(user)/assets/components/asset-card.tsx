@@ -552,7 +552,7 @@ export function AssetIconButton({ title, icon, danger, loading, onClick }: { tit
             <Button
                 type="text"
                 size="small"
-                className={cn("!h-8 !w-8 !min-w-8 !bg-transparent !p-0 !text-[var(--studio-text-secondary)] hover:!bg-[var(--studio-accent-soft)] hover:!text-[var(--studio-accent)]", danger && "hover:!bg-rose-500/10 hover:!text-[var(--studio-danger)]")}
+                className={cn("!h-8 !w-8 !min-w-8 !bg-transparent !p-0 !text-[var(--studio-text-secondary)] hover:!bg-[var(--studio-accent-soft)] hover:!text-[var(--studio-accent)]", danger && "hover:!bg-[color-mix(in_srgb,var(--studio-danger)_10%,transparent)] hover:!text-[var(--studio-danger)]")}
                 danger={danger}
                 icon={icon}
                 loading={loading}

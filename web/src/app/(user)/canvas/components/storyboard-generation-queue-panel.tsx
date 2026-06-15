@@ -54,7 +54,7 @@ export function StoryboardGenerationQueuePanel({
                     <QueueMetric label="缺失项" value={`${summary.missingCount}`} />
                 </div>
                 {missing.length ? (
-                    <div className="rounded-lg bg-amber-50 p-2 text-xs leading-5 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                    <div className="studio-semantic-warning studio-semantic-notice rounded-lg border p-2 text-xs leading-5">
                         {missing.map((item) => (
                             <div key={`${item.storyboardShotId}:${item.reason}`}>
                                 {item.storyboardShotId}：{item.reason}
@@ -96,7 +96,7 @@ export function StoryboardGenerationQueuePanel({
                                 </span>
                                 <span className="text-[var(--studio-text-muted)]">{item.estimatedDurationSeconds || item.estimatedCredits}s</span>
                                 <span className="text-[var(--studio-text-muted)]">{item.estimatedCredits} 点</span>
-                                {item.error ? <span className="text-red-500">{item.error}</span> : null}
+                                {item.error ? <span className="text-[var(--studio-danger)]">{item.error}</span> : null}
                                 {item.status === "failed" || item.status === "cancelled" ? (
                                     <Button size="small" type="text" onClick={() => onRetryItem(item.id)}>
                                         重试

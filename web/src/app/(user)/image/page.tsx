@@ -725,7 +725,7 @@ function PendingImageCard() {
             <div
                 className="absolute inset-0 opacity-60"
                 style={{
-                    backgroundImage: "linear-gradient(135deg, rgba(111,168,255,0.16) 0, transparent 42%), linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px)",
+                    backgroundImage: "linear-gradient(135deg, var(--studio-accent-soft) 0, transparent 42%), linear-gradient(var(--studio-border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--studio-border-subtle) 1px, transparent 1px)",
                     backgroundSize: "100% 100%, 24px 24px, 24px 24px",
                 }}
             />
@@ -739,14 +739,14 @@ function PendingImageCard() {
 
 function FailedImageCard({ error, onRetry }: { error: string; onRetry: () => void }) {
     return (
-        <div className="overflow-hidden rounded-lg border border-red-900/70 bg-red-950/20">
+        <div className="studio-semantic-danger studio-semantic-notice overflow-hidden rounded-lg border">
             <div className="flex aspect-square flex-col items-center justify-center gap-3 p-5 text-center">
-                <div className="text-sm font-medium text-red-600 dark:text-red-300">生成失败</div>
-                <Typography.Paragraph ellipsis={{ rows: 4 }} className="!mb-0 !text-xs !text-red-500 dark:!text-red-300">
+                <div className="text-sm font-medium">生成失败</div>
+                <Typography.Paragraph ellipsis={{ rows: 4 }} className="!mb-0 !text-xs !text-[var(--studio-danger)]">
                     {error}
                 </Typography.Paragraph>
             </div>
-            <div className="flex justify-end border-t border-red-900/70 p-3">
+            <div className="flex justify-end border-t border-[var(--studio-semantic-border)] p-3">
                 <Button size="middle" danger onClick={onRetry}>
                     重试
                 </Button>
@@ -857,7 +857,7 @@ function LogCard({ log, selected, active, onSelectedChange, onClick }: { log: Ge
                 <div className="grid gap-2 pl-6">
                     <div className="flex flex-wrap gap-1">
                         <Tag className="studio-tag flex h-6 items-center px-1.5 text-xs leading-none">成功 {log.successCount ?? log.imageCount}</Tag>
-                        {log.failCount ? <Tag className="studio-tag flex h-6 items-center !border-red-900/60 px-1.5 text-xs !text-red-300 leading-none">失败 {log.failCount}</Tag> : null}
+                        {log.failCount ? <Tag className="studio-semantic-danger studio-semantic-tag flex h-6 items-center px-1.5 text-xs leading-none">失败 {log.failCount}</Tag> : null}
                     </div>
                     <div className="flex flex-wrap gap-1">
                         <Tag className="studio-tag flex h-6 items-center px-1.5 text-xs leading-none">{log.imageCount} 张</Tag>

@@ -177,7 +177,7 @@ export function EpisodeAssetsModulePage({
                             {assetPrimaryActionLabel}
                         </Button>
                         {canRerunAssetAnalysis ? (
-                            <Button className="!rounded-md !border-amber-400/35 !bg-amber-400/[0.07] !text-amber-100 hover:!border-amber-300/60 hover:!text-amber-50" onClick={() => onRunStage("art-design")}>
+                            <Button className="studio-semantic-warning studio-semantic-tag !rounded-md" onClick={() => onRunStage("art-design")}>
                                 重新提取资产
                             </Button>
                         ) : null}
@@ -210,22 +210,22 @@ export function EpisodeAssetsModulePage({
             ) : null}
 
             {staleRunning ? (
-                <div className="rounded-md border border-amber-400/30 bg-amber-400/[0.07] p-4 shadow-[var(--studio-shadow)] backdrop-blur-xl">
+                <div className="studio-semantic-warning studio-semantic-notice rounded-md border p-4 shadow-[var(--studio-shadow)] backdrop-blur-xl">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
-                            <div className="text-base font-semibold text-amber-100">资产分析运行中断</div>
-                            <div className="mt-1 text-sm leading-6 text-amber-100/75">页面里已经没有正在等待的请求，但上一次阶段状态仍停在运行中。先点击“清理运行状态”，再重新运行资产分析。</div>
+                            <div className="text-base font-semibold">资产分析运行中断</div>
+                            <div className="mt-1 text-sm leading-6 opacity-75">页面里已经没有正在等待的请求，但上一次阶段状态仍停在运行中。先点击“清理运行状态”，再重新运行资产分析。</div>
                         </div>
                     </div>
                 </div>
             ) : null}
 
             {hasOutputStateMismatch ? (
-                <div className="rounded-md border border-rose-400/30 bg-rose-400/[0.06] p-4 shadow-[var(--studio-shadow)] backdrop-blur-xl">
+                <div className="studio-semantic-danger studio-semantic-notice rounded-md border p-4 shadow-[var(--studio-shadow)] backdrop-blur-xl">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
-                            <div className="text-base font-semibold text-rose-100">资产阶段状态不一致</div>
-                            <div className="mt-1 text-sm leading-6 text-rose-100/75">检测到资产分析产物，但当前阶段不是可确认状态。请重新运行资产分析，避免用旧产物继续生成资产清单。</div>
+                            <div className="text-base font-semibold">资产阶段状态不一致</div>
+                            <div className="mt-1 text-sm leading-6 opacity-75">检测到资产分析产物，但当前阶段不是可确认状态。请重新运行资产分析，避免用旧产物继续生成资产清单。</div>
                         </div>
                     </div>
                 </div>

@@ -476,9 +476,9 @@ function buildWorkbenchFlowNotice({
 }
 
 function flowNoticeClass(tone: "amber" | "cyan" | "green" | "red" | "slate") {
-    if (tone === "red") return "border-rose-400/40 bg-rose-400/10 text-rose-100";
-    if (tone === "green") return "border-emerald-400/35 bg-emerald-400/10 text-emerald-100";
-    if (tone === "amber") return "border-amber-400/35 bg-amber-400/10 text-amber-100";
-    if (tone === "slate") return "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]";
-    return "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-accent)]";
+    if (tone === "red") return "studio-semantic-danger studio-semantic-notice";
+    if (tone === "green") return "studio-semantic-success studio-semantic-notice";
+    if (tone === "amber") return "studio-semantic-warning studio-semantic-notice";
+    if (tone === "slate") return "studio-semantic-neutral studio-semantic-notice";
+    return "studio-semantic-info studio-semantic-notice";
 }

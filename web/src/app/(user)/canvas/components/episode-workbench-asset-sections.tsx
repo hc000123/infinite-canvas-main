@@ -68,7 +68,7 @@ export function AssetExtractionSection({
                                             <Tag className="m-0">{draftItems.length} 条草案</Tag>
                                         </div>
                                         <div className="mt-2 text-sm font-medium">{run.draftOutput.summary}</div>
-                                        {run.draftOutput.warnings.length ? <div className="mt-1 text-xs text-amber-600">{run.draftOutput.warnings.join("；")}</div> : null}
+                                        {run.draftOutput.warnings.length ? <div className="mt-1 text-xs text-[var(--studio-warning)]">{run.draftOutput.warnings.join("；")}</div> : null}
                                     </div>
                                     <Space size={6} wrap>
                                         <Button size="small" disabled={run.status !== "ready_for_review"} onClick={() => onApprove(run.id)}>
@@ -195,7 +195,7 @@ export function EpisodeImageNeedsSection({
                                     </Button>
                                 </div>
                             </div>
-                            {row.item.warnings?.length ? <div className="mt-2 rounded-md bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">{row.item.warnings.join("；")}</div> : null}
+                            {row.item.warnings?.length ? <div className="studio-semantic-warning studio-semantic-notice mt-2 rounded-md border p-2 text-xs">{row.item.warnings.join("；")}</div> : null}
                         </div>
                     ))}
                 </div>

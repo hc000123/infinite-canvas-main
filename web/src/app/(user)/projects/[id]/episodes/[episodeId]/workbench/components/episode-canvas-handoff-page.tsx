@@ -6,7 +6,7 @@ import { App, Button } from "antd";
 import type { CanvasProject } from "../../../../../../canvas/stores/use-canvas-store";
 import type { ScriptEpisode } from "../../../../../../canvas/utils/script-management";
 import { CanvasHandoffPreviewPanel, CanvasHandoffTable } from "./episode-canvas-handoff-components";
-import { episodeToneTextClass, type EpisodeStatusTone } from "./episode-module-panel";
+import { episodeToneSemanticClass, episodeToneTextClass, type EpisodeStatusTone } from "./episode-module-panel";
 import {
     buildCanvasHandoffRows,
     filterCanvasHandoffRow,
@@ -104,7 +104,7 @@ export function EpisodeCanvasHandoffPage({
                 ].map((step) => (
                     <div
                         key={step.label}
-                        className={`rounded-md border px-4 py-3 transition ${step.active ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] shadow-[inset_0_-2px_0_var(--studio-accent)]" : step.tone === "green" ? "border-emerald-500/35 bg-emerald-500/[0.06]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]"}`}
+                        className={`rounded-md border px-4 py-3 transition ${step.active ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] shadow-[inset_0_-2px_0_var(--studio-accent)]" : `studio-semantic-notice ${episodeToneSemanticClass(step.tone as EpisodeStatusTone)}`}`}
                     >
                         <div className={`text-sm font-semibold ${episodeToneTextClass(step.tone as EpisodeStatusTone)}`}>{step.label}</div>
                         <div className="mt-2 break-words text-xs leading-5 text-[var(--studio-text-muted)]">{step.text}</div>

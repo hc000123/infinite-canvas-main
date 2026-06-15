@@ -43,7 +43,7 @@ export function CanvasHandoffTable({
                                 key={row.pkg.id}
                                 role="button"
                                 tabIndex={0}
-                                className={`grid grid-cols-[56px_minmax(150px,1fr)_112px_50px_50px_72px_76px_126px] gap-2 border-l-4 px-5 py-4 text-sm transition ${selected ? "border-[var(--studio-accent)] bg-[var(--studio-active-bg)]" : row.status === "缺资产" ? "border-amber-400/70 bg-amber-500/[0.04] hover:bg-amber-500/[0.07]" : "border-transparent hover:bg-[var(--studio-hover-bg)]"}`}
+                                className={`grid grid-cols-[56px_minmax(150px,1fr)_112px_50px_50px_72px_76px_126px] gap-2 border-l-4 px-5 py-4 text-sm transition ${selected ? "border-[var(--studio-accent)] bg-[var(--studio-active-bg)]" : row.status === "缺资产" ? "border-[var(--studio-warning)] bg-[color-mix(in_srgb,var(--studio-warning)_6%,var(--studio-panel-bg))] hover:bg-[color-mix(in_srgb,var(--studio-warning)_10%,var(--studio-panel-bg))]" : "border-transparent hover:bg-[var(--studio-hover-bg)]"}`}
                                 onClick={() => onPreview(row)}
                                 onKeyDown={(event) => {
                                     if (event.key === "Enter" || event.key === " ") onPreview(row);
@@ -59,7 +59,7 @@ export function CanvasHandoffTable({
                                 </div>
                                 <div className="self-center font-semibold text-[var(--studio-text-secondary)]">{row.pkg.duration}s</div>
                                 <div className="self-center text-[var(--studio-text-secondary)]">{row.pkg.shots.length} 镜</div>
-                                <div className={`self-center font-semibold ${row.status === "缺资产" ? "text-amber-300" : "text-[var(--studio-text-secondary)]"}`}>{row.assetState}</div>
+                                <div className={`self-center font-semibold ${row.status === "缺资产" ? "text-[var(--studio-warning)]" : "text-[var(--studio-text-secondary)]"}`}>{row.assetState}</div>
                                 <div className="self-center">
                                     <EpisodeStatusPill status={row.status} tone={row.tone} />
                                 </div>
@@ -163,18 +163,18 @@ function CanvasHandoffActionButton({ disabled, label, onClick, primary }: { disa
 
 function CanvasHandoffNodePreview({ row }: { row: CanvasHandoffPackageRow }) {
     const nodes = [
-        { className: "left-[6%] top-[12%] border-cyan-400/45 bg-cyan-400/[0.08]", label: "原剧本", sub: "片段节点" },
-        { className: "left-[38%] top-[38%] border-amber-400/45 bg-amber-400/[0.07]", label: "引用资产", sub: `${row.pkg.assetLabels.length || 1} 项` },
-        { className: "right-[7%] top-[62%] border-emerald-400/45 bg-emerald-400/[0.07]", label: "提示词 + 配置", sub: "待画布检查" },
+        { className: "studio-semantic-info studio-semantic-notice left-[6%] top-[12%]", label: "原剧本", sub: "片段节点" },
+        { className: "studio-semantic-warning studio-semantic-notice left-[38%] top-[38%]", label: "引用资产", sub: `${row.pkg.assetLabels.length || 1} 项` },
+        { className: "studio-semantic-success studio-semantic-notice right-[7%] top-[62%]", label: "提示词 + 配置", sub: "待画布检查" },
         { className: "left-[10%] bottom-[12%] border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]", label: "结果占位", sub: "生成后回流" },
     ];
     return (
         <div className="overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]">
             <div className="border-b border-[var(--studio-border-subtle)] px-4 py-3 text-sm font-semibold text-[var(--studio-text-primary)]">导入后会创建的画布节点</div>
-            <div className="relative h-64 bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:28px_28px]">
-                <div className="absolute left-[27%] top-[26%] h-px w-[29%] rotate-[20deg] bg-cyan-400/30" />
-                <div className="absolute left-[58%] top-[52%] h-px w-[26%] rotate-[24deg] bg-cyan-400/30" />
-                <div className="absolute left-[20%] top-[58%] h-px w-[28%] -rotate-[28deg] bg-cyan-400/20" />
+            <div className="relative h-64 bg-[linear-gradient(var(--studio-border-subtle)_1px,transparent_1px),linear-gradient(90deg,var(--studio-border-subtle)_1px,transparent_1px)] bg-[size:28px_28px]">
+                <div className="absolute left-[27%] top-[26%] h-px w-[29%] rotate-[20deg] bg-[color-mix(in_srgb,var(--studio-accent)_34%,transparent)]" />
+                <div className="absolute left-[58%] top-[52%] h-px w-[26%] rotate-[24deg] bg-[color-mix(in_srgb,var(--studio-accent)_34%,transparent)]" />
+                <div className="absolute left-[20%] top-[58%] h-px w-[28%] -rotate-[28deg] bg-[color-mix(in_srgb,var(--studio-accent)_22%,transparent)]" />
                 {nodes.map((node) => (
                     <div key={node.label} className={`absolute w-32 rounded-md border px-3 py-3 shadow-[var(--studio-shadow)] ${node.className}`}>
                         <div className="text-sm font-semibold text-[var(--studio-text-primary)]">{node.label}</div>

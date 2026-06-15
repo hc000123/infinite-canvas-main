@@ -78,7 +78,7 @@ export function WorkflowMappingPreviewPanel({
                             )}
                         </div>
                         <div className="mt-1">{preview.summary}</div>
-                        {preview.warnings.length ? <div className="mt-1 text-amber-600">提示：{preview.warnings.join("；")}</div> : null}
+                        {preview.warnings.length ? <div className="mt-1 text-[var(--studio-warning)]">提示：{preview.warnings.join("；")}</div> : null}
                         {applyDisabledReason ? <div className="mt-1 text-[var(--studio-text-muted)]">{applyDisabledReason}</div> : null}
                         <details className="mt-2">
                             <summary className="cursor-pointer text-[var(--studio-text-muted)]">查看条目与追溯</summary>
@@ -105,7 +105,7 @@ export function WorkflowMappingPreviewPanel({
                                         </summary>
                                         <div className="mt-2 grid gap-2">
                                             <div className="text-[var(--studio-text-muted)]">来源：{item.sourceText}</div>
-                                            {item.warnings.length ? <div className="text-amber-600">{item.warnings.join("；")}</div> : null}
+                                            {item.warnings.length ? <div className="text-[var(--studio-warning)]">{item.warnings.join("；")}</div> : null}
                                             <details>
                                                 <summary className="cursor-pointer text-[var(--studio-text-muted)]">查看 mappedFields</summary>
                                                 <pre className="mt-2 overflow-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] p-2 text-[11px] text-[var(--studio-text-primary)]">{JSON.stringify(item.mappedFields, null, 2)}</pre>

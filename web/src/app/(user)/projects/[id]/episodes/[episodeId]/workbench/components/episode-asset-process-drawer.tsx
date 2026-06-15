@@ -189,7 +189,7 @@ function EpisodeAssetBindPanel({
                 <Button className="!rounded-md" disabled={!selectedCandidate || !asset.productionBibleItem} onClick={() => selectedCandidate && onBindAsset(asset, selectedCandidate)}>
                     绑定选中素材
                 </Button>
-                {!asset.productionBibleItem ? <span className="self-center text-xs text-amber-300">先写入设定库后可确认绑定。</span> : null}
+                {!asset.productionBibleItem ? <span className="self-center text-xs text-[var(--studio-warning)]">先写入设定库后可确认绑定。</span> : null}
             </div>
         </div>
     );

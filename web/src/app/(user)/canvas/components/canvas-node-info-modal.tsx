@@ -75,7 +75,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                                 <InfoRow
                                     label="video_url"
                                     value={
-                                        <a className="text-blue-500 underline underline-offset-2" href={node.metadata.videoUrl} target="_blank" rel="noreferrer">
+                                        <a className="text-[var(--studio-accent)] underline underline-offset-2 transition hover:text-[var(--studio-accent-hover)]" href={node.metadata.videoUrl} target="_blank" rel="noreferrer">
                                             打开临时地址
                                         </a>
                                     }
@@ -90,7 +90,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                                 <InfoRow
                                     label="缓存地址"
                                     value={
-                                        <a className="text-blue-500 underline underline-offset-2" href={node.metadata.cacheUrl} target="_blank" rel="noreferrer">
+                                        <a className="text-[var(--studio-accent)] underline underline-offset-2 transition hover:text-[var(--studio-accent-hover)]" href={node.metadata.cacheUrl} target="_blank" rel="noreferrer">
                                             打开缓存文件
                                         </a>
                                     }
@@ -111,7 +111,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                                 </>
                             ) : null}
                             {node.metadata?.errorDetails ? (
-                                <div className="rounded-lg border p-3 text-red-400" style={{ borderColor: theme.node.stroke }}>
+                                <div className="rounded-lg border p-3 text-[var(--studio-danger)]" style={{ borderColor: theme.node.stroke }}>
                                     {node.metadata.errorDetails}
                                 </div>
                             ) : null}
