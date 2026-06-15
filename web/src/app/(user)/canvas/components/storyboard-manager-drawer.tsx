@@ -183,7 +183,7 @@ export function StoryboardManagerDrawer({ open, projectId, projectTitle, initial
                 title: "导出前检查",
                 content: (
                     <div className="max-h-72 overflow-auto text-sm leading-6">
-                        <div className="mb-2 text-stone-500">发现 {plan.manifest.warnings.length} 个需要注意的问题。继续导出会保留清单，但缺失的媒体文件不会进入压缩包。</div>
+                        <div className="mb-2 text-[var(--studio-text-muted)]">发现 {plan.manifest.warnings.length} 个需要注意的问题。继续导出会保留清单，但缺失的媒体文件不会进入压缩包。</div>
                         {plan.manifest.warnings.map((item, index) => (
                             <div key={`${item.shotId}:${item.type}:${index}`}>- {item.message}</div>
                         ))}
@@ -223,8 +223,8 @@ export function StoryboardManagerDrawer({ open, projectId, projectTitle, initial
     };
 
     return (
-        <Drawer title="分镜管理" open={open} onClose={onClose} size={1080} destroyOnHidden>
-            <div className="mb-4 text-sm text-stone-500 dark:text-stone-400">当前画布：{projectTitle}</div>
+        <Drawer rootClassName="studio-modal" title="分镜管理" open={open} onClose={onClose} size={1080} destroyOnHidden>
+            <div className="mb-4 text-sm text-[var(--studio-text-muted)]">当前画布：{projectTitle}</div>
             <StoryboardTableSection
                 boundCanvases={boundCanvases}
                 activeTableCanvas={activeTableCanvas}
@@ -307,9 +307,9 @@ export function StoryboardManagerDrawer({ open, projectId, projectTitle, initial
                     }
                 >
                     {activeGroup ? (
-                        <div className="mb-4 rounded-lg bg-stone-50 p-3 text-sm leading-6 text-stone-600 dark:bg-stone-900 dark:text-stone-300">
+                        <div className="mb-4 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3 text-sm leading-6 text-[var(--studio-text-secondary)]">
                             {activeGroup.description || "暂无分镜组说明"}
-                            {Object.keys(activeGroup.preset || {}).length ? <div className="mt-1 text-xs text-stone-400">已记录项目预设参数</div> : null}
+                            {Object.keys(activeGroup.preset || {}).length ? <div className="mt-1 text-xs text-[var(--studio-text-muted)]">已记录项目预设参数</div> : null}
                         </div>
                     ) : null}
                     {activeGroup && queuePlan ? (

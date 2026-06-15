@@ -311,7 +311,7 @@ function WorkflowAssetLargePreview({ asset, compact = false }: { asset: Asset; c
     return (
         <div className={`${compact ? "min-h-40" : "min-h-72"} grid place-items-center rounded-md border border-[var(--studio-border-subtle)] bg-[linear-gradient(135deg,rgba(53,101,196,.2),rgba(18,112,84,.18))] p-6 text-center`}>
             <div className="max-w-xl">
-                <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-md bg-white/10 text-white">
+                <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-muted)]">
                     <ImagePlus className="size-6" />
                 </div>
                 {compact ? (

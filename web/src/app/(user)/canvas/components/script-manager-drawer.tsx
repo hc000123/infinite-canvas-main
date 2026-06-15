@@ -118,8 +118,8 @@ export function ScriptManagerDrawer({ open, projectId, projectTitle, initialEpis
     };
 
     return (
-        <Drawer title="剧本分镜工作台" open={open} onClose={onClose} size={980} destroyOnHidden>
-            <div className="mb-4 text-sm text-stone-500 dark:text-stone-400">当前画布：{projectTitle} · 按故事大纲、分集、场次到分镜草案推进</div>
+        <Drawer rootClassName="studio-modal" title="剧本分镜工作台" open={open} onClose={onClose} size={980} destroyOnHidden>
+            <div className="mb-4 text-sm text-[var(--studio-text-muted)]">当前画布：{projectTitle} · 按故事大纲、分集、场次到分镜草案推进</div>
             <ScriptWorkflowGuide steps={workflowSteps} nextAction={nextAction} />
             <div className="grid h-full min-h-[680px] gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
                 <div className="space-y-4">
@@ -181,7 +181,7 @@ export function ScriptManagerDrawer({ open, projectId, projectTitle, initialEpis
                     }
                 >
                     {activeEpisode ? (
-                        <div className="mb-4 rounded-lg bg-stone-50 p-3 text-sm leading-6 text-stone-600 dark:bg-stone-900 dark:text-stone-300">
+                        <div className="mb-4 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3 text-sm leading-6 text-[var(--studio-text-secondary)]">
                             {activeEpisode.summary || "暂无本集摘要"}
                             {activeEpisode.hook ? <div>开场钩子：{activeEpisode.hook}</div> : null}
                             {activeEpisode.turningPoint ? <div>转折：{activeEpisode.turningPoint}</div> : null}
@@ -254,7 +254,7 @@ export function ScriptManagerDrawer({ open, projectId, projectTitle, initialEpis
                     setSceneFormOpen(false);
                 }}
             />
-            <Modal title="从纯文本导入场次" open={importOpen} onCancel={() => setImportOpen(false)} onOk={submitImport} okText="导入" cancelText="取消">
+            <Modal rootClassName="studio-modal" title="从纯文本导入场次" open={importOpen} onCancel={() => setImportOpen(false)} onOk={submitImport} okText="导入" cancelText="取消">
                 <Input.TextArea value={importText} rows={10} placeholder={"按空行分段，每段会生成一个场次草稿。\n可写：地点：、情绪：、对白：、时长："} onChange={(event) => setImportText(event.target.value)} />
             </Modal>
         </Drawer>

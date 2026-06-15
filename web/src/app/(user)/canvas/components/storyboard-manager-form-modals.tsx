@@ -33,7 +33,7 @@ export function GroupFormModal({ open, editingGroup, onCancel, onSubmit }: { ope
         form.setFieldsValue({ title: editingGroup?.title || "", description: editingGroup?.description || "" });
     }, [editingGroup, form, open]);
     return (
-        <Modal title={editingGroup ? "编辑分镜组" : "新增分镜组"} open={open} onCancel={onCancel} onOk={() => form.submit()} okText="保存" cancelText="取消" destroyOnHidden>
+        <Modal rootClassName="studio-modal" title={editingGroup ? "编辑分镜组" : "新增分镜组"} open={open} onCancel={onCancel} onOk={() => form.submit()} okText="保存" cancelText="取消" destroyOnHidden>
             <Form form={form} layout="vertical" onFinish={onSubmit}>
                 <Form.Item name="title" label="标题" rules={[{ required: true, message: "请填写标题" }]}>
                     <Input placeholder="例如：第一集操场毕业典礼" />
@@ -100,6 +100,7 @@ export function ShotFormDrawer({
 
     return (
         <Drawer
+            rootClassName="studio-modal"
             title={editingShot ? "编辑分镜" : "新增分镜"}
             open={open}
             onClose={onClose}
@@ -152,7 +153,7 @@ export function ShotFormDrawer({
                 {selectedAssetIds.length ? (
                     <div className="mb-4 space-y-2">
                         {selectedAssetIds.map((assetId) => (
-                            <div key={assetId} className="grid gap-2 rounded-lg bg-stone-50 p-2 text-sm dark:bg-stone-900 sm:grid-cols-[minmax(0,1fr)_160px]">
+                            <div key={assetId} className="grid gap-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-2 text-sm text-[var(--studio-text-secondary)] sm:grid-cols-[minmax(0,1fr)_160px]">
                                 <span className="truncate">{assetsById.get(assetId)?.title || assetId}</span>
                                 <Select
                                     size="small"
@@ -167,7 +168,7 @@ export function ShotFormDrawer({
                 <Form.Item name="productionBibleIds" label="引用设定">
                     <Select mode="multiple" placeholder="选择角色、场景、道具设定" options={bibleItems.map((item) => ({ label: `${productionBibleKindLabel(item.kind)} · ${item.name}`, value: item.id }))} />
                 </Form.Item>
-                {selectedBibleIds.length ? <div className="mb-4 text-xs text-stone-500">提示词库变量填写时也可以选择这些设定项。</div> : null}
+                {selectedBibleIds.length ? <div className="mb-4 text-xs text-[var(--studio-text-muted)]">提示词库变量填写时也可以选择这些设定项。</div> : null}
             </Form>
             <PromptSelectDialog
                 open={promptOpen}

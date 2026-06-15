@@ -87,7 +87,7 @@ export function StoryboardTableShotCard({
             }
         >
             <div className="space-y-2 text-sm">
-                <div className="line-clamp-2 whitespace-pre-wrap leading-6 text-stone-700 dark:text-stone-300">{shot.visualDescription || shot.scriptText || "暂无镜头描述"}</div>
+                <div className="line-clamp-2 whitespace-pre-wrap leading-6 text-[var(--studio-text-secondary)]">{shot.visualDescription || shot.scriptText || "暂无镜头描述"}</div>
                 <Space size={[4, 4]} wrap>
                     <Tag className="m-0">{shot.sceneName}</Tag>
                     {shot.timeOfDay ? <Tag className="m-0">{shot.timeOfDay}</Tag> : null}
@@ -144,7 +144,7 @@ export function ShotGroupRowCard({
             }
         >
             <div className="space-y-2 text-sm">
-                <div className="line-clamp-3 whitespace-pre-wrap leading-6 text-stone-700 dark:text-stone-300">{row.group.effectivePrompt || row.group.prompt || "暂无视频提示词"}</div>
+                <div className="line-clamp-3 whitespace-pre-wrap leading-6 text-[var(--studio-text-secondary)]">{row.group.effectivePrompt || row.group.prompt || "暂无视频提示词"}</div>
                 <Space size={[4, 4]} wrap>
                     <Tag className="m-0">{shotGroupStatusLabel(row.group.status)}</Tag>
                     <Tag className="m-0">总时长 {row.group.totalDuration}s</Tag>
@@ -415,12 +415,12 @@ function AssetMentionTextArea({
                 onSelect={updateCaret}
             />
             {mentionTrigger && mentionMatches.length ? (
-                <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-lg border border-stone-200 bg-white p-1 shadow-xl dark:border-stone-800 dark:bg-stone-950">
+                <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-elevated-bg)] p-1 shadow-[var(--studio-shadow-hover)]">
                     {mentionMatches.map((option) => (
                         <button
                             key={option.id}
                             type="button"
-                            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-stone-100 dark:hover:bg-white/10"
+                            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-[var(--studio-text-secondary)] transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]"
                             onMouseDown={(event) => {
                                 event.preventDefault();
                                 insertMention(option);
@@ -429,7 +429,7 @@ function AssetMentionTextArea({
                             <AssetMentionPreview option={option} />
                             <span className="min-w-0 flex-1">
                                 <span className="block truncate font-medium">{option.asset.title}</span>
-                                <span className="block truncate text-stone-500 dark:text-stone-400">
+                                <span className="block truncate text-[var(--studio-text-muted)]">
                                     插入 {option.label} · {assetKindLabel(option.asset.kind)}
                                 </span>
                             </span>

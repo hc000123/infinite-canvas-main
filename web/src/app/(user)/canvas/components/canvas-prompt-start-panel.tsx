@@ -57,7 +57,7 @@ export function CanvasPromptStartPanel({ onSelect }: { onSelect: (preset: { kind
                             <button
                                 key={preset.kind}
                                 type="button"
-                                className="min-h-20 rounded-lg px-3 py-2 text-left transition hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 dark:hover:bg-white/10"
+                                className="min-h-20 rounded-lg px-3 py-2 text-left transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                                 onClick={() => onSelect(preset)}
                             >
                                 <div className="flex items-center gap-2">

@@ -22,8 +22,8 @@ export function CanvasAssistantHistory({ sessions, activeSession, checkedIds, on
     return (
         <div className="space-y-1">
             {sessions.map((session) => (
-                <div key={session.id} className="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition hover:bg-black/5 dark:hover:bg-white/10" style={session.id === activeSession?.id ? { background: theme.node.fill } : undefined}>
-                    <input type="checkbox" className="size-4 accent-stone-950" checked={checkedIds.includes(session.id)} onChange={(event) => onToggleChecked(session.id, event.target.checked)} />
+                <div key={session.id} className="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition hover:bg-[var(--studio-hover-bg)]" style={session.id === activeSession?.id ? { background: theme.node.fill } : undefined}>
+                    <input type="checkbox" className="size-4 accent-[var(--studio-accent)]" checked={checkedIds.includes(session.id)} onChange={(event) => onToggleChecked(session.id, event.target.checked)} />
                     <button type="button" className="min-w-0 flex-1 text-left text-sm" onClick={() => onOpen(session.id)}>
                         <span className="block truncate">{session.title}</span>
                         <span className="text-xs opacity-50">{session.messages.length} 条消息</span>

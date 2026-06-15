@@ -51,7 +51,7 @@ export function AssetBreakdownCard({
             }
         >
             <div className="space-y-3 text-sm">
-                <p className="m-0 whitespace-pre-wrap text-stone-600 dark:text-stone-300">{item.description || item.sourceText || "暂无描述"}</p>
+                <p className="m-0 whitespace-pre-wrap text-[var(--studio-text-secondary)]">{item.description || item.sourceText || "暂无描述"}</p>
                 <Space size={[4, 4]} wrap>
                     {item.tags.map((tag) => (
                         <Tag key={tag} className="m-0">
@@ -74,7 +74,7 @@ export function AssetBreakdownCard({
                         </Tag>
                     ))}
                 </Space>
-                {item.briefDraft ? <pre className="max-h-32 overflow-auto rounded bg-stone-50 p-2 text-xs leading-5 text-stone-500 dark:bg-stone-900 dark:text-stone-400">{item.briefDraft.prompt}</pre> : null}
+                {item.briefDraft ? <pre className="max-h-32 overflow-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-2 text-xs leading-5 text-[var(--studio-text-muted)]">{item.briefDraft.prompt}</pre> : null}
                 <div className="flex flex-wrap items-center gap-2">
                     <Select mode="tags" className="min-w-72 flex-1" placeholder="选择或粘贴素材 ID 绑定到该资产" value={selectedAssetIds} options={assets.map((asset) => ({ label: asset.title, value: asset.id }))} onChange={setSelectedAssetIds} />
                     <Button size="small" disabled={!selectedAssetIds.length} onClick={() => onBindAssets(selectedAssetIds)}>

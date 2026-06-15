@@ -52,6 +52,7 @@ export function ProductionBibleDrawer({ open, projectId, projectTitle, canvases 
 
     return (
         <Drawer
+            rootClassName="studio-modal"
             title="项目设定库"
             open={open}
             onClose={onClose}
@@ -63,7 +64,7 @@ export function ProductionBibleDrawer({ open, projectId, projectTitle, canvases 
                 </Button>
             }
         >
-            <div className="mb-4 text-sm text-stone-500 dark:text-stone-400">当前项目：{projectTitle}</div>
+            <div className="mb-4 text-sm text-[var(--studio-text-muted)]">当前项目：{projectTitle}</div>
             <Segmented className="mb-4" value={kind} onChange={(value) => setKind(value as ProductionBibleKind)} options={productionBibleKindOptions.map((option) => ({ label: option.label, value: option.value }))} />
 
             {visibleItems.length ? (

@@ -21,18 +21,18 @@ export function StoryboardGroupCard({ group, active, shotCount, onSelect, onEdit
     return (
         <button
             type="button"
-            className={`block w-full rounded-lg border p-3 text-left transition ${active ? "border-stone-900 bg-stone-100 dark:border-stone-200 dark:bg-stone-800" : "border-stone-200 hover:border-stone-400 dark:border-stone-700"}`}
+            className={`block w-full rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)] ${active ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-text-primary)]" : "border-[var(--studio-border-subtle)] text-[var(--studio-text-secondary)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]"}`}
             onClick={onSelect}
         >
             <div className="flex items-start gap-2">
-                <Clapperboard className="mt-0.5 size-4 shrink-0 text-stone-500" />
+                <Clapperboard className="mt-0.5 size-4 shrink-0 text-[var(--studio-text-muted)]" />
                 <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold">{group.title}</div>
-                    <div className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500">{group.description || "暂无说明"}</div>
+                    <div className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--studio-text-muted)]">{group.description || "暂无说明"}</div>
                 </div>
             </div>
             <div className="mt-2 flex items-center justify-between">
-                <span className="text-xs text-stone-400">{shotCount} 条分镜</span>
+                <span className="text-xs text-[var(--studio-text-muted)]">{shotCount} 条分镜</span>
                 <Space size={2} onClick={(event) => event.stopPropagation()}>
                     <Button size="small" type="text" icon={<Pencil className="size-3.5" />} onClick={onEdit} />
                     <Popconfirm title="删除这个分镜组？" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={onDelete}>
@@ -77,7 +77,7 @@ export function StoryboardShotCard({ shot, assetsById, bibleById, onUpdateAssetR
             }
         >
             <div className="space-y-2 text-sm">
-                <div className="line-clamp-3 whitespace-pre-wrap leading-6 text-stone-700 dark:text-stone-300">{shot.prompt || shot.description || "暂无提示词"}</div>
+                <div className="line-clamp-3 whitespace-pre-wrap leading-6 text-[var(--studio-text-secondary)]">{shot.prompt || shot.description || "暂无提示词"}</div>
                 <Space size={[4, 4]} wrap>
                     <Tag className="m-0">{shotStatusLabel(shot.status)}</Tag>
                     {shot.primaryAssetId ? <Tag className="m-0">主版本：{assetsById.get(shot.primaryAssetId)?.title || shot.primaryAssetId}</Tag> : null}
@@ -110,8 +110,8 @@ export function StoryboardShotCard({ shot, assetsById, bibleById, onUpdateAssetR
                     {shot.nodeRefs.length ? <Tag className="m-0">已加入画布</Tag> : null}
                 </Space>
                 {shot.resultAssetIds.length ? (
-                    <div className="rounded-lg bg-stone-50 p-2 text-xs leading-5 text-stone-500 dark:bg-stone-900 dark:text-stone-400">
-                        <div className="mb-1 font-medium text-stone-600 dark:text-stone-300">生成结果</div>
+                    <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-2 text-xs leading-5 text-[var(--studio-text-muted)]">
+                        <div className="mb-1 font-medium text-[var(--studio-text-secondary)]">生成结果</div>
                         <div className="flex flex-wrap gap-1.5">
                             {shot.resultAssetIds.map((assetId) => (
                                 <Tag key={assetId} className="m-0">

@@ -29,14 +29,14 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
     };
 
     return (
-        <article className="studio-panel group flex min-h-52 cursor-pointer flex-col justify-between p-5 transition hover:-translate-y-0.5 hover:border-teal-500/40 hover:bg-white/90 dark:hover:bg-white/[0.065]" onClick={() => !editing && open()}>
+        <article className="studio-panel group flex min-h-52 cursor-pointer flex-col justify-between p-5 transition hover:-translate-y-0.5 hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]" onClick={() => !editing && open()}>
             <div className="flex items-start gap-3">
                 <input
                     type="checkbox"
                     checked={selected}
                     onClick={(event) => event.stopPropagation()}
                     onChange={(event) => toggleSelected(project.id, event.target.checked)}
-                    className="mt-1 size-4 accent-stone-950 dark:accent-stone-100"
+                    className="mt-1 size-4 accent-[var(--studio-accent)]"
                     aria-label={`选择 ${project.title}`}
                 />
                 {editing ? (
@@ -51,15 +51,15 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
                         }}
                     >
                         <h2 className="break-words text-xl font-semibold leading-7">{project.title}</h2>
-                        <p className="mt-3 text-sm leading-6 text-stone-600 dark:text-stone-400">
+                        <p className="mt-3 text-sm leading-6 text-[var(--studio-text-secondary)]">
                             {project.nodes.length} 个节点 · {project.connections.length} 条连线
                         </p>
-                        {project.preset ? <p className="mt-1 break-words text-xs leading-5 text-stone-500">{canvasProjectPresetSummary(project.preset)}</p> : null}
+                        {project.preset ? <p className="mt-1 break-words text-xs leading-5 text-[var(--studio-text-muted)]">{canvasProjectPresetSummary(project.preset)}</p> : null}
                     </button>
                 )}
             </div>
             <div className="mt-8 flex items-end justify-between gap-3">
-                <p className="text-xs text-stone-500">更新于 {new Date(project.updatedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
+                <p className="text-xs text-[var(--studio-text-muted)]">更新于 {new Date(project.updatedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
                 <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
                     {editing ? (
                         <>

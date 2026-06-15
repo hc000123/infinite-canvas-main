@@ -303,7 +303,7 @@ function SmallInspectorButton({ icon, label, onClick, theme, disabled = false }:
     return (
         <button
             type="button"
-            className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)] disabled:cursor-not-allowed disabled:opacity-40"
             style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke, color: theme.node.text }}
             onClick={onClick}
             disabled={disabled}

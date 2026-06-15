@@ -56,7 +56,7 @@ export function CanvasProductionPackageBar({
                             style={{ background: active ? activePackageStyle.background : theme.node.fill, borderColor: active ? activePackageStyle.border : theme.node.stroke, color: active ? activePackageStyle.text : theme.node.text }}
                             title={`${item.label} · ${item.title}`}
                         >
-                            <button type="button" className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70" onClick={() => onSelect(item)}>
+                            <button type="button" className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]" onClick={() => onSelect(item)}>
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="truncate text-sm font-semibold">{item.label}</div>
                                     <span
@@ -77,7 +77,7 @@ export function CanvasProductionPackageBar({
                             <div className="mt-2 flex items-center gap-1.5">
                                 <button
                                     type="button"
-                                    className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-md border px-2 text-[11px] font-medium transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                                    className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-md border px-2 text-[11px] font-medium transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                                     style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke, color: theme.node.text }}
                                     onClick={() => onInsertConfig(item.id)}
                                     title={item.configNodeId ? "查看生产包配置节点" : "将生产包配置放入画布"}
@@ -88,7 +88,7 @@ export function CanvasProductionPackageBar({
                                 {selectedVideoNodeId ? (
                                     <button
                                         type="button"
-                                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                                         style={{
                                             background: active ? activePackageStyle.actionBackground : theme.toolbar.panel,
                                             borderColor: active ? activePackageStyle.border : theme.node.stroke,
@@ -103,7 +103,7 @@ export function CanvasProductionPackageBar({
                                 ) : item.configNodeId ? (
                                     <button
                                         type="button"
-                                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                                         style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke, color: theme.node.muted }}
                                         onClick={() => onEditPrompt(item.id)}
                                         title="编辑提示词"

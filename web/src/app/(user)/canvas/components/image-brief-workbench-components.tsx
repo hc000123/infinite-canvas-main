@@ -78,7 +78,7 @@ export function ImageBriefCard({
             }
         >
             <div className="space-y-3 text-sm">
-                {brief.scriptText ? <p className="m-0 line-clamp-2 whitespace-pre-wrap text-stone-600 dark:text-stone-300">{brief.scriptText}</p> : null}
+                {brief.scriptText ? <p className="m-0 line-clamp-2 whitespace-pre-wrap text-[var(--studio-text-secondary)]">{brief.scriptText}</p> : null}
                 <Space size={[4, 4]} wrap>
                     <Tag className="m-0">{imageBriefSourceTypeLabel(brief.sourceType)}</Tag>
                     {brief.episodeTitle ? <Tag className="m-0">{brief.episodeTitle}</Tag> : null}
@@ -90,7 +90,7 @@ export function ImageBriefCard({
                     ))}
                 </Space>
                 {brief.validationResult.messages.length ? <div className="rounded-lg bg-amber-50 p-2 text-xs leading-5 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">{brief.validationResult.messages.join(" / ")}</div> : null}
-                <pre className="thin-scrollbar max-h-40 overflow-auto rounded-lg bg-stone-50 p-3 text-xs leading-5 text-stone-600 dark:bg-stone-900 dark:text-stone-300">{brief.finalPrompt || brief.prompt}</pre>
+                <pre className="thin-scrollbar max-h-40 overflow-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3 text-xs leading-5 text-[var(--studio-text-secondary)]">{brief.finalPrompt || brief.prompt}</pre>
                 {brief.resultAssetIds.length ? <ImageBriefResultTags brief={brief} assetsById={assetsById} onOpenAsset={onOpenAsset} onSetPrimary={onSetPrimary} onSyncPrimary={onSyncPrimary} /> : null}
             </div>
         </Card>
@@ -190,15 +190,15 @@ function ImageBriefResultTags({
 }) {
     const summaries = buildImageBriefResultSummaries(brief, Array.from(assetsById.values()));
     return (
-        <div className="space-y-1 rounded-lg border border-stone-200 p-2 dark:border-stone-700">
-            <div className="text-xs font-medium text-stone-500">生成结果</div>
+        <div className="space-y-1 rounded-md border border-[var(--studio-border-subtle)] p-2">
+            <div className="text-xs font-medium text-[var(--studio-text-muted)]">生成结果</div>
             <div className="space-y-2">
                 {summaries.map((summary) => {
                     const asset = assetsById.get(summary.assetId);
                     return (
-                        <div key={summary.assetId} className="rounded-md bg-stone-50 p-2 text-xs leading-5 dark:bg-stone-900">
+                        <div key={summary.assetId} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-2 text-xs leading-5">
                             <div className="flex flex-wrap items-center gap-1.5">
-                                <button type="button" className="max-w-56 truncate font-medium text-stone-700 underline-offset-2 hover:underline dark:text-stone-200" onClick={() => asset && onOpenAsset?.(asset)}>
+                                <button type="button" className="max-w-56 truncate font-medium text-[var(--studio-text-secondary)] underline-offset-2 transition hover:text-[var(--studio-accent)] hover:underline" onClick={() => asset && onOpenAsset?.(asset)}>
                                     {summary.title}
                                 </button>
                                 {summary.isPrimary ? (
@@ -210,8 +210,8 @@ function ImageBriefResultTags({
                                 {summary.model ? <Tag className="m-0">{summary.model}</Tag> : null}
                                 {summary.provider ? <Tag className="m-0">{summary.provider}</Tag> : null}
                             </div>
-                            <div className="mt-1 text-stone-500 dark:text-stone-400">{[summary.createdAt, summary.referenceAssets.length ? `参考 ${summary.referenceAssets.length}` : ""].filter(Boolean).join(" · ")}</div>
-                            {summary.finalPrompt ? <div className="mt-1 line-clamp-2 text-stone-500 dark:text-stone-400">{summary.finalPrompt}</div> : null}
+                            <div className="mt-1 text-[var(--studio-text-muted)]">{[summary.createdAt, summary.referenceAssets.length ? `参考 ${summary.referenceAssets.length}` : ""].filter(Boolean).join(" · ")}</div>
+                            {summary.finalPrompt ? <div className="mt-1 line-clamp-2 text-[var(--studio-text-muted)]">{summary.finalPrompt}</div> : null}
                             <Space size={6} className="mt-1">
                                 {!summary.isPrimary ? (
                                     <button type="button" className="text-blue-600 underline underline-offset-2 dark:text-blue-300" onClick={() => onSetPrimary(summary.assetId)}>

@@ -28,28 +28,28 @@ export type SceneFormValues = {
 
 export function ScriptWorkflowGuide({ steps, nextAction }: { steps: ScriptWorkflowStep[]; nextAction: string }) {
     return (
-        <div className="mb-4 rounded-xl border border-stone-200 bg-stone-50/70 p-3 dark:border-stone-800 dark:bg-stone-900/70">
+        <div className="mb-4 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm font-medium text-stone-900 dark:text-stone-100">推荐流程</div>
+                <div className="text-sm font-medium text-[var(--studio-text-primary)]">推荐流程</div>
                 <Tag className="m-0">下一步：{nextAction}</Tag>
             </div>
             <div className="grid gap-2 md:grid-cols-4">
                 {steps.map((step, index) => (
-                    <div key={step.key} className={`rounded-lg border p-3 ${step.status === "current" ? "border-stone-900 bg-white dark:border-stone-200 dark:bg-stone-800" : "border-stone-200 bg-white/60 dark:border-stone-800 dark:bg-stone-950/40"}`}>
+                    <div key={step.key} className={`rounded-md border p-3 ${step.status === "current" ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)]"}`}>
                         <div className="flex items-center gap-2">
                             <span
-                                className={`inline-flex size-5 items-center justify-center rounded-full text-xs ${step.status === "done" ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-950" : "bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"}`}
+                                className={`inline-flex size-5 items-center justify-center rounded-full text-xs ${step.status === "done" ? "bg-[var(--studio-accent)] text-[var(--primary-foreground)]" : "bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]"}`}
                             >
                                 {index + 1}
                             </span>
-                            <span className="text-sm font-medium">{step.title}</span>
+                            <span className="text-sm font-medium text-[var(--studio-text-primary)]">{step.title}</span>
                             {step.status === "current" ? (
                                 <Tag className="m-0 ml-auto" color="blue">
                                     当前
                                 </Tag>
                             ) : null}
                         </div>
-                        <p className="mt-2 text-xs leading-5 text-stone-500">{step.detail}</p>
+                        <p className="mt-2 text-xs leading-5 text-[var(--studio-text-muted)]">{step.detail}</p>
                     </div>
                 ))}
             </div>
@@ -79,18 +79,18 @@ export function EpisodeCard({
     return (
         <button
             type="button"
-            className={`block w-full rounded-lg border p-3 text-left transition ${active ? "border-stone-900 bg-stone-100 dark:border-stone-200 dark:bg-stone-800" : "border-stone-200 hover:border-stone-400 dark:border-stone-700"}`}
+            className={`block w-full rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)] ${active ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-text-primary)]" : "border-[var(--studio-border-subtle)] text-[var(--studio-text-secondary)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]"}`}
             onClick={onSelect}
         >
             <div className="flex items-start gap-2">
                 <Tag className="m-0 shrink-0">第 {episode.order} 集</Tag>
                 <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold">{episode.title}</div>
-                    <div className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500">{episode.summary || "暂无摘要"}</div>
+                    <div className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--studio-text-muted)]">{episode.summary || "暂无摘要"}</div>
                 </div>
             </div>
             <div className="mt-2 flex items-center justify-between">
-                <span className="text-xs text-stone-400">{sceneCount} 个场次</span>
+                <span className="text-xs text-[var(--studio-text-muted)]">{sceneCount} 个场次</span>
                 <Space size={2} onClick={(event) => event.stopPropagation()}>
                     <Button size="small" type="text" icon={<ArrowUp className="size-3.5" />} onClick={onMoveUp} />
                     <Button size="small" type="text" icon={<ArrowDown className="size-3.5" />} onClick={onMoveDown} />
@@ -154,7 +154,7 @@ export function SceneCard({
             }
         >
             <div className="space-y-2 text-sm">
-                <div className="whitespace-pre-wrap leading-6 text-stone-700 dark:text-stone-300">{scene.beat || "暂无剧情节拍"}</div>
+                <div className="whitespace-pre-wrap leading-6 text-[var(--studio-text-secondary)]">{scene.beat || "暂无剧情节拍"}</div>
                 <Space size={[4, 4]} wrap>
                     {scene.characterIds.map((id) => (
                         <Tag key={id} className="m-0">
@@ -174,7 +174,7 @@ export function SceneCard({
                         </Tag>
                     ) : null}
                 </Space>
-                {scene.dialogue ? <div className="whitespace-pre-wrap rounded bg-stone-50 p-2 text-xs leading-5 text-stone-500 dark:bg-stone-900 dark:text-stone-400">对白：{scene.dialogue}</div> : null}
+                {scene.dialogue ? <div className="whitespace-pre-wrap rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-2 text-xs leading-5 text-[var(--studio-text-muted)]">对白：{scene.dialogue}</div> : null}
             </div>
         </Card>
     );
@@ -195,6 +195,7 @@ export function EpisodeFormDrawer({ open, editingEpisode, onClose, onSubmit }: {
 
     return (
         <Drawer
+            rootClassName="studio-modal"
             title={editingEpisode ? "编辑分集" : "新增分集"}
             open={open}
             onClose={onClose}
@@ -265,6 +266,7 @@ export function SceneFormDrawer({
 
     return (
         <Drawer
+            rootClassName="studio-modal"
             title={editingScene ? "编辑场次" : "新增场次"}
             open={open}
             onClose={onClose}

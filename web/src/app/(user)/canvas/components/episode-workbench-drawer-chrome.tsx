@@ -23,9 +23,9 @@ export function EpisodeWorkbenchHeader({
     projectTitle: string;
 }) {
     return (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50/70 p-4 dark:border-stone-800 dark:bg-white/5">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
             <div>
-                <div className="text-sm text-stone-500">当前项目：{projectTitle}</div>
+                <div className="text-sm text-[var(--studio-text-muted)]">当前项目：{projectTitle}</div>
                 <div className="mt-1 text-xl font-semibold">{activeCanvas?.episodeTitle || activeCanvas?.title || "未选择画布"}</div>
             </div>
             <Space wrap>
@@ -57,12 +57,12 @@ export function EpisodeWorkbenchEmptyCanvas({ onCreateCanvas }: { onCreateCanvas
 
 export function EpisodeWorkbenchAssetPreviewModal({ asset, onClose }: { asset: Asset | null; onClose: () => void }) {
     return (
-        <Modal title={asset?.title || "素材详情"} open={Boolean(asset)} onCancel={onClose} footer={null} destroyOnHidden>
+        <Modal rootClassName="studio-modal" title={asset?.title || "素材详情"} open={Boolean(asset)} onCancel={onClose} footer={null} destroyOnHidden>
             {asset ? (
                 <div className="space-y-3 text-sm">
                     {asset.coverUrl ? <img src={asset.coverUrl} alt={asset.title} className="max-h-96 w-full rounded-lg object-contain" /> : null}
-                    <div className="text-stone-500">素材 ID：{asset.id}</div>
-                    <div className="text-stone-500">类型：{asset.kind}</div>
+                    <div className="text-[var(--studio-text-muted)]">素材 ID：{asset.id}</div>
+                    <div className="text-[var(--studio-text-muted)]">类型：{asset.kind}</div>
                 </div>
             ) : null}
         </Modal>

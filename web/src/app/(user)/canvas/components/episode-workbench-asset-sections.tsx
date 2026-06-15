@@ -59,7 +59,7 @@ export function AssetExtractionSection({
                     {runs.map((run) => {
                         const draftItems = normalizeAgentAssetDraftItems(run.draftOutput.items);
                         return (
-                            <Card key={run.id} size="small" className="bg-stone-50/70 dark:bg-white/5">
+                            <Card key={run.id} size="small" className="bg-[var(--studio-panel-muted-bg)]">
                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                     <div className="min-w-0">
                                         <div className="flex flex-wrap items-center gap-2">
@@ -84,12 +84,12 @@ export function AssetExtractionSection({
                                 </div>
 
                                 <div className="mt-3 grid gap-2">
-                                    {draftItems.length ? draftItems.map((item) => <AssetDraftPreviewCard key={item.id} item={item} />) : <div className="rounded-lg bg-white p-3 text-sm text-stone-500 dark:bg-black/20">当前草案没有识别到可写入资产。</div>}
+                                    {draftItems.length ? draftItems.map((item) => <AssetDraftPreviewCard key={item.id} item={item} />) : <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3 text-sm text-[var(--studio-text-muted)]">当前草案没有识别到可写入资产。</div>}
                                 </div>
 
                                 <details className="mt-3" open>
-                                    <summary className="cursor-pointer text-xs text-stone-500">处理过程</summary>
-                                    <div className="mt-2 grid gap-2 rounded-lg bg-white p-3 text-xs leading-5 text-stone-500 dark:bg-black/20">
+                                    <summary className="cursor-pointer text-xs text-[var(--studio-text-muted)]">处理过程</summary>
+                                    <div className="mt-2 grid gap-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3 text-xs leading-5 text-[var(--studio-text-muted)]">
                                         <div>1. 读取当前画布绑定的本集剧本：{run.input.episodeTitle || "未命名本集"}。</div>
                                         <div>2. 使用本地规则扫描角色、场景、道具、服化道、情绪氛围和特效关键词。</div>
                                         <div>3. 合并同类型同名资产，并保留每条草案的剧本来源片段。</div>
@@ -97,8 +97,8 @@ export function AssetExtractionSection({
                                     </div>
                                 </details>
                                 <details className="mt-3">
-                                    <summary className="cursor-pointer text-xs text-stone-500">查看 rawJson / proposedActions</summary>
-                                    <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-stone-950 p-3 text-xs text-stone-50">
+                                    <summary className="cursor-pointer text-xs text-[var(--studio-text-muted)]">查看 rawJson / proposedActions</summary>
+                                    <pre className="mt-2 max-h-72 overflow-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-elevated-bg)] p-3 text-xs text-[var(--studio-text-secondary)]">
                                         {JSON.stringify({ rawJson: run.draftOutput.rawJson, warnings: run.draftOutput.warnings, proposedActions: run.proposedActions }, null, 2)}
                                     </pre>
                                 </details>
@@ -151,7 +151,7 @@ export function EpisodeImageNeedsSection({
             {rows.length ? (
                 <div className="space-y-3">
                     {rows.map((row) => (
-                        <div key={row.item.id} className="rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-white/5">
+                        <div key={row.item.id} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-3">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div className="min-w-0 flex-1">
                                     <div className="flex flex-wrap items-center gap-2">
@@ -165,8 +165,8 @@ export function EpisodeImageNeedsSection({
                                         </Tag>
                                         <Tag className="m-0">{row.statusLabel}</Tag>
                                     </div>
-                                    {row.item.description ? <div className="mt-2 text-sm leading-6 text-stone-600 dark:text-stone-300">{row.item.description}</div> : null}
-                                    {row.item.sourceText ? <div className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500 dark:text-stone-400">剧本依据：{row.item.sourceText}</div> : null}
+                                    {row.item.description ? <div className="mt-2 text-sm leading-6 text-[var(--studio-text-secondary)]">{row.item.description}</div> : null}
+                                    {row.item.sourceText ? <div className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--studio-text-muted)]">剧本依据：{row.item.sourceText}</div> : null}
                                     <Space className="mt-2" size={[6, 6]} wrap>
                                         <Tag className="m-0">结果素材 {row.resultAssetCount}</Tag>
                                         {row.item.agentRunId ? <Tag className="m-0">run: {row.item.agentRunId}</Tag> : null}
@@ -181,14 +181,14 @@ export function EpisodeImageNeedsSection({
                                     {row.primaryAsset ? (
                                         <button
                                             type="button"
-                                            className="h-14 w-20 overflow-hidden rounded-md border border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-900"
+                                            className="h-14 w-20 overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] transition hover:border-[var(--studio-border-strong)]"
                                             title="打开主参考图"
                                             onClick={() => onOpenAsset?.(row.primaryAsset!)}
                                         >
-                                            {row.primaryAsset.coverUrl ? <img src={row.primaryAsset.coverUrl} alt={row.primaryAsset.title} className="h-full w-full object-cover" /> : <span className="text-xs text-stone-400">主参考</span>}
+                                            {row.primaryAsset.coverUrl ? <img src={row.primaryAsset.coverUrl} alt={row.primaryAsset.title} className="h-full w-full object-cover" /> : <span className="text-xs text-[var(--studio-text-muted)]">主参考</span>}
                                         </button>
                                     ) : (
-                                        <div className="flex h-14 w-20 items-center justify-center rounded-md border border-dashed border-stone-200 text-xs text-stone-400 dark:border-stone-700">无主参考</div>
+                                        <div className="flex h-14 w-20 items-center justify-center rounded-md border border-dashed border-[var(--studio-border-subtle)] text-xs text-[var(--studio-text-muted)]">无主参考</div>
                                     )}
                                     <Button size="small" type={row.hasBrief ? "default" : "primary"} icon={<ImagePlus className="size-3.5" />} onClick={() => onOpenBrief(row.item)}>
                                         {row.hasBrief ? "查看草案" : "生成草案"}
@@ -208,15 +208,15 @@ export function EpisodeImageNeedsSection({
 
 function AssetDraftPreviewCard({ item }: { item: AgentAssetDraftItem }) {
     return (
-        <div className="rounded-lg border border-stone-200 bg-white p-3 text-sm dark:border-stone-800 dark:bg-black/20">
+        <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-3 text-sm">
             <div className="flex flex-wrap items-center gap-2">
                 <Tag className="m-0">{assetDraftKindLabel(item.kind)}</Tag>
                 <span className="font-medium">{item.name}</span>
                 <Tag className="m-0">{assetImportanceLabel(item.importance)}</Tag>
                 <Tag className="m-0">Brief：{episodeImageNeedKindLabel(item.suggestedBriefKind)}</Tag>
             </div>
-            {item.description ? <div className="mt-2 text-stone-600 dark:text-stone-300">{item.description}</div> : null}
-            {item.scriptEvidence ? <div className="mt-2 rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-500 dark:bg-white/5">来源片段：{item.scriptEvidence}</div> : null}
+            {item.description ? <div className="mt-2 text-[var(--studio-text-secondary)]">{item.description}</div> : null}
+            {item.scriptEvidence ? <div className="mt-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-2 text-xs leading-5 text-[var(--studio-text-muted)]">来源片段：{item.scriptEvidence}</div> : null}
             {item.tags.length ? (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                     {item.tags.map((tag) => (

@@ -103,7 +103,7 @@ export function CanvasTopBar({
                     >
                         <button
                             type="button"
-                            className="grid size-9 place-items-center rounded-full transition hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 dark:hover:bg-white/10"
+                            className="grid size-9 place-items-center rounded-full transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                             style={{ color: theme.node.text }}
                             aria-label="打开画布菜单"
                         >
@@ -114,7 +114,7 @@ export function CanvasTopBar({
                     <div ref={titleRef} className="flex min-w-0 items-center gap-1.5 overflow-hidden">
                         <button
                             type="button"
-                            className="grid size-8 shrink-0 place-items-center rounded-lg transition hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 dark:hover:bg-white/10"
+                            className="grid size-8 shrink-0 place-items-center rounded-lg transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                             style={{ color: theme.node.muted }}
                             onClick={onReturnParent}
                             aria-label={returnLabel}
@@ -133,13 +133,13 @@ export function CanvasTopBar({
                                     if (event.key === "Escape") onCancelTitleEditing();
                                 }}
                                 aria-label="画布名称"
-                                className="max-w-[320px] bg-transparent p-0 text-left text-base font-semibold tracking-normal outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                                className="max-w-[320px] bg-transparent p-0 text-left text-base font-semibold tracking-normal outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                                 style={{ color: theme.node.text }}
                             />
                         ) : (
                             <button
                                 type="button"
-                                className="min-w-0 max-w-[180px] truncate border-b border-dashed border-transparent text-left text-base font-semibold tracking-normal transition hover:border-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 sm:max-w-[320px]"
+                                className="min-w-0 max-w-[180px] truncate border-b border-dashed border-transparent text-left text-base font-semibold tracking-normal transition hover:border-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)] sm:max-w-[320px]"
                                 onDoubleClick={onStartTitleEditing}
                                 title="双击修改画布名称"
                             >
@@ -148,7 +148,7 @@ export function CanvasTopBar({
                         )}
                         <button
                             type="button"
-                            className="max-w-[96px] truncate rounded-md px-2 py-1 text-xs transition hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 dark:hover:bg-white/10 sm:max-w-[150px]"
+                            className="max-w-[96px] truncate rounded-md px-2 py-1 text-xs transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)] sm:max-w-[150px]"
                             style={{ color: hasEpisode ? theme.node.text : theme.node.muted, background: hasEpisode ? theme.toolbar.panel : "transparent" }}
                             onClick={onOpenEpisodeScript}
                             title={hasEpisode ? "打开本集剧本" : "打开剧本工作台"}

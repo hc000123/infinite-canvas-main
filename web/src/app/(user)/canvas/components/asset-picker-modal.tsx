@@ -35,7 +35,7 @@ export function AssetPickerModal({ open, title = "选择素材", defaultTab = "m
     }, [open, defaultTab]);
 
     return (
-        <Modal title={title} open={open} onCancel={onClose} footer={null} width={860} destroyOnHidden styles={{ body: { padding: "0 24px 24px", minHeight: 480 } }}>
+        <Modal rootClassName="studio-modal" title={title} open={open} onCancel={onClose} footer={null} width={860} destroyOnHidden styles={{ body: { padding: "0 24px 24px", minHeight: 480 } }}>
             <Tabs
                 activeKey={activeTab}
                 onChange={(key) => setActiveTab(key as AssetPickerTab)}
@@ -107,7 +107,7 @@ function LibraryTab({ allowedKinds, defaultKind = "all", onInsert }: { allowedKi
                 <Input
                     className="w-56"
                     size="small"
-                    prefix={<Search className="size-3.5 text-stone-400" />}
+                    prefix={<Search className="size-3.5 text-[var(--studio-text-muted)]" />}
                     placeholder="搜索素材"
                     value={keyword}
                     allowClear
@@ -161,7 +161,7 @@ function PickerCard({ title, kind, cover, previewUrl, loading, onClick }: { titl
     return (
         <button
             type="button"
-            className="group relative cursor-pointer overflow-hidden rounded-lg border border-stone-200 bg-white text-left transition hover:border-stone-400 hover:shadow-md dark:border-stone-700 dark:bg-stone-900 dark:hover:border-stone-500"
+            className="group relative cursor-pointer overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-left transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] hover:shadow-[var(--studio-shadow-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
             onClick={onClick}
             disabled={loading}
         >
@@ -170,20 +170,20 @@ function PickerCard({ title, kind, cover, previewUrl, loading, onClick }: { titl
             ) : videoPreviewUrl ? (
                 <video src={videoPreviewUrl} muted playsInline preload="metadata" className="aspect-[4/3] w-full bg-black object-cover" />
             ) : (
-                <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-3 text-center text-xs leading-5 text-stone-500 dark:bg-stone-800 dark:text-stone-400">{title}</div>
+                <div className="flex aspect-[4/3] items-center justify-center bg-[var(--studio-panel-muted-bg)] p-3 text-center text-xs leading-5 text-[var(--studio-text-muted)]">{title}</div>
             )}
             <div className="p-2.5">
                 <div className="flex items-center justify-between gap-2">
-                    <span className="line-clamp-1 text-xs font-medium text-stone-800 dark:text-stone-200">{title}</span>
+                    <span className="line-clamp-1 text-xs font-medium text-[var(--studio-text-primary)]">{title}</span>
                     <Tag className="m-0 shrink-0 text-[10px]">{assetTypeLabel(kind)}</Tag>
                 </div>
             </div>
             {loading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-stone-900/60">
+                <div className="absolute inset-0 flex items-center justify-center bg-[color-mix(in_srgb,var(--studio-panel-bg)_72%,transparent)] backdrop-blur-sm">
                     <Spin size="small" />
                 </div>
             )}
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-stone-950/0 text-sm font-medium text-white opacity-0 transition group-hover:bg-stone-950/55 group-hover:opacity-100">插入</div>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--studio-media-overlay-soft)] text-sm font-medium text-[var(--studio-on-media)] opacity-0 transition group-hover:bg-[var(--studio-media-overlay)] group-hover:opacity-100">插入</div>
         </button>
     );
 }
@@ -247,7 +247,7 @@ function MyAssetsTab({ allowedKinds, defaultKind = "all", onInsert }: { allowedK
                 <Input
                     className="w-56"
                     size="small"
-                    prefix={<Search className="size-3.5 text-stone-400" />}
+                    prefix={<Search className="size-3.5 text-[var(--studio-text-muted)]" />}
                     placeholder="搜索素材"
                     value={keyword}
                     allowClear

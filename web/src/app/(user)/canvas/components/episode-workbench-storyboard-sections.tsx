@@ -75,7 +75,7 @@ export function EpisodeTableSection({
             {runs.length ? (
                 <div className="mb-3 space-y-2">
                     {runs.map((run) => (
-                        <Card key={run.id} size="small" className="bg-stone-50/70 dark:bg-white/5">
+                        <Card key={run.id} size="small" className="bg-[var(--studio-panel-muted-bg)]">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
@@ -99,8 +99,8 @@ export function EpisodeTableSection({
                                 </Space>
                             </div>
                             <details className="mt-3">
-                                <summary className="cursor-pointer text-xs text-stone-500">查看 items / rawJson / warnings / proposedActions</summary>
-                                <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-stone-950 p-3 text-xs text-stone-50">
+                                <summary className="cursor-pointer text-xs text-[var(--studio-text-muted)]">查看 items / rawJson / warnings / proposedActions</summary>
+                                <pre className="mt-2 max-h-72 overflow-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-elevated-bg)] p-3 text-xs text-[var(--studio-text-secondary)]">
                                     {JSON.stringify({ items: run.draftOutput.items, rawJson: run.draftOutput.rawJson, warnings: run.draftOutput.warnings, proposedActions: run.proposedActions }, null, 2)}
                                 </pre>
                             </details>
@@ -243,13 +243,13 @@ export function GenerationManagementSection({
             {summaries.length ? (
                 <div className="space-y-3">
                     {summaries.map((summary) => (
-                        <Card key={summary.group.id} size="small" className="bg-stone-50/70 dark:bg-white/5">
+                        <Card key={summary.group.id} size="small" className="bg-[var(--studio-panel-muted-bg)]">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div className="min-w-0">
                                     <div className="font-medium">
                                         镜 {summary.shotRangeLabel} · {summary.group.sceneName}
                                     </div>
-                                    <div className="mt-1 text-xs text-stone-500">{summary.isFreeCanvas ? "自由画布镜头：补充 / 修改 / 实验 / 未归档" : `剧本驱动镜头 · ${summary.group.totalDuration}s`}</div>
+                                    <div className="mt-1 text-xs text-[var(--studio-text-muted)]">{summary.isFreeCanvas ? "自由画布镜头：补充 / 修改 / 实验 / 未归档" : `剧本驱动镜头 · ${summary.group.totalDuration}s`}</div>
                                 </div>
                                 <Tag className="m-0">{generationStatusLabel(summary.status)}</Tag>
                             </div>
@@ -317,9 +317,9 @@ export function ShotGroupReferencePreview({
                     {candidates.map((candidate) => {
                         const asset = assetsById.get(candidate.assetId);
                         return (
-                            <label key={candidate.assetId} className="flex cursor-pointer gap-3 rounded-lg border border-stone-200 p-2 dark:border-stone-800">
+                            <label key={candidate.assetId} className="flex cursor-pointer gap-3 rounded-md border border-[var(--studio-border-subtle)] p-2 transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]">
                                 <input className="mt-5" type="checkbox" defaultChecked={defaultSelectedIds.includes(candidate.assetId)} value={candidate.assetId} onChange={noop} />
-                                <div className="h-14 w-20 shrink-0 overflow-hidden rounded-md bg-stone-100 dark:bg-stone-900">{asset?.coverUrl ? <img src={asset.coverUrl} alt={asset.title} className="h-full w-full object-cover" /> : null}</div>
+                                <div className="h-14 w-20 shrink-0 overflow-hidden rounded-md bg-[var(--studio-panel-muted-bg)]">{asset?.coverUrl ? <img src={asset.coverUrl} alt={asset.title} className="h-full w-full object-cover" /> : null}</div>
                                 <div className="min-w-0 flex-1">
                                     <div className="flex flex-wrap items-center gap-2">
                                         <span className="font-medium">{candidate.assetTitle}</span>
@@ -328,7 +328,7 @@ export function ShotGroupReferencePreview({
                                         {candidate.isPrimary ? <Tag className="m-0">主参考图</Tag> : null}
                                         {candidate.assetVersion?.versionNumber ? <Tag className="m-0">v{candidate.assetVersion.versionNumber}</Tag> : null}
                                     </div>
-                                    <div className="mt-1 text-xs leading-5 text-stone-500">{candidate.matchReasons.join("；")}</div>
+                                    <div className="mt-1 text-xs leading-5 text-[var(--studio-text-muted)]">{candidate.matchReasons.join("；")}</div>
                                 </div>
                             </label>
                         );

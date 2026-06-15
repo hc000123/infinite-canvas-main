@@ -79,7 +79,7 @@ export function StoryboardTableSection({
                     />
                     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
                         <div className="space-y-2">
-                            <div className="flex items-center justify-between text-xs text-stone-500">
+                            <div className="flex items-center justify-between text-xs text-[var(--studio-text-muted)]">
                                 <span>分镜头表：{activeTableShots.length} 条</span>
                                 <span>已选择 {selectedTableShotIds.length} 条连续镜头可组合</span>
                             </div>
@@ -101,7 +101,7 @@ export function StoryboardTableSection({
                             )}
                         </div>
                         <div className="space-y-2">
-                            <div className="text-xs text-stone-500">生成表：{shotGroupRows.length} 组</div>
+                            <div className="text-xs text-[var(--studio-text-muted)]">生成表：{shotGroupRows.length} 组</div>
                             {shotGroupRows.length ? (
                                 shotGroupRows.map((row) => (
                                     <ShotGroupRowCard

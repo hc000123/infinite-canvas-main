@@ -47,7 +47,7 @@ export function StoryboardGenerationQueuePanel({
     return (
         <Card size="small" className="mb-4" title="生成队列">
             <div className="space-y-3">
-                <div className="grid gap-2 text-xs text-stone-500 sm:grid-cols-4">
+                <div className="grid gap-2 text-xs text-[var(--studio-text-muted)] sm:grid-cols-4">
                     <QueueMetric label="视频数" value={`${summary.videoCount}`} />
                     <QueueMetric label="预计时长" value={`${summary.totalDurationSeconds}s`} />
                     <QueueMetric label="预计点数" value={`${summary.totalEstimatedCredits}`} />
@@ -81,7 +81,7 @@ export function StoryboardGenerationQueuePanel({
                     <Button size="small" icon={<RotateCcw className="size-3.5" />} onClick={onRetryFailed} disabled={!hasFailed}>
                         重试失败项
                     </Button>
-                    <span className="ml-auto inline-flex items-center gap-2 text-xs text-stone-500">
+                    <span className="ml-auto inline-flex items-center gap-2 text-xs text-[var(--studio-text-muted)]">
                         并发
                         <InputNumber size="small" min={1} max={10} value={concurrency} onChange={(value) => onConcurrencyChange(Number(value) || 1)} className="w-16" />
                     </span>
@@ -89,13 +89,13 @@ export function StoryboardGenerationQueuePanel({
                 {visibleItems.length ? (
                     <div className="space-y-1.5">
                         {visibleItems.map((item) => (
-                            <div key={item.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-stone-50 px-2 py-1.5 text-xs dark:bg-stone-900">
+                            <div key={item.id} className="flex flex-wrap items-center gap-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-2 py-1.5 text-xs text-[var(--studio-text-secondary)]">
                                 <Tag className="m-0">{queueStatusLabel(item.status)}</Tag>
                                 <span className="min-w-0 flex-1 truncate">
                                     {group.title} / {item.storyboardShotId}
                                 </span>
-                                <span className="text-stone-400">{item.estimatedDurationSeconds || item.estimatedCredits}s</span>
-                                <span className="text-stone-400">{item.estimatedCredits} 点</span>
+                                <span className="text-[var(--studio-text-muted)]">{item.estimatedDurationSeconds || item.estimatedCredits}s</span>
+                                <span className="text-[var(--studio-text-muted)]">{item.estimatedCredits} 点</span>
                                 {item.error ? <span className="text-red-500">{item.error}</span> : null}
                                 {item.status === "failed" || item.status === "cancelled" ? (
                                     <Button size="small" type="text" onClick={() => onRetryItem(item.id)}>
@@ -113,9 +113,9 @@ export function StoryboardGenerationQueuePanel({
 
 function QueueMetric({ label, value }: { label: string; value: string }) {
     return (
-        <div className="rounded-lg bg-stone-50 p-2 dark:bg-stone-900">
+        <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-2">
             <div>{label}</div>
-            <div className="mt-1 text-base font-semibold text-stone-800 dark:text-stone-100">{value}</div>
+            <div className="mt-1 text-base font-semibold text-[var(--studio-text-primary)]">{value}</div>
         </div>
     );
 }

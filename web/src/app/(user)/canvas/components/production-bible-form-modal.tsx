@@ -72,6 +72,7 @@ export function ProductionBibleFormModal({
 
     return (
         <Drawer
+            rootClassName="studio-modal"
             title={editingItem ? "编辑设定" : "新增设定"}
             open={open}
             onClose={onCancel}
@@ -108,7 +109,7 @@ export function ProductionBibleFormModal({
                     <Select mode="multiple" showSearch options={assetOptions} optionFilterProp="label" placeholder="从我的素材中选择图片、视频、音频或文本素材" />
                 </Form.Item>
                 {selectedAssetIds.length ? (
-                    <div className="mb-5 space-y-2 rounded-lg border border-stone-200 p-3 dark:border-stone-700">
+                    <div className="mb-5 space-y-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
                         {selectedAssetIds.map((assetId) => {
                             const asset = assetsById.get(assetId);
                             return (

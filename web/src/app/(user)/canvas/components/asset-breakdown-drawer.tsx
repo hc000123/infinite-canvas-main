@@ -105,6 +105,7 @@ export function AssetBreakdownDrawer({ open, projectId, projectTitle, canvases, 
 
     return (
         <Drawer
+            rootClassName="studio-modal"
             title="本集资产拆解"
             open={open}
             onClose={onClose}
@@ -121,7 +122,7 @@ export function AssetBreakdownDrawer({ open, projectId, projectTitle, canvases, 
                 </Space>
             }
         >
-            <div className="mb-4 text-sm text-stone-500 dark:text-stone-400">当前项目：{projectTitle}</div>
+            <div className="mb-4 text-sm text-[var(--studio-text-muted)]">当前项目：{projectTitle}</div>
             <div className="mb-4 flex flex-wrap items-center gap-2">
                 <Select
                     className="min-w-72"

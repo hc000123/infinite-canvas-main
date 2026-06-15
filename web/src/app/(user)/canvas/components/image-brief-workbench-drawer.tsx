@@ -167,6 +167,7 @@ export function ImageBriefWorkbenchDrawer({ open, projectId, projectTitle, canva
 
     return (
         <Drawer
+            rootClassName="studio-modal"
             title="美术 Brief 审核台（旧入口）"
             open={open}
             onClose={onClose}
@@ -178,7 +179,7 @@ export function ImageBriefWorkbenchDrawer({ open, projectId, projectTitle, canva
                 </Button>
             }
         >
-            <div className="mb-4 text-sm text-stone-500 dark:text-stone-400">当前项目：{projectTitle}。主流程建议从单集页“生图需求审核台”进入。</div>
+            <div className="mb-4 text-sm text-[var(--studio-text-muted)]">当前项目：{projectTitle}。主流程建议从单集页“生图需求审核台”进入。</div>
             <div className="mb-4 flex flex-wrap items-center gap-2">
                 <Segmented value={kindFilter} onChange={(value) => setKindFilter(value as ImageBriefKind | "all")} options={[{ label: "全部", value: "all" }, ...imageBriefKindOptions]} />
                 {onCreateImageConfig ? (

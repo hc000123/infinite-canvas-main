@@ -48,7 +48,7 @@ export function ProductionBibleCard({
             }
         >
             <div className="space-y-2 text-sm">
-                {item.description ? <p className="m-0 whitespace-pre-wrap text-stone-600 dark:text-stone-300">{item.description}</p> : <p className="m-0 text-stone-400">暂无描述</p>}
+                {item.description ? <p className="m-0 whitespace-pre-wrap text-[var(--studio-text-secondary)]">{item.description}</p> : <p className="m-0 text-[var(--studio-text-muted)]">暂无描述</p>}
                 {item.tags.length ? (
                     <div className="flex flex-wrap gap-1">
                         {item.tags.map((tag) => (
@@ -83,7 +83,7 @@ export function ProductionBibleCard({
                         })}
                     </div>
                 ) : null}
-                {snippets.length ? <div className="line-clamp-3 text-xs leading-5 text-stone-500 dark:text-stone-400">{snippets.join(" / ")}</div> : null}
+                {snippets.length ? <div className="line-clamp-3 text-xs leading-5 text-[var(--studio-text-muted)]">{snippets.join(" / ")}</div> : null}
             </div>
         </Card>
     );
