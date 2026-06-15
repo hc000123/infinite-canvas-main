@@ -379,7 +379,7 @@ export default function CreativeProjectDetailPage() {
                 onTabChange={setActiveTab}
             />
 
-            <Modal className="studio-modal" title="编辑项目" open={projectEditOpen} onCancel={() => setProjectEditOpen(false)} onOk={saveProjectEdit} okText="保存" cancelText="取消" destroyOnHidden>
+            <Modal rootClassName="studio-modal" title="编辑项目" open={projectEditOpen} onCancel={() => setProjectEditOpen(false)} onOk={saveProjectEdit} okText="保存" cancelText="取消" destroyOnHidden>
                 <div className="grid gap-4">
                     <label className="grid gap-2">
                         <span className="text-sm text-[var(--studio-text-secondary)]">项目名称</span>
@@ -391,13 +391,13 @@ export default function CreativeProjectDetailPage() {
                     </label>
                 </div>
             </Modal>
-            <Modal className="studio-modal" title="修改分集标题" open={Boolean(editingEpisodeTitle)} onCancel={closeEpisodeTitleEdit} onOk={saveEpisodeTitleEdit} okText="保存" cancelText="取消" destroyOnHidden>
+            <Modal rootClassName="studio-modal" title="修改分集标题" open={Boolean(editingEpisodeTitle)} onCancel={closeEpisodeTitleEdit} onOk={saveEpisodeTitleEdit} okText="保存" cancelText="取消" destroyOnHidden>
                 <label className="grid gap-2">
                     <span className="text-sm text-[var(--studio-text-secondary)]">标题</span>
                     <Input value={episodeTitleDraft} placeholder="例如：第 147 集" maxLength={80} showCount onChange={(event) => setEpisodeTitleDraft(event.target.value)} onPressEnter={saveEpisodeTitleEdit} />
                 </label>
             </Modal>
-            <Modal className="studio-modal" title="导入本集剧本" open={episodeImportOpen} onCancel={() => setEpisodeImportOpen(false)} onOk={() => void importEpisodeAndOpen()} okText="导入并进入视频工作流" cancelText="取消" destroyOnHidden>
+            <Modal rootClassName="studio-modal" title="导入本集剧本" open={episodeImportOpen} onCancel={() => setEpisodeImportOpen(false)} onOk={() => void importEpisodeAndOpen()} okText="导入并进入视频工作流" cancelText="取消" destroyOnHidden>
                 <Form form={episodeImportForm} layout="vertical" initialValues={{ title: `第 ${projectEpisodes.length + 1} 集`, scriptText: "" }} requiredMark={false}>
                     <Form.Item name="title" label="本集标题" rules={[{ required: true, message: "请填写本集标题" }]}>
                         <Input placeholder="例如：第一集" />

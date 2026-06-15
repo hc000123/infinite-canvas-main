@@ -555,6 +555,122 @@
         border-color: var(--studio-border-subtle) !important;
     }
 
+    :where(.ant-message-notice-content, .ant-notification-notice) {
+        background: var(--studio-elevated-bg) !important;
+        border: 1px solid var(--studio-border-subtle);
+        border-radius: 8px !important;
+        box-shadow: var(--studio-shadow) !important;
+        color: var(--studio-text-primary) !important;
+    }
+
+    .studio-workspace :where(.ant-empty-description, .ant-spin-text),
+    .studio-shell :where(.ant-empty-description, .ant-spin-text),
+    .studio-modal :where(.ant-empty-description, .ant-spin-text) {
+        color: var(--studio-text-secondary) !important;
+    }
+
+    .studio-workspace :where(.ant-empty-image),
+    .studio-shell :where(.ant-empty-image),
+    .studio-modal :where(.ant-empty-image) {
+        opacity: 0.72;
+    }
+
+    .studio-workspace :where(.ant-tag),
+    .studio-shell :where(.ant-tag),
+    .studio-modal :where(.ant-tag) {
+        border-radius: 4px !important;
+        margin-inline-end: 4px;
+        transition:
+            background-color 0.15s ease,
+            border-color 0.15s ease,
+            color 0.15s ease;
+    }
+
+    .studio-workspace :where(.ant-tag:not(.ant-tag-checkable):not(.ant-tag-has-color):not(.ant-tag-magenta):not(.ant-tag-red):not(.ant-tag-volcano):not(.ant-tag-orange):not(.ant-tag-gold):not(.ant-tag-lime):not(.ant-tag-green):not(.ant-tag-cyan):not(.ant-tag-blue):not(.ant-tag-geekblue):not(.ant-tag-purple):not(.ant-tag-success):not(.ant-tag-processing):not(.ant-tag-error):not(.ant-tag-warning)),
+    .studio-shell :where(.ant-tag:not(.ant-tag-checkable):not(.ant-tag-has-color):not(.ant-tag-magenta):not(.ant-tag-red):not(.ant-tag-volcano):not(.ant-tag-orange):not(.ant-tag-gold):not(.ant-tag-lime):not(.ant-tag-green):not(.ant-tag-cyan):not(.ant-tag-blue):not(.ant-tag-geekblue):not(.ant-tag-purple):not(.ant-tag-success):not(.ant-tag-processing):not(.ant-tag-error):not(.ant-tag-warning)),
+    .studio-modal :where(.ant-tag:not(.ant-tag-checkable):not(.ant-tag-has-color):not(.ant-tag-magenta):not(.ant-tag-red):not(.ant-tag-volcano):not(.ant-tag-orange):not(.ant-tag-gold):not(.ant-tag-lime):not(.ant-tag-green):not(.ant-tag-cyan):not(.ant-tag-blue):not(.ant-tag-geekblue):not(.ant-tag-purple):not(.ant-tag-success):not(.ant-tag-processing):not(.ant-tag-error):not(.ant-tag-warning)) {
+        background: var(--studio-panel-muted-bg) !important;
+        border-color: var(--studio-border-subtle) !important;
+        color: var(--studio-text-secondary) !important;
+    }
+
+    .studio-workspace :where(.ant-checkbox-inner, .ant-radio-inner),
+    .studio-shell :where(.ant-checkbox-inner, .ant-radio-inner),
+    .studio-modal :where(.ant-checkbox-inner, .ant-radio-inner) {
+        background: var(--studio-control-bg) !important;
+        border-color: var(--studio-border-subtle) !important;
+        transition:
+            background-color 0.15s ease,
+            border-color 0.15s ease,
+            box-shadow 0.15s ease;
+    }
+
+    .studio-workspace :where(.ant-checkbox-wrapper:hover .ant-checkbox-inner, .ant-radio-wrapper:hover .ant-radio-inner),
+    .studio-shell :where(.ant-checkbox-wrapper:hover .ant-checkbox-inner, .ant-radio-wrapper:hover .ant-radio-inner),
+    .studio-modal :where(.ant-checkbox-wrapper:hover .ant-checkbox-inner, .ant-radio-wrapper:hover .ant-radio-inner) {
+        border-color: var(--studio-border-strong) !important;
+    }
+
+    .studio-workspace :where(.ant-checkbox-checked .ant-checkbox-inner, .ant-radio-checked .ant-radio-inner),
+    .studio-shell :where(.ant-checkbox-checked .ant-checkbox-inner, .ant-radio-checked .ant-radio-inner),
+    .studio-modal :where(.ant-checkbox-checked .ant-checkbox-inner, .ant-radio-checked .ant-radio-inner) {
+        background: var(--studio-accent) !important;
+        border-color: var(--studio-accent) !important;
+    }
+
+    .studio-workspace :where(.ant-checkbox-wrapper, .ant-radio-wrapper),
+    .studio-shell :where(.ant-checkbox-wrapper, .ant-radio-wrapper),
+    .studio-modal :where(.ant-checkbox-wrapper, .ant-radio-wrapper) {
+        color: var(--studio-text-secondary) !important;
+    }
+
+    .studio-workspace :where(.ant-switch),
+    .studio-shell :where(.ant-switch),
+    .studio-modal :where(.ant-switch) {
+        background: var(--studio-border-strong) !important;
+        box-shadow: none !important;
+    }
+
+    .studio-workspace :where(.ant-switch:hover),
+    .studio-shell :where(.ant-switch:hover),
+    .studio-modal :where(.ant-switch:hover) {
+        background: color-mix(in srgb, var(--studio-border-strong) 72%, var(--studio-accent)) !important;
+    }
+
+    .studio-workspace :where(.ant-switch-checked),
+    .studio-shell :where(.ant-switch-checked),
+    .studio-modal :where(.ant-switch-checked) {
+        background: var(--studio-accent) !important;
+    }
+
+    .studio-workspace :where(.ant-collapse),
+    .studio-shell :where(.ant-collapse),
+    .studio-modal :where(.ant-collapse) {
+        background: transparent !important;
+        border-color: var(--studio-border-subtle) !important;
+        color: var(--studio-text-primary) !important;
+    }
+
+    .studio-workspace :where(.ant-collapse > .ant-collapse-item),
+    .studio-shell :where(.ant-collapse > .ant-collapse-item),
+    .studio-modal :where(.ant-collapse > .ant-collapse-item) {
+        border-bottom-color: var(--studio-border-subtle) !important;
+    }
+
+    .studio-workspace :where(.ant-collapse-header),
+    .studio-shell :where(.ant-collapse-header),
+    .studio-modal :where(.ant-collapse-header) {
+        color: var(--studio-text-primary) !important;
+    }
+
+    .studio-workspace :where(.ant-collapse-content),
+    .studio-shell :where(.ant-collapse-content),
+    .studio-modal :where(.ant-collapse-content) {
+        background: var(--studio-panel-muted-bg) !important;
+        border-top-color: var(--studio-border-subtle) !important;
+        color: var(--studio-text-secondary) !important;
+    }
+
     .studio-workspace :where(.bg-background),
     .studio-shell :where(.bg-background) {
         background: var(--studio-shell-bg) !important;

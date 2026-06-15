@@ -71,9 +71,9 @@ export function ModelPicker({ config, value, onChange, className, fullWidth = fa
                     type="button"
                     aria-label={current ? `当前模型：${current}` : placeholder}
                     className={cn(
-                        "canvas-composer-model-picker flex h-8 w-fit max-w-full items-center gap-2 rounded-full border border-input bg-transparent px-3 text-sm font-normal shadow-sm transition-colors",
+                        "canvas-composer-model-picker flex h-8 w-fit max-w-full items-center gap-2 rounded-full border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-3 text-sm font-normal text-[var(--studio-text-primary)] shadow-none transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]",
                         fullWidth ? "w-full min-w-0 justify-start" : "min-w-[9rem] justify-start",
-                        open && "border-ring ring-2 ring-ring/20",
+                        open && "border-[var(--studio-accent)] bg-[var(--studio-active-bg)] ring-2 ring-[var(--studio-focus-ring)]",
                         className,
                     )}
                     onMouseDown={(event) => event.stopPropagation()}
@@ -88,7 +88,7 @@ export function ModelPicker({ config, value, onChange, className, fullWidth = fa
             <PopoverPrimitive.Portal>
                 <PopoverPrimitive.Content
                     data-canvas-no-zoom
-                    className="z-[1200] w-80 max-w-[calc(100vw-24px)] rounded-xl border border-border/70 bg-popover p-2 text-popover-foreground shadow-xl"
+                    className="z-[1200] w-80 max-w-[calc(100vw-24px)] rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-elevated-bg)] p-2 text-[var(--studio-text-primary)] shadow-[var(--studio-shadow)]"
                     align="start"
                     side="bottom"
                     sideOffset={6}
@@ -97,11 +97,11 @@ export function ModelPicker({ config, value, onChange, className, fullWidth = fa
                     onMouseDown={(event) => event.stopPropagation()}
                     onWheel={(event) => event.stopPropagation()}
                 >
-                    <div className="flex h-9 items-center gap-2 rounded-lg border border-border/70 bg-background px-2">
-                        <Search className="size-4 shrink-0 opacity-60" />
+                    <div className="flex h-9 items-center gap-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-2 focus-within:border-[var(--studio-accent)] focus-within:ring-2 focus-within:ring-[var(--studio-focus-ring)]">
+                        <Search className="size-4 shrink-0 text-[var(--studio-text-muted)]" />
                         <input
                             autoFocus
-                            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                            className="min-w-0 flex-1 bg-transparent text-sm text-[var(--studio-text-primary)] outline-none placeholder:text-[var(--studio-text-muted)]"
                             value={keyword}
                             placeholder={allowCustomModel ? "搜索或输入模型 ID" : "搜索模型名"}
                             onChange={(event) => setKeyword(event.target.value)}
@@ -119,7 +119,7 @@ export function ModelPicker({ config, value, onChange, className, fullWidth = fa
                         {optionGroups.length ? (
                             optionGroups.map((group) => (
                                 <div key={group.key} className="py-1">
-                                    <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">{group.label}</div>
+                                    <div className="px-2 pb-1 text-xs font-medium text-[var(--studio-text-muted)]">{group.label}</div>
                                     <div className="space-y-1">
                                         {group.options.map((option) => (
                                             <ModelOptionButton key={option.value} model={option.value} active={option.value === current} onSelect={() => selectModel(option.value)} />
@@ -128,18 +128,18 @@ export function ModelPicker({ config, value, onChange, className, fullWidth = fa
                                 </div>
                             ))
                         ) : !customModel ? (
-                            <div className="px-2 py-6 text-center text-sm text-muted-foreground">{emptyText}</div>
+                            <div className="px-2 py-6 text-center text-sm text-[var(--studio-text-muted)]">{emptyText}</div>
                         ) : null}
                         {customModel ? (
-                            <div className="border-t border-border/70 pt-2">
+                            <div className="border-t border-[var(--studio-border-subtle)] pt-2">
                                 <button
                                     type="button"
-                                    className="flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground"
+                                    className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-[var(--studio-text-secondary)] outline-none transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] focus-visible:bg-[var(--studio-hover-bg)] focus-visible:text-[var(--studio-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                                     onClick={() => selectModel(customModel)}
                                 >
-                                    <Cpu className="size-4 shrink-0 opacity-70" />
+                                    <Cpu className="size-4 shrink-0 text-[var(--studio-accent)]" />
                                     <span className="min-w-0 flex-1">
-                                        <span className="block text-xs text-muted-foreground">使用自定义模型 ID</span>
+                                        <span className="block text-xs text-[var(--studio-text-muted)]">使用自定义模型 ID</span>
                                         <span className="block truncate">{customModel}</span>
                                     </span>
                                 </button>
@@ -199,17 +199,17 @@ function ModelOptionButton({ model, active, onSelect }: { model: string; active:
         <button
             type="button"
             className={cn(
-                "flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground",
-                active && "bg-accent text-accent-foreground",
+                "flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-[var(--studio-text-secondary)] outline-none transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] focus-visible:bg-[var(--studio-hover-bg)] focus-visible:text-[var(--studio-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]",
+                active && "bg-[var(--studio-active-bg)] text-[var(--studio-text-primary)] shadow-[inset_0_-2px_0_var(--studio-accent)]",
             )}
             onClick={onSelect}
         >
             <ModelIcon model={model} />
             <span className="min-w-0 flex-1">
                 <span className="block truncate">{model}</span>
-                <span className="block truncate text-xs text-muted-foreground">{resolveModelProvider(model).label}</span>
+                <span className="block truncate text-xs text-[var(--studio-text-muted)]">{resolveModelProvider(model).label}</span>
             </span>
-            {active ? <Check className="size-4 shrink-0" /> : null}
+            {active ? <Check className="size-4 shrink-0 text-[var(--studio-accent)]" /> : null}
         </button>
     );
 }

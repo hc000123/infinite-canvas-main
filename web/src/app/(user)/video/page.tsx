@@ -1305,7 +1305,7 @@ function VideoNodeDetailDrawer({
 }) {
     if (!item) return null;
     return (
-        <Drawer className="studio-drawer" size={620} title={`${item.id} · 视频节点详情`} open={open} onClose={onClose}>
+        <Drawer rootClassName="studio-modal" size={620} title={`${item.id} · 视频节点详情`} open={open} onClose={onClose}>
             <div className="space-y-4 text-stone-100">
                 <GenerationDetail item={item} loading={loading} onGenerate={() => onGenerate(item)} onOpenConfig={onOpenConfig} onSync={() => onSync(item)} />
                 <Collapse

@@ -593,7 +593,7 @@ function AssetsPageContent() {
                 onSaveAsset={saveAsset}
                 onSaveFolder={saveFolder}
             />
-            <Modal className="studio-modal" title="匹配已有图片" open={Boolean(matchingWorkflowAsset)} width={900} footer={null} destroyOnHidden onCancel={() => setMatchingWorkflowAsset(null)}>
+            <Modal rootClassName="studio-modal" title="匹配已有图片" open={Boolean(matchingWorkflowAsset)} width={900} footer={null} destroyOnHidden onCancel={() => setMatchingWorkflowAsset(null)}>
                 {matchingWorkflowAsset ? (
                     <div className="grid gap-4">
                         <div className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">

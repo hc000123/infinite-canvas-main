@@ -89,36 +89,36 @@ export function AssetPageModals({
 }) {
     return (
         <>
-            <Modal title={editingFolder ? "重命名文件夹" : "新建文件夹"} open={folderDialogOpen} onCancel={onCancelFolder} onOk={onSaveFolder} okText="保存" cancelText="取消" destroyOnHidden>
+            <Modal rootClassName="studio-modal" title={editingFolder ? "重命名文件夹" : "新建文件夹"} open={folderDialogOpen} onCancel={onCancelFolder} onOk={onSaveFolder} okText="保存" cancelText="取消" destroyOnHidden>
                 <Input value={folderName} autoFocus placeholder="输入文件夹名称" onChange={(event) => onFolderNameChange(event.target.value)} onPressEnter={onSaveFolder} />
             </Modal>
 
-            <Modal title="批量移动文件夹" open={bulkMoveOpen} onCancel={onCancelBulkMove} onOk={onApplyBulkMove} okText="移动" cancelText="取消" destroyOnHidden>
+            <Modal rootClassName="studio-modal" title="批量移动文件夹" open={bulkMoveOpen} onCancel={onCancelBulkMove} onOk={onApplyBulkMove} okText="移动" cancelText="取消" destroyOnHidden>
                 <div className="space-y-3">
                     <div className="text-sm text-stone-500">将 {selectedCount} 个素材移动到：</div>
                     <Select className="w-full" allowClear placeholder="未分组" value={bulkMoveFolderId} options={folderOptions} onChange={(value) => onBulkMoveFolderChange(value || undefined)} />
                 </div>
             </Modal>
 
-            <Modal title="批量添加标签" open={bulkTagOpen} onCancel={onCancelBulkTag} onOk={onApplyBulkTags} okText="添加" cancelText="取消" destroyOnHidden>
+            <Modal rootClassName="studio-modal" title="批量添加标签" open={bulkTagOpen} onCancel={onCancelBulkTag} onOk={onApplyBulkTags} okText="添加" cancelText="取消" destroyOnHidden>
                 <div className="space-y-3">
                     <div className="text-sm text-stone-500">为 {selectedCount} 个素材追加标签，已有标签会保留并自动去重。</div>
                     <Select mode="tags" className="w-full" placeholder="输入标签后回车" value={bulkTags} onChange={onBulkTagsChange} />
                 </div>
             </Modal>
 
-            <Modal title="批量删除素材" open={bulkDeleteOpen} onCancel={onCancelBulkDelete} onOk={onApplyBulkDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消" destroyOnHidden>
+            <Modal rootClassName="studio-modal" title="批量删除素材" open={bulkDeleteOpen} onCancel={onCancelBulkDelete} onOk={onApplyBulkDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消" destroyOnHidden>
                 确定删除已选择的 {selectedCount} 个素材吗？删除后会从我的素材中移除。
             </Modal>
 
-            <Modal title="批量删除设定" open={bulkProductionBibleDeleteOpen} onCancel={onCancelBulkProductionBibleDelete} onOk={onApplyBulkProductionBibleDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消" destroyOnHidden>
+            <Modal rootClassName="studio-modal" title="批量删除设定" open={bulkProductionBibleDeleteOpen} onCancel={onCancelBulkProductionBibleDelete} onOk={onApplyBulkProductionBibleDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消" destroyOnHidden>
                 <div className="space-y-2">
                     <div>确定删除已选择的 {selectedProductionBibleCount} 个设定吗？删除后会从设定库中移除，但不会删除已经生成或上传的素材文件。</div>
                     {selectedProductionBibleSummary ? <div className="text-sm text-stone-500 dark:text-stone-400">{selectedProductionBibleSummary}</div> : null}
                 </div>
             </Modal>
 
-            <Modal title="批量更新过期引用" open={bulkOutdatedOpen} onCancel={onCancelBulkOutdated} onOk={onApplySelectedOutdatedUsages} okText="更新到最新版" cancelText="取消" destroyOnHidden>
+            <Modal rootClassName="studio-modal" title="批量更新过期引用" open={bulkOutdatedOpen} onCancel={onCancelBulkOutdated} onOk={onApplySelectedOutdatedUsages} okText="更新到最新版" cancelText="取消" destroyOnHidden>
                 <div className="space-y-3">
                     <div className="text-sm text-stone-600 dark:text-stone-300">将更新以下 {selectedOutdatedUsageConfirmItems.length} 处引用。更新只修改引用方记录，不修改素材本体。</div>
                     <div className="max-h-72 space-y-2 overflow-y-auto rounded-lg border border-stone-200 p-2 dark:border-stone-800">
@@ -134,11 +134,11 @@ export function AssetPageModals({
                 </div>
             </Modal>
 
-            <Modal title="删除素材" open={Boolean(deletingAsset)} onCancel={onCancelDeleteAsset} onOk={onConfirmDeleteAsset} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
+            <Modal rootClassName="studio-modal" title="删除素材" open={Boolean(deletingAsset)} onCancel={onCancelDeleteAsset} onOk={onConfirmDeleteAsset} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
                 确定删除「{deletingAsset?.title}」吗？删除后会从我的素材中移除。
             </Modal>
 
-            <Modal title="删除设定" open={Boolean(deletingProductionBibleItem)} onCancel={onCancelDeleteProductionBibleItem} onOk={onConfirmDeleteProductionBibleItem} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
+            <Modal rootClassName="studio-modal" title="删除设定" open={Boolean(deletingProductionBibleItem)} onCancel={onCancelDeleteProductionBibleItem} onOk={onConfirmDeleteProductionBibleItem} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
                 确定删除「{deletingProductionBibleItem?.name || "未命名设定"}」吗？删除后会从设定库中移除，但不会删除已经生成或上传的素材文件。
             </Modal>
         </>

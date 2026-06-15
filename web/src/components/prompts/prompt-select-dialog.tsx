@@ -182,7 +182,7 @@ export function PromptSelectDialog({
     };
 
     return (
-        <Modal className="studio-modal" title="提示词库" open={open} onCancel={() => onOpenChange(false)} footer={null} width={1040} centered styles={{ body: { maxHeight: "calc(100dvh - 160px)", overflowY: "auto" } }}>
+        <Modal rootClassName="studio-modal" title="提示词库" open={open} onCancel={() => onOpenChange(false)} footer={null} width={1040} centered styles={{ body: { maxHeight: "calc(100dvh - 160px)", overflowY: "auto" } }}>
             <div data-canvas-no-zoom onWheelCapture={(event) => event.stopPropagation()}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 flex-1 gap-2 sm:max-w-2xl">
@@ -321,7 +321,7 @@ export function PromptCreateDialog({ open, form, categories, saving, onCancel, o
     const categoryOptions = categories.filter((category) => category !== ALL_PROMPTS_OPTION).map((category) => ({ label: category, value: category }));
 
     return (
-        <Modal className="studio-modal" title="新建提示词" open={open} width={720} onCancel={onCancel} onOk={() => void onSave()} okText="保存" cancelText="取消" confirmLoading={saving} destroyOnHidden>
+        <Modal rootClassName="studio-modal" title="新建提示词" open={open} width={720} onCancel={onCancel} onOk={() => void onSave()} okText="保存" cancelText="取消" confirmLoading={saving} destroyOnHidden>
             <Form form={form} layout="vertical" requiredMark={false}>
                 <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
                     <Input />

@@ -612,7 +612,7 @@ export default function ImagePage() {
                     event.target.value = "";
                 }}
             />
-            <Drawer rootClassName="studio-workspace" title="生成记录" placement="bottom" size="large" open={logsOpen} onClose={() => setLogsOpen(false)}>
+            <Drawer rootClassName="studio-modal" title="生成记录" placement="bottom" size="large" open={logsOpen} onClose={() => setLogsOpen(false)}>
                 <LogPanel
                     logs={logs}
                     selectedLogIds={selectedLogIds}
@@ -623,14 +623,14 @@ export default function ImagePage() {
                     onPreviewLog={(log) => void previewGenerationLog(log)}
                 />
             </Drawer>
-            <Drawer rootClassName="studio-workspace" title="参数" placement="bottom" size="82vh" open={settingsOpen} onClose={() => setSettingsOpen(false)}>
+            <Drawer rootClassName="studio-modal" title="参数" placement="bottom" size="82vh" open={settingsOpen} onClose={() => setSettingsOpen(false)}>
                 <div className="grid grid-cols-2 gap-3 pb-4">
                     <GenerationSettings config={effectiveConfig} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} allowCustomModel={allowCustomModel} />
                 </div>
             </Drawer>
             <PromptSelectDialog open={promptDialogOpen} nodeGroup="image" onOpenChange={setPromptDialogOpen} onSelect={setPrompt} />
             <AssetPickerModal open={assetPickerOpen} title="选择参考图素材" defaultTab="library" defaultKind="image" allowedKinds={["image"]} onInsert={(payload) => void insertPickedAsset(payload)} onClose={() => setAssetPickerOpen(false)} />
-            <Modal className="studio-modal" title="删除生成记录" open={deleteConfirmOpen} onCancel={() => setDeleteConfirmOpen(false)} onOk={deleteSelectedLogs} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
+            <Modal rootClassName="studio-modal" title="删除生成记录" open={deleteConfirmOpen} onCancel={() => setDeleteConfirmOpen(false)} onOk={deleteSelectedLogs} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
                 确定删除选中的 {selectedLogIds.length} 条生成记录吗？
             </Modal>
         </div>

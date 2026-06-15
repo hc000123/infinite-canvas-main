@@ -46,7 +46,7 @@ type Props = AgentWorkspacePanelProps & {
 
 export function AgentSettingsDrawer({ open, onClose, ...panelProps }: Props) {
     return (
-        <Drawer title="Agent 工作台" open={open} onClose={onClose} size={1080} destroyOnHidden>
+        <Drawer rootClassName="studio-modal" title="Agent 工作台" open={open} onClose={onClose} size={1080} destroyOnHidden>
             <AgentWorkspacePanel {...panelProps} />
         </Drawer>
     );

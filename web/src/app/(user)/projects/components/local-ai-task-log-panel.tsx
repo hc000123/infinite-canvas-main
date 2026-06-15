@@ -70,7 +70,7 @@ export function LocalAiTaskLogPanel({ projectId }: { projectId: string }) {
 
 function LocalAiTaskDetailDrawer({ record, onClose }: { record: LocalAiTaskRecord | null; onClose: () => void }) {
     return (
-        <Drawer title="本地 AI 任务详情" open={Boolean(record)} onClose={onClose} size="large">
+        <Drawer rootClassName="studio-modal" title="本地 AI 任务详情" open={Boolean(record)} onClose={onClose} size="large">
             {record ? (
                 <div className="space-y-4">
                     <div className="flex flex-wrap gap-2">

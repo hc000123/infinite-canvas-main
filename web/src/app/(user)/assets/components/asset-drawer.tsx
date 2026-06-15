@@ -57,7 +57,7 @@ export function AssetDrawer({
     const canvasLibraryEntries = assetCanvasLibraryEntries(asset);
     const versionRecords = assetVersionRecords(asset);
     return (
-        <Drawer rootClassName="studio-workspace" title="素材详情" open={Boolean(asset)} size={asset && workflowInfo ? "min(560px, calc(100vw - 24px))" : "large"} onClose={onClose}>
+        <Drawer rootClassName="studio-modal" title="素材详情" open={Boolean(asset)} size={asset && workflowInfo ? "min(560px, calc(100vw - 24px))" : "large"} onClose={onClose}>
             {asset && workflowInfo ? (
                 <WorkflowAssetDrawerContent
                     asset={asset}
