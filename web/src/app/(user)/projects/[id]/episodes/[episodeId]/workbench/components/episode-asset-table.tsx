@@ -30,7 +30,7 @@ export function EpisodeAssetTable({
     selectedAssetId: string;
 }) {
     if (!assets.length) {
-        return <div className="px-5 py-10 text-center text-sm text-slate-500">暂无符合筛选的资产。</div>;
+        return <div className="px-5 py-10 text-center text-sm text-[var(--studio-text-muted)]">暂无符合筛选的资产。</div>;
     }
     return (
         <div className="grid gap-4 p-4 sm:grid-cols-2 2xl:grid-cols-3">
@@ -104,38 +104,38 @@ function EpisodeAssetCard({
     };
 
     return (
-        <article className={`group overflow-hidden rounded-lg border bg-white/[0.025] transition ${selected ? "border-cyan-300 shadow-[0_0_0_1px_rgba(103,232,249,0.22)]" : "border-white/[0.07] hover:border-cyan-400/40"}`}>
+        <article className={`group overflow-hidden rounded-md border bg-[var(--studio-panel-muted-bg)] transition ${selected ? "border-[var(--studio-border-strong)] shadow-[inset_0_-2px_0_var(--studio-accent)]" : "border-[var(--studio-border-subtle)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]"}`}>
             <div className="relative">
                 <button type="button" className="block w-full text-left" onClick={() => onOpenProcess(asset, asset.status === "已绑定" || asset.libraryMatchCount ? "bind" : "generate")}>
-                    <div className="relative bg-[#05080d]" style={{ aspectRatio: coverAspectRatio }}>
+                    <div className="relative bg-[var(--studio-elevated-bg)]" style={{ aspectRatio: coverAspectRatio }}>
                         {coverUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={coverUrl} alt={asset.name} className="size-full object-contain" />
                         ) : (
-                            <div className="flex size-full flex-col items-center justify-center gap-2 border-b border-white/[0.07] bg-[#05080d] text-slate-500">
-                                <ImageIcon className="size-9 text-slate-600" />
+                            <div className="flex size-full flex-col items-center justify-center gap-2 border-b border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-muted)]">
+                                <ImageIcon className="size-9 text-[var(--studio-text-muted)]" />
                                 <span className="text-sm">未绑定预览图</span>
-                                <span className="px-4 text-center text-xs leading-5 text-slate-600">生成、上传或绑定素材后才显示封面</span>
+                                <span className="px-4 text-center text-xs leading-5 text-[var(--studio-text-muted)]">生成、上传或绑定素材后才显示封面</span>
                             </div>
                         )}
-                        <div className="absolute left-3 top-3 rounded-md border border-white/10 bg-[#05080d]/82 px-2 py-1 text-xs font-semibold text-cyan-100 backdrop-blur">{asset.type}</div>
+                        <div className="absolute left-3 top-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] px-2 py-1 text-xs font-semibold text-[var(--studio-accent)] backdrop-blur">{asset.type}</div>
                         <div className="absolute bottom-3 left-3">
                             <EpisodeStatusPill status={asset.status} tone={asset.tone} />
                         </div>
                     </div>
                     <div className="grid min-h-[220px] gap-3 p-4">
                         <div className="min-w-0">
-                            <h3 className="line-clamp-2 break-words text-base font-semibold leading-6 text-slate-100">{asset.name}</h3>
-                            <p className="mt-1 line-clamp-2 break-words text-sm leading-6 text-slate-500">{asset.description || "暂无描述，建议先运行资产分析补全用途。"}</p>
+                            <h3 className="line-clamp-2 break-words text-base font-semibold leading-6 text-[var(--studio-text-primary)]">{asset.name}</h3>
+                            <p className="mt-1 line-clamp-2 break-words text-sm leading-6 text-[var(--studio-text-muted)]">{asset.description || "暂无描述，建议先运行资产分析补全用途。"}</p>
                         </div>
-                        <div className="rounded-lg border border-white/[0.07] bg-[#05080d]/55 p-3">
+                        <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-3">
                             <div className="mb-1 flex items-center justify-between gap-2 text-xs font-semibold">
-                                <span className="text-slate-500">提示词</span>
-                                <span className="shrink-0 rounded border border-cyan-400/20 bg-cyan-400/10 px-1.5 py-0.5 text-[11px] text-cyan-100">{preset.label}</span>
+                                <span className="text-[var(--studio-text-muted)]">提示词</span>
+                                <span className="shrink-0 rounded border border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] px-1.5 py-0.5 text-[11px] text-[var(--studio-accent)]">{preset.label}</span>
                             </div>
-                            <p className="line-clamp-4 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">{asset.promptDraft || "暂无提示词，可先重新生成资产清单。"}</p>
+                            <p className="line-clamp-4 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--studio-text-secondary)]">{asset.promptDraft || "暂无提示词，可先重新生成资产清单。"}</p>
                         </div>
-                        <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                        <div className="flex flex-wrap gap-2 text-xs text-[var(--studio-text-muted)]">
                             {asset.boundAssetIds.length ? <span>已绑定 {asset.boundAssetIds.length} 个素材</span> : null}
                             <span>{asset.libraryMatchCount ? `候选匹配 ${asset.libraryMatchCount}${candidateImageCount ? ` / 图片 ${candidateImageCount}` : ""}` : "素材库无候选"}</span>
                             {asset.referencedShotLabels.length ? <span>引用 {asset.referencedShotLabels.join("、")}</span> : null}
@@ -144,20 +144,20 @@ function EpisodeAssetCard({
                     </div>
                 </button>
                 {coverAsset && coverUrl ? (
-                    <button type="button" aria-label={`预览 ${asset.name}`} className="absolute inset-x-0 top-0 cursor-zoom-in rounded-t-lg outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70" style={{ aspectRatio: coverAspectRatio }} onClick={() => onPreviewAsset(coverAsset)} />
+                    <button type="button" aria-label={`预览 ${asset.name}`} className="absolute inset-x-0 top-0 cursor-zoom-in rounded-t-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]" style={{ aspectRatio: coverAspectRatio }} onClick={() => onPreviewAsset(coverAsset)} />
                 ) : null}
             </div>
-            <div className="grid gap-2 border-t border-white/[0.07] p-3">
-                <div className="grid gap-2 rounded-lg border border-white/[0.07] bg-[#05080d]/55 px-3 py-2">
+            <div className="grid gap-2 border-t border-[var(--studio-border-subtle)] p-3">
+                <div className="grid gap-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] px-3 py-2">
                     <div className="flex min-w-0 items-center justify-between gap-2 text-xs">
-                        <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold text-slate-400">
-                            <SlidersHorizontal className="size-3.5 shrink-0 text-cyan-200" />
+                        <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold text-[var(--studio-text-secondary)]">
+                            <SlidersHorizontal className="size-3.5 shrink-0 text-[var(--studio-accent)]" />
                             <span>图片设置</span>
                         </span>
-                        <span className="shrink-0 text-slate-500">{actualImageSize ? `输出 ${actualImageSize}` : `请求 ${generationSize}`}</span>
+                        <span className="shrink-0 text-[var(--studio-text-muted)]">{actualImageSize ? `输出 ${actualImageSize}` : `请求 ${generationSize}`}</span>
                     </div>
                     <select
-                        className="h-8 w-full rounded-md border border-white/10 bg-[#090f18] px-2 text-xs text-slate-100 outline-none transition hover:border-cyan-400/45 focus:border-cyan-300"
+                        className="h-8 w-full rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-2 text-xs text-[var(--studio-text-primary)] outline-none transition hover:border-[var(--studio-border-strong)] focus:border-[var(--studio-accent)]"
                         title={selectedSizeOption?.description}
                         value={generationSize}
                         onChange={(event) => setGenerationSize(event.target.value)}
@@ -170,17 +170,17 @@ function EpisodeAssetCard({
                     </select>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                    <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-500/35 bg-cyan-400/10 px-3 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-45" disabled={generating || !asset.canGenerate || !asset.promptDraft.trim()} onClick={() => void onGenerateImage(asset, { size: generationSize })}>
+                    <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] px-3 py-2 text-sm font-medium text-[var(--studio-accent)] transition hover:bg-[var(--studio-hover-bg)] disabled:cursor-not-allowed disabled:opacity-45" disabled={generating || !asset.canGenerate || !asset.promptDraft.trim()} onClick={() => void onGenerateImage(asset, { size: generationSize })}>
                         <WandSparkles className={`size-4 ${generating ? "animate-pulse" : ""}`} />
                         {generating ? "生成中" : "生成图片"}
                     </button>
-                    <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-medium text-slate-200 hover:border-cyan-500/60 hover:text-cyan-100 disabled:cursor-wait disabled:opacity-60" disabled={uploading} onClick={() => inputRef.current?.click()}>
+                    <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-3 py-2 text-sm font-medium text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] disabled:cursor-wait disabled:opacity-60" disabled={uploading} onClick={() => inputRef.current?.click()}>
                         <Upload className="size-4" />
                         {uploading ? "上传中" : "上传图片"}
                     </button>
                 </div>
                 <div className="grid gap-2">
-                    <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-medium text-slate-200 hover:border-amber-400/60 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-45" disabled={!reviewReady || reviewing} onClick={() => void onReviewAsset(asset)} title={reviewReady ? "提交或刷新火山素材加白状态" : "请先生成、上传或绑定图片"}>
+                    <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-3 py-2 text-sm font-medium text-[var(--studio-text-secondary)] transition hover:border-amber-400/60 hover:bg-amber-400/10 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-45" disabled={!reviewReady || reviewing} onClick={() => void onReviewAsset(asset)} title={reviewReady ? "提交或刷新火山素材加白状态" : "请先生成、上传或绑定图片"}>
                         <ShieldCheck className="size-4" />
                         {reviewing ? "处理中" : reviewText}
                     </button>

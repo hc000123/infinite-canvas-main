@@ -276,7 +276,7 @@ export default function EpisodeProductionWorkbenchPage() {
 
     if (!projectHydrated || !scriptsHydrated) {
         return (
-            <main className="grid h-full place-items-center bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
+            <main className="studio-shell grid h-full place-items-center px-6 py-10 text-[var(--studio-text-primary)]">
                 <Spin description="正在读取本地项目" />
             </main>
         );
@@ -284,7 +284,7 @@ export default function EpisodeProductionWorkbenchPage() {
 
     if (!project || !episode) {
         return (
-            <main className="h-full overflow-auto bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
+            <main className="studio-shell h-full overflow-auto px-6 py-10 text-[var(--studio-text-primary)]">
                 <div className="mx-auto max-w-3xl">
                     <Empty description="项目或集数不存在">
                         <Button href={project ? `/projects/${project.id}` : "/projects"}>返回项目</Button>
@@ -443,7 +443,7 @@ export default function EpisodeProductionWorkbenchPage() {
     };
 
     return (
-        <main className="h-full overflow-auto bg-[#050b10] text-slate-100">
+        <main className="studio-workspace studio-shell h-full overflow-auto text-[var(--studio-text-primary)]">
             <EpisodeProductionShell
                 activeModule={activeModule}
                 appliedPreviewItemIds={workflowAppliedPreviewItemIds}

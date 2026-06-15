@@ -153,22 +153,22 @@ export function EpisodeAssetsModulePage({
 
     return (
         <section className="grid gap-4">
-            <div className="grid gap-4 rounded-xl border border-white/[0.07] bg-[#070b10]/80 px-5 py-4 shadow-[0_16px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+            <div className="grid gap-4 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] px-5 py-4 shadow-[var(--studio-shadow)] backdrop-blur-xl xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
                 <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-[var(--studio-text-muted)]">
                         <span>{projectTitle}</span>
                         <span>/</span>
                         <span>第 {padEpisodeOrder(episode.order)} 集</span>
                         <span>/</span>
-                        <span className="text-cyan-300">资产与生图</span>
+                        <span className="text-[var(--studio-accent)]">资产与生图</span>
                     </div>
-                    <h2 className="mt-2 break-words text-2xl font-semibold leading-tight text-slate-50">{episode.title} · 资产与生图</h2>
-                    <p className="mt-2 break-words text-sm leading-6 text-slate-500">从剧本和导演分析中提取角色、场景、道具、服装；每条资产可直接绑定已有素材，或按类型预设画幅就地生成参考图。</p>
+                    <h2 className="mt-2 break-words text-2xl font-semibold leading-tight text-[var(--studio-text-primary)]">{episode.title} · 资产与生图</h2>
+                    <p className="mt-2 break-words text-sm leading-6 text-[var(--studio-text-muted)]">从剧本和导演分析中提取角色、场景、道具、服装；每条资产可直接绑定已有素材，或按类型预设画幅就地生成参考图。</p>
                 </div>
                 <div className="grid justify-items-start gap-2 xl:justify-items-end">
                     <div className="flex flex-wrap gap-2">
                         <Button
-                            className="!rounded-xl !border-white/10 !bg-white/[0.04] !text-slate-200 hover:!border-cyan-400/60 hover:!text-cyan-100"
+                            className="!rounded-md"
                             danger={isRunning || staleRunning || hasOutputStateMismatch}
                             disabled={assetBlocked}
                             onClick={runAssetPrimaryAction}
@@ -177,14 +177,14 @@ export function EpisodeAssetsModulePage({
                             {assetPrimaryActionLabel}
                         </Button>
                         {canRerunAssetAnalysis ? (
-                            <Button className="!rounded-xl !border-amber-400/35 !bg-amber-400/[0.07] !text-amber-100 hover:!border-amber-300/60 hover:!text-amber-50" onClick={() => onRunStage("art-design")}>
+                            <Button className="!rounded-md !border-amber-400/35 !bg-amber-400/[0.07] !text-amber-100 hover:!border-amber-300/60 hover:!text-amber-50" onClick={() => onRunStage("art-design")}>
                                 重新提取资产
                             </Button>
                         ) : null}
-                        <Button className="!rounded-xl !border-white/10 !bg-white/[0.04] !text-slate-200 hover:!border-cyan-400/60 hover:!text-cyan-100" disabled={(!stageOutputs["art-design"] && !preview) || isRunning} onClick={() => onSaveStageResult("art-design")}>
+                        <Button className="!rounded-md" disabled={(!stageOutputs["art-design"] && !preview) || isRunning} onClick={() => onSaveStageResult("art-design")}>
                             保存结果
                         </Button>
-                        <Button className="!rounded-xl" type="primary" disabled={!preview || previewCountsResult.pending <= 0} loading={Boolean(preview && applyingPreviewIds[preview.previewId])} onClick={() => preview && onApplyPreview(preview)}>
+                        <Button className="!rounded-md" type="primary" disabled={!preview || previewCountsResult.pending <= 0} loading={Boolean(preview && applyingPreviewIds[preview.previewId])} onClick={() => preview && onApplyPreview(preview)}>
                             写入设定库 {previewCountsResult.pending ? previewCountsResult.pending : ""}
                         </Button>
                     </div>
@@ -193,15 +193,15 @@ export function EpisodeAssetsModulePage({
             </div>
 
             {isRunning ? (
-                <div className="rounded-xl border border-cyan-400/25 bg-cyan-400/[0.07] p-4 shadow-[0_16px_50px_rgba(8,145,178,0.08)] backdrop-blur-xl">
-                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-cyan-100">
-                        <span className="size-2 animate-pulse rounded-full bg-cyan-300" />
+                <div className="rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] p-4 shadow-[var(--studio-shadow)] backdrop-blur-xl">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--studio-accent)]">
+                        <span className="size-2 animate-pulse rounded-full bg-[var(--studio-accent)]" />
                         资产分析实时预览
                     </div>
                     <div className="grid gap-2 md:grid-cols-3">
                         {["正在从剧本和导演分析中识别角色、场景、道具和服装。", "正在整理可写入设定库的资产清单和参考图缺口。", "结果返回后会先展示清单，不会自动生成图片或视频。"].map((line, index) => (
-                            <div key={line} className="rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-sm leading-6 text-slate-300">
-                                <span className="mr-2 text-xs font-semibold text-cyan-200">{index + 1}</span>
+                            <div key={line} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] px-3 py-2 text-sm leading-6 text-[var(--studio-text-secondary)]">
+                                <span className="mr-2 text-xs font-semibold text-[var(--studio-accent)]">{index + 1}</span>
                                 {line}
                             </div>
                         ))}
@@ -210,7 +210,7 @@ export function EpisodeAssetsModulePage({
             ) : null}
 
             {staleRunning ? (
-                <div className="rounded-xl border border-amber-400/30 bg-amber-400/[0.07] p-4 shadow-[0_16px_50px_rgba(245,158,11,0.07)] backdrop-blur-xl">
+                <div className="rounded-md border border-amber-400/30 bg-amber-400/[0.07] p-4 shadow-[var(--studio-shadow)] backdrop-blur-xl">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
                             <div className="text-base font-semibold text-amber-100">资产分析运行中断</div>
@@ -221,7 +221,7 @@ export function EpisodeAssetsModulePage({
             ) : null}
 
             {hasOutputStateMismatch ? (
-                <div className="rounded-xl border border-rose-400/30 bg-rose-400/[0.06] p-4 shadow-[0_16px_50px_rgba(244,63,94,0.07)] backdrop-blur-xl">
+                <div className="rounded-md border border-rose-400/30 bg-rose-400/[0.06] p-4 shadow-[var(--studio-shadow)] backdrop-blur-xl">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
                             <div className="text-base font-semibold text-rose-100">资产阶段状态不一致</div>
@@ -239,19 +239,19 @@ export function EpisodeAssetsModulePage({
                     { label: "服装", value: summary.costumes },
                     { label: "缺素材", tone: summary.missing ? "amber" : "green", value: summary.missing },
                 ].map((item) => (
-                    <div key={item.label} className="rounded-lg border border-white/[0.07] bg-white/[0.03] px-4 py-3">
-                        <div className="text-xs text-slate-500">{item.label}</div>
+                    <div key={item.label} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-4 py-3">
+                        <div className="text-xs text-[var(--studio-text-muted)]">{item.label}</div>
                         <div className={`mt-1 text-2xl font-semibold ${episodeToneTextClass((item.tone as EpisodeStatusTone | undefined) || "slate")}`}>{item.value}</div>
                     </div>
                 ))}
             </div>
 
             {!isRunning && !assets.length ? (
-                <div className="rounded-xl border border-cyan-400/25 bg-cyan-400/[0.07] p-5 shadow-[0_16px_50px_rgba(8,145,178,0.08)] backdrop-blur-xl">
+                <div className="rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] p-5 shadow-[var(--studio-shadow)] backdrop-blur-xl">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="min-w-0">
-                            <div className="text-base font-semibold text-cyan-100">{assetBlocked ? "下一步：先确认导演分析" : staleRunning ? "下一步：清理运行状态" : hasOutputStateMismatch ? "下一步：重新运行资产分析" : stageOutputs["art-design"] ? "正在生成资产清单" : "下一步：运行资产分析"}</div>
-                            <div className="mt-1 max-w-3xl break-words text-sm leading-6 text-cyan-100/75">
+                            <div className="text-base font-semibold text-[var(--studio-accent)]">{assetBlocked ? "下一步：先确认导演分析" : staleRunning ? "下一步：清理运行状态" : hasOutputStateMismatch ? "下一步：重新运行资产分析" : stageOutputs["art-design"] ? "正在生成资产清单" : "下一步：运行资产分析"}</div>
+                            <div className="mt-1 max-w-3xl break-words text-sm leading-6 text-[var(--studio-text-secondary)]">
                                 {assetBlocked
                                     ? stageActionHint.text
                                     : staleRunning
@@ -268,21 +268,21 @@ export function EpisodeAssetsModulePage({
             ) : null}
 
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_430px]">
-                <div className="min-w-0 overflow-hidden rounded-xl border border-white/[0.07] bg-[#070b10]/78 shadow-[0_16px_60px_rgba(0,0,0,0.20)] backdrop-blur-xl">
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] px-5 py-4">
+                <div className="min-w-0 overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] shadow-[var(--studio-shadow)] backdrop-blur-xl">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--studio-border-subtle)] px-5 py-4">
                         <div className="flex flex-wrap gap-2">
                             {(["全部", "缺素材", "已绑定", "待生成", "角色", "场景", "道具", "服装"] as EpisodeAssetFilter[]).map((item) => (
                                 <button
                                     key={item}
                                     type="button"
-                                    className={`rounded-lg border px-3 py-1.5 text-sm transition ${filter === item ? "border-cyan-400/70 bg-cyan-400/12 text-cyan-100" : "border-white/[0.08] bg-white/[0.025] text-slate-500 hover:border-cyan-400/45 hover:text-slate-200"}`}
+                                    className={`rounded-md border px-3 py-1.5 text-sm transition ${filter === item ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-accent)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] text-[var(--studio-text-muted)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]"}`}
                                     onClick={() => setFilter(item)}
                                 >
                                     {item}
                                 </button>
                             ))}
                         </div>
-                        <div className="text-sm text-slate-500">当前显示 {filteredAssets.length} 条</div>
+                        <div className="text-sm text-[var(--studio-text-muted)]">当前显示 {filteredAssets.length} 条</div>
                     </div>
                     <EpisodeAssetTable
                         assets={filteredAssets}
@@ -298,7 +298,7 @@ export function EpisodeAssetsModulePage({
                 </div>
                 <EpisodeAssetProcessDrawer asset={selectedAsset} generating={Boolean(selectedAsset && generatingAssetIds[selectedAsset.id])} mode={processMode} onBindAsset={onBindAsset} onGenerateImage={generateAssetImage} onModeChange={setProcessMode} onPreviewAsset={setPreviewAsset} />
             </div>
-            <Modal centered footer={null} open={Boolean(previewAssetUrl)} title={previewAsset?.title || "图片预览"} width={960} onCancel={() => setPreviewAsset(null)}>
+            <Modal rootClassName="studio-modal" centered footer={null} open={Boolean(previewAssetUrl)} title={previewAsset?.title || "图片预览"} width={960} onCancel={() => setPreviewAsset(null)}>
                 {previewAssetUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img alt={previewAsset?.title || "图片预览"} className="max-h-[78vh] w-full rounded-lg object-contain" src={previewAssetUrl} />

@@ -263,22 +263,22 @@ export function EpisodeProductionShell({
     const scriptModuleVisible = activeModule === "script";
     const scriptEditor =
         activeModule === "script" ? (
-            <section className="rounded-xl border border-white/[0.07] bg-white/[0.025]">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
+            <section className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--studio-border-subtle)] px-4 py-3">
                     <div>
                         <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-sm font-semibold text-cyan-100">本集剧本正文</h3>
-                            {visibleStructuredScript ? <span className="rounded border border-cyan-400/20 bg-cyan-400/10 px-2 py-0.5 text-xs text-cyan-100">{hasPendingScriptDraft ? "待确认结构稿" : "AI结构稿"} · {visibleStructuredScript.scenes.length} 场</span> : null}
+                            <h3 className="text-sm font-semibold text-[var(--studio-text-primary)]">本集剧本正文</h3>
+                            {visibleStructuredScript ? <span className="rounded border border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] px-2 py-0.5 text-xs text-[var(--studio-accent)]">{hasPendingScriptDraft ? "待确认结构稿" : "AI结构稿"} · {visibleStructuredScript.scenes.length} 场</span> : null}
                         </div>
-                        <p className="mt-1 text-xs text-slate-500">{hasPendingScriptDraft ? "左侧原稿，右侧待确认优化稿；确认提交后再进入导演分析。" : "默认阅读，确认内容后再进入导演分析。"}</p>
+                        <p className="mt-1 text-xs text-[var(--studio-text-muted)]">{hasPendingScriptDraft ? "左侧原稿，右侧待确认优化稿；确认提交后再进入导演分析。" : "默认阅读，确认内容后再进入导演分析。"}</p>
                     </div>
-                    <button type="button" className="rounded-lg border border-white/10 bg-white/[0.035] px-3 py-1.5 text-sm text-slate-200 hover:border-cyan-400/45 hover:text-cyan-100" onClick={() => setScriptEditing((value) => !value)}>
+                    <button type="button" className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-3 py-1.5 text-sm text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]" onClick={() => setScriptEditing((value) => !value)}>
                         {scriptEditing || !hasScript ? "阅读正文" : "编辑正文"}
                     </button>
                 </div>
                 <div className="p-4">
                     {scriptEditing || !hasScript ? (
-                        <Input.TextArea className="!min-h-[420px] !bg-slate-950/70 !text-base !leading-8 !text-slate-100" value={scriptDraft} onChange={(event) => setScriptDraft(event.target.value)} placeholder="粘贴本集剧本，保存后再运行导演分析。" />
+                        <Input.TextArea className="!min-h-[420px] !text-base !leading-8" value={scriptDraft} onChange={(event) => setScriptDraft(event.target.value)} placeholder="粘贴本集剧本，保存后再运行导演分析。" />
                     ) : hasPendingScriptDraft ? (
                         <ScriptComparisonView draft={scriptDraft} snapshot={scriptSnapshot} />
                     ) : (
@@ -288,7 +288,7 @@ export function EpisodeProductionShell({
             </section>
         ) : undefined;
     return (
-        <div className="min-h-full bg-[#05080d] bg-[linear-gradient(rgba(148,163,184,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.045)_1px,transparent_1px),radial-gradient(circle_at_18%_0%,rgba(34,211,238,0.12),transparent_32%)] [background-size:44px_44px,44px_44px,100%_100%]">
+        <div className="min-h-full">
             <EpisodeProductionHeader
                 boundCanvas={boundCanvas}
                 canRunFullWorkflow={legacyWorkbenchVisible && hasScript}
@@ -308,13 +308,13 @@ export function EpisodeProductionShell({
                 {!legacyWorkbenchVisible && !scriptModuleVisible ? (
                     <OriginalWorkflowReplacementPanel opening={openingOriginalWorkflow} onOpen={onOpenOriginalWorkflow} />
                 ) : topNotice ? (
-                    <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 shadow-[0_12px_44px_rgba(0,0,0,0.18)] backdrop-blur-xl ${flowNoticeClass(topNotice.tone || "slate")}`}>
+                    <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3 shadow-[var(--studio-shadow)] backdrop-blur-xl ${flowNoticeClass(topNotice.tone || "slate")}`}>
                         <div className="min-w-0">
                             <div className="text-sm font-semibold">{topNotice.title}</div>
                             <div className="mt-1 break-words text-sm leading-6 opacity-85">{topNotice.text}</div>
                         </div>
                         {"actionLabel" in topNotice && topNotice.actionLabel ? (
-                            <button type="button" className="rounded-lg border border-current bg-transparent px-3 py-1.5 text-sm font-medium hover:bg-white/10" onClick={() => ("onAction" in topNotice && topNotice.onAction ? topNotice.onAction() : onModuleChange(topNotice.module))}>
+                            <button type="button" className="rounded-md border border-current bg-transparent px-3 py-1.5 text-sm font-medium transition hover:bg-[var(--studio-hover-bg)]" onClick={() => ("onAction" in topNotice && topNotice.onAction ? topNotice.onAction() : onModuleChange(topNotice.module))}>
                                 {topNotice.actionLabel}
                             </button>
                         ) : null}
@@ -396,14 +396,14 @@ export function EpisodeProductionShell({
 
 function OriginalWorkflowReplacementPanel({ opening, onOpen }: { opening: boolean; onOpen: () => void }) {
     return (
-        <section className="rounded-2xl border border-cyan-400/25 bg-cyan-400/[0.055] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.22)]">
+        <section className="rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] p-5 shadow-[var(--studio-shadow)]">
             <div className="max-w-3xl">
-                <div className="text-sm font-semibold text-cyan-100">本集生产台工作流已暂时收起</div>
-                <p className="mt-2 text-sm leading-6 text-slate-300">
+                <div className="text-sm font-semibold text-[var(--studio-text-primary)]">本集生产台工作流已暂时收起</div>
+                <p className="mt-2 text-sm leading-6 text-[var(--studio-text-secondary)]">
                     导演分析、资产提示词、Seedance 提示词和 Copy-only 拆分先统一交给独立“视频工作流”控制台处理。资产图先行入口已迁移到 Stage 2，质量门通过后可在“导入到工具”里写入“我的素材待生图卡”。
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                    <button type="button" className="inline-flex h-9 items-center justify-center rounded-xl bg-cyan-400 px-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60" disabled={opening} onClick={onOpen}>
+                    <button type="button" className="inline-flex h-9 items-center justify-center rounded-md bg-[var(--studio-accent)] px-3 text-sm font-semibold text-white transition hover:bg-[var(--studio-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60" disabled={opening} onClick={onOpen}>
                         {opening ? "正在同步..." : "打开视频工作流"}
                     </button>
                 </div>
@@ -423,12 +423,12 @@ function ScriptComparisonView({ draft, snapshot }: { draft: string; snapshot: st
 
 function ScriptTextPane({ accent = false, label, text }: { accent?: boolean; label: string; text: string }) {
     return (
-        <div className={`min-h-[420px] overflow-hidden rounded-lg border ${accent ? "border-cyan-400/25 bg-cyan-400/[0.035]" : "border-white/[0.07] bg-[#060a10]/72"}`}>
-            <div className={`flex items-center justify-between gap-3 border-b px-4 py-2 ${accent ? "border-cyan-400/15 text-cyan-100" : "border-white/[0.06] text-slate-300"}`}>
+        <div className={`min-h-[420px] overflow-hidden rounded-md border ${accent ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)]"}`}>
+            <div className={`flex items-center justify-between gap-3 border-b px-4 py-2 ${accent ? "border-[var(--studio-border-strong)] text-[var(--studio-accent)]" : "border-[var(--studio-border-subtle)] text-[var(--studio-text-secondary)]"}`}>
                 <span className="text-xs font-semibold">{label}</span>
-                <span className="shrink-0 text-xs text-slate-500">{text.length} 字</span>
+                <span className="shrink-0 text-xs text-[var(--studio-text-muted)]">{text.length} 字</span>
             </div>
-            <article className="thin-scrollbar max-h-[58vh] overflow-auto whitespace-pre-wrap break-words px-5 py-4 text-base leading-8 text-slate-200">{text}</article>
+            <article className="thin-scrollbar max-h-[58vh] overflow-auto whitespace-pre-wrap break-words px-5 py-4 text-base leading-8 text-[var(--studio-text-secondary)]">{text}</article>
         </div>
     );
 }
@@ -479,6 +479,6 @@ function flowNoticeClass(tone: "amber" | "cyan" | "green" | "red" | "slate") {
     if (tone === "red") return "border-rose-400/40 bg-rose-400/10 text-rose-100";
     if (tone === "green") return "border-emerald-400/35 bg-emerald-400/10 text-emerald-100";
     if (tone === "amber") return "border-amber-400/35 bg-amber-400/10 text-amber-100";
-    if (tone === "slate") return "border-slate-700 bg-slate-900/60 text-slate-200";
-    return "border-cyan-400/35 bg-cyan-400/10 text-cyan-100";
+    if (tone === "slate") return "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]";
+    return "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-accent)]";
 }

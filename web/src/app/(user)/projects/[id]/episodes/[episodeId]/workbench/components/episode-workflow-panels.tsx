@@ -9,19 +9,19 @@ import { episodeModuleNavToneClass, previewActionLabel, previewApplyDisabledReas
 
 export function EpisodeModuleTabs({ activeModule, onChange, tabs }: { activeModule: EpisodeModuleKey; onChange: (module: EpisodeModuleKey) => void; tabs: Array<{ key: EpisodeModuleKey; label: string; status: EpisodeModuleNavStatus; step: number }> }) {
     return (
-        <nav className="grid content-start gap-1 rounded-xl border border-white/[0.07] bg-[#070b10]/72 p-1.5 shadow-[0_12px_44px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+        <nav className="grid content-start gap-1 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-1.5 shadow-[var(--studio-shadow)] backdrop-blur-xl">
             {tabs.map((tab) => {
                 const active = tab.key === activeModule;
                 return (
                     <button
                         key={tab.key}
                         type="button"
-                        className={`rounded-lg border px-3 py-2.5 text-left transition ${active ? "border-cyan-400/55 bg-cyan-400/12 text-cyan-50 shadow-[inset_0_0_0_1px_rgba(34,211,238,0.10)]" : "border-transparent bg-transparent text-slate-400 hover:border-white/10 hover:bg-white/[0.035] hover:text-slate-100"}`}
+                        className={`rounded-md border px-3 py-2.5 text-left transition ${active ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-text-primary)] shadow-[inset_0_-2px_0_var(--studio-accent)]" : "border-transparent bg-transparent text-[var(--studio-text-secondary)] hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]"}`}
                         onClick={() => onChange(tab.key)}
                         title={tab.status.detail || tab.status.text}
                     >
                         <span className="flex items-center gap-2">
-                            <span className={`grid size-6 shrink-0 place-items-center rounded-md border text-xs font-semibold ${active ? "border-cyan-300/60 bg-cyan-300/15 text-cyan-100" : "border-white/10 bg-white/[0.035] text-slate-400"}`}>
+                            <span className={`grid size-6 shrink-0 place-items-center rounded-md border text-xs font-semibold ${active ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-accent)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] text-[var(--studio-text-muted)]"}`}>
                                 {tab.step}
                             </span>
                             <span className="min-w-0 flex-1 truncate text-base font-semibold">{tab.label}</span>
@@ -48,7 +48,7 @@ export function PreviewList({
     onApplyPreview: (preview: AgentWorkflowMappingPreview) => void;
 }) {
     return (
-        <div className="grid gap-2 rounded-lg border border-dashed border-teal-500/35 bg-teal-700/5 p-3 dark:border-teal-200/25 dark:bg-teal-200/5">
+        <div className="grid gap-2 rounded-md border border-dashed border-[var(--studio-border-strong)] bg-[var(--studio-panel-muted-bg)] p-3">
             {previews.map((preview) => {
                 const counts = previewCounts(preview, appliedPreviewItemIds);
                 const disabledReason = previewApplyDisabledReason(preview, counts.pending, hasCanvas);
@@ -65,12 +65,12 @@ export function PreviewList({
                                 {previewActionLabel(preview.targetType)}
                             </Button>
                         </div>
-                        <div className="mt-1 text-stone-600 dark:text-stone-300">{preview.summary}</div>
+                        <div className="mt-1 text-[var(--studio-text-secondary)]">{preview.summary}</div>
                         {preview.warnings.length ? <div className="mt-1 text-amber-600">提示：{preview.warnings.join("；")}</div> : null}
-                        {disabledReason ? <div className="mt-1 text-stone-500">{disabledReason}</div> : null}
+                        {disabledReason ? <div className="mt-1 text-[var(--studio-text-muted)]">{disabledReason}</div> : null}
                         <details className="mt-2">
-                            <summary className="cursor-pointer text-xs text-stone-500">映射字段 / 流程追溯</summary>
-                            <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-stone-950 p-3 text-xs text-stone-50">{JSON.stringify(preview, null, 2)}</pre>
+                            <summary className="cursor-pointer text-xs text-[var(--studio-text-muted)]">映射字段 / 流程追溯</summary>
+                            <pre className="mt-2 max-h-72 overflow-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-3 text-xs text-[var(--studio-text-secondary)]">{JSON.stringify(preview, null, 2)}</pre>
                         </details>
                     </div>
                 );
@@ -84,23 +84,23 @@ export function StageReadingList({ requiredReadings, readingRecords }: { require
     return (
         <div className="studio-panel-muted p-3">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <div className="text-xs font-medium text-stone-500">规范读取清单</div>
-                <div className="text-xs text-stone-500">这些文件 / 规范需要在运行或审核本阶段前确认读过。</div>
+                <div className="text-xs font-medium text-[var(--studio-text-muted)]">规范读取清单</div>
+                <div className="text-xs text-[var(--studio-text-muted)]">这些文件 / 规范需要在运行或审核本阶段前确认读过。</div>
             </div>
             <div className="grid gap-1.5">
                 {requiredReadings.map((reading) => {
                     const record = readingRecords.find((item) => (item.readingId ? item.readingId === reading.readingId : item.sourceFile === reading.sourceFile));
                     const isRead = record?.status === "read";
                     return (
-                        <div key={reading.readingId} className="grid gap-2 rounded-md border border-stone-950/10 bg-white/45 px-3 py-2 text-xs dark:border-white/10 dark:bg-white/[0.035] md:grid-cols-[auto_auto_minmax(0,1fr)] md:items-start">
+                        <div key={reading.readingId} className="grid gap-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] px-3 py-2 text-xs md:grid-cols-[auto_auto_minmax(0,1fr)] md:items-start">
                             <Tag className="m-0 w-fit" color={isRead ? "green" : "red"}>
                                 {isRead ? "已读" : "未读"}
                             </Tag>
                             <Tag className="m-0 w-fit">{readingSourceTypeLabel(reading.sourceType)}</Tag>
                             <div className="min-w-0">
-                                <div className="font-medium text-stone-800 dark:text-stone-100">{reading.label}</div>
-                                <div className="mt-1 break-all font-mono text-[11px] leading-5 text-stone-500">{reading.sourceFile}</div>
-                                {reading.note ? <div className="mt-1 text-stone-500">{reading.note}</div> : null}
+                                <div className="font-medium text-[var(--studio-text-primary)]">{reading.label}</div>
+                                <div className="mt-1 break-all font-mono text-[11px] leading-5 text-[var(--studio-text-muted)]">{reading.sourceFile}</div>
+                                {reading.note ? <div className="mt-1 text-[var(--studio-text-muted)]">{reading.note}</div> : null}
                             </div>
                         </div>
                     );
@@ -113,8 +113,8 @@ export function StageReadingList({ requiredReadings, readingRecords }: { require
 export function InfoBlock({ label, value }: { label: string; value: string }) {
     return (
         <div className="studio-panel-muted p-3 text-sm">
-            <div className="mb-1 text-xs text-stone-500">{label}</div>
-            <div className="leading-6">{value}</div>
+            <div className="mb-1 text-xs text-[var(--studio-text-muted)]">{label}</div>
+            <div className="leading-6 text-[var(--studio-text-secondary)]">{value}</div>
         </div>
     );
 }

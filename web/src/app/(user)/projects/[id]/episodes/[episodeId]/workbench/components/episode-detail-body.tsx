@@ -5,15 +5,15 @@ import type { ReactNode } from "react";
 export function EpisodeDetailBody({ body }: { body: string }) {
     const parsed = parseDetailJson(body);
     if (!parsed) {
-        return <div className="thin-scrollbar max-h-[68vh] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800 bg-slate-950/70 p-5 text-base leading-8">{body || "暂无详情"}</div>;
+        return <div className="thin-scrollbar max-h-[68vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-5 text-base leading-8 text-[var(--studio-text-secondary)]">{body || "暂无详情"}</div>;
     }
     const businessRecord = selectBusinessDetailRecord(parsed);
     const readableText = buildReadableDetailText(businessRecord);
     return (
-        <div className="thin-scrollbar max-h-[68vh] overflow-auto rounded-lg border border-slate-800 bg-slate-950/70 p-5">
-            <article className="whitespace-pre-wrap break-words text-base leading-8 text-slate-100">{readableText || "暂无详情"}</article>
-            <details className="mt-5 rounded-lg border border-slate-800 bg-slate-900/35 px-3 py-2">
-                <summary className="cursor-pointer text-sm font-medium text-slate-400">结构化字段</summary>
+        <div className="thin-scrollbar max-h-[68vh] overflow-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-5">
+            <article className="whitespace-pre-wrap break-words text-base leading-8 text-[var(--studio-text-primary)]">{readableText || "暂无详情"}</article>
+            <details className="mt-5 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] px-3 py-2">
+                <summary className="cursor-pointer text-sm font-medium text-[var(--studio-text-secondary)]">结构化字段</summary>
                 <div className="mt-3">{renderHumanDetail(businessRecord)}</div>
             </details>
         </div>
@@ -59,7 +59,7 @@ function renderHumanDetail(value: unknown): ReactNode {
         return (
             <div className="grid gap-3">
                 {value.map((item, index) => (
-                    <div key={index} className="rounded-lg border border-slate-800 bg-slate-900/45 p-3">
+                    <div key={index} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-3">
                         {renderHumanDetail(item)}
                     </div>
                 ))}
@@ -68,19 +68,19 @@ function renderHumanDetail(value: unknown): ReactNode {
     }
     if (value && typeof value === "object") {
         const entries = Object.entries(value as Record<string, unknown>).filter(([, item]) => hasDisplayValue(item));
-        if (!entries.length) return <div className="text-sm text-slate-500">暂无可展示内容</div>;
+        if (!entries.length) return <div className="text-sm text-[var(--studio-text-muted)]">暂无可展示内容</div>;
         return (
             <div className="grid gap-3">
                 {entries.map(([key, item]) => (
-                    <section key={key} className="rounded-lg border border-slate-800 bg-slate-900/45 p-3">
-                        <div className="mb-2 text-xs font-semibold text-cyan-200">{humanDetailLabel(key)}</div>
+                    <section key={key} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-3">
+                        <div className="mb-2 text-xs font-semibold text-[var(--studio-accent)]">{humanDetailLabel(key)}</div>
                         {renderHumanDetail(item)}
                     </section>
                 ))}
             </div>
         );
     }
-    return <div className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-200">{String(value || "暂无内容")}</div>;
+    return <div className="whitespace-pre-wrap break-words text-sm leading-7 text-[var(--studio-text-secondary)]">{String(value || "暂无内容")}</div>;
 }
 
 function buildReadableDetailText(value: unknown): string {
