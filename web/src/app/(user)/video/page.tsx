@@ -1,10 +1,12 @@
 "use client";
 
-import { Check, ChevronRight, Download, Eye, Link2, LoaderCircle, Play, RefreshCw, RotateCcw, SendToBack, Settings2, ShieldCheck, Trash2, TriangleAlert, Video } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { App, Button, Drawer, Input, Select, Tag } from "antd";
+import { Check, ChevronRight, Download, Eye, Link2, LoaderCircle, Play, RefreshCw, RotateCcw, SendToBack, Settings2, ShieldCheck, Trash2, TriangleAlert, Upload, Video, Workflow } from "lucide-react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { App, Button, Collapse, Drawer, Input, Tag } from "antd";
 import { useSearchParams } from "next/navigation";
 
+import { ModelPicker } from "@/components/model-picker";
+import { videoRatioLabel, videoResolutionLabel, videoSecondsLabel } from "@/components/video-settings-panel";
 import { runCanvasVideoGeneration } from "@/app/(user)/canvas/utils/canvas-generation-runner";
 import { appendSeedanceMediaReviewDiagnostic, seedanceMediaReviewBlockingError } from "@/app/(user)/canvas/utils/canvas-volcengine-review-diagnostics";
 import { buildCanvasVideoConfig } from "@/app/(user)/canvas/utils/canvas-video-config";
@@ -12,19 +14,23 @@ import { cn } from "@/lib/utils";
 import type { AiTaskLedger } from "@/services/api/ai-task-trace";
 import { fetchVideoTaskContent, preflightVideoGeneration, RecoverableVideoTaskError, refreshVideoTask, type NormalizedVideoTask } from "@/services/api/video";
 import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
+import { uploadImage, type UploadedImage } from "@/services/image-storage";
 import { canSubmitVolcengineReview } from "@/services/volcengine-asset-metadata";
-import { useAssetStore, type Asset } from "@/stores/use-asset-store";
+import { useAssetStore, type Asset, type AssetWriteInput } from "@/stores/use-asset-store";
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useVolcengineAssetReview } from "../assets/use-volcengine-asset-review";
 import { buildAssetVersionedUpdatePatch } from "../assets/asset-version-history";
+import { buildWorkflowUploadedImagePatch } from "../assets/workflow-asset-image";
 import { NODE_DEFAULT_SIZE } from "../canvas/constants";
 import { useScriptStore } from "../canvas/stores/use-script-store";
 import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata } from "../canvas/types";
+import { CanvasVideoSettingsPopover } from "../canvas/components/canvas-video-settings-popover";
 import { useCreativeProjectStore } from "../projects/use-creative-project-store";
 import { formatVideoGenerationError, isVideoChannelAuthError, isVideoChannelUpstreamError, normalizeVideoGenerationErrorMessage, sanitizeVideoGenerationErrorMessage } from "./video-generation-errors";
 import {
+    alignWorkflowPromptReferencesForSeedance,
     enterpriseVideoChannelReadiness,
     isWorkflowReferenceAssetBound,
     resolveWorkflowReferenceAssetForName,
@@ -33,12 +39,13 @@ import {
     workflowReferenceBindingSummary,
     workflowVideoGenerationReadiness,
 } from "./video-package-builders";
-import { useVideoPackageStore, type AssetStatus, type CanvasStatus, type PackageGeneration, type PackageGenerationStatus, type ProductionPackage, type PromptStatus } from "./use-video-package-store";
+import { useVideoPackageStore, type AssetStatus, type CanvasStatus, type PackageGeneration, type PackageGenerationStatus, type ProductionPackage, type ProductionPackageConfig, type PromptStatus, type WorkflowVideoReference } from "./use-video-package-store";
 
 type FilterKey = "all" | "review" | "missing" | "ready" | "imported" | "generated";
 type PackageUploadedVideo = UploadedFile & { aiTask?: AiTaskLedger };
 type VideoPreflightState = { checkedAt: string; message: string; status: "failed" | "passed"; targetId: string };
-type PackageConfigPatch = Partial<ProductionPackage["config"]>;
+type PackageConfigPatch = Partial<ProductionPackageConfig>;
+type PackageAssetSlot = ProductionPackage["assets"][number];
 
 const initialPackages: ProductionPackage[] = [
     {
@@ -148,11 +155,6 @@ const filters: { key: FilterKey; label: string }[] = [
     { key: "generated", label: "已生成" },
 ];
 
-const ratioOptions = ["9:16", "16:9", "1:1", "4:3", "3:4"];
-const durationOptions = ["4秒", "6秒", "8秒", "10秒", "12秒", "15秒"];
-const resolutionOptions = ["720p", "1080p"];
-const motionOptions = ["低", "中", "中高", "高"];
-
 export default function VideoPage() {
     const { message, modal } = App.useApp();
     const searchParams = useSearchParams();
@@ -186,6 +188,7 @@ export default function VideoPage() {
     const [preflightState, setPreflightState] = useState<VideoPreflightState | null>(null);
     const [isPreflightChecking, setIsPreflightChecking] = useState(false);
     const [detailPackageId, setDetailPackageId] = useState("");
+    const [uploadingReferenceKey, setUploadingReferenceKey] = useState("");
 
     const targetEpisode = searchParams.get("episode") || "";
     const targetProjectSlug = searchParams.get("projectSlug") || "";
@@ -213,6 +216,7 @@ export default function VideoPage() {
     const missingCount = packages.filter((item) => item.assetStatus !== "完整").length;
     const reviewCount = packages.filter((item) => item.promptStatus === "待审核").length;
     const isPublicSettingsPending = isPublicSettingsLoading || !hasLoadedPublicSettings;
+    const workflowControlHref = targetEpisode ? originalWorkflowHref(targetEpisode, { projectSlug: sourceProjectSlug, sourceEpisodeId, sourceProjectId }) : "/original-workflow";
 
     useEffect(() => {
         void loadPublicSettings();
@@ -235,28 +239,37 @@ export default function VideoPage() {
 
     if (!selected) {
         return (
-            <div className="min-h-full bg-[#090d0f] text-stone-100">
-                <main className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[1500px] flex-col gap-4 px-4 py-4 sm:px-6">
+            <main className="studio-shell h-full overflow-hidden text-stone-100">
+                <div className="mx-auto flex h-full w-full max-w-[1540px] flex-col gap-4 px-5 py-4 xl:px-8">
                     <section className="shrink-0 border-b border-white/10 pb-4">
-                        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
-                            <span className="font-medium text-teal-200">AI · 画布</span>
-                            <ChevronRight className="size-3.5" />
-                            <span>{sourceLabel}</span>
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0">
+                                <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
+                                    <span className="font-medium text-teal-200">AI · 画布</span>
+                                    <ChevronRight className="size-3.5" />
+                                    <span>{sourceLabel}</span>
+                                </div>
+                                <h1 className="text-2xl font-semibold tracking-normal text-white sm:text-3xl">视频节点生产台</h1>
+                            </div>
+                            <div className="flex flex-wrap gap-2 lg:justify-end">
+                                <Button icon={<Workflow className="size-4" />} href={workflowControlHref}>
+                                    视频工作流控制台
+                                </Button>
+                            </div>
                         </div>
-                        <h1 className="text-2xl font-semibold tracking-normal text-white sm:text-3xl">视频提示词生产台</h1>
                     </section>
                     <section className="grid min-h-[520px] place-items-center rounded-lg border border-dashed border-white/10 bg-white/[0.035] px-6 py-16 text-center">
                         <div>
                             <Video className="mx-auto mb-4 size-9 text-stone-500" />
                             <h2 className="text-xl font-semibold text-white">这一集还没有视频生产包</h2>
                             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-400">请先回到视频工作流，完成 Stage 3 质量门并同步 Copy-only 到视频生成界面。</p>
-                            <Button className="mt-5" href={targetEpisode ? originalWorkflowHref(targetEpisode, { projectSlug: sourceProjectSlug, sourceEpisodeId, sourceProjectId }) : "/original-workflow"} type="primary">
+                            <Button className="mt-5" href={workflowControlHref} type="primary">
                                 返回视频工作流
                             </Button>
                         </div>
                     </section>
-                </main>
-            </div>
+                </div>
+            </main>
         );
     }
 
@@ -264,8 +277,44 @@ export default function VideoPage() {
         if (hasImportedPackages) updateImportedPackage(id, patch);
         else setDemoPackages((items) => items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
     };
-    const updatePackageConfig = (item: ProductionPackage, patch: Partial<ProductionPackage["config"]>) => {
+    const updatePackageConfig = (item: ProductionPackage, patch: PackageConfigPatch) => {
         updatePackage(item.id, { config: { ...item.config, ...patch } });
+    };
+    const uploadReferenceImage = async (item: ProductionPackage, slot: PackageAssetSlot, file: File) => {
+        if (!file.type.startsWith("image/")) {
+            message.warning("请选择图片文件");
+            return;
+        }
+        const uploadKey = referenceSlotUploadKey(item.id, slot.name);
+        setUploadingReferenceKey(uploadKey);
+        try {
+            const image = await uploadImage(file);
+            const current = resolveWorkflowReferenceAssetForName(item, slot.name, libraryAssets);
+            if (current && (current.kind === "image" || current.kind === "text")) {
+                updateAsset(current.id, buildWorkflowUploadedImagePatch(current, image, { fileName: file.name }));
+            } else {
+                await addAssetOnce(
+                    buildWorkflowReferenceImageAssetInput({
+                        episode: targetEpisode,
+                        fileName: file.name,
+                        image,
+                        item,
+                        projectSlug: sourceProjectSlug,
+                        slot,
+                        sourceEpisodeId,
+                        sourceProjectId,
+                    }),
+                    { blob: file },
+                );
+            }
+            updatePackage(item.id, buildReferenceUploadPackagePatch(item, slot, libraryAssets));
+            message.success(`${slot.name} 已上传并绑定`);
+        } catch (error) {
+            console.error(error);
+            message.error("上传匹配失败，请换一张图片重试");
+        } finally {
+            setUploadingReferenceKey("");
+        }
     };
     const requireEnterpriseVideoChannel = (config: AiConfig, targetId?: string) => {
         const readiness = enterpriseVideoChannelReadiness({ isPublicSettingsLoading: isPublicSettingsPending, videoProtocol: config.videoProtocol });
@@ -466,7 +515,8 @@ export default function VideoPage() {
             const referenceImages = resolveWorkflowReferenceImages(item, libraryAssets);
             const reviewBlockingError = config.videoProtocol === "volcengine-ark" ? seedanceMediaReviewBlockingError(referenceImages, []) : "";
             if (reviewBlockingError) throw new Error(reviewBlockingError);
-            const { completedTask, video } = await runCanvasVideoGeneration(config, item.prompt, referenceImages, (task) => {
+            const prompt = config.videoProtocol === "volcengine-ark" ? alignWorkflowPromptReferencesForSeedance(item.prompt, referenceImages) : item.prompt;
+            const { completedTask, video } = await runCanvasVideoGeneration(config, prompt, referenceImages, (task) => {
                 updatePackage(item.id, { generation: generationFromTask(task) });
             });
             await savePackageVideoResult(item, config, video, completedTask as NormalizedVideoTask | null);
@@ -602,8 +652,8 @@ export default function VideoPage() {
     };
 
     return (
-        <div className="min-h-full bg-[#090d0f] text-stone-100">
-            <main className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[1420px] flex-col gap-4 px-4 py-4 sm:px-6">
+        <main className="studio-shell h-full overflow-hidden text-stone-100">
+            <div className="mx-auto flex h-full w-full max-w-[1540px] flex-col gap-4 px-5 py-4 xl:px-8">
                 <section className="shrink-0 border-b border-white/10 pb-4">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0">
@@ -622,6 +672,9 @@ export default function VideoPage() {
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-2 lg:justify-end">
+                            <Button icon={<Workflow className="size-4" />} href={workflowControlHref}>
+                                视频工作流控制台
+                            </Button>
                             <Button type="primary" icon={<Video className="size-4" />} onClick={generateConfirmedPackages}>
                                 生成已确认项
                             </Button>
@@ -673,10 +726,12 @@ export default function VideoPage() {
                                     onRefreshReview={refreshImageReview}
                                     onSelect={() => setSelectedId(item.id)}
                                     onSubmitReview={submitImageReview}
+                                    onUploadReferenceImage={uploadReferenceImage}
                                     onSync={() => void syncPackageVideo(item)}
                                     preflightLoading={isPreflightChecking || isPublicSettingsPending}
                                     refreshingReviewId={refreshingReviewId}
                                     submittingReviewId={submittingReviewId}
+                                    uploadingReferenceKey={uploadingReferenceKey}
                                 />
                             ))}
                             {!visiblePackages.length ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-16 text-center text-sm text-stone-500">没有匹配的生产包</div> : null}
@@ -695,17 +750,15 @@ export default function VideoPage() {
                     submittingReviewId={submittingReviewId}
                     videoProtocol={effectiveConfig.videoProtocol}
                     onClose={() => setDetailPackageId("")}
-                    onConfigChange={(item, patch) => updatePackageConfig(item, patch)}
                     onGenerate={(item) => void generatePackageVideo(item)}
                     onOpenConfig={() => openConfigDialog(true)}
                     onPreflight={(item) => void checkVideoChannel(item)}
-                    onPromptChange={(item, prompt) => updatePackage(item.id, { prompt })}
                     onRefreshReview={refreshImageReview}
                     onSubmitReview={submitImageReview}
                     onSync={(item) => void syncPackageVideo(item)}
                 />
-            </main>
-        </div>
+            </div>
+        </main>
     );
 }
 
@@ -725,12 +778,14 @@ function VideoPromptNodeCard({
     onRefreshReview,
     onSelect,
     onSubmitReview,
+    onUploadReferenceImage,
     onSync,
     preflight,
     preflightLoading,
     refreshingReviewId,
     selected,
     submittingReviewId,
+    uploadingReferenceKey,
     videoProtocol,
 }: {
     assets: Asset[];
@@ -748,12 +803,14 @@ function VideoPromptNodeCard({
     onRefreshReview: (asset: Asset, options?: { silent?: boolean; showProgress?: boolean }) => Promise<void>;
     onSelect: () => void;
     onSubmitReview: (asset: Asset) => Promise<void>;
+    onUploadReferenceImage: (item: ProductionPackage, slot: PackageAssetSlot, file: File) => Promise<void>;
     onSync: () => void;
     preflight: VideoPreflightState | null;
     preflightLoading: boolean;
     refreshingReviewId: string | null;
     selected: boolean;
     submittingReviewId: string | null;
+    uploadingReferenceKey: string;
     videoProtocol?: string;
 }) {
     const summary = workflowReferenceBindingSummary(item, assets);
@@ -799,7 +856,16 @@ function VideoPromptNodeCard({
                     </div>
                 </div>
 
-                <InlineAssetSlots assets={assets} item={item} onRefreshReview={onRefreshReview} onSubmitReview={onSubmitReview} refreshingReviewId={refreshingReviewId} submittingReviewId={submittingReviewId} />
+                <InlineAssetSlots
+                    assets={assets}
+                    item={item}
+                    onRefreshReview={onRefreshReview}
+                    onSubmitReview={onSubmitReview}
+                    onUploadReferenceImage={onUploadReferenceImage}
+                    refreshingReviewId={refreshingReviewId}
+                    submittingReviewId={submittingReviewId}
+                    uploadingReferenceKey={uploadingReferenceKey}
+                />
 
                 <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
                     <div className="min-w-0">
@@ -807,15 +873,15 @@ function VideoPromptNodeCard({
                             <div className="text-xs font-semibold tracking-normal text-teal-200/70">提示词</div>
                             <span className="text-xs text-stone-500">提示词和上方资产槽一一对照</span>
                         </div>
-                        <Input.TextArea
+                        <PromptTextAreaWithReferencePreview
+                            assets={assets}
+                            item={item}
                             value={item.prompt}
-                            onChange={(event) => onPromptChange(event.target.value)}
-                            autoSize={{ minRows: 7, maxRows: 14 }}
-                            className="!border-white/10 !bg-black/20 !text-sm !leading-6 !text-stone-100 placeholder:!text-stone-600"
+                            onChange={onPromptChange}
                             onClick={(event) => event.stopPropagation()}
                         />
                     </div>
-                    <VideoNodeSettings item={item} onChange={onConfigChange} />
+                    <VideoNodeSettings baseConfig={config} item={item} onChange={onConfigChange} onOpenConfig={onOpenConfig} />
                 </div>
 
                 <div
@@ -855,15 +921,19 @@ function InlineAssetSlots({
     item,
     onRefreshReview,
     onSubmitReview,
+    onUploadReferenceImage,
     refreshingReviewId,
     submittingReviewId,
+    uploadingReferenceKey,
 }: {
     assets: Asset[];
     item: ProductionPackage;
     onRefreshReview: (asset: Asset, options?: { silent?: boolean; showProgress?: boolean }) => Promise<void>;
     onSubmitReview: (asset: Asset) => Promise<void>;
+    onUploadReferenceImage: (item: ProductionPackage, slot: PackageAssetSlot, file: File) => Promise<void>;
     refreshingReviewId: string | null;
     submittingReviewId: string | null;
+    uploadingReferenceKey: string;
 }) {
     const slots = item.assets.length ? item.assets : [{ kind: "场景图" as const, name: "未声明参考资产", status: "缺失" as const }];
     return (
@@ -873,6 +943,8 @@ function InlineAssetSlots({
                 const bound = boundAsset?.kind === "image";
                 const canReview = boundAsset && (boundAsset.kind === "image" || boundAsset.kind === "video" || boundAsset.kind === "audio");
                 const shouldSubmitReview = canReview ? canSubmitVolcengineReview(boundAsset.metadata?.volcengineAsset) : false;
+                const uploadKey = referenceSlotUploadKey(item.id, slot.name);
+                const uploading = uploadingReferenceKey === uploadKey;
                 return (
                     <div key={slot.name} className="overflow-hidden rounded-md border border-white/[0.08] bg-white/[0.035]">
                         <div className="grid grid-cols-[72px_minmax(0,1fr)]">
@@ -886,7 +958,10 @@ function InlineAssetSlots({
                                 )}
                             </div>
                             <div className="min-w-0 p-2">
-                                <div className="truncate text-sm font-medium text-stone-100">{boundAsset?.title || slot.name}</div>
+                                <div className="overflow-hidden text-sm leading-5 font-medium break-words text-stone-100 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]" title={slot.name}>
+                                    {slot.name}
+                                </div>
+                                {boundAsset?.title && boundAsset.title !== slot.name ? <div className="mt-0.5 truncate text-[11px] text-stone-500">已绑定：{boundAsset.title}</div> : null}
                                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                     <span className="rounded border border-white/10 px-1.5 py-0.5 text-[11px] text-stone-400">{slot.kind}</span>
                                     <StatusTag label={bound ? "完整" : "缺参考"} />
@@ -895,15 +970,26 @@ function InlineAssetSlots({
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-1.5 border-t border-white/[0.06] px-2 py-1.5">
+                            <label className={cn("inline-flex h-6 cursor-pointer items-center gap-1 rounded border border-white/10 bg-white/[0.04] px-2 text-xs leading-6 text-stone-200 transition hover:border-teal-300/45 hover:text-teal-100", uploading && "pointer-events-none opacity-60")} onClick={(event) => event.stopPropagation()}>
+                                {uploading ? <LoaderCircle className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+                                <span>{uploading ? "上传中" : bound ? "替换" : "上传"}</span>
+                                <input
+                                    accept="image/*"
+                                    className="hidden"
+                                    disabled={uploading}
+                                    type="file"
+                                    onClick={(event) => event.stopPropagation()}
+                                    onChange={(event) => {
+                                        const file = event.currentTarget.files?.[0];
+                                        event.currentTarget.value = "";
+                                        if (file) void onUploadReferenceImage(item, slot, file);
+                                    }}
+                                />
+                            </label>
                             {!bound ? (
-                                <>
-                                    <Button size="small" href="/assets">
-                                        补图
-                                    </Button>
-                                    <Button size="small" href="/assets">
-                                        绑定
-                                    </Button>
-                                </>
+                                <Button size="small" href="/assets">
+                                    素材库
+                                </Button>
                             ) : null}
                             {canReview ? (
                                 shouldSubmitReview ? (
@@ -924,28 +1010,166 @@ function InlineAssetSlots({
     );
 }
 
-function VideoNodeSettings({ item, onChange }: { item: ProductionPackage; onChange: (patch: PackageConfigPatch) => void }) {
+function PromptTextAreaWithReferencePreview({
+    assets,
+    item,
+    onChange,
+    onClick,
+    value,
+}: {
+    assets: Asset[];
+    item: ProductionPackage;
+    onChange: (value: string) => void;
+    onClick?: (event: MouseEvent<HTMLTextAreaElement>) => void;
+    value: string;
+}) {
+    const [activeRef, setActiveRef] = useState("");
+    const [isFocused, setIsFocused] = useState(false);
+    const updateActiveRef = (textarea: HTMLTextAreaElement) => setActiveRef(promptReferenceAtCursor(textarea.value, textarea.selectionStart || 0));
     return (
-        <div className="rounded-md border border-white/[0.08] bg-white/[0.035] p-3" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-3 text-xs font-semibold tracking-normal text-teal-200/70">节点设置</div>
-            <div className="grid grid-cols-2 gap-2">
-                <SettingSelect label="画幅" value={item.config.ratio} options={ratioOptions} onChange={(ratio) => onChange({ ratio })} />
-                <SettingSelect label="时长" value={item.config.duration} options={durationOptions} onChange={(duration) => onChange({ duration })} />
-                <SettingSelect label="清晰度" value={item.config.resolution} options={resolutionOptions} onChange={(resolution) => onChange({ resolution })} />
-                <SettingSelect label="运动" value={item.config.motion} options={motionOptions} onChange={(motion) => onChange({ motion })} />
-            </div>
-            <Input className="mt-2 !border-white/10 !bg-black/20 !text-stone-100" value={item.config.model} onChange={(event) => onChange({ model: event.target.value })} placeholder="模型" />
+        <div className="relative">
+            <Input.TextArea
+                value={value}
+                onChange={(event) => {
+                    onChange(event.target.value);
+                    updateActiveRef(event.currentTarget);
+                }}
+                onClick={(event) => {
+                    onClick?.(event);
+                    updateActiveRef(event.currentTarget);
+                }}
+                onFocus={(event) => {
+                    setIsFocused(true);
+                    updateActiveRef(event.currentTarget);
+                }}
+                onBlur={() => setIsFocused(false)}
+                onKeyUp={(event) => updateActiveRef(event.currentTarget)}
+                onSelect={(event) => updateActiveRef(event.currentTarget)}
+                autoSize={{ minRows: 7, maxRows: 14 }}
+                className="!border-white/10 !bg-black/20 !text-sm !leading-6 !text-stone-100 placeholder:!text-stone-600"
+                style={{ paddingBottom: isFocused && item.assets.length ? 74 : undefined }}
+            />
+            {isFocused && item.assets.length ? (
+                <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex gap-1.5 overflow-hidden rounded-md border border-teal-300/20 bg-[#071013]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,.35)] backdrop-blur">
+                    {item.assets.map((slot) => {
+                        const ref = slotReferenceRef(slot.name);
+                        const boundAsset = resolveWorkflowReferenceAssetForName(item, slot.name, assets);
+                        const previewUrl = assetPreviewUrl(boundAsset);
+                        const active = activeRef === ref;
+                        return (
+                            <div key={slot.name} className={cn("grid w-[118px] shrink-0 grid-cols-[34px_minmax(0,1fr)] gap-1.5 rounded border p-1", active ? "border-teal-300/70 bg-teal-300/15" : "border-white/10 bg-white/[0.04]")}>
+                                <div className="grid size-[34px] place-items-center overflow-hidden rounded bg-black/40">
+                                    {previewUrl ? <img src={previewUrl} alt={slot.name} className="h-full w-full object-cover" /> : <Link2 className="size-4 text-amber-200" />}
+                                </div>
+                                <div className="min-w-0">
+                                    <div className="truncate text-[11px] font-semibold text-teal-100" title={slot.name}>
+                                        {slot.name}
+                                    </div>
+                                    <div className={cn("truncate text-[10px]", boundAsset ? "text-stone-400" : "text-amber-200")} title={boundAsset?.title || "缺参考"}>
+                                        {boundAsset?.title || "缺参考"}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            ) : null}
         </div>
     );
 }
 
-function SettingSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+function promptReferenceAtCursor(prompt: string, cursor: number) {
+    for (const match of prompt.matchAll(/@图\s*(\d+)/g)) {
+        const start = match.index || 0;
+        const end = promptReferenceMentionEnd(prompt, start + match[0].length);
+        if (cursor >= start && cursor <= end) return `@图${Number(match[1])}`;
+    }
+    return "";
+}
+
+function slotReferenceRef(slotName: string) {
+    const match = slotName.match(/@图\s*(\d+)/);
+    return match ? `@图${Number(match[1])}` : "";
+}
+
+function promptReferenceMentionEnd(prompt: string, start: number) {
+    const next = prompt.slice(start).search(/[、，。；;\n]/);
+    return next < 0 ? Math.min(prompt.length, start + 24) : start + next;
+}
+
+function assetPreviewUrl(asset?: Asset | null) {
+    if (!asset) return "";
+    if (asset.kind === "image") return asset.coverUrl || asset.data.dataUrl;
+    if (asset.kind === "video" || asset.kind === "audio") return asset.coverUrl || asset.data.url;
+    return "";
+}
+
+function VideoNodeSettings({ baseConfig, item, onChange, onOpenConfig }: { baseConfig: AiConfig; item: ProductionPackage; onChange: (patch: PackageConfigPatch) => void; onOpenConfig: () => void }) {
+    const config = buildPackageVideoConfig(baseConfig, item);
+    const visibleModel = item.config.model || config.seedanceModel || config.videoModel || config.model;
     return (
-        <label className="grid gap-1 text-xs text-stone-500">
-            {label}
-            <Select size="small" value={value} options={options.map((item) => ({ label: item, value: item }))} onChange={onChange} />
-        </label>
+        <div className="space-y-3 rounded-md border border-white/[0.08] bg-white/[0.035] p-3" onClick={(event) => event.stopPropagation()}>
+            <div>
+                <div className="text-xs font-semibold tracking-normal text-teal-200/70">视频节点设置</div>
+                <div className="mt-1 text-xs leading-5 text-stone-500">与画布视频配置节点使用同一套参数。</div>
+            </div>
+            <ModelPicker
+                className="canvas-compact-control !h-8 !w-full !justify-start !rounded-lg !border-white/10 !bg-black/20 !px-2 !text-xs !text-stone-100"
+                config={config}
+                fullWidth
+                modelType="video"
+                value={visibleModel}
+                onChange={(model) => onChange({ model })}
+                onMissingConfig={onOpenConfig}
+            />
+            <CanvasVideoSettingsPopover
+                buttonClassName="canvas-compact-control !h-8 !w-full !justify-start !rounded-lg !border-white/10 !bg-black/20 !px-2 !text-xs !text-stone-100"
+                config={config}
+                hasSourceVideo={false}
+                placement="bottomRight"
+                showTaskMode
+                onConfigChange={(key, value) => onChange(packageConfigPatchFromVideoSetting(key, value))}
+            />
+            <div className="grid grid-cols-2 gap-2 text-xs">
+                <SettingSummaryChip label="生成方式" value={videoTaskModeLabel(config.videoTaskMode)} />
+                <SettingSummaryChip label="图片控制" value={videoReferenceImageModeLabel(config.videoReferenceImageMode)} />
+                <SettingSummaryChip label="生成音频" value={config.videoGenerateAudio === "true" ? "开" : "关"} />
+                <SettingSummaryChip label="水印" value={config.videoWatermark === "true" ? "开" : "关"} />
+            </div>
+        </div>
     );
+}
+
+function SettingSummaryChip({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="min-w-0 rounded border border-white/[0.08] bg-black/15 px-2 py-1.5">
+            <div className="truncate text-[11px] text-stone-500">{label}</div>
+            <div className="mt-0.5 truncate text-stone-200">{value}</div>
+        </div>
+    );
+}
+
+function packageConfigPatchFromVideoSetting(key: string, value: string): PackageConfigPatch {
+    if (key === "size") return { ratio: value, size: value };
+    if (key === "videoSeconds") return { duration: `${value}秒`, videoSeconds: value };
+    if (key === "vquality") return { resolution: `${value.replace(/p$/i, "")}p`, vquality: value };
+    if (key === "videoTaskMode") return { videoTaskMode: value as ProductionPackageConfig["videoTaskMode"] };
+    if (key === "videoEditType") return { videoEditType: value as ProductionPackageConfig["videoEditType"] };
+    if (key === "videoExtendDirection") return { videoExtendDirection: value as ProductionPackageConfig["videoExtendDirection"] };
+    if (key === "videoReferenceImageMode") return { frames: videoReferenceImageModeLabel(value), videoReferenceImageMode: value as ProductionPackageConfig["videoReferenceImageMode"] };
+    return { [key]: value } as PackageConfigPatch;
+}
+
+function videoReferenceImageModeLabel(value: string) {
+    if (value === "first_last_frame") return "首尾帧";
+    if (value === "first_frame") return "首帧";
+    return "普通参考";
+}
+
+function videoTaskModeLabel(value: string) {
+    if (value === "edit") return "编辑视频";
+    if (value === "extend") return "延长视频";
+    return "生成新视频";
 }
 
 function VideoNodeOutput({
@@ -976,6 +1200,7 @@ function VideoNodeOutput({
     showCanvasAction: boolean;
 }) {
     const video = item.generation?.video;
+    const nodeConfig = buildPackageVideoConfig(config, item);
     const generationError = item.generation?.status === "failed" ? normalizeVideoGenerationErrorMessage(item.generation.errorMessage || "视频生成失败，请打开详情查看原因。") : "";
     return (
         <aside className="flex min-w-0 flex-col gap-3 rounded-md border border-white/[0.08] bg-black/15 p-3">
@@ -1018,7 +1243,7 @@ function VideoNodeOutput({
                 </Button>
             </div>
             <div className="rounded-md border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-xs leading-5 text-stone-400">
-                {config.videoProtocol === "volcengine-ark" ? "企业 Ark / Seedance" : "未切到企业 Ark"} · {item.config.ratio} · {item.config.duration} · {item.config.resolution}
+                {nodeConfig.videoProtocol === "volcengine-ark" ? "企业 Ark / Seedance" : "未切到企业 Ark"} · {videoRatioLabel(nodeConfig.size)} · {videoSecondsLabel(nodeConfig.videoSeconds, nodeConfig)} · {videoResolutionLabel(nodeConfig.vquality)}
             </div>
             {preflight ? (
                 <div className={cn("rounded-md border px-3 py-2 text-xs leading-5", preflight.status === "passed" ? "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100" : "border-amber-300/20 bg-amber-300/[0.08] text-amber-100")}>
@@ -1047,11 +1272,9 @@ function VideoNodeDetailDrawer({
     item,
     loading,
     onClose,
-    onConfigChange,
     onGenerate,
     onOpenConfig,
     onPreflight,
-    onPromptChange,
     onRefreshReview,
     onSubmitReview,
     onSync,
@@ -1067,11 +1290,9 @@ function VideoNodeDetailDrawer({
     item: ProductionPackage | null;
     loading: boolean;
     onClose: () => void;
-    onConfigChange: (item: ProductionPackage, patch: PackageConfigPatch) => void;
     onGenerate: (item: ProductionPackage) => void;
     onOpenConfig: () => void;
     onPreflight: (item: ProductionPackage) => void;
-    onPromptChange: (item: ProductionPackage, prompt: string) => void;
     onRefreshReview: (asset: Asset, options?: { silent?: boolean; showProgress?: boolean }) => Promise<void>;
     onSubmitReview: (asset: Asset) => Promise<void>;
     onSync: (item: ProductionPackage) => void;
@@ -1086,27 +1307,35 @@ function VideoNodeDetailDrawer({
     return (
         <Drawer className="studio-drawer" size={620} title={`${item.id} · 视频节点详情`} open={open} onClose={onClose}>
             <div className="space-y-4 text-stone-100">
-                <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
-                    <div className="text-sm font-semibold text-white">{item.segment}</div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                        <StatusTag label={item.promptStatus} />
-                        <StatusTag label={item.assetStatus} />
-                        <GenerationTag status={item.generation?.status} />
-                        {item.generationVersions?.length ? <Tag className="m-0 rounded border-white/15 bg-white/[0.04] px-1.5 py-0 text-xs leading-5 text-stone-300">{item.generationVersions.length} 个版本</Tag> : null}
-                    </div>
-                </div>
                 <GenerationDetail item={item} loading={loading} onGenerate={() => onGenerate(item)} onOpenConfig={onOpenConfig} onSync={() => onSync(item)} />
-                <div className="rounded-lg border border-white/10 bg-white/[0.035] p-3">
-                    <div className="mb-2 text-xs font-semibold tracking-normal text-teal-200/70">最终提示词</div>
-                    <Input.TextArea value={item.prompt} onChange={(event) => onPromptChange(item, event.target.value)} autoSize={{ minRows: 7, maxRows: 14 }} className="!border-white/10 !bg-black/20 !text-sm !leading-6 !text-stone-100" />
-                </div>
-                <InlineAssetSlots assets={assets} item={item} onRefreshReview={onRefreshReview} onSubmitReview={onSubmitReview} refreshingReviewId={refreshingReviewId} submittingReviewId={submittingReviewId} />
-                <VideoNodeSettings item={item} onChange={(patch) => onConfigChange(item, patch)} />
-                <ConfigDetail config={config} item={item} loading={preflightLoading} preflight={preflight} onPreflight={() => onPreflight(item)} />
-                <AssetDetail assets={assets} item={item} onRefreshReview={onRefreshReview} onSubmitReview={onSubmitReview} refreshingReviewId={refreshingReviewId} submittingReviewId={submittingReviewId} videoProtocol={videoProtocol} />
+                <Collapse
+                    className="video-detail-collapse"
+                    ghost
+                    items={[
+                        {
+                            key: "prompt",
+                            label: <span className="text-sm font-medium text-stone-100">生成使用的提示词</span>,
+                            children: <PromptDetailText prompt={item.prompt} />,
+                        },
+                        {
+                            key: "assets",
+                            label: <span className="text-sm font-medium text-stone-100">参考图与加白状态</span>,
+                            children: <AssetDetail assets={assets} item={item} onRefreshReview={onRefreshReview} onSubmitReview={onSubmitReview} refreshingReviewId={refreshingReviewId} submittingReviewId={submittingReviewId} videoProtocol={videoProtocol} />,
+                        },
+                        {
+                            key: "config",
+                            label: <span className="text-sm font-medium text-stone-100">视频通道与参数</span>,
+                            children: <ConfigDetail config={config} item={item} loading={preflightLoading} preflight={preflight} onPreflight={() => onPreflight(item)} />,
+                        },
+                    ]}
+                />
             </div>
         </Drawer>
     );
+}
+
+function PromptDetailText({ prompt }: { prompt: string }) {
+    return <div className="thin-scrollbar max-h-72 overflow-y-auto whitespace-pre-wrap rounded-md border border-white/[0.07] bg-black/20 px-3 py-2 text-sm leading-6 text-stone-200">{prompt}</div>;
 }
 
 function isEnterpriseBusy(checking: boolean, loading: boolean) {
@@ -1213,17 +1442,20 @@ function AssetDetail({
 }
 
 function ConfigDetail({ config, item, loading, onPreflight, preflight }: { config: AiConfig; item: ProductionPackage; loading: boolean; onPreflight: () => void; preflight: VideoPreflightState | null }) {
-    const channelLabel = config.videoProtocol === "volcengine-ark" ? "企业 Ark / Seedance" : "未切到企业 Ark";
-    const actualModel = config.videoProtocol === "volcengine-ark" ? config.seedanceModel || config.videoModel || config.model : config.videoModel || config.model;
+    const nodeConfig = buildPackageVideoConfig(config, item);
+    const channelLabel = nodeConfig.videoProtocol === "volcengine-ark" ? "企业 Ark / Seedance" : "未切到企业 Ark";
+    const actualModel = resolvePackageVideoModel(nodeConfig);
     const entries = [
         ["实际通道", channelLabel],
         ["实际模型", actualModel || "未配置"],
-        ["模型", item.config.model],
-        ["比例", item.config.ratio],
-        ["时长", item.config.duration],
-        ["清晰度", item.config.resolution],
-        ["运动强度", item.config.motion],
-        ["首尾帧", item.config.frames],
+        ["生成方式", videoTaskModeLabel(nodeConfig.videoTaskMode)],
+        ["比例", videoRatioLabel(nodeConfig.size)],
+        ["时长", videoSecondsLabel(nodeConfig.videoSeconds, nodeConfig)],
+        ["清晰度", videoResolutionLabel(nodeConfig.vquality)],
+        ["图片控制", videoReferenceImageModeLabel(nodeConfig.videoReferenceImageMode)],
+        ["生成音频", nodeConfig.videoGenerateAudio === "true" ? "开启" : "关闭"],
+        ["水印", nodeConfig.videoWatermark === "true" ? "开启" : "关闭"],
+        ["seed", nodeConfig.videoSeed || "随机"],
     ];
 
     return (
@@ -1425,14 +1657,15 @@ function mergeVideoPackagesIntoCanvasNodes(existingNodes: CanvasNodeData[], pack
 
 function buildVideoPackageConfigNode(item: ProductionPackage, baseConfig: AiConfig, position: CanvasNodeData["position"]): CanvasNodeData {
     const videoConfig = buildPackageVideoConfig(baseConfig, item);
-    const packageDuration = item.config.duration || item.duration || videoConfig.videoSeconds;
+    const packageDuration = videoConfig.videoSeconds;
     return {
         height: NODE_DEFAULT_SIZE[CanvasNodeType.Config].height,
         id: videoPackageCanvasNodeId(item),
         metadata: {
             content: "",
-            duration: packageSeconds(packageDuration),
+            duration: packageDuration,
             finalPrompt: item.prompt,
+            generateAudio: videoConfig.videoGenerateAudio,
             generationMode: "video",
             model: resolvePackageVideoModel(videoConfig),
             productionPackageId: videoPackageCanvasPackageId(item),
@@ -1442,14 +1675,20 @@ function buildVideoPackageConfigNode(item: ProductionPackage, baseConfig: AiConf
             prompt: item.prompt,
             provider: videoConfig.videoProtocol === "volcengine-ark" ? "volcengine-ark" : "openai",
             referenceAssets: item.assets.map((asset) => ({ kind: asset.kind, name: asset.name, status: asset.status })),
-            seconds: packageSeconds(packageDuration),
-            size: packageRatio(item.config.ratio || videoConfig.size),
+            returnLastFrame: videoConfig.returnLastFrame,
+            seconds: packageDuration,
+            seed: videoConfig.videoSeed,
+            size: videoConfig.size,
             sourceId: item.id,
             sourceType: "manual",
             status: "idle",
-            videoPromptReviewEnabled: "true",
-            videoTaskMode: "generate",
-            vquality: packageResolution(item.config.resolution || videoConfig.vquality),
+            videoEditType: videoConfig.videoEditType,
+            videoExtendDirection: videoConfig.videoExtendDirection,
+            videoPromptReviewEnabled: videoConfig.videoPromptReviewEnabled,
+            videoReferenceImageMode: videoConfig.videoReferenceImageMode,
+            videoTaskMode: videoConfig.videoTaskMode,
+            vquality: videoConfig.vquality,
+            watermark: videoConfig.videoWatermark,
         },
         position,
         title: `${item.id} · 视频配置`,
@@ -1483,6 +1722,100 @@ function matchFilter(item: ProductionPackage, filter: FilterKey) {
     if (filter === "imported") return item.canvasStatus === "已导入";
     if (filter === "generated") return item.canvasStatus === "已生成";
     return true;
+}
+
+function referenceSlotUploadKey(packageId: string, slotName: string) {
+    return `${packageId}:${slotName}`;
+}
+
+function buildReferenceUploadPackagePatch(item: ProductionPackage, uploadedSlot: PackageAssetSlot, assets: Asset[]): Partial<ProductionPackage> {
+    const slots = item.assets.length ? item.assets : [uploadedSlot];
+    const nextAssets = slots.map((slot) => ({
+        ...slot,
+        status: slot.name === uploadedSlot.name || isWorkflowReferenceAssetBound(item, slot.name, assets) ? ("已绑定" as const) : slot.status,
+    }));
+    return {
+        assetStatus: packageAssetStatusFromSlots(nextAssets),
+        assets: nextAssets,
+    };
+}
+
+function packageAssetStatusFromSlots(slots: PackageAssetSlot[]): AssetStatus {
+    const missing = slots.find((slot) => slot.status !== "已绑定");
+    if (!missing) return "完整";
+    return missing.kind === "场景图" ? "缺场景图" : "缺角色图";
+}
+
+function buildWorkflowReferenceImageAssetInput(input: {
+    episode: string;
+    fileName: string;
+    image: UploadedImage;
+    item: ProductionPackage;
+    projectSlug: string;
+    slot: PackageAssetSlot;
+    sourceEpisodeId: string;
+    sourceProjectId: string;
+}): AssetWriteInput {
+    const now = new Date().toISOString();
+    const reference = slotWorkflowReference(input.item, input.slot.name);
+    const refName = reference?.name || referenceNameFromSlot(input.slot.name);
+    const refLabel = [reference?.ref, refName].filter(Boolean).join(" ") || input.slot.name;
+    const typeLabel = reference?.type || input.slot.kind.replace(/图$/, "");
+    const originalWorkflow = {
+        assetId: refName || input.slot.name,
+        episode: input.item.sourceEpisode || input.episode,
+        generatedAt: now,
+        importKey: `${input.item.id}:${reference?.ref || input.slot.name}`,
+        prompt: input.item.prompt,
+        projectSlug: input.item.sourceProjectSlug || input.projectSlug,
+        sourceEpisodeId: input.sourceEpisodeId,
+        sourcePath: input.item.source || "",
+        sourceProjectId: input.item.sourceProjectId || input.sourceProjectId,
+        status: "image_generated",
+        type: typeLabel,
+    };
+    const generation = {
+        actionType: "upload-reference",
+        createdAt: now,
+        fileName: input.fileName,
+        originalWorkflow,
+        productionPackageId: input.item.id,
+        prompt: input.item.prompt,
+        source: "video-page",
+    };
+    return {
+        coverUrl: input.image.url,
+        data: {
+            bytes: input.image.bytes,
+            dataUrl: input.image.url,
+            height: input.image.height,
+            mimeType: input.image.mimeType,
+            storageKey: input.image.storageKey,
+            width: input.image.width,
+        },
+        kind: "image",
+        metadata: {
+            generation,
+            generations: [generation],
+            originalWorkflow,
+            prompt: input.item.prompt,
+            source: "original-workflow",
+        },
+        note: [`来源生产包：${input.item.id}`, `参考资产：${refLabel}`, `文件：${input.fileName}`].filter(Boolean).join("\n"),
+        source: "视频生产台上传",
+        tags: ["视频工作流", "视频生产台", "参考图", "已生图", input.item.sourceEpisode || input.episode, typeLabel].filter(Boolean),
+        title: `${refLabel} · ${typeLabel}`,
+    } satisfies AssetWriteInput;
+}
+
+function slotWorkflowReference(item: ProductionPackage, slotName: string): WorkflowVideoReference | undefined {
+    const ref = slotName.match(/@图\s*(\d+)/)?.[1];
+    if (!ref) return undefined;
+    return item.workflowReferences?.find((entry) => entry.ref === `@图${Number(ref)}`);
+}
+
+function referenceNameFromSlot(slotName: string) {
+    return slotName.replace(/@图\s*\d+/, "").trim() || slotName;
 }
 
 function uniqueAssets(assets: Asset[]) {
@@ -1581,16 +1914,25 @@ function resolvePackageVideoModel(config: AiConfig) {
 
 function buildPackageVideoConfig(baseConfig: AiConfig, item: ProductionPackage): AiConfig {
     const provider = baseConfig.videoProtocol || "openai";
-    const packageDuration = item.config.duration || item.duration || baseConfig.videoSeconds;
+    const packageDuration = item.config.videoSeconds || item.config.duration || item.duration || baseConfig.videoSeconds;
+    const packageModel = resolvePackageConfigModel(baseConfig, item, provider);
     const metadata: Partial<CanvasNodeMetadata> = {
         duration: packageSeconds(packageDuration),
+        generateAudio: item.config.videoGenerateAudio || baseConfig.videoGenerateAudio || "true",
         generationMode: "video",
-        model: provider === "volcengine-ark" ? baseConfig.seedanceEndpointId || baseConfig.seedanceModel || baseConfig.videoModel : baseConfig.videoModel || baseConfig.model,
+        model: packageModel,
         provider,
+        returnLastFrame: item.config.returnLastFrame || baseConfig.returnLastFrame,
+        seed: item.config.videoSeed || baseConfig.videoSeed,
         seconds: packageSeconds(packageDuration),
-        size: packageRatio(item.config.ratio || baseConfig.size),
-        videoTaskMode: "generate",
-        vquality: packageResolution(item.config.resolution || baseConfig.vquality),
+        size: packageRatio(item.config.size || item.config.ratio || baseConfig.size),
+        videoEditType: item.config.videoEditType || baseConfig.videoEditType,
+        videoExtendDirection: item.config.videoExtendDirection || baseConfig.videoExtendDirection,
+        videoPromptReviewEnabled: item.config.videoPromptReviewEnabled || baseConfig.videoPromptReviewEnabled || "true",
+        videoReferenceImageMode: item.config.videoReferenceImageMode || baseConfig.videoReferenceImageMode,
+        videoTaskMode: item.config.videoTaskMode || "generate",
+        vquality: packageResolution(item.config.vquality || item.config.resolution || baseConfig.vquality),
+        watermark: item.config.videoWatermark || baseConfig.videoWatermark,
     };
     const config = buildCanvasVideoConfig(baseConfig, metadata as CanvasNodeMetadata);
     return {
@@ -1599,11 +1941,20 @@ function buildPackageVideoConfig(baseConfig: AiConfig, item: ProductionPackage):
     };
 }
 
+function resolvePackageConfigModel(baseConfig: AiConfig, item: ProductionPackage, provider: string) {
+    const fallback = provider === "volcengine-ark" ? baseConfig.seedanceEndpointId || baseConfig.seedanceModel || baseConfig.videoModel : baseConfig.videoModel || baseConfig.model;
+    const model = item.config.model?.trim() || "";
+    if (provider !== "volcengine-ark") return model || fallback;
+    const allowedModels = new Set([baseConfig.videoModel, baseConfig.seedanceModel, ...baseConfig.videoModels].filter(Boolean));
+    return model && allowedModels.has(model) ? model : fallback;
+}
+
 function packageSeconds(value: string) {
     return value.match(/\d+/)?.[0] || "6";
 }
 
 function packageRatio(value: string) {
+    if (value === "adaptive" || value === "auto") return "adaptive";
     const ratio = value.match(/\d+\s*:\s*\d+/)?.[0]?.replace(/\s+/g, "");
     return ratio || "9:16";
 }

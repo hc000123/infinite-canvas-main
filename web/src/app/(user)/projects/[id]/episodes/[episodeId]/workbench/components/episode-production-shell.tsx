@@ -260,6 +260,7 @@ export function EpisodeProductionShell({
     const hasPendingScriptDraft = Boolean(scriptSnapshot.trim() && scriptDraft.trim() && scriptDraft.trim() !== scriptSnapshot.trim());
     const visibleStructuredScript = hasPendingScriptDraft ? structuredScriptDraft : episode.structuredScript;
     const legacyWorkbenchVisible = false;
+    const scriptModuleVisible = activeModule === "script";
     const scriptEditor =
         activeModule === "script" ? (
             <section className="rounded-xl border border-white/[0.07] bg-white/[0.025]">
@@ -291,11 +292,11 @@ export function EpisodeProductionShell({
             <EpisodeProductionHeader
                 boundCanvas={boundCanvas}
                 canRunFullWorkflow={legacyWorkbenchVisible && hasScript}
-                currentPhase={legacyWorkbenchVisible ? currentPhase : "已切换到视频工作流"}
+                currentPhase={scriptModuleVisible ? "剧本优化" : legacyWorkbenchVisible ? currentPhase : "已切换到视频工作流"}
                 episode={episode}
                 fullWorkflowRunning={fullWorkflowRunning}
                 legacyWorkflowVisible={legacyWorkbenchVisible}
-                nextActionText={legacyWorkbenchVisible ? nextActionText : "本集生产台内置四阶段流程已暂时收起，请在独立视频工作流控制台运行导演 / 资产 / 分镜。"}
+                nextActionText={scriptModuleVisible ? "先确认或优化本集剧本；导演分析、资产提示词和分镜继续在独立视频工作流控制台运行。" : legacyWorkbenchVisible ? nextActionText : "本集生产台内置四阶段流程已暂时收起，请在独立视频工作流控制台运行导演 / 资产 / 分镜。"}
                 onBackProject={onBackProject}
                 onOpenCanvas={onOpenCanvas}
                 onOpenOriginalWorkflow={onOpenOriginalWorkflow}
@@ -304,7 +305,7 @@ export function EpisodeProductionShell({
                 project={project}
             />
             <div className="px-5 py-5 xl:px-6">
-                {!legacyWorkbenchVisible ? (
+                {!legacyWorkbenchVisible && !scriptModuleVisible ? (
                     <OriginalWorkflowReplacementPanel opening={openingOriginalWorkflow} onOpen={onOpenOriginalWorkflow} />
                 ) : topNotice ? (
                     <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 shadow-[0_12px_44px_rgba(0,0,0,0.18)] backdrop-blur-xl ${flowNoticeClass(topNotice.tone || "slate")}`}>
@@ -319,7 +320,9 @@ export function EpisodeProductionShell({
                         ) : null}
                     </div>
                 ) : null}
-                {legacyWorkbenchVisible ? (
+                {scriptModuleVisible ? (
+                    <EpisodeModulePanel config={moduleConfig} editorSlot={scriptEditor} filteredRows={filteredRows} activeFilter={activeFilter} showRows={false} onFilterChange={setActiveFilter} onOpenDetail={onOpenDetail} />
+                ) : legacyWorkbenchVisible ? (
                     <div className="grid gap-4 lg:grid-cols-[180px_minmax(0,1fr)]">
                         <EpisodeModuleTabs activeModule={activeModule} onChange={onModuleChange} tabs={tabs} />
                         <div className="min-w-0">

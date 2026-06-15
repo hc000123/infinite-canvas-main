@@ -9,12 +9,13 @@ import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useCanvasStore } from "../../../../../canvas/stores/use-canvas-store";
 import { useScriptStore } from "../../../../../canvas/stores/use-script-store";
 import { useStoryboardStore } from "../../../../../canvas/stores/use-storyboard-store";
-import { normalizeStructuredEpisodeScript, structuredEpisodeScriptToText, type ScriptEpisode, type StructuredEpisodeScript } from "../../../../../canvas/utils/script-management";
+import type { ScriptEpisode, StructuredEpisodeScript } from "../../../../../canvas/utils/script-management";
 import { canvasEpisodeContextFromEpisode } from "../../../../../canvas/utils/canvas-episode-context";
 import { buildCanvasProjectPresetFromConfig } from "../../../../../canvas/utils/canvas-project-preset";
 import { videoWorkflowEpisodeKey, videoWorkflowHref, videoWorkflowProjectSlug } from "../../../../../original-workflow/video-workflow-routing";
 import { useAgentRunnerStore } from "../../../../use-agent-runner-store";
 import { agentSystemPromptContent, canInvokeAgentConfig, defaultAgentConfigs, fillAgentPromptTemplate, mergeAgentConfigs } from "../../../../agent-settings";
+import { SCRIPT_OPTIMIZER_PRODUCTION_RULES, SCRIPT_OPTIMIZER_STRUCTURED_JSON_RULES, hasScriptOptimizerWhitePaperProductionNotes, isMeaningfullyOptimizedScript, parseScriptOptimizerResult } from "../../../../script-optimizer-agent";
 import { useAgentSettingsStore } from "../../../../use-agent-settings-store";
 import { useCreativeProjectStore } from "../../../../use-creative-project-store";
 import { useEpisodeWorkbenchState } from "./use-episode-workbench-state";
@@ -336,7 +337,7 @@ export default function EpisodeProductionWorkbenchPage() {
         setScriptOptimizing(true);
         try {
             const answer = await requestImageQuestion(requestConfig, promptMessages);
-            const result = parseOptimizedScriptResult(answer, episode.title);
+            const result = parseScriptOptimizerResult(answer, episode.title);
             const optimized = result.productionScript;
             if (!optimized) {
                 setScriptDraft(scriptSnapshot || sourceScript);
@@ -348,6 +349,12 @@ export default function EpisodeProductionWorkbenchPage() {
                 setScriptDraft(scriptSnapshot || sourceScript);
                 setPendingStructuredScript(undefined);
                 message.warning("模型返回内容与原稿基本一致，未作为有效优化稿写入。请换更强的文本模型或调整剧本优化 Agent 设定后重试。");
+                return;
+            }
+            if (!hasScriptOptimizerWhitePaperProductionNotes(optimized)) {
+                setScriptDraft(scriptSnapshot || sourceScript);
+                setPendingStructuredScript(undefined);
+                message.warning("模型返回稿缺少白皮书要求的制作备注、视觉方向、连续性、风险提示或禁止项，未作为有效优化稿写入。");
                 return;
             }
             setScriptDraft(optimized);
@@ -494,38 +501,9 @@ export default function EpisodeProductionWorkbenchPage() {
     );
 }
 
-const SCRIPT_OPTIMIZER_PRODUCTION_RULES =
-    "生产稿标准化硬性规则：\n" +
-    "1. 不要只做轻微润色，必须把原始剧本整理成后续导演分析可直接读取的标准生产稿。\n" +
-    "2. 删除重复标题、重复摘要、重复集数、粘贴残留；同一标题只保留一次。\n" +
-    "3. 每个场次必须使用清晰结构：场次编号 / 地点 / 时间 / 内外 / 出场人物 / 场记 / 动作视觉 / 对白。\n" +
-    "4. 场记必须描述空间、人物位置、关键道具、光线氛围和连续性，不要省略。\n" +
-    "5. 对白保留为“人物：对白”；动作视觉写成可读段落。\n" +
-    "6. 不允许原样返回、只改标点、只改换行或只补标题；必须让生产稿比原稿更结构化、更可拍。\n" +
-    "7. 不做导演分析、不输出资产清单、不输出分镜提示词；productionScript 只放优化后的完整剧本正文。";
-
-const SCRIPT_OPTIMIZER_STRUCTURED_JSON_RULES =
-    "结构化输出硬性规则：\n" +
-    "1. 最终回复必须是一个 JSON 对象，不要 Markdown，不要代码围栏，不要解释文字。\n" +
-    "2. 顶层只包含 productionScript 和 structuredScript。\n" +
-    "3. productionScript 是优化后的完整生产稿正文，供人阅读和确认。\n" +
-    "4. structuredScript.schemaVersion 固定为 episode-script.v1。\n" +
-    "5. structuredScript 必须包含 episodeTitle、summary、characters、scenes。\n" +
-    "6. 每个 scenes 条目必须包含 sceneId、location、timeOfDay、space、characters、sceneNote、beats、assets。\n" +
-    "7. beats 只能使用 type=action/dialogue/visual/note；dialogue 必须写 speaker 和 text。\n" +
-    "8. assets 必须包含 characters、locations、props、costumes、mood 数组，缺失时给空数组。";
-
 function buildAiReadableScriptSnapshot(scriptSnapshot: string, structuredScript?: StructuredEpisodeScript) {
     if (!structuredScript) return scriptSnapshot;
     return [scriptSnapshot, "AI 结构化剧本 JSON：", JSON.stringify(structuredScript, null, 2)].filter(Boolean).join("\n\n");
-}
-
-function parseOptimizedScriptResult(text: string, episodeTitle: string) {
-    const payload = parseJsonObjectFromText(text);
-    if (!payload) return { productionScript: cleanOptimizedScriptText(text, episodeTitle), structuredScript: undefined };
-    const structuredScript = normalizeStructuredEpisodeScript(payload.structuredScript || payload);
-    const productionScript = cleanOptimizedScriptText(stringFromPayload(payload, ["productionScript", "optimizedScript", "script", "text"]) || (structuredScript ? structuredEpisodeScriptToText(structuredScript) : text), episodeTitle);
-    return { productionScript, structuredScript };
 }
 
 function parseJsonObjectFromText(text: string): Record<string, unknown> | undefined {
@@ -587,66 +565,6 @@ function stringFromPayload(payload: Record<string, unknown>, keys: string[]) {
         if (typeof value === "string" && value.trim()) return value.trim();
     }
     return "";
-}
-
-function cleanOptimizedScriptText(text: string, episodeTitle: string) {
-    const lines = text
-        .replace(/\r\n/g, "\n")
-        .replace(/(#{1,6}\s*第\s*\d+\s*集\s*摘要[:：]\s*){2,}/g, "# ")
-        .replace(/(第\s*\d+\s*集\s*摘要[:：]\s*){2,}/g, "$1")
-        .split("\n")
-        .map((line) => line.trimEnd());
-    const seenHeadings = new Set<string>();
-    const cleaned: string[] = [];
-    for (const line of lines) {
-        const normalized = line.replace(/^#+\s*/, "").trim();
-        const headingKey = normalized.replace(/\s+/g, "");
-        const isDuplicateHeading = /^第\s*\d+\s*集/.test(normalized) || normalized === episodeTitle.trim();
-        if (isDuplicateHeading) {
-            if (seenHeadings.has(headingKey)) continue;
-            seenHeadings.add(headingKey);
-        }
-        cleaned.push(line);
-    }
-    return cleaned
-        .join("\n")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
-}
-
-function isMeaningfullyOptimizedScript(source: string, optimized: string) {
-    const sourceNormalized = normalizeComparableScriptText(source);
-    const optimizedNormalized = normalizeComparableScriptText(optimized);
-    if (!sourceNormalized || !optimizedNormalized) return false;
-    if (sourceNormalized === optimizedNormalized) return false;
-    const sourceLength = sourceNormalized.length;
-    const optimizedLength = optimizedNormalized.length;
-    const lengthGrowth = optimizedLength / Math.max(sourceLength, 1);
-    const productionMarkers = ["出场人物", "场记", "动作视觉", "对白", "内外"].filter((marker) => optimized.includes(marker)).length;
-    if (lengthGrowth >= 1.18 || productionMarkers >= 3) return true;
-    if (lengthGrowth < 1.08 && productionMarkers < 2) return false;
-    return normalizedTextSimilarity(sourceNormalized, optimizedNormalized) < 0.9;
-}
-
-function normalizeComparableScriptText(text: string) {
-    return text
-        .replace(/\s+/g, "")
-        .replace(/[，。！？；：、“”‘’《》（）()#\-—_]/g, "")
-        .trim();
-}
-
-function normalizedTextSimilarity(left: string, right: string) {
-    const leftChars = new Map<string, number>();
-    for (const char of left) leftChars.set(char, (leftChars.get(char) || 0) + 1);
-    let shared = 0;
-    for (const char of right) {
-        const count = leftChars.get(char) || 0;
-        if (!count) continue;
-        shared += 1;
-        if (count === 1) leftChars.delete(char);
-        else leftChars.set(char, count - 1);
-    }
-    return shared / Math.max(left.length, right.length, 1);
 }
 
 function parseRequestedEpisodeModule(value: string | null): EpisodeModuleKey | undefined {

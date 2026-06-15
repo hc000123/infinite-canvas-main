@@ -135,8 +135,12 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
     const defaultVideoModel = normalizedDefaultVideoModel && models.includes(normalizedDefaultVideoModel) ? normalizedDefaultVideoModel : "";
     const imageDefault = modelChannel.defaultImageModel && models.includes(modelChannel.defaultImageModel) ? modelChannel.defaultImageModel : "";
     const textDefault = modelChannel.defaultTextModel && models.includes(modelChannel.defaultTextModel) ? modelChannel.defaultTextModel : "";
+    const selectedImageModel = config.imageModel && models.includes(config.imageModel) ? config.imageModel : "";
+    const selectedTextModel = config.textModel && models.includes(config.textModel) ? config.textModel : "";
+    const selectedVideoModel = normalizeVisibleRemoteVideoModel(config.videoModel);
+    const visibleSelectedVideoModel = selectedVideoModel && models.includes(selectedVideoModel) ? selectedVideoModel : "";
     const modelTextEndpoints = normalizeModelTextEndpoints(modelChannel.modelTextEndpoints || [], models);
-    const videoCandidates = uniqueModels([defaultVideoModel, ...classifiedModels.videoModels]).filter(Boolean);
+    const videoCandidates = uniqueModels([visibleSelectedVideoModel, defaultVideoModel, ...classifiedModels.videoModels]).filter(Boolean);
     const videoModel = videoCandidates[0] || "";
     const videoProtocol = inferRemoteVideoProtocol(videoModel, config.videoProtocol, modelChannel.modelProtocols || []);
     return {
@@ -149,10 +153,11 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
         textModels: classifiedModels.textModels,
         modelTextEndpoints,
         model: models.includes(config.model) ? config.model : fallbackModel,
-        imageModel: imageDefault || fallbackModel,
+        imageModel: selectedImageModel || imageDefault || fallbackModel,
         videoModel,
         seedanceModel: videoProtocol === "volcengine-ark" ? videoModel : config.seedanceModel,
-        textModel: textDefault || fallbackModel,
+        seedanceEndpointId: "",
+        textModel: selectedTextModel || textDefault || fallbackModel,
     };
 }
 

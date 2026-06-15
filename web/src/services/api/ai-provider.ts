@@ -7,7 +7,7 @@ export const AI_REQUEST_TIMEOUT_MS = 300_000;
 export const AI_VIDEO_TASK_TIMEOUT_MS = 300_000;
 export const AI_VIDEO_CONTENT_TIMEOUT_MS = 300_000;
 export const AI_VIDEO_POLL_INTERVAL_MS = 2500;
-export const AI_VIDEO_MAX_POLL_ATTEMPTS = 240;
+export const AI_VIDEO_MAX_POLL_ATTEMPTS = 480;
 
 export type AiProviderProtocol = AiConfig["videoProtocol"];
 const reasoningEfforts = new Set<AiConfig["reasoningEffort"]>(["minimal", "low", "medium", "high"]);

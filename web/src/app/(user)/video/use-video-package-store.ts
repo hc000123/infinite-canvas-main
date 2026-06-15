@@ -41,6 +41,27 @@ export type PackageGeneration = {
     };
 };
 
+export type ProductionPackageConfig = {
+    model: string;
+    ratio: string;
+    duration: string;
+    resolution: string;
+    motion: string;
+    frames: string;
+    size?: string;
+    videoSeconds?: string;
+    vquality?: string;
+    videoGenerateAudio?: string;
+    videoWatermark?: string;
+    videoSeed?: string;
+    videoPromptReviewEnabled?: string;
+    returnLastFrame?: string;
+    videoTaskMode?: "generate" | "edit" | "extend";
+    videoEditType?: "replace" | "add" | "remove" | "inpaint";
+    videoExtendDirection?: "forward" | "backward";
+    videoReferenceImageMode?: "reference" | "first_frame" | "first_last_frame" | "continue";
+};
+
 export type ProductionPackage = {
     id: string;
     segment: string;
@@ -51,7 +72,7 @@ export type ProductionPackage = {
     prompt: string;
     tags: Record<"运镜" | "主体动作" | "环境" | "光影" | "节奏", string>;
     assets: { kind: AssetKind; name: string; status: "已绑定" | "缺失" }[];
-    config: { model: string; ratio: string; duration: string; resolution: string; motion: string; frames: string };
+    config: ProductionPackageConfig;
     generation?: PackageGeneration;
     generationVersions?: PackageGeneration[];
     risks: { level: "提示" | "注意" | "阻断"; text: string }[];

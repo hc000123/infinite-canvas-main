@@ -9,6 +9,7 @@ import type { ReferenceVersionFilter } from "./use-asset-page-query";
 type GenerationTaskFilter = "all" | "with" | "without";
 
 type Props = {
+    setEpisodeFilter: Dispatch<SetStateAction<string>>;
     setFolderFilter: Dispatch<SetStateAction<string>>;
     setGenerationActionFilter: Dispatch<SetStateAction<string | undefined>>;
     setGenerationModelProviderFilter: Dispatch<SetStateAction<string | undefined>>;
@@ -25,6 +26,7 @@ type Props = {
 };
 
 export function useAssetFilterActions({
+    setEpisodeFilter,
     setFolderFilter,
     setGenerationActionFilter,
     setGenerationModelProviderFilter,
@@ -43,7 +45,12 @@ export function useAssetFilterActions({
     return {
         changeFolderFilter(value: string) {
             resetPage();
+            setEpisodeFilter("");
             setFolderFilter(value);
+        },
+        changeEpisodeFilter(value: string) {
+            resetPage();
+            setEpisodeFilter(value);
         },
         changeGenerationActionFilter(value?: string) {
             resetPage();
@@ -71,6 +78,7 @@ export function useAssetFilterActions({
         },
         changeProjectContextFilter(value: string) {
             resetPage();
+            setEpisodeFilter("");
             setProjectContextFilter(value);
         },
         changeProjectLibraryFilter(value: ProjectLibraryFilter) {

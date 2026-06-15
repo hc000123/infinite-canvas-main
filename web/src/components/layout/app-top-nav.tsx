@@ -34,7 +34,11 @@ export function AppTopNav() {
     const slug = pathname.split("/").filter(Boolean)[0];
     const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
     const themeToggleLabel = theme === "dark" ? "切换到全局浅色主题" : "切换到全局深色主题";
-    const getToolHref = (toolSlug: NavigationToolSlug) => (toolSlug === "assets" ? buildAssetsReturnHref(pathname, searchParams) : `/${toolSlug}`);
+    const getToolHref = (toolSlug: NavigationToolSlug) => {
+        if (toolSlug === "assets") return buildAssetsReturnHref(pathname, searchParams);
+        if (toolSlug === "original-workflow") return buildOriginalWorkflowToolHref(pathname, searchParams);
+        return `/${toolSlug}`;
+    };
 
     return (
         <>
@@ -133,6 +137,7 @@ export function AppTopNav() {
 }
 
 type SearchParamReader = {
+    get: (name: string) => string | null;
     toString: () => string;
 };
 
@@ -145,4 +150,27 @@ function buildAssetsReturnHref(pathname: string, searchParams: SearchParamReader
     params.set("returnTo", currentHref);
     params.set("returnLabel", "返回上一页");
     return `/assets?${params.toString()}`;
+}
+
+function buildOriginalWorkflowToolHref(pathname: string, searchParams: SearchParamReader) {
+    if (pathname === "/original-workflow" || pathname.startsWith("/original-workflow/")) return withCurrentQuery("/original-workflow", searchParams);
+    const returnTo = searchParams.get("returnTo") || "";
+    if (returnTo.startsWith("/original-workflow")) return returnTo;
+    const params = workflowScopedParams(searchParams);
+    const query = params.toString();
+    return query ? `/original-workflow?${query}` : "/original-workflow";
+}
+
+function withCurrentQuery(pathname: string, searchParams: SearchParamReader) {
+    const query = searchParams.toString();
+    return query ? `${pathname}?${query}` : pathname;
+}
+
+function workflowScopedParams(searchParams: SearchParamReader) {
+    const params = new URLSearchParams();
+    for (const key of ["episode", "projectSlug", "sourceProjectId", "sourceEpisodeId"]) {
+        const value = searchParams.get(key);
+        if (value) params.set(key, value);
+    }
+    return params;
 }

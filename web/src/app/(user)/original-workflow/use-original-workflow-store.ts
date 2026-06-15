@@ -5,17 +5,21 @@ import { persist, type PersistStorage, type StorageValue } from "zustand/middlew
 
 import { localForageStorage } from "@/lib/localforage-storage";
 
+export type OriginalWorkflowExecutionMode = "cloud-worker" | "local-runner";
+
 type OriginalWorkflowSettings = {
     codexApiBaseUrl: string;
     codexApiKey: string;
     codexModel: string;
     episode: string;
+    executionMode: OriginalWorkflowExecutionMode;
     projectSlug: string;
     rootPath: string;
     setCodexApiBaseUrl: (codexApiBaseUrl: string) => void;
     setCodexApiKey: (codexApiKey: string) => void;
     setCodexModel: (codexModel: string) => void;
     setEpisode: (episode: string) => void;
+    setExecutionMode: (executionMode: OriginalWorkflowExecutionMode) => void;
     setProjectSlug: (projectSlug: string) => void;
     setRootPath: (rootPath: string) => void;
 };
@@ -32,6 +36,7 @@ const storage: PersistStorage<OriginalWorkflowSettings> = {
         parsed.state.codexApiKey ||= "";
         parsed.state.codexModel ||= "";
         parsed.state.episode ||= "ep05";
+        parsed.state.executionMode = parsed.state.executionMode === "cloud-worker" ? "cloud-worker" : "local-runner";
         parsed.state.projectSlug ||= "demo-project";
         parsed.state.rootPath ||= defaultRootPath;
         return parsed;
@@ -47,19 +52,21 @@ export const useOriginalWorkflowStore = create<OriginalWorkflowSettings>()(
             codexApiKey: "",
             codexModel: "",
             episode: "ep05",
+            executionMode: "local-runner",
             projectSlug: "demo-project",
             rootPath: defaultRootPath,
             setCodexApiBaseUrl: (codexApiBaseUrl) => set({ codexApiBaseUrl }),
             setCodexApiKey: (codexApiKey) => set({ codexApiKey }),
             setCodexModel: (codexModel) => set({ codexModel }),
             setEpisode: (episode) => set({ episode }),
+            setExecutionMode: (executionMode) => set({ executionMode }),
             setProjectSlug: (projectSlug) => set({ projectSlug }),
             setRootPath: (rootPath) => set({ rootPath }),
         }),
         {
             name: STORE_KEY,
             storage,
-            partialize: (state) => ({ codexApiBaseUrl: state.codexApiBaseUrl, codexApiKey: state.codexApiKey, codexModel: state.codexModel, episode: state.episode, projectSlug: state.projectSlug, rootPath: state.rootPath }) as StorageValue<OriginalWorkflowSettings>["state"],
+            partialize: (state) => ({ codexApiBaseUrl: state.codexApiBaseUrl, codexApiKey: state.codexApiKey, codexModel: state.codexModel, episode: state.episode, executionMode: state.executionMode, projectSlug: state.projectSlug, rootPath: state.rootPath }) as StorageValue<OriginalWorkflowSettings>["state"],
         },
     ),
 );

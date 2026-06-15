@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { Asset, AssetFolder, AssetKind } from "@/stores/use-asset-store";
 import type { CanvasProject } from "../canvas/stores/use-canvas-store";
+import type { ScriptEpisode } from "../canvas/utils/script-management";
 import { isReadableProductionBibleItem, type ProductionBibleItem } from "../canvas/utils/production-bible";
 import type { ShotGroup, StoryboardGroup, StoryboardShot, StoryboardTableShot } from "../canvas/utils/storyboard-management";
 import type { CreativeProject } from "../projects/creative-projects";
 import { assetGenerationFilterOptions } from "./asset-generation";
+import { assetEpisodeLabels, assetMatchesEpisodeOption, buildAssetEpisodeOptions } from "./asset-episode";
 import { buildAssetProjectResultGroups } from "./asset-project-groups";
 import { collectOutdatedAssetVersionUsages } from "./asset-version-outdated-references";
 import { collectAssetVersionUsageReferences } from "./asset-version-references";
@@ -15,7 +17,6 @@ import {
     activeAssetFolderId,
     buildAssetProjectContexts,
     filterAssetList,
-    paginateAssetList,
     projectReferencedAssetIds as collectProjectReferencedAssetIds,
     sortAssetList,
     storyboardGroupReferencedAssetIds as collectStoryboardGroupReferencedAssetIds,
@@ -35,13 +36,14 @@ type Props = {
     previewAsset: Asset | null;
     productionBibleItems: ProductionBibleItem[];
     projects: CanvasProject[];
+    scriptEpisodes: ScriptEpisode[];
     shotGroups: ShotGroup[];
     storyboardGroups: StoryboardGroup[];
     storyboardShots: StoryboardShot[];
     storyboardTableShots: StoryboardTableShot[];
 };
 
-export function useAssetPageQuery({ assets, creativeProjects, folders, initialProjectId, previewAsset, productionBibleItems, projects, shotGroups, storyboardGroups, storyboardShots, storyboardTableShots }: Props) {
+export function useAssetPageQuery({ assets, creativeProjects, folders, initialProjectId, previewAsset, productionBibleItems, projects, scriptEpisodes, shotGroups, storyboardGroups, storyboardShots, storyboardTableShots }: Props) {
     const [keyword, setKeyword] = useState("");
     const [kindFilter, setKindFilter] = useState<AssetKind | "all">("all");
     const [folderFilter, setFolderFilter] = useState<string | "all" | "root">("all");
@@ -50,6 +52,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
     const [generationModelProviderFilter, setGenerationModelProviderFilter] = useState<string>();
     const [generationTaskFilter, setGenerationTaskFilter] = useState<"all" | "with" | "without">("all");
     const [projectContextFilter, setProjectContextFilter] = useState(initialProjectId);
+    const [episodeFilter, setEpisodeFilter] = useState("");
     const [projectLibraryFilter, setProjectLibraryFilter] = useState<ProjectLibraryFilter>("all");
     const canvasLibraryFilter = "";
     const [referenceVersionFilter, setReferenceVersionFilter] = useState<ReferenceVersionFilter>("all");
@@ -124,8 +127,8 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
             ),
         [validAssets, projects, shotGroups, storyboardGroups, storyboardShots, storyboardTableShots, productionBibleItems, projectLibraryProjectTitles, projectContextFilter],
     );
-    const filteredAssets = useMemo(() => {
-        return sortAssetList(
+    const projectFilteredAssets = useMemo(
+        () =>
             filterAssetList(validAssets, {
                 keyword,
                 kindFilter,
@@ -142,35 +145,42 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
                 storyboardGroupAssetIds,
                 searchText: assetSearchText,
             }),
-            sortMode,
-        );
-    }, [
-        validAssets,
-        keyword,
-        kindFilter,
-        folderFilter,
-        generationSourceFilter,
-        generationActionFilter,
-        generationModelProviderFilter,
-        generationTaskFilter,
-        projectContextFilter,
-        projectLibraryFilter,
-        canvasLibraryFilter,
-        projectReferencedAssetIds,
-        storyboardGroupFilter,
-        storyboardGroupAssetIds,
-        sortMode,
-    ]);
-    const visibleAssets = useMemo(() => paginateAssetList(filteredAssets, page, pageSize), [filteredAssets, page, pageSize]);
+        [
+            validAssets,
+            keyword,
+            kindFilter,
+            folderFilter,
+            generationSourceFilter,
+            generationActionFilter,
+            generationModelProviderFilter,
+            generationTaskFilter,
+            projectContextFilter,
+            projectLibraryFilter,
+            canvasLibraryFilter,
+            projectReferencedAssetIds,
+            storyboardGroupFilter,
+            storyboardGroupAssetIds,
+        ],
+    );
+    const episodeOptions = useMemo(() => buildAssetEpisodeOptions(projectFilteredAssets, scriptEpisodes, projectContextFilter, projectLibraryProjectTitles), [projectContextFilter, projectFilteredAssets, projectLibraryProjectTitles, scriptEpisodes]);
+    const episodeOptionMap = useMemo(() => new Map(episodeOptions.map((option) => [option.value, option])), [episodeOptions]);
+    const activeEpisodeOption = episodeFilter ? episodeOptionMap.get(episodeFilter) : undefined;
+    const episodeTitleMap = useMemo(() => assetEpisodeLabels(episodeOptions), [episodeOptions]);
+    const filteredAssets = useMemo(() => {
+        const assetsByEpisode = activeEpisodeOption ? projectFilteredAssets.filter((asset) => assetMatchesEpisodeOption(asset, activeEpisodeOption)) : projectFilteredAssets;
+        return sortAssetList(assetsByEpisode, sortMode);
+    }, [activeEpisodeOption, projectFilteredAssets, sortMode]);
+    const assetPaginationEnabled = false;
+    const visibleAssets = filteredAssets;
     const visibleProductionBibleItems = useMemo(() => {
-        if (referenceVersionFilter !== "all" || kindFilter !== "all") return [];
+        if (referenceVersionFilter !== "all" || kindFilter !== "all" || episodeFilter) return [];
         if (generationSourceFilter || generationActionFilter || generationModelProviderFilter || generationTaskFilter !== "all" || storyboardGroupFilter || projectLibraryFilter !== "all") return [];
         if (!projectContextFilter && folderFilter !== "all") return [];
         const query = keyword.trim().toLowerCase();
         return productionBibleItems
             .filter((item) => isReadableProductionBibleItem(item) && (!projectContextFilter || item.projectId === projectContextFilter) && (!query || productionBibleSearchText(item).includes(query)))
             .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    }, [folderFilter, generationActionFilter, generationModelProviderFilter, generationSourceFilter, generationTaskFilter, keyword, kindFilter, productionBibleItems, projectContextFilter, projectLibraryFilter, referenceVersionFilter, storyboardGroupFilter]);
+    }, [episodeFilter, folderFilter, generationActionFilter, generationModelProviderFilter, generationSourceFilter, generationTaskFilter, keyword, kindFilter, productionBibleItems, projectContextFilter, projectLibraryFilter, referenceVersionFilter, storyboardGroupFilter]);
     const visibleAssetGroups = useMemo(
         () =>
             buildAssetProjectResultGroups({
@@ -183,6 +193,10 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
             }),
         [folderMap, projectContexts, projectLibraryProjectTitles, projectReferencedAssetIdsByProject, visibleAssets, visibleProductionBibleItems],
     );
+
+    useEffect(() => {
+        if (episodeFilter && !episodeOptionMap.has(episodeFilter)) setEpisodeFilter("");
+    }, [episodeFilter, episodeOptionMap]);
 
     useEffect(() => {
         const maxPage = Math.max(1, Math.ceil(filteredAssets.length / pageSize));
@@ -215,8 +229,12 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
     return {
         activeFolderId,
         activeFolderName,
+        assetPaginationEnabled,
         canvasLibraryFilter,
         canvasLibraryTitles,
+        episodeFilter,
+        episodeOptions,
+        episodeTitleMap,
         filteredAssets,
         folderCounts,
         folderFilter,
@@ -239,6 +257,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
         projectLibraryProjectTitles,
         referenceVersionFilter,
         regularFolders,
+        setEpisodeFilter,
         setFolderFilter,
         setGenerationActionFilter,
         setGenerationModelProviderFilter,

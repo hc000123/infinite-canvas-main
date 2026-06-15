@@ -26,6 +26,17 @@ test("builds default templates for all first-batch agent kinds", () => {
     assert.ok(configs.slice(0, 4).every((config) => config.skillSummary?.includes("Skill")));
 });
 
+test("script optimizer embeds script-to-ai-script white paper production rules", () => {
+    const config = defaultAgentConfig("script_optimizer");
+    const content = [config.systemPrompt, config.skillSummary, config.userPromptTemplate].join("\n");
+
+    for (const marker of ["AI 剧本母版", "每场生产备注", "视觉方向", "连续性", "风险提示", "禁止项"]) {
+        assert.ok(content.includes(marker), `missing white paper marker: ${marker}`);
+    }
+    assert.match(content, /不是\s*Prompt|不是提示词|不要输出.*Prompt/);
+    assert.match(content, /不是分镜脚本|不写分镜|不输出分镜/);
+});
+
 test("merges global and project overrides by agent kind", () => {
     const defaults = defaultAgentConfigs("2026-01-01T00:00:00.000Z");
     const merged = mergeAgentConfigs(

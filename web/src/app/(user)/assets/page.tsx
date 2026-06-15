@@ -1,11 +1,14 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { App, Form } from "antd";
+import { App, Empty, Form, Input, Modal } from "antd";
 
+import { uploadImage } from "@/services/image-storage";
 import type { Asset } from "@/stores/use-asset-store";
+import { useScriptStore } from "../canvas/stores/use-script-store";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible";
+import { assetEpisodeTitle } from "./asset-episode";
 import type { AssetFormValues } from "./components/asset-editor-modal";
 import { AssetFilterPanel } from "./components/asset-filter-panel";
 import { AssetPageHeader } from "./components/asset-page-header";
@@ -24,6 +27,7 @@ import { useAssetPageStores } from "./use-asset-page-stores";
 import { useAssetSelection } from "./use-asset-selection";
 import { useVolcengineAssetReview } from "./use-volcengine-asset-review";
 import { useWorkflowAssetImageActions } from "./use-workflow-asset-image-actions";
+import { buildWorkflowMatchedImagePatch, buildWorkflowUploadedImagePatch, workflowAssetInfo } from "./workflow-asset-image";
 
 export default function AssetsPage() {
     return (
@@ -36,6 +40,7 @@ export default function AssetsPage() {
 function AssetsPageContent() {
     const { message, modal } = App.useApp();
     const searchParams = useSearchParams();
+    const scriptEpisodes = useScriptStore((state) => state.episodes);
     const returnTarget = buildAssetsPageReturnTarget(searchParams);
     const requestedAssetId = searchParams.get("assetId") || "";
     const [form] = Form.useForm<AssetFormValues>();
@@ -43,6 +48,8 @@ function AssetsPageContent() {
     const imageInputRef = useRef<HTMLInputElement>(null);
     const mediaInputRef = useRef<HTMLInputElement>(null);
     const assetInputRef = useRef<HTMLInputElement>(null);
+    const workflowUploadInputRef = useRef<HTMLInputElement>(null);
+    const workflowUploadTargetRef = useRef<Asset | null>(null);
     const {
         addAsset,
         addAssetOnce,
@@ -75,6 +82,9 @@ function AssetsPageContent() {
     const [bulkOutdatedOpen, setBulkOutdatedOpen] = useState(false);
     const [deletingProductionBibleItem, setDeletingProductionBibleItem] = useState<ProductionBibleItem | null>(null);
     const [bulkProductionBibleDeleteOpen, setBulkProductionBibleDeleteOpen] = useState(false);
+    const [uploadingWorkflowAssetId, setUploadingWorkflowAssetId] = useState<string | null>(null);
+    const [matchingWorkflowAsset, setMatchingWorkflowAsset] = useState<Asset | null>(null);
+    const [matchKeyword, setMatchKeyword] = useState("");
 
     useEffect(() => {
         if (!requestedAssetId || openedRequestedAssetId === requestedAssetId) return;
@@ -87,8 +97,11 @@ function AssetsPageContent() {
     const {
         activeFolderId,
         activeFolderName,
-        canvasLibraryFilter,
+        assetPaginationEnabled,
         canvasLibraryTitles,
+        episodeFilter,
+        episodeOptions,
+        episodeTitleMap,
         filteredAssets,
         folderCounts,
         folderFilter,
@@ -111,6 +124,7 @@ function AssetsPageContent() {
         projectLibraryProjectTitles,
         referenceVersionFilter,
         regularFolders,
+        setEpisodeFilter,
         setFolderFilter,
         setGenerationActionFilter,
         setGenerationModelProviderFilter,
@@ -139,6 +153,7 @@ function AssetsPageContent() {
         previewAsset,
         productionBibleItems,
         projects,
+        scriptEpisodes,
         shotGroups,
         storyboardGroups,
         storyboardShots,
@@ -208,6 +223,7 @@ function AssetsPageContent() {
         toggleProductionBibleItemSelected,
     } = useAssetSelection({ filteredAssets, outdatedAssetVersionUsages, productionBibleItems, validAssets, visibleProductionBibleItems });
     const assetFilterActions = useAssetFilterActions({
+        setEpisodeFilter,
         setFolderFilter,
         setGenerationActionFilter,
         setGenerationModelProviderFilter,
@@ -296,6 +312,74 @@ function AssetsPageContent() {
     const { generateWorkflowAssetImage, generatingWorkflowAssetId } = useWorkflowAssetImageActions({
         message,
     });
+    const openWorkflowImageUpload = (asset: Asset) => {
+        if (!workflowAssetInfo(asset)) {
+            message.warning("这不是视频工作流素材，不能直接匹配图片");
+            return;
+        }
+        workflowUploadTargetRef.current = asset;
+        if (workflowUploadInputRef.current) workflowUploadInputRef.current.value = "";
+        workflowUploadInputRef.current?.click();
+    };
+    const uploadWorkflowImageFile = async (files?: FileList | null) => {
+        const file = files?.[0];
+        const target = workflowUploadTargetRef.current;
+        workflowUploadTargetRef.current = null;
+        if (workflowUploadInputRef.current) workflowUploadInputRef.current.value = "";
+        if (!file || !target) return;
+        if (!file.type.startsWith("image/")) {
+            message.warning("请选择图片文件");
+            return;
+        }
+        const current = assets.find((asset) => asset.id === target.id) || target;
+        setUploadingWorkflowAssetId(current.id);
+        try {
+            const image = await uploadImage(file);
+            const patch = buildWorkflowUploadedImagePatch(current, image, { fileName: file.name });
+            updateAsset(current.id, patch);
+            if (previewAsset?.id === current.id) setPreviewAsset({ ...current, ...patch } as Asset);
+            message.success("已上传并匹配到这条素材");
+        } catch (error) {
+            console.error(error);
+            message.error("上传匹配失败，请换一张图片重试");
+        } finally {
+            setUploadingWorkflowAssetId(null);
+        }
+    };
+    const matchCandidateAssets = useMemo(() => {
+        if (!matchingWorkflowAsset) return [];
+        const query = matchKeyword.trim().toLowerCase();
+        const targetInfo = workflowAssetInfo(matchingWorkflowAsset);
+        const targetProjectId = assetMatchProjectId(matchingWorkflowAsset, targetInfo, projectContextFilter);
+        return validAssets
+            .filter((asset): asset is Extract<Asset, { kind: "image" }> => asset.kind === "image" && asset.id !== matchingWorkflowAsset.id)
+            .filter((asset) => {
+                const candidateProjectId = assetMatchProjectId(asset, workflowAssetInfo(asset), "");
+                return !targetProjectId || !candidateProjectId || candidateProjectId === targetProjectId;
+            })
+            .filter((asset) => {
+                if (!query) return true;
+                return assetMatchSearchText(asset, episodeTitleMap).includes(query);
+            })
+            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    }, [episodeTitleMap, matchKeyword, matchingWorkflowAsset, projectContextFilter, validAssets]);
+    const openWorkflowImageMatch = (asset: Asset) => {
+        if (!workflowAssetInfo(asset)) {
+            message.warning("这不是视频工作流素材，不能匹配已有图片");
+            return;
+        }
+        setMatchingWorkflowAsset(asset);
+        setMatchKeyword("");
+    };
+    const matchWorkflowImageAsset = (source: Extract<Asset, { kind: "image" }>) => {
+        if (!matchingWorkflowAsset) return;
+        const current = assets.find((asset) => asset.id === matchingWorkflowAsset.id) || matchingWorkflowAsset;
+        const patch = buildWorkflowMatchedImagePatch(current, source);
+        updateAsset(current.id, patch);
+        if (previewAsset?.id === current.id) setPreviewAsset({ ...current, ...patch } as Asset);
+        setMatchingWorkflowAsset(null);
+        message.success("已匹配已有图片到这条素材");
+    };
     const confirmDeleteProductionBibleItem = () => {
         if (!deletingProductionBibleItem) return;
         removeProductionBibleItem(deletingProductionBibleItem.id);
@@ -318,11 +402,13 @@ function AssetsPageContent() {
         <div className="flex h-full flex-col overflow-hidden bg-[var(--studio-shell-bg)] text-[var(--studio-text-primary)]">
             <main className="studio-shell relative min-h-0 flex-1 overflow-y-auto px-6 py-8" onDragEnter={handleUploadDragEnter} onDragLeave={handleUploadDragLeave} onDragOver={handleUploadDragOver} onDrop={handleUploadDrop}>
                 {isDraggingUpload ? <AssetUploadDropOverlay activeFolderName={activeFolderName} /> : null}
-                <div className="mx-auto max-w-7xl pb-8">
+                <div className="mx-auto max-w-[1680px] pb-8">
                     <AssetPageHeader returnHref={returnTarget.href} returnLabel={returnTarget.label} onCreate={openCreate} onExportAll={() => void exportAllAssets()} onImportClick={() => assetInputRef.current?.click()} />
 
                     <AssetFilterPanel
                         activeFolderId={activeFolderId}
+                        episodeFilter={episodeFilter}
+                        episodeOptions={episodeOptions}
                         filteredCount={filteredAssets.length}
                         folderCounts={folderCounts}
                         folderFilter={folderFilter}
@@ -346,6 +432,7 @@ function AssetsPageContent() {
                         onClearSelectedOutdatedUsages={clearSelectedOutdatedUsages}
                         onCreateFolder={openCreateFolder}
                         onDeleteFolder={deleteFolder}
+                        onEpisodeFilterChange={assetFilterActions.changeEpisodeFilter}
                         onEditFolder={openEditFolder}
                         onFolderFilterChange={assetFilterActions.changeFolderFilter}
                         onGenerationActionFilterChange={assetFilterActions.changeGenerationActionFilter}
@@ -364,10 +451,10 @@ function AssetsPageContent() {
                 <AssetResultsSection
                     allFilteredSelected={allFilteredSelected}
                     allVisibleProductionBibleSelected={allVisibleProductionBibleSelected}
+                    assetPaginationEnabled={assetPaginationEnabled}
                     bulkReviewAction={bulkReviewAction}
-                    canvasLibraryFilter={canvasLibraryFilter}
+                    episodeTitleMap={episodeTitleMap}
                     filteredCount={filteredAssets.length}
-                    folderMap={folderMap}
                     page={page}
                     pageSize={pageSize}
                     productionBibleCount={visibleProductionBibleItems.length}
@@ -375,6 +462,7 @@ function AssetsPageContent() {
                     referenceVersionFilter={referenceVersionFilter}
                     refreshingReviewId={refreshingReviewId}
                     generatingWorkflowAssetId={generatingWorkflowAssetId}
+                    uploadingWorkflowAssetId={uploadingWorkflowAssetId}
                     selectedAssetIds={selectedAssetIds}
                     selectedAssetSummary={selectedAssetSummary}
                     selectedAssetsCount={selectedAssets.length}
@@ -386,6 +474,7 @@ function AssetsPageContent() {
                     selectedProductionBibleSummary={selectedProductionBibleItemSummary}
                     selectedVolcengineRefreshCount={selectedVolcengineRefreshAssets.length}
                     selectedVolcengineSubmitCount={selectedVolcengineSubmitAssets.length}
+                    showEpisodeGroups={Boolean(projectContextFilter)}
                     sortMode={sortMode}
                     submittingReviewId={submittingReviewId}
                     usages={outdatedAssetVersionUsages}
@@ -412,6 +501,8 @@ function AssetsPageContent() {
                     }}
                     onRefreshAssetReview={(asset) => void refreshImageReview(asset)}
                     onGenerateWorkflowImage={(asset) => void generateWorkflowAssetImage(asset)}
+                    onMatchWorkflowImage={openWorkflowImageMatch}
+                    onUploadWorkflowImage={openWorkflowImageUpload}
                     onRefreshSelectedReviews={() => void refreshSelectedVolcengineReviews()}
                     onRemoveFromProjectLibrary={removeSelectedFromProjectLibrary}
                     onSelectFiltered={selectFilteredAssets}
@@ -502,6 +593,39 @@ function AssetsPageContent() {
                 onSaveAsset={saveAsset}
                 onSaveFolder={saveFolder}
             />
+            <Modal className="studio-modal" title="匹配已有图片" open={Boolean(matchingWorkflowAsset)} width={900} footer={null} destroyOnHidden onCancel={() => setMatchingWorkflowAsset(null)}>
+                {matchingWorkflowAsset ? (
+                    <div className="grid gap-4">
+                        <div className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
+                            <div className="text-xs text-[var(--studio-text-muted)]">目标素材</div>
+                            <div className="mt-1 truncate text-sm font-semibold text-[var(--studio-text-primary)]">{matchingWorkflowAsset.title}</div>
+                        </div>
+                        <Input className="studio-command-input" allowClear value={matchKeyword} placeholder="搜索旧素材标题、来源、标签或集数" onChange={(event) => setMatchKeyword(event.target.value)} />
+                        {matchCandidateAssets.length ? (
+                            <div className="grid max-h-[520px] gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
+                                {matchCandidateAssets.map((asset) => {
+                                    const cover = asset.coverUrl || asset.data.dataUrl;
+                                    return (
+                                        <button key={asset.id} type="button" className="grid gap-3 rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-elevated-bg)] p-3 text-left transition hover:border-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]" onClick={() => matchWorkflowImageAsset(asset)}>
+                                            <div className="overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-shell-bg)]">
+                                                {cover ? <img src={cover} alt={asset.title} className="h-32 w-full object-contain" /> : <div className="grid h-32 place-items-center text-xs text-[var(--studio-text-muted)]">暂无预览</div>}
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="truncate text-sm font-semibold text-[var(--studio-text-primary)]">{asset.title}</div>
+                                                <div className="mt-1 text-xs text-[var(--studio-text-muted)]">{assetEpisodeTitle(asset, episodeTitleMap)}</div>
+                                                <div className="mt-1 line-clamp-1 text-xs text-[var(--studio-text-secondary)]">{asset.source || "未标注来源"}</div>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到可匹配的图片素材" className="py-10" />
+                        )}
+                    </div>
+                ) : null}
+            </Modal>
+            <input ref={workflowUploadInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => void uploadWorkflowImageFile(event.target.files)} />
         </div>
     );
 }
@@ -509,6 +633,20 @@ function AssetsPageContent() {
 type SearchParamReader = {
     get: (name: string) => string | null;
 };
+
+function assetMatchProjectId(asset: Asset, info: ReturnType<typeof workflowAssetInfo>, fallback: string) {
+    const metadata = asset.metadata || {};
+    return readMetadataString(metadata.projectId) || info?.sourceProjectId || info?.projectSlug || fallback;
+}
+
+function assetMatchSearchText(asset: Asset, episodeTitleMap: Record<string, string>) {
+    const metadata = asset.metadata || {};
+    return [asset.title, asset.source, asset.note, (asset.tags || []).join(" "), readMetadataString(metadata.episodeId), readMetadataString(metadata.episodeTitle), assetEpisodeTitle(asset, episodeTitleMap)].join(" ").toLowerCase();
+}
+
+function readMetadataString(value: unknown) {
+    return typeof value === "string" ? value : "";
+}
 
 function buildAssetsPageReturnTarget(searchParams: SearchParamReader) {
     const returnTo = searchParams.get("returnTo") || "";

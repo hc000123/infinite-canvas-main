@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { AgentSettingsCenterPanel } from "@/app/(user)/projects/agent-settings-center-panel";
+import { ModelPicker } from "@/components/model-picker";
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
@@ -27,6 +28,7 @@ export function AppConfigModal() {
     const videoModel = modelConfig.videoModel;
     const isAdmin = user?.role === "admin";
     const showAdminSettingsEntry = isAdmin;
+    const allowCustomModel = modelChannel?.allowCustomChannel !== false;
 
     useEffect(() => {
         if (isConfigOpen && showAdminSettingsEntry) router.prefetch("/admin/settings");
@@ -94,13 +96,13 @@ export function AppConfigModal() {
                                     </div>
                                     <div className="grid gap-4 md:grid-cols-3">
                                         <Form.Item label="默认生图模型" className="mb-4">
-                                            <SyncedModelValue value={modelConfig.imageModel} />
+                                            <ModelPicker config={modelConfig} modelType="image" value={modelConfig.imageModel} onChange={(value) => updateConfig("imageModel", value)} fullWidth allowCustomModel={allowCustomModel} />
                                         </Form.Item>
                                         <Form.Item label="默认视频模型" className="mb-4">
-                                            <SyncedModelValue value={modelConfig.videoModel} />
+                                            <ModelPicker config={modelConfig} modelType="video" value={modelConfig.videoModel} onChange={(value) => updateConfig("videoModel", value)} fullWidth allowCustomModel={allowCustomModel} />
                                         </Form.Item>
                                         <Form.Item label="默认文本模型" className="mb-4">
-                                            <SyncedModelValue value={modelConfig.textModel} />
+                                            <ModelPicker config={modelConfig} modelType="text" value={modelConfig.textModel} onChange={(value) => updateConfig("textModel", value)} fullWidth allowCustomModel={allowCustomModel} />
                                         </Form.Item>
                                     </div>
                                     <div className="mb-0 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
@@ -146,8 +148,4 @@ export function AppConfigModal() {
             </div>
         </Modal>
     );
-}
-
-function SyncedModelValue({ value }: { value: string }) {
-    return <div className="flex h-8 min-w-0 items-center rounded-full border border-input bg-transparent px-3 text-sm text-stone-700 dark:text-stone-200">{value || "后台未设置"}</div>;
 }

@@ -1,4 +1,4 @@
-import { CheckCircle, CheckSquare, Copy, Download, Eye, Folder, ImageIcon, ImagePlus, PencilLine, RefreshCw, ShieldCheck, Square, Trash2 } from "lucide-react";
+import { CheckCircle, CheckSquare, Copy, Download, Eye, Folder, ImageIcon, ImagePlus, Link2, PencilLine, RefreshCw, ShieldCheck, Square, Trash2, Upload } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { Button, Card, Tag, Tooltip, Typography } from "antd";
 
@@ -195,6 +195,184 @@ export function AssetCard({
     );
 }
 
+export function AssetRow({
+    asset,
+    selected,
+    refreshingReview,
+    onSelect,
+    onOpen,
+    onEdit,
+    onCopy,
+    onDownload,
+    onDelete,
+    submittingReview,
+    onReview,
+    onRefreshReview,
+    onGenerateWorkflowImage,
+    generatingWorkflowImage,
+    onMatchWorkflowImage,
+    onUploadWorkflowImage,
+    uploadingWorkflowImage,
+}: {
+    asset: Asset;
+    selected: boolean;
+    refreshingReview: boolean;
+    onSelect: () => void;
+    onOpen: () => void;
+    onEdit: () => void;
+    onCopy: (asset: Asset) => void;
+    onDownload: (asset: Asset) => void;
+    onDelete: () => void;
+    submittingReview: boolean;
+    onReview: () => void;
+    onRefreshReview: () => void;
+    onGenerateWorkflowImage?: (asset: Asset) => void;
+    generatingWorkflowImage?: boolean;
+    onMatchWorkflowImage?: (asset: Asset) => void;
+    onUploadWorkflowImage?: (asset: Asset) => void;
+    uploadingWorkflowImage?: boolean;
+}) {
+    const cover = asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "");
+    const workflowInfo = workflowAssetInfo(asset);
+    const canGenerateWorkflowImage = workflowAssetCanGenerate(asset);
+    const videoPreviewUrl = asset.kind === "video" ? videoCoverUrl(asset.data.url) : "";
+    const mediaInfo = assetMediaInfo(asset);
+    const summary = workflowInfo ? workflowAssetContentField(asset, ["视觉描述", "描述", "用途", "资产用途"]) || assetSummary(asset) : assetSummary(asset);
+    const isGenerated = asset.kind === "image" || workflowInfo?.status === "image_generated";
+    const statusLabel = workflowInfo ? (isGenerated ? "已生图" : "待生图") : assetKindLabel(asset.kind);
+    const generateLabel = isGenerated ? "重新生成" : "生成图片";
+    const typeLabel = workflowInfo?.type || assetKindLabel(asset.kind);
+    const identity = [workflowInfo?.assetId, workflowInfo?.episode].filter(Boolean).join(" · ");
+    const previewFitClass = workflowInfo ? "object-contain" : "object-cover";
+    const openOnKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        onOpen();
+    };
+
+    return (
+        <article className={cn("group grid min-h-[96px] grid-cols-[auto_minmax(0,124px)_minmax(0,1fr)] items-stretch gap-3 rounded-lg border bg-[var(--studio-elevated-bg)] p-3 transition lg:grid-cols-[auto_minmax(0,132px)_minmax(0,1fr)_auto]", selected ? "border-[var(--studio-accent)] shadow-[0_0_0_1px_var(--studio-accent)]" : "border-[var(--studio-border-subtle)] hover:border-[var(--studio-accent)]")}>
+            <Tooltip title={selected ? "取消选择素材" : "选择素材"}>
+                <button
+                    type="button"
+                    aria-label={selected ? `取消选择素材 ${asset.title}` : `选择素材 ${asset.title}`}
+                    aria-pressed={selected}
+                    className={cn("mt-1 grid h-7 w-7 place-items-center rounded-md border border-[var(--studio-border-strong)] bg-[rgba(10,14,22,.58)] text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-accent)] hover:text-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]", selected && "border-[var(--studio-accent)] bg-[var(--studio-accent)] text-[var(--primary-foreground)] hover:text-[var(--primary-foreground)]")}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onSelect();
+                    }}
+                >
+                    {selected ? <CheckSquare className="size-4" /> : <Square className="size-4" />}
+                </button>
+            </Tooltip>
+
+            <div
+                role="button"
+                tabIndex={0}
+                aria-label={`查看素材详情：${asset.title}`}
+                className="relative min-h-[72px] cursor-pointer overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-shell-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]"
+                onClick={onOpen}
+                onKeyDown={openOnKeyboard}
+            >
+                {cover ? (
+                    <img src={cover} alt={asset.title} className={`size-full ${previewFitClass}`} />
+                ) : asset.kind === "video" ? (
+                    <video src={videoPreviewUrl} muted playsInline preload="metadata" className="size-full bg-[var(--studio-shell-bg)] object-cover" />
+                ) : (
+                    <div className="flex size-full flex-col items-center justify-center gap-1.5 px-4 text-center text-xs leading-5 text-[var(--studio-text-muted)]">
+                        <ImageIcon className="size-6" />
+                        <span>{workflowInfo ? "待匹配图片" : asset.kind === "text" ? "文本素材" : "暂无封面"}</span>
+                    </div>
+                )}
+                <span className="absolute left-1.5 top-1.5 rounded border border-[var(--studio-border-subtle)] bg-[rgba(10,14,22,.72)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--studio-text-primary)] backdrop-blur">{statusLabel}</span>
+                {mediaInfo ? <span className="absolute bottom-1.5 right-1.5 max-w-[calc(100%-12px)] truncate rounded border border-[var(--studio-border-subtle)] bg-[rgba(10,14,22,.76)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--studio-text-primary)] backdrop-blur">{mediaInfo}</span> : null}
+            </div>
+
+            <div
+                role="button"
+                tabIndex={0}
+                aria-label={`查看素材详情：${asset.title}`}
+                className="min-w-0 cursor-pointer py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]"
+                onClick={onOpen}
+                onKeyDown={openOnKeyboard}
+            >
+                <div className="flex min-w-0 items-center gap-2">
+                    <h3 className="min-w-0 truncate text-sm font-semibold leading-6 text-[var(--studio-text-primary)]">{asset.title}</h3>
+                    <span className="shrink-0 rounded border border-[var(--studio-border-subtle)] px-1.5 py-0.5 text-[11px] text-[var(--studio-text-secondary)]">{typeLabel}</span>
+                </div>
+                <p className="mt-1 line-clamp-1 text-xs leading-5 text-[var(--studio-text-secondary)]">{summary}</p>
+                <div className="mt-2 flex min-w-0 items-center gap-2 text-[11px] text-[var(--studio-text-muted)]">
+                    {identity ? <span className="shrink-0">{identity}</span> : null}
+                    {asset.source ? <span className="truncate">{asset.source}</span> : null}
+                    {(asset.kind === "image" || asset.kind === "video") && asset.metadata?.volcengineAsset ? <VolcengineAssetTag status={asset.metadata.volcengineAsset.status} /> : null}
+                </div>
+            </div>
+
+            <div className="col-span-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--studio-border-subtle)] pt-3 lg:col-span-1 lg:flex-col lg:items-end lg:justify-center lg:border-t-0 lg:pt-0">
+                <div className="flex flex-wrap justify-end gap-2">
+                    {canGenerateWorkflowImage && onGenerateWorkflowImage ? (
+                        <Button
+                            type="primary"
+                            size="middle"
+                            className="!h-8"
+                            icon={<ImagePlus className="size-4" />}
+                            loading={generatingWorkflowImage}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onGenerateWorkflowImage(asset);
+                            }}
+                        >
+                            {generateLabel}
+                        </Button>
+                    ) : null}
+                    {workflowInfo && onMatchWorkflowImage ? (
+                        <Button
+                            size="middle"
+                            className="!h-8"
+                            icon={<Link2 className="size-4" />}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onMatchWorkflowImage?.(asset);
+                            }}
+                        >
+                            匹配旧图
+                        </Button>
+                    ) : null}
+                    {workflowInfo && onUploadWorkflowImage ? (
+                        <Button
+                            size="middle"
+                            className="!h-8"
+                            icon={<Upload className="size-4" />}
+                            loading={uploadingWorkflowImage}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onUploadWorkflowImage(asset);
+                            }}
+                        >
+                            上传
+                        </Button>
+                    ) : null}
+                </div>
+                <div className="flex items-center gap-1">
+                    <AssetIconButton title="查看" icon={<Eye className="size-3.5" />} onClick={onOpen} />
+                    <AssetIconButton title="编辑" icon={<PencilLine className="size-3.5" />} onClick={onEdit} />
+                    {asset.kind === "text" ? <AssetIconButton title="复制" icon={<Copy className="size-3.5" />} onClick={() => void onCopy(asset)} /> : null}
+                    {asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" ? <AssetIconButton title="下载" icon={<Download className="size-3.5" />} onClick={() => onDownload(asset)} /> : null}
+                    {shouldShowVolcengineReviewAction(asset.kind) ? (
+                        asset.metadata?.volcengineAsset?.assetId && !canSubmitVolcengineReview(asset.metadata.volcengineAsset) ? (
+                            <AssetIconButton title={volcengineReviewActionLabel(asset.metadata.volcengineAsset.status)} icon={<RefreshCw className={`size-3.5 ${isVolcengineReviewProcessing(asset.metadata.volcengineAsset) && !refreshingReview ? "animate-spin" : ""}`} />} loading={refreshingReview} onClick={onRefreshReview} />
+                        ) : (
+                            <AssetIconButton title={asset.metadata?.volcengineAsset?.status === "Failed" ? "重新加白" : "加白"} icon={<ShieldCheck className="size-3.5" />} loading={submittingReview} onClick={onReview} />
+                        )
+                    ) : null}
+                    <AssetIconButton title="删除" icon={<Trash2 className="size-3.5" />} danger onClick={onDelete} />
+                </div>
+            </div>
+        </article>
+    );
+}
+
 function WorkflowImportedAssetCard({
     asset,
     canGenerateWorkflowImage,
@@ -322,7 +500,7 @@ function WorkflowImportedAssetCard({
                             onGenerateWorkflowImage(asset);
                         }}
                     >
-                        生成图片
+                        {asset.kind === "image" || workflowInfo.status === "image_generated" ? "重新生成图片" : "生成图片"}
                     </Button>
                 ) : null}
                 <div className="flex items-center justify-between gap-2">

@@ -1,26 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { App, Button, Empty, Input, Spin, Tag } from "antd";
-import { ArrowLeft, CheckCircle2, ChevronRight, Clipboard, Download, FileText, FolderOpen, PackagePlus, Play, RefreshCw, Save, ShieldCheck, Square, TerminalSquare, TriangleAlert, Video, Wand2 } from "lucide-react";
+import { App, Button, Empty, Input, Segmented, Spin, Tag } from "antd";
+import { ArrowLeft, CheckCircle2, ChevronRight, Clipboard, Download, FileText, FolderOpen, PackagePlus, Play, RefreshCw, Save, ShieldCheck, Square, Video, Wand2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useCopyText } from "@/hooks/use-copy-text";
-import { createRemoteAgentRun, type CreateRemoteAgentRunInput } from "@/services/api/agent-runs";
-import { preflightVideoGeneration } from "@/services/api/video";
-import { useAssetStore, type Asset } from "@/stores/use-asset-store";
+import { requestImageQuestion, type ChatCompletionMessage } from "@/services/api/image";
+import { useAssetStore, type Asset, type AssetWriteInput } from "@/stores/use-asset-store";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useScriptStore } from "../canvas/stores/use-script-store";
-import { defaultAgentConfigs, mergeAgentConfigs, type AgentConfig, type AgentConfigKind } from "../projects/agent-settings";
+import { assetProjectLibraryEntries, type AssetProjectLibraryEntry } from "../assets/asset-project-library";
+import { canInvokeAgentConfig, defaultAgentConfigs, mergeAgentConfigs } from "../projects/agent-settings";
+import { hasScriptOptimizerWhitePaperProductionNotes, isMeaningfullyOptimizedScript } from "../projects/script-optimizer-agent";
 import { useAgentSettingsStore } from "../projects/use-agent-settings-store";
 import { useCreativeProjectStore } from "../projects/use-creative-project-store";
-import { formatVideoGenerationError } from "../video/video-generation-errors";
 import { buildImportedVideoPackage, useVideoPackageStore } from "../video/use-video-package-store";
-import { buildOriginalWorkflowChainHealth, type OriginalWorkflowChainHealthItem, type OriginalWorkflowEnterprisePreflight } from "./original-workflow-chain-health";
+import { workflowPromptAuthoringIssue } from "../video/video-package-builders";
+import { buildOriginalWorkflowChainHealth } from "./original-workflow-chain-health";
 import { buildWorkflowTextAssetInput, parseWorkflowAssetPrompts, parseWorkflowCopyOnlyPrompts, parseWorkflowImageReferenceTable } from "./original-workflow-imports";
 import { getOriginalWorkflowNextStep, type OriginalWorkflowNextStep } from "./original-workflow-next-step";
+import { findOriginalWorkflowPresetByRootPath } from "./original-workflow-presets";
 import { getCopyOnlySyncState } from "./original-workflow-readiness";
-import { useOriginalWorkflowStore } from "./use-original-workflow-store";
+import { buildOriginalWorkflowScriptOptimizerMessages, parseOriginalWorkflowScriptOptimizerResult } from "./original-workflow-script-optimizer";
+import { useOriginalWorkflowStore, type OriginalWorkflowExecutionMode } from "./use-original-workflow-store";
 
 type WorkflowFile = {
     content: string;
@@ -107,24 +110,27 @@ export default function OriginalWorkflowPage() {
     const codexApiBaseUrl = useOriginalWorkflowStore((state) => state.codexApiBaseUrl);
     const codexApiKey = useOriginalWorkflowStore((state) => state.codexApiKey);
     const codexModel = useOriginalWorkflowStore((state) => state.codexModel);
+    const executionMode = useOriginalWorkflowStore((state) => state.executionMode);
     const rootPath = useOriginalWorkflowStore((state) => state.rootPath);
     const episode = useOriginalWorkflowStore((state) => state.episode);
     const projectSlug = useOriginalWorkflowStore((state) => state.projectSlug);
-    const setCodexModel = useOriginalWorkflowStore((state) => state.setCodexModel);
     const setRootPath = useOriginalWorkflowStore((state) => state.setRootPath);
     const setEpisode = useOriginalWorkflowStore((state) => state.setEpisode);
+    const setExecutionMode = useOriginalWorkflowStore((state) => state.setExecutionMode);
     const setProjectSlug = useOriginalWorkflowStore((state) => state.setProjectSlug);
     const addAsset = useAssetStore((state) => state.addAsset);
     const assets = useAssetStore((state) => state.assets);
+    const ensureProjectFolder = useAssetStore((state) => state.ensureProjectFolder);
     const updateAsset = useAssetStore((state) => state.updateAsset);
     const sourceEpisodes = useScriptStore((state) => state.episodes);
     const sourceProjects = useCreativeProjectStore((state) => state.projects);
     const effectiveConfig = useEffectiveConfig();
-    const globalAgentConfigs = useAgentSettingsStore((state) => state.globalConfigs);
-    const projectAgentConfigs = useAgentSettingsStore((state) => state.projectConfigs);
     const hasLoadedPublicSettings = useConfigStore((state) => state.hasLoadedPublicSettings);
     const isPublicSettingsLoading = useConfigStore((state) => state.isPublicSettingsLoading);
     const loadPublicSettings = useConfigStore((state) => state.loadPublicSettings);
+    const checkAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
+    const globalAgentConfigs = useAgentSettingsStore((state) => state.globalConfigs);
+    const projectAgentConfigs = useAgentSettingsStore((state) => state.projectConfigs);
     const importedPackages = useVideoPackageStore((state) => state.importedPackages);
     const upsertImportedPackages = useVideoPackageStore((state) => state.upsertImportedPackages);
     const [snapshot, setSnapshot] = useState<WorkflowSnapshot>();
@@ -132,8 +138,6 @@ export default function OriginalWorkflowPage() {
     const [activeFileKey, setActiveFileKey] = useState("script");
     const [draft, setDraft] = useState("");
     const [loading, setLoading] = useState(false);
-    const [enterprisePreflight, setEnterprisePreflight] = useState<OriginalWorkflowEnterprisePreflight | null>(null);
-    const [isEnterprisePreflightChecking, setIsEnterprisePreflightChecking] = useState(false);
     const [runningAction, setRunningAction] = useState("");
     const [syncedSourceScriptKey, setSyncedSourceScriptKey] = useState("");
     const latestSnapshotRequestKeyRef = useRef("");
@@ -144,14 +148,15 @@ export default function OriginalWorkflowPage() {
     const routeParamsPending = Boolean((requestedEpisode && requestedEpisode !== episode) || (requestedProjectSlug && requestedProjectSlug !== projectSlug));
     const sourceProject = useMemo(() => sourceProjects.find((item) => item.id === sourceProjectId), [sourceProjectId, sourceProjects]);
     const sourceEpisode = useMemo(() => sourceEpisodes.find((item) => item.id === sourceEpisodeId), [sourceEpisodeId, sourceEpisodes]);
-    const resolvedAgentConfigs = useMemo(
-        () => mergeAgentConfigs(defaultAgentConfigs(), globalAgentConfigs, projectAgentConfigs[sourceProjectId] || projectAgentConfigs[projectSlug] || []),
-        [globalAgentConfigs, projectAgentConfigs, projectSlug, sourceProjectId],
-    );
     const sourceScopeLabel = sourceProject || sourceEpisode ? `${sourceProject?.title || "未命名项目"} / ${sourceEpisode ? `第 ${String(sourceEpisode.order || 1).padStart(2, "0")} 集 · ${sourceEpisode.title}` : "未绑定分集"}` : "";
     const sourceReturnHref = sourceProjectId ? (sourceEpisodeId ? `/projects/${encodeURIComponent(sourceProjectId)}/episodes/${encodeURIComponent(sourceEpisodeId)}/workbench` : `/projects/${encodeURIComponent(sourceProjectId)}`) : "";
     const sourceReturnLabel = sourceEpisodeId ? "返回本集生产台" : "返回来源项目";
+    const scriptOptimizeHref = sourceEpisodeId && sourceReturnHref ? `${sourceReturnHref}?module=script` : "";
+    const agentProjectId = sourceProjectId || projectSlug;
     const filesByKey = useMemo(() => new Map(snapshot?.files.map((file) => [file.key, file]) || []), [snapshot?.files]);
+    const resolvedAgentConfigs = useMemo(() => mergeAgentConfigs(defaultAgentConfigs(), globalAgentConfigs, projectAgentConfigs[agentProjectId] || []), [agentProjectId, globalAgentConfigs, projectAgentConfigs]);
+    const scriptOptimizerConfig = resolvedAgentConfigs.find((config) => config.kind === "script_optimizer");
+    const workflowPreset = useMemo(() => findOriginalWorkflowPresetByRootPath(rootPath), [rootPath]);
     const currentFile = filesByKey.get(activeFileKey);
     const visibleFileKeys = activeTab === "quality" ? [] : tabFileKeys[activeTab];
     const visibleFiles = visibleFileKeys.map((key) => filesByKey.get(key)).filter(Boolean) as WorkflowFile[];
@@ -167,14 +172,14 @@ export default function OriginalWorkflowPage() {
     const chainHealth = useMemo(
         () =>
             buildOriginalWorkflowChainHealth({
-                enterprisePreflight,
+                enterprisePreflight: null,
                 files: snapshot?.files || [],
                 isPublicSettingsLoading: isPublicSettingsPending,
                 validations: snapshot?.validations,
                 videoPackageCount: workflowVideoPackageCount,
                 videoProtocol: effectiveConfig.videoProtocol,
             }),
-        [effectiveConfig.videoProtocol, enterprisePreflight, isPublicSettingsPending, snapshot?.files, snapshot?.validations, workflowVideoPackageCount],
+        [effectiveConfig.videoProtocol, isPublicSettingsPending, snapshot?.files, snapshot?.validations, workflowVideoPackageCount],
     );
     const nextStep = useMemo(
         () => getOriginalWorkflowNextStep({ files: snapshot?.files || [], job: currentReport, rootExists: snapshot?.rootExists, validations: snapshot?.validations }),
@@ -200,6 +205,9 @@ export default function OriginalWorkflowPage() {
         ],
         [filesByKey],
     );
+    const activeTabLabel = tabOptions.find((tab) => tab.key === activeTab)?.label || "当前阶段";
+    const blockedHealthCount = chainHealth.filter((item) => item.status === "blocked").length;
+    const readyHealthCount = chainHealth.filter((item) => item.status === "ready").length;
 
     useEffect(() => {
         let changed = false;
@@ -298,6 +306,7 @@ export default function OriginalWorkflowPage() {
                 action,
                 content: draft,
                 episode,
+                executionMode,
                 fileKey: options?.fileKey,
                 ...(action === "start-stage"
                     ? {
@@ -326,57 +335,86 @@ export default function OriginalWorkflowPage() {
         }
     };
 
-    const startCloudStage = async (stage: "stage1" | "stage2" | "stage3") => {
-        const notice = stageStartGateNotice(stage, snapshot?.validations);
-        if (notice) {
-            message.warning(notice);
-            setActiveTab("quality");
-            return;
-        }
-        const input = buildCloudStageRunInput(stage, {
-            agentConfig: resolvedAgentConfigs.find((config) => config.kind === workflowStageAgentKind(stage)),
-            episode,
-            filesByKey,
-            modelPreference: codexModel,
-            projectId: sourceProjectId || projectSlug,
-            projectSlug,
-            sourceEpisodeId,
-            sourceProjectId,
-        });
-        if (!input.userPrompt?.trim()) {
-            message.warning("缺少可提交给云端 Agent 的阶段输入");
-            return;
-        }
-        setRunningAction(`cloud-stage-${stage}`);
-        try {
-            const run = await createRemoteAgentRun(input);
-            const result: CommandResult = {
-                command: "后端 Agent Run API",
-                exitCode: run.status === "failed" ? "1" : "0",
-                jobId: run.id,
-                jobStatus: run.status,
-                runnerAgent: `${run.provider || "后台模型渠道"}${run.channelId ? `(${run.channelId})` : ""} / ${run.model || "默认文本模型"}${run.fallbackUsed ? " / fallback" : ""}`,
-                stderr: run.errorMessage || "",
-                stdout: run.rawOutput || `云端 Agent Run 已创建，原始输出和结构化草案已保存到后端，等待人工确认后再写入资产 / 分镜 / 视频生产包。耗时 ${run.durationMs || 0}ms。`,
-            };
-            setSnapshot((current) => (current ? { ...current, commandResult: result } : current));
-            setActiveTab("quality");
-            if (run.status === "failed") message.error(run.errorMessage || "云端 Agent Run 失败");
-            else message.success("云端 Agent Run 已完成，等待审核确认");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "云端 Agent Run 创建失败");
-        } finally {
-            setRunningAction("");
-        }
-    };
-
     const saveCurrentFile = () => {
         if (!currentFile) return;
         void runAction(currentFile.key === "script" ? "save-script" : "save-file", { fileKey: currentFile.key });
     };
 
+    const optimizeScriptWithAgent = async () => {
+        const sourceScript = (activeFileKey === "script" ? draft : filesByKey.get("script")?.content || draft).trim();
+        if (!sourceScript) {
+            message.warning("请先导入或粘贴本集剧本。");
+            setActiveTab("script");
+            return;
+        }
+        const agentConfig = scriptOptimizerConfig;
+        if (!agentConfig) {
+            message.warning("未找到剧本优化 Agent 设定。");
+            return;
+        }
+        const callable = canInvokeAgentConfig(agentConfig);
+        if (!callable.callable) {
+            message.warning(callable.reason || "剧本优化 Agent 不可用。");
+            return;
+        }
+        const preferredModel = agentConfig.modelPreference.trim();
+        const textModel = preferredModel && preferredModel !== "default" ? preferredModel : effectiveConfig.textModel || effectiveConfig.model;
+        if (!checkAiConfigReady(effectiveConfig, textModel)) {
+            message.warning("请先配置可用的文本模型。");
+            return;
+        }
+        const requestKey = workflowSnapshotKey(rootPath, projectSlug, episode);
+        latestSnapshotRequestKeyRef.current = requestKey;
+        setRunningAction("optimize-script");
+        try {
+            const answer = await requestImageQuestion(
+                { ...effectiveConfig, model: textModel },
+                buildOriginalWorkflowScriptOptimizerMessages({
+                    agentConfig,
+                    episode,
+                    projectSlug,
+                    scriptSnapshot: sourceScript,
+                }) as ChatCompletionMessage[],
+            );
+            if (latestSnapshotRequestKeyRef.current !== requestKey) return;
+            const result = parseOriginalWorkflowScriptOptimizerResult(answer, episode);
+            const optimized = result.productionScript.trim();
+            if (!optimized) {
+                message.warning("模型没有返回可用的优化稿。");
+                return;
+            }
+            if (!isMeaningfullyOptimizedScript(sourceScript, optimized)) {
+                message.warning("模型返回内容与原稿基本一致，未作为有效优化稿写入。请换更强的文本模型或调整剧本优化 Agent 后重试。");
+                return;
+            }
+            if (!hasScriptOptimizerWhitePaperProductionNotes(optimized)) {
+                message.warning("模型返回稿缺少白皮书要求的制作备注、视觉方向、连续性、风险提示或禁止项，未写入剧本。");
+                return;
+            }
+            const data = await requestWorkflow<WorkflowSnapshot>("/api/original-workflow", {
+                action: "save-script",
+                content: optimized,
+                episode,
+                executionMode,
+                projectSlug,
+                requireScriptOptimizerNotes: true,
+                rootPath,
+            });
+            if (latestSnapshotRequestKeyRef.current !== requestKey) return;
+            setSnapshot(data);
+            setActiveTab("script");
+            setActiveFileKey("script");
+            setDraft(optimized);
+            message.success("剧本优化 Agent 已保存优化稿，可用 v5 继续跑 Stage 1。");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "剧本优化失败");
+        } finally {
+            if (latestSnapshotRequestKeyRef.current === requestKey) setRunningAction("");
+        }
+    };
+
     const startStage = (stage: "stage1" | "stage2" | "stage3") => {
-        void startCloudStage(stage);
+        void runAction("start-stage", { stage });
     };
 
     const importAssetPromptCards = () => {
@@ -395,11 +433,19 @@ export default function OriginalWorkflowPage() {
             message.warning("没有找到可导入的资产提示词，请先生成 Stage 2");
             return;
         }
+        const projectFolderId = sourceProjectId ? ensureProjectFolder(sourceProjectId, sourceProject?.title || projectSlug || sourceProjectId) : "";
         let created = 0;
         let updated = 0;
         for (const item of parsed) {
-            const input = buildWorkflowTextAssetInput(item);
             const existing = assets.find((asset) => workflowAssetImportKey(asset) === item.importKey);
+            const input = scopeWorkflowAssetToSourceProject(buildWorkflowTextAssetInput(item), {
+                existing,
+                folderId: projectFolderId,
+                sourceEpisodeId,
+                sourceEpisodeTitle: sourceEpisode?.title || "",
+                sourceProjectId,
+                sourceProjectTitle: sourceProject?.title || "",
+            });
             if (existing) {
                 updateAsset(existing.id, input as Partial<Omit<Asset, "createdAt" | "id">>);
                 updated += 1;
@@ -421,6 +467,14 @@ export default function OriginalWorkflowPage() {
             if (!options?.quietMissing) message.warning("没有找到 Copy-only 提示词，请先完成 Stage 3 并导出 Copy-only");
             return 0;
         }
+        const blocked = parsed
+            .map((item) => ({ item, issue: workflowPromptAuthoringIssue(item.prompt, item.duration) }))
+            .find(({ issue }) => Boolean(issue));
+        if (blocked) {
+            message.error(`${blocked.item.id} 未通过视频提示词入库检查：${blocked.issue}`);
+            setActiveTab("stage3");
+            return 0;
+        }
         const count = upsertImportedPackages(parsed.map((item) => buildImportedVideoPackage({ ...item, references, sourceProjectId })));
         message.success(`已同步 ${count} 条视频生产包`);
         if (navigate) router.push(videoHref(episode, { projectSlug, sourceEpisodeId, sourceProjectId }));
@@ -434,35 +488,6 @@ export default function OriginalWorkflowPage() {
             return;
         }
         syncCopyOnlyToVideo(snapshot);
-    };
-
-    const checkEnterpriseVideoApi = async () => {
-        if (isPublicSettingsPending) {
-            message.info("正在读取企业视频配置，请稍后再试");
-            return;
-        }
-        if (effectiveConfig.videoProtocol !== "volcengine-ark") {
-            const errorMessage = "当前视频通道不是企业 Ark / Seedance，请先确认后台系统设置已把视频模型映射到 volcengine-ark。";
-            setEnterprisePreflight({ checkedAt: new Date().toISOString(), message: errorMessage, status: "failed" });
-            message.error(errorMessage);
-            return;
-        }
-        setIsEnterprisePreflightChecking(true);
-        try {
-            const result = await preflightVideoGeneration(effectiveConfig);
-            const model = result?.model || effectiveConfig.seedanceEndpointId || effectiveConfig.seedanceModel || effectiveConfig.videoModel || effectiveConfig.model;
-            const channel = result?.channelName || "企业 Ark / Seedance";
-            const endpoint = result?.endpointId ? `，EP ${result.endpointId}` : "";
-            const successMessage = `${channel} 已通过预检，模型 ${model || "未返回"}${endpoint} 可用于提交视频任务。`;
-            setEnterprisePreflight({ checkedAt: new Date().toISOString(), message: successMessage, status: "passed" });
-            message.success("企业视频 API 预检通过");
-        } catch (error) {
-            const errorMessage = formatVideoGenerationError(error);
-            setEnterprisePreflight({ checkedAt: new Date().toISOString(), message: errorMessage, status: "failed" });
-            message.error(errorMessage);
-        } finally {
-            setIsEnterprisePreflightChecking(false);
-        }
     };
 
     const exportCopyOnlyToVideo = async () => {
@@ -544,198 +569,232 @@ export default function OriginalWorkflowPage() {
                                     {sourceReturnLabel}
                                 </Button>
                             ) : null}
+                            <Button icon={<Video className="size-4" />} onClick={() => router.push(videoHref(episode, { projectSlug, sourceEpisodeId, sourceProjectId }))}>
+                                视频生产台
+                            </Button>
                             <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void refresh()}>
                                 刷新
                             </Button>
                             <Button danger icon={<Square className="size-4" />} disabled={currentReport?.jobStatus !== "running"} loading={runningAction === "cancel-latest-job-"} onClick={() => void runAction("cancel-latest-job")}>
                                 停止 Runner
                             </Button>
-                            <Button type="primary" icon={<Save className="size-4" />} disabled={!editable || !currentFile} loading={runningAction.startsWith("save")} onClick={saveCurrentFile}>
-                                保存当前稿
-                            </Button>
                         </div>
                     </div>
                 </header>
 
-                <section className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[340px_1fr]">
-                    <aside className="thin-scrollbar flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
-                        <div className="studio-panel p-4">
-                            <div className="flex items-center gap-2 text-sm font-semibold text-[var(--studio-text-primary)]">
-                                <FolderOpen className="size-4 text-[var(--studio-accent)]" />
-                                工作流目录
+                <section className="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[260px_minmax(0,1fr)]">
+                    <aside className="studio-panel flex min-h-0 flex-col overflow-hidden">
+                        <div className="shrink-0 border-b border-[var(--studio-border-subtle)] p-4">
+                            <div className="text-xs font-semibold text-[var(--studio-accent)]">PROJECT</div>
+                            <div className="mt-2 truncate text-sm font-semibold text-[var(--studio-text-primary)]">{sourceScopeLabel || projectSlug}</div>
+                            <div className="mt-2 flex items-center justify-between rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2">
+                                <span className="truncate font-mono text-xs text-[var(--studio-text-muted)]">{episode}</span>
+                                <Tag color={isWorkflowReading ? "processing" : snapshot?.rootExists ? "success" : "error"}>{isWorkflowReading ? "读取中" : snapshot?.rootExists ? "缓存就绪" : "未连接"}</Tag>
                             </div>
-                            <div className="mt-4 grid gap-3">
-                                <LabeledInput label="根目录" value={rootPath} onChange={setRootPath} />
-                                <div className="grid grid-cols-2 gap-3">
-                                    <LabeledInput label="项目目录" value={projectSlug} onChange={setProjectSlug} />
-                                    <LabeledInput label="集数" value={episode} onChange={setEpisode} />
+                            <div className="mt-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2">
+                                <div className="text-xs font-semibold text-[var(--studio-text-muted)]">工作流包 / 预设</div>
+                                <div className="mt-1 flex flex-wrap items-center gap-2">
+                                    <span className="text-sm font-medium text-[var(--studio-text-primary)]">{workflowPreset?.name || "自定义本地工作流目录"}</span>
+                                    {workflowPreset ? <Tag color="blue">v{workflowPreset.version}</Tag> : null}
                                 </div>
-                                {sourceScopeLabel ? (
-                                    <div className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2 text-xs leading-5 text-[var(--studio-text-secondary)]">当前绑定：{sourceScopeLabel}</div>
-                                ) : null}
-                                {snapshot?.episodes.length ? <div className="truncate text-xs text-[var(--studio-text-muted)]">已有集数：{snapshot.episodes.join(" / ")}</div> : null}
+                                <div className="mt-1 text-xs leading-5 text-[var(--studio-text-muted)]">{workflowPreset?.description || "当前根目录不在内置预设清单中。"}</div>
                             </div>
-                            <div className="mt-4 flex items-center justify-between rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2 text-sm">
-                                <span className="text-[var(--studio-text-secondary)]">目录状态</span>
-                                <Tag color={isWorkflowReading ? "processing" : snapshot?.rootExists ? "success" : "error"}>{isWorkflowReading ? "读取中" : snapshot?.rootExists ? "已连接" : "未找到"}</Tag>
+                            <div className="mt-3 grid gap-2">
+                                <div className="text-xs font-semibold text-[var(--studio-text-muted)]">执行模式</div>
+                                <Segmented
+                                    block
+                                    options={[
+                                        { label: "本地 Runner", value: "local-runner" },
+                                        { label: "云端 Worker", value: "cloud-worker" },
+                                    ]}
+                                    value={executionMode}
+                                    onChange={(value) => setExecutionMode(value as OriginalWorkflowExecutionMode)}
+                                />
+                                {executionMode === "cloud-worker" ? (
+                                    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-200">
+                                        上线前测试模式：阶段启动、质量门和导出会走后端 Worker 门禁；Worker 未接入时会阻断，不回退本地 Codex CLI。
+                                    </div>
+                                ) : (
+                                    <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2 text-xs leading-5 text-[var(--studio-text-muted)]">
+                                        桌面 / 本地调试模式：使用 Codex CLI 和本地 markdown 缓存。
+                                    </div>
+                                )}
                             </div>
                         </div>
 
-                        <WorkflowNextStepCard loading={isWorkflowReading || loading || runningAction !== ""} onClick={isWorkflowReading ? () => void refresh() : runNextStep} step={visibleNextStep} />
-
-                        {isWorkflowReading ? (
-                            <div className="studio-panel p-4">
-                                <div className="flex items-center gap-2 text-sm font-semibold text-[var(--studio-text-primary)]">
-                                    <RefreshCw className="size-4 text-[var(--studio-accent)]" />
-                                    链路自检
-                                </div>
-                                <p className="mt-2 text-xs leading-5 text-[var(--studio-text-muted)]">正在读取当前项目的剧本、阶段文件、质量门和视频配置。</p>
-                            </div>
-                        ) : (
-                            <WorkflowChainHealthCard
-                                health={chainHealth}
-                                onOpenConfig={() => router.push("/admin/settings?focus=enterprise-video")}
-                                onOpenVideo={() => router.push(videoHref(episode, { projectSlug, sourceEpisodeId, sourceProjectId }))}
-                                onPreflight={() => void checkEnterpriseVideoApi()}
-                                onSync={() => void exportCopyOnlyToVideo()}
-                                preflightLoading={isEnterprisePreflightChecking}
-                            />
-                        )}
-
-                        <WorkflowDisclosure icon={<Wand2 className="size-4 text-[var(--studio-accent)]" />} title="云端 Agent Run API">
-                            <div className="p-4">
-                                <p className="text-xs leading-5 text-[var(--studio-text-muted)]">阶段启动走后端 Agent Run API；API Key、Base URL 和企业模型渠道请在后台系统设置维护。这里仅可指定文本模型偏好。</p>
-                                <div className="mt-4 grid gap-3">
-                                    <LabeledInput label="文本模型偏好" value={codexModel} onChange={setCodexModel} placeholder="留空使用后台默认文本模型" />
-                                    {codexApiBaseUrl || codexApiKey ? (
-                                        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">旧版浏览器内 Agent API Key 已不再作为云端主链路使用，请迁移到后台系统设置的私有模型渠道。</div>
-                                    ) : null}
-                                </div>
-                            </div>
-                        </WorkflowDisclosure>
-
-                        <WorkflowDisclosure icon={<ShieldCheck className="size-4 text-[var(--studio-accent)]" />} title="阶段状态">
-                            <div className="p-4">
-                                <div className="grid gap-2">
-                                    {stageStats.map((item) => (
-                                        <div key={item.label} className="flex items-center justify-between rounded-lg border border-[var(--studio-border-subtle)] px-3 py-2">
-                                            <div className="flex items-center gap-2">
-                                                {item.ok ? <CheckCircle2 className="size-4 text-emerald-500" /> : <FileText className="size-4 text-[var(--studio-text-muted)]" />}
-                                                <div>
-                                                    <div className="text-sm text-[var(--studio-text-secondary)]">{item.label}</div>
-                                                    {item.stage ? <div className="mt-0.5 text-xs text-[var(--studio-text-muted)]">{validationLabel(snapshot?.validations?.[item.stage])}</div> : null}
-                                                </div>
-                                            </div>
-                                            <span className="text-sm font-semibold text-[var(--studio-text-primary)]">{item.value}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </WorkflowDisclosure>
-
-                        <WorkflowDisclosure icon={<Play className="size-4 text-[var(--studio-accent)]" />} title="启动阶段">
-                            <div className="grid gap-2 p-4">
-                                <CommandButton label="启动 Stage 1" icon={<Play className="size-4" />} loading={runningAction === "cloud-stage-stage1"} primary onClick={() => startStage("stage1")} />
-                                {stage2StartNotice ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">{stage2StartNotice}</div> : null}
-                                <CommandButton disabled={Boolean(stage2StartNotice)} label="启动 Stage 2" icon={<Play className="size-4" />} loading={runningAction === "cloud-stage-stage2"} primary onClick={() => startStage("stage2")} />
-                                {stage3StartNotice ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">{stage3StartNotice}</div> : null}
-                                <CommandButton disabled={Boolean(stage3StartNotice)} label="启动 Stage 3" icon={<Play className="size-4" />} loading={runningAction === "cloud-stage-stage3"} primary onClick={() => startStage("stage3")} />
-                            </div>
-                        </WorkflowDisclosure>
-
-                        <WorkflowDisclosure icon={<TerminalSquare className="size-4 text-[var(--studio-accent)]" />} title="校验与导出">
-                            <div className="grid gap-2 p-4">
-                                <CommandButton label="校验 Stage 1" icon={<Play className="size-4" />} loading={runningAction === "validate-stage1"} onClick={() => void runAction("validate", { stage: "stage1" })} />
-                                <CommandButton label="校验 Stage 2" icon={<Play className="size-4" />} loading={runningAction === "validate-stage2"} onClick={() => void runAction("validate", { stage: "stage2" })} />
-                                <CommandButton label="校验 Stage 3" icon={<Play className="size-4" />} loading={runningAction === "validate-stage3"} onClick={() => void runAction("validate", { stage: "stage3" })} />
-                                {copyOnlySyncNotice ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">{copyOnlySyncNotice}</div> : null}
-                                <CommandButton disabled={copyOnlySyncState.disabled} label={copyOnlySyncState.label} icon={<Download className="size-4" />} loading={runningAction === "export-copy-only-"} onClick={() => void exportCopyOnlyToVideo()} />
-                            </div>
-                        </WorkflowDisclosure>
-
-                        <WorkflowDisclosure defaultOpen icon={<PackagePlus className="size-4 text-[var(--studio-accent)]" />} title="导入到工具">
-                            <div className="grid gap-2 p-4">
-                                {snapshot?.validations?.stage2?.state !== "passed" ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">{validationRequiredNotice("stage2")}</div> : null}
-                                <CommandButton disabled={snapshot?.validations?.stage2?.state !== "passed"} label="资产提示词 → 我的素材待生图卡" icon={<PackagePlus className="size-4" />} loading={false} onClick={importAssetPromptCards} />
-                                {copyOnlyImportNotice ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">{copyOnlyImportNotice}</div> : null}
-                                <CommandButton disabled={!canImportCopyOnly} label="Copy-only → 视频生产包" icon={<Video className="size-4" />} loading={false} onClick={importCopyOnlyToVideo} />
-                            </div>
-                        </WorkflowDisclosure>
-                    </aside>
-
-                    <section className="studio-panel flex min-h-0 flex-col overflow-hidden">
-                        <div className="shrink-0 border-b border-[var(--studio-border-subtle)] p-3">
-                            <div className="thin-scrollbar flex gap-1 overflow-x-auto">
-                                {tabOptions.map((tab) => (
+                        <nav className="grid shrink-0 gap-1 border-b border-[var(--studio-border-subtle)] p-3">
+                            {tabOptions.map((tab) => {
+                                const count = tab.key === "quality" ? (currentReport ? 1 : 0) : tab.key === "script" ? fileCount(filesByKey, ["script"]) : tab.key === "stage1" ? fileCount(filesByKey, ["stage1A", "stage1B", "stage1C", "stage1D"]) : tab.key === "stage2" ? fileCount(filesByKey, ["characters", "scenes"]) : tab.key === "stage3" ? fileCount(filesByKey, ["stage3"]) : fileCount(filesByKey, ["copyOnly"]);
+                                const done = tab.key === "quality" ? Boolean(currentReport) : count > 0;
+                                return (
                                     <button
                                         key={tab.key}
                                         type="button"
-                                        className={`h-10 shrink-0 rounded-lg px-3 text-sm font-medium transition ${activeTab === tab.key ? "bg-[var(--studio-accent-soft)] text-[var(--studio-text-primary)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-secondary)] hover:bg-[var(--studio-panel-muted-bg)] hover:text-[var(--studio-text-primary)]"}`}
+                                        className={`flex items-center justify-between rounded-md px-3 py-2 text-left text-sm transition ${activeTab === tab.key ? "bg-[var(--studio-accent-soft)] text-[var(--studio-text-primary)] ring-1 ring-[var(--studio-border-strong)]" : "text-[var(--studio-text-secondary)] hover:bg-[var(--studio-panel-muted-bg)] hover:text-[var(--studio-text-primary)]"}`}
                                         onClick={() => setActiveTab(tab.key)}
                                     >
-                                        {tab.label}
+                                        <span className="flex min-w-0 items-center gap-2">
+                                            {done ? <CheckCircle2 className="size-4 shrink-0 text-emerald-500" /> : <FileText className="size-4 shrink-0 text-[var(--studio-text-muted)]" />}
+                                            <span className="truncate">{tab.label}</span>
+                                        </span>
+                                        <span className="font-mono text-xs text-[var(--studio-text-muted)]">{count}</span>
                                     </button>
+                                );
+                            })}
+                        </nav>
+
+                        <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto p-3">
+                            <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2 text-sm font-semibold text-[var(--studio-text-primary)]">
+                                        <ShieldCheck className="size-4 text-[var(--studio-accent)]" />
+                                        链路状态
+                                    </div>
+                                    <Tag color={blockedHealthCount ? "warning" : isWorkflowReading ? "processing" : "success"}>{isWorkflowReading ? "读取中" : blockedHealthCount ? "未完成" : "可继续"}</Tag>
+                                </div>
+                                <div className="mt-2 text-xs leading-5 text-[var(--studio-text-muted)]">已就绪 {readyHealthCount}/{chainHealth.length}，阻断 {blockedHealthCount}</div>
+                            </div>
+
+                            <div className="mt-3 grid gap-2">
+                                {stageStats.map((item) => (
+                                    <div key={item.label} className="rounded-md border border-[var(--studio-border-subtle)] px-3 py-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="text-sm text-[var(--studio-text-secondary)]">{item.label}</span>
+                                            <span className="font-mono text-sm text-[var(--studio-text-primary)]">{item.value}</span>
+                                        </div>
+                                        {item.stage ? <div className="mt-1 text-xs text-[var(--studio-text-muted)]">{validationLabel(snapshot?.validations?.[item.stage])}</div> : null}
+                                    </div>
                                 ))}
                             </div>
-                        </div>
 
-                        {isWorkflowReading ? (
-                            <div className="grid flex-1 place-items-center">
-                                <Spin />
-                            </div>
-                        ) : activeTab === "quality" ? (
-                            <QualityPanel result={currentReport} />
-                        ) : visibleFiles.length ? (
-                            <div className="grid min-h-0 flex-1 lg:grid-cols-[260px_1fr]">
-                                <div className="thin-scrollbar overflow-y-auto border-b border-[var(--studio-border-subtle)] p-3 lg:border-b-0 lg:border-r">
-                                    <div className="grid gap-2">
-                                        {visibleFiles.map((file) => (
-                                            <button
-                                                key={file.key}
-                                                type="button"
-                                                className={`rounded-lg border px-3 py-3 text-left transition ${activeFileKey === file.key ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-[var(--studio-border-subtle)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-panel-muted-bg)]"}`}
-                                                onClick={() => setActiveFileKey(file.key)}
-                                            >
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <span className="min-w-0 truncate text-sm font-semibold text-[var(--studio-text-primary)]">{file.label}</span>
-                                                    <Tag color={file.exists ? "success" : "default"}>{file.exists ? "有文件" : "空"}</Tag>
-                                                </div>
-                                                <div className="mt-1 truncate text-xs text-[var(--studio-text-muted)]">{file.path}</div>
-                                            </button>
-                                        ))}
+                            <WorkflowDisclosure icon={<FolderOpen className="size-4 text-[var(--studio-accent)]" />} title="本地缓存目录">
+                                <div className="grid gap-3 p-4">
+                                    <p className="text-xs leading-5 text-[var(--studio-text-muted)]">仅用于当前本地版兼容 markdown 工作流。上云后这里会由后端项目存储和对象存储替代。</p>
+                                    <LabeledInput label="根目录" value={rootPath} onChange={setRootPath} />
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <LabeledInput label="项目目录" value={projectSlug} onChange={setProjectSlug} />
+                                        <LabeledInput label="集数" value={episode} onChange={setEpisode} />
                                     </div>
                                 </div>
-                                <div className="flex min-h-0 min-w-0 flex-col">
-                                    <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--studio-border-subtle)] px-4 py-3">
-                                        <div className="min-w-0">
-                                            <div className="truncate text-sm font-semibold text-[var(--studio-text-primary)]">{currentFile?.label || "未选择文件"}</div>
-                                            <div className="mt-1 truncate text-xs text-[var(--studio-text-muted)]">{currentFile?.path || "-"}</div>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <Button icon={<Clipboard className="size-4" />} disabled={!draft} onClick={() => copyText(draft, "已复制当前内容")}>
-                                                复制
-                                            </Button>
-                                            <Button type="primary" icon={<Save className="size-4" />} disabled={!editable || !currentFile} loading={runningAction.startsWith("save")} onClick={saveCurrentFile}>
-                                                保存
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    {currentFile ? (
-                                        <Input.TextArea
-                                            value={draft}
-                                            readOnly={!editable}
-                                            onChange={(event) => setDraft(event.target.value)}
-                                            className="min-h-0 flex-1 resize-none rounded-none border-0 !bg-transparent p-4 font-mono text-sm leading-6 text-[var(--studio-text-primary)] shadow-none focus:shadow-none"
-                                            placeholder={editable ? "在这里编辑当前 markdown 文件" : "当前文件暂未生成"}
-                                        />
-                                    ) : (
-                                        <Empty className="m-auto" description="没有可预览的文件" />
-                                    )}
+                            </WorkflowDisclosure>
+                        </div>
+                    </aside>
+
+                    <section className="flex min-h-0 flex-col gap-4 overflow-hidden">
+                        <section className="studio-panel shrink-0 p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                    <div className="text-xs font-semibold text-[var(--studio-accent)]">CURRENT STEP</div>
+                                    <h2 className="mt-1 text-xl font-semibold text-[var(--studio-text-primary)]">{activeTabLabel}</h2>
+                                    <p className="mt-1 text-sm leading-6 text-[var(--studio-text-secondary)]">{visibleNextStep.title}：{visibleNextStep.description}</p>
                                 </div>
+                                <Button type="primary" icon={<Play className="size-4" />} loading={isWorkflowReading || loading || runningAction !== ""} onClick={isWorkflowReading ? () => void refresh() : runNextStep}>
+                                    {visibleNextStep.actionLabel}
+                                </Button>
                             </div>
-                        ) : (
-                            <Empty className="py-24" description="暂无阶段文件" />
-                        )}
+
+                            <div className="mt-4 flex flex-wrap gap-2">
+                                {activeTab === "script" ? (
+                                    <>
+                                        <Button icon={<Wand2 className="size-4" />} loading={runningAction === "optimize-script"} disabled={isWorkflowReading || Boolean(runningAction && runningAction !== "optimize-script")} onClick={() => void optimizeScriptWithAgent()}>
+                                            优化剧本 Agent
+                                        </Button>
+                                        {scriptOptimizeHref ? (
+                                            <Button icon={<ArrowLeft className="size-4" />} onClick={() => router.push(scriptOptimizeHref)}>
+                                                本集生产台剧本页
+                                            </Button>
+                                        ) : null}
+                                    </>
+                                ) : null}
+                                {activeTab === "stage1" ? (
+                                    <>
+                                        <Button icon={<ShieldCheck className="size-4" />} loading={runningAction === "validate-stage1"} onClick={() => void runAction("validate", { stage: "stage1" })}>校验 Stage 1</Button>
+                                    </>
+                                ) : null}
+                                {activeTab === "stage2" ? (
+                                    <>
+                                        <Button icon={<ShieldCheck className="size-4" />} loading={runningAction === "validate-stage2"} onClick={() => void runAction("validate", { stage: "stage2" })}>校验 Stage 2</Button>
+                                        <Button icon={<PackagePlus className="size-4" />} disabled={snapshot?.validations?.stage2?.state !== "passed"} onClick={importAssetPromptCards}>资产写入素材</Button>
+                                    </>
+                                ) : null}
+                                {activeTab === "stage3" ? (
+                                    <>
+                                        <Button icon={<ShieldCheck className="size-4" />} loading={runningAction === "validate-stage3"} onClick={() => void runAction("validate", { stage: "stage3" })}>校验 Stage 3</Button>
+                                    </>
+                                ) : null}
+                                {activeTab === "copy" ? (
+                                    <>
+                                        <Button type="primary" icon={<Download className="size-4" />} disabled={copyOnlySyncState.disabled} loading={runningAction === "export-copy-only-"} onClick={() => void exportCopyOnlyToVideo()}>{copyOnlySyncState.label}</Button>
+                                        <Button icon={<Video className="size-4" />} disabled={!canImportCopyOnly} onClick={importCopyOnlyToVideo}>同步到视频生成</Button>
+                                        <Button icon={<Video className="size-4" />} onClick={() => router.push(videoHref(episode, { projectSlug, sourceEpisodeId, sourceProjectId }))}>进入视频生成</Button>
+                                    </>
+                                ) : null}
+                                {activeTab === "quality" ? (
+                                    <Button danger icon={<Square className="size-4" />} disabled={currentReport?.jobStatus !== "running"} loading={runningAction === "cancel-latest-job-"} onClick={() => void runAction("cancel-latest-job")}>停止 Runner</Button>
+                                ) : null}
+                            </div>
+                        </section>
+
+                        <section className="studio-panel flex min-h-0 flex-1 flex-col overflow-hidden">
+                            {isWorkflowReading ? (
+                                <div className="grid flex-1 place-items-center">
+                                    <Spin />
+                                </div>
+                            ) : activeTab === "quality" ? (
+                                <QualityPanel result={currentReport} />
+                            ) : visibleFiles.length ? (
+                                <div className="flex min-h-0 flex-1 flex-col">
+                                    {visibleFiles.length > 1 ? (
+                                        <div className="thin-scrollbar shrink-0 overflow-x-auto border-b border-[var(--studio-border-subtle)] p-2">
+                                            <div className="flex min-w-max gap-2">
+                                                {visibleFiles.map((file) => (
+                                                    <button
+                                                        key={file.key}
+                                                        type="button"
+                                                        className={`w-[190px] shrink-0 rounded-lg border px-3 py-2 text-left transition ${activeFileKey === file.key ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-[var(--studio-border-subtle)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-panel-muted-bg)]"}`}
+                                                        onClick={() => setActiveFileKey(file.key)}
+                                                    >
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <span className="min-w-0 truncate text-sm font-semibold text-[var(--studio-text-primary)]">{file.label}</span>
+                                                            <Tag className="m-0 shrink-0" color={file.exists ? "success" : "default"}>{file.exists ? "有文件" : "空"}</Tag>
+                                                        </div>
+                                                        <div className="mt-1 truncate text-xs text-[var(--studio-text-muted)]">{file.path}</div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                                        <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--studio-border-subtle)] px-4 py-3">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="truncate text-sm font-semibold text-[var(--studio-text-primary)]">{currentFile?.label || "未选择文件"}</div>
+                                                <div className="mt-1 truncate text-xs text-[var(--studio-text-muted)]">{currentFile?.path || "-"}</div>
+                                            </div>
+                                            <div className="flex shrink-0 gap-2">
+                                                <Button icon={<Clipboard className="size-4" />} disabled={!draft} onClick={() => copyText(draft, "已复制当前内容")}>复制</Button>
+                                                <Button type="primary" icon={<Save className="size-4" />} disabled={!editable || !currentFile} loading={runningAction.startsWith("save")} onClick={saveCurrentFile}>保存</Button>
+                                            </div>
+                                        </div>
+                                        {currentFile ? (
+                                            <div className="min-h-0 flex-1">
+                                                <textarea
+                                                    key={currentFile.key}
+                                                    value={draft}
+                                                    readOnly={!editable}
+                                                    onChange={(event) => setDraft(event.target.value)}
+                                                    className="thin-scrollbar h-full w-full resize-none overflow-auto border-0 bg-transparent p-4 font-mono text-sm leading-6 text-[var(--studio-text-primary)] outline-none"
+                                                    placeholder={editable ? "在这里编辑当前 markdown 文件" : "当前文件暂未生成"}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <Empty className="m-auto" description="没有可预览的文件" />
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <Empty className="py-24" description="暂无阶段文件" />
+                            )}
+                        </section>
                     </section>
                 </section>
             </div>
@@ -775,96 +834,6 @@ function WorkflowDisclosure({ children, defaultOpen, icon, title }: { children: 
     );
 }
 
-function CommandButton({ disabled, icon, label, loading, onClick, primary }: { disabled?: boolean; icon: ReactNode; label: string; loading: boolean; onClick: () => void; primary?: boolean }) {
-    return (
-        <Button type={primary ? "primary" : "default"} className="justify-start" disabled={disabled} icon={icon} loading={loading} onClick={onClick}>
-            {label}
-        </Button>
-    );
-}
-
-function WorkflowNextStepCard({ loading, onClick, step }: { loading: boolean; onClick: () => void; step: OriginalWorkflowNextStep }) {
-    return (
-        <div className="studio-panel border-[var(--studio-accent)]/40 bg-[var(--studio-accent-soft)] p-4">
-            <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-[var(--studio-text-primary)]">
-                        <ChevronRight className="size-4 text-[var(--studio-accent)]" />
-                        {step.title}
-                    </div>
-                    <p className="mt-2 text-xs leading-5 text-[var(--studio-text-secondary)]">{step.description}</p>
-                </div>
-            </div>
-            <Button className="mt-4 w-full justify-center" type="primary" icon={<Play className="size-4" />} loading={loading} onClick={onClick}>
-                {step.actionLabel}
-            </Button>
-        </div>
-    );
-}
-
-function WorkflowChainHealthCard({
-    health,
-    onOpenConfig,
-    onOpenVideo,
-    onPreflight,
-    onSync,
-    preflightLoading,
-}: {
-    health: OriginalWorkflowChainHealthItem[];
-    onOpenConfig: () => void;
-    onOpenVideo: () => void;
-    onPreflight: () => void;
-    onSync: () => void;
-    preflightLoading: boolean;
-}) {
-    const blocked = health.filter((item) => item.status === "blocked").length;
-    const checking = health.filter((item) => item.status === "checking").length;
-    const ready = health.length - blocked - checking;
-    return (
-        <div className="studio-panel p-4">
-            <div className="flex items-start justify-between gap-3">
-                <div>
-                    <div className="flex items-center gap-2 text-sm font-semibold text-[var(--studio-text-primary)]">
-                        <ShieldCheck className="size-4 text-[var(--studio-accent)]" />
-                        链路自检
-                    </div>
-                    <p className="mt-1 text-xs text-[var(--studio-text-muted)]">
-                        已就绪 {ready}/{health.length}
-                        {blocked ? `，阻断 ${blocked}` : ""}
-                        {checking ? `，检查中 ${checking}` : ""}
-                    </p>
-                </div>
-                {blocked ? <Tag color="warning">未完成</Tag> : checking ? <Tag color="processing">检查中</Tag> : <Tag color="success">可生成</Tag>}
-            </div>
-            <div className="thin-scrollbar mt-4 grid max-h-[300px] gap-2 overflow-y-auto pr-1">
-                {health.map((item) => (
-                    <div key={item.key} className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2">
-                        <div className="flex items-center gap-2">
-                            {item.status === "ready" ? <CheckCircle2 className="size-4 text-emerald-500" /> : item.status === "checking" ? <RefreshCw className="size-4 text-sky-400" /> : <TriangleAlert className="size-4 text-amber-500" />}
-                            <span className="text-sm font-medium text-[var(--studio-text-primary)]">{item.title}</span>
-                        </div>
-                        <div className="mt-1 text-xs leading-5 text-[var(--studio-text-muted)]">{item.detail}</div>
-                    </div>
-                ))}
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-                <Button icon={<Video className="size-4" />} onClick={onOpenVideo}>
-                    视频生成
-                </Button>
-                <Button icon={<PackagePlus className="size-4" />} onClick={onSync}>
-                    同步生产包
-                </Button>
-                <Button icon={<ShieldCheck className="size-4" />} loading={preflightLoading} onClick={onPreflight}>
-                    预检企业 API
-                </Button>
-                <Button icon={<ShieldCheck className="size-4" />} onClick={onOpenConfig}>
-                    企业视频配置
-                </Button>
-            </div>
-        </div>
-    );
-}
-
 function workflowAssetImportKey(asset: Asset) {
     const originalWorkflow = asset.metadata?.originalWorkflow;
     if (!originalWorkflow || typeof originalWorkflow !== "object" || Array.isArray(originalWorkflow)) return "";
@@ -872,11 +841,55 @@ function workflowAssetImportKey(asset: Asset) {
     return typeof value === "string" ? value : "";
 }
 
+function scopeWorkflowAssetToSourceProject(
+    input: AssetWriteInput,
+    options: {
+        existing?: Asset;
+        folderId: string;
+        sourceEpisodeId: string;
+        sourceEpisodeTitle: string;
+        sourceProjectId: string;
+        sourceProjectTitle: string;
+    },
+) {
+    if (!options.sourceProjectId) return input;
+    const now = new Date().toISOString();
+    const metadata = { ...(input.metadata || {}) };
+    metadata.projectId = options.sourceProjectId;
+    if (options.sourceProjectTitle) metadata.projectTitle = options.sourceProjectTitle;
+    if (options.sourceEpisodeId) metadata.episodeId = options.sourceEpisodeId;
+    if (options.sourceEpisodeTitle) metadata.episodeTitle = options.sourceEpisodeTitle;
+    metadata.projectLibraries = mergeWorkflowProjectLibraries(options.existing, options.sourceProjectId, now);
+    metadata.originalWorkflow = {
+        ...readWorkflowMetadataRecord(metadata.originalWorkflow),
+        sourceEpisodeId: options.sourceEpisodeId,
+        sourceProjectId: options.sourceProjectId,
+    };
+    return {
+        ...input,
+        folderId: options.folderId || input.folderId,
+        metadata,
+    } as AssetWriteInput;
+}
+
+function mergeWorkflowProjectLibraries(existing: Asset | undefined, projectId: string, now: string): AssetProjectLibraryEntry[] {
+    const entries = assetProjectLibraryEntries(existing);
+    const current = entries.find((entry) => entry.projectId === projectId);
+    const nextEntry: AssetProjectLibraryEntry = current
+        ? { ...current, role: "editor", syncStatus: current.syncStatus || "local", updatedAt: now }
+        : { addedAt: now, projectId, role: "editor", syncStatus: "local", updatedAt: now, visibility: "project" };
+    return current ? entries.map((entry) => (entry.projectId === projectId ? nextEntry : entry)) : [...entries, nextEntry];
+}
+
+function readWorkflowMetadataRecord(value: unknown) {
+    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
 function QualityPanel({ result }: { result?: CommandResult }) {
     if (!result) {
         return (
             <div className="grid flex-1 place-items-center p-8">
-                <Empty description="还没有本次质量门输出" />
+                <Empty description="还没有本次本地 Runner 或质量门输出" />
             </div>
         );
     }
@@ -925,15 +938,13 @@ function InfoLine({ label, value }: { label: string; value: string }) {
 }
 
 function runnerStatusTitle(status?: string, reused?: boolean, health?: string) {
-    if (status === "failed") return "Agent Run 运行失败";
-    if (status === "success" || status === "needs_review") return "Agent Run 已完成，待审核";
-    if (status === "approved") return "Agent Run 已审核";
-    if (status === "applied") return "Agent Run 已写入";
-    if (status === "cancelled") return "Agent Run 已取消";
+    if (status === "failed") return "本地 Runner 运行失败";
+    if (status === "success") return "本地 Runner 已完成";
+    if (status === "cancelled") return "本地 Runner 已取消";
     if (health === "stalled") return "本地 Runner 可能卡住";
     if (reused) return "已有本地 Runner 正在运行";
-    if (status === "running") return "Agent Run 正在运行";
-    return "Agent Run 已启动";
+    if (status === "running") return "本地 Runner 正在运行";
+    return "本地 Runner 已启动";
 }
 
 function runnerStatusClass(status?: string, health?: string) {
@@ -979,92 +990,6 @@ function stageStartGateNotice(stage: "stage1" | "stage2" | "stage3", validations
 function validationRequiredNotice(stage: "stage1" | "stage2" | "stage3") {
     const label = stage.replace("stage", "Stage ");
     return `${label} 尚未通过质量门，请先校验通过后再继续下一步。`;
-}
-
-function buildCloudStageRunInput(
-    stage: "stage1" | "stage2" | "stage3",
-    {
-        agentConfig,
-        episode,
-        filesByKey,
-        modelPreference,
-        projectId,
-        projectSlug,
-        sourceEpisodeId,
-        sourceProjectId,
-    }: {
-        agentConfig?: AgentConfig;
-        episode: string;
-        filesByKey: Map<string, WorkflowFile>;
-        modelPreference: string;
-        projectId: string;
-        projectSlug: string;
-        sourceEpisodeId: string;
-        sourceProjectId: string;
-    },
-): CreateRemoteAgentRunInput {
-    const script = filesByKey.get("script")?.content || "";
-    const stage1 = ["stage1A", "stage1B", "stage1C", "stage1D"]
-        .map((key) => filePromptBlock(filesByKey.get(key)))
-        .filter(Boolean)
-        .join("\n\n");
-    const stage2 = ["characters", "scenes"]
-        .map((key) => filePromptBlock(filesByKey.get(key)))
-        .filter(Boolean)
-        .join("\n\n");
-    const systemPrompt = cloudStageSystemPrompt(stage);
-    const userPrompt = cloudStageUserPrompt(stage, { episode, projectSlug, script, stage1, stage2 });
-    const preferredModel = agentConfig?.modelPreference?.trim();
-    return {
-        agentKind: workflowStageAgentKind(stage),
-        allowBatch: agentConfig?.allowBatch === true,
-        allowFallback: agentConfig?.allowFallback === true,
-        channelId: agentConfig?.channelId || "",
-        concurrencyLimit: agentConfig?.concurrencyLimit || 1,
-        episodeId: sourceEpisodeId || episode,
-        estimatedCredits: agentConfig?.estimatedCredits || 0,
-        fallbackChannelIds: agentConfig?.fallbackChannelIds || [],
-        maxOutputTokens: agentConfig?.maxOutputTokens || (stage === "stage3" ? 12000 : 9000),
-        modelPreference: preferredModel && preferredModel !== "default" ? preferredModel : modelPreference || "default",
-        projectId,
-        sourceSnapshot: { episode, projectSlug, sourceEpisodeId, sourceProjectId },
-        stageId: stage,
-        systemPrompt,
-        temperature: agentConfig?.temperature ?? 0.4,
-        timeoutSeconds: agentConfig?.timeoutSeconds || (stage === "stage3" ? 900 : 600),
-        userPrompt,
-        variables: { episode, projectSlug, stage },
-        workflowRunId: `video-workflow:${projectSlug}:${episode}`,
-        writePolicy: agentConfig?.writePolicy || "confirm_before_write",
-    };
-}
-
-function workflowStageAgentKind(stage: "stage1" | "stage2" | "stage3"): AgentConfigKind {
-    if (stage === "stage1") return "script_analyzer";
-    if (stage === "stage2") return "asset_extractor";
-    return "storyboard_director";
-}
-
-function filePromptBlock(file?: WorkflowFile) {
-    if (!file?.content.trim()) return "";
-    return `## ${file.label}\n路径：${file.path}\n\n${file.content.trim()}`;
-}
-
-function cloudStageSystemPrompt(stage: "stage1" | "stage2" | "stage3") {
-    if (stage === "stage1") return "你是云端视频工作流的导演分析 Agent。只基于用户提供的本集剧本生成导演分析草案，保存为待审核结果；不得写入本地文件，不得触发图片或视频生成。";
-    if (stage === "stage2") return "你是云端视频工作流的资产提示词 Agent。只基于剧本和导演分析生成角色、场景、道具等资产空壳与生图提示词草案；不得自动写入素材库或触发扣费生图。";
-    return "你是云端视频工作流的 Seedance 分镜与视频提示词 Agent。只生成逐条视频节点草案，每条包含编号、剧情、参考资产占位、提示词和建议生成设置；不得自动创建视频任务。";
-}
-
-function cloudStageUserPrompt(stage: "stage1" | "stage2" | "stage3", input: { episode: string; projectSlug: string; script: string; stage1: string; stage2: string }) {
-    const header = `项目目录：${input.projectSlug}\n集数：${input.episode}\n\n`;
-    if (stage === "stage1") {
-        return `${header}请执行 Stage 1 导演分析，输出可人工审核的导演分析草案和结构化 JSON 摘要。\n\n## 剧本\n${input.script}`;
-    }
-    if (stage === "stage2") {
-        return `${header}请执行 Stage 2 资产提示词生成，输出 assets JSON 草案。资产只作为项目共享资产库空壳和补图提示词，不要直接写入素材库。\n\n## 剧本\n${input.script}\n\n${input.stage1}`;
-    }
-    return `${header}请执行 Stage 3 Seedance 视频提示词生成。每条提示词必须等价一条视频节点记录，包含编号、对应剧情、引用资产占位、最终提示词、建议时长、画幅和状态字段。输出 JSON，等待用户确认后再写入视频生产包。\n\n## 剧本\n${input.script}\n\n${input.stage1}\n\n${input.stage2}`;
 }
 
 function actionLabel(action: string, stage?: string, result?: CommandResult) {

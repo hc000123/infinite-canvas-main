@@ -9,6 +9,32 @@
 
 部署完成后，打开 Render 分配的 `.onrender.com` 域名即可访问。
 
+## 上线前主门禁：视频工作流 Worker 化
+
+当前 `/original-workflow` 在桌面端 / 本地开发阶段使用 Codex CLI / 本地 Runner 跑三阶段视频工作流。正式上云前，必须先把这部分能力拆成后端 Worker，不能把用户本机目录、`codex exec` 或 `.workflow-cache` 当作云端主执行链路。
+
+上线前必须完成：
+
+1. 后端提供视频工作流执行模式开关，至少区分 `local-runner` 和 `cloud-worker`；桌面 / 本地开发可用 `local-runner`，生产云环境必须使用 `cloud-worker`。
+2. `cloud-worker` 接管 Codex CLI 当前承担的能力：读取 `AGENTS.md`、`specs/skills/*`、`templates/*`、`examples/*` 和项目剧本快照。
+3. Stage 1 必须拆成 01A、01B、01C、01D 四个受控 Worker 子任务；Stage 2 拆成角色 / 场景 / 道具资产提示词任务；Stage 3 拆成 Seedance 提示词和 Copy-only 导出任务。
+4. 每个 Worker 任务必须保存输入快照、命中的 API 渠道和模型、原始输出、结构化草案、日志、错误、耗时、额度消耗和写入目标。
+5. 质量门必须服务化，不能只依赖本机 Python 脚本；第一版可以由后端受控调用质量门脚本，但报告和状态必须写入后端任务记录。
+6. 任何阶段产物写入资产库、分镜、Copy-only 或视频生产包前，都必须先进入人工审核 / 确认状态。
+7. 云端 Worker 需要支持队列、并发限制、停止任务、日志回传、失败重试、任务超时、租户权限隔离和额度扣费。
+8. 上线构建或部署配置必须阻止生产环境误用 `local-runner`；如果云端 Worker 未启用，视频工作流阶段启动应显示不可用原因，而不是回退到本地 Codex CLI。
+
+当前工具已经预留执行模式开关和后端门禁：
+
+- 前端视频工作流控制台可切换 `本地 Runner` / `云端 Worker`。
+- 请求会把执行模式传给 `/api/original-workflow`。
+- `cloud-worker` 模式下，阶段启动、质量门、Copy-only 导出、停止任务和本地 markdown 写入会被明确阻断，并提示缺少哪一类 Worker 能力。
+- 云端部署可以设置 `ORIGINAL_WORKFLOW_EXECUTION_MODE=cloud-worker` 或 `ORIGINAL_WORKFLOW_FORCE_CLOUD_WORKER=true`，强制禁止 `local-runner` 回退。
+
+这只是上线前门禁和测试入口，不代表云端 Worker 已完成真实执行。真实执行仍必须补齐 Worker 队列、模型调用、质量门服务化、审核后写入、对象存储和权限扣费。
+
+这个门禁优先级高于公开视频工作流上线。未完成前，云端可以开放项目、素材、图片 / 视频生成等后端渠道能力，但不应承诺 `/original-workflow` 的三阶段 Agent 生产链路已经适合多人云端使用。
+
 ## 视频生成无法进入排队的排查
 
 视频生成需要前端、Next API 代理、Go 后端和模型渠道同时可用。页面点击生成后，如果节点没有进入“排队 / 生成中”，通常先检查下面几项：
@@ -22,9 +48,9 @@
 
 Docker 部署会在同一个容器里启动 Go 后端和 Next 服务，因此默认不需要单独设置 `API_BASE_URL`。如果改成前后端分离部署，就必须显式配置。
 
-## 云端 Agent Run 主链路
+## 云端视频工作流主链路
 
-视频工作流的云端主链路使用后端 Agent Run API：
+视频工作流的云端主链路应使用后端 Agent Run API 和受控 Worker：
 
 - `GET /api/v1/agent-configs` / `POST /api/v1/agent-configs`：保存 Agent 中心配置，按用户、项目、集数隔离。
 - `GET /api/v1/agent-runs` / `POST /api/v1/agent-runs`：创建和查询文本 Agent 任务。
@@ -32,7 +58,7 @@ Docker 部署会在同一个容器里启动 Go 后端和 Next 服务，因此默
 
 Agent Run 创建后由后端选择后台系统设置里的企业文本模型渠道，保存请求快照、原始输出、可解析 JSON 草案、审核结果和映射预览。成功状态停在 `needs_review`，用户确认后再写入资产库、分镜或视频生产包。
 
-本地 `codex exec` Runner 只作为桌面端或开发调试适配器保留，不作为云端多用户主执行链路。云端后续还需要继续补齐后台队列 worker、对象存储、质量门服务化、并发限制、租户权限和更细粒度额度扣费。
+本地 `codex exec` Runner 只作为桌面端或开发调试适配器保留，不作为云端多用户主执行链路。上线前必须完成后台队列 Worker、对象存储、质量门服务化、并发限制、租户权限和更细粒度额度扣费，并让工具在生产部署中切换到 `cloud-worker`。
 
 ## Docker 健康检查与持久化
 
@@ -63,6 +89,7 @@ https://你的域名/api/uploaded-assets/...
 
 - `ADMIN_PASSWORD`
 - `JWT_SECRET`
+- `ORIGINAL_WORKFLOW_EXECUTION_MODE=cloud-worker`
 - 如改用 MySQL / PostgreSQL，还需要修改 `STORAGE_DRIVER` 和 `DATABASE_DSN`
 
 ## 免费版说明

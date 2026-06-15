@@ -10,6 +10,7 @@ export const maxDuration = 300;
 
 const execFileAsync = promisify(execFile);
 const defaultRootPath = "/Users/huangchi/马也传媒/03_AI工作流/AI/眨眼之间工作区/ai/hc工作流-新版/seedance-original-workflow-plus-director-method-v5";
+const pythonBin = process.env.ORIGINAL_WORKFLOW_PYTHON || "/usr/bin/python3";
 const stalledLogIdleSeconds = 300;
 
 type FileGroup = {
@@ -38,12 +39,15 @@ type ActionBody = {
     agent?: CodexAgentConfig;
     content?: string;
     episode?: string;
+    executionMode?: WorkflowExecutionMode;
     fileKey?: string;
     projectSlug?: string;
+    requireScriptOptimizerNotes?: boolean;
     rootPath?: string;
     stage?: "stage1" | "stage2" | "stage3";
 };
 
+type WorkflowExecutionMode = "cloud-worker" | "local-runner";
 type WorkflowStage = "stage1" | "stage2" | "stage3";
 type ValidationSnapshot = CommandResult & {
     latestFileUpdatedAt?: string;
@@ -118,6 +122,25 @@ function normalizeProjectSlug(value?: string) {
     const slug = (value || "demo-project").trim();
     if (!/^[\w-]+$/.test(slug)) throw new Error("项目目录只支持英文、数字、下划线和中划线");
     return slug;
+}
+
+function normalizeExecutionMode(value?: string): WorkflowExecutionMode {
+    return value === "cloud-worker" ? "cloud-worker" : "local-runner";
+}
+
+function assertExecutionModeAvailable(action: ActionBody["action"], executionMode: WorkflowExecutionMode) {
+    const cloudWorkerForced = process.env.ORIGINAL_WORKFLOW_EXECUTION_MODE === "cloud-worker" || process.env.ORIGINAL_WORKFLOW_FORCE_CLOUD_WORKER === "true";
+    if (cloudWorkerForced && executionMode !== "cloud-worker") {
+        throw new Error("当前部署已强制使用云端 Worker，不能回退本地 Codex CLI / local-runner。");
+    }
+    if (executionMode !== "cloud-worker") return;
+    if (!action || action === "save-script" || action === "save-file") {
+        throw new Error("云端 Worker 模式尚未接入阶段文件写入服务，不能写入本地 markdown。");
+    }
+    if (action === "start-stage") throw new Error("云端 Worker 阶段启动尚未接入：上线前需要后端 Worker 接管规范读取、分文件任务、日志、停止任务和人工审核后写入。");
+    if (action === "validate") throw new Error("云端 Worker 质量门尚未接入：上线前需要把质量门服务化，不能回退本地 Python 脚本。");
+    if (action === "export-copy-only") throw new Error("云端 Worker Copy-only 导出尚未接入：上线前需要由后端 Worker 审核后写入视频生产包。");
+    if (action === "cancel-latest-job") throw new Error("云端 Worker 停止任务尚未接入：上线前需要支持队列任务停止、超时回收和日志回传。");
 }
 
 function normalizeRootPath(value?: string) {
@@ -248,9 +271,9 @@ function stageLabel(stage: WorkflowStage) {
 }
 
 async function runPythonTool(rootPath: string, args: string[], extra?: Partial<CommandResult>): Promise<CommandResult> {
-    const command = `python3 ${args.map((item) => (item.includes(" ") ? JSON.stringify(item) : item)).join(" ")}`;
+    const command = `${pythonBin} ${args.map((item) => (item.includes(" ") ? JSON.stringify(item) : item)).join(" ")}`;
     const options = { cwd: rootPath, maxBuffer: 1024 * 1024 * 8, timeout: 1000 * 60 * 5 };
-    const result = await execFileAsync("python3", args, options)
+    const result = await execFileAsync(pythonBin, args, options)
         .then((value) => ({ ...value, exitCode: 0 }))
         .catch((error: Error & { code?: number | string; stderr?: string; stdout?: string }) => ({
             exitCode: typeof error.code === "number" ? error.code : 1,
@@ -272,7 +295,7 @@ function shellQuote(value: string) {
 
 async function startCodexStageJob(rootPath: string, episode: string, projectSlug: string, stage: WorkflowStage, instruction: string, agentConfig?: CodexAgentConfig) {
     const existing = await findRunningStageJob(rootPath, episode, stage);
-    if (existing?.jobHealth !== "stalled") return existing;
+    if (existing && existing.jobHealth !== "stalled") return existing;
     if (existing) await cancelJob(existing.statusPath, "stalled runner replaced by new launch");
     const jobId = `web-${stage}-${episode}-${Date.now()}`;
     const relativeJobDir = `.workflow-cache/web-jobs/${jobId}`;
@@ -327,6 +350,7 @@ function normalizeCodexAgentConfig(input?: CodexAgentConfig): Required<CodexAgen
 
 function buildCodexRunnerEnv(agent: Required<CodexAgentConfig>) {
     const env = { ...process.env };
+    env.PATH = `/usr/bin:${env.PATH || ""}`;
     if (agent.apiKey) env.OPENAI_API_KEY = agent.apiKey;
     if (agent.apiBaseUrl) env.OPENAI_BASE_URL = agent.apiBaseUrl;
     return env;
@@ -521,12 +545,18 @@ export async function POST(request: NextRequest) {
         const episode = normalizeEpisode(body.episode);
         const projectSlug = normalizeProjectSlug(body.projectSlug);
         const action = body.action;
+        const executionMode = normalizeExecutionMode(body.executionMode);
+        assertExecutionModeAvailable(action, executionMode);
         let commandResult: CommandResult | undefined;
 
         if (action === "save-script") {
+            const content = body.content || "";
+            if (body.requireScriptOptimizerNotes && !hasScriptOptimizerWhitePaperProductionNotes(content)) {
+                throw new Error("优化剧本缺少白皮书要求的制作备注、视觉方向、连续性、风险提示或禁止项，已拒绝写入。");
+            }
             const target = resolveInside(rootPath, `projects/${projectSlug}/script/${episode}.md`);
             await mkdir(path.dirname(target), { recursive: true });
-            await writeFile(target, body.content || "", "utf8");
+            await writeFile(target, content, "utf8");
         } else if (action === "save-file") {
             const group = fileGroups.find((item) => item.key === body.fileKey);
             if (!group) throw new Error("未知文件类型");
@@ -566,6 +596,10 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         return json({ error: error instanceof Error ? error.message : "操作失败" }, 400);
     }
+}
+
+function hasScriptOptimizerWhitePaperProductionNotes(script: string) {
+    return ["制作备注", "视觉方向", "连续性", "风险提示", "禁止项"].every((marker) => script.includes(marker));
 }
 
 async function cancelLatestJob(rootPath: string, episode?: string): Promise<CommandResult> {

@@ -14,6 +14,8 @@ export type WorkflowAssetInfo = {
     prompt: string;
     projectSlug: string;
     sourcePath: string;
+    sourceEpisodeId: string;
+    sourceProjectId: string;
     status: string;
     type: string;
 };
@@ -32,13 +34,15 @@ export function workflowAssetInfo(asset: Asset | null | undefined): WorkflowAsse
         prompt,
         projectSlug: readString(raw.projectSlug),
         sourcePath: readString(raw.sourcePath),
+        sourceEpisodeId: readString(raw.sourceEpisodeId),
+        sourceProjectId: readString(raw.sourceProjectId),
         status: readString(raw.status) || (asset?.kind === "image" ? "image_generated" : "pending_image"),
         type: readString(raw.type),
     };
 }
 
 export function workflowAssetCanGenerate(asset: Asset | null | undefined) {
-    return Boolean(asset && asset.kind === "text" && workflowAssetInfo(asset)?.prompt);
+    return Boolean(asset && workflowAssetInfo(asset)?.prompt);
 }
 
 export function workflowAssetPrompt(asset: Asset | null | undefined) {
@@ -111,6 +115,90 @@ export function buildWorkflowGeneratedImagePatch(
         tags: mergeTags(asset.tags, ["已生图"]),
     };
     return buildAssetVersionedUpdatePatch(asset, patch, now, "视频工作流提示词生图");
+}
+
+export function buildWorkflowUploadedImagePatch(asset: Asset, image: UploadedImage, input: { fileName?: string }) {
+    const now = new Date().toISOString();
+    const info = workflowAssetInfo(asset);
+    const prompt = info?.prompt || "";
+    const generation = {
+        source: "original-workflow",
+        actionType: "upload-match",
+        prompt,
+        fileName: input.fileName || "",
+        originalWorkflow: info,
+        createdAt: now,
+    };
+    const existingGenerations = Array.isArray(asset.metadata?.generations) ? asset.metadata.generations : [];
+    const patch = {
+        kind: "image" as const,
+        coverUrl: image.url,
+        data: {
+            dataUrl: image.url,
+            storageKey: image.storageKey,
+            width: image.width,
+            height: image.height,
+            bytes: image.bytes,
+            mimeType: image.mimeType,
+        },
+        metadata: {
+            ...(asset.metadata || {}),
+            source: "original-workflow",
+            prompt,
+            originalWorkflow: {
+                ...(info || {}),
+                prompt,
+                status: "image_generated",
+                generatedAt: now,
+            },
+            generation,
+            generations: [...existingGenerations, generation],
+        },
+        source: asset.source || "本地上传匹配",
+        tags: mergeTags(asset.tags, ["已生图"]),
+    };
+    return buildAssetVersionedUpdatePatch(asset, patch, now, "上传图片匹配工作流素材");
+}
+
+export function buildWorkflowMatchedImagePatch(asset: Asset, source: Extract<Asset, { kind: "image" }>) {
+    const now = new Date().toISOString();
+    const info = workflowAssetInfo(asset);
+    const prompt = info?.prompt || "";
+    const generation = {
+        source: "original-workflow",
+        actionType: "match-existing",
+        prompt,
+        matchedAssetId: source.id,
+        matchedAssetTitle: source.title,
+        originalWorkflow: info,
+        createdAt: now,
+    };
+    const existingGenerations = Array.isArray(asset.metadata?.generations) ? asset.metadata.generations : [];
+    const patch = {
+        kind: "image" as const,
+        coverUrl: source.coverUrl || source.data.dataUrl,
+        data: {
+            ...source.data,
+            dataUrl: source.data.dataUrl,
+        },
+        metadata: {
+            ...(asset.metadata || {}),
+            source: "original-workflow",
+            prompt,
+            originalWorkflow: {
+                ...(info || {}),
+                prompt,
+                status: "image_generated",
+                generatedAt: now,
+            },
+            generation,
+            generations: [...existingGenerations, generation],
+            matchedAssetId: source.id,
+        },
+        source: asset.source || "复用已有素材",
+        tags: mergeTags(asset.tags, ["已生图"]),
+    };
+    return buildAssetVersionedUpdatePatch(asset, patch, now, "匹配已有图片到工作流素材");
 }
 
 export function buildWorkflowPromptAssetInput(input: {

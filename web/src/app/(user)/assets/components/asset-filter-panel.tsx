@@ -6,6 +6,7 @@ import { Button, Input, Select, Tag } from "antd";
 
 import { cn } from "@/lib/utils";
 import type { AssetFolder, AssetKind } from "@/stores/use-asset-store";
+import type { AssetEpisodeOption } from "../asset-episode";
 import type { ProjectLibraryFilter } from "../asset-page-filters";
 import { AssetIconButton } from "./asset-card";
 
@@ -25,6 +26,8 @@ const PROJECT_FILTER_COLLAPSED_COUNT = 6;
 
 export function AssetFilterPanel({
     activeFolderId,
+    episodeFilter,
+    episodeOptions,
     filteredCount,
     folderCounts,
     folderFilter,
@@ -48,6 +51,7 @@ export function AssetFilterPanel({
     onClearSelectedOutdatedUsages,
     onCreateFolder,
     onDeleteFolder,
+    onEpisodeFilterChange,
     onEditFolder,
     onFolderFilterChange,
     onGenerationActionFilterChange,
@@ -62,6 +66,8 @@ export function AssetFilterPanel({
     onStoryboardGroupFilterChange,
 }: {
     activeFolderId?: string;
+    episodeFilter: string;
+    episodeOptions: AssetEpisodeOption[];
     filteredCount: number;
     folderCounts: Record<string, number>;
     folderFilter: string;
@@ -85,6 +91,7 @@ export function AssetFilterPanel({
     onClearSelectedOutdatedUsages: () => void;
     onCreateFolder: () => void;
     onDeleteFolder: (folder: AssetFolder) => void;
+    onEpisodeFilterChange: (value: string) => void;
     onEditFolder: (folder: AssetFolder) => void;
     onFolderFilterChange: (value: string) => void;
     onGenerationActionFilterChange: (value?: string) => void;
@@ -100,6 +107,7 @@ export function AssetFilterPanel({
 }) {
     const activeRegularFolder = activeFolderId ? regularFolders.find((folder) => folder.id === activeFolderId) : undefined;
     const [projectFiltersExpanded, setProjectFiltersExpanded] = useState(false);
+    const episodeAssetCount = episodeOptions.reduce((sum, option) => sum + option.count, 0);
     const visibleProjectFolderRows = useMemo(() => {
         if (projectFiltersExpanded || projectFolderRows.length <= PROJECT_FILTER_COLLAPSED_COUNT) return projectFolderRows;
         const collapsedRows = projectFolderRows.slice(0, PROJECT_FILTER_COLLAPSED_COUNT);
@@ -205,6 +213,22 @@ export function AssetFilterPanel({
                         />
                     </div>
                 </div>
+                {projectContextFilter ? (
+                    <div className="grid gap-3 sm:grid-cols-[64px_minmax(0,1fr)] sm:items-center">
+                        <div className="text-sm font-medium text-[var(--studio-text-secondary)]">集数</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Tag.CheckableTag checked={!episodeFilter} className={cn("prompt-filter-tag", !episodeFilter && "is-active")} onChange={() => onEpisodeFilterChange("")}>
+                                全部集数 {episodeAssetCount}
+                            </Tag.CheckableTag>
+                            {episodeOptions.map((option) => (
+                                <Tag.CheckableTag key={option.value} checked={episodeFilter === option.value} className={cn("prompt-filter-tag", episodeFilter === option.value && "is-active")} onChange={() => onEpisodeFilterChange(option.value)}>
+                                    {option.label} {option.count}
+                                </Tag.CheckableTag>
+                            ))}
+                            {!episodeOptions.length ? <span className="text-sm text-[var(--studio-text-muted)]">暂无可筛选集数</span> : null}
+                        </div>
+                    </div>
+                ) : null}
                 <div className="grid gap-3 sm:grid-cols-[64px_minmax(0,1fr)] sm:items-start">
                     <div className="pt-1 text-sm font-medium text-[var(--studio-text-secondary)]">文件夹</div>
                     <div className="flex flex-wrap items-center gap-2">

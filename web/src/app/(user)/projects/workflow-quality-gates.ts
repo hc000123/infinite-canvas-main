@@ -72,7 +72,7 @@ export function buildSeedanceQualityGateManifest(preset?: Pick<AgentWorkflowPres
     const workflowId = preset?.workflowId || SEEDANCE_WORKFLOW_PRESET_ID;
     const version = preset?.version || "1.0.0";
     const stageIds = ["director-analysis", "art-design", "seedance-storyboard"];
-    const requiredReadings = buildSeedanceRequiredReadings();
+    const requiredReadings = buildSeedanceRequiredReadings(workflowId);
     const gates = stageIds.flatMap((stageId) => {
         const stageReadings = requiredReadings.filter((reading) => reading.stageId === stageId);
         return [

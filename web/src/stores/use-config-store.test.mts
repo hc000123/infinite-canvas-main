@@ -60,6 +60,29 @@ test("does not leak stale local seedance model into remote video models", () => 
     assert.deepEqual(result.videoModels, ["doubao-seedance-2-0"]);
 });
 
+test("clears stale local seedance endpoint when backend channel controls video model", () => {
+    const result = resolveEffectiveConfig(
+        { ...defaultConfig, channelMode: "remote", videoProtocol: "volcengine-ark", seedanceEndpointId: "Seedance 2.0", seedanceModel: "Seedance 2.0", videoModel: "Seedance 2.0" },
+        {
+            availableModels: ["gpt-image-2", "doubao-seedance-2-0"],
+            modelCosts: [],
+            modelTextEndpoints: [],
+            modelProtocols: [{ model: "doubao-seedance-2-0", protocol: "volcengine-ark" }],
+            defaultModel: "gpt-image-2",
+            defaultImageModel: "gpt-image-2",
+            defaultVideoModel: "doubao-seedance-2-0",
+            defaultTextModel: "gpt-image-2",
+            systemPrompt: "",
+            allowCustomChannel: true,
+        },
+    );
+
+    assert.equal(result.videoModel, "doubao-seedance-2-0");
+    assert.equal(result.seedanceModel, "doubao-seedance-2-0");
+    assert.equal(result.seedanceEndpointId, "");
+    assert.equal(resolveSeedanceRequestModel(result), "doubao-seedance-2-0");
+});
+
 test("uses enterprise Ark endpoint before visible Seedance model for video requests", () => {
     assert.equal(
         resolveSeedanceRequestModel({
@@ -72,7 +95,7 @@ test("uses enterprise Ark endpoint before visible Seedance model for video reque
     );
 });
 
-test("uses backend default models before stale local model selections", () => {
+test("keeps available local model selections before backend defaults", () => {
     const result = resolveEffectiveConfig(
         {
             ...defaultConfig,
@@ -94,9 +117,9 @@ test("uses backend default models before stale local model selections", () => {
         },
     );
 
-    assert.equal(result.imageModel, "gpt-image-2");
-    assert.equal(result.videoModel, "doubao-seedance-2-0");
-    assert.equal(result.textModel, "gpt-5.5-pro");
+    assert.equal(result.imageModel, "gemini-3.1-flash-image-preview");
+    assert.equal(result.videoModel, "doubao-seedance-2-0-fast");
+    assert.equal(result.textModel, "gemini-3.1-pro-preview");
     assert.equal(textModelEndpointType(result, "gpt-5.5-pro"), "responses");
     assert.equal(textModelEndpointType(result, "gemini-3.1-pro-preview"), "chat_completions");
     assert.deepEqual(
@@ -106,4 +129,29 @@ test("uses backend default models before stale local model selections", () => {
             { model: "gpt-5.5-pro", endpointType: "responses" },
         ],
     );
+});
+
+test("falls back to backend defaults when local selections are no longer available", () => {
+    const result = resolveEffectiveConfig(
+        {
+            ...defaultConfig,
+            channelMode: "remote",
+            imageModel: "old-image-model",
+            textModel: "old-text-model",
+        },
+        {
+            availableModels: ["gpt-image-2", "gemini-3.1-pro-preview", "gpt-5.5-pro"],
+            modelCosts: [],
+            modelTextEndpoints: [],
+            defaultModel: "gpt-image-2",
+            defaultImageModel: "gpt-image-2",
+            defaultVideoModel: "",
+            defaultTextModel: "gpt-5.5-pro",
+            systemPrompt: "",
+            allowCustomChannel: true,
+        },
+    );
+
+    assert.equal(result.imageModel, "gpt-image-2");
+    assert.equal(result.textModel, "gpt-5.5-pro");
 });

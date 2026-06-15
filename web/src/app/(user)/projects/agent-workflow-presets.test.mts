@@ -2,7 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { defaultAgentConfig, defaultAgentConfigs, mergeAgentConfigs } from "./agent-settings.ts";
-import { SEEDANCE_WORKFLOW_PRESET_ID, applyWorkflowPresetSelection, buildSeedanceWorkflowPreset, sortedWorkflowStages, workflowStageDetail } from "./agent-workflow-presets.ts";
+import {
+    SEEDANCE_ORIGINAL_FORMAT_DIRECTOR_METHOD_V5_PRESET_ID,
+    SEEDANCE_WORKFLOW_PRESET_ID,
+    applyWorkflowPresetSelection,
+    buildSeedanceOriginalFormatDirectorMethodV5Preset,
+    buildSeedanceWorkflowPreset,
+    builtInAgentWorkflowPresets,
+    sortedWorkflowStages,
+    workflowStageDetail,
+} from "./agent-workflow-presets.ts";
 
 test("builds the Seedance multi-agent workflow preset", () => {
     const preset = buildSeedanceWorkflowPreset();
@@ -76,4 +85,26 @@ test("does not include M6.10.1 runner execution fields or behavior", () => {
         assert.equal("model" in stage, false);
         assert.equal("execute" in stage, false);
     }
+});
+
+test("adds the Seedance original-format director-method v5 preset alongside the old preset", () => {
+    const presets = builtInAgentWorkflowPresets();
+    assert.deepEqual(
+        presets.map((preset) => preset.workflowId),
+        [SEEDANCE_WORKFLOW_PRESET_ID, SEEDANCE_ORIGINAL_FORMAT_DIRECTOR_METHOD_V5_PRESET_ID],
+    );
+
+    const preset = buildSeedanceOriginalFormatDirectorMethodV5Preset();
+    assert.equal(preset.workflowId, SEEDANCE_ORIGINAL_FORMAT_DIRECTOR_METHOD_V5_PRESET_ID);
+    assert.equal(preset.version, "5.1.0");
+    assert.deepEqual(
+        sortedWorkflowStages(preset).map((stage) => stage.stageId),
+        ["director-analysis", "art-design", "seedance-storyboard"],
+    );
+    assert.ok(preset.sourceFiles.some((file) => file.path === "specs/skills/original-prompt-format-lock/SKILL.md"));
+    assert.ok(preset.sourceFiles.some((file) => file.path === "specs/skills/director-method-shot-skill/SKILL.md"));
+    assert.ok(preset.sourceFiles.some((file) => file.path === "specs/knowledge/director-methods/director_method_cards.md"));
+    assert.ok(preset.sourceFiles.some((file) => file.path === "tools/export_copy_only.py"));
+    assert.equal(preset.qualityGates.some((gate) => gate.gateId === "compliance-review"), false);
+    assert.equal(preset.skills.some((skill) => skill.skillId === "compliance-review-skill"), false);
 });

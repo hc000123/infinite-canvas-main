@@ -131,6 +131,7 @@ export default function ImagePage() {
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
+    const allowCustomModel = useConfigStore((state) => state.publicSettings?.modelChannel.allowCustomChannel !== false);
     const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
     const updateAsset = useAssetStore((state) => state.updateAsset);
     const addBriefResultAsset = useImageBriefStore((state) => state.addResultAsset);
@@ -556,7 +557,7 @@ export default function ImagePage() {
                             </div>
 
                             <div className="hidden gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-1">
-                                <GenerationSettings config={effectiveConfig} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} compact />
+                                <GenerationSettings config={effectiveConfig} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} allowCustomModel={allowCustomModel} compact />
                             </div>
                         </div>
 
@@ -624,7 +625,7 @@ export default function ImagePage() {
             </Drawer>
             <Drawer rootClassName="studio-workspace" title="参数" placement="bottom" size="82vh" open={settingsOpen} onClose={() => setSettingsOpen(false)}>
                 <div className="grid grid-cols-2 gap-3 pb-4">
-                    <GenerationSettings config={effectiveConfig} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} />
+                    <GenerationSettings config={effectiveConfig} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} allowCustomModel={allowCustomModel} />
                 </div>
             </Drawer>
             <PromptSelectDialog open={promptDialogOpen} nodeGroup="image" onOpenChange={setPromptDialogOpen} onSelect={setPrompt} />
@@ -636,14 +637,14 @@ export default function ImagePage() {
     );
 }
 
-function GenerationSettings({ config, model, updateConfig, openConfigDialog, compact = false }: { config: AiConfig; model: string; updateConfig: UpdateAiConfig; openConfigDialog: (shouldPromptContinue?: boolean) => void; compact?: boolean }) {
+function GenerationSettings({ allowCustomModel, config, model, updateConfig, openConfigDialog, compact = false }: { allowCustomModel: boolean; config: AiConfig; model: string; updateConfig: UpdateAiConfig; openConfigDialog: (shouldPromptContinue?: boolean) => void; compact?: boolean }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
 
     return (
         <>
             <label className={compact ? "block min-w-0" : "col-span-2 block min-w-0 sm:col-span-1"}>
                 <span className={compact ? "mb-1.5 block text-sm font-semibold text-[var(--studio-text-primary)]" : "mb-1.5 block text-sm font-semibold text-[var(--studio-text-primary)] sm:mb-2 sm:text-base"}>模型</span>
-                <ModelPicker config={config} modelType="image" value={model} onChange={(value) => updateConfig("imageModel", value)} fullWidth onMissingConfig={() => openConfigDialog(false)} />
+                <ModelPicker config={config} modelType="image" value={model} onChange={(value) => updateConfig("imageModel", value)} fullWidth allowCustomModel={allowCustomModel} onMissingConfig={() => openConfigDialog(false)} />
             </label>
             <div className={compact ? "" : "col-span-2"}>
                 <ImageSettingsPanel config={config} onConfigChange={(key, value) => updateConfig(key, value)} theme={theme} showTitle={false} className={compact ? "space-y-3" : "space-y-4"} maxCount={10} quickCount={compact ? 4 : 10} compact={compact} />
@@ -665,9 +666,20 @@ function ResultImageCard({
     onDownload: (image: GeneratedImage, index: number) => void;
     onSaveAsset: (image: GeneratedImage, index: number) => void;
 }) {
+    const aspectRatio = resultImageAspectRatio(image);
+
     return (
         <div className="overflow-hidden rounded-lg border border-[var(--studio-border-subtle)] bg-[rgba(20,28,40,0.72)]">
-            <Image src={image.dataUrl} alt={`生成结果 ${index + 1}`} className="aspect-square object-cover" />
+            <div className="overflow-hidden bg-[rgba(8,12,20,0.36)]" style={{ aspectRatio }}>
+                <Image
+                    src={image.dataUrl}
+                    alt={`生成结果 ${index + 1}`}
+                    styles={{
+                        root: { display: "block", width: "100%", height: "100%" },
+                        image: { display: "block", width: "100%", height: "100%", objectFit: "contain" },
+                    }}
+                />
+            </div>
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-[var(--studio-border-subtle)] px-3 py-3">
                 <div className="flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-sm text-[var(--studio-text-secondary)]">
                     <span>
@@ -699,6 +711,12 @@ function ResultImageCard({
             </div>
         </div>
     );
+}
+
+function resultImageAspectRatio(image: Pick<GeneratedImage, "width" | "height">) {
+    const width = image.width > 0 ? image.width : 1;
+    const height = image.height > 0 ? image.height : 1;
+    return `${width} / ${height}`;
 }
 
 function PendingImageCard() {

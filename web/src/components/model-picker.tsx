@@ -153,7 +153,9 @@ export function ModelPicker({ config, value, onChange, className, fullWidth = fa
 }
 
 function resolveModelOptions(config: AiConfig, modelType?: AiModelKind) {
-    if (modelType === "image") return config.imageModels?.length ? config.imageModels : config.models || [];
+    if (modelType === "image") {
+        return uniquePickerModels([...(config.imageModels || []), config.imageModel, ...(config.models || []).filter((model) => !isLikelyVideoModel(model) && !isEndpointModel(model))]);
+    }
     if (modelType === "video") {
         const videoModels = config.videoModels || [];
         if (videoModels.length) {
@@ -185,6 +187,11 @@ function uniquePickerModels(models: Array<string | undefined>) {
 
 function isEndpointModel(model: string) {
     return model.trim().toLowerCase().startsWith("ep-");
+}
+
+function isLikelyVideoModel(model: string) {
+    const name = model.trim().toLowerCase();
+    return ["seedance", "video", "veo", "sora", "kling", "hailuo", "runway", "wan"].some((keyword) => name.includes(keyword));
 }
 
 function ModelOptionButton({ model, active, onSelect }: { model: string; active: boolean; onSelect: () => void }) {

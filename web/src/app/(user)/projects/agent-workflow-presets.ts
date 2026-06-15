@@ -67,12 +67,14 @@ export type AgentWorkflowPresetSelection = {
 };
 
 export const SEEDANCE_WORKFLOW_PRESET_ID = "seedance-2-multi-agent-storyboard-team";
+export const SEEDANCE_ORIGINAL_FORMAT_DIRECTOR_METHOD_V5_PRESET_ID = "seedance-original-format-director-method-v5";
 
 const sourceRoot = "/Users/huangchi/马也传媒/03_AI工作流/AI/眨眼之间工作区/ai/86.废才Seedance 2.0 AI 分镜师团队";
+const v5SourceRoot = "/Users/huangchi/马也传媒/03_AI工作流/AI/眨眼之间工作区/ai/hc工作流-新版/seedance-original-workflow-plus-director-method-v5";
 const importedAt = "2026-06-06T00:00:00.000Z";
 
 export function builtInAgentWorkflowPresets(): AgentWorkflowPreset[] {
-    return [buildSeedanceWorkflowPreset()];
+    return [buildSeedanceWorkflowPreset(), buildSeedanceOriginalFormatDirectorMethodV5Preset()];
 }
 
 export function buildSeedanceWorkflowPreset(): AgentWorkflowPreset {
@@ -223,6 +225,115 @@ export function buildSeedanceWorkflowPreset(): AgentWorkflowPreset {
     };
 }
 
+export function buildSeedanceOriginalFormatDirectorMethodV5Preset(): AgentWorkflowPreset {
+    const sourceFiles = uniqueSourceFiles([
+        sourceFile("AGENTS.md", "config", "原提示词格式锁、三阶段输出和禁止项。"),
+        sourceFile("config/workflow.yaml", "config", "v5.1 三阶段流程、hard locks 和必读清单。"),
+        sourceFile("tools/workflow_validate.py", "tool", "阶段原格式质量门校验。"),
+        sourceFile("tools/export_copy_only.py", "tool", "从清道夫 V4.3 主文件导出 copy-only。"),
+        ...v5Stage1SourceFiles(),
+        ...v5Stage2SourceFiles(),
+        ...v5Stage3SourceFiles(),
+    ]);
+    return {
+        workflowId: SEEDANCE_ORIGINAL_FORMAT_DIRECTOR_METHOD_V5_PRESET_ID,
+        name: "Seedance 原格式导演方法 v5",
+        version: "5.1.0",
+        description: "并行接入 seedance-original-workflow-plus-director-method-v5：保留现有三阶段流程 ID，但强化原提示词格式锁、导演方法包、@图N 引用和 copy-only 导出；不启用剧情合规审核 gate。",
+        stages: [
+            {
+                stageId: "director-analysis",
+                name: "导演方法真分镜",
+                agentId: "director",
+                order: 1,
+                purpose: "基于导演方法包输出导演分析、Beat Board、真分镜脚本和用户修改轨。",
+                inputSummary: "本集剧本、原格式锁、导演方法卡、场景类型 playbook 和真分镜规则。",
+                outputSummary: "01A 导演分析、01B Beat Board、01C 真分镜脚本、01D 用户修改轨。",
+                requiredSkills: ["original-prompt-format-lock", "director-method-shot-skill"],
+                qualityGateIds: ["v5-stage-spec-read-record", "v5-director-method-shot-gate"],
+            },
+            {
+                stageId: "art-design",
+                name: "原格式服化道",
+                agentId: "art-designer",
+                order: 2,
+                purpose: "沿用原工作流图片提示词格式，输出人物提示词和场景 / 互动道具提示词。",
+                inputSummary: "01A / 01B / 01C / 01D、原格式锁、服化道模板和示例。",
+                outputSummary: "assets/character-prompts.md 与 assets/scene-prompts.md；互动道具写入 scene-prompts 的对应章节。",
+                requiredSkills: ["original-prompt-format-lock", "art-design-skill"],
+                qualityGateIds: ["v5-stage-spec-read-record", "v5-original-art-prompt-format", "v5-asset-uniqueness-check"],
+            },
+            {
+                stageId: "seedance-storyboard",
+                name: "原清道夫 V4.3 Seedance",
+                agentId: "storyboard-artist",
+                order: 3,
+                purpose: "按场次 / 子场次输出原清道夫 V4.3 Seedance 2.0 提示词，并导出 copy-only。",
+                inputSummary: "导演真分镜、原格式服化道资产提示词、Seedance 模板、方法论和工业化质检规则。",
+                outputSummary: "02-seedance-prompts.md 与 02-seedance-copy-only.md，使用 @图N 引用。",
+                requiredSkills: ["original-prompt-format-lock", "seedance-storyboard-skill"],
+                qualityGateIds: ["v5-stage-spec-read-record", "v5-scene-by-scene-lock", "v5-industrial-quality-precheck", "v5-original-seedance-prompt-format"],
+            },
+        ],
+        agents: [
+            {
+                agentId: "director",
+                name: "导演 / director",
+                role: "导演方法 + 真分镜",
+                responsibility: "输出 01A/01B/01C/01D；每个场次包含 method_plan，每个 Shot 包含 method_tags 与 method_reason。",
+                systemPromptSummary: "资深影视导演，使用导演方法包转化镜头策略，不写最终图片或 Seedance 提示词。",
+                sourceFile: "specs/agents/director.md",
+            },
+            {
+                agentId: "art-designer",
+                name: "服化道 / art-designer",
+                role: "原格式图片提示词",
+                responsibility: "读取阶段一四个文件，输出原格式 character-prompts.md 与 scene-prompts.md。",
+                systemPromptSummary: "严格沿用 art-design-template，不输出 v3 图片提示词文件，不因待确认阻断 Stage 2。",
+                sourceFile: "specs/agents/art-designer.md",
+            },
+            {
+                agentId: "storyboard-artist",
+                name: "分镜师 / storyboard-artist",
+                role: "原清道夫 V4.3 Seedance 提示词",
+                responsibility: "输出 02-seedance-prompts.md，使用 @图N，并额外导出 copy-only。",
+                systemPromptSummary: "按场次生成单 P 视觉 DNA、任务卡和一键复制正文，控制内部术语与引用数量。",
+                sourceFile: "specs/agents/storyboard-artist.md",
+            },
+        ],
+        skills: [
+            skill("original-prompt-format-lock", "原提示词格式锁", "锁定原工作流图片提示词和 Seedance 清道夫 V4.3 格式，禁止简化替代格式。", [sourceFile("specs/skills/original-prompt-format-lock/SKILL.md", "skill", "原格式锁。")]),
+            skill("director-method-shot-skill", "导演方法真分镜技能", "导演方法选择、method_plan、Shot 级 method_tags / method_reason 和真分镜脚本。", v5Stage1SourceFiles(["specs/skills/director-method-shot-skill/SKILL.md", "specs/knowledge/director-methods/director_method_cards.md", "specs/knowledge/director-methods/director_methods.json", "specs/knowledge/director-methods/scene_type_playbook.md", "specs/knowledge/director-methods/shot_script_method_rules.md", "specs/knowledge/director-methods/method_selection_matrix.csv"])),
+            skill("art-design-skill", "原格式服化道技能", "沿用原工作流人物、场景和互动道具提示词格式。", v5Stage2SourceFiles(["specs/skills/art-design-skill/SKILL.md", "specs/skills/art-design-skill/templates/art-design-template.md", "specs/skills/art-design-skill/examples/character-prompt-examples.md", "specs/skills/art-design-skill/examples/scene-prompt-examples.md"])),
+            skill("seedance-storyboard-skill", "原清道夫 V4.3 Seedance 技能", "输出原格式 Seedance 2.0 提示词、工业化预检、单 P 任务卡和 copy-only。", v5Stage3SourceFiles(["specs/skills/seedance-storyboard-skill/SKILL.md", "specs/skills/seedance-storyboard-skill/templates/seedance-prompts-template.md", "specs/skills/seedance-storyboard-skill/seedance-prompt-methodology.md", "specs/skills/seedance-storyboard-skill/industrial-quality-rules.md", "specs/skills/seedance-storyboard-skill/examples/seedance-prompt-examples.md"])),
+        ],
+        qualityGates: [
+            gate("v5-stage-spec-read-record", "v5 规范读取记录", ["director-analysis", "art-design", "seedance-storyboard"], "每阶段开始前记录原格式锁和本阶段必读规范。", "未读取原格式锁和阶段必读文件时不得通过。", [
+                sourceFile("AGENTS.md", "config", "v5 必读规则。"),
+                sourceFile("config/workflow.yaml", "config", "v5 必读清单。"),
+            ]),
+            gate("v5-director-method-shot-gate", "导演方法真分镜检查", ["director-analysis"], "检查 01A/01B/01C/01D、method_plan、method_tags 和 method_reason。", "Stage 1 必须输出四个导演文件，待确认不是 Stage 2/3 阻断。", v5Stage1SourceFiles(["specs/skills/director-method-shot-skill/SKILL.md"])),
+            gate("v5-original-art-prompt-format", "原格式服化道检查", ["art-design"], "检查 character-prompts.md 与 scene-prompts.md 是否沿用原模板。", "不得输出 character-image-prompts.md、scene-image-prompts.md 或 prop-image-prompts.md。", v5Stage2SourceFiles(["specs/skills/art-design-skill/templates/art-design-template.md"])),
+            gate("v5-asset-uniqueness-check", "资产唯一性检查", ["art-design", "seedance-storyboard"], "检查角色、场景和互动道具没有错误合并。", "互动道具写入 scene-prompts.md 的互动道具章节，不单独输出 prop 文件。", [
+                sourceFile("AGENTS.md", "config", "资产唯一性与禁止输出。"),
+            ]),
+            gate("v5-scene-by-scene-lock", "阶段三场次推进锁", ["seedance-storyboard"], "阶段三按场次 / 子场次推进，不能整集一次性生成到底。", "每个场次先写视觉 DNA，再写生成 P 和单 P 任务卡。", [
+                sourceFile("AGENTS.md", "config", "阶段三推进锁。"),
+            ]),
+            gate("v5-industrial-quality-precheck", "工业化质检预检", ["seedance-storyboard"], "阶段三按工业化质检规则留痕。", "记录阶段开始、场次开始、单 P 生成后和导演审核前的质检节点。", v5Stage3SourceFiles(["specs/skills/seedance-storyboard-skill/industrial-quality-rules.md"])),
+            gate("v5-original-seedance-prompt-format", "原清道夫 V4.3 格式检查", ["seedance-storyboard"], "检查 02-seedance-prompts.md、@图N 引用和 copy-only 导出。", "不得输出 02-seedance-final-prompts.md，不得使用 @图片N。", [
+                sourceFile("specs/skills/seedance-storyboard-skill/templates/seedance-prompts-template.md", "template", "原清道夫 V4.3 模板。"),
+                sourceFile("tools/export_copy_only.py", "tool", "copy-only 导出工具。"),
+            ]),
+        ],
+        sourceFiles,
+        sourceRoot: v5SourceRoot,
+        importedAt: "2026-06-15T00:00:00.000Z",
+        enabled: false,
+        selected: false,
+    };
+}
+
 export function resolveWorkflowPreset(workflowId: string, selections: AgentWorkflowPresetSelection[] = []) {
     const preset = builtInAgentWorkflowPresets().find((item) => item.workflowId === workflowId);
     if (!preset) return undefined;
@@ -318,6 +429,55 @@ function stage3SourceFiles(only?: string[]) {
             sourceFile("skills/seedance-storyboard-skill/templates/seedance-prompts-template.md", "template", "Seedance 输出模板。"),
             sourceFile("skills/seedance-prompt-review-skill/SKILL.md", "skill", "阶段三业务审核。"),
             sourceFile("skills/compliance-review-skill/SKILL.md", "skill", "合规审核。"),
+        ],
+        only,
+    );
+}
+
+function v5Stage1SourceFiles(only?: string[]) {
+    return filterSources(
+        [
+            sourceFile("AGENTS.md", "config", "v5 原格式锁、必读文件和待确认规则。"),
+            sourceFile("specs/agents/director.md", "agent", "导演方法 + 真分镜 Agent。"),
+            sourceFile("specs/skills/original-prompt-format-lock/SKILL.md", "skill", "原提示词格式锁。"),
+            sourceFile("specs/skills/director-method-shot-skill/SKILL.md", "skill", "导演方法真分镜技能。"),
+            sourceFile("specs/knowledge/director-methods/director_method_cards.md", "guide", "导演方法卡。"),
+            sourceFile("specs/knowledge/director-methods/director_methods.json", "guide", "导演方法结构数据。"),
+            sourceFile("specs/knowledge/director-methods/scene_type_playbook.md", "guide", "场景类型 playbook。"),
+            sourceFile("specs/knowledge/director-methods/shot_script_method_rules.md", "guide", "真分镜规则。"),
+            sourceFile("specs/knowledge/director-methods/method_selection_matrix.csv", "guide", "方法选择矩阵。"),
+        ],
+        only,
+    );
+}
+
+function v5Stage2SourceFiles(only?: string[]) {
+    return filterSources(
+        [
+            sourceFile("AGENTS.md", "config", "v5 原格式锁、禁止输出和待确认规则。"),
+            sourceFile("specs/agents/art-designer.md", "agent", "原格式服化道 Agent。"),
+            sourceFile("specs/skills/original-prompt-format-lock/SKILL.md", "skill", "原提示词格式锁。"),
+            sourceFile("specs/skills/art-design-skill/SKILL.md", "skill", "服化道技能。"),
+            sourceFile("specs/skills/art-design-skill/templates/art-design-template.md", "template", "原格式服化道模板。"),
+            sourceFile("specs/skills/art-design-skill/examples/character-prompt-examples.md", "example", "人物提示词示例。"),
+            sourceFile("specs/skills/art-design-skill/examples/scene-prompt-examples.md", "example", "场景提示词示例。"),
+        ],
+        only,
+    );
+}
+
+function v5Stage3SourceFiles(only?: string[]) {
+    return filterSources(
+        [
+            sourceFile("AGENTS.md", "config", "v5 原格式锁、@图N 和 copy-only 规则。"),
+            sourceFile("specs/agents/storyboard-artist.md", "agent", "原清道夫 V4.3 Seedance Agent。"),
+            sourceFile("specs/skills/original-prompt-format-lock/SKILL.md", "skill", "原提示词格式锁。"),
+            sourceFile("specs/skills/seedance-storyboard-skill/SKILL.md", "skill", "Seedance 分镜技能。"),
+            sourceFile("specs/skills/seedance-storyboard-skill/templates/seedance-prompts-template.md", "template", "Seedance 清道夫 V4.3 模板。"),
+            sourceFile("specs/skills/seedance-storyboard-skill/industrial-quality-rules.md", "guide", "工业化质检规则。"),
+            sourceFile("specs/skills/seedance-storyboard-skill/seedance-prompt-methodology.md", "guide", "Seedance 提示词方法论。"),
+            sourceFile("specs/skills/seedance-storyboard-skill/examples/seedance-prompt-examples.md", "example", "Seedance 提示词示例。"),
+            sourceFile("tools/export_copy_only.py", "tool", "copy-only 导出工具。"),
         ],
         only,
     );

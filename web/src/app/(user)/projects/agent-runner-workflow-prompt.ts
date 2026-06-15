@@ -1,4 +1,5 @@
 import type { AgentWorkflowAgent, AgentWorkflowQualityGate, AgentWorkflowSkill, AgentWorkflowStage } from "./agent-workflow-presets";
+import { SEEDANCE_ORIGINAL_FORMAT_DIRECTOR_METHOD_V5_PRESET_ID } from "./agent-workflow-presets.ts";
 import type { AgentRunInput, ChatCompletionMessage, WorkflowTextRunOutput } from "./agent-runner-types.ts";
 import { normalizeStringList, summarizeWorkflowTextOutput, tryParseTextOutput } from "./agent-runner-text-utils.ts";
 
@@ -51,6 +52,18 @@ export function buildWorkflowStageSourceFiles(skills: AgentWorkflowSkill[], qual
 
 export function buildWorkflowStagePrompt({ workflowId, workflowVersion, stage, agent, skills, qualityGates, inputSnapshot }: WorkflowStagePromptBuildInput) {
     const sourceFiles = buildWorkflowStageSourceFiles(skills, qualityGates);
+    const originalFormatRequirement =
+        workflowId === SEEDANCE_ORIGINAL_FORMAT_DIRECTOR_METHOD_V5_PRESET_ID
+            ? [
+                  "",
+                  "v5 原格式硬锁：最终图片提示词与 Seedance 视频提示词必须严格沿用原工作流格式，禁止改成新的简化格式。",
+                  "禁止输出：character-image-prompts.md、scene-image-prompts.md、prop-image-prompts.md、02-seedance-final-prompts.md。",
+                  "禁止使用 @图片N；Seedance 引用必须使用 @图N。",
+                  "不得做剧情合规审核，不得要求合规审核 PASS；只保留专业质量和格式检查。",
+                  "01B / 01D 中的“待确认”只表示用户后续可修改点，不是 Stage 2 或 Stage 3 的阻断条件。",
+                  "Stage 3 必须包含原清道夫 V4.3 结构，并保留 copy-only 导出所需的一键复制 Seedance 2.0 提示词代码块。",
+              ]
+            : [];
     const sceneRequirement =
         stage.stageId === "seedance-storyboard"
             ? [
@@ -78,6 +91,7 @@ export function buildWorkflowStagePrompt({ workflowId, workflowVersion, stage, a
         `sourceFiles: ${sourceFiles.join("；") || "（无）"}`,
         "",
         `最小上下文：${buildWorkflowStageContextLines(inputSnapshot, agent.agentId, stage.stageId).join("；")}`,
+        ...originalFormatRequirement,
         ...sceneRequirement,
         "",
         `要求：输出可读、可审核的文本草案，并在必要处给出校验建议。若你能输出 JSON，请将结果放在 JSON 里；若不适配，可输出纯文本，但必须完整可读。`,

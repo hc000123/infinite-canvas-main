@@ -266,13 +266,25 @@
 
     .ant-tooltip,
     .ant-tooltip .ant-tooltip-content,
+    .ant-tooltip .ant-tooltip-container,
+    .ant-tooltip .ant-tooltip-container *,
+    .ant-tooltip .ant-tooltip-unique-container,
+    .ant-tooltip .ant-tooltip-unique-container *,
     .ant-tooltip .ant-tooltip-inner,
     .ant-tooltip .ant-tooltip-inner *,
+    .ant-tooltip-container,
+    .ant-tooltip-unique-container,
     .ant-tooltip-inner {
+        --ant-tooltip-overlay-color: #f8fafc;
+        --ant-tooltip-arrow-background-color: #111827;
         color: #f8fafc !important;
     }
 
+    .ant-tooltip .ant-tooltip-container,
+    .ant-tooltip .ant-tooltip-unique-container,
     .ant-tooltip .ant-tooltip-inner,
+    .ant-tooltip-container,
+    .ant-tooltip-unique-container,
     .ant-tooltip-inner {
         min-height: 28px;
         padding: 7px 10px !important;
@@ -292,11 +304,19 @@
     }
 
     .canvas-tool-tooltip .ant-tooltip-inner,
+    .canvas-tool-tooltip .ant-tooltip-container,
+    .canvas-tool-tooltip .ant-tooltip-container *,
+    .canvas-tool-tooltip .ant-tooltip-unique-container,
+    .canvas-tool-tooltip .ant-tooltip-unique-container *,
     .canvas-tool-tooltip .ant-tooltip-inner * {
         color: #f2f4f8 !important;
     }
 
     .project-card-action-tooltip .ant-tooltip-inner,
+    .project-card-action-tooltip .ant-tooltip-container,
+    .project-card-action-tooltip .ant-tooltip-container *,
+    .project-card-action-tooltip .ant-tooltip-unique-container,
+    .project-card-action-tooltip .ant-tooltip-unique-container *,
     .project-card-action-tooltip .ant-tooltip-inner * {
         color: #f8fafc !important;
     }

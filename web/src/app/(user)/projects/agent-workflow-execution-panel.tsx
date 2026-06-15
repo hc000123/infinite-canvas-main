@@ -1,5 +1,5 @@
 import { type Dispatch, type SetStateAction } from "react";
-import { Alert, Button, Card, Input, Space, Tag } from "antd";
+import { Alert, Button, Card, Input, Select, Space, Tag } from "antd";
 import { Workflow } from "lucide-react";
 
 import type { AgentWorkflowMappingPreview, AgentWorkflowReviewEvidence, AgentWorkflowRunRecord, AgentWorkflowStageOutput } from "./agent-runner-types";
@@ -10,6 +10,7 @@ import { workflowStageDetail, type AgentWorkflowPreset, type AgentWorkflowStage 
 import { evaluateWorkflowQualityGates, type WorkflowQualityGateManifest } from "./workflow-quality-gates";
 
 type AgentWorkflowExecutionPanelProps = {
+    workflowPresets: AgentWorkflowPreset[];
     selectedWorkflowPreset: AgentWorkflowPreset;
     selectedWorkflowStages: AgentWorkflowStage[];
     selectedWorkflowRun?: AgentWorkflowRunRecord;
@@ -34,9 +35,11 @@ type AgentWorkflowExecutionPanelProps = {
     onRunWorkflowStageText: (stageId: string) => void;
     onApproveStage: (stageId: string) => void;
     onRejectStage: (stageId: string) => void;
+    onSelectWorkflowPreset: (workflowId: string) => void;
 };
 
 export function AgentWorkflowExecutionPanel({
+    workflowPresets,
     selectedWorkflowPreset,
     selectedWorkflowStages,
     selectedWorkflowRun,
@@ -61,6 +64,7 @@ export function AgentWorkflowExecutionPanel({
     onRunWorkflowStageText,
     onApproveStage,
     onRejectStage,
+    onSelectWorkflowPreset,
 }: AgentWorkflowExecutionPanelProps) {
     return (
         <Card
@@ -75,6 +79,16 @@ export function AgentWorkflowExecutionPanel({
             <Alert className="mb-4" type="info" showIcon title="仅运行文本草案；图片、视频生成与业务写入仍需人工确认。" />
             <div className="grid gap-4">
                 <div>
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <span className="text-sm text-stone-500">工作流预设</span>
+                        <Select
+                            className="min-w-72"
+                            size="small"
+                            value={selectedWorkflowPreset.workflowId}
+                            options={workflowPresets.map((preset) => ({ value: preset.workflowId, label: `${preset.name} v${preset.version}` }))}
+                            onChange={onSelectWorkflowPreset}
+                        />
+                    </div>
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="text-base font-semibold">{selectedWorkflowPreset.name}</span>
                         <Tag className="m-0">v{selectedWorkflowPreset.version}</Tag>

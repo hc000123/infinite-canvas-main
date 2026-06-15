@@ -64,6 +64,7 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
     const saveProjectConfig = useAgentSettingsStore((state) => state.saveProjectConfig);
     const copyDefaultToProject = useAgentSettingsStore((state) => state.copyDefaultToProject);
     const resetProjectConfig = useAgentSettingsStore((state) => state.resetProjectConfig);
+    const saveProjectWorkflowSelection = useAgentSettingsStore((state) => state.saveProjectWorkflowSelection);
     const runs = useAgentRunnerStore((state) => state.runs);
     const workflowRuns = useAgentRunnerStore((state) => state.workflowRuns);
     const workflowOutputs = useAgentRunnerStore((state) => state.workflowOutputs);
@@ -78,7 +79,9 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const resolvedConfigs = useMemo(() => mergeAgentConfigs(defaultAgentConfigs(), globalConfigs, projectConfigs[projectId] || []), [globalConfigs, projectConfigs, projectId]);
     const workflowPresets = useMemo(() => builtInAgentWorkflowPresets(), []);
-    const selectedWorkflowPreset = useMemo(() => resolveWorkflowPreset(workflowPresets[0].workflowId, projectWorkflowSelections[projectId] || []) || workflowPresets[0], [projectId, projectWorkflowSelections, workflowPresets]);
+    const projectWorkflowSelectionList = projectWorkflowSelections[projectId] || [];
+    const selectedWorkflowId = projectWorkflowSelectionList.find((selection) => selection.selected)?.workflowId || workflowPresets[0].workflowId;
+    const selectedWorkflowPreset = useMemo(() => resolveWorkflowPreset(selectedWorkflowId, projectWorkflowSelectionList) || workflowPresets[0], [projectWorkflowSelectionList, selectedWorkflowId, workflowPresets]);
     const selectedWorkflowStages = useMemo(() => sortedWorkflowStages(selectedWorkflowPreset), [selectedWorkflowPreset]);
     const qualityGateManifest = useMemo(() => buildSeedanceQualityGateManifest({ workflowId: selectedWorkflowPreset.workflowId, version: selectedWorkflowPreset.version }), [selectedWorkflowPreset.version, selectedWorkflowPreset.workflowId]);
     const selectedWorkflowRun = useMemo(
@@ -188,6 +191,11 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
         }
     };
 
+    const selectWorkflowPreset = (workflowId: string) => {
+        saveProjectWorkflowSelection(projectId, { workflowId, projectId, enabled: true, selected: true, updatedAt: new Date().toISOString() });
+        message.success("已切换项目工作流预设");
+    };
+
     return (
         <div className="grid gap-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -217,6 +225,7 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
                               label: "工作流执行",
                               children: (
                                   <AgentWorkflowExecutionPanel
+                                      workflowPresets={workflowPresets}
                                       selectedWorkflowPreset={selectedWorkflowPreset}
                                       selectedWorkflowStages={selectedWorkflowStages}
                                       selectedWorkflowRun={selectedWorkflowRun}
@@ -241,6 +250,7 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
                                       onRunWorkflowStageText={(stageId) => void runWorkflowStageText(stageId)}
                                       onApproveStage={approveWorkflowStage}
                                       onRejectStage={rejectWorkflowStage}
+                                      onSelectWorkflowPreset={selectWorkflowPreset}
                                   />
                               ),
                           }
