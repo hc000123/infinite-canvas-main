@@ -239,17 +239,17 @@ export default function VideoPage() {
 
     if (!selected) {
         return (
-            <main className="studio-shell h-full overflow-hidden text-stone-100">
+            <main className="studio-workspace studio-shell h-full overflow-hidden text-[var(--studio-text-primary)]">
                 <div className="mx-auto flex h-full w-full max-w-[1540px] flex-col gap-4 px-5 py-4 xl:px-8">
-                    <section className="shrink-0 border-b border-white/10 pb-4">
+                    <section className="shrink-0 border-b border-[var(--studio-border-subtle)] pb-4">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div className="min-w-0">
-                                <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
-                                    <span className="font-medium text-teal-200">AI · 画布</span>
+                                <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-[var(--studio-text-muted)]">
+                                    <span className="font-medium text-[var(--studio-accent)]">AI · 画布</span>
                                     <ChevronRight className="size-3.5" />
                                     <span>{sourceLabel}</span>
                                 </div>
-                                <h1 className="text-2xl font-semibold tracking-normal text-white sm:text-3xl">视频节点生产台</h1>
+                                <h1 className="text-2xl font-semibold tracking-normal text-[var(--studio-text-primary)] sm:text-3xl">视频节点生产台</h1>
                             </div>
                             <div className="flex flex-wrap gap-2 lg:justify-end">
                                 <Button icon={<Workflow className="size-4" />} href={workflowControlHref}>
@@ -258,11 +258,11 @@ export default function VideoPage() {
                             </div>
                         </div>
                     </section>
-                    <section className="grid min-h-[520px] place-items-center rounded-lg border border-dashed border-white/10 bg-white/[0.035] px-6 py-16 text-center">
+                    <section className="grid min-h-[520px] place-items-center rounded-lg border border-dashed border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-6 py-16 text-center">
                         <div>
-                            <Video className="mx-auto mb-4 size-9 text-stone-500" />
-                            <h2 className="text-xl font-semibold text-white">这一集还没有视频生产包</h2>
-                            <p className="mt-2 max-w-xl text-sm leading-6 text-stone-400">请先回到视频工作流，完成 Stage 3 质量门并同步 Copy-only 到视频生成界面。</p>
+                            <Video className="mx-auto mb-4 size-9 text-[var(--studio-text-muted)]" />
+                            <h2 className="text-xl font-semibold text-[var(--studio-text-primary)]">这一集还没有视频生产包</h2>
+                            <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--studio-text-secondary)]">请先回到视频工作流，完成 Stage 3 质量门并同步 Copy-only 到视频生成界面。</p>
                             <Button className="mt-5" href={workflowControlHref} type="primary">
                                 返回视频工作流
                             </Button>
@@ -652,20 +652,20 @@ export default function VideoPage() {
     };
 
     return (
-        <main className="studio-shell h-full overflow-hidden text-stone-100">
+        <main className="studio-workspace studio-shell h-full overflow-hidden text-[var(--studio-text-primary)]">
             <div className="mx-auto flex h-full w-full max-w-[1540px] flex-col gap-4 px-5 py-4 xl:px-8">
-                <section className="shrink-0 border-b border-white/10 pb-4">
+                <section className="shrink-0 border-b border-[var(--studio-border-subtle)] pb-4">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0">
-                            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
-                                <span className="font-medium text-teal-200">AI · 画布</span>
+                            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-[var(--studio-text-muted)]">
+                                <span className="font-medium text-[var(--studio-accent)]">AI · 画布</span>
                                 <ChevronRight className="size-3.5" />
                                 <span>{sourceLabel}</span>
                             </div>
-                            <h1 className="text-2xl font-semibold tracking-normal text-white sm:text-3xl">视频节点生产台</h1>
-                            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-stone-300">
+                            <h1 className="text-2xl font-semibold tracking-normal text-[var(--studio-text-primary)] sm:text-3xl">视频节点生产台</h1>
+                            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-[var(--studio-text-secondary)]">
                                 <span>按集推进：先补资产，再逐条检查提示词并生成</span>
-                                <span className="text-stone-500">|</span>
+                                <span className="text-[var(--studio-text-muted)]">|</span>
                                 <span>
                                     已确认 {confirmedCount} 个，已生成 {generatedCount} 个，缺参考 {missingCount} 个，待审核 {reviewCount} 个
                                 </span>
@@ -688,20 +688,20 @@ export default function VideoPage() {
                 </section>
 
                 <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2">
                         <div className="flex flex-wrap gap-1.5">
                             {filters.map((item) => (
                                 <button
                                     key={item.key}
                                     type="button"
-                                    className={cn("h-8 rounded-md px-3 text-sm transition", filter === item.key ? "bg-teal-300/15 text-teal-100 ring-1 ring-teal-300/30" : "text-stone-400 hover:bg-white/[0.05] hover:text-stone-100")}
+                                    className={cn("h-8 rounded-md border px-3 text-sm transition", filter === item.key ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-text-primary)] shadow-[inset_0_-2px_0_var(--studio-accent)]" : "border-transparent text-[var(--studio-text-secondary)] hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]")}
                                     onClick={() => setFilter(item.key)}
                                 >
                                     {item.label}
                                 </button>
                             ))}
                         </div>
-                        <div className="text-sm text-stone-500">{visiblePackages.length} 条视频节点</div>
+                        <div className="text-sm text-[var(--studio-text-muted)]">{visiblePackages.length} 条视频节点</div>
                     </div>
                     <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto pr-1">
                         <div className="grid gap-3 pb-8">
@@ -734,7 +734,7 @@ export default function VideoPage() {
                                     uploadingReferenceKey={uploadingReferenceKey}
                                 />
                             ))}
-                            {!visiblePackages.length ? <div className="rounded-lg border border-dashed border-white/10 px-4 py-16 text-center text-sm text-stone-500">没有匹配的生产包</div> : null}
+                            {!visiblePackages.length ? <div className="rounded-lg border border-dashed border-[var(--studio-border-subtle)] px-4 py-16 text-center text-sm text-[var(--studio-text-muted)]">没有匹配的生产包</div> : null}
                         </div>
                     </div>
                 </section>

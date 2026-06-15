@@ -43,11 +43,11 @@ export function AppTopNav() {
     return (
         <>
             {!hideHeader ? (
-                <header className="sticky top-0 z-20 h-16 shrink-0 border-b border-stone-950/10 bg-[#fffefa]/84 backdrop-blur-xl dark:border-white/10 dark:bg-[#101313]/86">
+                <header className="sticky top-0 z-20 h-16 shrink-0 border-b border-[var(--studio-border-subtle)] bg-[color-mix(in_srgb,var(--studio-app-bg)_92%,transparent)] shadow-[0_10px_28px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:shadow-[0_10px_28px_rgba(0,0,0,0.18)]">
                     <div className="mx-auto flex h-full max-w-7xl items-stretch justify-between gap-5 px-5 sm:px-6">
                         <div className="flex min-w-0 items-center">
-                            <Link href="/" className="flex h-full shrink-0 items-center gap-3 text-sm font-semibold leading-none tracking-tight text-stone-950 transition hover:text-teal-700 dark:text-stone-100 dark:hover:text-teal-200">
-                                <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-teal-700/20 bg-teal-700/10 text-teal-700 dark:border-teal-200/25 dark:bg-teal-200/10 dark:text-teal-200">
+                            <Link href="/" className="group flex h-full shrink-0 items-center gap-3 text-sm font-semibold leading-none tracking-tight text-[var(--studio-text-primary)] transition hover:text-[var(--studio-accent)]">
+                                <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-active-bg)] text-[var(--studio-accent)] transition group-hover:border-[var(--studio-border-strong)] group-hover:bg-[var(--studio-hover-bg)]">
                                     <span
                                         className="size-5 bg-current"
                                         style={{
@@ -59,15 +59,15 @@ export function AppTopNav() {
                                 <span className="grid gap-1">
                                     <span className="flex items-center gap-2 text-base font-semibold">
                                         AI · 画布
-                                        <span className="rounded-md border border-teal-700/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-teal-700 dark:border-teal-200/25 dark:text-teal-200">本地版</span>
+                                        <span className="rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-accent-soft)] px-1.5 py-0.5 text-[10px] font-medium leading-none text-[var(--studio-accent)]">本地版</span>
                                     </span>
-                                    <span className="text-[10px] font-medium leading-none text-stone-400 dark:text-stone-500">让想法成为影像</span>
+                                    <span className="text-[10px] font-medium leading-none text-[var(--studio-text-muted)]">让想法成为影像</span>
                                 </span>
                             </Link>
 
                             <button
                                 type="button"
-                                className="ml-3 inline-flex size-8 shrink-0 items-center justify-center text-stone-600 transition hover:text-stone-950 md:hidden dark:text-stone-300 dark:hover:text-white"
+                                className="ml-3 inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-transparent text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] md:hidden"
                                 onClick={() => setMobileNavOpen(true)}
                                 aria-label="打开导航菜单"
                                 title="导航菜单"
@@ -75,7 +75,7 @@ export function AppTopNav() {
                                 <Menu className="size-5" />
                             </button>
 
-                            <nav className="hide-scrollbar ml-7 hidden h-16 min-w-0 items-center gap-1 overflow-x-auto rounded-lg border border-stone-950/10 bg-white/55 p-1 md:flex dark:border-white/10 dark:bg-white/[0.04]">
+                            <nav className="hide-scrollbar ml-7 hidden h-16 min-w-0 items-center gap-1 overflow-x-auto rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-1 md:flex">
                                 {navigationTools.map((tool) => {
                                     const Icon = tool.icon;
                                     const active = tool.slug === activeToolSlug;
@@ -84,13 +84,13 @@ export function AppTopNav() {
                                             key={tool.slug}
                                             href={getToolHref(tool.slug)}
                                             className={cn(
-                                                "relative flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-sm leading-6 transition",
+                                                "relative flex h-9 shrink-0 items-center gap-2 rounded-md border px-3 text-sm leading-6 transition",
                                                 active
-                                                    ? "bg-stone-950 font-medium text-white shadow-sm dark:bg-white dark:text-stone-950"
-                                                    : "text-stone-500 hover:bg-stone-950/5 hover:text-stone-950 dark:text-stone-400 dark:hover:bg-white/10 dark:hover:text-stone-100",
+                                                    ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] font-semibold text-[var(--studio-text-primary)] shadow-[inset_0_-2px_0_var(--studio-accent)]"
+                                                    : "border-transparent text-[var(--studio-text-secondary)] hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]",
                                             )}
                                         >
-                                            <Icon className="size-4" />
+                                            <Icon className={cn("size-4 transition", active ? "text-[var(--studio-accent)]" : "text-current")} />
                                             <span>{tool.label}</span>
                                         </Link>
                                     );
@@ -105,7 +105,7 @@ export function AppTopNav() {
                                 <>
                                     <button
                                         type="button"
-                                        className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-transparent text-stone-600 transition hover:border-stone-950/10 hover:bg-stone-950/5 hover:text-stone-950 dark:text-stone-300 dark:hover:border-white/10 dark:hover:bg-white/10 dark:hover:text-white [&_svg]:size-4"
+                                        className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-transparent text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] [&_svg]:size-4"
                                         onClick={() => openConfigDialog(false)}
                                         aria-label="配置"
                                         title="配置"
@@ -115,12 +115,12 @@ export function AppTopNav() {
                                     <AnimatedThemeToggler
                                         theme={theme}
                                         onThemeChange={setTheme}
-                                        className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-transparent text-stone-600 transition hover:border-stone-950/10 hover:bg-stone-950/5 hover:text-stone-950 dark:text-stone-300 dark:hover:border-white/10 dark:hover:bg-white/10 dark:hover:text-white [&_svg]:size-4"
+                                        className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-transparent text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] [&_svg]:size-4"
                                         aria-label={themeToggleLabel}
                                         title={themeToggleLabel}
                                     />
                                     <VersionReleaseModal />
-                                    <Link href="/login" className="text-sm font-medium text-stone-600 underline-offset-4 transition hover:text-stone-950 hover:underline dark:text-stone-300 dark:hover:text-stone-100">
+                                    <Link href="/login" className="rounded-md px-2 py-1 text-sm font-medium text-[var(--studio-text-secondary)] underline-offset-4 transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] hover:no-underline">
                                         登录
                                     </Link>
                                 </>

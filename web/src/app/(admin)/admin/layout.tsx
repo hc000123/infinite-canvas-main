@@ -100,7 +100,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         const fallbackDescription = !isReady ? (authWaitExpired ? "你可以重新登录，或先回到项目工作台。" : "正在确认登录状态，请稍候。") : !token ? "登录后会自动回到管理后台。" : "你可以返回项目工作台继续使用。";
 
         return (
-            <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: antToken.colorBgLayout, padding: 24 }}>
+            <div className="studio-workspace" style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: antToken.colorBgLayout, padding: 24 }}>
                 <Flex vertical align="center" gap={16} style={{ textAlign: "center" }}>
                     {!isReady ? <Spin /> : null}
                     <Typography.Title level={4} style={{ margin: 0 }}>
@@ -167,7 +167,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     );
 
     return (
-        <Layout hasSider={!isCompact} style={{ height: "100dvh", overflow: "hidden", background: antToken.colorBgLayout }}>
+        <Layout className="studio-workspace" hasSider={!isCompact} style={{ height: "100dvh", overflow: "hidden", background: antToken.colorBgLayout }}>
             {!isCompact ? (
                 <Layout.Sider width={adminLayoutStyle.siderWidth} style={{ height: "100dvh", overflow: "hidden", background: antToken.colorBgContainer, borderRight: `1px solid ${antToken.colorBorder}` }}>
                     {brand}
@@ -175,7 +175,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                     <div style={{ position: "absolute", bottom: 0, insetInline: 0, padding: 12, borderTop: `1px solid ${antToken.colorBorder}`, background: antToken.colorBgContainer }}>{sideActions}</div>
                 </Layout.Sider>
             ) : (
-                <Drawer title={drawerTitle} placement="left" size={280} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} footer={sideActions} styles={{ body: { padding: 0 }, footer: { borderTop: `1px solid ${antToken.colorBorder}` } }}>
+                <Drawer rootClassName="studio-modal" title={drawerTitle} placement="left" size={280} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} footer={sideActions} styles={{ body: { padding: 0 }, footer: { borderTop: `1px solid ${antToken.colorBorder}` } }}>
                     {adminMenu}
                 </Drawer>
             )}

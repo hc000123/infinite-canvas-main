@@ -172,7 +172,7 @@ export default function AdminUsersPage() {
                 />
             </Flex>
 
-            <Modal title={editingUser?.id ? "编辑用户" : "新增用户"} open={Boolean(editingUser)} width={680} onCancel={() => setEditingUser(null)} onOk={() => void saveUser()} okText="保存" cancelText="取消" destroyOnHidden>
+            <Modal rootClassName="studio-modal" title={editingUser?.id ? "编辑用户" : "新增用户"} open={Boolean(editingUser)} width={680} onCancel={() => setEditingUser(null)} onOk={() => void saveUser()} okText="保存" cancelText="取消" destroyOnHidden>
                 <Form form={form} layout="vertical" requiredMark={false}>
                     <Typography.Text strong>基础信息</Typography.Text>
                     <Row gutter={14}>
@@ -230,7 +230,7 @@ export default function AdminUsersPage() {
                 </Form>
             </Modal>
 
-            <Modal
+            <Modal rootClassName="studio-modal"
                 title="删除用户"
                 open={Boolean(deletingUser)}
                 onCancel={() => setDeletingUser(null)}

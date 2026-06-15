@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { ArrowLeft, CircleDot, Menu } from "lucide-react";
+import { ArrowLeft, Menu } from "lucide-react";
 
 import { MobileNavDrawer } from "@/components/layout/mobile-nav-drawer";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
@@ -30,15 +30,21 @@ function ProjectWorkspaceTopBar() {
         if (toolSlug === "original-workflow") return buildWorkspaceOriginalWorkflowHref(pathname, searchParams);
         return `/${toolSlug}`;
     };
-    const barStyle = { background: "color-mix(in srgb, var(--studio-app-bg) 94%, transparent)", color: "var(--studio-text-primary)" };
+    const barStyle = { background: "color-mix(in srgb, var(--studio-app-bg) 92%, transparent)", color: "var(--studio-text-primary)" };
 
     return (
-        <header className="relative z-[80] h-16 shrink-0 border-b border-[var(--studio-border-subtle)] shadow-[0_10px_28px_rgba(0,0,0,0.12)] backdrop-blur-xl" style={barStyle}>
+        <header className="relative z-[80] h-16 shrink-0 border-b border-[var(--studio-border-subtle)] shadow-[0_10px_28px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:shadow-[0_10px_28px_rgba(0,0,0,0.18)]" style={barStyle}>
             <div className="mx-auto flex h-full w-full max-w-7xl items-stretch justify-between gap-5 px-5 sm:px-6">
                 <div className="flex min-w-0 items-center">
-                    <Link href="/" className="flex h-full shrink-0 items-center gap-3 text-sm font-semibold leading-none tracking-tight transition hover:text-[var(--studio-accent)]">
-                        <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-white/[0.15] bg-[var(--studio-accent)] text-[var(--primary-foreground)] shadow-[0_10px_24px_rgba(111,168,255,0.24)]">
-                            <CircleDot className="size-5 fill-current" />
+                    <Link href="/" className="group flex h-full shrink-0 items-center gap-3 text-sm font-semibold leading-none tracking-tight transition hover:text-[var(--studio-accent)]">
+                        <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-active-bg)] text-[var(--studio-accent)] transition group-hover:border-[var(--studio-border-strong)] group-hover:bg-[var(--studio-hover-bg)]">
+                            <span
+                                className="size-5 bg-current"
+                                style={{
+                                    mask: "url(/logo.svg) center / contain no-repeat",
+                                    WebkitMask: "url(/logo.svg) center / contain no-repeat",
+                                }}
+                            />
                         </span>
                         <span className="grid gap-1">
                             <span className="flex items-center gap-2 text-base font-semibold" style={{ color: "var(--studio-text-primary)" }}>
@@ -58,7 +64,7 @@ function ProjectWorkspaceTopBar() {
 
                     <button
                         type="button"
-                        className="ml-2 inline-flex size-9 shrink-0 items-center justify-center rounded-md transition hover:bg-[var(--studio-accent-soft)] hover:text-[var(--studio-accent)] md:hidden"
+                        className="ml-2 inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-transparent transition hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-accent)] md:hidden"
                         style={{ color: "var(--studio-text-secondary)" }}
                         onClick={() => setMobileNavOpen(true)}
                         aria-label="打开导航菜单"
@@ -79,7 +85,7 @@ function ProjectWorkspaceTopBar() {
                     {returnTarget ? (
                         <button
                             type="button"
-                            className="hidden h-8 shrink-0 items-center gap-2 rounded-md px-2 text-sm font-medium transition hover:bg-[var(--studio-accent-soft)] hover:text-[var(--studio-accent)] sm:flex"
+                            className="hidden h-8 shrink-0 items-center gap-2 rounded-md border border-transparent px-2 text-sm font-medium transition hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-accent)] sm:flex"
                             style={{ color: "var(--studio-text-secondary)" }}
                             onClick={() => window.location.assign(returnTarget.href)}
                             title={returnTarget.label}
@@ -151,17 +157,16 @@ function workflowScopedParams(searchParams: SearchParamReader) {
 }
 
 function ProjectWorkspaceLink({ icon, label, href, active }: { icon: ReactNode; label: string; href: string; active: boolean }) {
-    const activeStyle = { background: "var(--studio-accent-soft)", borderColor: "color-mix(in srgb, var(--studio-accent) 36%, transparent)", color: "var(--studio-text-primary)" };
+    const activeStyle = { background: "var(--studio-active-bg)", borderColor: "var(--studio-border-strong)", color: "var(--studio-text-primary)" };
     const inactiveStyle = { background: "transparent", borderColor: "transparent", color: "var(--studio-text-secondary)" };
     const iconStyle = { color: active ? "var(--studio-accent)" : "currentColor" };
 
     return (
         <a
             href={href}
-            className={`group relative flex h-9 shrink-0 items-center gap-2 rounded-md border px-3 text-sm leading-6 transition hover:bg-[var(--studio-panel-muted-bg)] ${active ? "font-semibold shadow-[inset_0_0_0_1px_rgba(125,211,252,0.12),0_10px_28px_rgba(56,189,248,0.10)]" : "font-medium"}`}
+            className={`group relative flex h-9 shrink-0 items-center gap-2 rounded-md border px-3 text-sm leading-6 transition hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] ${active ? "font-semibold shadow-[inset_0_-2px_0_var(--studio-accent)]" : "font-medium"}`}
             style={active ? activeStyle : inactiveStyle}
         >
-            <span className={`absolute inset-x-3 -bottom-px h-0.5 rounded-full transition ${active ? "bg-[var(--studio-accent)] opacity-100" : "bg-transparent opacity-0 group-hover:bg-[var(--studio-accent)] group-hover:opacity-100"}`} />
             <span className="shrink-0 transition" style={iconStyle}>
                 {icon}
             </span>

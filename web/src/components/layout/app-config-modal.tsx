@@ -57,10 +57,11 @@ export function AppConfigModal() {
 
     return (
         <Modal
+            rootClassName="studio-modal"
             title={
                 <div>
                     <div className="text-lg font-semibold">配置</div>
-                    <div className="mt-1 text-xs font-normal text-stone-500">模型、密钥和 Agent 设定</div>
+                    <div className="mt-1 text-xs font-normal text-[var(--studio-text-muted)]">模型、密钥和 Agent 设定</div>
                 </div>
             }
             open={isConfigOpen}
@@ -84,8 +85,8 @@ export function AppConfigModal() {
                             label: "模型配置",
                             children: (
                                 <Form layout="vertical" requiredMark={false}>
-                                    <div className="mb-4 rounded-lg border border-stone-200 p-3 text-sm text-stone-500 dark:border-stone-800">
-                                        <div className="font-medium text-stone-900 dark:text-stone-100">模型渠道</div>
+                                    <div className="mb-4 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3 text-sm text-[var(--studio-text-secondary)]">
+                                        <div className="font-medium text-[var(--studio-text-primary)]">模型渠道</div>
                                         <div className="mt-1">由后端统一转发请求，当前可用 {modelChannel?.availableModels.length || 0} 个模型。接口、密钥、模型映射、额度、任务日志和素材审核都在后台维护。</div>
                                         {isPublicSettingsLoading ? <div className="mt-1 text-xs text-blue-500">正在同步后台配置...</div> : null}
                                         {showAdminSettingsEntry ? (
@@ -105,11 +106,11 @@ export function AppConfigModal() {
                                             <ModelPicker config={modelConfig} modelType="text" value={modelConfig.textModel} onChange={(value) => updateConfig("textModel", value)} fullWidth allowCustomModel={allowCustomModel} />
                                         </Form.Item>
                                     </div>
-                                    <div className="mb-0 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+                                    <div className="mb-0 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
                                         <div className="mb-3 flex items-center justify-between gap-3">
                                             <div>
                                                 <div className="text-sm font-medium">思考模式</div>
-                                                <div className="mt-1 text-xs text-stone-500">用于支持 reasoning_effort 的 OpenAI 兼容 Chat Completions 模型。</div>
+                                                <div className="mt-1 text-xs text-[var(--studio-text-muted)]">用于支持 reasoning_effort 的 OpenAI 兼容 Chat Completions 模型。</div>
                                             </div>
                                             <Segmented
                                                 size="small"

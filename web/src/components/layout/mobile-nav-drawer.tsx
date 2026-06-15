@@ -15,7 +15,7 @@ type MobileNavDrawerProps = {
 
 export function MobileNavDrawer({ open, activeToolSlug, getHref, onClose }: MobileNavDrawerProps) {
     return (
-        <Drawer title="眨眼之间" placement="left" size={280} open={open} onClose={onClose} className="md:hidden">
+        <Drawer rootClassName="studio-modal" title="眨眼之间" placement="left" size={280} open={open} onClose={onClose} className="md:hidden">
             <div className="space-y-1">
                 {navigationTools.map((tool) => {
                     const Icon = tool.icon;
@@ -26,11 +26,13 @@ export function MobileNavDrawer({ open, activeToolSlug, getHref, onClose }: Mobi
                             href={getHref ? getHref(tool.slug) : `/${tool.slug}`}
                             onClick={onClose}
                             className={cn(
-                                "flex items-center gap-3 rounded-lg px-3 py-3 text-base transition",
-                                active ? "bg-stone-100 font-medium text-stone-950 dark:bg-stone-800 dark:text-stone-100" : "text-stone-600 hover:bg-stone-100 hover:text-stone-950 dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-stone-100",
+                                "flex items-center gap-3 rounded-md border px-3 py-3 text-base transition",
+                                active
+                                    ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] font-semibold text-[var(--studio-text-primary)] shadow-[inset_0_-2px_0_var(--studio-accent)]"
+                                    : "border-transparent text-[var(--studio-text-secondary)] hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]",
                             )}
                         >
-                            <Icon className="size-5" />
+                            <Icon className={cn("size-5", active ? "text-[var(--studio-accent)]" : "text-current")} />
                             <span>{tool.label}</span>
                         </Link>
                     );

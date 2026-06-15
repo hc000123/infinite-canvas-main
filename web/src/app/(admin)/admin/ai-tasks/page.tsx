@@ -265,7 +265,7 @@ export default function AdminAITasksPage() {
                 />
             </Space>
 
-            <Drawer title="AI 任务详情" open={Boolean(detailId)} size={820} onClose={closeDetail} loading={isDetailLoading}>
+            <Drawer rootClassName="studio-modal" title="AI 任务详情" open={Boolean(detailId)} size={820} onClose={closeDetail} loading={isDetailLoading}>
                 {detail ? (
                     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
                         <Descriptions bordered size="small" column={2}>

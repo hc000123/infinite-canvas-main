@@ -310,7 +310,7 @@ export default function AdminAssetsPage() {
                 />
             </Flex>
 
-            <Modal title={editingAsset?.id ? "编辑素材" : "新增素材"} open={Boolean(editingAsset)} width={760} onCancel={() => setEditingAsset(null)} onOk={() => void saveAsset()} okText="保存" cancelText="取消" destroyOnHidden>
+            <Modal rootClassName="studio-modal" title={editingAsset?.id ? "编辑素材" : "新增素材"} open={Boolean(editingAsset)} width={760} onCancel={() => setEditingAsset(null)} onOk={() => void saveAsset()} okText="保存" cancelText="取消" destroyOnHidden>
                 <Form form={form} layout="vertical" requiredMark={false}>
                     <Form.Item name="type" label="类型" rules={[{ required: true, message: "请选择类型" }]}>
                         <Select options={editTypeOptions} />
@@ -353,7 +353,7 @@ export default function AdminAssetsPage() {
                 <input ref={mediaInputRef} type="file" accept="image/*,video/*,audio/*" className="hidden" onChange={(event) => void uploadMedia(event.target.files?.[0])} />
             </Modal>
 
-            <Modal title="素材详情" open={Boolean(detailAsset)} width={760} onCancel={() => setDetailAsset(null)} footer={<Button onClick={() => setDetailAsset(null)}>关闭</Button>}>
+            <Modal rootClassName="studio-modal" title="素材详情" open={Boolean(detailAsset)} width={760} onCancel={() => setDetailAsset(null)} footer={<Button onClick={() => setDetailAsset(null)}>关闭</Button>}>
                 {detailAsset ? (
                     <Flex vertical gap={14}>
                         <Flex gap={14} align="start">
@@ -398,7 +398,7 @@ export default function AdminAssetsPage() {
                 ) : null}
             </Modal>
 
-            <Modal
+            <Modal rootClassName="studio-modal"
                 title="删除素材"
                 open={Boolean(deletingAsset)}
                 onCancel={() => setDeletingAsset(null)}

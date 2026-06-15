@@ -162,7 +162,7 @@ export default function AdminCreditLogsPage() {
                 />
             </Space>
 
-            <Modal title={editingLog?.id ? "编辑日志" : "新增日志"} open={Boolean(editingLog)} width={680} onCancel={() => setEditingLog(null)} onOk={() => void saveLog()} okText="保存" cancelText="取消" destroyOnHidden>
+            <Modal rootClassName="studio-modal" title={editingLog?.id ? "编辑日志" : "新增日志"} open={Boolean(editingLog)} width={680} onCancel={() => setEditingLog(null)} onOk={() => void saveLog()} okText="保存" cancelText="取消" destroyOnHidden>
                 <Form form={form} layout="vertical" requiredMark={false}>
                     <Row gutter={14}>
                         <Col span={12}>
@@ -209,7 +209,7 @@ export default function AdminCreditLogsPage() {
                 </Form>
             </Modal>
 
-            <Modal
+            <Modal rootClassName="studio-modal"
                 title="删除日志"
                 open={Boolean(deletingLog)}
                 onCancel={() => setDeletingLog(null)}

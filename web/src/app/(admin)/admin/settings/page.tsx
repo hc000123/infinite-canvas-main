@@ -850,7 +850,7 @@ export default function AdminSettingsPage() {
                         </div>
                     )}
                 </Card>
-                <Drawer
+                <Drawer rootClassName="studio-modal"
                     title={editingChannelIndex === null ? "新增渠道" : "编辑渠道"}
                     open={isChannelDrawerOpen}
                     size={isModelSelectorOpen ? 760 : 560}
@@ -1077,7 +1077,7 @@ export default function AdminSettingsPage() {
                         </Form>
                     )}
                 </Drawer>
-                <Modal
+                <Modal rootClassName="studio-modal"
                     title={
                         <Space>
                             {testChannel?.name || "渠道"} 渠道的{isTestingArkChannel ? "企业视频预检" : "模型测试"}
