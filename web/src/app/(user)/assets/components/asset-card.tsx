@@ -103,7 +103,7 @@ export function AssetCard({
                             aria-label={selected ? `取消选择素材 ${asset.title}` : `选择素材 ${asset.title}`}
                             aria-pressed={selected}
                             className={cn(
-                                "absolute left-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-md border border-[var(--studio-border-strong)] bg-[rgba(21,24,33,.86)] text-[var(--studio-text-secondary)] shadow-sm backdrop-blur transition hover:border-[var(--studio-accent)] hover:text-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]",
+                                "absolute left-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-media-overlay)] text-[var(--studio-on-media)] shadow-sm backdrop-blur transition hover:border-[var(--studio-accent)] hover:text-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]",
                                 selected && "border-[var(--studio-accent)] bg-[var(--studio-accent)] text-[var(--primary-foreground)] hover:bg-[var(--studio-accent-hover)] hover:text-[var(--primary-foreground)]",
                             )}
                             onClick={(event) => {
@@ -122,7 +122,7 @@ export function AssetCard({
                         <div className="flex aspect-[4/3] items-center justify-center bg-[var(--studio-panel-muted-bg)] p-5 text-center text-sm leading-6 text-[var(--studio-text-secondary)]">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>
                     )}
                     {mediaInfo ? (
-                        <span className="absolute bottom-2 right-2 max-w-[calc(100%-16px)] truncate rounded-md border border-[var(--studio-border-subtle)] bg-[rgba(21,24,33,.78)] px-2 py-1 text-[11px] font-medium leading-none text-[var(--studio-text-primary)] backdrop-blur-sm">
+                        <span className="absolute bottom-2 right-2 max-w-[calc(100%-16px)] truncate rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-media-overlay)] px-2 py-1 text-[11px] font-medium leading-none text-[var(--studio-on-media)] backdrop-blur-sm">
                             {mediaInfo}
                         </span>
                     ) : null}
@@ -257,7 +257,7 @@ export function AssetRow({
                     type="button"
                     aria-label={selected ? `取消选择素材 ${asset.title}` : `选择素材 ${asset.title}`}
                     aria-pressed={selected}
-                    className={cn("mt-1 grid h-7 w-7 place-items-center rounded-md border border-[var(--studio-border-strong)] bg-[rgba(10,14,22,.58)] text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-accent)] hover:text-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]", selected && "border-[var(--studio-accent)] bg-[var(--studio-accent)] text-[var(--primary-foreground)] hover:text-[var(--primary-foreground)]")}
+                    className={cn("mt-1 grid h-7 w-7 place-items-center rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-control-bg)] text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-accent)] hover:text-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]", selected && "border-[var(--studio-accent)] bg-[var(--studio-accent)] text-[var(--primary-foreground)] hover:text-[var(--primary-foreground)]")}
                     onClick={(event) => {
                         event.stopPropagation();
                         onSelect();
@@ -285,8 +285,8 @@ export function AssetRow({
                         <span>{workflowInfo ? "待匹配图片" : asset.kind === "text" ? "文本素材" : "暂无封面"}</span>
                     </div>
                 )}
-                <span className="absolute left-1.5 top-1.5 rounded border border-[var(--studio-border-subtle)] bg-[rgba(10,14,22,.72)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--studio-text-primary)] backdrop-blur">{statusLabel}</span>
-                {mediaInfo ? <span className="absolute bottom-1.5 right-1.5 max-w-[calc(100%-12px)] truncate rounded border border-[var(--studio-border-subtle)] bg-[rgba(10,14,22,.76)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--studio-text-primary)] backdrop-blur">{mediaInfo}</span> : null}
+                <span className="absolute left-1.5 top-1.5 rounded border border-[var(--studio-border-subtle)] bg-[var(--studio-media-overlay)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--studio-on-media)] backdrop-blur">{statusLabel}</span>
+                {mediaInfo ? <span className="absolute bottom-1.5 right-1.5 max-w-[calc(100%-12px)] truncate rounded border border-[var(--studio-border-subtle)] bg-[var(--studio-media-overlay)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--studio-on-media)] backdrop-blur">{mediaInfo}</span> : null}
             </div>
 
             <div
@@ -448,7 +448,7 @@ function WorkflowImportedAssetCard({
                                 aria-label={selected ? `取消选择素材 ${asset.title}` : `选择素材 ${asset.title}`}
                                 aria-pressed={selected}
                                 className={cn(
-                                    "grid h-7 w-7 place-items-center rounded-md border border-[var(--studio-border-strong)] bg-[rgba(10,14,22,.72)] text-[var(--studio-text-secondary)] backdrop-blur transition hover:border-[var(--studio-accent)] hover:text-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]",
+                                    "grid h-7 w-7 place-items-center rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-media-overlay)] text-[var(--studio-on-media)] backdrop-blur transition hover:border-[var(--studio-accent)] hover:text-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]",
                                     selected && "border-[var(--studio-accent)] bg-[var(--studio-accent)] text-[var(--primary-foreground)] hover:text-[var(--primary-foreground)]",
                                 )}
                                 onClick={(event) => {
@@ -459,14 +459,14 @@ function WorkflowImportedAssetCard({
                                 {selected ? <CheckSquare className="size-4" /> : <Square className="size-4" />}
                             </button>
                         </Tooltip>
-                        <span className="rounded-md border border-[var(--studio-border-subtle)] bg-[rgba(10,14,22,.72)] px-2 py-1 text-xs font-semibold text-[var(--studio-text-primary)] backdrop-blur">工作流</span>
+                        <span className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-media-overlay)] px-2 py-1 text-xs font-semibold text-[var(--studio-on-media)] backdrop-blur">工作流</span>
                     </div>
-                    <span className="absolute right-3 top-3 rounded-md border border-[var(--studio-border-subtle)] bg-[rgba(10,14,22,.72)] px-2 py-1 text-xs font-semibold text-[var(--studio-text-primary)] backdrop-blur">
+                    <span className="absolute right-3 top-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-media-overlay)] px-2 py-1 text-xs font-semibold text-[var(--studio-on-media)] backdrop-blur">
                         {workflowInfo.type || "资产"}
                     </span>
-                    <span className="absolute bottom-3 left-3 rounded-md border border-[var(--studio-border-subtle)] bg-[rgba(10,14,22,.78)] px-2 py-1 text-xs font-medium text-[var(--studio-text-primary)] backdrop-blur">{statusLabel}</span>
+                    <span className="absolute bottom-3 left-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-media-overlay)] px-2 py-1 text-xs font-medium text-[var(--studio-on-media)] backdrop-blur">{statusLabel}</span>
                     {mediaInfo ? (
-                        <span className="absolute bottom-3 right-3 rounded-md border border-[var(--studio-border-subtle)] bg-[rgba(10,14,22,.78)] px-2 py-1 text-xs font-medium text-[var(--studio-text-primary)] backdrop-blur">{mediaInfo}</span>
+                        <span className="absolute bottom-3 right-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-media-overlay)] px-2 py-1 text-xs font-medium text-[var(--studio-on-media)] backdrop-blur">{mediaInfo}</span>
                     ) : null}
                 </div>
                 <div className="grid min-h-[230px] gap-3 p-4">

@@ -887,11 +887,7 @@ function VideoPromptNodeCard({
                 <div
                     className={cn(
                         "rounded-md border px-3 py-2 text-sm leading-6",
-                        readiness.status === "blocked"
-                            ? "border-amber-300/20 bg-amber-300/[0.08] text-amber-100"
-                            : readiness.status === "warning"
-                              ? "border-sky-300/20 bg-sky-300/[0.08] text-sky-100"
-                              : "border-emerald-300/15 bg-emerald-300/[0.06] text-emerald-100",
+                        studioSemanticNoticeClass(readinessStatusTone(readiness.status)),
                     )}
                 >
                     参考资产 {summary.bound}/{summary.total || item.assets.length}：{readiness.message}
@@ -1059,13 +1055,13 @@ function PromptTextAreaWithReferencePreview({
                         return (
                             <div key={slot.name} className={cn("grid w-[118px] shrink-0 grid-cols-[34px_minmax(0,1fr)] gap-1.5 rounded border p-1", active ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]")}>
                                 <div className="grid size-[34px] place-items-center overflow-hidden rounded bg-[var(--studio-control-bg)]">
-                                    {previewUrl ? <img src={previewUrl} alt={slot.name} className="h-full w-full object-cover" /> : <Link2 className="size-4 text-amber-200" />}
+                                    {previewUrl ? <img src={previewUrl} alt={slot.name} className="h-full w-full object-cover" /> : <Link2 className="size-4 text-[var(--studio-warning)]" />}
                                 </div>
                                 <div className="min-w-0">
                                     <div className="truncate text-[11px] font-semibold text-[var(--studio-text-primary)]" title={slot.name}>
                                         {slot.name}
                                     </div>
-                                    <div className={cn("truncate text-[10px]", boundAsset ? "text-[var(--studio-text-muted)]" : "text-amber-200")} title={boundAsset?.title || "缺参考"}>
+                                    <div className={cn("truncate text-[10px]", boundAsset ? "text-[var(--studio-text-muted)]" : "text-[var(--studio-warning)]")} title={boundAsset?.title || "缺参考"}>
                                         {boundAsset?.title || "缺参考"}
                                     </div>
                                 </div>
@@ -1246,12 +1242,12 @@ function VideoNodeOutput({
                 {nodeConfig.videoProtocol === "volcengine-ark" ? "企业 Ark / Seedance" : "未切到企业 Ark"} · {videoRatioLabel(nodeConfig.size)} · {videoSecondsLabel(nodeConfig.videoSeconds, nodeConfig)} · {videoResolutionLabel(nodeConfig.vquality)}
             </div>
             {preflight ? (
-                <div className={cn("rounded-md border px-3 py-2 text-xs leading-5", preflight.status === "passed" ? "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100" : "border-amber-300/20 bg-amber-300/[0.08] text-amber-100")}>
+                <div className={cn("rounded-md border px-3 py-2 text-xs leading-5", studioSemanticNoticeClass(preflight.status === "passed" ? "success" : "warning"))}>
                     {preflight.message}
                 </div>
             ) : null}
             {generationError ? (
-                <div className="rounded-md border border-rose-300/20 bg-rose-300/[0.08] px-3 py-2 text-xs leading-5 text-rose-100">
+                <div className={cn("rounded-md border px-3 py-2 text-xs leading-5", studioSemanticNoticeClass("danger"))}>
                     <div className="mb-1 flex items-center gap-1.5 font-medium">
                         <TriangleAlert className="size-3.5" />
                         生成失败
@@ -1373,16 +1369,12 @@ function AssetDetail({
             <div
                 className={cn(
                     "rounded-md border px-3 py-2 text-sm leading-6",
-                    readiness.status === "blocked"
-                        ? "border-amber-300/20 bg-amber-300/[0.08] text-amber-100"
-                        : readiness.status === "warning"
-                          ? "border-sky-300/20 bg-sky-300/[0.08] text-sky-100"
-                          : "border-emerald-300/15 bg-emerald-300/[0.06] text-emerald-100",
+                    studioSemanticNoticeClass(readinessStatusTone(readiness.status)),
                 )}
             >
                 {readiness.message}
             </div>
-            {reviewNotice ? <div className="rounded-md border border-amber-300/20 bg-amber-300/[0.08] px-3 py-2 text-sm leading-6 text-amber-100">{reviewNotice}</div> : null}
+            {reviewNotice ? <div className={cn("rounded-md border px-3 py-2 text-sm leading-6", studioSemanticNoticeClass("warning"))}>{reviewNotice}</div> : null}
             {item.assets.map((asset) => {
                 const bound = isWorkflowReferenceAssetBound(item, asset.name, assets);
                 const boundAsset = resolveWorkflowReferenceAssetForName(item, asset.name, assets);
@@ -1395,7 +1387,7 @@ function AssetDetail({
                         <span className="text-[var(--studio-text-muted)]">{asset.kind}</span>
                         <div className="min-w-0">
                             <div className="flex items-center justify-between gap-2">
-                                <span className={cn("truncate", status === "缺失" ? "text-amber-200" : "text-[var(--studio-text-primary)]")}>{asset.name}</span>
+                                <span className={cn("truncate", status === "缺失" ? "text-[var(--studio-warning)]" : "text-[var(--studio-text-primary)]")}>{asset.name}</span>
                                 <StatusTag label={status === "缺失" ? "缺参考" : "完整"} />
                             </div>
                             {status === "缺失" ? (
@@ -1409,7 +1401,7 @@ function AssetDetail({
                                 </div>
                             ) : null}
                             {image?.volcengineAssetStatus ? (
-                                <div className={cn("mt-2 text-xs", image.assetUri ? "text-emerald-200" : "text-amber-200")}>
+                                <div className={cn("mt-2 text-xs", image.assetUri ? "text-[var(--studio-success)]" : "text-[var(--studio-warning)]")}>
                                     火山加白：{image.volcengineAssetStatus}
                                     {image.assetUri ? "，生成时将使用 asset:// 参考图" : "，需刷新到 Active 后再生成"}
                                 </div>
@@ -1471,7 +1463,7 @@ function ConfigDetail({ config, item, loading, onPreflight, preflight }: { confi
                 </Button>
             </div>
             {preflight ? (
-                <div className={cn("rounded-md border px-3 py-2 text-sm", preflight.status === "passed" ? "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100" : "border-amber-300/20 bg-amber-300/[0.08] text-amber-100")}>
+                <div className={cn("rounded-md border px-3 py-2 text-sm", studioSemanticNoticeClass(preflight.status === "passed" ? "success" : "warning"))}>
                     <div className="flex items-center gap-2 font-medium">
                         {preflight.status === "passed" ? <Check className="size-4" /> : <TriangleAlert className="size-4" />}
                         {preflight.status === "passed" ? "预检通过" : "预检失败"}
@@ -1554,9 +1546,9 @@ function GenerationDetail({ item, loading, onGenerate, onOpenConfig, onSync }: {
                 {displayError ? <InfoRow danger label="错误" value={displayError} /> : null}
             </div>
             {authError ? (
-                <div className="rounded-lg border border-amber-300/20 bg-amber-300/[0.08] p-3 text-sm text-amber-100">
+                <div className={cn("rounded-lg border p-3 text-sm", studioSemanticNoticeClass("warning"))}>
                     <div className="font-medium">视频通道认证失败</div>
-                    <div className="mt-1 leading-6 text-amber-100/80">当前生产包已经正确进入真实视频接口，但企业 Ark API Key 不存在、已失效，或 EP 绑定不可用。请到后台系统设置更新企业视频通道密钥后重试。</div>
+                    <div className="mt-1 leading-6 opacity-80">当前生产包已经正确进入真实视频接口，但企业 Ark API Key 不存在、已失效，或 EP 绑定不可用。请到后台系统设置更新企业视频通道密钥后重试。</div>
                     <div className="mt-3 flex flex-wrap gap-2">
                         <Button size="small" icon={<Settings2 className="size-3.5" />} onClick={onOpenConfig}>
                             打开配置
@@ -1568,9 +1560,9 @@ function GenerationDetail({ item, loading, onGenerate, onOpenConfig, onSync }: {
                 </div>
             ) : null}
             {upstreamError ? (
-                <div className="rounded-lg border border-amber-300/20 bg-amber-300/[0.08] p-3 text-sm text-amber-100">
+                <div className={cn("rounded-lg border p-3 text-sm", studioSemanticNoticeClass("warning"))}>
                     <div className="font-medium">视频上游提交失败</div>
-                    <div className="mt-1 leading-6 text-amber-100/80">请求已进入真实视频通道，但供应商上游拒绝创建任务。通常是企业 API Key / EP 绑定不可用、账号未开通视频模型，或模型路由不可用；请在后台系统设置更新已确认可用的视频通道后重试。</div>
+                    <div className="mt-1 leading-6 opacity-80">请求已进入真实视频通道，但供应商上游拒绝创建任务。通常是企业 API Key / EP 绑定不可用、账号未开通视频模型，或模型路由不可用；请在后台系统设置更新已确认可用的视频通道后重试。</div>
                     <div className="mt-3 flex flex-wrap gap-2">
                         <Button size="small" icon={<Settings2 className="size-3.5" />} onClick={onOpenConfig}>
                             打开配置
@@ -1582,9 +1574,9 @@ function GenerationDetail({ item, loading, onGenerate, onOpenConfig, onSync }: {
                 </div>
             ) : null}
             {generation?.assetId ? (
-                <div className="rounded-lg border border-emerald-300/20 bg-emerald-300/[0.08] p-3 text-sm text-emerald-100">
+                <div className={cn("rounded-lg border p-3 text-sm", studioSemanticNoticeClass("success"))}>
                     <div className="font-medium">素材已归档</div>
-                    <div className="mt-1 leading-6 text-emerald-100/80">本次视频已写入“我的素材”，同编号再次生成会保留旧视频版本。</div>
+                    <div className="mt-1 leading-6 opacity-80">本次视频已写入“我的素材”，同编号再次生成会保留旧视频版本。</div>
                     <Button className="mt-3" size="small" href={`/assets?kind=video&assetId=${encodeURIComponent(generation.assetId)}`}>
                         打开素材
                     </Button>
@@ -1598,7 +1590,7 @@ function InfoRow({ danger, label, value }: { danger?: boolean; label: string; va
     return (
         <div className="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2">
             <span className="text-[var(--studio-text-muted)]">{label}</span>
-            <span className={cn("break-all", danger ? "text-rose-200" : "text-[var(--studio-text-primary)]")}>{value}</span>
+            <span className={cn("break-all", danger ? "text-[var(--studio-danger)]" : "text-[var(--studio-text-primary)]")}>{value}</span>
         </div>
     );
 }
@@ -1606,12 +1598,12 @@ function InfoRow({ danger, label, value }: { danger?: boolean; label: string; va
 function StatusTag({ label }: { label: PromptStatus | AssetStatus | CanvasStatus | "缺参考" | "完整" }) {
     const colorClass =
         label === "已确认" || label === "完整" || label === "已生成"
-            ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-200"
+            ? studioSemanticTagClass("success")
             : label === "待审核" || label === "已导入"
-              ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-accent)]"
+              ? studioSemanticTagClass("info")
               : label === "未导入"
-                ? "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]"
-                : "border-amber-300/25 bg-amber-300/10 text-amber-200";
+                ? studioSemanticTagClass("neutral")
+                : studioSemanticTagClass("warning");
 
     return <Tag className={cn("m-0 rounded px-1.5 py-0 text-xs leading-5", colorClass)}>{label}</Tag>;
 }
@@ -1620,13 +1612,29 @@ function GenerationTag({ status }: { status?: PackageGenerationStatus }) {
     const label = generationStatusLabel(status);
     const colorClass =
         status === "succeeded"
-            ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-200"
+            ? studioSemanticTagClass("success")
             : status === "running" || status === "queued" || status === "creating" || status === "checking"
-              ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-accent)]"
+              ? studioSemanticTagClass("info")
               : status === "failed" || status === "cancelled"
-                ? "border-rose-300/25 bg-rose-300/10 text-rose-200"
-                : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]";
+                ? studioSemanticTagClass("danger")
+                : studioSemanticTagClass("neutral");
     return <Tag className={cn("m-0 rounded px-1.5 py-0 text-xs leading-5", colorClass)}>{label}</Tag>;
+}
+
+type StudioSemanticTone = "danger" | "info" | "neutral" | "success" | "warning";
+
+function studioSemanticNoticeClass(tone: StudioSemanticTone) {
+    return `studio-semantic-notice studio-semantic-${tone}`;
+}
+
+function studioSemanticTagClass(tone: StudioSemanticTone) {
+    return `studio-semantic-tag studio-semantic-${tone}`;
+}
+
+function readinessStatusTone(status: ReturnType<typeof workflowVideoGenerationReadiness>["status"]): StudioSemanticTone {
+    if (status === "blocked") return "warning";
+    if (status === "warning") return "info";
+    return "success";
 }
 
 function videoWorkflowCanvasKey(packages: ProductionPackage[], targetEpisode: string) {

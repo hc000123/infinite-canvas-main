@@ -404,11 +404,16 @@ function projectVisualMeta(project: CreativeProject, index: number, canvasCount:
 
 function ProjectStatusBadge({ status }: { status: ProjectVisualMeta["statusLabel"] }) {
     const tone = {
-        暂停中: "border-amber-300/30 bg-[#2c2318]/90 text-amber-100 before:bg-amber-300",
-        草稿: "border-sky-300/28 bg-[#172337]/90 text-sky-100 before:bg-sky-300",
-        进行中: "border-emerald-300/28 bg-[#102820]/90 text-emerald-100 before:bg-emerald-300",
+        暂停中: { background: "color-mix(in srgb, var(--studio-warning) 24%, var(--studio-media-overlay))", borderColor: "color-mix(in srgb, var(--studio-warning) 48%, var(--studio-border-subtle))", dot: "var(--studio-warning)" },
+        草稿: { background: "color-mix(in srgb, var(--studio-accent) 22%, var(--studio-media-overlay))", borderColor: "color-mix(in srgb, var(--studio-accent) 46%, var(--studio-border-subtle))", dot: "var(--studio-accent)" },
+        进行中: { background: "color-mix(in srgb, var(--studio-success) 24%, var(--studio-media-overlay))", borderColor: "color-mix(in srgb, var(--studio-success) 48%, var(--studio-border-subtle))", dot: "var(--studio-success)" },
     }[status];
-    return <span className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-semibold shadow-[var(--studio-shadow)] backdrop-blur-md before:block before:size-1.5 before:rounded-full ${tone}`}>{status}</span>;
+    return (
+        <span className="inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-semibold text-[var(--studio-on-media)] shadow-[var(--studio-shadow)] backdrop-blur-md" style={{ background: tone.background, borderColor: tone.borderColor }}>
+            <span className="block size-1.5 rounded-full" style={{ background: tone.dot }} />
+            {status}
+        </span>
+    );
 }
 
 function formatProjectDate(value: string) {

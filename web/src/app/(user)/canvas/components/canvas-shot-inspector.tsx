@@ -171,7 +171,7 @@ export function ShotChecklistSection({
                         >
                             <div className="flex items-center justify-between gap-2">
                                 <span className="font-medium">镜头 {shot.order}</span>
-                                <span style={{ color: inspection.phase === "error" ? "#ef4444" : theme.node.muted }}>{inspection.statusLabel}</span>
+                                <span style={{ color: inspection.phase === "error" ? "var(--studio-danger)" : theme.node.muted }}>{inspection.statusLabel}</span>
                             </div>
                             <div className="break-words" style={{ color: theme.node.muted }}>
                                 {shot.sceneName || "未命名场次"} · {inspection.healthLabel}

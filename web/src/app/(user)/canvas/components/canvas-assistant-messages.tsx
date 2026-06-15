@@ -110,7 +110,7 @@ function AssistantActionPreviewCard({ message, nodes, connections, onApply, onCa
                     <span className="opacity-60">影响连线：</span>
                     {affectedConnectionIds.length ? affectedConnectionIds.join("、") : "无"}
                 </div>
-                <div style={{ color: risk.length ? "#dc2626" : theme.node.muted }}>
+                <div style={{ color: risk.length ? "var(--studio-danger)" : theme.node.muted }}>
                     <span className="opacity-60">风险/校验：</span>
                     {risk.length ? unique(risk).join("；") : status === "pending" ? "校验通过，等待确认" : status === "applied" ? "已应用到画布" : "已取消"}
                 </div>

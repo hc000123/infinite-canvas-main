@@ -38,7 +38,7 @@ export function VideoTaskProgressPanel({
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <div className="flex items-center gap-1.5 text-sm font-semibold">
-                        {isFailed ? <AlertTriangle className="size-4 text-red-300" /> : null}
+                        {isFailed ? <AlertTriangle className="size-4" style={{ color: "var(--studio-danger)" }} /> : null}
                         <span>{progress.label}</span>
                     </div>
                     <div className="mt-1 flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-[11px] opacity-65">
@@ -46,7 +46,7 @@ export function VideoTaskProgressPanel({
                         {taskId ? <span className="max-w-[180px] truncate tabular-nums">task {shortTaskId(taskId)}</span> : <span>{isFailed ? "未创建任务" : "等待 taskId"}</span>}
                     </div>
                 </div>
-                <div className="shrink-0 rounded-full border px-2 py-1 text-[11px] font-medium tabular-nums" style={{ borderColor: isFailed ? "#ef4444aa" : theme.node.stroke, color: isFailed ? "#fca5a5" : theme.node.text }}>
+                <div className="shrink-0 rounded-full border px-2 py-1 text-[11px] font-medium tabular-nums" style={{ borderColor: isFailed ? "color-mix(in srgb, var(--studio-danger) 68%, var(--studio-border-subtle))" : theme.node.stroke, color: isFailed ? "var(--studio-danger)" : theme.node.text }}>
                     {isFailed ? "失败" : `${progress.percent}%`}
                 </div>
             </div>
@@ -184,7 +184,7 @@ function padTime(value: number) {
 
 function videoProgressStepColor({ index, progress, theme }: { index: number; progress: ReturnType<typeof buildCanvasVideoProgress>; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     const step = index + 1;
-    if (progress.stage === "failed") return step === progress.currentStep ? "#ef4444" : theme.node.stroke;
+    if (progress.stage === "failed") return step === progress.currentStep ? "var(--studio-danger)" : theme.node.stroke;
     return step <= progress.currentStep ? theme.node.activeStroke : theme.node.stroke;
 }
 

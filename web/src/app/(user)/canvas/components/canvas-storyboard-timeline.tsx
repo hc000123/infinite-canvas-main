@@ -96,7 +96,7 @@ export function CanvasStoryboardTimeline({ shots, shotGroups, nodes, activeShotI
                                     </div>
                                     <div className="mt-1 flex items-center gap-1">
                                         <StatusDot health={inspection.health} />
-                                        <span className="truncate text-[10px]" style={{ color: inspection.health === "warning" ? "#b45309" : theme.node.muted }}>
+                                        <span className="truncate text-[10px]" style={{ color: inspection.health === "warning" ? "var(--studio-warning)" : theme.node.muted }}>
                                             {inspection.healthLabel}
                                         </span>
                                     </div>
@@ -126,9 +126,9 @@ const timelineFilters: { value: TimelineFilter; label: string }[] = [
 ];
 
 function StatusDot({ health }: { health: string }) {
-    if (health === "danger") return <AlertTriangle className="size-3 text-red-500" />;
-    if (health === "done") return <CheckCircle2 className="size-3 text-emerald-500" />;
-    if (health === "linked") return <Link2 className="size-3 text-blue-500" />;
-    if (health === "ready") return <CheckCircle2 className="size-3 text-cyan-600" />;
-    return <AlertTriangle className="size-3 text-amber-600" />;
+    if (health === "danger") return <AlertTriangle className="size-3" style={{ color: "var(--studio-danger)" }} />;
+    if (health === "done") return <CheckCircle2 className="size-3" style={{ color: "var(--studio-success)" }} />;
+    if (health === "linked") return <Link2 className="size-3" style={{ color: "var(--studio-accent)" }} />;
+    if (health === "ready") return <CheckCircle2 className="size-3" style={{ color: "var(--studio-accent)" }} />;
+    return <AlertTriangle className="size-3" style={{ color: "var(--studio-warning)" }} />;
 }

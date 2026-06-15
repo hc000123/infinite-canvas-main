@@ -103,8 +103,8 @@ function FrameReferenceStrip({
             {mismatch && first && last ? (
                 <button
                     type="button"
-                    className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-medium text-amber-100 shadow-[var(--studio-shadow)] backdrop-blur-md transition hover:scale-[1.03]"
-                    style={{ background: "rgba(120,53,15,.78)", borderColor: "rgba(251,191,36,.38)" }}
+                    className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-medium shadow-[var(--studio-shadow)] backdrop-blur-md transition hover:scale-[1.03]"
+                    style={{ background: "color-mix(in srgb, var(--studio-warning) 28%, var(--studio-media-overlay))", borderColor: "color-mix(in srgb, var(--studio-warning) 44%, var(--studio-border-subtle))", color: "var(--studio-on-media)" }}
                     onClick={(event) => {
                         event.stopPropagation();
                         onNormalizeFrameReferences?.(videoNode, first, last);

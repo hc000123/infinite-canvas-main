@@ -79,27 +79,27 @@ export function MediaReviewStatusBadge({
 
 const reviewBadgeTones = {
     active: {
-        background: "rgba(6,78,59,.92)",
-        border: "rgba(52,211,153,.9)",
-        icon: "#86efac",
-        text: "#ecfdf5",
+        background: "color-mix(in srgb, var(--studio-success) 34%, var(--studio-media-overlay))",
+        border: "color-mix(in srgb, var(--studio-success) 64%, var(--studio-border-subtle))",
+        icon: "var(--studio-success)",
+        text: "var(--studio-on-media)",
     },
     failed: {
-        background: "rgba(127,29,29,.94)",
-        border: "rgba(248,113,113,.92)",
-        icon: "#fecaca",
-        text: "#fff1f2",
+        background: "color-mix(in srgb, var(--studio-danger) 36%, var(--studio-media-overlay))",
+        border: "color-mix(in srgb, var(--studio-danger) 66%, var(--studio-border-subtle))",
+        icon: "var(--studio-danger)",
+        text: "var(--studio-on-media)",
     },
     processing: {
-        background: "rgba(120,53,15,.94)",
-        border: "rgba(251,191,36,.92)",
-        icon: "#fde68a",
-        text: "#fffbeb",
+        background: "color-mix(in srgb, var(--studio-warning) 36%, var(--studio-media-overlay))",
+        border: "color-mix(in srgb, var(--studio-warning) 66%, var(--studio-border-subtle))",
+        icon: "var(--studio-warning)",
+        text: "var(--studio-on-media)",
     },
     idle: {
-        background: "rgba(30,41,59,.94)",
-        border: "rgba(148,163,184,.9)",
-        icon: "#cbd5e1",
-        text: "#f8fafc",
+        background: "var(--studio-media-overlay)",
+        border: "var(--studio-border-subtle)",
+        icon: "var(--studio-text-muted)",
+        text: "var(--studio-on-media)",
     },
 };

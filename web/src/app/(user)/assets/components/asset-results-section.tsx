@@ -162,7 +162,7 @@ export function AssetResultsSection({
                 const collapsed = collapsedAssetTypeGroups[typeGroupId] === true;
                 const stats = workflowAssetTypeStats(typeGroup.assets);
                 return (
-                    <section key={typeGroup.id} id={typeGroupId} className="rounded-lg border border-[var(--studio-border-subtle)] bg-[rgba(20,28,40,0.32)]">
+                    <section key={typeGroup.id} id={typeGroupId} className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]">
                         <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={() => toggleAssetTypeGroup(typeGroupId)} aria-expanded={!collapsed}>
                             <span className="flex min-w-0 items-center gap-2">
                                 {collapsed ? <ChevronRight className="size-4 shrink-0 text-[var(--studio-text-muted)]" /> : <ChevronDown className="size-4 shrink-0 text-[var(--studio-accent)]" />}
@@ -306,7 +306,7 @@ export function AssetResultsSection({
                                             {episodeGroups.map((episodeGroup) => {
                                                 const assetTypeGroups = buildAssetTypeGroups(episodeGroup.assets);
                                                 return (
-                                                    <section key={episodeGroup.id} className="grid gap-3 rounded-lg border border-[var(--studio-border-subtle)] bg-[rgba(15,22,32,0.28)] p-3">
+                                                    <section key={episodeGroup.id} className="grid gap-3 rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
                                                         <div className="flex flex-col gap-2 px-1 sm:flex-row sm:items-center sm:justify-between">
                                                             <div className="min-w-0">
                                                                 <div className="text-xs font-semibold tracking-normal text-[var(--studio-text-muted)]">集数</div>

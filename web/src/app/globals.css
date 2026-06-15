@@ -353,6 +353,41 @@
         color: var(--studio-text-muted) !important;
     }
 
+    .studio-workspace :where(.ant-input-disabled, .ant-input[disabled], .ant-input-affix-wrapper-disabled, .ant-input-number-disabled, .ant-picker-disabled, .ant-select-disabled .ant-select-selector),
+    .studio-shell :where(.ant-input-disabled, .ant-input[disabled], .ant-input-affix-wrapper-disabled, .ant-input-number-disabled, .ant-picker-disabled, .ant-select-disabled .ant-select-selector),
+    .studio-modal :where(.ant-input-disabled, .ant-input[disabled], .ant-input-affix-wrapper-disabled, .ant-input-number-disabled, .ant-picker-disabled, .ant-select-disabled .ant-select-selector) {
+        background: var(--studio-panel-muted-bg) !important;
+        border-color: var(--studio-border-subtle) !important;
+        color: var(--studio-text-muted) !important;
+        opacity: 0.72;
+    }
+
+    .studio-workspace :where(.ant-form-item-label > label),
+    .studio-shell :where(.ant-form-item-label > label),
+    .studio-modal :where(.ant-form-item-label > label) {
+        color: var(--studio-text-primary) !important;
+        font-weight: 600;
+    }
+
+    .studio-workspace :where(.ant-form-item-extra, .ant-form-item-explain, .ant-input-data-count, .ant-select-selection-placeholder),
+    .studio-shell :where(.ant-form-item-extra, .ant-form-item-explain, .ant-input-data-count, .ant-select-selection-placeholder),
+    .studio-modal :where(.ant-form-item-extra, .ant-form-item-explain, .ant-input-data-count, .ant-select-selection-placeholder) {
+        color: var(--studio-text-muted) !important;
+    }
+
+    .studio-workspace :where(.ant-form-item-explain-error),
+    .studio-shell :where(.ant-form-item-explain-error),
+    .studio-modal :where(.ant-form-item-explain-error) {
+        color: var(--studio-danger) !important;
+    }
+
+    .studio-workspace :where(.ant-input-status-error, .ant-input-affix-wrapper-status-error, .ant-input-number-status-error, .ant-picker-status-error, .ant-select-status-error .ant-select-selector),
+    .studio-shell :where(.ant-input-status-error, .ant-input-affix-wrapper-status-error, .ant-input-number-status-error, .ant-picker-status-error, .ant-select-status-error .ant-select-selector),
+    .studio-modal :where(.ant-input-status-error, .ant-input-affix-wrapper-status-error, .ant-input-number-status-error, .ant-picker-status-error, .ant-select-status-error .ant-select-selector) {
+        border-color: color-mix(in srgb, var(--studio-danger) 58%, var(--studio-border-subtle)) !important;
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--studio-danger) 14%, transparent) !important;
+    }
+
     .studio-workspace :where(.ant-segmented),
     .studio-shell :where(.ant-segmented),
     .studio-modal :where(.ant-segmented) {
@@ -453,6 +488,35 @@
         border-bottom-color: var(--studio-border-subtle) !important;
     }
 
+    .studio-workspace :where(.ant-tabs-tab),
+    .studio-shell :where(.ant-tabs-tab),
+    .studio-modal :where(.ant-tabs-tab) {
+        color: var(--studio-text-secondary) !important;
+        transition:
+            color 0.16s ease,
+            transform 0.16s ease;
+    }
+
+    .studio-workspace :where(.ant-tabs-tab:hover),
+    .studio-shell :where(.ant-tabs-tab:hover),
+    .studio-modal :where(.ant-tabs-tab:hover) {
+        color: var(--studio-text-primary) !important;
+        transform: translateY(-1px);
+    }
+
+    .studio-workspace :where(.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn),
+    .studio-shell :where(.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn),
+    .studio-modal :where(.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn) {
+        color: var(--studio-text-primary) !important;
+        font-weight: 650;
+    }
+
+    .studio-workspace :where(.ant-tabs-ink-bar),
+    .studio-shell :where(.ant-tabs-ink-bar),
+    .studio-modal :where(.ant-tabs-ink-bar) {
+        background: var(--studio-accent) !important;
+    }
+
     .studio-modal :where(.ant-modal-container, .ant-modal-content, .ant-drawer-content) {
         background: var(--studio-elevated-bg) !important;
         border: 1px solid var(--studio-border-subtle);
@@ -492,6 +556,47 @@
     .studio-modal :where(.ant-card-head, .ant-pro-card-header) {
         border-bottom-color: var(--studio-border-subtle) !important;
         color: var(--studio-text-primary) !important;
+    }
+
+    .studio-workspace :where(.ant-avatar),
+    .studio-shell :where(.ant-avatar),
+    .studio-modal :where(.ant-avatar) {
+        background: var(--studio-panel-muted-bg) !important;
+        border: 1px solid var(--studio-border-subtle);
+        color: var(--studio-text-primary) !important;
+        box-shadow: none !important;
+    }
+
+    .studio-workspace :where(.ant-list),
+    .studio-shell :where(.ant-list),
+    .studio-modal :where(.ant-list) {
+        color: var(--studio-text-primary) !important;
+    }
+
+    .studio-workspace :where(.ant-list-item),
+    .studio-shell :where(.ant-list-item),
+    .studio-modal :where(.ant-list-item) {
+        border-block-end-color: var(--studio-border-subtle) !important;
+    }
+
+    .studio-workspace :where(.ant-descriptions-view, .ant-descriptions-bordered .ant-descriptions-item-label, .ant-descriptions-bordered .ant-descriptions-item-content),
+    .studio-shell :where(.ant-descriptions-view, .ant-descriptions-bordered .ant-descriptions-item-label, .ant-descriptions-bordered .ant-descriptions-item-content),
+    .studio-modal :where(.ant-descriptions-view, .ant-descriptions-bordered .ant-descriptions-item-label, .ant-descriptions-bordered .ant-descriptions-item-content) {
+        background: var(--studio-panel-bg) !important;
+        border-color: var(--studio-border-subtle) !important;
+        color: var(--studio-text-secondary) !important;
+    }
+
+    .studio-workspace :where(.ant-descriptions-title, .ant-result-title),
+    .studio-shell :where(.ant-descriptions-title, .ant-result-title),
+    .studio-modal :where(.ant-descriptions-title, .ant-result-title) {
+        color: var(--studio-text-primary) !important;
+    }
+
+    .studio-workspace :where(.ant-result-subtitle),
+    .studio-shell :where(.ant-result-subtitle),
+    .studio-modal :where(.ant-result-subtitle) {
+        color: var(--studio-text-secondary) !important;
     }
 
     .studio-workspace :where(.ant-table-wrapper, .ant-pro-table),
@@ -615,6 +720,15 @@
         box-shadow: none !important;
     }
 
+    :where(.ant-dropdown-menu .ant-dropdown-menu-item-danger) {
+        color: var(--studio-danger) !important;
+    }
+
+    :where(.ant-dropdown-menu .ant-dropdown-menu-item-danger:hover) {
+        background: color-mix(in srgb, var(--studio-danger) 11%, var(--studio-panel-bg)) !important;
+        color: var(--studio-danger) !important;
+    }
+
     :where(.ant-popover-title, .ant-popconfirm-title) {
         color: var(--studio-text-primary) !important;
     }
@@ -680,6 +794,71 @@
         color: var(--studio-danger) !important;
     }
 
+    .studio-workspace :where(.ant-skeleton-title, .ant-skeleton-paragraph > li, .ant-skeleton-avatar, .ant-skeleton-button, .ant-skeleton-input),
+    .studio-shell :where(.ant-skeleton-title, .ant-skeleton-paragraph > li, .ant-skeleton-avatar, .ant-skeleton-button, .ant-skeleton-input),
+    .studio-modal :where(.ant-skeleton-title, .ant-skeleton-paragraph > li, .ant-skeleton-avatar, .ant-skeleton-button, .ant-skeleton-input) {
+        background: linear-gradient(90deg, var(--studio-panel-muted-bg) 25%, var(--studio-hover-bg) 37%, var(--studio-panel-muted-bg) 63%) !important;
+        background-size: 400% 100% !important;
+    }
+
+    .studio-workspace :where(.ant-progress-inner),
+    .studio-shell :where(.ant-progress-inner),
+    .studio-modal :where(.ant-progress-inner) {
+        background: var(--studio-panel-muted-bg) !important;
+    }
+
+    .studio-workspace :where(.ant-progress-bg),
+    .studio-shell :where(.ant-progress-bg),
+    .studio-modal :where(.ant-progress-bg) {
+        background: var(--studio-accent) !important;
+    }
+
+    .studio-workspace :where(.ant-progress-text),
+    .studio-shell :where(.ant-progress-text),
+    .studio-modal :where(.ant-progress-text) {
+        color: var(--studio-text-secondary) !important;
+    }
+
+    .studio-workspace :where(.ant-badge-count),
+    .studio-shell :where(.ant-badge-count),
+    .studio-modal :where(.ant-badge-count) {
+        background: var(--studio-accent) !important;
+        box-shadow: 0 0 0 1px var(--studio-panel-bg) !important;
+        color: var(--primary-foreground) !important;
+        font-weight: 650;
+    }
+
+    .studio-workspace :where(.ant-badge-status-text),
+    .studio-shell :where(.ant-badge-status-text),
+    .studio-modal :where(.ant-badge-status-text) {
+        color: var(--studio-text-secondary) !important;
+    }
+
+    .studio-workspace :where(.ant-divider),
+    .studio-shell :where(.ant-divider),
+    .studio-modal :where(.ant-divider) {
+        border-color: var(--studio-border-subtle) !important;
+    }
+
+    .studio-workspace :where(.ant-timeline-item-tail),
+    .studio-shell :where(.ant-timeline-item-tail),
+    .studio-modal :where(.ant-timeline-item-tail) {
+        border-inline-start-color: var(--studio-border-subtle) !important;
+    }
+
+    .studio-workspace :where(.ant-timeline-item-head),
+    .studio-shell :where(.ant-timeline-item-head),
+    .studio-modal :where(.ant-timeline-item-head) {
+        background: var(--studio-elevated-bg) !important;
+        border-color: var(--studio-border-strong) !important;
+    }
+
+    .studio-workspace :where(.ant-timeline-item-content),
+    .studio-shell :where(.ant-timeline-item-content),
+    .studio-modal :where(.ant-timeline-item-content) {
+        color: var(--studio-text-secondary) !important;
+    }
+
     :where(.ant-message-notice-content, .ant-notification-notice) {
         background: var(--studio-elevated-bg) !important;
         border: 1px solid var(--studio-border-subtle);
@@ -717,6 +896,49 @@
         background: var(--studio-panel-muted-bg) !important;
         border-color: var(--studio-border-subtle) !important;
         color: var(--studio-text-secondary) !important;
+    }
+
+    .studio-semantic-warning {
+        --studio-semantic-bg: color-mix(in srgb, var(--studio-warning) 11%, var(--studio-panel-bg));
+        --studio-semantic-border: color-mix(in srgb, var(--studio-warning) 34%, var(--studio-border-subtle));
+        --studio-semantic-text: var(--studio-warning);
+    }
+
+    .studio-semantic-success {
+        --studio-semantic-bg: color-mix(in srgb, var(--studio-success) 10%, var(--studio-panel-bg));
+        --studio-semantic-border: color-mix(in srgb, var(--studio-success) 32%, var(--studio-border-subtle));
+        --studio-semantic-text: var(--studio-success);
+    }
+
+    .studio-semantic-info {
+        --studio-semantic-bg: var(--studio-active-bg);
+        --studio-semantic-border: var(--studio-border-strong);
+        --studio-semantic-text: var(--studio-accent);
+    }
+
+    .studio-semantic-danger {
+        --studio-semantic-bg: color-mix(in srgb, var(--studio-danger) 10%, var(--studio-panel-bg));
+        --studio-semantic-border: color-mix(in srgb, var(--studio-danger) 34%, var(--studio-border-subtle));
+        --studio-semantic-text: var(--studio-danger);
+    }
+
+    .studio-semantic-neutral {
+        --studio-semantic-bg: var(--studio-panel-muted-bg);
+        --studio-semantic-border: var(--studio-border-subtle);
+        --studio-semantic-text: var(--studio-text-secondary);
+    }
+
+    .studio-semantic-notice {
+        background: var(--studio-semantic-bg) !important;
+        border-color: var(--studio-semantic-border) !important;
+        color: var(--studio-semantic-text) !important;
+    }
+
+    .studio-semantic-tag,
+    .studio-semantic-tag.ant-tag {
+        background: var(--studio-semantic-bg) !important;
+        border-color: var(--studio-semantic-border) !important;
+        color: var(--studio-semantic-text) !important;
     }
 
     .studio-workspace :where(.ant-checkbox-inner, .ant-radio-inner),

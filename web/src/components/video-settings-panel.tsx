@@ -241,7 +241,7 @@ function ToggleSwitch({ checked, label, theme, onChange }: { checked: boolean; l
                 className="relative h-5 w-9 rounded-full transition peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--studio-focus-ring)] peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-transparent"
                 style={{ background: checked ? theme.node.activeStroke : theme.node.stroke }}
             >
-                <span className="absolute top-0.5 size-4 rounded-full bg-white transition" style={{ left: checked ? 18 : 2 }} />
+                <span className="absolute top-0.5 size-4 rounded-full transition" style={{ left: checked ? 18 : 2, background: "var(--studio-elevated-bg)", boxShadow: "0 1px 4px var(--studio-border-subtle)" }} />
             </span>
         </label>
     );

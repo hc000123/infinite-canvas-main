@@ -66,7 +66,7 @@ export function CanvasAssistantComposer({
                     ))}
                 </div>
             ) : null}
-            <div className="rounded-[28px] border px-3 pb-3 pt-3 shadow-lg" style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke }}>
+            <div className="rounded-lg border px-3 pb-3 pt-3 shadow-[var(--studio-shadow)]" style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke }}>
                 <textarea
                     value={prompt}
                     onChange={(event) => onPromptChange(event.target.value)}
