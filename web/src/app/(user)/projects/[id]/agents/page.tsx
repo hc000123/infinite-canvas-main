@@ -32,7 +32,7 @@ export default function ProjectAgentWorkspacePage() {
 
     if (!hydrated) {
         return (
-            <main className="grid h-full place-items-center bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
+            <main className="studio-shell grid h-full place-items-center px-6 py-10 text-[var(--studio-text-primary)]">
                 <Spin description="正在读取本地项目" />
             </main>
         );
@@ -40,7 +40,7 @@ export default function ProjectAgentWorkspacePage() {
 
     if (!project) {
         return (
-            <main className="h-full overflow-auto bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
+            <main className="studio-shell h-full overflow-auto px-6 py-10 text-[var(--studio-text-primary)]">
                 <div className="mx-auto max-w-3xl">
                     <Empty description="项目不存在或尚未加载">
                         <div className="flex flex-wrap justify-center gap-2">
@@ -53,16 +53,16 @@ export default function ProjectAgentWorkspacePage() {
     }
 
     return (
-        <main className="h-full overflow-auto bg-background text-stone-950 dark:text-stone-100">
+        <main className="studio-shell h-full overflow-auto text-[var(--studio-text-primary)]">
             <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10">
-                <header className="border-b border-stone-200 pb-6 dark:border-stone-800">
-                    <Link href={`/projects/${project.id}`} className="text-xs text-stone-500 hover:text-stone-950 dark:hover:text-stone-100">
+                <header className="border-b border-[var(--studio-border-subtle)] pb-6">
+                    <Link href={`/projects/${project.id}`} className="text-xs text-[var(--studio-text-muted)] transition hover:text-[var(--studio-accent)]">
                         {project.title}
                     </Link>
                     <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
                         <div>
                             <h1 className="text-3xl font-semibold">Agent 设置</h1>
-                            <p className="mt-2 text-sm text-stone-500">项目级设置入口；集中维护通用模型配置、Agent 模板、提示词和写入策略，流程执行回到本集生产流程中完成。</p>
+                            <p className="mt-2 text-sm text-[var(--studio-text-muted)]">项目级设置入口；集中维护通用模型配置、Agent 模板、提示词和写入策略，流程执行回到本集生产流程中完成。</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {canvas ? <Tag className="m-0">{canvas.title}</Tag> : null}

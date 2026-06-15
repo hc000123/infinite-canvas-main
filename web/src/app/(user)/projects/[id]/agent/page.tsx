@@ -48,7 +48,7 @@ export default function ProjectAgentWorkbenchPage() {
 
     if (!hydrated) {
         return (
-            <main className="grid h-full place-items-center bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
+            <main className="studio-shell grid h-full place-items-center px-6 py-10 text-[var(--studio-text-primary)]">
                 <Spin description="正在读取本地项目" />
             </main>
         );
@@ -56,7 +56,7 @@ export default function ProjectAgentWorkbenchPage() {
 
     if (!project) {
         return (
-            <main className="h-full overflow-auto bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
+            <main className="studio-shell h-full overflow-auto px-6 py-10 text-[var(--studio-text-primary)]">
                 <Empty description="项目不存在或尚未加载">
                     <Button href="/projects">返回项目工作台</Button>
                 </Empty>
@@ -124,16 +124,16 @@ export default function ProjectAgentWorkbenchPage() {
     };
 
     return (
-        <main className="h-full overflow-auto bg-background text-stone-950 dark:text-stone-100">
+        <main className="studio-shell h-full overflow-auto text-[var(--studio-text-primary)]">
             <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10">
-                <header className="border-b border-stone-200 pb-6 dark:border-stone-800">
-                    <Link href={`/projects/${project.id}`} className="text-xs text-stone-500 hover:text-stone-950 dark:hover:text-stone-100">
+                <header className="border-b border-[var(--studio-border-subtle)] pb-6">
+                    <Link href={`/projects/${project.id}`} className="text-xs text-[var(--studio-text-muted)] transition hover:text-[var(--studio-accent)]">
                         {project.title}
                     </Link>
                     <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
                         <div>
                             <h1 className="text-3xl font-semibold">短剧 Agent 工作台</h1>
-                            <p className="mt-2 text-sm text-stone-500">第一版只做任务中心和受控建议，不接真实 LLM，不自动改画布，不自动生成视频。</p>
+                            <p className="mt-2 text-sm text-[var(--studio-text-muted)]">第一版只做任务中心和受控建议，不接真实 LLM，不自动改画布，不自动生成视频。</p>
                         </div>
                     </div>
                 </header>
@@ -166,12 +166,12 @@ export default function ProjectAgentWorkbenchPage() {
 
 function AgentStarter({ icon, title, description, onClick }: { icon: ReactNode; title: string; description: string; onClick: () => void }) {
     return (
-        <button type="button" className="rounded-xl border border-stone-200 p-4 text-left transition hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-white/5" onClick={onClick}>
+        <button type="button" className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-4 text-left transition hover:-translate-y-0.5 hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] hover:shadow-[var(--studio-shadow-hover)]" onClick={onClick}>
             <div className="flex items-center gap-2 text-base font-medium">
                 {icon}
                 {title}
             </div>
-            <p className="mt-2 text-sm leading-6 text-stone-500">{description}</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--studio-text-muted)]">{description}</p>
         </button>
     );
 }
@@ -179,11 +179,11 @@ function AgentStarter({ icon, title, description, onClick }: { icon: ReactNode; 
 function AgentTaskCard({ task, onApply, onCancel }: { task: AgentTask; onApply: () => void; onCancel: () => void }) {
     const pending = task.status === "pending";
     return (
-        <article className="rounded-xl border border-stone-200 p-5 dark:border-stone-800">
+        <article className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-5 shadow-[var(--studio-shadow)]">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                        <Bot className="size-4 text-stone-500" />
+                        <Bot className="size-4 text-[var(--studio-text-muted)]" />
                         <h3 className="font-semibold">{task.title}</h3>
                         <Tag className="m-0">{agentKindLabel(task.kind)}</Tag>
                         {task.skillName ? <Tag className="m-0">{task.skillName}</Tag> : null}
@@ -195,7 +195,7 @@ function AgentTaskCard({ task, onApply, onCancel }: { task: AgentTask; onApply: 
                             {agentTaskStatusLabel(task.status)}
                         </Tag>
                     </div>
-                    <p className="mt-3 whitespace-pre-line text-sm leading-6 text-stone-600 dark:text-stone-400">{task.summary}</p>
+                    <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[var(--studio-text-secondary)]">{task.summary}</p>
                 </div>
                 {pending ? (
                     <div className="flex shrink-0 gap-2">
@@ -207,12 +207,12 @@ function AgentTaskCard({ task, onApply, onCancel }: { task: AgentTask; onApply: 
                         </Button>
                     </div>
                 ) : (
-                    <div className="shrink-0 rounded-md border border-stone-200 px-3 py-1 text-sm text-stone-500 dark:border-stone-800 dark:text-stone-400">{agentTaskStatusLabel(task.status)}</div>
+                    <div className="shrink-0 rounded-md border border-[var(--studio-border-subtle)] px-3 py-1 text-sm text-[var(--studio-text-muted)]">{agentTaskStatusLabel(task.status)}</div>
                 )}
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <div>
-                    <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-stone-500">
+                    <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-[var(--studio-text-muted)]">
                         <Tags className="size-3.5" />
                         影响对象
                     </div>
@@ -224,21 +224,21 @@ function AgentTaskCard({ task, onApply, onCancel }: { task: AgentTask; onApply: 
                                 </Tag>
                             ))
                         ) : (
-                            <span className="text-sm text-stone-500">暂无影响对象</span>
+                            <span className="text-sm text-[var(--studio-text-muted)]">暂无影响对象</span>
                         )}
                     </div>
                 </div>
                 <div>
-                    <div className="mb-2 text-xs font-medium text-stone-500">动作预览</div>
+                    <div className="mb-2 text-xs font-medium text-[var(--studio-text-muted)]">动作预览</div>
                     <div className="grid gap-1.5">
                         {task.proposedActions.length ? (
                             task.proposedActions.map((action, index) => (
-                                <div key={index} className="rounded-lg bg-stone-100 px-3 py-2 text-sm dark:bg-white/5">
+                                <div key={index} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2 text-sm text-[var(--studio-text-secondary)]">
                                     {agentActionLabel(action)}
                                 </div>
                             ))
                         ) : (
-                            <span className="text-sm text-stone-500">本任务只给出只读建议，没有写入动作。</span>
+                            <span className="text-sm text-[var(--studio-text-muted)]">本任务只给出只读建议，没有写入动作。</span>
                         )}
                     </div>
                 </div>

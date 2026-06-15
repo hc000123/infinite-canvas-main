@@ -22,6 +22,7 @@
   10. 登录页、404 页和公共素材库入口补齐 `studio-workspace / studio-shell` 作用域；公共素材库卡片、筛选、分页和素材详情抽屉接入统一 hover、边框、面板和 `studio-modal` 样式。
   11. 共享模型选择器和图片生成等待态改用 `studio-*` 变量；提示词、素材、生图、视频和项目页的普通 Modal / Drawer 根节点统一挂入 `studio-modal`，让按钮、输入框、下拉和抽屉头尾细节一致。
   12. Empty、Spin、Tag、Checkbox、Radio、Switch、Collapse、Message 和 Notification 等 Ant Design 小控件补齐 studio 变量样式，减少弹层、筛选和空状态里的框架默认感。
+  13. 项目 Agent 任务页、项目 Agent 设置页和分集 workflow 落地页统一改用 `studio-shell` 外壳；Agent 类型按钮、模型配置摘要卡、模板预览块、workflow 详情面板、任务入口卡片和 workflow 信息面板改为 8px 圆角、统一面板底色、选中底线和 hover 边框反馈。
 - 待验收：
   1. 浅色主题下项目工作台搜索框、按钮、状态卡和顶部导航应保持浅色一致，不再出现突兀深色控件。
   2. 深色主题下生图工作台、素材库和视频生产台的按钮、输入框、筛选项 hover 时应有轻微底色 / 边框反馈，不应只靠透明度变化。
@@ -32,6 +33,7 @@
   7. 登录页、404 页和 `/asset-library` 公共素材库应与主工作台背景、按钮、输入框、卡片 hover 和抽屉质感一致，不应再出现旧的网格背景或突兀默认白卡。
   8. 配置弹窗、生图页、视频生产台和画布助手里的模型选择器，下拉展开后应保持统一的暗 / 浅色面板、选中状态线、搜索框 focus ring 和 hover 反馈。
   9. 筛选标签、开关、单选 / 复选框、折叠面板、消息提示和通知提示应跟随浅 / 深色主题，不应露出 Ant Design 默认白底或高对比边框。
+  10. `/projects/:id/agents` 和 `/projects/:id/agent` 已用 Chrome 在真实项目下抽检，`/projects/:id/agents` 的可见模型配置和单 Agent 配置区已确认没有旧 stone 面板残留；`/projects/:id/episodes/:episodeId/workflow` 当前只完成空状态样式验证，仍需在有可落地 workflow run 的分集下确认三阶段面板、进度圆环和操作按钮。
 
 #### v0.2.91：Seedance 原格式导演方法 v5 并行预设
 

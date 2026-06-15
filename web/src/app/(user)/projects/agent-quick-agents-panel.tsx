@@ -17,6 +17,11 @@ const agentKindOptions: Array<{ label: string; value: AgentConfigKind }> = [
     { label: "提示词质检 Agent", value: "prompt_reviewer" },
 ];
 
+const panelClass = "rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)]";
+const mutedPanelClass = "rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]";
+const mutedTextClass = "text-[var(--studio-text-muted)]";
+const codeBlockClass = "overflow-auto rounded-md border border-[var(--studio-border-subtle)] bg-[#090d14] p-3 text-xs leading-5 whitespace-pre-wrap text-slate-100";
+
 export function AgentQuickAgentsPanel({
     callable,
     form,
@@ -70,7 +75,7 @@ export function AgentQuickAgentsPanel({
                                 <button
                                     key={option.value}
                                     type="button"
-                                    className={`rounded-lg border p-3 text-left transition hover:bg-stone-50 dark:hover:bg-white/5 ${selectedKind === option.value ? "border-stone-900 dark:border-stone-100" : "border-stone-200 dark:border-stone-800"}`}
+                                    className={`rounded-md border p-3 text-left transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] ${selectedKind === option.value ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] shadow-[inset_0_-2px_0_var(--studio-accent)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)]"}`}
                                     onClick={() => setSelectedKind(option.value)}
                                 >
                                     <div className="flex items-center justify-between gap-2">
@@ -123,7 +128,7 @@ export function AgentQuickAgentsPanel({
                 >
                     {!validation.valid ? <Alert className="mb-4" type="warning" showIcon title="当前配置需要修正" description={validation.errors.join("；")} /> : null}
                     {!callable.callable ? <Alert className="mb-4" type="info" showIcon title="后续调用入口会显示不可用" description={callable.reason} /> : null}
-                    <div className="mb-4 grid gap-2 rounded-lg bg-stone-50 p-3 text-sm dark:bg-white/5">
+                    <div className={`mb-4 grid gap-2 p-3 text-sm ${mutedPanelClass}`}>
                         <div className="flex flex-wrap items-center gap-2">
                             <Tag className="m-0" color={callable.callable ? "green" : "default"}>
                                 {callable.callable ? "模板可用" : "模板不可用"}
@@ -134,7 +139,7 @@ export function AgentQuickAgentsPanel({
                             <Tag className="m-0">{textChannelLabel}</Tag>
                             <Tag className="m-0">实际模型：{selectedAgentModel}</Tag>
                         </div>
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
+                        <div className={`flex flex-wrap items-center justify-between gap-2 text-xs ${mutedTextClass}`}>
                             <span>{settingsOnly ? "这里只保存项目级 Agent 配置；运行与写入回到本集生产流程中完成。" : "“创建预览 Run”只创建本地草案记录；真实文本调用在工作流阶段的“运行草案”中触发。"}</span>
                             <Button size="small" onClick={onOpenConfig}>
                                 打开 AI 配置
@@ -153,7 +158,7 @@ export function AgentQuickAgentsPanel({
 
 function AgentTemplatePreview({ selectedConfig }: { selectedConfig: AgentConfig }) {
     return (
-        <div className="mb-4 grid gap-3 rounded-lg border border-stone-200 p-3 text-sm dark:border-stone-800">
+        <div className={`mb-4 grid gap-3 p-3 text-sm ${panelClass}`}>
             <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">模板预览</span>
                 <Tag className="m-0">{selectedConfig.reasoningLevel}</Tag>
@@ -161,12 +166,12 @@ function AgentTemplatePreview({ selectedConfig }: { selectedConfig: AgentConfig 
             </div>
             <div className="grid gap-3 md:grid-cols-2">
                 <div>
-                    <div className="mb-1 text-xs text-stone-500">使用场景</div>
-                    <div className="rounded-md bg-stone-50 p-2 leading-6 dark:bg-white/5">{selectedConfig.scenario}</div>
+                    <div className={`mb-1 text-xs ${mutedTextClass}`}>使用场景</div>
+                    <div className={`p-2 leading-6 ${mutedPanelClass}`}>{selectedConfig.scenario}</div>
                 </div>
                 <div>
-                    <div className="mb-1 text-xs text-stone-500">输入变量</div>
-                    <div className="rounded-md bg-stone-50 p-2 leading-6 dark:bg-white/5">
+                    <div className={`mb-1 text-xs ${mutedTextClass}`}>输入变量</div>
+                    <div className={`p-2 leading-6 ${mutedPanelClass}`}>
                         {selectedConfig.inputVariables.map((variable) => (
                             <div key={variable.name}>
                                 {variable.name}：{variable.description}
@@ -176,25 +181,25 @@ function AgentTemplatePreview({ selectedConfig }: { selectedConfig: AgentConfig 
                 </div>
             </div>
             <details open>
-                <summary className="cursor-pointer text-xs text-stone-500">查看完整提示词与输出 Schema</summary>
+                <summary className={`cursor-pointer text-xs ${mutedTextClass}`}>查看完整提示词与输出 Schema</summary>
                 <div className="mt-2 grid gap-2">
                     {selectedConfig.skillSummary ? (
                         <div>
-                            <div className="mb-1 text-xs text-stone-500">内置 Skill 摘要</div>
-                            <pre className="max-h-32 overflow-auto rounded-md bg-stone-950 p-3 text-xs leading-5 whitespace-pre-wrap text-stone-50">{selectedConfig.skillSummary}</pre>
+                            <div className={`mb-1 text-xs ${mutedTextClass}`}>内置 Skill 摘要</div>
+                            <pre className={`max-h-32 ${codeBlockClass}`}>{selectedConfig.skillSummary}</pre>
                         </div>
                     ) : null}
                     <div>
-                        <div className="mb-1 text-xs text-stone-500">系统提示词</div>
-                        <pre className="max-h-40 overflow-auto rounded-md bg-stone-950 p-3 text-xs leading-5 whitespace-pre-wrap text-stone-50">{selectedConfig.systemPrompt}</pre>
+                        <div className={`mb-1 text-xs ${mutedTextClass}`}>系统提示词</div>
+                        <pre className={`max-h-40 ${codeBlockClass}`}>{selectedConfig.systemPrompt}</pre>
                     </div>
                     <div>
-                        <div className="mb-1 text-xs text-stone-500">用户提示词模板</div>
-                        <pre className="max-h-48 overflow-auto rounded-md bg-stone-950 p-3 text-xs leading-5 whitespace-pre-wrap text-stone-50">{selectedConfig.userPromptTemplate}</pre>
+                        <div className={`mb-1 text-xs ${mutedTextClass}`}>用户提示词模板</div>
+                        <pre className={`max-h-48 ${codeBlockClass}`}>{selectedConfig.userPromptTemplate}</pre>
                     </div>
                     <div>
-                        <div className="mb-1 text-xs text-stone-500">输出 JSON 示例 / Schema</div>
-                        <pre className="max-h-64 overflow-auto rounded-md bg-stone-950 p-3 text-xs leading-5 whitespace-pre-wrap text-stone-50">{selectedConfig.outputJsonExample}</pre>
+                        <div className={`mb-1 text-xs ${mutedTextClass}`}>输出 JSON 示例 / Schema</div>
+                        <pre className={`max-h-64 ${codeBlockClass}`}>{selectedConfig.outputJsonExample}</pre>
                     </div>
                 </div>
             </details>
@@ -204,7 +209,7 @@ function AgentTemplatePreview({ selectedConfig }: { selectedConfig: AgentConfig 
 
 function AgentTemplateEditForm({ form }: { form: FormInstance<AgentConfigFormValues> }) {
     return (
-        <details className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+        <details className={`p-3 ${panelClass}`}>
             <summary className="cursor-pointer text-sm font-medium">编辑模板字段</summary>
             <Form className="mt-3" form={form} layout="vertical">
                 <div className="grid gap-3 md:grid-cols-2">
@@ -292,7 +297,7 @@ function AgentDraftRunsPanel({ recentRuns }: { recentRuns: AgentRunRecord[] }) {
             {recentRuns.length ? (
                 <div className="grid gap-3">
                     {recentRuns.map((run) => (
-                        <Card key={run.id} size="small" className="bg-stone-50/70 dark:bg-white/5">
+                        <Card key={run.id} size="small" className="bg-[var(--studio-panel-muted-bg)]">
                             <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <Tag className="m-0">{agentRunKindLabel(run.agentKind)}</Tag>
@@ -304,7 +309,7 @@ function AgentDraftRunsPanel({ recentRuns }: { recentRuns: AgentRunRecord[] }) {
                                 </div>
                                 <div className="mt-2 text-sm font-medium">{run.workflowTextOutput?.summary || run.draftOutput.summary}</div>
                                 {run.status === "error" || run.status === "failed" ? <div className="mt-1 text-xs text-rose-500">{run.errorMessage || "执行失败"}</div> : null}
-                                <div className="mt-1 text-xs text-stone-500">
+                                <div className={`mt-1 text-xs ${mutedTextClass}`}>
                                     来源：{run.input.sourceType}
                                     {run.input.sourceId ? ` / ${run.input.sourceId}` : ""} · {run.createdAt}
                                     {run.input.agentId ? ` · agent ${run.input.agentId}` : ""}
@@ -312,14 +317,14 @@ function AgentDraftRunsPanel({ recentRuns }: { recentRuns: AgentRunRecord[] }) {
                                 </div>
                             </div>
                             <details className="mt-3">
-                                <summary className="cursor-pointer text-xs text-stone-500">查看草案 / workflow 文本产物</summary>
-                                <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-stone-950 p-3 text-xs text-stone-50">{JSON.stringify({ draftOutput: run.draftOutput, workflowTextOutput: run.workflowTextOutput, proposedActions: run.proposedActions }, null, 2)}</pre>
+                                <summary className={`cursor-pointer text-xs ${mutedTextClass}`}>查看草案 / workflow 文本产物</summary>
+                                <pre className={`mt-2 max-h-72 ${codeBlockClass}`}>{JSON.stringify({ draftOutput: run.draftOutput, workflowTextOutput: run.workflowTextOutput, proposedActions: run.proposedActions }, null, 2)}</pre>
                             </details>
                         </Card>
                     ))}
                 </div>
             ) : (
-                <div className="rounded-lg bg-stone-50 p-4 text-sm text-stone-500 dark:bg-white/5">暂无草案记录。可以先选择一个 Agent，点击“创建预览 Run”生成本地草案记录。</div>
+                <div className={`p-4 text-sm ${mutedPanelClass} ${mutedTextClass}`}>暂无草案记录。可以先选择一个 Agent，点击“创建预览 Run”生成本地草案记录。</div>
             )}
         </Card>
     );

@@ -16,6 +16,11 @@ import {
 
 export { WorkflowMappingPreviewPanel } from "./agent-workflow-mapping-preview-panel";
 
+const mutedPanelClass = "rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]";
+const innerPanelClass = "rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)]";
+const mutedTextClass = "text-[var(--studio-text-muted)]";
+const codeBlockClass = "overflow-auto rounded-md border border-[var(--studio-border-subtle)] bg-[#090d14] p-2 text-[11px] text-slate-100";
+
 export function WorkflowStageStatePanel({ stageId, workflowRun, workflowOutputs, workflowEvidences }: { stageId: string; workflowRun?: AgentWorkflowRunRecord; workflowOutputs: AgentWorkflowStageOutput[]; workflowEvidences: AgentWorkflowReviewEvidence[] }) {
     const stageState = workflowRun?.stageStates.find((stage) => stage.stageId === stageId);
     const displayState = workflowRun ? summarizeWorkflowStageDisplayState(workflowRun, stageId) : undefined;
@@ -23,7 +28,7 @@ export function WorkflowStageStatePanel({ stageId, workflowRun, workflowOutputs,
     const evidences = workflowEvidences.filter((item) => item.workflowRunId === workflowRun?.id && item.stageId === stageId);
     const latestEvidence = evidences[0];
     return (
-        <div className="grid gap-2 rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-500 dark:bg-white/5">
+        <div className={`grid gap-2 p-2 text-xs leading-5 ${mutedPanelClass} ${mutedTextClass}`}>
             <div className="flex flex-wrap items-center gap-2">
                 <Tag className="m-0">{workflowStageStatusLabel(displayState?.displayStatus || "idle")}</Tag>
                 {displayState?.hasSceneStates ? <span>{displayState.summaryText}</span> : null}
@@ -36,23 +41,23 @@ export function WorkflowStageStatePanel({ stageId, workflowRun, workflowOutputs,
             {stageState?.errorMessage ? <div className="text-rose-500">错误：{stageState.errorMessage}</div> : null}
             {output ? (
                 <details>
-                    <summary className="cursor-pointer text-stone-500">查看产物详情</summary>
+                    <summary className={`cursor-pointer ${mutedTextClass}`}>查看产物详情</summary>
                     <div className="mt-2 grid gap-2">
-                        <div className="rounded-md bg-white px-2 py-1.5 dark:bg-black/20">
+                        <div className={`px-2 py-1.5 ${innerPanelClass}`}>
                             <div>输出格式：{output.outputFormat}</div>
                             <div>生成时间：{output.createdAt}</div>
                             <div className="mt-1">摘要：{output.summary}</div>
                         </div>
                         {output.structuredOutput !== undefined ? (
-                            <details className="rounded-md bg-white px-2 py-1.5 dark:bg-black/20">
-                                <summary className="cursor-pointer text-stone-500">查看 rawJson</summary>
-                                <pre className="mt-2 overflow-auto rounded bg-stone-950 p-2 text-[11px] text-stone-50">{JSON.stringify(output.structuredOutput, null, 2)}</pre>
+                            <details className={`px-2 py-1.5 ${innerPanelClass}`}>
+                                <summary className={`cursor-pointer ${mutedTextClass}`}>查看 rawJson</summary>
+                                <pre className={`mt-2 ${codeBlockClass}`}>{JSON.stringify(output.structuredOutput, null, 2)}</pre>
                             </details>
                         ) : null}
-                        <details className="rounded-md bg-white px-2 py-1.5 dark:bg-black/20">
-                            <summary className="cursor-pointer text-stone-500">查看 rawText / sourceFiles / qualityGateIds</summary>
+                        <details className={`px-2 py-1.5 ${innerPanelClass}`}>
+                            <summary className={`cursor-pointer ${mutedTextClass}`}>查看 rawText / sourceFiles / qualityGateIds</summary>
                             <div className="mt-2 grid gap-2">
-                                <pre className="overflow-auto rounded bg-stone-950 p-2 text-[11px] text-stone-50 whitespace-pre-wrap">{output.rawText}</pre>
+                                <pre className={`${codeBlockClass} whitespace-pre-wrap`}>{output.rawText}</pre>
                                 <div>sourceFiles：{output.sourceFiles.join("；") || "（无）"}</div>
                                 <div>qualityGateIds：{output.qualityGateIds.join("；") || "（无）"}</div>
                             </div>
@@ -62,10 +67,10 @@ export function WorkflowStageStatePanel({ stageId, workflowRun, workflowOutputs,
             ) : null}
             {evidences.length ? (
                 <details>
-                    <summary className="cursor-pointer text-stone-500">查看审核证据</summary>
+                    <summary className={`cursor-pointer ${mutedTextClass}`}>查看审核证据</summary>
                     <div className="mt-2 grid gap-2">
                         {evidences.map((evidence) => (
-                            <div key={evidence.evidenceId} className="rounded-md bg-white px-2 py-1.5 dark:bg-black/20">
+                            <div key={evidence.evidenceId} className={`px-2 py-1.5 ${innerPanelClass}`}>
                                 <div className="flex flex-wrap items-center gap-2">
                                     <Tag className="m-0" color={evidence.decision === "approved" ? "green" : "red"}>
                                         {evidence.decision === "approved" ? "已批准" : "已驳回"}
@@ -74,10 +79,10 @@ export function WorkflowStageStatePanel({ stageId, workflowRun, workflowOutputs,
                                     <span>{evidence.reviewer}</span>
                                 </div>
                                 <div className="mt-1">摘要：{evidence.outputSummary}</div>
-                                {evidence.reviewerNote ? <div className="mt-1 text-stone-500">备注：{evidence.reviewerNote}</div> : null}
+                                {evidence.reviewerNote ? <div className={`mt-1 ${mutedTextClass}`}>备注：{evidence.reviewerNote}</div> : null}
                                 <details className="mt-1">
-                                    <summary className="cursor-pointer text-stone-500">查看追溯信息</summary>
-                                    <div className="mt-1 grid gap-1 text-stone-500">
+                                    <summary className={`cursor-pointer ${mutedTextClass}`}>查看追溯信息</summary>
+                                    <div className={`mt-1 grid gap-1 ${mutedTextClass}`}>
                                         <div>outputHash：{evidence.outputHash}</div>
                                         <div>sourceFiles：{evidence.sourceFiles.join("；") || "（无）"}</div>
                                         <div>qualityGateIds：{evidence.qualityGateIds.join("；") || "（无）"}</div>
@@ -116,7 +121,7 @@ export function WorkflowQualityGatePanel({
     const errorCount = gateResults.filter((result) => result.status === "error").length;
     const warningCount = gateResults.filter((result) => result.status === "warning").length;
     return (
-        <div className="grid gap-2 rounded-md border border-stone-200 p-2 text-xs leading-5 dark:border-stone-800">
+        <div className={`grid gap-2 p-2 text-xs leading-5 ${innerPanelClass}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                     <Tag className="m-0">
@@ -137,10 +142,10 @@ export function WorkflowQualityGatePanel({
                 </Button>
             </div>
             <details>
-                <summary className="cursor-pointer text-stone-500">查看 required readings 与缺失原因</summary>
+                <summary className={`cursor-pointer ${mutedTextClass}`}>查看 required readings 与缺失原因</summary>
                 <div className="mt-2 grid gap-1">
                     {readingRows.map(({ reading, status, readAt }) => (
-                        <div key={reading.readingId} className="rounded-md bg-stone-50 px-2 py-1 dark:bg-white/5">
+                        <div key={reading.readingId} className={`px-2 py-1 ${mutedPanelClass}`}>
                             <div className="flex flex-wrap items-center gap-2">
                                 <Tag className="m-0" color={status === "read" ? "green" : status === "missing" ? "red" : "default"}>
                                     {readingStatusLabel(status)}
@@ -149,7 +154,7 @@ export function WorkflowQualityGatePanel({
                                     [{readingSourceTypeLabel(reading.sourceType)}] {reading.sourceFile}
                                 </span>
                             </div>
-                            <div className="mt-1 text-stone-500">
+                            <div className={`mt-1 ${mutedTextClass}`}>
                                 {reading.label}
                                 {readAt ? ` · ${readAt}` : ""}
                             </div>
@@ -158,10 +163,10 @@ export function WorkflowQualityGatePanel({
                 </div>
             </details>
             <details>
-                <summary className="cursor-pointer text-stone-500">查看 gate result 详情</summary>
+                <summary className={`cursor-pointer ${mutedTextClass}`}>查看 gate result 详情</summary>
                 <div className="mt-2 grid gap-1">
                     {gateResults.map((result) => (
-                        <div key={result.resultId} className="rounded-md bg-stone-50 px-2 py-1 dark:bg-white/5">
+                        <div key={result.resultId} className={`px-2 py-1 ${mutedPanelClass}`}>
                             <div className="flex flex-wrap items-center gap-2">
                                 <Tag className="m-0" color={result.status === "error" ? "red" : result.status === "warning" ? "orange" : "green"}>
                                     {result.status.toUpperCase()}
@@ -169,7 +174,7 @@ export function WorkflowQualityGatePanel({
                                 <span>{result.name}</span>
                                 <Tag className="m-0">{qualityGateCheckKindLabel(result.checkKind)}</Tag>
                             </div>
-                            <div className="mt-1 text-stone-500">{result.message}</div>
+                            <div className={`mt-1 ${mutedTextClass}`}>{result.message}</div>
                         </div>
                     ))}
                 </div>

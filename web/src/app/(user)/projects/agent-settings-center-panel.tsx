@@ -19,6 +19,9 @@ const agentKindOptions: Array<{ label: string; value: AgentConfigKind }> = [
     { label: "提示词质检", value: "prompt_reviewer" },
 ];
 
+const panelClass = "rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)]";
+const mutedTextClass = "text-[var(--studio-text-muted)]";
+
 export function AgentSettingsCenterPanel() {
     const { message } = App.useApp();
     const [form] = Form.useForm<AgentConfigFormValues>();
@@ -69,14 +72,14 @@ export function AgentSettingsCenterPanel() {
 
     return (
         <div className="grid gap-4">
-            <div className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+            <div className={`p-3 ${panelClass}`}>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <div className="flex items-center gap-2 text-sm font-medium">
                             <Bot className="size-4" />
                             Agent 中心
                         </div>
-                        <div className="mt-1 text-xs text-stone-500">每个 Agent 只维护一份完整设定；具体流程里读取这里的全局设定，项目页可再单独覆盖。</div>
+                        <div className={`mt-1 text-xs ${mutedTextClass}`}>每个 Agent 只维护一份完整设定；具体流程里读取这里的全局设定，项目页可再单独覆盖。</div>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <Tag className="m-0" color={callable.callable ? "green" : "orange"}>
@@ -107,9 +110,9 @@ export function AgentSettingsCenterPanel() {
                 </Form.Item>
 
                 {selectedConfig.skillSummary ? (
-                    <details className="mb-3 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+                    <details className={`mb-3 p-3 ${panelClass}`}>
                         <summary className="cursor-pointer text-sm font-medium">内置 Skill 摘要</summary>
-                        <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-stone-600 dark:text-stone-300">{selectedConfig.skillSummary}</div>
+                        <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--studio-text-secondary)]">{selectedConfig.skillSummary}</div>
                     </details>
                 ) : null}
 
@@ -117,7 +120,7 @@ export function AgentSettingsCenterPanel() {
                     <Input.TextArea rows={6} />
                 </Form.Item>
 
-                <details className="rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+                <details className={`p-3 ${panelClass}`}>
                     <summary className="cursor-pointer text-sm font-medium">高级项</summary>
                     <div className="mt-3 grid gap-3">
                         <Form.Item name="inputVariablesText" label="变量说明">
@@ -181,7 +184,7 @@ export function AgentSettingsCenterPanel() {
                 </details>
             </Form>
 
-            {!validation.valid ? <div className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-200">{validation.errors.join("；")}</div> : null}
+            {!validation.valid ? <div className="rounded-md border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-200">{validation.errors.join("；")}</div> : null}
             <div className="flex flex-wrap justify-end gap-2">
                 <Button icon={<RotateCcw className="size-4" />} onClick={restoreDefaultToForm}>
                     恢复默认

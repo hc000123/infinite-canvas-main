@@ -9,6 +9,10 @@ import { WorkflowMappingPreviewPanel, WorkflowQualityGatePanel, WorkflowStageSta
 import { workflowStageDetail, type AgentWorkflowPreset, type AgentWorkflowStage } from "./agent-workflow-presets";
 import { evaluateWorkflowQualityGates, type WorkflowQualityGateManifest } from "./workflow-quality-gates";
 
+const panelClass = "rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)]";
+const mutedPanelClass = "rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]";
+const mutedTextClass = "text-[var(--studio-text-muted)]";
+
 type AgentWorkflowExecutionPanelProps = {
     workflowPresets: AgentWorkflowPreset[];
     selectedWorkflowPreset: AgentWorkflowPreset;
@@ -80,7 +84,7 @@ export function AgentWorkflowExecutionPanel({
             <div className="grid gap-4">
                 <div>
                     <div className="mb-3 flex flex-wrap items-center gap-2">
-                        <span className="text-sm text-stone-500">工作流预设</span>
+                        <span className={`text-sm ${mutedTextClass}`}>工作流预设</span>
                         <Select
                             className="min-w-72"
                             size="small"
@@ -97,17 +101,17 @@ export function AgentWorkflowExecutionPanel({
                         <Tag className="m-0">质量门 {selectedWorkflowPreset.qualityGates.length}</Tag>
                         {selectedWorkflowRun ? <Tag className="m-0">当前阶段：{workflowStageName(selectedWorkflowStages, selectedWorkflowRun.currentStageId)}</Tag> : null}
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-stone-50 px-3 py-2 text-sm dark:bg-white/5">
+                    <div className={`mt-3 flex flex-wrap items-center gap-2 px-3 py-2 text-sm ${mutedPanelClass}`}>
                         {selectedWorkflowStages.map((stage, index) => (
                             <span key={stage.stageId} className="inline-flex items-center gap-2">
                                 <Tag className="m-0">阶段 {stage.order}</Tag>
                                 <span className="font-medium">{stage.name}</span>
-                                {index < selectedWorkflowStages.length - 1 ? <span className="text-stone-400">→</span> : null}
+                                {index < selectedWorkflowStages.length - 1 ? <span className={mutedTextClass}>→</span> : null}
                             </span>
                         ))}
-                        <span className="text-stone-400">→</span>
+                        <span className={mutedTextClass}>→</span>
                         <Tag className="m-0">生成预览</Tag>
-                        <span className="text-stone-400">→</span>
+                        <span className={mutedTextClass}>→</span>
                         <Tag className="m-0">确认写入</Tag>
                     </div>
                 </div>
@@ -128,7 +132,7 @@ export function AgentWorkflowExecutionPanel({
                             <details
                                 key={stage.stageId}
                                 open={isExpanded}
-                                className="rounded-lg border border-stone-200 p-3 dark:border-stone-800"
+                                className={`p-3 ${panelClass}`}
                                 onToggle={(event) => {
                                     const nextOpen = event.currentTarget.open;
                                     setExpandedStageIds((current) => (nextOpen ? (current.includes(stage.stageId) ? current : [...current, stage.stageId]) : current.filter((item) => item !== stage.stageId)));
@@ -154,12 +158,12 @@ export function AgentWorkflowExecutionPanel({
                                             warning {warningCount}
                                         </Tag>
                                     </div>
-                                    <div className="mt-2 flex flex-wrap gap-3 text-xs text-stone-500">
+                                    <div className={`mt-2 flex flex-wrap gap-3 text-xs ${mutedTextClass}`}>
                                         <span>输入：{stage.inputSummary}</span>
                                         <span>输出：{stage.outputSummary}</span>
                                     </div>
                                     {displayState?.blockedReason ? <div className="mt-2 text-xs text-amber-600">阻塞原因：{displayState.blockedReason}</div> : null}
-                                    {dependencySummary ? <div className="mt-1 text-xs text-stone-500">前置依赖：{dependencySummary}</div> : null}
+                                    {dependencySummary ? <div className={`mt-1 text-xs ${mutedTextClass}`}>前置依赖：{dependencySummary}</div> : null}
                                     {stageState?.errorMessage ? <div className="mt-1 text-xs text-rose-500">错误：{stageState.errorMessage}</div> : null}
                                 </summary>
 
@@ -170,13 +174,13 @@ export function AgentWorkflowExecutionPanel({
                                         {detail.qualityGates.length ? <Tag className="m-0">质量门 {detail.qualityGates.length}</Tag> : null}
                                     </div>
                                     {detail.agent ? (
-                                        <details className="rounded-md bg-stone-50 p-2 text-xs leading-5 text-stone-600 dark:bg-white/5 dark:text-stone-300">
-                                            <summary className="cursor-pointer font-medium text-stone-600 dark:text-stone-300">查看阶段说明与 Agent</summary>
+                                        <details className={`p-2 text-xs leading-5 text-[var(--studio-text-secondary)] ${mutedPanelClass}`}>
+                                            <summary className="cursor-pointer font-medium text-[var(--studio-text-secondary)]">查看阶段说明与 Agent</summary>
                                             <div className="mt-2 grid gap-1.5">
                                                 <div>{detail.agent.role}</div>
                                                 <div>{detail.agent.responsibility}</div>
-                                                <div className="text-stone-500">系统提示摘要：{detail.agent.systemPromptSummary}</div>
-                                                <div className="text-stone-500">来源：{detail.agent.sourceFile}</div>
+                                                <div className={mutedTextClass}>系统提示摘要：{detail.agent.systemPromptSummary}</div>
+                                                <div className={mutedTextClass}>来源：{detail.agent.sourceFile}</div>
                                             </div>
                                         </details>
                                     ) : null}
@@ -195,7 +199,7 @@ export function AgentWorkflowExecutionPanel({
                                         />
                                     ) : null}
                                     {stageState?.status === "review" ? (
-                                        <div className="grid gap-2 rounded-md bg-stone-50 p-2 dark:bg-white/5">
+                                        <div className={`grid gap-2 p-2 ${mutedPanelClass}`}>
                                             <Input.TextArea rows={2} value={reviewNotes[stage.stageId] || ""} placeholder="可选：填写本阶段审核备注" onChange={(event) => setReviewNotes((current) => ({ ...current, [stage.stageId]: event.target.value }))} />
                                             <Space size={6} wrap>
                                                 <Button size="small" type="primary" onClick={() => onApproveStage(stage.stageId)}>
@@ -214,7 +218,7 @@ export function AgentWorkflowExecutionPanel({
                                         <Button size="small" type="primary" disabled={stageState?.status === "blocked"} loading={Boolean(runningStageIds[stage.stageId])} onClick={() => onRunWorkflowStageText(stage.stageId)}>
                                             运行草案
                                         </Button>
-                                        {!mappingPreviewStatus.allowed ? <span className="text-xs text-stone-500">{mappingPreviewStatus.reason}</span> : null}
+                                        {!mappingPreviewStatus.allowed ? <span className={`text-xs ${mutedTextClass}`}>{mappingPreviewStatus.reason}</span> : null}
                                     </Space>
                                 </div>
                             </details>
@@ -223,12 +227,12 @@ export function AgentWorkflowExecutionPanel({
                 </div>
 
                 <details>
-                    <summary className="cursor-pointer text-sm text-stone-500">查看 preset 来源与文件清单</summary>
-                    <div className="mt-2 grid gap-2 text-xs text-stone-500">
+                    <summary className={`cursor-pointer text-sm ${mutedTextClass}`}>查看 preset 来源与文件清单</summary>
+                    <div className={`mt-2 grid gap-2 text-xs ${mutedTextClass}`}>
                         <div>说明：{selectedWorkflowPreset.description}</div>
                         <div>来源目录：{selectedWorkflowPreset.sourceRoot}</div>
                         {selectedWorkflowPreset.sourceFiles.map((file) => (
-                            <div key={file.path} className="rounded-md bg-stone-50 px-2 py-1 dark:bg-white/5">
+                            <div key={file.path} className={`px-2 py-1 ${mutedPanelClass}`}>
                                 [{sourceCategoryLabel(file.category)}] {file.path}：{file.summary}
                             </div>
                         ))}

@@ -200,9 +200,9 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
         <div className="grid gap-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <div className="text-sm text-stone-500">当前项目：{projectTitle}</div>
+                    <div className="text-sm text-[var(--studio-text-muted)]">当前项目：{projectTitle}</div>
                     <div className="mt-1 text-xl font-semibold">{settingsOnly ? "Agent 设置" : "工作流执行"}</div>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-stone-500">
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-[var(--studio-text-muted)]">
                         {canvasId ? <Tag className="m-0">画布 {canvasId}</Tag> : null}
                         {episodeId ? <Tag className="m-0">{episodeTitle || `本集 ${episodeId}`}</Tag> : null}
                     </div>

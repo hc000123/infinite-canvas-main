@@ -118,7 +118,7 @@ export default function EpisodeWorkflowLandingPage() {
 
     if (!projectHydrated || !scriptsHydrated) {
         return (
-            <main className="grid h-full place-items-center bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
+            <main className="studio-shell grid h-full place-items-center px-6 py-10 text-[var(--studio-text-primary)]">
                 <Spin description="正在读取本地项目" />
             </main>
         );
@@ -126,7 +126,7 @@ export default function EpisodeWorkflowLandingPage() {
 
     if (!project || !episode) {
         return (
-            <main className="h-full overflow-auto bg-background px-6 py-10 text-stone-950 dark:text-stone-100">
+            <main className="studio-shell h-full overflow-auto px-6 py-10 text-[var(--studio-text-primary)]">
                 <div className="mx-auto max-w-3xl">
                     <Empty description="项目或集数不存在">
                         <Button href={project ? `/projects/${project.id}` : "/projects"}>返回项目</Button>
@@ -137,28 +137,27 @@ export default function EpisodeWorkflowLandingPage() {
     }
 
     return (
-        <main className="h-full overflow-auto bg-[#050b10] text-slate-100">
-            <header className="border-b border-slate-800/80 px-6 py-5 xl:px-8">
+        <main className="studio-shell h-full overflow-auto text-[var(--studio-text-primary)]">
+            <header className="border-b border-[var(--studio-border-subtle)] px-6 py-5 xl:px-8">
                 <div className="flex flex-wrap items-start justify-between gap-5">
                     <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500">
-                            <Link href={`/projects/${project.id}`} className="text-cyan-300/85 hover:text-cyan-200">
+                        <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-[var(--studio-text-muted)]">
+                            <Link href={`/projects/${project.id}`} className="text-[var(--studio-accent)] transition hover:text-[var(--studio-accent-hover)]">
                                 {project.title}
                             </Link>
                             <span>/</span>
-                            <Link href={`/projects/${project.id}/episodes/${episode.id}/workbench`} className="text-cyan-300/85 hover:text-cyan-200">
+                            <Link href={`/projects/${project.id}/episodes/${episode.id}/workbench`} className="text-[var(--studio-accent)] transition hover:text-[var(--studio-accent-hover)]">
                                 本集生产台
                             </Link>
                         </div>
                         <div className="mt-3 flex flex-wrap items-center gap-3">
-                            <h1 className="break-words text-3xl font-semibold leading-tight text-slate-50">工作流落地页</h1>
+                            <h1 className="break-words text-3xl font-semibold leading-tight text-[var(--studio-text-primary)]">工作流落地页</h1>
                             <StatusTag status={runDisplay?.displayStatus || "idle"} />
                         </div>
-                        <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-slate-500">{episode.title} 的 Agent 阶段、产物预览和画布承接状态集中在这里，减少最后落地时来回切换。</p>
+                        <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-[var(--studio-text-muted)]">{episode.title} 的 Agent 阶段、产物预览和画布承接状态集中在这里，减少最后落地时来回切换。</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <Button
-                            className="!border-slate-700 !bg-slate-950/50 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100"
                             icon={<ArrowLeft className="size-4" />}
                             onClick={() => router.push(`/projects/${project.id}/episodes/${episode.id}/workbench`)}
                         >
@@ -173,16 +172,16 @@ export default function EpisodeWorkflowLandingPage() {
 
             <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-6 py-6 xl:px-8">
                 <section className="grid gap-4 lg:grid-cols-[1.2fr_.8fr]">
-                    <div className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-5">
+                    <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-5 shadow-[var(--studio-shadow)] backdrop-blur">
                         <div className="flex flex-wrap items-start justify-between gap-4">
                             <div>
-                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
-                                    <Workflow className="size-4 text-cyan-300" />
+                                <div className="flex items-center gap-2 text-sm font-semibold text-[var(--studio-text-primary)]">
+                                    <Workflow className="size-4 text-[var(--studio-accent)]" />
                                     {preset.name}
                                 </div>
-                                <p className="mt-2 text-sm leading-6 text-slate-500">{runDisplay?.summaryText || "工作流尚未开始，进入生产台后可按阶段运行 Agent。"}</p>
+                                <p className="mt-2 text-sm leading-6 text-[var(--studio-text-muted)]">{runDisplay?.summaryText || "工作流尚未开始，进入生产台后可按阶段运行 Agent。"}</p>
                             </div>
-                            <Progress type="circle" percent={progress} size={76} strokeColor="#22d3ee" railColor="rgba(51,65,85,.8)" format={() => `${approvedStageCount}/${stages.length}`} />
+                            <Progress type="circle" percent={progress} size={76} strokeColor="var(--studio-accent)" trailColor="var(--studio-panel-muted-bg)" format={() => `${approvedStageCount}/${stages.length}`} />
                         </div>
                         <div className="mt-5 grid gap-3 sm:grid-cols-3">
                             <MetricCard label="阶段完成" value={`${approvedStageCount}/${stages.length}`} />
@@ -190,9 +189,9 @@ export default function EpisodeWorkflowLandingPage() {
                             <MetricCard label="画布节点" value={String(boundCanvas?.nodes?.length || 0)} />
                         </div>
                     </div>
-                    <div className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-5">
-                        <div className="text-sm font-semibold text-slate-200">承接位置</div>
-                        <div className="mt-3 space-y-3 text-sm text-slate-400">
+                    <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-5 shadow-[var(--studio-shadow)] backdrop-blur">
+                        <div className="text-sm font-semibold text-[var(--studio-text-primary)]">承接位置</div>
+                        <div className="mt-3 space-y-3 text-sm">
                             <InfoRow label="本集" value={episode.title} />
                             <InfoRow label="剧本" value={scriptSnapshot.trim() ? "已导入" : "未导入"} />
                             <InfoRow label="承接画布" value={boundCanvas?.title || "未创建"} />
@@ -240,11 +239,11 @@ export default function EpisodeWorkflowLandingPage() {
                     />
                 </section>
 
-                <section className="rounded-2xl border border-slate-800/80 bg-slate-950/70">
-                    <div className="border-b border-slate-800/80 px-5 py-4">
-                        <h2 className="text-base font-semibold text-slate-100">阶段进度</h2>
+                <section className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] shadow-[var(--studio-shadow)] backdrop-blur">
+                    <div className="border-b border-[var(--studio-border-subtle)] px-5 py-4">
+                        <h2 className="text-base font-semibold text-[var(--studio-text-primary)]">阶段进度</h2>
                     </div>
-                    <div className="divide-y divide-slate-800/80">
+                    <div className="divide-y divide-[var(--studio-border-subtle)]">
                         {stages.map((stage, index) => (
                             <StageRow
                                 key={stage.stageId}
@@ -266,9 +265,9 @@ export default function EpisodeWorkflowLandingPage() {
 
 function MetricCard({ label, value }: { label: string; value: string }) {
     return (
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/45 px-4 py-3">
-            <div className="text-xs text-slate-500">{label}</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-100">{value}</div>
+        <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-4 py-3">
+            <div className="text-xs text-[var(--studio-text-muted)]">{label}</div>
+            <div className="mt-1 text-2xl font-semibold text-[var(--studio-text-primary)]">{value}</div>
         </div>
     );
 }
@@ -276,8 +275,8 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 function InfoRow({ label, value }: { label: string; value: string }) {
     return (
         <div className="flex items-center justify-between gap-4">
-            <span className="text-slate-500">{label}</span>
-            <span className="min-w-0 truncate text-right text-slate-200">{value}</span>
+            <span className="text-[var(--studio-text-muted)]">{label}</span>
+            <span className="min-w-0 truncate text-right text-[var(--studio-text-primary)]">{value}</span>
         </div>
     );
 }
@@ -308,12 +307,12 @@ function LandingTargetCard({
     const counts = preview ? previewCounts(preview, appliedPreviewItemIds) : { applied: 0, pending: 0, total: 0 };
     const disabledReason = preview ? previewApplyDisabledReason(preview, counts.pending, hasCanvas) : "";
     return (
-        <div className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-5">
+        <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-5 shadow-[var(--studio-shadow)] backdrop-blur transition hover:border-[var(--studio-border-strong)]">
             <div className="flex items-center gap-3">
-                <span className="grid size-10 place-items-center rounded-xl bg-cyan-400/10 text-cyan-200">{icon}</span>
+                <span className="grid size-10 place-items-center rounded-md bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]">{icon}</span>
                 <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-slate-100">{title}</div>
-                    <div className="mt-1 text-xs text-slate-500">{preview?.title || "暂无可落地预览"}</div>
+                    <div className="truncate text-sm font-semibold text-[var(--studio-text-primary)]">{title}</div>
+                    <div className="mt-1 text-xs text-[var(--studio-text-muted)]">{preview?.title || "暂无可落地预览"}</div>
                 </div>
             </div>
             <div className="mt-5 grid grid-cols-3 gap-2 text-center text-xs">
@@ -328,7 +327,7 @@ function LandingTargetCard({
                     </Button>
                 ) : (
                     <Button
-                        className="!h-9 !border-slate-700 !bg-slate-900/70 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100"
+                        className="!h-9"
                         disabled={Boolean(previewGenerationReason)}
                         title={previewGenerationReason}
                         onClick={() => onGeneratePreview(stageId, title)}
@@ -336,16 +335,16 @@ function LandingTargetCard({
                         {previewGenerationReason ? "待阶段产物" : "生成预览"}
                     </Button>
                 )}
-                {disabledReason || previewGenerationReason ? <span className="flex items-center text-xs text-slate-500">{disabledReason || previewGenerationReason}</span> : null}
+                {disabledReason || previewGenerationReason ? <span className="flex items-center text-xs text-[var(--studio-text-muted)]">{disabledReason || previewGenerationReason}</span> : null}
             </div>
         </div>
     );
 }
 
 function CountPill({ label, tone, value }: { label: string; tone: "amber" | "green" | "slate"; value: number }) {
-    const className = tone === "amber" ? "bg-amber-400/10 text-amber-200" : tone === "green" ? "bg-emerald-400/10 text-emerald-200" : "bg-slate-800/80 text-slate-300";
+    const className = tone === "amber" ? "bg-amber-500/10 text-amber-700 dark:text-amber-200" : tone === "green" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-200" : "bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-secondary)]";
     return (
-        <div className={`rounded-xl px-3 py-2 ${className}`}>
+        <div className={`rounded-md px-3 py-2 ${className}`}>
             <div className="text-base font-semibold">{value}</div>
             <div className="mt-0.5 opacity-75">{label}</div>
         </div>
@@ -372,20 +371,20 @@ function StageRow({
     const canGeneratePreview = Boolean(output && stage.stageId !== "director-analysis");
     return (
         <div className="grid gap-4 px-5 py-4 md:grid-cols-[120px_1fr_180px]">
-            <div className="text-sm text-slate-500">阶段 {order}</div>
+            <div className="text-sm text-[var(--studio-text-muted)]">阶段 {order}</div>
             <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-sm font-semibold text-slate-100">{workflowStageDisplayName(stage.stageId)}</h3>
+                    <h3 className="text-sm font-semibold text-[var(--studio-text-primary)]">{workflowStageDisplayName(stage.stageId)}</h3>
                     <StatusTag status={display?.displayStatus || "idle"} />
                 </div>
-                <p className="mt-2 break-words text-sm leading-6 text-slate-500">{display?.summaryText || stage.purpose}</p>
-                {output?.summary ? <p className="mt-2 break-words text-xs leading-5 text-slate-400">{output.summary}</p> : null}
+                <p className="mt-2 break-words text-sm leading-6 text-[var(--studio-text-muted)]">{display?.summaryText || stage.purpose}</p>
+                {output?.summary ? <p className="mt-2 break-words text-xs leading-5 text-[var(--studio-text-secondary)]">{output.summary}</p> : null}
             </div>
-            <div className="flex flex-col gap-2 text-sm text-slate-400">
+            <div className="flex flex-col gap-2 text-sm text-[var(--studio-text-secondary)]">
                 <InfoRow label="预览" value={`${previews.length} 个`} />
                 <InfoRow label="产物" value={output ? "已生成" : "未生成"} />
                 <div className="mt-1 flex flex-wrap gap-2">
-                    <Button size="small" className="!border-slate-700 !bg-slate-900/70 !text-slate-200 hover:!border-cyan-500/70 hover:!text-cyan-100" onClick={onOpenWorkbench}>
+                    <Button size="small" onClick={onOpenWorkbench}>
                         去处理
                     </Button>
                     {canGeneratePreview ? (

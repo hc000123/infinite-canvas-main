@@ -13,6 +13,11 @@ type Props = {
     onOpenFullConfig: () => void;
 };
 
+const summaryPanelClass = "rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3";
+const sectionPanelClass = "rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-4";
+const mutedBlockClass = "rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2 text-sm text-[var(--studio-text-secondary)]";
+const mutedTextClass = "text-[var(--studio-text-muted)]";
+
 export function AgentModelSettingsPanel({ config, effectiveConfig, onConfigChange, onOpenFullConfig }: Props) {
     const setConfigValue = <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => onConfigChange(key, value);
     const modelSummary = [
@@ -49,35 +54,35 @@ export function AgentModelSettingsPanel({ config, effectiveConfig, onConfigChang
             >
                 <Alert className="mb-4" type="info" showIcon title="这里保存的是全局默认模型和通用生成参数" description="Agent、工作流、画布配置节点都会优先读取这些默认值；单个 Agent 或单个画布节点仍可在自己的面板里临时覆盖。" />
                 <div className="mb-4 grid gap-3 lg:grid-cols-[1.2fr_1fr]">
-                    <div className="rounded-lg border border-sky-400/30 bg-sky-400/10 p-3">
-                        <div className="text-xs font-medium text-sky-700 dark:text-sky-200">当前实际视频通道</div>
+                    <div className="rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-accent-soft)] p-3">
+                        <div className="text-xs font-medium text-[var(--studio-accent)]">当前实际视频通道</div>
                         <div className="mt-1 break-words text-base font-semibold">{videoProtocolLabel(effectiveConfig.videoProtocol)}</div>
-                        <div className="mt-1 break-words text-xs text-stone-500 dark:text-stone-400">后端模型渠道 · {effectiveVideoModel || "未配置模型"}</div>
+                        <div className={`mt-1 break-words text-xs ${mutedTextClass}`}>后端模型渠道 · {effectiveVideoModel || "未配置模型"}</div>
                     </div>
-                    <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-stone-800 dark:bg-white/5">
-                        <div className="text-xs font-medium text-stone-500">本地默认视频协议</div>
+                    <div className={summaryPanelClass}>
+                        <div className={`text-xs font-medium ${mutedTextClass}`}>本地默认视频协议</div>
                         <div className="mt-1 break-words text-base font-semibold">{videoProtocolLabel(config.videoProtocol)}</div>
-                        <div className="mt-1 text-xs text-stone-500 dark:text-stone-400">下方表单只保存本地默认参数；后台渠道优先生效。</div>
+                        <div className={`mt-1 text-xs ${mutedTextClass}`}>下方表单只保存本地默认参数；后台渠道优先生效。</div>
                     </div>
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
                     {modelSummary.map((item) => (
-                        <div key={item.label} className="rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-stone-800 dark:bg-white/5">
-                            <div className="text-xs text-stone-500">默认{item.label}模型</div>
+                        <div key={item.label} className={summaryPanelClass}>
+                            <div className={`text-xs ${mutedTextClass}`}>默认{item.label}模型</div>
                             <div className="mt-1 break-words text-base font-semibold">{item.value}</div>
                         </div>
                     ))}
                 </div>
 
                 <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                    <section className="rounded-lg border border-stone-200 p-4 dark:border-stone-800">
+                    <section className={sectionPanelClass}>
                         <div className="font-medium">模型渠道</div>
                         <div className="mt-3 grid gap-3">
-                            <div className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600 dark:bg-white/5 dark:text-stone-300">统一由后端模型渠道转发请求；接口地址、API Key、模型映射、额度和任务日志都在后台系统设置中维护。</div>
+                            <div className={mutedBlockClass}>统一由后端模型渠道转发请求；接口地址、API Key、模型映射、额度和任务日志都在后台系统设置中维护。</div>
                         </div>
                     </section>
 
-                    <section className="rounded-lg border border-stone-200 p-4 dark:border-stone-800">
+                    <section className={sectionPanelClass}>
                         <div className="font-medium">默认模型</div>
                         <div className="mt-3 grid gap-3">
                             <FieldLabel label="默认文本模型">
@@ -95,7 +100,7 @@ export function AgentModelSettingsPanel({ config, effectiveConfig, onConfigChang
                         </div>
                     </section>
 
-                    <section className="rounded-lg border border-stone-200 p-4 dark:border-stone-800">
+                    <section className={sectionPanelClass}>
                         <div className="font-medium">图片默认参数</div>
                         <div className="mt-3 grid gap-3">
                             <FieldLabel label="尺寸">
@@ -122,7 +127,7 @@ export function AgentModelSettingsPanel({ config, effectiveConfig, onConfigChang
                         </div>
                     </section>
 
-                    <section className="rounded-lg border border-stone-200 p-4 dark:border-stone-800">
+                    <section className={sectionPanelClass}>
                         <div className="font-medium">视频默认参数</div>
                         <div className="mt-3 grid gap-3">
                             <FieldLabel label="本地默认视频协议">
@@ -172,7 +177,7 @@ export function AgentModelSettingsPanel({ config, effectiveConfig, onConfigChang
                     </section>
                 </div>
 
-                <details className="mt-4 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
+                <details className="mt-4 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-3">
                     <summary className="cursor-pointer text-sm font-medium">当前可见模型列表</summary>
                     <div className="mt-3 flex flex-wrap gap-2">
                         {visibleModels.length ? (
@@ -182,7 +187,7 @@ export function AgentModelSettingsPanel({ config, effectiveConfig, onConfigChang
                                 </Tag>
                             ))
                         ) : (
-                            <span className="text-sm text-stone-500">暂无模型列表；请先在后台系统设置中维护模型渠道。</span>
+                            <span className={`text-sm ${mutedTextClass}`}>暂无模型列表；请先在后台系统设置中维护模型渠道。</span>
                         )}
                     </div>
                 </details>
@@ -194,7 +199,7 @@ export function AgentModelSettingsPanel({ config, effectiveConfig, onConfigChang
 function FieldLabel({ children, label }: { children: ReactNode; label: string }) {
     return (
         <label className="grid gap-1.5 text-sm">
-            <span className="text-xs font-medium text-stone-500">{label}</span>
+            <span className={`text-xs font-medium ${mutedTextClass}`}>{label}</span>
             {children}
         </label>
     );
