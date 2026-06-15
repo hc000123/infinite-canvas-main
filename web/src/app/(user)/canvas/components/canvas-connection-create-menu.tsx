@@ -21,7 +21,7 @@ export function ConnectionCreateMenu({
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
         <div
-            className="absolute z-[120] w-[300px] rounded-[18px] border p-3 shadow-2xl backdrop-blur"
+            className="absolute z-[120] w-[300px] rounded-xl border p-3 shadow-[var(--studio-shadow)] backdrop-blur"
             data-connection-create-menu
             style={{ left: position.x, top: position.y, background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}
             onMouseDown={(event) => event.stopPropagation()}
@@ -31,7 +31,7 @@ export function ConnectionCreateMenu({
                 <span className="text-sm font-medium" style={{ color: theme.node.muted }}>
                     {title}
                 </span>
-                <button type="button" className="grid size-7 place-items-center rounded-lg text-base opacity-55 transition hover:bg-white/10 hover:opacity-100" onClick={onClose} aria-label="关闭">
+                <button type="button" className="grid size-7 place-items-center rounded-lg text-base opacity-55 transition hover:bg-[var(--studio-hover-bg)] hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]" onClick={onClose} aria-label="关闭">
                     ×
                 </button>
             </div>
@@ -50,7 +50,7 @@ function ConnectionCreateOption({ theme, icon, title, description, onClick }: { 
     return (
         <button
             type="button"
-            className="flex h-16 w-full cursor-pointer items-center gap-3 rounded-2xl px-3 text-left transition"
+            className="flex h-16 w-full cursor-pointer items-center gap-3 rounded-lg px-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
             style={{ color: theme.node.text }}
             onClick={onClick}
             onMouseEnter={(event) => (event.currentTarget.style.background = theme.node.fill)}

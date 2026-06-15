@@ -32,7 +32,7 @@ export function VideoTaskProgressPanel({
     const prompt = node.metadata?.prompt?.trim();
     return (
         <div
-            className={`${compact ? "w-[min(420px,calc(100%-16px))]" : "w-[min(420px,calc(100%-20px))]"} flex max-h-[calc(100%-16px)] flex-col rounded-2xl border p-3 text-left shadow-[0_18px_42px_rgba(0,0,0,.18)] backdrop-blur-md`}
+            className={`${compact ? "w-[min(420px,calc(100%-16px))]" : "w-[min(420px,calc(100%-20px))]"} flex max-h-[calc(100%-16px)] flex-col rounded-lg border p-3 text-left shadow-[var(--studio-shadow)] backdrop-blur-md`}
             style={{ background: `${theme.node.fill}ee`, borderColor: theme.node.stroke, color: theme.node.text }}
         >
             <div className="flex items-start justify-between gap-3">
@@ -52,7 +52,7 @@ export function VideoTaskProgressPanel({
             </div>
             {!isFailed ? (
                 <div className="mt-3 h-1.5 overflow-hidden rounded-full" style={{ background: theme.toolbar.activeBg }}>
-                    <div className="h-full rounded-full bg-[#2f80ff] transition-[width] duration-500" style={{ width: `${progress.percent}%` }} />
+                    <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${progress.percent}%`, background: theme.node.activeStroke }} />
                 </div>
             ) : null}
             <div className="mt-3 grid grid-cols-5 gap-1.5">
@@ -185,7 +185,7 @@ function padTime(value: number) {
 function videoProgressStepColor({ index, progress, theme }: { index: number; progress: ReturnType<typeof buildCanvasVideoProgress>; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     const step = index + 1;
     if (progress.stage === "failed") return step === progress.currentStep ? "#ef4444" : theme.node.stroke;
-    return step <= progress.currentStep ? "#2f80ff" : theme.node.stroke;
+    return step <= progress.currentStep ? theme.node.activeStroke : theme.node.stroke;
 }
 
 function videoTaskDetailRows(node: CanvasNodeData, elapsedSeconds: number) {

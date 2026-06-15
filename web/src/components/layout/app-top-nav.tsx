@@ -43,7 +43,7 @@ export function AppTopNav() {
     return (
         <>
             {!hideHeader ? (
-                <header className="sticky top-0 z-20 h-16 shrink-0 border-b border-[var(--studio-border-subtle)] bg-[color-mix(in_srgb,var(--studio-app-bg)_92%,transparent)] shadow-[0_10px_28px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:shadow-[0_10px_28px_rgba(0,0,0,0.18)]">
+                <header className="sticky top-0 z-20 h-16 shrink-0 border-b border-[var(--studio-border-subtle)] bg-[color-mix(in_srgb,var(--studio-app-bg)_92%,transparent)] shadow-[var(--studio-shadow)] backdrop-blur-xl">
                     <div className="mx-auto flex h-full max-w-7xl items-stretch justify-between gap-5 px-5 sm:px-6">
                         <div className="flex min-w-0 items-center">
                             <Link href="/" className="group flex h-full shrink-0 items-center gap-3 text-sm font-semibold leading-none tracking-tight text-[var(--studio-text-primary)] transition hover:text-[var(--studio-accent)]">

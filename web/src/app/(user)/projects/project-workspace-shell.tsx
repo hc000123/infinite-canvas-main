@@ -33,7 +33,7 @@ function ProjectWorkspaceTopBar() {
     const barStyle = { background: "color-mix(in srgb, var(--studio-app-bg) 92%, transparent)", color: "var(--studio-text-primary)" };
 
     return (
-        <header className="relative z-[80] h-16 shrink-0 border-b border-[var(--studio-border-subtle)] shadow-[0_10px_28px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:shadow-[0_10px_28px_rgba(0,0,0,0.18)]" style={barStyle}>
+        <header className="relative z-[80] h-16 shrink-0 border-b border-[var(--studio-border-subtle)] shadow-[var(--studio-shadow)] backdrop-blur-xl" style={barStyle}>
             <div className="mx-auto flex h-full w-full max-w-7xl items-stretch justify-between gap-5 px-5 sm:px-6">
                 <div className="flex min-w-0 items-center">
                     <Link href="/" className="group flex h-full shrink-0 items-center gap-3 text-sm font-semibold leading-none tracking-tight transition hover:text-[var(--studio-accent)]">

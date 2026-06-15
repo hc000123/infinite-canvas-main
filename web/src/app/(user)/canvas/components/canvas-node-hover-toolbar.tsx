@@ -98,8 +98,8 @@ export function CanvasNodeHoverToolbar({ node, viewport, onKeep, onLeave, action
 
     return (
         <div
-            className={`absolute z-[70] flex h-12 -translate-x-1/2 items-center overflow-visible rounded-[18px] border text-[15px] shadow-lg backdrop-blur ${shouldOverlayMedia ? "" : "-translate-y-full"}`}
-            style={{ left, top, background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item, boxShadow: colorTheme === "dark" ? "0 18px 45px rgba(0,0,0,.32)" : "0 16px 40px rgba(28,25,23,.12)" }}
+            className={`absolute z-[70] flex h-12 -translate-x-1/2 items-center overflow-visible rounded-lg border text-[15px] shadow-[var(--studio-shadow)] backdrop-blur ${shouldOverlayMedia ? "" : "-translate-y-full"}`}
+            style={{ left, top, background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item }}
             onMouseEnter={() => onKeep(node.id)}
             onMouseLeave={onLeave}
             onMouseDown={(event) => event.stopPropagation()}

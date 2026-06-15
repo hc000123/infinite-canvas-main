@@ -374,7 +374,7 @@ function ProjectCard({
 
 function ProjectActionIconButton({ title, icon, danger, onClick }: { title: string; icon: ReactNode; danger?: boolean; onClick: () => void }) {
     return (
-        <Tooltip title={<span className="text-slate-50">{title}</span>} classNames={{ root: "project-card-action-tooltip" }} styles={{ container: { color: "#f8fafc" } }}>
+        <Tooltip title={title} classNames={{ root: "project-card-action-tooltip" }}>
             <Button type="text" size="small" shape="circle" icon={icon} danger={danger} onClick={onClick} aria-label={title} />
         </Tooltip>
     );
@@ -408,7 +408,7 @@ function ProjectStatusBadge({ status }: { status: ProjectVisualMeta["statusLabel
         草稿: "border-sky-300/28 bg-[#172337]/90 text-sky-100 before:bg-sky-300",
         进行中: "border-emerald-300/28 bg-[#102820]/90 text-emerald-100 before:bg-emerald-300",
     }[status];
-    return <span className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-semibold shadow-[0_8px_22px_rgba(0,0,0,0.28)] backdrop-blur-md before:block before:size-1.5 before:rounded-full ${tone}`}>{status}</span>;
+    return <span className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-semibold shadow-[var(--studio-shadow)] backdrop-blur-md before:block before:size-1.5 before:rounded-full ${tone}`}>{status}</span>;
 }
 
 function formatProjectDate(value: string) {

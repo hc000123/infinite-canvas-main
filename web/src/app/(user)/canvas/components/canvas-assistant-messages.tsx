@@ -36,7 +36,7 @@ export function AssistantMessages({
             {messages.map((message) => (
                 <div key={message.id} className={cn("flex flex-col gap-2", message.role === "user" ? "items-end" : "items-start")}>
                     <div
-                        className="max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm leading-6"
+                        className="max-w-[88%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm leading-6"
                         style={message.role === "user" ? { background: theme.toolbar.activeBg, color: theme.toolbar.activeText } : { background: theme.node.fill, color: theme.node.text }}
                     >
                         {message.role === "assistant" ? (
@@ -49,7 +49,7 @@ export function AssistantMessages({
                     </div>
                     {message.references?.length ? <MessageReferences message={message} /> : null}
                     {message.assistantActions?.length ? <AssistantActionPreviewCard message={message} nodes={nodes} connections={connections} onApply={() => onApplyAssistantActions(message)} onCancel={() => onCancelAssistantActions(message)} /> : null}
-                    {message.isLoading ? <ImageGenerationPending compact label={message.mode === "image" ? "正在生成图片" : "正在回答"} className="w-[250px] rounded-2xl border" /> : null}
+                    {message.isLoading ? <ImageGenerationPending compact label={message.mode === "image" ? "正在生成图片" : "正在回答"} className="w-[250px] rounded-lg border" /> : null}
                     {message.role === "assistant" && !message.isLoading ? (
                         <div className="flex gap-1">
                             <Button shape="circle" size="small" style={{ borderColor: theme.node.stroke }} icon={<RotateCcw className="size-3.5" />} onClick={() => onRetry(message)} title="重试" />
@@ -57,7 +57,7 @@ export function AssistantMessages({
                         </div>
                     ) : null}
                     {message.images?.map((image) => (
-                        <div key={image.id} className="w-[250px] overflow-hidden rounded-2xl border" style={{ background: theme.node.panel, borderColor: theme.node.stroke }}>
+                        <div key={image.id} className="w-[250px] overflow-hidden rounded-lg border" style={{ background: theme.node.panel, borderColor: theme.node.stroke }}>
                             <img src={image.dataUrl} alt="" className="aspect-square w-full object-cover" />
                             <Button
                                 type="text"
@@ -91,7 +91,7 @@ function AssistantActionPreviewCard({ message, nodes, connections, onApply, onCa
     const canApply = status === "pending" && actions.length > 0 && risk.length === 0;
 
     return (
-        <div className="w-[290px] rounded-2xl border p-3 text-sm" style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}>
+        <div className="w-[290px] rounded-lg border p-3 text-sm" style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}>
             <div className="mb-2 text-xs font-medium opacity-60">动作预览</div>
             <div className="space-y-1.5 leading-5">
                 <div>

@@ -30,7 +30,7 @@ export function CanvasToolbar({ actions, state }: { actions: CanvasToolbarAction
     const theme = canvasThemes[colorTheme];
     const [appearanceOpen, setAppearanceOpen] = useState(false);
     const [panelX, setPanelX] = useState(0);
-    const dockStyle = { background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item, boxShadow: colorTheme === "dark" ? "0 18px 45px rgba(0,0,0,.32)" : "0 16px 40px rgba(28,25,23,.12)" };
+    const dockStyle = { background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item, boxShadow: "var(--studio-shadow)" };
     const tools = buildToolbarItems({
         actions,
         state,
@@ -129,7 +129,7 @@ function CanvasAppearancePanel({
 
     return (
         <div
-            className="pointer-events-auto absolute bottom-[72px] z-30 w-[248px] -translate-x-1/2 rounded-xl border p-2.5 shadow-xl backdrop-blur"
+            className="pointer-events-auto absolute bottom-[72px] z-30 w-[248px] -translate-x-1/2 rounded-xl border p-2.5 shadow-[var(--studio-shadow)] backdrop-blur"
             style={{ left: panelX || "50%", background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item }}
         >
             <div className="px-1 pb-2 text-sm font-medium opacity-65">外观设置</div>

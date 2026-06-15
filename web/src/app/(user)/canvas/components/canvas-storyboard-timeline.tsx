@@ -36,7 +36,7 @@ export function CanvasStoryboardTimeline({ shots, shotGroups, nodes, activeShotI
     return (
         <div className="pointer-events-none absolute inset-x-4 bottom-20 z-40 flex justify-center">
             <div
-                className="pointer-events-auto flex max-w-[min(1100px,calc(100%-32px))] items-stretch gap-2 rounded-xl border px-2 py-2 shadow-[0_14px_34px_rgba(28,25,23,.12)] backdrop-blur"
+                className="pointer-events-auto flex max-w-[min(1100px,calc(100%-32px))] items-stretch gap-2 rounded-lg border px-2 py-2 shadow-[var(--studio-shadow)] backdrop-blur"
                 style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
             >
                 <div className="flex w-32 shrink-0 flex-col gap-1.5">

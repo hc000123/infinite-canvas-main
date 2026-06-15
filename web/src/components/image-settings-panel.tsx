@@ -41,7 +41,7 @@ type ImageSettingsPanelProps = {
 type ImageSettingsKey = "quality" | "size" | "count";
 type ModelThinkingSettingsKey = "thinkingMode" | "reasoningEffort";
 
-export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, className = "w-[320px] space-y-4 rounded-2xl px-1 py-0.5", maxCount = 15, quickCount = 10, compact = false }: ImageSettingsPanelProps) {
+export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, className = "w-[320px] space-y-4 rounded-lg px-1 py-0.5", maxCount = 15, quickCount = 10, compact = false }: ImageSettingsPanelProps) {
     const quality = config.quality || "auto";
     const count = Math.max(1, Math.min(maxCount, Math.floor(Math.abs(Number(config.count)) || 1)));
     const activeSize = config.size || "auto";
@@ -85,7 +85,7 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                             <button
                                 key={item.value}
                                 type="button"
-                                className={`cursor-pointer rounded-full border bg-transparent px-2 text-center transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f80ff]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${compact ? "h-8 text-xs" : "h-9 text-sm"}`}
+                                className={`cursor-pointer rounded-full border bg-transparent px-2 text-center transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${compact ? "h-8 text-xs" : "h-9 text-sm"}`}
                                 style={{ borderColor: selectedAspect?.value === item.value ? theme.node.text : theme.node.stroke, background: selectedAspect?.value === item.value ? theme.node.panel : "transparent", color: theme.node.text }}
                                 onMouseDown={(event) => event.stopPropagation()}
                                 onClick={() => selectAspect(item.value)}
@@ -191,7 +191,7 @@ function OptionPill({ selected, theme, onClick, children }: { selected: boolean;
     return (
         <button
             type="button"
-            className="h-9 cursor-pointer rounded-full border px-2 text-sm transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f80ff]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+            className="h-9 cursor-pointer rounded-full border px-2 text-sm transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
             style={{ background: "transparent", borderColor: selected ? theme.node.text : theme.node.stroke, color: theme.node.text }}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={onClick}
@@ -206,7 +206,7 @@ function SmallOptionPill({ selected, disabled = false, theme, onClick, children 
         <button
             type="button"
             disabled={disabled}
-            className="h-7 cursor-pointer rounded-full border px-2 text-xs transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f80ff]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+            className="h-7 cursor-pointer rounded-full border px-2 text-xs transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
             style={{ background: selected ? theme.node.panel : "transparent", borderColor: selected ? theme.node.text : theme.node.stroke, color: theme.node.text }}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={onClick}
@@ -226,7 +226,7 @@ function DimensionInput({ prefix, value, disabled, theme, onChange }: { prefix: 
                 type="number"
                 min={1}
                 disabled={disabled}
-                className="min-w-0 flex-1 bg-transparent px-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2f80ff]/70 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="min-w-0 flex-1 bg-transparent px-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--studio-focus-ring)] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 value={value || ""}
                 onChange={(event) => onChange(Number(event.target.value) || null)}
                 onMouseDown={(event) => event.stopPropagation()}
@@ -242,7 +242,7 @@ function CountInput({ value, max, theme, onChange }: { value: number; max: numbe
                 type="number"
                 min={1}
                 max={max}
-                className="min-w-0 flex-1 bg-transparent px-3 text-center outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2f80ff]/70 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="min-w-0 flex-1 bg-transparent px-3 text-center outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--studio-focus-ring)] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 style={{ color: theme.node.text, WebkitTextFillColor: theme.node.text }}
                 value={value || ""}
                 onChange={(event) => onChange(Number(event.target.value) || null)}

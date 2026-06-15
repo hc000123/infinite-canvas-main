@@ -9,7 +9,6 @@ import { CanvasNodeType, type CanvasNodeData, type Position } from "../types";
 import { ImageInfoBar, NodeContent } from "./canvas-node-content";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
-const selectionBlue = "#2f80ff";
 
 type CanvasNodeProps = {
     data: CanvasNodeData;
@@ -104,7 +103,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const showFrameReferenceHandles = data.type === CanvasNodeType.Video && data.metadata?.videoReferenceImageMode === "first_last_frame";
     const packageAccent = "rgba(34,211,238,.86)";
     const packageAccentSoft = "rgba(34,211,238,.24)";
-    const imageBorderColor = isActive ? selectionBlue : isProductionPackageActive ? packageAccent : isRelated && !isBatchChild ? theme.node.muted : "transparent";
+    const imageBorderColor = isActive ? theme.node.activeStroke : isProductionPackageActive ? packageAccent : isRelated && !isBatchChild ? theme.node.muted : "transparent";
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const resizeRef = useRef({
         isResizing: false,
@@ -250,16 +249,16 @@ export const CanvasNode = React.memo(function CanvasNode({
             onContextMenu={(event) => onContextMenu(event, data.id)}
         >
             <div
-                className="relative h-full w-full overflow-visible rounded-3xl border-2"
+                className="relative h-full w-full overflow-visible rounded-lg border-2"
                 style={{
                     background: hasImageContent || hasVideoContent || hasAudioContent ? "transparent" : theme.node.fill,
-                    borderColor: hasImageContent ? imageBorderColor : isActive ? selectionBlue : isProductionPackageActive ? packageAccent : isRelated ? theme.node.muted : theme.node.stroke,
+                    borderColor: hasImageContent ? imageBorderColor : isActive ? theme.node.activeStroke : isProductionPackageActive ? packageAccent : isRelated ? theme.node.muted : theme.node.stroke,
                     boxShadow: isActive
-                        ? `0 0 0 1px ${selectionBlue}55`
+                        ? `0 0 0 1px ${theme.node.activeStroke}55`
                         : isProductionPackageActive
-                          ? `0 0 0 1px ${packageAccentSoft}, 0 18px 48px rgba(0,0,0,.14)`
+                          ? `0 0 0 1px ${packageAccentSoft}, var(--studio-shadow)`
                           : isRelated && !isBatchChild
-                            ? `0 0 0 1px ${theme.node.muted}55, 0 18px 48px rgba(0,0,0,.14)`
+                            ? `0 0 0 1px ${theme.node.muted}55, var(--studio-shadow)`
                             : undefined,
                 }}
                 onMouseDown={(event) => onMouseDown(event, data.id)}
@@ -403,7 +402,7 @@ function FrameReferenceHandle({ label, side, connected, visible, onMouseDown }: 
             aria-label={`${label}输入`}
         >
             <span
-                className="pointer-events-none absolute bottom-10 rounded-md border px-2 py-1 text-[10px] font-medium leading-none shadow-[0_8px_24px_rgba(0,0,0,.16)] backdrop-blur-md"
+                className="pointer-events-none absolute bottom-10 rounded-md border px-2 py-1 text-[10px] font-medium leading-none shadow-[var(--studio-shadow)] backdrop-blur-md"
                 style={{ background: connected ? theme.toolbar.activeBg : theme.toolbar.panel, borderColor: connected ? theme.node.activeStroke : theme.toolbar.border, color: connected ? theme.toolbar.activeText : theme.node.text }}
             >
                 {label}

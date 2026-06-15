@@ -41,7 +41,7 @@ export function CanvasNodeContextMenu({
 
     return (
         <div
-            className="fixed z-[80] min-w-44 overflow-hidden rounded-xl border py-1 shadow-2xl"
+            className="fixed z-[80] min-w-44 overflow-hidden rounded-xl border py-1 shadow-[var(--studio-shadow)]"
             style={{ left: menu.x, top: menu.y, background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
             onPointerDown={(event) => event.stopPropagation()}
         >
@@ -66,7 +66,7 @@ function MenuButton({ icon, label, onClick, danger = false }: { icon: ReactNode;
     return (
         <button
             type="button"
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
             style={{ color: danger ? token.colorError : theme.node.text }}
             onClick={onClick}
         >

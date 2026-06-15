@@ -125,7 +125,7 @@ export function CanvasContextInspector({
             <aside className="relative flex h-full w-10 shrink-0 items-start justify-center border-l pt-3" style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}>
                 <button
                     type="button"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                     style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel, color: theme.node.text }}
                     onClick={() => onCollapsedChange(false)}
                     title="展开右侧面板"
@@ -139,7 +139,7 @@ export function CanvasContextInspector({
 
     return (
         <aside
-            className="fixed inset-y-0 right-0 z-[80] flex h-full w-[calc(100vw-16px)] max-w-[420px] shrink-0 flex-col border-l shadow-2xl md:relative md:z-auto md:w-[420px] md:shadow-none"
+            className="fixed inset-y-0 right-0 z-[80] flex h-full w-[calc(100vw-16px)] max-w-[420px] shrink-0 flex-col border-l shadow-[var(--studio-shadow)] md:relative md:z-auto md:w-[420px] md:shadow-none"
             style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}
         >
             <div className="border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
@@ -158,7 +158,7 @@ export function CanvasContextInspector({
                     <div className="flex shrink-0 items-center gap-2">
                         <button
                             type="button"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                             style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel, color: theme.node.text }}
                             onClick={() => setRecordsOpen(true)}
                             title="查看记录"
@@ -169,7 +169,7 @@ export function CanvasContextInspector({
                         {selectedProductionPackage ? (
                             <button
                                 type="button"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                                 style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel, color: theme.node.text }}
                                 onClick={() => setProductionInfoOpen(true)}
                                 title="查看生产包信息"
@@ -180,7 +180,7 @@ export function CanvasContextInspector({
                         ) : null}
                         <button
                             type="button"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                             style={{ borderColor: theme.node.stroke, background: theme.toolbar.panel, color: theme.node.text }}
                             onClick={() => onCollapsedChange(true)}
                             title="收起右侧面板"
@@ -190,7 +190,7 @@ export function CanvasContextInspector({
                         </button>
                     </div>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-1 rounded-lg border p-1" style={{ background: "rgba(15, 23, 42, 0.18)", borderColor: theme.node.stroke }}>
+                <div className="mt-3 grid grid-cols-2 gap-1 rounded-lg border p-1" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
                     <InspectorTab label="内容" active={activeView === "context"} onClick={() => onViewChange("context")} />
                     <InspectorTab
                         label="助手"
@@ -269,7 +269,7 @@ export function CanvasContextInspector({
                 />
             )}
             {selectedProductionPackage ? (
-                <Modal title="生产包信息" open={productionInfoOpen} footer={null} onCancel={() => setProductionInfoOpen(false)} centered width={520}>
+                <Modal rootClassName="studio-modal" title="生产包信息" open={productionInfoOpen} footer={null} onCancel={() => setProductionInfoOpen(false)} centered width={520}>
                     <ProductionPackageInfoContent
                         productionPackage={selectedProductionPackage}
                         theme={theme}
@@ -280,7 +280,7 @@ export function CanvasContextInspector({
                     />
                 </Modal>
             ) : null}
-            <Modal title="记录 / 任务详情" open={recordsOpen} footer={null} onCancel={() => setRecordsOpen(false)} centered width={560}>
+            <Modal rootClassName="studio-modal" title="记录 / 任务详情" open={recordsOpen} footer={null} onCancel={() => setRecordsOpen(false)} centered width={560}>
                 <RecordsView selectedNode={selectedNode} selectedShot={selectedShot} theme={theme} />
             </Modal>
         </aside>
@@ -292,7 +292,7 @@ function InspectorTab({ label, active, onClick }: { label: string; active: boole
     return (
         <button
             type="button"
-            className="relative h-8 rounded-md text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+            className="relative h-8 rounded-md text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
             style={{
                 background: active ? "rgba(111, 168, 255, 0.16)" : "transparent",
                 border: active ? `1px solid ${theme.node.activeStroke}` : "1px solid transparent",
@@ -391,7 +391,7 @@ function InspectorAction({ icon, label, onClick, theme, disabled = false }: { ic
     return (
         <button
             type="button"
-            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-2 text-xs font-medium transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-2 text-xs font-medium transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)] disabled:cursor-not-allowed disabled:opacity-40"
             style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke, color: theme.node.text }}
             onClick={onClick}
             disabled={disabled}

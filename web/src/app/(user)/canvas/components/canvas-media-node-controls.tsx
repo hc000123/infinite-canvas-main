@@ -15,8 +15,8 @@ export function GeneratedPromptToggle({ node, theme, variant = "panel" }: { node
         <div className="relative">
             <button
                 type="button"
-                className={`${dark ? "grid size-8 place-items-center px-0 text-white" : "inline-flex h-8 items-center gap-1.5 px-2.5"} rounded-lg border text-[11px] font-medium shadow-[0_8px_24px_rgba(0,0,0,.18)] backdrop-blur-md transition hover:scale-[1.03]`}
-                style={{ background: dark ? "rgba(0,0,0,.5)" : `${theme.toolbar.panel}d9`, borderColor: dark ? "rgba(255,255,255,.22)" : `${theme.toolbar.border}cc`, color: dark ? "#fff" : theme.node.text }}
+                className={`${dark ? "grid size-8 place-items-center px-0" : "inline-flex h-8 items-center gap-1.5 px-2.5"} rounded-lg border text-[11px] font-medium shadow-[var(--studio-shadow)] backdrop-blur-md transition hover:scale-[1.03]`}
+                style={{ background: dark ? "var(--studio-media-overlay)" : `${theme.toolbar.panel}d9`, borderColor: dark ? "var(--studio-border-subtle)" : `${theme.toolbar.border}cc`, color: dark ? "var(--studio-on-media)" : theme.node.text }}
                 onClick={(event) => {
                     event.stopPropagation();
                     setOpen((value) => !value);
@@ -31,8 +31,8 @@ export function GeneratedPromptToggle({ node, theme, variant = "panel" }: { node
             </button>
             {open ? (
                 <div
-                    className="thin-scrollbar absolute left-0 top-10 z-50 max-h-44 w-[min(320px,calc(100vw-32px))] overflow-auto whitespace-pre-wrap break-words rounded-xl border p-3 text-xs leading-5 shadow-[0_18px_42px_rgba(0,0,0,.22)] backdrop-blur-md"
-                    style={{ background: dark ? "rgba(0,0,0,.72)" : `${theme.node.fill}f2`, borderColor: dark ? "rgba(255,255,255,.22)" : theme.node.stroke, color: dark ? "#fff" : theme.node.text }}
+                    className="thin-scrollbar absolute left-0 top-10 z-50 max-h-44 w-[min(320px,calc(100vw-32px))] overflow-auto whitespace-pre-wrap break-words rounded-lg border p-3 text-xs leading-5 shadow-[var(--studio-shadow)] backdrop-blur-md"
+                    style={{ background: dark ? "var(--studio-media-overlay)" : `${theme.node.fill}f2`, borderColor: dark ? "var(--studio-border-subtle)" : theme.node.stroke, color: dark ? "var(--studio-on-media)" : theme.node.text }}
                     onMouseDown={(event) => event.stopPropagation()}
                     onPointerDown={(event) => event.stopPropagation()}
                     onWheel={(event) => event.stopPropagation()}
@@ -66,7 +66,7 @@ export function MediaReviewStatusBadge({
     const tone = active ? reviewBadgeTones.active : failed ? reviewBadgeTones.failed : processing ? reviewBadgeTones.processing : reviewBadgeTones.idle;
     return (
         <div
-            className={`${className || ""} pointer-events-none inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold shadow-[0_10px_28px_rgba(0,0,0,.35),0_0_0_1px_rgba(255,255,255,.12)_inset] backdrop-blur-md`}
+            className={`${className || ""} pointer-events-none inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold shadow-[var(--studio-shadow)] backdrop-blur-md`}
             style={{ background: tone.background, borderColor: tone.border, color: tone.text }}
             title={active ? "素材已完成加白" : failed ? "素材加白失败" : "素材加白处理中"}
             aria-label="素材加白状态"

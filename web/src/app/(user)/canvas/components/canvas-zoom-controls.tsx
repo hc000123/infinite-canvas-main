@@ -18,7 +18,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const colorTheme = useThemeStore((state) => state.theme);
     const theme = canvasThemes[colorTheme];
-    const dockStyle = { background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item, boxShadow: colorTheme === "dark" ? "0 18px 45px rgba(0,0,0,.32)" : "0 16px 40px rgba(28,25,23,.12)" };
+    const dockStyle = { background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item, boxShadow: "var(--studio-shadow)" };
     const activeStyle = { background: theme.toolbar.activeBg, color: theme.toolbar.activeText };
 
     return (
@@ -57,7 +57,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
                     <Button type="text" className="!h-8 !w-8 !min-w-8 !p-0" style={shortcutsOpen ? activeStyle : { color: theme.toolbar.item }} icon={<HelpCircle className="size-4" />} onClick={() => setShortcutsOpen(true)} aria-label="快捷键" />
                 </Tooltip>
             </div>
-            <Modal title="快捷键" open={shortcutsOpen} onCancel={() => setShortcutsOpen(false)} footer={null} centered>
+            <Modal rootClassName="studio-modal" title="快捷键" open={shortcutsOpen} onCancel={() => setShortcutsOpen(false)} footer={null} centered>
                 <div className="space-y-3 border-t pt-4 text-sm" style={{ borderColor: theme.node.stroke }}>
                     <Shortcut label="拖动画布" value="平移视图" />
                     <Shortcut label="滚轮" value="缩放画布" />

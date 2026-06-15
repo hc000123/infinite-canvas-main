@@ -37,7 +37,7 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
     const avatarText = (userName.trim()[0] || "U").toUpperCase();
     const naturalIconClass =
         variant === "canvas"
-            ? "inline-flex size-8 shrink-0 items-center justify-center text-stone-600 transition hover:text-stone-950 dark:text-stone-300 dark:hover:text-white [&_svg]:size-4"
+            ? "inline-flex size-8 shrink-0 items-center justify-center rounded-md opacity-85 transition hover:bg-[var(--studio-hover-bg)] hover:opacity-100 [&_svg]:size-4"
             : "inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-transparent text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] [&_svg]:size-4";
     const iconStyle: CSSProperties | undefined = variant === "canvas" ? { color: canvasTheme.node.text } : undefined;
     const versionStyle = iconStyle;
@@ -78,7 +78,7 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
                     href="/login"
                     className={
                         variant === "canvas"
-                            ? "px-1.5 text-sm font-medium text-stone-600 underline-offset-4 transition hover:text-stone-950 hover:underline dark:text-stone-300 dark:hover:text-stone-100"
+                            ? "px-1.5 text-sm font-medium opacity-85 underline-offset-4 transition hover:opacity-100 hover:underline"
                             : "rounded-md px-2 py-1 text-sm font-medium text-[var(--studio-text-secondary)] underline-offset-4 transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] hover:no-underline"
                     }
                     style={iconStyle}

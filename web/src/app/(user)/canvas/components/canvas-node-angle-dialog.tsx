@@ -28,17 +28,17 @@ export function CanvasNodeAngleDialog({ dataUrl, open, onClose, onConfirm }: { d
     const update = <Key extends keyof CanvasImageAngleParams>(key: Key, value: CanvasImageAngleParams[Key]) => setParams((current) => ({ ...current, [key]: value }));
 
     return (
-        <Modal title={null} open={open && Boolean(dataUrl)} onCancel={onClose} footer={null} width={860} centered destroyOnHidden>
+        <Modal rootClassName="studio-modal" title={null} open={open && Boolean(dataUrl)} onCancel={onClose} footer={null} width={860} centered destroyOnHidden>
             <div className="space-y-5">
                 <div>
                     <h2 className="text-xl font-semibold">AI 多角度</h2>
                     <p className="mt-1 text-sm opacity-60">左侧只预览方向，结果会基于原图重新生成</p>
                 </div>
                 <div className="grid gap-6 md:grid-cols-[minmax(260px,1fr)_360px]">
-                    <div className="flex min-h-[300px] flex-col justify-between rounded-xl border p-4">
+                    <div className="flex min-h-[300px] flex-col justify-between rounded-xl border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
                         <div className="grid flex-1 place-items-center">
                             <div className="relative">
-                                <img src={dataUrl} alt="" className="size-48 rounded-2xl object-cover shadow-2xl" draggable={false} style={{ transform: previewTransform(params) }} />
+                                <img src={dataUrl} alt="" className="size-48 rounded-lg object-cover shadow-[var(--studio-shadow)]" draggable={false} style={{ transform: previewTransform(params) }} />
                                 <div className="absolute -bottom-6 left-1/2 h-10 w-24 -translate-x-1/2 rounded-full border bg-black/20 backdrop-blur" />
                             </div>
                         </div>

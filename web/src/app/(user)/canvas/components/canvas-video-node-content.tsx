@@ -28,23 +28,23 @@ export function VideoNodeContent({
     const frameStrip = <FrameReferenceStrip videoNode={node} theme={theme} frameReferenceNodes={frameReferenceNodes} onNormalizeFrameReferences={onNormalizeFrameReferences} />;
     if (!node.metadata?.content)
         return (
-            <div className="relative flex h-full w-full flex-col items-center justify-center gap-3 rounded-[18px]" style={{ color: theme.node.placeholder }}>
+            <div className="relative flex h-full w-full flex-col items-center justify-center gap-3 rounded-lg" style={{ color: theme.node.placeholder }}>
                 <Video className="size-7 opacity-35" />
                 <span className="text-sm">空视频节点</span>
                 {frameStrip}
             </div>
         );
     return (
-        <div className="relative h-full w-full rounded-[18px] bg-black">
-            <video src={node.metadata.content} controls controlsList="nodownload" className="h-full w-full rounded-[18px] object-contain" data-canvas-no-zoom />
+        <div className="relative h-full w-full rounded-lg bg-black">
+            <video src={node.metadata.content} controls controlsList="nodownload" className="h-full w-full rounded-lg object-contain" data-canvas-no-zoom />
             {frameStrip}
             {node.metadata?.taskId || node.metadata?.prompt ? (
                 <div className="absolute left-2.5 top-2.5 z-30 flex flex-wrap gap-1.5">
                     {node.metadata?.taskId ? (
                         <button
                             type="button"
-                            className="grid size-8 place-items-center rounded-lg border text-white shadow-[0_8px_24px_rgba(0,0,0,.24)] backdrop-blur-md transition hover:scale-[1.03]"
-                            style={{ background: "rgba(0,0,0,.5)", borderColor: "rgba(255,255,255,.22)" }}
+                            className="grid size-8 place-items-center rounded-lg border shadow-[var(--studio-shadow)] backdrop-blur-md transition hover:scale-[1.03]"
+                            style={{ background: "var(--studio-media-overlay)", borderColor: "var(--studio-border-subtle)", color: "var(--studio-on-media)" }}
                             onClick={(event) => {
                                 event.stopPropagation();
                                 setDetailsOpen((value) => !value);
@@ -103,7 +103,7 @@ function FrameReferenceStrip({
             {mismatch && first && last ? (
                 <button
                     type="button"
-                    className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-medium text-amber-100 shadow-[0_8px_24px_rgba(0,0,0,.18)] backdrop-blur-md transition hover:scale-[1.03]"
+                    className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-medium text-amber-100 shadow-[var(--studio-shadow)] backdrop-blur-md transition hover:scale-[1.03]"
                     style={{ background: "rgba(120,53,15,.78)", borderColor: "rgba(251,191,36,.38)" }}
                     onClick={(event) => {
                         event.stopPropagation();
@@ -123,7 +123,7 @@ function FrameReferenceStrip({
 
 function FrameReferenceThumb({ label, node, theme }: { label: string; node?: CanvasNodeData; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     return (
-        <div className="relative h-16 w-24 overflow-hidden rounded-lg border shadow-[0_8px_24px_rgba(0,0,0,.18)] backdrop-blur-md" style={{ background: `${theme.toolbar.panel}dd`, borderColor: theme.toolbar.border, color: theme.node.text }}>
+        <div className="relative h-16 w-24 overflow-hidden rounded-lg border shadow-[var(--studio-shadow)] backdrop-blur-md" style={{ background: `${theme.toolbar.panel}dd`, borderColor: theme.toolbar.border, color: theme.node.text }}>
             {node?.metadata?.content ? <img src={node.metadata.content} alt={label} className="h-full w-full object-cover" draggable={false} /> : <div className="grid h-full w-full place-items-center text-[11px] opacity-45">未连接</div>}
             <span className="absolute left-1 top-1 rounded bg-black/55 px-1.5 py-0.5 text-[9px] font-medium leading-none text-white">{label}</span>
             {node ? <span className="absolute bottom-1 left-1 max-w-[88px] truncate rounded bg-black/55 px-1.5 py-0.5 text-[9px] leading-none text-white/90">{frameResolutionLabel(node) || "未知尺寸"}</span> : null}

@@ -97,6 +97,9 @@
     --studio-accent-hover: #4778bd;
     --studio-accent-soft: rgba(49, 95, 159, 0.1);
     --studio-focus-ring: rgba(49, 95, 159, 0.18);
+    --studio-tooltip-bg: #111827;
+    --studio-tooltip-text: #f8fafc;
+    --studio-tooltip-border: rgba(148, 163, 184, 0.28);
     --studio-success: #16a34a;
     --studio-warning: #d97706;
     --studio-danger: #dc2626;
@@ -156,6 +159,9 @@
     --studio-accent-hover: #8fb9ff;
     --studio-accent-soft: rgba(111, 168, 255, 0.14);
     --studio-focus-ring: rgba(111, 168, 255, 0.2);
+    --studio-tooltip-bg: #111827;
+    --studio-tooltip-text: #f8fafc;
+    --studio-tooltip-border: rgba(148, 163, 184, 0.3);
     --studio-success: #57d57f;
     --studio-warning: #d6a74a;
     --studio-danger: #ff6b81;
@@ -772,9 +778,9 @@
     .ant-tooltip-container,
     .ant-tooltip-unique-container,
     .ant-tooltip-inner {
-        --ant-tooltip-overlay-color: #f8fafc;
-        --ant-tooltip-arrow-background-color: #111827;
-        color: #f8fafc !important;
+        --ant-tooltip-overlay-color: var(--studio-tooltip-text);
+        --ant-tooltip-arrow-background-color: var(--studio-tooltip-bg);
+        color: var(--studio-tooltip-text) !important;
     }
 
     .ant-tooltip .ant-tooltip-container,
@@ -785,8 +791,8 @@
     .ant-tooltip-inner {
         min-height: 28px;
         padding: 7px 10px !important;
-        background: #111827 !important;
-        border: 1px solid rgba(148, 163, 184, 0.28) !important;
+        background: var(--studio-tooltip-bg) !important;
+        border: 1px solid var(--studio-tooltip-border) !important;
         border-radius: 8px !important;
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.36) !important;
         font-size: 12px !important;
@@ -797,7 +803,7 @@
 
     .ant-tooltip .ant-tooltip-arrow::before,
     .ant-tooltip .ant-tooltip-arrow::after {
-        background: #111827 !important;
+        background: var(--studio-tooltip-bg) !important;
     }
 
     .canvas-tool-tooltip .ant-tooltip-inner,
@@ -806,7 +812,7 @@
     .canvas-tool-tooltip .ant-tooltip-unique-container,
     .canvas-tool-tooltip .ant-tooltip-unique-container *,
     .canvas-tool-tooltip .ant-tooltip-inner * {
-        color: #f2f4f8 !important;
+        color: var(--studio-tooltip-text) !important;
     }
 
     .project-card-action-tooltip .ant-tooltip-inner,
@@ -815,7 +821,7 @@
     .project-card-action-tooltip .ant-tooltip-unique-container,
     .project-card-action-tooltip .ant-tooltip-unique-container *,
     .project-card-action-tooltip .ant-tooltip-inner * {
-        color: #f8fafc !important;
+        color: var(--studio-tooltip-text) !important;
     }
 
     .dark.studio-workspace .ant-drawer-header {

@@ -142,7 +142,7 @@ function TextContent({ node, theme, isEditingContent, textareaRef, onContentChan
             {isEditingContent ? (
                 <textarea
                     ref={textareaRef}
-                    className="thin-scrollbar block h-full w-full resize-none overflow-y-auto whitespace-pre-wrap break-words border-none bg-transparent pl-4 pr-14 pt-0 pb-4 m-0 font-mono leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300/70 select-text appearance-none"
+                    className="thin-scrollbar block h-full w-full resize-none overflow-y-auto whitespace-pre-wrap break-words border-none bg-transparent pl-4 pr-14 pt-0 pb-4 m-0 font-mono leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--studio-focus-ring)] select-text appearance-none"
                     style={{ fontSize: `${node.metadata?.fontSize || 14}px`, color: theme.node.text }}
                     value={node.metadata?.content || ""}
                     onChange={(event) => onContentChange(node.id, event.target.value)}
@@ -204,7 +204,7 @@ function ImageNodeContent(props: NodeContentRendererProps) {
 function EmptyImageContent({ theme, isBatchRoot, batchCount, batchExpanded, batchOpening, batchRecovering, onToggleBatch }: NodeContentRendererProps) {
     const content = (
         <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.placeholder }}>
-            <div className="flex size-14 items-center justify-center rounded-2xl" style={{ background: theme.toolbar.activeBg }}>
+            <div className="flex size-14 items-center justify-center rounded-lg" style={{ background: theme.toolbar.activeBg }}>
                 <ImageIcon className="size-6 opacity-30" />
             </div>
             <span className="text-[10px] tracking-[0.18em] opacity-50">空图片节点</span>
@@ -228,7 +228,7 @@ function AudioNodeContent({ node, theme }: NodeContentRendererProps) {
             </div>
         );
     return (
-        <div className="flex h-full w-full flex-col justify-center gap-2 rounded-[18px] px-4" style={{ background: theme.node.fill }}>
+        <div className="flex h-full w-full flex-col justify-center gap-2 rounded-lg px-4" style={{ background: theme.node.fill }}>
             <div className="flex min-w-0 items-center gap-2 text-xs opacity-65">
                 <AudioLines className="size-4 shrink-0" />
                 <span className="truncate">{node.title}</span>
@@ -265,7 +265,7 @@ function ImageContent({
 
     return (
         <BatchFrame batchCount={isBatchRoot ? batchCount : 0} batchExpanded={batchExpanded} batchOpening={batchOpening} batchRecovering={batchRecovering} onToggleBatch={onToggleBatch}>
-            <div className="h-full w-full overflow-hidden rounded-3xl">
+            <div className="h-full w-full overflow-hidden rounded-lg">
                 <img
                     src={node.metadata!.content!}
                     alt={node.title}
@@ -281,7 +281,7 @@ function ImageContent({
             {isBatchRoot ? (
                 <button
                     type="button"
-                    className="absolute right-2.5 top-2.5 z-30 flex h-8 items-center justify-center gap-1 rounded-full border px-2.5 text-xs font-semibold shadow-[0_6px_18px_rgba(15,23,42,.10)] backdrop-blur-md transition hover:scale-[1.02]"
+                    className="absolute right-2.5 top-2.5 z-30 flex h-8 items-center justify-center gap-1 rounded-full border px-2.5 text-xs font-semibold shadow-[var(--studio-shadow)] backdrop-blur-md transition hover:scale-[1.02]"
                     style={{ background: `${theme.toolbar.panel}d9`, borderColor: `${theme.toolbar.border}cc`, color: theme.node.text }}
                     aria-label={batchExpanded ? "图片组已展开" : "图片组已收起"}
                     onClick={(event) => {
@@ -291,14 +291,16 @@ function ImageContent({
                     onMouseDown={(event) => event.stopPropagation()}
                     onPointerDown={(event) => event.stopPropagation()}
                 >
-                    <span className="leading-none text-[#2f80ff]">{batchCount}</span>
+                    <span className="leading-none" style={{ color: theme.node.activeStroke }}>
+                        {batchCount}
+                    </span>
                     <ChevronRight className={`size-3.5 opacity-55 transition-transform ${batchExpanded ? "rotate-90" : ""}`} />
                 </button>
             ) : null}
             {isBatchChild ? (
                 <button
                     type="button"
-                    className="absolute right-3 top-3 z-30 flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-medium opacity-0 shadow-[0_8px_20px_rgba(68,64,60,.13)] backdrop-blur-md transition group-hover/batch:opacity-100 hover:scale-[1.02]"
+                    className="absolute right-3 top-3 z-30 flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium opacity-0 shadow-[var(--studio-shadow)] backdrop-blur-md transition group-hover/batch:opacity-100 hover:scale-[1.02]"
                     style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
                     onClick={(event) => {
                         event.stopPropagation();
@@ -307,7 +309,7 @@ function ImageContent({
                     onMouseDown={(event) => event.stopPropagation()}
                     onPointerDown={(event) => event.stopPropagation()}
                 >
-                    <Star className="size-3.5 text-[#2f80ff]" />
+                    <Star className="size-3.5" style={{ color: theme.node.activeStroke }} />
                     设为主图
                 </button>
             ) : null}
@@ -335,7 +337,7 @@ function BatchFrame({ batchCount, batchExpanded, batchOpening, batchRecovering, 
                     {Array.from({ length: Math.min(batchCount - 1, 5) }).map((_, index) => (
                         <div
                             key={index}
-                            className="absolute rounded-[inherit] border shadow-[0_14px_34px_rgba(68,64,60,.16)] transition-transform duration-300 group-hover/batch:translate-x-2"
+                            className="absolute rounded-[inherit] border shadow-[var(--studio-shadow)] transition-transform duration-300 group-hover/batch:translate-x-2"
                             style={{
                                 inset: 0,
                                 background: `linear-gradient(135deg, ${theme.node.panel}, ${theme.node.fill})`,

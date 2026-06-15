@@ -17,7 +17,7 @@ export function CanvasRefreshShell() {
                 ))}
             </div>
 
-            <div className="absolute bottom-24 left-6 z-50 h-40 w-[240px] rounded-lg border shadow-2xl backdrop-blur-sm" style={{ background: "var(--background)", borderColor: "var(--border)" }} aria-hidden="true">
+            <div className="absolute bottom-24 left-6 z-50 h-40 w-[240px] rounded-lg border shadow-[var(--studio-shadow)] backdrop-blur-sm" style={{ background: "var(--background)", borderColor: "var(--border)" }} aria-hidden="true">
                 <div className="absolute left-7 top-7 h-5 w-12 rounded-sm bg-current opacity-10" />
                 <div className="absolute left-28 top-16 h-6 w-16 rounded-sm bg-current opacity-10" />
                 <div className="absolute bottom-7 left-16 h-8 w-20 rounded-sm bg-current opacity-10" />

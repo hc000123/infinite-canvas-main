@@ -86,7 +86,7 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
 
     return (
         <div
-            className="rounded-2xl border p-3 shadow-2xl backdrop-blur"
+            className="rounded-xl border p-3 shadow-[var(--studio-shadow)] backdrop-blur"
             style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -127,12 +127,12 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                     }
                 />
                 {mentionTrigger && mentionMatches.length ? (
-                    <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-lg border p-1 shadow-xl" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }}>
+                    <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-lg border p-1 shadow-[var(--studio-shadow)]" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }}>
                         {mentionMatches.map((option) => (
                             <button
                                 key={option.id}
                                 type="button"
-                                className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-white/10"
+                                className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                                 onMouseDown={(event) => {
                                     event.preventDefault();
                                     insertReferenceMention(option);
