@@ -172,11 +172,11 @@ export function compactWorkflowNavStatus(display: WorkflowStageDisplaySummary | 
 
 export function episodeModuleNavToneClass(tone: EpisodeStatusTone) {
     const toneClass: Record<EpisodeStatusTone, string> = {
-        amber: "bg-amber-400/10 text-amber-200",
-        cyan: "bg-cyan-400/10 text-cyan-100",
-        green: "bg-emerald-400/10 text-emerald-200",
-        red: "bg-rose-400/10 text-rose-200",
-        slate: "bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-muted)]",
+        amber: "studio-semantic-warning studio-semantic-tag border",
+        cyan: "studio-semantic-info studio-semantic-tag border",
+        green: "studio-semantic-success studio-semantic-tag border",
+        red: "studio-semantic-danger studio-semantic-tag border",
+        slate: "studio-semantic-neutral studio-semantic-tag border",
     };
     return toneClass[tone];
 }

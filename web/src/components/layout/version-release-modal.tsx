@@ -5,12 +5,12 @@ import { Modal, Tag, Timeline } from "antd";
 import { useVersionCheck } from "@/hooks/use-version-check";
 import { APP_VERSION } from "@/constant/env";
 
-function getTagColor(type: string) {
-    if (type === "新增") return "green";
-    if (type === "修复") return "red";
-    if (type === "调整") return "blue";
-    if (type === "文档") return "purple";
-    return "default";
+function getTagToneClass(type: string) {
+    if (type === "新增") return "studio-semantic-success";
+    if (type === "修复") return "studio-semantic-danger";
+    if (type === "调整") return "studio-semantic-info";
+    if (type === "文档") return "studio-semantic-neutral";
+    return "studio-semantic-neutral";
 }
 
 function getReleaseTitle(version: string) {
@@ -39,7 +39,7 @@ export function VersionReleaseModal({ className, style }: VersionReleaseModalPro
             >
                 <span className="relative inline-flex max-w-full items-center whitespace-nowrap">
                     {APP_VERSION}
-                    {hasNewVersion ? <span className="absolute -right-1.5 -top-1 size-1.5 rounded-full bg-green-500" /> : null}
+                    {hasNewVersion ? <span className="absolute -right-1.5 -top-1 size-1.5 rounded-full bg-[var(--studio-success)] ring-2 ring-[var(--studio-elevated-bg)]" /> : null}
                 </span>
             </button>
             <Modal rootClassName="studio-modal" title="版本更新" open={open} width={680} centered footer={null} onCancel={() => setOpen(false)}>
@@ -71,14 +71,14 @@ export function VersionReleaseModal({ className, style }: VersionReleaseModalPro
                                         <span className="text-sm font-semibold text-[var(--studio-text-primary)]">{getReleaseTitle(release.version)}</span>
                                         <span className="text-xs text-[var(--studio-text-muted)]">{release.date}</span>
                                         <div className="flex min-w-0 items-center gap-1.5">
-                                            {release.version === latestVersion ? <Tag color="green">最新</Tag> : null}
-                                            {release.version === APP_VERSION ? <Tag>当前</Tag> : null}
+                                            {release.version === latestVersion ? <Tag className="m-0 studio-semantic-success studio-semantic-tag">最新</Tag> : null}
+                                            {release.version === APP_VERSION ? <Tag className="m-0">当前</Tag> : null}
                                         </div>
                                     </div>
                                     <div className="mt-2 space-y-1.5">
                                         {release.items.map((item, index) => (
                                             <div key={`${release.version}-${index}`} className="flex items-start gap-2 text-sm leading-6 text-[var(--studio-text-secondary)]">
-                                                <Tag color={getTagColor(item.type)} className="m-0 mt-0.5 shrink-0 whitespace-nowrap">
+                                                <Tag className={`m-0 mt-0.5 shrink-0 whitespace-nowrap studio-semantic-tag ${getTagToneClass(item.type)}`}>
                                                     {item.type}
                                                 </Tag>
                                                 <span className="min-w-0 flex-1">{item.content}</span>
