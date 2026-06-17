@@ -199,6 +199,21 @@ test("workflow prompt authoring blocks simplified copy-only prompts", () => {
     assert.match(issue, /简化版提示词/);
 });
 
+test("workflow prompt authoring accepts copy-only field contract prompts", () => {
+    const prompt = [
+        "参考图：使用 @图1 锁定学校礼堂空间；使用 @图2 锁定魏梁毕业礼服。",
+        "场景：日间，学校礼堂内，暖白顶灯覆盖座席区，发言台和投影屏位置清楚。",
+        "声音：低音量毕业典礼背景音乐，台下逐渐安静；魏梁台词保留原文。",
+        "画面内容：",
+        "0-2秒：35mm 中远景，摄影机位于座席区中轴偏左，缓慢向前推进，带出礼堂纵深。",
+        "2-5秒：50mm 中景，魏梁把皱起的发言稿放低，呼吸放慢后看向台下。",
+        "5-8秒：85mm 近景，魏梁说：“谢谢大家。”台下保持安静。",
+        "限制：视频全程无字幕、无 logo、无水印；不生成可读发言稿正文；人物服装和站位保持连续。",
+    ].join("\n");
+
+    assert.equal(workflowPromptAuthoringIssue(prompt, "8秒"), "");
+});
+
 test("workflow prompt authoring accepts rich prompt with short spoken dialogue", () => {
     const prompt = [
         "一、基础设定",

@@ -11,6 +11,8 @@ export type WorkflowScriptBatch = {
 const defaultBatchMaxChars = 450;
 const mxShellSkillPath = "/Users/huangchi/马也传媒/03_AI工作流/AI/眨眼之间工作区/ai/Mx-Shell_Prompts_v1.5.md";
 const emotionDirectorSkillPath = "/Users/huangchi/马也传媒/03_AI工作流/AI/眨眼之间工作区/ai/情绪导演_Skill_V2.1.md";
+const stage3CopyOnlyFieldContract =
+    "Copy-only 代码块字段硬规则：每个 ```text 代码块必须逐字包含 `场景：`、`声音：`、`画面内容：`、`限制：` 四个字段；逐时间段描述必须写成 `0-2秒：...` 这种 x-y秒格式；`画面内容：` 不可用 `镜头`、`动作` 或 `时间轴` 替代，可在该字段下继续写 0-2秒、2-5秒等分段。";
 
 export function buildScriptBatchPlan(scriptText: string, episode: string, maxChars = defaultBatchMaxChars): WorkflowScriptBatch[] {
     const normalized = scriptText.replace(/\r\n/g, "\n").trim();
@@ -175,6 +177,7 @@ export function buildStage3PartPromptTexts(rootPath: string, episode: string, pr
         "分批策略：按场次 / Beat / P 段逐批生成 Copy-only 碎片，最后只面向用户交付 02-seedance-copy-only.md；02-seedance-prompts.md 只作为隐藏缓存。",
         "每批只处理当前批次原文；台词超载时拆连续 P，不能压缩剧情台词，不能把长演讲塞进单个 4-15 秒片段。",
         "引用必须用 @图N，禁止 @图片N；Copy-only 正文禁止出现“本P、单P、生成P、P间、分镜思路、导演分析、剧情分析、大分镜、情绪锚点、跨段衔接卡、6 字段分镜”等内部过程术语。",
+        stage3CopyOnlyFieldContract,
         skill.outputRule,
     ].join("\n");
     const fragmentDir = `outputs/${episode}/.scene-batches/stage3`;
@@ -187,6 +190,7 @@ export function buildStage3PartPromptTexts(rootPath: string, episode: string, pr
                 `任务：只处理当前 Copy-only 批次「${batch.label}」，写入 ${fragmentDir}/${batch.batchId}.md。`,
                 `碎片只允许使用此格式：# Copy-only 批次；随后多个 ## P临时编号｜段落｜秒数；每个标题下只放一个 \`\`\`text 代码块。`,
                 `代码块内容风格：${skill.fragmentOutput}。`,
+                "每个代码块必须满足字段硬规则；即使写了时间轴，也不能省略 `画面内容：` 字段。",
                 "每个 P 目标 4-15 秒；若台词超过可读秒数，拆成连续 P 或改由画面/动作承载。",
                 "不要写规范读取记录、参考图映射表、剧情分析、大分镜表、情绪锚点、6 字段分镜、跨段衔接卡、自检报告或解释性文字。",
                 "不要写最终 outputs 文件，不要读取其它批次剧情来补当前批次。",
@@ -205,6 +209,7 @@ export function buildStage3PartPromptTexts(rootPath: string, episode: string, pr
                 `2. outputs/${episode}/02-seedance-prompts.md：隐藏缓存，内容与 Copy-only 保持同一交付标准，可附极简素材索引，但不要写过程分析。`,
                 "汇总时只做合并、去重、P 编号统一、跨段衔接和格式修正；不要重新整集长推理，不要改剧情事件和台词原意。",
                 `最终文件只允许包含：${skill.finalOutput}。`,
+                "合并时必须逐块补齐字段硬规则；不能把 `场景`、逐秒时间轴或镜头动作当作 `画面内容` 字段替代。",
                 "最终文件禁止出现规范读取记录、剧情分析、大分镜总表、情绪锚点、6 字段分镜、跨段衔接卡、自检报告或解释性文字。",
             ].join("\n"),
         },

@@ -174,8 +174,18 @@ function promptDialogueBudgetIssue(prompt: string, durationText: string) {
 }
 
 function promptStructureIssue(prompt: string) {
+    if (looksLikeCopyOnlyPrompt(prompt)) return copyOnlyPromptStructureIssue(prompt);
     if (looksLikeSkill5Prompt(prompt)) return skill5PromptStructureIssue(prompt);
     return legacyWorkflowPromptStructureIssue(prompt);
+}
+
+function copyOnlyPromptStructureIssue(prompt: string) {
+    const requiredSections = ["场景", "声音", "画面内容", "限制"];
+    const missingSection = requiredSections.find((section) => !new RegExp(`${section}[：:]`).test(prompt));
+    if (missingSection) return `提示词缺少“${missingSection}”，疑似简化版提示词；请回到 Stage 3 重新生成 Copy-only。`;
+    if (!/\b\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?秒/.test(prompt)) return "提示词缺少逐时间段描述，请回到 Stage 3 重新生成 Copy-only。";
+    if (/简化版提示词|摘要版|骨架版|占位符|后续补充/.test(prompt)) return "提示词包含简化/摘要/占位符写法，请回到 Stage 3 输出完整 Copy-only。";
+    return "";
 }
 
 function skill5PromptStructureIssue(prompt: string) {
@@ -214,6 +224,10 @@ function legacyWorkflowPromptStructureIssue(prompt: string) {
 
 function looksLikeSkill5Prompt(prompt: string) {
     return ["焦段", "光圈", "机位", "主体动作/表情"].every((field) => new RegExp(`${field}[：:]`).test(prompt));
+}
+
+function looksLikeCopyOnlyPrompt(prompt: string) {
+    return ["场景", "声音", "画面内容", "限制"].every((field) => new RegExp(`${field}[：:]`).test(prompt));
 }
 
 function promptShotDurationBudgets(prompt: string) {

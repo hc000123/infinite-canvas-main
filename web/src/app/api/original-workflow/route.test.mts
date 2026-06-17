@@ -96,6 +96,10 @@ test("stage3 part prompts submit copy-only batches before final visible output",
     assert.match(allText, /按场次 \/ Beat \/ P 段逐批生成 Copy-only 碎片/);
     assert.match(allText, /outputs\/ep50-2\/\.scene-batches\/stage3/);
     assert.match(allText, /每个标题下只放一个 ```text 代码块/);
+    assert.match(allText, /Copy-only 代码块字段硬规则/);
+    assert.match(allText, /`场景：`、`声音：`、`画面内容：`、`限制：`/);
+    assert.match(allText, /0-2秒/);
+    assert.match(allText, /不能把 `场景`、逐秒时间轴或镜头动作当作 `画面内容` 字段替代/);
     assert.match(allText, /不要写规范读取记录、参考图映射表、剧情分析、大分镜表、情绪锚点、6 字段分镜、跨段衔接卡、自检报告/);
     assert.match(allText, /台词超载时拆连续 P/);
     assert.match(allText, /02-seedance-copy-only\.md/);
