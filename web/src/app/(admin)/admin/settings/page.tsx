@@ -8,6 +8,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorView } from "@uiw/react-codemirror";
 
+import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind";
 import { fetchAdminSettings, fetchChannelModels, saveAdminSettings, testChannelModel, type AdminModelChannel, type AdminModelCost, type AdminSettings } from "@/services/api/admin";
 import { VOLCENGINE_ASSET_CONFIG_NOTICE } from "@/services/volcengine-asset-config";
 import { useUserStore } from "@/stores/use-user-store";
@@ -96,10 +97,13 @@ export default function AdminSettingsPage() {
     const watchedPublicModels = Form.useWatch(["public", "modelChannel", "availableModels"], form);
     const watchedModelTextEndpoints = Form.useWatch(["public", "modelChannel", "modelTextEndpoints"], form);
     const publicModels = useMemo(() => watchedPublicModels || [], [watchedPublicModels]);
-    const modelTextEndpoints = useMemo(() => normalizeModelTextEndpoints(watchedModelTextEndpoints || [], publicModels), [watchedModelTextEndpoints, publicModels]);
     const publicModelChannel = Form.useWatch(["public", "modelChannel"], form) || emptySettings.public.modelChannel;
     const privateVolcengineAsset = Form.useWatch(["private", "volcengineAsset"], form) || emptySettings.private.volcengineAsset;
-    const publicModelOptions = useMemo(() => publicModels.map((item) => ({ label: item, value: item })), [publicModels]);
+    const publicImageModelOptions = useMemo(() => buildCapabilityModelOptions(publicModels, channels, "image"), [channels, publicModels]);
+    const publicVideoModelOptions = useMemo(() => buildCapabilityModelOptions(publicModels, channels, "video"), [channels, publicModels]);
+    const publicTextModels = useMemo(() => filterModelsByCapability(publicModels, channels, "text"), [channels, publicModels]);
+    const modelTextEndpoints = useMemo(() => normalizeModelTextEndpoints(watchedModelTextEndpoints || [], publicTextModels), [watchedModelTextEndpoints, publicTextModels]);
+    const publicTextModelOptions = useMemo(() => publicTextModels.map((item) => ({ label: item, value: item })), [publicTextModels]);
     const channelModels = useMemo(() => collectChannelModels(channels), [channels]);
     const channelTableData = useMemo(() => channels.map((channel, index) => ({ ...channel, _index: index, _rowKey: `${index}-${channel.name}-${channel.baseUrl}` })), [channels]);
     const activeMode = editorMode[activeTab];
@@ -536,24 +540,19 @@ export default function AdminSettingsPage() {
                                             <Select mode="multiple" placeholder="请选择系统可用模型" options={channelModels.map((item) => ({ label: item, value: item }))} />
                                         </Form.Item>
                                     </Col>
-                                    <Col xs={24} md={6}>
-                                        <Form.Item name={["public", "modelChannel", "defaultModel"]} label="默认模型">
-                                            <Select showSearch allowClear optionFilterProp="label" placeholder="搜索模型名" options={publicModelOptions} />
-                                        </Form.Item>
-                                    </Col>
-                                    <Col xs={24} md={6}>
+                                    <Col xs={24} md={8}>
                                         <Form.Item name={["public", "modelChannel", "defaultImageModel"]} label="默认图片模型">
-                                            <Select showSearch allowClear optionFilterProp="label" placeholder="搜索模型名" options={publicModelOptions} />
+                                            <Select showSearch allowClear optionFilterProp="label" placeholder="搜索图片模型" options={publicImageModelOptions} />
                                         </Form.Item>
                                     </Col>
-                                    <Col xs={24} md={6}>
+                                    <Col xs={24} md={8}>
                                         <Form.Item name={["public", "modelChannel", "defaultVideoModel"]} label="默认视频模型">
-                                            <Select showSearch allowClear optionFilterProp="label" placeholder="搜索模型名" options={publicModelOptions} />
+                                            <Select showSearch allowClear optionFilterProp="label" placeholder="搜索视频模型" options={publicVideoModelOptions} />
                                         </Form.Item>
                                     </Col>
-                                    <Col xs={24} md={6}>
+                                    <Col xs={24} md={8}>
                                         <Form.Item name={["public", "modelChannel", "defaultTextModel"]} label="默认文本模型">
-                                            <Select showSearch allowClear optionFilterProp="label" placeholder="搜索模型名" options={publicModelOptions} />
+                                            <Select showSearch allowClear optionFilterProp="label" placeholder="搜索文本模型" options={publicTextModelOptions} />
                                         </Form.Item>
                                     </Col>
                                     <Col span={24}>
@@ -567,7 +566,7 @@ export default function AdminSettingsPage() {
                                             rowKey="model"
                                             pagination={false}
                                             size="small"
-                                            dataSource={publicModels.map((model) => ({ model, endpointType: modelTextEndpointType(modelTextEndpoints, model) }))}
+                                            dataSource={publicTextModels.map((model) => ({ model, endpointType: modelTextEndpointType(modelTextEndpoints, model) }))}
                                             columns={[
                                                 { title: "模型", dataIndex: "model" },
                                                 {
@@ -582,7 +581,7 @@ export default function AdminSettingsPage() {
                                                                 { label: "Chat Completions (/chat/completions)", value: "chat_completions" },
                                                                 { label: "Responses (/responses)", value: "responses" },
                                                             ]}
-                                                            onChange={(value) => setModelTextEndpoint(form, item.model, value)}
+                                                            onChange={(value) => setModelTextEndpoint(form, publicTextModels, item.model, value)}
                                                         />
                                                     ),
                                                 },
@@ -1146,7 +1145,7 @@ function normalizePublicSetting(setting: Partial<AdminSettings["public"]> = {}):
             ...(setting.modelChannel || {}),
             availableModels: cleanChannelModels(setting.modelChannel?.availableModels || []),
             modelCosts: normalizeModelCosts(setting.modelChannel?.modelCosts || []),
-            modelTextEndpoints: normalizeModelTextEndpoints(setting.modelChannel?.modelTextEndpoints || [], setting.modelChannel?.availableModels || []),
+            modelTextEndpoints: normalizeModelTextEndpoints(setting.modelChannel?.modelTextEndpoints || [], setting.modelChannel?.availableModels || [], false),
         },
         auth: {
             allowRegister: setting.auth?.allowRegister !== false,
@@ -1159,7 +1158,7 @@ function normalizeModelCosts(items: Partial<AdminSettings["public"]["modelChanne
     return items.filter((item) => item.model && !isEndpointModel(item.model)).map((item) => ({ model: item.model || "", credits: Math.max(0, Number(item.credits) || 0) }));
 }
 
-function normalizeModelTextEndpoints(items: Partial<AdminSettings["public"]["modelChannel"]["modelTextEndpoints"][number]>[], models: string[]) {
+function normalizeModelTextEndpoints(items: Partial<AdminSettings["public"]["modelChannel"]["modelTextEndpoints"][number]>[], models: string[], fillMissing = true) {
     const availableModels = cleanChannelModels(models);
     const modelSet = new Set(availableModels);
     const seen = new Set<string>();
@@ -1170,9 +1169,11 @@ function normalizeModelTextEndpoints(items: Partial<AdminSettings["public"]["mod
             seen.add(item.model);
             return true;
         });
-    availableModels.forEach((model) => {
-        if (!seen.has(model)) result.push({ model, endpointType: defaultTextEndpointType(model) });
-    });
+    if (fillMissing) {
+        availableModels.forEach((model) => {
+            if (!seen.has(model)) result.push({ model, endpointType: defaultTextEndpointType(model) });
+        });
+    }
     return result;
 }
 
@@ -1324,10 +1325,9 @@ function setModelCost(form: FormInstance<AdminSettings>, setModelCosts: (items: 
     setModelCosts(next);
 }
 
-function setModelTextEndpoint(form: FormInstance<AdminSettings>, model: string, endpointType: AdminSettings["public"]["modelChannel"]["modelTextEndpoints"][number]["endpointType"]) {
-    const publicModels = cleanChannelModels(form.getFieldValue(["public", "modelChannel", "availableModels"]) || []);
+function setModelTextEndpoint(form: FormInstance<AdminSettings>, textModels: string[], model: string, endpointType: AdminSettings["public"]["modelChannel"]["modelTextEndpoints"][number]["endpointType"]) {
     const current = (form.getFieldValue(["public", "modelChannel", "modelTextEndpoints"]) || []) as AdminSettings["public"]["modelChannel"]["modelTextEndpoints"];
-    const next = normalizeModelTextEndpoints([...current.filter((item) => item.model !== model), { model, endpointType }], publicModels);
+    const next = normalizeModelTextEndpoints([...current.filter((item) => item.model !== model), { model, endpointType }], textModels);
     form.setFieldValue(["public", "modelChannel", "modelTextEndpoints"], next);
 }
 
@@ -1360,6 +1360,29 @@ function mergePrivateSecrets(input: AdminSettings, saved: AdminSettings): AdminS
 
 function collectChannelModels(channels: AdminModelChannel[]) {
     return cleanChannelModels(channels.filter((channel) => channel.enabled).flatMap((channel) => channel.models || []));
+}
+
+function filterModelsByCapability(models: string[], channels: AdminModelChannel[], capability: AiModelKind) {
+    const capabilitiesByModel = modelCapabilitiesByChannel(channels);
+    return cleanChannelModels(models).filter((model) => modelMatchesAiCapability(model, capabilitiesByModel.get(model), capability));
+}
+
+function buildCapabilityModelOptions(models: string[], channels: AdminModelChannel[], capability: AiModelKind) {
+    return filterModelsByCapability(models, channels, capability).map((item) => ({ label: item, value: item }));
+}
+
+function modelCapabilitiesByChannel(channels: AdminModelChannel[]) {
+    const capabilitiesByModel = new Map<string, string[]>();
+    channels.forEach((item) => {
+        const channel = normalizeChannel(item);
+        if (!channel.enabled) return;
+        visibleChannelModels(channel.models).forEach((model) => {
+            const capabilities = new Set(capabilitiesByModel.get(model) || []);
+            channel.capabilities.forEach((capability) => capabilities.add(capability));
+            capabilitiesByModel.set(model, Array.from(capabilities));
+        });
+    });
+    return capabilitiesByModel;
 }
 
 function collectKnownModels(settings: AdminSettings) {
@@ -1470,7 +1493,8 @@ async function collectSettings(form: FormInstance<AdminSettings>, editorMode: Re
         values.private = privateSetting;
     }
     values.public.modelChannel.availableModels = filterModels(values.public.modelChannel.availableModels, collectChannelModels(values.private.channels));
-    values.public.modelChannel.modelTextEndpoints = normalizeModelTextEndpoints(values.public.modelChannel.modelTextEndpoints, values.public.modelChannel.availableModels);
+    values.public.modelChannel.modelTextEndpoints = normalizeModelTextEndpoints(values.public.modelChannel.modelTextEndpoints, filterModelsByCapability(values.public.modelChannel.availableModels, values.private.channels, "text"));
+    values.public.modelChannel.defaultModel = "";
     return normalizeSettings(values);
 }
 

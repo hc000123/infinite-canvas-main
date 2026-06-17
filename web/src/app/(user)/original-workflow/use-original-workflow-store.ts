@@ -14,6 +14,7 @@ type OriginalWorkflowSettings = {
     codexModel: string;
     episode: string;
     executionMode: OriginalWorkflowExecutionMode;
+    localCodexEnabled: boolean;
     projectSlug: string;
     rootPath: string;
     scriptSkillPresetId: string;
@@ -44,7 +45,8 @@ const storage: PersistStorage<OriginalWorkflowSettings> = {
         parsed.state.codexApiKey ||= "";
         parsed.state.codexModel ||= "";
         parsed.state.episode ||= "ep05";
-        parsed.state.executionMode = parsed.state.executionMode === "cloud-worker" ? "cloud-worker" : "local-runner";
+        parsed.state.localCodexEnabled = parsed.state.localCodexEnabled === true;
+        parsed.state.executionMode = parsed.state.localCodexEnabled ? "local-runner" : "cloud-worker";
         parsed.state.projectSlug ||= "demo-project";
         parsed.state.rootPath ||= defaultRootPath;
         parsed.state.scriptSkillPresetId ||= defaultV5PresetId;
@@ -63,7 +65,8 @@ export const useOriginalWorkflowStore = create<OriginalWorkflowSettings>()(
             codexApiKey: "",
             codexModel: "",
             episode: "ep05",
-            executionMode: "local-runner",
+            executionMode: "cloud-worker",
+            localCodexEnabled: false,
             projectSlug: "demo-project",
             rootPath: defaultRootPath,
             scriptSkillPresetId: defaultV5PresetId,
@@ -73,7 +76,7 @@ export const useOriginalWorkflowStore = create<OriginalWorkflowSettings>()(
             setCodexApiKey: (codexApiKey) => set({ codexApiKey }),
             setCodexModel: (codexModel) => set({ codexModel }),
             setEpisode: (episode) => set({ episode }),
-            setExecutionMode: (executionMode) => set({ executionMode }),
+            setExecutionMode: (executionMode) => set({ executionMode, localCodexEnabled: executionMode === "local-runner" }),
             setProjectSlug: (projectSlug) => set({ projectSlug }),
             setRootPath: (rootPath) => set({ rootPath }),
             setScriptSkillPresetId: (scriptSkillPresetId) => set({ scriptSkillPresetId }),
@@ -82,7 +85,7 @@ export const useOriginalWorkflowStore = create<OriginalWorkflowSettings>()(
         {
             name: STORE_KEY,
             storage,
-            partialize: (state) => ({ artSkillPresetId: state.artSkillPresetId, codexApiBaseUrl: state.codexApiBaseUrl, codexApiKey: state.codexApiKey, codexModel: state.codexModel, episode: state.episode, executionMode: state.executionMode, projectSlug: state.projectSlug, rootPath: state.rootPath, scriptSkillPresetId: state.scriptSkillPresetId, storyboardSkillPresetId: state.storyboardSkillPresetId }) as StorageValue<OriginalWorkflowSettings>["state"],
+            partialize: (state) => ({ artSkillPresetId: state.artSkillPresetId, codexApiBaseUrl: state.codexApiBaseUrl, codexApiKey: state.codexApiKey, codexModel: state.codexModel, episode: state.episode, executionMode: state.executionMode, localCodexEnabled: state.localCodexEnabled, projectSlug: state.projectSlug, rootPath: state.rootPath, scriptSkillPresetId: state.scriptSkillPresetId, storyboardSkillPresetId: state.storyboardSkillPresetId }) as StorageValue<OriginalWorkflowSettings>["state"],
         },
     ),
 );

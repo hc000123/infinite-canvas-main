@@ -54,12 +54,18 @@ type ModelProtocolType struct {
 	Protocol string `json:"protocol"`
 }
 
+type ModelCapabilityType struct {
+	Model        string   `json:"model"`
+	Capabilities []string `json:"capabilities"`
+}
+
 // PublicModelChannelSetting 公开模型渠道配置。
 type PublicModelChannelSetting struct {
 	AvailableModels    []string                `json:"availableModels"`
 	ModelCosts         []ModelCost             `json:"modelCosts"`
 	ModelTextEndpoints []ModelTextEndpointType `json:"modelTextEndpoints"`
 	ModelProtocols     []ModelProtocolType     `json:"modelProtocols"`
+	ModelCapabilities  []ModelCapabilityType   `json:"modelCapabilities"`
 	DefaultModel       string                  `json:"defaultModel"`
 	DefaultImageModel  string                  `json:"defaultImageModel"`
 	DefaultVideoModel  string                  `json:"defaultVideoModel"`

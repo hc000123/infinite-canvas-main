@@ -222,9 +222,6 @@ func resolveAgentRunChannel(input CreateAgentRunInput) (resolvedAgentRunChannel,
 		}
 		public := normalizeSettings(settings).Public.ModelChannel
 		modelName = strings.TrimSpace(public.DefaultTextModel)
-		if modelName == "" {
-			modelName = strings.TrimSpace(public.DefaultModel)
-		}
 	}
 	if modelName == "" {
 		return resolvedAgentRunChannel{}, safeMessageError{message: "缺少文本模型"}

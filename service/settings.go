@@ -193,6 +193,9 @@ func normalizePublicSetting(setting model.PublicSetting) model.PublicSetting {
 	if setting.ModelChannel.ModelProtocols == nil {
 		setting.ModelChannel.ModelProtocols = []model.ModelProtocolType{}
 	}
+	if setting.ModelChannel.ModelCapabilities == nil {
+		setting.ModelChannel.ModelCapabilities = []model.ModelCapabilityType{}
+	}
 	for i := range setting.ModelChannel.ModelCosts {
 		setting.ModelChannel.ModelCosts[i].Model = strings.TrimSpace(setting.ModelChannel.ModelCosts[i].Model)
 		if setting.ModelChannel.ModelCosts[i].Credits < 0 {
@@ -249,9 +252,11 @@ func modelCostByName(items []model.ModelCost, modelName string) (int, bool) {
 }
 
 func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetting, channels []model.ModelChannel) model.PublicModelChannelSetting {
+	public.DefaultModel = ""
 	endpointModels := map[string][]string{}
 	openAIModels := map[string]bool{}
 	modelProtocols := map[string]string{}
+	modelCapabilities := map[string][]string{}
 	setModelProtocol := func(modelName string, protocol string, overwrite bool) {
 		modelName = strings.TrimSpace(modelName)
 		if modelName == "" {
@@ -264,6 +269,13 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 		}
 		modelProtocols[modelName] = normalizeModelProtocol(protocol)
 	}
+	setModelCapabilities := func(modelName string, capabilities []string) {
+		modelName = strings.TrimSpace(modelName)
+		if modelName == "" {
+			return
+		}
+		modelCapabilities[modelName] = uniqueModelNames(append(modelCapabilities[modelName], capabilities...))
+	}
 	for _, channel := range channels {
 		channel = normalizeModelChannel(channel)
 		if !IsVolcengineArkProtocol(channel.Protocol) {
@@ -271,6 +283,7 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 				modelName = strings.TrimSpace(modelName)
 				openAIModels[modelName] = true
 				setModelProtocol(modelName, modelProtocolOpenAI, false)
+				setModelCapabilities(modelName, channel.Capabilities)
 			}
 			continue
 		}
@@ -283,6 +296,7 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 			endpointModels[endpointID] = uniqueModelNames(append(endpointModels[endpointID], normalizedModels...))
 			for _, modelName := range normalizedModels {
 				setModelProtocol(modelName, modelProtocolVolcengineArk, true)
+				setModelCapabilities(modelName, channel.Capabilities)
 			}
 		}
 		appendEndpointModels(channel.EndpointID, channel.Models)
@@ -339,12 +353,13 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 		public.DefaultVideoModel = models[0]
 	}
 	public.ModelProtocols = normalizePublicModelProtocols(modelProtocols, public)
+	public.ModelCapabilities = normalizePublicModelCapabilities(modelCapabilities, public)
 	return public
 }
 
 func normalizePublicModelProtocols(modelProtocols map[string]string, public model.PublicModelChannelSetting) []model.ModelProtocolType {
 	models := uniqueModelNames(append([]string{}, public.AvailableModels...))
-	models = uniqueModelNames(append(models, public.DefaultModel, public.DefaultImageModel, public.DefaultVideoModel, public.DefaultTextModel))
+	models = uniqueModelNames(append(models, public.DefaultImageModel, public.DefaultVideoModel, public.DefaultTextModel))
 	result := make([]model.ModelProtocolType, 0, len(models))
 	for _, modelName := range models {
 		protocol := normalizeModelProtocol(modelProtocols[modelName])
@@ -352,6 +367,24 @@ func normalizePublicModelProtocols(modelProtocols map[string]string, public mode
 			continue
 		}
 		result = append(result, model.ModelProtocolType{Model: modelName, Protocol: protocol})
+	}
+	return result
+}
+
+func normalizePublicModelCapabilities(modelCapabilities map[string][]string, public model.PublicModelChannelSetting) []model.ModelCapabilityType {
+	models := uniqueModelNames(append([]string{}, public.AvailableModels...))
+	models = uniqueModelNames(append(models, public.DefaultImageModel, public.DefaultVideoModel, public.DefaultTextModel))
+	result := make([]model.ModelCapabilityType, 0, len(models))
+	for _, modelName := range models {
+		rawCapabilities := modelCapabilities[modelName]
+		if len(rawCapabilities) == 0 {
+			continue
+		}
+		capabilities := normalizeModelChannelCapabilities(rawCapabilities, "")
+		if len(capabilities) == 0 {
+			continue
+		}
+		result = append(result, model.ModelCapabilityType{Model: modelName, Capabilities: capabilities})
 	}
 	return result
 }

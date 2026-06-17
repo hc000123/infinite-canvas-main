@@ -179,6 +179,59 @@ func TestPublicSettingsKeepsOpenAICompatibleSeedanceModelName(t *testing.T) {
 	}
 }
 
+func TestPublicSettingsExposesVideoModelCapabilities(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{
+		Public: model.PublicSetting{
+			ModelChannel: model.PublicModelChannelSetting{
+				AvailableModels:   []string{"relay-i2v-main", "doubao-seedance-2-0"},
+				DefaultVideoModel: "doubao-seedance-2-0",
+			},
+		},
+		Private: model.PrivateSetting{
+			Channels: []model.ModelChannel{
+				{
+					Protocol:     string(model.ModelProtocolOpenAI),
+					Name:         "relay-video",
+					BaseURL:      "https://relay.example.com/v1",
+					APIKey:       "sk-test",
+					Models:       []string{"relay-i2v-main"},
+					Capabilities: []string{"video"},
+					Weight:       1,
+					Enabled:      true,
+				},
+				{
+					Protocol:         string(model.ModelProtocolVolcengineArk),
+					Name:             "ark",
+					BaseURL:          "https://ark.example.com/api/v3",
+					APIKey:           "ark-test",
+					EndpointMappings: []model.ModelEndpointMapping{{Model: "doubao-seedance-2-0", EndpointID: "ep-test"}},
+					Weight:           1,
+					Enabled:          true,
+				},
+			},
+		},
+	}, now())
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+
+	settings, err := PublicSettings()
+	if err != nil {
+		t.Fatalf("PublicSettings returned error: %v", err)
+	}
+	capabilities := map[string][]string{}
+	for _, item := range settings.ModelChannel.ModelCapabilities {
+		capabilities[item.Model] = item.Capabilities
+	}
+	if !containsString(capabilities["relay-i2v-main"], "video") {
+		t.Fatalf("relay capabilities = %#v, want video", capabilities["relay-i2v-main"])
+	}
+	if !containsString(capabilities["doubao-seedance-2-0"], "video") {
+		t.Fatalf("ark capabilities = %#v, want video", capabilities["doubao-seedance-2-0"])
+	}
+}
+
 func TestAdminTestArkChannelModelChecksEnterpriseAPIAuth(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/contents/generations/tasks/__infinite_canvas_probe__" {
@@ -403,4 +456,13 @@ func saveArkPreflightSettings(t *testing.T, baseURL string, apiKey string) {
 	if err != nil {
 		t.Fatalf("SaveSettings returned error: %v", err)
 	}
+}
+
+func containsString(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
 }

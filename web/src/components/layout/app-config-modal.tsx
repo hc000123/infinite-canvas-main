@@ -1,11 +1,11 @@
 "use client";
 
-import { App, Button, Form, Modal, Segmented, Select } from "antd";
+import { App, Button, Form, Modal, Segmented, Switch } from "antd";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { ModelPicker } from "@/components/model-picker";
-import { useOriginalWorkflowStore, type OriginalWorkflowExecutionMode } from "@/app/(user)/original-workflow/use-original-workflow-store";
+import { useOriginalWorkflowStore } from "@/app/(user)/original-workflow/use-original-workflow-store";
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
@@ -103,18 +103,16 @@ export function AppConfigModal() {
                     </div>
                     <div className="mb-4 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
                         <div className="grid gap-3 md:grid-cols-[240px_minmax(0,1fr)] md:items-start">
-                            <Form.Item label="视频工作流执行方式" className="mb-0">
-                                <Select<OriginalWorkflowExecutionMode>
-                                    value={workflowExecutionMode}
-                                    onChange={setWorkflowExecutionMode}
-                                    options={[
-                                        { label: "本地 Codex CLI", value: "local-runner" },
-                                        { label: "云端 Worker", value: "cloud-worker" },
-                                    ]}
+                            <Form.Item label="本地 Codex CLI" className="mb-0">
+                                <Switch
+                                    checked={workflowExecutionMode === "local-runner"}
+                                    checkedChildren="开启"
+                                    unCheckedChildren="关闭"
+                                    onChange={(checked) => setWorkflowExecutionMode(checked ? "local-runner" : "cloud-worker")}
                                 />
                             </Form.Item>
                             <div className="text-xs leading-5 text-[var(--studio-text-muted)]">
-                                {workflowExecutionMode === "cloud-worker" ? "云端 Worker 未接入时会阻断 Stage 启动。" : "使用本机 Codex CLI 执行视频工作流 Stage，结果写入 markdown 缓存。"}
+                                {workflowExecutionMode === "local-runner" ? "使用本机 Codex CLI 执行视频工作流文字 Stage；默认关闭，开启后不使用后台文本模型跑 Stage。" : "关闭后不调用本机 Codex，文字 Stage 交给云端 Worker / 后台路径处理。"}
                             </div>
                         </div>
                     </div>

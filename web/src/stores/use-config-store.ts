@@ -4,13 +4,15 @@ import { useMemo } from "react";
 import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 
+import { classifyAiModels, modelMatchesAiCapability, type AiModelKind } from "../lib/ai-model-kind.ts";
 import { localForageStorage } from "../lib/localforage-storage.ts";
 import { normalizeSeedanceImageRoleMode, type SeedanceImageRoleMode } from "../services/api/video-reference.ts";
 import { apiGet } from "../services/api/request.ts";
-import type { AdminModelProtocol, AdminModelTextEndpoint, AdminPublicSettings } from "../services/api/admin.ts";
+import type { AdminModelCapability, AdminModelProtocol, AdminModelTextEndpoint, AdminPublicSettings } from "../services/api/admin.ts";
 import { inferRemoteVideoProtocol, resolveAllowedVideoProtocol } from "../services/api/ai-channel-boundary.ts";
 
-export type AiModelKind = "image" | "video" | "text";
+export { classifyAiModels };
+export type { AiModelKind };
 export type TextModelEndpointType = "chat_completions" | "responses";
 
 export type AiConfig = {
@@ -45,6 +47,7 @@ export type AiConfig = {
     videoModels: string[];
     textModels: string[];
     modelProtocols: AdminModelProtocol[];
+    modelCapabilities: AdminModelCapability[];
     modelTextEndpoints: AdminModelTextEndpoint[];
     quality: string;
     size: string;
@@ -88,6 +91,7 @@ export const defaultConfig: AiConfig = {
     videoModels: [],
     textModels: [],
     modelProtocols: [],
+    modelCapabilities: [],
     modelTextEndpoints: [],
     quality: "auto",
     size: "1:1",
@@ -131,19 +135,22 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
         return { ...config, channelMode, videoProtocol: localVideoProtocol, videoModel: config.videoModel, modelProtocols: config.modelProtocols || [] };
     }
     const modelProtocols = modelChannel.modelProtocols || [];
-    const models = uniqueModels([modelChannel.defaultModel, modelChannel.defaultImageModel, modelChannel.defaultVideoModel, modelChannel.defaultTextModel, ...modelChannel.availableModels].map(normalizeVisibleRemoteVideoModel).filter(Boolean));
-    const classifiedModels = classifyAiModels(models);
-    const fallbackModel = (modelChannel.defaultModel && models.includes(modelChannel.defaultModel) ? modelChannel.defaultModel : models[0]) || "";
+    const models = uniqueModels([modelChannel.defaultImageModel, modelChannel.defaultVideoModel, modelChannel.defaultTextModel, ...modelChannel.availableModels].map(normalizeVisibleRemoteVideoModel).filter(Boolean));
+    const modelCapabilities = normalizeModelCapabilities(modelChannel.modelCapabilities || [], models);
     const normalizedDefaultVideoModel = normalizeVisibleRemoteVideoModel(modelChannel.defaultVideoModel);
     const defaultVideoModel = normalizedDefaultVideoModel && models.includes(normalizedDefaultVideoModel) ? normalizedDefaultVideoModel : "";
+    const videoModels = uniqueModels([defaultVideoModel, ...modelsByCapability(models, modelCapabilities, "video")]).filter(Boolean);
+    const imageModels = uniqueModels(modelsByCapability(models, modelCapabilities, "image"));
+    const textModels = uniqueModels(modelsByCapability(models, modelCapabilities, "text"));
     const imageDefault = modelChannel.defaultImageModel && models.includes(modelChannel.defaultImageModel) ? modelChannel.defaultImageModel : "";
     const textDefault = modelChannel.defaultTextModel && models.includes(modelChannel.defaultTextModel) ? modelChannel.defaultTextModel : "";
+    const fallbackModel = textDefault || imageDefault || models[0] || "";
     const selectedImageModel = config.imageModel && models.includes(config.imageModel) ? config.imageModel : "";
     const selectedTextModel = config.textModel && models.includes(config.textModel) ? config.textModel : "";
     const selectedVideoModel = normalizeVisibleRemoteVideoModel(config.videoModel);
     const visibleSelectedVideoModel = selectedVideoModel && models.includes(selectedVideoModel) ? selectedVideoModel : "";
-    const modelTextEndpoints = normalizeModelTextEndpoints(modelChannel.modelTextEndpoints || [], models);
-    const videoCandidates = uniqueModels([visibleSelectedVideoModel, defaultVideoModel, ...classifiedModels.videoModels]).filter(Boolean);
+    const modelTextEndpoints = normalizeModelTextEndpoints(modelChannel.modelTextEndpoints || [], textModels);
+    const videoCandidates = uniqueModels([visibleSelectedVideoModel, defaultVideoModel, ...videoModels]).filter(Boolean);
     const videoModel = videoCandidates[0] || "";
     const videoProtocol = inferRemoteVideoProtocol(videoModel, config.videoProtocol, modelProtocols);
     return {
@@ -151,12 +158,13 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
         channelMode,
         videoProtocol,
         models,
-        imageModels: classifiedModels.imageModels,
-        videoModels: classifiedModels.videoModels,
-        textModels: classifiedModels.textModels,
+        imageModels,
+        videoModels,
+        textModels,
         modelProtocols,
+        modelCapabilities,
         modelTextEndpoints,
-        model: models.includes(config.model) ? config.model : fallbackModel,
+        model: textDefault || (textModels.includes(config.model) ? config.model : fallbackModel),
         imageModel: selectedImageModel || imageDefault || fallbackModel,
         videoModel,
         seedanceModel: videoProtocol === "volcengine-ark" ? videoModel : config.seedanceModel,
@@ -234,6 +242,7 @@ export const useConfigStore = create<ConfigStore>()(
                         videoModels: Array.isArray(config.videoModels) && config.videoModels.length ? config.videoModels : classifiedModels.videoModels,
                         textModels: Array.isArray(config.textModels) && config.textModels.length ? config.textModels : classifiedModels.textModels,
                         modelProtocols: Array.isArray(config.modelProtocols) ? config.modelProtocols : [],
+                        modelCapabilities: Array.isArray(config.modelCapabilities) ? config.modelCapabilities : [],
                         modelTextEndpoints: Array.isArray(config.modelTextEndpoints) ? config.modelTextEndpoints : [],
                         videoSeconds: config.videoSeconds || "6",
                         vquality: config.vquality || "720",
@@ -287,27 +296,6 @@ export function resolveSeedanceRequestModel(config: Pick<AiConfig, "seedanceEndp
     return (config.seedanceEndpointId || config.seedanceModel || config.videoModel || config.model).trim();
 }
 
-export function classifyAiModels(models: string[]) {
-    const imageModels: string[] = [];
-    const videoModels: string[] = [];
-    const textModels: string[] = [];
-    uniqueModels(models).forEach((model) => {
-        const name = model.toLowerCase();
-        if (["seedance", "video", "veo", "sora", "kling", "hailuo", "runway", "wan"].some((keyword) => name.includes(keyword))) {
-            videoModels.push(model);
-            return;
-        }
-        if (["gpt-image", "image", "imagen", "seedream", "banana", "dall-e", "dalle", "flux", "sdxl", "stable-diffusion", "midjourney"].some((keyword) => name.includes(keyword))) {
-            imageModels.push(model);
-            return;
-        }
-        if (!["embedding", "moderation", "whisper", "tts", "audio", "rerank"].some((keyword) => name.includes(keyword))) {
-            textModels.push(model);
-        }
-    });
-    return { imageModels, videoModels, textModels };
-}
-
 export function textModelEndpointType(config: Pick<AiConfig, "modelTextEndpoints">, model: string): TextModelEndpointType {
     const modelName = model.trim();
     const configured = config.modelTextEndpoints.find((item) => item.model === modelName)?.endpointType;
@@ -330,6 +318,28 @@ function normalizeModelTextEndpoints(items: AdminModelTextEndpoint[], models: st
         if (!seen.has(model)) result.push({ model, endpointType: defaultTextModelEndpointType(model) });
     });
     return result;
+}
+
+function normalizeModelCapabilities(items: AdminModelCapability[], models: string[]) {
+    const availableModels = new Set(uniqueModels(models));
+    const allowedCapabilities = new Set(["text", "image", "video"]);
+    const byModel = new Map<string, Set<string>>();
+    items.forEach((item) => {
+        const model = item.model.trim();
+        if (!model || !availableModels.has(model)) return;
+        const capabilities = byModel.get(model) || new Set<string>();
+        item.capabilities.forEach((capability) => {
+            const value = capability.trim().toLowerCase();
+            if (allowedCapabilities.has(value)) capabilities.add(value);
+        });
+        if (capabilities.size) byModel.set(model, capabilities);
+    });
+    return Array.from(byModel.entries()).map(([model, capabilities]) => ({ model, capabilities: Array.from(capabilities) }));
+}
+
+function modelsByCapability(models: string[], items: AdminModelCapability[], capability: AiModelKind) {
+    const explicitCapabilities = new Map(items.map((item) => [item.model, item.capabilities]));
+    return models.filter((model) => modelMatchesAiCapability(model, explicitCapabilities.get(model), capability));
 }
 
 function normalizeTextModelEndpointType(value: string | undefined, model: string): TextModelEndpointType {

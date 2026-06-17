@@ -12,13 +12,13 @@
 ```json
 {
   "modelChannel": {
-    "availableModels": ["gpt-5.5", "gpt-image-2"],
+    "availableModels": ["gpt-5.5", "gpt-image-2", "doubao-seedance-2-0"],
     "modelCosts": [
       { "model": "gpt-5.5", "credits": 1 },
       { "model": "gpt-image-2", "credits": 10 }
     ],
-    "defaultModel": "gpt-image-2",
     "defaultImageModel": "gpt-image-2",
+    "defaultVideoModel": "doubao-seedance-2-0",
     "defaultTextModel": "gpt-5.5",
     "systemPrompt": "",
     "allowCustomChannel": false
@@ -40,8 +40,11 @@
 | -------------------- | -------- | ------------------------------------------------------------------------------ |
 | `availableModels`    | string[] | 系统可用模型，由管理员手动选择；页面下拉选项可来自私有渠道模型                 |
 | `modelCosts`         | object[] | 模型算力点配置，后端模型接口调用前按模型预扣，上游失败时返还；未配置默认不扣除 |
-| `defaultModel`       | string   | 默认模型，从 `availableModels` 中选择                                          |
+| `modelTextEndpoints` | object[] | 文本模型使用的接口类型配置                                                     |
+| `modelProtocols`     | object[] | 后端根据私有渠道推导出的模型协议映射，用于区分 OpenAI 兼容与 Ark               |
+| `modelCapabilities`  | object[] | 后端根据私有渠道推导出的模型能力映射，用于前台区分文本 / 图片 / 视频           |
 | `defaultImageModel`  | string   | 默认图片模型，从 `availableModels` 中选择                                      |
+| `defaultVideoModel`  | string   | 默认视频模型，从 `availableModels` 中选择                                      |
 | `defaultTextModel`   | string   | 默认文本模型，从 `availableModels` 中选择                                      |
 | `systemPrompt`       | string   | 系统提示词                                                                     |
 | `allowCustomChannel` | boolean  | 历史兼容字段；当前前端与后端都统一走后端模型渠道，默认关闭                     |
@@ -123,7 +126,7 @@ Agent 中心仍是前端配置入口，但配置会同步保存到后端 `agent_
 后端 Agent Run 的文本模型与渠道选择规则：
 
 1. Agent 配置可显式传入 `channelId`、`modelPreference`、`allowFallback`、`fallbackChannelIds`、`temperature`、`maxOutputTokens`、`estimatedCredits`、`timeoutSeconds`、`concurrencyLimit` 和 `allowBatch`。
-2. 如果 `modelPreference` 非空且不是 `default`，优先使用该模型名；否则读取 `public.modelChannel.defaultTextModel`，再回退到 `public.modelChannel.defaultModel`。
+2. 如果 `modelPreference` 非空且不是 `default`，优先使用该模型名；否则读取 `public.modelChannel.defaultTextModel`。
 3. 如果传入 `channelId`，后端只使用该渠道；该渠道未启用、缺少 `baseUrl/apiKey`、不包含模型或不具备 `text` 能力时，默认阻断。
 4. 只有 `allowFallback=true` 且传入 `fallbackChannelIds` 时，才按 fallback 列表寻找可用渠道；不会自动切到更贵或未授权渠道。
 5. 未传入 `channelId` 时，后端按模型名匹配 `private.channels` 中已启用、已配置 `baseUrl/apiKey`、具备 `text` 能力且包含该模型的渠道。

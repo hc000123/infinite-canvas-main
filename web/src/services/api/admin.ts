@@ -302,6 +302,7 @@ export type AdminPublicModelChannelSettings = {
     modelCosts: AdminModelCost[];
     modelTextEndpoints: AdminModelTextEndpoint[];
     modelProtocols?: AdminModelProtocol[];
+    modelCapabilities?: AdminModelCapability[];
     defaultModel: string;
     defaultImageModel: string;
     defaultVideoModel: string;
@@ -323,6 +324,11 @@ export type AdminModelTextEndpoint = {
 export type AdminModelProtocol = {
     model: string;
     protocol: "openai" | "volcengine-ark";
+};
+
+export type AdminModelCapability = {
+    model: string;
+    capabilities: string[];
 };
 
 export type AdminPublicVolcengineAssetSettings = { enabled: boolean };

@@ -144,7 +144,8 @@
 | `modelCosts`         | object[] | 模型算力点配置                                                     |
 | `modelTextEndpoints` | object[] | 文本模型使用的接口类型配置                                         |
 | `modelProtocols`     | object[] | 后端根据私有渠道推导出的模型协议映射，用于区分 OpenAI 兼容与 Ark   |
-| `defaultModel`       | string   | 默认模型                                                           |
+| `modelCapabilities`  | object[] | 后端根据私有渠道推导出的模型能力映射，用于前台区分文本 / 图片 / 视频 |
+| `defaultModel`       | string   | 历史兼容字段；后台不再展示，默认文本模型使用 `defaultTextModel`    |
 | `defaultImageModel`  | string   | 默认图片模型                                                       |
 | `defaultVideoModel`  | string   | 默认视频模型                                                       |
 | `defaultTextModel`   | string   | 默认文本模型                                                       |
@@ -164,6 +165,13 @@
 | ---------- | ------ | ----------------------------------------- |
 | `model`    | string | 前端可见模型名称                          |
 | `protocol` | string | 该模型应使用的渠道协议：`openai` 或 `volcengine-ark` |
+
+`modelCapabilities` 每项字段：
+
+| 字段           | 类型     | 说明                                      |
+| -------------- | -------- | ----------------------------------------- |
+| `model`        | string   | 前端可见模型名称                          |
+| `capabilities` | string[] | 该模型支持的能力，例如 `text`、`image`、`video` |
 
 `private.value` 当前字段：
 
