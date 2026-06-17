@@ -8,9 +8,8 @@ type CanvasPageTargetProject = {
 export function canvasPageReturnTargetForProject(currentProject?: CanvasPageTargetProject) {
     const videoWorkflowHref = canvasVideoWorkflowHref(currentProject);
     if (videoWorkflowHref) return { href: videoWorkflowHref, label: "返回视频生产台" };
-    if (currentProject?.projectId && currentProject.episodeId) return { href: `/projects/${currentProject.projectId}/episodes/${currentProject.episodeId}/workbench`, label: "返回本集生产流程" };
     if (currentProject?.projectId) return { href: `/projects/${currentProject.projectId}`, label: "返回项目详情" };
-    return { href: "/projects", label: "项目工作台" };
+    return { href: "/projects", label: "项目中心" };
 }
 
 export function videoWorkflowEpisodeFromCanvasProject(currentProject?: CanvasPageTargetProject) {

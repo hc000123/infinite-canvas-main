@@ -84,7 +84,7 @@ export function AgentWorkflowExecutionPanel({
             <div className="grid gap-4">
                 <div>
                     <div className="mb-3 flex flex-wrap items-center gap-2">
-                        <span className={`text-sm ${mutedTextClass}`}>工作流预设</span>
+                        <span className={`text-sm ${mutedTextClass}`}>阶段 Skill 模板</span>
                         <Select
                             className="min-w-72"
                             size="small"
@@ -150,6 +150,7 @@ export function AgentWorkflowExecutionPanel({
                                             </Tag>
                                         ) : null}
                                         {detail.agent ? <Tag className="m-0">{detail.agent.name}</Tag> : null}
+                                        {detail.binding ? <Tag className="m-0">绑定 v{detail.binding.agentVersion}</Tag> : null}
                                         <Tag className="m-0">预览 {stagePreviews.length}</Tag>
                                         <Tag className="m-0" color={errorCount ? "red" : "green"}>
                                             error {errorCount}
@@ -180,6 +181,7 @@ export function AgentWorkflowExecutionPanel({
                                                 <div>{detail.agent.role}</div>
                                                 <div>{detail.agent.responsibility}</div>
                                                 <div className={mutedTextClass}>系统提示摘要：{detail.agent.systemPromptSummary}</div>
+                                                {detail.binding ? <div className={mutedTextClass}>绑定：{detail.binding.agentConfigKind} · 输入 {detail.binding.inputContract} · 输出 {detail.binding.outputContract}</div> : null}
                                                 <div className={mutedTextClass}>来源：{detail.agent.sourceFile}</div>
                                             </div>
                                         </details>

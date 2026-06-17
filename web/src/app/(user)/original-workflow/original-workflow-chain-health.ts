@@ -31,10 +31,8 @@ export function buildOriginalWorkflowChainHealth(input: {
     videoProtocol?: string;
 }): OriginalWorkflowChainHealthItem[] {
     const files = new Map(input.files.map((file) => [file.key, file]));
-    const stage1Ready = ["stage1A", "stage1B", "stage1C", "stage1D"].every((key) => files.get(key)?.exists);
-    const stage2Ready = ["characters", "scenes"].every((key) => files.get(key)?.exists);
-    const stage3Ready = Boolean(files.get("stage3")?.exists);
-    const copyOnlyReady = Boolean(files.get("copyOnly")?.exists);
+    const stage2Ready = ["characters", "scenes", "props"].every((key) => files.get(key)?.exists);
+    const stage3Ready = Boolean(files.get("copyOnly")?.exists);
     const enterprise = enterpriseVideoChannelReadiness({ isPublicSettingsLoading: input.isPublicSettingsLoading, videoProtocol: input.videoProtocol });
     const enterpriseStatus = input.enterprisePreflight?.status === "failed" ? "blocked" : input.enterprisePreflight?.status === "passed" ? "ready" : enterprise.status === "ready" ? "ready" : enterprise.status;
     const enterpriseDetail = input.enterprisePreflight?.message || enterprise.message;
@@ -43,17 +41,10 @@ export function buildOriginalWorkflowChainHealth(input: {
             detail: files.get("script")?.exists ? "本集剧本已写入本地 markdown。" : "先在剧本页签粘贴并保存本集剧本。",
             key: "script",
             status: files.get("script")?.exists ? "ready" : "blocked",
-            title: "剧本",
+            title: "剧本优化",
         },
-        stageHealth("stage1", "Stage 1 导演分析", stage1Ready, input.validations?.stage1),
-        stageHealth("stage2", "Stage 2 资产提示词", stage2Ready, input.validations?.stage2),
-        stageHealth("stage3", "Stage 3 Seedance", stage3Ready, input.validations?.stage3),
-        {
-            detail: copyOnlyReady ? "Copy-only 文件已存在，可同步到视频生产包。" : "Stage 3 通过后导出 Copy-only。",
-            key: "copyOnly",
-            status: copyOnlyReady ? "ready" : "blocked",
-            title: "Copy-only",
-        },
+        stageHealth("stage2", "服化道", stage2Ready, input.validations?.stage2),
+        stageHealth("stage3", "Copy-only", stage3Ready, input.validations?.stage3),
         {
             detail: input.videoPackageCount > 0 ? `已同步 ${input.videoPackageCount} 条视频生产包。` : "还没有同步到视频生成界面。",
             key: "videoPackages",

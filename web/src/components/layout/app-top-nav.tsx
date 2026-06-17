@@ -43,7 +43,7 @@ export function AppTopNav() {
     return (
         <>
             {!hideHeader ? (
-                <header className="sticky top-0 z-20 h-16 shrink-0 border-b border-[var(--studio-border-subtle)] bg-[color-mix(in_srgb,var(--studio-app-bg)_92%,transparent)] shadow-[var(--studio-shadow)] backdrop-blur-xl">
+                <header className="sticky top-0 z-20 h-14 shrink-0 border-b border-[var(--studio-border-subtle)] bg-[color-mix(in_srgb,var(--studio-app-bg)_94%,transparent)] shadow-[var(--studio-shadow)] backdrop-blur-xl">
                     <div className="mx-auto flex h-full max-w-7xl items-stretch justify-between gap-5 px-5 sm:px-6">
                         <div className="flex min-w-0 items-center">
                             <Link href="/" className="group flex h-full shrink-0 items-center gap-3 text-sm font-semibold leading-none tracking-tight text-[var(--studio-text-primary)] transition hover:text-[var(--studio-accent)]">
@@ -75,7 +75,7 @@ export function AppTopNav() {
                                 <Menu className="size-5" />
                             </button>
 
-                            <nav className="hide-scrollbar ml-7 hidden h-16 min-w-0 items-center gap-1 overflow-x-auto rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-1 md:flex">
+                            <nav className="hide-scrollbar ml-6 hidden h-10 min-w-0 items-center gap-1 overflow-x-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-rail-bg)] p-1 md:flex">
                                 {navigationTools.map((tool) => {
                                     const Icon = tool.icon;
                                     const active = tool.slug === activeToolSlug;
@@ -84,13 +84,13 @@ export function AppTopNav() {
                                             key={tool.slug}
                                             href={getToolHref(tool.slug)}
                                             className={cn(
-                                                "relative flex h-9 shrink-0 items-center gap-2 rounded-md border px-3 text-sm leading-6 transition",
+                                                "relative flex h-8 shrink-0 items-center gap-2 rounded-md border px-2.5 text-sm leading-6 transition",
                                                 active
-                                                    ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] font-semibold text-[var(--studio-text-primary)] shadow-[inset_0_-2px_0_var(--studio-accent)]"
-                                                    : "border-transparent text-[var(--studio-text-secondary)] hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]",
+                                                    ? "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] font-semibold !text-[var(--studio-text-primary)] shadow-[inset_0_-2px_0_var(--studio-text-primary)]"
+                                                    : "border-transparent !text-[var(--studio-text-secondary)] hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:!text-[var(--studio-text-primary)]",
                                             )}
                                         >
-                                            <Icon className={cn("size-4 transition", active ? "text-[var(--studio-accent)]" : "text-current")} />
+                                            <Icon className="size-4 text-current transition" />
                                             <span>{tool.label}</span>
                                         </Link>
                                     );

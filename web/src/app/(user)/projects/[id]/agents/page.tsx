@@ -44,7 +44,7 @@ export default function ProjectAgentWorkspacePage() {
                 <div className="mx-auto max-w-3xl">
                     <Empty description="项目不存在或尚未加载">
                         <div className="flex flex-wrap justify-center gap-2">
-                            <Button href="/projects">返回项目工作台</Button>
+                            <Button href="/projects">返回项目中心</Button>
                         </div>
                     </Empty>
                 </div>
@@ -61,8 +61,8 @@ export default function ProjectAgentWorkspacePage() {
                     </Link>
                     <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
                         <div>
-                            <h1 className="text-3xl font-semibold">Agent 设置</h1>
-                            <p className="mt-2 text-sm text-[var(--studio-text-muted)]">项目级设置入口；集中维护通用模型配置、Agent 模板、提示词和写入策略，流程执行回到本集生产流程中完成。</p>
+                            <h1 className="text-3xl font-semibold">Agent 中心</h1>
+                            <p className="mt-2 text-sm text-[var(--studio-text-muted)]">项目级入口；固定 Agent 岗位，只集中选择各阶段 Skill 和模型配置，流程执行回到本集生产流程中完成。</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {canvas ? <Tag className="m-0">{canvas.title}</Tag> : null}
@@ -80,7 +80,7 @@ export default function ProjectAgentWorkspacePage() {
                     episodeTitle={episodeTitle}
                     initialAgentKind={requestedAgentKind}
                     initialStageId={requestedStageId}
-                    initialTab={requestedTab === "workflow" ? "quick-agents" : requestedTab}
+                    initialTab={requestedTab === "workflow" ? "agent-presets" : requestedTab}
                     settingsOnly
                     canvasNodes={canvas?.nodes}
                     onApplyVideoPreviewNodes={
@@ -101,6 +101,6 @@ function parseAgentKind(value: string | null): AgentConfigKind | undefined {
     return ["script_optimizer", "script_analyzer", "asset_extractor", "storyboard_director", "image_brief_builder", "video_prompt_builder", "prompt_reviewer"].includes(value || "") ? (value as AgentConfigKind) : undefined;
 }
 
-function parseAgentTab(value: string | null): "quick-agents" | "workflow" | undefined {
-    return value === "quick-agents" || value === "workflow" ? value : undefined;
+function parseAgentTab(value: string | null): "agent-presets" | "workflow" | undefined {
+    return value === "agent-presets" || value === "workflow" ? value : undefined;
 }

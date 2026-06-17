@@ -70,17 +70,20 @@ export function AssetListToolbar({
 }) {
     return (
         <div className="grid gap-3">
-            <div className="studio-panel flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0 text-sm text-[var(--studio-text-secondary)]">
-                    当前筛选 <span className="font-semibold text-[var(--studio-text-primary)]">{filteredCount}</span> 个素材
-                    {productionBibleCount ? (
-                        <>
-                            {" / "}
-                            <span className="font-semibold text-[var(--studio-text-primary)]">{productionBibleCount}</span> 个设定
-                        </>
-                    ) : null}
-                    {selectedInFilteredCount ? <span className="ml-2 text-[var(--studio-text-muted)]">已选 {selectedInFilteredCount} 个</span> : null}
-                    {selectedProductionBibleInVisibleCount ? <span className="ml-2 text-[var(--studio-text-muted)]">已选设定 {selectedProductionBibleInVisibleCount} 个</span> : null}
+            <div className="studio-toolbar flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                    <div className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">素材结果</div>
+                    <div className="mt-1 text-sm text-[var(--studio-text-secondary)]">
+                        当前筛选 <span className="font-semibold text-[var(--studio-text-primary)]">{filteredCount}</span> 个素材
+                        {productionBibleCount ? (
+                            <>
+                                {" / "}
+                                <span className="font-semibold text-[var(--studio-text-primary)]">{productionBibleCount}</span> 个设定
+                            </>
+                        ) : null}
+                        {selectedInFilteredCount ? <span className="ml-2 text-[var(--studio-text-muted)]">已选 {selectedInFilteredCount} 个</span> : null}
+                        {selectedProductionBibleInVisibleCount ? <span className="ml-2 text-[var(--studio-text-muted)]">已选设定 {selectedProductionBibleInVisibleCount} 个</span> : null}
+                    </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
                     <Select
@@ -107,7 +110,7 @@ export function AssetListToolbar({
                 </div>
             </div>
             {selectedProductionBibleCount ? (
-                <div className="studio-panel flex flex-col gap-4 border-[var(--studio-accent-soft)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="studio-section flex flex-col gap-4 border-[var(--studio-accent-soft)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                         <div className="text-base font-semibold text-[var(--studio-text-primary)]">已选择 {selectedProductionBibleCount} 个设定</div>
                         <div className="mt-1 truncate text-[13px] text-[var(--studio-text-muted)]">{selectedProductionBibleSummary}</div>
@@ -123,7 +126,7 @@ export function AssetListToolbar({
                 </div>
             ) : null}
             {selectedCount ? (
-                <div className="studio-panel flex flex-col gap-4 border-[var(--studio-accent-soft)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="studio-section flex flex-col gap-4 border-[var(--studio-accent-soft)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                         <div className="text-base font-semibold text-[var(--studio-text-primary)]">已选择 {selectedCount} 个素材</div>
                         <div className="mt-1 truncate text-[13px] text-[var(--studio-text-muted)]">{selectedSummary}</div>

@@ -1,9 +1,11 @@
 import { execFile, spawn } from "node:child_process";
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { promisify } from "node:util";
 import type { NextRequest } from "next/server";
+
+import { buildStage1PartPromptTexts, buildStage2Instruction, buildStage2PartPromptTexts, buildStage3PartPromptTexts, episodeAssetPrefix } from "./stage-prompts";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -30,7 +32,8 @@ const fileGroups: FileGroup[] = [
     { key: "stage1D", label: "01D 用户修改轨", paths: (episode: string) => [`outputs/${episode}/01D-shot-edit-track.md`] },
     { key: "characters", label: "角色资产提示词", paths: (_episode: string, projectSlug: string) => projectWorkflowPaths(projectSlug, "assets/character-prompts.md") },
     { key: "scenes", label: "场景资产提示词", paths: (_episode: string, projectSlug: string) => projectWorkflowPaths(projectSlug, "assets/scene-prompts.md") },
-    { key: "stage3", label: "Stage 3 Seedance", paths: (episode: string) => [`outputs/${episode}/02-seedance-prompts.md`] },
+    { key: "props", label: "道具资产提示词", paths: (_episode: string, projectSlug: string) => projectWorkflowPaths(projectSlug, "assets/prop-prompts.md") },
+    { key: "stage3", label: "Copy-only 过程缓存", paths: (episode: string) => [`outputs/${episode}/02-seedance-prompts.md`] },
     { key: "copyOnly", label: "Copy-only", paths: (episode: string) => [`outputs/${episode}/02-seedance-copy-only.md`] },
 ];
 
@@ -44,6 +47,7 @@ type ActionBody = {
     projectSlug?: string;
     requireScriptOptimizerNotes?: boolean;
     rootPath?: string;
+    skillPresetId?: string;
     stage?: "stage1" | "stage2" | "stage3";
 };
 
@@ -82,31 +86,36 @@ type CommandResult = {
     stdout: string;
 };
 
-const stageLaunchConfig: Record<WorkflowStage, { action: string; instruction: (episode: string, projectSlug: string) => string }> = {
+const stageLaunchConfig: Record<WorkflowStage, { action: string; instruction: (episode: string, projectSlug: string, skillPresetId?: string) => string }> = {
     stage1: {
         action: "start",
         instruction: (episode, projectSlug) =>
-            `网页 Runner 模式：不要启用子代理，不要等待人工回复。只读取 AGENTS.md、specs/agents/director.md、specs/skills/director-method-shot-skill/SKILL.md、specs/knowledge/director-methods/scene_type_playbook.md、specs/knowledge/director-methods/shot_script_method_rules.md、projects/${projectSlug}/script/${episode}.md 和必要的 ep05 示例文件。直接创建 outputs/${episode}/，并生成 outputs/${episode}/01A-director-analysis.md、outputs/${episode}/01B-beat-board.md、outputs/${episode}/01C-director-shot-script.md、outputs/${episode}/01D-shot-edit-track.md。01A 写人物、场景、道具、剧情段落和导演策略；01B 写 Beat Board、方法标签、用户决策点和确认状态；01C 写真分镜脚本，Shot 标题必须清楚；01D 写用户修改轨。不要输出到 projects/${projectSlug}/outputs/。不要生成最终提示词。不要做剧情合规审核。写完四个文件后直接结束。`,
+            `网页 Runner 模式：不要启用子代理，不要等待人工回复。后台 Runner 会按场次 / Beat 分批提交：先为每批写 outputs/${episode}/.scene-batches/stage1/ 碎片，再合并生成 outputs/${episode}/01A-director-analysis.md、01B-beat-board.md、01C-director-shot-script.md、01D-shot-edit-track.md。只读取 AGENTS.md、specs/agents/director.md、specs/skills/director-method-shot-skill/SKILL.md、specs/knowledge/director-methods/scene_type_playbook.md、specs/knowledge/director-methods/shot_script_method_rules.md、projects/${projectSlug}/script/${episode}.md 和当前集 outputs/${episode} 上游文件。ep05 示例只允许查标题结构和字段名，不要读取或复制旧剧情正文、旧人物动作、旧场次编号。01A 写人物、场景、道具、剧情段落和导演策略；01B 写 Beat Board、方法标签、用户决策点和确认状态；01C 写真分镜脚本，Shot 标题必须清楚；01D 写用户修改轨。禁止输出 ep05、ep06、5-1、6-1 等旧集 ID。不要输出到 projects/${projectSlug}/outputs/。不要生成最终提示词。不要做剧情合规审核。`,
     },
     stage2: {
         action: "design",
-        instruction: (_episode, projectSlug) => {
-            const [charactersPath] = projectWorkflowPaths(projectSlug, "assets/character-prompts.md");
-            const [scenesPath] = projectWorkflowPaths(projectSlug, "assets/scene-prompts.md");
-            return `按 art_designer 角色要求执行，但不要 spawn_agent、不要 fork、不要 collab Wait，必须在当前 Codex exec 进程内直接完成。必须读取 original-prompt-format-lock 和 art-design-template。输出原格式 ${charactersPath} 与 ${scenesPath}。不要输出 image-prompts 文件。`;
-        },
+        instruction: (episode, projectSlug, skillPresetId) => buildStage2Instruction(episode, projectSlug, skillPresetId),
     },
     stage3: {
         action: "prompt",
-        instruction: (episode) =>
-            `按 storyboard_artist 角色要求执行，但不要 spawn_agent、不要 fork、不要 collab Wait，必须在当前 Codex exec 进程内直接完成。必须读取 original-prompt-format-lock 和 seedance-prompts-template。输出原清道夫 V4.3 格式 outputs/${episode}/02-seedance-prompts.md。引用必须用 @图N。完成后运行 python3 tools/export_copy_only.py --episode ${episode}。`,
+        instruction: (episode, _projectSlug, skillPresetId) =>
+            `按 Copy-only 生产角色要求执行，但不要 spawn_agent、不要 fork、不要 collab Wait，必须在当前 Codex exec 进程内直接完成。Copy-only 内部可完成分镜拆解，但不要把过程思路作为前台交付。${stage3SkillInstruction(skillPresetId)}后台 Runner 会按场次 / Beat / P 段并行提交：先为每批写 outputs/${episode}/.scene-batches/stage3/ 碎片，最后输出 outputs/${episode}/02-seedance-copy-only.md，并保留 outputs/${episode}/02-seedance-prompts.md 作为隐藏过程缓存。引用必须用 @图N，禁止 @图片N；不修改剧情，不压缩剧本台词，台词超载时拆分连续 P。`,
     },
 };
 const stageFileKeys: Record<WorkflowStage, string[]> = {
     stage1: ["script", "stage1A", "stage1B", "stage1C", "stage1D"],
-    stage2: ["characters", "scenes"],
-    stage3: ["stage3"],
+    stage2: ["characters", "scenes", "props"],
+    stage3: ["copyOnly"],
 };
+
+function stage3SkillInstruction(skillPresetId?: string) {
+    const mxShellPath = "/Users/huangchi/马也传媒/03_AI工作流/AI/眨眼之间工作区/ai/Mx-Shell_Prompts_v1.5.md";
+    const emotionPath = "/Users/huangchi/马也传媒/03_AI工作流/AI/眨眼之间工作区/ai/情绪导演_Skill_V2.1.md";
+    if (skillPresetId === "seedance-mx-shell-storyboard-v1-5") return `当前 Copy-only Skill：清道夫包 v1.5。必须读取 ${mxShellPath}，按基础设定、氛围画质、同期声、一镜到底 / 多机位画面内容、按秒时间轴和物理化动作输出；禁止用 find /Users 全盘搜索 Skill 文件。`;
+    if (skillPresetId === "seedance-original-format-emotion-director-v2-1") return `当前 Copy-only Skill：情绪导演 + Skill 5 轻量包 v2.1。必须读取 ${emotionPath}，并在 Skill 5 结构上叠加情绪曲线、生理反应、微动作、声音层次和环境反馈；禁止用 find /Users 全盘搜索 Skill 文件。`;
+    if (skillPresetId === "seedance-mx-shell-emotion-director-v2-1") return `当前 Copy-only Skill：情绪导演 + 清道夫包 v2.1。必须读取 ${mxShellPath} 与 ${emotionPath}，同时输出清道夫结构、按秒时间轴、情绪物理化和声音状态；禁止用 find /Users 全盘搜索 Skill 文件。`;
+    return "当前 Copy-only Skill：导演方法 + Skill 5 轻量包 v5.2。必须读取 original-prompt-format-lock、seedance-storyboard-skill 和 seedance-prompts-template，隐藏过程可保留参考图映射和结构记录，前台只交付一键复制 Seedance 2.0 提示词代码块。";
+}
 
 function json(data: unknown, status = 200) {
     return Response.json({ code: status >= 400 ? 1 : 0, data, msg: status >= 400 ? "操作失败" : "ok" }, { status });
@@ -202,9 +211,20 @@ async function readSnapshotFiles(rootPath: string, episode: string, projectSlug:
     return Promise.all(
         fileGroups.map(async (group) => {
             const file = await readFirstExisting(rootPath, group.paths(episode, projectSlug));
-            return { key: group.key, label: group.label, ...file };
+            return { key: group.key, label: group.label, ...normalizeSnapshotFile(group, file, episode) };
         }),
     );
+}
+
+function normalizeSnapshotFile(group: FileGroup, file: Awaited<ReturnType<typeof readFirstExisting>>, episode: string) {
+    if (!file.exists || !["characters", "scenes", "props"].includes(group.key)) return file;
+    if (assetContentMatchesEpisode(file.content, episode)) return file;
+    return { ...file, content: "", exists: false, size: 0, updatedAt: "" };
+}
+
+function assetContentMatchesEpisode(content: string, episode: string) {
+    const prefix = episodeAssetPrefix(episode);
+    return [episode, `${prefix}-`, `${prefix} `, `${prefix}（`, `${prefix} 新增`, `所属集数**：${prefix}`, `所属集数：${prefix}`].some((marker) => marker && content.includes(marker));
 }
 
 async function readValidationSnapshots(rootPath: string, episode: string, files: SnapshotFile[]) {
@@ -220,13 +240,15 @@ async function readValidationSnapshot(rootPath: string, episode: string, stage: 
     const raw = await readFile(validationPath(rootPath, episode, stage), "utf8").catch(() => "");
     if (!raw) return undefined;
     const parsed = JSON.parse(raw) as CommandResult & { updatedAt?: string };
-    const latestFileUpdatedAt = latestUpdatedAt(files.filter((file) => stageFileKeys[stage].includes(file.key) && file.exists).map((file) => file.updatedAt));
+    const stageFiles = files.filter((file) => stageFileKeys[stage].includes(file.key));
+    const latestFileUpdatedAt = latestUpdatedAt(stageFiles.filter((file) => file.exists).map((file) => file.updatedAt));
     const updatedAt = parsed.updatedAt || "";
+    const missingStageFile = stageFiles.some((file) => !file.exists);
     const stale = Boolean(latestFileUpdatedAt && updatedAt && new Date(latestFileUpdatedAt).getTime() > new Date(updatedAt).getTime());
     return {
         ...parsed,
         latestFileUpdatedAt,
-        state: stale ? "stale" : parsed.exitCode === "0" ? "passed" : "failed",
+        state: missingStageFile || stale ? "stale" : parsed.exitCode === "0" ? "passed" : "failed",
         updatedAt,
     } satisfies ValidationSnapshot;
 }
@@ -261,13 +283,18 @@ async function assertStageValidationPassed(rootPath: string, episode: string, pr
 }
 
 function prerequisiteStage(stage: WorkflowStage) {
-    if (stage === "stage2") return "stage1" as const;
     if (stage === "stage3") return "stage2" as const;
     return undefined;
 }
 
 function stageLabel(stage: WorkflowStage) {
-    return stage.replace("stage", "Stage ");
+    if (stage === "stage2") return "服化道";
+    if (stage === "stage3") return "Copy-only";
+    return "剧本优化";
+}
+
+function pythonProjectArgs(stage: WorkflowStage, projectSlug: string) {
+    return stage === "stage2" && projectSlug !== "demo-project" ? ["--project", `projects/${projectSlug}`] : [];
 }
 
 async function runPythonTool(rootPath: string, args: string[], extra?: Partial<CommandResult>): Promise<CommandResult> {
@@ -293,10 +320,9 @@ function shellQuote(value: string) {
     return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
-async function startCodexStageJob(rootPath: string, episode: string, projectSlug: string, stage: WorkflowStage, instruction: string, agentConfig?: CodexAgentConfig) {
+async function startCodexStageJob(rootPath: string, episode: string, projectSlug: string, stage: WorkflowStage, instruction: string, agentConfig?: CodexAgentConfig, skillPresetId?: string) {
     const existing = await findRunningStageJob(rootPath, episode, stage);
-    if (existing && existing.jobHealth !== "stalled") return existing;
-    if (existing) await cancelJob(existing.statusPath, "stalled runner replaced by new launch");
+    if (existing) return existing;
     const jobId = `web-${stage}-${episode}-${Date.now()}`;
     const relativeJobDir = `.workflow-cache/web-jobs/${jobId}`;
     const jobDir = resolveInside(rootPath, relativeJobDir);
@@ -306,13 +332,14 @@ async function startCodexStageJob(rootPath: string, episode: string, projectSlug
     const statusPath = path.join(jobDir, "status.json");
     const prompt = buildRunnerPrompt(rootPath, episode, projectSlug, stage, instruction);
     const agent = normalizeCodexAgentConfig(agentConfig);
+    await prepareStageJobOutputDirs(rootPath, episode, stage);
     await writeFile(promptPath, prompt, "utf8");
-    const stage1Prompts = stage === "stage1" ? await writeStage1PartPrompts(jobDir, rootPath, episode, projectSlug) : [];
+    const partPrompts = await writeStagePartPrompts(jobDir, rootPath, episode, projectSlug, stage, skillPresetId);
     await writeFile(statusPath, JSON.stringify({ agent: publicAgentStatus(agent), episode, jobId, logPath, promptPath, stage, startedAt: new Date().toISOString(), status: "running" }, null, 2), "utf8");
     const modelArg = agent.model ? ` --model ${shellQuote(agent.model)}` : "";
     const codexCommand = (inputPath: string, append = false) =>
         `codex exec${modelArg} --cd ${shellQuote(rootPath)} --add-dir ${shellQuote(rootPath)} --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check - < ${shellQuote(inputPath)} ${append ? ">>" : ">"} ${shellQuote(logPath)} 2>&1`;
-    const runCommands = stage1Prompts.length ? stage1Prompts.flatMap((item) => [`echo ${shellQuote(`\\n===== ${item.label} =====`)} >> ${shellQuote(logPath)}`, codexCommand(item.path, true)]) : [codexCommand(promptPath)];
+    const runCommands = partPrompts.length ? buildPartRunnerCommands(stage, partPrompts, logPath, codexCommand) : [codexCommand(promptPath)];
     const script = [
         `set -o pipefail`,
         ...runCommands,
@@ -334,10 +361,51 @@ async function startCodexStageJob(rootPath: string, episode: string, projectSlug
         logUpdatedAt: status.logUpdatedAt,
         promptPath,
         runnerAgent: publicAgentLabel(agent),
-        runnerCommand: stage1Prompts.length ? `Stage 1 分文件后台 Runner：01A → 01B → 01C → 01D` : `codex exec${modelArg} --cd ${rootPath} --add-dir ${rootPath} --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check - < ${promptPath}`,
+        runnerCommand: partPrompts.length ? stagePartRunnerLabel(stage) : `codex exec${modelArg} --cd ${rootPath} --add-dir ${rootPath} --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check - < ${promptPath}`,
         runnerPid: String(child.pid || ""),
         statusPath,
     };
+}
+
+async function prepareStageJobOutputDirs(rootPath: string, episode: string, stage: WorkflowStage) {
+    if (stage === "stage1") {
+        await mkdir(resolveInside(rootPath, `outputs/${episode}/.scene-batches/stage1`), { recursive: true });
+    }
+    if (stage === "stage3") {
+        const stage3Dir = resolveInside(rootPath, `outputs/${episode}/.scene-batches/stage3`);
+        await mkdir(stage3Dir, { recursive: true });
+        const entries = await readdir(stage3Dir, { withFileTypes: true }).catch(() => []);
+        await Promise.all(entries.filter((entry) => entry.isFile() && entry.name.endsWith(".md")).map((entry) => unlink(path.join(stage3Dir, entry.name)).catch(() => undefined)));
+    }
+}
+
+function buildPartRunnerCommands(stage: WorkflowStage, partPrompts: Array<{ label: string; path: string }>, logPath: string, codexCommand: (inputPath: string, append?: boolean) => string) {
+    if (stage === "stage3") {
+        const mergePrompt = partPrompts.find((item) => item.label === "stage3-merge");
+        const batchPrompts = partPrompts.filter((item) => item !== mergePrompt);
+        const commands = buildParallelCodexCommands(batchPrompts, logPath, codexCommand);
+        if (mergePrompt) {
+            commands.push(`if [ "$code" -ne 0 ]; then false; else echo ${shellQuote(`\\n===== ${mergePrompt.label} =====`)} >> ${shellQuote(logPath)}; ${codexCommand(mergePrompt.path, true)}; fi`);
+        } else {
+            commands.push(`if [ "$code" -ne 0 ]; then false; else true; fi`);
+        }
+        return commands;
+    }
+    if (stage !== "stage2") return partPrompts.flatMap((item) => [`echo ${shellQuote(`\\n===== ${item.label} =====`)} >> ${shellQuote(logPath)}`, codexCommand(item.path, true)]);
+    const commands = buildParallelCodexCommands(partPrompts, logPath, codexCommand);
+    commands.push(`if [ "$code" -ne 0 ]; then false; else true; fi`);
+    return commands;
+}
+
+function buildParallelCodexCommands(partPrompts: Array<{ label: string; path: string }>, logPath: string, codexCommand: (inputPath: string, append?: boolean) => string) {
+    const commands = [`pids=()`];
+    partPrompts.forEach((item) => {
+        commands.push(`( echo ${shellQuote(`\\n===== ${item.label} =====`)} >> ${shellQuote(logPath)}; ${codexCommand(item.path, true)} ) &`);
+        commands.push(`pids+=($!)`);
+    });
+    commands.push(`code=0`);
+    commands.push(`for pid in "\${pids[@]}"; do wait "$pid" || code=1; done`);
+    return commands;
 }
 
 function normalizeCodexAgentConfig(input?: CodexAgentConfig): Required<CodexAgentConfig> {
@@ -370,9 +438,22 @@ function publicAgentLabel(agent: Required<CodexAgentConfig>) {
     return [`企业 API`, agent.model || "默认模型", agent.apiBaseUrl || "默认 Base URL", agent.apiKey ? "Key 已配置" : "未填 Key"].join(" · ");
 }
 
+function stageOutputRule(episode: string, projectSlug: string, stage: WorkflowStage) {
+    if (stage === "stage1") return `输出文件只允许写入工作流根目录 outputs/${episode}/ 下的导演方法参考文件；不要写到 projects/${projectSlug}/outputs/，不要读写 assets/。`;
+    if (stage === "stage2") return `服化道输出只允许覆盖写入 projects/${projectSlug}/assets/character-prompts.md、projects/${projectSlug}/assets/scene-prompts.md 与 projects/${projectSlug}/assets/prop-prompts.md；不要读写根目录 assets/，不要写到 outputs/${episode}/ 或 projects/${projectSlug}/outputs/。`;
+    return `Copy-only 输出文件必须写在工作流根目录 outputs/${episode}/ 下；读取资产时只允许使用 projects/${projectSlug}/assets/character-prompts.md、projects/${projectSlug}/assets/scene-prompts.md 与 projects/${projectSlug}/assets/prop-prompts.md，不要读写根目录 assets/。`;
+}
+
+function stagePartRunnerLabel(stage: WorkflowStage) {
+    if (stage === "stage1") return "导演方法参考分批后台 Runner：批次碎片 → 01A/01B/01C/01D 汇总";
+    if (stage === "stage2") return "服化道并行后台 Runner：角色 / 场景 / 道具三路资产";
+    if (stage === "stage3") return "Copy-only 并行分批后台 Runner：分段提示词 → Copy-only";
+    return "后台 Codex Runner";
+}
+
 function buildRunnerPrompt(rootPath: string, episode: string, projectSlug: string, stage: WorkflowStage, instruction: string) {
     return [
-        `你正在执行 Seedance 视频工作流 ${stage}。`,
+        `你正在执行 Seedance 视频工作流：${stageLabel(stage)}。`,
         "",
         `工作流根目录：${rootPath}`,
         `项目目录：${projectSlug}`,
@@ -380,40 +461,41 @@ function buildRunnerPrompt(rootPath: string, episode: string, projectSlug: strin
         "",
         "请严格遵循本目录 AGENTS.md、specs/skills、templates 和 examples。只修改本阶段要求的文件，不要改网站项目文件。",
         "重要：这是网页后台 runner，不能使用 spawn_agent / fork / subagent / collab Wait。你必须在当前 Codex exec 进程内直接读取资料、生成内容、写入文件并结束。",
-        `输出文件必须写在工作流根目录的 outputs/${episode}/ 或 assets/ 下；不要写到 projects/${projectSlug}/outputs/。`,
+        stageOutputRule(episode, projectSlug, stage),
         "",
         instruction,
     ].join("\n");
 }
 
+async function writeStagePartPrompts(jobDir: string, rootPath: string, episode: string, projectSlug: string, stage: WorkflowStage, skillPresetId?: string) {
+    if (stage === "stage1") return writeStage1PartPrompts(jobDir, rootPath, episode, projectSlug);
+    if (stage === "stage2") return writeStage2PartPrompts(jobDir, rootPath, episode, projectSlug, skillPresetId);
+    if (stage === "stage3") return writeStage3PartPrompts(jobDir, rootPath, episode, projectSlug, skillPresetId);
+    return [];
+}
+
 async function writeStage1PartPrompts(jobDir: string, rootPath: string, episode: string, projectSlug: string) {
-    const base = [
-        "你正在执行 Seedance 视频工作流 Stage 1 的一个分文件任务。",
-        `工作流根目录：${rootPath}`,
-        `项目目录：${projectSlug}`,
-        `集数：${episode}`,
-        "网页 Runner 模式：不要启用子代理，不要等待人工回复，不要做剧情合规审核，不要生成最终 Seedance 提示词。",
-        `只允许写入工作流根目录 outputs/${episode}/ 下指定的一个文件；不要写到 projects/${projectSlug}/outputs/。`,
-        `必须读取 AGENTS.md、specs/agents/director.md、specs/skills/director-method-shot-skill/SKILL.md、projects/${projectSlug}/script/${episode}.md，并按需参考 outputs/ep05 对应文件格式。`,
-    ].join("\n");
-    const prompts = [
-        {
-            label: "01A-director-analysis",
-            text: `${base}\n\n任务：生成 outputs/${episode}/01A-director-analysis.md。内容包含阶段一规范读取记录、本集核心戏剧任务、场次清单、人物清单、场景清单、互动道具清单和提示词污染预防。只写这一个文件，写完结束。`,
-        },
-        {
-            label: "01B-beat-board",
-            text: `${base}\n\n任务：读取 outputs/${episode}/01A-director-analysis.md，生成 outputs/${episode}/01B-beat-board.md。内容包含按场次拆分的 Beat Board、导演方法标签、具体镜头策略、用户决策点和确认状态。只写这一个文件，写完结束。`,
-        },
-        {
-            label: "01C-director-shot-script",
-            text: `${base}\n\n任务：读取 outputs/${episode}/01A-director-analysis.md 和 outputs/${episode}/01B-beat-board.md，生成 outputs/${episode}/01C-director-shot-script.md。必须覆盖 ${episode} 全部场次，Shot 标题清楚，包含 method_tags、时长、景别、机位、镜头运动、起幅、落幅、人物调度、声音/台词、剪辑关系、资产需求和可修改项。只写这一个文件，写完结束。`,
-        },
-        {
-            label: "01D-shot-edit-track",
-            text: `${base}\n\n任务：读取 outputs/${episode}/01A-director-analysis.md、outputs/${episode}/01B-beat-board.md 和 outputs/${episode}/01C-director-shot-script.md，生成 outputs/${episode}/01D-shot-edit-track.md。内容用于用户后续修改，包含每场可改项、风险提示、默认确认状态和用户批注区。只写这一个文件，写完结束。`,
-        },
-    ];
+    const scriptFile = await readFirstExisting(rootPath, fileGroups.find((group) => group.key === "script")?.paths(episode, projectSlug) || [`projects/${projectSlug}/script/${episode}.md`]);
+    const prompts = buildStage1PartPromptTexts(rootPath, episode, projectSlug, scriptFile.content);
+    return writePartPromptFiles(jobDir, prompts);
+}
+
+async function writeStage3PartPrompts(jobDir: string, rootPath: string, episode: string, projectSlug: string, skillPresetId?: string) {
+    const [shotScript, scriptFile] = await Promise.all([
+        readFirstExisting(rootPath, [`outputs/${episode}/01C-director-shot-script.md`]),
+        readFirstExisting(rootPath, fileGroups.find((group) => group.key === "script")?.paths(episode, projectSlug) || [`projects/${projectSlug}/script/${episode}.md`]),
+    ]);
+    const prompts = buildStage3PartPromptTexts(rootPath, episode, projectSlug, shotScript.content || scriptFile.content, skillPresetId);
+    return writePartPromptFiles(jobDir, prompts);
+}
+
+async function writeStage2PartPrompts(jobDir: string, rootPath: string, episode: string, projectSlug: string, skillPresetId?: string) {
+    const scriptFile = await readFirstExisting(rootPath, fileGroups.find((group) => group.key === "script")?.paths(episode, projectSlug) || [`projects/${projectSlug}/script/${episode}.md`]);
+    const prompts = buildStage2PartPromptTexts(rootPath, episode, projectSlug, scriptFile.content, skillPresetId);
+    return writePartPromptFiles(jobDir, prompts);
+}
+
+async function writePartPromptFiles(jobDir: string, prompts: Array<{ label: string; text: string }>) {
     const result = [];
     for (const [index, item] of prompts.entries()) {
         const promptPath = path.join(jobDir, `prompt-${index + 1}-${item.label}.md`);
@@ -484,18 +566,25 @@ async function findRunningStageJob(rootPath: string, episode: string, stage: Wor
 async function readLatestJob(rootPath: string, episode?: string) {
     const jobsDir = resolveInside(rootPath, ".workflow-cache/web-jobs");
     const entries = await readdir(jobsDir, { withFileTypes: true }).catch(() => []);
-    const jobNames = entries
-        .filter((entry) => entry.isDirectory() && entry.name.startsWith("web-stage"))
-        .map((entry) => entry.name)
-        .sort()
-        .reverse();
+    const jobs = await Promise.all(
+        entries
+            .filter((entry) => entry.isDirectory() && entry.name.startsWith("web-stage"))
+            .map(async (entry) => {
+                const statusPath = resolveInside(rootPath, `.workflow-cache/web-jobs/${entry.name}/status.json`);
+                const statusRaw = await readFile(statusPath, "utf8").catch(() => "{}");
+                const status = JSON.parse(statusRaw) as { episode?: string; finishedAt?: string; startedAt?: string };
+                const fallbackMs = await stat(resolveInside(rootPath, `.workflow-cache/web-jobs/${entry.name}`))
+                    .then((info) => info.mtimeMs)
+                    .catch(() => 0);
+                const timeMs = Date.parse(status.finishedAt || status.startedAt || "") || fallbackMs;
+                return { name: entry.name, status, timeMs };
+            }),
+    );
+    jobs.sort((a, b) => b.timeMs - a.timeMs);
     let latest = "";
-    for (const jobName of jobNames) {
-        const statusPath = resolveInside(rootPath, `.workflow-cache/web-jobs/${jobName}/status.json`);
-        const statusRaw = await readFile(statusPath, "utf8").catch(() => "{}");
-        const status = JSON.parse(statusRaw) as { episode?: string };
-        if (!episode || status.episode === episode) {
-            latest = jobName;
+    for (const job of jobs) {
+        if (!episode || job.status.episode === episode) {
+            latest = job.name;
             break;
         }
     }
@@ -552,7 +641,7 @@ export async function POST(request: NextRequest) {
         if (action === "save-script") {
             const content = body.content || "";
             if (body.requireScriptOptimizerNotes && !hasScriptOptimizerWhitePaperProductionNotes(content)) {
-                throw new Error("优化剧本缺少白皮书要求的制作备注、视觉方向、连续性、风险提示或禁止项，已拒绝写入。");
+                throw new Error("优化剧本缺少白皮书 v1.1 要求的制作备注、隐喻处理、画面生成禁止项或母版文档禁止项，已拒绝写入。");
             }
             const target = resolveInside(rootPath, `projects/${projectSlug}/script/${episode}.md`);
             await mkdir(path.dirname(target), { recursive: true });
@@ -565,7 +654,7 @@ export async function POST(request: NextRequest) {
             await writeFile(target, body.content || "", "utf8");
         } else if (action === "validate") {
             const stage = body.stage || "stage3";
-            commandResult = await runPythonTool(rootPath, ["tools/workflow_validate.py", "--stage", stage, "--mode", "pre_review", "--episode", episode]);
+            commandResult = await runPythonTool(rootPath, ["tools/workflow_validate.py", "--stage", stage, "--mode", "pre_review", "--episode", episode, ...pythonProjectArgs(stage, projectSlug)]);
             await writeValidationSnapshot(rootPath, episode, stage, commandResult);
         } else if (action === "cancel-latest-job") {
             commandResult = await cancelLatestJob(rootPath, episode);
@@ -575,18 +664,22 @@ export async function POST(request: NextRequest) {
             if (!config) throw new Error("未知阶段");
             const prerequisite = prerequisiteStage(stage);
             if (prerequisite) await assertStageValidationPassed(rootPath, episode, projectSlug, prerequisite);
+            const launchInstruction = config.instruction(episode, projectSlug, body.skillPresetId);
             const guardResult = await runPythonTool(rootPath, ["tools/workflow_guard.py", "--action", config.action, "--episode", episode], {
-                launchInstruction: config.instruction(episode, projectSlug),
+                launchInstruction,
                 launchStatus: "guard_checked",
             });
             if (guardResult.exitCode === "0") {
-                const job = await startCodexStageJob(rootPath, episode, projectSlug, stage, config.instruction(episode, projectSlug), body.agent);
+                const job = await startCodexStageJob(rootPath, episode, projectSlug, stage, launchInstruction, body.agent, body.skillPresetId);
                 commandResult = { ...guardResult, ...job, launchStatus: "runner_started" };
             } else {
                 commandResult = guardResult;
             }
         } else if (action === "export-copy-only") {
-            await assertStageValidationPassed(rootPath, episode, projectSlug, "stage3");
+            const files = await readSnapshotFiles(rootPath, episode, projectSlug);
+            if (!files.some((file) => file.key === "copyOnly" && file.exists) && !files.some((file) => file.key === "stage3" && file.exists)) {
+                throw new Error("缺少 Copy-only 或旧版过程缓存，请先启动 Copy-only。");
+            }
             commandResult = await runPythonTool(rootPath, ["tools/export_copy_only.py", "--episode", episode]);
         } else {
             throw new Error("未知操作");
@@ -599,7 +692,7 @@ export async function POST(request: NextRequest) {
 }
 
 function hasScriptOptimizerWhitePaperProductionNotes(script: string) {
-    return ["制作备注", "视觉方向", "连续性", "风险提示", "禁止项"].every((marker) => script.includes(marker));
+    return ["制作备注", "视觉方向", "连续性", "风险提示", "隐喻处理", "画面生成禁止项", "母版文档禁止项"].every((marker) => script.includes(marker));
 }
 
 async function cancelLatestJob(rootPath: string, episode?: string): Promise<CommandResult> {

@@ -71,8 +71,8 @@ type MinimalWorkflowEvidence = Pick<AgentWorkflowReviewEvidence, "evidenceId" | 
 export function buildSeedanceQualityGateManifest(preset?: Pick<AgentWorkflowPreset, "workflowId" | "version">): WorkflowQualityGateManifest {
     const workflowId = preset?.workflowId || SEEDANCE_WORKFLOW_PRESET_ID;
     const version = preset?.version || "1.0.0";
-    const stageIds = ["director-analysis", "art-design", "seedance-storyboard"];
     const requiredReadings = buildSeedanceRequiredReadings(workflowId);
+    const stageIds = unique(requiredReadings.map((reading) => reading.stageId));
     const gates = stageIds.flatMap((stageId) => {
         const stageReadings = requiredReadings.filter((reading) => reading.stageId === stageId);
         return [

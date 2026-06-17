@@ -23,18 +23,19 @@ test("seedance workflow agent cores can be resolved by stageId", () => {
     assert.deepEqual(
         seedanceWorkflowAgentCores.map((core) => [core.stageId, core.agentId]),
         [
-            ["director-analysis", "director"],
+            ["script-adaptation", "script-optimizer"],
             ["art-design", "art-designer"],
             ["seedance-storyboard", "storyboard-artist"],
         ],
     );
-    assert.equal(getSeedanceWorkflowAgentCore("director-analysis")?.label, "导演 / director");
+    assert.equal(getSeedanceWorkflowAgentCore("script-adaptation")?.label, "剧本 / script-optimizer");
+    assert.equal(getSeedanceWorkflowAgentCore("director-analysis"), undefined);
     assert.equal(getSeedanceWorkflowAgentCore("art-design")?.label, "服化道 / art-designer");
     assert.equal(getSeedanceWorkflowAgentCore("seedance-storyboard")?.label, "分镜师 / storyboard-artist");
 });
 
-test("director core builds the same prompt and previews as current workflow", () => {
-    assertCorePromptAndPreview("director-analysis", '{"summary":"导演分析","items":[{"title":"第一场","description":"夜戏开场"}]}');
+test("script-optimizer core builds the same prompt and previews as current workflow", () => {
+    assertCorePromptAndPreview("script-adaptation", '{"summary":"剧本适配","items":[{"title":"第一场","description":"生产稿"}]}');
 });
 
 test("art-designer core builds the same prompt and previews as current workflow", () => {
@@ -45,7 +46,7 @@ test("storyboard-artist core builds the same prompt and previews as current work
     assertCorePromptAndPreview("seedance-storyboard", '{"summary":"分镜提示词","items":[{"title":"镜头一","prompt":"镜头从门外推入仓库","cameraMovement":"push in"}]}');
 });
 
-function assertCorePromptAndPreview(stageId: "director-analysis" | "art-design" | "seedance-storyboard", rawText: string) {
+function assertCorePromptAndPreview(stageId: "script-adaptation" | "art-design" | "seedance-storyboard", rawText: string) {
     const core = getSeedanceWorkflowAgentCore(stageId);
     assert.ok(core);
     const inputSnapshot = {
@@ -73,7 +74,7 @@ function assertCorePromptAndPreview(stageId: "director-analysis" | "art-design" 
     );
 }
 
-function buildApprovedWorkflowStageFixture(stageId: "director-analysis" | "art-design" | "seedance-storyboard", rawText: string) {
+function buildApprovedWorkflowStageFixture(stageId: "script-adaptation" | "art-design" | "seedance-storyboard", rawText: string) {
     const workflowRun = createAgentWorkflowRunRecord({ preset, projectId: "project-workflow", id: `workflow-${stageId}`, now: "2026-01-12T00:00:00.000Z" });
     const core = getSeedanceWorkflowAgentCore(stageId)!;
     const targetStageOrder = preset.stages.find((stage) => stage.stageId === stageId)?.order ?? 0;

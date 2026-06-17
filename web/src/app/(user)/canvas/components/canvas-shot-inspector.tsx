@@ -85,7 +85,7 @@ export function ShotInspector({
             <ShotChecklistSection shots={checklistShots} shotGroups={checklistShotGroups} nodes={checklistNodes} activeShotId={activeShotId} theme={theme} onSelectShot={onSelectShot} />
             {textParts.raw.length ? <RawSourceSection items={textParts.raw} theme={theme} /> : null}
             <div className="mt-3">
-                <InspectorAction icon={<FileText className="size-4" />} label="返回本集生产流程" onClick={onOpenEpisodeWorkbench} theme={theme} />
+                <InspectorAction icon={<FileText className="size-4" />} label="返回项目详情" onClick={onOpenEpisodeWorkbench} theme={theme} />
             </div>
         </div>
     );

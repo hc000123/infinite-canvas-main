@@ -403,48 +403,65 @@ function AssetsPageContent() {
             <main className="studio-shell relative min-h-0 flex-1 overflow-y-auto px-6 py-8" onDragEnter={handleUploadDragEnter} onDragLeave={handleUploadDragLeave} onDragOver={handleUploadDragOver} onDrop={handleUploadDrop}>
                 {isDraggingUpload ? <AssetUploadDropOverlay activeFolderName={activeFolderName} /> : null}
                 <div className="mx-auto max-w-[1680px] pb-8">
-                    <AssetPageHeader returnHref={returnTarget.href} returnLabel={returnTarget.label} onCreate={openCreate} onExportAll={() => void exportAllAssets()} onImportClick={() => assetInputRef.current?.click()} />
+                    <AssetPageHeader
+                        filteredCount={filteredAssets.length}
+                        returnHref={returnTarget.href}
+                        returnLabel={returnTarget.label}
+                        selectedCount={selectedAssets.length}
+                        totalCount={validAssets.length}
+                        onCreate={openCreate}
+                        onExportAll={() => void exportAllAssets()}
+                        onImportClick={() => assetInputRef.current?.click()}
+                    />
 
                     <AssetFilterPanel
-                        activeFolderId={activeFolderId}
-                        episodeFilter={episodeFilter}
-                        episodeOptions={episodeOptions}
-                        filteredCount={filteredAssets.length}
-                        folderCounts={folderCounts}
-                        folderFilter={folderFilter}
-                        generationActionFilter={generationActionFilter}
-                        generationFilterOptions={generationFilterOptions}
-                        generationModelProviderFilter={generationModelProviderFilter}
-                        generationSourceFilter={generationSourceFilter}
-                        generationTaskFilter={generationTaskFilter}
-                        kindFilter={kindFilter}
-                        keyword={keyword}
-                        outdatedUsageCount={outdatedAssetVersionUsages.length}
-                        projectContextFilter={projectContextFilter}
-                        projectFolderRows={projectFolderRows}
-                        projectLibraryFilter={projectLibraryFilter}
-                        referenceVersionFilter={referenceVersionFilter}
-                        regularFolders={regularFolders}
-                        selectedCount={selectedAssets.length}
-                        storyboardGroupFilter={storyboardGroupFilter}
-                        storyboardGroupOptions={storyboardGroupOptions}
-                        validAssetCount={validAssets.length}
-                        onClearSelectedOutdatedUsages={clearSelectedOutdatedUsages}
-                        onCreateFolder={openCreateFolder}
-                        onDeleteFolder={deleteFolder}
-                        onEpisodeFilterChange={assetFilterActions.changeEpisodeFilter}
-                        onEditFolder={openEditFolder}
-                        onFolderFilterChange={assetFilterActions.changeFolderFilter}
-                        onGenerationActionFilterChange={assetFilterActions.changeGenerationActionFilter}
-                        onGenerationModelProviderFilterChange={assetFilterActions.changeGenerationModelProviderFilter}
-                        onGenerationSourceFilterChange={assetFilterActions.changeGenerationSourceFilter}
-                        onGenerationTaskFilterChange={assetFilterActions.changeGenerationTaskFilter}
-                        onKindFilterChange={assetFilterActions.changeKindFilter}
-                        onKeywordChange={assetFilterActions.changeKeyword}
-                        onProjectContextFilterChange={assetFilterActions.changeProjectContextFilter}
-                        onProjectLibraryFilterChange={assetFilterActions.changeProjectLibraryFilter}
-                        onReferenceVersionFilterChange={assetFilterActions.changeReferenceVersionFilter}
-                        onStoryboardGroupFilterChange={assetFilterActions.changeStoryboardGroupFilter}
+                        actions={{
+                            onClearSelectedOutdatedUsages: clearSelectedOutdatedUsages,
+                            onCreateFolder: openCreateFolder,
+                            onDeleteFolder: deleteFolder,
+                            onEditFolder: openEditFolder,
+                            onEpisodeFilterChange: assetFilterActions.changeEpisodeFilter,
+                            onFolderFilterChange: assetFilterActions.changeFolderFilter,
+                            onGenerationActionFilterChange: assetFilterActions.changeGenerationActionFilter,
+                            onGenerationModelProviderFilterChange: assetFilterActions.changeGenerationModelProviderFilter,
+                            onGenerationSourceFilterChange: assetFilterActions.changeGenerationSourceFilter,
+                            onGenerationTaskFilterChange: assetFilterActions.changeGenerationTaskFilter,
+                            onKindFilterChange: assetFilterActions.changeKindFilter,
+                            onKeywordChange: assetFilterActions.changeKeyword,
+                            onProjectContextFilterChange: assetFilterActions.changeProjectContextFilter,
+                            onProjectLibraryFilterChange: assetFilterActions.changeProjectLibraryFilter,
+                            onReferenceVersionFilterChange: assetFilterActions.changeReferenceVersionFilter,
+                            onStoryboardGroupFilterChange: assetFilterActions.changeStoryboardGroupFilter,
+                        }}
+                        counts={{
+                            filteredCount: filteredAssets.length,
+                            folderCounts,
+                            outdatedUsageCount: outdatedAssetVersionUsages.length,
+                            selectedCount: selectedAssets.length,
+                            validAssetCount: validAssets.length,
+                        }}
+                        options={{
+                            episodeOptions,
+                            generationFilterOptions,
+                            projectFolderRows,
+                            regularFolders,
+                            storyboardGroupOptions,
+                        }}
+                        values={{
+                            activeFolderId,
+                            episodeFilter,
+                            folderFilter,
+                            generationActionFilter,
+                            generationModelProviderFilter,
+                            generationSourceFilter,
+                            generationTaskFilter,
+                            kindFilter,
+                            keyword,
+                            projectContextFilter,
+                            projectLibraryFilter,
+                            referenceVersionFilter,
+                            storyboardGroupFilter,
+                        }}
                     />
                 </div>
 
@@ -606,7 +623,12 @@ function AssetsPageContent() {
                                 {matchCandidateAssets.map((asset) => {
                                     const cover = asset.coverUrl || asset.data.dataUrl;
                                     return (
-                                        <button key={asset.id} type="button" className="grid gap-3 rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-elevated-bg)] p-3 text-left transition hover:border-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]" onClick={() => matchWorkflowImageAsset(asset)}>
+                                        <button
+                                            key={asset.id}
+                                            type="button"
+                                            className="grid gap-3 rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-elevated-bg)] p-3 text-left transition hover:border-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]"
+                                            onClick={() => matchWorkflowImageAsset(asset)}
+                                        >
                                             <div className="overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-shell-bg)]">
                                                 {cover ? <img src={cover} alt={asset.title} className="h-32 w-full object-contain" /> : <div className="grid h-32 place-items-center text-xs text-[var(--studio-text-muted)]">暂无预览</div>}
                                             </div>
@@ -654,14 +676,13 @@ function buildAssetsPageReturnTarget(searchParams: SearchParamReader) {
 
     const source = searchParams.get("source") || "";
     const projectId = searchParams.get("projectId") || "";
-    const episodeId = searchParams.get("episodeId") || "";
-    if (source === "episode-workbench" && projectId && episodeId) {
+    if (source === "episode-workbench" && projectId) {
         return {
-            href: `/projects/${encodeURIComponent(projectId)}/episodes/${encodeURIComponent(episodeId)}/workbench?module=assets`,
-            label: "返回资产与生图",
+            href: `/projects/${encodeURIComponent(projectId)}`,
+            label: "返回项目",
         };
     }
     if (projectId) return { href: `/projects/${encodeURIComponent(projectId)}`, label: "返回项目" };
 
-    return { href: "/projects", label: "返回项目工作台" };
+    return { href: "/projects", label: "返回项目中心" };
 }

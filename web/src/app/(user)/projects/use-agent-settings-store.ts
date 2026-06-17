@@ -112,7 +112,7 @@ function normalizeConfigRecord(record: Record<string, AgentConfig[]> | undefined
 }
 
 function normalizeWorkflowSelectionRecord(record: Record<string, AgentWorkflowPresetSelection[]> | undefined) {
-    return Object.fromEntries(Object.entries(record || {}).map(([key, selections]) => [key, (selections || []).map(normalizeWorkflowPresetSelection)]));
+    return Object.fromEntries(Object.entries(record || {}).map(([key, selections]) => [key, normalizeWorkflowSelections(selections || [])]));
 }
 
 function upsertConfig(configs: AgentConfig[], config: AgentConfig) {
@@ -120,5 +120,16 @@ function upsertConfig(configs: AgentConfig[], config: AgentConfig) {
 }
 
 function upsertWorkflowSelection(selections: AgentWorkflowPresetSelection[], selection: AgentWorkflowPresetSelection) {
-    return [selection, ...selections.filter((item) => item.workflowId !== selection.workflowId)];
+    const normalizedSelections = selection.selected ? selections.map((item) => ({ ...item, selected: false })) : selections;
+    return normalizeWorkflowSelections([selection, ...normalizedSelections.filter((item) => item.workflowId !== selection.workflowId)]);
+}
+
+function normalizeWorkflowSelections(selections: AgentWorkflowPresetSelection[]) {
+    let selectedSeen = false;
+    return selections.map(normalizeWorkflowPresetSelection).map((selection) => {
+        if (!selection.selected) return selection;
+        if (selectedSeen) return { ...selection, selected: false };
+        selectedSeen = true;
+        return selection;
+    });
 }

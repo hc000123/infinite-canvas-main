@@ -11,6 +11,7 @@ export type ScriptEpisode = {
     order: number;
     title: string;
     summary: string;
+    sourceSummary?: string;
     structuredScript?: StructuredEpisodeScript;
     hook: string;
     turningPoint: string;
@@ -77,6 +78,7 @@ export function normalizeScriptEpisode(input: ScriptEpisodeWriteInput): ScriptEp
         ...input,
         title: input.title.trim() || "未命名集数",
         summary: input.summary.trim(),
+        sourceSummary: input.sourceSummary?.trim() || undefined,
         structuredScript: normalizeStructuredEpisodeScript(input.structuredScript),
         hook: input.hook.trim(),
         turningPoint: input.turningPoint.trim(),

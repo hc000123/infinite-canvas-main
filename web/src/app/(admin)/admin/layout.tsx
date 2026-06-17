@@ -97,23 +97,33 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
     if (!isReady || !token || user?.role !== "admin") {
         const fallbackTitle = !isReady ? (authWaitExpired ? "登录状态确认较慢" : "正在进入管理后台") : !token ? "请先登录管理员账号" : "当前账号没有管理后台权限";
-        const fallbackDescription = !isReady ? (authWaitExpired ? "你可以重新登录，或先回到项目工作台。" : "正在确认登录状态，请稍候。") : !token ? "登录后会自动回到管理后台。" : "你可以返回项目工作台继续使用。";
+        const fallbackDescription = !isReady ? (authWaitExpired ? "你可以重新登录，或先回到项目中心。" : "正在确认登录状态，请稍候。") : !token ? "登录后会自动回到管理后台。" : "你可以返回项目中心继续使用。";
 
         return (
-            <div className="studio-workspace" style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: antToken.colorBgLayout, padding: 24 }}>
-                <Flex vertical align="center" gap={16} style={{ textAlign: "center" }}>
-                    {!isReady ? <Spin /> : null}
-                    <Typography.Title level={4} style={{ margin: 0 }}>
-                        {fallbackTitle}
-                    </Typography.Title>
-                    <Typography.Text type="secondary">{fallbackDescription}</Typography.Text>
-                    {(isReady && !token) || authWaitExpired ? (
-                        <Button type="primary" href="/login?redirect=/admin">
-                            去登录
-                        </Button>
-                    ) : null}
-                    {(isReady && token && user?.role !== "admin") || authWaitExpired ? <Button href="/projects">前往项目</Button> : null}
-                </Flex>
+            <div className="studio-workspace studio-shell flex min-h-screen items-center justify-center p-6" style={{ background: antToken.colorBgLayout }}>
+                <div className="studio-panel w-full max-w-[420px] p-5">
+                    <Flex vertical align="center" gap={16} style={{ textAlign: "center" }}>
+                        <span aria-hidden className="grid size-12 place-items-center rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]">
+                            <span style={{ display: "inline-block", width: 28, height: 28, background: antToken.colorText, WebkitMask: "url(/logo.svg) center / contain no-repeat", mask: "url(/logo.svg) center / contain no-repeat" }} />
+                        </span>
+                        <div>
+                            <Typography.Text className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">管理后台</Typography.Text>
+                            <Typography.Title level={4} style={{ margin: "8px 0 0" }}>
+                                {fallbackTitle}
+                            </Typography.Title>
+                        </div>
+                        {!isReady ? <Spin /> : null}
+                        <Typography.Text type="secondary">{fallbackDescription}</Typography.Text>
+                        <Flex gap={10} wrap justify="center">
+                            {(isReady && !token) || authWaitExpired ? (
+                                <Button type="primary" href="/login?redirect=/admin">
+                                    去登录
+                                </Button>
+                            ) : null}
+                            {(isReady && token && user?.role !== "admin") || authWaitExpired ? <Button href="/projects">前往项目</Button> : null}
+                        </Flex>
+                    </Flex>
+                </div>
             </div>
         );
     }
@@ -150,11 +160,18 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </Flex>
     );
     const brand = (
-        <Flex align="center" gap={12} style={{ height: adminLayoutStyle.brandHeight, padding: "0 20px", borderBottom: `1px solid ${antToken.colorBorderSecondary}` }}>
-            <span aria-hidden style={{ display: "inline-block", width: 30, height: 30, background: antToken.colorText, WebkitMask: "url(/logo.svg) center / contain no-repeat", mask: "url(/logo.svg) center / contain no-repeat" }} />
-            <Typography.Text strong style={{ fontSize: 18, letterSpacing: 0 }}>
-                眨眼之间
-            </Typography.Text>
+        <Flex align="center" gap={12} style={{ height: adminLayoutStyle.brandHeight, padding: "0 20px", borderBottom: "1px solid var(--studio-border-subtle)", background: "var(--studio-panel-muted-bg)" }}>
+            <span aria-hidden className="grid size-8 place-items-center rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)]">
+                <span style={{ display: "inline-block", width: 20, height: 20, background: antToken.colorText, WebkitMask: "url(/logo.svg) center / contain no-repeat", mask: "url(/logo.svg) center / contain no-repeat" }} />
+            </span>
+            <div style={{ minWidth: 0 }}>
+                <Typography.Text strong style={{ display: "block", fontSize: 18, letterSpacing: 0, lineHeight: 1.2 }}>
+                    眨眼之间
+                </Typography.Text>
+                <Typography.Text type="secondary" style={{ display: "block", fontSize: 12, lineHeight: 1.3 }}>
+                    管理后台
+                </Typography.Text>
+            </div>
         </Flex>
     );
     const drawerTitle = (
@@ -169,13 +186,22 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     return (
         <Layout className="studio-workspace" hasSider={!isCompact} style={{ height: "100dvh", overflow: "hidden", background: antToken.colorBgLayout }}>
             {!isCompact ? (
-                <Layout.Sider width={adminLayoutStyle.siderWidth} style={{ height: "100dvh", overflow: "hidden", background: antToken.colorBgContainer, borderRight: `1px solid ${antToken.colorBorder}` }}>
+                <Layout.Sider width={adminLayoutStyle.siderWidth} style={{ height: "100dvh", overflow: "hidden", background: "var(--studio-panel-bg)", borderRight: "1px solid var(--studio-border-subtle)" }}>
                     {brand}
                     {adminMenu}
-                    <div style={{ position: "absolute", bottom: 0, insetInline: 0, padding: 12, borderTop: `1px solid ${antToken.colorBorder}`, background: antToken.colorBgContainer }}>{sideActions}</div>
+                    <div style={{ position: "absolute", bottom: 0, insetInline: 0, padding: 12, borderTop: "1px solid var(--studio-border-subtle)", background: "var(--studio-panel-muted-bg)" }}>{sideActions}</div>
                 </Layout.Sider>
             ) : (
-                <Drawer rootClassName="studio-modal" title={drawerTitle} placement="left" size={280} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} footer={sideActions} styles={{ body: { padding: 0 }, footer: { borderTop: `1px solid ${antToken.colorBorder}` } }}>
+                <Drawer
+                    rootClassName="studio-modal"
+                    title={drawerTitle}
+                    placement="left"
+                    size={280}
+                    open={mobileMenuOpen}
+                    onClose={() => setMobileMenuOpen(false)}
+                    footer={sideActions}
+                    styles={{ body: { padding: 0 }, footer: { borderTop: `1px solid ${antToken.colorBorder}` } }}
+                >
                     {adminMenu}
                 </Drawer>
             )}
@@ -188,8 +214,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                         gap: 12,
                         height: adminLayoutStyle.headerHeight,
                         padding: isCompact ? "0 12px" : "0 24px",
-                        background: antToken.colorBgContainer,
-                        borderBottom: `1px solid ${antToken.colorBorder}`,
+                        background: "var(--studio-panel-bg)",
+                        borderBottom: "1px solid var(--studio-border-subtle)",
+                        backdropFilter: "blur(16px)",
                     }}
                 >
                     <Flex align="center" gap={8} style={{ minWidth: 0 }}>

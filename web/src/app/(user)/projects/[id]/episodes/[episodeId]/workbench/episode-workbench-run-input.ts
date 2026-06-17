@@ -26,10 +26,10 @@ const STORYBOARD_PACKAGE_FORMAT_RULES = `分镜生产包硬规则：
 6. seedancePrompt 是给 Seedance 的最终片段提示词正文，不出现“本P、单P、生成P、P间”等内部术语。`;
 
 const FULL_WORKFLOW_FORMAT_RULES = `完整短剧工作流硬规则：
-1. 这次不是单阶段任务，而是一次性完成导演分析、资产整理和分镜生产包。
+1. 这次不是单阶段任务，而是一次性完成剧本适配、导演分析、资产整理和分镜生产包。
 2. 最终回复必须是 JSON 对象，不要 Markdown，不要代码围栏，不要解释文字。
-3. 顶层只包含 directorAnalysis、assets、storyboard、warnings。
-4. directorAnalysis 放导演讲戏、风险提示、场次理解、人物表演方向和分镜建议。
+3. 顶层只包含 scriptAdaptation、directorAnalysis、assets、storyboard、warnings。
+4. scriptAdaptation 放 productionScript 和 structuredScript；directorAnalysis 放导演讲戏、风险提示、场次理解、人物表演方向和分镜建议。
 5. assets 必须是对象，内部包含 assets 数组；每个资产条目遵守资产卡片整理硬规则。
 6. storyboard 必须是对象，内部包含 summary、sceneVisualDna、industrialPrecheckSummary、shots、warnings；shots 遵守分镜生产包硬规则。
 7. 允许一次性处理本集所有关键场次，但每个 shots 条目仍然代表一个 4-15 秒的可生成片段。
@@ -67,9 +67,11 @@ export function buildEpisodeFullWorkflowRunRequest({
     const directorConfig = resolvedAgentConfigs.find((config) => config.kind === "script_analyzer");
     const assetConfig = resolvedAgentConfigs.find((config) => config.kind === "asset_extractor");
     const storyboardConfig = resolvedAgentConfigs.find((config) => config.kind === "storyboard_director");
-    const textModel = workflowTextModel(effectiveConfig, storyboardConfig || directorConfig || assetConfig);
+    const scriptConfig = resolvedAgentConfigs.find((config) => config.kind === "script_optimizer");
+    const textModel = workflowTextModel(effectiveConfig, storyboardConfig || directorConfig || assetConfig || scriptConfig);
     const requestConfig = { ...effectiveConfig, model: textModel || effectiveConfig.model };
     const agentRules = [
+        scriptConfig ? `剧本适配 Agent：\n${agentSystemPromptContent(scriptConfig)}` : "",
         directorConfig ? `导演分析 Agent：\n${agentSystemPromptContent(directorConfig)}` : "",
         assetConfig ? `资产整理 Agent：\n${agentSystemPromptContent(assetConfig)}` : "",
         storyboardConfig ? `分镜生产 Agent：\n${agentSystemPromptContent(storyboardConfig)}` : "",
@@ -80,7 +82,7 @@ export function buildEpisodeFullWorkflowRunRequest({
         {
             role: "system",
             content: [
-                "你是短剧生产多 Agent 总控。你要在一次回复里模拟导演、服化道/资产整理、Seedance 分镜三个 Agent 协作完成完整工作流。",
+                "你是短剧生产多 Agent 总控。你要在一次回复里模拟剧本适配、导演、服化道/资产整理、Seedance 分镜四个 Agent 协作完成完整工作流。",
                 "只返回最终 JSON，不要输出过程日志。",
                 agentRules,
                 ASSET_CARD_FORMAT_RULES,
@@ -174,6 +176,7 @@ export function buildEpisodeStageRunRequest({
     const requestConfig = { ...effectiveConfig, model: textModel || effectiveConfig.model };
     const directorSummary = stageOutputs["director-analysis"]?.summary || "";
     const artSummary = stageOutputs["art-design"]?.summary || "";
+    const scriptSummary = stageOutputs["script-adaptation"]?.summary || "";
     const coreInput = core.buildInput({
         preset,
         inputSnapshot: {
@@ -184,6 +187,7 @@ export function buildEpisodeStageRunRequest({
             episodeTitle: episode.title,
             scriptSnapshot,
             stageSummary: `${stage.inputSummary}；输出目标：${stage.outputSummary}`,
+            scriptAdaptationOutputSummary: scriptSummary,
             directorOutputSummary: directorSummary,
             artDesignOutputSummary: artSummary,
             storyboardRequirement:
@@ -251,6 +255,7 @@ export function buildEpisodeStoryboardSceneRunRequest({
     const requestConfig = { ...effectiveConfig, model: textModel || effectiveConfig.model };
     const directorSummary = stageOutputs["director-analysis"]?.summary || "";
     const artSummary = stageOutputs["art-design"]?.summary || "";
+    const scriptSummary = stageOutputs["script-adaptation"]?.summary || "";
     const stageDetail = workflowStageDetail(preset, stage);
     const sourceFiles = buildWorkflowStageSourceFiles(stageDetail.skills, stageDetail.qualityGates);
     const coreInput = core.buildInput({
@@ -268,6 +273,7 @@ export function buildEpisodeStoryboardSceneRunRequest({
             sceneScriptText: currentScene.scriptText,
             sceneVisualDnaSummary: currentSceneState?.visualDnaSummary,
             previousSceneSummary: previousApprovedSceneSummary(workflowSceneStates, currentScene.sceneKey),
+            scriptAdaptationOutputSummary: scriptSummary,
             directorOutputSummary: directorSummary,
             artDesignOutputSummary: artSummary,
             storyboardRequirement: "先输出场次视觉 DNA，再输出生成 P / 镜头 P 拆分表、单 P 任务卡、Seedance 提示词正文和工业化预检记录摘要。",

@@ -55,7 +55,7 @@
 12. M8.R1 追溯链路结构收口与自查。（已实现，待回归确认）
 13. M6.8 本集工作台收口。（已实现，待页面验收）
 14. M6.9 剧本到资产、镜头组和视频节点的 Agent 化工作台。（进行中，M6.9.0 / M6.9.1 / M6.9.2 / M6.9.3 / M6.9.4 已实现）
-15. M6.10 Seedance 2.0 多 Agent 工作流接入。（进行中，M6.10.0 已实现，用于接入“导演 / 服化道 / 分镜师”三阶段团队工作流）
+15. M6.10 Seedance 2.0 多 Agent 工作流接入。（进行中，M6.10.0 已实现，用于接入“剧本 / 导演 / 服化道 / 分镜师”主 Agent 链）
 
 ### C. 云端资产与协作
 
@@ -70,7 +70,7 @@
 
 ## 近期执行顺序
 
-1. M6.10.R0 Seedance 三阶段 Agent Core 拆分。（已实现，待回归确认）
+1. M6.10.R0 Seedance 主链 Agent Core 拆分。（已实现，待回归确认）
 2. M6.10.3-Fix1 映射预览 JSON 解析修复。（已实现，待映射质量复测）
 3. M6.10.3-Fix2 映射预览写入前人工筛选与业务字段安全校验。
 4. M6.10.4-A 规范读取记录与质量门 manifest 底座。（已实现，待页面验收）
@@ -98,12 +98,16 @@
 26. M6.11.15 本地原工作流控制台。（已实现，待页面验收；先接入本地 markdown 目录、质量门和 Copy-only 导出，不在前端重写三阶段生成逻辑）
 27. M6.11.16 云端 Agent Run API 底座。（已实现，待页面验收；Agent 配置、运行记录、阶段状态、审核结果和映射预览开始落到后端；当前视频工作流主启动链路暂时切回 Codex CLI / 本地 Runner，云端 Agent Run 作为后续 Worker 化底座保留）
 28. M6.11.17 视频工作流云端 Worker 化与质量门服务化。（上线前主门禁；把 Codex CLI 当前承担的读取规范、分文件任务、质量门、审核后写入和日志回传拆成后端 Worker，并让生产环境切到 `cloud-worker`）
-29. M6.11.18 Seedance 原格式导演方法 v5 并行预设。（已实现，待页面验收；新增 v5 workflow preset，不覆盖老 preset，项目工作流执行面板可切换）
-30. M6.11.19 剧本优化 Agent 白皮书接入与 Stage 3 台词预算门禁。（已实现，待页面验收；剧本页新增优化剧本 Agent，Stage 3/Copy-only 入库前会阻断念不完台词和简化版提示词，当前集已同步到视频生成台）
-31. M10.1 云端文件表与对象存储底座。
-32. M10.2 项目共享资产库云端版与租户权限隔离。
-33. M10.3 云同步、额度扣费细化与冲突策略。
-34. M6.11 画布工具模块化与 Agent 独立化。
+29. M6.11.18 Seedance Skill 5 轻量分镜 v5.2、Mx-Shell 清道夫分镜 v1.5 与情绪导演增强预设。（已实现，待页面验收；新增 v5.2 workflow preset、清道夫分镜 preset 和两个情绪导演增强分镜包，不覆盖老 preset，项目 Agent 中心按固定岗位选择 Skill 套件，工作流执行面板同步读取；本地 Runner 的 Stage 1 / Stage 3 已改为场次 / Beat 分批碎片后汇总）
+30. M6.11.19 剧本优化 Agent 白皮书 v1.1 接入与 Stage 3 台词预算门禁。（已实现，待页面验收；剧本优化前移到分集导入阶段，优化稿按 AI 剧本母版 v1.1 校验原始场次 / 当前母版场次、隐喻处理和禁止项分类，Stage 3/Copy-only 入库前会阻断念不完台词和简化版提示词，当前集已同步到视频生成台）
+31. M6.11.20 本集制作台独立页面退场。（已实现，待页面验收；旧 `/workbench` 路由兼容跳转到视频工作流，项目详情和画布不再主动进入旧制作台界面）
+32. M6.11.21 视频工作流剧本优化入口收口。（已实现，待页面验收；项目导入本集剧本时仍可先运行 AI 适配，标题不再自动预填“第 N 集”；已有分集可在项目页原剧本卡片选择白皮书剧本优化 Skill 并直接生成优化稿，不再点击剧本优化时自动跳转视频工作流；项目详情默认进入分集生产入口，左侧集数只显示自定义标题并负责选集，中间保留原剧本缩略，右侧优化稿标题栏提供进入工作流入口并显示优化稿 / 失败态）
+33. M6.11.22 视频工作流新阶段收口。（已实现，待页面验收；`/original-workflow` 改为剧本 / 服化道 / 分镜 / Copy-only / 运行报告，导演方法不再作为独立阶段展示，服化道和分镜 Runner prompt 均内置导演方法，服化道不再等待 Stage 1 质量门；项目详情剧本优化和剧本写入也读取同一份视频工作流执行方式，本地模式走 Codex CLI，云端 Worker 未接入时明确阻断；视频工作流与 Agent 中心移除整套模板选择器，改为剧本优化 / 服化道 / 分镜逐阶段选择 Skill，分镜 Runner prompt 会按 Skill 5、清道夫或情绪导演增强包切换模板要求）
+34. M6.11.23 视频工作流三阶段与 Copy-only 收口。（已实现，待页面验收；`/original-workflow` 前台只保留剧本优化 / 服化道 / Copy-only / 运行报告，分镜过程隐藏到 Copy-only 后台；服化道交付契约扩展为角色 / 场景 / 道具三份资产文件，并由本地 Runner 三路并行提交；Copy-only 改为分批并行生成碎片后合并，只交付 `02-seedance-copy-only.md` 可复制提示词，`02-seedance-prompts.md` 只作为同标准隐藏缓存；质量门已切到 Copy-only 新合同）
+35. M10.1 云端文件表与对象存储底座。
+36. M10.2 项目共享资产库云端版与租户权限隔离。
+37. M10.3 云同步、额度扣费细化与冲突策略。
+38. M6.11 画布工具模块化与 Agent 独立化。
 
 ### 上线前主门禁：视频工作流云端 Worker 化
 
@@ -990,14 +994,14 @@ Agent 设置中心
 
 ### M6.10：Seedance 2.0 多 Agent 工作流接入
 
-目标：把“废才 Seedance 2.0 AI 分镜师团队”中的 director、art-designer、storyboard-artist 三阶段工作流接入当前项目工具。接入后，它不是一个超长提示词模板，而是项目级 Seedance 工作流模块：预设负责角色与规范，Runner 负责模型调用，workflow store 负责阶段状态和审核证据，现有剧本 / 设定库 / 分镜 / 画布视频节点负责承接结果。
+目标：把剧本适配和“废才 Seedance 2.0 AI 分镜师团队”中的 director、art-designer、storyboard-artist 工作流接入当前项目工具。接入后，它不是一个超长提示词模板，而是项目级 Seedance 工作流模块：预设负责角色与规范，Runner 负责模型调用，workflow store 负责阶段状态和审核证据，现有剧本 / 设定库 / 分镜 / 画布视频节点负责承接结果。
 
 状态：进行中。M6.10.0 已完成预设导入与项目级选择，后续从 M6.10.1 开始再接真实文本 Runner；当前仍不自动执行工作流。
 
 来源工作流：
 
 - 来源目录：`/Users/huangchi/马也传媒/03_AI工作流/AI/眨眼之间工作区/ai/86.废才Seedance 2.0 AI 分镜师团队/`。
-- `AGENTS.md` 定义制片人调度、三阶段流程和强制执行锁。
+- `AGENTS.md` 定义制片人调度、导演 / 服化道 / 分镜原始三阶段流程和强制执行锁；工具内预设展示时把导演能力下沉到服化道和分镜阶段。
 - `agents/director.md`、`agents/art-designer.md`、`agents/storyboard-artist.md` 定义三个内容 Agent。
 - `skills/` 下的 director、art-design、seedance-storyboard、三类 review 和 compliance skill 定义阶段规范。
 - `project.config.json` 定义各阶段需要读取的 agent / skill / template / examples。
@@ -1022,14 +1026,12 @@ Agent 设置中心
 
 ```text
 Seedance 工作流预设
-  -> 导入 director / art-designer / storyboard-artist 与阶段 skills
+  -> 导入 script-optimizer / art-designer / storyboard-artist 与阶段 skills
   -> 用户选择项目和本集剧本
-  -> 阶段一 director 生成导演分析 / 讲戏本
-  -> director 执行业务审核 + 合规审核，PASS 后进入阶段二
-  -> 阶段二 art-designer 生成角色 / 场景 / 道具设定
-  -> director 执行业务审核 + 合规审核，PASS 后写入设定库
-  -> 阶段三 storyboard-artist 按场次 / 子场次生成 Seedance 提示词
-  -> director 执行业务审核 + 合规审核，PASS 后写入分镜 / 镜头组
+  -> 阶段一 script-optimizer 生成 AI 剧本母版
+  -> 阶段二 art-designer 内置导演讲戏 / 导演方法，生成角色 / 场景 / 道具设定
+  -> 阶段三 storyboard-artist 内置导演讲戏 / 导演方法，按场次 / 子场次生成 Seedance 提示词
+  -> 各阶段保留读取记录、业务审核、质量门和人工确认后再写入设定库 / 分镜 / 镜头组
   -> 用户确认后加入画布视频生成节点
 ```
 
@@ -1037,17 +1039,18 @@ Seedance 工作流预设
 
 模型推理程度：`高`。
 
-状态：已实现，待页面验收。当前已新增内置 `Seedance 2.0 分镜师团队` workflow preset，导入 director / art-designer / storyboard-artist 三阶段摘要、skills、quality gates 和 sourceFiles，并接入 Agent 设置中心项目级启用 / 选择保存；不会执行 workflow、调用真实 LLM、生成图片或视频、触发扣费。
+状态：已实现，待页面验收。当前已新增内置 `Seedance 2.0 分镜师团队` workflow preset，导入 script-optimizer / art-designer / storyboard-artist 主链摘要、skills、quality gates、agentBindings 和 sourceFiles；导演 Skill 不再独立成阶段，已并入服化道和分镜阶段，并接入 Agent 设置中心项目级启用 / 选择保存；不会执行 workflow、调用真实 LLM、生成图片或视频、触发扣费。
 
 实现时机：M6.9.R1 之后。先把旧工作流沉淀为工具内可选择、可版本化、可编辑的预设，不急着自动执行内容。
 
 交付内容：
 
 - 新增内置预设：`Seedance 2.0 分镜师团队`。
-- 将旧工作流中的三个 Agent 导入为预设配置：
-  - 导演 / director
-  - 服化道 / art-designer
-  - 分镜师 / storyboard-artist
+- 将主链 Agent 导入为预设配置：
+  - 剧本 / script-optimizer
+  - 服化道 / art-designer（内置导演讲戏 / 导演方法）
+  - 分镜师 / storyboard-artist（内置导演讲戏 / 导演方法）
+- 每个阶段保存独立 `agentBindings`，记录可替换的 agent kind、版本、输入契约和输出契约。
 - 将阶段 skill、template、examples 路径整理成预设 manifest。
 - 在 Agent 设置中心或项目工作流中能查看该预设的系统提示词、阶段说明、输入变量和输出要求。
 - 预设必须标记来源版本和导入时间，后续项目级修改不污染内置默认预设。
@@ -1055,7 +1058,7 @@ Seedance 工作流预设
 验收标准：
 
 - 用户能在项目中选择 `Seedance 2.0 分镜师团队` 预设。
-- 预设能展示三阶段流程和各阶段读取的规范文件。
+- 预设能展示剧本适配、服化道美术设计、Seedance 分镜三段主链和各阶段读取的规范文件；不再显示独立导演分析阶段。
 - 导入后不自动运行 Agent、不自动写入设定库、不触发生成或扣费。
 
 不做事项：
@@ -1153,8 +1156,7 @@ Seedance 工作流预设
 
 说明：
 
-- director-analysis：预览 production_bible / storyboard_table 草案。
-- art-design：预览 production_bible 草案。
+- art-design：预览 production_bible 草案，并承接内置导演讲戏 / 导演方法。
 - seedance-storyboard：预览 storyboard_table / video_node 草案。
 - 本阶段只做预览；M6.10.3-B 再做确认后写入设定库，M6.10.3-C 再做分镜 / 画布视频节点写入。
 
@@ -1259,7 +1261,7 @@ Seedance 工作流预设
 交付内容：
 
 - 新增 Seedance quality gate manifest 类型和内置 manifest。
-- 为 `director-analysis`、`art-design`、`seedance-storyboard` 定义 required readings、sourceFiles 和基础 gate。
+- 为 `script-adaptation`、`art-design`、`seedance-storyboard` 定义 required readings、sourceFiles 和基础 gate；导演 Skill 读取记录并入 `art-design` 与 `seedance-storyboard`。
 - 建立 workflow reading records：sourceFile、sourceType、readAt、status、note。
 - 提供基础 gate 纯函数，第一版只检查 required readings、stage output、review evidence 是否存在。
 - 在 Agent 设置中心展示每阶段已读 / 缺失、error / warning 数量和 required readings 列表。
@@ -1359,7 +1361,7 @@ Seedance 工作流预设
 - 写入设定库、写入分镜、创建视频配置节点和可能扣费 / 生成的操作前仍有明确确认。
 - 不改变 workflow 状态、Runner、mapping preview、应用写入或质量门逻辑。
 
-#### M6.10.R0：Seedance 三阶段 Agent Core 拆分
+#### M6.10.R0：Seedance 主链 Agent Core 拆分
 
 模型推理程度：`高`。
 
@@ -1370,7 +1372,7 @@ Seedance 工作流预设
 交付内容：
 
 - 新增 `web/src/app/(user)/projects/workflow-agents/`，定义 `WorkflowAgentCore` 协议。
-- 拆出 `director`、`art-designer`、`storyboard-artist` 三个正式工作流 Agent Core。
+- 拆出 `script-optimizer`、`art-designer`、`storyboard-artist` 三个正式工作流 Agent Core；导演分析不再作为独立 Core。
 - Agent Core 负责构造阶段输入、构造 prompt messages、标准化文本输出入口和生成 mapping preview。
 - 现有 workflow stage runner 和 mapping preview 入口改为通过对应 Agent Core 调用，保持 UI、状态、审核证据、output 存储和应用链路行为不变。
 - 后续快速 Agent 可以复用 Agent Core 的输入 / prompt / output / mapper 能力，但不能绕过 workflow 审核、approved 门禁和质量门。
@@ -1378,7 +1380,7 @@ Seedance 工作流预设
 不做事项：
 
 - 不新增单独运行 `director` / `art-designer` / `storyboard-artist` 的 UI 入口。
-- 不改 workflow 阶段顺序。
+- workflow 主链顺序为剧本适配、服化道美术设计、Seedance 分镜；导演 Skill 随服化道 / 分镜 Skill 套件选择，不改全局 Agent 配置。
 - 不改审核 / approved 门禁。
 - 不改 mapping preview 应用行为。
 - 不触发图片或视频生成，不触发扣费。
@@ -1419,10 +1421,10 @@ Agent 分层边界：
 
 - 当前 Agent 分为两层，不应在 UI 或代码命名里混成同一级：
   - 快速工具 Agent：M6.9 的 `asset_extractor`、`storyboard_director`，用于单点辅助动作。
-  - 正式工作流 Agent：M6.10 Seedance workflow 的 `director`、`art-designer`、`storyboard-artist`，用于带阶段依赖、审核证据和质量门的三阶段流程。
+  - 正式工作流 Agent：M6.10 Seedance workflow 的 `script-optimizer`、`art-designer`、`storyboard-artist`，用于带阶段依赖、审核证据和质量门的三阶段流程；导演能力以 Skill 形式并入服化道和分镜套件。
 - 功能相近但定位不同：
   - `asset_extractor` 负责快速从剧本拆本集生图需求；`art-designer` 负责正式工作流里的美术设定阶段。
-  - `storyboard_director` 负责快速生成分镜头表草案；`director` / `storyboard-artist` 负责正式工作流里的导演分析和 Seedance 分镜提示词。
+  - `storyboard_director` 负责快速生成分镜头表草案；`storyboard-artist` 负责正式工作流里的 Seedance 分镜提示词，并通过内置导演 Skill 承接导演方法。
 - 产品入口应区分：
   - 本集工作台展示“快速 Agent”。
   - Agent 设置中心 / Seedance workflow 展示“正式工作流 Agent”。
@@ -1442,7 +1444,7 @@ Agent 分层边界：
 拆分顺序：
 
 0. M6.11.0-A Agent 工作台项目级入口：已实现，待页面验收。当前已将 Agent 工作台抽为项目级页面 `/projects/:id/agents`，画布页只保留跳转入口，并可带上 `canvasId / episodeId` 上下文；不改 Agent Runner、后端、写入逻辑和扣费边界。
-1. M6.11.1 本集生产主线页面：已实现，待页面验收。新增 `/projects/:id/episodes/:episodeId/workbench`，把原始 Seedance 三阶段 workflow 对齐为单集正式生产流程：导演分析、服化道美术设计、Seedance 分镜、mapping preview 和人工确认写入；项目详情按分集提供“生产流程”入口，画布工具栏在已绑定项目和集数时跳转该页面。本轮不做逐场次执行器、不触发图片或视频生成、不触发扣费、不改后端。
+1. M6.11.1 本集生产主线页面：已实现，待页面验收。曾新增 `/projects/:id/episodes/:episodeId/workbench`，把原始 Seedance 三阶段 workflow 对齐为单集正式生产流程；当前已按 M6.11.20 退场为旧链接兼容跳转，主入口回到项目详情和视频工作流。
 2. M6.11.2 Agent 独立化：待实现。先抽资产提取 Agent、分镜导演 Agent、统一 hook 和审核列表。
 3. M6.11.3 Canvas Toolbar 工具定义模块化：抽顶部工具栏工具协议和构建函数。
 4. M6.11.4 Node Hover Toolbar 工具定义模块化：抽节点悬浮工具显隐规则。

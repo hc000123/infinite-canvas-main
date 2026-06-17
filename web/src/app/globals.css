@@ -80,16 +80,18 @@
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: oklch(0.708 0 0);
-    --studio-app-bg: #f4f7fb;
-    --studio-shell-bg: #f8fafc;
-    --studio-panel-bg: rgba(255, 255, 255, 0.82);
-    --studio-panel-muted-bg: rgba(241, 245, 249, 0.72);
+    --studio-app-bg: #edf2f7;
+    --studio-shell-bg: #f5f7fb;
+    --studio-panel-bg: rgba(255, 255, 255, 0.9);
+    --studio-panel-muted-bg: rgba(229, 235, 244, 0.84);
+    --studio-panel-rail-bg: rgba(225, 232, 242, 0.92);
+    --studio-section-bg: rgba(248, 250, 252, 0.88);
     --studio-elevated-bg: #ffffff;
-    --studio-control-bg: rgba(255, 255, 255, 0.72);
-    --studio-hover-bg: rgba(49, 95, 159, 0.075);
-    --studio-active-bg: rgba(49, 95, 159, 0.12);
-    --studio-border-subtle: rgba(15, 23, 42, 0.09);
-    --studio-border-strong: rgba(49, 95, 159, 0.28);
+    --studio-control-bg: rgba(255, 255, 255, 0.84);
+    --studio-hover-bg: rgba(49, 95, 159, 0.095);
+    --studio-active-bg: rgba(49, 95, 159, 0.15);
+    --studio-border-subtle: rgba(15, 23, 42, 0.12);
+    --studio-border-strong: rgba(49, 95, 159, 0.34);
     --studio-text-primary: #111827;
     --studio-text-secondary: #475569;
     --studio-text-muted: #64748b;
@@ -106,8 +108,8 @@
     --studio-media-overlay: rgba(8, 13, 20, 0.56);
     --studio-media-overlay-soft: rgba(8, 13, 20, 0);
     --studio-on-media: #f8fafc;
-    --studio-shadow: 0 16px 42px rgba(15, 23, 42, 0.06);
-    --studio-shadow-hover: 0 18px 38px rgba(15, 23, 42, 0.1);
+    --studio-shadow: 0 14px 36px rgba(15, 23, 42, 0.07);
+    --studio-shadow-hover: 0 18px 38px rgba(15, 23, 42, 0.12);
 }
 
 .dark {
@@ -142,16 +144,18 @@
     --sidebar-accent-foreground: #f2f4f8;
     --sidebar-border: #262b36;
     --sidebar-ring: #6fa8ff;
-    --studio-app-bg: #0d1016;
-    --studio-shell-bg: #10141b;
-    --studio-panel-bg: rgba(20, 24, 33, 0.86);
-    --studio-panel-muted-bg: rgba(27, 32, 43, 0.66);
+    --studio-app-bg: #0b0e14;
+    --studio-shell-bg: #0f141d;
+    --studio-panel-bg: rgba(22, 27, 38, 0.92);
+    --studio-panel-muted-bg: rgba(32, 39, 52, 0.82);
+    --studio-panel-rail-bg: rgba(18, 23, 33, 0.94);
+    --studio-section-bg: rgba(15, 20, 29, 0.88);
     --studio-elevated-bg: #171c26;
-    --studio-control-bg: rgba(23, 28, 38, 0.72);
-    --studio-hover-bg: rgba(111, 168, 255, 0.1);
-    --studio-active-bg: rgba(111, 168, 255, 0.16);
-    --studio-border-subtle: rgba(148, 163, 184, 0.13);
-    --studio-border-strong: rgba(143, 185, 255, 0.28);
+    --studio-control-bg: rgba(24, 30, 42, 0.86);
+    --studio-hover-bg: rgba(111, 168, 255, 0.13);
+    --studio-active-bg: rgba(111, 168, 255, 0.2);
+    --studio-border-subtle: rgba(148, 163, 184, 0.18);
+    --studio-border-strong: rgba(143, 185, 255, 0.36);
     --studio-text-primary: #f7f9fc;
     --studio-text-secondary: #c7cede;
     --studio-text-muted: #9aa3b4;
@@ -168,8 +172,8 @@
     --studio-media-overlay: rgba(8, 13, 20, 0.6);
     --studio-media-overlay-soft: rgba(8, 13, 20, 0);
     --studio-on-media: #f8fafc;
-    --studio-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
-    --studio-shadow-hover: 0 22px 48px rgba(0, 0, 0, 0.3);
+    --studio-shadow: 0 18px 42px rgba(0, 0, 0, 0.3);
+    --studio-shadow-hover: 0 22px 48px rgba(0, 0, 0, 0.36);
 }
 
 @layer base {
@@ -198,15 +202,15 @@
 @layer utilities {
     .studio-shell {
         background:
-            linear-gradient(180deg, rgba(49, 95, 159, 0.045) 0%, transparent 220px),
-            linear-gradient(90deg, rgba(15, 23, 42, 0.025), transparent 36%, rgba(49, 95, 159, 0.025)),
+            linear-gradient(180deg, rgba(49, 95, 159, 0.05) 0%, transparent 210px),
+            linear-gradient(90deg, rgba(15, 23, 42, 0.04), transparent 34%, rgba(49, 95, 159, 0.035)),
             var(--studio-shell-bg);
     }
 
     .dark .studio-shell {
         background:
-            linear-gradient(180deg, rgba(111, 168, 255, 0.04) 0%, transparent 240px),
-            linear-gradient(90deg, rgba(255, 255, 255, 0.018), transparent 38%, rgba(111, 168, 255, 0.018)),
+            linear-gradient(180deg, rgba(111, 168, 255, 0.045) 0%, transparent 230px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.025), transparent 38%, rgba(111, 168, 255, 0.025)),
             var(--studio-shell-bg);
     }
 
@@ -229,6 +233,34 @@
         border: 1px solid var(--studio-border-subtle);
         border-radius: 8px;
         backdrop-filter: blur(14px);
+    }
+
+    .studio-rail {
+        background: var(--studio-panel-rail-bg);
+        border: 1px solid var(--studio-border-subtle);
+        border-radius: 8px;
+        box-shadow: var(--studio-shadow);
+        backdrop-filter: blur(18px);
+    }
+
+    .studio-section {
+        background: var(--studio-section-bg);
+        border: 1px solid var(--studio-border-subtle);
+        border-radius: 8px;
+    }
+
+    .studio-toolbar {
+        background: var(--studio-panel-muted-bg);
+        border: 1px solid var(--studio-border-subtle);
+        border-radius: 8px;
+    }
+
+    .studio-page-header {
+        background: color-mix(in srgb, var(--studio-panel-bg) 86%, var(--studio-shell-bg));
+        border: 1px solid var(--studio-border-subtle);
+        border-radius: 8px;
+        box-shadow: var(--studio-shadow);
+        backdrop-filter: blur(18px);
     }
 
     .dark .studio-panel-muted {
@@ -635,6 +667,73 @@
         color: var(--studio-text-primary) !important;
     }
 
+    :where(.studio-workspace, .studio-shell, .studio-modal) :where(.ant-typography) {
+        color: var(--studio-text-primary) !important;
+    }
+
+    :where(.studio-workspace, .studio-shell, .studio-modal) :where(.ant-typography-secondary) {
+        color: var(--studio-text-secondary) !important;
+    }
+
+    :where(.studio-workspace, .studio-shell, .studio-modal) :where(.ant-typography-disabled) {
+        color: var(--studio-text-muted) !important;
+        opacity: 0.58;
+    }
+
+    :where(.studio-workspace, .studio-shell, .studio-modal) :where(.ant-typography-success) {
+        color: var(--studio-success) !important;
+    }
+
+    :where(.studio-workspace, .studio-shell, .studio-modal) :where(.ant-typography-warning) {
+        color: var(--studio-warning) !important;
+    }
+
+    :where(.studio-workspace, .studio-shell, .studio-modal) :where(.ant-typography-danger) {
+        color: var(--studio-danger) !important;
+    }
+
+    :where(.studio-workspace, .studio-shell, .studio-modal) :where(a.ant-typography, .ant-typography a) {
+        color: var(--studio-accent) !important;
+        text-decoration-color: color-mix(in srgb, var(--studio-accent) 35%, transparent);
+        text-underline-offset: 3px;
+        transition:
+            color 0.16s ease,
+            text-decoration-color 0.16s ease;
+    }
+
+    :where(.studio-workspace, .studio-shell, .studio-modal) :where(a.ant-typography:hover, .ant-typography a:hover) {
+        color: var(--studio-accent-hover) !important;
+        text-decoration-color: var(--studio-accent-hover);
+    }
+
+    :where(.studio-workspace, .studio-shell, .studio-modal) :where(.ant-typography-copy, .ant-typography-edit, .ant-typography-expand) {
+        color: var(--studio-text-muted) !important;
+        transition:
+            color 0.16s ease,
+            background-color 0.16s ease;
+    }
+
+    :where(.studio-workspace, .studio-shell, .studio-modal) :where(.ant-typography-copy:hover, .ant-typography-edit:hover, .ant-typography-expand:hover) {
+        color: var(--studio-accent) !important;
+    }
+
+    :where(.studio-workspace, .studio-shell, .studio-modal) :where(.ant-typography code, .ant-typography kbd) {
+        background: var(--studio-panel-muted-bg);
+        border: 1px solid var(--studio-border-subtle);
+        border-radius: 5px;
+        color: var(--studio-text-primary);
+    }
+
+    :where(.studio-workspace, .studio-shell, .studio-modal) :where(.ant-typography mark) {
+        background: color-mix(in srgb, var(--studio-warning) 16%, transparent);
+        color: var(--studio-text-primary);
+    }
+
+    :where(.studio-workspace, .studio-shell, .studio-modal) :where(.ant-typography blockquote) {
+        border-inline-start-color: var(--studio-border-strong);
+        color: var(--studio-text-secondary);
+    }
+
     .studio-workspace :where(.ant-card, .ant-pro-card),
     .studio-shell :where(.ant-card, .ant-pro-card),
     .studio-modal :where(.ant-card, .ant-pro-card) {
@@ -829,6 +928,11 @@
         color: var(--studio-text-secondary) !important;
     }
 
+    :where(.ant-popover .ant-popover-arrow::before, .ant-popover .ant-popover-arrow::after) {
+        background: var(--studio-elevated-bg) !important;
+        border-color: var(--studio-border-subtle) !important;
+    }
+
     :where(.ant-picker-dropdown .ant-picker-panel-container) {
         background: var(--studio-elevated-bg) !important;
         border: 1px solid var(--studio-border-subtle);
@@ -857,7 +961,12 @@
         color: var(--studio-text-primary) !important;
     }
 
-    :where(.ant-picker-dropdown .ant-picker-cell-selected .ant-picker-cell-inner, .ant-picker-dropdown .ant-picker-cell-range-start .ant-picker-cell-inner, .ant-picker-dropdown .ant-picker-cell-range-end .ant-picker-cell-inner, .ant-picker-dropdown .ant-picker-time-panel-cell-selected .ant-picker-time-panel-cell-inner) {
+    :where(
+        .ant-picker-dropdown .ant-picker-cell-selected .ant-picker-cell-inner,
+        .ant-picker-dropdown .ant-picker-cell-range-start .ant-picker-cell-inner,
+        .ant-picker-dropdown .ant-picker-cell-range-end .ant-picker-cell-inner,
+        .ant-picker-dropdown .ant-picker-time-panel-cell-selected .ant-picker-time-panel-cell-inner
+    ) {
         background: var(--studio-accent) !important;
         color: var(--primary-foreground) !important;
     }
@@ -1157,9 +1266,24 @@
             color 0.15s ease;
     }
 
-    .studio-workspace :where(.ant-tag:not(.ant-tag-checkable):not(.ant-tag-has-color):not(.ant-tag-magenta):not(.ant-tag-red):not(.ant-tag-volcano):not(.ant-tag-orange):not(.ant-tag-gold):not(.ant-tag-lime):not(.ant-tag-green):not(.ant-tag-cyan):not(.ant-tag-blue):not(.ant-tag-geekblue):not(.ant-tag-purple):not(.ant-tag-success):not(.ant-tag-processing):not(.ant-tag-error):not(.ant-tag-warning)),
-    .studio-shell :where(.ant-tag:not(.ant-tag-checkable):not(.ant-tag-has-color):not(.ant-tag-magenta):not(.ant-tag-red):not(.ant-tag-volcano):not(.ant-tag-orange):not(.ant-tag-gold):not(.ant-tag-lime):not(.ant-tag-green):not(.ant-tag-cyan):not(.ant-tag-blue):not(.ant-tag-geekblue):not(.ant-tag-purple):not(.ant-tag-success):not(.ant-tag-processing):not(.ant-tag-error):not(.ant-tag-warning)),
-    .studio-modal :where(.ant-tag:not(.ant-tag-checkable):not(.ant-tag-has-color):not(.ant-tag-magenta):not(.ant-tag-red):not(.ant-tag-volcano):not(.ant-tag-orange):not(.ant-tag-gold):not(.ant-tag-lime):not(.ant-tag-green):not(.ant-tag-cyan):not(.ant-tag-blue):not(.ant-tag-geekblue):not(.ant-tag-purple):not(.ant-tag-success):not(.ant-tag-processing):not(.ant-tag-error):not(.ant-tag-warning)) {
+    .studio-workspace
+        :where(
+            .ant-tag:not(.ant-tag-checkable):not(.ant-tag-has-color):not(.ant-tag-magenta):not(.ant-tag-red):not(.ant-tag-volcano):not(.ant-tag-orange):not(.ant-tag-gold):not(.ant-tag-lime):not(.ant-tag-green):not(.ant-tag-cyan):not(.ant-tag-blue):not(
+                    .ant-tag-geekblue
+                ):not(.ant-tag-purple):not(.ant-tag-success):not(.ant-tag-processing):not(.ant-tag-error):not(.ant-tag-warning)
+        ),
+    .studio-shell
+        :where(
+            .ant-tag:not(.ant-tag-checkable):not(.ant-tag-has-color):not(.ant-tag-magenta):not(.ant-tag-red):not(.ant-tag-volcano):not(.ant-tag-orange):not(.ant-tag-gold):not(.ant-tag-lime):not(.ant-tag-green):not(.ant-tag-cyan):not(.ant-tag-blue):not(
+                    .ant-tag-geekblue
+                ):not(.ant-tag-purple):not(.ant-tag-success):not(.ant-tag-processing):not(.ant-tag-error):not(.ant-tag-warning)
+        ),
+    .studio-modal
+        :where(
+            .ant-tag:not(.ant-tag-checkable):not(.ant-tag-has-color):not(.ant-tag-magenta):not(.ant-tag-red):not(.ant-tag-volcano):not(.ant-tag-orange):not(.ant-tag-gold):not(.ant-tag-lime):not(.ant-tag-green):not(.ant-tag-cyan):not(.ant-tag-blue):not(
+                    .ant-tag-geekblue
+                ):not(.ant-tag-purple):not(.ant-tag-success):not(.ant-tag-processing):not(.ant-tag-error):not(.ant-tag-warning)
+        ) {
         background: var(--studio-panel-muted-bg) !important;
         border-color: var(--studio-border-subtle) !important;
         color: var(--studio-text-secondary) !important;

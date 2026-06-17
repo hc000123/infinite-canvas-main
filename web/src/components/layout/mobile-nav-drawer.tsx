@@ -28,11 +28,11 @@ export function MobileNavDrawer({ open, activeToolSlug, getHref, onClose }: Mobi
                             className={cn(
                                 "flex items-center gap-3 rounded-md border px-3 py-3 text-base transition",
                                 active
-                                    ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] font-semibold text-[var(--studio-text-primary)] shadow-[inset_0_-2px_0_var(--studio-accent)]"
-                                    : "border-transparent text-[var(--studio-text-secondary)] hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]",
+                                    ? "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] font-semibold !text-[var(--studio-text-primary)] shadow-[inset_0_-2px_0_var(--studio-text-primary)]"
+                                    : "border-transparent !text-[var(--studio-text-secondary)] hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:!text-[var(--studio-text-primary)]",
                             )}
                         >
-                            <Icon className={cn("size-5", active ? "text-[var(--studio-accent)]" : "text-current")} />
+                            <Icon className="size-5 text-current" />
                             <span>{tool.label}</span>
                         </Link>
                     );

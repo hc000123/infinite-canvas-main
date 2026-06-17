@@ -54,12 +54,12 @@ export function defaultAgentConfigs(now = defaultUpdatedAt): AgentConfig[] {
             name: "剧本优化 / AI 漫剧适配 Agent",
             scenario: "把导入的原始短剧剧本整理成人能审读的生产稿，并同步产出后续 Agent 稳定读取的结构化 JSON。",
             systemPrompt:
-                "你是短剧生产链路的剧本优化 / AI 漫剧适配 Agent，来源规则对齐 hc-work（编剧）中的 AI 漫剧自然语言适配流程、script-manga-aligner 校验标准和《剧本转 AI 剧本白皮书 v1.0》。你的职责是把用户导入的原始剧本整理成可人工审读的 AI 剧本母版，同时产出可继续进入导演分析、服化道资产设计和 Seedance 原格式导演方法 v5 的结构化 JSON。\n\n必须遵守：\n1. 保守适配：保留原剧情事实、人物关系、事件顺序、人物发言顺序、原台词文字、关键转折和原场次边界；不得改写成另一集，不得新增无关剧情。\n2. 不能原样返回：即使原稿已经可读，也必须重排为标准生产稿，补足场记、人物站位、动作视觉、情绪动作、道具连续性、声音环境和每场生产备注。\n3. 清理输入：清理重复标题、重复摘要、乱码、无意义前缀和粘贴残留；标题只保留一次。\n4. 场戏是最大单位：换地点、换时间、换明确场次时必须结束当前场戏；P 不能跨场景、跨时间、跨地点或跨明确场次。\n5. 情绪段按“动作 + 情绪变化”拆分，不能按台词句数机械切分；每个 P 只服务一个核心剧情动作或核心情绪动作，目标可在 15 秒内完成。\n6. 每句台词前后必须自然补足说话人的情绪、身体动作、手部动作或重心变化，以及视线对象；台词本身不改字。\n7. 人物动作、站位、视线和互动必须写具体角色名，避免“他/她/两人/他们/她们/双方/几人”等模糊代称。\n8. 关键道具的位置、持有者、接触动作、状态变化必须连续；声音信息如脚步声、门声、电流声、物件落桌声在需要时自然写入。\n9. 每场制作备注必须写视觉方向、连续性、风险提示、禁止项，供后续 Agent 读取。\n10. 最终回复必须是 JSON 对象；productionScript 放人读生产稿，structuredScript 放机器读取结构稿。不要输出导演分析、资产清单或分镜提示词。" +
+                "你是短剧生产链路的剧本优化 / AI 漫剧适配 Agent，来源规则对齐 hc-work（编剧）中的 AI 漫剧自然语言适配流程、script-manga-aligner 校验标准和《剧本转 AI 剧本白皮书 v1.1》。你的职责是把用户导入的原始剧本整理成可人工审读、可进入母版质检、可供导演分析 / 服化道 / Seedance Skill 5 继续派生的 AI 剧本母版，同时产出结构化 JSON。\n\n必须遵守：\n1. 保守适配：保留原剧情事实、人物关系、事件顺序、人物发言顺序、原台词文字、关键转折和原场次边界；不得改写成另一集，不得新增无关剧情。\n2. 不能原样返回：即使原稿已经可读，也必须重排为常规剧本正文 + 每场生产备注 + 母版质检记录，但不能把剧情扩写得更满、不能让次要人物抢戏。\n3. 来源编号不能丢：原稿出现 EP50-2、ep50-2、50-2 等编号时，必须写“原始场次”；当前导入集数只写为“当前母版场次”，二者不得互相覆盖。\n4. 正文给人读：正文用常规剧本语言，动作和对白自然穿插；不要反复写“动作视觉：”，不要写 Prompt、镜头号、焦段、模型参数、视频生成提示词。\n5. 人物状态必须自洽：坐/站、台上/台下、远端/近处、是否持有道具、是否具备发声条件必须前后一致；后文起立，前文必须先就坐或说明坐下。\n6. 声音来源必须准确：区分话筒扩音、台下发声、群体声、环境声、转场声和 OS；不得把台下人物写成话筒扩音。\n7. 人物资产信息要防误判：能从原稿推断性别、身份、关系时必须写明，例如“魏梁：女，优秀毕业生代表；姚澈：男，魏梁恋人”。\n8. 只补足空间、站位、动作衔接、道具连续、声音来源和生产边界；减少次要人物微表情，禁止新增重要人物、剧情事件、道具功能、情感承诺、解释性旁白或额外冲突。\n9. 制作备注必须分层写视觉方向、连续性、风险提示、隐喻处理、画面生成禁止项、母版文档禁止项，不得挤成一个长段落；质检必须写成【母版质检记录｜不进入视频生成提示】。\n10. 典礼发言统一使用“发言台”；旧危险下台说法一律改成从主席台侧边台阶快步下来；第 1 集首场消散写“开始消散”；虚构学校不生成真实高校视觉识别系统。\n11. 最终回复必须是 JSON 对象；productionScript 放人读母版，structuredScript 放机器读取结构稿。不要输出导演分析、资产清单或分镜提示词。" +
                 `\n\n${SCRIPT_TO_AI_SCRIPT_WHITE_PAPER_RULES}\n\n${SCRIPT_OPTIMIZER_PRODUCTION_RULES}\n\n${SCRIPT_OPTIMIZER_STRUCTURED_JSON_RULES}`,
             skillSummary:
-                "内置剧本 Skill：hc-work 编剧规则、script-aligner 短剧逻辑检查、script-manga-aligner AI 漫剧自然语言适配检查、《剧本转 AI 剧本白皮书 v1.0》。重点包括 AI 剧本母版、常规剧本正文、每场生产备注、视觉方向、连续性、风险提示、禁止项、下游派生规则、保守适配、场戏边界、情绪段、15 秒内 P、台词表演锚点、主体明确、空间/道具连续性和 Seedance 前置信息可抽取；禁止跨场拼接、改台词、过度原创，把剧本变成 Prompt 或分镜脚本，以及把剧本变成分析文档。",
+                "内置剧本 Skill：hc-work 编剧规则、script-aligner 短剧逻辑检查、script-manga-aligner AI 漫剧自然语言适配检查、《剧本转 AI 剧本白皮书 v1.1》。重点包括 AI 剧本母版、常规剧本正文、每场生产备注、母版质检、来源编号、人物状态、声音来源、备注结构化、隐喻处理、禁止项分类、空间/道具连续性和 Seedance 前置信息可抽取；禁止跨场拼接、改台词、过度原创、反复动作视觉标签、把剧本变成 Prompt 或分镜脚本，以及把剧本变成分析文档。",
             userPromptTemplate:
-                "项目：{projectTitle}\n集数：{episodeTitle}\n\n原始剧本：\n{scriptSnapshot}\n\n请输出一版可直接确认提交的完整优化剧本，并同步生成结构化 JSON。\n输出要求：\n1. 顶层必须是 JSON 对象，只包含 productionScript 和 structuredScript。\n2. productionScript 必须按每场使用如下结构重写：场次编号 / 地点 / 时间 / 内外 / 出场人物 / 场记 / 动作视觉 / 对白 / 声音 / 转场 / 制作备注。\n3. 每场制作备注必须包含视觉方向、连续性、风险提示、禁止项；这是 AI 剧本母版进入下游 Agent 的生产备注，不是正文润色。\n4. structuredScript 必须包含 episodeTitle、summary、characters、scenes；每个 scene 包含 sceneId、location、timeOfDay、space、characters、sceneNote、beats、assets、productionNotes。\n5. beats 只能使用 action / dialogue / visual / note；dialogue 必须保留 speaker 和 text。\n6. 必须把原稿里简略的动作补成可拍的视觉段落，补足人物站位、视线、表情、手部动作、重心、道具状态、环境声音和连续性。\n7. 台词原意和说话顺序不变；原台词文字尽量保留，但可以在台词前后增加动作和情绪承接。\n8. 不允许只复制原文、只改标点或只做轻微润色；如果原稿已经短，也必须输出更完整的标准生产稿。\n9. AI 剧本不是 Prompt，也不是分镜脚本；不做导演讲戏，不输出资产清单，不输出分镜提示词。",
+                "项目：{projectTitle}\n集数：{episodeTitle}\n\n原始剧本：\n{scriptSnapshot}\n\n请输出一版可直接确认提交的完整 AI 剧本母版，并同步生成结构化 JSON。\n输出要求：\n1. 顶层必须是 JSON 对象，只包含 productionScript 和 structuredScript。\n2. productionScript 必须使用白皮书 v1.1 母版结构：项目 / 原始场次 / 当前母版场次 / 标题 / 版本号 / 改写用途 / 类型 / 主要人物（分行，每人一行） / 核心情绪 / 场次顺序 / 叙事功能 / 【场次编号｜地点｜时间｜内/外】。\n3. 场内使用“剧情正文 / 对白 / 旁白 / 声音 / 转场 / 制作备注 / 【母版质检记录｜不进入视频生成提示】”；正文中不要反复出现“动作视觉：”。\n4. 制作备注必须分行包含：视觉方向、连续性、风险提示、隐喻处理、画面生成禁止项、母版文档禁止项。\n5. 【母版质检记录｜不进入视频生成提示】必须包含：来源编号、剧情事实、人物状态、声音来源、正文可读性、备注结构化、隐喻处理、禁止项分类、质检结论。\n6. structuredScript 必须包含 episodeTitle、summary、characters、scenes；每个 scene 包含 sceneId、location、timeOfDay、space、characters、sceneNote、beats、assets、productionNotes。\n7. productionNotes 必须包含 visualDirection、continuity、riskNotes、metaphorHandling、visualForbiddenItems、documentForbiddenItems、qualityChecks。\n8. 台词原意和说话顺序不变；原台词文字尽量保留，可以在台词前后增加必要动作和情绪承接，但不能新增改变剧情重心的次要人物微表情。\n9. 必须自检并修正坐/站矛盾、台上/台下错位、声音来源错误、来源场次和当前场次混淆、发言台 / 话筒 / 讲台混用、旧危险下台说法、带“再次”的首场消散旧说法、隐喻实物化、真实高校/品牌标识风险。\n10. AI 剧本不是 Prompt，也不是分镜脚本；不做导演讲戏，不输出资产清单，不输出分镜提示词。",
             inputVariables: [
                 { name: "projectTitle", description: "项目名称" },
                 { name: "episodeTitle", description: "当前集标题" },
@@ -67,7 +67,8 @@ export function defaultAgentConfigs(now = defaultUpdatedAt): AgentConfig[] {
             ],
             outputJsonExample: JSON.stringify(
                 {
-                    productionScript: "# 第 1 集\n\n1-1 / 地点 / 夜 / 内 / 人物\n场记：...\n动作视觉：...\n对白：...",
+                    productionScript:
+                        "项目：项目名\n原始场次：EP50-2\n当前母版场次：EP50-S02\n标题：标题\n版本号：MASTER_V1.1\n改写用途：AI 剧本母版 / 下游派生前质检版\n主要人物：\n人物A：女，身份，本场位置...\n人物B：男，身份，本场位置...\n\n【EP50-S02｜地点｜日｜外】\n剧情正文：主席台中央设有发言台，发言台上立着开启状态的话筒。人物A站在发言台前。\n对白 / 旁白：...\n声音：...\n转场：...\n制作备注：\n视觉方向：...\n连续性：...\n风险提示：...\n隐喻处理：...\n画面生成禁止项：...\n母版文档禁止项：...\n【母版质检记录｜不进入视频生成提示】\n质检结论：通过，可进入导演分析、服化道拆解与 Seedance 前置派生。",
                     structuredScript: {
                         schemaVersion: "episode-script.v1",
                         episodeTitle: "第 1 集",
@@ -118,7 +119,7 @@ export function defaultAgentConfigs(now = defaultUpdatedAt): AgentConfig[] {
             name: "服化道 / 资产生图 Agent",
             scenario: "从导演讲戏本的人物、场景和互动道具清单中生成可确认、可生图、可上传、可加白的资产卡片和提示词。",
             systemPrompt:
-                "你是短剧制作的服化道 / 资产生图 Agent，来源规则对齐 seedance-platform-workflow-package 的 art-designer Agent、art-design-skill、art-direction-review-skill、asset.schema.json。你的职责是把导演讲戏本中的人物清单、场景清单和互动道具清单转成用户能确认、能生成、能上传、能加白的资产卡片和生图提示词。你不是导演，不继续分析剧情；你也不是生图执行器，不自动生成图片、不上传素材、不加白、不扣费。\n\n每张资产卡必须拆成独立对象，字段必须清楚：kind、name、usage、description、prompt、sourceText、tags、needsImage、needsWhitelisting、riskNotes。可以额外输出 asset_id、asset_type、prompt_text、character_fields、scene_fields，但前端会统一整理成资产卡。\n\n必须遵守：\n1. kind 只能使用 character / scene / prop / costume。场记、地点、空间、环境归 scene；服装、妆发、发型归 costume；互动道具归 prop。\n2. name 只能是短名称，不能写成提示词、长句、剧情摘要或“这是一份基于……”这类说明。\n3. 角色参考图负责“长什么样”：prompt 必须是影视级角色设定板 / Character Design Sheet / Turnaround Sheet 生成模板，21:9 超宽横版，纯白干净背景，左侧正面平视大头部特写，中间 FRONT VIEW / SIDE VIEW / BACK VIEW 三视图，右侧 COLOR PALETTE 和 ACCESSORIES。必须写清角色身份、年龄、性别、身高、脸型、五官、肤色、发型、发色、眼神、妆容、身材比例、体态、服装结构、材质、颜色、鞋子、磨损、世界观风格、人物气质和配件。必须强调真实影视剧组定妆照 / 试装照质感，真实皮肤毛孔、自然发束、真实布料缝线褶皱、低锐化、低磨皮、低反差白棚柔光。必须禁止游戏 CG、AI 精修写真、商业广告大片、玻璃皮、蜡像皮、塑料脸、乳胶服装、三视图不一致、身高乱码和多余文字。\n4. 场景参考图负责“空间怎么锁定”：必须输出 16:9 横版 2x2 四宫格场景规划参考图，左上俯视布局，其余三格为平视不同角度；只描述地点、空间、物件、剧情必要文字、光线、材质、氛围、可调度空间和可拍角度，不得写入人物、角色、群演、人形全息投影、面部、肢体、服装或动作。\n5. 道具参考图只提取会被人物明确拿取、触碰、使用、递送、损坏、承载关键动作或特写的互动道具；每个互动道具单独一张白底资产设定图，不允许多个道具合并。\n6. prompt 必须是单张资产的完整叙事式生图提示词，不堆关键词，不混入多个不相干资产；description 写视觉描述，sourceText 写来源片段，usage 写后续引用用途。\n7. 必须写清清道夫引用边界：参考图锁外貌/空间/材质/形态，不覆盖动作、情绪、台词、站位、手持方式、接触点、破坏时机和镜头调度。\n8. 输出必须是 JSON 对象，顶层只包含 assets 数组；不要输出 Markdown 表格、解释文字或简历式段落。",
+                "你是短剧制作的服化道 / 资产生图 Agent，来源规则对齐 seedance-platform-workflow-package 的 art-designer Agent、art-design-skill、art-direction-review-skill、asset.schema.json。你的职责是把导演讲戏本中的人物清单、场景清单和互动道具清单转成用户能确认、能生成、能上传、能加白的资产卡片和生图提示词。你不是导演，不继续分析剧情；你也不是生图执行器，不自动生成图片、不上传素材、不加白、不扣费。\n\n每张资产卡必须拆成独立对象，字段必须清楚：kind、name、usage、description、prompt、sourceText、tags、needsImage、needsWhitelisting、riskNotes。可以额外输出 asset_id、asset_type、prompt_text、character_fields、scene_fields，但前端会统一整理成资产卡。\n\n必须遵守：\n1. kind 只能使用 character / scene / prop / costume。场记、地点、空间、环境归 scene；服装、妆发、发型归 costume；互动道具归 prop。\n2. name 只能是短名称，不能写成提示词、长句、剧情摘要或“这是一份基于……”这类说明。\n3. 角色性别、年龄、身份和人物关系必须以剧本原文、代词、称谓和导演清单为准，不得根据姓名、常见印象或模型猜测自行改写；证据不足时写“待确认”，不要硬编。\n4. 角色参考图负责“长什么样”：prompt 必须是影视级角色设定板 / Character Design Sheet / Turnaround Sheet 生成模板，21:9 超宽横版，纯白干净背景，左侧正面平视大头部特写，中间 FRONT VIEW / SIDE VIEW / BACK VIEW 三视图，右侧 COLOR PALETTE 和 ACCESSORIES。必须写清角色身份、年龄、性别、身高、脸型、五官、肤色、发型、发色、眼神、妆容、身材比例、体态、服装结构、材质、颜色、鞋子、磨损、世界观风格、人物气质和配件。必须强调真实影视剧组定妆照 / 试装照质感，真实皮肤毛孔、自然发束、真实布料缝线褶皱、低锐化、低磨皮、低反差白棚柔光。必须禁止游戏 CG、AI 精修写真、商业广告大片、玻璃皮、蜡像皮、塑料脸、乳胶服装、三视图不一致、身高乱码和多余文字。\n5. 场景参考图负责“空间怎么锁定”：必须输出 16:9 横版 2x2 四宫格场景规划参考图，左上俯视布局，其余三格为平视不同角度；只描述地点、空间、物件、剧情必要文字、光线、材质、氛围、可调度空间和可拍角度，不得写入人物、角色、群演、人形全息投影、面部、肢体、服装或动作。\n6. 道具参考图只提取会被人物明确拿取、触碰、使用、递送、损坏、承载关键动作或特写的互动道具；每个互动道具单独一张白底资产设定图，不允许多个道具合并。\n7. prompt 必须是单张资产的完整叙事式生图提示词，不堆关键词，不混入多个不相干资产；description 写视觉描述，sourceText 写来源片段，usage 写后续引用用途。\n8. 必须写清清道夫引用边界：参考图锁外貌/空间/材质/形态，不覆盖动作、情绪、台词、站位、手持方式、接触点、破坏时机和镜头调度。\n9. 输出必须是 JSON 对象，顶层只包含 assets 数组；不要输出 Markdown 表格、解释文字或简历式段落。",
             skillSummary:
                 "内置资产 Skill：art-design-skill 人物 21:9 角色设定板、场景 16:9 2x2 四宫格规划板、互动道具白底资产图、清道夫引用边界、Gemini 生图叙事式提示词、资产唯一性和变体判断；art-direction-review-skill 与 compliance-review-skill 负责业务和合规自检。重点是资产边界清楚、提示词可直接生图、来源可追溯、每卡只服务一个资产。",
             userPromptTemplate:
@@ -128,7 +129,26 @@ export function defaultAgentConfigs(now = defaultUpdatedAt): AgentConfig[] {
                 { name: "directorOutputSummary", description: "导演分析或讲戏产物摘要" },
                 { name: "episodeTitle", description: "当前集标题" },
             ],
-            outputJsonExample: JSON.stringify({ assets: [{ kind: "character", name: "魏南风", usage: "作为本集人物形象参考，只锁定外貌、发型、体型、服装气质，不覆盖动作、情绪、台词和站位。", description: "年轻男性，夜间卧房场景中神情紧张，动作敏捷，服装需保持连续。", prompt: "请根据魏南风的文字设定生成一张影视级角色设定板 / Character Design Sheet / Turnaround Sheet。21:9 超宽屏横版构图，纯白干净背景，左侧正面平视大头部特写，双眼直视观众；中间 FRONT VIEW / SIDE VIEW / BACK VIEW 三张完整全身三视图，三视图身高、头身比例、服装材质和配件完全一致；FRONT VIEW 左侧有清晰身高刻度线和 head line / shoulder line / waist line / knee line / foot line；右侧有 COLOR PALETTE 5-6 个色卡和 ACCESSORIES 配件细节。真实影视剧组定妆照、试装照、角色档案照质感，白棚柔和漫反射光，低反差，低锐化，低磨皮，真实人类皮肤毛孔、自然发束、真实布料缝线褶皱。禁止游戏 CG、AI 精修写真、商业广告大片、玻璃皮、蜡像皮、塑料脸、乳胶服装、三视图不一致、身高乱码和多余文字。", sourceText: "魏南风在卧房内充电，随后快速拔掉充电线。", tags: ["角色", "主角"], needsImage: true, needsWhitelisting: false, riskNotes: [] }] }, null, 2),
+            outputJsonExample: JSON.stringify(
+                {
+                    assets: [
+                        {
+                            kind: "character",
+                            name: "魏南风",
+                            usage: "作为本集人物形象参考，只锁定外貌、发型、体型、服装气质，不覆盖动作、情绪、台词和站位。",
+                            description: "年轻男性，夜间卧房场景中神情紧张，动作敏捷，服装需保持连续。",
+                            prompt: "请根据魏南风的文字设定生成一张影视级角色设定板 / Character Design Sheet / Turnaround Sheet。21:9 超宽屏横版构图，纯白干净背景，左侧正面平视大头部特写，双眼直视观众；中间 FRONT VIEW / SIDE VIEW / BACK VIEW 三张完整全身三视图，三视图身高、头身比例、服装材质和配件完全一致；FRONT VIEW 左侧有清晰身高刻度线和 head line / shoulder line / waist line / knee line / foot line；右侧有 COLOR PALETTE 5-6 个色卡和 ACCESSORIES 配件细节。真实影视剧组定妆照、试装照、角色档案照质感，白棚柔和漫反射光，低反差，低锐化，低磨皮，真实人类皮肤毛孔、自然发束、真实布料缝线褶皱。禁止游戏 CG、AI 精修写真、商业广告大片、玻璃皮、蜡像皮、塑料脸、乳胶服装、三视图不一致、身高乱码和多余文字。",
+                            sourceText: "魏南风在卧房内充电，随后快速拔掉充电线。",
+                            tags: ["角色", "主角"],
+                            needsImage: true,
+                            needsWhitelisting: false,
+                            riskNotes: [],
+                        },
+                    ],
+                },
+                null,
+                2,
+            ),
             reasoningLevel: "高",
             now,
         }),
@@ -149,7 +169,24 @@ export function defaultAgentConfigs(now = defaultUpdatedAt): AgentConfig[] {
                 { name: "artDesignOutputSummary", description: "资产分析产物摘要" },
                 { name: "storyboardRequirement", description: "分镜输出要求" },
             ],
-            outputJsonExample: JSON.stringify({ shots: [{ sceneName: "魏南风卧房", title: "P01 魏南风听见脚步声并紧张拔线", scriptText: "原文台词和动作依据", visualDescription: "按景别 / 构图 / 运镜手法 / 画面内容 / 声音台词组织的分镜描述", estimatedDuration: 8, sceneVisualDna: "场次范围、色彩、光源、空气颗粒、空间层次和敏感词转译策略", singlePTaskCard: "动作触发因、行为动机、行动-反应关系、活人感策略", copyPrompt: "一键复制 Seedance 2.0 提示词正文，不出现本P/单P/生成P等内部术语" }] }, null, 2),
+            outputJsonExample: JSON.stringify(
+                {
+                    shots: [
+                        {
+                            sceneName: "魏南风卧房",
+                            title: "P01 魏南风听见脚步声并紧张拔线",
+                            scriptText: "原文台词和动作依据",
+                            visualDescription: "按景别 / 构图 / 运镜手法 / 画面内容 / 声音台词组织的分镜描述",
+                            estimatedDuration: 8,
+                            sceneVisualDna: "场次范围、色彩、光源、空气颗粒、空间层次和敏感词转译策略",
+                            singlePTaskCard: "动作触发因、行为动机、行动-反应关系、活人感策略",
+                            copyPrompt: "一键复制 Seedance 2.0 提示词正文，不出现本P/单P/生成P等内部术语",
+                        },
+                    ],
+                },
+                null,
+                2,
+            ),
             reasoningLevel: "高",
             now,
         }),
@@ -288,7 +325,12 @@ export function agentSystemPromptContent(config: AgentConfig) {
     return [config.systemPrompt, config.skillSummary ? `内置 Skill 摘要：\n${config.skillSummary}` : ""].filter(Boolean).join("\n\n");
 }
 
-function buildDefaultAgentConfig(input: Omit<AgentConfig, "id" | "enabled" | "channelId" | "modelPreference" | "temperature" | "maxOutputTokens" | "estimatedCredits" | "allowFallback" | "fallbackChannelIds" | "allowBatch" | "timeoutSeconds" | "concurrencyLimit" | "writePolicy" | "version" | "updatedAt"> & { now: string }): AgentConfig {
+function buildDefaultAgentConfig(
+    input: Omit<
+        AgentConfig,
+        "id" | "enabled" | "channelId" | "modelPreference" | "temperature" | "maxOutputTokens" | "estimatedCredits" | "allowFallback" | "fallbackChannelIds" | "allowBatch" | "timeoutSeconds" | "concurrencyLimit" | "writePolicy" | "version" | "updatedAt"
+    > & { now: string },
+): AgentConfig {
     return {
         ...input,
         id: `agent-config-${input.kind}`,

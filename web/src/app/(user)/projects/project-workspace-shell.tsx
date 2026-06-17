@@ -13,7 +13,7 @@ export function ProjectWorkspaceShell({ children }: { children: ReactNode }) {
     return (
         <div className="studio-workspace flex h-full min-h-0 flex-col overflow-hidden bg-[var(--studio-app-bg)] text-[var(--studio-text-primary)]">
             <ProjectWorkspaceTopBar />
-            <div className="min-h-0 flex-1 overflow-hidden bg-[var(--studio-shell-bg)]">{children}</div>
+            <div className="studio-shell min-h-0 flex-1 overflow-hidden">{children}</div>
         </div>
     );
 }
@@ -33,7 +33,7 @@ function ProjectWorkspaceTopBar() {
     const barStyle = { background: "color-mix(in srgb, var(--studio-app-bg) 92%, transparent)", color: "var(--studio-text-primary)" };
 
     return (
-        <header className="relative z-[80] h-16 shrink-0 border-b border-[var(--studio-border-subtle)] shadow-[var(--studio-shadow)] backdrop-blur-xl" style={barStyle}>
+        <header className="relative z-[80] h-14 shrink-0 border-b border-[var(--studio-border-subtle)] shadow-[var(--studio-shadow)] backdrop-blur-xl" style={barStyle}>
             <div className="mx-auto flex h-full w-full max-w-7xl items-stretch justify-between gap-5 px-5 sm:px-6">
                 <div className="flex min-w-0 items-center">
                     <Link href="/" className="group flex h-full shrink-0 items-center gap-3 text-sm font-semibold leading-none tracking-tight transition hover:text-[var(--studio-accent)]">
@@ -73,7 +73,7 @@ function ProjectWorkspaceTopBar() {
                         <Menu className="size-5" />
                     </button>
 
-                    <nav className="thin-scrollbar ml-7 hidden h-16 min-w-0 items-center gap-1 overflow-x-auto rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-1 md:flex">
+                    <nav className="thin-scrollbar ml-6 hidden h-10 min-w-0 items-center gap-1 overflow-x-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-rail-bg)] p-1 md:flex">
                         {navigationTools.map((tool) => {
                             const Icon = tool.icon;
                             return <ProjectWorkspaceLink key={tool.slug} icon={<Icon className="size-4" />} label={tool.label} href={getToolHref(tool.slug)} active={tool.slug === activeToolSlug} />;
@@ -107,11 +107,10 @@ function buildWorkspaceReturnTarget(searchParams: URLSearchParams) {
     if (returnTo.startsWith("/")) return { href: returnTo, label: searchParams.get("returnLabel") || "返回上一步" };
     const source = searchParams.get("source") || "";
     const projectId = searchParams.get("projectId") || "";
-    const episodeId = searchParams.get("episodeId") || "";
-    if (source === "episode-workbench" && projectId && episodeId) {
+    if (source === "episode-workbench" && projectId) {
         return {
-            href: `/projects/${encodeURIComponent(projectId)}/episodes/${encodeURIComponent(episodeId)}/workbench?module=assets`,
-            label: "返回资产与生图",
+            href: `/projects/${encodeURIComponent(projectId)}`,
+            label: "返回项目详情",
         };
     }
     return undefined;
@@ -164,7 +163,7 @@ function ProjectWorkspaceLink({ icon, label, href, active }: { icon: ReactNode; 
     return (
         <a
             href={href}
-            className={`group relative flex h-9 shrink-0 items-center gap-2 rounded-md border px-3 text-sm leading-6 transition hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] ${active ? "font-semibold shadow-[inset_0_-2px_0_var(--studio-accent)]" : "font-medium"}`}
+            className={`group relative flex h-8 shrink-0 items-center gap-2 rounded-md border px-2.5 text-sm leading-6 transition hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] ${active ? "font-semibold shadow-[inset_0_-2px_0_var(--studio-accent)]" : "font-medium"}`}
             style={active ? activeStyle : inactiveStyle}
         >
             <span className="shrink-0 transition" style={iconStyle}>

@@ -35,6 +35,7 @@ import {
     createAgentWorkflowRunRecord,
     failAgentWorkflowSceneRun,
     failAgentWorkflowStageRun,
+    reconcileAgentWorkflowRunWithPreset,
 } from "./agent-runner-workflow-state";
 
 type AgentRunnerStore = {
@@ -98,10 +99,11 @@ export const useAgentRunnerStore = create<AgentRunnerStore>()(
             ensureWorkflowRun: ({ projectId, canvasId, episodeId, preset }) => {
                 const existing = pickReusableWorkflowRun(get().workflowRuns, { canvasId, episodeId, projectId, workflowId: preset.workflowId });
                 if (existing) {
-                    if ((canvasId && !existing.canvasId) || (episodeId && !existing.episodeId)) {
-                        const now = new Date().toISOString();
+                    const now = new Date().toISOString();
+                    const reconciled = reconcileAgentWorkflowRunWithPreset(existing, preset, now);
+                    if (reconciled !== existing || (canvasId && !reconciled.canvasId) || (episodeId && !reconciled.episodeId)) {
                         set((state) => ({
-                            workflowRuns: state.workflowRuns.map((run) => (run.id === existing.id ? bindReusableWorkflowRunContext(run, { canvasId, episodeId, now }) : run)),
+                            workflowRuns: state.workflowRuns.map((run) => (run.id === existing.id ? bindReusableWorkflowRunContext(reconciled, { canvasId, episodeId, now }) : run)),
                         }));
                     }
                     return existing.id;

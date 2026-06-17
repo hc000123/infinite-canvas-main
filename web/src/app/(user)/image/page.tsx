@@ -302,7 +302,7 @@ export default function ImagePage() {
             const patch = buildWorkflowGeneratedImagePatch(sourceAsset, stored, { config: { ...effectiveConfig, model, count: "1" }, model });
             updateAsset(sourceAsset.id, patch);
             assetId = sourceAsset.id;
-            savedAsset = { id: sourceAsset.id, metadata: { ...(sourceAsset.metadata || {}), ...(patch.metadata || {}) }, updatedAt: now };
+            savedAsset = { id: sourceAsset.id, metadata: { ...sourceAsset.metadata, ...patch.metadata }, updatedAt: now };
         } else {
             assetId = await addAssetOnce({
                 kind: "image",
@@ -446,7 +446,7 @@ export default function ImagePage() {
     return (
         <div className="studio-workspace flex h-full flex-col overflow-hidden bg-[var(--studio-shell-bg)] text-[var(--studio-text-primary)]">
             <main className="studio-shell grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-4 lg:grid-cols-[300px_minmax(0,1fr)] lg:overflow-hidden 2xl:grid-cols-[320px_minmax(0,1fr)]">
-                <aside className="thin-scrollbar hidden min-h-0 overflow-y-auto rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-3 lg:block">
+                <aside className="studio-rail thin-scrollbar hidden min-h-0 overflow-y-auto p-3 lg:block">
                     <LogPanel
                         logs={logs}
                         selectedLogIds={selectedLogIds}
@@ -459,7 +459,7 @@ export default function ImagePage() {
                 </aside>
 
                 <section className="grid gap-3 lg:min-h-0 lg:grid-cols-[minmax(420px,1fr)_minmax(420px,480px)] lg:overflow-hidden 2xl:grid-cols-[minmax(520px,1fr)_minmax(460px,520px)]">
-                    <div className="thin-scrollbar flex flex-col rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-4 shadow-[var(--studio-shadow)] lg:order-2 lg:min-h-0 lg:overflow-y-auto lg:p-5">
+                    <div className="studio-panel thin-scrollbar flex flex-col p-4 lg:order-2 lg:min-h-0 lg:overflow-y-auto lg:p-5">
                         <div className="mb-5 flex items-start justify-between gap-3 border-b border-[var(--studio-border-subtle)] pb-4">
                             <div className="min-w-0">
                                 <div className="text-xs font-semibold tracking-normal text-[var(--studio-accent)]">图片生成</div>
@@ -547,7 +547,7 @@ export default function ImagePage() {
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2 text-sm sm:hidden">
+                            <div className="studio-toolbar flex items-center justify-between px-3 py-2 text-sm sm:hidden">
                                 <span className="truncate text-[var(--studio-text-secondary)]">
                                     {model} · {effectiveConfig.size} · {effectiveConfig.quality}
                                 </span>
@@ -572,7 +572,7 @@ export default function ImagePage() {
                         </div>
                     </div>
 
-                    <div className="thin-scrollbar flex min-h-[420px] flex-col rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-4 shadow-[var(--studio-shadow)] lg:order-1 lg:min-h-0 lg:overflow-y-auto lg:p-5">
+                    <div className="studio-panel thin-scrollbar flex min-h-[420px] flex-col p-4 lg:order-1 lg:min-h-0 lg:overflow-y-auto lg:p-5">
                         <div className="mb-4 flex items-start justify-between gap-3 border-b border-[var(--studio-border-subtle)] pb-4">
                             <div>
                                 <h2 className="text-2xl font-semibold text-[var(--studio-text-primary)]">生成结果</h2>

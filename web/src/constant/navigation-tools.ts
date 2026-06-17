@@ -3,7 +3,7 @@ import { BriefcaseBusiness, FileText, ImagePlus, Images, Workflow } from "lucide
 export const navigationTools = [
     {
         slug: "projects",
-        label: "项目工作台",
+        label: "项目中心",
         icon: BriefcaseBusiness,
     },
     {

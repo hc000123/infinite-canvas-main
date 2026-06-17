@@ -14,8 +14,8 @@ import type {
 } from "../agent-runner-types.ts";
 import { workflowStageDetail, type AgentWorkflowPreset } from "../agent-workflow-presets.ts";
 
-export type SeedanceWorkflowAgentStageId = "director-analysis" | "art-design" | "seedance-storyboard";
-export type SeedanceWorkflowAgentId = "director" | "art-designer" | "storyboard-artist";
+export type SeedanceWorkflowAgentStageId = "script-adaptation" | "art-design" | "seedance-storyboard";
+export type SeedanceWorkflowAgentId = "script-optimizer" | "art-designer" | "storyboard-artist";
 
 export type WorkflowAgentCoreBuildContext = {
     preset: AgentWorkflowPreset;

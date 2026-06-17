@@ -44,6 +44,7 @@ export {
     createAgentWorkflowRunRecord,
     failAgentWorkflowSceneRun,
     failAgentWorkflowStageRun,
+    reconcileAgentWorkflowRunWithPreset,
     reviewAgentWorkflowSceneRun,
     reviewAgentWorkflowStageRun,
     startAgentWorkflowSceneRun,

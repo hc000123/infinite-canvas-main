@@ -37,6 +37,15 @@ test("script optimizer embeds script-to-ai-script white paper production rules",
     assert.match(content, /不是分镜脚本|不写分镜|不输出分镜/);
 });
 
+test("asset extractor preserves character gender and identity from script evidence", () => {
+    const config = defaultAgentConfig("asset_extractor");
+    const content = [config.systemPrompt, config.userPromptTemplate].join("\n");
+
+    for (const marker of ["性别", "年龄", "身份", "代词", "称谓", "不得根据姓名", "待确认"]) {
+        assert.ok(content.includes(marker), `missing asset identity guard: ${marker}`);
+    }
+});
+
 test("merges global and project overrides by agent kind", () => {
     const defaults = defaultAgentConfigs("2026-01-01T00:00:00.000Z");
     const merged = mergeAgentConfigs(

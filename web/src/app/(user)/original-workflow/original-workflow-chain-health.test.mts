@@ -7,7 +7,6 @@ test("chain health reports a complete workflow before real video submission", ()
     const health = buildOriginalWorkflowChainHealth({
         files: completeFiles(),
         validations: {
-            stage1: { state: "passed" },
             stage2: { state: "passed" },
             stage3: { state: "passed" },
         },
@@ -17,16 +16,15 @@ test("chain health reports a complete workflow before real video submission", ()
 
     assert.deepEqual(
         health.map((item) => item.status),
-        ["ready", "ready", "ready", "ready", "ready", "ready", "ready"],
+        ["ready", "ready", "ready", "ready", "ready"],
     );
     assert.match(health.find((item) => item.key === "videoPackages")?.detail || "", /9 条/);
 });
 
-test("chain health blocks stale stage3 before copy-only export", () => {
+test("chain health blocks stale Copy-only before video sync", () => {
     const health = buildOriginalWorkflowChainHealth({
-        files: completeFiles().filter((file) => file.key !== "copyOnly"),
+        files: completeFiles(),
         validations: {
-            stage1: { state: "passed" },
             stage2: { state: "passed" },
             stage3: { state: "stale" },
         },
@@ -36,14 +34,12 @@ test("chain health blocks stale stage3 before copy-only export", () => {
 
     assert.equal(health.find((item) => item.key === "stage3")?.status, "blocked");
     assert.match(health.find((item) => item.key === "stage3")?.detail || "", /重新校验/);
-    assert.equal(health.find((item) => item.key === "copyOnly")?.status, "blocked");
 });
 
 test("chain health blocks non enterprise video protocol", () => {
     const health = buildOriginalWorkflowChainHealth({
         files: completeFiles(),
         validations: {
-            stage1: { state: "passed" },
             stage2: { state: "passed" },
             stage3: { state: "passed" },
         },
@@ -60,7 +56,6 @@ test("chain health waits while enterprise video settings are loading", () => {
         files: completeFiles(),
         isPublicSettingsLoading: true,
         validations: {
-            stage1: { state: "passed" },
             stage2: { state: "passed" },
             stage3: { state: "passed" },
         },
@@ -80,7 +75,6 @@ test("chain health blocks failed enterprise video preflight", () => {
         },
         files: completeFiles(),
         validations: {
-            stage1: { state: "passed" },
             stage2: { state: "passed" },
             stage3: { state: "passed" },
         },
@@ -101,7 +95,6 @@ test("chain health accepts passed enterprise video preflight", () => {
         },
         files: completeFiles(),
         validations: {
-            stage1: { state: "passed" },
             stage2: { state: "passed" },
             stage3: { state: "passed" },
         },
@@ -114,5 +107,5 @@ test("chain health accepts passed enterprise video preflight", () => {
 });
 
 function completeFiles(): OriginalWorkflowChainFile[] {
-    return ["script", "stage1A", "stage1B", "stage1C", "stage1D", "characters", "scenes", "stage3", "copyOnly"].map((key) => ({ exists: true, key }));
+    return ["script", "stage1A", "stage1B", "stage1C", "stage1D", "characters", "scenes", "props", "stage3", "copyOnly"].map((key) => ({ exists: true, key }));
 }

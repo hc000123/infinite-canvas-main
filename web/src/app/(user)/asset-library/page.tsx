@@ -12,6 +12,7 @@ import { useAssetStore } from "@/stores/use-asset-store";
 import { fetchAssetLibrary, type AssetLibraryItem } from "@/services/api/assets";
 import { uploadMediaFile } from "@/services/file-storage";
 import { uploadImage } from "@/services/image-storage";
+import { ToolMetricGrid, ToolWorkbenchLayout } from "../components/tool-workbench";
 
 const PAGE_SIZE = 12;
 
@@ -42,6 +43,14 @@ export default function AssetLibraryPage() {
     const items = query.data?.items || [];
     const availableTags = query.data?.tags || [];
     const total = query.data?.total || 0;
+    const activeFilterCount = (selectedType ? 1 : 0) + selectedTags.length;
+    const typeFilters = [
+        { label: "全部", value: "" },
+        { label: "文本", value: "text" },
+        { label: "图片", value: "image" },
+        { label: "视频", value: "video" },
+        { label: "音频", value: "audio" },
+    ];
 
     const toggleTag = (tag: string) => {
         setSelectedTags((items) => (items.includes(tag) ? items.filter((item) => item !== tag) : [...items, tag]));
@@ -106,94 +115,115 @@ export default function AssetLibraryPage() {
 
     return (
         <div className="studio-workspace flex h-full flex-col overflow-hidden bg-background text-[var(--studio-text-primary)]">
-            <main className="studio-shell min-h-0 flex-1 overflow-y-auto px-6 py-8">
-                <div className="pb-8">
-                    <div className="mx-auto max-w-5xl text-center">
-                        <h1 className="text-4xl font-semibold tracking-tight text-[var(--studio-text-primary)]">素材库</h1>
-                        <p className="mt-3 text-sm text-[var(--studio-text-secondary)]">挑选团队素材，加入我的素材后继续编辑和使用。</p>
-                    </div>
-                    <div className="mx-auto mt-8 w-full max-w-2xl">
-                        <Input
-                            size="large"
-                            className="w-full"
-                            prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />}
-                            value={keyword}
-                            placeholder="按标题查询"
-                            onChange={(event) => {
-                                setPage(1);
-                                setKeyword(event.target.value);
-                            }}
-                        />
-                    </div>
-                    <div className="mx-auto mt-6 max-w-6xl space-y-3">
-                        <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                            <div className="pt-2 text-xs font-medium text-[var(--studio-text-muted)]">类型</div>
-                            <div className="flex flex-wrap gap-2">
-                                {[
-                                    { label: "全部", value: "" },
-                                    { label: "文本", value: "text" },
-                                    { label: "图片", value: "image" },
-                                    { label: "视频", value: "video" },
-                                    { label: "音频", value: "audio" },
-                                ].map((item) => (
+            <main className="studio-shell min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6 xl:px-7">
+                <ToolWorkbenchLayout
+                    sidebar={
+                        <aside className="studio-panel h-fit p-4 lg:sticky lg:top-5">
+                            <div>
+                                <p className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">公共素材</p>
+                                <h1 className="mt-2 text-2xl font-semibold tracking-normal text-[var(--studio-text-primary)]">素材库</h1>
+                                <p className="mt-2 text-xs leading-5 text-[var(--studio-text-secondary)]">挑选团队素材，加入我的素材后继续编辑和使用。</p>
+                            </div>
+
+                            <ToolMetricGrid
+                                className="mt-5 grid-cols-2"
+                                items={[
+                                    { label: "素材总数", value: total },
+                                    { label: "筛选项", value: activeFilterCount },
+                                ]}
+                            />
+
+                            <div className="mt-5 border-t border-[var(--studio-border-subtle)] pt-4">
+                                <div className="mb-2 text-xs font-medium text-[var(--studio-text-muted)]">类型</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {typeFilters.map((item) => (
+                                        <Tag.CheckableTag
+                                            key={item.value || "all"}
+                                            checked={selectedType === item.value}
+                                            className={cn("prompt-filter-tag", selectedType === item.value && "is-active")}
+                                            onChange={() => {
+                                                setPage(1);
+                                                setSelectedType(item.value);
+                                            }}
+                                        >
+                                            {item.label}
+                                        </Tag.CheckableTag>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="mt-5 border-t border-[var(--studio-border-subtle)] pt-4">
+                                <div className="mb-2 text-xs font-medium text-[var(--studio-text-muted)]">标签</div>
+                                <div className="flex flex-wrap gap-2">
                                     <Tag.CheckableTag
-                                        key={item.value || "all"}
-                                        checked={selectedType === item.value}
-                                        className={cn("prompt-filter-tag", selectedType === item.value && "is-active")}
+                                        checked={selectedTags.length === 0}
+                                        className={cn("prompt-filter-tag", selectedTags.length === 0 && "is-active")}
                                         onChange={() => {
                                             setPage(1);
-                                            setSelectedType(item.value);
+                                            setSelectedTags([]);
                                         }}
                                     >
-                                        {item.label}
+                                        全部
                                     </Tag.CheckableTag>
+                                    {availableTags.map((tag) => (
+                                        <Tag.CheckableTag
+                                            key={tag}
+                                            checked={selectedTags.includes(tag)}
+                                            className={cn("prompt-filter-tag", selectedTags.includes(tag) && "is-active")}
+                                            onChange={() => {
+                                                setPage(1);
+                                                toggleTag(tag);
+                                            }}
+                                        >
+                                            {tag}
+                                        </Tag.CheckableTag>
+                                    ))}
+                                </div>
+                            </div>
+                        </aside>
+                    }
+                >
+                    <section className="min-w-0">
+                        <header className="flex flex-wrap items-start justify-between gap-4">
+                            <div>
+                                <p className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">团队素材</p>
+                                <h2 className="mt-2 text-3xl font-semibold leading-tight tracking-normal text-[var(--studio-text-primary)]">素材浏览</h2>
+                                <p className="mt-2 text-sm text-[var(--studio-text-secondary)]">
+                                    共 {total} 个素材，当前显示 {items.length} 个
+                                </p>
+                            </div>
+                            <Input
+                                size="large"
+                                className="w-full sm:w-[420px]"
+                                prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />}
+                                value={keyword}
+                                placeholder="搜索素材标题"
+                                onChange={(event) => {
+                                    setPage(1);
+                                    setKeyword(event.target.value);
+                                }}
+                            />
+                        </header>
+
+                        <div className="studio-panel mt-5 p-4">
+                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                                {items.map((asset) => (
+                                    <LibraryCard key={asset.id} asset={asset} onOpen={() => setSelectedAsset(asset)} onAdd={() => void saveToMyAssets(asset)} />
                                 ))}
                             </div>
-                        </div>
-                        <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                            <div className="pt-2 text-xs font-medium text-[var(--studio-text-muted)]">标签</div>
-                            <div className="flex flex-wrap gap-2">
-                                <Tag.CheckableTag
-                                    checked={selectedTags.length === 0}
-                                    className={cn("prompt-filter-tag", selectedTags.length === 0 && "is-active")}
-                                    onChange={() => {
-                                        setPage(1);
-                                        setSelectedTags([]);
-                                    }}
-                                >
-                                    全部
-                                </Tag.CheckableTag>
-                                {availableTags.map((tag) => (
-                                    <Tag.CheckableTag
-                                        key={tag}
-                                        checked={selectedTags.includes(tag)}
-                                        className={cn("prompt-filter-tag", selectedTags.includes(tag) && "is-active")}
-                                        onChange={() => {
-                                            setPage(1);
-                                            toggleTag(tag);
-                                        }}
-                                    >
-                                        {tag}
-                                    </Tag.CheckableTag>
-                                ))}
+
+                            {!items.length ? (
+                                <div className="flex min-h-[360px] items-center justify-center">
+                                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到素材" />
+                                </div>
+                            ) : null}
+
+                            <div className="mt-5 flex justify-center">
+                                <Pagination current={page} pageSize={PAGE_SIZE} total={total} showSizeChanger={false} onChange={(nextPage) => setPage(nextPage)} />
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <div className="mx-auto flex max-w-7xl flex-col gap-5">
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
-                        {items.map((asset) => (
-                            <LibraryCard key={asset.id} asset={asset} onOpen={() => setSelectedAsset(asset)} onAdd={() => void saveToMyAssets(asset)} />
-                        ))}
-                    </div>
-
-                    {!items.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到素材" className="py-20" /> : null}
-
-                    <div className="flex justify-center">
-                        <Pagination current={page} pageSize={PAGE_SIZE} total={total} showSizeChanger={false} onChange={(nextPage) => setPage(nextPage)} />
-                    </div>
-                </div>
+                    </section>
+                </ToolWorkbenchLayout>
             </main>
 
             <Drawer title="素材详情" open={Boolean(selectedAsset)} size="large" rootClassName="studio-modal" onClose={() => setSelectedAsset(null)}>

@@ -112,7 +112,7 @@ export function useCanvasPageActions({
             return;
         }
         if (currentProject?.projectId && currentProject.episodeId) {
-            navigate(`/projects/${currentProject.projectId}/episodes/${currentProject.episodeId}/workbench`);
+            navigate(`/projects/${currentProject.projectId}`);
             return;
         }
         if (currentProject?.projectId) {

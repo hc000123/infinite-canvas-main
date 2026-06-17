@@ -83,7 +83,7 @@ export function CanvasTopBar({
                         menu={{
                             items: [
                                 { key: "parent", icon: <ArrowLeft className="size-4" />, label: returnLabel, onClick: onReturnParent },
-                                { key: "projects", icon: <Home className="size-4" />, label: "项目工作台", onClick: onHome },
+                                { key: "projects", icon: <Home className="size-4" />, label: "项目中心", onClick: onHome },
                                 { type: "divider" },
                                 { key: "new", icon: <Plus className="size-4" />, label: "新建画布", onClick: onCreateProject },
                                 { key: "save", icon: <Save className="size-4" />, label: "保存画布", onClick: onSaveProject },

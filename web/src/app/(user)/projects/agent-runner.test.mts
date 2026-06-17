@@ -45,14 +45,14 @@ import {
     validateAgentDraftOutputShape,
     workflowMappingPreviewItemKey,
 } from "./agent-runner.ts";
-import { buildSeedanceWorkflowPreset, workflowStageDetail } from "./agent-workflow-presets.ts";
+import { buildSeedanceMxShellEmotionDirectorV21Preset, buildSeedanceMxShellStoryboardV15Preset, buildSeedanceOriginalFormatEmotionDirectorV21Preset, buildSeedanceWorkflowPreset, workflowStageDetail } from "./agent-workflow-presets.ts";
 
 const workflowPreset = buildSeedanceWorkflowPreset();
 const workflowInputBase = {
     projectId: "project-workflow",
     sourceType: "workflow_text_stage",
-    sourceId: "director-analysis",
-    variables: { stageId: "director-analysis" },
+    sourceId: "art-design",
+    variables: { stageId: "art-design" },
 };
 
 const baseInput = {
@@ -70,7 +70,7 @@ const baseInput = {
 function buildWorkflowStageTextInput() {
     const stage = workflowPreset.stages[0];
     const detail = workflowStageDetail(workflowPreset, stage);
-    if (!detail.agent) throw new Error("workflow preset missing director agent");
+    if (!detail.agent) throw new Error("workflow preset missing stage agent");
     return {
         workflowId: workflowPreset.workflowId,
         workflowVersion: workflowPreset.version,
@@ -90,7 +90,7 @@ function buildWorkflowStageTextInput() {
     } as const;
 }
 
-function buildApprovedWorkflowStageFixture(stageId: "director-analysis" | "art-design" | "seedance-storyboard", rawText: string, evidenceId: string, outputId: string, agentId: string) {
+function buildApprovedWorkflowStageFixture(stageId: "script-adaptation" | "art-design" | "seedance-storyboard", rawText: string, evidenceId: string, outputId: string, agentId: string) {
     const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", id: `workflow-${stageId}-${evidenceId}`, now: "2026-01-12T00:00:00.000Z" });
     const stage = workflowPreset.stages.find((item) => item.stageId === stageId)!;
     const detail = workflowStageDetail(workflowPreset, stage);
@@ -264,18 +264,71 @@ test("builds workflow stage prompt with stage/agent/skills/quality gates/source 
     assert.ok(stagePrompt.includes(sourceFiles[0]));
 });
 
+test("builds Mx-Shell storyboard prompt with scavenger shell constraints", () => {
+    const preset = buildSeedanceMxShellStoryboardV15Preset();
+    const stage = preset.stages.find((item) => item.stageId === "seedance-storyboard")!;
+    const detail = workflowStageDetail(preset, stage);
+    const stagePrompt = buildWorkflowStagePrompt({
+        workflowId: preset.workflowId,
+        workflowVersion: preset.version,
+        stage,
+        agent: detail.agent!,
+        skills: detail.skills,
+        qualityGates: detail.qualityGates,
+        inputSnapshot: { scriptSnapshot: "测试剧本", storyboardRequirement: "多机位分镜" },
+    });
+    assert.ok(stagePrompt.includes("Mx-Shell v1.5 清道夫分镜硬锁"));
+    assert.ok(stagePrompt.includes("一镜到底或多机位分镜"));
+    assert.ok(stagePrompt.includes("Mx-Shell_Prompts v1.5"));
+    assert.equal(stagePrompt.includes("Stage 3 必须包含轻量规范读取记录"), false);
+});
+
+test("builds emotion director storyboard prompts as skill enhancements", () => {
+    const skill5Preset = buildSeedanceOriginalFormatEmotionDirectorV21Preset();
+    const skill5Stage = skill5Preset.stages.find((item) => item.stageId === "seedance-storyboard")!;
+    const skill5Detail = workflowStageDetail(skill5Preset, skill5Stage);
+    const skill5Prompt = buildWorkflowStagePrompt({
+        workflowId: skill5Preset.workflowId,
+        workflowVersion: skill5Preset.version,
+        stage: skill5Stage,
+        agent: skill5Detail.agent!,
+        skills: skill5Detail.skills,
+        qualityGates: skill5Detail.qualityGates,
+        inputSnapshot: { scriptSnapshot: "测试剧本", storyboardRequirement: "情绪强化" },
+    });
+    assert.ok(skill5Prompt.includes("Stage 3 必须包含轻量规范读取记录"));
+    assert.ok(skill5Prompt.includes("情绪导演 v2.1 增强硬锁"));
+    assert.ok(skill5Prompt.includes("1900 字限制只约束单条最终可复制 Seedance 提示词"));
+
+    const mxPreset = buildSeedanceMxShellEmotionDirectorV21Preset();
+    const mxStage = mxPreset.stages.find((item) => item.stageId === "seedance-storyboard")!;
+    const mxDetail = workflowStageDetail(mxPreset, mxStage);
+    const mxPrompt = buildWorkflowStagePrompt({
+        workflowId: mxPreset.workflowId,
+        workflowVersion: mxPreset.version,
+        stage: mxStage,
+        agent: mxDetail.agent!,
+        skills: mxDetail.skills,
+        qualityGates: mxDetail.qualityGates,
+        inputSnapshot: { scriptSnapshot: "测试剧本", storyboardRequirement: "清道夫情绪强化" },
+    });
+    assert.ok(mxPrompt.includes("Mx-Shell v1.5 清道夫分镜硬锁"));
+    assert.ok(mxPrompt.includes("情绪导演 v2.1 增强硬锁"));
+    assert.equal(mxPrompt.includes("Stage 3 必须包含轻量规范读取记录"), false);
+});
+
 test("binds unbound workflow run to canvas without losing failed stage state", () => {
     const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", episodeId: "episode-1", id: "workflow-unbound", now: "2026-01-12T00:00:00.000Z" });
-    const failedRun = failAgentWorkflowStageRun(workflowRun, "director-analysis", "runner-director-failed", "模型配置不可用", "2026-01-12T00:01:00.000Z");
+    const failedRun = failAgentWorkflowStageRun(workflowRun, "art-design", "runner-art-failed", "模型配置不可用", "2026-01-12T00:01:00.000Z");
     const boundRun = bindAgentWorkflowRunCanvas(failedRun, "canvas-1", "2026-01-12T00:02:00.000Z");
-    const directorState = boundRun.stageStates.find((stage) => stage.stageId === "director-analysis");
+    const artState = boundRun.stageStates.find((stage) => stage.stageId === "art-design");
 
     assert.equal(boundRun.id, "workflow-unbound");
     assert.equal(boundRun.canvasId, "canvas-1");
     assert.equal(boundRun.updatedAt, "2026-01-12T00:02:00.000Z");
-    assert.equal(directorState?.status, "error");
-    assert.equal(directorState?.runnerRunId, "runner-director-failed");
-    assert.equal(directorState?.errorMessage, "模型配置不可用");
+    assert.equal(artState?.status, "error");
+    assert.equal(artState?.runnerRunId, "runner-art-failed");
+    assert.equal(artState?.errorMessage, "模型配置不可用");
 });
 
 test("workflow text run input preserves workflowId / stageId / agentId", () => {
@@ -284,9 +337,9 @@ test("workflow text run input preserves workflowId / stageId / agentId", () => {
             ...workflowInputBase,
             workflowId: workflowPreset.workflowId,
             workflowVersion: workflowPreset.version,
-            stageId: "director-analysis",
-            agentId: "director",
-            agentName: "导演 / director",
+            stageId: "art-design",
+            agentId: "art-designer",
+            agentName: "服化道 / art-designer",
             sourcePresetId: workflowPreset.workflowId,
             presetId: workflowPreset.workflowId,
             inputSnapshot: { stageSummary: "测试阶段" },
@@ -296,8 +349,8 @@ test("workflow text run input preserves workflowId / stageId / agentId", () => {
         now: "2026-01-10T00:00:00.000Z",
     });
     assert.equal(run.input.workflowId, workflowPreset.workflowId);
-    assert.equal(run.input.stageId, "director-analysis");
-    assert.equal(run.input.agentId, "director");
+    assert.equal(run.input.stageId, "art-design");
+    assert.equal(run.input.agentId, "art-designer");
     assert.equal(run.status, "running");
 });
 
@@ -307,9 +360,9 @@ test("workflow text run success enters review and stores text output", () => {
             ...workflowInputBase,
             workflowId: workflowPreset.workflowId,
             workflowVersion: workflowPreset.version,
-            stageId: "director-analysis",
-            agentId: "director",
-            sourceFiles: ["agents/director.md", "skills/director-skill/SKILL.md"],
+            stageId: "art-design",
+            agentId: "art-designer",
+            sourceFiles: ["agents/art-designer.md", "skills/director-skill/SKILL.md", "skills/art-design-skill/SKILL.md"],
             qualityGateIds: ["stage-spec-read-record", "director-business-review"],
         },
         id: "workflow-run-2",
@@ -319,7 +372,7 @@ test("workflow text run success enters review and stores text output", () => {
     assert.equal(completed.status, "review");
     assert.equal(completed.workflowTextOutput?.rawText, '{"summary":"导演分析草案","items":[{"id":"step-1"}]}');
     assert.equal(completed.workflowTextOutput?.outputFormat, "json");
-    assert.equal(completed.workflowTextOutput?.sourceFiles.length, 2);
+    assert.equal(completed.workflowTextOutput?.sourceFiles.length, 3);
     assert.equal(completed.workflowTextOutput?.qualityGateIds.includes("director-business-review"), true);
 });
 
@@ -368,8 +421,8 @@ test("approve workflow text run only changes HITL state", () => {
                 ...workflowInputBase,
                 workflowId: workflowPreset.workflowId,
                 workflowVersion: workflowPreset.version,
-                stageId: "director-analysis",
-                agentId: "director",
+                stageId: "art-design",
+                agentId: "art-designer",
             },
             id: "workflow-run-5",
             now: "2026-01-10T00:00:00.000Z",
@@ -383,7 +436,7 @@ test("approve workflow text run only changes HITL state", () => {
     assert.equal(approved.agentKind, "workflow_text");
 });
 
-test("workflow run initializes three stage states with blocked dependencies", () => {
+test("workflow run initializes main stage states with blocked dependencies", () => {
     const workflowRun = createAgentWorkflowRunRecord({
         preset: workflowPreset,
         projectId: "project-workflow",
@@ -392,14 +445,17 @@ test("workflow run initializes three stage states with blocked dependencies", ()
         id: "workflow-state-1",
         now: "2026-01-11T00:00:00.000Z",
     });
-    assert.equal(workflowRun.stageStates.length, 3);
-    assert.equal(workflowRun.stageStates[0].status, "idle");
-    assert.equal(workflowRun.stageStates[1].status, "blocked");
-    assert.deepEqual(workflowRun.stageStates[1].dependsOnStageIds, ["director-analysis"]);
-    assert.equal(workflowRun.stageStates[2].status, "blocked");
+    assert.deepEqual(
+        workflowRun.stageStates.map((stage) => stage.stageId),
+        ["script-adaptation", "art-design", "seedance-storyboard"],
+    );
+    assert.equal(workflowRun.stageStates.find((stage) => stage.stageId === "script-adaptation")?.status, "idle");
+    assert.equal(workflowRun.stageStates.find((stage) => stage.stageId === "art-design")?.status, "blocked");
+    assert.deepEqual(workflowRun.stageStates.find((stage) => stage.stageId === "art-design")?.dependsOnStageIds, ["script-adaptation"]);
+    assert.deepEqual(workflowRun.stageStates.find((stage) => stage.stageId === "seedance-storyboard")?.dependsOnStageIds, ["art-design"]);
 });
 
-test("director must be approved before art-design and storyboard can run", () => {
+test("script must be approved before downstream stages can run", () => {
     const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", id: "workflow-state-2", now: "2026-01-11T00:00:00.000Z" });
     const artDesign = startAgentWorkflowStageRun(workflowRun, "art-design", "runner-blocked", "2026-01-11T00:01:00.000Z");
     assert.equal(artDesign.stageStates.find((stage) => stage.stageId === "art-design")?.status, "blocked");
@@ -408,51 +464,63 @@ test("director must be approved before art-design and storyboard can run", () =>
 
 test("workflow runner success moves stage to review and stores output snapshot", () => {
     const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", id: "workflow-state-3", now: "2026-01-11T00:00:00.000Z" });
-    const started = startAgentWorkflowStageRun(workflowRun, "director-analysis", "runner-1", "2026-01-11T00:01:00.000Z");
+    const started = startAgentWorkflowStageRun(workflowRun, "script-adaptation", "runner-1", "2026-01-11T00:01:00.000Z");
     const runnerRun = setWorkflowTextRunCompleted(
         createWorkflowTextRunRecord({
             input: {
                 ...workflowInputBase,
+                sourceId: "script-adaptation",
+                variables: { stageId: "script-adaptation" },
                 workflowRunId: workflowRun.id,
                 workflowId: workflowPreset.workflowId,
                 workflowVersion: workflowPreset.version,
-                stageId: "director-analysis",
-                agentId: "director",
-                sourceFiles: ["agents/director.md"],
-                qualityGateIds: ["director-business-review"],
+                stageId: "script-adaptation",
+                agentId: "script-optimizer",
+                sourceFiles: ["web/src/app/(user)/projects/script-optimizer-agent.ts"],
+                qualityGateIds: ["script-production-draft-check"],
             },
             id: "runner-1",
             now: "2026-01-11T00:01:00.000Z",
         }),
-        '{"summary":"导演阶段产物"}',
+        '{"summary":"剧本阶段产物"}',
         "2026-01-11T00:02:00.000Z",
     );
     const output = buildAgentWorkflowStageOutput({ workflowRunId: workflowRun.id, runnerRun, outputId: "output-1", now: "2026-01-11T00:02:00.000Z" });
     assert.ok(output);
     const reviewed = completeAgentWorkflowStageRun(started, output!, "2026-01-11T00:02:00.000Z");
-    assert.equal(reviewed.stageStates[0].status, "review");
-    assert.equal(reviewed.stageStates[0].outputId, "output-1");
-    assert.equal(output?.summary, "导演阶段产物");
+    const scriptState = reviewed.stageStates.find((stage) => stage.stageId === "script-adaptation");
+    assert.equal(scriptState?.status, "review");
+    assert.equal(scriptState?.outputId, "output-1");
+    assert.equal(output?.summary, "剧本阶段产物");
 });
 
 test("approved workflow stage writes evidence and unblocks next stage", () => {
     const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", id: "workflow-state-4", now: "2026-01-11T00:00:00.000Z" });
     const runnerRun = setWorkflowTextRunCompleted(
         createWorkflowTextRunRecord({
-            input: { ...workflowInputBase, workflowRunId: workflowRun.id, workflowId: workflowPreset.workflowId, workflowVersion: workflowPreset.version, stageId: "director-analysis", agentId: "director" },
+            input: {
+                ...workflowInputBase,
+                sourceId: "script-adaptation",
+                variables: { stageId: "script-adaptation" },
+                workflowRunId: workflowRun.id,
+                workflowId: workflowPreset.workflowId,
+                workflowVersion: workflowPreset.version,
+                stageId: "script-adaptation",
+                agentId: "script-optimizer",
+            },
             id: "runner-2",
             now: "2026-01-11T00:01:00.000Z",
         }),
-        '{"summary":"可批准导演产物"}',
+        '{"summary":"可批准剧本产物"}',
         "2026-01-11T00:02:00.000Z",
     );
     const output = buildAgentWorkflowStageOutput({ workflowRunId: workflowRun.id, runnerRun, outputId: "output-2", now: "2026-01-11T00:02:00.000Z" })!;
-    const reviewed = completeAgentWorkflowStageRun(startAgentWorkflowStageRun(workflowRun, "director-analysis", runnerRun.id, "2026-01-11T00:01:00.000Z"), output, "2026-01-11T00:02:00.000Z");
+    const reviewed = completeAgentWorkflowStageRun(startAgentWorkflowStageRun(workflowRun, "script-adaptation", runnerRun.id, "2026-01-11T00:01:00.000Z"), output, "2026-01-11T00:02:00.000Z");
     const evidence = buildAgentWorkflowReviewEvidence({ workflowRun: reviewed, runnerRun: approveAgentRun(runnerRun, "2026-01-11T00:03:00.000Z"), evidenceId: "evidence-1", decision: "approved", reviewerNote: "通过", now: "2026-01-11T00:03:00.000Z" })!;
     const approved = reviewAgentWorkflowStageRun(reviewed, evidence, "2026-01-11T00:03:00.000Z");
-    assert.equal(approved.stageStates[0].status, "approved");
-    assert.equal(approved.stageStates[0].evidenceIds.includes("evidence-1"), true);
-    assert.equal(approved.stageStates[1].status, "idle");
+    assert.equal(approved.stageStates.find((stage) => stage.stageId === "script-adaptation")?.status, "approved");
+    assert.equal(approved.stageStates.find((stage) => stage.stageId === "script-adaptation")?.evidenceIds.includes("evidence-1"), true);
+    assert.equal(approved.stageStates.find((stage) => stage.stageId === "art-design")?.status, "idle");
     assert.equal(evidence.reviewerNote, "通过");
     assert.ok(evidence.outputHash.startsWith("wf-"));
 });
@@ -461,25 +529,34 @@ test("rejected workflow stage writes evidence and keeps downstream blocked", () 
     const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", id: "workflow-state-5", now: "2026-01-11T00:00:00.000Z" });
     const runnerRun = setWorkflowTextRunCompleted(
         createWorkflowTextRunRecord({
-            input: { ...workflowInputBase, workflowRunId: workflowRun.id, workflowId: workflowPreset.workflowId, workflowVersion: workflowPreset.version, stageId: "director-analysis", agentId: "director" },
+            input: {
+                ...workflowInputBase,
+                sourceId: "script-adaptation",
+                variables: { stageId: "script-adaptation" },
+                workflowRunId: workflowRun.id,
+                workflowId: workflowPreset.workflowId,
+                workflowVersion: workflowPreset.version,
+                stageId: "script-adaptation",
+                agentId: "script-optimizer",
+            },
             id: "runner-3",
             now: "2026-01-11T00:01:00.000Z",
         }),
-        '{"summary":"需驳回导演产物"}',
+        '{"summary":"需驳回剧本产物"}',
         "2026-01-11T00:02:00.000Z",
     );
     const evidence = buildAgentWorkflowReviewEvidence({ workflowRun, runnerRun: rejectAgentRun(runnerRun, "2026-01-11T00:03:00.000Z"), evidenceId: "evidence-2", decision: "rejected", now: "2026-01-11T00:03:00.000Z" })!;
     const rejected = reviewAgentWorkflowStageRun(workflowRun, evidence, "2026-01-11T00:03:00.000Z");
-    assert.equal(rejected.stageStates[0].status, "rejected");
-    assert.equal(rejected.stageStates[1].status, "blocked");
-    assert.equal(rejected.stageStates[2].status, "blocked");
+    assert.equal(rejected.stageStates.find((stage) => stage.stageId === "script-adaptation")?.status, "rejected");
+    assert.equal(rejected.stageStates.find((stage) => stage.stageId === "art-design")?.status, "blocked");
 });
 
 test("workflow runner error moves stage to error and keeps error message", () => {
     const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", id: "workflow-state-6", now: "2026-01-11T00:00:00.000Z" });
-    const failed = failAgentWorkflowStageRun(startAgentWorkflowStageRun(workflowRun, "director-analysis", "runner-error", "2026-01-11T00:01:00.000Z"), "director-analysis", "runner-error", "模型超时", "2026-01-11T00:02:00.000Z");
-    assert.equal(failed.stageStates[0].status, "error");
-    assert.equal(failed.stageStates[0].errorMessage, "模型超时");
+    const failed = failAgentWorkflowStageRun(startAgentWorkflowStageRun(workflowRun, "script-adaptation", "runner-error", "2026-01-11T00:01:00.000Z"), "script-adaptation", "runner-error", "模型超时", "2026-01-11T00:02:00.000Z");
+    const scriptState = failed.stageStates.find((stage) => stage.stageId === "script-adaptation");
+    assert.equal(scriptState?.status, "error");
+    assert.equal(scriptState?.errorMessage, "模型超时");
 });
 
 test("stage3 scene run advances independently without approving whole storyboard stage", () => {
@@ -823,22 +900,16 @@ test("approved output can generate mapping preview", () => {
 
 test("non-approved stage cannot generate mapping preview", () => {
     const workflowRun = createAgentWorkflowRunRecord({ preset: workflowPreset, projectId: "project-workflow", id: "workflow-preview-2", now: "2026-01-12T00:00:00.000Z" });
-    const result = canGenerateWorkflowMappingPreview(workflowRun, "director-analysis");
+    const result = canGenerateWorkflowMappingPreview(workflowRun, "art-design");
     assert.equal(result.allowed, false);
     assert.equal(result.reason.includes("尚未批准"), true);
 });
 
-test("director art-design and storyboard map to expected target types", () => {
-    const director = buildApprovedWorkflowStageFixture("director-analysis", '{"summary":"导演分析","items":[{"title":"第一场","description":"夜戏开场"}]}', "ev-dir", "out-dir", "director");
+test("art-design and storyboard map to expected target types", () => {
     const art = buildApprovedWorkflowStageFixture("art-design", '{"summary":"美术设定","items":[{"title":"仓库场景","kind":"scene","description":"冷白工业灯"}]}', "ev-art", "out-art", "art-designer");
     const board = buildApprovedWorkflowStageFixture("seedance-storyboard", '{"summary":"分镜提示词","items":[{"title":"镜头一","prompt":"镜头从门外推入仓库","cameraMovement":"push in"}]}', "ev-board", "out-board", "storyboard-artist");
-    const directorPreviews = buildWorkflowMappingPreviews({ workflowRun: director.workflowRun, stageId: "director-analysis", output: director.output, now: "2026-01-12T00:03:00.000Z" });
     const artPreviews = buildWorkflowMappingPreviews({ workflowRun: art.workflowRun, stageId: "art-design", output: art.output, now: "2026-01-12T00:03:00.000Z" });
     const boardPreviews = buildWorkflowMappingPreviews({ workflowRun: board.workflowRun, stageId: "seedance-storyboard", output: board.output, now: "2026-01-12T00:03:00.000Z" });
-    assert.deepEqual(
-        directorPreviews.map((item) => item.targetType),
-        ["production_bible", "storyboard_table"],
-    );
     assert.deepEqual(
         artPreviews.map((item) => item.targetType),
         ["production_bible"],
@@ -1120,10 +1191,10 @@ test("same previewItemId from another preview does not block application", () =>
     assert.equal(bibleResult.appliedWrites.length, 1);
     assert.deepEqual(bibleResult.appliedPreviewItemIds, [workflowMappingPreviewItemKey(secondBiblePreview, secondBiblePreview.items[0].itemId)]);
 
-    const firstStoryboardFixture = buildApprovedWorkflowStageFixture("director-analysis", '{"summary":"导演分析","items":[{"title":"第一场","description":"夜戏开场"}]}', "ev-storyboard-key-1", "out-storyboard-key-1", "director");
-    const secondStoryboardFixture = buildApprovedWorkflowStageFixture("director-analysis", '{"summary":"导演分析","items":[{"title":"第二场","description":"雨夜追逐"}]}', "ev-storyboard-key-2", "out-storyboard-key-2", "director");
-    const firstStoryboardPreview = buildWorkflowMappingPreviews({ workflowRun: firstStoryboardFixture.workflowRun, stageId: "director-analysis", output: firstStoryboardFixture.output, now: "2026-01-12T00:04:00.000Z" })[1];
-    const secondStoryboardPreview = buildWorkflowMappingPreviews({ workflowRun: secondStoryboardFixture.workflowRun, stageId: "director-analysis", output: secondStoryboardFixture.output, now: "2026-01-12T00:05:00.000Z" })[1];
+    const firstStoryboardFixture = buildApprovedWorkflowStageFixture("seedance-storyboard", '{"summary":"分镜","items":[{"title":"镜头一","prompt":"推入夜戏开场"}]}', "ev-storyboard-key-1", "out-storyboard-key-1", "storyboard-artist");
+    const secondStoryboardFixture = buildApprovedWorkflowStageFixture("seedance-storyboard", '{"summary":"分镜","items":[{"title":"镜头一","prompt":"推入雨夜追逐"}]}', "ev-storyboard-key-2", "out-storyboard-key-2", "storyboard-artist");
+    const firstStoryboardPreview = buildWorkflowMappingPreviews({ workflowRun: firstStoryboardFixture.workflowRun, stageId: "seedance-storyboard", output: firstStoryboardFixture.output, now: "2026-01-12T00:04:00.000Z" })[0];
+    const secondStoryboardPreview = buildWorkflowMappingPreviews({ workflowRun: secondStoryboardFixture.workflowRun, stageId: "seedance-storyboard", output: secondStoryboardFixture.output, now: "2026-01-12T00:05:00.000Z" })[0];
     const existingShot = {
         id: "shot-existing-key",
         projectId: "project-workflow",
@@ -1152,14 +1223,14 @@ test("same previewItemId from another preview does not block application", () =>
             workflowId: workflowPreset.workflowId,
             workflowRunId: firstStoryboardFixture.workflowRun.id,
             workflowVersion: firstStoryboardFixture.workflowRun.workflowVersion,
-            stageId: "director-analysis",
-            agentId: "director",
+            stageId: "seedance-storyboard",
+            agentId: "storyboard-artist",
             sourceOutputId: firstStoryboardPreview.sourceOutputId,
             previewId: firstStoryboardPreview.previewId,
             previewItemId: firstStoryboardPreview.items[0].itemId,
             sourceFiles: firstStoryboardFixture.output.sourceFiles,
             qualityGateIds: firstStoryboardFixture.output.qualityGateIds,
-            createdFromText: "第一场",
+            createdFromText: "镜头一",
         },
         createdAt: "2026-01-12T00:00:00.000Z",
         updatedAt: "2026-01-12T00:00:00.000Z",
@@ -1304,13 +1375,13 @@ test("production_bible and video_node previews are not applied to storyboard tab
 
 test("skip update and duplicate storyboard preview items are not written", () => {
     const fixture = buildApprovedWorkflowStageFixture(
-        "director-analysis",
-        '{"summary":"导演分析","items":[{"title":"第一场","description":"夜戏开场"},{"title":"第二场","description":"雨夜追逐"},{"title":"第三场","description":"仓库对峙"}]}',
+        "seedance-storyboard",
+        '{"summary":"分镜","items":[{"title":"镜头一","prompt":"夜戏开场"},{"title":"镜头二","prompt":"雨夜追逐"},{"title":"镜头三","prompt":"仓库对峙"}]}',
         "ev-storyboard-4",
         "out-storyboard-4",
-        "director",
+        "storyboard-artist",
     );
-    const preview = buildWorkflowMappingPreviews({ workflowRun: fixture.workflowRun, stageId: "director-analysis", output: fixture.output, now: "2026-01-12T00:04:00.000Z" })[1];
+    const preview = buildWorkflowMappingPreviews({ workflowRun: fixture.workflowRun, stageId: "seedance-storyboard", output: fixture.output, now: "2026-01-12T00:04:00.000Z" })[0];
     preview.items[0].action = "skip";
     preview.items[1].action = "update";
     const existingShot = {
@@ -1341,14 +1412,14 @@ test("skip update and duplicate storyboard preview items are not written", () =>
             workflowId: workflowPreset.workflowId,
             workflowRunId: fixture.workflowRun.id,
             workflowVersion: fixture.workflowRun.workflowVersion,
-            stageId: "director-analysis",
-            agentId: "director",
+            stageId: "seedance-storyboard",
+            agentId: "storyboard-artist",
             sourceOutputId: preview.sourceOutputId,
             previewId: preview.previewId,
             previewItemId: preview.items[2].itemId,
             sourceFiles: fixture.output.sourceFiles,
             qualityGateIds: fixture.output.qualityGateIds,
-            createdFromText: "第三场",
+            createdFromText: "镜头三",
         },
         createdAt: "2026-01-12T00:00:00.000Z",
         updatedAt: "2026-01-12T00:00:00.000Z",
@@ -1484,22 +1555,22 @@ test("filtered metadata fields are not applied as production bible storyboard or
 });
 
 test("production_bible and storyboard_table previews are not applied to video nodes", () => {
-    const director = buildApprovedWorkflowStageFixture("director-analysis", JSON.stringify({ summary: "导演分析", items: [{ id: "d-1", title: "人物", text: "角色分析" }] }), "evidence-director-video", "output-director-video", "director");
-    const directorPreviews = buildWorkflowMappingPreviews({ workflowRun: director.workflowRun, stageId: "director-analysis", output: director.output, now: "2026-01-12T00:05:00.000Z" });
-    const biblePreview = directorPreviews.find((item) => item.targetType === "production_bible")!;
-    const storyboardPreview = directorPreviews.find((item) => item.targetType === "storyboard_table")!;
+    const art = buildApprovedWorkflowStageFixture("art-design", JSON.stringify({ summary: "服化道", items: [{ id: "asset-1", title: "人物", kind: "character", text: "角色分析" }] }), "evidence-art-video", "output-art-video", "art-designer");
+    const board = buildApprovedWorkflowStageFixture("seedance-storyboard", JSON.stringify({ summary: "分镜", items: [{ id: "shot-1", title: "镜头一", prompt: "推进镜头" }] }), "evidence-board-video", "output-board-video", "storyboard-artist");
+    const biblePreview = buildWorkflowMappingPreviews({ workflowRun: art.workflowRun, stageId: "art-design", output: art.output, now: "2026-01-12T00:05:00.000Z" }).find((item) => item.targetType === "production_bible")!;
+    const storyboardPreview = buildWorkflowMappingPreviews({ workflowRun: board.workflowRun, stageId: "seedance-storyboard", output: board.output, now: "2026-01-12T00:05:00.000Z" }).find((item) => item.targetType === "storyboard_table")!;
 
     const bibleResult = applyWorkflowMappingPreviewToVideoNodes({
         preview: biblePreview,
-        workflowRun: director.workflowRun,
-        output: director.output,
+        workflowRun: art.workflowRun,
+        output: art.output,
         canvasId: "canvas-1",
         existingNodes: [],
     });
     const storyboardResult = applyWorkflowMappingPreviewToVideoNodes({
         preview: storyboardPreview,
-        workflowRun: director.workflowRun,
-        output: director.output,
+        workflowRun: board.workflowRun,
+        output: board.output,
         canvasId: "canvas-1",
         existingNodes: [],
     });

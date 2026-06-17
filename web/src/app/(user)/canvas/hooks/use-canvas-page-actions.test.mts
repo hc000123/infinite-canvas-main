@@ -14,7 +14,7 @@ test("video workflow canvases return to the video production page", () => {
     assert.deepEqual(target, { href: "/video?episode=ep05", label: "返回视频生产台" });
 });
 
-test("regular episode canvases return to the episode workbench", () => {
+test("regular episode canvases return to the project detail page", () => {
     const target = canvasPageReturnTargetForProject({
         episodeId: "episode-1",
         episodeTitle: "第一集",
@@ -22,7 +22,7 @@ test("regular episode canvases return to the episode workbench", () => {
         scriptId: "script-1",
     });
 
-    assert.deepEqual(target, { href: "/projects/project-1/episodes/episode-1/workbench", label: "返回本集生产流程" });
+    assert.deepEqual(target, { href: "/projects/project-1", label: "返回项目详情" });
 });
 
 test("video workflow episode can fall back to the canvas episode title", () => {

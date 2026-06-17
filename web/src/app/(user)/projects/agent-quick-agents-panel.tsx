@@ -3,6 +3,7 @@ import { Alert, Button, Card, Form, Input, InputNumber, Select, Space, Switch, T
 import { Bot, Copy, RotateCcw, Save } from "lucide-react";
 
 import { canInvokeAgentConfig, defaultAgentConfig, validateAgentConfig, type AgentConfig, type AgentConfigKind } from "./agent-settings";
+import { sortedWorkflowStages, workflowStageDetail, type AgentWorkflowPreset } from "./agent-workflow-presets";
 import { agentRunKindLabel, agentRunStatusLabel } from "./agent-runner-records";
 import type { AgentRunRecord } from "./agent-runner-types";
 import type { AgentConfigFormValues } from "./agent-settings-form";
@@ -37,6 +38,7 @@ export function AgentQuickAgentsPanel({
     selectedAgentModel,
     selectedConfig,
     selectedKind,
+    selectedWorkflowPreset,
     setSelectedKind,
     settingsOnly,
     textApiReady,
@@ -57,18 +59,31 @@ export function AgentQuickAgentsPanel({
     selectedAgentModel: string;
     selectedConfig: AgentConfig;
     selectedKind: AgentConfigKind;
+    selectedWorkflowPreset: AgentWorkflowPreset;
     setSelectedKind: (kind: AgentConfigKind) => void;
     settingsOnly: boolean;
     textApiReady: boolean;
     textChannelLabel: string;
     validation: ReturnType<typeof validateAgentConfig>;
 }) {
+    const workflowAgentOptions = workflowAgentKindOptions(selectedWorkflowPreset);
     return (
         <div className="grid gap-4">
             <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
-                <Card size="small" title="Agent 类型">
+                <Card
+                    size="small"
+                    title="Agent 类型"
+                    extra={
+                        <Tag className="m-0" color="blue">
+                            当前预设
+                        </Tag>
+                    }
+                >
+                    <div className={`mb-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-2 text-xs leading-5 ${mutedTextClass}`}>
+                        只显示当前 Agent 预设「{selectedWorkflowPreset.name}」绑定的 Agent。切换大预设后，这里会跟着切换同一套链路。
+                    </div>
                     <div className="grid gap-2">
-                        {agentKindOptions.map((option) => {
+                        {workflowAgentOptions.map((option) => {
                             const config = resolvedConfigs.find((item) => item.kind === option.value) || defaultAgentConfig(option.value);
                             const status = canInvokeAgentConfig(config);
                             return (
@@ -85,6 +100,9 @@ export function AgentQuickAgentsPanel({
                                         </Tag>
                                     </div>
                                     <div className="mt-2 flex flex-wrap gap-1.5">
+                                        <Tag className="m-0">阶段 {option.stageOrder}</Tag>
+                                        <Tag className="m-0">{option.stageName}</Tag>
+                                        <Tag className="m-0">绑定 v{option.agentVersion}</Tag>
                                         <Tag className="m-0">{config.reasoningLevel}</Tag>
                                         <Tag className="m-0">{config.modelPreference === "default" ? "全局文本模型" : config.modelPreference}</Tag>
                                         <Tag className="m-0">{config.writePolicy === "confirm_before_write" ? "确认后写入" : "仅预览"}</Tag>
@@ -133,6 +151,7 @@ export function AgentQuickAgentsPanel({
                             <Tag className="m-0" color={callable.callable ? "green" : "default"}>
                                 {callable.callable ? "模板可用" : "模板不可用"}
                             </Tag>
+                            <Tag className="m-0">所属预设：{selectedWorkflowPreset.name}</Tag>
                             <Tag className="m-0" color={textApiReady ? "green" : "orange"}>
                                 文本 API {textApiReady ? "已就绪" : "未就绪"}
                             </Tag>
@@ -154,6 +173,27 @@ export function AgentQuickAgentsPanel({
             {!settingsOnly ? <AgentDraftRunsPanel recentRuns={recentRuns} /> : null}
         </div>
     );
+}
+
+function workflowAgentKindOptions(preset: AgentWorkflowPreset) {
+    const seen = new Set<AgentConfigKind>();
+    const options = sortedWorkflowStages(preset)
+        .map((stage) => {
+            const detail = workflowStageDetail(preset, stage);
+            const binding = detail.binding;
+            if (!binding || seen.has(binding.agentConfigKind)) return undefined;
+            seen.add(binding.agentConfigKind);
+            const kindOption = agentKindOptions.find((option) => option.value === binding.agentConfigKind);
+            return {
+                label: kindOption?.label || detail.agent?.name || binding.agentConfigKind,
+                value: binding.agentConfigKind,
+                stageName: stage.name,
+                stageOrder: stage.order,
+                agentVersion: binding.agentVersion,
+            };
+        })
+        .filter((option): option is { label: string; value: AgentConfigKind; stageName: string; stageOrder: number; agentVersion: string } => Boolean(option));
+    return options.length ? options : agentKindOptions.map((option, index) => ({ ...option, stageName: "未绑定阶段", stageOrder: index + 1, agentVersion: "-" }));
 }
 
 function AgentTemplatePreview({ selectedConfig }: { selectedConfig: AgentConfig }) {

@@ -10,6 +10,7 @@ import { summarizeWorkflowStageDisplayState } from "./agent-runner-workflow-disp
 import type { AgentWorkflowMappingPreview, AgentWorkflowRunRecord, AgentWorkflowStageOutput } from "./agent-runner-types.ts";
 
 export function canGenerateWorkflowMappingPreview(workflowRun: AgentWorkflowRunRecord, stageId: string, expectedSceneKeys: string[] = []) {
+    if (!workflowStageHasMappingPreview(stageId)) return { allowed: false, reason: "该阶段不生成映射预览" };
     const stageState = workflowRun.stageStates.find((stage) => stage.stageId === stageId);
     if (!stageState) return { allowed: false, reason: "未找到阶段状态" };
     const displayState = summarizeWorkflowStageDisplayState(workflowRun, stageId, expectedSceneKeys);
@@ -93,4 +94,8 @@ export function buildWorkflowMappingPreviews({ workflowRun, stageId, output, now
         ];
     }
     return [];
+}
+
+function workflowStageHasMappingPreview(stageId: string) {
+    return stageId === "director-analysis" || stageId === "art-design" || stageId === "seedance-storyboard";
 }

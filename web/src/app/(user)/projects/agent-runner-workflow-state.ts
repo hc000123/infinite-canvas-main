@@ -49,6 +49,50 @@ export function createAgentWorkflowRunRecord({ preset, projectId, canvasId, epis
     );
 }
 
+export function reconcileAgentWorkflowRunWithPreset(workflowRun: AgentWorkflowRunRecord, preset: AgentWorkflowPreset, now: string): AgentWorkflowRunRecord {
+    const stages = orderedWorkflowPresetStages(preset);
+    const existingByStageId = new Map(workflowRun.stageStates.map((stage) => [stage.stageId, stage]));
+    let changed = workflowRun.workflowVersion !== preset.version || workflowRun.presetId !== preset.workflowId;
+    const stageStates = stages.map((stage, index) => {
+        const existing = existingByStageId.get(stage.stageId);
+        const dependsOnStageIds = index === 0 ? [] : [stages[index - 1].stageId];
+        if (!existing) {
+            changed = true;
+            return {
+                stageId: stage.stageId,
+                agentId: stage.agentId,
+                status: index === 0 ? ("idle" as const) : ("blocked" as const),
+                evidenceIds: [],
+                dependsOnStageIds,
+                readingRecords: [],
+                blockedReason: index === 0 ? undefined : `需先批准前置阶段：${stages[index - 1].name}`,
+            };
+        }
+        const patched = {
+            ...existing,
+            agentId: stage.agentId,
+            dependsOnStageIds,
+        };
+        if (existing.agentId !== patched.agentId || !sameStringArray(existing.dependsOnStageIds, patched.dependsOnStageIds)) changed = true;
+        return patched;
+    });
+    if (stageStates.length !== workflowRun.stageStates.length) changed = true;
+    const currentStageId = stages.some((stage) => stage.stageId === workflowRun.currentStageId) ? workflowRun.currentStageId : stages[0]?.stageId || "";
+    if (currentStageId !== workflowRun.currentStageId) changed = true;
+    if (!changed) return refreshWorkflowStageBlocks(workflowRun, now);
+    return refreshWorkflowStageBlocks(
+        {
+            ...workflowRun,
+            workflowVersion: preset.version,
+            presetId: preset.workflowId,
+            currentStageId,
+            stageStates,
+            updatedAt: now,
+        },
+        now,
+    );
+}
+
 export function bindAgentWorkflowRunCanvas(workflowRun: AgentWorkflowRunRecord, canvasId: string, now: string): AgentWorkflowRunRecord {
     if (!canvasId || workflowRun.canvasId === canvasId) return workflowRun;
     return { ...workflowRun, canvasId, updatedAt: now };
@@ -174,4 +218,8 @@ export function reviewAgentWorkflowStageRun(workflowRun: AgentWorkflowRunRecord,
         },
         now,
     );
+}
+
+function sameStringArray(left: string[], right: string[]) {
+    return left.length === right.length && left.every((item, index) => item === right[index]);
 }

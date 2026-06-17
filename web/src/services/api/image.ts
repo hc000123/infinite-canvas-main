@@ -403,12 +403,12 @@ function summarizeText(value: string, maxLength = 180) {
     return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text || "暂无输入摘要";
 }
 
-export async function requestImageQuestion(config: AiConfig, messages: ChatCompletionMessage[], onDelta?: (text: string) => void) {
-    if (textModelEndpointType(config, config.model) === "responses") return requestResponsesQuestion(config, messages, onDelta);
-    return requestChatQuestion(config, messages, onDelta);
+export async function requestImageQuestion(config: AiConfig, messages: ChatCompletionMessage[], onDelta?: (text: string) => void, options?: { timeoutMs?: number }) {
+    if (textModelEndpointType(config, config.model) === "responses") return requestResponsesQuestion(config, messages, onDelta, options);
+    return requestChatQuestion(config, messages, onDelta, options);
 }
 
-async function requestChatQuestion(config: AiConfig, messages: ChatCompletionMessage[], onDelta?: (text: string) => void) {
+async function requestChatQuestion(config: AiConfig, messages: ChatCompletionMessage[], onDelta?: (text: string) => void, options?: { timeoutMs?: number }) {
     let buffer = "";
     let answer = "";
     let processedLength = 0;
@@ -426,7 +426,7 @@ async function requestChatQuestion(config: AiConfig, messages: ChatCompletionMes
                 headers: {
                     ...aiHeaders(config, "application/json"),
                 } as Record<string, string>,
-                timeout: AI_REQUEST_TIMEOUT_MS,
+                timeout: options?.timeoutMs || AI_REQUEST_TIMEOUT_MS,
                 responseType: "text",
                 onDownloadProgress: (event) => {
                     const responseText = String(event.event?.target?.responseText || "");
@@ -477,7 +477,7 @@ async function requestChatQuestion(config: AiConfig, messages: ChatCompletionMes
     return answer || "没有返回内容";
 }
 
-async function requestResponsesQuestion(config: AiConfig, messages: ChatCompletionMessage[], onDelta?: (text: string) => void) {
+async function requestResponsesQuestion(config: AiConfig, messages: ChatCompletionMessage[], onDelta?: (text: string) => void, options?: { timeoutMs?: number }) {
     let buffer = "";
     let answer = "";
     let processedLength = 0;
@@ -495,7 +495,7 @@ async function requestResponsesQuestion(config: AiConfig, messages: ChatCompleti
                 headers: {
                     ...aiHeaders(config, "application/json"),
                 } as Record<string, string>,
-                timeout: AI_REQUEST_TIMEOUT_MS,
+                timeout: options?.timeoutMs || AI_REQUEST_TIMEOUT_MS,
                 responseType: "text",
                 onDownloadProgress: (event) => {
                     const responseText = String(event.event?.target?.responseText || "");

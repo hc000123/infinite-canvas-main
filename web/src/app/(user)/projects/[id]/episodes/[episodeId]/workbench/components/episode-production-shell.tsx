@@ -384,7 +384,7 @@ export function EpisodeProductionShell({
                                     segments={packageSegments}
                                 />
                             ) : (
-                                <EpisodeModulePanel config={moduleConfig} editorSlot={scriptEditor} filteredRows={filteredRows} activeFilter={activeFilter} showRows={activeModule !== "script"} onFilterChange={setActiveFilter} onOpenDetail={onOpenDetail} />
+                                <EpisodeModulePanel config={moduleConfig} editorSlot={scriptEditor} filteredRows={filteredRows} activeFilter={activeFilter} onFilterChange={setActiveFilter} onOpenDetail={onOpenDetail} />
                             )}
                         </div>
                     </div>

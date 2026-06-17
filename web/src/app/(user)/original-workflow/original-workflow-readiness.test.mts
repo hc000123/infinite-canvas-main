@@ -4,7 +4,7 @@ import test from "node:test";
 import { getCopyOnlySyncState } from "./original-workflow-readiness.ts";
 import { parseWorkflowImageReferenceTable } from "./original-workflow-imports.ts";
 
-test("copy-only action exports when stage3 standard output exists", () => {
+test("copy-only action exports legacy cache when only stage3 standard output exists", () => {
     const state = getCopyOnlySyncState([
         { exists: true, key: "stage3" },
         { exists: false, key: "copyOnly" },
@@ -14,7 +14,7 @@ test("copy-only action exports when stage3 standard output exists", () => {
     assert.equal(state.disabled, false);
 });
 
-test("copy-only action requires fresh stage3 validation before export", () => {
+test("copy-only action requires fresh Copy-only validation before sync", () => {
     const files = [
         { exists: true, key: "stage3" },
         { exists: true, key: "copyOnly" },
@@ -22,23 +22,23 @@ test("copy-only action requires fresh stage3 validation before export", () => {
 
     assert.deepEqual(getCopyOnlySyncState(files), {
         disabled: true,
-        label: "先校验 Stage 3",
+        label: "先校验 Copy-only",
         mode: "needs-stage3-validation",
-        notice: "Stage 3 尚未通过质量门，请先校验 Stage 3，再导出或同步视频生产包。",
+        notice: "Copy-only 尚未通过质量门，请先校验 Copy-only，再同步视频生产包。",
     });
     assert.match(getCopyOnlySyncState(files, { state: "failed" }).notice, /未通过/);
     assert.match(getCopyOnlySyncState(files, { state: "stale" }).notice, /有更新/);
 });
 
-test("copy-only action syncs existing copy-only when stage3 is missing", () => {
+test("copy-only action syncs validated copy-only when stage3 is missing", () => {
     const state = getCopyOnlySyncState([
         { exists: false, key: "stage3" },
         { exists: true, key: "copyOnly" },
-    ]);
+    ], { state: "passed" });
 
     assert.equal(state.mode, "sync-existing");
     assert.equal(state.disabled, false);
-    assert.match(state.notice, /现有 Copy-only/);
+    assert.equal(state.notice, "");
 });
 
 test("copy-only action blocks when neither stage3 nor copy-only exists", () => {
@@ -49,7 +49,7 @@ test("copy-only action blocks when neither stage3 nor copy-only exists", () => {
 
     assert.equal(state.mode, "blocked");
     assert.equal(state.disabled, true);
-    assert.match(state.notice, /Stage 3/);
+    assert.match(state.notice, /Copy-only/);
 });
 
 test("parses stage3 image reference table", () => {

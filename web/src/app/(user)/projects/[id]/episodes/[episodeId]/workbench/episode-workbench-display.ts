@@ -8,6 +8,13 @@ import type { CanvasHandoffImportTarget } from "./components/episode-canvas-hand
 import type { EpisodeSceneOption } from "./use-episode-workbench-state";
 
 export const stageCopy: Record<string, { title: string; agent: string; input: string; output: string; previewTargets: Array<AgentWorkflowMappingPreview["targetType"]> }> = {
+    "script-adaptation": {
+        title: "剧本适配",
+        agent: "剧本优化 Agent",
+        input: "原始本集剧本、剧本优化规则、AI 剧本白皮书",
+        output: "productionScript、structuredScript、场次 / 人物 / 道具连续性和生产备注",
+        previewTargets: [],
+    },
     "director-analysis": {
         title: "导演分析",
         agent: "导演分析 Agent",
@@ -355,5 +362,5 @@ export function sceneSourceLabel(source: EpisodeSceneOption["source"]) {
 export function formatBlockedReason(reason?: string) {
     const value = reason?.trim();
     if (!value) return "前置阶段未批准";
-    return value.replace("director-analysis", "导演分析").replace("art-design", "服化道美术设计").replace("seedance-storyboard", "Seedance 分镜");
+    return value.replace("script-adaptation", "剧本适配").replace("director-analysis", "导演分析").replace("art-design", "服化道美术设计").replace("seedance-storyboard", "Seedance 分镜");
 }

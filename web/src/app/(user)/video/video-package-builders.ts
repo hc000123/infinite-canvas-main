@@ -174,9 +174,29 @@ function promptDialogueBudgetIssue(prompt: string, durationText: string) {
 }
 
 function promptStructureIssue(prompt: string) {
+    if (looksLikeSkill5Prompt(prompt)) return skill5PromptStructureIssue(prompt);
+    return legacyWorkflowPromptStructureIssue(prompt);
+}
+
+function skill5PromptStructureIssue(prompt: string) {
+    const requiredSections = ["场景", "人物位置关系", "情绪基调"];
+    const missingSection = requiredSections.find((section) => !new RegExp(`${section}[：:]`).test(prompt));
+    if (missingSection) return `提示词缺少“${missingSection}”，疑似简化版提示词；请回到 Stage 3 重新生成完整 Skill 5 执行稿。`;
+    const shotBlocks = promptShotBlocks(prompt);
+    if (shotBlocks.length < 2) return "提示词少于 2 个分镜，疑似摘要版提示词；请回到 Stage 3 重写。";
+    const shotFields = ["焦段", "光圈", "机位", "构图", "运镜", "主体动作/表情"];
+    for (const block of shotBlocks) {
+        const missingField = shotFields.find((field) => !new RegExp(`${field}[：:]`).test(block.text));
+        if (missingField) return `分镜${block.label} 缺少“${missingField}”字段，请补齐 Skill 5 的 6 字段分镜后再生成视频。`;
+    }
+    if (/简化版提示词|摘要版|骨架版|占位符|后续补充/.test(prompt)) return "提示词包含简化/摘要/占位符写法，请回到 Stage 3 输出完整执行稿。";
+    return "";
+}
+
+function legacyWorkflowPromptStructureIssue(prompt: string) {
     const requiredSections = ["基础设定", "场景起始状态", "场景固定视觉设定", "画面内容分镜", "兜底约束", "生产审核用时间预算校验"];
     const missingSection = requiredSections.find((section) => !prompt.includes(section));
-    if (missingSection) return `提示词缺少“${missingSection}”，疑似简化版提示词；请回到 Stage 3 重新生成完整清道夫 V4.3 执行稿。`;
+    if (missingSection) return `提示词缺少“${missingSection}”，疑似简化版提示词；请回到 Stage 3 重新生成完整 Skill 5 / 执行稿。`;
     const fixedVisualFields = ["场景空间", "场景材质", "固定道具", "固定光源", "固定色彩影调", "摄影机与成像系统", "固定画幅", "固定景深原则", "环境颗粒", "画面稳定目标"];
     const missingFixedField = fixedVisualFields.find((field) => !prompt.includes(field));
     if (missingFixedField) return `场景固定视觉设定缺少“${missingFixedField}”，请补完整后再同步视频生产包。`;
@@ -192,6 +212,10 @@ function promptStructureIssue(prompt: string) {
     return "";
 }
 
+function looksLikeSkill5Prompt(prompt: string) {
+    return ["焦段", "光圈", "机位", "主体动作/表情"].every((field) => new RegExp(`${field}[：:]`).test(prompt));
+}
+
 function promptShotDurationBudgets(prompt: string) {
     const budgets = new Map<string, number>();
     for (const match of prompt.matchAll(/分镜\s*([一二三四五六七八九十百\d]+)\s*约\s*(\d+(?:\.\d+)?)\s*秒/g)) {
@@ -201,7 +225,7 @@ function promptShotDurationBudgets(prompt: string) {
 }
 
 function promptShotBlocks(prompt: string) {
-    const matches = [...prompt.matchAll(/(?:^|\n|[▸•\-]\s*)分镜\s*([一二三四五六七八九十百\d]+)/g)];
+    const matches = [...prompt.matchAll(/(?:^|\n|[▸•\-]\s*)[【\[]?\s*分镜\s*([一二三四五六七八九十百\d]+)(?:[】\]])?/g)];
     return matches.map((match, index) => {
         const start = match.index || 0;
         const end = index + 1 < matches.length ? matches[index + 1].index || prompt.length : prompt.length;

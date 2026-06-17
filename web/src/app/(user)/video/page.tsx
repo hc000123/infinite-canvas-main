@@ -20,6 +20,7 @@ import { useAssetStore, type Asset, type AssetWriteInput } from "@/stores/use-as
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useVolcengineAssetReview } from "../assets/use-volcengine-asset-review";
+import { ToolMetricGrid } from "../components/tool-workbench";
 import { buildAssetVersionedUpdatePatch } from "../assets/asset-version-history";
 import { buildWorkflowUploadedImagePatch } from "../assets/workflow-asset-image";
 import { NODE_DEFAULT_SIZE } from "../canvas/constants";
@@ -39,7 +40,17 @@ import {
     workflowReferenceBindingSummary,
     workflowVideoGenerationReadiness,
 } from "./video-package-builders";
-import { useVideoPackageStore, type AssetStatus, type CanvasStatus, type PackageGeneration, type PackageGenerationStatus, type ProductionPackage, type ProductionPackageConfig, type PromptStatus, type WorkflowVideoReference } from "./use-video-package-store";
+import {
+    useVideoPackageStore,
+    type AssetStatus,
+    type CanvasStatus,
+    type PackageGeneration,
+    type PackageGenerationStatus,
+    type ProductionPackage,
+    type ProductionPackageConfig,
+    type PromptStatus,
+    type WorkflowVideoReference,
+} from "./use-video-package-store";
 
 type FilterKey = "all" | "review" | "missing" | "ready" | "imported" | "generated";
 type PackageUploadedVideo = UploadedFile & { aiTask?: AiTaskLedger };
@@ -439,7 +450,7 @@ export default function VideoPage() {
                     {
                         ...assetInput,
                         metadata: {
-                            ...(existingAsset.metadata || {}),
+                            ...existingAsset.metadata,
                             ...assetInput.metadata,
                             generations: [...readGenerationList(existingAsset.metadata?.generations), generation],
                             generationVersions: [...readGenerationVersions(existingAsset), video.aiTask].filter(Boolean),
@@ -654,7 +665,7 @@ export default function VideoPage() {
     return (
         <main className="studio-workspace studio-shell h-full overflow-hidden text-[var(--studio-text-primary)]">
             <div className="mx-auto flex h-full w-full max-w-[1540px] flex-col gap-4 px-5 py-4 xl:px-8">
-                <section className="shrink-0 border-b border-[var(--studio-border-subtle)] pb-4">
+                <section className="studio-page-header shrink-0 p-4">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0">
                             <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-[var(--studio-text-muted)]">
@@ -663,13 +674,7 @@ export default function VideoPage() {
                                 <span>{sourceLabel}</span>
                             </div>
                             <h1 className="text-2xl font-semibold tracking-normal text-[var(--studio-text-primary)] sm:text-3xl">视频节点生产台</h1>
-                            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-[var(--studio-text-secondary)]">
-                                <span>按集推进：先补资产，再逐条检查提示词并生成</span>
-                                <span className="text-[var(--studio-text-muted)]">|</span>
-                                <span>
-                                    已确认 {confirmedCount} 个，已生成 {generatedCount} 个，缺参考 {missingCount} 个，待审核 {reviewCount} 个
-                                </span>
-                            </div>
+                            <p className="mt-3 text-sm leading-6 text-[var(--studio-text-secondary)]">按集推进：先补资产，再逐条检查提示词并生成。</p>
                         </div>
                         <div className="flex flex-wrap gap-2 lg:justify-end">
                             <Button icon={<Workflow className="size-4" />} href={workflowControlHref}>
@@ -685,16 +690,31 @@ export default function VideoPage() {
                             ) : null}
                         </div>
                     </div>
+                    <ToolMetricGrid
+                        cardClassName="px-3 py-2"
+                        className="mt-4 sm:grid-cols-2 xl:grid-cols-4"
+                        items={[
+                            { label: "已确认", value: confirmedCount },
+                            { label: "已生成", value: generatedCount },
+                            { label: "缺参考", value: missingCount },
+                            { label: "待审核", value: reviewCount },
+                        ]}
+                    />
                 </section>
 
                 <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2">
+                    <div className="studio-toolbar flex flex-wrap items-center justify-between gap-3 px-3 py-2">
                         <div className="flex flex-wrap gap-1.5">
                             {filters.map((item) => (
                                 <button
                                     key={item.key}
                                     type="button"
-                                    className={cn("h-8 rounded-md border px-3 text-sm transition", filter === item.key ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-text-primary)] shadow-[inset_0_-2px_0_var(--studio-accent)]" : "border-transparent text-[var(--studio-text-secondary)] hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]")}
+                                    className={cn(
+                                        "h-8 rounded-md border px-3 text-sm transition",
+                                        filter === item.key
+                                            ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] text-[var(--studio-text-primary)] shadow-[inset_0_-2px_0_var(--studio-accent)]"
+                                            : "border-transparent text-[var(--studio-text-secondary)] hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]",
+                                    )}
                                     onClick={() => setFilter(item.key)}
                                 >
                                     {item.label}
@@ -817,7 +837,13 @@ function VideoPromptNodeCard({
     const readiness = workflowVideoGenerationReadiness(item, assets, videoProtocol);
     const showCanvasAction = item.generation?.status === "succeeded" || item.canvasStatus === "已生成";
     return (
-        <article className={cn("grid gap-4 rounded-md border bg-[var(--studio-panel-bg)] p-4 shadow-[var(--studio-shadow)] transition hover:border-[var(--studio-border-strong)] xl:grid-cols-[minmax(0,1fr)_260px]", selected ? "border-[var(--studio-accent)] shadow-[0_0_0_1px_var(--studio-accent)]" : "border-[var(--studio-border-subtle)]")} onClick={onSelect}>
+        <article
+            className={cn(
+                "grid gap-4 rounded-md border bg-[var(--studio-panel-bg)] p-4 shadow-[var(--studio-shadow)] transition hover:border-[var(--studio-border-strong)] xl:grid-cols-[minmax(0,1fr)_260px]",
+                selected ? "border-[var(--studio-accent)] shadow-[0_0_0_1px_var(--studio-accent)]" : "border-[var(--studio-border-subtle)]",
+            )}
+            onClick={onSelect}
+        >
             <div className="min-w-0 space-y-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -827,7 +853,9 @@ function VideoPromptNodeCard({
                             <StatusTag label={item.promptStatus} />
                             <StatusTag label={item.assetStatus} />
                             <GenerationTag status={item.generation?.status} />
-                            {item.generationVersions?.length ? <Tag className="m-0 rounded border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-1.5 py-0 text-xs leading-5 text-[var(--studio-text-secondary)]">{item.generationVersions.length} 版</Tag> : null}
+                            {item.generationVersions?.length ? (
+                                <Tag className="m-0 rounded border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-1.5 py-0 text-xs leading-5 text-[var(--studio-text-secondary)]">{item.generationVersions.length} 版</Tag>
+                            ) : null}
                         </div>
                         <h2 className="mt-2 break-words text-lg font-semibold leading-7 text-[var(--studio-text-primary)]">{item.segment}</h2>
                     </div>
@@ -873,23 +901,12 @@ function VideoPromptNodeCard({
                             <div className="text-xs font-semibold tracking-normal text-[var(--studio-accent)]">提示词</div>
                             <span className="text-xs text-[var(--studio-text-muted)]">提示词和上方资产槽一一对照</span>
                         </div>
-                        <PromptTextAreaWithReferencePreview
-                            assets={assets}
-                            item={item}
-                            value={item.prompt}
-                            onChange={onPromptChange}
-                            onClick={(event) => event.stopPropagation()}
-                        />
+                        <PromptTextAreaWithReferencePreview assets={assets} item={item} value={item.prompt} onChange={onPromptChange} onClick={(event) => event.stopPropagation()} />
                     </div>
                     <VideoNodeSettings baseConfig={config} item={item} onChange={onConfigChange} onOpenConfig={onOpenConfig} />
                 </div>
 
-                <div
-                    className={cn(
-                        "rounded-md border px-3 py-2 text-sm leading-6",
-                        studioSemanticNoticeClass(readinessStatusTone(readiness.status)),
-                    )}
-                >
+                <div className={cn("rounded-md border px-3 py-2 text-sm leading-6", studioSemanticNoticeClass(readinessStatusTone(readiness.status)))}>
                     参考资产 {summary.bound}/{summary.total || item.assets.length}：{readiness.message}
                 </div>
             </div>
@@ -962,11 +979,19 @@ function InlineAssetSlots({
                                     <span className="rounded border border-[var(--studio-border-subtle)] px-1.5 py-0.5 text-[11px] text-[var(--studio-text-secondary)]">{slot.kind}</span>
                                     <StatusTag label={bound ? "完整" : "缺参考"} />
                                 </div>
-                                {boundAsset?.kind === "image" && boundAsset.metadata?.volcengineAsset?.status ? <div className="mt-1 truncate text-[11px] text-[var(--studio-text-muted)]">加白：{String(boundAsset.metadata.volcengineAsset.status)}</div> : null}
+                                {boundAsset?.kind === "image" && boundAsset.metadata?.volcengineAsset?.status ? (
+                                    <div className="mt-1 truncate text-[11px] text-[var(--studio-text-muted)]">加白：{String(boundAsset.metadata.volcengineAsset.status)}</div>
+                                ) : null}
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-1.5 border-t border-[var(--studio-border-subtle)] px-2 py-1.5">
-                            <label className={cn("inline-flex h-6 cursor-pointer items-center gap-1 rounded border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-2 text-xs leading-6 text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]", uploading && "pointer-events-none opacity-60")} onClick={(event) => event.stopPropagation()}>
+                            <label
+                                className={cn(
+                                    "inline-flex h-6 cursor-pointer items-center gap-1 rounded border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-2 text-xs leading-6 text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]",
+                                    uploading && "pointer-events-none opacity-60",
+                                )}
+                                onClick={(event) => event.stopPropagation()}
+                            >
                                 {uploading ? <LoaderCircle className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
                                 <span>{uploading ? "上传中" : bound ? "替换" : "上传"}</span>
                                 <input
@@ -1053,7 +1078,13 @@ function PromptTextAreaWithReferencePreview({
                         const previewUrl = assetPreviewUrl(boundAsset);
                         const active = activeRef === ref;
                         return (
-                            <div key={slot.name} className={cn("grid w-[118px] shrink-0 grid-cols-[34px_minmax(0,1fr)] gap-1.5 rounded border p-1", active ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]")}>
+                            <div
+                                key={slot.name}
+                                className={cn(
+                                    "grid w-[118px] shrink-0 grid-cols-[34px_minmax(0,1fr)] gap-1.5 rounded border p-1",
+                                    active ? "border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]",
+                                )}
+                            >
                                 <div className="grid size-[34px] place-items-center overflow-hidden rounded bg-[var(--studio-control-bg)]">
                                     {previewUrl ? <img src={previewUrl} alt={slot.name} className="h-full w-full object-cover" /> : <Link2 className="size-4 text-[var(--studio-warning)]" />}
                                 </div>
@@ -1199,7 +1230,7 @@ function VideoNodeOutput({
     const nodeConfig = buildPackageVideoConfig(config, item);
     const generationError = item.generation?.status === "failed" ? normalizeVideoGenerationErrorMessage(item.generation.errorMessage || "视频生成失败，请打开详情查看原因。") : "";
     return (
-        <aside className="flex min-w-0 flex-col gap-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
+        <aside className="studio-section flex min-w-0 flex-col gap-3 p-3">
             <div className="flex items-center justify-between gap-2">
                 <div>
                     <div className="text-xs font-semibold tracking-normal text-[var(--studio-accent)]">生成结果</div>
@@ -1241,11 +1272,7 @@ function VideoNodeOutput({
             <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-3 py-2 text-xs leading-5 text-[var(--studio-text-secondary)]">
                 {nodeConfig.videoProtocol === "volcengine-ark" ? "企业 Ark / Seedance" : "未切到企业 Ark"} · {videoRatioLabel(nodeConfig.size)} · {videoSecondsLabel(nodeConfig.videoSeconds, nodeConfig)} · {videoResolutionLabel(nodeConfig.vquality)}
             </div>
-            {preflight ? (
-                <div className={cn("rounded-md border px-3 py-2 text-xs leading-5", studioSemanticNoticeClass(preflight.status === "passed" ? "success" : "warning"))}>
-                    {preflight.message}
-                </div>
-            ) : null}
+            {preflight ? <div className={cn("rounded-md border px-3 py-2 text-xs leading-5", studioSemanticNoticeClass(preflight.status === "passed" ? "success" : "warning"))}>{preflight.message}</div> : null}
             {generationError ? (
                 <div className={cn("rounded-md border px-3 py-2 text-xs leading-5", studioSemanticNoticeClass("danger"))}>
                     <div className="mb-1 flex items-center gap-1.5 font-medium">
@@ -1316,7 +1343,9 @@ function VideoNodeDetailDrawer({
                         {
                             key: "assets",
                             label: <span className="text-sm font-medium text-[var(--studio-text-primary)]">参考图与加白状态</span>,
-                            children: <AssetDetail assets={assets} item={item} onRefreshReview={onRefreshReview} onSubmitReview={onSubmitReview} refreshingReviewId={refreshingReviewId} submittingReviewId={submittingReviewId} videoProtocol={videoProtocol} />,
+                            children: (
+                                <AssetDetail assets={assets} item={item} onRefreshReview={onRefreshReview} onSubmitReview={onSubmitReview} refreshingReviewId={refreshingReviewId} submittingReviewId={submittingReviewId} videoProtocol={videoProtocol} />
+                            ),
                         },
                         {
                             key: "config",
@@ -1366,14 +1395,7 @@ function AssetDetail({
                     已匹配参考图 {summary.bound}/{summary.total}。已生图的视频工作流素材会随视频请求一起提交；缺失项仍按提示词文字生成。
                 </div>
             ) : null}
-            <div
-                className={cn(
-                    "rounded-md border px-3 py-2 text-sm leading-6",
-                    studioSemanticNoticeClass(readinessStatusTone(readiness.status)),
-                )}
-            >
-                {readiness.message}
-            </div>
+            <div className={cn("rounded-md border px-3 py-2 text-sm leading-6", studioSemanticNoticeClass(readinessStatusTone(readiness.status)))}>{readiness.message}</div>
             {reviewNotice ? <div className={cn("rounded-md border px-3 py-2 text-sm leading-6", studioSemanticNoticeClass("warning"))}>{reviewNotice}</div> : null}
             {item.assets.map((asset) => {
                 const bound = isWorkflowReferenceAssetBound(item, asset.name, assets);
@@ -1383,7 +1405,10 @@ function AssetDetail({
                 const canReview = boundAsset && (boundAsset.kind === "image" || boundAsset.kind === "video" || boundAsset.kind === "audio");
                 const shouldSubmitReview = canReview ? canSubmitVolcengineReview(boundAsset.metadata?.volcengineAsset) : false;
                 return (
-                    <div key={asset.name} className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2.5 text-sm transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]">
+                    <div
+                        key={asset.name}
+                        className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2.5 text-sm transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]"
+                    >
                         <span className="text-[var(--studio-text-muted)]">{asset.kind}</span>
                         <div className="min-w-0">
                             <div className="flex items-center justify-between gap-2">
@@ -1452,7 +1477,9 @@ function ConfigDetail({ config, item, loading, onPreflight, preflight }: { confi
 
     return (
         <div className="space-y-3 pb-4">
-            <div className="rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] px-3 py-2 text-sm text-[var(--studio-text-primary)]">生成会调用当前全局 AI 设置里的真实视频通道；企业 Ark 模型和 EP 绑定在后台系统设置维护。</div>
+            <div className="rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] px-3 py-2 text-sm text-[var(--studio-text-primary)]">
+                生成会调用当前全局 AI 设置里的真实视频通道；企业 Ark 模型和 EP 绑定在后台系统设置维护。
+            </div>
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2">
                 <div>
                     <div className="text-sm font-medium text-[var(--studio-text-primary)]">企业视频通道预检</div>

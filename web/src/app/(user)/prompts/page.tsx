@@ -16,6 +16,7 @@ import { saveAdminPrompt } from "@/services/api/admin";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { ALL_PROMPTS_OPTION, type Prompt } from "@/services/api/prompts";
+import { ToolMetricGrid, ToolWorkbenchLayout } from "../components/tool-workbench";
 
 const SCENARIO_FILTER_COLLAPSED_COUNT = 8;
 const TAG_FILTER_COLLAPSED_COUNT = 12;
@@ -59,6 +60,7 @@ export default function PromptsPage() {
     const promptSummaryText = query.isLoading ? "正在读取提示词库..." : query.isError ? "提示词读取失败，请稍后重试。" : `共 ${totalPrompts} 条提示词，按标题、标签与分类快速查找灵感。`;
     const showPromptContent = !query.isLoading && !query.isError;
     const listFooterText = query.isFetchingNextPage ? "加载更多提示词..." : query.hasNextPage ? "继续向下滚动加载更多" : promptItems.length > 0 ? `已显示全部 ${promptItems.length} 条提示词` : null;
+    const activeFilterCount = (selectedCategory !== ALL_PROMPTS_OPTION ? 1 : 0) + (selectedType !== ALL_PROMPTS_OPTION ? 1 : 0) + (selectedScenario !== ALL_PROMPTS_OPTION ? 1 : 0) + selectedTags.length + (favoriteOnly ? 1 : 0);
     const defaultCreateCategory = () => (selectedCategory !== ALL_PROMPTS_OPTION ? selectedCategory : promptCategoryOptions.find((category) => category !== ALL_PROMPTS_OPTION) || "system");
     const visiblePromptScenarios = useMemo(
         () => getVisibleFilterOptions(promptScenarios, scenarioFiltersExpanded, selectedScenario === ALL_PROMPTS_OPTION ? [] : [selectedScenario], SCENARIO_FILTER_COLLAPSED_COUNT),
@@ -125,7 +127,7 @@ export default function PromptsPage() {
                     .map((item) => item.trim())
                     .filter(Boolean),
                 metadata: {
-                    ...(metadata || {}),
+                    ...metadata,
                     nodeGroup: nextNodeGroup,
                     variables: parsePromptVariablesText(variableText),
                     favorite: metadata?.favorite === true,
@@ -151,158 +153,182 @@ export default function PromptsPage() {
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-[var(--studio-shell-bg)] text-[var(--studio-text-primary)]">
-            <main className="studio-shell min-h-0 flex-1 overflow-y-auto px-6 py-8" onScroll={handleListScroll}>
-                <div className="pb-8">
-                    <div className="mx-auto max-w-5xl text-center">
-                        <h1 className="text-4xl font-semibold tracking-normal text-[var(--studio-text-primary)]">提示词中心</h1>
-                        <p className="mt-3 text-sm text-[var(--studio-text-secondary)]">{promptSummaryText}</p>
-                    </div>
-                    {query.isLoading ? (
-                        <div className="studio-panel mx-auto mt-8 flex h-60 max-w-3xl flex-col items-center justify-center gap-3 text-sm text-[var(--studio-text-secondary)]">
-                            <Spin />
-                            <span>正在读取提示词...</span>
-                        </div>
-                    ) : null}
-                    {query.isError ? (
-                        <Alert
-                            className="mx-auto mt-8 max-w-3xl"
-                            type="error"
-                            showIcon
-                            message="提示词读取失败"
-                            description={query.error instanceof Error ? query.error.message : "请确认后端服务已启动后重试。"}
-                            action={
-                                <Button size="small" onClick={() => void query.refetch()}>
-                                    重试
-                                </Button>
-                            }
-                        />
-                    ) : null}
-                    {showPromptContent ? (
-                        <>
-                            <div className="mx-auto mt-8 flex w-full max-w-3xl gap-3">
-                                <Input
-                                    size="large"
-                                    className="min-w-0 flex-1 rounded-lg border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)] placeholder:text-[var(--studio-text-muted)]"
-                                    prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />}
-                                    value={titleKeyword}
-                                    placeholder="搜索标题、内容或标签"
-                                    onChange={(event) => setTitleKeyword(event.target.value)}
-                                />
-                                <Button size="large" type="primary" icon={<Plus className="size-4" />} onClick={openCreatePrompt}>
-                                    新建提示词
-                                </Button>
-                            </div>
-                            <div className="studio-panel-muted mx-auto mt-6 grid max-w-6xl gap-3 p-4 text-left">
-                                <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                                    <div className="pt-2 text-xs font-medium text-[var(--studio-text-muted)]">分类</div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {promptCategoryOptions.map((category) => (
-                                            <Tag.CheckableTag key={category} checked={selectedCategory === category} className={cn("prompt-filter-tag", selectedCategory === category && "is-active")} onChange={() => setSelectedCategory(category)}>
-                                                {category}
-                                            </Tag.CheckableTag>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                                    <div className="pt-2 text-xs font-medium text-[var(--studio-text-muted)]">类型</div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {typeOptions.map((type) => (
-                                            <Tag.CheckableTag
-                                                key={type}
-                                                checked={selectedType === type}
-                                                className={cn("prompt-filter-tag", selectedType === type && "is-active")}
-                                                onChange={() => {
-                                                    setSelectedType(type);
-                                                    setSelectedScenario(ALL_PROMPTS_OPTION);
-                                                }}
-                                            >
-                                                {type === ALL_PROMPTS_OPTION ? "全部" : promptTypeLabel(type)}
-                                            </Tag.CheckableTag>
-                                        ))}
-                                        <Tag.CheckableTag checked={favoriteOnly} className={cn("prompt-filter-tag", favoriteOnly && "is-active")} onChange={() => setFavoriteOnly((value) => !value)}>
-                                            常用
-                                        </Tag.CheckableTag>
-                                    </div>
-                                </div>
-                                <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                                    <div className="pt-2 text-xs font-medium text-[var(--studio-text-muted)]">场景</div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        {visiblePromptScenarios.map((scenario) => (
-                                            <Tag.CheckableTag key={scenario} checked={selectedScenario === scenario} className={cn("prompt-filter-tag", selectedScenario === scenario && "is-active")} onChange={() => setSelectedScenario(scenario)}>
-                                                {scenario}
-                                            </Tag.CheckableTag>
-                                        ))}
-                                        {promptScenarios.length > SCENARIO_FILTER_COLLAPSED_COUNT ? (
-                                            <Button
-                                                size="middle"
-                                                type="text"
-                                                className="!h-8 !px-2 !text-[var(--studio-text-secondary)] hover:!text-[var(--studio-text-primary)]"
-                                                icon={scenarioFiltersExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-                                                onClick={() => setScenarioFiltersExpanded((value) => !value)}
-                                            >
-                                                {scenarioFiltersExpanded ? "收起场景" : `展开${hiddenScenarioCount ? ` ${hiddenScenarioCount} 个` : ""}场景`}
-                                            </Button>
-                                        ) : null}
-                                    </div>
-                                </div>
-                                <div className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)] sm:items-start">
-                                    <div className="pt-2 text-xs font-medium text-[var(--studio-text-muted)]">标签</div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        {visiblePromptTags.map((tag) => (
-                                            <Tag.CheckableTag
-                                                key={tag}
-                                                checked={tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag)}
-                                                className={cn("prompt-filter-tag", (tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag)) && "is-active")}
-                                                onChange={() => toggleTag(tag)}
-                                            >
-                                                {tag}
-                                            </Tag.CheckableTag>
-                                        ))}
-                                        {promptTags.length > TAG_FILTER_COLLAPSED_COUNT ? (
-                                            <Button
-                                                size="middle"
-                                                type="text"
-                                                className="!h-8 !px-2 !text-[var(--studio-text-secondary)] hover:!text-[var(--studio-text-primary)]"
-                                                icon={tagFiltersExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-                                                onClick={() => setTagFiltersExpanded((value) => !value)}
-                                            >
-                                                {tagFiltersExpanded ? "收起标签" : `展开${hiddenTagCount ? ` ${hiddenTagCount} 个` : ""}标签`}
-                                            </Button>
-                                        ) : null}
-                                    </div>
-                                </div>
-                            </div>
-                        </>
-                    ) : null}
-                </div>
+            <main className="studio-shell min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6 xl:px-7" onScroll={handleListScroll}>
+                <ToolWorkbenchLayout
+                    sidebar={
+                        <aside className="studio-rail h-fit p-4 lg:sticky lg:top-5">
+                            <p className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">提示词中心</p>
+                            <h1 className="mt-2 text-2xl font-semibold tracking-normal text-[var(--studio-text-primary)]">提示词中心</h1>
+                            <p className="mt-2 text-xs leading-5 text-[var(--studio-text-secondary)]">{promptSummaryText}</p>
 
-                {showPromptContent ? (
-                    <div>
-                        <div className="mx-auto grid max-w-7xl gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                            {promptItems.map((item) => (
-                                <PromptCard
-                                    key={item.id}
-                                    item={item}
-                                    onOpen={() => setSelectedPrompt(item)}
-                                    onCopy={() => copyText(item.prompt, "提示词已复制")}
-                                    extraAction={
-                                        <Button size="small" icon={<FolderPlus className="size-3.5" />} onClick={() => savePromptAsset(item)}>
-                                            加入我的素材
-                                        </Button>
-                                    }
-                                />
-                            ))}
-                        </div>
-                        {promptItems.length === 0 ? (
-                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到匹配的提示词" className="py-16">
-                                <Button type="primary" icon={<Plus className="size-4" />} onClick={openCreatePrompt}>
-                                    新建提示词
-                                </Button>
-                            </Empty>
+                            <ToolMetricGrid
+                                className="mt-5 grid-cols-2"
+                                items={[
+                                    { label: "提示词", value: totalPrompts },
+                                    { label: "筛选项", value: activeFilterCount },
+                                ]}
+                            />
+
+                            {showPromptContent ? (
+                                <div className="mt-5 grid gap-4 border-t border-[var(--studio-border-subtle)] pt-4">
+                                    <div>
+                                        <div className="mb-2 text-xs font-medium text-[var(--studio-text-muted)]">分类</div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {promptCategoryOptions.map((category) => (
+                                                <Tag.CheckableTag key={category} checked={selectedCategory === category} className={cn("prompt-filter-tag", selectedCategory === category && "is-active")} onChange={() => setSelectedCategory(category)}>
+                                                    {category}
+                                                </Tag.CheckableTag>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="mb-2 text-xs font-medium text-[var(--studio-text-muted)]">类型</div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {typeOptions.map((type) => (
+                                                <Tag.CheckableTag
+                                                    key={type}
+                                                    checked={selectedType === type}
+                                                    className={cn("prompt-filter-tag", selectedType === type && "is-active")}
+                                                    onChange={() => {
+                                                        setSelectedType(type);
+                                                        setSelectedScenario(ALL_PROMPTS_OPTION);
+                                                    }}
+                                                >
+                                                    {type === ALL_PROMPTS_OPTION ? "全部" : promptTypeLabel(type)}
+                                                </Tag.CheckableTag>
+                                            ))}
+                                            <Tag.CheckableTag checked={favoriteOnly} className={cn("prompt-filter-tag", favoriteOnly && "is-active")} onChange={() => setFavoriteOnly((value) => !value)}>
+                                                常用
+                                            </Tag.CheckableTag>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="mb-2 text-xs font-medium text-[var(--studio-text-muted)]">场景</div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {visiblePromptScenarios.map((scenario) => (
+                                                <Tag.CheckableTag key={scenario} checked={selectedScenario === scenario} className={cn("prompt-filter-tag", selectedScenario === scenario && "is-active")} onChange={() => setSelectedScenario(scenario)}>
+                                                    {scenario}
+                                                </Tag.CheckableTag>
+                                            ))}
+                                            {promptScenarios.length > SCENARIO_FILTER_COLLAPSED_COUNT ? (
+                                                <Button
+                                                    size="middle"
+                                                    type="text"
+                                                    className="!h-8 !px-2 !text-[var(--studio-text-secondary)] hover:!text-[var(--studio-text-primary)]"
+                                                    icon={scenarioFiltersExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                                                    onClick={() => setScenarioFiltersExpanded((value) => !value)}
+                                                >
+                                                    {scenarioFiltersExpanded ? "收起场景" : `展开${hiddenScenarioCount ? ` ${hiddenScenarioCount} 个` : ""}场景`}
+                                                </Button>
+                                            ) : null}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="mb-2 text-xs font-medium text-[var(--studio-text-muted)]">标签</div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {visiblePromptTags.map((tag) => (
+                                                <Tag.CheckableTag
+                                                    key={tag}
+                                                    checked={tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag)}
+                                                    className={cn("prompt-filter-tag", (tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag)) && "is-active")}
+                                                    onChange={() => toggleTag(tag)}
+                                                >
+                                                    {tag}
+                                                </Tag.CheckableTag>
+                                            ))}
+                                            {promptTags.length > TAG_FILTER_COLLAPSED_COUNT ? (
+                                                <Button
+                                                    size="middle"
+                                                    type="text"
+                                                    className="!h-8 !px-2 !text-[var(--studio-text-secondary)] hover:!text-[var(--studio-text-primary)]"
+                                                    icon={tagFiltersExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                                                    onClick={() => setTagFiltersExpanded((value) => !value)}
+                                                >
+                                                    {tagFiltersExpanded ? "收起标签" : `展开${hiddenTagCount ? ` ${hiddenTagCount} 个` : ""}标签`}
+                                                </Button>
+                                            ) : null}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : null}
+                        </aside>
+                    }
+                >
+                    <section className="min-w-0">
+                        <header className="studio-page-header flex flex-wrap items-start justify-between gap-4 px-4 py-3">
+                            <div>
+                                <p className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">提示词列表</p>
+                                <h2 className="mt-2 text-3xl font-semibold leading-tight tracking-normal text-[var(--studio-text-primary)]">灵感检索</h2>
+                                <p className="mt-2 text-sm text-[var(--studio-text-secondary)]">{promptItems.length ? `当前显示 ${promptItems.length} 条提示词` : promptSummaryText}</p>
+                            </div>
+                            {showPromptContent ? (
+                                <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
+                                    <Input
+                                        size="large"
+                                        className="min-w-0 rounded-lg border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)] placeholder:text-[var(--studio-text-muted)] sm:w-[360px] xl:w-[420px]"
+                                        prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />}
+                                        value={titleKeyword}
+                                        placeholder="搜索标题、内容或标签"
+                                        onChange={(event) => setTitleKeyword(event.target.value)}
+                                    />
+                                    <Button size="large" type="primary" icon={<Plus className="size-4" />} onClick={openCreatePrompt}>
+                                        新建提示词
+                                    </Button>
+                                </div>
+                            ) : null}
+                        </header>
+
+                        {query.isLoading ? (
+                            <div className="studio-section mt-5 flex h-60 flex-col items-center justify-center gap-3 text-sm text-[var(--studio-text-secondary)]">
+                                <Spin />
+                                <span>正在读取提示词...</span>
+                            </div>
                         ) : null}
-                        <div className="mx-auto mt-6 max-w-7xl text-center text-xs text-[var(--studio-text-muted)]">{listFooterText}</div>
-                    </div>
-                ) : null}
+                        {query.isError ? (
+                            <Alert
+                                className="mt-5"
+                                type="error"
+                                showIcon
+                                message="提示词读取失败"
+                                description={query.error instanceof Error ? query.error.message : "请确认后端服务已启动后重试。"}
+                                action={
+                                    <Button size="small" onClick={() => void query.refetch()}>
+                                        重试
+                                    </Button>
+                                }
+                            />
+                        ) : null}
+                        {showPromptContent ? (
+                            <div className="studio-section mt-5 p-4">
+                                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                                    {promptItems.map((item) => (
+                                        <PromptCard
+                                            key={item.id}
+                                            item={item}
+                                            onOpen={() => setSelectedPrompt(item)}
+                                            onCopy={() => copyText(item.prompt, "提示词已复制")}
+                                            extraAction={
+                                                <Button size="small" icon={<FolderPlus className="size-3.5" />} onClick={() => savePromptAsset(item)}>
+                                                    加入我的素材
+                                                </Button>
+                                            }
+                                        />
+                                    ))}
+                                </div>
+                                {promptItems.length === 0 ? (
+                                    <div className="flex min-h-[360px] items-center justify-center">
+                                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到匹配的提示词">
+                                            <Button type="primary" icon={<Plus className="size-4" />} onClick={openCreatePrompt}>
+                                                新建提示词
+                                            </Button>
+                                        </Empty>
+                                    </div>
+                                ) : null}
+                                <div className="mt-6 text-center text-xs text-[var(--studio-text-muted)]">{listFooterText}</div>
+                            </div>
+                        ) : null}
+                    </section>
+                </ToolWorkbenchLayout>
             </main>
 
             <PromptDetailDialog prompt={selectedPrompt} onClose={() => setSelectedPrompt(null)} onCopy={(prompt) => copyText(prompt, "提示词已复制")} onSaveAsset={savePromptAsset} />

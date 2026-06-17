@@ -4,19 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { App, Drawer, Form, Tabs, Tag } from "antd";
 
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
-import {
-    canInvokeAgentConfig,
-    defaultAgentConfig,
-    defaultAgentConfigs,
-    mergeAgentConfigs,
-    validateAgentConfig,
-    type AgentConfigKind,
-} from "./agent-settings";
+import { canInvokeAgentConfig, defaultAgentConfig, defaultAgentConfigs, mergeAgentConfigs, validateAgentConfig, type AgentConfigKind } from "./agent-settings";
 import { configToForm, formToConfig, type AgentConfigFormValues } from "./agent-settings-form";
-import { builtInAgentWorkflowPresets, resolveWorkflowPreset, sortedWorkflowStages } from "./agent-workflow-presets";
+import { builtInAgentWorkflowPresets, resolveWorkflowPreset, sortedWorkflowStages, workflowStageDetail } from "./agent-workflow-presets";
 import { listAgentRunsByProject } from "./agent-runner-records";
 import { summarizeWorkflowStageDisplayState, type AgentWorkflowDisplayStatus } from "./agent-runner-workflow-display";
 import { AgentModelSettingsPanel } from "./agent-model-settings-panel";
+import { AgentPresetSelectionPanel } from "./agent-preset-selection-panel";
 import { AgentQuickAgentsPanel } from "./agent-quick-agents-panel";
 import { AgentWorkflowExecutionPanel } from "./agent-workflow-execution-panel";
 import { useAgentSettingsStore } from "./use-agent-settings-store";
@@ -33,7 +27,7 @@ export type AgentWorkspacePanelProps = {
     episodeTitle?: string;
     initialAgentKind?: AgentConfigKind;
     initialStageId?: string;
-    initialTab?: "quick-agents" | "workflow";
+    initialTab?: "agent-presets" | "quick-agents" | "workflow";
     settingsOnly?: boolean;
     canvasNodes?: CanvasNodeData[];
     onApplyVideoPreviewNodes?: (result: { nodes: CanvasNodeData[]; focusNodeIds: string[] }) => void;
@@ -79,10 +73,14 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const resolvedConfigs = useMemo(() => mergeAgentConfigs(defaultAgentConfigs(), globalConfigs, projectConfigs[projectId] || []), [globalConfigs, projectConfigs, projectId]);
     const workflowPresets = useMemo(() => builtInAgentWorkflowPresets(), []);
-    const projectWorkflowSelectionList = projectWorkflowSelections[projectId] || [];
+    const projectWorkflowSelectionList = useMemo(() => projectWorkflowSelections[projectId] || [], [projectId, projectWorkflowSelections]);
     const selectedWorkflowId = projectWorkflowSelectionList.find((selection) => selection.selected)?.workflowId || workflowPresets[0].workflowId;
     const selectedWorkflowPreset = useMemo(() => resolveWorkflowPreset(selectedWorkflowId, projectWorkflowSelectionList) || workflowPresets[0], [projectWorkflowSelectionList, selectedWorkflowId, workflowPresets]);
     const selectedWorkflowStages = useMemo(() => sortedWorkflowStages(selectedWorkflowPreset), [selectedWorkflowPreset]);
+    const selectedWorkflowAgentKinds = useMemo(
+        () => selectedWorkflowStages.map((stage) => workflowStageDetail(selectedWorkflowPreset, stage).binding?.agentConfigKind).filter((kind): kind is AgentConfigKind => Boolean(kind)),
+        [selectedWorkflowPreset, selectedWorkflowStages],
+    );
     const qualityGateManifest = useMemo(() => buildSeedanceQualityGateManifest({ workflowId: selectedWorkflowPreset.workflowId, version: selectedWorkflowPreset.version }), [selectedWorkflowPreset.version, selectedWorkflowPreset.workflowId]);
     const selectedWorkflowRun = useMemo(
         () => workflowRuns.find((run) => run.projectId === projectId && run.canvasId === canvasId && run.episodeId === episodeId && run.workflowId === selectedWorkflowPreset.workflowId),
@@ -90,6 +88,7 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
     );
     const selectedStagePreviews = useMemo(() => (selectedWorkflowRun ? workflowMappingPreviews.filter((preview) => preview.workflowRunId === selectedWorkflowRun.id) : []), [selectedWorkflowRun, workflowMappingPreviews]);
     const recentRuns = useMemo(() => listAgentRunsByProject(runs, projectId).slice(0, 8), [projectId, runs]);
+    const defaultActiveTab = settingsOnly ? "agent-presets" : initialTab;
     const selectedConfig = resolvedConfigs.find((config) => config.kind === selectedKind) || defaultAgentConfig(selectedKind);
     const projectOverrideKinds = new Set((projectConfigs[projectId] || []).map((config) => config.kind));
     const validation = validateAgentConfig(selectedConfig);
@@ -128,8 +127,15 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
     });
 
     useEffect(() => {
+        if (settingsOnly) return;
         form.setFieldsValue(configToForm(selectedConfig));
-    }, [form, selectedConfig]);
+    }, [form, selectedConfig, settingsOnly]);
+
+    useEffect(() => {
+        if (selectedWorkflowAgentKinds.length && !selectedWorkflowAgentKinds.includes(selectedKind)) {
+            setSelectedKind(selectedWorkflowAgentKinds[0]);
+        }
+    }, [selectedKind, selectedWorkflowAgentKinds]);
 
     useEffect(() => {
         ensureWorkflowRun({ projectId, canvasId, episodeId, preset: selectedWorkflowPreset });
@@ -193,7 +199,7 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
 
     const selectWorkflowPreset = (workflowId: string) => {
         saveProjectWorkflowSelection(projectId, { workflowId, projectId, enabled: true, selected: true, updatedAt: new Date().toISOString() });
-        message.success("已切换项目工作流预设");
+        message.success("已切换阶段 Skill 模板");
     };
 
     return (
@@ -201,7 +207,7 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <div className="text-sm text-[var(--studio-text-muted)]">当前项目：{projectTitle}</div>
-                    <div className="mt-1 text-xl font-semibold">{settingsOnly ? "Agent 设置" : "工作流执行"}</div>
+                    <div className="mt-1 text-xl font-semibold">{settingsOnly ? "Agent 中心" : "工作流执行"}</div>
                     <div className="mt-2 flex flex-wrap gap-2 text-xs text-[var(--studio-text-muted)]">
                         {canvasId ? <Tag className="m-0">画布 {canvasId}</Tag> : null}
                         {episodeId ? <Tag className="m-0">{episodeTitle || `本集 ${episodeId}`}</Tag> : null}
@@ -211,8 +217,13 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
             </div>
 
             <Tabs
-                defaultActiveKey={settingsOnly ? "models" : initialTab || "workflow"}
+                defaultActiveKey={settingsOnly ? defaultActiveTab || "agent-presets" : defaultActiveTab || "workflow"}
                 items={[
+                    {
+                        key: "agent-presets",
+                        label: "阶段 Skill",
+                        children: <AgentPresetSelectionPanel workflowPresets={workflowPresets} selectedWorkflowPreset={selectedWorkflowPreset} onSelectWorkflowPreset={selectWorkflowPreset} />,
+                    },
                     {
                         key: "models",
                         label: "模型配置",
@@ -255,34 +266,37 @@ export function AgentWorkspacePanel({ projectId, projectTitle, canvasId, episode
                               ),
                           }
                         : undefined,
-                    {
-                        key: "quick-agents",
-                        label: "单 Agent 配置",
-                        forceRender: true,
-                        children: (
-                            <AgentQuickAgentsPanel
-                                callable={callable}
-                                form={form}
-                                onCopyDefault={copyDefault}
-                                onCreatePreviewRun={createPreviewRun}
-                                onOpenConfig={() => openConfigDialog()}
-                                onResetProjectOverride={resetProjectOverride}
-                                onRestoreDefaultToForm={restoreDefaultToForm}
-                                onSaveOverride={() => void saveOverride()}
-                                projectOverrideKinds={projectOverrideKinds}
-                                recentRuns={recentRuns}
-                                resolvedConfigs={resolvedConfigs}
-                                selectedAgentModel={selectedAgentModel}
-                                selectedConfig={selectedConfig}
-                                selectedKind={selectedKind}
-                                setSelectedKind={setSelectedKind}
-                                settingsOnly={settingsOnly}
-                                textApiReady={textApiReady}
-                                textChannelLabel={textChannelLabel}
-                                validation={validation}
-                            />
-                        ),
-                    },
+                    !settingsOnly
+                        ? {
+                              key: "quick-agents",
+                              label: "单 Agent 配置",
+                              forceRender: true,
+                              children: (
+                                  <AgentQuickAgentsPanel
+                                      callable={callable}
+                                      form={form}
+                                      onCopyDefault={copyDefault}
+                                      onCreatePreviewRun={createPreviewRun}
+                                      onOpenConfig={() => openConfigDialog()}
+                                      onResetProjectOverride={resetProjectOverride}
+                                      onRestoreDefaultToForm={restoreDefaultToForm}
+                                      onSaveOverride={() => void saveOverride()}
+                                      projectOverrideKinds={projectOverrideKinds}
+                                      recentRuns={recentRuns}
+                                      resolvedConfigs={resolvedConfigs}
+                                      selectedAgentModel={selectedAgentModel}
+                                      selectedConfig={selectedConfig}
+                                      selectedKind={selectedKind}
+                                      selectedWorkflowPreset={selectedWorkflowPreset}
+                                      setSelectedKind={setSelectedKind}
+                                      settingsOnly={settingsOnly}
+                                      textApiReady={textApiReady}
+                                      textChannelLabel={textChannelLabel}
+                                      validation={validation}
+                                  />
+                              ),
+                          }
+                        : undefined,
                 ].filter((item): item is NonNullable<typeof item> => Boolean(item))}
             />
         </div>

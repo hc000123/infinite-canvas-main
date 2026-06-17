@@ -158,6 +158,7 @@ export function workflowStageStatusLabel(status: AgentWorkflowDisplayStatus) {
 }
 
 export function workflowStageDisplayName(stageId: string) {
+    if (stageId === "script-adaptation") return "剧本适配";
     if (stageId === "director-analysis") return "导演分析";
     if (stageId === "art-design") return "服化道美术设计";
     if (stageId === "seedance-storyboard") return "Seedance 分镜";
@@ -166,7 +167,7 @@ export function workflowStageDisplayName(stageId: string) {
 
 function normalizeWorkflowBlockedReason(reason?: string) {
     if (!reason) return undefined;
-    return ["director-analysis", "art-design", "seedance-storyboard"].reduce((text, stageId) => text.replaceAll(stageId, workflowStageDisplayName(stageId)), reason);
+    return ["script-adaptation", "director-analysis", "art-design", "seedance-storyboard"].reduce((text, stageId) => text.replaceAll(stageId, workflowStageDisplayName(stageId)), reason);
 }
 
 function uniqueStrings(values: string[]) {

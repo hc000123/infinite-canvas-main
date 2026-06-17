@@ -280,6 +280,7 @@ export function useEpisodeWorkbenchRunActions({
 }
 
 function workflowStageAgentKind(stageId: string): AgentConfigKind {
+    if (stageId === "script-adaptation") return "script_optimizer";
     if (stageId === "director-analysis") return "script_analyzer";
     if (stageId === "art-design") return "asset_extractor";
     if (stageId === "seedance-storyboard") return "storyboard_director";

@@ -56,7 +56,15 @@ export function CanvasCreateProjectModal({
 
     useEffect(() => {
         if (!open) return;
-        form.setFieldsValue({ title: defaultTitle, presetKey: undefined, scriptSource: "none", episodeId: undefined, importedEpisodeTitle: "", importedScriptText: "", ...buildCanvasProjectPresetFromConfig(config, initialPreset) });
+        form.setFieldsValue({
+            title: defaultTitle,
+            presetKey: undefined,
+            scriptSource: "none",
+            episodeId: undefined,
+            importedEpisodeTitle: "",
+            importedScriptText: "",
+            ...buildCanvasProjectPresetFromConfig(config, initialPreset),
+        });
     }, [config, defaultTitle, form, initialPreset, open]);
 
     useEffect(() => {
@@ -107,7 +115,8 @@ export function CanvasCreateProjectModal({
                                 <Form.Item name="importedEpisodeTitle" label="本集标题" rules={[{ required: true, message: "请输入本集标题" }]}>
                                     <Input placeholder="例如：第一集 毕业典礼" />
                                 </Form.Item>
-                                <Form.Item name="importedScriptText" label="本集剧本" rules={[{ required: true, message: "请粘贴本集剧本" }]}>
+                                <Typography.Text className="mb-2 block text-sm text-[var(--studio-text-secondary)]">本集剧本</Typography.Text>
+                                <Form.Item name="importedScriptText" rules={[{ required: true, message: "请粘贴本集剧本" }]}>
                                     <Input.TextArea rows={7} placeholder="粘贴这一集的剧本正文。创建后会写入项目剧本分集，并保存一份画布快照。" />
                                 </Form.Item>
                             </>
@@ -199,14 +208,14 @@ function modelSelectOptions(models: string[]) {
 }
 
 function buildScriptBinding(values: CanvasCreateProjectValues, options?: { projectId: string; episodes: ScriptEpisode[]; scenes: ScriptScene[] }): CanvasCreateScriptBinding | undefined {
-    if (!options || values.scriptSource === "none" || !values.scriptSource) return { mode: "none" };
-    if (values.scriptSource === "import") {
+    if (values.scriptSource === "import" && options) {
         return {
             mode: "import",
             title: values.importedEpisodeTitle?.trim() || "未命名集数",
             scriptText: values.importedScriptText?.trim() || "",
         };
     }
+    if (!options || values.scriptSource === "none" || !values.scriptSource) return { mode: "none" };
     const episode = options.episodes.find((item) => item.id === values.episodeId);
     if (!episode) return { mode: "none" };
     return {

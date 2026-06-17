@@ -238,6 +238,35 @@ test("workflow prompt authoring accepts rich prompt with short spoken dialogue",
     assert.equal(workflowPromptAuthoringIssue(prompt, "8秒"), "");
 });
 
+test("workflow prompt authoring accepts Skill 5 copy-only prompts", () => {
+    const prompt = [
+        "这段视频使用 @图1 锁定毕业典礼主席台，使用 @图2 锁定魏梁。保持剧本原剧情和原台词，不生成字幕、logo 或水印。",
+        "场景：日间毕业典礼主席台，台面浅灰，台下掌声收住。",
+        "人物位置关系：魏梁站在立式麦克风后方，台下师生位于画面远端。",
+        "情绪基调：克制、紧张、即将开口。",
+        "【分镜 1】",
+        "焦段：35mm，建立人物和主席台空间。",
+        "光圈：f/4，中等景深。",
+        "机位：摄影机位于魏梁正面略低处，眼平偏下拍摄上半身，景别为中景。",
+        "构图：魏梁居中，麦克风在前景，台下人群虚化。",
+        "运镜：固定后轻微 Dolly In。",
+        "主体动作/表情：魏梁深吸气，指尖轻扶麦克风，眼神看向台下。",
+        "限制：无字幕、无 logo、无水印。",
+        "【分镜 2 · 辅助镜头】",
+        "焦段：85mm，压缩背景突出表情。",
+        "光圈：f/2.8，浅景深。",
+        "机位：摄影机位于魏梁右前 45°，眼平高度拍摄面部，景别为近景。",
+        "构图：魏梁眼睛位于上三分之一，麦克风边缘虚化。",
+        "运镜：缓慢推近。",
+        "主体动作/表情：魏梁停半拍，语气稳定地说：“谢谢大家。”",
+        "限制：人物服装和麦克风位置保持连续。",
+        "【跨段衔接】",
+        "本段结尾保持魏梁看向台下的状态，用于衔接下一段视频。",
+    ].join("\n");
+
+    assert.equal(workflowPromptAuthoringIssue(prompt, "8秒"), "");
+});
+
 test("workflow video readiness explains legacy packages without reference tables", () => {
     const item = buildImportedVideoPackage({
         duration: "8秒",

@@ -1,7 +1,7 @@
 "use client";
 
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
-import { App, Button, Form, Input, Segmented, Space } from "antd";
+import { App, Button, Form, Input, Segmented } from "antd";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
@@ -89,54 +89,84 @@ function LoginContent() {
     };
 
     return (
-        <main className="studio-workspace studio-shell flex h-full min-h-0 items-center justify-center overflow-y-auto px-6 py-10">
-            <section className="w-full max-w-[420px]">
-                <div className="mb-7 text-center">
-                    <span
-                        className="mx-auto mb-4 block size-12 bg-[var(--studio-text-primary)]"
-                        style={{
-                            mask: "url(/logo.svg) center / contain no-repeat",
-                            WebkitMask: "url(/logo.svg) center / contain no-repeat",
-                        }}
-                        aria-label="眨眼之间"
-                    />
-                    <h1 className="text-3xl font-semibold tracking-normal text-[var(--studio-text-primary)]">账号登录</h1>
-                    <p className="mt-3 text-base leading-7 text-[var(--studio-text-secondary)]">使用账号密码登录工作台。</p>
+        <main className="studio-workspace studio-shell flex h-full min-h-0 items-center justify-center overflow-y-auto px-4 py-6 md:px-6">
+            <section className="grid w-full max-w-5xl gap-5 lg:grid-cols-[minmax(0,1fr)_420px]">
+                <div className="studio-panel hidden min-h-[520px] flex-col justify-between p-6 lg:flex">
+                    <div>
+                        <span
+                            className="block size-12 bg-[var(--studio-text-primary)]"
+                            style={{
+                                mask: "url(/logo.svg) center / contain no-repeat",
+                                WebkitMask: "url(/logo.svg) center / contain no-repeat",
+                            }}
+                            aria-label="眨眼之间"
+                        />
+                        <p className="mt-8 text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">工作台登录</p>
+                        <h1 className="mt-2 max-w-md text-3xl font-semibold leading-tight tracking-normal text-[var(--studio-text-primary)]">进入你的 AI 影视工作台</h1>
+                        <p className="mt-3 max-w-md text-sm leading-6 text-[var(--studio-text-secondary)]">项目、素材、提示词和生成记录都在同一套本地工作流里继续。</p>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                        {[
+                            ["Projects", "项目"],
+                            ["Assets", "素材"],
+                            ["Prompts", "提示词"],
+                        ].map(([label, value]) => (
+                            <div key={label} className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
+                                <div className="text-xs font-semibold uppercase text-[var(--studio-accent)]">{label}</div>
+                                <div className="mt-2 text-sm text-[var(--studio-text-primary)]">{value}</div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
-                <Form<LoginFormValues> layout="vertical" size="large" requiredMark={false} onFinish={submit}>
-                    <Form.Item>
-                        <Segmented
-                            block
-                            value={mode}
-                            onChange={(value) => setMode(value as "login" | "register")}
-                            options={
-                                allowRegister
-                                    ? [
-                                          { label: "登录", value: "login" },
-                                          { label: "注册", value: "register" },
-                                      ]
-                                    : [{ label: "登录", value: "login" }]
-                            }
+                <div className="studio-panel p-5 md:p-6">
+                    <div className="mb-7">
+                        <span
+                            className="mb-4 block size-10 bg-[var(--studio-text-primary)] lg:hidden"
+                            style={{
+                                mask: "url(/logo.svg) center / contain no-repeat",
+                                WebkitMask: "url(/logo.svg) center / contain no-repeat",
+                            }}
+                            aria-label="眨眼之间"
                         />
-                    </Form.Item>
-                    <Form.Item name="username" label={<span className="font-medium text-[var(--studio-text-primary)]">用户名</span>} rules={[{ required: true, message: "请输入用户名" }]}>
-                        <Input prefix={<UserOutlined />} autoComplete="username" />
-                    </Form.Item>
-                    <Form.Item name="password" label={<span className="font-medium text-[var(--studio-text-primary)]">密码</span>} rules={[{ required: true, message: "请输入密码" }]}>
-                        <Input.Password prefix={<LockOutlined />} autoComplete="current-password" />
-                    </Form.Item>
-                    {mode === "register" ? (
-                        <Form.Item name="confirmPassword" label={<span className="font-medium text-[var(--studio-text-primary)]">确认密码</span>} rules={[{ required: true, message: "请再次输入密码" }]}>
-                            <Input.Password prefix={<LockOutlined />} autoComplete="new-password" />
+                        <p className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">账号登录</p>
+                        <h2 className="mt-2 text-3xl font-semibold tracking-normal text-[var(--studio-text-primary)]">账号登录</h2>
+                        <p className="mt-3 text-sm leading-6 text-[var(--studio-text-secondary)]">使用账号密码登录工作台。</p>
+                    </div>
+
+                    <Form<LoginFormValues> layout="vertical" size="large" requiredMark={false} onFinish={submit}>
+                        <Form.Item>
+                            <Segmented
+                                block
+                                value={mode}
+                                onChange={(value) => setMode(value as "login" | "register")}
+                                options={
+                                    allowRegister
+                                        ? [
+                                              { label: "登录", value: "login" },
+                                              { label: "注册", value: "register" },
+                                          ]
+                                        : [{ label: "登录", value: "login" }]
+                                }
+                            />
                         </Form.Item>
-                    ) : null}
-                    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+                        <Form.Item name="username" label={<span className="font-medium text-[var(--studio-text-primary)]">用户名</span>} rules={[{ required: true, message: "请输入用户名" }]}>
+                            <Input prefix={<UserOutlined />} autoComplete="username" />
+                        </Form.Item>
+                        <Form.Item name="password" label={<span className="font-medium text-[var(--studio-text-primary)]">密码</span>} rules={[{ required: true, message: "请输入密码" }]}>
+                            <Input.Password prefix={<LockOutlined />} autoComplete="current-password" />
+                        </Form.Item>
+                        {mode === "register" ? (
+                            <Form.Item name="confirmPassword" label={<span className="font-medium text-[var(--studio-text-primary)]">确认密码</span>} rules={[{ required: true, message: "请再次输入密码" }]}>
+                                <Input.Password prefix={<LockOutlined />} autoComplete="new-password" />
+                            </Form.Item>
+                        ) : null}
                         <Button block type="primary" htmlType="submit" loading={isLoading}>
                             {mode === "register" ? "注册" : "登录"}
                         </Button>
-                    </Space>
-                </Form>
+                    </Form>
+                </div>
             </section>
         </main>
     );

@@ -17,6 +17,7 @@ import { summarizeWorkflowRunDisplayState, summarizeWorkflowStageDisplayState, w
 import type { AgentWorkflowMappingPreview, AgentWorkflowRunRecord, AgentWorkflowStageOutput } from "../../../../agent-runner-types";
 import { useAgentRunnerStore } from "../../../../use-agent-runner-store";
 import { useCreativeProjectStore } from "../../../../use-creative-project-store";
+import { videoWorkflowHref } from "../../../../../original-workflow/video-workflow-routing";
 import { latestPreview, previewActionLabel, previewApplyDisabledReason, previewCounts } from "../workbench/episode-workbench-display";
 import { findEpisodeWorkflowRun } from "../workflow-run-selection";
 
@@ -146,9 +147,7 @@ export default function EpisodeWorkflowLandingPage() {
                                 {project.title}
                             </Link>
                             <span>/</span>
-                            <Link href={`/projects/${project.id}/episodes/${episode.id}/workbench`} className="text-[var(--studio-accent)] transition hover:text-[var(--studio-accent-hover)]">
-                                本集生产台
-                            </Link>
+                            <span>工作流落地页</span>
                         </div>
                         <div className="mt-3 flex flex-wrap items-center gap-3">
                             <h1 className="break-words text-3xl font-semibold leading-tight text-[var(--studio-text-primary)]">工作流落地页</h1>
@@ -159,9 +158,9 @@ export default function EpisodeWorkflowLandingPage() {
                     <div className="flex flex-wrap gap-2">
                         <Button
                             icon={<ArrowLeft className="size-4" />}
-                            onClick={() => router.push(`/projects/${project.id}/episodes/${episode.id}/workbench`)}
+                            onClick={() => router.push(`/projects/${project.id}`)}
                         >
-                            返回生产台
+                            返回项目
                         </Button>
                         <Button type="primary" icon={<PanelTop className="size-4" />} disabled={!boundCanvas} onClick={() => boundCanvas && router.push(`/canvas/${boundCanvas.id}`)}>
                             进入画布
@@ -253,7 +252,7 @@ export default function EpisodeWorkflowLandingPage() {
                                 output={stageOutput(workflowRun, workflowOutputs, stage.stageId)}
                                 previews={previews.filter((preview) => preview.sourceStageId === stage.stageId)}
                                 onGeneratePreview={generatePreview}
-                                onOpenWorkbench={() => router.push(`/projects/${project.id}/episodes/${episode.id}/workbench`)}
+                                onOpenWorkflow={() => router.push(videoWorkflowHref(episode.order, project.id, episode.id))}
                             />
                         ))}
                     </div>
@@ -354,7 +353,7 @@ function CountPill({ label, tone, value }: { label: string; tone: "amber" | "gre
 function StageRow({
     display,
     onGeneratePreview,
-    onOpenWorkbench,
+    onOpenWorkflow,
     order,
     output,
     previews,
@@ -362,13 +361,13 @@ function StageRow({
 }: {
     display?: ReturnType<typeof summarizeWorkflowStageDisplayState>;
     onGeneratePreview: (stageId: string, label: string) => void;
-    onOpenWorkbench: () => void;
+    onOpenWorkflow: () => void;
     order: number;
     output?: AgentWorkflowStageOutput;
     previews: AgentWorkflowMappingPreview[];
     stage: AgentWorkflowStage;
 }) {
-    const canGeneratePreview = Boolean(output && stage.stageId !== "director-analysis");
+    const canGeneratePreview = Boolean(output && (stage.stageId === "art-design" || stage.stageId === "seedance-storyboard"));
     return (
         <div className="grid gap-4 px-5 py-4 md:grid-cols-[120px_1fr_180px]">
             <div className="text-sm text-[var(--studio-text-muted)]">阶段 {order}</div>
@@ -384,8 +383,8 @@ function StageRow({
                 <InfoRow label="预览" value={`${previews.length} 个`} />
                 <InfoRow label="产物" value={output ? "已生成" : "未生成"} />
                 <div className="mt-1 flex flex-wrap gap-2">
-                    <Button size="small" onClick={onOpenWorkbench}>
-                        去处理
+                    <Button size="small" onClick={onOpenWorkflow}>
+                        视频工作流
                     </Button>
                     {canGeneratePreview ? (
                         <Button size="small" type="primary" ghost onClick={() => onGeneratePreview(stage.stageId, `${workflowStageDisplayName(stage.stageId)}预览`)}>
