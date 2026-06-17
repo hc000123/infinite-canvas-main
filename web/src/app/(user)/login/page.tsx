@@ -37,6 +37,7 @@ function LoginContent() {
     const allowRegister = useConfigStore((state) => state.publicSettings?.auth?.allowRegister !== false);
     const [mode, setMode] = useState<"login" | "register">("login");
     const redirect = searchParams.get("redirect") || "/projects";
+    const isAdminRedirect = redirect.startsWith("/admin");
 
     useEffect(() => {
         const token = searchParams.get("token");
@@ -47,21 +48,21 @@ function LoginContent() {
             setSession(token, user);
             message.success("登录成功");
             router.replace(redirect.startsWith("/") ? redirect : "/");
-            router.refresh();
         });
     }, [message, redirect, router, searchParams, setSession]);
 
     useEffect(() => {
         if (searchParams.get("token") || searchParams.get("error")) return;
+        if (isAdminRedirect) return;
         if (process.env.NODE_ENV !== "development" || process.env.NEXT_PUBLIC_DEV_AUTO_LOGIN === "false") return;
         void hydrateUser();
-    }, [hydrateUser, searchParams]);
+    }, [hydrateUser, isAdminRedirect, searchParams]);
 
     useEffect(() => {
         if (!isReady || !user) return;
+        if (isAdminRedirect && user.role !== "admin") return;
         router.replace(redirect.startsWith("/") ? redirect : "/");
-        router.refresh();
-    }, [isReady, redirect, router, user]);
+    }, [isAdminRedirect, isReady, redirect, router, user]);
 
     useEffect(() => {
         if (!allowRegister && mode === "register") setMode("login");
@@ -81,7 +82,6 @@ function LoginContent() {
             const user = await action({ username: values.username, password: values.password });
             message.success(mode === "register" ? "注册成功" : "登录成功");
             router.replace(redirect.startsWith("/") ? redirect : "/");
-            router.refresh();
             if (user.role !== "admin") router.replace("/projects");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "登录失败");
