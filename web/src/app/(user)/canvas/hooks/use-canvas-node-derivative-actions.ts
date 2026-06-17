@@ -7,7 +7,7 @@ import { requestEdit } from "@/services/api/image";
 import { uploadImage, type UploadedImage } from "@/services/image-storage";
 import type { AiConfig } from "@/stores/use-config-store";
 import { useLocalAiTaskLogStore } from "@/stores/use-local-ai-task-log-store";
-import { NODE_DEFAULT_SIZE, getNodeSpec } from "../constants";
+import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT, NODE_DEFAULT_SIZE, getNodeSpec } from "../constants";
 import { buildGenerationConfig } from "../utils/canvas-generation-config";
 import { buildImageGenerationMetadata } from "../utils/canvas-generation-metadata";
 import type { CanvasEpisodeContext } from "../utils/canvas-episode-context";
@@ -267,7 +267,7 @@ export function useCanvasNodeDerivativeActions({
                         prompt: "",
                         model: canvasAiConfig.imageModel || canvasAiConfig.model,
                         size: canvasAiConfig.size,
-                        count: 3,
+                        count: CANVAS_IMAGE_GENERATION_DEFAULT_COUNT,
                     },
                 ),
                 nodesRef.current,

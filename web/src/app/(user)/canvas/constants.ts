@@ -17,6 +17,7 @@ export const NODE_DEFAULT_SIZE = {
 
 export const VIDEO_NODE_MAX_WIDTH = 420;
 export const VIDEO_NODE_MAX_HEIGHT = 420;
+export const CANVAS_IMAGE_GENERATION_DEFAULT_COUNT = 1;
 
 export const NODE_SPECS = {
     image: {

@@ -1,5 +1,6 @@
 import { resolveEffectiveConfig, type AiConfig } from "../../../../stores/use-config-store.ts";
 import type { AdminPublicSettings } from "../../../../services/api/admin.ts";
+import { inferRemoteVideoProtocol } from "../../../../services/api/ai-channel-boundary.ts";
 import { normalizeSeedanceImageRoleMode } from "../../../../services/api/video-reference.ts";
 import type { CanvasNodeMetadata } from "../types";
 
@@ -111,8 +112,11 @@ export function buildCanvasVideoDefaultsPatch(config: AiConfig, metadata: Partia
 
 function resolveCanvasVideoProvider(config: AiConfig, metadata?: CanvasNodeMetadata): CanvasVideoProvider {
     const metadataModel = metadata?.model?.trim() || "";
-    if (metadataModel && !isSeedanceEndpointModel(metadataModel) && !isVideoModelName(metadataModel)) return config.videoProtocol || "openai";
-    return metadata?.provider || config.videoProtocol || "openai";
+    const fallback =
+        metadataModel && !isSeedanceEndpointModel(metadataModel) && !isVideoModelName(metadataModel)
+            ? config.videoProtocol || "openai"
+            : metadata?.provider || config.videoProtocol || "openai";
+    return inferRemoteVideoProtocol(metadataModel, fallback, config.modelProtocols || []);
 }
 
 function resolveCanvasVideoModel(config: AiConfig, provider: CanvasVideoProvider, metadata?: CanvasNodeMetadata) {

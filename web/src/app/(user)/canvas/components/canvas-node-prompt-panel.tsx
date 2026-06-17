@@ -14,6 +14,7 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import { buildCanvasVideoConfig, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
 import { promptPreviewNoZoomProps, promptPreviewTextareaClass, promptPreviewTextareaStyle } from "../utils/canvas-prompt-preview";
 import { applyReferenceMention, filterReferenceMentions, findReferenceMentionTrigger, type CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
+import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
@@ -242,7 +243,7 @@ function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: Can
         videoWatermark: node.metadata?.watermark || globalConfig.videoWatermark || defaultConfig.videoWatermark,
         videoSeed: node.metadata?.seed || globalConfig.videoSeed || defaultConfig.videoSeed,
         videoPromptReviewEnabled: node.metadata?.videoPromptReviewEnabled || globalConfig.videoPromptReviewEnabled || defaultConfig.videoPromptReviewEnabled,
-        count: String(node.metadata?.count || (mode === "image" ? 3 : globalConfig.count) || defaultConfig.count),
+        count: String(node.metadata?.count || (mode === "image" ? CANVAS_IMAGE_GENERATION_DEFAULT_COUNT : globalConfig.count) || defaultConfig.count),
     };
 }
 
@@ -258,6 +259,6 @@ function videoConfigPatch(key: keyof AiConfig, value: string): Partial<CanvasNod
 function videoModelPatch(config: AiConfig, model: string): Partial<CanvasNodeMetadata> {
     return {
         model,
-        provider: inferRemoteVideoProtocol(model, config.videoProtocol || "openai"),
+        provider: inferRemoteVideoProtocol(model, config.videoProtocol || "openai", config.modelProtocols || []),
     };
 }

@@ -1,4 +1,5 @@
 import type { AiConfig } from "../../../../stores/use-config-store.ts";
+import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants.ts";
 import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata } from "../types.ts";
 import { buildCanvasVideoConfig } from "./canvas-video-config.ts";
 
@@ -20,7 +21,7 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
         videoGenerateAudio: node?.metadata?.generateAudio || config.videoGenerateAudio || defaults.videoGenerateAudio,
         videoWatermark: node?.metadata?.watermark || config.videoWatermark || defaults.videoWatermark,
         videoSeed: node?.metadata?.seed || config.videoSeed || defaults.videoSeed,
-        count: String(node?.metadata?.count || (mode === "image" ? 3 : config.count) || defaults.count),
+        count: String(node?.metadata?.count || (mode === "image" ? CANVAS_IMAGE_GENERATION_DEFAULT_COUNT : config.count) || defaults.count),
     };
 }
 

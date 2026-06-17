@@ -34,7 +34,7 @@ function ProjectWorkspaceTopBar() {
 
     return (
         <header className="relative z-[80] h-14 shrink-0 border-b border-[var(--studio-border-subtle)] shadow-[var(--studio-shadow)] backdrop-blur-xl" style={barStyle}>
-            <div className="mx-auto flex h-full w-full max-w-7xl items-stretch justify-between gap-5 px-5 sm:px-6">
+            <div className="mx-auto flex h-full w-full max-w-7xl items-stretch justify-between gap-3 px-4 sm:px-5">
                 <div className="flex min-w-0 items-center">
                     <Link href="/" className="group flex h-full shrink-0 items-center gap-3 text-sm font-semibold leading-none tracking-tight transition hover:text-[var(--studio-accent)]">
                         <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-active-bg)] text-[var(--studio-accent)] transition group-hover:border-[var(--studio-border-strong)] group-hover:bg-[var(--studio-hover-bg)]">
@@ -73,7 +73,7 @@ function ProjectWorkspaceTopBar() {
                         <Menu className="size-5" />
                     </button>
 
-                    <nav className="thin-scrollbar ml-6 hidden h-10 min-w-0 items-center gap-1 overflow-x-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-rail-bg)] p-1 md:flex">
+                    <nav className="ml-4 hidden h-10 min-w-0 items-center gap-0.5 overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-rail-bg)] p-1 md:flex">
                         {navigationTools.map((tool) => {
                             const Icon = tool.icon;
                             return <ProjectWorkspaceLink key={tool.slug} icon={<Icon className="size-4" />} label={tool.label} href={getToolHref(tool.slug)} active={tool.slug === activeToolSlug} />;
@@ -163,13 +163,15 @@ function ProjectWorkspaceLink({ icon, label, href, active }: { icon: ReactNode; 
     return (
         <a
             href={href}
-            className={`group relative flex h-8 shrink-0 items-center gap-2 rounded-md border px-2.5 text-sm leading-6 transition hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] ${active ? "font-semibold shadow-[inset_0_-2px_0_var(--studio-accent)]" : "font-medium"}`}
+            className={`group relative flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border px-2 text-sm leading-6 transition hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] xl:justify-start ${active ? "font-semibold shadow-[inset_0_-2px_0_var(--studio-accent)]" : "font-medium"}`}
             style={active ? activeStyle : inactiveStyle}
+            title={label}
+            aria-label={label}
         >
             <span className="shrink-0 transition" style={iconStyle}>
                 {icon}
             </span>
-            <span className="whitespace-nowrap">{label}</span>
+            <span className="hidden whitespace-nowrap xl:inline">{label}</span>
         </a>
     );
 }

@@ -48,10 +48,10 @@ import { CanvasInteractionOverlays } from "../components/canvas-interaction-over
 import { CanvasTopBar } from "../components/canvas-top-bar";
 import { CanvasSideInspector } from "../components/canvas-side-inspector";
 import { CanvasPageOverlays } from "../components/canvas-page-overlays";
-import { CanvasPromptStartPanel, type CanvasPromptPresetKind } from "../components/canvas-prompt-start-panel";
 import { InfiniteCanvas } from "../components/infinite-canvas";
 import { CanvasNodesLayer } from "../components/canvas-nodes-layer";
 import { CanvasFloatingControls } from "../components/canvas-floating-controls";
+import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
 import { CanvasNodeType, type CanvasNodeData } from "../types";
 
 export default function CanvasPage() {
@@ -320,46 +320,6 @@ function InfiniteCanvasPage() {
         viewportRef,
     });
 
-    const createPromptPresetFlow = useCallback(
-        (preset: { kind: CanvasPromptPresetKind; title: string; prompt: string }) => {
-            const center = getCanvasCenter();
-            const textNode = createCanvasNode(CanvasNodeType.Text, { x: center.x - 210, y: center.y }, { content: preset.prompt, prompt: preset.prompt, status: "success", sourceType: "manual" });
-            textNode.metadata = {
-                ...textNode.metadata,
-                canvasSource: { projectId: workspaceProjectId, projectTitle: workspaceProjectTitle, canvasId, canvasTitle: currentProject?.title || "未命名画布", nodeId: textNode.id, prompt: preset.prompt },
-            };
-            const configNode = createCanvasNode(
-                CanvasNodeType.Config,
-                { x: center.x + 260, y: center.y },
-                { prompt: "", model: canvasAiConfig.imageModel || canvasAiConfig.model, size: canvasAiConfig.size, count: preset.kind === "storyboard" ? 9 : 3, sourceType: "manual" },
-            );
-            configNode.metadata = {
-                ...configNode.metadata,
-                canvasSource: { projectId: workspaceProjectId, projectTitle: workspaceProjectTitle, canvasId, canvasTitle: currentProject?.title || "未命名画布", nodeId: configNode.id, prompt: preset.prompt },
-            };
-            setNodes((prev) => [...prev, textNode, configNode]);
-            setConnections((prev) => [...prev, { id: `connection-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, fromNodeId: textNode.id, toNodeId: configNode.id }]);
-            setSelectedNodeIds(new Set([configNode.id]));
-            setSelectedConnectionId(null);
-            setDialogNodeId(configNode.id);
-        },
-        [
-            canvasAiConfig.imageModel,
-            canvasAiConfig.model,
-            canvasAiConfig.size,
-            canvasId,
-            currentProject?.title,
-            getCanvasCenter,
-            setConnections,
-            setDialogNodeId,
-            setNodes,
-            setSelectedConnectionId,
-            setSelectedNodeIds,
-            workspaceProjectId,
-            workspaceProjectTitle,
-        ],
-    );
-
     const { connectingParams, connectionTargetNodeId, pendingConnectionCreate, pendingConnectionCreateRef, mouseWorld, cancelPendingConnectionCreate, createConnectedNode, finishConnection, handleConnectStart, moveConnectionTarget } = useCanvasConnections(
         {
             nodesRef,
@@ -368,7 +328,7 @@ function InfiniteCanvasPage() {
             normalizeConnection,
             isNodeHidden: isHiddenBatchChild,
             createNode: createCanvasNode,
-            configNodeMetadata: { model: canvasAiConfig.imageModel || canvasAiConfig.model, size: canvasAiConfig.size, count: 3 },
+            configNodeMetadata: { model: canvasAiConfig.imageModel || canvasAiConfig.model, size: canvasAiConfig.size, count: CANVAS_IMAGE_GENERATION_DEFAULT_COUNT },
             showWarning: (text) => message.warning(text),
             setNodes,
             setConnections,
@@ -979,8 +939,6 @@ function InfiniteCanvasPage() {
                         onCreateNode={createNode}
                     />
                 </InfiniteCanvas>
-
-                {!nodes.length ? <CanvasPromptStartPanel onSelect={createPromptPresetFlow} /> : null}
 
                 <CanvasFloatingControls
                     activeTimelineShotId={activeTimelineShotId}

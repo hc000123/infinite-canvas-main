@@ -51,7 +51,7 @@ export function createImageGenerationNodes({ nodeId, sourceNode, prompt, count, 
     const rootNode: CanvasNodeData = {
         id: rootId,
         type: "image" as CanvasNodeData["type"],
-        title: prompt.slice(0, 32) || "Generated Image",
+        title: "生成图片",
         position: {
             x: isEmptyImageNode ? parentPosition.x : parentPosition.x + parentConfig.width + 96,
             y: parentPosition.y + parentConfig.height / 2 - imageConfig.height / 2,
@@ -70,7 +70,7 @@ export function createImageGenerationNodes({ nodeId, sourceNode, prompt, count, 
     const childNodes: CanvasNodeData[] = childIds.map((id, index) => ({
         id,
         type: "image" as CanvasNodeData["type"],
-        title: prompt.slice(0, 32) || "Generated Image",
+        title: `生成图片 ${index + 1}`,
         position: {
             x: rootNode.position.x + rootNode.width + 120 + (index % 2) * (imageConfig.width + 36),
             y: rootNode.position.y + Math.floor(index / 2) * (imageConfig.height + 36),

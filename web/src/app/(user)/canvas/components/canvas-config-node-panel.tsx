@@ -14,6 +14,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { defaultSeedanceImageRole, normalizeSeedanceImageRole, seedanceReferenceLabelRange } from "@/services/api/video-reference";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { buildCanvasVideoConfig, buildCanvasVideoModePatch, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
+import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
 import { CanvasConfigNodePreview } from "./canvas-config-node-preview";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
@@ -45,7 +46,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
     const mode = node.metadata?.generationMode || "image";
     const globalConfig = resolveCanvasVideoChannelConfig(localConfig, effectiveConfig, publicSettings?.modelChannel, mode === "video" ? node.metadata?.channelMode : undefined);
     const config = buildNodeConfig(globalConfig, node, mode);
-    const count = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(node.metadata?.count || 3)) || 1)));
+    const count = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(node.metadata?.count || CANVAS_IMAGE_GENERATION_DEFAULT_COUNT)) || 1)));
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "image" ? count : 1 });
     const chipStyle = { background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text };
     const textInputs = inputs.filter((input) => input.type === "text");
@@ -279,7 +280,7 @@ function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: Can
         videoWatermark: node.metadata?.watermark || globalConfig.videoWatermark || defaultConfig.videoWatermark,
         videoSeed: node.metadata?.seed || globalConfig.videoSeed || defaultConfig.videoSeed,
         videoPromptReviewEnabled: node.metadata?.videoPromptReviewEnabled || globalConfig.videoPromptReviewEnabled || defaultConfig.videoPromptReviewEnabled,
-        count: String(node.metadata?.count || (mode === "image" ? 3 : globalConfig.count) || defaultConfig.count),
+        count: String(node.metadata?.count || (mode === "image" ? CANVAS_IMAGE_GENERATION_DEFAULT_COUNT : globalConfig.count) || defaultConfig.count),
     };
 }
 
@@ -304,6 +305,6 @@ function videoConfigPatch(key: keyof AiConfig, value: string): Partial<CanvasNod
 function videoModelPatch(config: AiConfig, model: string): Partial<CanvasNodeMetadata> {
     return {
         model,
-        provider: inferRemoteVideoProtocol(model, config.videoProtocol || "openai"),
+        provider: inferRemoteVideoProtocol(model, config.videoProtocol || "openai", config.modelProtocols || []),
     };
 }

@@ -1,5 +1,7 @@
 import type { ReferenceImage } from "@/types/image";
 
+const MAX_UPLOAD_FILENAME_LENGTH = 64;
+
 export function formatBytes(bytes: number) {
     if (!Number.isFinite(bytes) || bytes <= 0) {
         return "";
@@ -58,5 +60,26 @@ export function dataUrlToFile(image: ReferenceImage) {
     for (let index = 0; index < binary.length; index += 1) {
         bytes[index] = binary.charCodeAt(index);
     }
-    return new File([bytes], image.name || "reference.png", { type: mimeType });
+    return new File([bytes], safeUploadFilename(image.name, mimeType), { type: mimeType });
+}
+
+function safeUploadFilename(name: string, mimeType: string) {
+    const extension = imageExtension(mimeType);
+    const rawBase = (name || "reference").replace(/\.[a-z0-9]{1,8}$/i, "").trim();
+    const safeBase =
+        rawBase
+            .replace(/[\\/:*?"<>|，,：:；;]+/g, "_")
+            .replace(/\s+/g, "_")
+            .replace(/_+/g, "_")
+            .replace(/^[_ .-]+|[_ .-]+$/g, "") || "reference";
+    const maxBaseLength = Math.max(1, MAX_UPLOAD_FILENAME_LENGTH - extension.length - 1);
+    return `${Array.from(safeBase).slice(0, maxBaseLength).join("")}.${extension}`;
+}
+
+function imageExtension(mimeType: string) {
+    const subtype = mimeType.split(";")[0]?.split("/")[1]?.toLowerCase();
+    if (!subtype) return "png";
+    if (subtype === "jpeg" || subtype === "jpg") return "jpg";
+    const safeSubtype = subtype.replace(/[^a-z0-9]+/g, "");
+    return safeSubtype || "png";
 }

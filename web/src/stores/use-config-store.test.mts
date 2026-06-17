@@ -58,6 +58,7 @@ test("does not leak stale local seedance model into remote video models", () => 
     assert.equal(result.videoProtocol, "volcengine-ark");
     assert.equal(result.seedanceModel, "doubao-seedance-2-0");
     assert.deepEqual(result.videoModels, ["doubao-seedance-2-0"]);
+    assert.deepEqual(result.modelProtocols, [{ model: "doubao-seedance-2-0", protocol: "volcengine-ark" }]);
 });
 
 test("clears stale local seedance endpoint when backend channel controls video model", () => {

@@ -28,6 +28,7 @@ const baseConfig = {
     videoReferenceImageMode: "reference",
     systemPrompt: "",
     models: [],
+    modelProtocols: [],
     quality: "auto",
     size: "1:1",
     count: "1",
@@ -122,6 +123,24 @@ test("video node always uses the backend channel even when metadata is stale", (
     assert.equal(localNodeConfig.channelMode, "remote");
     assert.equal(localNodeConfig.videoProtocol, "volcengine-ark");
     assert.equal(localNodeConfig.model, "local-video-node");
+});
+
+test("video node follows backend model protocol mapping before stale node provider", () => {
+    const config = buildCanvasVideoConfig(
+        {
+            ...cloudConfig,
+            videoProtocol: "openai",
+            modelProtocols: [{ model: "doubao-seedance-2-0", protocol: "volcengine-ark" }],
+        },
+        {
+            provider: "openai",
+            model: "doubao-seedance-2-0",
+        },
+    );
+
+    assert.equal(config.videoProtocol, "volcengine-ark");
+    assert.equal(config.model, "doubao-seedance-2-0");
+    assert.equal(config.seedanceModel, "doubao-seedance-2-0");
 });
 
 test("video mode patch clamps Seedance duration from global defaults", () => {

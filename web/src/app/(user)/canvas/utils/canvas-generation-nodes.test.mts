@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createVideoGenerationNode } from "./canvas-generation-nodes.ts";
+import { createImageGenerationNodes, createVideoGenerationNode } from "./canvas-generation-nodes.ts";
 
 test("creates regenerated video variants without a canvas connection", () => {
     const sourceNode = {
@@ -32,4 +32,17 @@ test("creates regenerated video variants without a canvas connection", () => {
     assert.equal(result.videoNode.metadata?.variantOfNodeId, sourceNode.id);
     assert.equal(result.videoNode.position.x, sourceNode.position.x + 48);
     assert.equal(result.videoNode.position.y, sourceNode.position.y + sourceNode.height + 72);
+});
+
+test("uses short generated image titles while keeping the full prompt in metadata", () => {
+    const prompt = "一个非常长的角色设定提示词，会继续描述人物设定、服装、光线、情绪、构图和时代感";
+    const result = createImageGenerationNodes({ nodeId: "config-1", prompt, count: 3, metadata: {} });
+
+    assert.equal(result.rootNode.title, "生成图片");
+    assert.deepEqual(
+        result.childNodes.map((node) => node.title),
+        ["生成图片 1", "生成图片 2", "生成图片 3"],
+    );
+    assert.equal(result.rootNode.metadata.prompt, prompt);
+    assert.equal(result.childNodes[0]?.metadata.prompt, prompt);
 });

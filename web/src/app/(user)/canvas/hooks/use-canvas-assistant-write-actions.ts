@@ -50,7 +50,7 @@ export function useCanvasAssistantWriteActions({
                 {
                     id,
                     type: CanvasNodeType.Image,
-                    title: image.prompt.slice(0, 32) || "Generated Image",
+                    title: "助手图片",
                     position: { x: center.x - config.width / 2, y: center.y - config.height / 2 },
                     width: config.width,
                     height: config.height,

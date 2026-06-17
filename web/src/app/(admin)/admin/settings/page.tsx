@@ -86,7 +86,6 @@ export default function AdminSettingsPage() {
     const [modelSelectExisting, setModelSelectExisting] = useState<string[]>([]);
     const [modelSelectSelected, setModelSelectSelected] = useState<string[]>([]);
     const [modelSelectKeyword, setModelSelectKeyword] = useState("");
-    const [modelSelectNewModel, setModelSelectNewModel] = useState("");
     const [modelSelectTab, setModelSelectTab] = useState<ModelSelectTabKey>("new");
     const [isFetchingChannelModels, setIsFetchingChannelModels] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -335,7 +334,6 @@ export default function AdminSettingsPage() {
             setModelSelectSource(uniqueModels(channelModels));
             setModelSelectSelected(uniqueModels([...current, ...channelModels]));
             setModelSelectKeyword("");
-            setModelSelectNewModel("");
             setModelSelectTab("new");
             setIsModelSelectorOpen(true);
             message.success(`已获取 ${channelModels.length} 个模型，请选择后确认`);
@@ -354,7 +352,6 @@ export default function AdminSettingsPage() {
         setModelSelectSource(source);
         setModelSelectSelected(sourceModels ? uniqueModels([...current, ...source]) : current);
         setModelSelectKeyword("");
-        setModelSelectNewModel("");
         setModelSelectTab(sourceModels ? "new" : "current");
         setIsModelSelectorOpen(true);
     };
@@ -362,7 +359,6 @@ export default function AdminSettingsPage() {
     const closeChannelModelSelector = () => {
         setIsModelSelectorOpen(false);
         setModelSelectKeyword("");
-        setModelSelectNewModel("");
         modelSelectChannelDraftRef.current = null;
     };
 
@@ -385,21 +381,6 @@ export default function AdminSettingsPage() {
     const clearActiveModels = () => {
         const active = new Set(activeModelSelectModels);
         setModelSelectSelected((current) => current.filter((model) => !active.has(model)));
-    };
-
-    const addModelInSelector = () => {
-        const model = modelSelectNewModel.trim();
-        if (!model) return;
-        if (isEndpointModel(model)) {
-            channelForm.setFieldValue("endpointId", model);
-            setModelSelectNewModel("");
-            scheduleChannelAutoSave();
-            return;
-        }
-        setModelSelectExisting((current) => uniqueModels([...current, model]));
-        setModelSelectSelected((current) => uniqueModels([...current, model]));
-        setModelSelectNewModel("");
-        setModelSelectTab("current");
     };
 
     function rememberModels(models: string[]) {
@@ -893,11 +874,7 @@ export default function AdminSettingsPage() {
                                 onChange={(event) => setModelSelectKeyword(event.target.value)}
                                 onMouseDown={(event) => event.currentTarget.focus()}
                             />
-                            <Flex gap={12} wrap>
-                                <Space.Compact style={{ flex: "1 1 360px" }}>
-                                    <Input value={modelSelectNewModel} placeholder="输入模型名称" onChange={(event) => setModelSelectNewModel(event.target.value)} onMouseDown={(event) => event.currentTarget.focus()} onPressEnter={addModelInSelector} />
-                                    <Button onClick={addModelInSelector}>增加模型</Button>
-                                </Space.Compact>
+                            <Flex justify="flex-end">
                                 <Button icon={<ReloadOutlined />} loading={isFetchingChannelModels} onClick={() => void fetchChannelModelList()}>
                                     拉取模型列表
                                 </Button>

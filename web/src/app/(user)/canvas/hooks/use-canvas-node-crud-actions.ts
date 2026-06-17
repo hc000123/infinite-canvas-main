@@ -3,6 +3,7 @@
 import { useCallback, type Dispatch, type PointerEvent as ReactPointerEvent, type RefObject, type SetStateAction } from "react";
 
 import type { AiConfig } from "@/stores/use-config-store";
+import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
 import { collectBatchAwareDeletedNodeIds, removeDeletedNodesFromBatches } from "../utils/canvas-batch-nodes";
 import { placeCanvasNodeAwayFromNodes, resolveRightwardNodePosition } from "../utils/canvas-node-placement";
 import { CanvasNodeType, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type ContextMenuState, type Position } from "../types";
@@ -74,7 +75,7 @@ export function useCanvasNodeCrudActions({
                     ? {
                           model: canvasAiConfig.imageModel || canvasAiConfig.model,
                           size: canvasAiConfig.size,
-                          count: 3,
+                          count: CANVAS_IMAGE_GENERATION_DEFAULT_COUNT,
                       }
                     : undefined;
             const draftNode = createCanvasNode(type, targetPosition, configMetadata);

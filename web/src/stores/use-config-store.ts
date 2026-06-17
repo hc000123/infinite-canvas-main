@@ -7,7 +7,7 @@ import { persist, type PersistStorage, type StorageValue } from "zustand/middlew
 import { localForageStorage } from "../lib/localforage-storage.ts";
 import { normalizeSeedanceImageRoleMode, type SeedanceImageRoleMode } from "../services/api/video-reference.ts";
 import { apiGet } from "../services/api/request.ts";
-import type { AdminModelTextEndpoint, AdminPublicSettings } from "../services/api/admin.ts";
+import type { AdminModelProtocol, AdminModelTextEndpoint, AdminPublicSettings } from "../services/api/admin.ts";
 import { inferRemoteVideoProtocol, resolveAllowedVideoProtocol } from "../services/api/ai-channel-boundary.ts";
 
 export type AiModelKind = "image" | "video" | "text";
@@ -44,6 +44,7 @@ export type AiConfig = {
     imageModels: string[];
     videoModels: string[];
     textModels: string[];
+    modelProtocols: AdminModelProtocol[];
     modelTextEndpoints: AdminModelTextEndpoint[];
     quality: string;
     size: string;
@@ -86,6 +87,7 @@ export const defaultConfig: AiConfig = {
     imageModels: [],
     videoModels: [],
     textModels: [],
+    modelProtocols: [],
     modelTextEndpoints: [],
     quality: "auto",
     size: "1:1",
@@ -126,8 +128,9 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
     const channelMode = "remote";
     const localVideoProtocol = resolveAllowedVideoProtocol("local", config.videoProtocol);
     if (!modelChannel) {
-        return { ...config, channelMode, videoProtocol: localVideoProtocol, videoModel: config.videoModel };
+        return { ...config, channelMode, videoProtocol: localVideoProtocol, videoModel: config.videoModel, modelProtocols: config.modelProtocols || [] };
     }
+    const modelProtocols = modelChannel.modelProtocols || [];
     const models = uniqueModels([modelChannel.defaultModel, modelChannel.defaultImageModel, modelChannel.defaultVideoModel, modelChannel.defaultTextModel, ...modelChannel.availableModels].map(normalizeVisibleRemoteVideoModel).filter(Boolean));
     const classifiedModels = classifyAiModels(models);
     const fallbackModel = (modelChannel.defaultModel && models.includes(modelChannel.defaultModel) ? modelChannel.defaultModel : models[0]) || "";
@@ -142,7 +145,7 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
     const modelTextEndpoints = normalizeModelTextEndpoints(modelChannel.modelTextEndpoints || [], models);
     const videoCandidates = uniqueModels([visibleSelectedVideoModel, defaultVideoModel, ...classifiedModels.videoModels]).filter(Boolean);
     const videoModel = videoCandidates[0] || "";
-    const videoProtocol = inferRemoteVideoProtocol(videoModel, config.videoProtocol, modelChannel.modelProtocols || []);
+    const videoProtocol = inferRemoteVideoProtocol(videoModel, config.videoProtocol, modelProtocols);
     return {
         ...config,
         channelMode,
@@ -151,6 +154,7 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
         imageModels: classifiedModels.imageModels,
         videoModels: classifiedModels.videoModels,
         textModels: classifiedModels.textModels,
+        modelProtocols,
         modelTextEndpoints,
         model: models.includes(config.model) ? config.model : fallbackModel,
         imageModel: selectedImageModel || imageDefault || fallbackModel,
@@ -229,6 +233,7 @@ export const useConfigStore = create<ConfigStore>()(
                         imageModels: Array.isArray(config.imageModels) && config.imageModels.length ? config.imageModels : classifiedModels.imageModels,
                         videoModels: Array.isArray(config.videoModels) && config.videoModels.length ? config.videoModels : classifiedModels.videoModels,
                         textModels: Array.isArray(config.textModels) && config.textModels.length ? config.textModels : classifiedModels.textModels,
+                        modelProtocols: Array.isArray(config.modelProtocols) ? config.modelProtocols : [],
                         modelTextEndpoints: Array.isArray(config.modelTextEndpoints) ? config.modelTextEndpoints : [],
                         videoSeconds: config.videoSeconds || "6",
                         vquality: config.vquality || "720",
