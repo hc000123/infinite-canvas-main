@@ -30,7 +30,7 @@ import {
     resolveWorkflowReferenceImages,
     workflowVideoGenerationReadiness,
 } from "./video-package-builders";
-import { useVideoPackageStore, type PackageGeneration, type ProductionPackage } from "./use-video-package-store";
+import { useVideoPackageStore, type PackageGeneration, type PackageGenerationStatus, type ProductionPackage } from "./use-video-package-store";
 import { VideoNodeDetailDrawer, VideoPromptNodeCard } from "./video-page-components";
 import { initialPackages, videoFilters } from "./video-page-data";
 import type { FilterKey, PackageAssetSlot, PackageConfigPatch, PackageUploadedVideo, VideoPreflightState } from "./video-page-types";

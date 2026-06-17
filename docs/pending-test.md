@@ -28,6 +28,20 @@
   2. 若后台把某个 Seedance 名称配置在 OpenAI 兼容中转渠道，画布不应仅凭模型名强行切到火山，仍应按后台映射走中转渠道。
   3. 带图片 / 视频 / 音频参考生成 Seedance 视频时，参考素材不应因为前端误判成 OpenAI 兼容协议而丢失。
 
+#### v0.2.91：Docker 上线前验收复跑
+
+- 入口：`Dockerfile`、`docker-compose.local.yml`、临时 Docker 容器 `infinite-canvas:local`。
+- 本次验收：
+  1. 复跑 `docker compose -f docker-compose.local.yml config` 通过，单容器仍只暴露 Next `3000` 并挂载 `/app/data`。
+  2. 复跑 `docker compose -f docker-compose.local.yml --progress=plain build`，首次在 Next TypeScript 阶段暴露视频生产台拆分后的 `PackageGenerationStatus` 类型导入缺失；补齐导入后复跑通过，包含 Go build、Next production build、TypeScript 和静态页面生成。
+  3. 使用全新临时 `/app/data` 挂载目录启动 `infinite-canvas:local`，Docker healthcheck 进入 `healthy`，`/api/health` 返回 `ok`，`/login` 和 `/projects` 返回 200，`/api/settings` 返回成功结构。
+  4. 临时容器内完成注册、`/api/auth/me` 校验、重启后同账号登录，确认 SQLite 落盘并随 `/app/data` 持久化。
+  5. 写入 `/app/data/public-assets/acceptance/probe.txt` 后，`/api/uploaded-assets/acceptance/probe.txt` 返回 200，根路径 `/uploaded-assets/acceptance/probe.txt` 返回 404，符合单端口部署的公开素材路径约束。
+  6. 杀掉容器内 Go 后端后，入口脚本让容器整体退出，避免 Next 页面存活但 API 全部 502 的假健康状态。
+- 待验收：
+  1. 真实云服务器域名 / HTTPS / 反向代理下仍需复测 `/api/health`、`/api/uploaded-assets/...` 和 Docker healthcheck。
+  2. 正式部署必须继续使用非默认 `ADMIN_PASSWORD`、非默认 `JWT_SECRET`，并挂载持久化 `/app/data`。
+
 #### v0.2.91：上线前体检与后台登录跳转修复
 
 - 入口：`/projects`、项目详情分集入口、`/original-workflow`、`/video`、`/image`、`/assets`、`/prompts`、`/asset-library`、`/login?redirect=/admin/assets`。
