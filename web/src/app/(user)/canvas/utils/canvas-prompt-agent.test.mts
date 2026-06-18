@@ -5,7 +5,7 @@ import { buildPromptAgentCanvasActions } from "./canvas-prompt-agent-actions.ts"
 import { formatPromptAgentOutputText } from "./canvas-prompt-agent-render.ts";
 import { buildPromptAgentSystemContext, parsePromptAgentPlan } from "./canvas-prompt-agent.ts";
 import { buildPromptAgentSkillContext, promptAgentSkillsForIntent } from "./canvas-prompt-agent-skills.ts";
-import { buildPromptAgentExecutionPlan, promptAgentToolForAction } from "./canvas-prompt-agent-tools.ts";
+import { buildPromptAgentExecutionPlan, promptAgentToolForAction, updatePromptAgentExecutionState } from "./canvas-prompt-agent-tools.ts";
 
 test("parses a valid image prompt agent plan", () => {
     const raw = JSON.stringify({
@@ -204,4 +204,32 @@ test("adds mode constraints to prompt agent system context", () => {
     assert.match(autoContext, /视频生成仍然禁止自动触发/);
     assert.match(reviewContext, /审核模式/);
     assert.match(reviewContext, /actions 必须为空数组/);
+});
+
+test("overrides execution plan steps with runtime status", () => {
+    const plan = {
+        intent: "image_prompt" as const,
+        reply: "已整理图片提示词。",
+        outputs: [{ id: "img-1", kind: "image_prompt" as const, title: "雨夜角色", finalPrompt: "rainy portrait" }],
+        actions: [{ id: "create-1", type: "node.create_image_config" as const, outputId: "img-1", title: "创建图片配置" }],
+    };
+
+    const state = updatePromptAgentExecutionState(undefined, [{ actionId: "create-1", status: "succeeded", note: "已写入画布" }], "已完成 1 个步骤", "2026-06-18T10:00:00.000Z");
+    const execution = buildPromptAgentExecutionPlan(plan, "ask", state);
+
+    assert.equal(execution.steps[0].status, "succeeded");
+    assert.equal(execution.steps[0].note, "已写入画布");
+    assert.equal(execution.succeededCount, 1);
+    assert.match(execution.summary, /已完成 1 个步骤/);
+});
+
+test("records image generation result without losing existing execution status", () => {
+    const initial = updatePromptAgentExecutionState(undefined, [{ actionId: "create-1", status: "succeeded", note: "已写入画布" }], "已完成画布写入", "2026-06-18T10:00:00.000Z");
+    const next = updatePromptAgentExecutionState(initial, [{ actionId: "generate-1", status: "succeeded", note: "生成了 2 张图片" }], "生图完成：2 张", "2026-06-18T10:01:00.000Z");
+
+    assert.equal(next.steps["create-1"].status, "succeeded");
+    assert.equal(next.steps["generate-1"].status, "succeeded");
+    assert.equal(next.steps["generate-1"].note, "生成了 2 张图片");
+    assert.equal(next.summary, "生图完成：2 张");
+    assert.equal(next.updatedAt, "2026-06-18T10:01:00.000Z");
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "antd";
-import { CheckCircle2, Clock3, Copy, ImageIcon, ListChecks, MessageSquare, Plus, RotateCcw, ShieldAlert, Sparkles, X } from "lucide-react";
+import { CheckCircle2, CircleSlash, Clock3, Copy, ImageIcon, ListChecks, LoaderCircle, MessageSquare, Plus, RotateCcw, ShieldAlert, Sparkles, X, XCircle } from "lucide-react";
 
 import { ImageGenerationPending } from "@/components/image-generation-pending";
 import { useCopyText } from "@/hooks/use-copy-text";
@@ -12,7 +12,7 @@ import type { CanvasAssistantImage, CanvasAssistantMessage, CanvasAssistantRefer
 import { validateAssistantCanvasActions } from "../utils/canvas-assistant-actions";
 import { formatPromptAgentOutputText, promptAgentOutputLabel } from "../utils/canvas-prompt-agent-render";
 import { buildPromptAgentExecutionPlan } from "../utils/canvas-prompt-agent-tools";
-import type { PromptAgentOutput } from "../utils/canvas-prompt-agent-types";
+import type { PromptAgentExecutionStepStatus, PromptAgentOutput } from "../utils/canvas-prompt-agent-types";
 
 export function AssistantMessages({
     messages,
@@ -86,7 +86,7 @@ export function AssistantMessages({
 function PromptAgentExecutionPlanCard({ message }: { message: CanvasAssistantMessage }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     if (!message.promptAgentPlan) return null;
-    const execution = buildPromptAgentExecutionPlan(message.promptAgentPlan, message.promptAgentMode || "ask");
+    const execution = buildPromptAgentExecutionPlan(message.promptAgentPlan, message.promptAgentMode || "ask", message.promptAgentExecutionState);
     if (!execution.steps.length) return null;
 
     return (
@@ -183,7 +183,11 @@ function promptAgentPermissionLabel(permission: "write_canvas" | "generate_image
     return "写入画布";
 }
 
-function promptAgentStepStatusView(status: "ready" | "confirm" | "blocked", theme: (typeof canvasThemes)[keyof typeof canvasThemes]) {
+function promptAgentStepStatusView(status: PromptAgentExecutionStepStatus, theme: (typeof canvasThemes)[keyof typeof canvasThemes]) {
+    if (status === "running") return { label: "执行中", color: theme.node.activeStroke, icon: <LoaderCircle className="size-3 animate-spin" /> };
+    if (status === "succeeded") return { label: "已完成", color: theme.node.activeStroke, icon: <CheckCircle2 className="size-3" /> };
+    if (status === "failed") return { label: "失败", color: "var(--studio-danger)", icon: <XCircle className="size-3" /> };
+    if (status === "skipped") return { label: "已跳过", color: theme.node.muted, icon: <CircleSlash className="size-3" /> };
     if (status === "ready") return { label: "可执行", color: theme.node.activeStroke, icon: <CheckCircle2 className="size-3" /> };
     if (status === "blocked") return { label: "已阻止", color: "var(--studio-danger)", icon: <ShieldAlert className="size-3" /> };
     return { label: "需确认", color: theme.node.muted, icon: <Clock3 className="size-3" /> };

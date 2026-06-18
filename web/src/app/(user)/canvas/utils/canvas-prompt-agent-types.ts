@@ -80,7 +80,7 @@ export type PromptAgentTool = {
     costly?: boolean;
 };
 
-export type PromptAgentExecutionStepStatus = "ready" | "confirm" | "blocked";
+export type PromptAgentExecutionStepStatus = "ready" | "confirm" | "blocked" | "running" | "succeeded" | "failed" | "skipped";
 
 export type PromptAgentExecutionStep = {
     id: string;
@@ -102,4 +102,20 @@ export type PromptAgentExecutionPlan = {
     readyCount: number;
     confirmCount: number;
     blockedCount: number;
+    runningCount: number;
+    succeededCount: number;
+    failedCount: number;
+    skippedCount: number;
+};
+
+export type PromptAgentExecutionStepRecord = {
+    status: PromptAgentExecutionStepStatus;
+    note?: string;
+    updatedAt?: string;
+};
+
+export type PromptAgentExecutionState = {
+    steps: Record<string, PromptAgentExecutionStepRecord>;
+    summary?: string;
+    updatedAt?: string;
 };

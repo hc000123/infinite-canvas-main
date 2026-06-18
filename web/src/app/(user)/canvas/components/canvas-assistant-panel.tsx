@@ -20,7 +20,8 @@ import { buildCanvasAssistantWorkflowContext } from "../utils/canvas-assistant-w
 import { buildWorkflowAssistantActionSuggestion } from "../utils/canvas-assistant-workflow-actions";
 import { buildPromptAgentCanvasActions } from "../utils/canvas-prompt-agent-actions";
 import { buildPromptAgentSystemContext, isPromptAgentRequest, parsePromptAgentPlan } from "../utils/canvas-prompt-agent";
-import type { PromptAgentComposerIntent, PromptAgentOutput, PromptAgentRunMode } from "../utils/canvas-prompt-agent-types";
+import type { PromptAgentComposerIntent, PromptAgentExecutionState, PromptAgentExecutionStepStatus, PromptAgentOutput, PromptAgentRunMode } from "../utils/canvas-prompt-agent-types";
+import { updatePromptAgentExecutionState } from "../utils/canvas-prompt-agent-tools";
 import { useCanvasAssistantSessions } from "../hooks/use-canvas-assistant-sessions";
 import { AssistantMessages } from "./canvas-assistant-messages";
 import { CanvasAssistantComposer, type AssistantMode } from "./canvas-assistant-composer";
@@ -29,6 +30,7 @@ import { CanvasAssistantDeleteModal, CanvasAssistantEmptyState, CanvasAssistantH
 
 const PANEL_MOTION_MS = 500;
 const PANEL_MOTION_SECONDS = PANEL_MOTION_MS / 1000;
+type AssistantSendResult = { ok: true; imageCount?: number } | { ok: false; error: string };
 
 type CanvasAssistantPanelProps = {
     embedded?: boolean;
@@ -51,6 +53,19 @@ type CanvasAssistantPanelProps = {
     onCollapseStart: () => void;
     onCollapse: () => void;
 };
+
+const promptAgentCanvasWriteActionTypes = ["node.create_image_config", "node.create_video_config", "node.create_storyboard_group"];
+
+function nextPromptAgentExecutionState(message: CanvasAssistantMessage, state: PromptAgentExecutionState | undefined, actionTypes: string[], status: PromptAgentExecutionStepStatus, note: string, summary: string) {
+    const updates = (message.promptAgentPlan?.actions || [])
+        .filter((action) => actionTypes.includes(action.type))
+        .map((action) => ({
+            actionId: action.id,
+            status,
+            note,
+        }));
+    return updatePromptAgentExecutionState(state, updates, summary);
+}
 
 export function CanvasAssistantPanel({
     embedded = false,
@@ -138,11 +153,11 @@ export function CanvasAssistantPanel({
         setRemovedReferenceIds(new Set());
     }, [selectedNodeKey]);
 
-    const sendMessage = async (text: string, nextMode: AssistantMode, history: CanvasAssistantMessage[], savedReferences?: CanvasAssistantReference[]) => {
+    const sendMessage = async (text: string, nextMode: AssistantMode, history: CanvasAssistantMessage[], savedReferences?: CanvasAssistantReference[]): Promise<AssistantSendResult> => {
         const requestConfig = { ...effectiveConfig, model: nextMode === "image" ? effectiveConfig.imageModel || effectiveConfig.model : effectiveConfig.textModel || effectiveConfig.model };
         if (!isAiConfigReady(requestConfig, requestConfig.model)) {
             openConfigDialog(true);
-            return;
+            return { ok: false, error: "AI 配置未完成" };
         }
 
         const session = ensureActiveSession();
@@ -185,15 +200,18 @@ export function CanvasAssistantPanel({
                     images: storedImages.map((image, index) => ({ id: images[index].id, dataUrl: image.url, storageKey: image.storageKey, prompt: text })),
                     isLoading: false,
                 });
-                return;
+                return { ok: true, imageCount: storedImages.length };
             }
 
             const answer = await requestImageQuestion(requestConfig, await buildChatMessages([...history, userMessage], workflowContext.text), (streamed) => {
                 updateMessage(session.id, assistantId, { text: streamed, isLoading: false });
             });
             updateMessage(session.id, assistantId, { text: answer, isLoading: false });
+            return { ok: true };
         } catch (error) {
-            updateMessage(session.id, assistantId, { text: error instanceof Error ? error.message : "操作失败", isLoading: false });
+            const message = error instanceof Error ? error.message : "操作失败";
+            updateMessage(session.id, assistantId, { text: message, isLoading: false });
+            return { ok: false, error: message };
         } finally {
             setIsRunning(false);
         }
@@ -282,11 +300,35 @@ export function CanvasAssistantPanel({
 
     const generatePromptAgentImage = async (message: CanvasAssistantMessage, output: PromptAgentOutput) => {
         if (output.kind !== "image_prompt") return;
+        const sessionId = activeSession?.id || "";
+        let executionState = message.promptAgentExecutionState;
+        const updateExecution = (actionTypes: string[], status: PromptAgentExecutionStepStatus, note: string, summary: string) => {
+            if (!sessionId || !message.promptAgentPlan) return;
+            executionState = nextPromptAgentExecutionState(message, executionState, actionTypes, status, note, summary);
+            updateMessage(sessionId, message.id, { promptAgentExecutionState: executionState });
+        };
+
         if (message.assistantActionStatus === "pending" && message.assistantActions?.length) {
             const applied = onApplyAssistantActions(message.assistantActions);
-            if (applied) updateMessage(activeSession?.id || "", message.id, { assistantActionStatus: "applied", assistantActionAppliedAt: new Date().toISOString() });
+            if (!applied) {
+                updateExecution(promptAgentCanvasWriteActionTypes, "failed", "画布写入失败，已停止生图", "画布写入失败");
+                return;
+            }
+            executionState = nextPromptAgentExecutionState(message, executionState, promptAgentCanvasWriteActionTypes, "succeeded", "已写入画布", "画布写入完成");
+            updateMessage(sessionId, message.id, {
+                assistantActionStatus: "applied",
+                assistantActionAppliedAt: new Date().toISOString(),
+                promptAgentExecutionState: executionState,
+            });
         }
-        await sendMessage(output.finalPrompt, "image", messages, selectedReferences);
+
+        updateExecution(["image.generate"], "running", "正在调用生图", "正在生图");
+        const result = await sendMessage(output.finalPrompt, "image", messages, selectedReferences);
+        if (result.ok) {
+            updateExecution(["image.generate"], "succeeded", `生成了 ${result.imageCount || 0} 张图片`, `生图完成：${result.imageCount || 0} 张`);
+            return;
+        }
+        updateExecution(["image.generate"], "failed", result.error, `生图失败：${result.error}`);
     };
 
     const retryMessage = (message: CanvasAssistantMessage) => {
@@ -390,9 +432,22 @@ export function CanvasAssistantPanel({
                         onApplyAssistantActions={(message) => {
                             if (!message.assistantActions?.length) return;
                             const applied = onApplyAssistantActions(message.assistantActions);
-                            if (applied) updateMessage(activeSession?.id || "", message.id, { assistantActionStatus: "applied", assistantActionAppliedAt: new Date().toISOString() });
+                            const sessionId = activeSession?.id || "";
+                            if (!sessionId) return;
+                            updateMessage(sessionId, message.id, {
+                                assistantActionStatus: applied ? "applied" : "pending",
+                                assistantActionAppliedAt: applied ? new Date().toISOString() : undefined,
+                                promptAgentExecutionState: message.promptAgentPlan
+                                    ? nextPromptAgentExecutionState(message, message.promptAgentExecutionState, promptAgentCanvasWriteActionTypes, applied ? "succeeded" : "failed", applied ? "已写入画布" : "画布写入失败", applied ? "画布写入完成" : "画布写入失败")
+                                    : message.promptAgentExecutionState,
+                            });
                         }}
-                        onCancelAssistantActions={(message) => updateMessage(activeSession?.id || "", message.id, { assistantActionStatus: "cancelled" })}
+                        onCancelAssistantActions={(message) =>
+                            updateMessage(activeSession?.id || "", message.id, {
+                                assistantActionStatus: "cancelled",
+                                promptAgentExecutionState: message.promptAgentPlan ? nextPromptAgentExecutionState(message, message.promptAgentExecutionState, promptAgentCanvasWriteActionTypes, "skipped", "用户取消写入画布", "已取消画布写入") : message.promptAgentExecutionState,
+                            })
+                        }
                         onGeneratePromptImage={(message, output) => {
                             void generatePromptAgentImage(message, output);
                         }}
