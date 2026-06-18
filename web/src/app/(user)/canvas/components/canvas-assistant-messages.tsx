@@ -1,14 +1,17 @@
 "use client";
 
 import { Button } from "antd";
-import { MessageSquare, Plus, RotateCcw, X } from "lucide-react";
+import { Copy, ImageIcon, MessageSquare, Plus, RotateCcw, Sparkles, X } from "lucide-react";
 
 import { ImageGenerationPending } from "@/components/image-generation-pending";
+import { useCopyText } from "@/hooks/use-copy-text";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { cn } from "@/lib/utils";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasAssistantImage, CanvasAssistantMessage, CanvasAssistantReference, CanvasConnection, CanvasNodeData } from "../types";
 import { validateAssistantCanvasActions } from "../utils/canvas-assistant-actions";
+import { formatPromptAgentOutputText, promptAgentOutputLabel } from "../utils/canvas-prompt-agent-render";
+import type { PromptAgentOutput } from "../utils/canvas-prompt-agent-types";
 
 export function AssistantMessages({
     messages,
@@ -19,6 +22,7 @@ export function AssistantMessages({
     onInsertText,
     onApplyAssistantActions,
     onCancelAssistantActions,
+    onGeneratePromptImage,
 }: {
     messages: CanvasAssistantMessage[];
     nodes: CanvasNodeData[];
@@ -28,6 +32,7 @@ export function AssistantMessages({
     onInsertText: (text: string) => void;
     onApplyAssistantActions: (message: CanvasAssistantMessage) => void;
     onCancelAssistantActions: (message: CanvasAssistantMessage) => void;
+    onGeneratePromptImage?: (message: CanvasAssistantMessage, output: PromptAgentOutput) => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
 
@@ -48,6 +53,7 @@ export function AssistantMessages({
                         {message.text}
                     </div>
                     {message.references?.length ? <MessageReferences message={message} /> : null}
+                    {message.promptAgentPlan?.outputs.length ? <PromptAgentCards message={message} onInsertText={onInsertText} onGeneratePromptImage={onGeneratePromptImage} /> : null}
                     {message.assistantActions?.length ? <AssistantActionPreviewCard message={message} nodes={nodes} connections={connections} onApply={() => onApplyAssistantActions(message)} onCancel={() => onCancelAssistantActions(message)} /> : null}
                     {message.isLoading ? <ImageGenerationPending compact label={message.mode === "image" ? "正在生成图片" : "正在回答"} className="w-[250px] rounded-lg border" /> : null}
                     {message.role === "assistant" && !message.isLoading ? (
@@ -72,6 +78,49 @@ export function AssistantMessages({
                 </div>
             ))}
         </>
+    );
+}
+
+function PromptAgentCards({ message, onInsertText, onGeneratePromptImage }: { message: CanvasAssistantMessage; onInsertText: (text: string) => void; onGeneratePromptImage?: (message: CanvasAssistantMessage, output: PromptAgentOutput) => void }) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const copyText = useCopyText();
+    const outputs = message.promptAgentPlan?.outputs || [];
+
+    return (
+        <div className="grid w-[290px] gap-2">
+            {outputs.map((output) => {
+                const text = formatPromptAgentOutputText(output);
+                const canGenerateImage = output.kind === "image_prompt" && Boolean(onGeneratePromptImage);
+                return (
+                    <div key={output.id} className="rounded-lg border p-3 text-sm" style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}>
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                            <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium opacity-70">
+                                <Sparkles className="size-3.5" />
+                                <span>{promptAgentOutputLabel(output.kind)}</span>
+                            </div>
+                            {output.kind === "image_prompt" ? <ImageIcon className="size-3.5 opacity-50" /> : null}
+                        </div>
+                        <div className="font-medium">{output.title}</div>
+                        <pre className="mt-2 max-h-52 whitespace-pre-wrap break-words rounded-md border p-2 text-xs leading-5" style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }}>
+                            {text}
+                        </pre>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            <Button size="small" icon={<Copy className="size-3.5" />} onClick={() => copyText(text, "已复制提示词")}>
+                                复制
+                            </Button>
+                            <Button size="small" icon={<Plus className="size-3.5" />} onClick={() => onInsertText(text)}>
+                                文本节点
+                            </Button>
+                            {canGenerateImage ? (
+                                <Button size="small" type="primary" onClick={() => onGeneratePromptImage?.(message, output)}>
+                                    创建并生图
+                                </Button>
+                            ) : null}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
     );
 }
 

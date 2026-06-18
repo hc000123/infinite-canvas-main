@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, FileText, ImageIcon, LoaderCircle, MessageSquare, Network, Sparkles } from "lucide-react";
+import { ArrowUp, Clapperboard, FileText, ImageIcon, LoaderCircle, MessageSquare, Network, Sparkles, Video } from "lucide-react";
 import { Button, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -13,16 +13,19 @@ import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { AssistantReferenceChip } from "./canvas-assistant-messages";
 import type { CanvasAssistantReference } from "../types";
+import type { PromptAgentComposerIntent } from "../utils/canvas-prompt-agent-types";
 
 export type AssistantMode = "ask" | "image";
 
 type CanvasAssistantComposerProps = {
     mode: AssistantMode;
+    intent: PromptAgentComposerIntent;
     prompt: string;
     isRunning: boolean;
     references: CanvasAssistantReference[];
     config: AiConfig;
     onModeChange: (mode: AssistantMode) => void;
+    onIntentChange: (intent: PromptAgentComposerIntent) => void;
     onPromptChange: (prompt: string) => void;
     onSubmit: () => void;
     onConfigChange: (key: keyof AiConfig, value: string) => void;
@@ -37,11 +40,13 @@ type CanvasAssistantComposerProps = {
 
 export function CanvasAssistantComposer({
     mode,
+    intent,
     prompt,
     isRunning,
     references,
     config,
     onModeChange,
+    onIntentChange,
     onPromptChange,
     onSubmit,
     onConfigChange,
@@ -83,7 +88,7 @@ export function CanvasAssistantComposer({
                     }}
                     className="thin-scrollbar h-20 w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none placeholder:text-[var(--studio-text-muted)]"
                     style={{ color: theme.node.text }}
-                    placeholder={mode === "image" ? "描述你想生成或修改的图片" : "输入你想问的问题"}
+                    placeholder={mode === "image" ? "描述你想生成或修改的图片" : "描述你想写的图片、视频或分镜提示词"}
                 />
                 <div className="mt-2 flex items-center justify-between gap-2">
                     <div className="canvas-composer-tools flex min-w-0 flex-1 items-center gap-1">
@@ -97,6 +102,7 @@ export function CanvasAssistantComposer({
                         <Tooltip title="开发调试：生成动作预览">
                             <Button type="text" shape="circle" className="canvas-composer-icon !h-8 !min-w-8 !rounded-full !px-2" icon={<Sparkles className="size-4" />} onClick={onCreateDebugActionPreview} />
                         </Tooltip>
+                        <PromptAgentIntentSwitch intent={intent} theme={theme} onChange={onIntentChange} />
                         <AssistantModeSwitch mode={mode} theme={theme} onChange={onModeChange} />
                         {mode === "image" ? (
                             <>
@@ -126,6 +132,32 @@ export function CanvasAssistantComposer({
                     </Button>
                 </div>
             </div>
+        </div>
+    );
+}
+
+function PromptAgentIntentSwitch({ intent, theme, onChange }: { intent: PromptAgentComposerIntent; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onChange: (intent: PromptAgentComposerIntent) => void }) {
+    return (
+        <div className="canvas-composer-mode-switch flex h-8 shrink-0 items-center rounded-full p-0.5" style={{ background: theme.node.fill }}>
+            {[
+                { value: "auto" as const, title: "自动", icon: <Sparkles className="size-3.5" /> },
+                { value: "image_prompt" as const, title: "图片", icon: <ImageIcon className="size-3.5" /> },
+                { value: "video_prompt" as const, title: "视频", icon: <Video className="size-3.5" /> },
+                { value: "storyboard_prompt" as const, title: "分镜", icon: <Clapperboard className="size-3.5" /> },
+            ].map((item) => (
+                <Tooltip key={item.value} title={`${item.title}提示词`}>
+                    <button
+                        type="button"
+                        className="canvas-composer-mode-button flex h-7 cursor-pointer items-center justify-center gap-1 rounded-full border-0 bg-transparent px-2 text-xs transition"
+                        style={{ background: intent === item.value ? theme.node.activeStroke : "transparent", color: intent === item.value ? theme.node.panel : theme.node.text }}
+                        onClick={() => onChange(item.value)}
+                        aria-label={`${item.title}提示词`}
+                    >
+                        {item.icon}
+                        <span>{item.title}</span>
+                    </button>
+                </Tooltip>
+            ))}
         </div>
     );
 }
