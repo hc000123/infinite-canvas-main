@@ -3,7 +3,8 @@ import test from "node:test";
 
 import { buildPromptAgentCanvasActions } from "./canvas-prompt-agent-actions.ts";
 import { formatPromptAgentOutputText } from "./canvas-prompt-agent-render.ts";
-import { parsePromptAgentPlan } from "./canvas-prompt-agent.ts";
+import { buildPromptAgentSystemContext, parsePromptAgentPlan } from "./canvas-prompt-agent.ts";
+import { buildPromptAgentSkillContext, promptAgentSkillsForIntent } from "./canvas-prompt-agent-skills.ts";
 
 test("parses a valid image prompt agent plan", () => {
     const raw = JSON.stringify({
@@ -107,4 +108,30 @@ test("formats storyboard output into readable shot text", () => {
     assert.match(text, /1\. 镜头 1/);
     assert.match(text, /雨夜手持跟拍奔跑/);
     assert.match(text, /2\. 镜头 2/);
+});
+
+test("selects workflow-derived skills for image prompt intent", () => {
+    const skills = promptAgentSkillsForIntent("image_prompt");
+    const ids = skills.map((skill) => skill.id);
+
+    assert.ok(ids.includes("original-art-prompt-format"));
+    assert.ok(ids.includes("director-method-shot"));
+    assert.equal(ids.includes("seedance-copy-only"), false);
+});
+
+test("selects copy-only and director skills for storyboard prompt intent", () => {
+    const text = buildPromptAgentSkillContext("storyboard_prompt");
+
+    assert.match(text, /Skill 5 轻量分镜/);
+    assert.match(text, /Copy-only 代码块字段硬规则/);
+    assert.match(text, /情绪物理化/);
+    assert.match(text, /清道夫/);
+});
+
+test("injects adapted skills into prompt agent system context", () => {
+    const context = buildPromptAgentSystemContext({ intent: "video_prompt", selectedReferences: [], workflowContext: "" });
+
+    assert.match(context, /适配 Skill/);
+    assert.match(context, /@图N/);
+    assert.match(context, /视频第一版只创建配置节点/);
 });
