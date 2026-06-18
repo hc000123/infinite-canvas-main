@@ -1,6 +1,7 @@
 export type PromptAgentIntent = "image_prompt" | "video_prompt" | "storyboard_prompt" | "rewrite_prompt" | "chat";
 export type PromptAgentComposerIntent = PromptAgentIntent | "auto";
 export type PromptAgentRunMode = "ask" | "auto" | "review";
+export type PromptAgentSkillPackId = "auto" | "art-direction" | "seedance-video" | "storyboard-director" | "review-cleanup";
 
 export type PromptAgentImageOutput = {
     id: string;

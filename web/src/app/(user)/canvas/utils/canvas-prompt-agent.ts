@@ -1,5 +1,5 @@
 import type { CanvasAssistantReference } from "../types.ts";
-import type { PromptAgentAction, PromptAgentComposerIntent, PromptAgentIntent, PromptAgentOutput, PromptAgentParseResult, PromptAgentPlan, PromptAgentRunMode, PromptAgentStoryboardShot } from "./canvas-prompt-agent-types.ts";
+import type { PromptAgentAction, PromptAgentComposerIntent, PromptAgentIntent, PromptAgentOutput, PromptAgentParseResult, PromptAgentPlan, PromptAgentRunMode, PromptAgentSkillPackId, PromptAgentStoryboardShot } from "./canvas-prompt-agent-types.ts";
 import { buildPromptAgentSkillContext } from "./canvas-prompt-agent-skills.ts";
 
 const intents = new Set(["image_prompt", "video_prompt", "storyboard_prompt", "rewrite_prompt", "chat"]);
@@ -37,16 +37,18 @@ export function isPromptAgentRequest(text: string, intent: PromptAgentComposerIn
 export function buildPromptAgentSystemContext({
     agentMode = "ask",
     intent,
+    skillPackId = "auto",
     selectedReferences,
     workflowContext,
 }: {
     agentMode?: PromptAgentRunMode;
     intent: PromptAgentComposerIntent;
+    skillPackId?: PromptAgentSkillPackId;
     selectedReferences: CanvasAssistantReference[];
     workflowContext?: string;
 }) {
     const referenceLines = selectedReferences.map((item, index) => `参考 ${index + 1}：${item.title}；类型 ${item.type}；${item.text ? `文本：${item.text.slice(0, 300)}` : item.dataUrl ? "包含图片" : "无内容预览"}`);
-    const skillContext = buildPromptAgentSkillContext(intent);
+    const skillContext = buildPromptAgentSkillContext(intent, skillPackId);
     return [
         "你是画布提示词 Agent，负责把用户需求整理成可落地到画布的图片、视频或分镜提示词。",
         "只输出一个 JSON 对象，不要输出 Markdown，不要解释 JSON 之外的内容。",

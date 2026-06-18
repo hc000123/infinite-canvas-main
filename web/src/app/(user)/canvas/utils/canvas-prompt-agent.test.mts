@@ -4,7 +4,7 @@ import test from "node:test";
 import { buildPromptAgentCanvasActions } from "./canvas-prompt-agent-actions.ts";
 import { formatPromptAgentOutputText } from "./canvas-prompt-agent-render.ts";
 import { buildPromptAgentSystemContext, parsePromptAgentPlan } from "./canvas-prompt-agent.ts";
-import { buildPromptAgentSkillContext, promptAgentSkillsForIntent } from "./canvas-prompt-agent-skills.ts";
+import { buildPromptAgentSkillContext, promptAgentSkillPacks, promptAgentSkillsForIntent, promptAgentSkillsForSelection } from "./canvas-prompt-agent-skills.ts";
 import { buildPromptAgentExecutionPlan, promptAgentToolForAction, updatePromptAgentExecutionState } from "./canvas-prompt-agent-tools.ts";
 
 test("parses a valid image prompt agent plan", () => {
@@ -135,6 +135,29 @@ test("injects adapted skills into prompt agent system context", () => {
     assert.match(context, /适配 Skill/);
     assert.match(context, /@图N/);
     assert.match(context, /视频第一版只创建配置节点/);
+});
+
+test("selects skills from a prompt agent skill pack", () => {
+    const packIds = promptAgentSkillPacks.map((pack) => pack.id);
+    const imageSkills = promptAgentSkillsForSelection({ intent: "image_prompt", skillPackId: "art-direction" }).map((skill) => skill.id);
+    const videoSkills = promptAgentSkillsForSelection({ intent: "video_prompt", skillPackId: "seedance-video" }).map((skill) => skill.id);
+
+    assert.ok(packIds.includes("auto"));
+    assert.ok(packIds.includes("art-direction"));
+    assert.ok(imageSkills.includes("original-art-prompt-format"));
+    assert.ok(imageSkills.includes("director-method-shot"));
+    assert.equal(imageSkills.includes("seedance-copy-only"), false);
+    assert.ok(videoSkills.includes("seedance-copy-only"));
+    assert.ok(videoSkills.includes("mx-shell-copyonly"));
+});
+
+test("injects selected skill pack label into prompt agent system context", () => {
+    const context = buildPromptAgentSystemContext({ intent: "video_prompt", skillPackId: "seedance-video", selectedReferences: [], workflowContext: "" });
+
+    assert.match(context, /当前 Skill Pack：Seedance 视频/);
+    assert.match(context, /Skill 5 轻量分镜/);
+    assert.match(context, /清道夫 Copy-only/);
+    assert.doesNotMatch(context, /原格式服化道图片提示词/);
 });
 
 test("describes prompt agent tools with permissions and cost gates", () => {

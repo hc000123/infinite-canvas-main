@@ -20,7 +20,7 @@ import { buildCanvasAssistantWorkflowContext } from "../utils/canvas-assistant-w
 import { buildWorkflowAssistantActionSuggestion } from "../utils/canvas-assistant-workflow-actions";
 import { buildPromptAgentCanvasActions } from "../utils/canvas-prompt-agent-actions";
 import { buildPromptAgentSystemContext, isPromptAgentRequest, parsePromptAgentPlan } from "../utils/canvas-prompt-agent";
-import type { PromptAgentComposerIntent, PromptAgentExecutionState, PromptAgentExecutionStepStatus, PromptAgentOutput, PromptAgentRunMode } from "../utils/canvas-prompt-agent-types";
+import type { PromptAgentComposerIntent, PromptAgentExecutionState, PromptAgentExecutionStepStatus, PromptAgentOutput, PromptAgentRunMode, PromptAgentSkillPackId } from "../utils/canvas-prompt-agent-types";
 import { updatePromptAgentExecutionState } from "../utils/canvas-prompt-agent-tools";
 import { useCanvasAssistantSessions } from "../hooks/use-canvas-assistant-sessions";
 import { AssistantMessages } from "./canvas-assistant-messages";
@@ -104,6 +104,7 @@ export function CanvasAssistantPanel({
     const [mode, setMode] = useState<AssistantMode>("ask");
     const [agentMode, setAgentMode] = useState<PromptAgentRunMode>("ask");
     const [promptIntent, setPromptIntent] = useState<PromptAgentComposerIntent>("auto");
+    const [promptSkillPackId, setPromptSkillPackId] = useState<PromptAgentSkillPackId>("auto");
     const [prompt, setPrompt] = useState("");
     const [isRunning, setIsRunning] = useState(false);
     const [closing, setClosing] = useState(false);
@@ -249,8 +250,9 @@ export function CanvasAssistantPanel({
         await sendMessage(text, mode, messages);
     };
 
-    const sendPromptAgentMessage = async (text: string, history: CanvasAssistantMessage[], options?: { agentMode?: PromptAgentRunMode; references?: CanvasAssistantReference[] }) => {
+    const sendPromptAgentMessage = async (text: string, history: CanvasAssistantMessage[], options?: { agentMode?: PromptAgentRunMode; references?: CanvasAssistantReference[]; skillPackId?: PromptAgentSkillPackId }) => {
         const nextAgentMode = options?.agentMode || agentMode;
+        const nextSkillPackId = options?.skillPackId || promptSkillPackId;
         const requestConfig = { ...effectiveConfig, model: effectiveConfig.textModel || effectiveConfig.model };
         if (!isAiConfigReady(requestConfig, requestConfig.model)) {
             openConfigDialog(true);
@@ -259,7 +261,7 @@ export function CanvasAssistantPanel({
 
         const session = ensureActiveSession();
         const refs = options?.references || selectedReferences;
-        const userMessage: CanvasAssistantMessage = { id: nanoid(), role: "user", mode: "ask", text, references: refs, promptAgentMode: nextAgentMode };
+        const userMessage: CanvasAssistantMessage = { id: nanoid(), role: "user", mode: "ask", text, references: refs, promptAgentMode: nextAgentMode, promptAgentSkillPackId: nextSkillPackId };
         const assistantId = nanoid();
         appendMessage(session.id, userMessage);
         appendMessage(session.id, { id: assistantId, role: "assistant", mode: "ask", text: "正在整理提示词", isLoading: true });
@@ -267,7 +269,7 @@ export function CanvasAssistantPanel({
         setIsRunning(true);
 
         try {
-            const systemContext = buildPromptAgentSystemContext({ agentMode: nextAgentMode, intent: promptIntent, selectedReferences: refs, workflowContext: workflowContext.text });
+            const systemContext = buildPromptAgentSystemContext({ agentMode: nextAgentMode, intent: promptIntent, skillPackId: nextSkillPackId, selectedReferences: refs, workflowContext: workflowContext.text });
             const answer = await requestImageQuestion(requestConfig, await buildChatMessages([...history, userMessage], systemContext));
             const parsed = parsePromptAgentPlan(answer);
             if (!parsed.ok) {
@@ -287,6 +289,7 @@ export function CanvasAssistantPanel({
                 isLoading: false,
                 promptAgentIntent: parsed.plan.intent,
                 promptAgentMode: nextAgentMode,
+                promptAgentSkillPackId: nextSkillPackId,
                 promptAgentPlan: parsed.plan,
                 assistantActions: suggestion?.actions,
                 assistantActionStatus: suggestion?.actions.length ? "pending" : undefined,
@@ -337,7 +340,7 @@ export function CanvasAssistantPanel({
         const user = messages[userIndex];
         if (!user) return;
         if (message.promptAgentPlan || message.promptAgentIntent || user.promptAgentMode) {
-            void sendPromptAgentMessage(user.text, messages.slice(0, userIndex), { agentMode: message.promptAgentMode || user.promptAgentMode || agentMode, references: user.references });
+            void sendPromptAgentMessage(user.text, messages.slice(0, userIndex), { agentMode: message.promptAgentMode || user.promptAgentMode || agentMode, references: user.references, skillPackId: message.promptAgentSkillPackId || user.promptAgentSkillPackId || promptSkillPackId });
             return;
         }
         void sendMessage(user.text, user.mode, messages.slice(0, userIndex), user.references);
@@ -462,6 +465,7 @@ export function CanvasAssistantPanel({
                     mode={mode}
                     agentMode={agentMode}
                     intent={promptIntent}
+                    skillPackId={promptSkillPackId}
                     prompt={prompt}
                     isRunning={isRunning}
                     references={selectedReferences}
@@ -469,6 +473,7 @@ export function CanvasAssistantPanel({
                     onModeChange={setMode}
                     onAgentModeChange={setAgentMode}
                     onIntentChange={setPromptIntent}
+                    onSkillPackChange={setPromptSkillPackId}
                     onPromptChange={setPrompt}
                     onSubmit={submit}
                     onConfigChange={updateConfig}

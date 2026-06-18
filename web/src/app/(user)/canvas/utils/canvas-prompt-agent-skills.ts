@@ -1,4 +1,4 @@
-import type { PromptAgentComposerIntent, PromptAgentIntent } from "./canvas-prompt-agent-types.ts";
+import type { PromptAgentComposerIntent, PromptAgentIntent, PromptAgentSkillPackId } from "./canvas-prompt-agent-types.ts";
 
 type PromptAgentSkill = {
     id: string;
@@ -9,6 +9,13 @@ type PromptAgentSkill = {
     rules: string[];
     outputContract: string[];
     avoid: string[];
+};
+
+export type PromptAgentSkillPack = {
+    id: PromptAgentSkillPackId;
+    label: string;
+    description: string;
+    skillIds?: string[];
 };
 
 const promptAgentSkills: PromptAgentSkill[] = [
@@ -74,17 +81,34 @@ const promptAgentSkills: PromptAgentSkill[] = [
     },
 ];
 
+export const promptAgentSkillPacks: PromptAgentSkillPack[] = [
+    { id: "auto", label: "自动 Skill", description: "按当前提示词意图自动注入适配 Skill。" },
+    { id: "art-direction", label: "美术设定", description: "角色、场景、道具和图片提示词优先。", skillIds: ["original-art-prompt-format", "director-method-shot"] },
+    { id: "seedance-video", label: "Seedance 视频", description: "视频提示词、Copy-only 字段和按秒时间轴优先。", skillIds: ["seedance-copy-only", "mx-shell-copyonly", "emotion-director-copyonly", "director-method-shot"] },
+    { id: "storyboard-director", label: "导演分镜", description: "剧本改写、Beat 拆分、镜头调度和分镜连续性优先。", skillIds: ["script-master-adaptation", "director-method-shot", "seedance-copy-only", "emotion-director-copyonly"] },
+    { id: "review-cleanup", label: "清道夫审核", description: "检查内部术语、字段合同、情绪物理化和 Seedance 可生成性。", skillIds: ["mx-shell-copyonly", "emotion-director-copyonly", "seedance-copy-only"] },
+];
+
 export function promptAgentSkillsForIntent(intent: PromptAgentComposerIntent) {
     if (intent === "auto") return promptAgentSkills;
     if (intent === "chat") return [];
     return promptAgentSkills.filter((skill) => skill.intents.includes(intent));
 }
 
-export function buildPromptAgentSkillContext(intent: PromptAgentComposerIntent) {
-    const skills = promptAgentSkillsForIntent(intent);
+export function promptAgentSkillsForSelection({ intent, skillPackId = "auto" }: { intent: PromptAgentComposerIntent; skillPackId?: PromptAgentSkillPackId }) {
+    if (skillPackId === "auto") return promptAgentSkillsForIntent(intent);
+    const pack = promptAgentSkillPacks.find((item) => item.id === skillPackId);
+    const packSkillIds = new Set(pack?.skillIds || []);
+    return promptAgentSkillsForIntent(intent).filter((skill) => packSkillIds.has(skill.id));
+}
+
+export function buildPromptAgentSkillContext(intent: PromptAgentComposerIntent, skillPackId: PromptAgentSkillPackId = "auto") {
+    const pack = promptAgentSkillPacks.find((item) => item.id === skillPackId) || promptAgentSkillPacks[0];
+    const skills = promptAgentSkillsForSelection({ intent, skillPackId });
     if (!skills.length) return "";
     return [
         "适配 Skill：以下规则来自视频工作流 Skill 的轻量化整理，只用于画布提示词 Agent，不执行本地 Runner，不读取外部文件。",
+        `当前 Skill Pack：${pack.label}。${pack.description}`,
         ...skills.map((skill) =>
             [
                 `【${skill.label}】`,

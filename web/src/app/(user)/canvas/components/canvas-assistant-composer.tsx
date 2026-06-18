@@ -1,7 +1,7 @@
 "use client";
 
-import { ArrowUp, Bot, Clapperboard, FileText, ImageIcon, LoaderCircle, MessageSquare, Network, ShieldCheck, Sparkles, Video, Zap } from "lucide-react";
-import { Button, Tooltip } from "antd";
+import { ArrowUp, Bot, Clapperboard, FileText, ImageIcon, Layers3, LoaderCircle, MessageSquare, Network, ShieldCheck, Sparkles, Video, Zap } from "lucide-react";
+import { Button, Select, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
 import { ModelThinkingSettings } from "@/components/image-settings-panel";
@@ -13,7 +13,8 @@ import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { AssistantReferenceChip } from "./canvas-assistant-messages";
 import type { CanvasAssistantReference } from "../types";
-import type { PromptAgentComposerIntent, PromptAgentRunMode } from "../utils/canvas-prompt-agent-types";
+import { promptAgentSkillPacks } from "../utils/canvas-prompt-agent-skills";
+import type { PromptAgentComposerIntent, PromptAgentRunMode, PromptAgentSkillPackId } from "../utils/canvas-prompt-agent-types";
 
 export type AssistantMode = "ask" | "image";
 
@@ -21,6 +22,7 @@ type CanvasAssistantComposerProps = {
     mode: AssistantMode;
     agentMode: PromptAgentRunMode;
     intent: PromptAgentComposerIntent;
+    skillPackId: PromptAgentSkillPackId;
     prompt: string;
     isRunning: boolean;
     references: CanvasAssistantReference[];
@@ -28,6 +30,7 @@ type CanvasAssistantComposerProps = {
     onModeChange: (mode: AssistantMode) => void;
     onAgentModeChange: (mode: PromptAgentRunMode) => void;
     onIntentChange: (intent: PromptAgentComposerIntent) => void;
+    onSkillPackChange: (skillPackId: PromptAgentSkillPackId) => void;
     onPromptChange: (prompt: string) => void;
     onSubmit: () => void;
     onConfigChange: (key: keyof AiConfig, value: string) => void;
@@ -44,6 +47,7 @@ export function CanvasAssistantComposer({
     mode,
     agentMode,
     intent,
+    skillPackId,
     prompt,
     isRunning,
     references,
@@ -51,6 +55,7 @@ export function CanvasAssistantComposer({
     onModeChange,
     onAgentModeChange,
     onIntentChange,
+    onSkillPackChange,
     onPromptChange,
     onSubmit,
     onConfigChange,
@@ -110,6 +115,7 @@ export function CanvasAssistantComposer({
                             <>
                                 <PromptAgentIntentSwitch intent={intent} theme={theme} onChange={onIntentChange} />
                                 <PromptAgentRunModeSwitch mode={agentMode} theme={theme} onChange={onAgentModeChange} />
+                                <PromptAgentSkillPackSelect value={skillPackId} theme={theme} onChange={onSkillPackChange} />
                             </>
                         ) : null}
                         <AssistantModeSwitch mode={mode} theme={theme} onChange={onModeChange} />
@@ -142,6 +148,26 @@ export function CanvasAssistantComposer({
                 </div>
             </div>
         </div>
+    );
+}
+
+function PromptAgentSkillPackSelect({ value, theme, onChange }: { value: PromptAgentSkillPackId; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onChange: (skillPackId: PromptAgentSkillPackId) => void }) {
+    return (
+        <Tooltip title="Skill Pack">
+            <div className="flex h-8 shrink-0 items-center gap-1 rounded-full px-2" style={{ background: theme.node.fill, color: theme.node.text }}>
+                <Layers3 className="size-3.5 opacity-70" />
+                <Select
+                    size="small"
+                    variant="borderless"
+                    value={value}
+                    className="w-[108px]"
+                    popupMatchSelectWidth={160}
+                    getPopupContainer={() => document.body}
+                    options={promptAgentSkillPacks.map((pack) => ({ value: pack.id, label: pack.label }))}
+                    onChange={(next) => onChange(next as PromptAgentSkillPackId)}
+                />
+            </div>
+        </Tooltip>
     );
 }
 
