@@ -1,5 +1,5 @@
 import type { CanvasAssistantReference } from "../types.ts";
-import type { PromptAgentAction, PromptAgentComposerIntent, PromptAgentIntent, PromptAgentOutput, PromptAgentParseResult, PromptAgentPlan, PromptAgentStoryboardShot } from "./canvas-prompt-agent-types.ts";
+import type { PromptAgentAction, PromptAgentComposerIntent, PromptAgentIntent, PromptAgentOutput, PromptAgentParseResult, PromptAgentPlan, PromptAgentRunMode, PromptAgentStoryboardShot } from "./canvas-prompt-agent-types.ts";
 import { buildPromptAgentSkillContext } from "./canvas-prompt-agent-skills.ts";
 
 const intents = new Set(["image_prompt", "video_prompt", "storyboard_prompt", "rewrite_prompt", "chat"]);
@@ -35,10 +35,12 @@ export function isPromptAgentRequest(text: string, intent: PromptAgentComposerIn
 }
 
 export function buildPromptAgentSystemContext({
+    agentMode = "ask",
     intent,
     selectedReferences,
     workflowContext,
 }: {
+    agentMode?: PromptAgentRunMode;
     intent: PromptAgentComposerIntent;
     selectedReferences: CanvasAssistantReference[];
     workflowContext?: string;
@@ -57,6 +59,7 @@ export function buildPromptAgentSystemContext({
         "第一版不允许直接生成视频；视频需求只能创建视频配置节点。",
         "视频第一版只创建配置节点，不自动触发视频生成。",
         "写入画布或生图会由界面二次确认，你只需要给出 actions。",
+        promptAgentModeInstruction(agentMode),
         intent !== "auto" ? `用户选择的意图：${intent}` : "用户意图：自动判断。",
         skillContext,
         referenceLines.length ? ["当前引用：", ...referenceLines].join("\n") : "当前没有选中引用。",
@@ -64,6 +67,16 @@ export function buildPromptAgentSystemContext({
     ]
         .filter(Boolean)
         .join("\n");
+}
+
+function promptAgentModeInstruction(agentMode: PromptAgentRunMode) {
+    if (agentMode === "auto") {
+        return "Agent 运行模式：自动模式。你可以给出可连续执行的画布写入 actions，但生图仍需用户确认，视频生成仍然禁止自动触发。";
+    }
+    if (agentMode === "review") {
+        return "Agent 运行模式：审核模式。只做提示词、分镜、镜头连续性和合规检查，actions 必须为空数组。";
+    }
+    return "Agent 运行模式：问答模式。先解释判断和下一步计划，所有 actions 都等待用户确认。";
 }
 
 function normalizePromptAgentPlan(value: unknown): PromptAgentPlan | null {

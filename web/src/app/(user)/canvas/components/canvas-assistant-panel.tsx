@@ -20,7 +20,7 @@ import { buildCanvasAssistantWorkflowContext } from "../utils/canvas-assistant-w
 import { buildWorkflowAssistantActionSuggestion } from "../utils/canvas-assistant-workflow-actions";
 import { buildPromptAgentCanvasActions } from "../utils/canvas-prompt-agent-actions";
 import { buildPromptAgentSystemContext, isPromptAgentRequest, parsePromptAgentPlan } from "../utils/canvas-prompt-agent";
-import type { PromptAgentComposerIntent, PromptAgentOutput } from "../utils/canvas-prompt-agent-types";
+import type { PromptAgentComposerIntent, PromptAgentOutput, PromptAgentRunMode } from "../utils/canvas-prompt-agent-types";
 import { useCanvasAssistantSessions } from "../hooks/use-canvas-assistant-sessions";
 import { AssistantMessages } from "./canvas-assistant-messages";
 import { CanvasAssistantComposer, type AssistantMode } from "./canvas-assistant-composer";
@@ -86,7 +86,8 @@ export function CanvasAssistantPanel({
     const workflowMappingPreviews = useAgentRunnerStore((state) => state.workflowMappingPreviews);
     const workflowAppliedPreviewItemIds = useAgentRunnerStore((state) => state.workflowAppliedPreviewItemIds);
     const [width, setWidth] = useState(390);
-    const [mode, setMode] = useState<AssistantMode>("image");
+    const [mode, setMode] = useState<AssistantMode>("ask");
+    const [agentMode, setAgentMode] = useState<PromptAgentRunMode>("ask");
     const [promptIntent, setPromptIntent] = useState<PromptAgentComposerIntent>("auto");
     const [prompt, setPrompt] = useState("");
     const [isRunning, setIsRunning] = useState(false);
@@ -223,14 +224,15 @@ export function CanvasAssistantPanel({
             });
             return;
         }
-        if (mode === "ask" && isPromptAgentRequest(text, promptIntent)) {
+        if (mode === "ask" && (agentMode !== "ask" || isPromptAgentRequest(text, promptIntent))) {
             await sendPromptAgentMessage(text, messages);
             return;
         }
         await sendMessage(text, mode, messages);
     };
 
-    const sendPromptAgentMessage = async (text: string, history: CanvasAssistantMessage[]) => {
+    const sendPromptAgentMessage = async (text: string, history: CanvasAssistantMessage[], options?: { agentMode?: PromptAgentRunMode; references?: CanvasAssistantReference[] }) => {
+        const nextAgentMode = options?.agentMode || agentMode;
         const requestConfig = { ...effectiveConfig, model: effectiveConfig.textModel || effectiveConfig.model };
         if (!isAiConfigReady(requestConfig, requestConfig.model)) {
             openConfigDialog(true);
@@ -238,8 +240,8 @@ export function CanvasAssistantPanel({
         }
 
         const session = ensureActiveSession();
-        const refs = selectedReferences;
-        const userMessage: CanvasAssistantMessage = { id: nanoid(), role: "user", mode: "ask", text, references: refs };
+        const refs = options?.references || selectedReferences;
+        const userMessage: CanvasAssistantMessage = { id: nanoid(), role: "user", mode: "ask", text, references: refs, promptAgentMode: nextAgentMode };
         const assistantId = nanoid();
         appendMessage(session.id, userMessage);
         appendMessage(session.id, { id: assistantId, role: "assistant", mode: "ask", text: "正在整理提示词", isLoading: true });
@@ -247,7 +249,7 @@ export function CanvasAssistantPanel({
         setIsRunning(true);
 
         try {
-            const systemContext = buildPromptAgentSystemContext({ intent: promptIntent, selectedReferences: refs, workflowContext: workflowContext.text });
+            const systemContext = buildPromptAgentSystemContext({ agentMode: nextAgentMode, intent: promptIntent, selectedReferences: refs, workflowContext: workflowContext.text });
             const answer = await requestImageQuestion(requestConfig, await buildChatMessages([...history, userMessage], systemContext));
             const parsed = parsePromptAgentPlan(answer);
             if (!parsed.ok) {
@@ -257,6 +259,7 @@ export function CanvasAssistantPanel({
 
             const suggestion = buildPromptAgentCanvasActions({
                 connections,
+                agentMode: nextAgentMode,
                 nodes,
                 plan: parsed.plan,
                 selectedNodeIds: Array.from(selectedNodeIds),
@@ -265,6 +268,7 @@ export function CanvasAssistantPanel({
                 text: parsed.plan.reply,
                 isLoading: false,
                 promptAgentIntent: parsed.plan.intent,
+                promptAgentMode: nextAgentMode,
                 promptAgentPlan: parsed.plan,
                 assistantActions: suggestion?.actions,
                 assistantActionStatus: suggestion?.actions.length ? "pending" : undefined,
@@ -289,7 +293,12 @@ export function CanvasAssistantPanel({
         const index = messages.findIndex((item) => item.id === message.id);
         const userIndex = messages.slice(0, index).findLastIndex((item) => item.role === "user");
         const user = messages[userIndex];
-        if (user) void sendMessage(user.text, user.mode, messages.slice(0, userIndex), user.references);
+        if (!user) return;
+        if (message.promptAgentPlan || message.promptAgentIntent || user.promptAgentMode) {
+            void sendPromptAgentMessage(user.text, messages.slice(0, userIndex), { agentMode: message.promptAgentMode || user.promptAgentMode || agentMode, references: user.references });
+            return;
+        }
+        void sendMessage(user.text, user.mode, messages.slice(0, userIndex), user.references);
     };
 
     const createDebugActionPreview = () => {
@@ -396,12 +405,14 @@ export function CanvasAssistantPanel({
             {view === "chat" ? (
                 <CanvasAssistantComposer
                     mode={mode}
+                    agentMode={agentMode}
                     intent={promptIntent}
                     prompt={prompt}
                     isRunning={isRunning}
                     references={selectedReferences}
                     config={effectiveConfig}
                     onModeChange={setMode}
+                    onAgentModeChange={setAgentMode}
                     onIntentChange={setPromptIntent}
                     onPromptChange={setPrompt}
                     onSubmit={submit}

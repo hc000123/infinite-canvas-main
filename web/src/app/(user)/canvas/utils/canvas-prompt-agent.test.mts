@@ -5,6 +5,7 @@ import { buildPromptAgentCanvasActions } from "./canvas-prompt-agent-actions.ts"
 import { formatPromptAgentOutputText } from "./canvas-prompt-agent-render.ts";
 import { buildPromptAgentSystemContext, parsePromptAgentPlan } from "./canvas-prompt-agent.ts";
 import { buildPromptAgentSkillContext, promptAgentSkillsForIntent } from "./canvas-prompt-agent-skills.ts";
+import { buildPromptAgentExecutionPlan, promptAgentToolForAction } from "./canvas-prompt-agent-tools.ts";
 
 test("parses a valid image prompt agent plan", () => {
     const raw = JSON.stringify({
@@ -134,4 +135,73 @@ test("injects adapted skills into prompt agent system context", () => {
     assert.match(context, /适配 Skill/);
     assert.match(context, /@图N/);
     assert.match(context, /视频第一版只创建配置节点/);
+});
+
+test("describes prompt agent tools with permissions and cost gates", () => {
+    assert.equal(promptAgentToolForAction("node.create_image_config")?.permission, "write_canvas");
+    assert.equal(promptAgentToolForAction("image.generate")?.permission, "generate_image");
+    assert.equal(promptAgentToolForAction("image.generate")?.requiresConfirmation, true);
+    assert.equal(promptAgentToolForAction("video.generate"), null);
+});
+
+test("builds mode-aware execution plan for prompt agent actions", () => {
+    const plan = {
+        intent: "image_prompt" as const,
+        reply: "已整理图片提示词。",
+        outputs: [
+            {
+                id: "img-1",
+                kind: "image_prompt" as const,
+                title: "雨夜角色",
+                finalPrompt: "rainy portrait",
+            },
+        ],
+        actions: [
+            { id: "create-1", type: "node.create_image_config" as const, outputId: "img-1", title: "创建图片配置" },
+            { id: "generate-1", type: "image.generate" as const, outputId: "img-1", title: "生图" },
+        ],
+    };
+
+    const ask = buildPromptAgentExecutionPlan(plan, "ask");
+    const auto = buildPromptAgentExecutionPlan(plan, "auto");
+    const review = buildPromptAgentExecutionPlan(plan, "review");
+
+    assert.equal(ask.mode, "ask");
+    assert.equal(ask.steps[0].status, "confirm");
+    assert.match(ask.summary, /等待确认/);
+    assert.equal(auto.steps[0].status, "ready");
+    assert.equal(auto.steps[1].status, "confirm");
+    assert.match(auto.summary, /自动模式/);
+    assert.equal(review.steps[0].status, "blocked");
+    assert.match(review.summary, /审核模式/);
+});
+
+test("review mode does not build canvas write actions", () => {
+    const plan = {
+        intent: "image_prompt" as const,
+        reply: "只审核。",
+        outputs: [
+            {
+                id: "img-1",
+                kind: "image_prompt" as const,
+                title: "雨夜角色",
+                finalPrompt: "rainy portrait",
+            },
+        ],
+        actions: [{ id: "create-1", type: "node.create_image_config" as const, outputId: "img-1", title: "创建图片配置" }],
+    };
+
+    const result = buildPromptAgentCanvasActions({ plan, nodes: [], connections: [], selectedNodeIds: [], agentMode: "review" });
+
+    assert.equal(result, null);
+});
+
+test("adds mode constraints to prompt agent system context", () => {
+    const autoContext = buildPromptAgentSystemContext({ intent: "image_prompt", agentMode: "auto", selectedReferences: [], workflowContext: "" });
+    const reviewContext = buildPromptAgentSystemContext({ intent: "image_prompt", agentMode: "review", selectedReferences: [], workflowContext: "" });
+
+    assert.match(autoContext, /自动模式/);
+    assert.match(autoContext, /视频生成仍然禁止自动触发/);
+    assert.match(reviewContext, /审核模式/);
+    assert.match(reviewContext, /actions 必须为空数组/);
 });

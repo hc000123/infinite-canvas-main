@@ -1,18 +1,21 @@
 import type { CanvasConnection, CanvasNodeData, Position } from "../types.ts";
 import { buildAssistantCanvasActionPreview, validateAssistantCanvasAction, type AssistantCanvasAction, type AssistantCanvasSuggestionResult } from "./canvas-assistant-actions.ts";
-import type { PromptAgentAction, PromptAgentImageOutput, PromptAgentOutput, PromptAgentPlan, PromptAgentStoryboardOutput, PromptAgentVideoOutput } from "./canvas-prompt-agent-types.ts";
+import type { PromptAgentAction, PromptAgentImageOutput, PromptAgentOutput, PromptAgentPlan, PromptAgentRunMode, PromptAgentStoryboardOutput, PromptAgentVideoOutput } from "./canvas-prompt-agent-types.ts";
 
 export function buildPromptAgentCanvasActions({
     connections,
+    agentMode = "ask",
     nodes,
     plan,
     selectedNodeIds,
 }: {
     connections: CanvasConnection[];
+    agentMode?: PromptAgentRunMode;
     nodes: CanvasNodeData[];
     plan: PromptAgentPlan;
     selectedNodeIds: string[];
 }): AssistantCanvasSuggestionResult {
+    if (agentMode === "review") return null;
     const drafts = plan.actions.flatMap((action) => promptAgentActionToCanvasActions(action, plan.outputs, nodes, selectedNodeIds));
     if (!drafts.length) return null;
 

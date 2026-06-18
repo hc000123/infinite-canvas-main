@@ -1,7 +1,7 @@
 import type { SeedanceImageRoleMode } from "@/services/api/video-reference";
 import type { AssetVersionReference } from "../assets/asset-version-references";
 import type { AssistantCanvasAction } from "./utils/canvas-assistant-actions";
-import type { PromptAgentIntent, PromptAgentPlan } from "./utils/canvas-prompt-agent-types";
+import type { PromptAgentIntent, PromptAgentPlan, PromptAgentRunMode } from "./utils/canvas-prompt-agent-types";
 
 export type Position = {
     x: number;
@@ -244,6 +244,7 @@ export type CanvasAssistantMessage = {
     assistantActionStatus?: "pending" | "applied" | "cancelled";
     assistantActionAppliedAt?: string;
     promptAgentIntent?: PromptAgentIntent;
+    promptAgentMode?: PromptAgentRunMode;
     promptAgentPlan?: PromptAgentPlan;
 };
 

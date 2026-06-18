@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "antd";
-import { Copy, ImageIcon, MessageSquare, Plus, RotateCcw, Sparkles, X } from "lucide-react";
+import { CheckCircle2, Clock3, Copy, ImageIcon, ListChecks, MessageSquare, Plus, RotateCcw, ShieldAlert, Sparkles, X } from "lucide-react";
 
 import { ImageGenerationPending } from "@/components/image-generation-pending";
 import { useCopyText } from "@/hooks/use-copy-text";
@@ -11,6 +11,7 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasAssistantImage, CanvasAssistantMessage, CanvasAssistantReference, CanvasConnection, CanvasNodeData } from "../types";
 import { validateAssistantCanvasActions } from "../utils/canvas-assistant-actions";
 import { formatPromptAgentOutputText, promptAgentOutputLabel } from "../utils/canvas-prompt-agent-render";
+import { buildPromptAgentExecutionPlan } from "../utils/canvas-prompt-agent-tools";
 import type { PromptAgentOutput } from "../utils/canvas-prompt-agent-types";
 
 export function AssistantMessages({
@@ -54,6 +55,7 @@ export function AssistantMessages({
                     </div>
                     {message.references?.length ? <MessageReferences message={message} /> : null}
                     {message.promptAgentPlan?.outputs.length ? <PromptAgentCards message={message} onInsertText={onInsertText} onGeneratePromptImage={onGeneratePromptImage} /> : null}
+                    {message.promptAgentPlan?.actions.length ? <PromptAgentExecutionPlanCard message={message} /> : null}
                     {message.assistantActions?.length ? <AssistantActionPreviewCard message={message} nodes={nodes} connections={connections} onApply={() => onApplyAssistantActions(message)} onCancel={() => onCancelAssistantActions(message)} /> : null}
                     {message.isLoading ? <ImageGenerationPending compact label={message.mode === "image" ? "正在生成图片" : "正在回答"} className="w-[250px] rounded-lg border" /> : null}
                     {message.role === "assistant" && !message.isLoading ? (
@@ -78,6 +80,52 @@ export function AssistantMessages({
                 </div>
             ))}
         </>
+    );
+}
+
+function PromptAgentExecutionPlanCard({ message }: { message: CanvasAssistantMessage }) {
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    if (!message.promptAgentPlan) return null;
+    const execution = buildPromptAgentExecutionPlan(message.promptAgentPlan, message.promptAgentMode || "ask");
+    if (!execution.steps.length) return null;
+
+    return (
+        <div className="w-[290px] rounded-lg border p-3 text-sm" style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}>
+            <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-xs font-medium opacity-70">
+                    <ListChecks className="size-3.5" />
+                    执行计划
+                </div>
+                <span className="rounded-md px-1.5 py-0.5 text-[11px]" style={{ background: theme.node.fill, color: theme.node.muted }}>
+                    {promptAgentModeLabel(execution.mode)}
+                </span>
+            </div>
+            <div className="text-xs leading-5" style={{ color: theme.node.muted }}>
+                {execution.summary}
+            </div>
+            <div className="mt-2 space-y-1.5">
+                {execution.steps.map((step, index) => {
+                    const status = promptAgentStepStatusView(step.status, theme);
+                    return (
+                        <div key={step.id} className="rounded-md border p-2" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 text-xs font-medium">
+                                    {index + 1}. {step.toolLabel}
+                                </div>
+                                <div className="flex shrink-0 items-center gap-1 text-[11px]" style={{ color: status.color }}>
+                                    {status.icon}
+                                    {status.label}
+                                </div>
+                            </div>
+                            <div className="mt-1 break-words text-xs leading-5">{step.title}</div>
+                            <div className="mt-1 text-[11px] leading-4" style={{ color: theme.node.muted }}>
+                                {promptAgentPermissionLabel(step.permission)} · {step.note}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
     );
 }
 
@@ -122,6 +170,23 @@ function PromptAgentCards({ message, onInsertText, onGeneratePromptImage }: { me
             })}
         </div>
     );
+}
+
+function promptAgentModeLabel(mode: "ask" | "auto" | "review") {
+    if (mode === "auto") return "自动";
+    if (mode === "review") return "审核";
+    return "问答";
+}
+
+function promptAgentPermissionLabel(permission: "write_canvas" | "generate_image") {
+    if (permission === "generate_image") return "生成额度";
+    return "写入画布";
+}
+
+function promptAgentStepStatusView(status: "ready" | "confirm" | "blocked", theme: (typeof canvasThemes)[keyof typeof canvasThemes]) {
+    if (status === "ready") return { label: "可执行", color: theme.node.activeStroke, icon: <CheckCircle2 className="size-3" /> };
+    if (status === "blocked") return { label: "已阻止", color: "var(--studio-danger)", icon: <ShieldAlert className="size-3" /> };
+    return { label: "需确认", color: theme.node.muted, icon: <Clock3 className="size-3" /> };
 }
 
 function AssistantActionPreviewCard({ message, nodes, connections, onApply, onCancel }: { message: CanvasAssistantMessage; nodes: CanvasNodeData[]; connections: CanvasConnection[]; onApply: () => void; onCancel: () => void }) {

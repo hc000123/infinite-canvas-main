@@ -1,5 +1,6 @@
 export type PromptAgentIntent = "image_prompt" | "video_prompt" | "storyboard_prompt" | "rewrite_prompt" | "chat";
 export type PromptAgentComposerIntent = PromptAgentIntent | "auto";
+export type PromptAgentRunMode = "ask" | "auto" | "review";
 
 export type PromptAgentImageOutput = {
     id: string;
@@ -67,3 +68,38 @@ export type PromptAgentPlan = {
 };
 
 export type PromptAgentParseResult = { ok: true; plan: PromptAgentPlan; text: string } | { ok: false; text: string; error?: string };
+
+export type PromptAgentToolPermission = "write_canvas" | "generate_image";
+
+export type PromptAgentTool = {
+    actionType: PromptAgentAction["type"];
+    label: string;
+    permission: PromptAgentToolPermission;
+    description: string;
+    requiresConfirmation: boolean;
+    costly?: boolean;
+};
+
+export type PromptAgentExecutionStepStatus = "ready" | "confirm" | "blocked";
+
+export type PromptAgentExecutionStep = {
+    id: string;
+    actionId: string;
+    actionType: PromptAgentAction["type"];
+    outputId: string;
+    title: string;
+    toolLabel: string;
+    permission: PromptAgentToolPermission;
+    status: PromptAgentExecutionStepStatus;
+    requiresConfirmation: boolean;
+    note: string;
+};
+
+export type PromptAgentExecutionPlan = {
+    mode: PromptAgentRunMode;
+    summary: string;
+    steps: PromptAgentExecutionStep[];
+    readyCount: number;
+    confirmCount: number;
+    blockedCount: number;
+};

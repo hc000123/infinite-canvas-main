@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, Clapperboard, FileText, ImageIcon, LoaderCircle, MessageSquare, Network, Sparkles, Video } from "lucide-react";
+import { ArrowUp, Bot, Clapperboard, FileText, ImageIcon, LoaderCircle, MessageSquare, Network, ShieldCheck, Sparkles, Video, Zap } from "lucide-react";
 import { Button, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -13,18 +13,20 @@ import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { AssistantReferenceChip } from "./canvas-assistant-messages";
 import type { CanvasAssistantReference } from "../types";
-import type { PromptAgentComposerIntent } from "../utils/canvas-prompt-agent-types";
+import type { PromptAgentComposerIntent, PromptAgentRunMode } from "../utils/canvas-prompt-agent-types";
 
 export type AssistantMode = "ask" | "image";
 
 type CanvasAssistantComposerProps = {
     mode: AssistantMode;
+    agentMode: PromptAgentRunMode;
     intent: PromptAgentComposerIntent;
     prompt: string;
     isRunning: boolean;
     references: CanvasAssistantReference[];
     config: AiConfig;
     onModeChange: (mode: AssistantMode) => void;
+    onAgentModeChange: (mode: PromptAgentRunMode) => void;
     onIntentChange: (intent: PromptAgentComposerIntent) => void;
     onPromptChange: (prompt: string) => void;
     onSubmit: () => void;
@@ -40,12 +42,14 @@ type CanvasAssistantComposerProps = {
 
 export function CanvasAssistantComposer({
     mode,
+    agentMode,
     intent,
     prompt,
     isRunning,
     references,
     config,
     onModeChange,
+    onAgentModeChange,
     onIntentChange,
     onPromptChange,
     onSubmit,
@@ -102,7 +106,12 @@ export function CanvasAssistantComposer({
                         <Tooltip title="开发调试：生成动作预览">
                             <Button type="text" shape="circle" className="canvas-composer-icon !h-8 !min-w-8 !rounded-full !px-2" icon={<Sparkles className="size-4" />} onClick={onCreateDebugActionPreview} />
                         </Tooltip>
-                        <PromptAgentIntentSwitch intent={intent} theme={theme} onChange={onIntentChange} />
+                        {mode === "ask" ? (
+                            <>
+                                <PromptAgentIntentSwitch intent={intent} theme={theme} onChange={onIntentChange} />
+                                <PromptAgentRunModeSwitch mode={agentMode} theme={theme} onChange={onAgentModeChange} />
+                            </>
+                        ) : null}
                         <AssistantModeSwitch mode={mode} theme={theme} onChange={onModeChange} />
                         {mode === "image" ? (
                             <>
@@ -132,6 +141,31 @@ export function CanvasAssistantComposer({
                     </Button>
                 </div>
             </div>
+        </div>
+    );
+}
+
+function PromptAgentRunModeSwitch({ mode, theme, onChange }: { mode: PromptAgentRunMode; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onChange: (mode: PromptAgentRunMode) => void }) {
+    return (
+        <div className="canvas-composer-mode-switch flex h-8 shrink-0 items-center rounded-full p-0.5" style={{ background: theme.node.fill }}>
+            {[
+                { value: "ask" as const, title: "问答", icon: <Bot className="size-3.5" /> },
+                { value: "auto" as const, title: "自动", icon: <Zap className="size-3.5" /> },
+                { value: "review" as const, title: "审核", icon: <ShieldCheck className="size-3.5" /> },
+            ].map((item) => (
+                <Tooltip key={item.value} title={`Agent ${item.title}模式`}>
+                    <button
+                        type="button"
+                        className="canvas-composer-mode-button flex h-7 cursor-pointer items-center justify-center gap-1 rounded-full border-0 bg-transparent px-2 text-xs transition"
+                        style={{ background: mode === item.value ? theme.node.activeStroke : "transparent", color: mode === item.value ? theme.node.panel : theme.node.text }}
+                        onClick={() => onChange(item.value)}
+                        aria-label={`Agent ${item.title}模式`}
+                    >
+                        {item.icon}
+                        <span>{item.title}</span>
+                    </button>
+                </Tooltip>
+            ))}
         </div>
     );
 }
