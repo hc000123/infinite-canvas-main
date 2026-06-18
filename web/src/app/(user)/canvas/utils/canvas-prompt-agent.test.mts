@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildPromptAgentCanvasActions } from "./canvas-prompt-agent-actions.ts";
+import { buildCanvasAssistantToolContext, canvasAssistantToolsForAgentMode } from "./canvas-assistant-toolbox.ts";
 import { formatPromptAgentOutputText } from "./canvas-prompt-agent-render.ts";
 import { buildPromptAgentSystemContext, parsePromptAgentPlan } from "./canvas-prompt-agent.ts";
 import { buildPromptAgentSkillContext, promptAgentSkillPacks, promptAgentSkillsForIntent, promptAgentSkillsForSelection } from "./canvas-prompt-agent-skills.ts";
@@ -255,4 +256,28 @@ test("records image generation result without losing existing execution status",
     assert.equal(next.steps["generate-1"].note, "生成了 2 张图片");
     assert.equal(next.summary, "生图完成：2 张");
     assert.equal(next.updatedAt, "2026-06-18T10:01:00.000Z");
+});
+
+test("lists assistant tools with permissions and blocks direct video generation", () => {
+    const askTools = canvasAssistantToolsForAgentMode("ask");
+    const reviewTools = canvasAssistantToolsForAgentMode("review");
+    const ids = askTools.map((tool) => tool.id);
+
+    assert.ok(ids.includes("canvas.summarize"));
+    assert.ok(ids.includes("node.create_image_config"));
+    assert.ok(ids.includes("image.generate"));
+    assert.ok(ids.includes("node.create_video_config"));
+    assert.equal(ids.includes("video.generate"), false);
+    assert.ok(reviewTools.every((tool) => tool.permission === "read_canvas" || tool.status === "blocked"));
+});
+
+test("injects assistant tool context into prompt agent system context", () => {
+    const toolContext = buildCanvasAssistantToolContext("auto");
+    const systemContext = buildPromptAgentSystemContext({ intent: "video_prompt", agentMode: "auto", selectedReferences: [], workflowContext: "" });
+
+    assert.match(toolContext, /助手可用工具/);
+    assert.match(toolContext, /准备视频配置/);
+    assert.match(toolContext, /不支持直接视频生成/);
+    assert.match(systemContext, /助手可用工具/);
+    assert.match(systemContext, /调用生图/);
 });

@@ -1,4 +1,5 @@
 import type { CanvasAssistantReference } from "../types.ts";
+import { buildCanvasAssistantToolContext } from "./canvas-assistant-toolbox.ts";
 import type { PromptAgentAction, PromptAgentComposerIntent, PromptAgentIntent, PromptAgentOutput, PromptAgentParseResult, PromptAgentPlan, PromptAgentRunMode, PromptAgentSkillPackId, PromptAgentStoryboardShot } from "./canvas-prompt-agent-types.ts";
 import { buildPromptAgentSkillContext } from "./canvas-prompt-agent-skills.ts";
 
@@ -49,6 +50,7 @@ export function buildPromptAgentSystemContext({
 }) {
     const referenceLines = selectedReferences.map((item, index) => `参考 ${index + 1}：${item.title}；类型 ${item.type}；${item.text ? `文本：${item.text.slice(0, 300)}` : item.dataUrl ? "包含图片" : "无内容预览"}`);
     const skillContext = buildPromptAgentSkillContext(intent, skillPackId);
+    const toolContext = buildCanvasAssistantToolContext(agentMode);
     return [
         "你是画布提示词 Agent，负责把用户需求整理成可落地到画布的图片、视频或分镜提示词。",
         "只输出一个 JSON 对象，不要输出 Markdown，不要解释 JSON 之外的内容。",
@@ -62,6 +64,7 @@ export function buildPromptAgentSystemContext({
         "视频第一版只创建配置节点，不自动触发视频生成。",
         "写入画布或生图会由界面二次确认，你只需要给出 actions。",
         promptAgentModeInstruction(agentMode),
+        toolContext,
         intent !== "auto" ? `用户选择的意图：${intent}` : "用户意图：自动判断。",
         skillContext,
         referenceLines.length ? ["当前引用：", ...referenceLines].join("\n") : "当前没有选中引用。",

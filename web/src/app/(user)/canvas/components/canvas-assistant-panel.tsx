@@ -27,6 +27,7 @@ import { AssistantMessages } from "./canvas-assistant-messages";
 import { CanvasAssistantComposer, type AssistantMode } from "./canvas-assistant-composer";
 import { CanvasAssistantHistory } from "./canvas-assistant-history";
 import { CanvasAssistantDeleteModal, CanvasAssistantEmptyState, CanvasAssistantHeader } from "./canvas-assistant-panel-chrome";
+import { CanvasAssistantToolboxCard } from "./canvas-assistant-toolbox-card";
 
 const PANEL_MOTION_MS = 500;
 const PANEL_MOTION_SECONDS = PANEL_MOTION_MS / 1000;
@@ -412,6 +413,7 @@ export function CanvasAssistantPanel({
                     </span>
                     <span className="ml-2">{workflowContext.summary}</span>
                 </div>
+                {view === "chat" ? <CanvasAssistantToolboxCard agentMode={agentMode} /> : null}
                 {view === "history" ? (
                     <CanvasAssistantHistory
                         sessions={historySessions}
