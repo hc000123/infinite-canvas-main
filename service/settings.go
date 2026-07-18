@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,8 @@ import (
 const (
 	modelProtocolOpenAI        = string(model.ModelProtocolOpenAI)
 	modelProtocolVolcengineArk = string(model.ModelProtocolVolcengineArk)
+	modelProtocolJimengCLI     = string(model.ModelProtocolJimengCLI)
+	modelProtocolXinglianCloud = string(model.ModelProtocolXinglianCloud)
 	maskedAPIKey               = "********"
 	textEndpointChat           = "chat_completions"
 	textEndpointResponses      = "responses"
@@ -43,6 +46,9 @@ func SaveSettings(settings model.Settings) (model.Settings, error) {
 		return model.Settings{}, err
 	}
 	settings = normalizeSettings(settings)
+	if err := validateModelProtocolConflicts(settings.Private.Channels); err != nil {
+		return model.Settings{}, err
+	}
 	normalizedSaved := normalizeSettings(saved)
 	keepPrivateAPIKeys(&settings, normalizedSaved)
 	keepPrivateAuthSecrets(&settings, normalizedSaved)
@@ -52,6 +58,27 @@ func SaveSettings(settings model.Settings) (model.Settings, error) {
 		RefreshPromptSyncScheduler()
 	}
 	return hidePrivateAPIKeys(result), err
+}
+
+func validateModelProtocolConflicts(channels []model.ModelChannel) error {
+	protocols := map[string]string{}
+	for _, channel := range normalizePrivateSetting(model.PrivateSetting{Channels: channels}).Channels {
+		if !channel.Enabled {
+			continue
+		}
+		protocol := normalizeModelProtocol(channel.Protocol)
+		for _, modelName := range channel.Models {
+			modelName = strings.TrimSpace(modelName)
+			if modelName == "" {
+				continue
+			}
+			if previous := protocols[modelName]; previous != "" && previous != protocol {
+				return fmt.Errorf("同名模型跨协议冲突：%s 同时属于 %s 和 %s", modelName, previous, protocol)
+			}
+			protocols[modelName] = protocol
+		}
+	}
+	return nil
 }
 
 func AdminChannelModels(index *int, channel model.ModelChannel) ([]string, error) {
@@ -70,6 +97,28 @@ func AdminTestChannelModel(index *int, channel model.ModelChannel, modelName str
 	return testAdminChannelModel(resolved, modelName)
 }
 
+func AdminStartJimengLogin(index *int, channel model.ModelChannel) (JimengLoginStartResult, error) {
+	resolved, err := resolveAdminChannel(index, channel)
+	if err != nil {
+		return JimengLoginStartResult{}, err
+	}
+	if !IsJimengCLIProtocol(resolved.Protocol) {
+		return JimengLoginStartResult{}, errors.New("当前渠道不是即梦 CLI")
+	}
+	return StartJimengLogin(context.Background(), resolved)
+}
+
+func AdminCheckJimengLogin(index *int, channel model.ModelChannel, deviceCode string) (JimengLoginCheckResult, error) {
+	resolved, err := resolveAdminChannel(index, channel)
+	if err != nil {
+		return JimengLoginCheckResult{}, err
+	}
+	if !IsJimengCLIProtocol(resolved.Protocol) {
+		return JimengLoginCheckResult{}, errors.New("当前渠道不是即梦 CLI")
+	}
+	return CheckJimengLogin(context.Background(), resolved, deviceCode)
+}
+
 type ModelChannelPreflightResult struct {
 	ChannelName      string `json:"channelName"`
 	Model            string `json:"model"`
@@ -78,6 +127,10 @@ type ModelChannelPreflightResult struct {
 	EndpointID       string `json:"endpointId"`
 	APIKeyConfigured bool   `json:"apiKeyConfigured"`
 	APIKeyHint       string `json:"apiKeyHint"`
+	CLIPath          string `json:"cliPath,omitempty"`
+	OutputDir        string `json:"outputDir,omitempty"`
+	Version          string `json:"version,omitempty"`
+	LoginReady       bool   `json:"loginReady,omitempty"`
 }
 
 func PreflightModelChannel(modelName string) (ModelChannelPreflightResult, error) {
@@ -99,6 +152,27 @@ func PreflightModelChannel(modelName string) (ModelChannelPreflightResult, error
 				return ModelChannelPreflightResult{}, safeMessageError{message: decoratePreflightChannelMessage(safe.SafeMessage(), result)}
 			}
 			return ModelChannelPreflightResult{}, safeMessageError{message: decoratePreflightChannelMessage("企业 API 预检请求失败，请检查 Base URL 是否可访问", result)}
+		}
+	}
+	if IsJimengCLIProtocol(channel.Protocol) {
+		jimengResult, err := PreflightJimengCLI(channel, modelName)
+		if err != nil {
+			if safe, ok := err.(interface{ SafeMessage() string }); ok {
+				return ModelChannelPreflightResult{}, safeMessageError{message: decoratePreflightChannelMessage(safe.SafeMessage(), result)}
+			}
+			return ModelChannelPreflightResult{}, safeMessageError{message: decoratePreflightChannelMessage("即梦 CLI 预检失败", result)}
+		}
+		result.CLIPath = jimengResult.CLIPath
+		result.OutputDir = jimengResult.OutputDir
+		result.Version = jimengResult.Version
+		result.LoginReady = jimengResult.LoginReady
+	}
+	if IsXinglianCloudProtocol(channel.Protocol) {
+		if err := PreflightXinglianChannel(channel); err != nil {
+			if safe, ok := err.(interface{ SafeMessage() string }); ok {
+				return ModelChannelPreflightResult{}, safeMessageError{message: decoratePreflightChannelMessage(safe.SafeMessage(), result)}
+			}
+			return ModelChannelPreflightResult{}, safeMessageError{message: decoratePreflightChannelMessage("星链云余额预检失败", result)}
 		}
 	}
 	return result, nil
@@ -196,6 +270,9 @@ func normalizePublicSetting(setting model.PublicSetting) model.PublicSetting {
 	if setting.ModelChannel.ModelCapabilities == nil {
 		setting.ModelChannel.ModelCapabilities = []model.ModelCapabilityType{}
 	}
+	if setting.ModelChannel.ModelSources == nil {
+		setting.ModelChannel.ModelSources = []model.ModelSourceType{}
+	}
 	for i := range setting.ModelChannel.ModelCosts {
 		setting.ModelChannel.ModelCosts[i].Model = strings.TrimSpace(setting.ModelChannel.ModelCosts[i].Model)
 		if setting.ModelChannel.ModelCosts[i].Credits < 0 {
@@ -281,8 +358,10 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 		if !IsVolcengineArkProtocol(channel.Protocol) {
 			for _, modelName := range channel.Models {
 				modelName = strings.TrimSpace(modelName)
-				openAIModels[modelName] = true
-				setModelProtocol(modelName, modelProtocolOpenAI, false)
+				if normalizeModelProtocol(channel.Protocol) == modelProtocolOpenAI {
+					openAIModels[modelName] = true
+				}
+				setModelProtocol(modelName, channel.Protocol, false)
 				setModelCapabilities(modelName, channel.Capabilities)
 			}
 			continue
@@ -354,6 +433,7 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 	}
 	public.ModelProtocols = normalizePublicModelProtocols(modelProtocols, public)
 	public.ModelCapabilities = normalizePublicModelCapabilities(modelCapabilities, public)
+	public.ModelSources = normalizePublicModelSources(channels, public)
 	return public
 }
 
@@ -387,6 +467,57 @@ func normalizePublicModelCapabilities(modelCapabilities map[string][]string, pub
 		result = append(result, model.ModelCapabilityType{Model: modelName, Capabilities: capabilities})
 	}
 	return result
+}
+
+func normalizePublicModelSources(channels []model.ModelChannel, public model.PublicModelChannelSetting) []model.ModelSourceType {
+	visibleModels := map[string]bool{}
+	for _, modelName := range uniqueModelNames(append(append([]string{}, public.AvailableModels...), public.DefaultImageModel, public.DefaultVideoModel, public.DefaultTextModel)) {
+		visibleModels[modelName] = true
+	}
+	result := []model.ModelSourceType{}
+	seen := map[string]bool{}
+	for _, channel := range channels {
+		channel = normalizeModelChannel(channel)
+		if !channel.Enabled {
+			continue
+		}
+		if !IsJimengCLIProtocol(channel.Protocol) && (strings.TrimSpace(channel.BaseURL) == "" || strings.TrimSpace(channel.APIKey) == "") {
+			continue
+		}
+		channelName := strings.TrimSpace(channel.Name)
+		if channelName == "" {
+			channelName = channel.ID
+		}
+		for _, item := range channel.Models {
+			modelName := visibleModelNameForSource(channel, item)
+			if modelName == "" || !visibleModels[modelName] {
+				continue
+			}
+			key := channel.ID + "\x00" + modelName
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			result = append(result, model.ModelSourceType{
+				Model:       modelName,
+				ChannelID:   channel.ID,
+				ChannelName: channelName,
+				Protocol:    normalizeModelProtocol(channel.Protocol),
+			})
+		}
+	}
+	return result
+}
+
+func visibleModelNameForSource(channel model.ModelChannel, modelName string) string {
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" || strings.HasPrefix(strings.ToLower(modelName), "ep-") {
+		return ""
+	}
+	if IsVolcengineArkProtocol(channel.Protocol) {
+		return normalizeVisibleArkModelName(modelName)
+	}
+	return modelName
 }
 
 func normalizeModelTextEndpoints(items []model.ModelTextEndpointType, availableModels []string) []model.ModelTextEndpointType {
@@ -492,10 +623,35 @@ func keepPrivateAPIKeys(settings *model.Settings, saved model.Settings) {
 		if apiKey := strings.TrimSpace(settings.Private.Channels[i].APIKey); apiKey != "" && !isMaskedAPIKey(apiKey) {
 			continue
 		}
+		settings.Private.Channels[i].APIKey = ""
 		if channel, ok := findSavedChannel(settings.Private.Channels[i], saved.Private.Channels, i); ok {
 			settings.Private.Channels[i].APIKey = channel.APIKey
+			continue
 		}
+		settings.Private.Channels[i].APIKey = providerAPIKey(settings.Private.Channels[i], saved.Private.Channels)
 	}
+}
+
+func providerAPIKey(channel model.ModelChannel, saved []model.ModelChannel) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(channel.BaseURL), "/")
+	if baseURL == "" {
+		return ""
+	}
+	apiKey := ""
+	for _, item := range saved {
+		if normalizeModelProtocol(item.Protocol) != normalizeModelProtocol(channel.Protocol) || strings.TrimRight(strings.TrimSpace(item.BaseURL), "/") != baseURL {
+			continue
+		}
+		candidate := strings.TrimSpace(item.APIKey)
+		if candidate == "" {
+			continue
+		}
+		if apiKey != "" && apiKey != candidate {
+			return ""
+		}
+		apiKey = candidate
+	}
+	return apiKey
 }
 
 func isMaskedAPIKey(value string) bool {
@@ -541,7 +697,7 @@ func findSavedChannel(channel model.ModelChannel, saved []model.ModelChannel, in
 			return item, true
 		}
 	}
-	if index < len(saved) {
+	if index >= 0 && index < len(saved) {
 		return saved[index], true
 	}
 	return model.ModelChannel{}, false
@@ -615,6 +771,18 @@ func normalizeModelChannel(channel model.ModelChannel) model.ModelChannel {
 		channel.ID = stableModelChannelID(channel)
 	}
 	channel.EndpointID = strings.TrimSpace(channel.EndpointID)
+	channel.CLIPath = strings.TrimSpace(channel.CLIPath)
+	channel.WorkDir = strings.TrimSpace(channel.WorkDir)
+	channel.OutputDir = strings.TrimSpace(channel.OutputDir)
+	if channel.TimeoutSeconds < 0 {
+		channel.TimeoutSeconds = 0
+	}
+	if channel.SessionID < 0 {
+		channel.SessionID = 0
+	}
+	if channel.ConcurrencyLimit < 0 {
+		channel.ConcurrencyLimit = 0
+	}
 	if channel.Models == nil {
 		channel.Models = []string{}
 	}
@@ -690,6 +858,12 @@ func normalizeModelChannelCapabilities(capabilities []string, protocol string) [
 	if len(capabilities) == 0 {
 		if IsVolcengineArkProtocol(protocol) {
 			return []string{"text", "video"}
+		}
+		if IsJimengCLIProtocol(protocol) {
+			return []string{"video", "video_query", "preflight", "cli_workflow"}
+		}
+		if IsXinglianCloudProtocol(protocol) {
+			return []string{"video", "video_query", "preflight"}
 		}
 		return []string{"text", "image"}
 	}
@@ -770,12 +944,24 @@ func IsVolcengineArkProtocol(protocol string) bool {
 	return normalizeModelProtocol(protocol) == modelProtocolVolcengineArk
 }
 
+func IsJimengCLIProtocol(protocol string) bool {
+	return normalizeModelProtocol(protocol) == modelProtocolJimengCLI
+}
+
+func IsXinglianCloudProtocol(protocol string) bool {
+	return normalizeModelProtocol(protocol) == modelProtocolXinglianCloud
+}
+
 func normalizeModelProtocol(protocol string) string {
 	switch strings.TrimSpace(protocol) {
 	case "", modelProtocolOpenAI:
 		return modelProtocolOpenAI
 	case modelProtocolVolcengineArk:
 		return modelProtocolVolcengineArk
+	case modelProtocolJimengCLI:
+		return modelProtocolJimengCLI
+	case modelProtocolXinglianCloud:
+		return modelProtocolXinglianCloud
 	default:
 		return modelProtocolOpenAI
 	}
@@ -799,6 +985,15 @@ func resolveAdminChannel(index *int, channel model.ModelChannel) (model.ModelCha
 			if resolved.BaseURL == "" {
 				resolved.BaseURL = saved[*index].BaseURL
 			}
+			if resolved.CLIPath == "" {
+				resolved.CLIPath = saved[*index].CLIPath
+			}
+			if resolved.WorkDir == "" {
+				resolved.WorkDir = saved[*index].WorkDir
+			}
+			if resolved.OutputDir == "" {
+				resolved.OutputDir = saved[*index].OutputDir
+			}
 			if resolved.Name == "" {
 				resolved.Name = saved[*index].Name
 			}
@@ -808,6 +1003,9 @@ func resolveAdminChannel(index *int, channel model.ModelChannel) (model.ModelCha
 				resolved.APIKey = savedChannel.APIKey
 			}
 		}
+	}
+	if IsJimengCLIProtocol(resolved.Protocol) {
+		return resolved, nil
 	}
 	if strings.TrimSpace(resolved.BaseURL) == "" {
 		return model.ModelChannel{}, safeMessageError{message: "缺少接口地址"}
@@ -819,6 +1017,9 @@ func resolveAdminChannel(index *int, channel model.ModelChannel) (model.ModelCha
 }
 
 func fetchAdminChannelModels(channel model.ModelChannel) ([]string, error) {
+	if IsJimengCLIProtocol(channel.Protocol) {
+		return SupportedJimengModelVersions(), nil
+	}
 	request, err := http.NewRequest(http.MethodGet, BuildModelChannelURL(channel, "/models"), nil)
 	if err != nil {
 		return nil, err
@@ -866,6 +1067,22 @@ func testAdminChannelModel(channel model.ModelChannel, modelName string) (string
 			return "", safeMessageError{message: decoratePreflightChannelMessage("企业 API 预检请求失败，请检查 Base URL 是否可访问", result)}
 		}
 		return fmt.Sprintf("企业 API 鉴权通过；本地模型 %s 将使用火山 EP %s，EP 实际绑定模型以火山后台为准", modelName, endpointID), nil
+	}
+	if IsJimengCLIProtocol(channel.Protocol) {
+		result, err := PreflightJimengCLI(channel, modelName)
+		if err != nil {
+			return "", err
+		}
+		if result.Version != "" {
+			return fmt.Sprintf("即梦 CLI 预检通过；模型 %s 可用；CLI 版本 %s", modelName, result.Version), nil
+		}
+		return fmt.Sprintf("即梦 CLI 预检通过；模型 %s 可用", modelName), nil
+	}
+	if IsXinglianCloudProtocol(channel.Protocol) {
+		if err := PreflightXinglianChannel(channel); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("星链云余额预检通过；模型 %s 可用", modelName), nil
 	}
 	body, _ := json.Marshal(map[string]any{
 		"model": modelName,
@@ -966,7 +1183,10 @@ func modelChannelsForModel(channels []model.ModelChannel, modelName string) []mo
 	modelName = strings.TrimSpace(modelName)
 	for _, channel := range channels {
 		channel = normalizeModelChannel(channel)
-		if !channel.Enabled || channel.BaseURL == "" || channel.APIKey == "" {
+		if !channel.Enabled {
+			continue
+		}
+		if !IsJimengCLIProtocol(channel.Protocol) && (channel.BaseURL == "" || channel.APIKey == "") {
 			continue
 		}
 		if modelMatchesArkEndpoint(channel, modelName) {
@@ -987,7 +1207,10 @@ func findModelChannelByID(channels []model.ModelChannel, channelID string, model
 	channelID = strings.TrimSpace(channelID)
 	for _, channel := range channels {
 		channel = normalizeModelChannel(channel)
-		if channel.ID != channelID || !channel.Enabled || channel.BaseURL == "" || channel.APIKey == "" {
+		if channel.ID != channelID || !channel.Enabled {
+			continue
+		}
+		if !IsJimengCLIProtocol(channel.Protocol) && (channel.BaseURL == "" || channel.APIKey == "") {
 			continue
 		}
 		if strings.TrimSpace(capability) != "" && !modelChannelSupportsCapability(channel, capability) {

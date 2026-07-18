@@ -1,7 +1,7 @@
 import { resolveEffectiveConfig, type AiConfig } from "../../../../stores/use-config-store.ts";
+import { protocolForModel, resolveGenerationModel } from "../../../../lib/ai-model-catalog.ts";
 import type { AdminPublicSettings } from "../../../../services/api/admin.ts";
-import { inferRemoteVideoProtocol } from "../../../../services/api/ai-channel-boundary.ts";
-import { normalizeSeedanceImageRoleMode } from "../../../../services/api/video-reference.ts";
+import { inferVideoReferenceMode, normalizeSeedanceImageRoleMode, normalizeVideoReferenceMode } from "../../../../services/api/video-reference.ts";
 import type { CanvasNodeMetadata } from "../types";
 
 export type CanvasVideoProvider = AiConfig["videoProtocol"];
@@ -19,12 +19,13 @@ type CanvasVideoDefaultKey =
     | "videoSeed"
     | "videoPromptReviewEnabled"
     | "returnLastFrame"
-    | "videoReferenceImageMode";
+    | "videoReferenceImageMode"
+    | "videoReferenceMode";
 
 export function buildCanvasVideoConfig(config: AiConfig, metadata?: CanvasNodeMetadata): AiConfig {
     const channelMode = "remote";
-    const provider = resolveCanvasVideoProvider({ ...config, channelMode }, metadata);
-    const model = resolveCanvasVideoModel({ ...config, channelMode }, provider, metadata);
+    const model = resolveGenerationModel({ config, capability: "video", nodeModel: metadata?.model });
+    const provider = protocolForModel(config, model);
     const metadataDuration = metadata?.taskId ? "" : metadata?.duration;
     const seconds = normalizeCanvasVideoSeconds(metadata?.seconds || metadataDuration || config.videoSeconds, provider);
     return {
@@ -32,8 +33,9 @@ export function buildCanvasVideoConfig(config: AiConfig, metadata?: CanvasNodeMe
         channelMode,
         videoProtocol: provider,
         model,
-        videoModel: provider === "openai" ? model : config.videoModel,
+        videoModel: model,
         seedanceModel: provider === "volcengine-ark" ? model : config.seedanceModel,
+        seedanceEndpointId: "",
         size: metadata?.size || config.size,
         videoSeconds: seconds,
         vquality: metadata?.vquality || config.vquality,
@@ -46,14 +48,7 @@ export function buildCanvasVideoConfig(config: AiConfig, metadata?: CanvasNodeMe
         videoEditType: metadata?.videoEditType || config.videoEditType || "replace",
         videoExtendDirection: metadata?.videoExtendDirection || config.videoExtendDirection || "forward",
         videoReferenceImageMode: normalizeSeedanceImageRoleMode(metadata?.videoReferenceImageMode || config.videoReferenceImageMode),
-    };
-}
-
-export function buildCanvasVideoProviderPatch(config: AiConfig, provider: CanvasVideoProvider): Pick<CanvasNodeMetadata, "provider" | "model"> {
-    const nextProvider = provider;
-    return {
-        provider: nextProvider,
-        model: resolveCanvasVideoModel(config, nextProvider),
+        videoReferenceMode: resolveCanvasVideoReferenceMode(config, metadata, provider),
     };
 }
 
@@ -62,13 +57,13 @@ export function resolveCanvasVideoChannelConfig(localConfig: AiConfig, _effectiv
 }
 
 export function buildCanvasVideoModePatch(config: AiConfig): Partial<CanvasNodeMetadata> {
-    const provider = resolveCanvasVideoProvider(config);
+    const model = resolveGenerationModel({ config, capability: "video" });
+    const provider = protocolForModel(config, model);
     const seconds = normalizeCanvasVideoSeconds(config.videoSeconds, provider);
     return {
         generationMode: "video",
         channelMode: "remote",
-        provider,
-        model: resolveCanvasVideoModel(config, provider),
+        model,
         size: config.size,
         seconds,
         duration: seconds,
@@ -82,21 +77,20 @@ export function buildCanvasVideoModePatch(config: AiConfig): Partial<CanvasNodeM
         videoEditType: config.videoEditType || "replace",
         videoExtendDirection: config.videoExtendDirection || "forward",
         videoReferenceImageMode: normalizeSeedanceImageRoleMode(config.videoReferenceImageMode),
+        videoReferenceMode: normalizeVideoReferenceMode(config.videoReferenceMode),
     };
 }
 
 export function buildCanvasVideoDefaultsPatch(config: AiConfig, metadata: Partial<CanvasNodeMetadata>) {
-    const provider = metadata.provider || config.videoProtocol || "openai";
+    const model = resolveGenerationModel({ config, capability: "video", nodeModel: metadata.model });
+    const provider = protocolForModel(config, model);
     const patch: Partial<Pick<AiConfig, CanvasVideoDefaultKey>> = {};
     if (metadata.channelMode) patch.channelMode = "remote";
-    if (metadata.provider) patch.videoProtocol = metadata.provider;
-    if (metadata.model) {
-        if (provider === "volcengine-ark") {
-            if (isSeedanceEndpointModel(metadata.model)) patch.seedanceEndpointId = metadata.model;
-            else patch.seedanceModel = metadata.model;
-        } else {
-            patch.videoModel = metadata.model;
-        }
+    if (metadata.model && model) {
+        patch.videoProtocol = provider;
+        patch.videoModel = model;
+        patch.seedanceEndpointId = "";
+        if (provider === "volcengine-ark") patch.seedanceModel = model;
     }
     if (metadata.size) patch.size = metadata.size;
     if (metadata.seconds || metadata.duration) patch.videoSeconds = normalizeCanvasVideoSeconds(metadata.seconds || metadata.duration || "", provider);
@@ -107,37 +101,30 @@ export function buildCanvasVideoDefaultsPatch(config: AiConfig, metadata: Partia
     if (metadata.videoPromptReviewEnabled) patch.videoPromptReviewEnabled = metadata.videoPromptReviewEnabled;
     if (metadata.returnLastFrame) patch.returnLastFrame = metadata.returnLastFrame;
     if (metadata.videoReferenceImageMode) patch.videoReferenceImageMode = normalizeSeedanceImageRoleMode(metadata.videoReferenceImageMode);
+    if (metadata.videoReferenceMode) patch.videoReferenceMode = normalizeVideoReferenceMode(metadata.videoReferenceMode);
     return patch;
 }
 
-function resolveCanvasVideoProvider(config: AiConfig, metadata?: CanvasNodeMetadata): CanvasVideoProvider {
-    const metadataModel = metadata?.model?.trim() || "";
-    const fallback =
-        metadataModel && !isSeedanceEndpointModel(metadataModel) && !isVideoModelName(metadataModel)
-            ? config.videoProtocol || "openai"
-            : metadata?.provider || config.videoProtocol || "openai";
-    return inferRemoteVideoProtocol(metadataModel, fallback, config.modelProtocols || []);
-}
-
-function resolveCanvasVideoModel(config: AiConfig, provider: CanvasVideoProvider, metadata?: CanvasNodeMetadata) {
-    const metadataModel = metadata?.model?.trim() || "";
-    if (metadataModel) return metadataModel;
-    return (provider === "volcengine-ark" ? config.seedanceEndpointId || config.seedanceModel : config.videoModel) || config.model;
-}
-
-function isSeedanceEndpointModel(model?: string) {
-    return model?.trim().toLowerCase().startsWith("ep-") || false;
-}
-
-function isVideoModelName(model?: string) {
-    const name = model?.trim().toLowerCase() || "";
-    return ["seedance", "video", "veo", "sora", "kling", "hailuo", "runway", "wan"].some((keyword) => name.includes(keyword));
+function resolveCanvasVideoReferenceMode(config: AiConfig, metadata: CanvasNodeMetadata | undefined, provider: CanvasVideoProvider) {
+    const explicit = normalizeVideoReferenceMode(metadata?.videoReferenceMode);
+    if (explicit !== "auto") return explicit;
+    if (provider !== "jimeng-cli" || !metadata || metadata.videoReferenceMode === "auto") return normalizeVideoReferenceMode(config.videoReferenceMode);
+    return inferVideoReferenceMode({
+        imageCount: metadata.references?.length || 0,
+        videoCount: metadata.videoReferences?.length || 0,
+        audioCount: metadata.audioReferences?.length || 0,
+        imageRoleMode: metadata.videoReferenceImageMode,
+    });
 }
 
 function normalizeCanvasVideoSeconds(value: string, provider: CanvasVideoProvider) {
     const fallback = 6;
     const seconds = Math.floor(Number(value) || fallback);
-    const min = provider === "volcengine-ark" ? 4 : 1;
-    const max = provider === "volcengine-ark" ? 15 : 20;
+    const min = isSeedanceDurationProtocol(provider) ? 4 : 1;
+    const max = isSeedanceDurationProtocol(provider) ? 15 : 20;
     return String(Math.max(min, Math.min(max, seconds)));
+}
+
+function isSeedanceDurationProtocol(provider: CanvasVideoProvider) {
+    return provider === "volcengine-ark" || provider === "jimeng-cli" || provider === "xinglian-cloud";
 }

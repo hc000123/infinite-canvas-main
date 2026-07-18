@@ -916,7 +916,10 @@ function InfiniteCanvasPage() {
                         selectionBox={selectionBox}
                         setBatchPrimary={setBatchPrimary}
                         setContextMenu={setContextMenu}
+                        setDialogNodeId={setDialogNodeId}
                         setHoveredNodeId={setHoveredNodeId}
+                        setSelectedConnectionId={setSelectedConnectionId}
+                        setSelectedNodeIds={setSelectedNodeIds}
                         setNodeImageSettingsOpen={setNodeImageSettingsOpen}
                         setToolbarNodeId={setToolbarNodeId}
                         showImageInfo={showImageInfo}

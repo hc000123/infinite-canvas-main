@@ -4,12 +4,13 @@ import { useMemo } from "react";
 import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 
-import { classifyAiModels, modelMatchesAiCapability, type AiModelKind } from "../lib/ai-model-kind.ts";
+import { modelsForCapability, protocolForModel } from "../lib/ai-model-catalog.ts";
+import { classifyAiModels, type AiModelKind } from "../lib/ai-model-kind.ts";
 import { localForageStorage } from "../lib/localforage-storage.ts";
-import { normalizeSeedanceImageRoleMode, type SeedanceImageRoleMode } from "../services/api/video-reference.ts";
+import { normalizeSeedanceImageRoleMode, normalizeVideoReferenceMode, type SeedanceImageRoleMode, type VideoReferenceMode } from "../services/api/video-reference.ts";
 import { apiGet } from "../services/api/request.ts";
-import type { AdminModelCapability, AdminModelProtocol, AdminModelTextEndpoint, AdminPublicSettings } from "../services/api/admin.ts";
-import { inferRemoteVideoProtocol, resolveAllowedVideoProtocol } from "../services/api/ai-channel-boundary.ts";
+import type { AdminModelCapability, AdminModelProtocol, AdminModelSource, AdminModelTextEndpoint, AdminPublicSettings } from "../services/api/admin.ts";
+import { resolveAllowedVideoProtocol } from "../services/api/ai-channel-boundary.ts";
 
 export { classifyAiModels };
 export type { AiModelKind };
@@ -17,7 +18,7 @@ export type TextModelEndpointType = "chat_completions" | "responses";
 
 export type AiConfig = {
     channelMode: "remote" | "local";
-    videoProtocol: "openai" | "volcengine-ark";
+    videoProtocol: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud";
     baseUrl: string;
     apiKey: string;
     volcengineBaseUrl: string;
@@ -39,6 +40,7 @@ export type AiConfig = {
     videoEditType: "replace" | "add" | "remove" | "inpaint";
     videoExtendDirection: "forward" | "backward";
     videoReferenceImageMode: SeedanceImageRoleMode;
+    videoReferenceMode: VideoReferenceMode;
     systemPrompt: string;
     thinkingMode: string;
     reasoningEffort: "minimal" | "low" | "medium" | "high";
@@ -48,6 +50,7 @@ export type AiConfig = {
     textModels: string[];
     modelProtocols: AdminModelProtocol[];
     modelCapabilities: AdminModelCapability[];
+    modelSources: AdminModelSource[];
     modelTextEndpoints: AdminModelTextEndpoint[];
     quality: string;
     size: string;
@@ -57,7 +60,8 @@ export type AiConfig = {
 export const CONFIG_STORE_KEY = "infinite-canvas:ai_config_store";
 
 const useDevDefaults = process.env.NODE_ENV === "development";
-const devVideoProtocol: AiConfig["videoProtocol"] | "" = useDevDefaults && process.env.NEXT_PUBLIC_DEV_AI_VIDEO_PROTOCOL === "volcengine-ark" ? "volcengine-ark" : "";
+const devVideoProtocolValue = process.env.NEXT_PUBLIC_DEV_AI_VIDEO_PROTOCOL;
+const devVideoProtocol: AiConfig["videoProtocol"] | "" = useDevDefaults && (devVideoProtocolValue === "volcengine-ark" || devVideoProtocolValue === "jimeng-cli" || devVideoProtocolValue === "xinglian-cloud") ? devVideoProtocolValue : "";
 
 export const defaultConfig: AiConfig = {
     channelMode: "remote",
@@ -83,6 +87,7 @@ export const defaultConfig: AiConfig = {
     videoEditType: "replace",
     videoExtendDirection: "forward",
     videoReferenceImageMode: "reference",
+    videoReferenceMode: "auto",
     systemPrompt: "",
     thinkingMode: "false",
     reasoningEffort: "medium",
@@ -92,6 +97,7 @@ export const defaultConfig: AiConfig = {
     textModels: [],
     modelProtocols: [],
     modelCapabilities: [],
+    modelSources: [],
     modelTextEndpoints: [],
     quality: "auto",
     size: "1:1",
@@ -132,27 +138,32 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
     const channelMode = "remote";
     const localVideoProtocol = resolveAllowedVideoProtocol("local", config.videoProtocol);
     if (!modelChannel) {
-        return { ...config, channelMode, videoProtocol: localVideoProtocol, videoModel: config.videoModel, modelProtocols: config.modelProtocols || [] };
+        return { ...config, channelMode, videoProtocol: localVideoProtocol, videoModel: config.videoModel, modelProtocols: config.modelProtocols || [], modelSources: config.modelSources || [] };
     }
     const modelProtocols = modelChannel.modelProtocols || [];
-    const models = uniqueModels([modelChannel.defaultImageModel, modelChannel.defaultVideoModel, modelChannel.defaultTextModel, ...modelChannel.availableModels].map(normalizeVisibleRemoteVideoModel).filter(Boolean));
+    const models = uniqueModels(modelChannel.availableModels.map(normalizeVisibleRemoteVideoModel).filter(Boolean));
     const modelCapabilities = normalizeModelCapabilities(modelChannel.modelCapabilities || [], models);
+    const modelSources = normalizeModelSources(modelChannel.modelSources || [], models);
+    const catalogConfig = { ...config, models, modelCapabilities, modelProtocols, modelSources };
+    const catalogVideoModels = modelsForCapability(catalogConfig, "video");
+    const catalogImageModels = modelsForCapability(catalogConfig, "image");
+    const catalogTextModels = modelsForCapability(catalogConfig, "text");
     const normalizedDefaultVideoModel = normalizeVisibleRemoteVideoModel(modelChannel.defaultVideoModel);
-    const defaultVideoModel = normalizedDefaultVideoModel && models.includes(normalizedDefaultVideoModel) ? normalizedDefaultVideoModel : "";
-    const videoModels = uniqueModels([defaultVideoModel, ...modelsByCapability(models, modelCapabilities, "video")]).filter(Boolean);
-    const imageModels = uniqueModels(modelsByCapability(models, modelCapabilities, "image"));
-    const textModels = uniqueModels(modelsByCapability(models, modelCapabilities, "text"));
-    const imageDefault = modelChannel.defaultImageModel && models.includes(modelChannel.defaultImageModel) ? modelChannel.defaultImageModel : "";
-    const textDefault = modelChannel.defaultTextModel && models.includes(modelChannel.defaultTextModel) ? modelChannel.defaultTextModel : "";
-    const fallbackModel = textDefault || imageDefault || models[0] || "";
-    const selectedImageModel = config.imageModel && models.includes(config.imageModel) ? config.imageModel : "";
-    const selectedTextModel = config.textModel && models.includes(config.textModel) ? config.textModel : "";
+    const defaultVideoModel = catalogVideoModels.includes(normalizedDefaultVideoModel) ? normalizedDefaultVideoModel : catalogVideoModels[0] || "";
+    const imageDefault = catalogImageModels.includes(modelChannel.defaultImageModel) ? modelChannel.defaultImageModel : catalogImageModels[0] || "";
+    const textDefault = catalogTextModels.includes(modelChannel.defaultTextModel) ? modelChannel.defaultTextModel : catalogTextModels[0] || "";
+    const videoModels = uniqueModels([defaultVideoModel, ...catalogVideoModels]);
+    const imageModels = uniqueModels([imageDefault, ...catalogImageModels]);
+    const textModels = uniqueModels([textDefault, ...catalogTextModels]);
+    const selectedImageModel = imageModels.includes(config.imageModel) ? config.imageModel : "";
+    const selectedTextModel = textModels.includes(config.textModel) ? config.textModel : "";
     const selectedVideoModel = normalizeVisibleRemoteVideoModel(config.videoModel);
-    const visibleSelectedVideoModel = selectedVideoModel && models.includes(selectedVideoModel) ? selectedVideoModel : "";
+    const visibleSelectedVideoModel = videoModels.includes(selectedVideoModel) ? selectedVideoModel : "";
     const modelTextEndpoints = normalizeModelTextEndpoints(modelChannel.modelTextEndpoints || [], textModels);
-    const videoCandidates = uniqueModels([visibleSelectedVideoModel, defaultVideoModel, ...videoModels]).filter(Boolean);
-    const videoModel = videoCandidates[0] || "";
-    const videoProtocol = inferRemoteVideoProtocol(videoModel, config.videoProtocol, modelProtocols);
+    const videoModel = visibleSelectedVideoModel || defaultVideoModel;
+    const imageModel = selectedImageModel || imageDefault;
+    const textModel = selectedTextModel || textDefault;
+    const videoProtocol = protocolForModel(catalogConfig, videoModel);
     return {
         ...config,
         channelMode,
@@ -163,13 +174,14 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
         textModels,
         modelProtocols,
         modelCapabilities,
+        modelSources,
         modelTextEndpoints,
-        model: textDefault || (textModels.includes(config.model) ? config.model : fallbackModel),
-        imageModel: selectedImageModel || imageDefault || fallbackModel,
+        model: textModel,
+        imageModel,
         videoModel,
         seedanceModel: videoProtocol === "volcengine-ark" ? videoModel : config.seedanceModel,
         seedanceEndpointId: "",
-        textModel: selectedTextModel || textDefault || fallbackModel,
+        textModel,
     };
 }
 
@@ -243,6 +255,7 @@ export const useConfigStore = create<ConfigStore>()(
                         textModels: Array.isArray(config.textModels) && config.textModels.length ? config.textModels : classifiedModels.textModels,
                         modelProtocols: Array.isArray(config.modelProtocols) ? config.modelProtocols : [],
                         modelCapabilities: Array.isArray(config.modelCapabilities) ? config.modelCapabilities : [],
+                        modelSources: Array.isArray(config.modelSources) ? config.modelSources : [],
                         modelTextEndpoints: Array.isArray(config.modelTextEndpoints) ? config.modelTextEndpoints : [],
                         videoSeconds: config.videoSeconds || "6",
                         vquality: config.vquality || "720",
@@ -255,6 +268,7 @@ export const useConfigStore = create<ConfigStore>()(
                         videoEditType: normalizeVideoEditType(config.videoEditType),
                         videoExtendDirection: normalizeVideoExtendDirection(config.videoExtendDirection),
                         videoReferenceImageMode: normalizeSeedanceImageRoleMode(config.videoReferenceImageMode),
+                        videoReferenceMode: normalizeVideoReferenceMode(config.videoReferenceMode),
                         thinkingMode: config.thinkingMode === "true" ? "true" : "false",
                         reasoningEffort: normalizeReasoningEffort(config.reasoningEffort),
                     },
@@ -337,9 +351,22 @@ function normalizeModelCapabilities(items: AdminModelCapability[], models: strin
     return Array.from(byModel.entries()).map(([model, capabilities]) => ({ model, capabilities: Array.from(capabilities) }));
 }
 
-function modelsByCapability(models: string[], items: AdminModelCapability[], capability: AiModelKind) {
-    const explicitCapabilities = new Map(items.map((item) => [item.model, item.capabilities]));
-    return models.filter((model) => modelMatchesAiCapability(model, explicitCapabilities.get(model), capability));
+function normalizeModelSources(items: AdminModelSource[], models: string[]) {
+    const availableModels = new Set(uniqueModels(models));
+    const seen = new Set<string>();
+    return items
+        .map((item) => ({
+            model: item.model.trim(),
+            channelId: item.channelId.trim(),
+            channelName: item.channelName.trim(),
+            protocol: item.protocol,
+        }))
+        .filter((item) => {
+            const key = `${item.channelId || item.channelName}:${item.model}`;
+            if (!item.model || !availableModels.has(item.model) || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
 }
 
 function normalizeTextModelEndpointType(value: string | undefined, model: string): TextModelEndpointType {

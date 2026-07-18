@@ -35,7 +35,14 @@ const baseConfig = {
 
 test("builds image generation config from node metadata before global defaults", () => {
     const config = buildGenerationConfig(
-        baseConfig,
+        {
+            ...baseConfig,
+            models: ["image-model", "node-image-model", "video-model", "text-model"],
+            imageModels: ["image-model", "node-image-model"],
+            videoModels: ["video-model"],
+            textModels: ["text-model"],
+            modelCapabilities: [{ model: "node-image-model", capabilities: ["image"] }],
+        },
         {
             id: "image-config",
             type: "config",
@@ -55,9 +62,53 @@ test("builds image generation config from node metadata before global defaults",
     assert.equal(config.count, "4");
 });
 
-test("builds video generation config through provider-aware video config", () => {
+test("rejects a node model from the wrong generation capability", () => {
     const config = buildGenerationConfig(
-        { ...baseConfig, channelMode: "remote" },
+        {
+            ...baseConfig,
+            models: ["image-model", "video-model", "text-model"],
+            imageModels: ["image-model"],
+            videoModels: ["video-model"],
+            textModels: ["text-model"],
+            modelCapabilities: [
+                { model: "image-model", capabilities: ["image"] },
+                { model: "video-model", capabilities: ["video"] },
+                { model: "text-model", capabilities: ["text"] },
+            ],
+        },
+        {
+            id: "image-config",
+            type: "config",
+            title: "配置",
+            position: { x: 0, y: 0 },
+            width: 100,
+            height: 100,
+            metadata: { model: "video-model" },
+        },
+        "image",
+        baseConfig,
+    );
+
+    assert.equal(config.model, "image-model");
+});
+
+test("builds video generation config through provider-aware video config", () => {
+    const routedConfig = {
+        ...baseConfig,
+        channelMode: "remote",
+        models: ["image-model", "node-video-model", "text-model"],
+        imageModels: ["image-model"],
+        videoModels: ["node-video-model"],
+        textModels: ["text-model"],
+        modelCapabilities: [
+            { model: "image-model", capabilities: ["image"] },
+            { model: "node-video-model", capabilities: ["video"] },
+            { model: "text-model", capabilities: ["text"] },
+        ],
+        modelProtocols: [{ model: "node-video-model", protocol: "volcengine-ark" }],
+    } as const;
+    const config = buildGenerationConfig(
+        routedConfig,
         {
             id: "video-config",
             type: "config",
@@ -65,21 +116,22 @@ test("builds video generation config through provider-aware video config", () =>
             position: { x: 0, y: 0 },
             width: 100,
             height: 100,
-            metadata: { provider: "volcengine-ark", model: "node-endpoint", seconds: "20", generateAudio: "true", count: 2 },
+            metadata: { provider: "openai", model: "node-video-model", seconds: "20", generateAudio: "true", count: 2 },
         },
         "video",
         baseConfig,
     );
 
     assert.equal(config.videoProtocol, "volcengine-ark");
-    assert.equal(config.model, "node-endpoint");
-    assert.equal(config.seedanceModel, "node-endpoint");
+    assert.equal(config.model, "node-video-model");
+    assert.equal(config.seedanceModel, "node-video-model");
+    assert.equal(config.seedanceEndpointId, "");
     assert.equal(config.videoSeconds, "15");
     assert.equal(config.videoGenerateAudio, "true");
     assert.equal(config.count, "2");
 
     const localConfig = buildGenerationConfig(
-        baseConfig,
+        routedConfig,
         {
             id: "video-config",
             type: "config",
@@ -87,13 +139,13 @@ test("builds video generation config through provider-aware video config", () =>
             position: { x: 0, y: 0 },
             width: 100,
             height: 100,
-            metadata: { provider: "volcengine-ark", model: "node-endpoint", seconds: "20", count: 2 },
+            metadata: { provider: "openai", model: "node-video-model", seconds: "20", count: 2 },
         },
         "video",
         baseConfig,
     );
     assert.equal(localConfig.videoProtocol, "volcengine-ark");
-    assert.equal(localConfig.model, "node-endpoint");
+    assert.equal(localConfig.model, "node-video-model");
     assert.equal(localConfig.videoSeconds, "15");
 });
 
@@ -154,7 +206,14 @@ test("ignores non-video node duration metadata when building video config", () =
 
 test("builds retry config from saved image generation metadata", () => {
     const config = buildRetryGenerationConfig({
-        config: baseConfig,
+        config: {
+            ...baseConfig,
+            models: ["image-model", "saved-model", "video-model", "text-model"],
+            imageModels: ["image-model", "saved-model"],
+            videoModels: ["video-model"],
+            textModels: ["text-model"],
+            modelCapabilities: [{ model: "saved-model", capabilities: ["image"] }],
+        },
         sourceNode: {
             id: "source",
             type: "config",

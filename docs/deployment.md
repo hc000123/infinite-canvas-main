@@ -9,31 +9,28 @@
 
 部署完成后，打开 Render 分配的 `.onrender.com` 域名即可访问。
 
-## 上线前主门禁：视频工作流 Worker 化
+## 上线前主门禁：云端执行器
 
-当前 `/original-workflow` 在桌面端 / 本地开发阶段使用 Codex CLI / 本地 Runner 跑三阶段视频工作流。正式上云前，必须先把这部分能力拆成后端 Worker，不能把用户本机目录、`codex exec` 或 `.workflow-cache` 当作云端主执行链路。
+当前版本已彻底关闭浏览器侧和 Next API 内的 Codex CLI / 本地 Runner：
 
-上线前必须完成：
+- `/original-workflow` 只显示“云端执行器尚未启用”，不提供本地执行入口。
+- `/api/original-workflow` 与 `/api/original-workflow/script-optimizer` 拒绝 `local-runner` 请求；云端 Worker 未接入时也返回同一不可用说明。
+- 生产镜像不安装 Codex CLI，不读取用户本机目录，也不会回退到 `codex exec` 或 `.workflow-cache`。
+- `ORIGINAL_WORKFLOW_EXECUTION_MODE=cloud-worker` 与 `ORIGINAL_WORKFLOW_FORCE_CLOUD_WORKER=true` 固化了部署意图，但安全边界由代码门禁保证，不依赖环境变量是否正确填写。
 
-1. 后端提供视频工作流执行模式开关，至少区分 `local-runner` 和 `cloud-worker`；桌面 / 本地开发可用 `local-runner`，生产云环境必须使用 `cloud-worker`。
-2. `cloud-worker` 接管 Codex CLI 当前承担的能力：读取 `AGENTS.md`、`specs/skills/*`、`templates/*`、`examples/*` 和项目剧本快照。
-3. Stage 1 必须拆成 01A、01B、01C、01D 四个受控 Worker 子任务；Stage 2 拆成角色 / 场景 / 道具资产提示词任务；Stage 3 拆成 Seedance 提示词和 Copy-only 导出任务。
-4. 每个 Worker 任务必须保存输入快照、命中的 API 渠道和模型、原始输出、结构化草案、日志、错误、耗时、额度消耗和写入目标。
-5. 质量门必须服务化，不能只依赖本机 Python 脚本；第一版可以由后端受控调用质量门脚本，但报告和状态必须写入后端任务记录。
-6. 任何阶段产物写入资产库、分镜、Copy-only 或视频生产包前，都必须先进入人工审核 / 确认状态。
-7. 云端 Worker 需要支持队列、并发限制、停止任务、日志回传、失败重试、任务超时、租户权限隔离和额度扣费。
-8. 上线构建或部署配置必须阻止生产环境误用 `local-runner`；如果云端 Worker 未启用，视频工作流阶段启动应显示不可用原因，而不是回退到本地 Codex CLI。
+这代表项目、素材、画布、图片和视频模型渠道可以独立上线，不代表三阶段视频工作流已经具备云端执行能力。后续重新开放该入口前，云端 Worker 必须补齐队列、模型调用、质量门服务化、审核后写入、对象存储、日志、停止任务、权限隔离和额度扣费。
 
-当前工具已经预留执行模式开关和后端门禁：
+## 模型配置与节点路由
 
-- 前端视频工作流控制台可切换 `本地 Runner` / `云端 Worker`。
-- 请求会把执行模式传给 `/api/original-workflow`。
-- `cloud-worker` 模式下，阶段启动、质量门、Copy-only 导出、停止任务和本地 markdown 写入会被明确阻断，并提示缺少哪一类 Worker 能力。
-- 云端部署可以设置 `ORIGINAL_WORKFLOW_EXECUTION_MODE=cloud-worker` 或 `ORIGINAL_WORKFLOW_FORCE_CLOUD_WORKER=true`，强制禁止 `local-runner` 回退。
+后台模型渠道是协议和凭据的唯一来源，公开模型配置只负责开放范围、默认值和计费：
 
-这只是上线前门禁和测试入口，不代表云端 Worker 已完成真实执行。真实执行仍必须补齐 Worker 队列、模型调用、质量门服务化、审核后写入、对象存储和权限扣费。
+1. 私有渠道配置 `protocol`、Base URL、API Key、模型、能力和 Ark Endpoint 映射。
+2. 公开配置从渠道模型中选择 `availableModels`，并分别设置默认文本、图片、视频模型。
+3. 画布节点只保存公开模型 ID；运行时按统一模型目录解析“节点模型 → 项目默认 → 系统默认”。
+4. 协议只根据后台 `modelProtocols` 映射决定，不读取节点残留的 `provider`，也不靠模型名称猜测。
+5. 同一个模型 ID 可以配置多个同协议备用渠道，但不能同时属于不同协议；保存后台设置时会直接阻断跨协议重名。
 
-这个门禁优先级高于公开视频工作流上线。未完成前，云端可以开放项目、素材、图片 / 视频生成等后端渠道能力，但不应承诺 `/original-workflow` 的三阶段 Agent 生产链路已经适合多人云端使用。
+因此上线前应确认：所有开放模型都来自启用渠道、能力声明正确、三类默认模型没有交叉，并且 Ark 模型存在对应 Endpoint 映射。
 
 ## 视频生成无法进入排队的排查
 
@@ -58,7 +55,7 @@ Docker 部署会在同一个容器里启动 Go 后端和 Next 服务，因此默
 
 Agent Run 创建后由后端选择后台系统设置里的企业文本模型渠道，保存请求快照、原始输出、可解析 JSON 草案、审核结果和映射预览。成功状态停在 `needs_review`，用户确认后再写入资产库、分镜或视频生产包。
 
-本地 `codex exec` Runner 只作为桌面端或开发调试适配器保留，不作为云端多用户主执行链路。上线前必须完成后台队列 Worker、对象存储、质量门服务化、并发限制、租户权限和更细粒度额度扣费，并让工具在生产部署中切换到 `cloud-worker`。
+当前版本不再保留本地 `codex exec` Runner。后续云端 Worker 完成后台队列、对象存储、质量门服务化、并发限制、租户权限和更细粒度额度扣费后，才能重新开放视频工作流入口。
 
 ## Docker 健康检查与持久化
 
@@ -77,6 +74,26 @@ ok
 
 如果 Go API 或 Next.js 任一进程退出，容器会整体退出，避免只剩页面服务存活但 `/api/*` 全部 502。正式部署时必须挂载 `/app/data`，否则 SQLite 数据、公开素材和提示词缓存会随容器重建丢失。
 
+### Docker 内置即梦 CLI
+
+生产镜像会根据 `TARGETARCH` 安装 Linux amd64 或 arm64 版官方 `dreamina`，并在构建时校验固定 SHA256。上游二进制发生变化时构建会失败，需要先审核新版并更新哈希，不能跳过校验。
+
+即梦账号信息不会写进镜像，默认使用以下持久化路径：
+
+```dotenv
+DREAMINA_HOME=/app/data/dreamina-home
+DREAMINA_OUTPUT_DIR=/app/data/jimeng-cli
+```
+
+部署后先在后台即梦渠道完成“获取验证码 → 打开验证网页 → 完成验证”，再运行渠道预检。可用下面命令确认镜像内 CLI 与数据卷：
+
+```bash
+docker compose exec app dreamina version
+docker compose exec app sh -c 'test -d "$DREAMINA_HOME/.dreamina_cli"'
+```
+
+渠道预检和网页登录不会创建视频；真实生成会消耗即梦积分。文生、图生、首尾帧、多帧和全能参考应在正式账号登录后各做一次最短时长冒烟，记录任务 ID、最终状态和额度变化。
+
 单容器部署默认只暴露 Next.js 的 `3000` 端口，Go 的 `8080` 只在容器内被 Next API 代理访问。公开视频 / 图片素材给外部平台拉取时，优先验证公网路径：
 
 ```text
@@ -90,6 +107,8 @@ https://你的域名/api/uploaded-assets/...
 - `ADMIN_PASSWORD`
 - `JWT_SECRET`
 - `ORIGINAL_WORKFLOW_EXECUTION_MODE=cloud-worker`
+- `DREAMINA_HOME=/app/data/dreamina-home`
+- `DREAMINA_OUTPUT_DIR=/app/data/jimeng-cli`
 - 如改用 MySQL / PostgreSQL，还需要修改 `STORAGE_DRIVER` 和 `DATABASE_DSN`
 
 ## 免费版说明

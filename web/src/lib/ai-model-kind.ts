@@ -18,10 +18,10 @@ export function classifyAiModels(models: string[]) {
 }
 
 export function modelMatchesAiCapability(model: string, capabilities: string[] | undefined, capability: AiModelKind) {
-    const namedKind = inferNamedAiModelKind(model);
-    if (namedKind) return namedKind === capability;
     const normalizedCapabilities = normalizeAiCapabilities(capabilities);
     if (normalizedCapabilities.length === 1) return normalizedCapabilities[0] === capability;
+    const namedKind = inferNamedAiModelKind(model);
+    if (namedKind) return (!normalizedCapabilities.length || normalizedCapabilities.includes(namedKind)) && namedKind === capability;
     const inferredKind = inferAiModelKind(model);
     if (normalizedCapabilities.length && inferredKind === "text" && !normalizedCapabilities.includes("text")) return normalizedCapabilities.includes(capability);
     if (inferredKind) return inferredKind === capability;

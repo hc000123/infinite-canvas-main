@@ -88,6 +88,15 @@ func MarkAITaskArkCreated(id string, normalizedBody []byte) error {
 	return saveAITask(task)
 }
 
+func MarkAITaskJimengCreated(id string, normalizedBody []byte) error {
+	task, ok, err := repository.GetAITask(id)
+	if err != nil || !ok {
+		return err
+	}
+	applyArkVideoTaskPayload(&task, normalizedBody)
+	return saveAITask(task)
+}
+
 func SyncArkVideoAITaskStatus(upstreamTaskID string, normalizedBody []byte) error {
 	task, ok, err := repository.GetAITaskByUpstreamTaskID(strings.TrimSpace(upstreamTaskID))
 	if err != nil || !ok {
@@ -102,7 +111,32 @@ func SyncArkVideoAITaskStatus(upstreamTaskID string, normalizedBody []byte) erro
 	return saveAITask(task)
 }
 
+func SyncJimengVideoAITaskStatus(upstreamTaskID string, normalizedBody []byte) error {
+	task, ok, err := repository.GetAITaskByUpstreamTaskID(strings.TrimSpace(upstreamTaskID))
+	if err != nil || !ok {
+		return err
+	}
+	applyArkVideoTaskPayload(&task, normalizedBody)
+	if isRefundableAITaskStatus(task.Status) {
+		if err := refundAITaskIfNeeded(&task, false); err != nil {
+			return err
+		}
+	}
+	return saveAITask(task)
+}
+
 func MarkArkVideoAITaskContentFetched(upstreamTaskID string) error {
+	task, ok, err := repository.GetAITaskByUpstreamTaskID(strings.TrimSpace(upstreamTaskID))
+	if err != nil || !ok {
+		return err
+	}
+	task.FinishedAt = now()
+	task.UpdatedAt = now()
+	_, err = repository.SaveAITask(task)
+	return err
+}
+
+func MarkJimengVideoAITaskContentFetched(upstreamTaskID string) error {
 	task, ok, err := repository.GetAITaskByUpstreamTaskID(strings.TrimSpace(upstreamTaskID))
 	if err != nil || !ok {
 		return err

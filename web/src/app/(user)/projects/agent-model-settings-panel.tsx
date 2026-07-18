@@ -137,6 +137,7 @@ export function AgentModelSettingsPanel({ config, effectiveConfig, onConfigChang
                                     options={[
                                         { label: "OpenAI 兼容", value: "openai" },
                                         { label: "火山 Ark / Seedance", value: "volcengine-ark" },
+                                        { label: "即梦 CLI / Seedance", value: "jimeng-cli" },
                                     ]}
                                 />
                             </FieldLabel>
@@ -206,6 +207,7 @@ function FieldLabel({ children, label }: { children: ReactNode; label: string })
 }
 
 function videoProtocolLabel(value: AiConfig["videoProtocol"]) {
+    if (value === "jimeng-cli") return "即梦 CLI / Seedance";
     return value === "volcengine-ark" ? "火山 Ark / Seedance" : "OpenAI 兼容";
 }
 

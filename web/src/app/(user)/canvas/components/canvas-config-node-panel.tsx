@@ -2,12 +2,12 @@
 
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
-import { Eye, Image as ImageIcon, LoaderCircle, MessageSquare, Play, Video } from "lucide-react";
+import { ArrowRight, AudioLines, Clapperboard, Eye, Image as ImageIcon, LoaderCircle, MessageSquare, Play, Video } from "lucide-react";
 import { App, Button, Segmented } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
 import { ModelThinkingSettings } from "@/components/image-settings-panel";
-import { inferRemoteVideoProtocol } from "@/services/api/ai-channel-boundary";
+import { videoRatioLabel, videoResolutionLabel, videoSecondsLabel } from "@/components/video-settings-panel";
 import { defaultConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -113,6 +113,136 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
         message.success("已保存文本提示词");
     };
 
+    if (mode === "video") {
+        const videoPromptPreview = ownPrompt || textInputs.map((input) => input.text).filter(Boolean).join("\n\n");
+        const referencePreset = resolveVideoReferencePreset(config.videoReferenceMode, config.videoReferenceImageMode, imageInputs.length, videoInputs.length, audioInputs.length);
+        const imageReferences = imageInputs.map((input, index) => ({ input, role: imageReferenceRole(input, index) }));
+        return (
+            <div className="flex h-full w-full cursor-move flex-col gap-2 overflow-hidden p-3 pt-7 text-sm" style={{ color: theme.node.text }} onWheel={(event) => event.stopPropagation()}>
+                <div className="flex shrink-0 items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                        <span className="grid size-9 shrink-0 place-items-center rounded-lg" style={{ background: theme.toolbar.activeBg, color: theme.toolbar.activeText }}>
+                            <Clapperboard className="size-4.5" />
+                        </span>
+                        <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold leading-5">视频生成方案</div>
+                            <div className="truncate text-[10px] leading-4 opacity-55">{videoConfigSummary(config)}</div>
+                        </div>
+                    </div>
+                    <div className="cursor-default" onMouseDown={(event) => event.stopPropagation()}>
+                        <Segmented
+                            size="small"
+                            className="canvas-config-mode !rounded-md !p-0.5"
+                            value={mode}
+                            onChange={(value) => onConfigChange(node.id, generationModePatch(globalConfig, value as CanvasGenerationMode))}
+                            options={[
+                                { value: "image", label: <ImageIcon className="size-3.5" /> },
+                                { value: "text", label: <MessageSquare className="size-3.5" /> },
+                                { value: "video", label: <Video className="size-3.5" /> },
+                            ]}
+                        />
+                    </div>
+                </div>
+
+                <VideoReferenceModeTabs
+                    imageCount={imageInputs.length}
+                    mediaCount={mediaInputs.length}
+                    preset={referencePreset}
+                    theme={theme}
+                    onModeChange={(videoReferenceMode, videoReferenceImageMode) => onConfigChange(node.id, { videoReferenceMode, videoReferenceImageMode })}
+                />
+
+                <VideoReferenceDisplay imageReferences={imageReferences} inputs={mediaInputs} preset={referencePreset} theme={theme} />
+
+                <button
+                    type="button"
+                    className="min-h-0 flex-1 cursor-pointer rounded-lg border p-2 text-left transition hover:opacity-90"
+                    style={{ background: `${theme.node.fill}cc`, borderColor: theme.node.stroke, color: theme.node.text }}
+                    onClick={() => setPreviewOpen(true)}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    title="打开输入预览"
+                >
+                    <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-medium opacity-55">
+                        <span>提示词</span>
+                        <span>{promptCount ? `${promptCount} 段` : "未连接"}</span>
+                    </div>
+                    <div className={`thin-scrollbar max-h-full overflow-y-auto whitespace-pre-wrap break-words text-[12px] leading-5 ${videoPromptPreview ? "" : "opacity-55"}`}>
+                        {videoPromptPreview || emptyHint}
+                    </div>
+                </button>
+
+                <div className="flex shrink-0 items-center gap-1.5" onMouseDown={(event) => event.stopPropagation()}>
+                    <ModelPicker
+                        className="canvas-compact-control h-8 !min-w-[78px] !flex-1 !rounded-lg !px-2 !text-xs"
+                        config={config}
+                        modelType="video"
+                        value={config.model}
+                        onChange={(model) => onConfigChange(node.id, videoModelPatch(model))}
+                        onMissingConfig={() => openConfigDialog(true)}
+                        fullWidth
+                    />
+                    <CanvasVideoSettingsPopover
+                        config={config}
+                        placement="topRight"
+                        showTaskMode
+                        hasSourceVideo={hasSourceVideo}
+                        disabled={isRunning}
+                        buttonClassName="canvas-compact-control !h-8 !w-[124px] !justify-start !rounded-lg !px-2 !text-xs"
+                        onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))}
+                    />
+                    <button
+                        type="button"
+                        className="grid size-8 shrink-0 cursor-pointer place-items-center rounded-lg border transition hover:opacity-80"
+                        style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }}
+                        onClick={() => setPreviewOpen(true)}
+                        title="输入预览"
+                    >
+                        <Eye className="size-3.5" />
+                    </button>
+                    <Button
+                        type="primary"
+                        className="!h-8 !min-w-[68px] shrink-0 !cursor-pointer !rounded-lg !px-2"
+                        disabled={isRunning || !hasGenerationInput}
+                        onClick={() => onGenerate(node.id)}
+                        title={hasGenerationInput ? "开始生成" : emptyHint}
+                    >
+                        <span className="inline-flex items-center gap-1">
+                            <span className="inline-flex items-center gap-0.5 text-[11px]">
+                                <CreditSymbol />
+                                {credits.toLocaleString()}
+                            </span>
+                            {isRunning ? <LoaderCircle className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+                        </span>
+                    </Button>
+                </div>
+
+                <CanvasConfigNodePreview
+                    audioInputs={audioInputs}
+                    editingText={editingText}
+                    editingTextId={editingTextId}
+                    hasPreviewContent={hasPreviewContent}
+                    imageInputs={imageInputs}
+                    imageReferenceRole={imageReferenceRole}
+                    mediaInputs={mediaInputs}
+                    mode={mode}
+                    onChangeImageReferenceRole={changeImageReferenceRole}
+                    onClose={() => setPreviewOpen(false)}
+                    onEditingTextChange={setEditingText}
+                    onMoveInput={moveInput}
+                    onSaveTextEdit={saveTextEdit}
+                    onStartTextEdit={startTextEdit}
+                    onStopTextEdit={() => setEditingTextId(null)}
+                    open={previewOpen}
+                    ownPrompt={ownPrompt}
+                    promptCount={promptCount}
+                    textInputs={textInputs}
+                    theme={theme}
+                    videoInputs={videoInputs}
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="flex h-full w-full cursor-move flex-col gap-2 overflow-hidden px-3 pb-3 pt-7 text-sm" style={{ color: theme.node.text }} onWheel={(event) => event.stopPropagation()}>
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-1.5">
@@ -162,8 +292,6 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
             <div className="grid shrink-0 grid-cols-2 gap-1.5" onMouseDown={(event) => event.stopPropagation()}>
                 <InputChip label="提示" value={`${promptCount}`} style={chipStyle} />
                 <InputChip label="图" value={imageReferenceValue} style={chipStyle} />
-                {mode === "video" ? <InputChip label="视频" value={videoReferenceValue} style={chipStyle} /> : null}
-                {mode === "video" ? <InputChip label="音频" value={audioReferenceValue} style={chipStyle} /> : null}
                 <button type="button" className="inline-flex h-6 min-w-0 cursor-pointer items-center justify-center gap-1 rounded-md border px-2 text-[11px]" style={chipStyle} onClick={() => setPreviewOpen(true)}>
                     <Eye className="size-3.5" />
                     预览
@@ -182,22 +310,12 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
                     config={config}
                     modelType={mode}
                     value={config.model}
-                    onChange={(model) => onConfigChange(node.id, mode === "video" ? videoModelPatch(config, model) : { model })}
+                    onChange={(model) => onConfigChange(node.id, { model })}
                     onMissingConfig={() => openConfigDialog(true)}
                     fullWidth
                 />
                 {mode === "image" ? <ModelThinkingSettings className="w-full justify-start" compact config={config} model={config.model} theme={theme} onConfigChange={(key, value) => onConfigChange(node.id, { [key]: value })} /> : null}
-                {mode === "video" ? (
-                    <CanvasVideoSettingsPopover
-                        config={config}
-                        placement="topRight"
-                        showTaskMode
-                        hasSourceVideo={hasSourceVideo}
-                        disabled={isRunning}
-                        buttonClassName="canvas-compact-control !h-8 !w-full !justify-start !rounded-lg !px-2 !text-xs"
-                        onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))}
-                    />
-                ) : mode === "image" ? (
+                {mode === "image" ? (
                     <CanvasImageSettingsPopover
                         config={config}
                         placement="topRight"
@@ -252,6 +370,177 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
     );
 }
 
+type VideoReferencePreset = "text" | "all_reference" | "first_frame" | "first_last_frame" | "multi_frame";
+
+function VideoReferenceModeTabs({
+    imageCount,
+    mediaCount,
+    preset,
+    theme,
+    onModeChange,
+}: {
+    imageCount: number;
+    mediaCount: number;
+    preset: VideoReferencePreset;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onModeChange: (mode: NonNullable<CanvasNodeMetadata["videoReferenceMode"]>, imageMode: NonNullable<CanvasNodeMetadata["videoReferenceImageMode"]>) => void;
+}) {
+    const items: Array<{ value: VideoReferencePreset; label: string; disabled?: boolean; mode: NonNullable<CanvasNodeMetadata["videoReferenceMode"]>; imageMode: NonNullable<CanvasNodeMetadata["videoReferenceImageMode"]> }> = [
+        { value: "text", label: "文生视频", disabled: mediaCount > 0, mode: "text2video", imageMode: "reference" },
+        { value: "first_frame", label: "图生视频", disabled: imageCount === 0, mode: "image2video", imageMode: "first_frame" },
+        { value: "first_last_frame", label: "首尾帧", disabled: imageCount < 2, mode: "frames2video", imageMode: "first_last_frame" },
+        { value: "multi_frame", label: "多帧故事", disabled: imageCount < 2, mode: "multiframe2video", imageMode: "reference" },
+        { value: "all_reference", label: "全能参考", disabled: mediaCount === 0, mode: "multimodal2video", imageMode: "reference" },
+    ];
+
+    return (
+        <div className="thin-scrollbar flex shrink-0 gap-1 overflow-x-auto pb-0.5" onMouseDown={(event) => event.stopPropagation()}>
+            {items.map((item) => {
+                const active = preset === item.value;
+                return (
+                    <button
+                        key={item.value}
+                        type="button"
+                        className="h-8 shrink-0 cursor-pointer rounded-lg border px-2 text-[11px] font-medium transition hover:opacity-85 disabled:cursor-not-allowed disabled:hover:opacity-40"
+                        style={{
+                            background: active ? theme.toolbar.activeBg : theme.node.fill,
+                            borderColor: active ? theme.node.activeStroke : theme.node.stroke,
+                            color: active ? theme.toolbar.activeText : theme.node.text,
+                            opacity: item.disabled && !active ? 0.4 : 1,
+                        }}
+                        disabled={item.disabled}
+                        onClick={() => onModeChange(item.mode, item.imageMode)}
+                    >
+                        {item.label}
+                    </button>
+                );
+            })}
+        </div>
+    );
+}
+
+function VideoReferenceDisplay({
+    imageReferences,
+    inputs,
+    preset,
+    theme,
+}: {
+    imageReferences: Array<{ input: NodeGenerationInput; role: ReferenceImageRole }>;
+    inputs: NodeGenerationInput[];
+    preset: VideoReferencePreset;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+}) {
+    if (preset === "first_last_frame") {
+        const first = imageReferences.find((item) => item.role === "first_frame")?.input || imageReferences[0]?.input;
+        const last = imageReferences.find((item) => item.role === "last_frame")?.input || imageReferences.find((item) => item.input.nodeId !== first?.nodeId)?.input;
+        const extraCount = Math.max(0, inputs.length - [first?.nodeId, last?.nodeId].filter(Boolean).length);
+        return <FirstLastFrameStrip first={first} last={last} extraCount={extraCount} theme={theme} />;
+    }
+    return <VideoReferenceStrip inputs={inputs} theme={theme} />;
+}
+
+function FirstLastFrameStrip({
+    first,
+    last,
+    extraCount,
+    theme,
+}: {
+    first?: NodeGenerationInput;
+    last?: NodeGenerationInput;
+    extraCount: number;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+}) {
+    return (
+        <div className="grid h-[72px] shrink-0 grid-cols-[minmax(0,1fr)_22px_minmax(0,1fr)] items-stretch gap-1.5 rounded-lg border p-1.5" style={{ background: `${theme.node.fill}99`, borderColor: theme.node.stroke }} onMouseDown={(event) => event.stopPropagation()}>
+            <FrameSlot input={first} label="首帧" theme={theme} />
+            <div className="grid place-items-center" style={{ color: theme.node.muted }}>
+                <ArrowRight className="size-4" />
+            </div>
+            <FrameSlot input={last} label="尾帧" theme={theme} badge={extraCount ? `+${extraCount}` : undefined} />
+        </div>
+    );
+}
+
+function FrameSlot({ input, label, badge, theme }: { input?: NodeGenerationInput; label: string; badge?: string; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    return (
+        <div className="relative min-w-0 overflow-hidden rounded-md border" style={{ background: theme.node.fill, borderColor: input?.image?.dataUrl ? "transparent" : theme.node.stroke }}>
+            {input?.image?.dataUrl ? <img src={input.image.dataUrl} alt={label} className="h-full w-full object-cover" draggable={false} /> : <div className="grid h-full w-full place-items-center opacity-45"><ImageIcon className="size-5" /></div>}
+            <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-medium leading-none text-white">{label}</span>
+            {badge ? <span className="absolute right-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-medium leading-none text-white">{badge}</span> : null}
+            <span className="absolute inset-x-1 bottom-1 truncate rounded bg-black/55 px-1.5 py-0.5 text-[9px] leading-none text-white/90">{input?.title || "未连接"}</span>
+        </div>
+    );
+}
+
+function VideoReferenceStrip({ inputs, theme }: { inputs: NodeGenerationInput[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    if (!inputs.length) {
+        return (
+            <div className="flex h-12 shrink-0 items-center gap-2 rounded-lg border border-dashed px-2 text-[11px] opacity-65" style={{ background: `${theme.node.fill}88`, borderColor: theme.node.stroke }}>
+                <ImageIcon className="size-3.5 shrink-0" />
+                <span className="truncate">连接图片、视频或音频参考后会在这里显示</span>
+            </div>
+        );
+    }
+
+    const visibleInputs = inputs.slice(0, 6);
+    return (
+        <div className="thin-scrollbar flex h-14 shrink-0 gap-1.5 overflow-x-auto pb-0.5" onMouseDown={(event) => event.stopPropagation()}>
+            {visibleInputs.map((input, index) => (
+                <VideoReferenceThumb key={input.nodeId} input={input} index={index} theme={theme} />
+            ))}
+            {inputs.length > visibleInputs.length ? (
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border text-xs font-medium" style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.muted }}>
+                    +{inputs.length - visibleInputs.length}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function VideoReferenceThumb({ input, index, theme }: { input: NodeGenerationInput; index: number; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    const label = videoReferenceThumbLabel(input);
+    return (
+        <div className="relative h-12 w-14 shrink-0 overflow-hidden rounded-lg border" style={{ background: theme.node.fill, borderColor: theme.node.stroke }} title={input.title}>
+            {input.image?.dataUrl ? (
+                <img src={input.image.dataUrl} alt={input.title} className="h-full w-full object-cover" draggable={false} />
+            ) : input.video?.url ? (
+                <video src={input.video.url} className="h-full w-full object-cover" muted playsInline preload="metadata" data-canvas-no-zoom />
+            ) : (
+                <div className="grid h-full w-full place-items-center opacity-65">{input.type === "audio" ? <AudioLines className="size-4" /> : <ImageIcon className="size-4" />}</div>
+            )}
+            <span className="absolute right-1 top-1 grid size-4 place-items-center rounded-full bg-black/60 text-[9px] font-medium leading-none text-white">{index + 1}</span>
+            <span className="absolute bottom-1 left-1 max-w-[44px] truncate rounded bg-black/55 px-1 py-0.5 text-[9px] leading-none text-white">{label}</span>
+        </div>
+    );
+}
+
+function videoReferenceThumbLabel(input: NodeGenerationInput) {
+    if (input.image?.seedanceRole === "first_frame") return "首帧";
+    if (input.image?.seedanceRole === "last_frame") return "尾帧";
+    if (input.type === "video") return "视频";
+    if (input.type === "audio") return "音频";
+    return "图片";
+}
+
+function resolveVideoReferencePreset(referenceMode: AiConfig["videoReferenceMode"], imageMode: AiConfig["videoReferenceImageMode"], imageCount: number, videoCount: number, audioCount: number): VideoReferencePreset {
+    if (referenceMode === "text2video") return "text";
+    if (referenceMode === "image2video") return "first_frame";
+    if (referenceMode === "frames2video") return "first_last_frame";
+    if (referenceMode === "multiframe2video") return "multi_frame";
+    if (referenceMode === "multimodal2video") return "all_reference";
+    if (imageMode === "first_last_frame") return "first_last_frame";
+    if (imageMode === "first_frame") return "first_frame";
+    const mediaCount = imageCount + videoCount + audioCount;
+    if (!mediaCount) return "text";
+    if (videoCount || audioCount || imageCount > 1) return "all_reference";
+    return "first_frame";
+}
+
+function videoConfigSummary(config: AiConfig) {
+    const audio = config.videoGenerateAudio === "true" ? "音频开" : "音频关";
+    return `${videoRatioLabel(config.size)} · ${videoResolutionLabel(config.vquality).toUpperCase()} · ${videoSecondsLabel(config.videoSeconds, config)} · ${audio}`;
+}
+
 function InputChip({ label, value, style }: { label: string; value: string; style: CSSProperties }) {
     return (
         <div className="inline-flex h-6 min-w-0 items-center justify-center gap-1 rounded-md border px-2 text-[11px]" style={style}>
@@ -299,12 +588,10 @@ function videoConfigPatch(key: keyof AiConfig, value: string): Partial<CanvasNod
     if (key === "videoSeed") return { seed: value };
     if (key === "videoPromptReviewEnabled") return { videoPromptReviewEnabled: value };
     if (key === "videoReferenceImageMode") return { videoReferenceImageMode: value as CanvasNodeMetadata["videoReferenceImageMode"] };
+    if (key === "videoReferenceMode") return { videoReferenceMode: value as CanvasNodeMetadata["videoReferenceMode"] };
     return { [key]: value } as Partial<CanvasNodeMetadata>;
 }
 
-function videoModelPatch(config: AiConfig, model: string): Partial<CanvasNodeMetadata> {
-    return {
-        model,
-        provider: inferRemoteVideoProtocol(model, config.videoProtocol || "openai", config.modelProtocols || []),
-    };
+function videoModelPatch(model: string): Partial<CanvasNodeMetadata> {
+    return { model };
 }

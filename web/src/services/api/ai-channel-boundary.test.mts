@@ -40,3 +40,13 @@ test("remote video protocol uses backend model protocol mapping first", () => {
     assert.equal(inferRemoteVideoProtocol("doubao-seedance-2-0", "openai", [{ model: "doubao-seedance-2-0", protocol: "volcengine-ark" }]), "volcengine-ark");
     assert.equal(inferRemoteVideoProtocol("doubao-seedance-2-0-260128", "volcengine-ark", [{ model: "doubao-seedance-2-0-260128", protocol: "openai" }]), "openai");
 });
+
+test("remote video protocol supports Jimeng CLI backend mapping", () => {
+    assert.equal(inferRemoteVideoProtocol("seedance2.0fast", "openai", [{ model: "seedance2.0fast", protocol: "jimeng-cli" }]), "jimeng-cli");
+    assert.equal(resolveAllowedVideoProtocol("remote", "jimeng-cli"), "jimeng-cli");
+});
+
+test("remote video protocol supports Xinglian cloud backend mapping", () => {
+    assert.equal(inferRemoteVideoProtocol("sd2-720p-fast", "openai", [{ model: "sd2-720p-fast", protocol: "xinglian-cloud" }]), "xinglian-cloud");
+    assert.equal(resolveAllowedVideoProtocol("remote", "xinglian-cloud"), "xinglian-cloud");
+});

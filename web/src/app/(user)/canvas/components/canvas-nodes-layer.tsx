@@ -57,6 +57,9 @@ type Props = {
     setBatchPrimary: (node: CanvasNodeData) => void;
     setContextMenu: Dispatch<SetStateAction<ContextMenuState | null>>;
     setHoveredNodeId: Dispatch<SetStateAction<string | null>>;
+    setDialogNodeId: Dispatch<SetStateAction<string | null>>;
+    setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
+    setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
     setNodeImageSettingsOpen: Dispatch<SetStateAction<boolean>>;
     setToolbarNodeId: Dispatch<SetStateAction<string | null>>;
     toggleBatchExpanded: (nodeId: string) => void;
@@ -106,7 +109,10 @@ export function CanvasNodesLayer({
     normalizeVideoFrameReferences,
     setBatchPrimary,
     setContextMenu,
+    setDialogNodeId,
     setHoveredNodeId,
+    setSelectedConnectionId,
+    setSelectedNodeIds,
     setNodeImageSettingsOpen,
     setToolbarNodeId,
     toggleBatchExpanded,
@@ -181,6 +187,20 @@ export function CanvasNodesLayer({
                     onRetry={nodeToolActions.onRetry}
                     onRefreshVideoTask={(node) => void handleRefreshVideoTask(node)}
                     onGenerateImage={nodeToolActions.onGenerateImage}
+                    onImageQuickAction={(targetNode, action) => {
+                        const isUpscale = action === "upscale";
+                        handleConfigNodeChange(targetNode.id, {
+                            prompt: isUpscale ? "提升当前图片清晰度，保留原图构图、主体、颜色和质感，减少噪点，增强细节，不改变画面内容。" : "基于参考图生成一张新图，保留主体特征和画面风格，并按文字要求调整细节。",
+                            quality: isUpscale ? "high" : targetNode.metadata?.quality || "medium",
+                            size: targetNode.metadata?.size || "2048x2048",
+                            imagePresetId: action,
+                            imagePresetLabel: isUpscale ? "图片高清" : "图生图",
+                        });
+                        setSelectedNodeIds(new Set([targetNode.id]));
+                        setSelectedConnectionId(null);
+                        setDialogNodeId(targetNode.id);
+                        setToolbarNodeId(null);
+                    }}
                     onDownload={nodeToolActions.onDownload}
                     onViewImage={nodeToolActions.onViewImage}
                     onReviewAsset={nodeToolActions.onReviewAsset}

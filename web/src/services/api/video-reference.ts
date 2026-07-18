@@ -2,6 +2,7 @@ import { normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceRes
 
 export type SeedanceImageRole = "reference_image" | "first_frame" | "last_frame";
 export type SeedanceImageRoleMode = "reference" | "first_frame" | "first_last_frame" | "continue";
+export type VideoReferenceMode = "auto" | "text2video" | "image2video" | "frames2video" | "multiframe2video" | "multimodal2video";
 export type SeedanceVideoRole = "reference_video" | "source_video";
 export type SeedanceVideoTaskMode = "generate" | "edit" | "extend";
 export type SeedanceImageReferenceInput = string | { url: string; role?: SeedanceImageRole };
@@ -92,6 +93,20 @@ export function normalizeSeedanceImageRole(role?: string): SeedanceImageRole | u
 export function normalizeSeedanceImageRoleMode(mode?: string): SeedanceImageRoleMode {
     if (mode === "first_frame" || mode === "first_last_frame" || mode === "continue") return mode;
     return "reference";
+}
+
+export function normalizeVideoReferenceMode(mode?: string): VideoReferenceMode {
+    if (mode === "text2video" || mode === "image2video" || mode === "frames2video" || mode === "multiframe2video" || mode === "multimodal2video") return mode;
+    return "auto";
+}
+
+export function inferVideoReferenceMode(input: { imageCount: number; videoCount?: number; audioCount?: number; imageRoleMode?: string }): Exclude<VideoReferenceMode, "auto"> {
+    if (input.videoCount || input.audioCount) return "multimodal2video";
+    if (input.imageRoleMode === "first_last_frame" && input.imageCount >= 2) return "frames2video";
+    if ((input.imageRoleMode === "first_frame" || input.imageRoleMode === "continue") && input.imageCount) return "image2video";
+    if (input.imageCount >= 2) return "multiframe2video";
+    if (input.imageCount === 1) return "image2video";
+    return "text2video";
 }
 
 export function buildSeedanceContent(prompt: string, imageUrls: SeedanceReferenceInput[], videoUrls: string[] = [], audioUrls: string[] = []): SeedanceContentItem[] {

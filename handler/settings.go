@@ -9,9 +9,10 @@ import (
 )
 
 type adminChannelActionRequest struct {
-	Index   *int               `json:"index"`
-	Channel model.ModelChannel `json:"channel"`
-	Model   string             `json:"model"`
+	Index      *int               `json:"index"`
+	Channel    model.ModelChannel `json:"channel"`
+	Model      string             `json:"model"`
+	DeviceCode string             `json:"deviceCode"`
 }
 
 func Settings(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +59,28 @@ func AdminTestChannelModel(w http.ResponseWriter, r *http.Request) {
 	var request adminChannelActionRequest
 	_ = json.NewDecoder(r.Body).Decode(&request)
 	result, err := service.AdminTestChannelModel(request.Index, request.Channel, request.Model)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func AdminStartJimengLogin(w http.ResponseWriter, r *http.Request) {
+	var request adminChannelActionRequest
+	_ = json.NewDecoder(r.Body).Decode(&request)
+	result, err := service.AdminStartJimengLogin(request.Index, request.Channel)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func AdminCheckJimengLogin(w http.ResponseWriter, r *http.Request) {
+	var request adminChannelActionRequest
+	_ = json.NewDecoder(r.Body).Decode(&request)
+	result, err := service.AdminCheckJimengLogin(request.Index, request.Channel, request.DeviceCode)
 	if err != nil {
 		FailError(w, err)
 		return

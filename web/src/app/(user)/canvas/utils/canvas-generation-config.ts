@@ -1,19 +1,20 @@
 import type { AiConfig } from "../../../../stores/use-config-store.ts";
+import { resolveGenerationModel } from "../../../../lib/ai-model-catalog.ts";
 import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants.ts";
 import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata } from "../types.ts";
 import { buildCanvasVideoConfig } from "./canvas-video-config.ts";
 
 export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | undefined, mode: CanvasGenerationMode, defaults: AiConfig): AiConfig {
-    const defaultModel = mode === "image" ? config.imageModel : mode === "video" ? config.videoModel : config.textModel;
     if (mode === "video") {
         return {
             ...buildCanvasVideoConfig(config, videoGenerationMetadata(node)),
             count: String(node?.metadata?.count || config.count || defaults.count),
         };
     }
+    const model = resolveGenerationModel({ config, capability: mode, nodeModel: node?.metadata?.model });
     return {
         ...config,
-        model: node?.metadata?.model || defaultModel || config.model || defaults.model,
+        model,
         quality: node?.metadata?.quality || config.quality || defaults.quality,
         size: node?.metadata?.size || config.size || defaults.size,
         videoSeconds: node?.metadata?.seconds || config.videoSeconds || defaults.videoSeconds,
@@ -50,7 +51,7 @@ export function buildRetryGenerationConfig({
     if (savedImageMetadata?.generationType) {
         return {
             ...config,
-            model: savedImageMetadata.model || config.imageModel || config.model,
+            model: resolveGenerationModel({ config, capability: "image", nodeModel: savedImageMetadata.model }),
             quality: savedImageMetadata.quality || config.quality,
             size: savedImageMetadata.size || config.size,
             count: "1",

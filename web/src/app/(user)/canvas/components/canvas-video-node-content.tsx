@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Scissors, Settings2, Video } from "lucide-react";
+import { ArrowRight, Image as ImageIcon, Scissors, Settings2, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
@@ -26,7 +26,10 @@ export function VideoNodeContent({
 }) {
     const [detailsOpen, setDetailsOpen] = useState(false);
     const frameStrip = <FrameReferenceStrip videoNode={node} theme={theme} frameReferenceNodes={frameReferenceNodes} onNormalizeFrameReferences={onNormalizeFrameReferences} />;
-    if (!node.metadata?.content)
+    if (!node.metadata?.content && (frameReferenceNodes?.first || frameReferenceNodes?.last)) {
+        return <EmptyVideoFramePreview videoNode={node} theme={theme} frameReferenceNodes={frameReferenceNodes} onNormalizeFrameReferences={onNormalizeFrameReferences} />;
+    }
+    if (!node.metadata?.content) {
         return (
             <div className="relative flex h-full w-full flex-col items-center justify-center gap-3 rounded-lg" style={{ color: theme.node.placeholder }}>
                 <Video className="size-7 opacity-35" />
@@ -34,6 +37,7 @@ export function VideoNodeContent({
                 {frameStrip}
             </div>
         );
+    }
     return (
         <div className="relative h-full w-full rounded-lg bg-black">
             <video src={node.metadata.content} controls controlsList="nodownload" className="h-full w-full rounded-lg object-contain" data-canvas-no-zoom />
@@ -67,6 +71,66 @@ export function VideoNodeContent({
                     <VideoTaskProgressPanel node={node} theme={theme} onRefreshVideoTask={onRefreshVideoTask} showPanel={false} compact />
                 </div>
             ) : null}
+        </div>
+    );
+}
+
+function EmptyVideoFramePreview({
+    videoNode,
+    theme,
+    frameReferenceNodes,
+    onNormalizeFrameReferences,
+}: {
+    videoNode: CanvasNodeData;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    frameReferenceNodes?: { first?: CanvasNodeData; last?: CanvasNodeData };
+    onNormalizeFrameReferences?: (videoNode: CanvasNodeData, firstNode: CanvasNodeData, lastNode: CanvasNodeData) => void;
+}) {
+    const first = frameReferenceNodes?.first;
+    const last = frameReferenceNodes?.last;
+    const mismatch = Boolean(first && last && frameResolutionLabel(first) && frameResolutionLabel(last) && frameResolutionLabel(first) !== frameResolutionLabel(last));
+    return (
+        <div className="flex h-full w-full flex-col gap-2 rounded-lg p-3" style={{ color: theme.node.text }}>
+            <div className="flex shrink-0 items-center justify-between gap-2 text-[11px]">
+                <span className="inline-flex min-w-0 items-center gap-1.5 font-medium opacity-70">
+                    <Video className="size-3.5 shrink-0" />
+                    <span className="truncate">首尾帧生成视频</span>
+                </span>
+                {mismatch && first && last ? (
+                    <button
+                        type="button"
+                        className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[10px] font-medium transition hover:opacity-85"
+                        style={{ background: "color-mix(in srgb, var(--studio-warning) 24%, var(--studio-elevated-bg))", borderColor: "color-mix(in srgb, var(--studio-warning) 46%, var(--studio-border-subtle))", color: theme.node.text }}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onNormalizeFrameReferences?.(videoNode, first, last);
+                        }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        title="首尾帧分辨率不一致，自动居中裁切到统一分辨率"
+                    >
+                        <Scissors className="size-3" />
+                        统一裁切
+                    </button>
+                ) : null}
+            </div>
+            <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_28px_minmax(0,1fr)] items-stretch gap-2">
+                <LargeFrameSlot label="首帧" node={first} theme={theme} />
+                <div className="grid place-items-center" style={{ color: theme.node.muted }}>
+                    <ArrowRight className="size-4" />
+                </div>
+                <LargeFrameSlot label="尾帧" node={last} theme={theme} />
+            </div>
+        </div>
+    );
+}
+
+function LargeFrameSlot({ label, node, theme }: { label: string; node?: CanvasNodeData; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
+    return (
+        <div className="relative min-w-0 overflow-hidden rounded-lg border" style={{ background: `${theme.node.fill}cc`, borderColor: node?.metadata?.content ? "transparent" : theme.node.stroke }}>
+            {node?.metadata?.content ? <img src={node.metadata.content} alt={label} className="h-full w-full object-cover" draggable={false} /> : <div className="grid h-full w-full place-items-center opacity-40"><ImageIcon className="size-6" /></div>}
+            <span className="absolute left-2 top-2 rounded bg-black/60 px-2 py-1 text-[10px] font-medium leading-none text-white">{label}</span>
+            <span className="absolute inset-x-2 bottom-2 truncate rounded bg-black/55 px-2 py-1 text-[10px] leading-none text-white/90">{node ? frameResolutionLabel(node) || node.title : "未连接"}</span>
         </div>
     );
 }

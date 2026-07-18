@@ -1,4 +1,4 @@
-import type { SeedanceImageRoleMode } from "@/services/api/video-reference";
+import type { SeedanceImageRoleMode, VideoReferenceMode } from "@/services/api/video-reference";
 import type { AssetVersionReference } from "../assets/asset-version-references";
 import type { AssistantCanvasAction } from "./utils/canvas-assistant-actions";
 import type { PromptAgentExecutionState, PromptAgentIntent, PromptAgentPlan, PromptAgentRunMode, PromptAgentSkillPackId } from "./utils/canvas-prompt-agent-types";
@@ -44,6 +44,12 @@ export type CanvasNodeMetadata = {
     size?: string;
     quality?: string;
     count?: number;
+    imagePresetId?: string;
+    imagePresetLabel?: string;
+    imageCameraName?: string;
+    imageLensName?: string;
+    imageFocalLength?: string;
+    imageAperture?: string;
     seconds?: string;
     vquality?: string;
     duration?: string;
@@ -55,7 +61,7 @@ export type CanvasNodeMetadata = {
     videoPromptReviewEnabled?: string;
     returnLastFrame?: string;
     channelMode?: "remote" | "local";
-    provider?: "openai" | "volcengine-ark";
+    provider?: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud";
     actionType?: CanvasVideoActionType;
     videoActionType?: CanvasVideoActionType;
     relationType?: CanvasVideoRelationType;
@@ -63,6 +69,7 @@ export type CanvasNodeMetadata = {
     videoEditType?: CanvasVideoEditType;
     videoExtendDirection?: CanvasVideoExtendDirection;
     videoReferenceImageMode?: SeedanceImageRoleMode;
+    videoReferenceMode?: VideoReferenceMode;
     sourceVideoNodeId?: string;
     capturedFrameSourceVideoNodeId?: string;
     capturedFrameTime?: number;

@@ -1,0 +1,237 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/basketikun/infinite-canvas/model"
+)
+
+func TestBuildJimengText2VideoArgsFromJSON(t *testing.T) {
+	args, err := BuildJimengText2VideoArgs([]byte(`{
+		"prompt": "一只猫在霓虹街道奔跑",
+		"duration": 6,
+		"ratio": "9:16",
+		"resolution": "1080p",
+		"generate_audio": true,
+		"watermark": false
+	}`), "application/json", "seedance2.0_vip", 2)
+	if err != nil {
+		t.Fatalf("BuildJimengText2VideoArgs returned error: %v", err)
+	}
+	want := []string{"text2video", "--prompt=一只猫在霓虹街道奔跑", "--duration=6", "--ratio=9:16", "--video_resolution=1080p", "--model_version=seedance2.0_vip", "--session=2", "--poll=0"}
+	if !equalStringSlices(args, want) {
+		t.Fatalf("args = %#v, want %#v", args, want)
+	}
+}
+
+func TestBuildJimengText2VideoArgsRejectsReferenceInputs(t *testing.T) {
+	_, err := BuildJimengText2VideoArgs([]byte(`{
+		"model": "seedance2.0fast",
+		"prompt": "参考图片生成视频",
+		"content": [
+			{"type": "text", "text": "参考图片生成视频"},
+			{"type": "image_url", "image_url": {"url": "asset://image-id"}}
+		]
+	}`), "application/json", "seedance2.0fast", 0)
+	if err == nil || err.Error() != "即梦 CLI 第一版只支持文生视频，请先移除参考图片、视频或音频" {
+		t.Fatalf("err = %v, want reference rejection", err)
+	}
+}
+
+func TestNormalizeJimengVideoTaskResponseReadsSubmitResult(t *testing.T) {
+	body, err := NormalizeJimengVideoTaskResponse([]byte(`{
+		"submit_id": "dreamina-submit-1",
+		"gen_status": "querying",
+		"model_version": "seedance2.0fast",
+		"ratio": "9:16",
+		"duration": 6,
+		"video_resolution": "720p"
+	}`))
+	if err != nil {
+		t.Fatalf("NormalizeJimengVideoTaskResponse returned error: %v", err)
+	}
+	payload := readJimengJSONMap(t, body)
+	if payload["id"] != "dreamina-submit-1" || payload["status"] != "running" || payload["raw_status"] != "querying" {
+		t.Fatalf("task identifiers/status = %#v", payload)
+	}
+	if payload["resolution"] != "720p" || payload["ratio"] != "9:16" || payload["duration"] != float64(6) {
+		t.Fatalf("task controls = %#v", payload)
+	}
+}
+
+func TestNormalizeJimengVideoTaskResponseReadsDownloadedResult(t *testing.T) {
+	body, err := NormalizeJimengVideoTaskResponse([]byte(`{
+		"data": {
+			"submit_id": "dreamina-submit-2",
+			"gen_status": "success",
+			"result": {
+				"video_url": "https://example.com/video.mp4"
+			}
+		}
+	}`))
+	if err != nil {
+		t.Fatalf("NormalizeJimengVideoTaskResponse returned error: %v", err)
+	}
+	payload := readJimengJSONMap(t, body)
+	if payload["id"] != "dreamina-submit-2" || payload["status"] != "succeeded" {
+		t.Fatalf("task identifiers/status = %#v", payload)
+	}
+	if payload["video_url"] != "https://example.com/video.mp4" {
+		t.Fatalf("video_url = %#v, want nested url", payload["video_url"])
+	}
+}
+
+func TestNormalizeJimengVideoTaskResponseKeepsFailureReason(t *testing.T) {
+	body, err := NormalizeJimengVideoTaskResponse([]byte(`{
+		"submit_id": "dreamina-submit-3",
+		"gen_status": "fail",
+		"fail_reason": "内容审核未通过"
+	}`))
+	if err != nil {
+		t.Fatalf("NormalizeJimengVideoTaskResponse returned error: %v", err)
+	}
+	payload := readJimengJSONMap(t, body)
+	if payload["status"] != "failed" {
+		t.Fatalf("status = %#v, want failed", payload["status"])
+	}
+	taskError, ok := payload["error"].(map[string]any)
+	if !ok || taskError["message"] != "内容审核未通过" {
+		t.Fatalf("error = %#v, want fail reason", payload["error"])
+	}
+}
+
+func TestStartJimengLoginParsesHeadlessDeviceFlow(t *testing.T) {
+	cliPath := writeJimengLoginFakeCLI(t)
+	result, err := StartJimengLogin(context.Background(), model.ModelChannel{Protocol: string(model.ModelProtocolJimengCLI), CLIPath: cliPath})
+	if err != nil {
+		t.Fatalf("StartJimengLogin returned error: %v", err)
+	}
+	if result.VerificationURI != "https://example.com/activate" || result.UserCode != "ABCD-EFGH" || result.DeviceCode != "device-code-1" {
+		t.Fatalf("result = %#v, want parsed device flow", result)
+	}
+}
+
+func TestParseJimengLoginStartResultReadsHeadlessTextOutput(t *testing.T) {
+	result, err := parseJimengLoginStartResult([]byte(`请使用浏览器完成 OAuth Device Flow 登录。
+verification_uri: https://jimeng.jianying.com/ai-tool/cli-auth?verification_uri=https%3A%2F%2Fjimeng.jianying.com%2Fpassport%2Fopen%2Fscan_user_code%2F%3Fuser_code%3Dc8bec427f376655363d76ee8eb0decfa
+user_code: c8bec427f376655363d76ee8eb0decfa
+device_code: 700f0bd669d4a261ddc63979b1916b66
+poll_interval: 1s
+expires_at: 2026-07-07T15:55:10+08:00
+`))
+	if err != nil {
+		t.Fatalf("parseJimengLoginStartResult returned error: %v", err)
+	}
+	if result.VerificationURI == "" || result.UserCode != "c8bec427f376655363d76ee8eb0decfa" || result.DeviceCode != "700f0bd669d4a261ddc63979b1916b66" {
+		t.Fatalf("result = %#v, want parsed text device flow", result)
+	}
+	if result.Interval != 1 {
+		t.Fatalf("interval = %d, want 1", result.Interval)
+	}
+}
+
+func TestCheckJimengLoginUsesDeviceCode(t *testing.T) {
+	cliPath := writeJimengLoginFakeCLI(t)
+	result, err := CheckJimengLogin(context.Background(), model.ModelChannel{Protocol: string(model.ModelProtocolJimengCLI), CLIPath: cliPath}, "device-code-1")
+	if err != nil {
+		t.Fatalf("CheckJimengLogin returned error: %v", err)
+	}
+	if !result.LoginReady || result.Message == "" {
+		t.Fatalf("result = %#v, want login ready message", result)
+	}
+}
+
+func TestCheckJimengLoginRequiresDeviceCode(t *testing.T) {
+	_, err := CheckJimengLogin(context.Background(), model.ModelChannel{Protocol: string(model.ModelProtocolJimengCLI), CLIPath: "dreamina"}, "")
+	if err == nil || err.Error() != "缺少即梦登录 device_code" {
+		t.Fatalf("err = %v, want missing device_code", err)
+	}
+}
+
+func TestPreflightJimengCLIStartsTimeoutAfterQueueWait(t *testing.T) {
+	previousTimeout := jimengPreflightTimeout
+	jimengPreflightTimeout = 2 * time.Second
+	t.Cleanup(func() { jimengPreflightTimeout = previousTimeout })
+
+	cliPath := filepath.Join(t.TempDir(), "dreamina")
+	script := `#!/bin/sh
+	sleep 0.3
+case "$1" in
+  version) printf '{"version":"test-jimeng"}\n' ;;
+  user_credit) printf '{"total_credit":100}\n' ;;
+  *) exit 1 ;;
+esac
+`
+	if err := os.WriteFile(cliPath, []byte(script), 0755); err != nil {
+		t.Fatalf("write fake cli: %v", err)
+	}
+	channel := model.ModelChannel{
+		Protocol:  string(model.ModelProtocolJimengCLI),
+		CLIPath:   cliPath,
+		OutputDir: t.TempDir(),
+		Models:    []string{"seedance2.0mini"},
+	}
+
+	start := make(chan struct{})
+	errs := make(chan error, 4)
+	for range 4 {
+		go func() {
+			<-start
+			_, err := PreflightJimengCLI(channel, "seedance2.0mini")
+			errs <- err
+		}()
+	}
+	close(start)
+	for range 4 {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent preflight failed while waiting for the CLI queue: %v", err)
+		}
+	}
+}
+
+func readJimengJSONMap(t *testing.T, body []byte) map[string]any {
+	t.Helper()
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("Unmarshal JSON: %v", err)
+	}
+	return payload
+}
+
+func writeJimengLoginFakeCLI(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "dreamina")
+	script := `#!/bin/sh
+if [ "$1" = "login" ] && [ "$2" = "--headless" ]; then
+  printf '{"verification_uri":"https://example.com/activate","user_code":"ABCD-EFGH","device_code":"device-code-1","expires_in":600,"interval":5}\n'
+  exit 0
+fi
+if [ "$1" = "login" ] && [ "$2" = "checklogin" ]; then
+  printf '{"status":"success","message":"login ready"}\n'
+  exit 0
+fi
+printf 'unexpected args: %s %s %s\n' "$1" "$2" "$3" >&2
+exit 1
+`
+	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+		t.Fatalf("write fake cli: %v", err)
+	}
+	return path
+}
+
+func equalStringSlices(a []string, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for index := range a {
+		if a[index] != b[index] {
+			return false
+		}
+	}
+	return true
+}

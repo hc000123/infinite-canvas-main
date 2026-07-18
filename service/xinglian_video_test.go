@@ -1,0 +1,98 @@
+package service
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestXinglianVideoEndpointsNormalizeConfiguredV1URL(t *testing.T) {
+	endpoints, err := ResolveXinglianVideoEndpoints("https://www.vjimeng.vip/v1/")
+	if err != nil {
+		t.Fatalf("ResolveXinglianVideoEndpoints returned error: %v", err)
+	}
+	if endpoints.Submit != "https://www.vjimeng.vip/v1/video/submit/generate" {
+		t.Fatalf("submit = %q", endpoints.Submit)
+	}
+	if endpoints.Fetch("task-1") != "https://www.vjimeng.vip/v1/video/fetch/task-1" {
+		t.Fatalf("fetch = %q", endpoints.Fetch("task-1"))
+	}
+}
+
+func TestBuildXinglianVideoCreateRequestMapsExistingVideoFields(t *testing.T) {
+	body, contentType, err := BuildXinglianVideoCreateRequest([]byte(`{
+		"model":"sd2-720p-fast",
+		"prompt":"一只猫在草地奔跑",
+		"duration":6,
+		"ratio":"9:16",
+		"generate_audio":true,
+		"images":["https://files.example.com/cat.png"],
+		"audios":["https://files.example.com/voice.mp3"]
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildXinglianVideoCreateRequest returned error: %v", err)
+	}
+	if contentType != "application/json" {
+		t.Fatalf("content type = %q", contentType)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["duration"] != float64(6) || payload["model"] != "sd2-720p-fast" {
+		t.Fatalf("payload = %#v", payload)
+	}
+	metadata := payload["metadata"].(map[string]any)
+	if metadata["ratio"] != "9:16" || metadata["enableSound"] != "on" {
+		t.Fatalf("metadata = %#v", metadata)
+	}
+	if payload["images"].([]any)[0] != "https://files.example.com/cat.png" || payload["audios"].([]any)[0] != "https://files.example.com/voice.mp3" {
+		t.Fatalf("references = %#v", payload)
+	}
+}
+
+func TestNormalizeXinglianVideoTaskResponseMapsCompletedVideoURL(t *testing.T) {
+	body, err := NormalizeXinglianVideoTaskResponse([]byte(`{
+		"id":"task-1",
+		"status":"completed",
+		"progress":100,
+		"created_at":1715760000,
+		"metadata":{"url":"https://cdn.example.com/video.mp4"}
+	}`))
+	if err != nil {
+		t.Fatalf("NormalizeXinglianVideoTaskResponse returned error: %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["id"] != "task-1" || payload["status"] != "completed" || payload["video_url"] != "https://cdn.example.com/video.mp4" {
+		t.Fatalf("payload = %#v", payload)
+	}
+}
+
+func TestNormalizeXinglianVideoTaskResponseMapsTokenTaskWrapper(t *testing.T) {
+	body, err := NormalizeXinglianVideoTaskResponse([]byte(`{
+		"code":"success",
+		"message":"",
+		"data":{
+			"task_id":"task-1",
+			"status":"SUCCESS",
+			"progress":"100%",
+			"submit_time":1715760000,
+			"finish_time":1715760120,
+			"result_url":"http://cdn.example.com/video.mp4",
+			"fail_reason":"",
+			"data":{"status":"success","video_url":"http://cdn.example.com/video.mp4"}
+		}
+	}`))
+	if err != nil {
+		t.Fatalf("NormalizeXinglianVideoTaskResponse returned error: %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["id"] != "task-1" || payload["status"] != "completed" || payload["video_url"] != "http://cdn.example.com/video.mp4" {
+		t.Fatalf("payload = %#v", payload)
+	}
+}

@@ -77,7 +77,7 @@
 | `nodeGroup`  | string   | 节点分组：`text`、`image`、`video`，用于按画布节点筛选提示词                         |
 | `type`       | string   | 模板用途：`asset`、`image`、`video`、`grid`、`positive`、`negative`、`workflow` 等    |
 | `scenario`   | string   | 使用场景，例如短剧、人物设定、镜头模板、分镜等                                       |
-| `provider`   | string   | 推荐供应商，例如 `openai`、`volcengine-ark`，可为空                                  |
+| `provider`   | string   | 推荐供应商，例如 `openai`、`volcengine-ark`、`jimeng-cli`，可为空                     |
 | `model`      | string   | 推荐模型或 Endpoint ID，可为空                                                       |
 | `inputKind`  | string   | 输入类型，例如 `text`、`image`、`video`、`audio`、`multimodal`                        |
 | `outputKind` | string   | 输出类型，例如 `text`、`image`、`video`、`asset`、`workflow`                          |
@@ -143,8 +143,9 @@
 | `availableModels`    | string[] | 系统可用模型列表                                                   |
 | `modelCosts`         | object[] | 模型算力点配置                                                     |
 | `modelTextEndpoints` | object[] | 文本模型使用的接口类型配置                                         |
-| `modelProtocols`     | object[] | 后端根据私有渠道推导出的模型协议映射，用于区分 OpenAI 兼容与 Ark   |
+| `modelProtocols`     | object[] | 后端根据私有渠道推导出的模型协议映射，用于区分 OpenAI 兼容、Ark 与即梦 CLI |
 | `modelCapabilities`  | object[] | 后端根据私有渠道推导出的模型能力映射，用于前台区分文本 / 图片 / 视频 |
+| `modelSources`       | object[] | 后端根据私有渠道推导出的模型来源映射，用于前台按渠道来源筛选模型   |
 | `defaultModel`       | string   | 历史兼容字段；后台不再展示，默认文本模型使用 `defaultTextModel`    |
 | `defaultImageModel`  | string   | 默认图片模型                                                       |
 | `defaultVideoModel`  | string   | 默认视频模型                                                       |
@@ -164,7 +165,7 @@
 | 字段       | 类型   | 说明                                      |
 | ---------- | ------ | ----------------------------------------- |
 | `model`    | string | 前端可见模型名称                          |
-| `protocol` | string | 该模型应使用的渠道协议：`openai` 或 `volcengine-ark` |
+| `protocol` | string | 该模型应使用的渠道协议：`openai`、`volcengine-ark` 或 `jimeng-cli` |
 
 `modelCapabilities` 每项字段：
 
@@ -172,6 +173,15 @@
 | -------------- | -------- | ----------------------------------------- |
 | `model`        | string   | 前端可见模型名称                          |
 | `capabilities` | string[] | 该模型支持的能力，例如 `text`、`image`、`video` |
+
+`modelSources` 每项字段：
+
+| 字段          | 类型   | 说明                                                         |
+| ------------- | ------ | ------------------------------------------------------------ |
+| `model`       | string | 前端可见模型名称                                             |
+| `channelId`   | string | 后端模型渠道 ID                                              |
+| `channelName` | string | 后端模型渠道名称                                             |
+| `protocol`    | string | 该渠道协议：`openai`、`volcengine-ark` 或 `jimeng-cli`；不包含密钥或接口地址 |
 
 `private.value` 当前字段：
 
@@ -187,10 +197,16 @@
 | 字段               | 类型     | 说明                                                       |
 | ------------------ | -------- | ---------------------------------------------------------- |
 | `id`               | string   | 渠道稳定 ID，供 Agent / 工作流阶段绑定；为空时后端自动生成 |
-| `protocol`         | string   | 协议，当前支持 `openai`、`volcengine-ark`                  |
+| `protocol`         | string   | 协议，当前支持 `openai`、`volcengine-ark`、`jimeng-cli`    |
 | `name`             | string   | 渠道名称                                                   |
-| `baseUrl`          | string   | 渠道接口地址                                               |
-| `apiKey`           | string   | 渠道密钥，后台返回时隐藏                                   |
+| `baseUrl`          | string   | 渠道接口地址；`jimeng-cli` 可为空                          |
+| `apiKey`           | string   | 渠道密钥，后台返回时隐藏；`jimeng-cli` 不需要              |
+| `cliPath`          | string   | 即梦 CLI 可执行文件路径；为空时使用 `PATH` 中的 `dreamina` |
+| `workDir`          | string   | 即梦 CLI 工作目录，可为空                                  |
+| `outputDir`        | string   | 即梦 CLI 下载输出目录；为空时使用后端 `data/jimeng-cli`    |
+| `timeoutSeconds`   | number   | 即梦 CLI 命令超时时间；为空或 0 时使用视频任务默认超时     |
+| `sessionId`        | number   | 即梦 CLI 会话 ID；0 表示默认会话                           |
+| `concurrencyLimit` | number   | 即梦 CLI 渠道并发配置，当前作为渠道配置字段保留            |
 | `endpointId`       | string   | Ark 渠道默认 Endpoint / EP                                 |
 | `endpointMappings` | object[] | Ark 渠道模型名到 Endpoint / EP 的映射                      |
 | `models`           | string[] | 渠道可用模型列表                                           |
@@ -233,15 +249,15 @@
 | `task_type`            | string | 任务类型：`image_generation`、`image_edit`、`chat`、`video_create`           |
 | `action_type`          | string | 任务动作：`generate`、`edit`、`extend`、`chat` 等                            |
 | `provider`             | string | 命中的后台渠道名称                                                           |
-| `protocol`             | string | 渠道协议：`openai`、`volcengine-ark`                                         |
+| `protocol`             | string | 渠道协议：`openai`、`volcengine-ark`、`jimeng-cli`                           |
 | `model`                | string | 请求模型                                                                     |
 | `path`                 | string | 前端调用的 AI 代理路径                                                       |
 | `status`               | string | 任务状态：`created`、`queued`、`running`、`succeeded`、`failed`、`cancelled` |
 | `credits`              | number | 本次预扣算力点                                                               |
 | `credits_refunded`     | number | 已返还算力点数量                                                             |
-| `upstream_task_id`     | string | 上游任务 ID，当前主要用于 Ark 视频任务                                       |
-| `raw_status`           | string | 上游原始状态，当前主要用于 Ark 视频任务                                      |
-| `video_url`            | text   | 上游返回的视频地址，当前主要用于 Ark 视频任务                                |
+| `upstream_task_id`     | string | 上游任务 ID，当前主要用于 Ark / 即梦视频任务                                 |
+| `raw_status`           | string | 上游原始状态，当前主要用于 Ark / 即梦视频任务                                |
+| `video_url`            | text   | 上游返回的视频地址，当前主要用于 Ark / 即梦视频任务                          |
 | `video_url_expires_at` | number | 视频地址过期时间戳                                                           |
 | `error_code`           | string | 上游失败错误码                                                               |
 | `request_json`         | text   | 脱敏后的请求 JSON；不会保存 API Key、base64、blob URL 或文件内容             |

@@ -47,10 +47,9 @@ export function CanvasCreateProjectModal({
     onCreate: (title: string, preset: CanvasProjectPreset, scriptBinding?: CanvasCreateScriptBinding) => void;
 }) {
     const [form] = Form.useForm<CanvasCreateProjectValues>();
-    const videoProvider = Form.useWatch("defaultVideoProvider", form) || config.videoProtocol || "openai";
     const scriptSource = Form.useWatch("scriptSource", form) || "none";
     const imageModelOptions = useMemo(() => modelSelectOptions(canvasProjectPresetModelOptions(config, "image")), [config]);
-    const videoModelOptions = useMemo(() => modelSelectOptions(canvasProjectPresetModelOptions(config, "video", videoProvider)), [config, videoProvider]);
+    const videoModelOptions = useMemo(() => modelSelectOptions(canvasProjectPresetModelOptions(config, "video")), [config]);
     const textModelOptions = useMemo(() => modelSelectOptions(canvasProjectPresetModelOptions(config, "text")), [config]);
     const projectEpisodes = useMemo(() => (scriptOptions ? orderedScriptEpisodes(scriptOptions.episodes, scriptOptions.projectId) : []), [scriptOptions]);
 
@@ -172,19 +171,7 @@ export function CanvasCreateProjectModal({
                         </Space.Compact>
                     </Form.Item>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <Form.Item name="defaultVideoProvider" label="默认视频供应商">
-                        <Select
-                            onChange={(provider) => {
-                                const firstModel = canvasProjectPresetModelOptions(config, "video", provider)[0];
-                                if (firstModel) form.setFieldValue("defaultVideoModel", firstModel);
-                            }}
-                            options={[
-                                { label: "OpenAI 兼容", value: "openai" },
-                                { label: "火山 Seedance", value: "volcengine-ark" },
-                            ]}
-                        />
-                    </Form.Item>
+                <div className="grid gap-3 sm:grid-cols-3">
                     <Form.Item name="defaultImageModel" label="默认图片模型">
                         <Select showSearch optionFilterProp="label" placeholder="选择图片模型" options={imageModelOptions} />
                     </Form.Item>

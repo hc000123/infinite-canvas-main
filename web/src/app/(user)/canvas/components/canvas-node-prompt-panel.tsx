@@ -15,6 +15,8 @@ import { buildCanvasVideoConfig, resolveCanvasVideoChannelConfig } from "../util
 import { promptPreviewNoZoomProps, promptPreviewTextareaClass, promptPreviewTextareaStyle } from "../utils/canvas-prompt-preview";
 import { applyReferenceMention, filterReferenceMentions, findReferenceMentionTrigger, type CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
 import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
+import { CanvasImageCameraPopover } from "./canvas-image-camera-popover";
+import { CanvasImagePresetPopover, type CanvasImagePreset } from "./canvas-image-preset-popover";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
@@ -81,13 +83,24 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
     const submit = () => {
         const text = prompt.trim();
         if (!text || isRunning) return;
-        onGenerate(node.id, mode, text);
+        onGenerate(node.id, mode, mode === "image" ? appendImageCameraPrompt(text, node.metadata) : text);
         setPrompt("");
+    };
+
+    const applyImagePreset = (preset: CanvasImagePreset) => {
+        updatePrompt(preset.prompt);
+        onConfigChange(node.id, {
+            imagePresetId: preset.id,
+            imagePresetLabel: preset.label,
+            quality: preset.quality,
+            size: preset.size,
+            ...(!isEditingExistingContent ? { prompt: preset.prompt } : {}),
+        });
     };
 
     return (
         <div
-            className="rounded-lg border p-3 shadow-[var(--studio-shadow)] backdrop-blur"
+            className="rounded-lg border px-4 pb-3 pt-3 shadow-[var(--studio-shadow)] backdrop-blur"
             style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -155,16 +168,22 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                     <CanvasPromptLibrary projectId={projectId} nodeGroup={mode} onSelect={updatePrompt} />
                     {mode === "image" ? (
                         <>
-                            <ModelPicker className="h-10 !min-w-[140px] flex-1" fullWidth config={config} modelType="image" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />
-                            <ModelThinkingSettings className="min-w-[236px] flex-1" config={config} model={config.model} theme={theme} onConfigChange={(key, value) => onConfigChange(node.id, { [key]: value })} />
+                            <ModelPicker className="h-10 !min-w-[150px] flex-1" fullWidth config={config} modelType="image" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />
                             <CanvasImageSettingsPopover
                                 config={config}
                                 placement="topLeft"
-                                buttonClassName="!h-10 !w-[156px] !max-w-full !justify-start !rounded-full !px-3"
+                                buttonClassName="!h-10 !w-[220px] !max-w-full !justify-start !rounded-lg !px-3"
                                 onConfigChange={(key, value) => onConfigChange(node.id, key === "count" ? { count: Number(value) || 1 } : { [key]: value })}
                                 onMissingConfig={() => openConfigDialog(true)}
                                 onOpenChange={onImageSettingsOpenChange}
                             />
+                            <CanvasImagePresetPopover value={node.metadata?.imagePresetId} buttonClassName="!h-10 !w-[150px] !max-w-full !justify-start !rounded-lg !px-3" onSelect={applyImagePreset} />
+                            <CanvasImageCameraPopover
+                                value={node.metadata}
+                                buttonClassName="!h-10 !w-[132px] !max-w-full !justify-start !rounded-lg !px-3"
+                                onChange={(patch) => onConfigChange(node.id, patch)}
+                            />
+                            <ModelThinkingSettings className="min-w-[236px] flex-1" config={config} model={config.model} theme={theme} onConfigChange={(key, value) => onConfigChange(node.id, { [key]: value })} />
                         </>
                     ) : mode === "video" ? (
                         <>
@@ -261,4 +280,15 @@ function videoModelPatch(config: AiConfig, model: string): Partial<CanvasNodeMet
         model,
         provider: inferRemoteVideoProtocol(model, config.videoProtocol || "openai", config.modelProtocols || []),
     };
+}
+
+function appendImageCameraPrompt(prompt: string, metadata?: CanvasNodeMetadata) {
+    const cameraParts = [
+        metadata?.imageCameraName ? `摄影机 ${metadata.imageCameraName}` : "",
+        metadata?.imageLensName ? `镜头 ${metadata.imageLensName}` : "",
+        metadata?.imageFocalLength ? `焦距 ${metadata.imageFocalLength}mm` : "",
+        metadata?.imageAperture ? `光圈 ${metadata.imageAperture}` : "",
+    ].filter(Boolean);
+    if (!cameraParts.length) return prompt;
+    return `${prompt}\n\n摄影参数：${cameraParts.join("，")}，真实电影摄影质感，自然景深和真实光学成像。`;
 }

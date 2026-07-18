@@ -13,12 +13,13 @@ const resolutionOptions = [
 ];
 
 const ratioOptions = [
-    { value: "16:9", label: "横屏", width: 16, height: 9 },
-    { value: "9:16", label: "竖屏", width: 9, height: 16 },
-    { value: "1:1", label: "方形", width: 1, height: 1 },
-    { value: "4:3", label: "经典横屏", width: 4, height: 3 },
-    { value: "3:4", label: "经典竖屏", width: 3, height: 4 },
-    { value: "adaptive", label: "自适应", width: 0, height: 0 },
+    { value: "adaptive", label: "Auto", width: 0, height: 0 },
+    { value: "16:9", label: "16:9", width: 16, height: 9 },
+    { value: "4:3", label: "4:3", width: 4, height: 3 },
+    { value: "1:1", label: "1:1", width: 1, height: 1 },
+    { value: "3:4", label: "3:4", width: 3, height: 4 },
+    { value: "9:16", label: "9:16", width: 9, height: 16 },
+    { value: "21:9", label: "21:9", width: 21, height: 9 },
 ];
 
 const editTypeOptions = [
@@ -98,7 +99,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                 ) : null}
                 {showImageControl ? (
                     <SettingGroup title="图片控制" color={theme.node.muted}>
-                        <div className="grid grid-cols-2 gap-2.5">
+                        <div className="grid grid-cols-3 gap-2.5">
                             {seedanceReferenceImageModeOptions.map((item) => (
                                 <OptionPill key={item.value} selected={referenceImageMode === item.value} theme={theme} onClick={() => onConfigChange("videoReferenceImageMode", item.value)}>
                                     {item.label}
@@ -169,7 +170,8 @@ export function videoResolutionLabel(value: string) {
 }
 
 export function videoRatioLabel(value: string) {
-    return normalizeVideoRatioValue(value);
+    const ratio = normalizeVideoRatioValue(value);
+    return ratio === "adaptive" ? "Auto" : ratio;
 }
 
 export function videoSecondsLabel(value: string, config?: VideoSecondsConfig) {
@@ -195,7 +197,7 @@ export function normalizeVideoSizeValue(value: string) {
 
 export function normalizeVideoRatioValue(value: string) {
     if (value === "auto" || value === "adaptive") return "adaptive";
-    if (["16:9", "9:16", "1:1", "4:3", "3:4"].includes(value)) return value;
+    if (["21:9", "16:9", "9:16", "1:1", "4:3", "3:4"].includes(value)) return value;
     if (/^\d+x\d+$/.test(value || "")) return ratioFromDimensions(value);
     if (value === "2:3") return "9:16";
     if (value === "3:2") return "16:9";
@@ -326,6 +328,7 @@ function ratioFromDimensions(value: string) {
     const ratio = width / Math.max(1, height);
     const candidates = [
         { value: "16:9", ratio: 16 / 9 },
+        { value: "21:9", ratio: 21 / 9 },
         { value: "9:16", ratio: 9 / 16 },
         { value: "1:1", ratio: 1 },
         { value: "4:3", ratio: 4 / 3 },

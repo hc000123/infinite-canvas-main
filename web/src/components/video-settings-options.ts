@@ -9,6 +9,7 @@ export const seedanceTaskModeOptions: Array<{ value: VideoTaskModeOption; label:
 
 export const seedanceReferenceImageModeOptions: Array<{ value: VideoReferenceImageModeOption; label: string }> = [
     { value: "reference", label: "普通参考" },
+    { value: "first_frame", label: "首帧" },
     { value: "first_last_frame", label: "首尾帧" },
 ];
 
@@ -26,7 +27,7 @@ export function shouldShowSeedanceImageControl(mode: string | undefined, hasSour
 }
 
 export function visibleSeedanceReferenceImageMode(mode: string | undefined): VideoReferenceImageModeOption {
-    return mode === "first_frame" || mode === "first_last_frame" ? "first_last_frame" : "reference";
+    return mode === "first_frame" || mode === "first_last_frame" ? mode : "reference";
 }
 
 export function isSeedanceVideoProtocol(config?: { videoProtocol?: string } | boolean) {

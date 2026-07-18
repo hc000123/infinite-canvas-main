@@ -61,6 +61,7 @@ export function buildVideoGenerationMetadata(config: AiConfig, references: { ima
         videoEditType: config.videoEditType || "replace",
         videoExtendDirection: config.videoExtendDirection || "forward",
         videoReferenceImageMode: config.videoReferenceImageMode,
+        videoReferenceMode: config.videoReferenceMode,
         references: references.images.map(referenceUrl).filter((url): url is string => Boolean(url)),
         referenceRoles: references.images.map((image, index) => ({ nodeId: image.id, kind: "image" as const, role: image.seedanceRole || defaultSeedanceImageRole(index, config.videoReferenceImageMode), index: index + 1 })),
         videoReferences: references.videos.map(referenceVideoUrl).filter((url): url is string => Boolean(url)),

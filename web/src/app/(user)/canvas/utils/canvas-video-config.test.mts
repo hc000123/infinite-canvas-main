@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildCanvasVideoConfig, buildCanvasVideoDefaultsPatch, buildCanvasVideoModePatch, buildCanvasVideoProviderPatch } from "./canvas-video-config.ts";
+import { buildCanvasVideoConfig, buildCanvasVideoDefaultsPatch, buildCanvasVideoModePatch } from "./canvas-video-config.ts";
 
 const baseConfig = {
     channelMode: "local",
@@ -12,9 +12,9 @@ const baseConfig = {
     volcengineApiKey: "ark-key",
     model: "gpt-image-2",
     imageModel: "gpt-image-2",
-    videoModel: "openai-video-model",
+    videoModel: "doubao-seedance-model",
     seedanceModel: "doubao-seedance-model",
-    seedanceEndpointId: "ep-seedance-endpoint",
+    seedanceEndpointId: "",
     textModel: "gpt-5.5",
     videoSeconds: "6",
     vquality: "720",
@@ -26,9 +26,18 @@ const baseConfig = {
     videoEditType: "replace",
     videoExtendDirection: "forward",
     videoReferenceImageMode: "reference",
+    videoReferenceMode: "auto",
     systemPrompt: "",
-    models: [],
-    modelProtocols: [],
+    models: ["gpt-image-2", "doubao-seedance-model", "gpt-5.5"],
+    imageModels: ["gpt-image-2"],
+    videoModels: ["doubao-seedance-model"],
+    textModels: ["gpt-5.5"],
+    modelCapabilities: [
+        { model: "gpt-image-2", capabilities: ["image"] },
+        { model: "doubao-seedance-model", capabilities: ["video"] },
+        { model: "gpt-5.5", capabilities: ["text"] },
+    ],
+    modelProtocols: [{ model: "doubao-seedance-model", protocol: "volcengine-ark" }],
     quality: "auto",
     size: "1:1",
     count: "1",
@@ -36,40 +45,58 @@ const baseConfig = {
 
 const cloudConfig = { ...baseConfig, channelMode: "remote" } as const;
 
-test("video node provider overrides global provider and uses matching default model", () => {
+const catalogConfig = {
+    ...cloudConfig,
+    videoProtocol: "openai",
+    model: "text-model",
+    imageModel: "image-model",
+    videoModel: "sd2-720p-fast",
+    textModel: "text-model",
+    models: ["image-model", "sd2-720p-fast", "text-model"],
+    imageModels: ["image-model"],
+    videoModels: ["sd2-720p-fast"],
+    textModels: ["text-model"],
+    modelCapabilities: [
+        { model: "image-model", capabilities: ["image"] },
+        { model: "sd2-720p-fast", capabilities: ["video"] },
+        { model: "text-model", capabilities: ["text"] },
+    ],
+    modelProtocols: [{ model: "sd2-720p-fast", protocol: "xinglian-cloud" }],
+} as const;
+
+function routedVideoConfig(model: string, protocol: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud") {
+    return {
+        ...cloudConfig,
+        videoModel: model,
+        models: ["gpt-image-2", model, "gpt-5.5"],
+        videoModels: [model],
+        modelCapabilities: [
+            { model: "gpt-image-2", capabilities: ["image"] },
+            { model, capabilities: ["video"] },
+            { model: "gpt-5.5", capabilities: ["text"] },
+        ],
+        modelProtocols: [{ model, protocol }],
+    } as const;
+}
+
+test("video node ignores provider metadata and uses the catalog route", () => {
     const openaiConfig = buildCanvasVideoConfig(baseConfig, { provider: "openai" });
-    assert.equal(openaiConfig.videoProtocol, "openai");
-    assert.equal(openaiConfig.model, "openai-video-model");
-    assert.equal(openaiConfig.videoModel, "openai-video-model");
+    assert.equal(openaiConfig.videoProtocol, "volcengine-ark");
+    assert.equal(openaiConfig.model, "doubao-seedance-model");
+    assert.equal(openaiConfig.videoModel, "doubao-seedance-model");
     assert.equal(openaiConfig.seedanceModel, "doubao-seedance-model");
 
     const arkConfig = buildCanvasVideoConfig({ ...cloudConfig, videoProtocol: "openai" }, { provider: "volcengine-ark" });
     assert.equal(arkConfig.videoProtocol, "volcengine-ark");
-    assert.equal(arkConfig.model, "ep-seedance-endpoint");
-    assert.equal(arkConfig.seedanceModel, "ep-seedance-endpoint");
-});
-
-test("video provider patch resets node model to the selected provider default", () => {
-    assert.deepEqual(buildCanvasVideoProviderPatch(baseConfig, "openai"), {
-        provider: "openai",
-        model: "openai-video-model",
-    });
-    assert.deepEqual(buildCanvasVideoProviderPatch(baseConfig, "volcengine-ark"), {
-        provider: "volcengine-ark",
-        model: "ep-seedance-endpoint",
-    });
-    assert.deepEqual(buildCanvasVideoProviderPatch(cloudConfig, "volcengine-ark"), {
-        provider: "volcengine-ark",
-        model: "ep-seedance-endpoint",
-    });
+    assert.equal(arkConfig.model, "doubao-seedance-model");
+    assert.equal(arkConfig.seedanceModel, "doubao-seedance-model");
 });
 
 test("video mode patch starts config nodes with the active video provider model", () => {
     assert.deepEqual(buildCanvasVideoModePatch(baseConfig), {
         generationMode: "video",
         channelMode: "remote",
-        provider: "volcengine-ark",
-        model: "ep-seedance-endpoint",
+        model: "doubao-seedance-model",
         size: "1:1",
         seconds: "6",
         duration: "6",
@@ -83,12 +110,12 @@ test("video mode patch starts config nodes with the active video provider model"
         videoEditType: "replace",
         videoExtendDirection: "forward",
         videoReferenceImageMode: "reference",
+        videoReferenceMode: "auto",
     });
     assert.deepEqual(buildCanvasVideoModePatch(cloudConfig), {
         generationMode: "video",
         channelMode: "remote",
-        provider: "volcengine-ark",
-        model: "ep-seedance-endpoint",
+        model: "doubao-seedance-model",
         size: "1:1",
         seconds: "6",
         duration: "6",
@@ -102,6 +129,7 @@ test("video mode patch starts config nodes with the active video provider model"
         videoEditType: "replace",
         videoExtendDirection: "forward",
         videoReferenceImageMode: "reference",
+        videoReferenceMode: "auto",
     });
 });
 
@@ -113,7 +141,7 @@ test("video node always uses the backend channel even when metadata is stale", (
     });
     assert.equal(remoteNodeConfig.channelMode, "remote");
     assert.equal(remoteNodeConfig.videoProtocol, "volcengine-ark");
-    assert.equal(remoteNodeConfig.model, "ep-node");
+    assert.equal(remoteNodeConfig.model, "doubao-seedance-model");
 
     const localNodeConfig = buildCanvasVideoConfig(cloudConfig, {
         channelMode: "local",
@@ -122,16 +150,12 @@ test("video node always uses the backend channel even when metadata is stale", (
     });
     assert.equal(localNodeConfig.channelMode, "remote");
     assert.equal(localNodeConfig.videoProtocol, "volcengine-ark");
-    assert.equal(localNodeConfig.model, "local-video-node");
+    assert.equal(localNodeConfig.model, "doubao-seedance-model");
 });
 
 test("video node follows backend model protocol mapping before stale node provider", () => {
     const config = buildCanvasVideoConfig(
-        {
-            ...cloudConfig,
-            videoProtocol: "openai",
-            modelProtocols: [{ model: "doubao-seedance-2-0", protocol: "volcengine-ark" }],
-        },
+        routedVideoConfig("doubao-seedance-2-0", "volcengine-ark"),
         {
             provider: "openai",
             model: "doubao-seedance-2-0",
@@ -141,6 +165,43 @@ test("video node follows backend model protocol mapping before stale node provid
     assert.equal(config.videoProtocol, "volcengine-ark");
     assert.equal(config.model, "doubao-seedance-2-0");
     assert.equal(config.seedanceModel, "doubao-seedance-2-0");
+});
+
+test("video node supports Jimeng CLI provider mapping", () => {
+    const config = buildCanvasVideoConfig(
+        routedVideoConfig("seedance2.0fast", "jimeng-cli"),
+        {
+            provider: "openai",
+            model: "seedance2.0fast",
+        },
+    );
+
+    assert.equal(config.videoProtocol, "jimeng-cli");
+    assert.equal(config.model, "seedance2.0fast");
+    assert.equal(config.videoModel, "seedance2.0fast");
+    assert.equal(config.seedanceModel, "doubao-seedance-model");
+});
+
+test("video node ignores stale provider and routes through the selected model catalog entry", () => {
+    const config = buildCanvasVideoConfig(catalogConfig, {
+        provider: "volcengine-ark",
+        model: "sd2-720p-fast",
+    });
+
+    assert.equal(config.model, "sd2-720p-fast");
+    assert.equal(config.videoModel, "sd2-720p-fast");
+    assert.equal(config.videoProtocol, "xinglian-cloud");
+    assert.equal(config.seedanceEndpointId, "");
+});
+
+test("video node rejects a model without video capability", () => {
+    const config = buildCanvasVideoConfig(catalogConfig, {
+        provider: "openai",
+        model: "image-model",
+    });
+
+    assert.equal(config.model, "sd2-720p-fast");
+    assert.equal(config.videoProtocol, "xinglian-cloud");
 });
 
 test("video mode patch clamps Seedance duration from global defaults", () => {
@@ -153,7 +214,10 @@ test("video config normalizes duration by provider capability", () => {
     assert.equal(buildCanvasVideoConfig(cloudConfig, { provider: "volcengine-ark", seconds: "3" }).videoSeconds, "4");
     assert.equal(buildCanvasVideoConfig(cloudConfig, { provider: "volcengine-ark", seconds: "11" }).videoSeconds, "11");
     assert.equal(buildCanvasVideoConfig(cloudConfig, { provider: "volcengine-ark", duration: "9" }).videoSeconds, "9");
-    assert.equal(buildCanvasVideoConfig({ ...baseConfig, videoProtocol: "openai" }, { provider: "openai", seconds: "20" }).videoSeconds, "20");
+    assert.equal(buildCanvasVideoConfig(routedVideoConfig("seedance2.0fast", "jimeng-cli"), { provider: "openai", seconds: "20" }).videoSeconds, "15");
+    assert.equal(buildCanvasVideoConfig(routedVideoConfig("seedance2.0fast", "jimeng-cli"), { provider: "openai", seconds: "3" }).videoSeconds, "4");
+    assert.equal(buildCanvasVideoConfig(routedVideoConfig("openai-video", "openai"), { provider: "volcengine-ark", seconds: "20" }).videoSeconds, "20");
+    assert.equal(buildCanvasVideoConfig(catalogConfig, { seconds: "20" }).videoSeconds, "15");
 });
 
 test("video config ignores completed task duration when editable seconds exist", () => {
@@ -182,11 +246,30 @@ test("video config restores Seedance task mode fields from node metadata", () =>
     assert.equal(config.videoReferenceImageMode, "first_last_frame");
 });
 
+test("video config preserves an explicit Dreamina reference mode", () => {
+    const config = buildCanvasVideoConfig(routedVideoConfig("seedance2.0fast", "jimeng-cli"), {
+        videoReferenceMode: "multiframe2video",
+        videoReferenceImageMode: "reference",
+    });
+
+    assert.equal(config.videoReferenceMode, "multiframe2video");
+});
+
+test("video config infers Dreamina modes for legacy nodes", () => {
+    const jimengConfig = routedVideoConfig("seedance2.0fast", "jimeng-cli");
+
+    assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: [] }).videoReferenceMode, "text2video");
+    assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: ["image.png"], videoReferenceImageMode: "first_frame" }).videoReferenceMode, "image2video");
+    assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: ["first.png", "last.png"], videoReferenceImageMode: "first_last_frame" }).videoReferenceMode, "frames2video");
+    assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: ["1.png", "2.png", "3.png"] }).videoReferenceMode, "multiframe2video");
+    assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: ["image.png"], videoReferences: ["video.mp4"] }).videoReferenceMode, "multimodal2video");
+});
+
 test("builds global video defaults from config node metadata changes", () => {
     assert.deepEqual(
-        buildCanvasVideoDefaultsPatch(cloudConfig, {
-            provider: "volcengine-ark",
-            model: "ep-next",
+        buildCanvasVideoDefaultsPatch(routedVideoConfig("seedance-next", "volcengine-ark"), {
+            provider: "openai",
+            model: "seedance-next",
             size: "9:16",
             seconds: "20",
             vquality: "1080",
@@ -197,7 +280,9 @@ test("builds global video defaults from config node metadata changes", () => {
         }),
         {
             videoProtocol: "volcengine-ark",
-            seedanceEndpointId: "ep-next",
+            videoModel: "seedance-next",
+            seedanceModel: "seedance-next",
+            seedanceEndpointId: "",
             size: "9:16",
             videoSeconds: "15",
             vquality: "1080",
@@ -207,14 +292,10 @@ test("builds global video defaults from config node metadata changes", () => {
             videoReferenceImageMode: "first_frame",
         },
     );
-    assert.deepEqual(buildCanvasVideoDefaultsPatch({ ...baseConfig, videoProtocol: "openai" }, { provider: "openai", model: "openai-next", seconds: "20" }), {
+    assert.deepEqual(buildCanvasVideoDefaultsPatch(routedVideoConfig("openai-next", "openai"), { provider: "volcengine-ark", model: "openai-next", seconds: "20" }), {
         videoProtocol: "openai",
         videoModel: "openai-next",
+        seedanceEndpointId: "",
         videoSeconds: "20",
-    });
-    assert.deepEqual(buildCanvasVideoDefaultsPatch(baseConfig, { provider: "volcengine-ark", model: "seedance-local", seconds: "20" }), {
-        videoProtocol: "volcengine-ark",
-        seedanceModel: "seedance-local",
-        videoSeconds: "15",
     });
 });

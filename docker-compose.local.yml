@@ -6,6 +6,11 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    environment:
+      ORIGINAL_WORKFLOW_EXECUTION_MODE: cloud-worker
+      ORIGINAL_WORKFLOW_FORCE_CLOUD_WORKER: "true"
+      DREAMINA_HOME: /app/data/dreamina-home
+      DREAMINA_OUTPUT_DIR: /app/data/jimeng-cli
     volumes:
       - ./data:/app/data
     ports:

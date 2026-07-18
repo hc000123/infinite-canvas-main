@@ -27,12 +27,12 @@ test("shows image control only for generate mode", () => {
     assert.equal(shouldShowSeedanceImageControl("extend", true), false);
 });
 
-test("keeps continue compatible but out of visible image control options", () => {
+test("shows first frame mode while keeping continue out of visible image control options", () => {
     assert.deepEqual(
         seedanceReferenceImageModeOptions.map((option) => option.label),
-        ["普通参考", "首尾帧"],
+        ["普通参考", "首帧", "首尾帧"],
     );
-    assert.equal(visibleSeedanceReferenceImageMode("first_frame"), "first_last_frame");
+    assert.equal(visibleSeedanceReferenceImageMode("first_frame"), "first_frame");
     assert.equal(visibleSeedanceReferenceImageMode("continue"), "reference");
 });
 

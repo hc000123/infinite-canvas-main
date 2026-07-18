@@ -10,6 +10,16 @@ import (
 	"github.com/basketikun/infinite-canvas/repository"
 )
 
+func TestFindSavedChannelIgnoresNegativeIndex(t *testing.T) {
+	_, ok := findSavedChannel(model.ModelChannel{Name: "draft", BaseURL: "https://draft.example.com"}, []model.ModelChannel{{
+		Name:    "saved",
+		BaseURL: "https://saved.example.com",
+	}}, -1)
+	if ok {
+		t.Fatalf("findSavedChannel returned a saved channel for negative index")
+	}
+}
+
 func TestAdminSettingsMasksSavedChannelAPIKey(t *testing.T) {
 	setupAITaskTestDB(t)
 	saveSettingsForBoundaryTest(t, true, "sk-real-admin")
@@ -51,6 +61,43 @@ func TestSaveSettingsKeepsSavedChannelAPIKeyWhenMaskSubmitted(t *testing.T) {
 	}
 }
 
+func TestKeepPrivateAPIKeysSharesOneUnambiguousProviderCredential(t *testing.T) {
+	input := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
+		{ID: "comfly", Name: "中转 comfly", Protocol: "openai", BaseURL: "https://ai.comfly.org", APIKey: maskedAPIKey},
+		{ID: "comfly-text", Name: "Comfly 文本", Protocol: "openai", BaseURL: "https://ai.comfly.org", APIKey: maskedAPIKey},
+		{ID: "comfly-image", Name: "Comfly 图片", Protocol: "openai", BaseURL: "https://ai.comfly.org", APIKey: maskedAPIKey},
+	}}}
+	saved := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
+		{ID: "comfly", Name: "中转 comfly", Protocol: "openai", BaseURL: "https://ai.comfly.org", APIKey: "provider-key"},
+	}}}
+
+	keepPrivateAPIKeys(&input, saved)
+
+	for _, channel := range input.Private.Channels {
+		if channel.APIKey != "provider-key" {
+			t.Fatalf("channel %s api key = %q, want shared provider key", channel.ID, channel.APIKey)
+		}
+	}
+}
+
+func TestKeepPrivateAPIKeysRejectsAmbiguousProviderCredentials(t *testing.T) {
+	input := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
+		{ID: "primary", Name: "Primary", Protocol: "openai", BaseURL: "https://relay.example.com", APIKey: maskedAPIKey},
+		{ID: "backup", Name: "Backup", Protocol: "openai", BaseURL: "https://relay.example.com", APIKey: maskedAPIKey},
+		{ID: "preset-new", Name: "Preset", Protocol: "openai", BaseURL: "https://relay.example.com", APIKey: maskedAPIKey},
+	}}}
+	saved := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
+		{ID: "primary", Name: "Primary", Protocol: "openai", BaseURL: "https://relay.example.com", APIKey: "key-one"},
+		{ID: "backup", Name: "Backup", Protocol: "openai", BaseURL: "https://relay.example.com", APIKey: "key-two"},
+	}}}
+
+	keepPrivateAPIKeys(&input, saved)
+
+	if input.Private.Channels[2].APIKey != "" {
+		t.Fatalf("ambiguous provider api key = %q, want empty", input.Private.Channels[2].APIKey)
+	}
+}
+
 func TestIsCustomChannelAllowedReadsPublicSetting(t *testing.T) {
 	setupAITaskTestDB(t)
 	saveSettingsForBoundaryTest(t, true, "sk-real")
@@ -71,6 +118,34 @@ func TestCustomChannelDefaultsDisabled(t *testing.T) {
 	}
 	if *setting.ModelChannel.AllowCustomChannel {
 		t.Fatal("custom channel should default to disabled")
+	}
+}
+
+func TestValidateModelProtocolConflictsRejectsSameModelAcrossProtocols(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := SaveSettings(model.Settings{
+		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{AvailableModels: []string{"shared-video"}}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{
+			{ID: "openai", Name: "OpenAI", Protocol: string(model.ModelProtocolOpenAI), BaseURL: "https://openai.example.com", APIKey: "sk-openai", Models: []string{"shared-video"}, Capabilities: []string{"video"}, Enabled: true},
+			{ID: "xinglian", Name: "星链云", Protocol: string(model.ModelProtocolXinglianCloud), BaseURL: "https://xinglian.example.com/v1", APIKey: "sk-xinglian", Models: []string{"shared-video"}, Capabilities: []string{"video"}, Enabled: true},
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "同名模型跨协议冲突") {
+		t.Fatalf("SaveSettings error = %v, want protocol conflict", err)
+	}
+}
+
+func TestValidateModelProtocolConflictsAllowsSameProtocolFallbackChannels(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := SaveSettings(model.Settings{
+		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{AvailableModels: []string{"shared-text"}}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{
+			{ID: "primary", Name: "主渠道", Protocol: string(model.ModelProtocolOpenAI), BaseURL: "https://primary.example.com", APIKey: "sk-primary", Models: []string{"shared-text"}, Capabilities: []string{"text"}, Enabled: true},
+			{ID: "fallback", Name: "备用渠道", Protocol: string(model.ModelProtocolOpenAI), BaseURL: "https://fallback.example.com", APIKey: "sk-fallback", Models: []string{"shared-text"}, Capabilities: []string{"text"}, Enabled: true},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("SaveSettings returned error for same protocol channels: %v", err)
 	}
 }
 
@@ -179,6 +254,36 @@ func TestPublicSettingsKeepsOpenAICompatibleSeedanceModelName(t *testing.T) {
 	}
 }
 
+func TestPublicSettingsExposesXinglianCloudVideoProtocol(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{
+		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{
+			AvailableModels:   []string{"sd2-720p-fast"},
+			DefaultVideoModel: "sd2-720p-fast",
+		}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{{
+			Protocol: string(model.ModelProtocolXinglianCloud),
+			Name:     "星链云",
+			BaseURL:  "https://www.vjimeng.vip/v1",
+			APIKey:   "sk-test",
+			Models:   []string{"sd2-720p-fast"},
+			Weight:   1,
+			Enabled:  true,
+		}}},
+	}, now())
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+
+	settings, err := PublicSettings()
+	if err != nil {
+		t.Fatalf("PublicSettings returned error: %v", err)
+	}
+	if len(settings.ModelChannel.ModelProtocols) != 1 || settings.ModelChannel.ModelProtocols[0].Protocol != string(model.ModelProtocolXinglianCloud) {
+		t.Fatalf("model protocols = %#v, want xinglian-cloud", settings.ModelChannel.ModelProtocols)
+	}
+}
+
 func TestPublicSettingsExposesVideoModelCapabilities(t *testing.T) {
 	setupAITaskTestDB(t)
 	_, err := repository.SaveSettings(model.Settings{
@@ -229,6 +334,138 @@ func TestPublicSettingsExposesVideoModelCapabilities(t *testing.T) {
 	}
 	if !containsString(capabilities["doubao-seedance-2-0"], "video") {
 		t.Fatalf("ark capabilities = %#v, want video", capabilities["doubao-seedance-2-0"])
+	}
+}
+
+func TestPublicSettingsExposesModelSources(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{
+		Public: model.PublicSetting{
+			ModelChannel: model.PublicModelChannelSetting{
+				AvailableModels:    []string{"gpt-5.5", "seedance2.0fast"},
+				DefaultTextModel:   "gpt-5.5",
+				DefaultVideoModel:  "seedance2.0fast",
+				DefaultImageModel:  "gpt-5.5",
+				ModelCapabilities:  []model.ModelCapabilityType{},
+				ModelTextEndpoints: []model.ModelTextEndpointType{},
+			},
+		},
+		Private: model.PrivateSetting{
+			Channels: []model.ModelChannel{
+				{
+					Protocol: string(model.ModelProtocolOpenAI),
+					Name:     "文本中转",
+					BaseURL:  "https://relay.example.com",
+					APIKey:   "sk-test",
+					Models:   []string{"gpt-5.5"},
+					Enabled:  true,
+				},
+				{
+					Protocol: string(model.ModelProtocolJimengCLI),
+					Name:     "即梦本机 CLI",
+					Models:   []string{"seedance2.0fast"},
+					Enabled:  true,
+				},
+				{
+					Protocol: string(model.ModelProtocolOpenAI),
+					Name:     "已停用渠道",
+					BaseURL:  "https://disabled.example.com",
+					APIKey:   "sk-disabled",
+					Models:   []string{"gpt-5.5"},
+					Enabled:  false,
+				},
+			},
+		},
+	}, now())
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+
+	settings, err := PublicSettings()
+	if err != nil {
+		t.Fatalf("PublicSettings returned error: %v", err)
+	}
+	sources := map[string]model.ModelSourceType{}
+	for _, item := range settings.ModelChannel.ModelSources {
+		sources[item.Model] = item
+		if item.ChannelName == "已停用渠道" {
+			t.Fatalf("model sources included disabled channel: %#v", settings.ModelChannel.ModelSources)
+		}
+	}
+	if sources["gpt-5.5"].ChannelName != "文本中转" || sources["gpt-5.5"].Protocol != string(model.ModelProtocolOpenAI) {
+		t.Fatalf("gpt source = %#v, want 文本中转 openai", sources["gpt-5.5"])
+	}
+	if sources["seedance2.0fast"].ChannelName != "即梦本机 CLI" || sources["seedance2.0fast"].Protocol != string(model.ModelProtocolJimengCLI) {
+		t.Fatalf("jimeng source = %#v, want 即梦本机 CLI jimeng-cli", sources["seedance2.0fast"])
+	}
+}
+
+func TestPublicSettingsExposesJimengCLIProtocolAndCapabilities(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{
+		Public: model.PublicSetting{
+			ModelChannel: model.PublicModelChannelSetting{
+				AvailableModels:   []string{"seedance2.0fast"},
+				DefaultVideoModel: "seedance2.0fast",
+			},
+		},
+		Private: model.PrivateSetting{
+			Channels: []model.ModelChannel{{
+				Protocol:  string(model.ModelProtocolJimengCLI),
+				Name:      "即梦本机 CLI",
+				CLIPath:   "dreamina",
+				OutputDir: t.TempDir(),
+				Models:    []string{"seedance2.0fast"},
+				Enabled:   true,
+			}},
+		},
+	}, now())
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+
+	settings, err := PublicSettings()
+	if err != nil {
+		t.Fatalf("PublicSettings returned error: %v", err)
+	}
+	if len(settings.ModelChannel.ModelProtocols) != 1 || settings.ModelChannel.ModelProtocols[0].Protocol != string(model.ModelProtocolJimengCLI) {
+		t.Fatalf("model protocols = %#v, want jimeng-cli", settings.ModelChannel.ModelProtocols)
+	}
+	capabilities := map[string][]string{}
+	for _, item := range settings.ModelChannel.ModelCapabilities {
+		capabilities[item.Model] = item.Capabilities
+	}
+	for _, want := range []string{"video", "video_query", "preflight", "cli_workflow"} {
+		if !containsString(capabilities["seedance2.0fast"], want) {
+			t.Fatalf("jimeng capabilities = %#v, want %s", capabilities["seedance2.0fast"], want)
+		}
+	}
+}
+
+func TestSelectModelChannelAllowsJimengCLIWithoutAPIKeyOrBaseURL(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{
+		Private: model.PrivateSetting{
+			Channels: []model.ModelChannel{{
+				Protocol:  string(model.ModelProtocolJimengCLI),
+				Name:      "即梦本机 CLI",
+				CLIPath:   "dreamina",
+				OutputDir: t.TempDir(),
+				Models:    []string{"seedance2.0fast"},
+				Enabled:   true,
+			}},
+		},
+	}, now())
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+
+	channel, err := SelectModelChannel("seedance2.0fast")
+	if err != nil {
+		t.Fatalf("SelectModelChannel returned error: %v", err)
+	}
+	if channel.Protocol != string(model.ModelProtocolJimengCLI) || channel.Name != "即梦本机 CLI" {
+		t.Fatalf("channel = %#v, want jimeng cli channel", channel)
 	}
 }
 

@@ -10,7 +10,7 @@ test("classifies nano banana models as image models", () => {
     assert.deepEqual(result.textModels, ["gemini-3.1-pro-preview"]);
 });
 
-test("keeps remote default video model visible when it is missing from available models", () => {
+test("does not expose a default video model missing from public models", () => {
     const result = resolveEffectiveConfig(
         { ...defaultConfig, channelMode: "remote" },
         {
@@ -26,8 +26,31 @@ test("keeps remote default video model visible when it is missing from available
         },
     );
 
-    assert.equal(result.videoModel, "doubao-seedance-2-0-260128");
-    assert.deepEqual(result.videoModels, ["doubao-seedance-2-0-260128"]);
+    assert.equal(result.videoModel, "");
+    assert.deepEqual(result.videoModels, []);
+});
+
+test("does not cross fallback defaults between model capabilities", () => {
+    const result = resolveEffectiveConfig(
+        { ...defaultConfig, imageModel: "stale-image", videoModel: "stale-video", textModel: "stale-text" },
+        {
+            availableModels: ["only-text"],
+            modelCosts: [],
+            modelTextEndpoints: [],
+            modelCapabilities: [{ model: "only-text", capabilities: ["text"] }],
+            modelProtocols: [{ model: "only-text", protocol: "openai" }],
+            defaultModel: "only-text",
+            defaultImageModel: "only-text",
+            defaultVideoModel: "only-text",
+            defaultTextModel: "only-text",
+            systemPrompt: "",
+            allowCustomChannel: false,
+        },
+    );
+
+    assert.equal(result.imageModel, "");
+    assert.equal(result.videoModel, "");
+    assert.equal(result.textModel, "only-text");
 });
 
 test("falls back to backend channel when public model channel is unavailable", () => {
@@ -59,6 +82,33 @@ test("drops stale local seedance selection while keeping backend video models vi
     assert.equal(result.seedanceModel, "doubao-seedance-2-0");
     assert.deepEqual(result.videoModels, ["doubao-seedance-2-0"]);
     assert.deepEqual(result.modelProtocols, [{ model: "doubao-seedance-2-0", protocol: "volcengine-ark" }]);
+});
+
+test("uses backend Jimeng CLI protocol mapping for remote video models", () => {
+    const result = resolveEffectiveConfig(
+        { ...defaultConfig, channelMode: "remote", videoModel: "seedance2.0fast" },
+        {
+            availableModels: ["gpt-image-2", "gemini-3.1-pro-preview", "seedance2.0fast"],
+            modelCosts: [],
+            modelTextEndpoints: [],
+            modelProtocols: [{ model: "seedance2.0fast", protocol: "jimeng-cli" }],
+            modelCapabilities: [
+                { model: "gpt-image-2", capabilities: ["image"] },
+                { model: "gemini-3.1-pro-preview", capabilities: ["text"] },
+                { model: "seedance2.0fast", capabilities: ["video"] },
+            ],
+            defaultModel: "gemini-3.1-pro-preview",
+            defaultImageModel: "gpt-image-2",
+            defaultVideoModel: "seedance2.0fast",
+            defaultTextModel: "gemini-3.1-pro-preview",
+            systemPrompt: "",
+            allowCustomChannel: true,
+        },
+    );
+
+    assert.equal(result.videoModel, "seedance2.0fast");
+    assert.equal(result.videoProtocol, "jimeng-cli");
+    assert.deepEqual(result.videoModels, ["seedance2.0fast"]);
 });
 
 test("clears stale local seedance endpoint when backend channel controls video model", () => {

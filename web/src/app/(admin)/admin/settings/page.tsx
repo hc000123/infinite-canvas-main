@@ -9,7 +9,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorView } from "@uiw/react-codemirror";
 
 import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind";
-import { fetchAdminSettings, fetchChannelModels, saveAdminSettings, testChannelModel, type AdminModelChannel, type AdminModelCost, type AdminSettings } from "@/services/api/admin";
+import { ProviderPresetModal } from "./components/provider-preset-modal";
+import type { ModelChannelPresetResult } from "./model-channel-presets";
+import {
+    checkJimengLogin,
+    fetchAdminSettings,
+    fetchChannelModels,
+    saveAdminSettings,
+    startJimengLogin,
+    testChannelModel,
+    type AdminChannelActionRequest,
+    type AdminJimengLoginStartResult,
+    type AdminModelChannel,
+    type AdminModelCost,
+    type AdminSettings,
+} from "@/services/api/admin";
 import { VOLCENGINE_ASSET_CONFIG_NOTICE } from "@/services/volcengine-asset-config";
 import { useUserStore } from "@/stores/use-user-store";
 
@@ -50,8 +64,30 @@ const emptySettings: AdminSettings = {
         volcengineAsset: { enabled: false, accessKey: "", secretKey: "", accessKeyConfigured: false, secretKeyConfigured: false, projectName: "default", region: "cn-beijing", assetGroupId: "", publicAssetBaseUrl: "" },
     },
 };
-const emptyChannel: AdminModelChannel = { id: "", protocol: "openai", name: "", baseUrl: "", apiKey: "", endpointId: "", endpointMappings: [], models: [], capabilities: ["text"], environment: "dev", weight: 1, enabled: true, remark: "" };
+const emptyChannel: AdminModelChannel = {
+    id: "",
+    protocol: "openai",
+    name: "",
+    baseUrl: "",
+    apiKey: "",
+    cliPath: "",
+    workDir: "",
+    outputDir: "",
+    timeoutSeconds: 0,
+    sessionId: 0,
+    concurrencyLimit: 1,
+    endpointId: "",
+    endpointMappings: [],
+    models: [],
+    capabilities: ["text"],
+    environment: "dev",
+    weight: 1,
+    enabled: true,
+    remark: "",
+};
 const savedSecretExtra = "已保存的密钥不会在刷新后回显明文；留空保存会继续使用后台已保存的密钥，只在输入新值时替换。";
+const jimengPendingLoginStorageKey = "infinite-canvas:pending-jimeng-login";
+const xinglianVideoModels = ["sd2-720p-fast", "sd2-720p", "sd2-720p-sh", "sd2-720p-mini", "sd2-1080p-mini", "sd2-1080p-fast", "sd2-1080p", "sd2-720p-ax-fast", "sd2-720p-ax"];
 
 type SettingsTabKey = "public" | "private";
 type EditorMode = "visual" | "json";
@@ -59,6 +95,7 @@ type ModelSelectTabKey = "new" | "current";
 type AutoSaveStatus = "idle" | "saving" | "saved" | "error";
 type ChannelFormValues = AdminModelChannel & { endpointId?: string };
 type ChannelTableItem = AdminModelChannel & { _index: number; _rowKey: string };
+type PendingJimengLogin = { payload: AdminChannelActionRequest; result: AdminJimengLoginStartResult; createdAt: number; channelName: string };
 
 export default function AdminSettingsPage() {
     const token = useUserStore((state) => state.token);
@@ -71,6 +108,8 @@ export default function AdminSettingsPage() {
     const [channelForm] = Form.useForm<ChannelFormValues>();
     const [editingChannelIndex, setEditingChannelIndex] = useState<number | null>(null);
     const [isChannelDrawerOpen, setIsChannelDrawerOpen] = useState(false);
+    const [isProviderPresetOpen, setIsProviderPresetOpen] = useState(false);
+    const [isApplyingProviderPreset, setIsApplyingProviderPreset] = useState(false);
     const [channelAutoSaveStatus, setChannelAutoSaveStatus] = useState<AutoSaveStatus>("idle");
     const channelAutoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const channelAutoSaveSeqRef = useRef(0);
@@ -82,6 +121,10 @@ export default function AdminSettingsPage() {
     const [selectedTestModels, setSelectedTestModels] = useState<string[]>([]);
     const [testingModels, setTestingModels] = useState<string[]>([]);
     const [testResults, setTestResults] = useState<Record<string, { status: "success" | "error"; duration?: string; message: string }>>({});
+    const [jimengLoginResult, setJimengLoginResult] = useState<AdminJimengLoginStartResult | null>(null);
+    const [pendingJimengLogin, setPendingJimengLogin] = useState<PendingJimengLogin | null>(null);
+    const [isStartingJimengLogin, setIsStartingJimengLogin] = useState(false);
+    const [isCheckingJimengLogin, setIsCheckingJimengLogin] = useState(false);
     const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
     const [modelSelectSource, setModelSelectSource] = useState<string[]>([]);
     const [modelSelectExisting, setModelSelectExisting] = useState<string[]>([]);
@@ -148,6 +191,14 @@ export default function AdminSettingsPage() {
     }, [loadSettings]);
 
     useEffect(() => {
+        const pending = readPendingJimengLogin();
+        if (!pending) return;
+        setPendingJimengLogin(pending);
+        setActiveTab("private");
+        setEditorMode((current) => ({ ...current, private: "visual" }));
+    }, []);
+
+    useEffect(() => {
         if (typeof window === "undefined") return;
         if (new URLSearchParams(window.location.search).get("focus") !== "enterprise-video") return;
         setIsEnterpriseVideoFocus(true);
@@ -193,6 +244,26 @@ export default function AdminSettingsPage() {
         }
     };
 
+    const applyProviderPreset = async (result: ModelChannelPresetResult) => {
+        if (!token) return;
+        setIsApplyingProviderPreset(true);
+        try {
+            const saved = normalizeSettings(await saveAdminSettings(token, result.settings));
+            const merged = mergePrivateSecrets(result.settings, saved);
+            form.setFieldsValue(merged);
+            setChannels(merged.private.channels);
+            setModelCosts(merged.public.modelChannel.modelCosts);
+            rememberKnownModels(merged);
+            setJsonText({ public: JSON.stringify(merged.public, null, 2), private: JSON.stringify(merged.private, null, 2) });
+            setIsProviderPresetOpen(false);
+            message.success("厂商预设已一次配置完成");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "厂商预设保存失败");
+        } finally {
+            setIsApplyingProviderPreset(false);
+        }
+    };
+
     const toggleMode = (tab: SettingsTabKey, nextMode: EditorMode) => {
         if (nextMode === "json") {
             setJsonText((current) => ({
@@ -230,6 +301,7 @@ export default function AdminSettingsPage() {
     const openChannelDrawer = (index: number | null) => {
         setEditingChannelIndex(index);
         setIsChannelDrawerOpen(true);
+        setJimengLoginResult(null);
         const channel = index === null ? emptyChannel : normalizeChannel(channels[index]);
         channelForm.setFieldsValue({ ...channel, apiKey: "", endpointId: channel.endpointId || arkEndpointFromModels(channel.models), models: visibleChannelModels(channel.models), endpointMappings: channelEndpointMappingFields(channel) });
         rememberModels(channel.models);
@@ -261,6 +333,7 @@ export default function AdminSettingsPage() {
         setIsChannelDrawerOpen(false);
         setEditingChannelIndex(null);
         setChannelAutoSaveStatus("idle");
+        setJimengLoginResult(null);
         channelForm.resetFields();
     };
 
@@ -320,18 +393,18 @@ export default function AdminSettingsPage() {
 
     const fetchChannelModelList = async () => {
         if (!token) return;
-        const channel = modelSelectChannelDraftRef.current || (channelForm.getFieldsValue(true) as ChannelFormValues);
-        if (!channel?.baseUrl) {
+        const channel = normalizeChannel(modelSelectChannelDraftRef.current || (channelForm.getFieldsValue(true) as ChannelFormValues));
+        if (channel.protocol !== "jimeng-cli" && !channel?.baseUrl) {
             message.warning("请先填写接口地址");
             return;
         }
-        if (editingChannelIndex === null && !channel?.apiKey) {
+        if (channel.protocol !== "jimeng-cli" && editingChannelIndex === null && !channel?.apiKey) {
             message.warning("请先填写 API Key");
             return;
         }
         setIsFetchingChannelModels(true);
         try {
-            const channelModels = cleanChannelModels(await fetchChannelModels(token, { index: editingChannelIndex ?? undefined, channel: normalizeChannel(channel) }));
+            const channelModels = cleanChannelModels(await fetchChannelModels(token, { index: editingChannelIndex ?? undefined, channel }));
             const current = isModelSelectorOpen ? cleanChannelModels(modelSelectSelected) : cleanChannelModels(channelForm.getFieldValue("models") || []);
             rememberModels(channelModels);
             setModelSelectExisting(current);
@@ -397,8 +470,12 @@ export default function AdminSettingsPage() {
 
     const openTestDialog = (index: number) => {
         const channel = normalizeChannel(channels[index]);
-        if (!channel.baseUrl || visibleChannelModels(channel.models).length === 0) {
-            message.warning("请先填写接口地址和至少一个模型");
+        if (channel.protocol !== "jimeng-cli" && !channel.baseUrl) {
+            message.warning("请先填写接口地址");
+            return;
+        }
+        if (visibleChannelModels(channel.models).length === 0) {
+            message.warning("请先配置至少一个模型");
             return;
         }
         setTestChannelIndex(index);
@@ -432,6 +509,59 @@ export default function AdminSettingsPage() {
         }
     };
 
+    const channelLoginPayload = () => ({
+        index: editingChannelIndex === null ? undefined : editingChannelIndex,
+        channel: normalizeChannel(channelForm.getFieldsValue(true) as ChannelFormValues),
+    });
+
+    const startJimengWebLogin = async () => {
+        if (!token) return;
+        const payload = channelLoginPayload();
+        if (payload.channel.protocol !== "jimeng-cli") {
+            message.warning("请先把渠道协议切到即梦 CLI");
+            return;
+        }
+        setIsStartingJimengLogin(true);
+        try {
+            const result = await startJimengLogin(token, payload);
+            setJimengLoginResult(result);
+            if (result.loginReady) {
+                clearPendingJimengLogin();
+                setPendingJimengLogin(null);
+            } else {
+                const pending = { payload, result, createdAt: Date.now(), channelName: payload.channel.name || "即梦 CLI" };
+                savePendingJimengLogin(pending);
+                setPendingJimengLogin(pending);
+            }
+            message.success(result.loginReady ? result.message || "即梦 CLI 已登录" : "已获取即梦网页登录验证码");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "获取即梦网页登录验证码失败");
+        } finally {
+            setIsStartingJimengLogin(false);
+        }
+    };
+
+    const checkJimengWebLogin = async (pending?: PendingJimengLogin) => {
+        const loginResult = pending?.result || jimengLoginResult;
+        if (!token || !loginResult) return;
+        setIsCheckingJimengLogin(true);
+        try {
+            const result = await checkJimengLogin(token, { ...(pending?.payload || channelLoginPayload()), deviceCode: loginResult.deviceCode });
+            if (result.loginReady) {
+                clearPendingJimengLogin();
+                setPendingJimengLogin(null);
+                setJimengLoginResult({ ...loginResult, loginReady: true, message: result.message });
+                message.success(result.message || "即梦网页登录验证已完成");
+            } else {
+                message.warning(result.message || "即梦登录尚未完成");
+            }
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "即梦网页登录验证未完成");
+        } finally {
+            setIsCheckingJimengLogin(false);
+        }
+    };
+
     const batchTestModels = async () => {
         for (const model of selectedTestModels) {
             await testModelOnline(model);
@@ -441,6 +571,16 @@ export default function AdminSettingsPage() {
     const testChannel = testChannelIndex === null ? null : normalizeChannel(channels[testChannelIndex]);
     const testModels = visibleChannelModels(testChannel?.models || []).filter((model) => model.toLowerCase().includes(testKeyword.trim().toLowerCase()));
     const isTestingArkChannel = testChannel?.protocol === "volcengine-ark";
+    const isTestingJimengChannel = testChannel?.protocol === "jimeng-cli";
+    const isTestingXinglianChannel = testChannel?.protocol === "xinglian-cloud";
+    const jimengLoginURL = jimengLoginURLFromResult(jimengLoginResult);
+    const pendingJimengLoginURL = jimengLoginURLFromResult(pendingJimengLogin?.result);
+
+    const openJimengVerificationURL = (url: string) => {
+        if (!url || typeof window === "undefined") return;
+        const opened = window.open(url, "_blank", "noopener,noreferrer");
+        if (!opened) message.warning("验证网页被浏览器拦截，可复制验证码或验证链接后手动打开。");
+    };
 
     async function persistChannels(nextChannels: AdminModelChannel[], options: { silent?: boolean } = {}) {
         if (!token) return;
@@ -534,6 +674,13 @@ export default function AdminSettingsPage() {
                     {activeTab === "public" ? (
                         activeMode === "visual" ? (
                             <Form form={form} layout="vertical" initialValues={emptySettings} requiredMark={false}>
+                                <Alert
+                                    className="mb-4"
+                                    type="info"
+                                    showIcon
+                                    title="模型配置分两步"
+                                    description="先在“模型渠道”登记协议、密钥、模型和能力，再到这里决定开放范围与三类默认模型。画布节点只保存模型名称，实际协议始终跟随后台渠道映射。"
+                                />
                                 <Row gutter={16}>
                                     <Col span={24}>
                                         <Form.Item name={["public", "modelChannel", "availableModels"]} label="系统可用模型(请先在私有配置里配置渠道)" extra="可选项来自已启用渠道中选择的模型，最终开放哪些模型由这里勾选决定">
@@ -719,9 +866,54 @@ export default function AdminSettingsPage() {
                                         />
                                     ) : null}
                                 </div>
-                                <Button type="primary" icon={<PlusOutlined />} onClick={() => openChannelDrawer(null)}>
-                                    新增渠道
-                                </Button>
+                                {pendingJimengLogin ? (
+                                    <Alert
+                                        showIcon
+                                        type="info"
+                                        title="即梦验证待完成"
+                                        description={
+                                            <Flex vertical gap={8}>
+                                                <Typography.Text type="secondary">如果即梦网页已经提示登录成功，回到这里点击“完成验证”写入 CLI 登录态。即梦授权页不会自动跳回本后台。</Typography.Text>
+                                                {pendingJimengLogin.result.userCode ? (
+                                                    <Space size={12} wrap>
+                                                        <Typography.Text>渠道：{pendingJimengLogin.channelName}</Typography.Text>
+                                                        <Typography.Text>
+                                                            验证码：
+                                                            <Typography.Text code copyable>
+                                                                {pendingJimengLogin.result.userCode}
+                                                            </Typography.Text>
+                                                        </Typography.Text>
+                                                        {pendingJimengLoginURL ? <Typography.Text copyable={{ text: pendingJimengLoginURL }}>复制验证链接</Typography.Text> : null}
+                                                    </Space>
+                                                ) : null}
+                                                <Space wrap>
+                                                    <Button type="primary" loading={isCheckingJimengLogin} onClick={() => void checkJimengWebLogin(pendingJimengLogin)}>
+                                                        完成验证
+                                                    </Button>
+                                                    <Button disabled={!pendingJimengLoginURL} onClick={() => openJimengVerificationURL(pendingJimengLoginURL)}>
+                                                        重新打开验证网页
+                                                    </Button>
+                                                    <Button
+                                                        onClick={() => {
+                                                            clearPendingJimengLogin();
+                                                            setPendingJimengLogin(null);
+                                                        }}
+                                                    >
+                                                        清除
+                                                    </Button>
+                                                </Space>
+                                            </Flex>
+                                        }
+                                    />
+                                ) : null}
+                                <Space wrap>
+                                    <Button type="primary" icon={<FormatPainterOutlined />} onClick={() => setIsProviderPresetOpen(true)}>
+                                        一键配置厂商
+                                    </Button>
+                                    <Button icon={<PlusOutlined />} onClick={() => openChannelDrawer(null)}>
+                                        手动新增渠道
+                                    </Button>
+                                </Space>
                                 <Table<ChannelTableItem>
                                     rowKey="_rowKey"
                                     pagination={false}
@@ -830,7 +1022,15 @@ export default function AdminSettingsPage() {
                         </div>
                     )}
                 </Card>
-                <Drawer rootClassName="studio-modal"
+                <ProviderPresetModal
+                    open={isProviderPresetOpen}
+                    settings={normalizeSettings(form.getFieldsValue(true) as AdminSettings)}
+                    saving={isApplyingProviderPreset}
+                    onCancel={() => setIsProviderPresetOpen(false)}
+                    onApply={applyProviderPreset}
+                />
+                <Drawer
+                    rootClassName="studio-modal"
                     title={editingChannelIndex === null ? "新增渠道" : "编辑渠道"}
                     open={isChannelDrawerOpen}
                     size={isModelSelectorOpen ? 760 : 560}
@@ -934,6 +1134,8 @@ export default function AdminSettingsPage() {
                                             options={[
                                                 { label: "OpenAI 兼容", value: "openai" },
                                                 { label: "火山方舟 Ark", value: "volcengine-ark" },
+                                                { label: "即梦 CLI", value: "jimeng-cli" },
+                                                { label: "星链云 SD2", value: "xinglian-cloud" },
                                             ]}
                                         />
                                     </Form.Item>
@@ -975,11 +1177,90 @@ export default function AdminSettingsPage() {
                                         />
                                     </Form.Item>
                                 </Col>
-                                <Col span={24}>
-                                    <Form.Item name="baseUrl" label="接口地址" rules={[{ required: true, message: "请输入接口地址" }]}>
-                                        <Input />
-                                    </Form.Item>
-                                </Col>
+                                {channelProtocol === "jimeng-cli" ? (
+                                    <>
+                                        <Col span={24}>
+                                            <Form.Item name="cliPath" label="CLI 路径" extra="留空时使用 PATH 里的 dreamina；也可以填写 /Users/.../.local/bin/dreamina。">
+                                                <Input placeholder="dreamina" />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={12}>
+                                            <Form.Item name="outputDir" label="输出目录" extra="留空时使用后端 data/jimeng-cli。">
+                                                <Input placeholder="data/jimeng-cli" />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={12}>
+                                            <Form.Item name="workDir" label="工作目录">
+                                                <Input placeholder="留空使用后端当前目录" />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={8}>
+                                            <Form.Item name="sessionId" label="会话 ID">
+                                                <InputNumber min={0} precision={0} className="!w-full" />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={8}>
+                                            <Form.Item name="timeoutSeconds" label="超时秒数">
+                                                <InputNumber min={0} precision={0} className="!w-full" placeholder="默认 300" />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={8}>
+                                            <Form.Item name="concurrencyLimit" label="并发限制">
+                                                <InputNumber min={1} precision={0} className="!w-full" />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={24}>
+                                            <Alert
+                                                type="info"
+                                                showIcon
+                                                title="即梦网页登录验证"
+                                                description={
+                                                    <Flex vertical gap={8}>
+                                                        {jimengLoginResult?.loginReady ? (
+                                                            <Typography.Text type="success">{jimengLoginResult.message || "即梦 CLI 已登录，可以直接预检视频模型。"}</Typography.Text>
+                                                        ) : (
+                                                            <Typography.Text type="secondary">点击获取验证码后，在新打开的即梦网页里输入验证码并确认，再回到这里点击完成验证。</Typography.Text>
+                                                        )}
+                                                        {jimengLoginResult?.userCode ? (
+                                                            <Space size={12} wrap>
+                                                                <Typography.Text>
+                                                                    验证码：
+                                                                    <Typography.Text code copyable>
+                                                                        {jimengLoginResult.userCode}
+                                                                    </Typography.Text>
+                                                                </Typography.Text>
+                                                                {jimengLoginResult.expiresIn ? <Typography.Text type="secondary">{Math.floor(jimengLoginResult.expiresIn / 60)} 分钟内有效</Typography.Text> : null}
+                                                            </Space>
+                                                        ) : null}
+                                                        <Space wrap>
+                                                            <Button loading={isStartingJimengLogin} onClick={() => void startJimengWebLogin()}>
+                                                                获取验证码
+                                                            </Button>
+                                                            <Button type="primary" disabled={!jimengLoginURL} onClick={() => openJimengVerificationURL(jimengLoginURL)}>
+                                                                打开验证网页
+                                                            </Button>
+                                                            <Button loading={isCheckingJimengLogin} disabled={!jimengLoginResult || jimengLoginResult.loginReady} onClick={() => void checkJimengWebLogin()}>
+                                                                完成验证
+                                                            </Button>
+                                                            {jimengLoginURL ? <Typography.Text copyable={{ text: jimengLoginURL }}>复制验证链接</Typography.Text> : null}
+                                                        </Space>
+                                                    </Flex>
+                                                }
+                                            />
+                                        </Col>
+                                    </>
+                                ) : (
+                                    <Col span={24}>
+                                        <Form.Item
+                                            name="baseUrl"
+                                            label="接口地址"
+                                            extra={channelProtocol === "xinglian-cloud" ? "填写 https://www.vjimeng.vip/v1；后端会自动调用 SD2 提交和查询路径。" : undefined}
+                                            rules={[{ required: true, message: "请输入接口地址" }]}
+                                        >
+                                            <Input placeholder={channelProtocol === "xinglian-cloud" ? "https://www.vjimeng.vip/v1" : undefined} />
+                                        </Form.Item>
+                                    </Col>
+                                )}
                                 {channelProtocol === "volcengine-ark" ? (
                                     <Col span={24}>
                                         <Card size="small" title="Seedance 模型映射">
@@ -1017,27 +1298,34 @@ export default function AdminSettingsPage() {
                                         </Card>
                                     </Col>
                                 ) : null}
-                                <Col span={24}>
-                                    <Form.Item
-                                        name="apiKey"
-                                        label={
-                                            <Space size={8}>
-                                                API Key
-                                                <Tag color={hasNewChannelAPIKey ? "processing" : hasSavedChannelAPIKey ? "success" : "default"}>{hasNewChannelAPIKey ? "本次已输入新 Key" : hasSavedChannelAPIKey ? "已保存，留空不修改" : "未填写"}</Tag>
-                                            </Space>
-                                        }
-                                        extra={hasSavedChannelAPIKey && !hasNewChannelAPIKey ? "输入框留空会继续沿用后台已保存的 API Key；输入新值后会自动保存并覆盖。" : undefined}
-                                        rules={editingChannelIndex === null ? [{ required: true, message: "请输入 API Key" }] : []}
-                                    >
-                                        <Input.Password placeholder={hasSavedChannelAPIKey ? "已保存，输入新 Key 才会覆盖" : "请输入 API Key"} />
-                                    </Form.Item>
-                                </Col>
+                                {channelProtocol === "jimeng-cli" ? null : (
+                                    <Col span={24}>
+                                        <Form.Item
+                                            name="apiKey"
+                                            label={
+                                                <Space size={8}>
+                                                    API Key
+                                                    <Tag color={hasNewChannelAPIKey ? "processing" : hasSavedChannelAPIKey ? "success" : "default"}>{hasNewChannelAPIKey ? "本次已输入新 Key" : hasSavedChannelAPIKey ? "已保存，留空不修改" : "未填写"}</Tag>
+                                                </Space>
+                                            }
+                                            extra={hasSavedChannelAPIKey && !hasNewChannelAPIKey ? "输入框留空会继续沿用后台已保存的 API Key；输入新值后会自动保存并覆盖。" : undefined}
+                                            rules={editingChannelIndex === null ? [{ required: true, message: "请输入 API Key" }] : []}
+                                        >
+                                            <Input.Password placeholder={hasSavedChannelAPIKey ? "已保存，输入新 Key 才会覆盖" : "请输入 API Key"} />
+                                        </Form.Item>
+                                    </Col>
+                                )}
                                 {channelProtocol === "volcengine-ark" ? null : (
                                     <Col span={24}>
-                                        <Form.Item label="渠道可用模型">
+                                        <Form.Item label="渠道可用模型" extra="模型名称是节点调用的唯一标识；同名模型可用于同协议备用渠道，但不能同时配置到不同协议。">
                                             <Space.Compact style={{ width: "100%" }}>
                                                 <Form.Item name="models" noStyle>
-                                                    <Select mode="tags" maxTagCount="responsive" tokenSeparators={[",", "\n"]} options={knownModels.map((model) => ({ label: model, value: model }))} />
+                                                    <Select
+                                                        mode="tags"
+                                                        maxTagCount="responsive"
+                                                        tokenSeparators={[",", "\n"]}
+                                                        options={(channelProtocol === "xinglian-cloud" ? [...xinglianVideoModels, ...knownModels] : knownModels).map((model) => ({ label: model, value: model }))}
+                                                    />
                                                 </Form.Item>
                                                 <Button onClick={() => openChannelModelSelector()}>选择模型</Button>
                                             </Space.Compact>
@@ -1053,10 +1341,11 @@ export default function AdminSettingsPage() {
                         </Form>
                     )}
                 </Drawer>
-                <Modal rootClassName="studio-modal"
+                <Modal
+                    rootClassName="studio-modal"
                     title={
                         <Space>
-                            {testChannel?.name || "渠道"} 渠道的{isTestingArkChannel ? "企业视频预检" : "模型测试"}
+                            {testChannel?.name || "渠道"} 渠道的{isTestingArkChannel || isTestingJimengChannel || isTestingXinglianChannel ? "视频预检" : "模型测试"}
                             <Typography.Text type="secondary">共 {visibleChannelModels(testChannel?.models || []).length} 个模型</Typography.Text>
                         </Space>
                     }
@@ -1067,7 +1356,7 @@ export default function AdminSettingsPage() {
                         <Space>
                             <Button onClick={closeTestDialog}>取消</Button>
                             <Button type="primary" disabled={!selectedTestModels.length || testingModels.length > 0} onClick={() => void batchTestModels()}>
-                                {isTestingArkChannel ? "批量预检" : "批量测试"} {selectedTestModels.length} 个模型
+                                {isTestingArkChannel || isTestingJimengChannel || isTestingXinglianChannel ? "批量预检" : "批量测试"} {selectedTestModels.length} 个模型
                             </Button>
                         </Space>
                     }
@@ -1075,7 +1364,13 @@ export default function AdminSettingsPage() {
                 >
                     <Flex vertical gap={12}>
                         <Typography.Text type="secondary">
-                            {isTestingArkChannel ? "企业 Ark / Seedance 只验证 API Key、Base URL 和模型到火山 Endpoint / EP 的映射，不创建视频任务或扣除额度。" : "测试会向选中模型发送一条 hi，用于确认渠道是否有响应。"}
+                            {isTestingArkChannel
+                                ? "企业 Ark / Seedance 只验证 API Key、Base URL 和模型到火山 Endpoint / EP 的映射，不创建视频任务或扣除额度。"
+                                : isTestingJimengChannel
+                                  ? "即梦 CLI 只检查 CLI 安装、登录态、输出目录和模型版本，不创建视频任务或扣除额度。"
+                                  : isTestingXinglianChannel
+                                    ? "星链云只查询 API Key 对应账户余额，不创建视频任务或扣除额度。"
+                                    : "测试会向选中模型发送一条 hi，用于确认渠道是否有响应。"}
                         </Typography.Text>
                         <Input.Search placeholder="搜索模型..." allowClear value={testKeyword} onChange={(event) => setTestKeyword(event.target.value)} />
                         <Table
@@ -1114,7 +1409,7 @@ export default function AdminSettingsPage() {
                                     align: "right",
                                     render: (_, item) => (
                                         <Button size="small" loading={testingModels.includes(item.model)} onClick={() => void testModelOnline(item.model)}>
-                                            {isTestingArkChannel ? "预检" : "测试"}
+                                            {isTestingArkChannel || isTestingJimengChannel ? "预检" : "测试"}
                                         </Button>
                                     ),
                                 },
@@ -1219,6 +1514,12 @@ function normalizeChannel(item: Partial<AdminModelChannel> = {}): AdminModelChan
         name: item.name || "",
         baseUrl: item.baseUrl || "",
         apiKey: item.apiKey || "",
+        cliPath: item.cliPath || "",
+        workDir: item.workDir || "",
+        outputDir: item.outputDir || "",
+        timeoutSeconds: Math.max(0, Number(item.timeoutSeconds) || 0),
+        sessionId: Math.max(0, Number(item.sessionId) || 0),
+        concurrencyLimit: Math.max(1, Number(item.concurrencyLimit) || 1),
         endpointId,
         endpointMappings,
         models: protocol === "volcengine-ark" ? endpointMappings.map((mapping) => mapping.model) : localChannelModels(item.models || [], protocol, endpointId),
@@ -1237,7 +1538,7 @@ function stableChannelId(item: Partial<AdminModelChannel>) {
 }
 
 function normalizeChannelCapabilities(value: string[] | undefined, protocol: AdminModelChannel["protocol"]) {
-    const fallback = protocol === "volcengine-ark" ? ["text", "video"] : ["text", "image"];
+    const fallback = protocol === "volcengine-ark" ? ["text", "video"] : protocol === "jimeng-cli" ? ["video", "video_query", "preflight", "cli_workflow"] : protocol === "xinglian-cloud" ? ["video", "video_query", "preflight"] : ["text", "image"];
     const allowed = new Set(["text", "image", "video", "video_query", "asset_review", "preflight", "cli", "cli_workflow"]);
     const result = Array.from(new Set((value || []).map((item) => item.trim()).filter((item) => allowed.has(item))));
     return result.length ? result : fallback;
@@ -1435,8 +1736,8 @@ function buildPrivateConfigWarnings(channels: AdminModelChannel[], volcengineAss
     }
     channels.forEach((channel, index) => {
         const name = channel.name || `渠道 ${index + 1}`;
-        if (!channel.baseUrl.trim()) warnings.push(`${name} 缺少接口地址。请点击该渠道“编辑”，填写“接口地址”。`);
-        if (!channel.apiKey.trim()) warnings.push(`${name} 缺少 API Key。请点击该渠道“编辑”，填写“API Key”。`);
+        if (channel.protocol !== "jimeng-cli" && !channel.baseUrl.trim()) warnings.push(`${name} 缺少接口地址。请点击该渠道“编辑”，填写“接口地址”。`);
+        if (channel.protocol !== "jimeng-cli" && !channel.apiKey.trim()) warnings.push(`${name} 缺少 API Key。请点击该渠道“编辑”，填写“API Key”。`);
         if (channel.protocol === "volcengine-ark") {
             if (!channelEndpointMappings(channel).length) warnings.push(`${name} 缺少 Seedance 模型映射。请点击“编辑”，在“Seedance 模型映射”里填写模型名和火山 EP。`);
         } else if (!visibleChannelModels(channel.models).length) {
@@ -1453,14 +1754,54 @@ function buildPrivateConfigWarnings(channels: AdminModelChannel[], volcengineAss
 
 function channelMissingReasons(channel: AdminModelChannel) {
     const reasons: string[] = [];
-    if (!channel.baseUrl.trim()) reasons.push("接口地址");
-    if (!channel.apiKey.trim()) reasons.push("API Key");
+    if (channel.protocol !== "jimeng-cli" && !channel.baseUrl.trim()) reasons.push("接口地址");
+    if (channel.protocol !== "jimeng-cli" && !channel.apiKey.trim()) reasons.push("API Key");
     if (channel.protocol === "volcengine-ark") {
         if (!channelEndpointMappings(channel).length) reasons.push("Seedance 映射");
     } else if (!visibleChannelModels(channel.models).length) {
         reasons.push("模型");
     }
     return reasons;
+}
+
+function jimengLoginURLFromResult(result?: AdminJimengLoginStartResult | null) {
+    return result?.verificationUriComplete || result?.verificationUri || "";
+}
+
+function readPendingJimengLogin(): PendingJimengLogin | null {
+    if (typeof window === "undefined") return null;
+    try {
+        const raw = window.localStorage.getItem(jimengPendingLoginStorageKey);
+        if (!raw) return null;
+        const pending = JSON.parse(raw) as PendingJimengLogin;
+        if (!isPendingJimengLogin(pending)) {
+            clearPendingJimengLogin();
+            return null;
+        }
+        const ttl = Math.max(10 * 60, pending.result.expiresIn || 30 * 60) * 1000;
+        if (Date.now() - pending.createdAt > ttl) {
+            clearPendingJimengLogin();
+            return null;
+        }
+        return pending;
+    } catch {
+        clearPendingJimengLogin();
+        return null;
+    }
+}
+
+function savePendingJimengLogin(pending: PendingJimengLogin) {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(jimengPendingLoginStorageKey, JSON.stringify(pending));
+}
+
+function clearPendingJimengLogin() {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(jimengPendingLoginStorageKey);
+}
+
+function isPendingJimengLogin(value: PendingJimengLogin | null | undefined): value is PendingJimengLogin {
+    return Boolean(value?.result?.deviceCode && value?.result?.userCode && jimengLoginURLFromResult(value.result) && value?.payload?.channel?.protocol === "jimeng-cli");
 }
 
 function parseTabJson(tab: "public", value: string): AdminSettings["public"] | null;

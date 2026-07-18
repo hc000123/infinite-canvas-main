@@ -278,10 +278,16 @@ export async function deleteAdminAsset(token: string, id: string) {
 
 export type AdminModelChannel = {
     id: string;
-    protocol: "openai" | "volcengine-ark";
+    protocol: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud";
     name: string;
     baseUrl: string;
     apiKey: string;
+    cliPath: string;
+    workDir: string;
+    outputDir: string;
+    timeoutSeconds: number;
+    sessionId: number;
+    concurrencyLimit: number;
     endpointId: string;
     endpointMappings: AdminModelEndpointMapping[];
     models: string[];
@@ -303,6 +309,7 @@ export type AdminPublicModelChannelSettings = {
     modelTextEndpoints: AdminModelTextEndpoint[];
     modelProtocols?: AdminModelProtocol[];
     modelCapabilities?: AdminModelCapability[];
+    modelSources?: AdminModelSource[];
     defaultModel: string;
     defaultImageModel: string;
     defaultVideoModel: string;
@@ -323,12 +330,19 @@ export type AdminModelTextEndpoint = {
 
 export type AdminModelProtocol = {
     model: string;
-    protocol: "openai" | "volcengine-ark";
+    protocol: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud";
 };
 
 export type AdminModelCapability = {
     model: string;
     capabilities: string[];
+};
+
+export type AdminModelSource = {
+    model: string;
+    channelId: string;
+    channelName: string;
+    protocol: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud";
 };
 
 export type AdminPublicVolcengineAssetSettings = { enabled: boolean };
@@ -380,6 +394,24 @@ export type AdminChannelActionRequest = {
     index?: number;
     channel: AdminModelChannel;
     model?: string;
+    deviceCode?: string;
+};
+
+export type AdminJimengLoginStartResult = {
+    cliPath: string;
+    verificationUri: string;
+    verificationUriComplete?: string;
+    userCode: string;
+    deviceCode: string;
+    expiresIn?: number;
+    interval?: number;
+    loginReady?: boolean;
+    message?: string;
+};
+
+export type AdminJimengLoginCheckResult = {
+    loginReady: boolean;
+    message: string;
 };
 
 export async function fetchChannelModels(token: string, payload: AdminChannelActionRequest) {
@@ -388,4 +420,12 @@ export async function fetchChannelModels(token: string, payload: AdminChannelAct
 
 export async function testChannelModel(token: string, payload: AdminChannelActionRequest) {
     return apiPost<string>("/api/admin/settings/channel-test", payload, token);
+}
+
+export async function startJimengLogin(token: string, payload: AdminChannelActionRequest) {
+    return apiPost<AdminJimengLoginStartResult>("/api/admin/settings/jimeng-login/start", payload, token);
+}
+
+export async function checkJimengLogin(token: string, payload: AdminChannelActionRequest) {
+    return apiPost<AdminJimengLoginCheckResult>("/api/admin/settings/jimeng-login/check", payload, token);
 }

@@ -1,5 +1,5 @@
 export type AiChannelMode = "remote" | "local";
-export type AiProviderProtocol = "openai" | "volcengine-ark";
+export type AiProviderProtocol = "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud";
 export type AiModelProtocol = { model: string; protocol: AiProviderProtocol };
 
 export function resolveEffectiveChannelMode(_channelMode: AiChannelMode, _allowCustomChannel?: boolean) {
@@ -22,6 +22,6 @@ export function inferRemoteVideoProtocol(model: string, fallback: AiProviderProt
     const normalized = model.trim().toLowerCase();
     if (!normalized) return fallback;
     const configured = modelProtocols.find((item) => item.model.trim().toLowerCase() === normalized)?.protocol;
-    if (configured === "openai" || configured === "volcengine-ark") return configured;
+    if (configured === "openai" || configured === "volcengine-ark" || configured === "jimeng-cli" || configured === "xinglian-cloud") return configured;
     return normalized.startsWith("ep-") ? "volcengine-ark" : fallback;
 }

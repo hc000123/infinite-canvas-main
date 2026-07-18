@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode, RefObject } from "react";
-import { AudioLines, ChevronRight, Image as ImageIcon, RefreshCw, Star } from "lucide-react";
+import { AudioLines, ChevronRight, Image as ImageIcon, RefreshCw, Sparkles, Star, Upload } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
@@ -28,6 +28,7 @@ export type NodeContentRendererProps = {
     onRetry?: (node: CanvasNodeData) => void;
     onRefreshVideoTask?: (node: CanvasNodeData) => void;
     onGenerateImage?: (node: CanvasNodeData) => void;
+    onImageQuickAction?: (node: CanvasNodeData, action: "image-to-image" | "upscale") => void;
     onDownload?: (node: CanvasNodeData) => void;
     onReviewAsset?: (node: CanvasNodeData) => void;
     reviewSubmitting?: boolean;
@@ -201,13 +202,17 @@ function ImageNodeContent(props: NodeContentRendererProps) {
     );
 }
 
-function EmptyImageContent({ theme, isBatchRoot, batchCount, batchExpanded, batchOpening, batchRecovering, onToggleBatch }: NodeContentRendererProps) {
+function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded, batchOpening, batchRecovering, onToggleBatch, onImageQuickAction }: NodeContentRendererProps) {
     const content = (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.placeholder }}>
-            <div className="flex size-14 items-center justify-center rounded-lg" style={{ background: theme.toolbar.activeBg }}>
-                <ImageIcon className="size-6 opacity-30" />
+        <div className="flex h-full w-full flex-col items-center justify-center gap-5 px-8" style={{ color: theme.node.placeholder }}>
+            <ImageIcon className="size-16 opacity-35" />
+            <div className="w-full max-w-[220px] space-y-2 self-start">
+                <div className="text-xs font-medium" style={{ color: theme.node.muted }}>
+                    尝试：
+                </div>
+                <EmptyImageAction icon={<Upload className="size-4" />} label="图生图" theme={theme} onClick={() => onImageQuickAction?.(node, "image-to-image")} />
+                <EmptyImageAction icon={<Sparkles className="size-4" />} label="图片高清" theme={theme} onClick={() => onImageQuickAction?.(node, "upscale")} />
             </div>
-            <span className="text-[10px] tracking-[0.18em] opacity-50">空图片节点</span>
         </div>
     );
     if (isBatchRoot)
@@ -217,6 +222,25 @@ function EmptyImageContent({ theme, isBatchRoot, batchCount, batchExpanded, batc
             </BatchFrame>
         );
     return content;
+}
+
+function EmptyImageAction({ icon, label, theme, onClick }: { icon: ReactNode; label: string; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onClick: () => void }) {
+    return (
+        <button
+            type="button"
+            className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm font-medium transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
+            style={{ color: theme.node.text }}
+            onClick={(event) => {
+                event.stopPropagation();
+                onClick();
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+        >
+            {icon}
+            <span>{label}</span>
+        </button>
+    );
 }
 
 function AudioNodeContent({ node, theme }: NodeContentRendererProps) {

@@ -5,7 +5,9 @@ import { imageToDataUrl } from "@/services/image-storage";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { AI_REQUEST_TIMEOUT_MS, AI_VIDEO_CONTENT_TIMEOUT_MS, AI_VIDEO_MAX_POLL_ATTEMPTS, AI_VIDEO_POLL_INTERVAL_MS, AI_VIDEO_TASK_TIMEOUT_MS, aiApiUrl, aiHeaders, delay, normalizeAiError, refreshRemoteUser } from "@/services/api/ai-provider";
 import { isRemoteOrInlineMediaUrl, normalizeSeedanceRatio, normalizeSeedanceResolution, normalizeSeedanceSeed, normalizeVideoResolution, normalizeVideoSeconds, normalizeVideoSize } from "@/services/api/video-normalizers";
-import { buildSeedanceVideoTaskPayload, seedanceAssetURIFromImageReference, seedanceAssetURIFromVideoReference, type SeedanceImageReferenceInput, type SeedanceOrderedReferenceInput } from "@/services/api/video-reference";
+import { buildSeedanceVideoTaskPayload, defaultSeedanceImageRole, seedanceAssetURIFromImageReference, seedanceAssetURIFromVideoReference, type SeedanceImageReferenceInput, type SeedanceOrderedReferenceInput } from "@/services/api/video-reference";
+import { buildDreaminaVideoPayload } from "@/services/api/dreamina-video-payload";
+import { buildXinglianVideoPayload } from "@/services/api/xinglian-video-payload";
 import { aiTaskTraceHeaders, readAiTaskLedgerFromHeaders, type AiTaskLedger, type AiTaskTrace } from "@/services/api/ai-task-trace";
 import { type AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
@@ -85,7 +87,19 @@ type VideoResponse = {
     watermark?: boolean;
 };
 type ApiVideoResponse = VideoResponse | { code?: number; data?: VideoResponse | null; msg?: string };
-type VideoPreflightResponse = { channelName: string; model: string; protocol: string; baseUrl?: string; endpointId?: string; apiKeyConfigured?: boolean; apiKeyHint?: string };
+type VideoPreflightResponse = {
+    channelName: string;
+    model: string;
+    protocol: string;
+    baseUrl?: string;
+    endpointId?: string;
+    apiKeyConfigured?: boolean;
+    apiKeyHint?: string;
+    cliPath?: string;
+    outputDir?: string;
+    version?: string;
+    loginReady?: boolean;
+};
 type ApiVideoPreflightResponse = { code?: number; data?: VideoPreflightResponse | null; msg?: string };
 
 export async function requestVideoGeneration(config: AiConfig, prompt: string, references: VideoGenerationReferences = [], options: VideoGenerationOptions = {}) {
@@ -93,8 +107,8 @@ export async function requestVideoGeneration(config: AiConfig, prompt: string, r
 }
 
 export async function preflightVideoGeneration(config: AiConfig) {
-    if (config.videoProtocol !== "volcengine-ark") return undefined;
-    const model = config.seedanceEndpointId || config.seedanceModel || config.videoModel || config.model;
+    if (!shouldPreflightVideoProtocol(config.videoProtocol)) return undefined;
+    const model = resolveVideoRequestModel(config);
     if (!model?.trim()) throw new Error("视频模型未配置，请先选择视频模型");
     try {
         const response = await axios.get<ApiVideoPreflightResponse>(aiApiUrl(config, "/videos/preflight"), {
@@ -110,11 +124,11 @@ export async function preflightVideoGeneration(config: AiConfig) {
 }
 
 export async function refreshVideoTask(config: AiConfig, taskId: string) {
-    return queryVideoTask(config, taskId, config.model || config.videoModel);
+    return queryVideoTask(config, taskId, resolveVideoRequestModel(config));
 }
 
 export async function fetchVideoTaskContent(config: AiConfig, task: NormalizedVideoTask) {
-    const blob = await fetchVideoContent(config, config.model || config.videoModel, task);
+    const blob = await fetchVideoContent(config, resolveVideoRequestModel(config), task);
     await assertVideoBlob(blob);
     return blob;
 }
@@ -174,7 +188,7 @@ function calculateVideoUrlExpiresAt(base?: number, expiresAfter?: number) {
 }
 
 async function requestOpenAICompatibleVideoGeneration(config: AiConfig, prompt: string, references: VideoGenerationReferences, options: VideoGenerationOptions) {
-    const model = config.model || config.videoModel;
+    const model = resolveVideoRequestModel(config);
     const normalizedReferences = normalizeVideoGenerationReferences(references);
     try {
         assertVideoConfigReady(config, model);
@@ -217,9 +231,22 @@ async function queryVideoTask(config: AiConfig, taskId: string, model: string) {
     const response = await axios.get<ApiVideoResponse>(url, {
         headers: aiHeaders(config),
         params,
-        timeout: config.videoProtocol === "volcengine-ark" ? AI_VIDEO_TASK_TIMEOUT_MS : AI_REQUEST_TIMEOUT_MS,
+        timeout: isLongRunningVideoProtocol(config.videoProtocol) ? AI_VIDEO_TASK_TIMEOUT_MS : AI_REQUEST_TIMEOUT_MS,
     });
     return normalizeVideoTask(unwrapVideoResponse(response.data));
+}
+
+function shouldPreflightVideoProtocol(protocol: AiConfig["videoProtocol"]) {
+    return protocol === "volcengine-ark" || protocol === "jimeng-cli" || protocol === "xinglian-cloud";
+}
+
+function isLongRunningVideoProtocol(protocol: AiConfig["videoProtocol"]) {
+    return protocol === "volcengine-ark" || protocol === "jimeng-cli" || protocol === "xinglian-cloud";
+}
+
+function resolveVideoRequestModel(config: AiConfig) {
+    if (config.videoProtocol === "volcengine-ark") return (config.seedanceEndpointId || config.seedanceModel || config.videoModel || config.model).trim();
+    return (config.videoModel || config.model).trim();
 }
 
 async function pollVideoTask(initialTask: NormalizedVideoTask, queryTask: (taskId: string) => Promise<NormalizedVideoTask>, options: VideoGenerationOptions) {
@@ -281,6 +308,12 @@ export async function buildVideoPayload(config: AiConfig, prompt: string, refere
     if (config.videoProtocol === "volcengine-ark") {
         return buildSeedanceVideoPayload(config, prompt, references);
     }
+    if (config.videoProtocol === "jimeng-cli") {
+        return buildDreaminaVideoRequest(config, prompt, references, model);
+    }
+    if (config.videoProtocol === "xinglian-cloud") {
+        return buildXinglianVideoRequest(config, prompt, references, model);
+    }
     if (!references.images.length && !references.videos.length && !references.audios.length) {
         const seed = normalizeSeedanceSeed(config.videoSeed);
         return {
@@ -317,6 +350,78 @@ export async function buildVideoPayload(config: AiConfig, prompt: string, refere
         body.append("input_reference_role[]", references.images[index]?.seedanceRole || "reference_image");
     });
     return body;
+}
+
+async function buildDreaminaVideoRequest(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string) {
+    const [images, videos, audios] = await Promise.all([
+        Promise.all(
+            references.images.map(async (image, index) => ({
+                file: await dreaminaImageFile(image),
+                role: image.seedanceRole || defaultSeedanceImageRole(index, config.videoReferenceImageMode),
+            })),
+        ),
+        Promise.all(references.videos.map((video) => dreaminaMediaFile(video, "video"))),
+        Promise.all(references.audios.map((audio) => dreaminaMediaFile(audio, "audio"))),
+    ]);
+    return buildDreaminaVideoPayload({
+        model,
+        prompt,
+        duration: String(Math.max(4, Math.min(15, Number(config.videoSeconds) || 6))),
+        ratio: normalizeSeedanceRatio(config.size),
+        resolution: model === "seedance2.0_vip" ? normalizeVideoResolution(config.vquality) : "720p",
+        mode: config.videoReferenceMode,
+        images,
+        videos,
+        audios,
+    });
+}
+
+async function dreaminaImageFile(image: ReferenceImage) {
+    try {
+        const dataUrl = await imageToDataUrl(image);
+        if (!dataUrl?.startsWith("data:")) throw new Error("empty image");
+        return dataUrlToFile({ ...image, dataUrl });
+    } catch {
+        throw new Error(`即梦 CLI 无法读取图片“${image.name || "未命名图片"}”，请先导入我的素材后重试`);
+    }
+}
+
+async function dreaminaMediaFile(reference: ReferenceVideo | ReferenceAudio, kind: "video" | "audio") {
+    try {
+        const url = reference.url || (reference.storageKey ? await resolveMediaUrl(reference.storageKey, "") : "");
+        if (!url) throw new Error("missing url");
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        const fallbackType = kind === "video" ? "video/mp4" : "audio/mpeg";
+        return new File([blob], reference.name || (kind === "video" ? "reference.mp4" : "reference.mp3"), { type: blob.type || reference.type || fallbackType });
+    } catch {
+        throw new Error(`即梦 CLI 无法读取${kind === "video" ? "视频" : "音频"}“${reference.name || "未命名素材"}”，请先导入我的素材后重试`);
+    }
+}
+
+async function buildXinglianVideoRequest(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string) {
+    const [images, videos, audios] = await Promise.all([xinglianReferenceURLs(references.images), xinglianReferenceURLs(references.videos), xinglianReferenceURLs(references.audios)]);
+    return buildXinglianVideoPayload({
+        model,
+        prompt,
+        duration: normalizeVideoSeconds(config.videoSeconds),
+        ratio: normalizeSeedanceRatio(config.size),
+        generateAudio: config.videoGenerateAudio === "true",
+        images,
+        videos,
+        audios,
+    });
+}
+
+async function xinglianReferenceURLs(references: Array<{ url?: string; storageKey?: string }>) {
+    return Promise.all(
+        references.map(async (reference) => {
+            const url = reference.url || (reference.storageKey ? await resolveMediaUrl(reference.storageKey, "") : "");
+            if (!url.startsWith("https://")) throw new Error("星链云参考素材必须先上传为 HTTPS 地址");
+            return url;
+        }),
+    );
 }
 
 export type NormalizedVideoReferences = {

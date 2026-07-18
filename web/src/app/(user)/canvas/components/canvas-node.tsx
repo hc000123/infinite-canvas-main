@@ -42,6 +42,7 @@ type CanvasNodeProps = {
     onRetry?: (node: CanvasNodeData) => void;
     onRefreshVideoTask?: (node: CanvasNodeData) => void;
     onGenerateImage?: (node: CanvasNodeData) => void;
+    onImageQuickAction?: (node: CanvasNodeData, action: "image-to-image" | "upscale") => void;
     onDownload?: (node: CanvasNodeData) => void;
     onViewImage?: (node: CanvasNodeData) => void;
     onReviewAsset?: (node: CanvasNodeData) => void;
@@ -83,6 +84,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onRetry,
     onRefreshVideoTask,
     onGenerateImage,
+    onImageQuickAction,
     onDownload,
     onViewImage,
     onReviewAsset,
@@ -308,6 +310,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onRetry={onRetry}
                         onRefreshVideoTask={onRefreshVideoTask}
                         onGenerateImage={onGenerateImage}
+                        onImageQuickAction={onImageQuickAction}
                         onDownload={onDownload}
                         onReviewAsset={onReviewAsset}
                         reviewSubmitting={reviewSubmitting}
@@ -358,7 +361,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 </>
             ) : null}
 
-            {showPanel && renderPanel && data.type !== CanvasNodeType.Config && data.type !== CanvasNodeType.Audio ? <div className="absolute left-1/2 top-full z-[70] w-[500px] -translate-x-1/2 pt-4">{renderPanel(data)}</div> : null}
+            {showPanel && renderPanel && data.type !== CanvasNodeType.Config && data.type !== CanvasNodeType.Audio ? <div className="absolute left-1/2 top-full z-[70] w-[920px] max-w-[calc(100vw-48px)] -translate-x-1/2 pt-4">{renderPanel(data)}</div> : null}
         </div>
     );
 });

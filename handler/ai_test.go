@@ -5,8 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -183,6 +186,206 @@ func TestVideoPreflightChecksBackendArkChannel(t *testing.T) {
 	}
 }
 
+func TestJimengVideoProxySubmitsThroughCLIChannel(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	cliPath := writeFakeJimengCLI(t)
+	outputDir := t.TempDir()
+	saveJimengHandlerSettings(t, cliPath, outputDir)
+
+	body := []byte(`{
+		"model": "seedance2.0fast",
+		"prompt": "一只猫在霓虹街道奔跑",
+		"duration": 6,
+		"ratio": "9:16",
+		"resolution": "720p"
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/videos", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(service.WithUser(req.Context(), model.AuthUser{ID: "user-jimeng", Username: "jimeng", Role: model.UserRoleUser}))
+	rec := httptest.NewRecorder()
+
+	proxyAIRequest(rec, req, "/videos")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	payload := readJSONMap(t, rec.Body.Bytes())
+	if payload["id"] != "jimeng-submit-1" || payload["status"] != "running" {
+		t.Fatalf("payload = %#v, want jimeng running task", payload)
+	}
+	if rec.Header().Get("X-AI-Upstream-Task-ID") != "jimeng-submit-1" {
+		t.Fatalf("upstream header = %q, want jimeng submit id", rec.Header().Get("X-AI-Upstream-Task-ID"))
+	}
+}
+
+func TestJimengVideoProxySubmitsAllMultipartModes(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	cliPath := writeFakeJimengCLI(t)
+	saveJimengHandlerSettings(t, cliPath, t.TempDir())
+	png := append([]byte("\x89PNG\r\n\x1a\n"), bytes.Repeat([]byte{0}, 32)...)
+	tests := []struct {
+		mode   string
+		files  []handlerJimengUpload
+		wantID string
+	}{
+		{mode: "text2video", wantID: "jimeng-submit-1"},
+		{mode: "image2video", files: []handlerJimengUpload{{field: "input_image[]", name: "first.png", contentType: "image/png", body: png, role: "first_frame"}}, wantID: "jimeng-image2video"},
+		{mode: "frames2video", files: []handlerJimengUpload{{field: "input_image[]", name: "first.png", contentType: "image/png", body: png, role: "first_frame"}, {field: "input_image[]", name: "last.png", contentType: "image/png", body: png, role: "last_frame"}}, wantID: "jimeng-frames2video"},
+		{mode: "multiframe2video", files: []handlerJimengUpload{{field: "input_image[]", name: "1.png", contentType: "image/png", body: png}, {field: "input_image[]", name: "2.png", contentType: "image/png", body: png}, {field: "input_image[]", name: "3.png", contentType: "image/png", body: png}}, wantID: "jimeng-multiframe2video"},
+		{mode: "multimodal2video", files: []handlerJimengUpload{{field: "input_image[]", name: "image.png", contentType: "image/png", body: png}, {field: "input_video[]", name: "clip.mp4", contentType: "video/mp4", body: []byte("\x00\x00\x00\x18ftypmp42video")}, {field: "input_audio[]", name: "voice.mp3", contentType: "audio/mpeg", body: []byte("ID3audio")}}, wantID: "jimeng-multimodal2video"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.mode, func(t *testing.T) {
+			body, contentType := buildHandlerJimengMultipart(t, tt.mode, tt.files)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/videos", bytes.NewReader(body))
+			req.Header.Set("Content-Type", contentType)
+			req = req.WithContext(service.WithUser(req.Context(), model.AuthUser{ID: "user-jimeng-" + tt.mode, Username: "jimeng", Role: model.UserRoleUser}))
+			rec := httptest.NewRecorder()
+			proxyAIRequest(rec, req, "/videos")
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+			}
+			if payload := readJSONMap(t, rec.Body.Bytes()); payload["id"] != tt.wantID {
+				t.Fatalf("payload = %#v, want id %s", payload, tt.wantID)
+			}
+		})
+	}
+}
+
+func TestJimengVideoProxyRefundsRejectedMultipartTask(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	cliPath := writeFakeJimengCLI(t)
+	saveJimengHandlerSettingsWithCredits(t, cliPath, t.TempDir(), 4)
+	now := time.Now().Format(time.RFC3339)
+	_, err := repository.SaveUser(model.User{ID: "user-jimeng-refund", Username: "jimeng-refund", Role: model.UserRoleUser, Status: model.UserStatusActive, Credits: 10, AffCode: "JMREFUND", CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, contentType := buildHandlerJimengMultipart(t, "image2video", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/videos", bytes.NewReader(body))
+	req.Header.Set("Content-Type", contentType)
+	req = req.WithContext(service.WithUser(req.Context(), model.AuthUser{ID: "user-jimeng-refund", Username: "jimeng-refund", Role: model.UserRoleUser}))
+	rec := httptest.NewRecorder()
+	proxyAIRequest(rec, req, "/videos")
+	if !strings.Contains(rec.Body.String(), "图生视频需要恰好 1 张图片") {
+		t.Fatalf("body = %s", rec.Body.String())
+	}
+	user, ok, err := repository.GetUserByID("user-jimeng-refund")
+	if err != nil || !ok || user.Credits != 10 {
+		t.Fatalf("user = %#v ok=%v err=%v, want refunded balance 10", user, ok, err)
+	}
+}
+
+type handlerJimengUpload struct {
+	field       string
+	name        string
+	contentType string
+	body        []byte
+	role        string
+}
+
+func buildHandlerJimengMultipart(t *testing.T, mode string, files []handlerJimengUpload) ([]byte, string) {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for key, value := range map[string]string{"model": "seedance2.0fast", "dreamina_mode": mode, "prompt": "镜头推进", "duration": "6", "ratio": "9:16", "resolution": "720p"} {
+		if err := writer.WriteField(key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, file := range files {
+		header := textproto.MIMEHeader{}
+		header.Set("Content-Disposition", `form-data; name="`+file.field+`"; filename="`+file.name+`"`)
+		header.Set("Content-Type", file.contentType)
+		part, err := writer.CreatePart(header)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := part.Write(file.body); err != nil {
+			t.Fatal(err)
+		}
+		if file.field == "input_image[]" {
+			if err := writer.WriteField("input_image_role[]", file.role); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return body.Bytes(), writer.FormDataContentType()
+}
+
+func TestXinglianVideoProxySubmitsAndFetchesSD2Task(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer xinglian-key" {
+			t.Fatalf("authorization = %q", r.Header.Get("Authorization"))
+		}
+		switch r.URL.Path {
+		case "/v1/video/submit/generate":
+			payload := readJSONMap(t, mustReadAll(t, r.Body))
+			if payload["model"] != "sd2-720p-fast" || payload["duration"] != float64(6) {
+				t.Fatalf("submit payload = %#v", payload)
+			}
+			_, _ = w.Write([]byte(`{"id":"task-xinglian","status":"queued"}`))
+		case "/v1/video/fetch/task-xinglian":
+			_, _ = w.Write([]byte(`{"id":"task-xinglian","status":"completed","metadata":{"url":"https://cdn.example.com/xinglian.mp4"}}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer upstream.Close()
+	saveXinglianHandlerSettings(t, upstream.URL+"/v1")
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/videos", strings.NewReader(`{"model":"sd2-720p-fast","prompt":"一只猫在草地奔跑","duration":6,"ratio":"9:16","generate_audio":true}`))
+	request.Header.Set("Content-Type", "application/json")
+	request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: "user-xinglian", Username: "xinglian", Role: model.UserRoleUser}))
+	response := httptest.NewRecorder()
+
+	proxyAIRequest(response, request, "/videos")
+	if response.Code != http.StatusOK {
+		t.Fatalf("submit status = %d body=%s", response.Code, response.Body.String())
+	}
+	if payload := readJSONMap(t, response.Body.Bytes()); payload["id"] != "task-xinglian" || payload["status"] != "queued" {
+		t.Fatalf("submit response = %#v", payload)
+	}
+
+	fetchRequest := httptest.NewRequest(http.MethodGet, "/api/v1/videos/task-xinglian?model=sd2-720p-fast", nil)
+	fetchRequest = fetchRequest.WithContext(request.Context())
+	fetchResponse := httptest.NewRecorder()
+	proxyAIGetRequest(fetchResponse, fetchRequest, "/videos/task-xinglian")
+	if fetchResponse.Code != http.StatusOK {
+		t.Fatalf("fetch status = %d body=%s", fetchResponse.Code, fetchResponse.Body.String())
+	}
+	if payload := readJSONMap(t, fetchResponse.Body.Bytes()); payload["status"] != "completed" || payload["video_url"] != "https://cdn.example.com/xinglian.mp4" {
+		t.Fatalf("fetch response = %#v", payload)
+	}
+}
+
+func TestJimengVideoProxyDownloadsContentThroughCLIChannel(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	cliPath := writeFakeJimengCLI(t)
+	outputDir := t.TempDir()
+	saveJimengHandlerSettings(t, cliPath, outputDir)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/videos/jimeng-submit-1/content?model=seedance2.0fast", nil)
+	req = req.WithContext(service.WithUser(req.Context(), model.AuthUser{ID: "user-jimeng", Username: "jimeng", Role: model.UserRoleUser}))
+	rec := httptest.NewRecorder()
+
+	proxyAIGetRequest(rec, req, "/videos/jimeng-submit-1/content")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec.Body.String() != "fake-video" {
+		t.Fatalf("content = %q, want fake video", rec.Body.String())
+	}
+	if contentType := rec.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "video/") && contentType != "application/octet-stream" {
+		t.Fatalf("content type = %q, want video content", contentType)
+	}
+}
+
 func TestNormalizeArkVideoTaskResponseKeepsTaskDetails(t *testing.T) {
 	source := []byte(`{
 		"id": "cgt-2026-test",
@@ -355,6 +558,15 @@ func readJSONMap(t *testing.T, body []byte) map[string]any {
 	return payload
 }
 
+func mustReadAll(t *testing.T, reader io.Reader) []byte {
+	t.Helper()
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+
 func setupAIHandlerTestDB(t *testing.T) {
 	t.Helper()
 	tmp := t.TempDir()
@@ -397,4 +609,104 @@ func saveAIHandlerSettings(t *testing.T, allowCustomChannel bool, upstreamURL st
 	if err != nil {
 		t.Fatalf("SaveSettings returned error: %v", err)
 	}
+}
+
+func saveJimengHandlerSettings(t *testing.T, cliPath string, outputDir string) {
+	saveJimengHandlerSettingsWithCredits(t, cliPath, outputDir, 0)
+}
+
+func saveJimengHandlerSettingsWithCredits(t *testing.T, cliPath string, outputDir string, credits int) {
+	t.Helper()
+	now := time.Now().Format(time.RFC3339)
+	_, err := repository.SaveSettings(model.Settings{
+		Public: model.PublicSetting{
+			ModelChannel: model.PublicModelChannelSetting{
+				AvailableModels:   []string{"seedance2.0fast"},
+				DefaultVideoModel: "seedance2.0fast",
+				ModelCosts:        []model.ModelCost{{Model: "seedance2.0fast", Credits: credits}},
+			},
+		},
+		Private: model.PrivateSetting{
+			Channels: []model.ModelChannel{{
+				Protocol:  string(model.ModelProtocolJimengCLI),
+				Name:      "jimeng-cli",
+				CLIPath:   cliPath,
+				OutputDir: outputDir,
+				Models:    []string{"seedance2.0fast"},
+				Enabled:   true,
+			}},
+		},
+	}, now)
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+}
+
+func saveXinglianHandlerSettings(t *testing.T, upstreamURL string) {
+	t.Helper()
+	now := time.Now().Format(time.RFC3339)
+	_, err := repository.SaveSettings(model.Settings{
+		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{
+			AvailableModels:   []string{"sd2-720p-fast"},
+			DefaultVideoModel: "sd2-720p-fast",
+			ModelCosts:        []model.ModelCost{{Model: "sd2-720p-fast", Credits: 0}},
+		}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{{
+			Protocol: string(model.ModelProtocolXinglianCloud),
+			Name:     "星链云",
+			BaseURL:  upstreamURL,
+			APIKey:   "xinglian-key",
+			Models:   []string{"sd2-720p-fast"},
+			Weight:   1,
+			Enabled:  true,
+		}}},
+	}, now)
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+}
+
+func writeFakeJimengCLI(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "dreamina")
+	script := `#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  version)
+    printf '{"version":"test-jimeng"}\n'
+    ;;
+  user_credit)
+    printf '{"credits":100}\n'
+    ;;
+  text2video)
+    printf '{"submit_id":"jimeng-submit-1","gen_status":"querying","model_version":"seedance2.0fast","duration":6,"ratio":"9:16","video_resolution":"720p"}\n'
+    ;;
+  image2video|frames2video|multiframe2video|multimodal2video)
+    printf '{"submit_id":"jimeng-%s","gen_status":"querying","model_version":"seedance2.0fast","duration":6,"ratio":"9:16","video_resolution":"720p"}\n' "$1"
+    ;;
+  query_result)
+    download_dir=""
+    for arg in "$@"; do
+      case "$arg" in
+        --download_dir=*) download_dir="${arg#--download_dir=}" ;;
+      esac
+    done
+    if [ -n "$download_dir" ]; then
+      mkdir -p "$download_dir"
+      printf 'fake-video' > "$download_dir/result.mp4"
+      printf '{"submit_id":"jimeng-submit-1","gen_status":"success","downloaded_files":["%s/result.mp4"]}\n' "$download_dir"
+    else
+      printf '{"submit_id":"jimeng-submit-1","gen_status":"success"}\n'
+    fi
+    ;;
+  *)
+    echo "unexpected command: $*" >&2
+    exit 2
+    ;;
+esac
+`
+	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+		t.Fatalf("Write fake dreamina: %v", err)
+	}
+	return path
 }

@@ -14,6 +14,8 @@ type ModelProtocol string
 const (
 	ModelProtocolOpenAI        ModelProtocol = "openai"
 	ModelProtocolVolcengineArk ModelProtocol = "volcengine-ark"
+	ModelProtocolJimengCLI     ModelProtocol = "jimeng-cli"
+	ModelProtocolXinglianCloud ModelProtocol = "xinglian-cloud"
 )
 
 // ModelChannel 模型渠道配置。
@@ -23,6 +25,12 @@ type ModelChannel struct {
 	Name             string                 `json:"name"`
 	BaseURL          string                 `json:"baseUrl"`
 	APIKey           string                 `json:"apiKey"`
+	CLIPath          string                 `json:"cliPath"`
+	WorkDir          string                 `json:"workDir"`
+	OutputDir        string                 `json:"outputDir"`
+	TimeoutSeconds   int                    `json:"timeoutSeconds"`
+	SessionID        int                    `json:"sessionId"`
+	ConcurrencyLimit int                    `json:"concurrencyLimit"`
 	EndpointID       string                 `json:"endpointId"`
 	EndpointMappings []ModelEndpointMapping `json:"endpointMappings"`
 	Models           []string               `json:"models"`
@@ -59,6 +67,13 @@ type ModelCapabilityType struct {
 	Capabilities []string `json:"capabilities"`
 }
 
+type ModelSourceType struct {
+	Model       string `json:"model"`
+	ChannelID   string `json:"channelId"`
+	ChannelName string `json:"channelName"`
+	Protocol    string `json:"protocol"`
+}
+
 // PublicModelChannelSetting 公开模型渠道配置。
 type PublicModelChannelSetting struct {
 	AvailableModels    []string                `json:"availableModels"`
@@ -66,6 +81,7 @@ type PublicModelChannelSetting struct {
 	ModelTextEndpoints []ModelTextEndpointType `json:"modelTextEndpoints"`
 	ModelProtocols     []ModelProtocolType     `json:"modelProtocols"`
 	ModelCapabilities  []ModelCapabilityType   `json:"modelCapabilities"`
+	ModelSources       []ModelSourceType       `json:"modelSources"`
 	DefaultModel       string                  `json:"defaultModel"`
 	DefaultImageModel  string                  `json:"defaultImageModel"`
 	DefaultVideoModel  string                  `json:"defaultVideoModel"`

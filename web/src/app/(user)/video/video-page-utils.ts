@@ -55,7 +55,7 @@ function buildVideoPackageConfigNode(item: ProductionPackage, baseConfig: AiConf
             productionPackageRole: "video_config",
             productionPackageTitle: item.segment,
             prompt: item.prompt,
-            provider: videoConfig.videoProtocol === "volcengine-ark" ? "volcengine-ark" : "openai",
+            provider: videoConfig.videoProtocol,
             referenceAssets: item.assets.map((asset) => ({ kind: asset.kind, name: asset.name, status: asset.status })),
             returnLastFrame: videoConfig.returnLastFrame,
             seconds: packageDuration,

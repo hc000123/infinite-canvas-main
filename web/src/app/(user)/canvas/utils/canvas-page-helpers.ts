@@ -126,7 +126,7 @@ export function shouldRememberVideoDefaults(node: CanvasNodeData | undefined, pa
     if (node?.type !== CanvasNodeType.Config) return false;
     if (patch.generationMode === "video") return true;
     if (node.metadata?.generationMode !== "video") return false;
-    return ["channelMode", "provider", "model", "size", "seconds", "duration", "vquality", "generateAudio", "watermark", "seed", "returnLastFrame", "videoReferenceImageMode"].some((key) => key in patch);
+    return ["channelMode", "provider", "model", "size", "seconds", "duration", "vquality", "generateAudio", "watermark", "seed", "returnLastFrame", "videoReferenceImageMode", "videoReferenceMode"].some((key) => key in patch);
 }
 
 export function normalizeConnection(firstNodeId: string, secondNodeId: string, nodes: CanvasNodeData[], firstHandleType: "source" | "target", firstHandleId?: string) {

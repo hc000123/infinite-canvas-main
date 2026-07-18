@@ -22,7 +22,19 @@ const config = {
     imageModels: ["image-model", "gpt-image-2"],
     videoModels: ["video-model", "doubao-seedance-2-0-260128", "ep-seedance"],
     textModels: ["text-model", "gpt-5.5"],
-    models: ["image-model", "video-model", "doubao-seedance-2-0-260128", "ep-seedance", "text-model"],
+    models: ["image-model", "gpt-image-2", "video-model", "doubao-seedance-2-0-260128", "text-model", "gpt-5.5"],
+    modelCapabilities: [
+        { model: "image-model", capabilities: ["image"] },
+        { model: "gpt-image-2", capabilities: ["image"] },
+        { model: "video-model", capabilities: ["video"] },
+        { model: "doubao-seedance-2-0-260128", capabilities: ["video"] },
+        { model: "text-model", capabilities: ["text"] },
+        { model: "gpt-5.5", capabilities: ["text"] },
+    ],
+    modelProtocols: [
+        { model: "video-model", protocol: "openai" },
+        { model: "doubao-seedance-2-0-260128", protocol: "volcengine-ark" },
+    ],
     size: "1:1",
     vquality: "720",
     videoSeconds: "6",
@@ -34,9 +46,9 @@ test("builds project preset from current config and patch", () => {
     assert.equal(preset.ratio, "9:16");
     assert.equal(preset.defaultDuration, "8");
     assert.equal(preset.defaultImageModel, "image-model");
-    assert.equal(preset.defaultVideoModel, "seedance-model");
+    assert.equal(preset.defaultVideoModel, "video-model");
     assert.equal(preset.defaultTextModel, "text-model");
-    assert.equal(preset.defaultVideoProvider, "volcengine-ark");
+    assert.equal(preset.defaultVideoProvider, undefined);
 });
 
 test("built-in presets use 6 seconds as the video duration default", () => {
@@ -52,20 +64,21 @@ test("applies project preset to effective AI config and migrates legacy 10s dura
         resolution: "1080",
         ratio: "16:9",
         defaultDuration: "10",
-        defaultImageModel: "preset-image",
+        defaultImageModel: "image-model",
         defaultVideoModel: "doubao-seedance-2-0-260128",
-        defaultTextModel: "preset-text",
+        defaultTextModel: "text-model",
         defaultVideoProvider: "volcengine-ark",
     });
 
     assert.equal(next.size, "16:9");
     assert.equal(next.vquality, "1080");
     assert.equal(next.videoSeconds, "6");
-    assert.equal(next.imageModel, "preset-image");
-    assert.equal(next.textModel, "preset-text");
+    assert.equal(next.imageModel, "image-model");
+    assert.equal(next.textModel, "text-model");
     assert.equal(next.videoProtocol, "volcengine-ark");
+    assert.equal(next.videoModel, "doubao-seedance-2-0-260128");
     assert.equal(next.seedanceModel, "doubao-seedance-2-0-260128");
-    assert.equal(next.seedanceEndpointId, "ep-seedance");
+    assert.equal(next.seedanceEndpointId, "");
 });
 
 test("local project presets keep the same video provider as cloud presets", () => {
@@ -78,8 +91,33 @@ test("local project presets keep the same video provider as cloud presets", () =
     );
 
     assert.equal(next.videoProtocol, "volcengine-ark");
-    assert.equal(next.videoModel, "video-model");
+    assert.equal(next.videoModel, "doubao-seedance-2-0-260128");
     assert.equal(next.seedanceModel, "doubao-seedance-2-0-260128");
+});
+
+test("project preset model catalog mapping overrides a stale provider", () => {
+    const next = applyCanvasProjectPresetToConfig(
+        {
+            ...config,
+            videoModel: "sd2-720p-fast",
+            videoModels: ["sd2-720p-fast"],
+            models: ["image-model", "sd2-720p-fast", "text-model"],
+            modelCapabilities: [
+                { model: "image-model", capabilities: ["image"] },
+                { model: "sd2-720p-fast", capabilities: ["video"] },
+                { model: "text-model", capabilities: ["text"] },
+            ],
+            modelProtocols: [{ model: "sd2-720p-fast", protocol: "xinglian-cloud" }],
+        },
+        {
+            defaultVideoModel: "sd2-720p-fast",
+            defaultVideoProvider: "volcengine-ark",
+        },
+    );
+
+    assert.equal(next.videoModel, "sd2-720p-fast");
+    assert.equal(next.videoProtocol, "xinglian-cloud");
+    assert.equal(next.seedanceEndpointId, "");
 });
 
 test("normalizes legacy pixel sizes into aspect ratios", () => {
@@ -89,7 +127,7 @@ test("normalizes legacy pixel sizes into aspect ratios", () => {
 });
 
 test("builds model options without exposing Seedance endpoint ids", () => {
-    assert.deepEqual(canvasProjectPresetModelOptions(config, "video", "volcengine-ark"), ["doubao-seedance-2-0-260128", "seedance-model"]);
+    assert.deepEqual(canvasProjectPresetModelOptions(config, "video", "volcengine-ark"), ["video-model", "doubao-seedance-2-0-260128"]);
     assert.deepEqual(canvasProjectPresetModelOptions(config, "image", "openai"), ["image-model", "gpt-image-2"]);
 });
 
