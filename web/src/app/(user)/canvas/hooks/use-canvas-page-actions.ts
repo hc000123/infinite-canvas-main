@@ -3,6 +3,7 @@ import { useCallback, useMemo, type Dispatch, type SetStateAction } from "react"
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { useCanvasStore, type CanvasProject } from "../stores/use-canvas-store";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "../types";
+import { fitCanvasViewport } from "../utils/canvas-viewport";
 import { canvasPageReturnTargetForProject, canvasVideoWorkflowHref, originalWorkflowHref, videoWorkflowEpisodeFromCanvasProject } from "./canvas-page-action-targets";
 
 type CanvasPageActionMessage = {
@@ -64,9 +65,9 @@ export function useCanvasPageActions({
     viewport: ViewportTransform;
 }) {
     const resetViewport = useCallback(() => {
-        setViewport({ x: size.width / 2, y: size.height / 2, k: 1 });
+        setViewport(fitCanvasViewport(nodes, size));
         setContextMenu(null);
-    }, [setContextMenu, setViewport, size.height, size.width]);
+    }, [nodes, setContextMenu, setViewport, size]);
 
     const setZoomScale = useCallback(
         (scale: number) => {

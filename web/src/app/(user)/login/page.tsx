@@ -2,12 +2,14 @@
 
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
 import { App, Button, Form, Input, Segmented } from "antd";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
+import { activateUserStorageScope } from "@/lib/localforage-storage";
 import { fetchCurrentUser } from "@/services/api/auth";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { postLoginHref } from "../user-auth-route";
 
 type LoginFormValues = {
     username: string;
@@ -25,7 +27,6 @@ export default function LoginPage() {
 
 function LoginContent() {
     const { message } = App.useApp();
-    const router = useRouter();
     const searchParams = useSearchParams();
     const login = useUserStore((state) => state.login);
     const register = useUserStore((state) => state.register);
@@ -44,12 +45,13 @@ function LoginContent() {
         const error = searchParams.get("error");
         if (error) message.error(error);
         if (!token) return;
-        void fetchCurrentUser(token).then((user) => {
+        void fetchCurrentUser(token).then(async (user) => {
             setSession(token, user);
+            await activateUserStorageScope(user.id);
             message.success("登录成功");
-            router.replace(redirect.startsWith("/") ? redirect : "/");
+            window.location.replace(postLoginHref(redirect, user.role));
         });
-    }, [message, redirect, router, searchParams, setSession]);
+    }, [message, redirect, searchParams, setSession]);
 
     useEffect(() => {
         if (searchParams.get("token") || searchParams.get("error")) return;
@@ -60,9 +62,8 @@ function LoginContent() {
 
     useEffect(() => {
         if (!isReady || !user) return;
-        if (isAdminRedirect && user.role !== "admin") return;
-        router.replace(redirect.startsWith("/") ? redirect : "/");
-    }, [isAdminRedirect, isReady, redirect, router, user]);
+        void activateUserStorageScope(user.id).then(() => window.location.replace(postLoginHref(redirect, user.role)));
+    }, [isAdminRedirect, isReady, redirect, user]);
 
     useEffect(() => {
         if (!allowRegister && mode === "register") setMode("login");
@@ -80,9 +81,9 @@ function LoginContent() {
             }
             const action = mode === "register" ? register : login;
             const user = await action({ username: values.username, password: values.password });
+            await activateUserStorageScope(user.id);
             message.success(mode === "register" ? "注册成功" : "登录成功");
-            router.replace(redirect.startsWith("/") ? redirect : "/");
-            if (user.role !== "admin") router.replace("/projects");
+            window.location.replace(postLoginHref(redirect, user.role));
         } catch (error) {
             message.error(error instanceof Error ? error.message : "登录失败");
         }

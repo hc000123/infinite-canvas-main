@@ -312,6 +312,7 @@ function InfiniteCanvasPage() {
     const { screenToCanvas, getCanvasCenter, getAppendNodeCenter } = useCanvasViewportGeometry({
         containerRef,
         didInitialCenterRef,
+        enabled: projectLoaded,
         nodesRef,
         selectedNodeIds,
         setSize,

@@ -12,7 +12,7 @@ import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { buildCanvasVideoConfig, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
-import { promptPreviewNoZoomProps, promptPreviewTextareaClass, promptPreviewTextareaStyle } from "../utils/canvas-prompt-preview";
+import { canSubmitCanvasPrompt, promptPreviewNoZoomProps, promptPreviewTextareaClass, promptPreviewTextareaStyle } from "../utils/canvas-prompt-preview";
 import { applyReferenceMention, filterReferenceMentions, findReferenceMentionTrigger, type CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
 import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
 import { CanvasImageCameraPopover } from "./canvas-image-camera-popover";
@@ -33,9 +33,10 @@ type CanvasNodePromptPanelProps = {
     onGenerate: (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => void;
     onImageSettingsOpenChange?: (open: boolean) => void;
     referenceMentionOptions?: CanvasReferenceMentionOption[];
+    hasConnectedText?: boolean;
 };
 
-export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChange, onConfigChange, onGenerate, onImageSettingsOpenChange, referenceMentionOptions = [] }: CanvasNodePromptPanelProps) {
+export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChange, onConfigChange, onGenerate, onImageSettingsOpenChange, referenceMentionOptions = [], hasConnectedText = false }: CanvasNodePromptPanelProps) {
     const localConfig = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
     const publicSettings = useConfigStore((state) => state.publicSettings);
@@ -55,6 +56,7 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "image" ? config.count : 1 });
     const mentionTrigger = mode === "video" ? findReferenceMentionTrigger(prompt, caret) : null;
     const mentionMatches = useMemo(() => (mentionTrigger ? filterReferenceMentions(referenceMentionOptions, mentionTrigger.query).slice(0, 9) : []), [mentionTrigger?.query, mentionTrigger?.start, referenceMentionOptions]);
+    const canSubmit = canSubmitCanvasPrompt(prompt, isRunning, hasConnectedText);
 
     useEffect(() => {
         setPrompt(isEditingExistingContent ? "" : node.metadata?.prompt || "");
@@ -82,7 +84,7 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
 
     const submit = () => {
         const text = prompt.trim();
-        if (!text || isRunning) return;
+        if (!canSubmit) return;
         onGenerate(node.id, mode, mode === "image" ? appendImageCameraPrompt(text, node.metadata) : text);
         setPrompt("");
     };
@@ -209,7 +211,7 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                         <ModelPicker className="h-10 !min-w-[140px] flex-1" fullWidth config={config} modelType="text" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />
                     )}
                 </div>
-                <Button type="primary" className="!h-10 !min-w-[84px] shrink-0 !rounded-full !px-3" disabled={isRunning || !prompt.trim()} onClick={submit} aria-label="生成">
+                <Button type="primary" className="!h-10 !min-w-[84px] shrink-0 !rounded-full !px-3" disabled={!canSubmit} onClick={submit} aria-label="生成">
                     <span className="flex items-center gap-1.5">
                         <span className="inline-flex items-center gap-1 text-xs font-medium tabular-nums">
                             <CreditSymbol />

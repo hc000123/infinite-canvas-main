@@ -1,11 +1,12 @@
 "use client";
 
-import localforage from "localforage";
 import { nanoid } from "nanoid";
+
+import { createUserScopedLocalForage } from "@/lib/user-scoped-localforage";
 
 export type UploadedFile = { url: string; storageKey: string; bytes: number; mimeType: string; width?: number; height?: number };
 
-const store = localforage.createInstance({ name: "infinite-canvas", storeName: "media_files" });
+const store = createUserScopedLocalForage("media_files");
 const objectUrls = new Map<string, string>();
 
 export async function uploadMediaFile(input: string | Blob, prefix = "file"): Promise<UploadedFile> {

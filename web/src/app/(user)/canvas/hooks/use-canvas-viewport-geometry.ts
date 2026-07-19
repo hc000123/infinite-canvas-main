@@ -2,10 +2,12 @@ import { useCallback, useEffect, type Dispatch, type RefObject, type SetStateAct
 
 import { getNodeSpec } from "../constants";
 import { CanvasNodeType, type CanvasNodeData, type Position, type ViewportTransform } from "../types";
+import { initialMeasuredCanvasViewport } from "../utils/canvas-viewport";
 
 type Props = {
     containerRef: RefObject<HTMLDivElement | null>;
     didInitialCenterRef: RefObject<boolean>;
+    enabled: boolean;
     nodesRef: RefObject<CanvasNodeData[]>;
     selectedNodeIds: Set<string>;
     setSize: Dispatch<SetStateAction<{ width: number; height: number }>>;
@@ -14,8 +16,9 @@ type Props = {
     viewportRef: RefObject<ViewportTransform>;
 };
 
-export function useCanvasViewportGeometry({ containerRef, didInitialCenterRef, nodesRef, selectedNodeIds, setSize, setViewport, size, viewportRef }: Props) {
+export function useCanvasViewportGeometry({ containerRef, didInitialCenterRef, enabled, nodesRef, selectedNodeIds, setSize, setViewport, size, viewportRef }: Props) {
     useEffect(() => {
+        if (!enabled) return;
         const el = containerRef.current;
         if (!el) return;
 
@@ -24,7 +27,7 @@ export function useCanvasViewportGeometry({ containerRef, didInitialCenterRef, n
             setSize({ width: rect.width, height: rect.height });
             if (!didInitialCenterRef.current) {
                 didInitialCenterRef.current = true;
-                setViewport({ x: rect.width / 2, y: rect.height / 2, k: 1 });
+                setViewport((current) => initialMeasuredCanvasViewport(nodesRef.current, current, { width: rect.width, height: rect.height }));
             }
         };
 
@@ -32,7 +35,7 @@ export function useCanvasViewportGeometry({ containerRef, didInitialCenterRef, n
         const resizeObserver = new ResizeObserver(updateSize);
         resizeObserver.observe(el);
         return () => resizeObserver.disconnect();
-    }, [containerRef, didInitialCenterRef, setSize, setViewport]);
+    }, [containerRef, didInitialCenterRef, enabled, setSize, setViewport]);
 
     const screenToCanvas = useCallback(
         (clientX: number, clientY: number): Position => {

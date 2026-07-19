@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import { AUTH_TOKEN_KEY, fetchCurrentUser, login as requestLogin, register, type AuthPayload, type AuthUser } from "@/services/api/auth";
+import { clearActiveUserStorageScope } from "@/lib/localforage-storage";
 
 type UserStore = {
     token: string;
@@ -32,7 +33,10 @@ export const useUserStore = create<UserStore>()(
             isReady: false,
             isLoading: false,
             setSession: (token, user) => set({ token, user, isReady: true }),
-            clearSession: () => set({ token: "", user: null, isReady: true }),
+            clearSession: () => {
+                clearActiveUserStorageScope();
+                set({ token: "", user: null, isReady: true });
+            },
             hydrateUser: async () => {
                 const tryDevLogin = async () => {
                     const payload = devAuthPayload();

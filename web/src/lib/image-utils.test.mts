@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { dataUrlToFile } from "./image-utils.ts";
+import { dataUrlToFile, validatedImageMeta } from "./image-utils.ts";
 
 const tinyPng = "data:image/png;base64,iVBORw0KGgo=";
 
@@ -16,3 +16,7 @@ test("converts reference images to short safe upload filenames", () => {
     assert.doesNotMatch(file.name, /[\\/:*?"<>|]/);
 });
 
+test("rejects media that cannot be decoded as an image", () => {
+    assert.deepEqual(validatedImageMeta(640, 360, "image/png"), { width: 640, height: 360, mimeType: "image/png" });
+    assert.throws(() => validatedImageMeta(0, 0, "image/png"), /图片格式无效或文件已损坏/);
+});

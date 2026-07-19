@@ -42,14 +42,29 @@ export function readFileAsDataUrl(file: File) {
 }
 
 export function readImageMeta(dataUrl: string) {
-    return new Promise<{ width: number; height: number; mimeType: string }>((resolve) => {
+    return new Promise<{ width: number; height: number; mimeType: string }>((resolve, reject) => {
         const image = new Image();
-        const done = () => resolve({ width: image.naturalWidth || 1024, height: image.naturalHeight || 1024, mimeType: dataUrl.match(/^data:([^;]+)/)?.[1] || "image/png" });
-        image.onload = done;
-        image.onerror = done;
-        setTimeout(done, 3000);
+        const mimeType = dataUrl.match(/^data:([^;]+)/)?.[1] || "image/png";
+        const timer = window.setTimeout(() => reject(new Error("图片读取超时，请换一张图片重试")), 3000);
+        image.onload = () => {
+            window.clearTimeout(timer);
+            try {
+                resolve(validatedImageMeta(image.naturalWidth, image.naturalHeight, mimeType));
+            } catch (error) {
+                reject(error);
+            }
+        };
+        image.onerror = () => {
+            window.clearTimeout(timer);
+            reject(new Error("图片格式无效或文件已损坏"));
+        };
         image.src = dataUrl;
     });
+}
+
+export function validatedImageMeta(width: number, height: number, mimeType: string) {
+    if (width <= 0 || height <= 0) throw new Error("图片格式无效或文件已损坏");
+    return { width, height, mimeType };
 }
 
 export function dataUrlToFile(image: ReferenceImage) {

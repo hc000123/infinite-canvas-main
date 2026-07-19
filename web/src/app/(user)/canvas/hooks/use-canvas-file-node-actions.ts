@@ -30,6 +30,7 @@ type UseCanvasFileNodeActionsOptions = {
     toImageMetadata: (image: UploadedImage) => CanvasNodeMetadata;
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
     toAudioMetadata: (audio: UploadedFile) => CanvasNodeMetadata;
+    showError: (text: string) => void;
 };
 
 export function useCanvasFileNodeActions({
@@ -52,6 +53,7 @@ export function useCanvasFileNodeActions({
     toImageMetadata,
     toVideoMetadata,
     toAudioMetadata,
+    showError,
 }: UseCanvasFileNodeActionsOptions) {
     const createImageFileNode = useCallback(
         async (file: File, position: Position, forcedSize?: { width: number; height: number }, importInfo?: { batchId?: string; order: number }) => {
@@ -179,67 +181,67 @@ export function useCanvasFileNodeActions({
             const target = uploadTargetRef.current;
             if (!file) return;
 
-            if (target?.nodeId) {
-                const currentNode = nodesRef.current.find((node) => node.id === target.nodeId);
-                if (!currentNode) return;
+            try {
+                if (target?.nodeId) {
+                    const currentNode = nodesRef.current.find((node) => node.id === target.nodeId);
+                    if (!currentNode) return;
 
-                if (file.type.startsWith("audio/")) {
-                    const audio = await uploadMediaFile(file, "audio");
-                    const nextNode = replaceNodeWithUploadedAudioFile({
+                    if (file.type.startsWith("audio/")) {
+                        const audio = await uploadMediaFile(file, "audio");
+                        const nextNode = replaceNodeWithUploadedAudioFile({
+                            currentNode,
+                            title: file.name,
+                            file: audio,
+                            metadata: { ...toAudioMetadata(audio), canvasSource: buildImportCanvasSource({ canvasId, canvasTitle, fileName: file.name, nodeId: target.nodeId, order: 1, workspaceProjectId, workspaceProjectTitle }) },
+                        });
+                        setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? nextNode : node)));
+                        await addCanvasNodeToAssets(nextNode);
+                        setSelectedNodeIds(new Set([target.nodeId]));
+                        setSelectedConnectionId(null);
+                        setDialogNodeId(null);
+                        return;
+                    }
+
+                    if (file.type.startsWith("video/")) {
+                        const video = await uploadMediaFile(file, "video");
+                        const nextNode = replaceNodeWithUploadedVideoFile({
+                            currentNode,
+                            title: file.name,
+                            file: video,
+                            metadata: { ...toVideoMetadata(video), canvasSource: buildImportCanvasSource({ canvasId, canvasTitle, fileName: file.name, nodeId: target.nodeId, order: 1, workspaceProjectId, workspaceProjectTitle }) },
+                        });
+                        setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? nextNode : node)));
+                        await addCanvasNodeToAssets(nextNode);
+                        setSelectedNodeIds(new Set([target.nodeId]));
+                        setSelectedConnectionId(null);
+                        setDialogNodeId(target.nodeId);
+                        return;
+                    }
+
+                    const image = await uploadImage(file);
+                    const nextNode = replaceNodeWithUploadedImageFile({
                         currentNode,
                         title: file.name,
-                        file: audio,
-                    metadata: { ...toAudioMetadata(audio), canvasSource: buildImportCanvasSource({ canvasId, canvasTitle, fileName: file.name, nodeId: target.nodeId, order: 1, workspaceProjectId, workspaceProjectTitle }) },
-                    });
-                    setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? nextNode : node)));
-                    await addCanvasNodeToAssets(nextNode);
-                    setSelectedNodeIds(new Set([target.nodeId]));
-                    setSelectedConnectionId(null);
-                    setDialogNodeId(null);
-                    uploadTargetRef.current = null;
-                    event.target.value = "";
-                    return;
-                }
-
-                if (file.type.startsWith("video/")) {
-                    const video = await uploadMediaFile(file, "video");
-                    const nextNode = replaceNodeWithUploadedVideoFile({
-                        currentNode,
-                        title: file.name,
-                        file: video,
-                    metadata: { ...toVideoMetadata(video), canvasSource: buildImportCanvasSource({ canvasId, canvasTitle, fileName: file.name, nodeId: target.nodeId, order: 1, workspaceProjectId, workspaceProjectTitle }) },
+                        file: image,
+                        metadata: { ...toImageMetadata(image), canvasSource: buildImportCanvasSource({ canvasId, canvasTitle, fileName: file.name, nodeId: target.nodeId, order: 1, workspaceProjectId, workspaceProjectTitle }) },
                     });
                     setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? nextNode : node)));
                     await addCanvasNodeToAssets(nextNode);
                     setSelectedNodeIds(new Set([target.nodeId]));
                     setSelectedConnectionId(null);
                     setDialogNodeId(target.nodeId);
-                    uploadTargetRef.current = null;
-                    event.target.value = "";
-                    return;
+                } else {
+                    const position = target?.position || getCanvasCenterFromContainer(containerRef, size, screenToCanvas);
+                    await createFileNodes(files, position);
                 }
-
-                const image = await uploadImage(file);
-                const nextNode = replaceNodeWithUploadedImageFile({
-                    currentNode,
-                    title: file.name,
-                    file: image,
-                    metadata: { ...toImageMetadata(image), canvasSource: buildImportCanvasSource({ canvasId, canvasTitle, fileName: file.name, nodeId: target.nodeId, order: 1, workspaceProjectId, workspaceProjectTitle }) },
-                });
-                setNodes((prev) => prev.map((node) => (node.id === target.nodeId ? nextNode : node)));
-                await addCanvasNodeToAssets(nextNode);
-                setSelectedNodeIds(new Set([target.nodeId]));
-                setSelectedConnectionId(null);
-                setDialogNodeId(target.nodeId);
-            } else {
-                const position = target?.position || getCanvasCenterFromContainer(containerRef, size, screenToCanvas);
-                void createFileNodes(files, position);
+            } catch (error) {
+                showError(fileImportErrorMessage(error));
+            } finally {
+                uploadTargetRef.current = null;
+                event.target.value = "";
             }
-
-            uploadTargetRef.current = null;
-            event.target.value = "";
         },
-        [addCanvasNodeToAssets, canvasId, canvasTitle, containerRef, createFileNodes, nodesRef, screenToCanvas, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, size, toAudioMetadata, toImageMetadata, toVideoMetadata, uploadTargetRef, workspaceProjectId, workspaceProjectTitle],
+        [addCanvasNodeToAssets, canvasId, canvasTitle, containerRef, createFileNodes, nodesRef, screenToCanvas, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, showError, size, toAudioMetadata, toImageMetadata, toVideoMetadata, uploadTargetRef, workspaceProjectId, workspaceProjectTitle],
     );
 
     const handleDrop = useCallback(
@@ -249,18 +251,19 @@ export function useCanvasFileNodeActions({
             if (!files.length) return;
 
             const pos = screenToCanvas(event.clientX, event.clientY);
-            void createFileNodes(files, pos);
+            void createFileNodes(files, pos).catch((error) => showError(fileImportErrorMessage(error)));
         },
-        [createFileNodes, screenToCanvas],
+        [createFileNodes, screenToCanvas, showError],
     );
 
     const pasteAssistantImage = useCallback(
         (file: File) => {
             const position = getCanvasCenterFromContainer(containerRef, size, screenToCanvas);
-            void createImageFileNode(file, position);
-            showSuccess("已从剪切板添加图片");
+            void createImageFileNode(file, position)
+                .then(() => showSuccess("已从剪切板添加图片"))
+                .catch((error) => showError(fileImportErrorMessage(error)));
         },
-        [containerRef, createImageFileNode, screenToCanvas, showSuccess, size],
+        [containerRef, createImageFileNode, screenToCanvas, showError, showSuccess, size],
     );
 
     return {
@@ -273,6 +276,10 @@ export function useCanvasFileNodeActions({
         handleDrop,
         pasteAssistantImage,
     };
+}
+
+function fileImportErrorMessage(error: unknown) {
+    return error instanceof Error ? error.message : "素材读取失败，请检查文件后重试";
 }
 
 function isSupportedCanvasFile(file: File) {

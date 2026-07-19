@@ -4,7 +4,6 @@ import { BookOpen, CheckSquare, ClipboardPaste, Download, FolderPlus, History, I
 import { useEffect, useRef, useState } from "react";
 import { App, Button, Checkbox, Drawer, Dropdown, Empty, Image, Input, Modal, Tag, Typography } from "antd";
 import type { TextAreaRef } from "antd/es/input/TextArea";
-import localforage from "localforage";
 import { saveAs } from "file-saver";
 
 import { ImageSettingsPanel } from "@/components/image-settings-panel";
@@ -12,6 +11,7 @@ import { ModelPicker } from "@/components/model-picker";
 import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
 import { AssetPickerModal, type InsertAssetPayload } from "@/app/(user)/canvas/components/asset-picker-modal";
 import { canvasThemes } from "@/lib/canvas-theme";
+import { createUserScopedLocalForage } from "@/lib/user-scoped-localforage";
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { nanoid } from "nanoid";
@@ -80,7 +80,7 @@ type ImageWorkbenchSourceContext = {
     title: string;
 };
 
-const logStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_generation_logs" });
+const logStore = createUserScopedLocalForage("image_generation_logs");
 const emptyImageWorkbenchSourceContext: ImageWorkbenchSourceContext = {
     assetId: "",
     briefId: "",

@@ -121,17 +121,11 @@ type ConfigStore = {
 
 const configStorage: PersistStorage<ConfigStore> = {
     getItem: async (name) => {
-        const value = (await localForageStorage.getItem(name)) || (typeof window === "undefined" ? null : window.localStorage.getItem(name));
+        const value = await localForageStorage.getItem(name);
         return value ? (JSON.parse(value) as StorageValue<ConfigStore>) : null;
     },
-    setItem: async (name, value) => {
-        await localForageStorage.setItem(name, JSON.stringify(value));
-        if (typeof window !== "undefined") window.localStorage.removeItem(name);
-    },
-    removeItem: async (name) => {
-        await localForageStorage.removeItem(name);
-        if (typeof window !== "undefined") window.localStorage.removeItem(name);
-    },
+    setItem: (name, value) => localForageStorage.setItem(name, JSON.stringify(value)),
+    removeItem: (name) => localForageStorage.removeItem(name),
 };
 
 export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null): AiConfig {

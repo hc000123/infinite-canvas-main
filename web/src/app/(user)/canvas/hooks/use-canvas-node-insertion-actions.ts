@@ -10,7 +10,7 @@ type ImageBriefOptions = Parameters<typeof useCanvasImageBriefActions>[0];
 
 type UseCanvasNodeInsertionActionsOptions = AssetActionOptions &
     AssistantWriteOptions &
-    Omit<FileNodeOptions, "addCanvasNodeToAssets" | "showSuccess"> &
+    Omit<FileNodeOptions, "addCanvasNodeToAssets" | "showSuccess" | "showError"> &
     ImageBriefOptions & {
         showUploadSuccess: FileNodeOptions["showSuccess"];
     };
@@ -63,6 +63,7 @@ export function useCanvasNodeInsertionActions({
         setSelectedConnectionId,
         setDialogNodeId,
         showSuccess: showUploadSuccess,
+        showError: (text) => message.error(text),
         workspaceProjectId,
         workspaceProjectTitle,
         addCanvasNodeToAssets,

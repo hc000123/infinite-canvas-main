@@ -140,21 +140,25 @@ export function CanvasNodesLayer({
                     showImageInfo={showImageInfo}
                     productionPackageBadge={productionPackages.length ? productionNodeBadge(node, productionPackages, productionPackageLabelMap) : ""}
                     isProductionPackageActive={Boolean(productionPackages.length && getNodeProductionPackageId(node) && getNodeProductionPackageId(node) === activeProductionPackageId)}
-                    renderPanel={(panelNode) => (
-                        <CanvasNodePromptPanel
-                            node={panelNode}
-                            isRunning={runningNodeId === panelNode.id}
-                            projectId={workspaceProjectId}
-                            onPromptChange={handleNodePromptChange}
-                            onConfigChange={handleConfigNodeChange}
-                            onGenerate={handleGenerateNode}
-                            onImageSettingsOpenChange={(open) => {
-                                setNodeImageSettingsOpen(open);
-                                if (open) setToolbarNodeId(null);
-                            }}
-                            referenceMentionOptions={panelNode.type === CanvasNodeType.Video ? buildReferenceMentionOptions(buildNodeGenerationInputs(panelNode.id, nodes, connections)) : []}
-                        />
-                    )}
+                    renderPanel={(panelNode) => {
+                        const generationInputs = buildNodeGenerationInputs(panelNode.id, nodes, connections);
+                        return (
+                            <CanvasNodePromptPanel
+                                node={panelNode}
+                                isRunning={runningNodeId === panelNode.id}
+                                projectId={workspaceProjectId}
+                                onPromptChange={handleNodePromptChange}
+                                onConfigChange={handleConfigNodeChange}
+                                onGenerate={handleGenerateNode}
+                                onImageSettingsOpenChange={(open) => {
+                                    setNodeImageSettingsOpen(open);
+                                    if (open) setToolbarNodeId(null);
+                                }}
+                                referenceMentionOptions={panelNode.type === CanvasNodeType.Video ? buildReferenceMentionOptions(generationInputs) : []}
+                                hasConnectedText={generationInputs.some((input) => input.type === "text" && Boolean(input.text?.trim()))}
+                            />
+                        );
+                    }}
                     renderNodeContent={(contentNode) => (
                         <CanvasConfigNodePanel
                             node={contentNode}

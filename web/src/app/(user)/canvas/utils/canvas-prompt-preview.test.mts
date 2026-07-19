@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { promptPreviewNoZoomProps, promptPreviewTextareaClass, promptPreviewTextareaStyle } from "./canvas-prompt-preview.ts";
+import { canSubmitCanvasPrompt, promptPreviewNoZoomProps, promptPreviewTextareaClass, promptPreviewTextareaStyle } from "./canvas-prompt-preview.ts";
 
 test("uses a larger scrollable prompt preview for video nodes", () => {
     const className = promptPreviewTextareaClass("video");
@@ -14,4 +14,10 @@ test("uses a larger scrollable prompt preview for video nodes", () => {
 
 test("marks prompt preview as no-zoom so wheel events stay inside the textarea", () => {
     assert.deepEqual(promptPreviewNoZoomProps(), { "data-canvas-no-zoom": true });
+});
+
+test("allows generation with an empty local prompt when connected text is available", () => {
+    assert.equal(canSubmitCanvasPrompt("", false, true), true);
+    assert.equal(canSubmitCanvasPrompt("", false, false), false);
+    assert.equal(canSubmitCanvasPrompt("本地提示词", true, true), false);
 });

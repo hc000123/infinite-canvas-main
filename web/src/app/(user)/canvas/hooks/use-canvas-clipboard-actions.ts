@@ -2,6 +2,7 @@ import { useCallback, useRef, type Dispatch, type RefObject, type SetStateAction
 
 import { getNodeSpec } from "../constants";
 import { copySelectedCanvasItems, pasteCanvasClipboard, type CanvasClipboard } from "../utils/canvas-clipboard";
+import { placeCanvasNodeAwayFromNodes } from "../utils/canvas-node-placement";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type ContextMenuState, type Position } from "../types";
 
 type UseCanvasClipboardActionsOptions = {
@@ -50,7 +51,7 @@ export function useCanvasClipboardActions({
     }, [connectionsRef, nodesRef, selectedNodeIdsRef]);
 
     const pasteCopiedNodes = useCallback(() => {
-        const pasted = pasteCanvasClipboard(clipboardRef.current, getCanvasCenter());
+        const pasted = pasteCanvasClipboard(clipboardRef.current, getCanvasCenter(), undefined, nodesRef.current);
         if (!pasted) return false;
 
         setNodes((prev) => [...prev, ...pasted.nodes]);
@@ -60,7 +61,7 @@ export function useCanvasClipboardActions({
         setContextMenu(null);
         setDialogNodeId(pasted.nodes[0]?.id || null);
         return true;
-    }, [getCanvasCenter, setConnections, setContextMenu, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds]);
+    }, [getCanvasCenter, nodesRef, setConnections, setContextMenu, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds]);
 
     const createTextNodeFromClipboard = useCallback(
         (text: string) => {
@@ -69,7 +70,7 @@ export function useCanvasClipboardActions({
 
             const spec = getNodeSpec(CanvasNodeType.Text);
             const center = getCanvasCenter();
-            const node: CanvasNodeData = {
+            const node = placeCanvasNodeAwayFromNodes<CanvasNodeData>({
                 id: `${CanvasNodeType.Text}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
                 type: CanvasNodeType.Text,
                 title: trimmed.slice(0, 32) || "剪切板文本",
@@ -80,7 +81,7 @@ export function useCanvasClipboardActions({
                 width: spec.width,
                 height: spec.height,
                 metadata: { ...spec.metadata, content: trimmed, status: "success" },
-            };
+            }, nodesRef.current);
 
             setNodes((prev) => [...prev, node]);
             setSelectedNodeIds(new Set([node.id]));
@@ -89,7 +90,7 @@ export function useCanvasClipboardActions({
             setDialogNodeId(node.id);
             return true;
         },
-        [getCanvasCenter, setContextMenu, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds],
+        [getCanvasCenter, nodesRef, setContextMenu, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds],
     );
 
     const pasteSystemClipboard = useCallback(async () => {

@@ -34,7 +34,7 @@ export function copySelectedCanvasItems(nodes: CanvasNodeData[], connections: Ca
     };
 }
 
-export function pasteCanvasClipboard(clipboard: CanvasClipboard | null, center: Position, idFactory: CanvasClipboardIdFactory = defaultIdFactory) {
+export function pasteCanvasClipboard(clipboard: CanvasClipboard | null, center: Position, idFactory: CanvasClipboardIdFactory = defaultIdFactory, occupiedNodes: CanvasNodeData[] = []) {
     if (!clipboard?.nodes.length) return null;
 
     const bounds = clipboard.nodes.reduce(
@@ -46,8 +46,16 @@ export function pasteCanvasClipboard(clipboard: CanvasClipboard | null, center: 
         }),
         { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity },
     );
-    const dx = center.x - (bounds.left + bounds.right) / 2;
-    const dy = center.y - (bounds.top + bounds.bottom) / 2;
+    let dx = center.x - (bounds.left + bounds.right) / 2;
+    let dy = center.y - (bounds.top + bounds.bottom) / 2;
+    while (
+        clipboard.nodes.some((node) =>
+            occupiedNodes.some((occupied) => Math.abs(occupied.position.x - (node.position.x + dx)) < 1 && Math.abs(occupied.position.y - (node.position.y + dy)) < 1),
+        )
+    ) {
+        dx += 32;
+        dy += 32;
+    }
     const idMap = new Map<string, string>();
     const nodes = clipboard.nodes.map((node, index) => {
         const id = idFactory.nodeId(node, index);

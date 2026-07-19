@@ -13,3 +13,7 @@ export function promptPreviewTextareaStyle(mode: CanvasGenerationMode) {
 export function promptPreviewNoZoomProps() {
     return { "data-canvas-no-zoom": true };
 }
+
+export function canSubmitCanvasPrompt(prompt: string, isRunning: boolean, hasConnectedText: boolean) {
+    return !isRunning && (Boolean(prompt.trim()) || hasConnectedText);
+}

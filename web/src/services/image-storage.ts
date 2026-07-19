@@ -1,9 +1,8 @@
 "use client";
 
-import localforage from "localforage";
-
 import { nanoid } from "nanoid";
 import { readImageMeta } from "@/lib/image-utils";
+import { createUserScopedLocalForage } from "@/lib/user-scoped-localforage";
 
 export type UploadedImage = {
     url: string;
@@ -14,7 +13,7 @@ export type UploadedImage = {
     mimeType: string;
 };
 
-const store = localforage.createInstance({ name: "infinite-canvas", storeName: "image_files" });
+const store = createUserScopedLocalForage("image_files");
 const objectUrls = new Map<string, string>();
 
 export async function uploadImage(input: string | Blob): Promise<UploadedImage> {
@@ -23,8 +22,15 @@ export async function uploadImage(input: string | Blob): Promise<UploadedImage> 
     await store.setItem(storageKey, blob);
     const url = URL.createObjectURL(blob);
     objectUrls.set(storageKey, url);
-    const meta = await readImageMeta(url);
-    return { url, storageKey, width: meta.width, height: meta.height, bytes: blob.size, mimeType: blob.type || meta.mimeType };
+    try {
+        const meta = await readImageMeta(url);
+        return { url, storageKey, width: meta.width, height: meta.height, bytes: blob.size, mimeType: blob.type || meta.mimeType };
+    } catch (error) {
+        URL.revokeObjectURL(url);
+        objectUrls.delete(storageKey);
+        await store.removeItem(storageKey);
+        throw error;
+    }
 }
 
 export async function resolveImageUrl(storageKey?: string, fallback = "") {

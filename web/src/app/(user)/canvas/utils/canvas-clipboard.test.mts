@@ -75,3 +75,18 @@ test("pastes nodes centered at the requested canvas position and remaps connecti
     assert.equal(pasted?.nodes[0].position.x, 360);
     assert.equal(pasted?.nodes[0].position.y, 410);
 });
+
+test("offsets pasted nodes when the requested position is already occupied", () => {
+    const clipboard = copySelectedCanvasItems(nodes, connections, new Set(["text-a"]));
+    const pasted = pasteCanvasClipboard(
+        clipboard,
+        { x: 60, y: 45 },
+        {
+            nodeId: () => "new-node",
+            connectionId: () => "new-connection",
+        },
+        [{ ...nodes[0], position: { x: 10.0001, y: 19.9999 } }],
+    );
+
+    assert.deepEqual(pasted?.nodes[0].position, { x: 42, y: 52 });
+});
