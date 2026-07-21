@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { Alert, App, Button, Drawer, Empty, Spin } from "antd";
-import { CheckCircle2, CircleAlert, Clock3, FileText, List, PanelRight, ServerCog } from "lucide-react";
+import { CheckCircle2, CircleAlert, Clock3, FileText, List, PanelRight, ServerCog, ShieldCheck } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { getImageBlob } from "@/services/image-storage";
@@ -178,6 +178,7 @@ export default function EpisodeWorkflowPage() {
                             onApplied={workbench.refreshRemote}
                             packages={workbench.packages}
                             onSelectShot={(shot) => workbench.selectRoute(workbench.routeState.stage, shot)}
+                            videoActions={videoActions}
                         />
                     </div>
                 </section>
@@ -232,6 +233,7 @@ function StageWorkspace({
     stage,
     stageActions,
     workerReady,
+    videoActions,
 }: {
     episodeId: string;
     executorLabel: string;
@@ -251,6 +253,7 @@ function StageWorkspace({
     stage: string;
     stageActions: ReturnType<typeof useWorkflowStageActions>;
     workerReady: boolean;
+    videoActions: ReturnType<typeof useWorkflowVideoActions>;
 }) {
     if (stage === "script")
         return (
@@ -271,6 +274,24 @@ function StageWorkspace({
             </div>
         );
     if (stage === "delivery") return <WorkflowDeliveryPanel packages={packages} />;
+    if (stage === "video" && !selected)
+        return (
+            <Panel icon={<ShieldCheck className="size-4" />} title="企业视频通道预检" description="生产包尚未生成，也可以先验证上线通道、模型和端点；预检不会创建视频任务，也不扣费。">
+                <div className="grid min-h-52 place-items-center rounded-md border border-dashed border-[var(--studio-border-subtle)] px-5 text-center">
+                    <div className="max-w-md">
+                        <p className="text-sm leading-6 text-[var(--studio-text-secondary)]">先完成这一步，可以提前排除密钥、模型或企业端点配置问题。正式生成仍会在每条分镜上再次预检并要求二次确认。</p>
+                        <Button className="mt-4" icon={<ShieldCheck className="size-4" />} loading={videoActions.channelPreflighting} onClick={() => void videoActions.preflightChannel()}>
+                            通道预检（不扣费）
+                        </Button>
+                        {videoActions.channelPreflight ? (
+                            <div className={`mt-4 rounded-md border px-3 py-2 text-left text-xs leading-5 ${videoActions.channelPreflight.status === "passed" ? "border-[var(--studio-success)]/40 text-[var(--studio-success)]" : "border-[var(--studio-danger)]/40 text-[var(--studio-danger)]"}`}>
+                                {videoActions.channelPreflight.message}
+                            </div>
+                        ) : null}
+                    </div>
+                </div>
+            </Panel>
+        );
     if (!selected && ["assets", "storyboard", "video", "delivery"].includes(stage)) return <Empty className="py-20" description="完成分镜提示词阶段后，生产包会出现在这里" />;
     if (selected) return <WorkflowShotEditor item={selected} onSelect={onSelectShot} packages={packages} />;
     return (

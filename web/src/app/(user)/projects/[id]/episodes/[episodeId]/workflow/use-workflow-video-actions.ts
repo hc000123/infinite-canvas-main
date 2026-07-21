@@ -28,25 +28,31 @@ export function useWorkflowVideoActions(packages: ProductionPackage[]) {
     const updatePackage = useVideoPackageStore((state) => state.updateImportedPackage);
     const [generating, setGenerating] = useState<Record<string, boolean>>({});
     const [preflighting, setPreflighting] = useState<Record<string, boolean>>({});
+    const [channelPreflighting, setChannelPreflighting] = useState(false);
+    const [channelPreflight, setChannelPreflight] = useState<{ message: string; status: "failed" | "passed" } | null>(null);
 
     useEffect(() => {
         void loadPublicSettings();
     }, [loadPublicSettings]);
 
     const scopeKey = (item: ProductionPackage) => `${item.projectId}:${item.episodeId}:${item.id}`;
-    const prepare = (item: ProductionPackage) => {
-        const config = buildPackageVideoConfig(effectiveConfig, item);
+    const prepareChannel = (config: ReturnType<typeof buildPackageVideoConfig>) => {
         const model = resolvePackageVideoModel(config);
         if (!isAiConfigReady(config, model)) {
             openConfigDialog(true);
             message.warning("请先完成现有视频模型配置");
-            return null;
+            return false;
         }
         const channel = enterpriseVideoChannelReadiness({ isPublicSettingsLoading: isPublicSettingsLoading || !hasLoadedPublicSettings, videoProtocol: config.videoProtocol });
         if (channel.status !== "ready") {
             message.error(channel.message);
-            return null;
+            return false;
         }
+        return true;
+    };
+    const prepare = (item: ProductionPackage) => {
+        const config = buildPackageVideoConfig(effectiveConfig, item);
+        if (!prepareChannel(config)) return null;
         const readiness = workflowVideoGenerationReadiness(item, assets, config.videoProtocol);
         if (readiness.status === "blocked") {
             message.error(readiness.message);
@@ -54,6 +60,28 @@ export function useWorkflowVideoActions(packages: ProductionPackage[]) {
         }
         if (readiness.status === "warning") message.warning(readiness.message);
         return config;
+    };
+
+    const preflightChannel = async () => {
+        const config = effectiveConfig;
+        if (!prepareChannel(config)) return false;
+        setChannelPreflighting(true);
+        setChannelPreflight(null);
+        try {
+            const result = await preflightVideoGeneration(config);
+            const endpoint = result?.endpointId ? `，端点 ${result.endpointId}` : "";
+            const detail = `${result?.channelName || "企业视频通道"}已就绪，模型 ${result?.model || resolvePackageVideoModel(config)}${endpoint}`;
+            setChannelPreflight({ message: detail, status: "passed" });
+            message.success("企业视频通道预检通过");
+            return true;
+        } catch (error) {
+            const detail = formatVideoGenerationError(error);
+            setChannelPreflight({ message: detail, status: "failed" });
+            message.error(detail);
+            return false;
+        } finally {
+            setChannelPreflighting(false);
+        }
     };
 
     const preflight = async (item: ProductionPackage) => {
@@ -159,5 +187,5 @@ export function useWorkflowVideoActions(packages: ProductionPackage[]) {
         return eligible;
     };
 
-    return { batch, eligibility: eligibleBatchPackages(packages), generate, generating, preflight, preflighting, scopeKey, sync };
+    return { batch, channelPreflight, channelPreflighting, eligibility: eligibleBatchPackages(packages), generate, generating, preflight, preflightChannel, preflighting, scopeKey, sync };
 }
