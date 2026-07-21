@@ -14,3 +14,4 @@ web/desktop/app/package-lock.json
 *.tsbuildinfo
 .DS_Store
 .idea
+.superpowers/
