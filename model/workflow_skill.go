@@ -48,6 +48,7 @@ type WorkflowSkillEvaluation struct {
 	ID                string `json:"id" gorm:"primaryKey"`
 	SkillVersionID    string `json:"skillVersionId" gorm:"index"`
 	BaselineVersionID string `json:"baselineVersionId" gorm:"index"`
+	ContentHash       string `json:"contentHash" gorm:"index"`
 	ProjectID         string `json:"projectId" gorm:"index"`
 	EpisodeID         string `json:"episodeId" gorm:"index"`
 	InputHash         string `json:"inputHash" gorm:"index"`
