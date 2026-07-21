@@ -3,9 +3,13 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -62,7 +66,11 @@ func (executor *APIAgentRunExecutor) Call(ctx context.Context, run model.AgentRu
 	timeout := time.Duration(normalizeAgentRunTimeout(run.TimeoutSeconds)) * time.Second
 	callCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	request, err := http.NewRequestWithContext(callCtx, http.MethodPost, BuildModelChannelURL(channel, "/chat/completions"), bytes.NewBufferString(run.RequestJSON))
+	requestBody, err := buildAPIMultimodalRequest(run.RequestJSON, run.ImageManifestJSON)
+	if err != nil {
+		return agentRunCallResult{message: "Agent Run 图片上下文无效"}
+	}
+	request, err := http.NewRequestWithContext(callCtx, http.MethodPost, BuildModelChannelURL(channel, "/chat/completions"), bytes.NewReader(requestBody))
 	if err != nil {
 		return agentRunCallResult{message: "Agent Run 请求创建失败"}
 	}
@@ -88,6 +96,79 @@ func (executor *APIAgentRunExecutor) Call(ctx context.Context, run model.AgentRu
 		return agentRunCallResult{message: "Agent Run 上游未返回可审核内容", retryable: true}
 	}
 	return agentRunCallResult{rawOutput: rawOutput, structuredJSON: extractJSONDraft(rawOutput)}
+}
+
+func buildAPIMultimodalRequest(requestJSON string, manifestJSON string) ([]byte, error) {
+	if strings.TrimSpace(manifestJSON) == "" {
+		return []byte(requestJSON), nil
+	}
+	var manifest struct {
+		Items []struct {
+			Label      string `json:"label"`
+			Kind       string `json:"kind"`
+			Version    string `json:"version"`
+			MIME       string `json:"mime"`
+			ServerPath string `json:"serverPath"`
+			Order      int    `json:"order"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(manifestJSON), &manifest); err != nil || len(manifest.Items) > 9 {
+		return nil, errors.New("invalid image manifest")
+	}
+	if len(manifest.Items) == 0 {
+		return []byte(requestJSON), nil
+	}
+	var request map[string]any
+	if err := json.Unmarshal([]byte(requestJSON), &request); err != nil {
+		return nil, err
+	}
+	messages, ok := request["messages"].([]any)
+	if !ok || len(messages) == 0 {
+		return nil, errors.New("missing messages")
+	}
+	userIndex := -1
+	for index := len(messages) - 1; index >= 0; index-- {
+		message, valid := messages[index].(map[string]any)
+		if valid && strings.EqualFold(strings.TrimSpace(stringValue(message["role"])), "user") {
+			userIndex = index
+			break
+		}
+	}
+	if userIndex < 0 {
+		return nil, errors.New("missing user message")
+	}
+	sort.SliceStable(manifest.Items, func(left, right int) bool { return manifest.Items[left].Order < manifest.Items[right].Order })
+	message := messages[userIndex].(map[string]any)
+	textContent, ok := message["content"].(string)
+	if !ok || strings.TrimSpace(textContent) == "" {
+		return nil, errors.New("invalid user message")
+	}
+	parts := []any{map[string]any{"type": "text", "text": textContent + "\n\n" + codexImageContext(manifestJSON)}}
+	for _, item := range manifest.Items {
+		mimeType := strings.TrimSpace(item.MIME)
+		if mimeType != "image/png" && mimeType != "image/jpeg" && mimeType != "image/webp" {
+			return nil, errors.New("unsupported image mime")
+		}
+		file, err := os.Open(strings.TrimSpace(item.ServerPath))
+		if err != nil {
+			return nil, err
+		}
+		data, readErr := io.ReadAll(io.LimitReader(file, maxWorkflowMediaBytes+1))
+		closeErr := file.Close()
+		if readErr != nil || closeErr != nil || len(data) == 0 || len(data) > maxWorkflowMediaBytes {
+			return nil, errors.New("invalid image data")
+		}
+		parts = append(parts, map[string]any{"type": "image_url", "image_url": map[string]any{"url": "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(data)}})
+	}
+	message["content"] = parts
+	messages[userIndex] = message
+	request["messages"] = messages
+	return json.Marshal(request)
+}
+
+func stringValue(value any) string {
+	text, _ := value.(string)
+	return text
 }
 
 func NewAgentRunExecutorFromConfig() (AgentRunExecutor, error) {

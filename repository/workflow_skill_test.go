@@ -50,6 +50,7 @@ func TestWorkflowSkillTablesMigrate(t *testing.T) {
 		&model.WorkflowSkillVersion{},
 		&model.WorkflowStageSkillBinding{},
 		&model.WorkflowSkillEvaluation{},
+		&model.WorkflowSkillAuditLog{},
 	} {
 		if !db.Migrator().HasTable(item) {
 			t.Fatalf("missing table %T", item)

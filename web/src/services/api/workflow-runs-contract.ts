@@ -88,7 +88,7 @@ export type RemoteWorkflowRunDetail = {
     stages: RemoteWorkflowStageRun[];
     artifacts: RemoteWorkflowArtifact[];
     gates: RemoteWorkflowQualityGate[];
-    agentRuns: Array<Record<string, unknown> & { id: string; status: string; model: string; provider: string; errorMessage: string }>;
+    agentRuns: Array<Record<string, unknown> & { id: string; status: string; model: string; provider: string; errorMessage: string; executor: "api" | "codex-cli"; skillId: string; skillVersionId: string; skillVersion: string; skillContentHash: string }>;
 };
 
 export type WorkflowWorkerHealth = {
@@ -101,6 +101,14 @@ export type WorkflowWorkerHealth = {
     queueDepth: number;
     runningCount: number;
     staleLeaseCount: number;
+    executor: "api" | "codex-cli";
+    executorLabel: string;
+};
+
+export type WorkflowMediaItem = { id: string; batchId: string; assetId: string; label: string; kind: "character" | "scene" | "prop"; version: string; order: number; sha256: string; mime: string; size: number; createdAt: string };
+export type WorkflowMediaBatchDetail = {
+    batch: { id: string; userId: string; workflowRunId: string; stageId: string; idempotencyKey: string; status: "open" | "claimed"; agentRunId: string; expiresAt: string; createdAt: string; updatedAt: string };
+    items: WorkflowMediaItem[];
 };
 
 export type EnsureWorkflowRunRequest = {
@@ -129,7 +137,9 @@ const encode = encodeURIComponent;
 export const workflowRunRequest = {
     ensure: (body: EnsureWorkflowRunRequest) => ({ path: "/api/v1/workflow-runs", body }),
     detail: (id: string) => ({ path: `/api/v1/workflow-runs/${encode(id)}` }),
-    startStage: (id: string, stageId: string, idempotencyKey: string) => ({ path: `/api/v1/workflow-runs/${encode(id)}/stages/${encode(stageId)}/start`, body: { idempotencyKey } }),
+    startStage: (id: string, stageId: string, idempotencyKey: string, mediaBatchId?: string) => ({ path: `/api/v1/workflow-runs/${encode(id)}/stages/${encode(stageId)}/start`, body: { idempotencyKey, ...(mediaBatchId ? { mediaBatchId } : {}) } }),
+    createMediaBatch: (id: string, stageId: string, idempotencyKey: string) => ({ path: `/api/v1/workflow-runs/${encode(id)}/media-batches`, body: { stageId, idempotencyKey } }),
+    mediaBatch: (id: string) => ({ path: `/api/v1/workflow-media-batches/${encode(id)}` }),
     cancelStage: (id: string) => ({ path: `/api/v1/workflow-stage-runs/${encode(id)}/cancel`, body: {} }),
     retryStage: (id: string, idempotencyKey: string) => ({ path: `/api/v1/workflow-stage-runs/${encode(id)}/retry`, body: { idempotencyKey } }),
     reviewStage: (id: string, body: WorkflowReviewRequest) => ({ path: `/api/v1/workflow-stage-runs/${encode(id)}/review`, body }),

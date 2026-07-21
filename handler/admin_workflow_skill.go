@@ -145,6 +145,11 @@ func AdminWorkflowStageSkillBindings(w http.ResponseWriter, r *http.Request, sta
 }
 
 func AdminUpdateWorkflowStageSkillBinding(w http.ResponseWriter, r *http.Request, stageKey string) {
+	admin, ok := service.UserFromContext(r.Context())
+	if !ok || admin.Role != model.UserRoleAdmin {
+		Fail(w, "未登录或权限不足")
+		return
+	}
 	var input struct {
 		Scope          string `json:"scope"`
 		ScopeID        string `json:"scopeId"`
@@ -153,7 +158,7 @@ func AdminUpdateWorkflowStageSkillBinding(w http.ResponseWriter, r *http.Request
 	if !decodeWorkflowBody(w, r, &input, 32<<10) {
 		return
 	}
-	result, err := service.RollbackWorkflowSkillBinding(stageKey, input.Scope, input.ScopeID, input.SkillVersionID)
+	result, err := service.RollbackWorkflowSkillBinding(admin.ID, stageKey, input.Scope, input.ScopeID, input.SkillVersionID)
 	if err != nil {
 		FailError(w, err)
 		return

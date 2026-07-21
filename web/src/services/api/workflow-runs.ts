@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "@/services/api/request";
+import { apiDelete, apiGet, apiPost, apiPostForm } from "@/services/api/request";
 import { useUserStore } from "@/stores/use-user-store";
 
 import {
@@ -10,6 +10,7 @@ import {
     type WorkflowApplyRequest,
     type WorkflowReviewRequest,
     type WorkflowWorkerHealth,
+    type WorkflowMediaBatchDetail,
 } from "./workflow-runs-contract";
 
 export * from "./workflow-runs-contract";
@@ -25,9 +26,29 @@ export function getWorkflowRun(id: string) {
     return apiGet<RemoteWorkflowRunDetail>(workflowRunRequest.detail(id).path, undefined, token());
 }
 
-export function startWorkflowStage(id: string, stageId: string, idempotencyKey: string) {
-    const request = workflowRunRequest.startStage(id, stageId, idempotencyKey);
+export function startWorkflowStage(id: string, stageId: string, idempotencyKey: string, mediaBatchId?: string) {
+    const request = workflowRunRequest.startStage(id, stageId, idempotencyKey, mediaBatchId);
     return apiPost<RemoteWorkflowStageRun>(request.path, request.body, token());
+}
+
+export function createWorkflowMediaBatch(id: string, stageId: string, idempotencyKey: string) {
+    const request = workflowRunRequest.createMediaBatch(id, stageId, idempotencyKey);
+    return apiPost<WorkflowMediaBatchDetail>(request.path, request.body, token());
+}
+
+export function uploadWorkflowMedia(batchId: string, input: { file: Blob; filename: string; assetId: string; label: string; kind: "character" | "scene" | "prop"; version: string; order: number }) {
+    const form = new FormData();
+    form.set("file", input.file, input.filename);
+    form.set("assetId", input.assetId);
+    form.set("label", input.label);
+    form.set("kind", input.kind);
+    form.set("version", input.version);
+    form.set("order", String(input.order));
+    return apiPostForm<WorkflowMediaBatchDetail>(`${workflowRunRequest.mediaBatch(batchId).path}/items`, form, token());
+}
+
+export function deleteWorkflowMediaBatch(batchId: string) {
+    return apiDelete<boolean>(workflowRunRequest.mediaBatch(batchId).path, token());
 }
 
 export function cancelWorkflowStage(id: string) {

@@ -88,7 +88,8 @@ func (executor *CodexAgentRunExecutor) Call(ctx context.Context, run model.Agent
 		if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return agentRunCallResult{message: "Codex CLI 已取消或超时"}
 		}
-		return agentRunCallResult{message: safeCodexCommandError(stderr.String()), retryable: false}
+		message, retryable := codexCommandFailure(stderr.String())
+		return agentRunCallResult{message: message, retryable: retryable}
 	}
 	file, err := os.Open(outputPath)
 	if err != nil {
@@ -104,7 +105,7 @@ func (executor *CodexAgentRunExecutor) Call(ctx context.Context, run model.Agent
 }
 
 func buildCodexCommand(options CodexExecutorOptions, outputPath string, images []string) *exec.Cmd {
-	args := []string{"exec", "--ephemeral", "--sandbox", "read-only", "--color", "never", "--cd", options.Workdir, "--output-last-message", outputPath}
+	args := []string{"exec", "--ignore-user-config", "--ephemeral", "--sandbox", "read-only", "--color", "never", "--cd", options.Workdir, "--output-last-message", outputPath}
 	for _, image := range images {
 		args = append(args, "-i", image)
 	}
@@ -196,7 +197,18 @@ func (buffer *limitedBuffer) Write(value []byte) (int, error) {
 	return original, nil
 }
 
-func safeCodexCommandError(stderr string) string {
-	_ = stderr
-	return "Codex CLI 执行失败，请检查本地登录状态和运行日志"
+func codexCommandFailure(stderr string) (string, bool) {
+	message := strings.ToLower(stderr)
+	switch {
+	case strings.Contains(message, "requires a newer version of codex"):
+		return "Codex CLI 版本过低，请升级后重试", false
+	case strings.Contains(message, "rate limit"), strings.Contains(message, "too many requests"), strings.Contains(message, " 429"):
+		return "Codex CLI 请求频率受限，请稍后重试", true
+	case strings.Contains(message, "stream disconnected"), strings.Contains(message, "connection reset"), strings.Contains(message, "timed out"):
+		return "Codex CLI 网络连接失败，请稍后重试", true
+	case strings.Contains(message, "unauthorized"), strings.Contains(message, "not logged in"), strings.Contains(message, "login required"):
+		return "Codex CLI 登录状态无效，请重新登录", false
+	default:
+		return "Codex CLI 执行失败，请检查本地登录状态和运行日志", false
+	}
 }

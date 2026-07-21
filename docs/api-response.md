@@ -27,6 +27,10 @@
 | `POST /workflow-runs` | 按项目、分集、工作流版本和剧本哈希幂等创建运行记录 |
 | `GET /workflow-runs/:id` | 返回最新阶段、版本化产物、质量门和底层任务摘要 |
 | `POST /workflow-runs/:id/stages/:stageId/start` | 校验依赖并使用 `idempotencyKey` 异步入队 |
+| `POST /workflow-runs/:id/media-batches` | 为美术或分镜阶段创建绑定启动幂等键的一次性参考图批次 |
+| `POST /workflow-media-batches/:id/items` | 以 multipart 上传角色 / 场景 / 道具参考图，最多 9 张 |
+| `GET /workflow-media-batches/:id` | 返回批次状态与安全化图片元数据，不返回服务端路径 |
+| `DELETE /workflow-media-batches/:id` | 删除尚未被任务占用的图片批次和临时文件 |
 | `POST /workflow-stage-runs/:id/cancel` | 取消排队任务或请求取消运行中任务 |
 | `POST /workflow-stage-runs/:id/retry` | 对失败、取消或驳回阶段创建新尝试 |
 | `POST /workflow-stage-runs/:id/review` | 使用当前 artifact hash 批准或驳回产物 |
@@ -37,3 +41,5 @@
 底层 Agent Run 状态包括 `queued`、`running`、`cancel_requested`、`needs_review`、`approved`、`rejected`、`applied`、`failed` 和 `cancelled`。创建只入队，不在 HTTP 请求中等待模型；Worker 领取后才预扣算力点。429、5xx 和网络失败按次数重试，没有可审核产物时返还本次预扣。重复幂等请求返回原任务，不重复扣费。
 
 阶段质量门和人工审核分开：确定性质量门未通过时不能批准；审核提交的 hash 与当前产物不一致时返回冲突提示；服务端不会直接写浏览器本地项目、素材、分镜或生产包，只保存用户确认后的 apply receipt。
+
+管理端六阶段 Skill 接口位于 `/api/v1/admin`：`workflow-skills` 管理稳定阶段身份，`workflow-skill-versions` 管理草稿、校验、dry-run / compare 和发布，`workflow-stage-skill-bindings` 管理项目灰度、全局推广与回滚。发布版本不可原地修改，所有绑定变更写入审计记录。

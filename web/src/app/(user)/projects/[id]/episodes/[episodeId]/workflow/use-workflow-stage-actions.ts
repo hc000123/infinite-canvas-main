@@ -16,30 +16,34 @@ export function useWorkflowStageActions(input: { detail: RemoteWorkflowRunDetail
     const actions = useMemo(() => workflowStageActions(stage ? { hasArtifact: Boolean(artifact), status: stage.status } : null, Boolean(gate?.passed)), [artifact, gate?.passed, stage]);
 
     const execute = async (key: string, action: () => Promise<unknown>, success: string) => {
-        if (busyAction) return;
+        if (busyAction) return false;
         setBusyAction(key);
         try {
             await action();
             message.success(success);
             await input.refresh();
+            return true;
         } catch (error) {
             message.error(error instanceof Error ? error.message : "操作失败，请重试");
+            return false;
         } finally {
             setBusyAction("");
         }
     };
 
+    const startKey = input.detail ? workflowActionKey(input.detail.run.id, input.stageId, (stage?.attempt || 0) + 1, "start") : "";
     return {
         actions,
-        approve: () => artifact && stage ? execute("approve", () => reviewWorkflowStage(stage.id, { artifactHash: artifact.contentHash, decision: "approved" }), "阶段产物已批准") : undefined,
+        approve: () => (artifact && stage ? execute("approve", () => reviewWorkflowStage(stage.id, { artifactHash: artifact.contentHash, decision: "approved" }), "阶段产物已批准") : undefined),
         artifact,
         busyAction,
-        cancel: () => stage ? execute("cancel", () => cancelWorkflowStage(stage.id), "已提交停止请求") : undefined,
+        cancel: () => (stage ? execute("cancel", () => cancelWorkflowStage(stage.id), "已提交停止请求") : undefined),
         gate,
-        reject: () => artifact && stage ? execute("reject", () => reviewWorkflowStage(stage.id, { artifactHash: artifact.contentHash, decision: "rejected", comment: "需要调整后重新生成" }), "已退回当前产物") : undefined,
-        retry: () => stage ? execute("retry", () => retryWorkflowStage(stage.id, workflowActionKey(stage.workflowRunId, stage.stageId, stage.attempt + 1, "retry")), "已重新加入队列") : undefined,
+        reject: () => (artifact && stage ? execute("reject", () => reviewWorkflowStage(stage.id, { artifactHash: artifact.contentHash, decision: "rejected", comment: "需要调整后重新生成" }), "已退回当前产物") : undefined),
+        retry: () => (stage ? execute("retry", () => retryWorkflowStage(stage.id, workflowActionKey(stage.workflowRunId, stage.stageId, stage.attempt + 1, "retry")), "已重新加入队列") : undefined),
         stage,
-        start: () => input.detail ? execute("start", () => startWorkflowStage(input.detail!.run.id, input.stageId, workflowActionKey(input.detail!.run.id, input.stageId, (stage?.attempt || 0) + 1, "start")), "阶段已加入云端队列") : undefined,
+        start: (mediaBatchId?: string) => (input.detail ? execute("start", () => startWorkflowStage(input.detail!.run.id, input.stageId, startKey, mediaBatchId), "阶段已加入执行队列") : undefined),
+        startKey,
     };
 }
 

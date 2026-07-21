@@ -111,6 +111,62 @@ func ValidateStoryboardArtifact(raw json.RawMessage) WorkflowGateReport {
 	return report.finish()
 }
 
+func validateWorkflowReferenceEvidence(raw json.RawMessage, manifestJSON string, report *WorkflowGateReport) {
+	var manifest struct {
+		Items []json.RawMessage `json:"items"`
+	}
+	if json.Unmarshal([]byte(manifestJSON), &manifest) != nil || len(manifest.Items) == 0 {
+		return
+	}
+	var payload map[string]any
+	if json.Unmarshal(raw, &payload) != nil {
+		return
+	}
+	evidence := workflowItems(payload, "referenceEvidence")
+	if len(evidence) < len(manifest.Items) {
+		report.add("missing_reference_evidence", "参考图任务必须逐图记录画面理解证据", "")
+		report.Passed = false
+		return
+	}
+	seen := map[string]bool{}
+	for _, item := range evidence {
+		imageRef := workflowString(item, "imageRef", "image", "reference")
+		if imageRef == "" || !workflowValuePresent(item, "observations", "observation", "visualFacts") || !workflowValuePresent(item, "appliedTo", "usage", "applied") {
+			report.add("invalid_reference_evidence", "参考图理解证据缺少引用、观察结果或应用说明", imageRef)
+			report.Passed = false
+			continue
+		}
+		seen[imageRef] = true
+	}
+	for index := range manifest.Items {
+		imageRef := fmt.Sprintf("@图%d", index+1)
+		if !seen[imageRef] {
+			report.add("unverified_reference_image", "参考图没有对应的画面理解证据", imageRef)
+			report.Passed = false
+		}
+	}
+}
+
+func workflowValuePresent(payload map[string]any, keys ...string) bool {
+	for _, key := range keys {
+		switch value := payload[key].(type) {
+		case string:
+			if strings.TrimSpace(value) != "" {
+				return true
+			}
+		case []any:
+			if len(value) > 0 {
+				return true
+			}
+		case map[string]any:
+			if len(value) > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func newWorkflowGateReport() WorkflowGateReport {
 	return WorkflowGateReport{Passed: true, Version: workflowGateValidatorVersion, Issues: []WorkflowGateIssue{}}
 }

@@ -66,6 +66,7 @@ func DB() (*gorm.DB, error) {
 			&model.WorkflowSkillVersion{},
 			&model.WorkflowStageSkillBinding{},
 			&model.WorkflowSkillEvaluation{},
+			&model.WorkflowSkillAuditLog{},
 			&model.WorkflowMediaBatch{},
 			&model.WorkflowMediaItem{},
 			&model.Prompt{},

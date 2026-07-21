@@ -10,7 +10,7 @@ import (
 
 func TestCodexExecutorBuildsReadOnlyMultimodalCommand(t *testing.T) {
 	command := buildCodexCommand(CodexExecutorOptions{Bin: "codex", Workdir: "/workspace", Model: "gpt-test"}, "/tmp/final.txt", []string{"/staged/1.png", "/staged/2.webp"})
-	expected := []string{"exec", "--ephemeral", "--sandbox", "read-only", "--color", "never", "--cd", "/workspace", "--output-last-message", "/tmp/final.txt", "-i", "/staged/1.png", "-i", "/staged/2.webp", "--model", "gpt-test", "-"}
+	expected := []string{"exec", "--ignore-user-config", "--ephemeral", "--sandbox", "read-only", "--color", "never", "--cd", "/workspace", "--output-last-message", "/tmp/final.txt", "-i", "/staged/1.png", "-i", "/staged/2.webp", "--model", "gpt-test", "-"}
 	if !reflect.DeepEqual(command.Args[1:], expected) {
 		t.Fatalf("args=%q", command.Args)
 	}
@@ -50,5 +50,27 @@ func TestCodexImageContextRequiresVisualUnderstanding(t *testing.T) {
 	context := codexImageContext(`{"items":[{"label":"阿宁","kind":"character","version":"v3","sha256":"abc","order":1}]}`)
 	if !strings.Contains(context, "逐张理解图片") || !strings.Contains(context, "@图1：阿宁") || strings.Contains(context, "serverPath") {
 		t.Fatalf("context=%q", context)
+	}
+}
+
+func TestCodexCommandFailureClassifiesSafeDiagnostics(t *testing.T) {
+	tests := []struct {
+		name      string
+		stderr    string
+		message   string
+		retryable bool
+	}{
+		{name: "outdated", stderr: "model requires a newer version of Codex", message: "Codex CLI 版本过低，请升级后重试"},
+		{name: "network", stderr: "stream disconnected after retry", message: "Codex CLI 网络连接失败，请稍后重试", retryable: true},
+		{name: "rate limit", stderr: "429 rate limit exceeded", message: "Codex CLI 请求频率受限，请稍后重试", retryable: true},
+		{name: "unknown", stderr: "private upstream details", message: "Codex CLI 执行失败，请检查本地登录状态和运行日志"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			message, retryable := codexCommandFailure(test.stderr)
+			if message != test.message || retryable != test.retryable {
+				t.Fatalf("message=%q retryable=%v", message, retryable)
+			}
+		})
 	}
 }

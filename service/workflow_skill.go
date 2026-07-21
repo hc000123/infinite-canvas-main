@@ -67,9 +67,11 @@ type WorkflowSkillDraftInput struct {
 }
 
 type WorkflowSkillAdminItem struct {
-	Skill    model.WorkflowSkill               `json:"skill"`
-	Versions []model.WorkflowSkillVersion      `json:"versions"`
-	Bindings []model.WorkflowStageSkillBinding `json:"bindings"`
+	Skill       model.WorkflowSkill               `json:"skill"`
+	Versions    []model.WorkflowSkillVersion      `json:"versions"`
+	Bindings    []model.WorkflowStageSkillBinding `json:"bindings"`
+	Evaluations []model.WorkflowSkillEvaluation   `json:"evaluations"`
+	Audits      []model.WorkflowSkillAuditLog     `json:"audits"`
 }
 
 func ListWorkflowSkillAdminItems() ([]WorkflowSkillAdminItem, error) {
@@ -90,7 +92,19 @@ func ListWorkflowSkillAdminItems() ([]WorkflowSkillAdminItem, error) {
 		if err != nil {
 			return nil, err
 		}
-		items = append(items, WorkflowSkillAdminItem{Skill: skill, Versions: versions, Bindings: bindings})
+		evaluations := []model.WorkflowSkillEvaluation{}
+		for _, version := range versions {
+			versionEvaluations, err := repository.ListWorkflowSkillEvaluations(version.ID)
+			if err != nil {
+				return nil, err
+			}
+			evaluations = append(evaluations, versionEvaluations...)
+		}
+		audits, err := repository.ListWorkflowSkillAuditLogs(skill.StageKey)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, WorkflowSkillAdminItem{Skill: skill, Versions: versions, Bindings: bindings, Evaluations: evaluations, Audits: audits})
 	}
 	return items, nil
 }
@@ -287,6 +301,7 @@ func PublishWorkflowSkillVersion(adminID string, versionID string, input Workflo
 		return ResolvedWorkflowSkill{}, safeMessageError{message: "项目灰度发布必须指定项目"}
 	}
 	stamp := now()
+	action := "publish_project"
 	if scope == model.WorkflowSkillScopeGlobal {
 		if version.Status != model.WorkflowSkillVersionPublished {
 			return ResolvedWorkflowSkill{}, safeMessageError{message: "新版本必须先发布到测试项目"}
@@ -299,7 +314,8 @@ func PublishWorkflowSkillVersion(adminID string, versionID string, input Workflo
 			return ResolvedWorkflowSkill{}, safeMessageError{message: "全局提升前必须完成项目灰度评测"}
 		}
 		binding := model.WorkflowStageSkillBinding{ID: newID("skillbinding"), StageKey: skill.StageKey, Scope: scope, SkillVersionID: version.ID, CreatedAt: stamp, UpdatedAt: stamp}
-		if err := repository.UpsertWorkflowStageSkillBinding(binding); err != nil {
+		action = "promote_global"
+		if err := repository.UpsertWorkflowStageSkillBindingWithAudit(binding, workflowSkillAudit(adminID, action, binding, stamp)); err != nil {
 			return ResolvedWorkflowSkill{}, err
 		}
 		return ResolvePublishedWorkflowSkill(skill.StageKey, "")
@@ -314,14 +330,13 @@ func PublishWorkflowSkillVersion(adminID string, versionID string, input Workflo
 		ID: newID("skillbinding"), StageKey: skill.StageKey, Scope: scope, ScopeID: scopeID,
 		SkillVersionID: version.ID, CreatedAt: stamp, UpdatedAt: stamp,
 	}
-	if err := repository.PublishWorkflowSkillVersionBinding(version, binding); err != nil {
+	if err := repository.PublishWorkflowSkillVersionBinding(version, binding, workflowSkillAudit(adminID, action, binding, stamp)); err != nil {
 		return ResolvedWorkflowSkill{}, err
 	}
-	_ = adminID
 	return ResolvePublishedWorkflowSkill(skill.StageKey, scopeID)
 }
 
-func RollbackWorkflowSkillBinding(stageKey string, scope string, scopeID string, versionID string) (ResolvedWorkflowSkill, error) {
+func RollbackWorkflowSkillBinding(adminID string, stageKey string, scope string, scopeID string, versionID string) (ResolvedWorkflowSkill, error) {
 	skill, version, ok, err := repository.GetWorkflowSkillWithVersion(versionID)
 	if err != nil || !ok {
 		return ResolvedWorkflowSkill{}, safeMessageError{message: "回滚版本不存在"}
@@ -335,13 +350,22 @@ func RollbackWorkflowSkillBinding(stageKey string, scope string, scopeID string,
 		return ResolvedWorkflowSkill{}, safeMessageError{message: "回滚范围无效"}
 	}
 	stamp := now()
-	if err := repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{
+	binding := model.WorkflowStageSkillBinding{
 		ID: newID("skillbinding"), StageKey: stageKey, Scope: scope, ScopeID: scopeID,
 		SkillVersionID: versionID, CreatedAt: stamp, UpdatedAt: stamp,
-	}); err != nil {
+	}
+	if err := repository.UpsertWorkflowStageSkillBindingWithAudit(binding, workflowSkillAudit(adminID, "rollback_"+scope, binding, stamp)); err != nil {
 		return ResolvedWorkflowSkill{}, err
 	}
 	return ResolvePublishedWorkflowSkill(stageKey, scopeID)
+}
+
+func workflowSkillAudit(adminID string, action string, binding model.WorkflowStageSkillBinding, stamp string) model.WorkflowSkillAuditLog {
+	detail, _ := json.Marshal(map[string]string{"bindingId": binding.ID})
+	return model.WorkflowSkillAuditLog{
+		ID: newID("skillaudit"), AdminID: strings.TrimSpace(adminID), Action: action, StageKey: binding.StageKey,
+		Scope: binding.Scope, ScopeID: binding.ScopeID, SkillVersionID: binding.SkillVersionID, DetailJSON: string(detail), CreatedAt: stamp,
+	}
 }
 
 func normalizeWorkflowSkillText(value string) string {

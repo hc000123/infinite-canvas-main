@@ -35,6 +35,14 @@ func TestWorkflowSkillEvaluationNeverWritesBusinessDataAndUsesSameInput(t *testi
 	if err != nil || global.Version.ID != draft.ID || global.Binding.Scope != model.WorkflowSkillScopeGlobal {
 		t.Fatalf("promote global=%+v err=%v", global, err)
 	}
+	audits, err := repository.ListWorkflowSkillAuditLogs(WorkflowSkillStageArt)
+	actions := map[string]bool{}
+	for _, audit := range audits {
+		actions[audit.Action] = audit.AdminID == "admin-1"
+	}
+	if err != nil || len(audits) != 2 || !actions["publish_project"] || !actions["promote_global"] {
+		t.Fatalf("audits=%+v err=%v", audits, err)
+	}
 }
 
 func TestWorkflowSkillAPIEvaluationRequiresExplicitCostConfirmation(t *testing.T) {

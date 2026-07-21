@@ -43,6 +43,30 @@ export async function apiPost<T>(url: string, body?: unknown, token?: string) {
     });
 }
 
+export async function apiPatch<T>(url: string, body?: unknown, token?: string) {
+    return apiRequest<T>({
+        url,
+        method: "PATCH",
+        data: body ?? {},
+        headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+    });
+}
+
+export async function apiPut<T>(url: string, body?: unknown, token?: string) {
+    return apiRequest<T>({
+        url,
+        method: "PUT",
+        data: body ?? {},
+        headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+    });
+}
+
 export async function apiPostForm<T>(url: string, form: FormData, token?: string) {
     return apiRequest<T>({
         url,
@@ -60,7 +84,7 @@ export async function apiDelete<T>(url: string, token?: string) {
     });
 }
 
-async function apiRequest<T>(config: { url: string; method: "GET" | "POST" | "DELETE"; params?: ApiParams; data?: unknown; headers?: Record<string, string> }) {
+async function apiRequest<T>(config: { url: string; method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; params?: ApiParams; data?: unknown; headers?: Record<string, string> }) {
     let response;
     try {
         response = await axios.request<ApiResponse<T>>({

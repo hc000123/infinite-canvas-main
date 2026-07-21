@@ -64,3 +64,15 @@ type WorkflowSkillEvaluation struct {
 	CreatedAt         string `json:"createdAt"`
 	UpdatedAt         string `json:"updatedAt"`
 }
+
+type WorkflowSkillAuditLog struct {
+	ID             string `json:"id" gorm:"primaryKey"`
+	AdminID        string `json:"adminId" gorm:"index"`
+	Action         string `json:"action" gorm:"index"`
+	StageKey       string `json:"stageKey" gorm:"index"`
+	Scope          string `json:"scope" gorm:"index"`
+	ScopeID        string `json:"scopeId" gorm:"index"`
+	SkillVersionID string `json:"skillVersionId" gorm:"index"`
+	DetailJSON     string `json:"detailJson" gorm:"type:text"`
+	CreatedAt      string `json:"createdAt" gorm:"index"`
+}

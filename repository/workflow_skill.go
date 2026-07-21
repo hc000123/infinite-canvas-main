@@ -41,7 +41,20 @@ func UpsertWorkflowStageSkillBinding(binding model.WorkflowStageSkillBinding) er
 	}).Create(&binding).Error
 }
 
-func PublishWorkflowSkillVersionBinding(version model.WorkflowSkillVersion, binding model.WorkflowStageSkillBinding) error {
+func UpsertWorkflowStageSkillBindingWithAudit(binding model.WorkflowStageSkillBinding, audit model.WorkflowSkillAuditLog) error {
+	db, err := DB()
+	if err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := upsertWorkflowStageSkillBinding(tx, binding); err != nil {
+			return err
+		}
+		return tx.Create(&audit).Error
+	})
+}
+
+func PublishWorkflowSkillVersionBinding(version model.WorkflowSkillVersion, binding model.WorkflowStageSkillBinding, audit model.WorkflowSkillAuditLog) error {
 	db, err := DB()
 	if err != nil {
 		return err
@@ -56,11 +69,18 @@ func PublishWorkflowSkillVersionBinding(version model.WorkflowSkillVersion, bind
 		if result.RowsAffected != 1 {
 			return errors.New("Skill 版本状态已变化")
 		}
-		return tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "stage_key"}, {Name: "scope"}, {Name: "scope_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"skill_version_id", "updated_at"}),
-		}).Create(&binding).Error
+		if err := upsertWorkflowStageSkillBinding(tx, binding); err != nil {
+			return err
+		}
+		return tx.Create(&audit).Error
 	})
+}
+
+func upsertWorkflowStageSkillBinding(db *gorm.DB, binding model.WorkflowStageSkillBinding) error {
+	return db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "stage_key"}, {Name: "scope"}, {Name: "scope_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"skill_version_id", "updated_at"}),
+	}).Create(&binding).Error
 }
 
 func ResolveWorkflowStageSkillBinding(stageKey string, projectID string) (model.WorkflowStageSkillBinding, bool, error) {
@@ -212,6 +232,16 @@ func ListWorkflowSkillEvaluations(versionID string) ([]model.WorkflowSkillEvalua
 	}
 	var items []model.WorkflowSkillEvaluation
 	err = db.Where("skill_version_id = ?", strings.TrimSpace(versionID)).Order("created_at desc").Limit(50).Find(&items).Error
+	return items, err
+}
+
+func ListWorkflowSkillAuditLogs(stageKey string) ([]model.WorkflowSkillAuditLog, error) {
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	var items []model.WorkflowSkillAuditLog
+	err = db.Where("stage_key = ?", strings.TrimSpace(stageKey)).Order("created_at desc").Limit(100).Find(&items).Error
 	return items, err
 }
 
