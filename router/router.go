@@ -38,6 +38,29 @@ func New() *gin.Engine {
 	v1.POST("/agent-runs/:id/review", func(c *gin.Context) {
 		handler.ReviewAgentRun(c.Writer, c.Request, c.Param("id"))
 	})
+	v1.POST("/workflow-runs", gin.WrapF(handler.EnsureWorkflowRun))
+	v1.GET("/workflow-runs/:id", func(c *gin.Context) {
+		handler.WorkflowRun(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.GET("/workflow-runs/:id/events", func(c *gin.Context) {
+		handler.WorkflowEvents(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/workflow-runs/:id/stages/:stageId/start", func(c *gin.Context) {
+		handler.StartWorkflowStage(c.Writer, c.Request, c.Param("id"), c.Param("stageId"))
+	})
+	v1.POST("/workflow-stage-runs/:id/cancel", func(c *gin.Context) {
+		handler.CancelWorkflowStage(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/workflow-stage-runs/:id/retry", func(c *gin.Context) {
+		handler.RetryWorkflowStage(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/workflow-stage-runs/:id/review", func(c *gin.Context) {
+		handler.ReviewWorkflowStage(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/workflow-stage-runs/:id/apply", func(c *gin.Context) {
+		handler.ApplyWorkflowStage(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.GET("/workflow-worker/health", gin.WrapF(handler.WorkflowWorkerHealth))
 	v1.POST("/canvas/media-cache", gin.WrapF(handler.CacheCanvasMedia))
 	v1.POST("/volcengine/assets/image-review", gin.WrapF(handler.SubmitVolcengineImageAsset))
 	v1.POST("/volcengine/assets/media-review", gin.WrapF(handler.SubmitVolcengineMediaAsset))

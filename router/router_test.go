@@ -51,3 +51,23 @@ func TestUploadedAssetsUseNoSniffHeader(t *testing.T) {
 		t.Fatalf("X-Content-Type-Options = %q, want nosniff", header)
 	}
 }
+
+func TestWorkflowRoutesRequireAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	paths := []string{
+		"/api/v1/workflow-runs/run-1",
+		"/api/v1/workflow-runs/run-1/events",
+		"/api/v1/workflow-worker/health",
+	}
+	for _, path := range paths {
+		recorder := httptest.NewRecorder()
+		app.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code == http.StatusNotFound {
+			t.Fatalf("workflow route missing: %s", path)
+		}
+		if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+			t.Fatalf("workflow route did not reach auth: path=%s body=%s", path, recorder.Body.String())
+		}
+	}
+}

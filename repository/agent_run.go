@@ -11,6 +11,12 @@ import (
 
 var ErrAgentRunNotFound = errors.New("agent run not found")
 
+type AgentRunQueueStats struct {
+	Queued      int64
+	Running     int64
+	StaleLeases int64
+}
+
 func SaveAgentConfigRecord(item model.AgentConfigRecord) (model.AgentConfigRecord, error) {
 	db, err := DB()
 	if err != nil {
@@ -222,6 +228,25 @@ func RequestAgentRunCancel(userID string, id string) (model.AgentRun, error) {
 	}
 	run.UpdatedAt = nowText
 	return run, db.Save(&run).Error
+}
+
+func GetAgentRunQueueStats(now time.Time) (AgentRunQueueStats, error) {
+	db, err := DB()
+	if err != nil {
+		return AgentRunQueueStats{}, err
+	}
+	nowText := now.UTC().Format(time.RFC3339Nano)
+	stats := AgentRunQueueStats{}
+	if err := db.Model(&model.AgentRun{}).Where("status = ?", model.AgentRunStatusQueued).Count(&stats.Queued).Error; err != nil {
+		return stats, err
+	}
+	if err := db.Model(&model.AgentRun{}).Where("status IN ?", []model.AgentRunStatus{model.AgentRunStatusRunning, model.AgentRunStatusCancelRequested}).Count(&stats.Running).Error; err != nil {
+		return stats, err
+	}
+	if err := db.Model(&model.AgentRun{}).Where("status IN ? AND lease_expires_at <> '' AND lease_expires_at <= ?", []model.AgentRunStatus{model.AgentRunStatusRunning, model.AgentRunStatusCancelRequested}, nowText).Count(&stats.StaleLeases).Error; err != nil {
+		return stats, err
+	}
+	return stats, nil
 }
 
 func GetAgentRun(id string) (model.AgentRun, bool, error) {

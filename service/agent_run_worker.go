@@ -112,6 +112,7 @@ func (w *AgentRunWorker) ProcessOne(ctx context.Context) error {
 		return ctx.Err()
 	}
 	currentTime := w.now().UTC()
+	markWorkflowWorkerHeartbeat(w.id, currentTime)
 	if _, err := repository.RequeueExpiredAgentRuns(currentTime); err != nil {
 		return err
 	}
