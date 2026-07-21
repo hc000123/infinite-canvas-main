@@ -7,6 +7,7 @@ import { CheckCircle2, CircleAlert, Clock3, FileText, Film, ImageIcon, ListFilte
 import { cn } from "@/lib/utils";
 
 import { WorkflowHeader } from "./components/workflow-header";
+import { WorkflowAssetPanel } from "./components/workflow-asset-panel";
 import { WorkflowRunConsole } from "./components/workflow-run-console";
 import { WorkflowStagePanel } from "./components/workflow-stage-panel";
 import { WorkflowStageRail } from "./components/workflow-stage-rail";
@@ -17,7 +18,7 @@ export default function EpisodeWorkflowPage() {
     const params = useParams<{ episodeId: string; id: string }>();
     const { modal } = App.useApp();
     const workbench = useWorkflowWorkbench(params.id, params.episodeId);
-    const remoteStageId = workbench.routeState.stage === "art" ? "art-design" : workbench.routeState.stage === "storyboard" ? "seedance-storyboard" : "";
+    const remoteStageId = workbench.routeState.stage === "art" || workbench.routeState.stage === "assets" ? "art-design" : workbench.routeState.stage === "storyboard" ? "seedance-storyboard" : "";
     const stageActions = useWorkflowStageActions({ detail: workbench.detail, refresh: workbench.refreshRemote, stageId: remoteStageId });
 
     if (!workbench.isHydrated) {
@@ -88,6 +89,10 @@ export default function EpisodeWorkflowPage() {
                             workerReady={Boolean(workbench.health?.ready)}
                             onConfirmStart={() => modal.confirm({ title: `启动${activeStage.label}？`, content: `任务进入云端队列后会按实际模型预扣算力点。当前预估：${stageActions.stage?.estimatedCredits || "由任务创建时计算"}。`, okText: "确认启动", cancelText: "取消", onOk: stageActions.start })}
                             onConfirmReject={() => modal.confirm({ title: "退回当前产物？", content: "退回后需要重新生成并再次通过质量门，不会覆盖已经批准的其他阶段。", okText: "确认退回", cancelText: "取消", onOk: stageActions.reject })}
+                            projectId={workbench.project.id}
+                            projectTitle={workbench.project.title}
+                            episodeId={workbench.episode.id}
+                            onApplied={workbench.refreshRemote}
                         />
                     </div>
                 </section>
@@ -98,9 +103,10 @@ export default function EpisodeWorkflowPage() {
     );
 }
 
-function StageWorkspace({ onConfirmReject, onConfirmStart, script, selected, stage, stageActions, workerReady }: { onConfirmReject: () => void; onConfirmStart: () => void; script: string; selected: ReturnType<typeof useWorkflowWorkbench>["selectedPackage"]; stage: string; stageActions: ReturnType<typeof useWorkflowStageActions>; workerReady: boolean }) {
+function StageWorkspace({ episodeId, onApplied, onConfirmReject, onConfirmStart, projectId, projectTitle, script, selected, stage, stageActions, workerReady }: { episodeId: string; onApplied: () => void | Promise<void>; onConfirmReject: () => void; onConfirmStart: () => void; projectId: string; projectTitle: string; script: string; selected: ReturnType<typeof useWorkflowWorkbench>["selectedPackage"]; stage: string; stageActions: ReturnType<typeof useWorkflowStageActions>; workerReady: boolean }) {
     if (stage === "script") return <Panel icon={<FileText className="size-4" />} title="本集确认稿" description="云端阶段将使用这份不可变快照，不会再次自动改写。"><pre className="thin-scrollbar max-h-[58vh] overflow-auto whitespace-pre-wrap text-sm leading-7 text-[var(--studio-text-secondary)]">{script || "本集还没有确认稿。"}</pre></Panel>;
     if (stage === "art" || stage === "storyboard") return <WorkflowStagePanel label={stage === "art" ? "导演与美术" : "分镜提示词"} state={stageActions} workerReady={workerReady} onConfirmStart={onConfirmStart} onConfirmReject={onConfirmReject} />;
+    if (stage === "assets") return <WorkflowAssetPanel artifact={stageActions.artifact} episodeId={episodeId} onApplied={onApplied} projectId={projectId} projectTitle={projectTitle} stage={stageActions.stage} />;
     if (!selected && ["assets", "storyboard", "video", "delivery"].includes(stage)) return <Empty className="py-20" description="完成分镜提示词阶段后，生产包会出现在这里" />;
     if (selected) return <div className="space-y-3"><Panel icon={<Film className="size-4" />} title={`${selected.id} · ${selected.segment}`} description={`场次 ${selected.sceneKey} · ${selected.duration}`}><p className="text-sm leading-7 text-[var(--studio-text-secondary)]">{selected.prompt}</p></Panel><Panel icon={<ImageIcon className="size-4" />} title="参考资产" description={`${selected.assets.filter((item) => item.status === "已绑定").length}/${selected.assets.length} 已匹配`}><div className="grid gap-2 sm:grid-cols-2">{selected.assets.map((asset) => <div key={`${asset.kind}:${asset.name}`} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-elevated-bg)] px-3 py-2 text-xs"><span className="text-[var(--studio-text-muted)]">{asset.kind}</span><div className="mt-1 truncate">{asset.name}</div></div>)}</div></Panel></div>;
     return <Panel icon={<ServerCog className="size-4" />} title="云端阶段工作区" description="启动、审核和质量门操作将在这里完成。"><div className="grid min-h-56 place-items-center rounded-md border border-dashed border-[var(--studio-border-subtle)] text-sm text-[var(--studio-text-muted)]">等待阶段就绪</div></Panel>;
