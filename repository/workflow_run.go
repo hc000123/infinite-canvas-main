@@ -62,6 +62,19 @@ func GetUserWorkflowRun(userID string, id string) (model.WorkflowRun, bool, erro
 	return run, err == nil, err
 }
 
+func GetWorkflowRun(id string) (model.WorkflowRun, bool, error) {
+	db, err := DB()
+	if err != nil {
+		return model.WorkflowRun{}, false, err
+	}
+	var run model.WorkflowRun
+	err = db.Where("id = ?", strings.TrimSpace(id)).First(&run).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return run, false, nil
+	}
+	return run, err == nil, err
+}
+
 func FindWorkflowRunByScope(userID string, projectID string, episodeID string, workflowID string, workflowVersion string, scriptHash string) (model.WorkflowRun, bool, error) {
 	db, err := DB()
 	if err != nil {

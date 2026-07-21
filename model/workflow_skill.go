@@ -52,8 +52,8 @@ type WorkflowSkillEvaluation struct {
 	ProjectID         string `json:"projectId" gorm:"index"`
 	EpisodeID         string `json:"episodeId" gorm:"index"`
 	InputHash         string `json:"inputHash" gorm:"index"`
-	InputSnapshotJSON string `json:"inputSnapshotJson" gorm:"type:text"`
-	ImageManifestJSON string `json:"imageManifestJson" gorm:"type:text"`
+	InputSnapshotJSON string `json:"-" gorm:"type:text"`
+	ImageManifestJSON string `json:"-" gorm:"type:text"`
 	ResultJSON        string `json:"resultJson" gorm:"type:text"`
 	DiffJSON          string `json:"diffJson" gorm:"type:text"`
 	GateJSON          string `json:"gateJson" gorm:"type:text"`

@@ -205,6 +205,16 @@ func GetWorkflowSkillEvaluation(id string) (model.WorkflowSkillEvaluation, bool,
 	return evaluation, err == nil, err
 }
 
+func ListWorkflowSkillEvaluations(versionID string) ([]model.WorkflowSkillEvaluation, error) {
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	var items []model.WorkflowSkillEvaluation
+	err = db.Where("skill_version_id = ?", strings.TrimSpace(versionID)).Order("created_at desc").Limit(50).Find(&items).Error
+	return items, err
+}
+
 func HasPassingWorkflowSkillEvaluation(versionID string, contentHash string) (bool, error) {
 	db, err := DB()
 	if err != nil {

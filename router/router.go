@@ -163,6 +163,15 @@ func New() *gin.Engine {
 	workflowSkillAdmin.POST("/workflow-skill-versions/:id/validate", func(c *gin.Context) {
 		handler.AdminValidateWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
 	})
+	workflowSkillAdmin.POST("/workflow-skill-versions/:id/evaluations", func(c *gin.Context) {
+		handler.AdminEvaluateWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	workflowSkillAdmin.POST("/workflow-skill-versions/:id/compare", func(c *gin.Context) {
+		handler.AdminEvaluateWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	workflowSkillAdmin.GET("/workflow-skill-evaluations/:id", func(c *gin.Context) {
+		handler.AdminWorkflowSkillEvaluation(c.Writer, c.Request, c.Param("id"))
+	})
 	workflowSkillAdmin.POST("/workflow-skill-versions/:id/publish", func(c *gin.Context) {
 		handler.AdminPublishWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
 	})

@@ -102,6 +102,33 @@ func AdminPublishWorkflowSkillVersion(w http.ResponseWriter, r *http.Request, id
 	OK(w, result)
 }
 
+func AdminEvaluateWorkflowSkillVersion(w http.ResponseWriter, r *http.Request, id string) {
+	admin, ok := service.UserFromContext(r.Context())
+	if !ok || admin.Role != model.UserRoleAdmin {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	var input service.WorkflowSkillEvaluationInput
+	if !decodeWorkflowBody(w, r, &input, 128<<10) {
+		return
+	}
+	result, err := service.EvaluateWorkflowSkill(admin.ID, id, input)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func AdminWorkflowSkillEvaluation(w http.ResponseWriter, r *http.Request, id string) {
+	result, err := service.GetWorkflowSkillEvaluationResult(id)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
 func AdminWorkflowStageSkillBindings(w http.ResponseWriter, r *http.Request, stageKey string) {
 	items, err := service.ListWorkflowSkillAdminItems()
 	if err != nil {
