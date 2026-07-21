@@ -66,6 +66,34 @@ func TestAgentRunWorkerSkipsCancelledRunWithoutCharge(t *testing.T) {
 	fixture.assertCreditLogs(t, run.ID, 0, 0)
 }
 
+func TestAgentRunWorkerCompletesWorkflowStageArtifact(t *testing.T) {
+	fixture := newAgentRunWorkerFixture(t, http.StatusOK, `{"choices":[{"message":{"content":"{\"directorSummary\":\"室内压迫感\",\"items\":[{\"id\":\"character-1\",\"kind\":\"character\",\"name\":\"阿宁\",\"prompt\":\"角色三视图\"}]}"}}]}`)
+	detail, err := EnsureWorkflowRun("user-1", EnsureWorkflowRunInput{
+		ProjectID:       "project-worker",
+		EpisodeID:       "episode-worker",
+		ScriptSnapshot:  "阿宁进入房间。",
+		ScriptConfirmed: true,
+	})
+	if err != nil {
+		t.Fatalf("EnsureWorkflowRun returned error: %v", err)
+	}
+	stage, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageArtDesign, "worker-workflow-stage")
+	if err != nil {
+		t.Fatalf("StartWorkflowStage returned error: %v", err)
+	}
+	if err := fixture.worker.ProcessOne(context.Background()); err != nil {
+		t.Fatalf("ProcessOne returned error: %v", err)
+	}
+	saved, ok, err := repository.GetUserWorkflowStageRun("user-1", stage.ID)
+	if err != nil || !ok || saved.Status != model.WorkflowStageRunStatusNeedsReview || saved.OutputArtifactID == "" {
+		t.Fatalf("saved=%#v ok=%v err=%v", saved, ok, err)
+	}
+	gate, ok, err := repository.GetWorkflowQualityGateForArtifact("user-1", saved.OutputArtifactID)
+	if err != nil || !ok || !gate.Passed {
+		t.Fatalf("gate=%#v ok=%v err=%v", gate, ok, err)
+	}
+}
+
 type agentRunWorkerFixture struct {
 	worker *AgentRunWorker
 	now    time.Time

@@ -124,6 +124,9 @@ func (w *AgentRunWorker) ProcessOne(ctx context.Context) error {
 
 func (w *AgentRunWorker) execute(ctx context.Context, run model.AgentRun) error {
 	leaseOwner := run.LeaseOwner
+	if err := SyncWorkflowStageFromAgentRun(run); err != nil {
+		return err
+	}
 	channel, err := SelectModelChannelWithOptions(run.Model, run.ChannelID, nil, "text")
 	if err != nil {
 		return w.finishFailure(&run, leaseOwner, err.Error(), false)
@@ -175,7 +178,7 @@ func (w *AgentRunWorker) execute(ctx context.Context, run model.AgentRun) error 
 	if !saved {
 		return errors.New("Agent Run 完成时租约已失效")
 	}
-	return nil
+	return CompleteWorkflowStageAgentRun(run)
 }
 
 func (w *AgentRunWorker) call(ctx context.Context, run model.AgentRun, channel model.ModelChannel) agentRunCallResult {
@@ -259,7 +262,7 @@ func (w *AgentRunWorker) finishFailure(run *model.AgentRun, leaseOwner string, m
 	if !saved {
 		return errors.New("Agent Run 失败写入时租约已失效")
 	}
-	return nil
+	return SyncWorkflowStageFromAgentRun(*run)
 }
 
 func (w *AgentRunWorker) finishCancelled(run *model.AgentRun, leaseOwner string) error {
@@ -279,7 +282,7 @@ func (w *AgentRunWorker) finishCancelled(run *model.AgentRun, leaseOwner string)
 	if !saved {
 		return errors.New("Agent Run 取消写入时租约已失效")
 	}
-	return nil
+	return SyncWorkflowStageFromAgentRun(*run)
 }
 
 func reserveAgentRunCredits(run *model.AgentRun) error {

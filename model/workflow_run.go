@@ -45,11 +45,11 @@ type WorkflowRun struct {
 type WorkflowStageRun struct {
 	ID                   string                 `json:"id" gorm:"primaryKey"`
 	UserID               string                 `json:"userId" gorm:"index"`
-	WorkflowRunID        string                 `json:"workflowRunId" gorm:"index"`
-	StageID              string                 `json:"stageId" gorm:"index"`
+	WorkflowRunID        string                 `json:"workflowRunId" gorm:"index;uniqueIndex:idx_workflow_stage_attempt,priority:1"`
+	StageID              string                 `json:"stageId" gorm:"index;uniqueIndex:idx_workflow_stage_attempt,priority:2"`
 	ParentStageRunID     string                 `json:"parentStageRunId" gorm:"index"`
 	AgentRunID           string                 `json:"agentRunId" gorm:"index"`
-	Attempt              int                    `json:"attempt"`
+	Attempt              int                    `json:"attempt" gorm:"uniqueIndex:idx_workflow_stage_attempt,priority:3"`
 	Status               WorkflowStageRunStatus `json:"status" gorm:"index"`
 	InputArtifactID      string                 `json:"inputArtifactId" gorm:"index"`
 	OutputArtifactID     string                 `json:"outputArtifactId" gorm:"index"`
