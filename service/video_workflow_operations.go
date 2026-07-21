@@ -19,6 +19,8 @@ type WorkflowWorkerHealth struct {
 	QueueDepth           int64  `json:"queueDepth"`
 	RunningCount         int64  `json:"runningCount"`
 	StaleLeaseCount      int64  `json:"staleLeaseCount"`
+	Executor             string `json:"executor"`
+	ExecutorLabel        string `json:"executorLabel"`
 }
 
 var workflowWorkerRuntime = struct {
@@ -56,7 +58,12 @@ func GetWorkflowWorkerHealth() (WorkflowWorkerHealth, error) {
 	if err != nil {
 		return WorkflowWorkerHealth{}, err
 	}
-	channelAvailable := workflowTextChannelAvailable()
+	executorKind := currentAgentRunExecutorKind()
+	channelAvailable := workflowExecutorAvailable()
+	executorLabel := "后台 API"
+	if executorKind == AgentRunExecutorCodexCLI {
+		executorLabel = "本地 Codex 验证"
+	}
 	fresh := !heartbeat.IsZero() && currentTime.Sub(heartbeat) <= 30*time.Second
 	heartbeatText := ""
 	if !heartbeat.IsZero() {
@@ -72,6 +79,8 @@ func GetWorkflowWorkerHealth() (WorkflowWorkerHealth, error) {
 		QueueDepth:           stats.Queued,
 		RunningCount:         stats.Running,
 		StaleLeaseCount:      stats.StaleLeases,
+		Executor:             executorKind,
+		ExecutorLabel:        executorLabel,
 	}, nil
 }
 

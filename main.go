@@ -41,12 +41,17 @@ func run() error {
 	service.SetWorkflowWorkerEnabled(config.Cfg.WorkflowWorkerEnabled)
 	defer service.SetWorkflowWorkerEnabled(false)
 	if config.Cfg.WorkflowWorkerEnabled {
+		executor, err := service.NewAgentRunExecutorFromConfig()
+		if err != nil {
+			return err
+		}
 		worker := service.NewAgentRunWorker(service.AgentRunWorkerOptions{
 			ID:              "embedded-workflow-worker",
 			PollInterval:    time.Duration(config.Cfg.WorkflowWorkerPollMS) * time.Millisecond,
 			LeaseDuration:   time.Duration(config.Cfg.WorkflowWorkerLeaseSeconds) * time.Second,
 			MaxConcurrency:  config.Cfg.WorkflowWorkerConcurrency,
 			UserConcurrency: config.Cfg.WorkflowWorkerUserConcurrency,
+			Executor:        executor,
 		})
 		workerGroup.Add(1)
 		go func() {

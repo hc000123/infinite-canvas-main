@@ -1,10 +1,8 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -23,6 +21,7 @@ type AgentRunWorkerOptions struct {
 	UserConcurrency   int
 	Now               func() time.Time
 	HTTPClient        *http.Client
+	Executor          AgentRunExecutor
 }
 
 type AgentRunWorker struct {
@@ -33,7 +32,7 @@ type AgentRunWorker struct {
 	maxConcurrency    int
 	userConcurrency   int
 	now               func() time.Time
-	httpClient        *http.Client
+	executor          AgentRunExecutor
 }
 
 type agentRunCallResult struct {
@@ -65,8 +64,8 @@ func NewAgentRunWorker(options AgentRunWorkerOptions) *AgentRunWorker {
 	if options.Now == nil {
 		options.Now = time.Now
 	}
-	if options.HTTPClient == nil {
-		options.HTTPClient = &http.Client{}
+	if options.Executor == nil {
+		options.Executor = NewAPIAgentRunExecutor(options.HTTPClient)
 	}
 	return &AgentRunWorker{
 		id:                strings.TrimSpace(options.ID),
@@ -76,7 +75,7 @@ func NewAgentRunWorker(options AgentRunWorkerOptions) *AgentRunWorker {
 		maxConcurrency:    options.MaxConcurrency,
 		userConcurrency:   options.UserConcurrency,
 		now:               options.Now,
-		httpClient:        options.HTTPClient,
+		executor:          options.Executor,
 	}
 }
 
@@ -134,16 +133,19 @@ func (w *AgentRunWorker) execute(ctx context.Context, run model.AgentRun) error 
 	if err := SyncWorkflowStageFromAgentRun(run); err != nil {
 		return err
 	}
-	channel, err := SelectModelChannelWithOptions(run.Model, run.ChannelID, nil, "text")
-	if err != nil {
-		return w.finishFailure(&run, leaseOwner, err.Error(), false)
+	frozenExecutor := strings.TrimSpace(run.Executor)
+	if frozenExecutor == "" {
+		frozenExecutor = AgentRunExecutorAPI
+	}
+	if frozenExecutor != w.executor.Kind() {
+		return w.finishFailure(&run, leaseOwner, "任务执行器与当前 Worker 不匹配", false)
 	}
 	if cancelled, err := agentRunCancellationRequested(run.ID); err != nil {
 		return err
 	} else if cancelled {
 		return w.finishCancelled(&run, leaseOwner)
 	}
-	if err := reserveAgentRunCredits(&run); err != nil {
+	if err := w.executor.ReserveCredits(&run); err != nil {
 		return w.finishFailure(&run, leaseOwner, err.Error(), false)
 	}
 	if _, saved, err := repository.SaveLeasedAgentRun(run, leaseOwner); err != nil {
@@ -156,7 +158,7 @@ func (w *AgentRunWorker) execute(ctx context.Context, run model.AgentRun) error 
 	monitorDone := make(chan struct{})
 	go w.maintainLease(callCtx, run.ID, cancel, monitorDone)
 	startedAt := time.Now()
-	result := w.call(callCtx, run, channel)
+	result := w.executor.Call(callCtx, run)
 	cancel()
 	<-monitorDone
 	run.DurationMs = time.Since(startedAt).Milliseconds()
@@ -188,41 +190,6 @@ func (w *AgentRunWorker) execute(ctx context.Context, run model.AgentRun) error 
 	return CompleteWorkflowStageAgentRun(run)
 }
 
-func (w *AgentRunWorker) call(ctx context.Context, run model.AgentRun, channel model.ModelChannel) agentRunCallResult {
-	timeout := time.Duration(normalizeAgentRunTimeout(run.TimeoutSeconds)) * time.Second
-	callCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	request, err := http.NewRequestWithContext(callCtx, http.MethodPost, BuildModelChannelURL(channel, "/chat/completions"), bytes.NewBufferString(run.RequestJSON))
-	if err != nil {
-		return agentRunCallResult{message: "Agent Run 请求创建失败"}
-	}
-	request.Header.Set("Authorization", "Bearer "+channel.APIKey)
-	request.Header.Set("Content-Type", "application/json")
-	response, err := w.httpClient.Do(request)
-	if err != nil {
-		if errors.Is(err, context.Canceled) && ctx.Err() != nil {
-			return agentRunCallResult{message: "Agent Run 已取消"}
-		}
-		return agentRunCallResult{message: "Agent Run 文本模型请求失败", retryable: true}
-	}
-	defer response.Body.Close()
-	body, readErr := io.ReadAll(io.LimitReader(response.Body, 4<<20))
-	if readErr != nil {
-		return agentRunCallResult{message: "Agent Run 上游响应读取失败", retryable: true}
-	}
-	if response.StatusCode >= http.StatusBadRequest {
-		return agentRunCallResult{
-			message:   upstreamAgentRunError(body, response.StatusCode),
-			retryable: response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= http.StatusInternalServerError,
-		}
-	}
-	rawOutput := extractAgentRunText(body)
-	if strings.TrimSpace(rawOutput) == "" {
-		return agentRunCallResult{message: "Agent Run 上游未返回可审核内容", retryable: true}
-	}
-	return agentRunCallResult{rawOutput: rawOutput, structuredJSON: extractJSONDraft(rawOutput)}
-}
-
 func (w *AgentRunWorker) maintainLease(ctx context.Context, id string, cancel context.CancelFunc, done chan<- struct{}) {
 	defer close(done)
 	ticker := time.NewTicker(w.heartbeatInterval)
@@ -247,7 +214,7 @@ func (w *AgentRunWorker) maintainLease(ctx context.Context, id string, cancel co
 }
 
 func (w *AgentRunWorker) finishFailure(run *model.AgentRun, leaseOwner string, message string, retryable bool) error {
-	if err := refundAgentRunCredits(run); err != nil {
+	if err := w.executor.RefundCredits(run); err != nil {
 		return err
 	}
 	stamp := workerTime(w.now())
@@ -273,7 +240,7 @@ func (w *AgentRunWorker) finishFailure(run *model.AgentRun, leaseOwner string, m
 }
 
 func (w *AgentRunWorker) finishCancelled(run *model.AgentRun, leaseOwner string) error {
-	if err := refundAgentRunCredits(run); err != nil {
+	if err := w.executor.RefundCredits(run); err != nil {
 		return err
 	}
 	stamp := workerTime(w.now())

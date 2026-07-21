@@ -109,16 +109,29 @@ func ListUserAgentConfigs(userID string, projectID string, episodeID string) ([]
 }
 
 func CreateUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRun, error) {
-	resolved, err := resolveAgentRunChannel(input)
-	if err != nil {
-		return model.AgentRun{}, err
+	executorKind := strings.TrimSpace(input.Executor)
+	if executorKind == "" {
+		executorKind = currentAgentRunExecutorKind()
 	}
-	credits, err := ModelCost(resolved.ModelName)
-	if err != nil {
-		return model.AgentRun{}, err
+	if executorKind != currentAgentRunExecutorKind() {
+		return model.AgentRun{}, safeMessageError{message: "任务执行器与当前运行模式不匹配"}
+	}
+	resolved := resolvedAgentRunChannel{}
+	credits := 0
+	var err error
+	if executorKind == AgentRunExecutorAPI {
+		resolved, credits, err = apiAgentRunExecution(input)
+		if err != nil {
+			return model.AgentRun{}, err
+		}
+	} else {
+		resolved.ModelName = codexAgentRunModel()
+		resolved.TargetModel = strings.TrimSpace(input.ModelPreference)
 	}
 	estimatedCredits := input.EstimatedCredits
-	if estimatedCredits <= 0 {
+	if executorKind == AgentRunExecutorCodexCLI {
+		estimatedCredits = 0
+	} else if estimatedCredits <= 0 {
 		estimatedCredits = credits
 	}
 	timeoutSeconds := normalizeAgentRunTimeout(input.TimeoutSeconds)
@@ -137,7 +150,7 @@ func CreateUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRu
 		WorkflowRunID:      strings.TrimSpace(input.WorkflowRunID),
 		StageID:            strings.TrimSpace(input.StageID),
 		AgentKind:          strings.TrimSpace(input.AgentKind),
-		Executor:           strings.TrimSpace(input.Executor),
+		Executor:           executorKind,
 		SkillID:            strings.TrimSpace(input.SkillID),
 		SkillVersionID:     strings.TrimSpace(input.SkillVersionID),
 		SkillVersion:       strings.TrimSpace(input.SkillVersion),

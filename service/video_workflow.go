@@ -157,6 +157,7 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, ide
 		return current, err
 	}
 	systemPrompt, userPrompt := workflowStagePrompts(detail.Run, stageID, inputArtifact)
+	executorKind := ""
 	skillID, skillVersionID, skillVersion, skillContentHash, skillSnapshotJSON := "", "", "", "", ""
 	if frozenRun != nil && strings.TrimSpace(frozenRun.SkillSnapshotJSON) != "" {
 		instructions, err := workflowSkillInstructionsFromSnapshot(frozenRun.SkillSnapshotJSON)
@@ -167,6 +168,7 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, ide
 		skillID, skillVersionID = frozenRun.SkillID, frozenRun.SkillVersionID
 		skillVersion, skillContentHash = frozenRun.SkillVersion, frozenRun.SkillContentHash
 		skillSnapshotJSON = frozenRun.SkillSnapshotJSON
+		executorKind = frozenRun.Executor
 	} else {
 		if err := EnsureWorkflowSkillSeeds(); err != nil {
 			return current, err
@@ -181,6 +183,7 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, ide
 		skillSnapshotJSON = workflowSkillSnapshotJSON(resolvedSkill)
 	}
 	agentRun, err := CreateUserAgentRun(userID, CreateAgentRunInput{
+		Executor:          executorKind,
 		IdempotencyKey:    strings.TrimSpace(idempotencyKey),
 		ProjectID:         detail.Run.ProjectID,
 		EpisodeID:         detail.Run.EpisodeID,
