@@ -3,7 +3,7 @@
 import { ChevronRight, Trash2, Video, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { App, Button } from "antd";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { runCanvasVideoGeneration } from "@/app/(user)/canvas/utils/canvas-generation-runner";
 import { appendSeedanceMediaReviewDiagnostic, seedanceMediaReviewBlockingError } from "@/app/(user)/canvas/utils/canvas-volcengine-review-diagnostics";
@@ -59,6 +59,7 @@ import {
 
 export default function VideoPage() {
     const { message, modal } = App.useApp();
+    const router = useRouter();
     const searchParams = useSearchParams();
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
@@ -96,6 +97,11 @@ export default function VideoPage() {
     const targetProjectSlug = searchParams.get("projectSlug") || "";
     const sourceProjectId = searchParams.get("sourceProjectId") || "";
     const sourceEpisodeId = searchParams.get("sourceEpisodeId") || "";
+    useEffect(() => {
+        if (!sourceProjectId || !sourceEpisodeId) return;
+        const shot = searchParams.get("shot") || "";
+        router.replace(`/projects/${encodeURIComponent(sourceProjectId)}/episodes/${encodeURIComponent(sourceEpisodeId)}/workflow?stage=video${shot ? `&shot=${encodeURIComponent(shot)}` : ""}`);
+    }, [router, searchParams, sourceEpisodeId, sourceProjectId]);
     const scopedImportedPackages = useMemo(
         () =>
             sourceProjectId && sourceEpisodeId

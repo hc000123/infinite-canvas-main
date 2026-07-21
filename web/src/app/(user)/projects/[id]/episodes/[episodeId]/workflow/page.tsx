@@ -14,8 +14,10 @@ import { WorkflowShotQueue } from "./components/workflow-shot-queue";
 import { WorkflowStagePanel } from "./components/workflow-stage-panel";
 import { WorkflowStageRail } from "./components/workflow-stage-rail";
 import { WorkflowStoryboardSync } from "./components/workflow-storyboard-sync";
+import { WorkflowVideoConsole } from "./components/workflow-video-console";
 import { useWorkflowWorkbench } from "./use-workflow-workbench";
 import { useWorkflowStageActions } from "./use-workflow-stage-actions";
+import { useWorkflowVideoActions } from "./use-workflow-video-actions";
 
 export default function EpisodeWorkflowPage() {
     const params = useParams<{ episodeId: string; id: string }>();
@@ -23,6 +25,7 @@ export default function EpisodeWorkflowPage() {
     const workbench = useWorkflowWorkbench(params.id, params.episodeId);
     const remoteStageId = workbench.routeState.stage === "art" || workbench.routeState.stage === "assets" ? "art-design" : workbench.routeState.stage === "storyboard" ? "seedance-storyboard" : "";
     const stageActions = useWorkflowStageActions({ detail: workbench.detail, refresh: workbench.refreshRemote, stageId: remoteStageId });
+    const videoActions = useWorkflowVideoActions(workbench.packages);
 
     if (!workbench.isHydrated) {
         return <main className="studio-shell grid h-full place-items-center"><Spin description="正在读取本集生产资料" /></main>;
@@ -81,7 +84,7 @@ export default function EpisodeWorkflowPage() {
                     </div>
                 </section>
 
-                <WorkflowRunConsole events={workbench.events} health={workbench.health} stage={stageActions.stage} />
+                {workbench.routeState.stage === "video" || workbench.routeState.stage === "delivery" ? <WorkflowVideoConsole actions={videoActions} item={workbench.selectedPackage} /> : <WorkflowRunConsole events={workbench.events} health={workbench.health} stage={stageActions.stage} />}
             </div>
         </main>
     );
