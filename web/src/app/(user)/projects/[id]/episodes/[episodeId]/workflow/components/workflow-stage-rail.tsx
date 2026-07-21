@@ -9,7 +9,7 @@ const stageIcons = { script: ScrollText, art: Palette, assets: Shapes, storyboar
 
 export function WorkflowStageRail(props: { active: WorkflowStageKey; onSelect: (stage: WorkflowStageKey) => void; stages: WorkflowStageView[] }) {
     return (
-        <nav aria-label="视频工作流阶段" className="min-h-0 border-r border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] px-2 py-3">
+        <nav aria-label="视频工作流阶段" className="hidden min-h-0 border-r border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] px-2 py-3 xl:block">
             <div className="mb-2 px-2 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--studio-text-muted)]">Production</div>
             <div className="space-y-1">
                 {props.stages.map((stage, index) => {

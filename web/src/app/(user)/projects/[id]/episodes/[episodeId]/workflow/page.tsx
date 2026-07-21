@@ -1,13 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
-import { Alert, App, Button, Empty, Spin } from "antd";
-import { CheckCircle2, CircleAlert, Clock3, FileText, ServerCog } from "lucide-react";
+import { Alert, App, Button, Drawer, Empty, Spin } from "antd";
+import { CheckCircle2, CircleAlert, Clock3, FileText, List, PanelRight, ServerCog } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 import { WorkflowHeader } from "./components/workflow-header";
 import { WorkflowAssetPanel } from "./components/workflow-asset-panel";
+import { WorkflowDeliveryPanel } from "./components/workflow-delivery-panel";
 import { WorkflowRunConsole } from "./components/workflow-run-console";
 import { WorkflowShotEditor } from "./components/workflow-shot-editor";
 import { WorkflowShotQueue } from "./components/workflow-shot-queue";
@@ -22,6 +24,8 @@ import { useWorkflowVideoActions } from "./use-workflow-video-actions";
 export default function EpisodeWorkflowPage() {
     const params = useParams<{ episodeId: string; id: string }>();
     const { modal } = App.useApp();
+    const [queueOpen, setQueueOpen] = useState(false);
+    const [consoleOpen, setConsoleOpen] = useState(false);
     const workbench = useWorkflowWorkbench(params.id, params.episodeId);
     const remoteStageId = workbench.routeState.stage === "art" || workbench.routeState.stage === "assets" ? "art-design" : workbench.routeState.stage === "storyboard" ? "seedance-storyboard" : "";
     const stageActions = useWorkflowStageActions({ detail: workbench.detail, refresh: workbench.refreshRemote, stageId: remoteStageId });
@@ -62,6 +66,10 @@ export default function EpisodeWorkflowPage() {
 
                 <section className="thin-scrollbar min-h-0 overflow-y-auto bg-[var(--studio-workspace-bg)] px-4 py-4 xl:px-5">
                     <div className="mx-auto max-w-4xl">
+                        <div className="mb-3 flex gap-2 overflow-x-auto pb-1 xl:hidden">
+                            {workbench.stageViews.map((stage) => <button key={stage.key} type="button" className={cn("h-9 shrink-0 rounded-md border px-3 text-xs", stage.key === workbench.routeState.stage ? "border-[var(--studio-accent)] bg-[var(--studio-active-bg)] text-[var(--studio-text-primary)]" : "border-[var(--studio-border-subtle)] text-[var(--studio-text-secondary)]")} onClick={() => workbench.selectRoute(stage.key)}>{stage.label}</button>)}
+                        </div>
+                        <div className="mb-3 flex gap-2 xl:hidden"><Button className="min-h-11 flex-1" icon={<List className="size-4" />} onClick={() => setQueueOpen(true)}>分镜队列</Button><Button className="min-h-11 flex-1" icon={<PanelRight className="size-4" />} onClick={() => setConsoleOpen(true)}>结果与运行</Button></div>
                         <div className="mb-4 flex items-start justify-between gap-4 border-b border-[var(--studio-border-subtle)] pb-4">
                             <div><div className="text-xs font-medium text-[var(--studio-accent)]">当前工作区</div><h2 className="mt-1 text-xl font-semibold">{activeStage.label}</h2><p className="mt-1 text-sm text-[var(--studio-text-secondary)]">{activeStage.description}</p></div>
                             <StageBadge status={activeStage.status} />
@@ -86,6 +94,12 @@ export default function EpisodeWorkflowPage() {
 
                 {workbench.routeState.stage === "video" || workbench.routeState.stage === "delivery" ? <WorkflowVideoConsole actions={videoActions} item={workbench.selectedPackage} /> : <WorkflowRunConsole events={workbench.events} health={workbench.health} stage={stageActions.stage} />}
             </div>
+            <Drawer title="分镜队列" placement="left" width={340} open={queueOpen} onClose={() => setQueueOpen(false)} styles={{ body: { padding: 0, overflow: "hidden" } }}>
+                <div className="h-full [&>aside]:!flex [&>aside]:h-full"><WorkflowShotQueue packages={workbench.packages} selectedId={workbench.selectedPackage?.id || ""} onSelect={(shot) => { workbench.selectRoute(workbench.routeState.stage, shot); setQueueOpen(false); }} /></div>
+            </Drawer>
+            <Drawer title="结果与运行" placement="right" width={360} open={consoleOpen} onClose={() => setConsoleOpen(false)} styles={{ body: { padding: 0, overflow: "hidden" } }}>
+                <div className="h-full [&>aside]:!flex [&>aside]:h-full">{workbench.routeState.stage === "video" || workbench.routeState.stage === "delivery" ? <WorkflowVideoConsole actions={videoActions} item={workbench.selectedPackage} /> : <WorkflowRunConsole events={workbench.events} health={workbench.health} stage={stageActions.stage} />}</div>
+            </Drawer>
         </main>
     );
 }
@@ -95,6 +109,7 @@ function StageWorkspace({ episodeId, onApplied, onConfirmReject, onConfirmStart,
     if (stage === "art") return <WorkflowStagePanel label="导演与美术" state={stageActions} workerReady={workerReady} onConfirmStart={onConfirmStart} onConfirmReject={onConfirmReject} />;
     if (stage === "assets") return <WorkflowAssetPanel artifact={stageActions.artifact} episodeId={episodeId} onApplied={onApplied} projectId={projectId} projectTitle={projectTitle} stage={stageActions.stage} />;
     if (stage === "storyboard") return <div className="space-y-3"><WorkflowStagePanel label="分镜提示词" state={stageActions} workerReady={workerReady} onConfirmStart={onConfirmStart} onConfirmReject={onConfirmReject} />{stageActions.artifact && stageActions.stage && ["approved", "applied"].includes(stageActions.stage.status) ? <WorkflowStoryboardSync artifact={stageActions.artifact} episodeId={episodeId} onApplied={onApplied} projectId={projectId} stage={stageActions.stage} /> : null}</div>;
+    if (stage === "delivery") return <WorkflowDeliveryPanel packages={packages} />;
     if (!selected && ["assets", "storyboard", "video", "delivery"].includes(stage)) return <Empty className="py-20" description="完成分镜提示词阶段后，生产包会出现在这里" />;
     if (selected) return <WorkflowShotEditor item={selected} onSelect={onSelectShot} packages={packages} />;
     return <Panel icon={<ServerCog className="size-4" />} title="云端阶段工作区" description="启动、审核和质量门操作将在这里完成。"><div className="grid min-h-56 place-items-center rounded-md border border-dashed border-[var(--studio-border-subtle)] text-sm text-[var(--studio-text-muted)]">等待阶段就绪</div></Panel>;

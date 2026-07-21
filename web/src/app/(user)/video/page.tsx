@@ -2,7 +2,7 @@
 
 import { ChevronRight, Trash2, Video, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { App, Button } from "antd";
+import { App, Button, Result } from "antd";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { runCanvasVideoGeneration } from "@/app/(user)/canvas/utils/canvas-generation-runner";
@@ -152,6 +152,19 @@ export default function VideoPage() {
         validAssets: workflowReferenceAssets,
         volcengineAssetEnabled,
     });
+
+    if (!sourceProjectId || !sourceEpisodeId) {
+        return (
+            <main className="studio-workspace studio-shell grid h-full place-items-center px-6 text-[var(--studio-text-primary)]">
+                <Result
+                    status="info"
+                    title="视频生产已合并到项目分集工作流"
+                    subTitle="请选择一个项目和分集，在统一页面完成导演、美术、资产、分镜、视频生成与交付检查。"
+                    extra={<Button type="primary" href="/projects">选择项目</Button>}
+                />
+            </main>
+        );
+    }
 
     if (!selected) {
         return (
