@@ -94,6 +94,10 @@ func SaveAgentRunIdempotently(run model.AgentRun) (model.AgentRun, bool, error) 
 }
 
 func ClaimNextAgentRun(workerID string, now time.Time, lease time.Duration) (model.AgentRun, bool, error) {
+	return ClaimNextAgentRunWithUserLimit(workerID, now, lease, 1)
+}
+
+func ClaimNextAgentRunWithUserLimit(workerID string, now time.Time, lease time.Duration, userConcurrency int) (model.AgentRun, bool, error) {
 	db, err := DB()
 	if err != nil {
 		return model.AgentRun{}, false, err
@@ -101,9 +105,12 @@ func ClaimNextAgentRun(workerID string, now time.Time, lease time.Duration) (mod
 	nowText := now.UTC().Format(time.RFC3339Nano)
 	leaseText := now.UTC().Add(lease).Format(time.RFC3339Nano)
 	workerID = strings.TrimSpace(workerID)
+	if userConcurrency <= 0 {
+		userConcurrency = 1
+	}
 	for range 5 {
 		var candidate model.AgentRun
-		err := db.Where("status = ? AND (available_at = '' OR available_at <= ?) AND (lease_expires_at = '' OR lease_expires_at <= ?)", model.AgentRunStatusQueued, nowText, nowText).
+		err := db.Where("status = ? AND (available_at = '' OR available_at <= ?) AND (lease_expires_at = '' OR lease_expires_at <= ?) AND (SELECT COUNT(*) FROM agent_runs active WHERE active.user_id = agent_runs.user_id AND active.id <> agent_runs.id AND active.status IN ? AND active.lease_expires_at > ?) < ?", model.AgentRunStatusQueued, nowText, nowText, []model.AgentRunStatus{model.AgentRunStatusRunning, model.AgentRunStatusCancelRequested}, nowText, userConcurrency).
 			Order("available_at asc, created_at asc").First(&candidate).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return model.AgentRun{}, false, nil
@@ -112,7 +119,7 @@ func ClaimNextAgentRun(workerID string, now time.Time, lease time.Duration) (mod
 			return model.AgentRun{}, false, err
 		}
 		tx := db.Model(&model.AgentRun{}).
-			Where("id = ? AND status = ? AND (lease_expires_at = '' OR lease_expires_at <= ?)", candidate.ID, model.AgentRunStatusQueued, nowText).
+			Where("id = ? AND status = ? AND (lease_expires_at = '' OR lease_expires_at <= ?) AND (SELECT COUNT(*) FROM agent_runs active WHERE active.user_id = ? AND active.id <> ? AND active.status IN ? AND active.lease_expires_at > ?) < ?", candidate.ID, model.AgentRunStatusQueued, nowText, candidate.UserID, candidate.ID, []model.AgentRunStatus{model.AgentRunStatusRunning, model.AgentRunStatusCancelRequested}, nowText, userConcurrency).
 			Updates(map[string]any{
 				"status":           model.AgentRunStatusRunning,
 				"lease_owner":      workerID,

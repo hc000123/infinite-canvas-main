@@ -36,3 +36,20 @@ func TestLoadRejectsDefaultAdminCredentialsInProduction(t *testing.T) {
 		t.Fatalf("Load error = %v, want default admin credential error", err)
 	}
 }
+
+func TestLoadWorkflowWorkerConfig(t *testing.T) {
+	t.Setenv("ADMIN_PASSWORD", "safe-admin-password")
+	t.Setenv("JWT_SECRET", "safe-jwt-secret")
+	t.Setenv("WORKFLOW_WORKER_ENABLED", "true")
+	t.Setenv("WORKFLOW_WORKER_CONCURRENCY", "3")
+	t.Setenv("WORKFLOW_WORKER_USER_CONCURRENCY", "1")
+	t.Setenv("WORKFLOW_WORKER_POLL_MS", "750")
+	t.Setenv("WORKFLOW_WORKER_LEASE_SECONDS", "45")
+
+	if err := Load(); err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if !Cfg.WorkflowWorkerEnabled || Cfg.WorkflowWorkerConcurrency != 3 || Cfg.WorkflowWorkerUserConcurrency != 1 || Cfg.WorkflowWorkerPollMS != 750 || Cfg.WorkflowWorkerLeaseSeconds != 45 {
+		t.Fatalf("worker config=%#v", Cfg)
+	}
+}

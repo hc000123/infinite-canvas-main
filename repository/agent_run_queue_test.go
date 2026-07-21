@@ -69,6 +69,23 @@ func TestConcurrentWorkersClaimAgentRunOnce(t *testing.T) {
 	}
 }
 
+func TestClaimAgentRunRespectsPerUserConcurrency(t *testing.T) {
+	setupRepositoryTestDB(t)
+	now := time.Date(2026, 7, 21, 10, 0, 0, 0, time.UTC)
+	if _, err := SaveAgentRun(queueTestAgentRun("run-user-a", "idem-user-a", now)); err != nil {
+		t.Fatalf("SaveAgentRun returned error: %v", err)
+	}
+	if _, err := SaveAgentRun(queueTestAgentRun("run-user-b", "idem-user-b", now)); err != nil {
+		t.Fatalf("SaveAgentRun returned error: %v", err)
+	}
+	if _, ok, err := ClaimNextAgentRunWithUserLimit("worker-a", now, time.Minute, 1); err != nil || !ok {
+		t.Fatalf("first claim ok=%v err=%v", ok, err)
+	}
+	if run, ok, err := ClaimNextAgentRunWithUserLimit("worker-b", now, time.Minute, 1); err != nil || ok {
+		t.Fatalf("second same-user claim run=%#v ok=%v err=%v", run, ok, err)
+	}
+}
+
 func TestSaveAgentRunIdempotently(t *testing.T) {
 	setupRepositoryTestDB(t)
 	now := time.Date(2026, 7, 21, 10, 0, 0, 0, time.UTC)

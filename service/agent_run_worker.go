@@ -20,6 +20,7 @@ type AgentRunWorkerOptions struct {
 	LeaseDuration     time.Duration
 	HeartbeatInterval time.Duration
 	MaxConcurrency    int
+	UserConcurrency   int
 	Now               func() time.Time
 	HTTPClient        *http.Client
 }
@@ -30,6 +31,7 @@ type AgentRunWorker struct {
 	leaseDuration     time.Duration
 	heartbeatInterval time.Duration
 	maxConcurrency    int
+	userConcurrency   int
 	now               func() time.Time
 	httpClient        *http.Client
 }
@@ -57,6 +59,9 @@ func NewAgentRunWorker(options AgentRunWorkerOptions) *AgentRunWorker {
 	if options.MaxConcurrency <= 0 {
 		options.MaxConcurrency = 2
 	}
+	if options.UserConcurrency <= 0 {
+		options.UserConcurrency = 1
+	}
 	if options.Now == nil {
 		options.Now = time.Now
 	}
@@ -69,6 +74,7 @@ func NewAgentRunWorker(options AgentRunWorkerOptions) *AgentRunWorker {
 		leaseDuration:     options.LeaseDuration,
 		heartbeatInterval: options.HeartbeatInterval,
 		maxConcurrency:    options.MaxConcurrency,
+		userConcurrency:   options.UserConcurrency,
 		now:               options.Now,
 		httpClient:        options.HTTPClient,
 	}
@@ -116,7 +122,7 @@ func (w *AgentRunWorker) ProcessOne(ctx context.Context) error {
 	if _, err := repository.RequeueExpiredAgentRuns(currentTime); err != nil {
 		return err
 	}
-	run, ok, err := repository.ClaimNextAgentRun(w.id, currentTime, w.leaseDuration)
+	run, ok, err := repository.ClaimNextAgentRunWithUserLimit(w.id, currentTime, w.leaseDuration, w.userConcurrency)
 	if err != nil || !ok {
 		return err
 	}
