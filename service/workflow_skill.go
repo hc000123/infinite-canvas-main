@@ -400,3 +400,16 @@ func workflowSkillSnapshotJSON(resolved ResolvedWorkflowSkill) string {
 func workflowSkillInstructions(resolved ResolvedWorkflowSkill) string {
 	return fmt.Sprintf("\n\n【当前阶段 Skill %s@%s，内容哈希 %s】\n%s", resolved.Skill.Name, resolved.Version.Version, resolved.Version.ContentHash, strings.TrimSpace(resolved.Package.Files["SKILL.md"]))
 }
+
+func workflowSkillInstructionsFromSnapshot(snapshotJSON string) (string, error) {
+	var snapshot struct {
+		Name        string            `json:"name"`
+		Version     string            `json:"version"`
+		ContentHash string            `json:"contentHash"`
+		Files       map[string]string `json:"files"`
+	}
+	if json.Unmarshal([]byte(snapshotJSON), &snapshot) != nil || strings.TrimSpace(snapshot.Files["SKILL.md"]) == "" {
+		return "", safeMessageError{message: "原任务 Skill 快照损坏"}
+	}
+	return fmt.Sprintf("\n\n【当前阶段 Skill %s@%s，内容哈希 %s】\n%s", snapshot.Name, snapshot.Version, snapshot.ContentHash, strings.TrimSpace(snapshot.Files["SKILL.md"])), nil
+}

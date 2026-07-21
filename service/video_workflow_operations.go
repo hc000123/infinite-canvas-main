@@ -107,7 +107,14 @@ func RetryWorkflowStage(userID string, stageRunID string, idempotencyKey string)
 	}
 	switch stage.Status {
 	case model.WorkflowStageRunStatusFailed, model.WorkflowStageRunStatusCancelled, model.WorkflowStageRunStatusRejected:
-		return StartWorkflowStage(userID, stage.WorkflowRunID, stage.StageID, idempotencyKey)
+		previous, exists, err := repository.GetAgentRun(stage.AgentRunID)
+		if err != nil {
+			return stage, err
+		}
+		if !exists {
+			return stage, safeMessageError{message: "原任务不存在，无法保留 Skill 快照"}
+		}
+		return startWorkflowStage(userID, stage.WorkflowRunID, stage.StageID, idempotencyKey, &previous)
 	default:
 		return stage, safeMessageError{message: "当前阶段状态不能重试"}
 	}

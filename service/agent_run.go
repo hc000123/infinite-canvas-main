@@ -34,6 +34,13 @@ type CreateAgentRunInput struct {
 	WorkflowRunID      string            `json:"workflowRunId"`
 	StageID            string            `json:"stageId"`
 	AgentKind          string            `json:"agentKind"`
+	Executor           string            `json:"-"`
+	SkillID            string            `json:"-"`
+	SkillVersionID     string            `json:"-"`
+	SkillVersion       string            `json:"-"`
+	SkillContentHash   string            `json:"-"`
+	SkillSnapshotJSON  string            `json:"-"`
+	ImageManifestJSON  string            `json:"-"`
 	ChannelID          string            `json:"channelId"`
 	ModelPreference    string            `json:"modelPreference"`
 	AllowFallback      bool              `json:"allowFallback"`
@@ -130,6 +137,13 @@ func CreateUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRu
 		WorkflowRunID:      strings.TrimSpace(input.WorkflowRunID),
 		StageID:            strings.TrimSpace(input.StageID),
 		AgentKind:          strings.TrimSpace(input.AgentKind),
+		Executor:           strings.TrimSpace(input.Executor),
+		SkillID:            strings.TrimSpace(input.SkillID),
+		SkillVersionID:     strings.TrimSpace(input.SkillVersionID),
+		SkillVersion:       strings.TrimSpace(input.SkillVersion),
+		SkillContentHash:   strings.TrimSpace(input.SkillContentHash),
+		SkillSnapshotJSON:  strings.TrimSpace(input.SkillSnapshotJSON),
+		ImageManifestJSON:  strings.TrimSpace(input.ImageManifestJSON),
 		Model:              resolved.ModelName,
 		TargetModel:        resolved.TargetModel,
 		ChannelID:          resolved.Channel.ID,

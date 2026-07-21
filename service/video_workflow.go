@@ -127,6 +127,10 @@ func GetWorkflowRunDetail(userID string, id string) (WorkflowRunDetail, error) {
 }
 
 func StartWorkflowStage(userID string, workflowRunID string, stageID string, idempotencyKey string) (model.WorkflowStageRun, error) {
+	return startWorkflowStage(userID, workflowRunID, stageID, idempotencyKey, nil)
+}
+
+func startWorkflowStage(userID string, workflowRunID string, stageID string, idempotencyKey string, frozenRun *model.AgentRun) (model.WorkflowStageRun, error) {
 	detail, err := GetWorkflowRunDetail(userID, workflowRunID)
 	if err != nil {
 		return model.WorkflowStageRun{}, err
@@ -153,16 +157,44 @@ func StartWorkflowStage(userID string, workflowRunID string, stageID string, ide
 		return current, err
 	}
 	systemPrompt, userPrompt := workflowStagePrompts(detail.Run, stageID, inputArtifact)
+	skillID, skillVersionID, skillVersion, skillContentHash, skillSnapshotJSON := "", "", "", "", ""
+	if frozenRun != nil && strings.TrimSpace(frozenRun.SkillSnapshotJSON) != "" {
+		instructions, err := workflowSkillInstructionsFromSnapshot(frozenRun.SkillSnapshotJSON)
+		if err != nil {
+			return current, err
+		}
+		systemPrompt += instructions
+		skillID, skillVersionID = frozenRun.SkillID, frozenRun.SkillVersionID
+		skillVersion, skillContentHash = frozenRun.SkillVersion, frozenRun.SkillContentHash
+		skillSnapshotJSON = frozenRun.SkillSnapshotJSON
+	} else {
+		if err := EnsureWorkflowSkillSeeds(); err != nil {
+			return current, err
+		}
+		resolvedSkill, err := ResolvePublishedWorkflowSkill(workflowSkillStageForRun(stageID), detail.Run.ProjectID)
+		if err != nil {
+			return current, err
+		}
+		systemPrompt += workflowSkillInstructions(resolvedSkill)
+		skillID, skillVersionID = resolvedSkill.Skill.ID, resolvedSkill.Version.ID
+		skillVersion, skillContentHash = resolvedSkill.Version.Version, resolvedSkill.Version.ContentHash
+		skillSnapshotJSON = workflowSkillSnapshotJSON(resolvedSkill)
+	}
 	agentRun, err := CreateUserAgentRun(userID, CreateAgentRunInput{
-		IdempotencyKey: strings.TrimSpace(idempotencyKey),
-		ProjectID:      detail.Run.ProjectID,
-		EpisodeID:      detail.Run.EpisodeID,
-		WorkflowRunID:  detail.Run.ID,
-		StageID:        stageID,
-		AgentKind:      workflowStageAgentKind(stageID),
-		WritePolicy:    "confirm_before_write",
-		SystemPrompt:   systemPrompt,
-		UserPrompt:     userPrompt,
+		IdempotencyKey:    strings.TrimSpace(idempotencyKey),
+		ProjectID:         detail.Run.ProjectID,
+		EpisodeID:         detail.Run.EpisodeID,
+		WorkflowRunID:     detail.Run.ID,
+		StageID:           stageID,
+		AgentKind:         workflowStageAgentKind(stageID),
+		SkillID:           skillID,
+		SkillVersionID:    skillVersionID,
+		SkillVersion:      skillVersion,
+		SkillContentHash:  skillContentHash,
+		SkillSnapshotJSON: skillSnapshotJSON,
+		WritePolicy:       "confirm_before_write",
+		SystemPrompt:      systemPrompt,
+		UserPrompt:        userPrompt,
 	})
 	if err != nil {
 		return current, err
@@ -187,7 +219,10 @@ func StartWorkflowStage(userID string, workflowRunID string, stageID string, ide
 		CreatedAt:        stamp,
 		UpdatedAt:        stamp,
 	}
-	event := workflowEvent(detail.Run, stage, "stage.queued", "info", map[string]any{"agentRunId": agentRun.ID, "attempt": stage.Attempt}, stamp)
+	event := workflowEvent(detail.Run, stage, "stage.queued", "info", map[string]any{
+		"agentRunId": agentRun.ID, "attempt": stage.Attempt,
+		"skillId": agentRun.SkillID, "skillVersion": agentRun.SkillVersion, "skillContentHash": agentRun.SkillContentHash,
+	}, stamp)
 	if err := repository.CreateWorkflowStageWithEvent(stage, event); err != nil {
 		return stage, err
 	}

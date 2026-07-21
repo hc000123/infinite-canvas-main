@@ -40,8 +40,8 @@ type AgentRun struct {
 	SkillVersionID      string         `json:"skillVersionId" gorm:"index"`
 	SkillVersion        string         `json:"skillVersion"`
 	SkillContentHash    string         `json:"skillContentHash" gorm:"index"`
-	SkillSnapshotJSON   string         `json:"skillSnapshotJson" gorm:"type:text"`
-	ImageManifestJSON   string         `json:"imageManifestJson" gorm:"type:text"`
+	SkillSnapshotJSON   string         `json:"-" gorm:"type:text"`
+	ImageManifestJSON   string         `json:"-" gorm:"type:text"`
 	Model               string         `json:"model" gorm:"index"`
 	TargetModel         string         `json:"targetModel"`
 	ChannelID           string         `json:"channelId" gorm:"index"`
