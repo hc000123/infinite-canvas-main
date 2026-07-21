@@ -437,26 +437,24 @@ export default function CreativeProjectDetailPage() {
         message.success("画布预设已保存");
     };
 
-    const openEpisodeWorkflow = async (episodeId: string) => {
+    const openEpisodeWorkflow = (episodeId: string) => {
         const episode = projectEpisodes.find((item) => item.id === episodeId);
         if (!episode) return;
-        try {
-            await syncVideoWorkflowScript(episode.order, episode.summary.trim() || episode.sourceSummary || "");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "同步视频工作流剧本失败");
-            return;
-        }
         router.push(videoWorkflowHref(episode.order, project.id, episode.id));
     };
 
     const syncVideoWorkflowScript = async (order: number, content: string) => {
         const episode = videoWorkflowEpisodeKey(order, project.id);
-        const response = await fetch("/api/original-workflow", {
-            body: JSON.stringify({ action: "save-script", content, episode, executionMode: workflowExecutionMode, projectSlug: videoWorkflowProjectSlug(project.id), rootPath: workflowRootPath }),
-            headers: { "Content-Type": "application/json" },
-            method: "POST",
-        });
-        if (!response.ok) throw new Error("同步视频工作流剧本失败");
+        try {
+            const response = await fetch("/api/original-workflow", {
+                body: JSON.stringify({ action: "save-script", content, episode, executionMode: workflowExecutionMode, projectSlug: videoWorkflowProjectSlug(project.id), rootPath: workflowRootPath }),
+                headers: { "Content-Type": "application/json" },
+                method: "POST",
+            });
+            return response.ok;
+        } catch {
+            return false;
+        }
     };
 
     return (
