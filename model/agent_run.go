@@ -35,6 +35,13 @@ type AgentRun struct {
 	WorkflowRunID       string         `json:"workflowRunId" gorm:"index"`
 	StageID             string         `json:"stageId" gorm:"index"`
 	AgentKind           string         `json:"agentKind" gorm:"index"`
+	Executor            string         `json:"executor" gorm:"index"`
+	SkillID             string         `json:"skillId" gorm:"index"`
+	SkillVersionID      string         `json:"skillVersionId" gorm:"index"`
+	SkillVersion        string         `json:"skillVersion"`
+	SkillContentHash    string         `json:"skillContentHash" gorm:"index"`
+	SkillSnapshotJSON   string         `json:"skillSnapshotJson" gorm:"type:text"`
+	ImageManifestJSON   string         `json:"imageManifestJson" gorm:"type:text"`
 	Model               string         `json:"model" gorm:"index"`
 	TargetModel         string         `json:"targetModel"`
 	ChannelID           string         `json:"channelId" gorm:"index"`

@@ -24,6 +24,10 @@
 - `workflow_artifacts`
 - `workflow_quality_gate_results`
 - `workflow_events`
+- `workflow_skills`
+- `workflow_skill_versions`
+- `workflow_stage_skill_bindings`
+- `workflow_skill_evaluations`
 - `prompts`
 - `assets`
 - `settings`
@@ -326,6 +330,13 @@ M8 起，前台追溯信息不新增数据库字段，统一放入已脱敏 JSON
 | `workflow_run_id`       | string | 工作流运行 ID                                                 |
 | `stage_id`              | string | 阶段 ID，例如 `stage1`、`stage2`、`stage3`                    |
 | `agent_kind`            | string | Agent 类型                                                    |
+| `executor`              | string | 冻结的执行器：`api` 或仅限本地开发的 `codex-cli`              |
+| `skill_id`              | string | 冻结的 Skill 稳定 ID                                          |
+| `skill_version_id`      | string | 冻结的 Skill 版本记录 ID                                      |
+| `skill_version`         | string | 冻结的 Skill 语义版本                                         |
+| `skill_content_hash`    | string | 冻结 Skill 文件与契约的内容哈希                               |
+| `skill_snapshot_json`   | text   | 本次运行使用的只读 Skill 快照                                 |
+| `image_manifest_json`   | text   | 本次运行使用的图片清单；不向用户接口返回服务器路径            |
 | `model`                 | string | 实际请求模型                                                  |
 | `target_model`          | string | 用户或 Agent 配置期望使用的模型                              |
 | `channel_id`            | string | 实际命中的后台渠道 ID                                         |
@@ -402,6 +413,22 @@ M8 起，前台追溯信息不新增数据库字段，统一放入已脱敏 JSON
 ### workflow_events
 
 工作流增量事件流。自增主键作为游标，按用户和 workflow 查询；只保存状态、进度、重试、取消、审核和写入回执等安全化元数据，不保存密钥、完整请求头或上游凭证。
+
+### workflow_skills
+
+六阶段 Skill 的稳定身份表。`stage_key` 唯一，当前阶段键固定为 `script`、`art`、`assets`、`storyboard`、`video`、`delivery`；这里只保存名称、说明和启用状态，不保存可变版本正文。
+
+### workflow_skill_versions
+
+Skill 的不可变版本表。`skill_id + version` 唯一；`files_json` 保存以 `SKILL.md` 为入口的逻辑文件，`contract_json` 保存输入、图片策略、输出结构和质量门契约，`content_hash` 对规范化文件与契约计算。状态为 `draft`、`published`、`archived`，发布后不能原地修改。
+
+### workflow_stage_skill_bindings
+
+阶段到 Skill 版本的生效指针。`stage_key + scope + scope_id` 唯一；`scope=project` 时优先于 `scope=global`，从而支持项目灰度、全局推广及两级独立回滚。
+
+### workflow_skill_evaluations
+
+Skill 发布前 dry-run 与同输入版本对比记录。冻结候选版、基线版、项目/分集、输入哈希、图片清单、结果、结构化差异和质量门；评测不创建正式工作流阶段、不写业务资产。
 
 ### credit_logs
 
