@@ -3,13 +3,16 @@ package model
 type AgentRunStatus string
 
 const (
-	AgentRunStatusCreated     AgentRunStatus = "created"
-	AgentRunStatusRunning     AgentRunStatus = "running"
-	AgentRunStatusNeedsReview AgentRunStatus = "needs_review"
-	AgentRunStatusApproved    AgentRunStatus = "approved"
-	AgentRunStatusRejected    AgentRunStatus = "rejected"
-	AgentRunStatusApplied     AgentRunStatus = "applied"
-	AgentRunStatusFailed      AgentRunStatus = "failed"
+	AgentRunStatusCreated         AgentRunStatus = "created"
+	AgentRunStatusQueued          AgentRunStatus = "queued"
+	AgentRunStatusRunning         AgentRunStatus = "running"
+	AgentRunStatusCancelRequested AgentRunStatus = "cancel_requested"
+	AgentRunStatusNeedsReview     AgentRunStatus = "needs_review"
+	AgentRunStatusApproved        AgentRunStatus = "approved"
+	AgentRunStatusRejected        AgentRunStatus = "rejected"
+	AgentRunStatusApplied         AgentRunStatus = "applied"
+	AgentRunStatusFailed          AgentRunStatus = "failed"
+	AgentRunStatusCancelled       AgentRunStatus = "cancelled"
 )
 
 type AgentConfigRecord struct {
@@ -26,7 +29,7 @@ type AgentConfigRecord struct {
 
 type AgentRun struct {
 	ID                  string         `json:"id" gorm:"primaryKey"`
-	UserID              string         `json:"userId" gorm:"index"`
+	UserID              string         `json:"userId" gorm:"index;uniqueIndex:idx_agent_run_idempotency,priority:1"`
 	ProjectID           string         `json:"projectId" gorm:"index"`
 	EpisodeID           string         `json:"episodeId" gorm:"index"`
 	WorkflowRunID       string         `json:"workflowRunId" gorm:"index"`
@@ -49,6 +52,15 @@ type AgentRun struct {
 	WritePolicy         string         `json:"writePolicy"`
 	RequiresConfirm     bool           `json:"requiresConfirm"`
 	Credits             int            `json:"credits"`
+	IdempotencyKey      *string        `json:"idempotencyKey,omitempty" gorm:"uniqueIndex:idx_agent_run_idempotency,priority:2"`
+	Attempt             int            `json:"attempt"`
+	MaxAttempts         int            `json:"maxAttempts"`
+	AvailableAt         string         `json:"availableAt" gorm:"index"`
+	LeaseOwner          string         `json:"leaseOwner" gorm:"index"`
+	LeaseExpiresAt      string         `json:"leaseExpiresAt" gorm:"index"`
+	HeartbeatAt         string         `json:"heartbeatAt"`
+	CreditsReserved     int            `json:"creditsReserved"`
+	CreditsRefunded     int            `json:"creditsRefunded"`
 	RequestJSON         string         `json:"requestJson" gorm:"type:text"`
 	RawOutput           string         `json:"rawOutput" gorm:"type:text"`
 	StructuredDraftJSON string         `json:"structuredDraftJson" gorm:"type:text"`

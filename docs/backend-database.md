@@ -19,6 +19,11 @@
 - `ai_tasks`
 - `agent_config_records`
 - `agent_runs`
+- `workflow_runs`
+- `workflow_stage_runs`
+- `workflow_artifacts`
+- `workflow_quality_gate_results`
+- `workflow_events`
 - `prompts`
 - `assets`
 - `settings`
@@ -334,10 +339,19 @@ M8 起，前台追溯信息不新增数据库字段，统一放入已脱敏 JSON
 | `timeout_seconds`       | number | 本次模型调用超时秒数                                          |
 | `concurrency_limit`     | number | Agent 配置中的并发限制                                        |
 | `allow_batch`           | bool   | Agent 配置是否允许批量运行                                    |
-| `status`                | string | `created`、`running`、`needs_review`、`approved`、`rejected`、`applied`、`failed` |
+| `status`                | string | `created`、`queued`、`running`、`cancel_requested`、`needs_review`、`approved`、`rejected`、`applied`、`failed`、`cancelled` |
 | `write_policy`          | string | 写入策略，默认 `confirm_before_write`                         |
 | `requires_confirm`      | bool   | 是否需要用户确认后才能写入正式数据                            |
 | `credits`               | number | 本次预扣算力点                                                |
+| `idempotency_key`       | string | 同一用户创建任务的幂等键；数据库使用可空字段避免空键冲突      |
+| `attempt`               | number | 已领取执行次数                                                |
+| `max_attempts`          | number | 最大领取次数                                                  |
+| `available_at`          | string | 队列中下一次允许领取的时间                                    |
+| `lease_owner`           | string | 当前租约持有 Worker                                           |
+| `lease_expires_at`      | string | 当前租约到期时间                                              |
+| `heartbeat_at`          | string | Worker 最近续租时间                                           |
+| `credits_reserved`      | number | 本任务已经预扣的算力点                                        |
+| `credits_refunded`      | number | 本任务已经返还的算力点                                        |
 | `request_json`          | text   | 模型请求快照                                                  |
 | `raw_output`            | text   | 模型原始输出                                                  |
 | `structured_draft_json` | text   | 从原始输出中解析出的 JSON 草案，可为空                        |
@@ -359,6 +373,35 @@ M8 起，前台追溯信息不新增数据库字段，统一放入已脱敏 JSON
 | `GET /api/v1/agent-runs`             | 当前登录用户按项目、集数、阶段等查询记录  |
 | `POST /api/v1/agent-runs`            | 创建后端 Agent Run 并调用文本模型         |
 | `POST /api/v1/agent-runs/:id/review` | 当前登录用户确认、驳回或标记已写入        |
+
+### workflow_runs
+
+项目/分集级视频工作流聚合。`user_id + project_id + episode_id + workflow_id + workflow_version + script_hash` 唯一，确保相同剧本快照和工作流版本只创建一个运行记录。`script_snapshot` 创建后不再修改。
+
+| 字段 | 说明 |
+| ---- | ---- |
+| `id`、`user_id`、`project_id`、`episode_id` | 主键与用户、项目、分集作用域 |
+| `workflow_id`、`workflow_version` | 工作流和合同版本 |
+| `script_hash`、`script_snapshot` | 不可变剧本内容哈希与快照 |
+| `current_stage_id` | 当前建议进入的阶段 |
+| `status` | `active`、`completed`、`failed`、`cancelled` |
+| `created_at`、`updated_at` | 创建与更新时间 |
+
+### workflow_stage_runs
+
+工作流阶段及其重试记录。每次尝试关联一个底层 `agent_run`，保存输入/输出产物、进度、审核哈希和浏览器本地写入回执。状态包括 `blocked`、`ready`、`queued`、`running`、`cancel_requested`、`needs_review`、`approved`、`rejected`、`applied`、`failed`、`cancelled`。
+
+### workflow_artifacts
+
+阶段产生的版本化结构化产物。`stage_run_id + version` 唯一；`content_hash` 用于确定性质量门、审核冲突和幂等写入检查。内容保存在 `content_json`，同时记录 schema 和模板版本。
+
+### workflow_quality_gate_results
+
+确定性质量门结果。记录所校验产物及哈希、校验器版本、是否通过和结构化问题列表；模型自评不能覆盖本表的阻断结果。
+
+### workflow_events
+
+工作流增量事件流。自增主键作为游标，按用户和 workflow 查询；只保存状态、进度、重试、取消、审核和写入回执等安全化元数据，不保存密钥、完整请求头或上游凭证。
 
 ### credit_logs
 
