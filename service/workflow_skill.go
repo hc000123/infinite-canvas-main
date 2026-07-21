@@ -60,6 +60,121 @@ type WorkflowSkillPublishInput struct {
 	ScopeID string `json:"scopeId"`
 }
 
+type WorkflowSkillDraftInput struct {
+	Version  string                `json:"version"`
+	Files    map[string]string     `json:"files"`
+	Contract WorkflowSkillContract `json:"contract"`
+}
+
+type WorkflowSkillAdminItem struct {
+	Skill    model.WorkflowSkill               `json:"skill"`
+	Versions []model.WorkflowSkillVersion      `json:"versions"`
+	Bindings []model.WorkflowStageSkillBinding `json:"bindings"`
+}
+
+func ListWorkflowSkillAdminItems() ([]WorkflowSkillAdminItem, error) {
+	if err := EnsureWorkflowSkillSeeds(); err != nil {
+		return nil, err
+	}
+	skills, err := repository.ListWorkflowSkills()
+	if err != nil {
+		return nil, err
+	}
+	items := make([]WorkflowSkillAdminItem, 0, len(skills))
+	for _, skill := range skills {
+		versions, err := repository.ListWorkflowSkillVersions(skill.ID)
+		if err != nil {
+			return nil, err
+		}
+		bindings, err := repository.ListWorkflowStageSkillBindings(skill.StageKey)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, WorkflowSkillAdminItem{Skill: skill, Versions: versions, Bindings: bindings})
+	}
+	return items, nil
+}
+
+func UpdateWorkflowSkill(id string, name string, description string, enabled *bool) (model.WorkflowSkill, error) {
+	skill, ok, err := repository.GetWorkflowSkill(id)
+	if err != nil {
+		return skill, err
+	}
+	if !ok {
+		return skill, safeMessageError{message: "Skill 不存在"}
+	}
+	if strings.TrimSpace(name) != "" {
+		skill.Name = strings.TrimSpace(name)
+	}
+	if description != "" {
+		skill.Description = strings.TrimSpace(description)
+	}
+	if enabled != nil {
+		skill.Enabled = *enabled
+	}
+	skill.UpdatedAt = now()
+	return skill, repository.SaveWorkflowSkill(skill)
+}
+
+func CreateWorkflowSkillDraft(adminID string, skillID string, input WorkflowSkillDraftInput) (model.WorkflowSkillVersion, error) {
+	if _, ok, err := repository.GetWorkflowSkill(skillID); err != nil || !ok {
+		return model.WorkflowSkillVersion{}, safeMessageError{message: "Skill 不存在"}
+	}
+	versionName := strings.TrimSpace(input.Version)
+	if versionName == "" {
+		return model.WorkflowSkillVersion{}, safeMessageError{message: "缺少版本号"}
+	}
+	packageValue, err := NormalizeWorkflowSkillPackage(input.Files, input.Contract)
+	if err != nil {
+		return model.WorkflowSkillVersion{}, err
+	}
+	filesJSON, _ := json.Marshal(packageValue.Files)
+	contractJSON, _ := json.Marshal(packageValue.Contract)
+	stamp := now()
+	version := model.WorkflowSkillVersion{
+		ID: newID("skillversion"), SkillID: skillID, Version: versionName, Status: model.WorkflowSkillVersionDraft,
+		FilesJSON: string(filesJSON), ContractJSON: string(contractJSON), ContentHash: packageValue.ContentHash,
+		CreatedBy: strings.TrimSpace(adminID), CreatedAt: stamp, UpdatedAt: stamp,
+	}
+	return version, repository.CreateWorkflowSkillVersion(version)
+}
+
+func UpdateWorkflowSkillDraft(versionID string, input WorkflowSkillDraftInput) (model.WorkflowSkillVersion, error) {
+	version, ok, err := repository.GetWorkflowSkillVersion(versionID)
+	if err != nil {
+		return version, err
+	}
+	if !ok {
+		return version, safeMessageError{message: "Skill 版本不存在"}
+	}
+	if version.Status != model.WorkflowSkillVersionDraft {
+		return version, safeMessageError{message: "已发布版本不可修改"}
+	}
+	packageValue, err := NormalizeWorkflowSkillPackage(input.Files, input.Contract)
+	if err != nil {
+		return version, err
+	}
+	filesJSON, _ := json.Marshal(packageValue.Files)
+	contractJSON, _ := json.Marshal(packageValue.Contract)
+	version.FilesJSON = string(filesJSON)
+	version.ContractJSON = string(contractJSON)
+	version.ContentHash = packageValue.ContentHash
+	version.UpdatedAt = now()
+	return version, repository.SaveWorkflowSkillVersion(version)
+}
+
+func GetWorkflowSkillVersionPackage(versionID string) (model.WorkflowSkillVersion, WorkflowSkillPackage, error) {
+	version, ok, err := repository.GetWorkflowSkillVersion(versionID)
+	if err != nil {
+		return version, WorkflowSkillPackage{}, err
+	}
+	if !ok {
+		return version, WorkflowSkillPackage{}, safeMessageError{message: "Skill 版本不存在"}
+	}
+	packageValue, err := DecodeWorkflowSkillPackage(version)
+	return version, packageValue, err
+}
+
 func NormalizeWorkflowSkillPackage(files map[string]string, contract WorkflowSkillContract) (WorkflowSkillPackage, error) {
 	if strings.TrimSpace(files["SKILL.md"]) == "" {
 		return WorkflowSkillPackage{}, safeMessageError{message: "Skill 必须包含非空 SKILL.md"}
@@ -149,9 +264,6 @@ func PublishWorkflowSkillVersion(adminID string, versionID string, input Workflo
 	if !ok {
 		return ResolvedWorkflowSkill{}, safeMessageError{message: "Skill 版本不存在"}
 	}
-	if version.Status != model.WorkflowSkillVersionDraft {
-		return ResolvedWorkflowSkill{}, safeMessageError{message: "只有草稿版本可以发布"}
-	}
 	if _, err := DecodeWorkflowSkillPackage(version); err != nil {
 		return ResolvedWorkflowSkill{}, err
 	}
@@ -175,6 +287,26 @@ func PublishWorkflowSkillVersion(adminID string, versionID string, input Workflo
 		return ResolvedWorkflowSkill{}, safeMessageError{message: "项目灰度发布必须指定项目"}
 	}
 	stamp := now()
+	if scope == model.WorkflowSkillScopeGlobal {
+		if version.Status != model.WorkflowSkillVersionPublished {
+			return ResolvedWorkflowSkill{}, safeMessageError{message: "新版本必须先发布到测试项目"}
+		}
+		canPromote, err := repository.HasWorkflowSkillProjectCanary(version.ID, version.ContentHash)
+		if err != nil {
+			return ResolvedWorkflowSkill{}, err
+		}
+		if !canPromote {
+			return ResolvedWorkflowSkill{}, safeMessageError{message: "全局提升前必须完成项目灰度评测"}
+		}
+		binding := model.WorkflowStageSkillBinding{ID: newID("skillbinding"), StageKey: skill.StageKey, Scope: scope, SkillVersionID: version.ID, CreatedAt: stamp, UpdatedAt: stamp}
+		if err := repository.UpsertWorkflowStageSkillBinding(binding); err != nil {
+			return ResolvedWorkflowSkill{}, err
+		}
+		return ResolvePublishedWorkflowSkill(skill.StageKey, "")
+	}
+	if version.Status != model.WorkflowSkillVersionDraft {
+		return ResolvedWorkflowSkill{}, safeMessageError{message: "已发布版本只能提升为全局或用于回滚"}
+	}
 	version.Status = model.WorkflowSkillVersionPublished
 	version.PublishedAt = stamp
 	version.UpdatedAt = stamp

@@ -134,6 +134,33 @@ func New() *gin.Engine {
 		handler.AdminDeleteAsset(c.Writer, c.Request, c.Param("id"))
 	})
 
+	workflowSkillAdmin := api.Group("/v1/admin", middleware.AdminAuth)
+	workflowSkillAdmin.GET("/workflow-skills", gin.WrapF(handler.AdminWorkflowSkills))
+	workflowSkillAdmin.PATCH("/workflow-skills/:id", func(c *gin.Context) {
+		handler.AdminUpdateWorkflowSkill(c.Writer, c.Request, c.Param("id"))
+	})
+	workflowSkillAdmin.POST("/workflow-skills/:id/versions", func(c *gin.Context) {
+		handler.AdminCreateWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	workflowSkillAdmin.GET("/workflow-skill-versions/:id", func(c *gin.Context) {
+		handler.AdminWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	workflowSkillAdmin.PATCH("/workflow-skill-versions/:id", func(c *gin.Context) {
+		handler.AdminUpdateWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	workflowSkillAdmin.POST("/workflow-skill-versions/:id/validate", func(c *gin.Context) {
+		handler.AdminValidateWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	workflowSkillAdmin.POST("/workflow-skill-versions/:id/publish", func(c *gin.Context) {
+		handler.AdminPublishWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	workflowSkillAdmin.GET("/workflow-stage-skill-bindings/:stageKey", func(c *gin.Context) {
+		handler.AdminWorkflowStageSkillBindings(c.Writer, c.Request, c.Param("stageKey"))
+	})
+	workflowSkillAdmin.PUT("/workflow-stage-skill-bindings/:stageKey", func(c *gin.Context) {
+		handler.AdminUpdateWorkflowStageSkillBinding(c.Writer, c.Request, c.Param("stageKey"))
+	})
+
 	router.Static("/uploaded-assets", config.Cfg.PublicAssetDir)
 	router.NoRoute(middleware.NotFoundJSON)
 

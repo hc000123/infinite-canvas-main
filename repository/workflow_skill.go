@@ -123,6 +123,14 @@ func ListWorkflowSkills() ([]model.WorkflowSkill, error) {
 	return items, err
 }
 
+func SaveWorkflowSkill(skill model.WorkflowSkill) error {
+	db, err := DB()
+	if err != nil {
+		return err
+	}
+	return db.Save(&skill).Error
+}
+
 func GetWorkflowSkillVersion(id string) (model.WorkflowSkillVersion, bool, error) {
 	db, err := DB()
 	if err != nil {
@@ -143,6 +151,20 @@ func ListWorkflowSkillVersions(skillID string) ([]model.WorkflowSkillVersion, er
 	}
 	var items []model.WorkflowSkillVersion
 	err = db.Where("skill_id = ?", strings.TrimSpace(skillID)).Order("created_at desc").Find(&items).Error
+	return items, err
+}
+
+func ListWorkflowStageSkillBindings(stageKey string) ([]model.WorkflowStageSkillBinding, error) {
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	var items []model.WorkflowStageSkillBinding
+	query := db.Order("scope asc, scope_id asc")
+	if strings.TrimSpace(stageKey) != "" {
+		query = query.Where("stage_key = ?", strings.TrimSpace(stageKey))
+	}
+	err = query.Find(&items).Error
 	return items, err
 }
 
@@ -191,6 +213,19 @@ func HasPassingWorkflowSkillEvaluation(versionID string, contentHash string) (bo
 	var count int64
 	err = db.Model(&model.WorkflowSkillEvaluation{}).
 		Where("skill_version_id = ? AND content_hash = ? AND input_hash <> '' AND status = ?", strings.TrimSpace(versionID), strings.TrimSpace(contentHash), "passed").
+		Count(&count).Error
+	return count > 0, err
+}
+
+func HasWorkflowSkillProjectCanary(versionID string, contentHash string) (bool, error) {
+	db, err := DB()
+	if err != nil {
+		return false, err
+	}
+	var count int64
+	err = db.Table("workflow_skill_evaluations AS evaluations").
+		Joins("JOIN workflow_stage_skill_bindings AS bindings ON bindings.skill_version_id = evaluations.skill_version_id AND bindings.scope = ?", model.WorkflowSkillScopeProject).
+		Where("evaluations.skill_version_id = ? AND evaluations.content_hash = ? AND evaluations.project_id <> '' AND evaluations.status = ?", strings.TrimSpace(versionID), strings.TrimSpace(contentHash), "passed").
 		Count(&count).Error
 	return count > 0, err
 }
