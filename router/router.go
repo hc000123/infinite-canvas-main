@@ -48,6 +48,18 @@ func New() *gin.Engine {
 	v1.POST("/workflow-runs/:id/stages/:stageId/start", func(c *gin.Context) {
 		handler.StartWorkflowStage(c.Writer, c.Request, c.Param("id"), c.Param("stageId"))
 	})
+	v1.POST("/workflow-runs/:id/media-batches", func(c *gin.Context) {
+		handler.CreateWorkflowMediaBatch(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/workflow-media-batches/:id/items", func(c *gin.Context) {
+		handler.UploadWorkflowMedia(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.GET("/workflow-media-batches/:id", func(c *gin.Context) {
+		handler.WorkflowMediaBatch(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.DELETE("/workflow-media-batches/:id", func(c *gin.Context) {
+		handler.DeleteWorkflowMediaBatch(c.Writer, c.Request, c.Param("id"))
+	})
 	v1.POST("/workflow-stage-runs/:id/cancel", func(c *gin.Context) {
 		handler.CancelWorkflowStage(c.Writer, c.Request, c.Param("id"))
 	})

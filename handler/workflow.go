@@ -10,6 +10,7 @@ import (
 
 type workflowCommandInput struct {
 	IdempotencyKey string `json:"idempotencyKey"`
+	MediaBatchID   string `json:"mediaBatchId"`
 }
 
 func EnsureWorkflowRun(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +55,7 @@ func StartWorkflowStage(w http.ResponseWriter, r *http.Request, workflowRunID st
 	if !decodeWorkflowBody(w, r, &input, 32<<10) {
 		return
 	}
-	result, err := service.StartWorkflowStage(user.ID, workflowRunID, stageID, input.IdempotencyKey)
+	result, err := service.StartWorkflowStageWithMedia(user.ID, workflowRunID, stageID, input.IdempotencyKey, input.MediaBatchID)
 	if err != nil {
 		FailError(w, err)
 		return

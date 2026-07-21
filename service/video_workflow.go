@@ -127,10 +127,14 @@ func GetWorkflowRunDetail(userID string, id string) (WorkflowRunDetail, error) {
 }
 
 func StartWorkflowStage(userID string, workflowRunID string, stageID string, idempotencyKey string) (model.WorkflowStageRun, error) {
-	return startWorkflowStage(userID, workflowRunID, stageID, idempotencyKey, nil)
+	return startWorkflowStage(userID, workflowRunID, stageID, idempotencyKey, "", nil)
 }
 
-func startWorkflowStage(userID string, workflowRunID string, stageID string, idempotencyKey string, frozenRun *model.AgentRun) (model.WorkflowStageRun, error) {
+func StartWorkflowStageWithMedia(userID string, workflowRunID string, stageID string, idempotencyKey string, mediaBatchID string) (model.WorkflowStageRun, error) {
+	return startWorkflowStage(userID, workflowRunID, stageID, idempotencyKey, mediaBatchID, nil)
+}
+
+func startWorkflowStage(userID string, workflowRunID string, stageID string, idempotencyKey string, mediaBatchID string, frozenRun *model.AgentRun) (model.WorkflowStageRun, error) {
 	detail, err := GetWorkflowRunDetail(userID, workflowRunID)
 	if err != nil {
 		return model.WorkflowStageRun{}, err
@@ -158,6 +162,7 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, ide
 	}
 	systemPrompt, userPrompt := workflowStagePrompts(detail.Run, stageID, inputArtifact)
 	executorKind := ""
+	imageManifestJSON := `{"items":[],"degraded":true,"reason":"text-only"}`
 	skillID, skillVersionID, skillVersion, skillContentHash, skillSnapshotJSON := "", "", "", "", ""
 	if frozenRun != nil && strings.TrimSpace(frozenRun.SkillSnapshotJSON) != "" {
 		instructions, err := workflowSkillInstructionsFromSnapshot(frozenRun.SkillSnapshotJSON)
@@ -169,6 +174,7 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, ide
 		skillVersion, skillContentHash = frozenRun.SkillVersion, frozenRun.SkillContentHash
 		skillSnapshotJSON = frozenRun.SkillSnapshotJSON
 		executorKind = frozenRun.Executor
+		imageManifestJSON = frozenRun.ImageManifestJSON
 	} else {
 		if err := EnsureWorkflowSkillSeeds(); err != nil {
 			return current, err
@@ -181,6 +187,9 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, ide
 		skillID, skillVersionID = resolvedSkill.Skill.ID, resolvedSkill.Version.ID
 		skillVersion, skillContentHash = resolvedSkill.Version.Version, resolvedSkill.Version.ContentHash
 		skillSnapshotJSON = workflowSkillSnapshotJSON(resolvedSkill)
+		if resolvedSkill.Package.Contract.ImagePolicy.Required && strings.TrimSpace(mediaBatchID) == "" {
+			return current, safeMessageError{message: "当前 Skill 要求上传参考图片"}
+		}
 	}
 	agentRun, err := CreateUserAgentRun(userID, CreateAgentRunInput{
 		Executor:          executorKind,
@@ -195,6 +204,8 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, ide
 		SkillVersion:      skillVersion,
 		SkillContentHash:  skillContentHash,
 		SkillSnapshotJSON: skillSnapshotJSON,
+		ImageManifestJSON: imageManifestJSON,
+		MediaBatchID:      strings.TrimSpace(mediaBatchID),
 		WritePolicy:       "confirm_before_write",
 		SystemPrompt:      systemPrompt,
 		UserPrompt:        userPrompt,

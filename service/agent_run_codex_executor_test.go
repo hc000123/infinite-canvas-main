@@ -2,6 +2,7 @@ package service
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/basketikun/infinite-canvas/config"
@@ -42,5 +43,12 @@ func TestCodexPromptPreservesSystemAndUserMessages(t *testing.T) {
 	prompt, err := buildCodexPromptFromRequest(`{"model":"codex","messages":[{"role":"system","content":"系统规则"},{"role":"user","content":"用户输入"}]}`)
 	if err != nil || prompt != "[SYSTEM]\n系统规则\n\n[USER]\n用户输入" {
 		t.Fatalf("prompt=%q err=%v", prompt, err)
+	}
+}
+
+func TestCodexImageContextRequiresVisualUnderstanding(t *testing.T) {
+	context := codexImageContext(`{"items":[{"label":"阿宁","kind":"character","version":"v3","sha256":"abc","order":1}]}`)
+	if !strings.Contains(context, "逐张理解图片") || !strings.Contains(context, "@图1：阿宁") || strings.Contains(context, "serverPath") {
+		t.Fatalf("context=%q", context)
 	}
 }

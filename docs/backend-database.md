@@ -28,6 +28,8 @@
 - `workflow_skill_versions`
 - `workflow_stage_skill_bindings`
 - `workflow_skill_evaluations`
+- `workflow_media_batches`
+- `workflow_media_items`
 - `prompts`
 - `assets`
 - `settings`
@@ -429,6 +431,14 @@ Skill 的不可变版本表。`skill_id + version` 唯一；`files_json` 保存�
 ### workflow_skill_evaluations
 
 Skill 发布前 dry-run 与同输入版本对比记录。冻结候选版、基线版、候选内容哈希、项目/分集、输入哈希、图片清单、结果、结构化差异和质量门；评测不创建正式工作流阶段、不写业务资产。
+
+### workflow_media_batches
+
+本地多模态验证的一次性图片批次。批次绑定用户、工作流、阶段和启动幂等键，状态只在未使用的 `open` 与已绑定任务的 `claimed` 之间变化；过期或已绑定批次不能再次使用。
+
+### workflow_media_items
+
+一次性批次内最多 9 张图片的清单。保存资产 ID、角色/场景/道具类型、显示名称、版本、顺序、SHA-256、真实 MIME、大小与服务端私有路径；服务端路径不参与用户接口序列化。任务占用批次时固定按角色、场景、道具顺序写入 `agent_runs.image_manifest_json`。
 
 ### credit_logs
 

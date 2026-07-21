@@ -70,6 +70,9 @@ func (executor *CodexAgentRunExecutor) Call(ctx context.Context, run model.Agent
 	if err != nil {
 		return agentRunCallResult{message: "Codex CLI 图片清单无效"}
 	}
+	if imageContext := codexImageContext(run.ImageManifestJSON); imageContext != "" {
+		prompt += "\n\n" + imageContext
+	}
 	tempDir, err := os.MkdirTemp("", "workflow-codex-")
 	if err != nil {
 		return agentRunCallResult{message: "Codex CLI 临时目录创建失败"}
@@ -156,6 +159,27 @@ func codexImagePaths(manifestJSON string) ([]string, error) {
 		paths = append(paths, item.ServerPath)
 	}
 	return paths, nil
+}
+
+func codexImageContext(manifestJSON string) string {
+	var manifest struct {
+		Items []struct {
+			Label   string `json:"label"`
+			Kind    string `json:"kind"`
+			Version string `json:"version"`
+			SHA256  string `json:"sha256"`
+			Order   int    `json:"order"`
+		} `json:"items"`
+	}
+	if json.Unmarshal([]byte(manifestJSON), &manifest) != nil || len(manifest.Items) == 0 {
+		return ""
+	}
+	sort.SliceStable(manifest.Items, func(left, right int) bool { return manifest.Items[left].Order < manifest.Items[right].Order })
+	lines := []string{"[IMAGE REFERENCES]", "必须先逐张理解图片中的人物外观、空间关系、光线与关键道具，再结合文本生成结果；不得只根据文件名猜测。"}
+	for index, item := range manifest.Items {
+		lines = append(lines, fmt.Sprintf("@图%d：%s｜类型=%s｜版本=%s｜哈希=%s", index+1, item.Label, item.Kind, item.Version, item.SHA256))
+	}
+	return strings.Join(lines, "\n")
 }
 
 type limitedBuffer struct{ bytes.Buffer }

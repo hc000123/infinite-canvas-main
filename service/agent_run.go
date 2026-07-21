@@ -41,6 +41,7 @@ type CreateAgentRunInput struct {
 	SkillContentHash   string            `json:"-"`
 	SkillSnapshotJSON  string            `json:"-"`
 	ImageManifestJSON  string            `json:"-"`
+	MediaBatchID       string            `json:"-"`
 	ChannelID          string            `json:"channelId"`
 	ModelPreference    string            `json:"modelPreference"`
 	AllowFallback      bool              `json:"allowFallback"`
@@ -187,7 +188,11 @@ func CreateUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRu
 		return model.AgentRun{}, err
 	}
 	run.RequestJSON = string(requestBody)
-	run, _, err = repository.SaveAgentRunIdempotently(run)
+	if strings.TrimSpace(input.MediaBatchID) != "" {
+		run, _, err = repository.SaveAgentRunWithWorkflowMedia(run, input.MediaBatchID)
+	} else {
+		run, _, err = repository.SaveAgentRunIdempotently(run)
+	}
 	return run, err
 }
 
