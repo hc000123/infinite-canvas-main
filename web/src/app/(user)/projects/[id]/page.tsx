@@ -440,7 +440,7 @@ export default function CreativeProjectDetailPage() {
     const openEpisodeWorkflow = (episodeId: string) => {
         const episode = projectEpisodes.find((item) => item.id === episodeId);
         if (!episode) return;
-        router.push(videoWorkflowHref(episode.order, project.id, episode.id));
+        window.location.assign(videoWorkflowHref(episode.order, project.id, episode.id));
     };
 
     const syncVideoWorkflowScript = async (order: number, content: string) => {
