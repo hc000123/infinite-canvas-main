@@ -149,7 +149,7 @@ func CreateUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRu
 		Credits:            credits,
 		IdempotencyKey:     idempotencyKeyPointer,
 		MaxAttempts:        3,
-		AvailableAt:        stamp,
+		AvailableAt:        time.Now().UTC().Format(time.RFC3339Nano),
 		ReviewJSON:         string(input.ReviewJSON),
 		MappingPreviewJSON: string(input.MappingPreviewJSON),
 		CreatedAt:          stamp,

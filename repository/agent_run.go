@@ -144,6 +144,17 @@ func RenewAgentRunLease(id string, workerID string, now time.Time, lease time.Du
 	return tx.RowsAffected > 0, tx.Error
 }
 
+func SaveLeasedAgentRun(run model.AgentRun, leaseOwner string) (model.AgentRun, bool, error) {
+	db, err := DB()
+	if err != nil {
+		return run, false, err
+	}
+	tx := db.Model(&model.AgentRun{}).
+		Where("id = ? AND lease_owner = ?", run.ID, strings.TrimSpace(leaseOwner)).
+		Select("*").Updates(&run)
+	return run, tx.RowsAffected > 0, tx.Error
+}
+
 func RequeueExpiredAgentRuns(now time.Time) (int64, error) {
 	db, err := DB()
 	if err != nil {
