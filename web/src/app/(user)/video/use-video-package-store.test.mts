@@ -3,6 +3,24 @@ import test from "node:test";
 
 import type { Asset } from "../../../stores/use-asset-store.ts";
 import { alignWorkflowPromptReferencesForSeedance, buildImportedVideoPackage, enterpriseVideoChannelReadiness, resolveWorkflowReferenceImages, workflowPromptAuthoringIssue, workflowVideoGenerationReadiness } from "./video-package-builders.ts";
+import { upsertScopedPackages } from "./video-package-scope.ts";
+
+test("does not replace another episode P01", () => {
+    const first = { episodeId: "e1", id: "P01", projectId: "p1", value: "first" };
+    const second = { episodeId: "e2", id: "P01", projectId: "p1", value: "second" };
+    const items = upsertScopedPackages([first], [second]);
+
+    assert.equal(items.length, 2);
+    assert.deepEqual(items.map((item) => item.value), ["first", "second"]);
+});
+
+test("updates only the matching scoped P01", () => {
+    const first = { episodeId: "e1", id: "P01", projectId: "p1", value: "first" };
+    const second = { episodeId: "e2", id: "P01", projectId: "p1", value: "second" };
+    const items = upsertScopedPackages([first, second], [{ ...second, value: "updated" }]);
+
+    assert.deepEqual(items.map((item) => item.value), ["first", "updated"]);
+});
 
 test("imported copy-only package is ready for batch video generation", () => {
     const item = buildImportedVideoPackage({
@@ -15,7 +33,9 @@ test("imported copy-only package is ready for batch video generation", () => {
         sourcePath: "outputs/ep05/02-seedance-copy-only.md",
     });
 
-    assert.equal(item.id, "ep05-P01");
+    assert.equal(item.id, "P01");
+    assert.equal(item.projectId, "project-1");
+    assert.equal(item.episodeId, "ep05");
     assert.equal(item.promptStatus, "已确认");
     assert.equal(item.canvasStatus, "未导入");
     assert.equal(item.assetStatus, "完整");

@@ -3,6 +3,10 @@ import type { ProductionPackage } from "./use-video-package-store";
 
 export const initialPackages: ProductionPackage[] = [
     {
+        projectId: "demo-project",
+        episodeId: "demo-episode",
+        sceneKey: "scene-01",
+        order: 1,
         id: "P01",
         segment: "雨夜天桥，女主发现遗落的加密芯片",
         duration: "8s",
@@ -21,6 +25,10 @@ export const initialPackages: ProductionPackage[] = [
         risks: [{ level: "提示", text: "镜头动作清晰，可直接进入画布生成节点。" }],
     },
     {
+        projectId: "demo-project",
+        episodeId: "demo-episode",
+        sceneKey: "scene-02",
+        order: 2,
         id: "P02",
         segment: "地下停车场，追踪者从柱后现身",
         duration: "12s",
@@ -42,6 +50,10 @@ export const initialPackages: ProductionPackage[] = [
         ],
     },
     {
+        projectId: "demo-project",
+        episodeId: "demo-episode",
+        sceneKey: "scene-03",
+        order: 3,
         id: "P03",
         segment: "监控室，屏幕显示关键证据被远程删除",
         duration: "15s",
@@ -63,6 +75,10 @@ export const initialPackages: ProductionPackage[] = [
         ],
     },
     {
+        projectId: "demo-project",
+        episodeId: "demo-episode",
+        sceneKey: "scene-04",
+        order: 4,
         id: "P04",
         segment: "街边便利店外，线人交出备份密钥",
         duration: "8s",
@@ -81,6 +97,10 @@ export const initialPackages: ProductionPackage[] = [
         risks: [{ level: "提示", text: "提示词聚焦单一动作，适合确认后导入画布。" }],
     },
     {
+        projectId: "demo-project",
+        episodeId: "demo-episode",
+        sceneKey: "scene-05",
+        order: 5,
         id: "P05",
         segment: "楼顶对峙，反派说出真相",
         duration: "12s",

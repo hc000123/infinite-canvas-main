@@ -7,6 +7,7 @@ import { localForageStorage } from "@/lib/localforage-storage";
 import { resolveMediaUrl } from "@/services/file-storage";
 
 import { buildImportedVideoPackage } from "./video-package-builders";
+import { updateScopedPackage, upsertScopedPackages, type ProductionPackageScope } from "./video-package-scope";
 
 export { buildImportedVideoPackage };
 
@@ -63,6 +64,10 @@ export type ProductionPackageConfig = {
 };
 
 export type ProductionPackage = {
+    projectId: string;
+    episodeId: string;
+    sceneKey: string;
+    order: number;
     id: string;
     segment: string;
     duration: string;
@@ -86,7 +91,7 @@ export type ProductionPackage = {
 type VideoPackageStore = {
     importedPackages: ProductionPackage[];
     clearImportedPackages: () => void;
-    updateImportedPackage: (id: string, patch: Partial<ProductionPackage>) => void;
+    updateImportedPackage: (scope: ProductionPackageScope, patch: Partial<ProductionPackage>) => void;
     upsertImportedPackages: (packages: ProductionPackage[]) => number;
 };
 
@@ -123,20 +128,12 @@ export const useVideoPackageStore = create<VideoPackageStore>()(
         (set) => ({
             importedPackages: [],
             clearImportedPackages: () => set({ importedPackages: [] }),
-            updateImportedPackage: (id, patch) =>
+            updateImportedPackage: (scope, patch) =>
                 set((state) => ({
-                    importedPackages: state.importedPackages.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+                    importedPackages: updateScopedPackage(state.importedPackages, scope, patch),
                 })),
             upsertImportedPackages: (packages) => {
-                set((state) => {
-                    const next = [...state.importedPackages];
-                    for (const item of packages) {
-                        const index = next.findIndex((existing) => existing.id === item.id);
-                        if (index >= 0) next[index] = { ...next[index], ...item };
-                        else next.push(item);
-                    }
-                    return { importedPackages: next };
-                });
+                set((state) => ({ importedPackages: upsertScopedPackages(state.importedPackages, packages) }));
                 return packages.length;
             },
         }),

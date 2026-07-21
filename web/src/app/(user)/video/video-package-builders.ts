@@ -4,7 +4,7 @@ import { activeVolcengineAssetURI } from "../../../services/volcengine-asset-met
 
 import type { AssetKind, ProductionPackage, WorkflowVideoReference } from "./use-video-package-store";
 
-export function buildImportedVideoPackage(input: { duration: string; episode: string; id: string; projectSlug?: string; sourceProjectId?: string; prompt: string; references?: WorkflowVideoReference[]; segment: string; sourcePath: string }): ProductionPackage {
+export function buildImportedVideoPackage(input: { duration: string; episode: string; episodeId?: string; id: string; order?: number; projectId?: string; projectSlug?: string; sceneKey?: string; sourceProjectId?: string; prompt: string; references?: WorkflowVideoReference[]; segment: string; sourcePath: string }): ProductionPackage {
     const duration = input.duration || inferDuration(input.prompt) || "6秒";
     const references = input.references || [];
     const usedReferences = referencesUsedByPrompt(input.prompt, references);
@@ -19,10 +19,14 @@ export function buildImportedVideoPackage(input: { duration: string; episode: st
         canvasStatus: "未导入",
         config: { duration, frames: "按提示词引用素材", model: "Seedance 2.0", motion: "中", ratio: "9:16", resolution: "1080p" },
         duration,
-        id: input.episode ? `${input.episode}-${input.id}` : input.id,
+        episodeId: input.episodeId || input.episode || "unscoped-episode",
+        id: input.id,
+        order: input.order ?? Number(input.id.match(/\d+/)?.[0] || 0),
         prompt: input.prompt,
         promptStatus: "已确认",
+        projectId: input.projectId || input.sourceProjectId || input.projectSlug || "unscoped-project",
         risks: [{ level: "提示", text: "来自视频工作流 Copy-only，已按最终提示词确认；如提示词含 @图N，可在生成前按需补充参考素材。" }],
+        sceneKey: input.sceneKey || input.segment || input.id,
         segment: input.segment,
         source: input.sourcePath,
         sourceEpisode: input.episode,

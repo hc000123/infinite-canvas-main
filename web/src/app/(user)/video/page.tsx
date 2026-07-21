@@ -96,7 +96,15 @@ export default function VideoPage() {
     const targetProjectSlug = searchParams.get("projectSlug") || "";
     const sourceProjectId = searchParams.get("sourceProjectId") || "";
     const sourceEpisodeId = searchParams.get("sourceEpisodeId") || "";
-    const scopedImportedPackages = useMemo(() => (targetEpisode ? importedPackages.filter((item) => item.sourceEpisode === targetEpisode) : importedPackages), [importedPackages, targetEpisode]);
+    const scopedImportedPackages = useMemo(
+        () =>
+            sourceProjectId && sourceEpisodeId
+                ? importedPackages.filter((item) => item.projectId === sourceProjectId && item.episodeId === sourceEpisodeId)
+                : targetEpisode
+                  ? importedPackages.filter((item) => item.sourceEpisode === targetEpisode)
+                  : importedPackages,
+        [importedPackages, sourceEpisodeId, sourceProjectId, targetEpisode],
+    );
     const hasImportedPackages = scopedImportedPackages.length > 0;
     const packages = useMemo(() => (hasImportedPackages ? [...scopedImportedPackages] : targetEpisode ? [] : [...demoPackages]), [demoPackages, hasImportedPackages, scopedImportedPackages, targetEpisode]);
     const selected = packages.find((item) => item.id === selectedId) || packages[0];
@@ -175,12 +183,12 @@ export default function VideoPage() {
         );
     }
 
-    const updatePackage = (id: string, patch: Partial<ProductionPackage>) => {
-        if (hasImportedPackages) updateImportedPackage(id, patch);
-        else setDemoPackages((items) => items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+    const updatePackage = (target: ProductionPackage, patch: Partial<ProductionPackage>) => {
+        if (hasImportedPackages) updateImportedPackage(target, patch);
+        else setDemoPackages((items) => items.map((item) => (item.id === target.id ? { ...item, ...patch } : item)));
     };
     const updatePackageConfig = (item: ProductionPackage, patch: PackageConfigPatch) => {
-        updatePackage(item.id, { config: { ...item.config, ...patch } });
+        updatePackage(item, { config: { ...item.config, ...patch } });
     };
     const uploadReferenceImage = async (item: ProductionPackage, slot: PackageAssetSlot, file: File) => {
         if (!file.type.startsWith("image/")) {
@@ -209,7 +217,7 @@ export default function VideoPage() {
                     { blob: file },
                 );
             }
-            updatePackage(item.id, buildReferenceUploadPackagePatch(item, slot, libraryAssets));
+            updatePackage(item, buildReferenceUploadPackagePatch(item, slot, libraryAssets));
             message.success(`${slot.name} 已上传并绑定`);
         } catch (error) {
             console.error(error);
@@ -255,7 +263,7 @@ export default function VideoPage() {
         }
     };
     const confirmPackage = (item: ProductionPackage) => {
-        updatePackage(item.id, { promptStatus: "已确认" });
+        updatePackage(item, { promptStatus: "已确认" });
         message.success(`${item.id} 已确认，可生成视频`);
     };
     const importPackagesToCanvas = (items: ProductionPackage[]) => {
@@ -294,7 +302,7 @@ export default function VideoPage() {
             return;
         }
         const result = importPackagesToCanvas([item]);
-        updatePackage(item.id, { canvasStatus: "已导入" });
+        updatePackage(item, { canvasStatus: "已导入" });
         openCanvasImportResult(result, `${item.id} 已导入画布，正在进入`);
     };
     const savePackageVideoResult = async (item: ProductionPackage, config: AiConfig, video: PackageUploadedVideo, finalTask: NormalizedVideoTask | null) => {
@@ -371,7 +379,7 @@ export default function VideoPage() {
                 width: video.width || 1280,
             },
         };
-        updatePackage(item.id, {
+        updatePackage(item, {
             canvasStatus: "已生成",
             generation: nextGeneration,
             generationVersions: [...(item.generationVersions || []), nextGeneration],
@@ -392,7 +400,7 @@ export default function VideoPage() {
         }
         if (!requireEnterpriseVideoChannel(config, item.id)) return;
         setGeneratingIds((current) => ({ ...current, [item.id]: true }));
-        updatePackage(item.id, {
+        updatePackage(item, {
             generation: {
                 ...item.generation,
                 status: "checking",
@@ -406,7 +414,7 @@ export default function VideoPage() {
             if (readiness.status === "blocked") throw new Error(readiness.message);
             if (readiness.status === "warning") message.warning(readiness.message);
             if (!options.skipPreflight) await preflightVideoGeneration(config);
-            updatePackage(item.id, {
+            updatePackage(item, {
                 generation: {
                     ...item.generation,
                     status: "creating",
@@ -419,7 +427,7 @@ export default function VideoPage() {
             if (reviewBlockingError) throw new Error(reviewBlockingError);
             const prompt = config.videoProtocol === "volcengine-ark" ? alignWorkflowPromptReferencesForSeedance(item.prompt, referenceImages) : item.prompt;
             const { completedTask, video } = await runCanvasVideoGeneration(config, prompt, referenceImages, (task) => {
-                updatePackage(item.id, { generation: generationFromTask(task) });
+                updatePackage(item, { generation: generationFromTask(task) });
             });
             await savePackageVideoResult(item, config, video, completedTask as NormalizedVideoTask | null);
             message.success(`${item.id} 视频已生成，并写入我的素材`);
@@ -427,7 +435,7 @@ export default function VideoPage() {
             const referenceImages = resolveWorkflowReferenceImages(item, libraryAssets);
             const errorMessage = appendSeedanceMediaReviewDiagnostic(formatVideoGenerationError(error), referenceImages, []);
             if (error instanceof RecoverableVideoTaskError) {
-                updatePackage(item.id, {
+                updatePackage(item, {
                     generation: {
                         ...generationFromTask(error.task),
                         errorMessage,
@@ -438,7 +446,7 @@ export default function VideoPage() {
                 message.warning("视频任务已创建，已保留任务 ID，可稍后同步任务结果");
                 return;
             }
-            updatePackage(item.id, {
+            updatePackage(item, {
                 generation: {
                     ...item.generation,
                     errorMessage,
@@ -460,7 +468,7 @@ export default function VideoPage() {
         const config = buildPackageVideoConfig(effectiveConfig, item);
         if (!requireEnterpriseVideoChannel(config, item.id)) return;
         setGeneratingIds((current) => ({ ...current, [item.id]: true }));
-        updatePackage(item.id, {
+        updatePackage(item, {
             generation: {
                 ...item.generation,
                 status: "running",
@@ -470,7 +478,7 @@ export default function VideoPage() {
         });
         try {
             const latestTask = await refreshVideoTask(config, taskId);
-            updatePackage(item.id, { generation: generationFromTask(latestTask) });
+            updatePackage(item, { generation: generationFromTask(latestTask) });
             if (latestTask.status !== "succeeded") {
                 message.info(`${item.id} 当前任务状态：${generationStatusLabel(latestTask.status as PackageGenerationStatus)}`);
                 return;
@@ -481,7 +489,7 @@ export default function VideoPage() {
             message.success(`${item.id} 视频已同步，并写入我的素材`);
         } catch (error) {
             const errorMessage = formatVideoGenerationError(error);
-            updatePackage(item.id, {
+            updatePackage(item, {
                 generation: {
                     ...item.generation,
                     errorMessage,
@@ -510,7 +518,7 @@ export default function VideoPage() {
         if (!requireEnterpriseVideoChannel(batchConfig, readyItems[0].id)) return;
         const checkingAt = new Date().toISOString();
         readyItems.forEach((item) =>
-            updatePackage(item.id, {
+            updatePackage(item, {
                 generation: {
                     ...item.generation,
                     status: "checking",
@@ -525,7 +533,7 @@ export default function VideoPage() {
             const errorMessage = formatVideoGenerationError(error);
             const failedAt = new Date().toISOString();
             readyItems.forEach((item) =>
-                updatePackage(item.id, {
+                updatePackage(item, {
                     generation: {
                         ...item.generation,
                         errorMessage,
@@ -633,7 +641,7 @@ export default function VideoPage() {
                                     onOpenDetail={() => setDetailPackageId(item.id)}
                                     onOpenConfig={() => openConfigDialog(true)}
                                     onPreflight={() => void checkVideoChannel(item)}
-                                    onPromptChange={(prompt) => updatePackage(item.id, { prompt })}
+                                    onPromptChange={(prompt) => updatePackage(item, { prompt })}
                                     onRefreshReview={refreshImageReview}
                                     onSelect={() => setSelectedId(item.id)}
                                     onSubmitReview={submitImageReview}
