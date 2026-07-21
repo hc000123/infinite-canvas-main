@@ -13,7 +13,17 @@ export type RemoteAgentConfigRecord = {
     updatedAt: string;
 };
 
-export type RemoteAgentRunStatus = "created" | "running" | "needs_review" | "approved" | "rejected" | "applied" | "failed";
+export type RemoteAgentRunStatus =
+    | "created"
+    | "queued"
+    | "running"
+    | "cancel_requested"
+    | "needs_review"
+    | "approved"
+    | "rejected"
+    | "applied"
+    | "failed"
+    | "cancelled";
 
 export type RemoteAgentRun = {
     id: string;
@@ -40,6 +50,15 @@ export type RemoteAgentRun = {
     writePolicy: string;
     requiresConfirm: boolean;
     credits: number;
+    idempotencyKey?: string;
+    attempt: number;
+    maxAttempts: number;
+    availableAt: string;
+    leaseOwner: string;
+    leaseExpiresAt: string;
+    heartbeatAt: string;
+    creditsReserved: number;
+    creditsRefunded: number;
     requestJson: string;
     rawOutput: string;
     structuredDraftJson: string;
@@ -69,6 +88,7 @@ export type SaveRemoteAgentConfigInput = {
 };
 
 export type CreateRemoteAgentRunInput = {
+    idempotencyKey?: string;
     projectId?: string;
     episodeId?: string;
     workflowRunId?: string;

@@ -28,6 +28,7 @@ type AgentRunMessage struct {
 }
 
 type CreateAgentRunInput struct {
+	IdempotencyKey     string            `json:"idempotencyKey"`
 	ProjectID          string            `json:"projectId"`
 	EpisodeID          string            `json:"episodeId"`
 	WorkflowRunID      string            `json:"workflowRunId"`
@@ -116,6 +117,11 @@ func CreateUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRu
 	timeoutSeconds := normalizeAgentRunTimeout(input.TimeoutSeconds)
 	concurrencyLimit := normalizeAgentRunConcurrency(input.ConcurrencyLimit)
 	stamp := now()
+	idempotencyKey := strings.TrimSpace(input.IdempotencyKey)
+	var idempotencyKeyPointer *string
+	if idempotencyKey != "" {
+		idempotencyKeyPointer = &idempotencyKey
+	}
 	run := model.AgentRun{
 		ID:                 newID("agentrun"),
 		UserID:             strings.TrimSpace(userID),
@@ -137,10 +143,13 @@ func CreateUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRu
 		TimeoutSeconds:     timeoutSeconds,
 		ConcurrencyLimit:   concurrencyLimit,
 		AllowBatch:         input.AllowBatch,
-		Status:             model.AgentRunStatusCreated,
+		Status:             model.AgentRunStatusQueued,
 		WritePolicy:        normalizeAgentWritePolicy(input.WritePolicy),
 		RequiresConfirm:    true,
 		Credits:            credits,
+		IdempotencyKey:     idempotencyKeyPointer,
+		MaxAttempts:        3,
+		AvailableAt:        stamp,
 		ReviewJSON:         string(input.ReviewJSON),
 		MappingPreviewJSON: string(input.MappingPreviewJSON),
 		CreatedAt:          stamp,
@@ -151,25 +160,8 @@ func CreateUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRu
 		return model.AgentRun{}, err
 	}
 	run.RequestJSON = string(requestBody)
-	run, err = repository.SaveAgentRun(run)
-	if err != nil {
-		return run, err
-	}
-	if err := ConsumeUserCreditsForTask(userID, resolved.ModelName, credits, "/agent-runs", run.ID); err != nil {
-		run.Status = model.AgentRunStatusFailed
-		run.ErrorMessage = err.Error()
-		run.UpdatedAt = now()
-		_, _ = repository.SaveAgentRun(run)
-		return run, err
-	}
-	run.Status = model.AgentRunStatusRunning
-	run.UpdatedAt = now()
-	run, _ = repository.SaveAgentRun(run)
-	run = callAgentRunTextModel(run, resolved.Channel, requestBody, timeoutSeconds)
-	if run.Status == model.AgentRunStatusFailed {
-		_ = RefundUserCreditsForTask(userID, resolved.ModelName, credits, "/agent-runs", run.ID)
-	}
-	return repository.SaveAgentRun(run)
+	run, _, err = repository.SaveAgentRunIdempotently(run)
+	return run, err
 }
 
 func ListUserAgentRuns(userID string, q model.AgentRunQuery) (model.AgentRunList, error) {
