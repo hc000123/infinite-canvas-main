@@ -43,7 +43,7 @@ export function WorkflowAssetPanel(props: {
     const automation = props.automation;
 
     const materialize = useCallback(async () => {
-        if (!props.artifact || !props.stage || props.stage.status !== "approved" || applying) return;
+        if (!props.artifact || !props.stage || !["approved", "applied"].includes(props.stage.status) || applying) return;
         setApplying(true);
         try {
             const folderId = ensureProjectFolder(props.projectId, props.projectTitle);
@@ -111,7 +111,7 @@ export function WorkflowAssetPanel(props: {
     }, [addAssetOnce, applying, ensureProjectFolder, mapping.items, message, props, updateAsset]);
 
     useEffect(() => {
-        if (props.stage?.status === "approved" && mapping.items.some((item) => !item.targetAssetId)) void materialize();
+        if (["approved", "applied"].includes(props.stage?.status || "") && mapping.items.some((item) => !item.targetAssetId)) void materialize();
     }, [mapping.items, materialize, props.stage?.status]);
 
     useEffect(() => {
