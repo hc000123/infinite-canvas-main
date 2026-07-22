@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/basketikun/infinite-canvas/model"
@@ -159,12 +161,15 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, inp
 	if stageID != WorkflowStageAssetExtraction && stageID != WorkflowStageAssetImagePrompt && stageID != WorkflowStageShotBreakdown && stageID != WorkflowStageShotPrompt {
 		return model.WorkflowStageRun{}, safeMessageError{message: "不支持的工作流阶段"}
 	}
-	if workflowStageBusyOrReviewable(current.Status) {
+	if workflowStageBusyOrReviewable(current.Status) && !(stageID == WorkflowStageShotPrompt && (current.Status == model.WorkflowStageRunStatusApproved || current.Status == model.WorkflowStageRunStatusApplied)) {
 		return current, nil
 	}
-	context, err := validateWorkflowStageContext(stageID, input.Context)
-	if err != nil {
-		return current, err
+	var context *WorkflowShotPromptContext
+	if frozenRun == nil || len(input.Context) > 0 {
+		context, err = validateWorkflowStageContext(stageID, input.Context)
+		if err != nil {
+			return current, err
+		}
 	}
 	inputArtifact, err := workflowStageInputArtifact(detail, stageID)
 	if err != nil {
@@ -173,18 +178,24 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, inp
 	systemPrompt, userPrompt := workflowStagePrompts(detail.Run, stageID, inputArtifact, context)
 	executorKind := ""
 	imageManifestJSON := `{"items":[],"degraded":true,"reason":"text-only"}`
+	sourceSnapshot := map[string]any{}
 	skillID, skillVersionID, skillVersion, skillContentHash, skillSnapshotJSON := "", "", "", "", ""
 	if frozenRun != nil && strings.TrimSpace(frozenRun.SkillSnapshotJSON) != "" {
 		instructions, err := workflowSkillInstructionsFromSnapshot(frozenRun.SkillSnapshotJSON)
 		if err != nil {
 			return current, err
 		}
-		systemPrompt += instructions
+		if frozenSystemPrompt, frozenUserPrompt, ok := workflowPromptsFromFrozenRun(*frozenRun); ok {
+			systemPrompt, userPrompt = frozenSystemPrompt, frozenUserPrompt
+		} else {
+			systemPrompt += instructions
+		}
 		skillID, skillVersionID = frozenRun.SkillID, frozenRun.SkillVersionID
 		skillVersion, skillContentHash = frozenRun.SkillVersion, frozenRun.SkillContentHash
 		skillSnapshotJSON = frozenRun.SkillSnapshotJSON
 		executorKind = frozenRun.Executor
 		imageManifestJSON = frozenRun.ImageManifestJSON
+		sourceSnapshot = workflowSourceSnapshotFromRequest(frozenRun.RequestJSON)
 	} else {
 		if err := EnsureWorkflowSkillSeeds(); err != nil {
 			return current, err
@@ -200,6 +211,9 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, inp
 		if resolvedSkill.Package.Contract.ImagePolicy.Required && strings.TrimSpace(input.MediaBatchID) == "" {
 			return current, safeMessageError{message: "当前 Skill 要求上传参考图片"}
 		}
+	}
+	if context != nil {
+		sourceSnapshot = map[string]any{"shotId": context.ShotID, "promptInputHash": context.PromptInputHash}
 	}
 	agentRun, err := CreateUserAgentRun(userID, CreateAgentRunInput{
 		Executor:          executorKind,
@@ -219,6 +233,7 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, inp
 		WritePolicy:       "confirm_before_write",
 		SystemPrompt:      systemPrompt,
 		UserPrompt:        userPrompt,
+		SourceSnapshot:    sourceSnapshot,
 	})
 	if err != nil {
 		return current, err
@@ -271,7 +286,7 @@ func CompleteWorkflowStageAgentRun(run model.AgentRun) error {
 	if err != nil || !ok {
 		return err
 	}
-	content := workflowAgentRunContent(run)
+	content := normalizeWorkflowArtifactContent(stage.StageID, workflowAgentRunContent(run))
 	stamp := now()
 	artifact := workflowArtifact(workflowRun, stage, run, stage.StageID, stage.Attempt, content, stamp)
 	var report WorkflowGateReport
@@ -284,10 +299,18 @@ func CompleteWorkflowStageAgentRun(run model.AgentRun) error {
 		report = ValidateShotBreakdownArtifact(content)
 	case WorkflowStageShotPrompt:
 		report = ValidateShotPromptArtifact(content)
+		validateWorkflowShotPromptInputIdentity(content, run.RequestJSON, &report)
 	default:
 		report = ValidateScriptArtifact(content)
 	}
 	validateWorkflowReferenceEvidence(content, run.ImageManifestJSON, &report)
+	if stage.StageID == WorkflowStageAssetImagePrompt && stage.InputArtifactID != "" {
+		if inputArtifact, ok, err := repository.GetUserWorkflowArtifact(run.UserID, stage.InputArtifactID); err != nil {
+			return err
+		} else if ok {
+			validateWorkflowAssetIdentity([]byte(inputArtifact.ContentJSON), content, &report)
+		}
+	}
 	gate := workflowGateResult(workflowRun, stage, artifact, report, stamp)
 	stage.OutputArtifactID = artifact.ID
 	stage.Status = model.WorkflowStageRunStatusNeedsReview
@@ -467,14 +490,14 @@ func workflowStageInputArtifact(detail WorkflowRunDetail, stageID string) (model
 func workflowStagePrompts(run model.WorkflowRun, stageID string, input model.WorkflowArtifact, context *WorkflowShotPromptContext) (string, string) {
 	switch stageID {
 	case WorkflowStageAssetExtraction:
-		return "你是影视资产提取师。只从剧本提取需要保持一致的角色、场景、道具和服装，不生成生图提示词。只输出 JSON：items[].logicalAssetId/kind/name/scriptEvidence/description。logicalAssetId 必须使用 CHAR/SCENE/PROP/COSTUME 加三位序号，证据不足不得猜测。", fmt.Sprintf("工作流版本：%s\n已确认生产剧本：\n%s", run.WorkflowVersion, run.ScriptSnapshot)
+		return "你是影视资产提取师。只从剧本提取需要保持一致的角色、场景、道具和服装，不生成生图提示词。只输出 JSON：items[].logicalAssetId/kind/name/scriptEvidence/description。logicalAssetId 必须严格匹配 ^(CHAR|SCENE|PROP|COSTUME)-\\d{3}$，例如 CHAR-001、SCENE-001，中间的连字符 - 不得省略；kind 只能是 character/scene/prop/costume。证据不足不得猜测。", fmt.Sprintf("工作流版本：%s\n已确认生产剧本：\n%s", run.WorkflowVersion, run.ScriptSnapshot)
 	case WorkflowStageAssetImagePrompt:
 		return "你是影视资产生图提示词设计师。逐项保留上游 logicalAssetId/kind/name/scriptEvidence/description，新增可直接交给图片模型的 imagePrompt 和 status=ready；不得新增、遗漏、合并或重编号资产。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准资产提取：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
 	case WorkflowStageShotBreakdown:
-		return "你是影视导演与分镜拆解师。只输出可供用户修改确认的结构化分镜，不生成最终视频提示词。JSON 必须包含 shots[].shotId/sceneKey/sourceScript/shotDraft；shotDraft 包含 shotSize/camera/movement/action/performance/dialogue/durationSeconds/continuityMode。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准资产设计：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
+		return "你是影视导演与分镜拆解师。只输出可供用户修改确认的结构化分镜，不生成最终视频提示词。JSON 必须包含 shots[].shotId/sceneKey/sourceScript/shotDraft；shotId 使用 shot-001 格式，sceneKey 使用 scene-001 格式；shotDraft 必须完整包含 shotSize/camera/movement/action/performance/dialogue/durationSeconds/continuityMode，durationSeconds 为 4–15 数字，continuityMode 只能是 continuous 或 cut。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准资产设计：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
 	default:
 		contextJSON, _ := json.Marshal(context)
-		return "你是单镜头多模态视频提示词导演。只处理当前已确认镜头，结合原剧本、结构化分镜和实际参考图片的画面理解生成最终提示词。只输出 JSON：shotId、prompt、promptInputHash、referenceEvidence。prompt 必须包含“场景：”“声音：”“画面内容：”“限制：”和连续时间段，禁止只写电影感摘要；参考图必须逐图记录 imageRef/observations/appliedTo。若引用上一镜尾帧，只把它作为剧情连续性参考，本镜从该画面之后继续发展；保持场景、角色身份、服装、光线、材质与画风一致，不要求第一帧复刻参考图，不重新诠释视觉设定。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准分镜拆解：\n%s\n\n当前已确认镜头上下文：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON, contextJSON)
+		return "你是单镜头多模态视频提示词导演。只处理当前已确认镜头，结合原剧本、结构化分镜和实际参考图片的画面理解生成最终提示词。只输出 JSON：shotId、prompt、promptInputHash、referenceEvidence；promptInputHash 必须原样回写输入上下文中的同名字段。prompt 必须包含“场景：”“声音：”“画面内容：”“限制：”和连续时间段，禁止只写电影感摘要；参考图必须逐图记录 imageRef/observations/appliedTo。若引用上一镜尾帧，只把它作为剧情连续性参考，本镜从该画面之后继续发展；保持场景、角色身份、服装、光线、材质与画风一致，不要求第一帧复刻参考图，不重新诠释视觉设定。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准分镜拆解：\n%s\n\n当前已确认镜头上下文：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON, contextJSON)
 	}
 }
 
@@ -502,13 +525,93 @@ func validateWorkflowStageContext(stageID string, raw json.RawMessage) (*Workflo
 		return nil, safeMessageError{message: "缺少有效的已确认镜头上下文"}
 	}
 	var context WorkflowShotPromptContext
-	if json.Unmarshal(raw, &context) != nil || strings.TrimSpace(context.ShotID) == "" || strings.TrimSpace(context.SourceScript) == "" || len(context.ShotDraft) == 0 {
-		return nil, safeMessageError{message: "镜头上下文缺少 shotId、sourceScript 或 shotDraft"}
+	if json.Unmarshal(raw, &context) != nil || strings.TrimSpace(context.ShotID) == "" || strings.TrimSpace(context.SourceScript) == "" || len(context.ShotDraft) == 0 || strings.TrimSpace(context.PromptInputHash) == "" {
+		return nil, safeMessageError{message: "镜头上下文缺少 shotId、sourceScript、shotDraft 或 promptInputHash"}
 	}
 	if len(context.References) > 32 {
 		return nil, safeMessageError{message: "镜头上下文参考图片过多"}
 	}
 	return &context, nil
+}
+
+func workflowPromptsFromFrozenRun(run model.AgentRun) (string, string, bool) {
+	var request struct {
+		Messages []AgentRunMessage `json:"messages"`
+	}
+	if json.Unmarshal([]byte(run.RequestJSON), &request) != nil {
+		return "", "", false
+	}
+	systemPrompt, userPrompt := "", ""
+	for _, message := range request.Messages {
+		if message.Role == "system" && systemPrompt == "" {
+			systemPrompt = message.Content
+		}
+		if message.Role == "user" {
+			userPrompt = message.Content
+		}
+	}
+	return systemPrompt, userPrompt, systemPrompt != "" && userPrompt != ""
+}
+
+func workflowSourceSnapshotFromRequest(requestJSON string) map[string]any {
+	var request struct {
+		Metadata struct {
+			SourceSnapshot map[string]any `json:"sourceSnapshot"`
+		} `json:"metadata"`
+	}
+	if json.Unmarshal([]byte(requestJSON), &request) != nil || len(request.Metadata.SourceSnapshot) == 0 {
+		return map[string]any{}
+	}
+	return request.Metadata.SourceSnapshot
+}
+
+func validateWorkflowShotPromptInputIdentity(content []byte, requestJSON string, report *WorkflowGateReport) {
+	snapshot := workflowSourceSnapshotFromRequest(requestJSON)
+	expected := workflowString(snapshot, "promptInputHash")
+	if expected == "" {
+		return
+	}
+	var payload map[string]any
+	if json.Unmarshal(content, &payload) != nil {
+		return
+	}
+	if workflowString(payload, "promptInputHash") != expected {
+		report.add("prompt_input_hash_mismatch", "提示词产物与当前分镜、资产图版本不一致", workflowString(payload, "shotId"))
+	}
+	if expectedShotID := workflowString(snapshot, "shotId"); expectedShotID != "" && workflowString(payload, "shotId") != expectedShotID {
+		report.add("shot_id_mismatch", "提示词产物不属于当前镜头", workflowString(payload, "shotId"))
+	}
+	*report = report.finish()
+}
+
+func validateWorkflowAssetIdentity(input []byte, output []byte, report *WorkflowGateReport) {
+	inputIDs := workflowArtifactIDs(input, "items", "logicalAssetId")
+	outputIDs := workflowArtifactIDs(output, "items", "logicalAssetId")
+	for id := range inputIDs {
+		if !outputIDs[id] {
+			report.add("missing_upstream_asset", "生图提示词产物遗漏上游资产", id)
+		}
+	}
+	for id := range outputIDs {
+		if !inputIDs[id] {
+			report.add("unexpected_asset_id", "生图提示词产物新增或重编了资产 ID", id)
+		}
+	}
+	*report = report.finish()
+}
+
+func workflowArtifactIDs(content []byte, collectionKey string, idKey string) map[string]bool {
+	var payload map[string]any
+	if json.Unmarshal(content, &payload) != nil {
+		return map[string]bool{}
+	}
+	result := map[string]bool{}
+	for _, item := range workflowItems(payload, collectionKey) {
+		if id := workflowString(item, idKey); id != "" {
+			result[id] = true
+		}
+	}
+	return result
 }
 
 func workflowDetailStage(detail WorkflowRunDetail, stageID string) model.WorkflowStageRun {
@@ -544,6 +647,46 @@ func workflowAgentRunContent(run model.AgentRun) []byte {
 	}
 	fallback, _ := json.Marshal(map[string]string{"rawText": strings.TrimSpace(run.RawOutput)})
 	return fallback
+}
+
+var workflowAssetIDPattern = regexp.MustCompile(`(?i)^(CHAR|SCENE|PROP|COSTUME)[\s_-]?(\d{1,3})$`)
+
+func normalizeWorkflowArtifactContent(stageID string, content []byte) []byte {
+	if stageID != WorkflowStageAssetExtraction && stageID != WorkflowStageAssetImagePrompt {
+		return content
+	}
+	var payload map[string]any
+	if json.Unmarshal(content, &payload) != nil {
+		return content
+	}
+	items, ok := payload["items"].([]any)
+	if !ok {
+		return content
+	}
+	changed := false
+	for _, value := range items {
+		item, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		matches := workflowAssetIDPattern.FindStringSubmatch(strings.TrimSpace(fmt.Sprint(item["logicalAssetId"])))
+		if len(matches) != 3 {
+			continue
+		}
+		number, _ := strconv.Atoi(matches[2])
+		prefix := strings.ToUpper(matches[1])
+		item["logicalAssetId"] = fmt.Sprintf("%s-%03d", prefix, number)
+		item["kind"] = map[string]string{"CHAR": "character", "SCENE": "scene", "PROP": "prop", "COSTUME": "costume"}[prefix]
+		changed = true
+	}
+	if !changed {
+		return content
+	}
+	normalized, err := json.Marshal(payload)
+	if err != nil {
+		return content
+	}
+	return normalized
 }
 
 func workflowContentHash(content []byte) string {

@@ -133,8 +133,13 @@ func ValidateShotBreakdownArtifact(raw json.RawMessage) WorkflowGateReport {
 			}
 		}
 		duration := workflowNumber(draft, "durationSeconds")
-		if duration != 0 && (duration < 4 || duration > 15) {
+		if duration == 0 {
+			report.add("missing_duration", "分镜可编辑结构缺少 durationSeconds", itemID)
+		} else if duration < 4 || duration > 15 {
 			report.add("invalid_duration", "镜头时长必须在 4–15 秒之间", itemID)
+		}
+		if mode := workflowString(draft, "continuityMode"); mode != "continuous" && mode != "cut" {
+			report.add("invalid_continuity_mode", "continuityMode 只能是 continuous 或 cut", itemID)
 		}
 		dialogue := workflowString(draft, "dialogue")
 		if dialogue != "" && duration > 0 && visibleRuneCount(dialogue) > int(duration*5) {

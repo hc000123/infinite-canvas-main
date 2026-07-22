@@ -29,21 +29,22 @@ export function useWorkflowAssetImageActions({ message }: Props) {
     return { generateWorkflowAssetImage, generatingWorkflowAssetId: null };
 }
 
-function buildImageWorkbenchHref(asset: Asset, prompt: string, info: ReturnType<typeof workflowAssetInfo>) {
+export function buildImageWorkbenchHref(asset: Asset, prompt: string, info: ReturnType<typeof workflowAssetInfo>, returnTo?: string) {
     const params = new URLSearchParams();
     params.set("source", "original-workflow");
     params.set("prompt", prompt);
     params.set("title", asset.title);
     params.set("libraryAssetId", asset.id);
     params.set("assetId", info?.assetId || asset.id);
-    if (info?.projectSlug) {
-        params.set("projectId", info.projectSlug);
-        params.set("projectTitle", info.projectSlug);
+    const projectId = info?.sourceProjectId || info?.projectSlug;
+    if (projectId) {
+        params.set("projectId", projectId);
+        params.set("projectTitle", info?.projectSlug || projectId);
     }
     const episode = normalizeWorkflowEpisode(info?.episode) || normalizeWorkflowEpisode(info?.assetId);
     if (episode) params.set("episodeId", episode);
-    if (typeof window !== "undefined") {
-        params.set("returnTo", `${window.location.pathname}${window.location.search}`);
+    if (returnTo || typeof window !== "undefined") {
+        params.set("returnTo", returnTo || `${window.location.pathname}${window.location.search}`);
         params.set("returnLabel", "返回我的素材");
     }
     return `/image?${params.toString()}`;

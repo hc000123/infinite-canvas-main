@@ -1,12 +1,12 @@
 import type { WorkflowSkillAdminItem, WorkflowSkillEvaluation, WorkflowSkillStageKey, WorkflowSkillVersion } from "@/services/api/admin-workflow-skills";
 
 export const workflowSkillStageLabels: Record<WorkflowSkillStageKey, string> = {
-    script: "剧本整理",
-    art: "美术设计",
-    assets: "素材准备",
-    storyboard: "分镜提示词",
-    video: "视频生成",
-    delivery: "成片交付",
+    script: "剧本确认",
+    art: "资产提取",
+    assets: "资产生图提示词",
+    storyboard: "分镜拆解",
+    video: "镜头提示词",
+    delivery: "审核交付",
 };
 
 export const workflowSkillStageNumbers: Record<WorkflowSkillStageKey, string> = {
@@ -18,7 +18,7 @@ export const workflowSkillStageNumbers: Record<WorkflowSkillStageKey, string> = 
     delivery: "06",
 };
 
-const aiStages = new Set<WorkflowSkillStageKey>(["script", "art", "storyboard"]);
+const aiStages = new Set<WorkflowSkillStageKey>(["script", "art", "assets", "storyboard", "video"]);
 const stageOrder: WorkflowSkillStageKey[] = ["script", "art", "assets", "storyboard", "video", "delivery"];
 
 export function sortWorkflowSkillItems(items: WorkflowSkillAdminItem[]) {

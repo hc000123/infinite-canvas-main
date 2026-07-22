@@ -12,7 +12,7 @@ export function updateShotDraft(item: ProductionPackage, patch: Partial<Workflow
 }
 
 export function confirmShotDraft(item: ProductionPackage): ProductionPackage {
-    return { ...item, shotStatus: "confirmed", promptStatus: item.promptInputHash === promptInputHash(item) ? item.promptStatus : "需修改" };
+    return { ...item, shotStatus: "confirmed", promptStatus: !item.prompt.trim() ? "待审核" : item.promptInputHash === promptInputHash(item) ? item.promptStatus : "需修改" };
 }
 
 export function updateReferenceBindings(item: ProductionPackage, referenceBindings: WorkflowReferenceBinding[]): ProductionPackage {
@@ -37,8 +37,18 @@ export function buildContinuityReference(previous: ProductionPackage): WorkflowC
     };
 }
 
+export function refreshContinuityReference(item: ProductionPackage, previous?: ProductionPackage) {
+    if (!item.continuityReference?.updateAvailable || !previous || item.continuityReference.sourceShotId !== previous.id) return item;
+    const reference = buildContinuityReference(previous);
+    return reference ? updateContinuityReference(item, reference) : item;
+}
+
 export function isPromptFresh(item: ProductionPackage) {
     return Boolean(item.promptInputHash && item.promptInputHash === promptInputHash(item) && item.promptStatus === "已确认");
+}
+
+export function isShotPromptOutputCurrent(item: ProductionPackage, outputHash: string) {
+    return Boolean(outputHash && outputHash === promptInputHash(item));
 }
 
 function stalePrompt(item: ProductionPackage): ProductionPackage {

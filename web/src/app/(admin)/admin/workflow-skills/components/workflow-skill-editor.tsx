@@ -14,12 +14,12 @@ type Props = {
 };
 
 const stageOptions: { value: WorkflowSkillStageKey; label: string }[] = [
-    { value: "script", label: "剧本整理" },
-    { value: "art", label: "美术设计" },
-    { value: "assets", label: "素材准备" },
-    { value: "storyboard", label: "分镜提示词" },
-    { value: "video", label: "视频生成" },
-    { value: "delivery", label: "成片交付" },
+    { value: "script", label: "剧本确认" },
+    { value: "art", label: "资产提取" },
+    { value: "assets", label: "资产生图提示词" },
+    { value: "storyboard", label: "分镜拆解" },
+    { value: "video", label: "镜头提示词" },
+    { value: "delivery", label: "审核交付" },
 ];
 
 export function WorkflowSkillEditor({ value, readOnly, onChange }: Props) {

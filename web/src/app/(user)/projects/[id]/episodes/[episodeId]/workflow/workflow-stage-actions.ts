@@ -20,6 +20,10 @@ export function workflowStageActions(stage: WorkflowStageActionInput | null | un
     };
 }
 
+export function canStartFreshShotPrompt(status?: RemoteWorkflowStageStatus) {
+    return status === "ready" || status === "failed" || status === "cancelled" || status === "rejected" || status === "approved" || status === "applied";
+}
+
 export function parseWorkflowGateIssues(issuesJson?: string) {
     if (!issuesJson) return [] as string[];
     try {

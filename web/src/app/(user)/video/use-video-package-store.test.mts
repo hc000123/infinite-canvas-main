@@ -107,6 +107,41 @@ test("workflow reference images follow prompt mention order", () => {
     );
 });
 
+test("workflow reference images resolve by stable library asset id", () => {
+    const item = buildImportedVideoPackage({ duration: "8秒", episode: "ep05", id: "P01", prompt: "参考 @图1。", references: [{ ref: "@图1", name: "曾用名", type: "人物参考", libraryAssetId: "asset-stable-1" }], segment: "室内", sourcePath: "workflow" });
+    const images = resolveWorkflowReferenceImages(item, [workflowImageAsset("asset-stable-1", "当前资产名称", { assetId: "ark-stable-1", status: "Active" })]);
+
+    assert.equal(images.length, 1);
+    assert.equal(images[0].id, "asset-stable-1");
+});
+
+test("continuity tail frame stays a normal reference and reserves the ninth image slot", () => {
+    const references = Array.from({ length: 9 }, (_, index) => ({ ref: `@图${index + 1}`, name: `资产${index + 1}`, type: "场景参考", libraryAssetId: `asset-${index + 1}` }));
+    const item = buildImportedVideoPackage({ duration: "8秒", episode: "ep05", id: "P02", prompt: references.map((item) => item.ref).join("、"), references, segment: "连续镜头", sourcePath: "workflow" });
+    item.continuityReference = { sourceShotId: "P01", sourceVideoVersion: "video-v1", libraryAssetId: "tail-1", version: "tail-v1", role: "continuity_reference" };
+    const assets = [...references.map((_, index) => workflowImageAsset(`asset-${index + 1}`, `资产${index + 1}`, { assetId: `ark-${index + 1}`, status: "Active" })), workflowImageAsset("tail-1", "P01 尾帧", {})];
+    const images = resolveWorkflowReferenceImages(item, assets);
+
+    assert.equal(images.length, 9);
+    assert.equal(images.at(-1)?.id, "tail-1");
+    assert.equal(images.at(-1)?.seedanceRole, "reference_image");
+    assert.match(images.at(-1)?.name || "", /@图9/);
+});
+
+test("confirmed workflow shot keeps every frozen reference even when prompt names only one", () => {
+    const references = Array.from({ length: 3 }, (_, index) => ({ ref: `@图${index + 1}`, name: `资产${index + 1}`, type: "场景参考", libraryAssetId: `asset-${index + 1}`, version: "v1" }));
+    const item = buildImportedVideoPackage({ duration: "6秒", episode: "ep05", id: "P02", prompt: "画面沿用 @图1 的空间关系。", references, segment: "连续镜头", sourcePath: "workflow" });
+    item.shotDraft = { shotSize: "中景", camera: "平视", movement: "固定机位", action: "人物继续前行", performance: "克制", dialogue: "", durationSeconds: 6, continuityMode: "continuous" };
+    item.referenceBindings = references.map((reference) => ({ logicalAssetId: reference.name, libraryAssetId: reference.libraryAssetId || "", version: "v1", usage: "场景一致性" }));
+    item.continuityReference = { sourceShotId: "P01", sourceVideoVersion: "video-v1", libraryAssetId: "tail-1", version: "tail-v1", role: "continuity_reference" };
+    const assets = [...references.map((_, index) => workflowImageAsset(`asset-${index + 1}`, `资产${index + 1}`, { assetId: `ark-${index + 1}`, status: "Active" })), workflowImageAsset("tail-1", "P01 尾帧", {})];
+    const images = resolveWorkflowReferenceImages(item, assets);
+
+    assert.deepEqual(images.map((image) => image.id), ["asset-1", "asset-2", "asset-3", "tail-1"]);
+    assert.match(images.at(-1)?.name || "", /@图4/);
+    assert.equal(images.at(-1)?.seedanceRole, "reference_image");
+});
+
 test("workflow character references do not bind partial name matches", () => {
     const item = buildImportedVideoPackage({
         duration: "8秒",
@@ -194,6 +229,15 @@ test("workflow video readiness warns on missing references without blocking text
 
     assert.equal(readiness.status, "warning");
     assert.match(readiness.message, /1 个 @图N/);
+});
+
+test("workflow video readiness blocks a stale prompt snapshot", () => {
+    const item = buildImportedVideoPackage({ duration: "8秒", episode: "ep05", id: "P01", prompt: richWorkflowPrompt(), segment: "雨夜街巷", sourcePath: "workflow", shotDraft: { shotSize: "中景", camera: "平视", movement: "推进", action: "前行", performance: "克制", dialogue: "", durationSeconds: 8, continuityMode: "cut" } });
+    item.shotDraft = { ...item.shotDraft!, action: "突然回头" };
+
+    const readiness = workflowVideoGenerationReadiness(item, [], "volcengine-ark");
+    assert.equal(readiness.status, "blocked");
+    assert.match(readiness.message, /版本不一致/);
 });
 
 test("workflow video readiness blocks dialogue that cannot fit shot duration", () => {

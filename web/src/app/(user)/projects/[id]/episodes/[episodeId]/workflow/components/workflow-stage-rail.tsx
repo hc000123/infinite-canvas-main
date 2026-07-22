@@ -1,11 +1,11 @@
-import { Check, Circle, CircleAlert, LoaderCircle, PackageCheck, Palette, ScrollText, Shapes, Video, WandSparkles } from "lucide-react";
+import { Check, Circle, CircleAlert, LoaderCircle, PackageCheck, ScrollText, Shapes, Video } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 import type { WorkflowStageKey } from "../workflow-route-state";
 import type { WorkflowStageView, WorkflowViewStatus } from "../workflow-view-types";
 
-const stageIcons = { script: ScrollText, art: Palette, assets: Shapes, storyboard: WandSparkles, video: Video, delivery: PackageCheck };
+const stageIcons = { script: ScrollText, assets: Shapes, video: Video, delivery: PackageCheck };
 
 export function WorkflowStageRail(props: { active: WorkflowStageKey; onSelect: (stage: WorkflowStageKey) => void; stages: WorkflowStageView[] }) {
     return (

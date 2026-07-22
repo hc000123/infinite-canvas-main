@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { workflowStageActions } from "./workflow-stage-actions.ts";
+import { canStartFreshShotPrompt, workflowStageActions } from "./workflow-stage-actions.ts";
 
 test("cannot approve a failed gate", () => {
     assert.equal(workflowStageActions({ hasArtifact: true, status: "needs_review" }, false).canApprove, false);
@@ -17,4 +17,12 @@ test("running stages expose cancel but not retry", () => {
 test("failed and rejected stages can retry", () => {
     assert.equal(workflowStageActions({ hasArtifact: false, status: "failed" }, false).canRetry, true);
     assert.equal(workflowStageActions({ hasArtifact: true, status: "rejected" }, true).canRetry, true);
+});
+
+test("failed shot prompts can start fresh while active reviews stay frozen", () => {
+    assert.equal(canStartFreshShotPrompt("failed"), true);
+    assert.equal(canStartFreshShotPrompt("cancelled"), true);
+    assert.equal(canStartFreshShotPrompt("rejected"), true);
+    assert.equal(canStartFreshShotPrompt("needs_review"), false);
+    assert.equal(canStartFreshShotPrompt("running"), false);
 });

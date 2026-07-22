@@ -40,6 +40,12 @@ test("AI stage publish is blocked when content hash has no passed evaluation", (
     assert.equal(canPublishSkill({ stageKey: "art", version, evaluations: [...evaluations] }), false);
 });
 
+test("asset image prompt and shot prompt skills also require passed evaluations", () => {
+    const version = { id: "version-1", status: "draft", contentHash: "hash-1" } as Parameters<typeof canPublishSkill>[0]["version"];
+    assert.equal(canPublishSkill({ stageKey: "assets", version, evaluations: [] }), false);
+    assert.equal(canPublishSkill({ stageKey: "video", version, evaluations: [] }), false);
+});
+
 test("increments semantic patch version", () => {
     assert.equal(nextPatchVersion("2.4.9"), "2.4.10");
 });

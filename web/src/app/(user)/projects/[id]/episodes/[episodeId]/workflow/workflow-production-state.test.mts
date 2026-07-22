@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { ProductionPackage } from "../../../../../video/use-video-package-store.ts";
-import { buildContinuityReference, promptInputHash, updateContinuityReference, updateReferenceBindings, updateShotDraft } from "./workflow-production-state.ts";
+import { buildContinuityReference, confirmShotDraft, isShotPromptOutputCurrent, promptInputHash, refreshContinuityReference, updateContinuityReference, updateReferenceBindings, updateShotDraft } from "./workflow-production-state.ts";
 
 function fixture(patch: Partial<ProductionPackage> = {}): ProductionPackage {
     return {
@@ -34,4 +34,28 @@ test("maps previous tail frame as continuity reference rather than first frame",
     assert.equal(reference?.role, "continuity_reference");
     assert.notEqual(reference?.role, "first_frame");
     assert.equal(updateContinuityReference(fixture(), reference).promptStatus, "需修改");
+});
+
+test("refreshes an available tail frame only after explicit shot confirmation flow", () => {
+    const current = fixture({ continuityReference: { sourceShotId: "shot-000", sourceVideoVersion: "video-v1", libraryAssetId: "tail-old", version: "tail-v1", role: "continuity_reference", updateAvailable: true } });
+    const previous = fixture({ id: "shot-000", lastFrameAssetId: "tail-new", lastFrameVersion: "tail-v2", generation: { status: "succeeded", taskId: "video-v2", updatedAt: "2026-07-22T00:00:00Z" } });
+    const refreshed = refreshContinuityReference(current, previous);
+
+    assert.equal(refreshed.continuityReference?.libraryAssetId, "tail-new");
+    assert.equal(refreshed.continuityReference?.version, "tail-v2");
+    assert.equal(refreshed.continuityReference?.updateAvailable, undefined);
+    assert.equal(refreshed.promptStatus, "需修改");
+});
+
+test("rejects a generated prompt after its shot input changed", () => {
+    const item = fixture();
+    const generatedHash = promptInputHash(item);
+    assert.equal(isShotPromptOutputCurrent(item, generatedHash), true);
+    assert.equal(isShotPromptOutputCurrent(updateShotDraft(item, { action: "阿宁转身" }), generatedHash), false);
+});
+
+test("confirming a new shot waits for prompt generation instead of marking a missing prompt stale", () => {
+    const confirmed = confirmShotDraft(fixture({ prompt: "", promptInputHash: "", promptStatus: "待审核", shotStatus: "draft" }));
+    assert.equal(confirmed.shotStatus, "confirmed");
+    assert.equal(confirmed.promptStatus, "待审核");
 });

@@ -73,6 +73,7 @@ type VideoResponse = {
     status?: string;
     raw_status?: string;
     video_url?: string;
+    last_frame_url?: string;
     content?: { video_url?: string };
     error?: { code?: string; message?: string };
     created_at?: number;
@@ -139,6 +140,7 @@ function normalizeVideoTask(payload: VideoResponse): NormalizedVideoTask {
         status: normalizeVideoTaskStatus(payload.status),
         rawStatus: payload.raw_status || payload.status,
         videoUrl: payload.video_url || payload.content?.video_url,
+        lastFrameUrl: payload.last_frame_url,
         errorMessage: formatTaskError(payload.error?.message, payload.error?.code),
         createdAt: payload.created_at,
         updatedAt: payload.updated_at,

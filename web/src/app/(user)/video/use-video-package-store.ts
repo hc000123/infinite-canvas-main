@@ -21,6 +21,9 @@ export type WorkflowVideoReference = {
     type: string;
     name: string;
     usage?: string;
+    logicalAssetId?: string;
+    libraryAssetId?: string;
+    version?: string;
 };
 
 export type WorkflowShotDraft = {

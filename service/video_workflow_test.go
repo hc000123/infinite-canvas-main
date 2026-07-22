@@ -177,10 +177,50 @@ func TestShotPromptRequiresConfirmedBoundedContext(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "镜头上下文") {
 		t.Fatalf("missing context err=%v", err)
 	}
-	context := json.RawMessage(`{"shotId":"shot-001","sourceScript":"阿宁进入房间。","shotDraft":{"shotSize":"中景","camera":"固定机位","movement":"缓慢推近","action":"阿宁进入房间","performance":"克制","dialogue":"","durationSeconds":6,"continuityMode":"continuous"},"references":[{"logicalAssetId":"CHAR-001","libraryAssetId":"asset-1","version":"v1","usage":"角色一致性"}]}`)
+	context := json.RawMessage(`{"shotId":"shot-001","sourceScript":"阿宁进入房间。","shotDraft":{"shotSize":"中景","camera":"固定机位","movement":"缓慢推近","action":"阿宁进入房间","performance":"克制","dialogue":"","durationSeconds":6,"continuityMode":"continuous"},"promptInputHash":"wf2-test","references":[{"logicalAssetId":"CHAR-001","libraryAssetId":"asset-1","version":"v1","usage":"角色一致性"}]}`)
 	stage, err := StartWorkflowStageWithInput("user-1", detail.Run.ID, WorkflowStageShotPrompt, WorkflowStageStartInput{IdempotencyKey: "shot-prompt-valid", Context: context})
 	if err != nil || stage.Status != model.WorkflowStageRunStatusQueued {
 		t.Fatalf("stage=%#v err=%v", stage, err)
+	}
+}
+
+func TestShotPromptQualityGateRejectsWrongInputHash(t *testing.T) {
+	report := ValidateShotPromptArtifact(json.RawMessage(`{"shotId":"shot-001","promptInputHash":"wrong","referenceEvidence":[],"prompt":"场景：室内。\n声音：环境音。\n画面内容：0-6秒，阿宁走进房间。\n限制：无字幕。"}`))
+	validateWorkflowShotPromptInputIdentity([]byte(`{"shotId":"shot-001","promptInputHash":"wrong","referenceEvidence":[],"prompt":"场景：室内。\n声音：环境音。\n画面内容：0-6秒，阿宁走进房间。\n限制：无字幕。"}`), `{"metadata":{"sourceSnapshot":{"shotId":"shot-001","promptInputHash":"expected"}}}`, &report)
+	if report.Passed || len(report.Issues) == 0 || report.Issues[len(report.Issues)-1].Code != "prompt_input_hash_mismatch" {
+		t.Fatalf("report=%+v", report)
+	}
+}
+
+func TestNormalizeWorkflowArtifactContentRepairsStableAssetIDs(t *testing.T) {
+	raw := []byte(`{"items":[{"logicalAssetId":"CHAR001","kind":"CHAR","name":"林秋"},{"logicalAssetId":"scene_2","kind":"SCENE","name":"土坯房"}]}`)
+	normalized := normalizeWorkflowArtifactContent(WorkflowStageAssetExtraction, raw)
+	var payload struct {
+		Items []struct {
+			LogicalAssetID string `json:"logicalAssetId"`
+			Kind           string `json:"kind"`
+		} `json:"items"`
+	}
+	if json.Unmarshal(normalized, &payload) != nil || len(payload.Items) != 2 {
+		t.Fatalf("normalized=%s", normalized)
+	}
+	if payload.Items[0].LogicalAssetID != "CHAR-001" || payload.Items[0].Kind != "character" || payload.Items[1].LogicalAssetID != "SCENE-002" || payload.Items[1].Kind != "scene" {
+		t.Fatalf("items=%+v", payload.Items)
+	}
+}
+
+func TestAssetImagePromptQualityGateKeepsExactUpstreamIDs(t *testing.T) {
+	report := ValidateAssetImagePromptArtifact(json.RawMessage(`{"items":[{"logicalAssetId":"CHAR-001","kind":"character","name":"林秋","scriptEvidence":"林秋进门","description":"角色","imagePrompt":"角色设定图","status":"ready"},{"logicalAssetId":"SCENE-002","kind":"scene","name":"房间","scriptEvidence":"房内","description":"场景","imagePrompt":"场景设定图","status":"ready"}]}`))
+	validateWorkflowAssetIdentity([]byte(`{"items":[{"logicalAssetId":"CHAR-001"},{"logicalAssetId":"SCENE-001"}]}`), []byte(`{"items":[{"logicalAssetId":"CHAR-001"},{"logicalAssetId":"SCENE-002"}]}`), &report)
+	if report.Passed {
+		t.Fatal("expected asset identity mismatch")
+	}
+	codes := map[string]bool{}
+	for _, issue := range report.Issues {
+		codes[issue.Code] = true
+	}
+	if !codes["missing_upstream_asset"] || !codes["unexpected_asset_id"] {
+		t.Fatalf("issues=%+v", report.Issues)
 	}
 }
 

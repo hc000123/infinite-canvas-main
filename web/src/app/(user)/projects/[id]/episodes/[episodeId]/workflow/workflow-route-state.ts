@@ -1,4 +1,4 @@
-export const workflowStageKeys = ["script", "art", "assets", "storyboard", "video", "delivery"] as const;
+export const workflowStageKeys = ["script", "assets", "video", "delivery"] as const;
 
 export type WorkflowStageKey = (typeof workflowStageKeys)[number];
 export type WorkflowRouteShotStatus = "blocked" | "review" | "running" | "incomplete" | "complete";

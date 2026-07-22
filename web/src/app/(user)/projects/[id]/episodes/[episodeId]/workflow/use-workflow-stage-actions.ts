@@ -3,20 +3,21 @@
 import { useState } from "react";
 import { App } from "antd";
 
-import { cancelWorkflowStage, retryWorkflowStage, reviewWorkflowStage, startWorkflowStage, type RemoteWorkflowRunDetail } from "@/services/api/workflow-runs";
+import { cancelWorkflowStage, retryWorkflowStage, reviewWorkflowStage, startWorkflowStage, type RemoteWorkflowRunDetail, type WorkflowStageStartOptions } from "@/services/api/workflow-runs";
 
-import { workflowStageActions } from "./workflow-stage-actions";
+import { canStartFreshShotPrompt, workflowStageActions } from "./workflow-stage-actions";
 
 export function useWorkflowStageActions(input: { detail: RemoteWorkflowRunDetail | null; refresh: () => void | Promise<void>; stageId: string }) {
     const { message } = App.useApp();
     const [busyAction, setBusyAction] = useState("");
     const stageFor = (stageId: string) => input.detail?.stages.filter((item) => item.stageId === stageId).reduce((latest, item) => (!latest || item.attempt > latest.attempt ? item : latest), null as RemoteWorkflowRunDetail["stages"][number] | null) || null;
     const rawStage = stageFor(input.stageId);
-    const dependency = input.stageId === "asset-generation" ? stageFor("art-design") : input.stageId === "seedance-storyboard" ? stageFor("asset-generation") : null;
+    const dependency = input.stageId === "asset-image-prompt" ? stageFor("asset-extraction") : input.stageId === "shot-breakdown" ? stageFor("asset-image-prompt") : input.stageId === "shot-prompt" ? stageFor("shot-breakdown") : null;
     const stage = rawStage?.status === "blocked" && dependency && ["approved", "applied"].includes(dependency.status) ? { ...rawStage, status: "ready" as const } : rawStage;
     const artifact = input.detail?.artifacts.find((item) => item.id === stage?.outputArtifactId) || null;
     const gate = input.detail?.gates.find((item) => item.artifactId === artifact?.id) || null;
     const actions = workflowStageActions(stage ? { hasArtifact: Boolean(artifact), status: stage.status } : null, Boolean(gate?.passed));
+    if (input.stageId === "shot-prompt" && canStartFreshShotPrompt(stage?.status)) actions.canStart = true;
 
     const execute = async (key: string, action: () => Promise<unknown>, success: string) => {
         if (busyAction) return false;
@@ -45,7 +46,7 @@ export function useWorkflowStageActions(input: { detail: RemoteWorkflowRunDetail
         reject: () => (artifact && stage ? execute("reject", () => reviewWorkflowStage(stage.id, { artifactHash: artifact.contentHash, decision: "rejected", comment: "需要调整后重新生成" }), "已退回当前产物") : undefined),
         retry: () => (stage ? execute("retry", () => retryWorkflowStage(stage.id, workflowActionKey(stage.workflowRunId, stage.stageId, stage.attempt + 1, "retry")), "已重新加入队列") : undefined),
         stage,
-        start: (mediaBatchId?: string) => (input.detail ? execute("start", () => startWorkflowStage(input.detail!.run.id, input.stageId, startKey, { mediaBatchId }), "阶段已加入执行队列") : undefined),
+        start: (options?: string | WorkflowStageStartOptions) => (input.detail ? execute("start", () => startWorkflowStage(input.detail!.run.id, input.stageId, startKey, typeof options === "string" ? { mediaBatchId: options } : options), "阶段已加入执行队列") : undefined),
         startKey,
     };
 }

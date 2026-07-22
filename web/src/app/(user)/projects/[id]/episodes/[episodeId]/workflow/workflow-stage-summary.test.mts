@@ -3,11 +3,11 @@ import test from "node:test";
 
 import { summarizeWorkflowStages } from "./workflow-stage-summary.ts";
 
-test("shows worker outage as blocked only for remote stages", () => {
+test("blocks both production stages when their replaceable skill runner is unavailable", () => {
     const result = summarizeWorkflowStages({ packageCount: 3, scriptReady: true, workerReady: false });
 
-    assert.equal(result.find((item) => item.key === "art")?.status, "blocked");
-    assert.notEqual(result.find((item) => item.key === "video")?.status, "blocked");
+    assert.equal(result.find((item) => item.key === "assets")?.status, "blocked");
+    assert.equal(result.find((item) => item.key === "video")?.status, "blocked");
 });
 
 test("summarizes review and approved remote stages", () => {
@@ -16,13 +16,14 @@ test("summarizes review and approved remote stages", () => {
         scriptReady: true,
         workerReady: true,
         remoteStages: [
-            { stageId: "art-design", status: "approved" },
-            { stageId: "seedance-storyboard", status: "needs_review" },
+            { stageId: "asset-extraction", status: "approved" },
+            { stageId: "asset-image-prompt", status: "approved" },
+            { stageId: "shot-breakdown", status: "needs_review" },
         ],
     });
 
-    assert.equal(result.find((item) => item.key === "art")?.status, "approved");
-    assert.equal(result.find((item) => item.key === "storyboard")?.status, "needs_review");
+    assert.equal(result.find((item) => item.key === "assets")?.status, "approved");
+    assert.equal(result.find((item) => item.key === "video")?.status, "needs_review");
 });
 
 test("uses the latest stage attempt and keeps assets independent from art", () => {
@@ -30,16 +31,15 @@ test("uses the latest stage attempt and keeps assets independent from art", () =
         scriptReady: true,
         workerReady: true,
         remoteStages: [
-            { attempt: 1, stageId: "art-design", status: "applied" },
-            { attempt: 0, stageId: "art-design", status: "ready" },
-            { attempt: 0, stageId: "asset-generation", status: "ready" },
-            { attempt: 0, stageId: "seedance-storyboard", status: "blocked" },
+            { attempt: 1, stageId: "asset-extraction", status: "applied" },
+            { attempt: 0, stageId: "asset-extraction", status: "ready" },
+            { attempt: 0, stageId: "asset-image-prompt", status: "ready" },
+            { attempt: 0, stageId: "shot-breakdown", status: "blocked" },
         ],
     });
 
-    assert.equal(result.find((item) => item.key === "art")?.status, "applied");
     assert.equal(result.find((item) => item.key === "assets")?.status, "ready");
-    assert.equal(result.find((item) => item.key === "storyboard")?.status, "blocked");
+    assert.equal(result.find((item) => item.key === "video")?.status, "blocked");
 });
 
 test("unlocks storyboard only after Codex asset generation is approved", () => {
@@ -47,14 +47,14 @@ test("unlocks storyboard only after Codex asset generation is approved", () => {
         scriptReady: true,
         workerReady: true,
         remoteStages: [
-            { stageId: "art-design", status: "applied" },
-            { stageId: "asset-generation", status: "approved" },
-            { stageId: "seedance-storyboard", status: "blocked" },
+            { stageId: "asset-extraction", status: "applied" },
+            { stageId: "asset-image-prompt", status: "approved" },
+            { stageId: "shot-breakdown", status: "blocked" },
         ],
     });
 
     assert.equal(result.find((item) => item.key === "assets")?.status, "approved");
-    assert.equal(result.find((item) => item.key === "storyboard")?.status, "ready");
+    assert.equal(result.find((item) => item.key === "video")?.status, "ready");
 });
 
 test("marks delivery complete when every production package has a result", () => {

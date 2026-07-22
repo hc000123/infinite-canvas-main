@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useVideoPackageStore, type ProductionPackage } from "@/app/(user)/video/use-video-package-store";
+import { promptInputHash } from "./workflow-production-state";
 
 export type ShotDraftStatus = "clean" | "dirty" | "saving" | "saved" | "failed";
 
@@ -46,7 +47,7 @@ export function useShotPromptDraft(item: ProductionPackage | null) {
         if (!(await save())) return false;
         const current = itemRef.current;
         if (!current) return false;
-        updatePackage(current, { prompt, promptStatus: "已确认" });
+        updatePackage(current, { prompt, promptInputHash: promptInputHash(current), promptStatus: "已确认" });
         setStatus("saved");
         return true;
     };

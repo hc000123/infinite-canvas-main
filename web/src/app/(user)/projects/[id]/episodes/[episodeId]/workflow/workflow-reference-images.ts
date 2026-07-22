@@ -15,6 +15,7 @@ export function workflowReferenceImages(assets: Asset[], projectId: string, epis
         .flatMap((asset): WorkflowReferenceImage[] => {
             if (asset.kind !== "image") return [];
             const source = readRecord(asset.metadata?.originalWorkflow);
+            if (readString(source?.role) === "continuity_reference") return [];
             const sourceProjectId = readString(source?.projectId) || readString(source?.sourceProjectId);
             const sourceEpisodeId = readString(source?.episode) || readString(source?.sourceEpisodeId);
             const kind = normalizeReferenceKind(readString(source?.kind) || readString(source?.type));
@@ -39,7 +40,7 @@ export async function workflowReferenceBlob(reference: WorkflowReferenceImage, g
 
 function normalizeReferenceKind(value: string): WorkflowReferenceImage["kind"] | "" {
     const normalized = value.toLowerCase();
-    if (["character", "角色", "人物"].includes(normalized)) return "character";
+    if (["character", "costume", "角色", "人物", "服装"].includes(normalized)) return "character";
     if (["scene", "场景", "环境"].includes(normalized)) return "scene";
     if (["prop", "道具", "物件"].includes(normalized)) return "prop";
     return "";

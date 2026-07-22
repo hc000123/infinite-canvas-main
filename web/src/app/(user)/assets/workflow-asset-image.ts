@@ -8,9 +8,12 @@ import { buildAssetVersionedUpdatePatch } from "./asset-version-history.ts";
 
 export type WorkflowAssetInfo = {
     assetId: string;
+    logicalAssetId: string;
+    libraryAssetId: string;
     episode: string;
     generatedAt: string;
     importKey: string;
+    imagePrompt: string;
     prompt: string;
     projectSlug: string;
     sourcePath: string;
@@ -18,19 +21,23 @@ export type WorkflowAssetInfo = {
     sourceProjectId: string;
     status: string;
     type: string;
+    version: string;
 };
 
 export function workflowAssetInfo(asset: Asset | null | undefined): WorkflowAssetInfo | null {
     const raw = readRecord(asset?.metadata?.originalWorkflow);
     if (!raw) return null;
     const importKey = readString(raw.importKey);
-    const prompt = readString(raw.prompt) || readPromptFromAssetContent(asset);
+    const prompt = readString(raw.imagePrompt) || readString(raw.prompt) || readPromptFromAssetContent(asset);
     if (!importKey && !prompt) return null;
     return {
         assetId: readString(raw.assetId),
+        logicalAssetId: readString(raw.logicalAssetId) || readString(raw.assetId),
+        libraryAssetId: readString(raw.libraryAssetId) || asset?.id || "",
         episode: readString(raw.episode),
         generatedAt: readString(raw.generatedAt),
         importKey,
+        imagePrompt: prompt,
         prompt,
         projectSlug: readString(raw.projectSlug),
         sourcePath: readString(raw.sourcePath),
@@ -38,6 +45,7 @@ export function workflowAssetInfo(asset: Asset | null | undefined): WorkflowAsse
         sourceProjectId: readString(raw.sourceProjectId),
         status: readString(raw.status) || (asset?.kind === "image" ? "image_generated" : "pending_image"),
         type: readString(raw.type),
+        version: readString(raw.version) || "v1",
     };
 }
 
@@ -104,6 +112,8 @@ export function buildWorkflowGeneratedImagePatch(
             prompt,
             originalWorkflow: {
                 ...(info || {}),
+                imagePrompt: prompt,
+                libraryAssetId: asset.id,
                 prompt,
                 status: "image_generated",
                 generatedAt: now,

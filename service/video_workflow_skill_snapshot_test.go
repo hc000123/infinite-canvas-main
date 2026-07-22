@@ -20,7 +20,7 @@ func TestWorkflowStageFreezesPublishedSkillSnapshot(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("run ok=%v err=%v", ok, err)
 	}
-	if run.SkillID != "workflow-skill-art" || run.SkillVersion != "1.0.0" || run.SkillContentHash == "" || run.SkillSnapshotJSON == "" {
+	if run.SkillID != "workflow-skill-art" || run.SkillVersion != workflowSkillSeedVersion || run.SkillContentHash == "" || run.SkillSnapshotJSON == "" {
 		t.Fatalf("run skill snapshot=%+v", run)
 	}
 	if !strings.Contains(run.RequestJSON, "当前阶段 Skill") || !strings.Contains(run.RequestJSON, run.SkillContentHash) {
@@ -48,7 +48,7 @@ func TestWorkflowStageRetryKeepsOriginalSkillSnapshot(t *testing.T) {
 	filesJSON, _ := json.Marshal(packageValue.Files)
 	contractJSON, _ := json.Marshal(packageValue.Contract)
 	replacement := model.WorkflowSkillVersion{
-		ID: "workflow-skill-version-art-2.0.0", SkillID: baseVersion.SkillID, Version: "2.0.0",
+		ID: "workflow-skill-version-art-9.0.0", SkillID: baseVersion.SkillID, Version: "9.0.0",
 		Status: model.WorkflowSkillVersionPublished, FilesJSON: string(filesJSON), ContractJSON: string(contractJSON),
 		ContentHash: packageValue.ContentHash, CreatedAt: now(), UpdatedAt: now(), PublishedAt: now(),
 	}

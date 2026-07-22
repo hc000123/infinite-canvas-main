@@ -23,7 +23,7 @@ export function buildImportedVideoPackage(input: { duration: string; episode: st
         id: input.id,
         order: input.order ?? Number(input.id.match(/\d+/)?.[0] || 0),
         prompt: input.prompt,
-        promptStatus: "已确认",
+        promptStatus: input.prompt ? "已确认" : "待审核",
         projectId: input.projectId || input.sourceProjectId || input.projectSlug || "unscoped-project",
         risks: [{ level: "提示", text: "来自视频工作流 Copy-only，已按最终提示词确认；如提示词含 @图N，可在生成前按需补充参考素材。" }],
         sceneKey: input.sceneKey || input.segment || input.id,
@@ -40,7 +40,7 @@ export function buildImportedVideoPackage(input: { duration: string; episode: st
         tags: summarizePromptTags(input.prompt),
         workflowReferences: packageReferences,
     };
-    item.promptInputHash = workflowPromptInputHash(item);
+    item.promptInputHash = input.prompt ? workflowPromptInputHash(item) : "";
     return item;
 }
 
@@ -78,9 +78,15 @@ export function referencesUsedByPrompt(prompt: string, references: WorkflowVideo
         .filter((item): item is WorkflowVideoReference => Boolean(item));
 }
 
+function workflowReferencesForSubmission(item: ProductionPackage) {
+    const references = item.workflowReferences || [];
+    if (!item.referenceBindings?.length) return referencesUsedByPrompt(item.prompt, references);
+    return [...references].sort((left, right) => referenceNumber(left.ref) - referenceNumber(right.ref));
+}
+
 export function resolveWorkflowReferenceImages(item: ProductionPackage, assets: Asset[]): ReferenceImage[] {
-    const references = item.workflowReferences?.length ? referencesUsedByPrompt(item.prompt, item.workflowReferences) : [];
-    return references
+    const references = workflowReferencesForSubmission(item);
+    const resolved = references
         .map((reference): ReferenceImage | null => {
             const asset = findWorkflowReferenceAsset(reference, assets);
             if (!asset || asset.kind !== "image") return null;
@@ -99,6 +105,10 @@ export function resolveWorkflowReferenceImages(item: ProductionPackage, assets: 
             return image;
         })
         .filter((image): image is ReferenceImage => Boolean(image));
+    const continuity = item.continuityReference ? assets.find((asset) => asset.id === item.continuityReference?.libraryAssetId && asset.kind === "image") : null;
+    const regular = resolved.slice(0, continuity ? 8 : 9);
+    if (continuity?.kind === "image") regular.push({ dataUrl: continuity.data.dataUrl, id: continuity.id, name: `@图${regular.length + 1} 上一镜尾帧连续性参考`, seedanceRole: "reference_image", storageKey: continuity.data.storageKey, type: continuity.data.mimeType, url: continuity.data.dataUrl });
+    return regular;
 }
 
 export function isWorkflowReferenceAssetBound(item: ProductionPackage, assetName: string, assets: Asset[]) {
@@ -118,7 +128,7 @@ export function resolveWorkflowReferenceAssets(item: ProductionPackage, assets: 
 }
 
 export function workflowReferenceBindingSummary(item: ProductionPackage, assets: Asset[]) {
-    const references = item.workflowReferences?.length ? referencesUsedByPrompt(item.prompt, item.workflowReferences) : [];
+    const references = workflowReferencesForSubmission(item);
     const bound = references.filter((reference) => findWorkflowReferenceAsset(reference, assets)?.kind === "image").length;
     return { bound, total: references.length };
 }
@@ -126,6 +136,9 @@ export function workflowReferenceBindingSummary(item: ProductionPackage, assets:
 export function workflowVideoGenerationReadiness(item: ProductionPackage, assets: Asset[], videoProtocol?: string) {
     const summary = workflowReferenceBindingSummary(item, assets);
     const images = resolveWorkflowReferenceImages(item, assets);
+    if (item.shotDraft && item.promptInputHash !== workflowPromptInputHash(item)) {
+        return { message: "当前提示词与分镜或参考图版本不一致，请重新生成并确认。", status: "blocked" as const };
+    }
     const authoringIssue = workflowPromptAuthoringIssue(item.prompt, item.duration);
     if (authoringIssue) return { message: authoringIssue, status: "blocked" as const };
     if (!item.workflowReferences?.length && item.assetStatus !== "完整") {
@@ -169,7 +182,15 @@ function promptReferenceRefs(prompt: string) {
     return [...new Set([...prompt.matchAll(/@图\s*(\d+)/g)].map((match) => `@图${Number(match[1])}`))];
 }
 
+function referenceNumber(ref: string) {
+    return Number(ref.match(/\d+/)?.[0] || Number.MAX_SAFE_INTEGER);
+}
+
 function findWorkflowReferenceAsset(reference: WorkflowVideoReference, assets: Asset[]) {
+    if (reference.libraryAssetId) {
+        const stable = assets.find((asset) => asset.id === reference.libraryAssetId);
+        if (stable) return stable;
+    }
     const refName = normalizeText(reference.name);
     const exactMatchOnly = /人物|角色/.test(reference.type);
     return assets.find((asset) => {

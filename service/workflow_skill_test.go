@@ -23,7 +23,7 @@ func TestResolveWorkflowSkillPrefersProjectBinding(t *testing.T) {
 	if err := EnsureWorkflowSkillSeeds(); err != nil {
 		t.Fatal(err)
 	}
-	draft := createWorkflowSkillTestDraft(t, WorkflowSkillStageArt, "2.0.0")
+	draft := createWorkflowSkillTestDraft(t, WorkflowSkillStageArt, "2.1.0")
 	evaluation := model.WorkflowSkillEvaluation{
 		ID: newID("skilleval"), SkillVersionID: draft.ID, ContentHash: draft.ContentHash,
 		InputHash: "input-1", Status: "passed", CreatedBy: "admin-1", CreatedAt: now(), UpdatedAt: now(),
@@ -41,6 +41,53 @@ func TestResolveWorkflowSkillPrefersProjectBinding(t *testing.T) {
 	global, err := ResolvePublishedWorkflowSkill(WorkflowSkillStageArt, "project-2")
 	if err != nil || global.Version.ID == draft.ID {
 		t.Fatalf("global=%+v err=%v", global, err)
+	}
+}
+
+func TestEnsureWorkflowSkillSeedsUpgradesLegacyBuiltInBinding(t *testing.T) {
+	setupAITaskTestDB(t)
+	stamp := now()
+	skill := model.WorkflowSkill{ID: "workflow-skill-video", Name: "视频生成", StageKey: WorkflowSkillStageVideo, Enabled: true, CreatedAt: stamp, UpdatedAt: stamp}
+	legacy := model.WorkflowSkillVersion{ID: "workflow-skill-version-video-1.0.0", SkillID: skill.ID, Version: "1.0.0", Status: model.WorkflowSkillVersionPublished, FilesJSON: `{"SKILL.md":"legacy"}`, ContractJSON: `{}`, ContentHash: "legacy", CreatedBy: "system", PublishedAt: stamp, CreatedAt: stamp, UpdatedAt: stamp}
+	if err := repository.CreateWorkflowSkillAggregate(skill, legacy); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{ID: "workflow-skill-binding-global-video", StageKey: WorkflowSkillStageVideo, Scope: model.WorkflowSkillScopeGlobal, SkillVersionID: legacy.ID, CreatedAt: stamp, UpdatedAt: stamp}); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureWorkflowSkillSeeds(); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := ResolvePublishedWorkflowSkill(WorkflowSkillStageVideo, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.Version.Version != workflowSkillSeedVersion || !strings.Contains(resolved.Package.Files["SKILL.md"], "continuity_reference") {
+		t.Fatalf("resolved=%+v package=%+v", resolved.Version, resolved.Package)
+	}
+}
+
+func TestEnsureWorkflowSkillSeedsKeepsCustomGlobalBinding(t *testing.T) {
+	setupAITaskTestDB(t)
+	if err := EnsureWorkflowSkillSeeds(); err != nil {
+		t.Fatal(err)
+	}
+	draft := createWorkflowSkillTestDraft(t, WorkflowSkillStageArt, "9.0.0")
+	stamp := now()
+	draft.Status = model.WorkflowSkillVersionPublished
+	draft.PublishedAt = stamp
+	if err := repository.SaveWorkflowSkillVersion(draft); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{ID: "workflow-skill-binding-global-art", StageKey: WorkflowSkillStageArt, Scope: model.WorkflowSkillScopeGlobal, SkillVersionID: draft.ID, CreatedAt: stamp, UpdatedAt: stamp}); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureWorkflowSkillSeeds(); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := ResolvePublishedWorkflowSkill(WorkflowSkillStageArt, "")
+	if err != nil || resolved.Version.ID != draft.ID {
+		t.Fatalf("resolved=%+v err=%v", resolved.Version, err)
 	}
 }
 

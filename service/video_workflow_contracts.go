@@ -32,10 +32,12 @@ type WorkflowStageStartInput struct {
 }
 
 type WorkflowShotPromptContext struct {
-	ShotID       string                     `json:"shotId"`
-	SourceScript string                     `json:"sourceScript"`
-	ShotDraft    map[string]any             `json:"shotDraft"`
-	References   []WorkflowReferenceContext `json:"references"`
+	ShotID              string                     `json:"shotId"`
+	SourceScript        string                     `json:"sourceScript"`
+	ShotDraft           map[string]any             `json:"shotDraft"`
+	References          []WorkflowReferenceContext `json:"references"`
+	PromptInputHash     string                     `json:"promptInputHash"`
+	ContinuityReference map[string]any             `json:"continuityReference,omitempty"`
 }
 
 type WorkflowReferenceContext struct {
@@ -43,6 +45,9 @@ type WorkflowReferenceContext struct {
 	LibraryAssetID string `json:"libraryAssetId"`
 	Version        string `json:"version"`
 	Usage          string `json:"usage"`
+	Ref            string `json:"ref"`
+	Label          string `json:"label"`
+	Kind           string `json:"kind"`
 }
 
 type EnsureWorkflowRunInput struct {

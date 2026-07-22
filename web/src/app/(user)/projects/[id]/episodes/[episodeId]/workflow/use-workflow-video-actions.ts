@@ -14,6 +14,8 @@ import { useAssetStore, type AssetWriteInput } from "@/stores/use-asset-store";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 
 import { eligibleBatchPackages } from "./workflow-batch-eligibility";
+import { buildContinuityReference, updateContinuityReference } from "./workflow-production-state";
+import { archiveVideoLastFrame } from "./video-last-frame";
 
 export function useWorkflowVideoActions(packages: ProductionPackage[]) {
     const { message } = App.useApp();
@@ -116,7 +118,22 @@ export function useWorkflowVideoActions(packages: ProductionPackage[]) {
         } satisfies AssetWriteInput;
         const assetId = await addAssetOnce(input);
         const next: PackageGeneration = { aiTaskCredits: video.aiTask?.aiTaskCredits, aiTaskId: video.aiTask?.aiTaskId, assetId, status: "succeeded", taskId: task?.id, taskStatus: task?.rawStatus || task?.status || "succeeded", updatedAt: savedAt, video: input.data };
-        updatePackage(item, { canvasStatus: "已生成", generation: next, generationVersions: [...(item.generationVersions || []), next], promptStatus: "已确认" });
+        let tailAssetId = "";
+        try {
+            const tail = await archiveVideoLastFrame({ lastFrameUrl: task?.lastFrameUrl, videoUrl: video.url });
+            if (tail) tailAssetId = await addAssetOnce({ coverUrl: tail.url, data: { bytes: tail.bytes, dataUrl: tail.url, height: tail.height, mimeType: tail.mimeType, storageKey: tail.storageKey, width: tail.width }, kind: "image", metadata: { originalWorkflow: { episode: item.episodeId, kind: "scene", name: `${item.id} 尾帧连续性参考`, projectId: item.projectId, role: "continuity_reference", sourceShotId: item.id, sourceVideoVersion: task?.id || savedAt, version: savedAt } }, note: "上一视频的尾帧参考图；供下一连续镜头理解剧情延续，不作为首帧。", source: "workflow-video-tail-frame", tags: ["视频工作流", "尾帧连续性参考", item.episodeId, item.id], title: `${item.id} 尾帧连续性参考` });
+        } catch { message.warning(`${item.id} 视频已归档，但尾帧提取失败，可稍后从视频重新提取`); }
+        const completed = { ...item, canvasStatus: "已生成" as const, generation: next, generationVersions: [...(item.generationVersions || []), next], promptStatus: "已确认" as const, ...(tailAssetId ? { lastFrameAssetId: tailAssetId, lastFrameVersion: savedAt } : {}) };
+        updatePackage(item, completed);
+        if (tailAssetId) {
+            const ordered = [...packages].sort((left, right) => left.order - right.order);
+            const nextShot = ordered[ordered.findIndex((entry) => entry.id === item.id) + 1];
+            if (nextShot && nextShot.sceneKey === item.sceneKey && nextShot.shotDraft?.continuityMode === "continuous") {
+                const reference = buildContinuityReference(completed);
+                if (reference && !nextShot.continuityReference) updatePackage(nextShot, updateContinuityReference(nextShot, reference));
+                else if (reference && nextShot.continuityReference && nextShot.continuityReference.version !== reference.version) updatePackage(nextShot, { continuityReference: { ...nextShot.continuityReference, updateAvailable: true } });
+            }
+        }
     };
 
     const generate = async (item: ProductionPackage, skipPreflight = false) => {
