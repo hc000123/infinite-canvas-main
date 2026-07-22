@@ -23,6 +23,33 @@ export type WorkflowVideoReference = {
     usage?: string;
 };
 
+export type WorkflowShotDraft = {
+    shotSize: string;
+    camera: string;
+    movement: string;
+    action: string;
+    performance: string;
+    dialogue: string;
+    durationSeconds: number;
+    continuityMode: "continuous" | "cut";
+};
+
+export type WorkflowReferenceBinding = {
+    logicalAssetId: string;
+    libraryAssetId: string;
+    version: string;
+    usage: string;
+};
+
+export type WorkflowContinuityReference = {
+    sourceShotId: string;
+    sourceVideoVersion: string;
+    libraryAssetId: string;
+    version: string;
+    role: "continuity_reference";
+    updateAvailable?: boolean;
+};
+
 export type PackageGeneration = {
     aiTaskCredits?: number;
     aiTaskId?: string;
@@ -86,6 +113,14 @@ export type ProductionPackage = {
     sourceProjectId?: string;
     sourceProjectSlug?: string;
     workflowReferences?: WorkflowVideoReference[];
+    sourceScript?: string;
+    shotDraft?: WorkflowShotDraft;
+    shotStatus?: "draft" | "confirmed";
+    promptInputHash?: string;
+    referenceBindings?: WorkflowReferenceBinding[];
+    continuityReference?: WorkflowContinuityReference;
+    lastFrameAssetId?: string;
+    lastFrameVersion?: string;
 };
 
 type VideoPackageStore = {

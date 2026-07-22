@@ -2,9 +2,9 @@ import type { Asset } from "@/stores/use-asset-store";
 import type { ReferenceImage } from "@/types/image";
 import { activeVolcengineAssetURI } from "../../../services/volcengine-asset-metadata.ts";
 
-import type { AssetKind, ProductionPackage, WorkflowVideoReference } from "./use-video-package-store";
+import type { AssetKind, ProductionPackage, WorkflowShotDraft, WorkflowVideoReference } from "./use-video-package-store";
 
-export function buildImportedVideoPackage(input: { duration: string; episode: string; episodeId?: string; id: string; order?: number; projectId?: string; projectSlug?: string; sceneKey?: string; sourceProjectId?: string; prompt: string; references?: WorkflowVideoReference[]; segment: string; sourcePath: string }): ProductionPackage {
+export function buildImportedVideoPackage(input: { duration: string; episode: string; episodeId?: string; id: string; order?: number; projectId?: string; projectSlug?: string; sceneKey?: string; sourceProjectId?: string; prompt: string; references?: WorkflowVideoReference[]; segment: string; sourcePath: string; sourceScript?: string; shotDraft?: WorkflowShotDraft }): ProductionPackage {
     const duration = input.duration || inferDuration(input.prompt) || "6秒";
     const references = input.references || [];
     const usedReferences = referencesUsedByPrompt(input.prompt, references);
@@ -13,7 +13,7 @@ export function buildImportedVideoPackage(input: { duration: string; episode: st
         : promptReferenceRefs(input.prompt).map((ref): WorkflowVideoReference => ({ name: "未解析参考图", ref, type: "参考图" }));
     const packageReferences = references.length ? references : fallbackReferences;
     const declaredAssets = usedReferences.length ? usedReferences : fallbackReferences;
-    return {
+    const item: ProductionPackage = {
         assetStatus: declaredAssets.length ? "缺角色图" : "完整",
         assets: declaredAssets.map((item) => ({ kind: workflowReferenceAssetKind(item), name: `${item.ref} ${item.name}`, status: "缺失" })),
         canvasStatus: "未导入",
@@ -32,9 +32,43 @@ export function buildImportedVideoPackage(input: { duration: string; episode: st
         sourceEpisode: input.episode,
         sourceProjectId: input.sourceProjectId,
         sourceProjectSlug: input.projectSlug,
+        sourceScript: input.sourceScript || input.segment,
+        shotDraft: input.shotDraft,
+        shotStatus: input.shotDraft ? "confirmed" : "draft",
+        promptInputHash: "",
+        referenceBindings: [],
         tags: summarizePromptTags(input.prompt),
         workflowReferences: packageReferences,
     };
+    item.promptInputHash = workflowPromptInputHash(item);
+    return item;
+}
+
+export function workflowPromptInputHash(item: ProductionPackage) {
+    const payload = JSON.stringify({
+        continuityVersion: item.continuityReference?.version || "",
+        references: [...(item.referenceBindings || [])]
+            .map(({ logicalAssetId, libraryAssetId, version, usage }) => ({ logicalAssetId: cleanHashText(logicalAssetId), libraryAssetId: cleanHashText(libraryAssetId), version: cleanHashText(version), usage: cleanHashText(usage) }))
+            .sort((left, right) => `${left.logicalAssetId}:${left.libraryAssetId}`.localeCompare(`${right.logicalAssetId}:${right.libraryAssetId}`)),
+        shotDraft: normalizeHashRecord(item.shotDraft),
+        sourceScript: cleanHashText(item.sourceScript || ""),
+    });
+    let hash = 2166136261;
+    for (let index = 0; index < payload.length; index += 1) {
+        hash ^= payload.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+    return `wf2-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+function normalizeHashRecord(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(normalizeHashRecord);
+    if (!value || typeof value !== "object") return typeof value === "string" ? cleanHashText(value) : value;
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([left], [right]) => left.localeCompare(right)).map(([key, entry]) => [key, normalizeHashRecord(entry)]));
+}
+
+function cleanHashText(value: string) {
+    return value.trim().replace(/\s+/g, " ");
 }
 
 export function referencesUsedByPrompt(prompt: string, references: WorkflowVideoReference[]) {
