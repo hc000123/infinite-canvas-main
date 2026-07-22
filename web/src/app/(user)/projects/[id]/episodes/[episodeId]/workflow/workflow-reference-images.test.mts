@@ -31,3 +31,16 @@ test("accepts legacy workflow provenance and caps a batch at nine", () => {
     const assets = Array.from({ length: 12 }, (_, index) => ({ ...image(`角色${String(index).padStart(2, "0")}`, ""), metadata: { originalWorkflow: { sourceProjectId: "project-1", sourceEpisodeId: "episode-1", type: "人物" } } }));
     assert.equal(workflowReferenceImages(assets, "project-1", "episode-1").length, 9);
 });
+
+test("keeps character parent metadata on costume references", () => {
+    const variant = {
+        ...image("costume-1", "costume"),
+        metadata: { originalWorkflow: { projectId: "project-1", episode: "episode-1", kind: "costume", name: "林秋 · 病中旧棉衣", logicalAssetId: "COSTUME-001", parentLogicalAssetId: "CHAR-001", variantName: "病中旧棉衣" } },
+    };
+    const result = workflowReferenceImages([variant], "project-1", "episode-1");
+
+    assert.equal(result[0].kind, "character");
+    assert.equal(result[0].logicalAssetId, "COSTUME-001");
+    assert.equal(result[0].parentLogicalAssetId, "CHAR-001");
+    assert.equal(result[0].variantName, "病中旧棉衣");
+});

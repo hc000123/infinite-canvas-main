@@ -16,7 +16,7 @@ import { WorkflowAssetCard } from "./workflow-asset-card";
 
 export function WorkflowAssetPanel(props: {
     artifact: RemoteWorkflowArtifact | null;
-    automation?: ReturnType<typeof useWorkflowAssetAutomation>;
+    automation: ReturnType<typeof useWorkflowAssetAutomation>;
     episodeId: string;
     onApplied: () => void | Promise<void>;
     projectId: string;
@@ -38,9 +38,8 @@ export function WorkflowAssetPanel(props: {
     const counts = useMemo(() => workflowAssetCategoryCounts(cards), [cards]);
     const visible = cards.filter((card) => filter === "all" || card.category === filter);
     const variants = cards.flatMap((card) => card.variants);
-    const pendingCount = variants.filter((variant) => variant.asset?.kind !== "image").length;
     const imageActions = useWorkflowAssetImageActions();
-    const automation = props.automation || { busy: false, message: cards.length ? "资产卡片已准备完成" : "正在准备资产卡片", retry: async () => undefined, status: cards.length ? ("ready" as const) : ("organizing" as const) };
+    const automation = props.automation;
 
     const materialize = useCallback(async () => {
         if (!props.artifact || !props.stage || props.stage.status !== "approved" || applying) return;
@@ -166,7 +165,7 @@ export function WorkflowAssetPanel(props: {
                     </div>
                     <div className="flex flex-wrap gap-2">
                         {automation.status === "error" ? <Button icon={<RefreshCw className="size-4" />} loading={automation.busy} onClick={() => void automation.retry()}>重新整理</Button> : null}
-                        <Button type="primary" icon={<WandSparkles className="size-4" />} disabled={!selectedAssets.length} loading={Boolean(imageActions.generatingIds.length)} onClick={() => confirmGenerate(selectedAssets)}>确认生成 {selectedAssets.length || pendingCount} 项</Button>
+                        <Button type="primary" icon={<WandSparkles className="size-4" />} disabled={!selectedAssets.length} loading={Boolean(imageActions.generatingIds.length)} onClick={() => confirmGenerate(selectedAssets)}>确认生成 {selectedAssets.length} 项</Button>
                     </div>
                 </div>
                 {cards.length ? (
