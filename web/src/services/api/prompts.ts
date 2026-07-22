@@ -16,6 +16,9 @@ export type Prompt = {
 
 export type PromptTemplateType = "asset" | "image" | "video" | "grid" | "positive" | "negative" | "workflow";
 export type PromptNodeGroup = "text" | "image" | "video";
+export type PromptKind = "template" | "standard";
+export type PromptPolicy = "required" | "recommended" | "optional";
+export type PromptSlot = "style" | "camera" | "lighting" | "quality" | "negative" | "format" | "constraint";
 
 export type PromptVariable = {
     name: string;
@@ -33,6 +36,10 @@ export type PromptMetadata = {
     outputKind?: string;
     variables?: PromptVariable[];
     favorite?: boolean;
+    kind?: PromptKind | string;
+    policy?: PromptPolicy | string;
+    slot?: PromptSlot | string;
+    enabled?: boolean;
 };
 
 export const ALL_PROMPTS_OPTION = "全部";

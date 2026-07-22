@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { useUserStore } from "@/stores/use-user-store";
 import { PromptCard } from "./prompt-card";
 import { PromptDetailDialog } from "./prompt-detail-dialog";
+import { usePromptRecipeContext } from "./use-prompt-recipe-context";
 import { defaultPromptTypeForNodeGroup, formatPromptVariablesText, parsePromptVariablesText, promptNodeGroupLabel, promptNodeGroupOptions, promptTypeLabel, promptTypeOptions, promptTypesForNodeGroup } from "./prompt-template";
 import { usePromptList } from "./use-prompt-list";
 
@@ -63,6 +64,9 @@ export function PromptSelectDialog({
     const [isSavingPrompt, setIsSavingPrompt] = useState(false);
     const [scenarioFiltersExpanded, setScenarioFiltersExpanded] = useState(false);
     const [tagFiltersExpanded, setTagFiltersExpanded] = useState(false);
+    const recipeSupported = nodeGroup === "image" || nodeGroup === "video";
+    const recipeNodeGroup = nodeGroup === "video" ? "video" : "image";
+    const recipeContext = usePromptRecipeContext(recipeNodeGroup, projectId);
     const {
         query,
         items,
@@ -195,6 +199,14 @@ export function PromptSelectDialog({
                         关闭
                     </Button>
                 </div>
+                {recipeSupported ? (
+                    <div className="mt-4 flex flex-wrap items-center gap-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2 text-xs text-[var(--studio-text-secondary)]">
+                        <span className="font-medium text-[var(--studio-text-primary)]">本次完整配方</span>
+                        <Tag className="studio-tag">公司 {recipeContext.companyStandards.length} 项</Tag>
+                        <Tag className="studio-tag">{recipeContext.projectProfile ? `项目：${recipeContext.projectProfile.name}` : "未启用项目风格"}</Tag>
+                        <Tag className="studio-tag">{recipeContext.personalProfile ? `个人：${recipeContext.personalProfile.name}` : "未启用个人习惯"}</Tag>
+                    </div>
+                ) : null}
                 <div className="mt-5 grid gap-3">
                     <PromptFilterRow label="节点">
                         {nodeGroupOptions.map((group) => (
@@ -294,7 +306,15 @@ export function PromptSelectDialog({
                     ) : null}
                 </div>
             </div>
-            <PromptDetailDialog prompt={selectedPrompt} projectId={projectId} onClose={() => setSelectedPrompt(null)} onCopy={(text) => selectPrompt(text)} onUse={selectPrompt} />
+            <PromptDetailDialog
+                prompt={selectedPrompt}
+                projectId={projectId}
+                onClose={() => setSelectedPrompt(null)}
+                onCopy={(text) => selectPrompt(text)}
+                onUse={selectPrompt}
+                onUseTemplate={recipeSupported ? selectPrompt : undefined}
+                buildRecipe={recipeSupported ? (template) => recipeContext.compose("", template) : undefined}
+            />
             <PromptCreateDialog form={createForm} open={createOpen} categories={promptCategories} saving={isSavingPrompt} onCancel={() => setCreateOpen(false)} onSave={saveCreatedPrompt} />
         </Modal>
     );

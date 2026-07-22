@@ -94,8 +94,14 @@
 | `outputKind` | string   | 输出类型，例如 `text`、`image`、`video`、`asset`、`workflow`                          |
 | `variables`  | object[] | 模板变量说明，每项包含 `name`、`description`、`defaultValue`                          |
 | `favorite`   | bool     | 是否常用                                                                             |
+| `kind`       | string   | 记录类型：`template` 普通模板、`standard` 公司标准                                    |
+| `policy`     | string   | 公司标准策略：`required` 必选、`recommended` 默认推荐、`optional` 手动使用            |
+| `slot`       | string   | 配方位置：`style`、`camera`、`lighting`、`quality`、`negative`、`format`、`constraint` |
+| `enabled`    | bool     | 公司标准是否参与生产；仅 `kind=standard` 时生效                                      |
 
 模板变量使用 `{变量名}` 形式写在 `prompt` 中，前端会按 `metadata.variables` 展示说明并替换为最终提示词。
+
+旧提示词缺少以上公司标准字段时，前端按 `kind=template`、`policy=optional`、`enabled=true` 解释，只作为可选模板展示，不会自动加入图片或视频提示词。
 
 ### assets
 

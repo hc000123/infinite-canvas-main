@@ -2,12 +2,14 @@
 
 import { ChevronDown, ChevronUp, FolderPlus, Plus, Search } from "lucide-react";
 import { type UIEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Alert, App, Button, Empty, Form, Input, Spin, Tag } from "antd";
+import { Alert, App, Button, Empty, Form, Input, Segmented, Select, Spin, Tag } from "antd";
 
 import { PromptCard } from "@/components/prompts/prompt-card";
 import { PromptCreateDialog, type PromptCreateFormValues } from "@/components/prompts/prompt-select-dialog";
 import { PromptDetailDialog } from "@/components/prompts/prompt-detail-dialog";
+import { PromptProfileManager } from "@/components/prompts/prompt-profile-manager";
 import { usePromptList } from "@/components/prompts/use-prompt-list";
 import { defaultPromptTypeForNodeGroup, parsePromptVariablesText, promptTypeLabel, promptTypeOptions } from "@/components/prompts/prompt-template";
 import { useCopyText } from "@/hooks/use-copy-text";
@@ -16,6 +18,7 @@ import { saveAdminPrompt } from "@/services/api/admin";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { ALL_PROMPTS_OPTION, type Prompt } from "@/services/api/prompts";
+import { useCreativeProjectStore } from "../projects/use-creative-project-store";
 import { ToolMetricGrid, ToolWorkbenchLayout } from "../components/tool-workbench";
 
 const SCENARIO_FILTER_COLLAPSED_COUNT = 8;
@@ -31,6 +34,7 @@ function getVisibleFilterOptions(options: string[], expanded: boolean, selectedV
 
 export default function PromptsPage() {
     const { message } = App.useApp();
+    const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const token = useUserStore((state) => state.token);
     const [createForm] = Form.useForm<PromptCreateFormValues>();
@@ -45,6 +49,9 @@ export default function PromptsPage() {
     const [isSavingPrompt, setIsSavingPrompt] = useState(false);
     const [scenarioFiltersExpanded, setScenarioFiltersExpanded] = useState(false);
     const [tagFiltersExpanded, setTagFiltersExpanded] = useState(false);
+    const [workspaceMode, setWorkspaceMode] = useState<"active" | "library">("active");
+    const [profileProjectId, setProfileProjectId] = useState(searchParams.get("projectId") || "");
+    const projects = useCreativeProjectStore((state) => state.projects.filter((project) => project.status === "active"));
     const addAsset = useAssetStore((state) => state.addAsset);
     const copyText = useCopyText();
     const {
@@ -154,6 +161,21 @@ export default function PromptsPage() {
     return (
         <div className="flex h-full flex-col overflow-hidden bg-[var(--studio-shell-bg)] text-[var(--studio-text-primary)]">
             <main className="studio-shell min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6 xl:px-7" onScroll={handleListScroll}>
+                <div className="studio-page-header mb-5 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                    <div>
+                        <p className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">提示词配方台</p>
+                        <h1 className="mt-1 text-2xl font-semibold text-[var(--studio-text-primary)]">让标准、项目风格和个人习惯一起生效</h1>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {workspaceMode === "active" ? <Select className="min-w-52" allowClear placeholder="未选择项目" value={profileProjectId || undefined} options={projects.map((project) => ({ label: project.title, value: project.id }))} onChange={(value) => setProfileProjectId(value || "")} /> : null}
+                        <Segmented value={workspaceMode} options={[{ label: "当前生效", value: "active" }, { label: "全部模板", value: "library" }]} onChange={(value) => setWorkspaceMode(value as "active" | "library")} />
+                    </div>
+                </div>
+                {workspaceMode === "active" ? (
+                    <section className="studio-section p-4">
+                        <PromptProfileManager projectId={profileProjectId || undefined} />
+                    </section>
+                ) : (
                 <ToolWorkbenchLayout
                     sidebar={
                         <aside className="studio-rail h-fit p-4 lg:sticky lg:top-5">
@@ -329,6 +351,7 @@ export default function PromptsPage() {
                         ) : null}
                     </section>
                 </ToolWorkbenchLayout>
+                )}
             </main>
 
             <PromptDetailDialog prompt={selectedPrompt} onClose={() => setSelectedPrompt(null)} onCopy={(prompt) => copyText(prompt, "提示词已复制")} onSaveAsset={savePromptAsset} />

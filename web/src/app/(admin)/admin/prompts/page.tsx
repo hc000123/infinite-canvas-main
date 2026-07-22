@@ -8,11 +8,17 @@ import { useEffect, useState } from "react";
 import {
     formatPromptVariablesText,
     inputOutputKindLabel,
+    promptKindLabel,
+    promptKindOptions,
+    promptPolicyLabel,
+    promptPolicyOptions,
     parsePromptVariablesText,
     promptInputKindOptions,
     promptNodeGroupLabel,
     promptNodeGroupOptions,
     promptOutputKindOptions,
+    promptSlotLabel,
+    promptSlotOptions,
     promptTypeLabel,
     promptTypeOptions,
 } from "@/components/prompts/prompt-template";
@@ -82,6 +88,10 @@ export default function AdminPromptsPage() {
                 ...(value.metadata || {}),
                 variables: parsePromptVariablesText(value.variableText || ""),
                 favorite: value.metadata?.favorite === true,
+                kind: value.metadata?.kind || "template",
+                policy: value.metadata?.policy || "optional",
+                slot: value.metadata?.slot || "",
+                enabled: value.metadata?.enabled !== false,
             },
         });
         setEditingPrompt(null);
@@ -136,6 +146,10 @@ export default function AdminPromptsPage() {
                 <Space size={[4, 4]} wrap>
                     {item.metadata?.nodeGroup ? <Tag color="purple">{promptNodeGroupLabel(item.metadata.nodeGroup)}</Tag> : null}
                     {item.metadata?.type ? <Tag color="blue">{promptTypeLabel(item.metadata.type)}</Tag> : <Tag>普通</Tag>}
+                    {item.metadata?.kind === "standard" ? <Tag color="cyan">公司标准</Tag> : null}
+                    {item.metadata?.kind === "standard" ? <Tag color={item.metadata.policy === "required" ? "red" : "gold"}>{promptPolicyLabel(item.metadata.policy)}</Tag> : null}
+                    {item.metadata?.kind === "standard" && item.metadata.slot ? <Tag>{promptSlotLabel(item.metadata.slot)}</Tag> : null}
+                    {item.metadata?.kind === "standard" && item.metadata.enabled === false ? <Tag>已停用</Tag> : null}
                     {item.metadata?.scenario ? <Tag>{item.metadata.scenario}</Tag> : null}
                     {item.metadata?.favorite ? <Tag color="gold">常用</Tag> : null}
                 </Space>
@@ -229,7 +243,7 @@ export default function AdminPromptsPage() {
                                 同步
                             </Button>
                         ) : null,
-                        <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => setEditingPrompt({ category: defaultCategory, tags: [], metadata: { nodeGroup: "image", type: "image" } })}>
+                        <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => setEditingPrompt({ category: defaultCategory, tags: [], metadata: { nodeGroup: "image", type: "image", kind: "template", policy: "optional", enabled: true } })}>
                             新增提示词
                         </Button>,
                     ]}
@@ -283,6 +297,36 @@ export default function AdminPromptsPage() {
                     </Row>
                     <Row gutter={12}>
                         <Col span={6}>
+                            <Form.Item name={["metadata", "kind"]} label="记录类型">
+                                <Select options={promptKindOptions} />
+                            </Form.Item>
+                        </Col>
+                        <Form.Item noStyle shouldUpdate={(before, after) => before.metadata?.kind !== after.metadata?.kind}>
+                            {({ getFieldValue }) =>
+                                getFieldValue(["metadata", "kind"]) === "standard" ? (
+                                    <>
+                                        <Col span={6}>
+                                            <Form.Item name={["metadata", "policy"]} label="执行策略">
+                                                <Select options={promptPolicyOptions} />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={6}>
+                                            <Form.Item name={["metadata", "slot"]} label="内容位置">
+                                                <Select options={promptSlotOptions} />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={6}>
+                                            <Form.Item name={["metadata", "enabled"]} label="启用" valuePropName="checked">
+                                                <Checkbox>参与生产</Checkbox>
+                                            </Form.Item>
+                                        </Col>
+                                    </>
+                                ) : null
+                            }
+                        </Form.Item>
+                    </Row>
+                    <Row gutter={12}>
+                        <Col span={6}>
                             <Form.Item name={["metadata", "provider"]} label="供应商">
                                 <Input placeholder="openai / volcengine-ark" />
                             </Form.Item>
@@ -325,6 +369,10 @@ export default function AdminPromptsPage() {
                                     <Tag>{categoryName(detailPrompt.category)}</Tag>
                                     {detailPrompt.metadata?.nodeGroup ? <Tag color="purple">{promptNodeGroupLabel(detailPrompt.metadata.nodeGroup)}</Tag> : null}
                                     {detailPrompt.metadata?.type ? <Tag color="blue">{promptTypeLabel(detailPrompt.metadata.type)}</Tag> : null}
+                                    {detailPrompt.metadata?.kind === "standard" ? <Tag color="cyan">{promptKindLabel(detailPrompt.metadata.kind)}</Tag> : null}
+                                    {detailPrompt.metadata?.kind === "standard" ? <Tag color={detailPrompt.metadata.policy === "required" ? "red" : "gold"}>{promptPolicyLabel(detailPrompt.metadata.policy)}</Tag> : null}
+                                    {detailPrompt.metadata?.kind === "standard" && detailPrompt.metadata.slot ? <Tag>{promptSlotLabel(detailPrompt.metadata.slot)}</Tag> : null}
+                                    {detailPrompt.metadata?.kind === "standard" && detailPrompt.metadata.enabled === false ? <Tag>已停用</Tag> : null}
                                     {detailPrompt.metadata?.scenario ? <Tag>场景：{detailPrompt.metadata.scenario}</Tag> : null}
                                     {detailPrompt.metadata?.provider ? <Tag>供应商：{detailPrompt.metadata.provider}</Tag> : null}
                                     {detailPrompt.metadata?.model ? <Tag>模型：{detailPrompt.metadata.model}</Tag> : null}
