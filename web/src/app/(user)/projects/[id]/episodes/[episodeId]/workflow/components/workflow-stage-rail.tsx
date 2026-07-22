@@ -29,7 +29,7 @@ export function WorkflowStageRail(props: { active: WorkflowStageKey; onSelect: (
                             <span className="grid size-7 shrink-0 place-items-center rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]"><Icon className="size-3.5" /></span>
                             <span className="min-w-0 flex-1">
                                 <span className="block truncate text-xs font-medium">{index + 1}. {stage.label}</span>
-                                <span className="mt-1 flex items-center gap-1 text-[10px] text-[var(--studio-text-muted)]"><StatusIcon status={stage.status} />{statusLabel(stage.status)}{stage.count ? ` · ${stage.count}` : ""}</span>
+                                <span className="mt-1 flex items-center gap-1 text-[10px] text-[var(--studio-text-muted)]"><StatusIcon stage={stage.key} status={stage.status} />{statusLabel(stage.status, stage.key)}{stage.count ? ` · ${stage.count}` : ""}</span>
                             </span>
                         </button>
                     );
@@ -39,14 +39,16 @@ export function WorkflowStageRail(props: { active: WorkflowStageKey; onSelect: (
     );
 }
 
-function StatusIcon({ status }: { status: WorkflowViewStatus }) {
+function StatusIcon({ stage, status }: { stage: WorkflowStageKey; status: WorkflowViewStatus }) {
+    if (stage === "assets" && status === "approved") return <Circle className="size-3 text-[var(--studio-accent)]" />;
     if (["approved", "applied", "complete"].includes(status)) return <Check className="size-3 text-[var(--studio-success)]" />;
     if (["queued", "running", "cancel_requested"].includes(status)) return <LoaderCircle className="size-3 animate-spin text-[var(--studio-accent)]" />;
     if (["blocked", "failed", "rejected"].includes(status)) return <CircleAlert className="size-3 text-[var(--studio-warning)]" />;
     return <Circle className="size-3" />;
 }
 
-function statusLabel(status: WorkflowViewStatus) {
+function statusLabel(status: WorkflowViewStatus, stage: WorkflowStageKey) {
+    if (stage === "assets" && status === "approved") return "待生成草图";
     const labels: Record<WorkflowViewStatus, string> = {
         applied: "已写入",
         approved: "已通过",

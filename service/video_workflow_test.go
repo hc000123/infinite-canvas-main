@@ -122,7 +122,7 @@ func TestReviewBlocksFailedQualityGate(t *testing.T) {
 	}
 }
 
-func TestApprovedArtUnlocksAssetsAndApprovedAssetsUnlockStoryboard(t *testing.T) {
+func TestAppliedAssetImagesUnlockStoryboard(t *testing.T) {
 	setupVideoWorkflowTest(t)
 	detail := ensureVideoWorkflowTestRun(t)
 	stage := completeVideoWorkflowArtStage(t, detail, "idem-art-approved")
@@ -159,6 +159,12 @@ func TestApprovedArtUnlocksAssetsAndApprovedAssetsUnlockStoryboard(t *testing.T)
 	assetArtifact, _, _ := repository.GetUserWorkflowArtifact("user-1", assetStage.OutputArtifactID)
 	if _, err := ReviewWorkflowStage("user-1", assetStage.ID, WorkflowReviewInput{Decision: "approved", ArtifactHash: assetArtifact.ContentHash}); err != nil {
 		t.Fatalf("approve assets: %v", err)
+	}
+	if _, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard-too-early"); err == nil || !strings.Contains(err.Error(), "绑定全部资产图") {
+		t.Fatalf("storyboard should remain blocked before asset images are applied: %v", err)
+	}
+	if _, err := ApplyWorkflowStage("user-1", assetStage.ID, WorkflowApplyInput{ArtifactHash: assetArtifact.ContentHash, Target: "asset_store", TargetIDs: []string{"asset-1"}, AppliedCount: 1, Version: "local-v1"}); err != nil {
+		t.Fatalf("apply asset images: %v", err)
 	}
 	storyboard, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard-approved")
 	if err != nil || storyboard.Status != model.WorkflowStageRunStatusQueued {
@@ -220,6 +226,50 @@ func TestAssetImagePromptQualityGateKeepsExactUpstreamIDs(t *testing.T) {
 		codes[issue.Code] = true
 	}
 	if !codes["missing_upstream_asset"] || !codes["unexpected_asset_id"] {
+		t.Fatalf("issues=%+v", report.Issues)
+	}
+}
+
+func TestValidateAssetExtractionArtifactAcceptsCharacterVariant(t *testing.T) {
+	report := ValidateAssetExtractionArtifact(json.RawMessage(`{"items":[
+		{"logicalAssetId":"CHAR-001","kind":"character","name":"林秋","scriptEvidence":"林秋躺在床上","description":"六十岁女性"},
+		{"logicalAssetId":"COSTUME-001","kind":"costume","name":"病中旧棉衣","scriptEvidence":"林秋穿着旧棉衣","description":"褪色旧棉衣","parentLogicalAssetId":"CHAR-001","variantType":"costume","variantName":"病中旧棉衣"}
+	]}`))
+	if !report.Passed {
+		t.Fatalf("expected linked variant to pass: %+v", report.Issues)
+	}
+}
+
+func TestValidateAssetExtractionArtifactRejectsOrphanCharacterVariant(t *testing.T) {
+	report := ValidateAssetExtractionArtifact(json.RawMessage(`{"items":[
+		{"logicalAssetId":"COSTUME-001","kind":"costume","name":"旧棉衣","scriptEvidence":"她穿旧棉衣","description":"褪色旧棉衣","parentLogicalAssetId":"CHAR-999","variantType":"costume","variantName":"旧棉衣"}
+	]}`))
+	if report.Passed {
+		t.Fatal("expected orphan variant to fail")
+	}
+	codes := map[string]bool{}
+	for _, issue := range report.Issues {
+		codes[issue.Code] = true
+	}
+	if !codes["invalid_variant_parent"] {
+		t.Fatalf("issues=%+v", report.Issues)
+	}
+}
+
+func TestAssetImagePromptQualityGatePreservesCharacterVariantRelationship(t *testing.T) {
+	report := ValidateAssetImagePromptArtifact(json.RawMessage(`{"items":[
+		{"logicalAssetId":"CHAR-001","kind":"character","name":"林秋","scriptEvidence":"林秋","description":"角色","imagePrompt":"角色设定图","status":"ready"},
+		{"logicalAssetId":"COSTUME-001","kind":"costume","name":"旧棉衣","scriptEvidence":"穿旧棉衣","description":"服装","imagePrompt":"服装设定图","status":"ready","parentLogicalAssetId":"CHAR-001","variantType":"costume","variantName":"另一个名称"}
+	]}`))
+	validateWorkflowAssetIdentity(
+		[]byte(`{"items":[{"logicalAssetId":"CHAR-001"},{"logicalAssetId":"COSTUME-001","parentLogicalAssetId":"CHAR-001","variantType":"costume","variantName":"旧棉衣"}]}`),
+		[]byte(`{"items":[{"logicalAssetId":"CHAR-001"},{"logicalAssetId":"COSTUME-001","parentLogicalAssetId":"CHAR-001","variantType":"costume","variantName":"另一个名称"}]}`),
+		&report,
+	)
+	if report.Passed {
+		t.Fatal("expected changed character variant relationship to fail")
+	}
+	if report.Issues[len(report.Issues)-1].Code != "changed_asset_relationship" {
 		t.Fatalf("issues=%+v", report.Issues)
 	}
 }
@@ -289,6 +339,11 @@ func approveWorkflowStageForTest(t *testing.T, detail WorkflowRunDetail, stageID
 	artifact, _, _ := repository.GetUserWorkflowArtifact("user-1", stage.OutputArtifactID)
 	if _, err := ReviewWorkflowStage("user-1", stage.ID, WorkflowReviewInput{Decision: "approved", ArtifactHash: artifact.ContentHash}); err != nil {
 		t.Fatalf("approve %s: %v", stageID, err)
+	}
+	if stageID == WorkflowStageAssetImagePrompt {
+		if _, err := ApplyWorkflowStage("user-1", stage.ID, WorkflowApplyInput{ArtifactHash: artifact.ContentHash, Target: "asset_store", TargetIDs: []string{"asset-1"}, AppliedCount: 1, Version: "test-v1"}); err != nil {
+			t.Fatalf("apply %s: %v", stageID, err)
+		}
 	}
 	return mustWorkflowDetailForTest(t, detail.Run.ID)
 }

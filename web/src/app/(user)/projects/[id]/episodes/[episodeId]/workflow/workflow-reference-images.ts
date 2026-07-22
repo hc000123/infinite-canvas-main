@@ -5,6 +5,9 @@ export type WorkflowReferenceImage = {
     id: string;
     kind: "character" | "scene" | "prop";
     label: string;
+    logicalAssetId?: string;
+    parentLogicalAssetId?: string;
+    variantName?: string;
     version: string;
 };
 
@@ -20,7 +23,16 @@ export function workflowReferenceImages(assets: Asset[], projectId: string, epis
             const sourceEpisodeId = readString(source?.episode) || readString(source?.sourceEpisodeId);
             const kind = normalizeReferenceKind(readString(source?.kind) || readString(source?.type));
             if (sourceProjectId !== projectId || sourceEpisodeId !== episodeId || !kind) return [];
-            return [{ asset, id: asset.id, kind, label: readString(source?.name) || asset.title, version: readString(source?.version) || asset.updatedAt }];
+            return [{
+                asset,
+                id: asset.id,
+                kind,
+                label: readString(source?.name) || asset.title,
+                logicalAssetId: readString(source?.logicalAssetId) || undefined,
+                parentLogicalAssetId: readString(source?.parentLogicalAssetId) || undefined,
+                variantName: readString(source?.variantName) || undefined,
+                version: readString(source?.version) || asset.updatedAt,
+            }];
         })
         .sort((left, right) => KIND_ORDER[left.kind] - KIND_ORDER[right.kind] || left.label.localeCompare(right.label, "zh-CN") || left.id.localeCompare(right.id))
         .slice(0, 9);

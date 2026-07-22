@@ -49,3 +49,15 @@ test("rejects malformed art artifact rows", () => {
     assert.equal(result.items.length, 0);
     assert.equal(result.warnings.length, 1);
 });
+
+test("preserves character variant relationship", () => {
+    const artifact = JSON.stringify({ items: [
+        { logicalAssetId: "CHAR-001", kind: "character", name: "林秋", scriptEvidence: "林秋", description: "六十岁女性", imagePrompt: "角色设定", status: "ready" },
+        { logicalAssetId: "COSTUME-001", kind: "costume", name: "旧棉衣", scriptEvidence: "穿旧棉衣", description: "褪色棉衣", imagePrompt: "旧棉衣造型", status: "ready", parentLogicalAssetId: "CHAR-001", variantType: "costume", variantName: "旧棉衣" },
+    ] });
+    const result = mapAssetDesignArtifactToAssets(artifact, [], { episodeId: "e1", projectId: "p1" });
+
+    assert.equal(result.items[1].parentLogicalAssetId, "CHAR-001");
+    assert.equal(result.items[1].variantType, "costume");
+    assert.equal(result.items[1].variantName, "旧棉衣");
+});

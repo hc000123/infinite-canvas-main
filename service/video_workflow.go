@@ -476,6 +476,9 @@ func workflowStageInputArtifact(detail WorkflowRunDetail, stageID string) (model
 		message = "请先批准分镜拆解阶段"
 	}
 	stage := workflowDetailStage(detail, dependency)
+	if stageID == WorkflowStageShotBreakdown && stage.Status != model.WorkflowStageRunStatusApplied {
+		return model.WorkflowArtifact{}, safeMessageError{message: "请先生成并绑定全部资产图"}
+	}
 	if stage.Status != model.WorkflowStageRunStatusApproved && stage.Status != model.WorkflowStageRunStatusApplied {
 		return model.WorkflowArtifact{}, safeMessageError{message: message}
 	}
@@ -490,9 +493,9 @@ func workflowStageInputArtifact(detail WorkflowRunDetail, stageID string) (model
 func workflowStagePrompts(run model.WorkflowRun, stageID string, input model.WorkflowArtifact, context *WorkflowShotPromptContext) (string, string) {
 	switch stageID {
 	case WorkflowStageAssetExtraction:
-		return "你是影视资产提取师。只从剧本提取需要保持一致的角色、场景、道具和服装，不生成生图提示词。只输出 JSON：items[].logicalAssetId/kind/name/scriptEvidence/description。logicalAssetId 必须严格匹配 ^(CHAR|SCENE|PROP|COSTUME)-\\d{3}$，例如 CHAR-001、SCENE-001，中间的连字符 - 不得省略；kind 只能是 character/scene/prop/costume。证据不足不得猜测。", fmt.Sprintf("工作流版本：%s\n已确认生产剧本：\n%s", run.WorkflowVersion, run.ScriptSnapshot)
+		return "你是影视资产提取师。只从剧本提取需要保持一致的角色、场景、道具和角色外观马甲，不生成生图提示词。只输出 JSON：items[].logicalAssetId/kind/name/scriptEvidence/description；服装、发型、妆容、年龄阶段和受伤状态统一使用 kind=costume，并额外输出 parentLogicalAssetId/variantType/variantName。logicalAssetId 必须严格匹配 ^(CHAR|SCENE|PROP|COSTUME)-\\d{3}$；parentLogicalAssetId 必须指向当前 items 中的 CHAR-xxx；variantType 只能是 costume/hair/makeup/age/injury/other。证据不足不得猜测。", fmt.Sprintf("工作流版本：%s\n已确认生产剧本：\n%s", run.WorkflowVersion, run.ScriptSnapshot)
 	case WorkflowStageAssetImagePrompt:
-		return "你是影视资产生图提示词设计师。逐项保留上游 logicalAssetId/kind/name/scriptEvidence/description，新增可直接交给图片模型的 imagePrompt 和 status=ready；不得新增、遗漏、合并或重编号资产。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准资产提取：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
+		return "你是影视资产生图提示词设计师。逐项保留上游 logicalAssetId/kind/name/scriptEvidence/description，以及角色马甲的 parentLogicalAssetId/variantType/variantName，新增可直接交给图片模型的 imagePrompt 和 status=ready；不得新增、遗漏、合并或重编号资产。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准资产提取：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
 	case WorkflowStageShotBreakdown:
 		return "你是影视导演与分镜拆解师。只输出可供用户修改确认的结构化分镜，不生成最终视频提示词。JSON 必须包含 shots[].shotId/sceneKey/sourceScript/shotDraft；shotId 使用 shot-001 格式，sceneKey 使用 scene-001 格式；shotDraft 必须完整包含 shotSize/camera/movement/action/performance/dialogue/durationSeconds/continuityMode，durationSeconds 为 4–15 数字，continuityMode 只能是 continuous 或 cut。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准资产设计：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
 	default:
@@ -597,7 +600,35 @@ func validateWorkflowAssetIdentity(input []byte, output []byte, report *Workflow
 			report.add("unexpected_asset_id", "生图提示词产物新增或重编了资产 ID", id)
 		}
 	}
+	inputItems := workflowArtifactItemsByID(input)
+	outputItems := workflowArtifactItemsByID(output)
+	for id, inputItem := range inputItems {
+		outputItem, ok := outputItems[id]
+		if !ok {
+			continue
+		}
+		for _, field := range []string{"parentLogicalAssetId", "variantType", "variantName"} {
+			if workflowString(inputItem, field) != workflowString(outputItem, field) {
+				report.add("changed_asset_relationship", "生图提示词产物改变了角色马甲关系", id)
+				break
+			}
+		}
+	}
 	*report = report.finish()
+}
+
+func workflowArtifactItemsByID(content []byte) map[string]map[string]any {
+	var payload map[string]any
+	if json.Unmarshal(content, &payload) != nil {
+		return map[string]map[string]any{}
+	}
+	result := map[string]map[string]any{}
+	for _, item := range workflowItems(payload, "items") {
+		if id := workflowString(item, "logicalAssetId"); id != "" {
+			result[id] = item
+		}
+	}
+	return result
 }
 
 func workflowArtifactIDs(content []byte, collectionKey string, idKey string) map[string]bool {

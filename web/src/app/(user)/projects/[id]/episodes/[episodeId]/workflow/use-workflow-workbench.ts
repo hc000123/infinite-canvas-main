@@ -14,6 +14,7 @@ import { useUserStore } from "@/stores/use-user-store";
 
 import { normalizeWorkflowRouteState, workflowRouteSearch, type WorkflowStageKey } from "./workflow-route-state";
 import { summarizeWorkflowStages } from "./workflow-stage-summary";
+import type { WorkflowStageView } from "./workflow-view-types";
 
 export function useWorkflowWorkbench(projectId: string, episodeId: string) {
     const searchParams = useSearchParams();
@@ -104,7 +105,7 @@ export function useWorkflowWorkbench(projectId: string, episodeId: string) {
             }),
         [detail?.stages, health?.ready, packages, scriptSnapshot],
     );
-    const completedCount = stageViews.filter((stage) => ["approved", "applied", "complete"].includes(stage.status)).length;
+    const completedCount = stageViews.filter(workflowViewStageComplete).length;
     const blockerCount = stageViews.filter((stage) => ["blocked", "failed", "rejected"].includes(stage.status)).length;
 
     const selectRoute = useCallback(
@@ -117,7 +118,7 @@ export function useWorkflowWorkbench(projectId: string, episodeId: string) {
     );
     const continueNext = useCallback(() => {
         const currentIndex = stageViews.findIndex((stage) => stage.key === routeState.stage);
-        const next = stageViews.find((stage, index) => index > currentIndex && !["approved", "applied", "complete"].includes(stage.status)) || stageViews.find((stage) => !["approved", "applied", "complete"].includes(stage.status));
+        const next = stageViews.find((stage, index) => index > currentIndex && !workflowViewStageComplete(stage)) || stageViews.find((stage) => !workflowViewStageComplete(stage));
         if (next) selectRoute(next.key);
     }, [routeState.stage, selectRoute, stageViews]);
 
@@ -143,6 +144,10 @@ export function useWorkflowWorkbench(projectId: string, episodeId: string) {
         selectedPackage,
         stageViews,
     };
+}
+
+function workflowViewStageComplete(stage: WorkflowStageView) {
+    return stage.key === "assets" ? ["applied", "complete"].includes(stage.status) : ["approved", "applied", "complete"].includes(stage.status);
 }
 
 function packageRouteStatus(item: ReturnType<typeof useVideoPackageStore.getState>["importedPackages"][number]) {

@@ -8,6 +8,9 @@ export type WorkflowArtItem = {
     imagePrompt: string;
     prompt: string;
     status: string;
+    parentLogicalAssetId: string;
+    variantType: "costume" | "hair" | "makeup" | "age" | "injury" | "other" | "";
+    variantName: string;
 };
 
 export type WorkflowArtifactAsset = { id: string; kind: string; metadata?: Record<string, unknown>; title: string };
@@ -56,11 +59,18 @@ function parseAssetItems(contentJson: string): WorkflowArtItem[] {
                 imagePrompt,
                 prompt: imagePrompt,
                 status: readString(row.status) || "ready",
+                parentLogicalAssetId: readString(row.parentLogicalAssetId),
+                variantType: normalizeVariantType(readString(row.variantType)),
+                variantName: readString(row.variantName),
             };
         });
     } catch {
         return [];
     }
+}
+
+function normalizeVariantType(value: string): WorkflowArtItem["variantType"] {
+    return ["costume", "hair", "makeup", "age", "injury", "other"].includes(value) ? (value as WorkflowArtItem["variantType"]) : "";
 }
 
 function readWorkflowMetadata(metadata?: Record<string, unknown>) {
