@@ -39,6 +39,7 @@ func New() *gin.Engine {
 		handler.ReviewAgentRun(c.Writer, c.Request, c.Param("id"))
 	})
 	v1.POST("/workflow-runs", gin.WrapF(handler.EnsureWorkflowRun))
+	v1.GET("/workflow-skill-options", gin.WrapF(handler.WorkflowSkillOptions))
 	v1.GET("/workflow-runs/:id", func(c *gin.Context) {
 		handler.WorkflowRun(c.Writer, c.Request, c.Param("id"))
 	})

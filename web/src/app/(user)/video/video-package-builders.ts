@@ -48,7 +48,7 @@ export function workflowPromptInputHash(item: ProductionPackage) {
     const payload = JSON.stringify({
         continuityVersion: item.continuityReference?.version || "",
         references: [...(item.referenceBindings || [])]
-            .map(({ logicalAssetId, libraryAssetId, version, usage }) => ({ logicalAssetId: cleanHashText(logicalAssetId), libraryAssetId: cleanHashText(libraryAssetId), version: cleanHashText(version), usage: cleanHashText(usage) }))
+            .map(({ role, logicalAssetId, libraryAssetId, version, usage }) => ({ role, logicalAssetId: cleanHashText(logicalAssetId || ""), libraryAssetId: cleanHashText(libraryAssetId), version: cleanHashText(version), usage: cleanHashText(usage) }))
             .sort((left, right) => `${left.logicalAssetId}:${left.libraryAssetId}`.localeCompare(`${right.logicalAssetId}:${right.libraryAssetId}`)),
         shotDraft: normalizeHashRecord(item.shotDraft),
         sourceScript: cleanHashText(item.sourceScript || ""),

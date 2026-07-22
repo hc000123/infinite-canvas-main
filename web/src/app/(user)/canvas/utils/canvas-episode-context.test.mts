@@ -81,6 +81,13 @@ test("script snapshot remains stable after the original episode changes", () => 
     assert.equal(canvasEpisodeContextFromCanvas({ episodeId: original.id, episodeTitle: original.title, scriptId: "project-1", scriptSnapshot: snapshot })?.scriptSnapshot, snapshot);
 });
 
+test("script snapshot prefers the editable original script", () => {
+    const sourceEpisode = { ...episode("episode-1", "第一集"), sourceSummary: "完整原剧本", summary: "旧优化稿" };
+    const snapshot = buildEpisodeScriptSnapshot(sourceEpisode);
+    assert.match(snapshot, /完整原剧本/);
+    assert.doesNotMatch(snapshot, /旧优化稿/);
+});
+
 function episode(id: string, title: string): ScriptEpisode {
     return {
         id,

@@ -5,6 +5,7 @@ import { Alert, App, Button, Empty, Image, Segmented, Spin } from "antd";
 import { CheckCircle2, Library, RefreshCw, TriangleAlert, WandSparkles } from "lucide-react";
 
 import { workflowAssetPrompt } from "@/app/(user)/assets/workflow-asset-image";
+import { AssetPickerModal, type InsertAssetPayload } from "@/app/(user)/canvas/components/asset-picker-modal";
 import { applyWorkflowStage, type RemoteWorkflowArtifact, type RemoteWorkflowStageRun } from "@/services/api/workflow-runs";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 
@@ -14,6 +15,7 @@ import { buildWorkflowAssetCards, defaultWorkflowAssetSelection, workflowAssetCa
 import { startBackgroundTask } from "../workflow-background-task";
 import { mapAssetDesignArtifactToAssets } from "../workflow-artifact-mapping";
 import { WorkflowAssetCard } from "./workflow-asset-card";
+import { workflowAssetFileImportPatch, workflowAssetLibraryImportPatch, workflowAssetRemoteImportPatch } from "../workflow-asset-import";
 
 export function WorkflowAssetPanel(props: {
     artifact: RemoteWorkflowArtifact | null;
@@ -29,6 +31,10 @@ export function WorkflowAssetPanel(props: {
     const [applying, setApplying] = useState(false);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [failed, setFailed] = useState<Record<string, string>>({});
+    const [importTarget, setImportTarget] = useState<{ asset: Asset; logicalAssetId: string } | null>(null);
+    const [pickerOpen, setPickerOpen] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const fileInput = useRef<HTMLInputElement>(null);
     const selectionForArtifact = useRef("");
     const assets = useAssetStore((state) => state.assets);
     const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
@@ -168,6 +174,35 @@ export function WorkflowAssetPanel(props: {
         });
     };
     const selectedAssets = variants.flatMap((variant) => (variant.asset && selectedIds.includes(variant.logicalAssetId) && workflowAssetPrompt(variant.asset) ? [variant.asset] : []));
+    const finishImport = (patch: Parameters<typeof updateAsset>[1]) => {
+        if (!importTarget) return;
+        updateAsset(importTarget.asset.id, patch);
+        setSelectedIds((ids) => ids.filter((id) => id !== importTarget.logicalAssetId));
+        message.success(`已导入并绑定 ${importTarget.logicalAssetId}`);
+        setImportTarget(null);
+        setPickerOpen(false);
+    };
+    const startImport = (asset: Asset, logicalAssetId: string, source: "local" | "library") => {
+        setImportTarget({ asset, logicalAssetId });
+        if (source === "local") fileInput.current?.click();
+        else setPickerOpen(true);
+    };
+    const importFile = async (file?: File) => {
+        if (!file || !importTarget) return;
+        setImporting(true);
+        try { finishImport(await workflowAssetFileImportPatch(importTarget.asset, file, file.name)); }
+        catch (error) { message.error(error instanceof Error ? error.message : "图片导入失败"); }
+        finally { setImporting(false); if (fileInput.current) fileInput.current.value = ""; }
+    };
+    const importPicked = async (payload: InsertAssetPayload) => {
+        if (!importTarget || payload.kind !== "image") return message.warning("请选择图片素材");
+        setImporting(true);
+        try {
+            const source = payload.sourceAssetId ? useAssetStore.getState().assets.find((item): item is Extract<Asset, { kind: "image" }> => item.id === payload.sourceAssetId && item.kind === "image") : undefined;
+            finishImport(source ? workflowAssetLibraryImportPatch(importTarget.asset, source) : await workflowAssetRemoteImportPatch(importTarget.asset, payload.dataUrl, payload.title));
+        } catch (error) { message.error(error instanceof Error ? error.message : "素材导入失败"); }
+        finally { setImporting(false); }
+    };
 
     return (
         <div className="space-y-4">
@@ -226,6 +261,7 @@ export function WorkflowAssetPanel(props: {
                                 failed={failed}
                                 generatingIds={imageActions.generatingIds}
                                 onGenerate={(asset) => confirmGenerate([asset])}
+                                onImport={startImport}
                                 onSave={saveVariant}
                                 onSelectionChange={setVariantSelected}
                                 selectedIds={selectedIds}
@@ -240,6 +276,8 @@ export function WorkflowAssetPanel(props: {
                     请先修正有警告的资产，再开始生成。
                 </div>
             ) : null}
+            <input ref={fileInput} className="hidden" type="file" accept="image/*" disabled={importing} onChange={(event) => void importFile(event.target.files?.[0])} />
+            <AssetPickerModal open={pickerOpen} title={`导入并绑定 ${importTarget?.logicalAssetId || "资产"}`} defaultKind="image" allowedKinds={["image"]} onInsert={(payload) => void importPicked(payload)} onClose={() => { setPickerOpen(false); setImportTarget(null); }} />
         </div>
     );
 }

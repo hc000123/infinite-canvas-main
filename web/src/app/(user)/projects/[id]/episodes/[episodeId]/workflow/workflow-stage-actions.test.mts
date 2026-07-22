@@ -26,3 +26,7 @@ test("failed shot prompts can start fresh while active reviews stay frozen", () 
     assert.equal(canStartFreshShotPrompt("needs_review"), false);
     assert.equal(canStartFreshShotPrompt("running"), false);
 });
+
+test("shot breakdown can start from a confirmed script without asset images", () => {
+    assert.equal(workflowStageActions({ hasArtifact: false, status: "ready" }, false).canStart, true);
+});

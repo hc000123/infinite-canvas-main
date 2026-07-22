@@ -54,7 +54,7 @@ func TestWorkflowV2UsesAssetAndShotSubtasks(t *testing.T) {
 	if stage := workflowTestStage(detail, WorkflowStageAssetImagePrompt); stage.Status != model.WorkflowStageRunStatusBlocked {
 		t.Fatalf("asset image prompt=%#v", stage)
 	}
-	if stage := workflowTestStage(detail, WorkflowStageShotBreakdown); stage.Status != model.WorkflowStageRunStatusBlocked {
+	if stage := workflowTestStage(detail, WorkflowStageShotBreakdown); stage.Status != model.WorkflowStageRunStatusReady {
 		t.Fatalf("shot breakdown=%#v", stage)
 	}
 	if stage := workflowTestStage(detail, WorkflowStageShotPrompt); stage.Status != model.WorkflowStageRunStatusBlocked {
@@ -62,12 +62,12 @@ func TestWorkflowV2UsesAssetAndShotSubtasks(t *testing.T) {
 	}
 }
 
-func TestStoryboardStageRequiresApprovedAssets(t *testing.T) {
+func TestWorkflowShotBreakdownStartsFromConfirmedScript(t *testing.T) {
 	setupVideoWorkflowTest(t)
 	run := ensureVideoWorkflowTestRun(t)
-	_, err := StartWorkflowStage("user-1", run.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard")
-	if err == nil || !strings.Contains(err.Error(), "资产") {
-		t.Fatalf("err=%v", err)
+	stage, err := StartWorkflowStage("user-1", run.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard")
+	if err != nil || stage.Status != model.WorkflowStageRunStatusQueued {
+		t.Fatalf("stage=%#v err=%v", stage, err)
 	}
 }
 
@@ -160,13 +160,14 @@ func TestAppliedAssetImagesUnlockStoryboard(t *testing.T) {
 	if _, err := ReviewWorkflowStage("user-1", assetStage.ID, WorkflowReviewInput{Decision: "approved", ArtifactHash: assetArtifact.ContentHash}); err != nil {
 		t.Fatalf("approve assets: %v", err)
 	}
-	if _, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard-too-early"); err == nil || !strings.Contains(err.Error(), "绑定全部资产图") {
-		t.Fatalf("storyboard should remain blocked before asset images are applied: %v", err)
+	storyboard, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard-parallel")
+	if err != nil || storyboard.Status != model.WorkflowStageRunStatusQueued {
+		t.Fatalf("storyboard should run independently from asset images: %#v err=%v", storyboard, err)
 	}
 	if _, err := ApplyWorkflowStage("user-1", assetStage.ID, WorkflowApplyInput{ArtifactHash: assetArtifact.ContentHash, Target: "asset_store", TargetIDs: []string{"asset-1"}, AppliedCount: 1, Version: "local-v1"}); err != nil {
 		t.Fatalf("apply asset images: %v", err)
 	}
-	storyboard, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard-approved")
+	storyboard, err = StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard-approved")
 	if err != nil || storyboard.Status != model.WorkflowStageRunStatusQueued {
 		t.Fatalf("storyboard=%#v err=%v", storyboard, err)
 	}
@@ -183,7 +184,7 @@ func TestShotPromptRequiresConfirmedBoundedContext(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "镜头上下文") {
 		t.Fatalf("missing context err=%v", err)
 	}
-	context := json.RawMessage(`{"shotId":"shot-001","sourceScript":"阿宁进入房间。","shotDraft":{"shotSize":"中景","camera":"固定机位","movement":"缓慢推近","action":"阿宁进入房间","performance":"克制","dialogue":"","durationSeconds":6,"continuityMode":"continuous"},"promptInputHash":"wf2-test","references":[{"logicalAssetId":"CHAR-001","libraryAssetId":"asset-1","version":"v1","usage":"角色一致性"}]}`)
+	context := json.RawMessage(`{"shotId":"shot-001","sourceScript":"阿宁进入房间。","shotDraft":{"shotSize":"中景","camera":"固定机位","movement":"缓慢推近","action":"阿宁进入房间","performance":"克制","dialogue":"","durationSeconds":6,"continuityMode":"continuous"},"promptInputHash":"wf2-test","references":[{"role":"character","label":"阿宁","logicalAssetId":"CHAR-001","libraryAssetId":"asset-1","version":"v1","usage":"角色一致性"}]}`)
 	stage, err := StartWorkflowStageWithInput("user-1", detail.Run.ID, WorkflowStageShotPrompt, WorkflowStageStartInput{IdempotencyKey: "shot-prompt-valid", Context: context})
 	if err != nil || stage.Status != model.WorkflowStageRunStatusQueued {
 		t.Fatalf("stage=%#v err=%v", stage, err)
