@@ -26,7 +26,8 @@
 | ---- | ---- |
 | `POST /workflow-runs` | 按项目、分集、工作流版本和剧本哈希幂等创建运行记录 |
 | `GET /workflow-runs/:id` | 返回最新阶段、版本化产物、质量门和底层任务摘要 |
-| `POST /workflow-runs/:id/stages/:stageId/start` | 校验依赖并使用 `idempotencyKey` 异步入队 |
+| `GET /workflow-skill-options` | 按 `stageId` 和 `projectId` 返回当前用户可选择的已发布 Skill 版本 |
+| `POST /workflow-runs/:id/stages/:stageId/start` | 校验依赖并使用 `idempotencyKey` 异步入队，可通过 `skillVersionId` 覆盖本次运行版本 |
 | `POST /workflow-runs/:id/media-batches` | 为美术或分镜阶段创建绑定启动幂等键的一次性参考图批次 |
 | `POST /workflow-media-batches/:id/items` | 以 multipart 上传角色 / 场景 / 道具参考图，最多 9 张 |
 | `GET /workflow-media-batches/:id` | 返回批次状态与安全化图片元数据，不返回服务端路径 |

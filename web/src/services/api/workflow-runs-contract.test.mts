@@ -15,3 +15,10 @@ test("starts a shot prompt stage with media and confirmed-shot context", () => {
         body: { idempotencyKey: "idem-1", mediaBatchId: "batch-1", context },
     });
 });
+
+test("starts an extraction stage with an explicit skill version", () => {
+    assert.deepEqual(workflowRunRequest.startStage("run-1", "asset-extraction", "idem-2", { skillVersionId: "skill-version-2" }), {
+        path: "/api/v1/workflow-runs/run-1/stages/asset-extraction/start",
+        body: { idempotencyKey: "idem-2", skillVersionId: "skill-version-2" },
+    });
+});

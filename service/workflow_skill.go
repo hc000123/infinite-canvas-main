@@ -74,6 +74,16 @@ type WorkflowSkillAdminItem struct {
 	Audits      []model.WorkflowSkillAuditLog     `json:"audits"`
 }
 
+type WorkflowSkillOption struct {
+	StageID        string `json:"stageId"`
+	SkillID        string `json:"skillId"`
+	SkillName      string `json:"skillName"`
+	Description    string `json:"description"`
+	SkillVersionID string `json:"skillVersionId"`
+	Version        string `json:"version"`
+	IsDefault      bool   `json:"isDefault"`
+}
+
 func ListWorkflowSkillAdminItems() ([]WorkflowSkillAdminItem, error) {
 	if err := EnsureWorkflowSkillSeeds(); err != nil {
 		return nil, err
@@ -268,6 +278,54 @@ func ResolvePublishedWorkflowSkill(stageKey string, projectID string) (ResolvedW
 	}
 	packageValue, err := DecodeWorkflowSkillPackage(version)
 	return ResolvedWorkflowSkill{Skill: skill, Version: version, Package: packageValue, Binding: binding}, err
+}
+
+func ListWorkflowSkillOptions(stageID string, projectID string) ([]WorkflowSkillOption, error) {
+	if err := EnsureWorkflowSkillSeeds(); err != nil {
+		return nil, err
+	}
+	stageKey := workflowSkillStageForRun(stageID)
+	skill, ok, err := repository.FindWorkflowSkillByStage(stageKey)
+	if err != nil {
+		return nil, err
+	}
+	if !ok || !skill.Enabled {
+		return nil, safeMessageError{message: "当前阶段没有可用 Skill"}
+	}
+	resolved, err := ResolvePublishedWorkflowSkill(stageKey, projectID)
+	if err != nil {
+		return nil, err
+	}
+	versions, err := repository.ListWorkflowSkillVersions(skill.ID)
+	if err != nil {
+		return nil, err
+	}
+	options := make([]WorkflowSkillOption, 0, len(versions))
+	for _, version := range versions {
+		if version.Status != model.WorkflowSkillVersionPublished {
+			continue
+		}
+		options = append(options, WorkflowSkillOption{
+			StageID: stageID, SkillID: skill.ID, SkillName: skill.Name, Description: skill.Description,
+			SkillVersionID: version.ID, Version: version.Version, IsDefault: version.ID == resolved.Version.ID,
+		})
+	}
+	return options, nil
+}
+
+func ResolveWorkflowSkillForStage(stageID string, projectID string, versionID string) (ResolvedWorkflowSkill, error) {
+	if strings.TrimSpace(versionID) == "" {
+		return ResolvePublishedWorkflowSkill(workflowSkillStageForRun(stageID), projectID)
+	}
+	skill, version, ok, err := repository.GetWorkflowSkillWithVersion(strings.TrimSpace(versionID))
+	if err != nil {
+		return ResolvedWorkflowSkill{}, err
+	}
+	if !ok || !skill.Enabled || version.Status != model.WorkflowSkillVersionPublished || skill.StageKey != workflowSkillStageForRun(stageID) {
+		return ResolvedWorkflowSkill{}, safeMessageError{message: "所选 Skill 版本不可用于当前阶段"}
+	}
+	packageValue, err := DecodeWorkflowSkillPackage(version)
+	return ResolvedWorkflowSkill{Skill: skill, Version: version, Package: packageValue}, err
 }
 
 func PublishWorkflowSkillVersion(adminID string, versionID string, input WorkflowSkillPublishInput) (ResolvedWorkflowSkill, error) {

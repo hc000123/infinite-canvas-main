@@ -28,6 +28,7 @@ const (
 type WorkflowStageStartInput struct {
 	IdempotencyKey string          `json:"idempotencyKey"`
 	MediaBatchID   string          `json:"mediaBatchId"`
+	SkillVersionID string          `json:"skillVersionId"`
 	Context        json.RawMessage `json:"context"`
 }
 

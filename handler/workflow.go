@@ -11,7 +11,21 @@ import (
 type workflowCommandInput struct {
 	IdempotencyKey string          `json:"idempotencyKey"`
 	MediaBatchID   string          `json:"mediaBatchId"`
+	SkillVersionID string          `json:"skillVersionId"`
 	Context        json.RawMessage `json:"context"`
+}
+
+func WorkflowSkillOptions(w http.ResponseWriter, r *http.Request) {
+	if _, ok := service.UserFromContext(r.Context()); !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	result, err := service.ListWorkflowSkillOptions(r.URL.Query().Get("stageId"), r.URL.Query().Get("projectId"))
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
 }
 
 func EnsureWorkflowRun(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +70,7 @@ func StartWorkflowStage(w http.ResponseWriter, r *http.Request, workflowRunID st
 	if !decodeWorkflowBody(w, r, &input, 320<<10) {
 		return
 	}
-	result, err := service.StartWorkflowStageWithInput(user.ID, workflowRunID, stageID, service.WorkflowStageStartInput{IdempotencyKey: input.IdempotencyKey, MediaBatchID: input.MediaBatchID, Context: input.Context})
+	result, err := service.StartWorkflowStageWithInput(user.ID, workflowRunID, stageID, service.WorkflowStageStartInput{IdempotencyKey: input.IdempotencyKey, MediaBatchID: input.MediaBatchID, SkillVersionID: input.SkillVersionID, Context: input.Context})
 	if err != nil {
 		FailError(w, err)
 		return

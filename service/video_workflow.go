@@ -200,7 +200,7 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, inp
 		if err := EnsureWorkflowSkillSeeds(); err != nil {
 			return current, err
 		}
-		resolvedSkill, err := ResolvePublishedWorkflowSkill(workflowSkillStageForRun(stageID), detail.Run.ProjectID)
+		resolvedSkill, err := ResolveWorkflowSkillForStage(stageID, detail.Run.ProjectID, input.SkillVersionID)
 		if err != nil {
 			return current, err
 		}
