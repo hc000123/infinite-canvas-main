@@ -36,7 +36,7 @@ export default function EpisodeWorkflowPage() {
     const [selectedReferenceIds, setSelectedReferenceIds] = useState<string[]>([]);
     const assets = useAssetStore((state) => state.assets);
     const workbench = useWorkflowWorkbench(params.id, params.episodeId);
-    const remoteStageId = workbench.routeState.stage === "art" || workbench.routeState.stage === "assets" ? "art-design" : workbench.routeState.stage === "storyboard" ? "seedance-storyboard" : "";
+    const remoteStageId = workbench.routeState.stage === "art" ? "art-design" : workbench.routeState.stage === "assets" ? "asset-generation" : workbench.routeState.stage === "storyboard" ? "seedance-storyboard" : "";
     const stageActions = useWorkflowStageActions({ detail: workbench.detail, refresh: workbench.refreshRemote, stageId: remoteStageId });
     const videoActions = useWorkflowVideoActions(workbench.packages);
     const referenceImages = useMemo(() => workflowReferenceImages(assets, params.id, params.episodeId), [assets, params.episodeId, params.id]);
@@ -68,7 +68,7 @@ export default function EpisodeWorkflowPage() {
     const startCurrentStage = async () => {
         if (!stageActions.start || preparingStage) return;
         const selectedReferences = referenceImages.filter((item) => selectedReferenceIds.includes(item.id));
-        if (workbench.routeState.stage !== "storyboard" || !selectedReferences.length || !workbench.detail) {
+        if (!["assets", "storyboard"].includes(workbench.routeState.stage) || !selectedReferences.length || !workbench.detail) {
             await stageActions.start();
             return;
         }
@@ -93,13 +93,14 @@ export default function EpisodeWorkflowPage() {
     };
 
     const confirmStageStart = () => {
-        const selectedCount = workbench.routeState.stage === "storyboard" ? selectedReferenceIds.length : 0;
+        const acceptsReferences = ["assets", "storyboard"].includes(workbench.routeState.stage);
+        const selectedCount = acceptsReferences ? selectedReferenceIds.length : 0;
         const local = workbench.health?.executor === "codex-cli";
         modal.confirm({
             title: `启动${activeStage.label}？`,
             content: selectedCount
                 ? `将冻结并理解 ${selectedCount} 张参考图，再生成提示词。${local ? "本地 Codex 验证不扣应用算力点。" : "线上多模态 API 将按实际模型计费。"}`
-                : `${workbench.routeState.stage === "storyboard" ? "当前未选择参考图，将明确降级为纯文本生成。" : "任务将进入持久化执行队列。"}${local ? "本地 Codex 验证不扣应用算力点。" : `当前预估：${stageActions.stage?.estimatedCredits || "由任务创建时计算"}。`}`,
+                : `${acceptsReferences ? "当前未选择参考图，将明确降级为纯文本生成。" : "任务将进入持久化执行队列。"}${local ? "本地 Codex 验证不扣应用算力点。" : `当前预估：${stageActions.stage?.estimatedCredits || "由任务创建时计算"}。`}`,
             okText: selectedCount ? "确认并上传参考图" : "确认启动",
             cancelText: "取消",
             onOk: startCurrentStage,
@@ -189,7 +190,7 @@ export default function EpisodeWorkflowPage() {
                     <WorkflowRunConsole agentRun={currentAgentRun} events={workbench.events} health={workbench.health} stage={stageActions.stage} />
                 )}
             </div>
-            <Drawer title="分镜队列" placement="left" width={340} open={queueOpen} onClose={() => setQueueOpen(false)} styles={{ body: { padding: 0, overflow: "hidden" } }}>
+            <Drawer title="分镜队列" placement="left" size={340} open={queueOpen} onClose={() => setQueueOpen(false)} styles={{ body: { padding: 0, overflow: "hidden" } }}>
                 <div className="h-full [&>aside]:!flex [&>aside]:h-full">
                     <WorkflowShotQueue
                         packages={workbench.packages}
@@ -201,7 +202,7 @@ export default function EpisodeWorkflowPage() {
                     />
                 </div>
             </Drawer>
-            <Drawer title="结果与运行" placement="right" width={360} open={consoleOpen} onClose={() => setConsoleOpen(false)} styles={{ body: { padding: 0, overflow: "hidden" } }}>
+            <Drawer title="结果与运行" placement="right" size={360} open={consoleOpen} onClose={() => setConsoleOpen(false)} styles={{ body: { padding: 0, overflow: "hidden" } }}>
                 <div className="h-full [&>aside]:!flex [&>aside]:h-full">
                     {workbench.routeState.stage === "video" || workbench.routeState.stage === "delivery" ? (
                         <WorkflowVideoConsole actions={videoActions} item={workbench.selectedPackage} />
@@ -262,7 +263,16 @@ function StageWorkspace({
             </Panel>
         );
     if (stage === "art") return <WorkflowStagePanel executorLabel={executorLabel} label="导演与美术" preparing={preparingStage} state={stageActions} workerReady={workerReady} onConfirmStart={onConfirmStart} onConfirmReject={onConfirmReject} />;
-    if (stage === "assets") return <WorkflowAssetPanel artifact={stageActions.artifact} episodeId={episodeId} onApplied={onApplied} projectId={projectId} projectTitle={projectTitle} stage={stageActions.stage} />;
+    if (stage === "assets")
+        return (
+            <div className="space-y-3">
+                <WorkflowReferenceImagePanel images={referenceImages} selectedIds={selectedReferenceIds} onChange={onReferenceChange} />
+                <WorkflowStagePanel executorLabel={executorLabel} label="资产生成" preparing={preparingStage} state={stageActions} workerReady={workerReady} onConfirmStart={onConfirmStart} onConfirmReject={onConfirmReject} />
+                {stageActions.artifact && stageActions.stage && ["approved", "applied"].includes(stageActions.stage.status) ? (
+                    <WorkflowAssetPanel artifact={stageActions.artifact} episodeId={episodeId} onApplied={onApplied} projectId={projectId} projectTitle={projectTitle} stage={stageActions.stage} />
+                ) : null}
+            </div>
+        );
     if (stage === "storyboard")
         return (
             <div className="space-y-3">

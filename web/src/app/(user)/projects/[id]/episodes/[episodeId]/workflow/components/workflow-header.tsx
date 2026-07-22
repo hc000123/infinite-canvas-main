@@ -38,7 +38,7 @@ export function WorkflowHeader(props: {
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                     <div className="hidden min-w-40 items-center gap-3 lg:flex">
-                        <Progress percent={props.progress} showInfo={false} size="small" strokeColor="var(--studio-accent)" trailColor="var(--studio-panel-muted-bg)" />
+                        <Progress percent={props.progress} showInfo={false} size="small" strokeColor="var(--studio-accent)" railColor="var(--studio-panel-muted-bg)" />
                         <span className="w-9 text-right text-xs tabular-nums text-[var(--studio-text-secondary)]">{props.progress}%</span>
                     </div>
                     {props.blockerCount ? <span className="hidden items-center gap-1 text-xs text-[var(--studio-warning)] md:inline-flex"><CircleAlert className="size-3.5" />{props.blockerCount} 项待处理</span> : null}

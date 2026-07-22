@@ -63,6 +63,7 @@ func EnsureWorkflowRun(userID string, input EnsureWorkflowRunInput) (WorkflowRun
 	stages := []model.WorkflowStageRun{
 		workflowInitialStage(run, WorkflowStageScriptAdaptation, scriptStatus, stamp),
 		workflowInitialStage(run, WorkflowStageArtDesign, artStatus, stamp),
+		workflowInitialStage(run, WorkflowStageAssetGeneration, model.WorkflowStageRunStatusBlocked, stamp),
 		workflowInitialStage(run, WorkflowStageSeedanceStoryboard, model.WorkflowStageRunStatusBlocked, stamp),
 	}
 	artifacts := []model.WorkflowArtifact{}
@@ -108,8 +109,8 @@ func GetWorkflowRunDetail(userID string, id string) (WorkflowRunDetail, error) {
 			latest[stage.StageID] = stage
 		}
 	}
-	stages := make([]model.WorkflowStageRun, 0, 3)
-	for _, stageID := range []string{WorkflowStageScriptAdaptation, WorkflowStageArtDesign, WorkflowStageSeedanceStoryboard} {
+	stages := make([]model.WorkflowStageRun, 0, 4)
+	for _, stageID := range []string{WorkflowStageScriptAdaptation, WorkflowStageArtDesign, WorkflowStageAssetGeneration, WorkflowStageSeedanceStoryboard} {
 		if stage, exists := latest[stageID]; exists {
 			stages = append(stages, stage)
 		}
@@ -150,7 +151,7 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, ide
 		}
 		return current, nil
 	}
-	if stageID != WorkflowStageArtDesign && stageID != WorkflowStageSeedanceStoryboard {
+	if stageID != WorkflowStageArtDesign && stageID != WorkflowStageAssetGeneration && stageID != WorkflowStageSeedanceStoryboard {
 		return model.WorkflowStageRun{}, safeMessageError{message: "不支持的工作流阶段"}
 	}
 	if workflowStageBusyOrReviewable(current.Status) {
@@ -268,6 +269,8 @@ func CompleteWorkflowStageAgentRun(run model.AgentRun) error {
 	switch stage.StageID {
 	case WorkflowStageArtDesign:
 		report = ValidateArtDesignArtifact(content)
+	case WorkflowStageAssetGeneration:
+		report = ValidateAssetGenerationArtifact(content)
 	case WorkflowStageSeedanceStoryboard:
 		report = ValidateStoryboardArtifact(content)
 	default:
@@ -428,9 +431,12 @@ func workflowEvent(run model.WorkflowRun, stage model.WorkflowStageRun, eventTyp
 func workflowStageInputArtifact(detail WorkflowRunDetail, stageID string) (model.WorkflowArtifact, error) {
 	dependency := WorkflowStageScriptAdaptation
 	message := "请先确认生产剧本"
-	if stageID == WorkflowStageSeedanceStoryboard {
+	if stageID == WorkflowStageAssetGeneration {
 		dependency = WorkflowStageArtDesign
 		message = "请先批准美术设计阶段"
+	} else if stageID == WorkflowStageSeedanceStoryboard {
+		dependency = WorkflowStageAssetGeneration
+		message = "请先批准资产生成阶段"
 	}
 	stage := workflowDetailStage(detail, dependency)
 	if stage.Status != model.WorkflowStageRunStatusApproved && stage.Status != model.WorkflowStageRunStatusApplied {
@@ -448,12 +454,18 @@ func workflowStagePrompts(run model.WorkflowRun, stageID string, input model.Wor
 	if stageID == WorkflowStageArtDesign {
 		return "你是影视导演与美术设定师。只输出 JSON，包含 directorSummary、referenceEvidence 和 items；每个 item 必须有 id、kind、name、prompt。referenceEvidence 在无图时输出空数组；收到参考图时必须逐图写出 imageRef（@图N）、observations 和 appliedTo，证明提示词确实基于画面。不得改变剧本事实。", fmt.Sprintf("工作流版本：%s\n请根据以下已确认生产剧本生成角色、场景、道具设定：\n%s", run.WorkflowVersion, run.ScriptSnapshot)
 	}
-	return "你是 Seedance 分镜师。只输出 JSON，包含 referenceEvidence 和 shots；每个 shot 必须有 id、sceneId、prompt、duration，可选 dialogue。每条 prompt 必须是可直接生成视频的完整 Copy-only 合同，依次包含“场景：”“声音：”“画面内容：”“限制：”，画面内容必须按 0-2秒、2-4秒等连续时间段描述；禁止只写电影感摘要。referenceEvidence 在无图时输出空数组；收到参考图时必须逐图写出 imageRef（@图N）、observations 和 appliedTo，证明提示词确实基于画面。duration 必须为 4–15 秒，素材引用使用 @图N。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准美术产物：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
+	if stageID == WorkflowStageAssetGeneration {
+		return "你是影视资产制作师。只输出 JSON，包含 referenceEvidence 和 items；必须逐项完成已批准美术设定，保留 id、kind、name，输出可直接交给图片模型的 prompt，并补充 sourceAssetId 和 status=ready。不得遗漏上游资产、合并不同资产或改变剧本事实。referenceEvidence 在无图时输出空数组；收到参考图时必须逐图写出 imageRef（@图N）、observations 和 appliedTo。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准美术产物：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
+	}
+	return "你是 Seedance 分镜师。只输出 JSON，包含 referenceEvidence 和 shots；每个 shot 必须有 id、sceneId、prompt、duration，可选 dialogue。每条 prompt 必须是可直接生成视频的完整 Copy-only 合同，依次包含“场景：”“声音：”“画面内容：”“限制：”，画面内容必须按 0-2秒、2-4秒等连续时间段描述；禁止只写电影感摘要。referenceEvidence 在无图时输出空数组；收到参考图时必须逐图写出 imageRef（@图N）、observations 和 appliedTo，证明提示词确实基于画面。duration 必须为 4–15 秒，素材引用使用 @图N。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准资产产物：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
 }
 
 func workflowStageAgentKind(stageID string) string {
 	if stageID == WorkflowStageArtDesign {
 		return "asset_extractor"
+	}
+	if stageID == WorkflowStageAssetGeneration {
+		return "asset_producer"
 	}
 	return "storyboard_director"
 }

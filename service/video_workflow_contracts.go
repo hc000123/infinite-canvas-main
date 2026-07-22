@@ -8,10 +8,11 @@ import (
 
 const (
 	VideoWorkflowID      = "seedance-2-multi-agent-storyboard-team"
-	VideoWorkflowVersion = "1.0.0"
+	VideoWorkflowVersion = "1.1.0"
 
 	WorkflowStageScriptAdaptation   = "script-adaptation"
 	WorkflowStageArtDesign          = "art-design"
+	WorkflowStageAssetGeneration    = "asset-generation"
 	WorkflowStageSeedanceStoryboard = "seedance-storyboard"
 	workflowArtifactSchemaVersion   = "video-workflow-v1"
 	workflowGateValidatorVersion    = "video-workflow-gates-v1"

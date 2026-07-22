@@ -42,7 +42,7 @@ func CreateUserWorkflowMediaBatch(userID string, workflowRunID string, input Cre
 		return model.WorkflowMediaBatchDetail{}, safeMessageError{message: "工作流不存在"}
 	}
 	stageID := strings.TrimSpace(input.StageID)
-	if stageID != WorkflowStageArtDesign && stageID != WorkflowStageSeedanceStoryboard {
+	if stageID != WorkflowStageArtDesign && stageID != WorkflowStageAssetGeneration && stageID != WorkflowStageSeedanceStoryboard {
 		return model.WorkflowMediaBatchDetail{}, safeMessageError{message: "该阶段不接受参考图片"}
 	}
 	idempotencyKey := strings.TrimSpace(input.IdempotencyKey)

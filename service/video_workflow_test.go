@@ -29,11 +29,34 @@ func TestEnsureWorkflowRunIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestStoryboardStageRequiresApprovedArtDesign(t *testing.T) {
+func TestStoryboardStageRequiresApprovedAssets(t *testing.T) {
 	setupVideoWorkflowTest(t)
 	run := ensureVideoWorkflowTestRun(t)
 	_, err := StartWorkflowStage("user-1", run.Run.ID, WorkflowStageSeedanceStoryboard, "idem-storyboard")
-	if err == nil || !strings.Contains(err.Error(), "美术") {
+	if err == nil || !strings.Contains(err.Error(), "资产") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestWorkflowIncludesIndependentAssetGenerationStage(t *testing.T) {
+	setupVideoWorkflowTest(t)
+	detail := ensureVideoWorkflowTestRun(t)
+	stage := workflowTestStage(detail, "asset-generation")
+	if stage.ID == "" || stage.Status != model.WorkflowStageRunStatusBlocked {
+		t.Fatalf("asset stage=%#v", stage)
+	}
+}
+
+func TestStoryboardStageRequiresApprovedAssetGeneration(t *testing.T) {
+	setupVideoWorkflowTest(t)
+	detail := ensureVideoWorkflowTestRun(t)
+	art := completeVideoWorkflowArtStage(t, detail, "idem-art-before-assets")
+	artifact, _, _ := repository.GetUserWorkflowArtifact("user-1", art.OutputArtifactID)
+	if _, err := ReviewWorkflowStage("user-1", art.ID, WorkflowReviewInput{Decision: "approved", ArtifactHash: artifact.ContentHash}); err != nil {
+		t.Fatalf("approve art: %v", err)
+	}
+	_, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageSeedanceStoryboard, "idem-storyboard-without-assets")
+	if err == nil || !strings.Contains(err.Error(), "资产") {
 		t.Fatalf("err=%v", err)
 	}
 }
@@ -89,7 +112,7 @@ func TestReviewBlocksFailedQualityGate(t *testing.T) {
 	}
 }
 
-func TestApprovedArtCanApplyAndUnlockStoryboard(t *testing.T) {
+func TestApprovedArtUnlocksAssetsAndApprovedAssetsUnlockStoryboard(t *testing.T) {
 	setupVideoWorkflowTest(t)
 	detail := ensureVideoWorkflowTestRun(t)
 	stage := completeVideoWorkflowArtStage(t, detail, "idem-art-approved")
@@ -110,6 +133,22 @@ func TestApprovedArtCanApplyAndUnlockStoryboard(t *testing.T) {
 	})
 	if err != nil || applied.Status != model.WorkflowStageRunStatusApplied || applied.ApplyReceiptJSON == "" {
 		t.Fatalf("applied=%#v err=%v", applied, err)
+	}
+	assetStage, err := StartWorkflowStage("user-1", detail.Run.ID, "asset-generation", "idem-assets-approved")
+	if err != nil || assetStage.Status != model.WorkflowStageRunStatusQueued {
+		t.Fatalf("assets=%#v err=%v", assetStage, err)
+	}
+	assetRun, _, _ := repository.GetAgentRun(assetStage.AgentRunID)
+	assetRun.Status = model.AgentRunStatusNeedsReview
+	assetRun.StructuredDraftJSON = `{"items":[{"id":"character-1","kind":"character","name":"阿宁","prompt":"可执行三视图角色设定","sourceAssetId":"character-1","status":"ready"}]}`
+	_, _ = repository.SaveAgentRun(assetRun)
+	if err := CompleteWorkflowStageAgentRun(assetRun); err != nil {
+		t.Fatalf("complete assets: %v", err)
+	}
+	assetStage, _, _ = repository.GetUserWorkflowStageRun("user-1", assetStage.ID)
+	assetArtifact, _, _ := repository.GetUserWorkflowArtifact("user-1", assetStage.OutputArtifactID)
+	if _, err := ReviewWorkflowStage("user-1", assetStage.ID, WorkflowReviewInput{Decision: "approved", ArtifactHash: assetArtifact.ContentHash}); err != nil {
+		t.Fatalf("approve assets: %v", err)
 	}
 	storyboard, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageSeedanceStoryboard, "idem-storyboard-approved")
 	if err != nil || storyboard.Status != model.WorkflowStageRunStatusQueued {

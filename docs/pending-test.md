@@ -8,6 +8,15 @@
 
 > 当前上线门禁优先于下方历史待验收项：Codex CLI 仅允许在显式开启的本地开发环境执行；生产配置、Docker 镜像和上线环境必须固定走企业 API，且镜像内不包含 `codex` 命令。所有“节点保存 provider”的旧说明仍已失效。
 
+#### 资产生成独立调用 Codex
+
+- 入口：`/projects/:projectId/episodes/:episodeId/workflow?stage=assets`。
+- 本次修复：资产准备不再复用“导演与美术”的完成状态，也不再只在浏览器本地整理文本；新增独立 `asset-generation` 阶段、`asset_producer` 执行角色、资产 Skill 快照、质量门、审核和写入回执。
+- 阶段依赖：导演与美术批准后才可启动资产生成；资产产物批准后才解锁分镜提示词，避免跳过资产生产直接进入下一阶段。
+- 资产合同：Codex 必须保留原资产 ID / 类型 / 名称，并输出 `sourceAssetId`、`status=ready` 与可直接交给图片模型的提示词；有参考图时必须附图片理解证据，无参考图时明确记录纯文本降级。
+- 已完成真实页面验证：任务 `agentrun-eef2b3df-d6eb-46a5-804e-d7bcaa72b78d` 由 `codex-cli` 执行，耗时 143360ms、算力点 0，质量门通过；页面完成批准并安全写入 3 条资产设定，随后分镜提示词阶段正确解锁。
+- 已完成自动检查：Go 全量测试、前端 610 项测试与 TypeScript 检查通过；生产环境仍须固定企业 API，不开放 Codex CLI。
+
 #### 本地 Codex 多模态验证与六阶段 Skill 版本中心
 
 - 入口：用户端 `/projects/:projectId/episodes/:episodeId/workflow`；管理端 `/admin/workflow-skills`。

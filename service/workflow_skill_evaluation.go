@@ -228,6 +228,8 @@ func workflowSkillEvaluationGate(stageKey string, content []byte) WorkflowGateRe
 		return ValidateScriptArtifact(content)
 	case WorkflowSkillStageArt:
 		return ValidateArtDesignArtifact(content)
+	case WorkflowSkillStageAssets:
+		return ValidateAssetGenerationArtifact(content)
 	default:
 		return ValidateStoryboardArtifact(content)
 	}
@@ -246,6 +248,8 @@ func workflowSkillRunStage(stageKey string) string {
 		return WorkflowStageScriptAdaptation
 	case WorkflowSkillStageArt:
 		return WorkflowStageArtDesign
+	case WorkflowSkillStageAssets:
+		return WorkflowStageAssetGeneration
 	case WorkflowSkillStageStoryboard:
 		return WorkflowStageSeedanceStoryboard
 	default:

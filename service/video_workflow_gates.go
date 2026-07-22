@@ -66,6 +66,30 @@ func ValidateArtDesignArtifact(raw json.RawMessage) WorkflowGateReport {
 	return report.finish()
 }
 
+func ValidateAssetGenerationArtifact(raw json.RawMessage) WorkflowGateReport {
+	report := ValidateArtDesignArtifact(raw)
+	if !report.Passed {
+		return report
+	}
+	payload, ok := decodeWorkflowObject(raw, &report)
+	if !ok {
+		return report.finish()
+	}
+	for index, item := range workflowItems(payload, "items", "assets") {
+		itemID := workflowString(item, "id", "itemId", "assetId")
+		if itemID == "" {
+			itemID = fmt.Sprintf("item-%d", index+1)
+		}
+		if workflowString(item, "sourceAssetId") == "" {
+			report.add("missing_source_asset_id", "资产产物缺少上游美术资产 ID", itemID)
+		}
+		if workflowString(item, "status") != "ready" {
+			report.add("asset_not_ready", "资产产物必须明确标记为 ready", itemID)
+		}
+	}
+	return report.finish()
+}
+
 func ValidateStoryboardArtifact(raw json.RawMessage) WorkflowGateReport {
 	report := newWorkflowGateReport()
 	payload, ok := decodeWorkflowObject(raw, &report)

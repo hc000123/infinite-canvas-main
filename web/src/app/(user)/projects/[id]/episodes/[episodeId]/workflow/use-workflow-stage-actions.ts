@@ -12,7 +12,7 @@ export function useWorkflowStageActions(input: { detail: RemoteWorkflowRunDetail
     const [busyAction, setBusyAction] = useState("");
     const stageFor = (stageId: string) => input.detail?.stages.filter((item) => item.stageId === stageId).reduce((latest, item) => (!latest || item.attempt > latest.attempt ? item : latest), null as RemoteWorkflowRunDetail["stages"][number] | null) || null;
     const rawStage = stageFor(input.stageId);
-    const dependency = input.stageId === "seedance-storyboard" ? stageFor("art-design") : null;
+    const dependency = input.stageId === "asset-generation" ? stageFor("art-design") : input.stageId === "seedance-storyboard" ? stageFor("asset-generation") : null;
     const stage = rawStage?.status === "blocked" && dependency && ["approved", "applied"].includes(dependency.status) ? { ...rawStage, status: "ready" as const } : rawStage;
     const artifact = input.detail?.artifacts.find((item) => item.id === stage?.outputArtifactId) || null;
     const gate = input.detail?.gates.find((item) => item.artifactId === artifact?.id) || null;

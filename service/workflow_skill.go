@@ -396,7 +396,7 @@ func workflowSkillPackageHash(packageValue WorkflowSkillPackage) string {
 }
 
 func workflowSkillRequiresEvaluation(stageKey string) bool {
-	return stageKey == WorkflowSkillStageScript || stageKey == WorkflowSkillStageArt || stageKey == WorkflowSkillStageStoryboard
+	return stageKey == WorkflowSkillStageScript || stageKey == WorkflowSkillStageArt || stageKey == WorkflowSkillStageAssets || stageKey == WorkflowSkillStageStoryboard
 }
 
 func workflowSkillStageForRun(stageID string) string {
@@ -405,6 +405,8 @@ func workflowSkillStageForRun(stageID string) string {
 		return WorkflowSkillStageScript
 	case WorkflowStageArtDesign:
 		return WorkflowSkillStageArt
+	case WorkflowStageAssetGeneration:
+		return WorkflowSkillStageAssets
 	case WorkflowStageSeedanceStoryboard:
 		return WorkflowSkillStageStoryboard
 	default:

@@ -31,18 +31,18 @@ export function summarizeWorkflowStages(input: WorkflowStageSummaryInput): Workf
     const generatedCount = input.generatedCount || 0;
     const missingAssetCount = input.missingAssetCount || 0;
     const artStatus = remoteStatus(remote.get("art-design"), input.workerReady, input.scriptReady);
-    const storyboardStatus = remoteStatus(remote.get("seedance-storyboard"), input.workerReady, artStatus === "approved" || artStatus === "applied");
+    const assetStatus = remoteStatus(remote.get("asset-generation"), input.workerReady, artStatus === "approved" || artStatus === "applied");
+    const storyboardStatus = remoteStatus(remote.get("seedance-storyboard"), input.workerReady, assetStatus === "approved" || assetStatus === "applied");
 
     return stageDefinitions.map((stage): WorkflowStageView => {
         if (stage.key === "script") return { ...stage, status: input.scriptReady ? "complete" : "blocked", blockingReason: input.scriptReady ? undefined : "本集还没有可用的确认稿" };
         if (stage.key === "art") return { ...stage, status: artStatus, blockingReason: artStatus === "blocked" ? workerReason(input.workerReady, input.scriptReady) : undefined };
         if (stage.key === "assets") {
-            const ready = artStatus === "approved" || artStatus === "applied";
             return {
                 ...stage,
-                status: artStatus === "applied" ? "complete" : !ready ? "idle" : missingAssetCount ? "blocked" : packageCount ? "complete" : "ready",
+                status: assetStatus,
                 count: missingAssetCount ? `${missingAssetCount} 个缺口` : undefined,
-                blockingReason: missingAssetCount ? "仍有参考资产需要补齐或接受文本生成风险" : undefined,
+                blockingReason: assetStatus === "blocked" ? workerReason(input.workerReady, artStatus === "approved" || artStatus === "applied") : missingAssetCount ? "仍有参考资产需要补齐或接受文本生成风险" : undefined,
             };
         }
         if (stage.key === "storyboard") return { ...stage, status: storyboardStatus, count: packageCount ? `${packageCount} 条` : undefined, blockingReason: storyboardStatus === "blocked" ? workerReason(input.workerReady, true) : undefined };
