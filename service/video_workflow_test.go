@@ -54,7 +54,7 @@ func TestWorkflowV2UsesAssetAndShotSubtasks(t *testing.T) {
 	if stage := workflowTestStage(detail, WorkflowStageAssetImagePrompt); stage.Status != model.WorkflowStageRunStatusBlocked {
 		t.Fatalf("asset image prompt=%#v", stage)
 	}
-	if stage := workflowTestStage(detail, WorkflowStageShotBreakdown); stage.Status != model.WorkflowStageRunStatusBlocked {
+	if stage := workflowTestStage(detail, WorkflowStageShotBreakdown); stage.Status != model.WorkflowStageRunStatusReady {
 		t.Fatalf("shot breakdown=%#v", stage)
 	}
 	if stage := workflowTestStage(detail, WorkflowStageShotPrompt); stage.Status != model.WorkflowStageRunStatusBlocked {
@@ -62,12 +62,12 @@ func TestWorkflowV2UsesAssetAndShotSubtasks(t *testing.T) {
 	}
 }
 
-func TestStoryboardStageRequiresApprovedAssets(t *testing.T) {
+func TestWorkflowShotBreakdownStartsFromConfirmedScript(t *testing.T) {
 	setupVideoWorkflowTest(t)
 	run := ensureVideoWorkflowTestRun(t)
-	_, err := StartWorkflowStage("user-1", run.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard")
-	if err == nil || !strings.Contains(err.Error(), "资产") {
-		t.Fatalf("err=%v", err)
+	stage, err := StartWorkflowStage("user-1", run.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard")
+	if err != nil || stage.Status != model.WorkflowStageRunStatusQueued {
+		t.Fatalf("stage=%#v err=%v", stage, err)
 	}
 }
 
@@ -160,13 +160,14 @@ func TestAppliedAssetImagesUnlockStoryboard(t *testing.T) {
 	if _, err := ReviewWorkflowStage("user-1", assetStage.ID, WorkflowReviewInput{Decision: "approved", ArtifactHash: assetArtifact.ContentHash}); err != nil {
 		t.Fatalf("approve assets: %v", err)
 	}
-	if _, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard-too-early"); err == nil || !strings.Contains(err.Error(), "绑定全部资产图") {
-		t.Fatalf("storyboard should remain blocked before asset images are applied: %v", err)
+	storyboard, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard-parallel")
+	if err != nil || storyboard.Status != model.WorkflowStageRunStatusQueued {
+		t.Fatalf("storyboard should run independently from asset images: %#v err=%v", storyboard, err)
 	}
 	if _, err := ApplyWorkflowStage("user-1", assetStage.ID, WorkflowApplyInput{ArtifactHash: assetArtifact.ContentHash, Target: "asset_store", TargetIDs: []string{"asset-1"}, AppliedCount: 1, Version: "local-v1"}); err != nil {
 		t.Fatalf("apply asset images: %v", err)
 	}
-	storyboard, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard-approved")
+	storyboard, err = StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard-approved")
 	if err != nil || storyboard.Status != model.WorkflowStageRunStatusQueued {
 		t.Fatalf("storyboard=%#v err=%v", storyboard, err)
 	}

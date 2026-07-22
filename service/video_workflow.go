@@ -57,16 +57,18 @@ func EnsureWorkflowRun(userID string, input EnsureWorkflowRunInput) (WorkflowRun
 	confirmed := input.ScriptConfirmed && input.ScriptSnapshot != ""
 	scriptStatus := model.WorkflowStageRunStatusBlocked
 	assetExtractionStatus := model.WorkflowStageRunStatusBlocked
+	shotBreakdownStatus := model.WorkflowStageRunStatusBlocked
 	if confirmed {
 		scriptStatus = model.WorkflowStageRunStatusApproved
 		assetExtractionStatus = model.WorkflowStageRunStatusReady
+		shotBreakdownStatus = model.WorkflowStageRunStatusReady
 		run.CurrentStageID = WorkflowStageAssetExtraction
 	}
 	stages := []model.WorkflowStageRun{
 		workflowInitialStage(run, WorkflowStageScriptAdaptation, scriptStatus, stamp),
 		workflowInitialStage(run, WorkflowStageAssetExtraction, assetExtractionStatus, stamp),
 		workflowInitialStage(run, WorkflowStageAssetImagePrompt, model.WorkflowStageRunStatusBlocked, stamp),
-		workflowInitialStage(run, WorkflowStageShotBreakdown, model.WorkflowStageRunStatusBlocked, stamp),
+		workflowInitialStage(run, WorkflowStageShotBreakdown, shotBreakdownStatus, stamp),
 		workflowInitialStage(run, WorkflowStageShotPrompt, model.WorkflowStageRunStatusBlocked, stamp),
 	}
 	artifacts := []model.WorkflowArtifact{}
@@ -469,16 +471,13 @@ func workflowStageInputArtifact(detail WorkflowRunDetail, stageID string) (model
 		dependency = WorkflowStageAssetExtraction
 		message = "请先批准资产提取阶段"
 	} else if stageID == WorkflowStageShotBreakdown {
-		dependency = WorkflowStageAssetImagePrompt
-		message = "请先批准资产生图提示词阶段"
+		dependency = WorkflowStageScriptAdaptation
+		message = "请先确认生产剧本"
 	} else if stageID == WorkflowStageShotPrompt {
 		dependency = WorkflowStageShotBreakdown
 		message = "请先批准分镜拆解阶段"
 	}
 	stage := workflowDetailStage(detail, dependency)
-	if stageID == WorkflowStageShotBreakdown && stage.Status != model.WorkflowStageRunStatusApplied {
-		return model.WorkflowArtifact{}, safeMessageError{message: "请先生成并绑定全部资产图"}
-	}
 	if stage.Status != model.WorkflowStageRunStatusApproved && stage.Status != model.WorkflowStageRunStatusApplied {
 		return model.WorkflowArtifact{}, safeMessageError{message: message}
 	}
@@ -497,7 +496,7 @@ func workflowStagePrompts(run model.WorkflowRun, stageID string, input model.Wor
 	case WorkflowStageAssetImagePrompt:
 		return "你是影视资产生图提示词设计师。逐项保留上游 logicalAssetId/kind/name/scriptEvidence/description，以及角色马甲的 parentLogicalAssetId/variantType/variantName，新增可直接交给图片模型的 imagePrompt 和 status=ready；不得新增、遗漏、合并或重编号资产。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准资产提取：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
 	case WorkflowStageShotBreakdown:
-		return "你是影视导演与分镜拆解师。只输出可供用户修改确认的结构化分镜，不生成最终视频提示词。JSON 必须包含 shots[].shotId/sceneKey/sourceScript/shotDraft；shotId 使用 shot-001 格式，sceneKey 使用 scene-001 格式；shotDraft 必须完整包含 shotSize/camera/movement/action/performance/dialogue/durationSeconds/continuityMode，durationSeconds 为 4–15 数字，continuityMode 只能是 continuous 或 cut。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准资产设计：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
+		return "你是影视导演与分镜拆解师。只从已确认原剧本输出可供用户修改确认的结构化分镜，不等待资产图，不生成最终视频提示词。JSON 必须包含 shots[].shotId/sceneKey/sourceScript/shotDraft；shotId 使用 shot-001 格式，sceneKey 使用 scene-001 格式；sourceScript 必须逐字对应原剧本片段；shotDraft 必须完整包含 shotSize/camera/movement/action/performance/dialogue/durationSeconds/continuityMode，durationSeconds 为 4–15 数字，continuityMode 只能是 continuous 或 cut。", fmt.Sprintf("工作流版本：%s\n已确认生产剧本：\n%s", run.WorkflowVersion, run.ScriptSnapshot)
 	default:
 		contextJSON, _ := json.Marshal(context)
 		return "你是单镜头多模态视频提示词导演。只处理当前已确认镜头，结合原剧本、结构化分镜和实际参考图片的画面理解生成最终提示词。只输出 JSON：shotId、prompt、promptInputHash、referenceEvidence；promptInputHash 必须原样回写输入上下文中的同名字段。prompt 必须包含“场景：”“声音：”“画面内容：”“限制：”和连续时间段，禁止只写电影感摘要；参考图必须逐图记录 imageRef/observations/appliedTo。若引用上一镜尾帧，只把它作为剧情连续性参考，本镜从该画面之后继续发展；保持场景、角色身份、服装、光线、材质与画风一致，不要求第一帧复刻参考图，不重新诠释视觉设定。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准分镜拆解：\n%s\n\n当前已确认镜头上下文：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON, contextJSON)

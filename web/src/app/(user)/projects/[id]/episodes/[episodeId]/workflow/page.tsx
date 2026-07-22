@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { Alert, App, Button, Drawer, Empty, Spin } from "antd";
-import { FileText, List, PanelRight } from "lucide-react";
+import { FileText, List, PanelRight, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { getImageBlob } from "@/services/image-storage";
@@ -15,16 +15,16 @@ import { WorkflowHeader } from "./components/workflow-header";
 import { WorkflowAssetPanel } from "./components/workflow-asset-panel";
 import { WorkflowDeliveryPanel } from "./components/workflow-delivery-panel";
 import { WorkflowReferenceImagePanel } from "./components/workflow-reference-image-panel";
+import { WorkflowScriptExtractionPanel } from "./components/workflow-script-extraction-panel";
 import { WorkflowRunConsole } from "./components/workflow-run-console";
 import { WorkflowShotEditor } from "./components/workflow-shot-editor";
 import { WorkflowShotPromptReview } from "./components/workflow-shot-prompt-review";
 import { WorkflowShotQueue } from "./components/workflow-shot-queue";
-import { WorkflowStagePanel } from "./components/workflow-stage-panel";
 import { WorkflowStageRail } from "./components/workflow-stage-rail";
-import { WorkflowStoryboardSync } from "./components/workflow-storyboard-sync";
 import { WorkflowVideoConsole } from "./components/workflow-video-console";
 import { useWorkflowAssetAutomation } from "./use-workflow-asset-automation";
 import { useWorkflowStageActions } from "./use-workflow-stage-actions";
+import { useWorkflowShotAutomation } from "./use-workflow-shot-automation";
 import { useWorkflowVideoActions } from "./use-workflow-video-actions";
 import { useWorkflowWorkbench } from "./use-workflow-workbench";
 import { promptInputHash, updateReferenceBindings } from "./workflow-production-state";
@@ -53,6 +53,7 @@ export default function EpisodeWorkflowPage() {
         runId: workbench.detail?.run.id || "",
         workerReady: Boolean(workbench.health?.ready),
     });
+    const shotAutomation = useWorkflowShotAutomation({ artifact: breakdown.artifact, episodeId: params.episodeId, gate: breakdown.gate, onApplied: workbench.refreshRemote, projectId: params.id, stage: breakdown.stage });
     const referenceImages = useMemo(() => workflowReferenceImages(assets, params.id, params.episodeId), [assets, params.episodeId, params.id]);
     useEffect(() => { setSelectedReferenceIds((current) => current.length ? current.filter((id) => referenceImages.some((item) => item.id === id)) : referenceImages.map((item) => item.id)); }, [referenceImages]);
 
@@ -130,9 +131,9 @@ export default function EpisodeWorkflowPage() {
                     <div className="mb-3 flex gap-2 overflow-x-auto pb-1 xl:hidden">{workbench.stageViews.map((stage) => <button key={stage.key} type="button" className={cn("h-9 shrink-0 rounded-md border px-3 text-xs", stage.key === workbench.routeState.stage ? "border-[var(--studio-accent)] bg-[var(--studio-active-bg)]" : "border-[var(--studio-border-subtle)] text-[var(--studio-text-secondary)]")} onClick={() => workbench.selectRoute(stage.key)}>{stage.label}</button>)}</div>
                     {showsQueue ? <div className="mb-3 flex gap-2 xl:hidden"><Button className="min-h-11 flex-1" icon={<List className="size-4" />} onClick={() => setQueueOpen(true)}>分镜队列</Button><Button className="min-h-11 flex-1" icon={<PanelRight className="size-4" />} onClick={() => setConsoleOpen(true)}>视频控制台</Button></div> : null}
                     <div className="mb-5 border-b border-[var(--studio-border-subtle)] pb-4"><div className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--studio-accent)]">Episode production desk</div><h2 className="mt-1 text-xl font-semibold">{activeStage.label}</h2><p className="mt-1 text-sm text-[var(--studio-text-secondary)]">{activeStage.description}</p></div>
-                    {workbench.routeState.stage === "script" ? <Panel icon={<FileText className="size-4" />} title="本集确认稿" description="后续资产与镜头都引用这份不可变快照。"><pre className="thin-scrollbar max-h-[64vh] overflow-auto whitespace-pre-wrap text-sm leading-7 text-[var(--studio-text-secondary)]">{workbench.scriptSnapshot}</pre></Panel> : null}
+                    {workbench.routeState.stage === "script" ? <div className="space-y-4"><Panel icon={<FileText className="size-4" />} title="本集确认稿" description="后续资产与镜头都引用这份不可变快照。"><pre className="thin-scrollbar max-h-[48vh] overflow-auto whitespace-pre-wrap text-sm leading-7 text-[var(--studio-text-secondary)]">{workbench.scriptSnapshot}</pre></Panel><WorkflowScriptExtractionPanel agentRuns={workbench.detail?.agentRuns || []} asset={extraction} projectId={workbench.project.id} shot={breakdown} workerReady={Boolean(workbench.health?.ready)} /></div> : null}
                     {workbench.routeState.stage === "assets" ? <WorkflowAssetPanel artifact={assetPrompt.artifact} automation={assetAutomation} episodeId={workbench.episode.id} onApplied={workbench.refreshRemote} projectId={workbench.project.id} projectTitle={workbench.project.title} stage={assetPrompt.stage} /> : null}
-                    {workbench.routeState.stage === "video" ? (!workbench.packages.length ? <div className="space-y-4"><WorkflowReferenceImagePanel images={referenceImages} selectedIds={selectedReferenceIds} onChange={setSelectedReferenceIds} /><SubtaskLabel index="01" title="拆分可编辑分镜" description="保留每个生成包对应的原剧本，只产生镜头草案。" /><WorkflowStagePanel executorLabel={executorLabel} label="分镜拆解" preparing={preparing === "shot-breakdown"} state={breakdown} workerReady={Boolean(workbench.health?.ready)} onConfirmStart={() => startStage("分镜拆解", "shot-breakdown", breakdown, { references: selectedReferences })} onConfirmReject={breakdown.reject} />{breakdown.artifact && breakdown.stage && ["approved", "applied"].includes(breakdown.stage.status) ? <WorkflowStoryboardSync artifact={breakdown.artifact} episodeId={workbench.episode.id} onApplied={workbench.refreshRemote} projectId={workbench.project.id} stage={breakdown.stage} /> : null}</div> : workbench.selectedPackage ? <div className="space-y-4"><WorkflowReferenceImagePanel images={referenceImages} selectedIds={selectedReferenceIds} onChange={setSelectedReferenceIds} /><WorkflowShotEditor canGeneratePrompt={shotPrompt.actions.canStart} item={workbench.selectedPackage} packages={workbench.packages} onSelect={(shot) => workbench.selectRoute("video", shot)} generatingPrompt={preparing === "shot-prompt" || shotPrompt.busyAction === "start"} onGeneratePrompt={generateShotPrompt} promptReview={<WorkflowShotPromptReview item={workbench.selectedPackage} state={shotPrompt} onApplied={workbench.refreshRemote} />} /></div> : <Empty className="py-20" description="请先载入分镜" />) : null}
+                    {workbench.routeState.stage === "video" ? (!workbench.packages.length ? <Panel icon={<RefreshCw className={`size-4 ${["queued", "running"].includes(breakdown.stage?.status || "") || shotAutomation.loading ? "animate-spin" : ""}`} />} title="正在从原剧本生成分镜" description="分镜通过质量门后会自动载入左侧队列，不需要手动填写或再次确认。"><div className="flex flex-wrap items-center justify-between gap-3"><span className="text-sm text-[var(--studio-text-secondary)]">{shotAutomation.error || breakdown.stage?.errorMessage || storyboardStatusText(breakdown.stage?.status)}</span><Button icon={<RefreshCw className="size-4" />} disabled={!breakdown.actions.canStart && !breakdown.actions.canRetry} loading={Boolean(breakdown.busyAction)} onClick={() => void (breakdown.actions.canRetry ? breakdown.retry() : breakdown.start())}>重新生成分镜</Button></div></Panel> : workbench.selectedPackage ? <div className="space-y-4"><WorkflowReferenceImagePanel images={referenceImages} selectedIds={selectedReferenceIds} onChange={setSelectedReferenceIds} /><WorkflowShotEditor canGeneratePrompt={shotPrompt.actions.canStart} item={workbench.selectedPackage} packages={workbench.packages} onSelect={(shot) => workbench.selectRoute("video", shot)} generatingPrompt={preparing === "shot-prompt" || shotPrompt.busyAction === "start"} onGeneratePrompt={generateShotPrompt} promptReview={<WorkflowShotPromptReview item={workbench.selectedPackage} state={shotPrompt} onApplied={workbench.refreshRemote} />} /></div> : <Empty className="py-20" description="请先载入分镜" />) : null}
                     {workbench.routeState.stage === "delivery" ? <WorkflowDeliveryPanel packages={workbench.packages} /> : null}
                 </div>
             </section>
@@ -144,6 +145,6 @@ export default function EpisodeWorkflowPage() {
 }
 
 function Panel({ children, description, icon, title }: { children: React.ReactNode; description: string; icon: React.ReactNode; title: string }) { return <section className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-5 shadow-[var(--studio-shadow)]"><div className="mb-4 flex items-start gap-2"><span className="mt-0.5 text-[var(--studio-accent)]">{icon}</span><div><h3 className="text-sm font-semibold">{title}</h3><p className="mt-1 text-xs text-[var(--studio-text-muted)]">{description}</p></div></div>{children}</section>; }
-function SubtaskLabel({ description, index, title }: { description: string; index: string; title: string }) { return <div className="flex items-baseline gap-3 pt-1"><span className="font-mono text-[11px] text-[var(--studio-accent)]">{index}</span><div><h3 className="text-sm font-semibold">{title}</h3><p className="mt-1 text-xs text-[var(--studio-text-muted)]">{description}</p></div></div>; }
+function storyboardStatusText(status?: string) { return ({ blocked: "请先确认本集剧本", ready: "可从剧本开始提取", queued: "分镜任务已进入后台队列", running: "Codex 正在拆分结构化分镜", needs_review: "正在校验并载入分镜", approved: "正在载入分镜队列", applied: "分镜已载入", failed: "分镜生成失败，可重新生成", rejected: "分镜结果需要重新生成", cancelled: "分镜任务已停止" } as Record<string, string>)[status || ""] || "等待分镜任务"; }
 function logicalAssetId(reference: WorkflowReferenceImage) { if (reference.logicalAssetId) return reference.logicalAssetId; const value = reference.asset.metadata?.originalWorkflow; if (!value || typeof value !== "object" || Array.isArray(value)) return reference.id; const id = (value as Record<string, unknown>).logicalAssetId; return typeof id === "string" && id ? id : reference.id; }
 function continuityReferenceImage(assets: ReturnType<typeof useAssetStore.getState>["assets"], assetId: string, version: string): WorkflowReferenceImage | null { const asset = assets.find((item) => item.id === assetId); return asset?.kind === "image" ? { asset, id: asset.id, kind: "scene", label: "上一镜尾帧连续性参考", version } : null; }
