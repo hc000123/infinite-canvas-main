@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { ArrowUp, LoaderCircle } from "lucide-react";
-import { Alert, Button } from "antd";
+import { ArrowUp, LoaderCircle, Maximize2 } from "lucide-react";
+import { Alert, Button, Input, Modal } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
 import { ModelThinkingSettings } from "@/components/image-settings-panel";
@@ -55,6 +55,9 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
     const [prompt, setPrompt] = useState(isEditingExistingContent ? "" : node.metadata?.prompt || "");
     const [promptDocument, setPromptDocument] = useState<CanvasPromptDocument>(() => node.metadata?.promptDocument || promptDocumentFromText(isEditingExistingContent ? "" : node.metadata?.prompt || ""));
     const [editorRevision, setEditorRevision] = useState(0);
+    const [expandedEditorOpen, setExpandedEditorOpen] = useState(false);
+    const [expandedPrompt, setExpandedPrompt] = useState(prompt);
+    const [expandedPromptDocument, setExpandedPromptDocument] = useState(promptDocument);
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "image" ? config.count : 1 });
     const missingReferenceIds = mode === "video" ? validatePromptDocument(promptDocument, referenceMentionOptions) : [];
 
@@ -77,6 +80,18 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
         setPromptDocument(nextDocument);
         setPrompt(value);
         if (!isEditingExistingContent) onPromptChange(node.id, value, nextDocument);
+    };
+    const openExpandedEditor = () => {
+        setExpandedPrompt(prompt);
+        setExpandedPromptDocument(promptDocument);
+        setExpandedEditorOpen(true);
+    };
+    const saveExpandedEditor = () => {
+        if (mode === "video") {
+            updatePromptDocument(expandedPromptDocument);
+            setEditorRevision((revision) => revision + 1);
+        } else updatePrompt(expandedPrompt);
+        setExpandedEditorOpen(false);
     };
 
     const submit = () => {
@@ -106,6 +121,7 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                     placeholder="输入 @ 选择图片、视频或音频参考素材"
                     onChange={updatePromptDocument}
                     onPreviewReference={onPreviewReference}
+                    onExpand={openExpandedEditor}
                 />
             ) : (
             <div className="relative">
@@ -120,7 +136,7 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                         event.preventDefault();
                         submit();
                     }}
-                    className={promptPreviewTextareaClass(mode)}
+                    className={`${promptPreviewTextareaClass(mode)} !pr-12`}
                     style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text, ...promptPreviewTextareaStyle(mode) }}
                     onWheelCapture={(event) => event.stopPropagation()}
                     onMouseDown={(event) => event.stopPropagation()}
@@ -135,6 +151,17 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                                 : "请输入你想要生成的文本内容"
                     }
                 />
+                <button
+                    type="button"
+                    className="absolute right-2 top-2 z-10 flex size-8 items-center justify-center rounded-md border backdrop-blur transition hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
+                    style={{ background: `${theme.toolbar.panel}e6`, borderColor: theme.toolbar.border, color: theme.node.text }}
+                    aria-label="展开编辑提示词"
+                    title="展开编辑提示词"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={openExpandedEditor}
+                >
+                    <Maximize2 className="size-4" />
+                </button>
             </div>
             )}
             {missingReferenceIds.length ? <Alert className="mt-2" type="warning" showIcon message="有参考素材已被删除，请移除失效的引用后再生成" /> : null}
@@ -189,6 +216,42 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                     </span>
                 </Button>
             </div>
+            <Modal
+                rootClassName="studio-modal"
+                title="展开编辑提示词"
+                open={expandedEditorOpen}
+                width="min(1040px, calc(100vw - 32px))"
+                okText="保存"
+                cancelText="取消"
+                destroyOnHidden
+                onCancel={() => setExpandedEditorOpen(false)}
+                onOk={saveExpandedEditor}
+            >
+                {mode === "video" ? (
+                    <CanvasPromptEditor
+                        key={`${node.id}:expanded:${expandedEditorOpen}`}
+                        initialDocument={expandedPromptDocument}
+                        options={referenceMentionOptions}
+                        placeholder="输入 @ 选择图片、视频或音频参考素材"
+                        expanded
+                        onChange={(nextDocument) => {
+                            setExpandedPromptDocument(nextDocument);
+                            setExpandedPrompt(serializePromptDocument(nextDocument, referenceMentionOptions));
+                        }}
+                        onPreviewReference={onPreviewReference}
+                    />
+                ) : (
+                    <Input.TextArea
+                        autoFocus
+                        value={expandedPrompt}
+                        onChange={(event) => setExpandedPrompt(event.target.value)}
+                        className="thin-scrollbar !min-h-[62dvh] !max-h-[72dvh] !resize-y !leading-7"
+                        placeholder={mode === "image" ? "描述要生成或修改的图片内容" : "输入文本生成或修改要求"}
+                        data-canvas-no-zoom
+                        data-canvas-shortcut-scope="ignore"
+                    />
+                )}
+            </Modal>
         </div>
     );
 }

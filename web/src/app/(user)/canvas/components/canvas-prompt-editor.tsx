@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { AudioLines, Image as ImageIcon, Video } from "lucide-react";
+import { AudioLines, Image as ImageIcon, Maximize2, Video } from "lucide-react";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
@@ -32,6 +32,7 @@ import {
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasPromptDocument, CanvasPromptReferenceBlock } from "../utils/canvas-prompt-document";
+import { promptEditorContentClass } from "../utils/canvas-prompt-editor-layout";
 import { filterReferenceMentions, type CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
 
 type CanvasPromptEditorProps = {
@@ -40,6 +41,8 @@ type CanvasPromptEditorProps = {
     placeholder: string;
     onChange: (document: CanvasPromptDocument) => void;
     onPreviewReference?: (nodeId: string) => void;
+    expanded?: boolean;
+    onExpand?: () => void;
 };
 
 type SerializedCanvasPromptReferenceNode = Spread<
@@ -119,7 +122,7 @@ class ReferenceMenuOption extends MenuOption {
     }
 }
 
-export function CanvasPromptEditor({ initialDocument, options, placeholder, onChange, onPreviewReference }: CanvasPromptEditorProps) {
+export function CanvasPromptEditor({ initialDocument, options, placeholder, onChange, onPreviewReference, expanded = false, onExpand }: CanvasPromptEditorProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const optionMap = useMemo(() => new Map(options.map((option) => [option.id, option])), [options]);
     const initialConfig = useMemo(
@@ -142,7 +145,7 @@ export function CanvasPromptEditor({ initialDocument, options, placeholder, onCh
                     <PlainTextPlugin
                         contentEditable={
                             <ContentEditable
-                                className="thin-scrollbar min-h-24 max-h-44 overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 text-sm leading-6 outline-none select-text"
+                                className={`${promptEditorContentClass(expanded)} ${onExpand ? "pr-12" : "pr-3"}`}
                                 style={{ color: theme.node.text }}
                                 aria-placeholder={placeholder}
                                 placeholder={<span className="pointer-events-none absolute left-3 top-2 text-sm leading-6" style={{ color: theme.node.placeholder }}>{placeholder}</span>}
@@ -153,6 +156,19 @@ export function CanvasPromptEditor({ initialDocument, options, placeholder, onCh
                     <HistoryPlugin />
                     <OnChangePlugin onChange={(editorState) => editorState.read(() => onChange($readPromptDocument()))} />
                     <ReferenceTypeaheadPlugin options={options} />
+                    {onExpand ? (
+                        <button
+                            type="button"
+                            className="absolute right-2 top-2 z-10 flex size-8 items-center justify-center rounded-md border backdrop-blur transition hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
+                            style={{ background: `${theme.toolbar.panel}e6`, borderColor: theme.toolbar.border, color: theme.node.text }}
+                            aria-label="展开编辑提示词"
+                            title="展开编辑提示词"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={onExpand}
+                        >
+                            <Maximize2 className="size-4" />
+                        </button>
+                    ) : null}
                 </div>
             </LexicalComposer>
         </ReferenceContext.Provider>
