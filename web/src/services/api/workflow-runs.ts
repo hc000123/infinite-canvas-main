@@ -9,6 +9,7 @@ import {
     type RemoteWorkflowStageRun,
     type WorkflowApplyRequest,
     type WorkflowReviewRequest,
+    type WorkflowStageStartOptions,
     type WorkflowWorkerHealth,
     type WorkflowMediaBatchDetail,
 } from "./workflow-runs-contract";
@@ -26,8 +27,8 @@ export function getWorkflowRun(id: string) {
     return apiGet<RemoteWorkflowRunDetail>(workflowRunRequest.detail(id).path, undefined, token());
 }
 
-export function startWorkflowStage(id: string, stageId: string, idempotencyKey: string, mediaBatchId?: string) {
-    const request = workflowRunRequest.startStage(id, stageId, idempotencyKey, mediaBatchId);
+export function startWorkflowStage(id: string, stageId: string, idempotencyKey: string, options?: WorkflowStageStartOptions) {
+    const request = workflowRunRequest.startStage(id, stageId, idempotencyKey, options);
     return apiPost<RemoteWorkflowStageRun>(request.path, request.body, token());
 }
 

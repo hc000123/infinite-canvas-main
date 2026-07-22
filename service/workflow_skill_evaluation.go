@@ -227,11 +227,13 @@ func workflowSkillEvaluationGate(stageKey string, content []byte) WorkflowGateRe
 	case WorkflowSkillStageScript:
 		return ValidateScriptArtifact(content)
 	case WorkflowSkillStageArt:
-		return ValidateArtDesignArtifact(content)
+		return ValidateAssetExtractionArtifact(content)
 	case WorkflowSkillStageAssets:
-		return ValidateAssetGenerationArtifact(content)
+		return ValidateAssetImagePromptArtifact(content)
+	case WorkflowSkillStageStoryboard:
+		return ValidateShotBreakdownArtifact(content)
 	default:
-		return ValidateStoryboardArtifact(content)
+		return ValidateShotPromptArtifact(content)
 	}
 }
 
@@ -239,7 +241,7 @@ func workflowSkillEvaluationPrompts(run model.WorkflowRun, stageID string, artif
 	if stageID == WorkflowStageScriptAdaptation {
 		return "只输出 JSON，包含 productionScript。不得改变原始剧情事实。", "请把以下剧本整理成生产剧本：\n" + run.ScriptSnapshot
 	}
-	return workflowStagePrompts(run, stageID, artifact)
+	return workflowStagePrompts(run, stageID, artifact, nil)
 }
 
 func workflowSkillRunStage(stageKey string) string {
@@ -247,11 +249,13 @@ func workflowSkillRunStage(stageKey string) string {
 	case WorkflowSkillStageScript:
 		return WorkflowStageScriptAdaptation
 	case WorkflowSkillStageArt:
-		return WorkflowStageArtDesign
+		return WorkflowStageAssetExtraction
 	case WorkflowSkillStageAssets:
-		return WorkflowStageAssetGeneration
+		return WorkflowStageAssetImagePrompt
 	case WorkflowSkillStageStoryboard:
-		return WorkflowStageSeedanceStoryboard
+		return WorkflowStageShotBreakdown
+	case WorkflowSkillStageVideo:
+		return WorkflowStageShotPrompt
 	default:
 		return ""
 	}

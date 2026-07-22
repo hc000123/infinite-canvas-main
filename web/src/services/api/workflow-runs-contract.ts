@@ -121,6 +121,7 @@ export type EnsureWorkflowRunRequest = {
 };
 
 export type WorkflowReviewRequest = { decision: "approved" | "rejected"; artifactHash: string; comment?: string };
+export type WorkflowStageStartOptions = { mediaBatchId?: string; context?: unknown };
 export type WorkflowApplyRequest = {
     artifactHash: string;
     target: string;
@@ -137,7 +138,7 @@ const encode = encodeURIComponent;
 export const workflowRunRequest = {
     ensure: (body: EnsureWorkflowRunRequest) => ({ path: "/api/v1/workflow-runs", body }),
     detail: (id: string) => ({ path: `/api/v1/workflow-runs/${encode(id)}` }),
-    startStage: (id: string, stageId: string, idempotencyKey: string, mediaBatchId?: string) => ({ path: `/api/v1/workflow-runs/${encode(id)}/stages/${encode(stageId)}/start`, body: { idempotencyKey, ...(mediaBatchId ? { mediaBatchId } : {}) } }),
+    startStage: (id: string, stageId: string, idempotencyKey: string, options: WorkflowStageStartOptions = {}) => ({ path: `/api/v1/workflow-runs/${encode(id)}/stages/${encode(stageId)}/start`, body: { idempotencyKey, ...(options.mediaBatchId ? { mediaBatchId: options.mediaBatchId } : {}), ...(options.context !== undefined ? { context: options.context } : {}) } }),
     createMediaBatch: (id: string, stageId: string, idempotencyKey: string) => ({ path: `/api/v1/workflow-runs/${encode(id)}/media-batches`, body: { stageId, idempotencyKey } }),
     mediaBatch: (id: string) => ({ path: `/api/v1/workflow-media-batches/${encode(id)}` }),
     cancelStage: (id: string) => ({ path: `/api/v1/workflow-stage-runs/${encode(id)}/cancel`, body: {} }),

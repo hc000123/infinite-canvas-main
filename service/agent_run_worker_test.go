@@ -67,7 +67,7 @@ func TestAgentRunWorkerSkipsCancelledRunWithoutCharge(t *testing.T) {
 }
 
 func TestAgentRunWorkerCompletesWorkflowStageArtifact(t *testing.T) {
-	fixture := newAgentRunWorkerFixture(t, http.StatusOK, `{"choices":[{"message":{"content":"{\"directorSummary\":\"室内压迫感\",\"items\":[{\"id\":\"character-1\",\"kind\":\"character\",\"name\":\"阿宁\",\"prompt\":\"角色三视图\"}]}"}}]}`)
+	fixture := newAgentRunWorkerFixture(t, http.StatusOK, `{"choices":[{"message":{"content":"{\"items\":[{\"logicalAssetId\":\"CHAR-001\",\"kind\":\"character\",\"name\":\"阿宁\",\"scriptEvidence\":\"阿宁进入房间\",\"description\":\"进入房间的年轻角色\"}]}"}}]}`)
 	detail, err := EnsureWorkflowRun("user-1", EnsureWorkflowRunInput{
 		ProjectID:       "project-worker",
 		EpisodeID:       "episode-worker",

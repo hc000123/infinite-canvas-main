@@ -19,10 +19,10 @@ type workflowSkillSeed struct {
 func EnsureWorkflowSkillSeeds() error {
 	seeds := []workflowSkillSeed{
 		{WorkflowSkillStageScript, "剧本整理", "确认生产剧本并形成稳定输入。", "保持剧情事实、人物关系和场次顺序，输出可审核的生产剧本结构。", "script"},
-		{WorkflowSkillStageArt, "美术设计", "提取角色、场景和道具视觉设定。", "从已确认剧本提取角色、场景、道具；为每项生成稳定 ID、名称、类型和可执行图像提示词。收到参考图时先逐图提取可见事实，并在 referenceEvidence 中记录引用、观察与应用位置。", "art"},
-		{WorkflowSkillStageAssets, "资产生成", "把已批准美术设定整理成可执行资产产物。", "逐项完成上游角色、场景、道具设定，不得遗漏或合并；保留 id、kind、name，输出 sourceAssetId、status=ready 和可直接交给图片模型的完整 prompt。收到参考图时先理解可见事实并写入 referenceEvidence；缺图时明确使用纯文本降级。", "media"},
-		{WorkflowSkillStageStoryboard, "分镜提示词", "结合剧本和参考图片制作视频提示词。", "先理解输入图片中的人物外观、空间关系、光线和关键道具，再结合剧本制作结构化分镜与 Seedance 提示词；引用图片必须从 @图1 开始，并在 referenceEvidence 中逐图记录观察结果和应用位置。每条 shots[].prompt 必须输出可直接执行的完整合同，至少包含“场景：”“声音：”“画面内容：”“限制：”以及按秒时间段，不得只写电影感摘要。", "storyboard"},
-		{WorkflowSkillStageVideo, "视频生成", "校验最小视频生成参数和提交条件。", "根据已审核分镜形成视频任务参数；模型、时长、分辨率、声音和费用必须在提交前明确展示。", "media"},
+		{WorkflowSkillStageArt, "资产提取", "只从剧本提取角色、场景、道具和服装描述。", "只提取剧本已有资产事实和证据，为每项生成稳定 logicalAssetId；不生成生图提示词，不猜测剧本未提供的外观。", "art"},
+		{WorkflowSkillStageAssets, "资产生图提示词", "把已批准资产描述转成逐项可执行生图提示词。", "逐项保留 logicalAssetId、kind、name、scriptEvidence 和 description，新增 imagePrompt 与 status=ready，不得遗漏、合并或重编号。", "media"},
+		{WorkflowSkillStageStoryboard, "分镜拆解", "把原剧本拆成可编辑、可确认的结构化镜头。", "只生成 shots[].shotId/sceneKey/sourceScript/shotDraft，不生成最终视频提示词；每镜必须保留对应原剧本和可编辑镜头字段。", "storyboard"},
+		{WorkflowSkillStageVideo, "镜头提示词", "结合已确认分镜与实际参考图生成单镜头视频提示词。", "先理解参考图片，再结合原剧本和已确认 shotDraft 生成单镜头最终提示词；上一镜尾帧只能作为 continuity_reference，不得当作首帧复刻。", "media"},
 		{WorkflowSkillStageDelivery, "成片交付", "检查生成结果、失败项与导出清单。", "汇总视频结果、失败原因、重试建议和导出清单，不绕过人工确认与质量门。", "delivery"},
 	}
 	for _, seed := range seeds {

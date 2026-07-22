@@ -123,7 +123,7 @@ func RetryWorkflowStage(userID string, stageRunID string, idempotencyKey string)
 		if !exists {
 			return stage, safeMessageError{message: "原任务不存在，无法保留 Skill 快照"}
 		}
-		return startWorkflowStage(userID, stage.WorkflowRunID, stage.StageID, idempotencyKey, "", &previous)
+		return startWorkflowStage(userID, stage.WorkflowRunID, stage.StageID, WorkflowStageStartInput{IdempotencyKey: idempotencyKey}, &previous)
 	default:
 		return stage, safeMessageError{message: "当前阶段状态不能重试"}
 	}

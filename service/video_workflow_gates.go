@@ -26,18 +26,15 @@ func ValidateScriptArtifact(raw json.RawMessage) WorkflowGateReport {
 	return report.finish()
 }
 
-func ValidateArtDesignArtifact(raw json.RawMessage) WorkflowGateReport {
+func ValidateAssetExtractionArtifact(raw json.RawMessage) WorkflowGateReport {
 	report := newWorkflowGateReport()
 	payload, ok := decodeWorkflowObject(raw, &report)
 	if !ok {
 		return report.finish()
 	}
-	items := workflowItems(payload, "items", "assets")
-	for _, group := range []string{"characters", "scenes", "props"} {
-		items = append(items, workflowItems(payload, group)...)
-	}
+	items := workflowItems(payload, "items")
 	if len(items) == 0 {
-		report.add("missing_assets", "美术产物至少需要一条角色、场景或道具设定", "")
+		report.add("missing_assets", "资产提取至少需要一条角色、场景、道具或服装", "")
 		return report.finish()
 	}
 	if len(items) > 300 {
@@ -45,10 +42,12 @@ func ValidateArtDesignArtifact(raw json.RawMessage) WorkflowGateReport {
 	}
 	seen := map[string]bool{}
 	for index, item := range items {
-		itemID := workflowString(item, "id", "itemId", "assetId")
+		itemID := workflowString(item, "logicalAssetId")
 		if itemID == "" {
 			itemID = fmt.Sprintf("item-%d", index+1)
-			report.add("missing_asset_id", "资产缺少稳定 ID", itemID)
+			report.add("missing_asset_id", "资产缺少稳定 logicalAssetId", itemID)
+		} else if !regexp.MustCompile(`^(CHAR|SCENE|PROP|COSTUME)-\d{3}$`).MatchString(itemID) {
+			report.add("invalid_asset_id", "资产编号必须使用 CHAR/SCENE/PROP/COSTUME 加三位序号", itemID)
 		} else if seen[itemID] {
 			report.add("duplicate_asset_id", "资产 ID 重复", itemID)
 		}
@@ -59,15 +58,18 @@ func ValidateArtDesignArtifact(raw json.RawMessage) WorkflowGateReport {
 		if workflowString(item, "kind", "type", "category") == "" {
 			report.add("missing_asset_kind", "资产缺少角色、场景或道具类型", itemID)
 		}
-		if workflowString(item, "prompt", "imagePrompt", "description") == "" {
-			report.add("missing_asset_prompt", "资产缺少可执行提示词", itemID)
+		if workflowString(item, "scriptEvidence") == "" {
+			report.add("missing_script_evidence", "资产缺少剧本原文证据", itemID)
+		}
+		if workflowString(item, "description") == "" {
+			report.add("missing_asset_description", "资产缺少从剧本提取的描述", itemID)
 		}
 	}
 	return report.finish()
 }
 
-func ValidateAssetGenerationArtifact(raw json.RawMessage) WorkflowGateReport {
-	report := ValidateArtDesignArtifact(raw)
+func ValidateAssetImagePromptArtifact(raw json.RawMessage) WorkflowGateReport {
+	report := ValidateAssetExtractionArtifact(raw)
 	if !report.Passed {
 		return report
 	}
@@ -76,12 +78,12 @@ func ValidateAssetGenerationArtifact(raw json.RawMessage) WorkflowGateReport {
 		return report.finish()
 	}
 	for index, item := range workflowItems(payload, "items", "assets") {
-		itemID := workflowString(item, "id", "itemId", "assetId")
+		itemID := workflowString(item, "logicalAssetId")
 		if itemID == "" {
 			itemID = fmt.Sprintf("item-%d", index+1)
 		}
-		if workflowString(item, "sourceAssetId") == "" {
-			report.add("missing_source_asset_id", "资产产物缺少上游美术资产 ID", itemID)
+		if workflowString(item, "imagePrompt") == "" {
+			report.add("missing_image_prompt", "资产缺少可执行生图提示词", itemID)
 		}
 		if workflowString(item, "status") != "ready" {
 			report.add("asset_not_ready", "资产产物必须明确标记为 ready", itemID)
@@ -90,13 +92,13 @@ func ValidateAssetGenerationArtifact(raw json.RawMessage) WorkflowGateReport {
 	return report.finish()
 }
 
-func ValidateStoryboardArtifact(raw json.RawMessage) WorkflowGateReport {
+func ValidateShotBreakdownArtifact(raw json.RawMessage) WorkflowGateReport {
 	report := newWorkflowGateReport()
 	payload, ok := decodeWorkflowObject(raw, &report)
 	if !ok {
 		return report.finish()
 	}
-	items := workflowItems(payload, "shots", "items", "videoPrompts", "packages")
+	items := workflowItems(payload, "shots")
 	if len(items) == 0 {
 		report.add("missing_shots", "分镜产物至少需要一条镜头或生成 P", "")
 		return report.finish()
@@ -106,7 +108,7 @@ func ValidateStoryboardArtifact(raw json.RawMessage) WorkflowGateReport {
 	}
 	seen := map[string]bool{}
 	for index, item := range items {
-		itemID := workflowString(item, "id", "shotId", "packageId")
+		itemID := workflowString(item, "shotId")
 		if itemID == "" {
 			itemID = fmt.Sprintf("shot-%d", index+1)
 			report.add("missing_shot_id", "分镜缺少稳定 ID", itemID)
@@ -114,28 +116,69 @@ func ValidateStoryboardArtifact(raw json.RawMessage) WorkflowGateReport {
 			report.add("duplicate_shot_id", "分镜 ID 重复", itemID)
 		}
 		seen[itemID] = true
-		if workflowString(item, "sceneId", "scene", "sceneKey") == "" {
+		if workflowString(item, "sceneKey") == "" {
 			report.add("missing_scene_id", "分镜缺少场次标识", itemID)
 		}
-		prompt := workflowString(item, "prompt", "seedancePrompt", "videoPrompt")
-		if prompt == "" {
-			report.add("missing_shot_prompt", "分镜缺少 Seedance 提示词", itemID)
-		} else if !validStoryboardPromptStructure(prompt) {
-			report.add("invalid_shot_prompt_structure", "分镜提示词必须使用完整 Copy-only、Skill 5 或执行稿字段合同，不能只提交摘要描述", itemID)
+		if workflowString(item, "sourceScript") == "" {
+			report.add("missing_source_script", "分镜缺少对应原剧本", itemID)
 		}
-		if strings.Contains(prompt, "@图0") {
-			report.add("invalid_reference", "素材引用必须从 @图1 开始", itemID)
+		draft, ok := item["shotDraft"].(map[string]any)
+		if !ok || len(draft) == 0 {
+			report.add("missing_shot_draft", "分镜缺少可编辑结构", itemID)
+			continue
 		}
-		duration := workflowNumber(item, "duration", "seconds")
+		for _, field := range []string{"shotSize", "camera", "movement", "action", "performance", "continuityMode"} {
+			if workflowString(draft, field) == "" {
+				report.add("missing_shot_field", "分镜可编辑结构缺少 "+field, itemID)
+			}
+		}
+		duration := workflowNumber(draft, "durationSeconds")
 		if duration != 0 && (duration < 4 || duration > 15) {
 			report.add("invalid_duration", "镜头时长必须在 4–15 秒之间", itemID)
 		}
-		dialogue := workflowString(item, "dialogue", "spokenText")
+		dialogue := workflowString(draft, "dialogue")
 		if dialogue != "" && duration > 0 && visibleRuneCount(dialogue) > int(duration*5) {
 			report.add("dialogue_budget", "台词长度超过镜头时长可承载范围", itemID)
 		}
 	}
 	return report.finish()
+}
+
+func ValidateShotPromptArtifact(raw json.RawMessage) WorkflowGateReport {
+	report := newWorkflowGateReport()
+	payload, ok := decodeWorkflowObject(raw, &report)
+	if !ok {
+		return report.finish()
+	}
+	if workflowString(payload, "shotId") == "" {
+		report.add("missing_shot_id", "提示词产物缺少镜头 ID", "")
+	}
+	prompt := workflowString(payload, "prompt")
+	if prompt == "" {
+		report.add("missing_shot_prompt", "提示词产物缺少最终视频提示词", "")
+	} else if !validStoryboardPromptStructure(prompt) {
+		report.add("invalid_shot_prompt_structure", "最终提示词必须使用完整可执行字段合同和连续时间段", workflowString(payload, "shotId"))
+	}
+	if strings.Contains(prompt, "@图0") {
+		report.add("invalid_reference", "素材引用必须从 @图1 开始", workflowString(payload, "shotId"))
+	}
+	if workflowString(payload, "promptInputHash") == "" {
+		report.add("missing_prompt_input_hash", "提示词产物缺少输入快照哈希", workflowString(payload, "shotId"))
+	}
+	return report.finish()
+}
+
+// Deprecated wrappers keep non-workflow callers source-compatible while using v2 gates.
+func ValidateArtDesignArtifact(raw json.RawMessage) WorkflowGateReport {
+	return ValidateAssetExtractionArtifact(raw)
+}
+
+func ValidateAssetGenerationArtifact(raw json.RawMessage) WorkflowGateReport {
+	return ValidateAssetImagePromptArtifact(raw)
+}
+
+func ValidateStoryboardArtifact(raw json.RawMessage) WorkflowGateReport {
+	return ValidateShotPromptArtifact(raw)
 }
 
 func validStoryboardPromptStructure(prompt string) bool {

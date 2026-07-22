@@ -13,7 +13,7 @@ func TestWorkflowSkillEvaluationNeverWritesBusinessDataAndUsesSameInput(t *testi
 	setupVideoWorkflowTest(t)
 	detail := ensureVideoWorkflowTestRun(t)
 	draft := createWorkflowSkillTestDraft(t, WorkflowSkillStageArt, "1.2.0")
-	restore := useWorkflowSkillEvaluationExecutor(t, fakeWorkflowSkillExecutor{output: `{"directorSummary":"压迫感","items":[{"id":"character-1","kind":"character","name":"阿宁","prompt":"三视图角色设定"}]}`})
+	restore := useWorkflowSkillEvaluationExecutor(t, fakeWorkflowSkillExecutor{output: `{"items":[{"logicalAssetId":"CHAR-001","kind":"character","name":"阿宁","scriptEvidence":"阿宁进入房间","description":"进入房间的年轻角色"}]}`})
 	defer restore()
 	beforeStages, beforeArtifacts := workflowEvaluationBusinessCounts(t)
 

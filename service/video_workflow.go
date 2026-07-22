@@ -54,17 +54,18 @@ func EnsureWorkflowRun(userID string, input EnsureWorkflowRunInput) (WorkflowRun
 	}
 	confirmed := input.ScriptConfirmed && input.ScriptSnapshot != ""
 	scriptStatus := model.WorkflowStageRunStatusBlocked
-	artStatus := model.WorkflowStageRunStatusBlocked
+	assetExtractionStatus := model.WorkflowStageRunStatusBlocked
 	if confirmed {
 		scriptStatus = model.WorkflowStageRunStatusApproved
-		artStatus = model.WorkflowStageRunStatusReady
-		run.CurrentStageID = WorkflowStageArtDesign
+		assetExtractionStatus = model.WorkflowStageRunStatusReady
+		run.CurrentStageID = WorkflowStageAssetExtraction
 	}
 	stages := []model.WorkflowStageRun{
 		workflowInitialStage(run, WorkflowStageScriptAdaptation, scriptStatus, stamp),
-		workflowInitialStage(run, WorkflowStageArtDesign, artStatus, stamp),
-		workflowInitialStage(run, WorkflowStageAssetGeneration, model.WorkflowStageRunStatusBlocked, stamp),
-		workflowInitialStage(run, WorkflowStageSeedanceStoryboard, model.WorkflowStageRunStatusBlocked, stamp),
+		workflowInitialStage(run, WorkflowStageAssetExtraction, assetExtractionStatus, stamp),
+		workflowInitialStage(run, WorkflowStageAssetImagePrompt, model.WorkflowStageRunStatusBlocked, stamp),
+		workflowInitialStage(run, WorkflowStageShotBreakdown, model.WorkflowStageRunStatusBlocked, stamp),
+		workflowInitialStage(run, WorkflowStageShotPrompt, model.WorkflowStageRunStatusBlocked, stamp),
 	}
 	artifacts := []model.WorkflowArtifact{}
 	gates := []model.WorkflowQualityGateResult{}
@@ -109,8 +110,8 @@ func GetWorkflowRunDetail(userID string, id string) (WorkflowRunDetail, error) {
 			latest[stage.StageID] = stage
 		}
 	}
-	stages := make([]model.WorkflowStageRun, 0, 4)
-	for _, stageID := range []string{WorkflowStageScriptAdaptation, WorkflowStageArtDesign, WorkflowStageAssetGeneration, WorkflowStageSeedanceStoryboard} {
+	stages := make([]model.WorkflowStageRun, 0, 5)
+	for _, stageID := range []string{WorkflowStageScriptAdaptation, WorkflowStageAssetExtraction, WorkflowStageAssetImagePrompt, WorkflowStageShotBreakdown, WorkflowStageShotPrompt} {
 		if stage, exists := latest[stageID]; exists {
 			stages = append(stages, stage)
 		}
@@ -128,14 +129,18 @@ func GetWorkflowRunDetail(userID string, id string) (WorkflowRunDetail, error) {
 }
 
 func StartWorkflowStage(userID string, workflowRunID string, stageID string, idempotencyKey string) (model.WorkflowStageRun, error) {
-	return startWorkflowStage(userID, workflowRunID, stageID, idempotencyKey, "", nil)
+	return StartWorkflowStageWithInput(userID, workflowRunID, stageID, WorkflowStageStartInput{IdempotencyKey: idempotencyKey})
 }
 
 func StartWorkflowStageWithMedia(userID string, workflowRunID string, stageID string, idempotencyKey string, mediaBatchID string) (model.WorkflowStageRun, error) {
-	return startWorkflowStage(userID, workflowRunID, stageID, idempotencyKey, mediaBatchID, nil)
+	return StartWorkflowStageWithInput(userID, workflowRunID, stageID, WorkflowStageStartInput{IdempotencyKey: idempotencyKey, MediaBatchID: mediaBatchID})
 }
 
-func startWorkflowStage(userID string, workflowRunID string, stageID string, idempotencyKey string, mediaBatchID string, frozenRun *model.AgentRun) (model.WorkflowStageRun, error) {
+func StartWorkflowStageWithInput(userID string, workflowRunID string, stageID string, input WorkflowStageStartInput) (model.WorkflowStageRun, error) {
+	return startWorkflowStage(userID, workflowRunID, stageID, input, nil)
+}
+
+func startWorkflowStage(userID string, workflowRunID string, stageID string, input WorkflowStageStartInput, frozenRun *model.AgentRun) (model.WorkflowStageRun, error) {
 	detail, err := GetWorkflowRunDetail(userID, workflowRunID)
 	if err != nil {
 		return model.WorkflowStageRun{}, err
@@ -151,17 +156,21 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, ide
 		}
 		return current, nil
 	}
-	if stageID != WorkflowStageArtDesign && stageID != WorkflowStageAssetGeneration && stageID != WorkflowStageSeedanceStoryboard {
+	if stageID != WorkflowStageAssetExtraction && stageID != WorkflowStageAssetImagePrompt && stageID != WorkflowStageShotBreakdown && stageID != WorkflowStageShotPrompt {
 		return model.WorkflowStageRun{}, safeMessageError{message: "不支持的工作流阶段"}
 	}
 	if workflowStageBusyOrReviewable(current.Status) {
 		return current, nil
 	}
+	context, err := validateWorkflowStageContext(stageID, input.Context)
+	if err != nil {
+		return current, err
+	}
 	inputArtifact, err := workflowStageInputArtifact(detail, stageID)
 	if err != nil {
 		return current, err
 	}
-	systemPrompt, userPrompt := workflowStagePrompts(detail.Run, stageID, inputArtifact)
+	systemPrompt, userPrompt := workflowStagePrompts(detail.Run, stageID, inputArtifact, context)
 	executorKind := ""
 	imageManifestJSON := `{"items":[],"degraded":true,"reason":"text-only"}`
 	skillID, skillVersionID, skillVersion, skillContentHash, skillSnapshotJSON := "", "", "", "", ""
@@ -188,13 +197,13 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, ide
 		skillID, skillVersionID = resolvedSkill.Skill.ID, resolvedSkill.Version.ID
 		skillVersion, skillContentHash = resolvedSkill.Version.Version, resolvedSkill.Version.ContentHash
 		skillSnapshotJSON = workflowSkillSnapshotJSON(resolvedSkill)
-		if resolvedSkill.Package.Contract.ImagePolicy.Required && strings.TrimSpace(mediaBatchID) == "" {
+		if resolvedSkill.Package.Contract.ImagePolicy.Required && strings.TrimSpace(input.MediaBatchID) == "" {
 			return current, safeMessageError{message: "当前 Skill 要求上传参考图片"}
 		}
 	}
 	agentRun, err := CreateUserAgentRun(userID, CreateAgentRunInput{
 		Executor:          executorKind,
-		IdempotencyKey:    strings.TrimSpace(idempotencyKey),
+		IdempotencyKey:    strings.TrimSpace(input.IdempotencyKey),
 		ProjectID:         detail.Run.ProjectID,
 		EpisodeID:         detail.Run.EpisodeID,
 		WorkflowRunID:     detail.Run.ID,
@@ -206,7 +215,7 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, ide
 		SkillContentHash:  skillContentHash,
 		SkillSnapshotJSON: skillSnapshotJSON,
 		ImageManifestJSON: imageManifestJSON,
-		MediaBatchID:      strings.TrimSpace(mediaBatchID),
+		MediaBatchID:      strings.TrimSpace(input.MediaBatchID),
 		WritePolicy:       "confirm_before_write",
 		SystemPrompt:      systemPrompt,
 		UserPrompt:        userPrompt,
@@ -267,12 +276,14 @@ func CompleteWorkflowStageAgentRun(run model.AgentRun) error {
 	artifact := workflowArtifact(workflowRun, stage, run, stage.StageID, stage.Attempt, content, stamp)
 	var report WorkflowGateReport
 	switch stage.StageID {
-	case WorkflowStageArtDesign:
-		report = ValidateArtDesignArtifact(content)
-	case WorkflowStageAssetGeneration:
-		report = ValidateAssetGenerationArtifact(content)
-	case WorkflowStageSeedanceStoryboard:
-		report = ValidateStoryboardArtifact(content)
+	case WorkflowStageAssetExtraction:
+		report = ValidateAssetExtractionArtifact(content)
+	case WorkflowStageAssetImagePrompt:
+		report = ValidateAssetImagePromptArtifact(content)
+	case WorkflowStageShotBreakdown:
+		report = ValidateShotBreakdownArtifact(content)
+	case WorkflowStageShotPrompt:
+		report = ValidateShotPromptArtifact(content)
 	default:
 		report = ValidateScriptArtifact(content)
 	}
@@ -431,12 +442,15 @@ func workflowEvent(run model.WorkflowRun, stage model.WorkflowStageRun, eventTyp
 func workflowStageInputArtifact(detail WorkflowRunDetail, stageID string) (model.WorkflowArtifact, error) {
 	dependency := WorkflowStageScriptAdaptation
 	message := "请先确认生产剧本"
-	if stageID == WorkflowStageAssetGeneration {
-		dependency = WorkflowStageArtDesign
-		message = "请先批准美术设计阶段"
-	} else if stageID == WorkflowStageSeedanceStoryboard {
-		dependency = WorkflowStageAssetGeneration
-		message = "请先批准资产生成阶段"
+	if stageID == WorkflowStageAssetImagePrompt {
+		dependency = WorkflowStageAssetExtraction
+		message = "请先批准资产提取阶段"
+	} else if stageID == WorkflowStageShotBreakdown {
+		dependency = WorkflowStageAssetImagePrompt
+		message = "请先批准资产生图提示词阶段"
+	} else if stageID == WorkflowStageShotPrompt {
+		dependency = WorkflowStageShotBreakdown
+		message = "请先批准分镜拆解阶段"
 	}
 	stage := workflowDetailStage(detail, dependency)
 	if stage.Status != model.WorkflowStageRunStatusApproved && stage.Status != model.WorkflowStageRunStatusApplied {
@@ -450,24 +464,51 @@ func workflowStageInputArtifact(detail WorkflowRunDetail, stageID string) (model
 	return model.WorkflowArtifact{}, safeMessageError{message: message + "，且缺少已批准产物"}
 }
 
-func workflowStagePrompts(run model.WorkflowRun, stageID string, input model.WorkflowArtifact) (string, string) {
-	if stageID == WorkflowStageArtDesign {
-		return "你是影视导演与美术设定师。只输出 JSON，包含 directorSummary、referenceEvidence 和 items；每个 item 必须有 id、kind、name、prompt。referenceEvidence 在无图时输出空数组；收到参考图时必须逐图写出 imageRef（@图N）、observations 和 appliedTo，证明提示词确实基于画面。不得改变剧本事实。", fmt.Sprintf("工作流版本：%s\n请根据以下已确认生产剧本生成角色、场景、道具设定：\n%s", run.WorkflowVersion, run.ScriptSnapshot)
+func workflowStagePrompts(run model.WorkflowRun, stageID string, input model.WorkflowArtifact, context *WorkflowShotPromptContext) (string, string) {
+	switch stageID {
+	case WorkflowStageAssetExtraction:
+		return "你是影视资产提取师。只从剧本提取需要保持一致的角色、场景、道具和服装，不生成生图提示词。只输出 JSON：items[].logicalAssetId/kind/name/scriptEvidence/description。logicalAssetId 必须使用 CHAR/SCENE/PROP/COSTUME 加三位序号，证据不足不得猜测。", fmt.Sprintf("工作流版本：%s\n已确认生产剧本：\n%s", run.WorkflowVersion, run.ScriptSnapshot)
+	case WorkflowStageAssetImagePrompt:
+		return "你是影视资产生图提示词设计师。逐项保留上游 logicalAssetId/kind/name/scriptEvidence/description，新增可直接交给图片模型的 imagePrompt 和 status=ready；不得新增、遗漏、合并或重编号资产。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准资产提取：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
+	case WorkflowStageShotBreakdown:
+		return "你是影视导演与分镜拆解师。只输出可供用户修改确认的结构化分镜，不生成最终视频提示词。JSON 必须包含 shots[].shotId/sceneKey/sourceScript/shotDraft；shotDraft 包含 shotSize/camera/movement/action/performance/dialogue/durationSeconds/continuityMode。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准资产设计：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
+	default:
+		contextJSON, _ := json.Marshal(context)
+		return "你是单镜头多模态视频提示词导演。只处理当前已确认镜头，结合原剧本、结构化分镜和实际参考图片的画面理解生成最终提示词。只输出 JSON：shotId、prompt、promptInputHash、referenceEvidence。prompt 必须包含“场景：”“声音：”“画面内容：”“限制：”和连续时间段，禁止只写电影感摘要；参考图必须逐图记录 imageRef/observations/appliedTo。若引用上一镜尾帧，只把它作为剧情连续性参考，本镜从该画面之后继续发展；保持场景、角色身份、服装、光线、材质与画风一致，不要求第一帧复刻参考图，不重新诠释视觉设定。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准分镜拆解：\n%s\n\n当前已确认镜头上下文：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON, contextJSON)
 	}
-	if stageID == WorkflowStageAssetGeneration {
-		return "你是影视资产制作师。只输出 JSON，包含 referenceEvidence 和 items；必须逐项完成已批准美术设定，保留 id、kind、name，输出可直接交给图片模型的 prompt，并补充 sourceAssetId 和 status=ready。不得遗漏上游资产、合并不同资产或改变剧本事实。referenceEvidence 在无图时输出空数组；收到参考图时必须逐图写出 imageRef（@图N）、observations 和 appliedTo。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准美术产物：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
-	}
-	return "你是 Seedance 分镜师。只输出 JSON，包含 referenceEvidence 和 shots；每个 shot 必须有 id、sceneId、prompt、duration，可选 dialogue。每条 prompt 必须是可直接生成视频的完整 Copy-only 合同，依次包含“场景：”“声音：”“画面内容：”“限制：”，画面内容必须按 0-2秒、2-4秒等连续时间段描述；禁止只写电影感摘要。referenceEvidence 在无图时输出空数组；收到参考图时必须逐图写出 imageRef（@图N）、observations 和 appliedTo，证明提示词确实基于画面。duration 必须为 4–15 秒，素材引用使用 @图N。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准资产产物：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
 }
 
 func workflowStageAgentKind(stageID string) string {
-	if stageID == WorkflowStageArtDesign {
+	if stageID == WorkflowStageAssetExtraction {
 		return "asset_extractor"
 	}
-	if stageID == WorkflowStageAssetGeneration {
-		return "asset_producer"
+	if stageID == WorkflowStageAssetImagePrompt {
+		return "asset_prompt_designer"
 	}
-	return "storyboard_director"
+	if stageID == WorkflowStageShotBreakdown {
+		return "shot_breakdown_director"
+	}
+	return "shot_prompt_director"
+}
+
+func validateWorkflowStageContext(stageID string, raw json.RawMessage) (*WorkflowShotPromptContext, error) {
+	if stageID != WorkflowStageShotPrompt {
+		if len(strings.TrimSpace(string(raw))) > 0 && string(raw) != "null" {
+			return nil, safeMessageError{message: "该阶段不接受镜头上下文"}
+		}
+		return nil, nil
+	}
+	if len(raw) == 0 || len(raw) > maxWorkflowStageContextBytes {
+		return nil, safeMessageError{message: "缺少有效的已确认镜头上下文"}
+	}
+	var context WorkflowShotPromptContext
+	if json.Unmarshal(raw, &context) != nil || strings.TrimSpace(context.ShotID) == "" || strings.TrimSpace(context.SourceScript) == "" || len(context.ShotDraft) == 0 {
+		return nil, safeMessageError{message: "镜头上下文缺少 shotId、sourceScript 或 shotDraft"}
+	}
+	if len(context.References) > 32 {
+		return nil, safeMessageError{message: "镜头上下文参考图片过多"}
+	}
+	return &context, nil
 }
 
 func workflowDetailStage(detail WorkflowRunDetail, stageID string) model.WorkflowStageRun {

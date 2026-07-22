@@ -396,19 +396,21 @@ func workflowSkillPackageHash(packageValue WorkflowSkillPackage) string {
 }
 
 func workflowSkillRequiresEvaluation(stageKey string) bool {
-	return stageKey == WorkflowSkillStageScript || stageKey == WorkflowSkillStageArt || stageKey == WorkflowSkillStageAssets || stageKey == WorkflowSkillStageStoryboard
+	return stageKey == WorkflowSkillStageScript || stageKey == WorkflowSkillStageArt || stageKey == WorkflowSkillStageAssets || stageKey == WorkflowSkillStageStoryboard || stageKey == WorkflowSkillStageVideo
 }
 
 func workflowSkillStageForRun(stageID string) string {
 	switch stageID {
 	case WorkflowStageScriptAdaptation:
 		return WorkflowSkillStageScript
-	case WorkflowStageArtDesign:
+	case WorkflowStageAssetExtraction:
 		return WorkflowSkillStageArt
-	case WorkflowStageAssetGeneration:
+	case WorkflowStageAssetImagePrompt:
 		return WorkflowSkillStageAssets
-	case WorkflowStageSeedanceStoryboard:
+	case WorkflowStageShotBreakdown:
 		return WorkflowSkillStageStoryboard
+	case WorkflowStageShotPrompt:
+		return WorkflowSkillStageVideo
 	default:
 		return strings.TrimSpace(stageID)
 	}

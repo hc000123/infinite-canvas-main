@@ -8,17 +8,42 @@ import (
 
 const (
 	VideoWorkflowID      = "seedance-2-multi-agent-storyboard-team"
-	VideoWorkflowVersion = "1.1.0"
+	VideoWorkflowVersion = "2.0.0"
 
 	WorkflowStageScriptAdaptation   = "script-adaptation"
-	WorkflowStageArtDesign          = "art-design"
-	WorkflowStageAssetGeneration    = "asset-generation"
-	WorkflowStageSeedanceStoryboard = "seedance-storyboard"
-	workflowArtifactSchemaVersion   = "video-workflow-v1"
-	workflowGateValidatorVersion    = "video-workflow-gates-v1"
+	WorkflowStageAssetExtraction    = "asset-extraction"
+	WorkflowStageAssetImagePrompt   = "asset-image-prompt"
+	WorkflowStageShotBreakdown      = "shot-breakdown"
+	WorkflowStageShotPrompt         = "shot-prompt"
+	WorkflowStageArtDesign          = WorkflowStageAssetExtraction
+	WorkflowStageAssetGeneration    = WorkflowStageAssetImagePrompt
+	WorkflowStageSeedanceStoryboard = WorkflowStageShotBreakdown
+	workflowArtifactSchemaVersion   = "video-workflow-v2"
+	workflowGateValidatorVersion    = "video-workflow-gates-v2"
 	maxWorkflowScriptBytes          = 600_000
 	maxWorkflowArtifactBytes        = 4_000_000
+	maxWorkflowStageContextBytes    = 256 << 10
 )
+
+type WorkflowStageStartInput struct {
+	IdempotencyKey string          `json:"idempotencyKey"`
+	MediaBatchID   string          `json:"mediaBatchId"`
+	Context        json.RawMessage `json:"context"`
+}
+
+type WorkflowShotPromptContext struct {
+	ShotID       string                     `json:"shotId"`
+	SourceScript string                     `json:"sourceScript"`
+	ShotDraft    map[string]any             `json:"shotDraft"`
+	References   []WorkflowReferenceContext `json:"references"`
+}
+
+type WorkflowReferenceContext struct {
+	LogicalAssetID string `json:"logicalAssetId"`
+	LibraryAssetID string `json:"libraryAssetId"`
+	Version        string `json:"version"`
+	Usage          string `json:"usage"`
+}
 
 type EnsureWorkflowRunInput struct {
 	ProjectID       string `json:"projectId"`

@@ -45,7 +45,7 @@ export function useWorkflowStageActions(input: { detail: RemoteWorkflowRunDetail
         reject: () => (artifact && stage ? execute("reject", () => reviewWorkflowStage(stage.id, { artifactHash: artifact.contentHash, decision: "rejected", comment: "需要调整后重新生成" }), "已退回当前产物") : undefined),
         retry: () => (stage ? execute("retry", () => retryWorkflowStage(stage.id, workflowActionKey(stage.workflowRunId, stage.stageId, stage.attempt + 1, "retry")), "已重新加入队列") : undefined),
         stage,
-        start: (mediaBatchId?: string) => (input.detail ? execute("start", () => startWorkflowStage(input.detail!.run.id, input.stageId, startKey, mediaBatchId), "阶段已加入执行队列") : undefined),
+        start: (mediaBatchId?: string) => (input.detail ? execute("start", () => startWorkflowStage(input.detail!.run.id, input.stageId, startKey, { mediaBatchId }), "阶段已加入执行队列") : undefined),
         startKey,
     };
 }

@@ -4,8 +4,8 @@ import test from "node:test";
 import { workflowRunRequest } from "./workflow-runs-contract.ts";
 
 test("starts a stage with an idempotency key", () => {
-    assert.deepEqual(workflowRunRequest.startStage("run-1", "art-design", "idem-1"), {
-        path: "/api/v1/workflow-runs/run-1/stages/art-design/start",
+    assert.deepEqual(workflowRunRequest.startStage("run-1", "asset-extraction", "idem-1"), {
+        path: "/api/v1/workflow-runs/run-1/stages/asset-extraction/start",
         body: { idempotencyKey: "idem-1" },
     });
 });
