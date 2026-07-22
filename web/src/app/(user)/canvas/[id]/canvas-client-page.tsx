@@ -10,6 +10,7 @@ import { useCanvasConnections } from "../hooks/use-canvas-connections";
 import { useCanvasClipboardActions } from "../hooks/use-canvas-clipboard-actions";
 import { useCanvasConfigNodeActions } from "../hooks/use-canvas-config-node-actions";
 import { useCanvasDerivedState } from "../hooks/use-canvas-derived-state";
+import { useCanvasDeleteActions } from "../hooks/use-canvas-delete-actions";
 import { useCanvasGlobalPointerEvents } from "../hooks/use-canvas-global-pointer-events";
 import { useCanvasHistory } from "../hooks/use-canvas-history";
 import { useCanvasKeyboardShortcuts } from "../hooks/use-canvas-keyboard-shortcuts";
@@ -124,6 +125,7 @@ function InfiniteCanvasPage() {
         didInitialCenterRef,
         editRequestNonce,
         editingNodeId,
+        expandedTextNodeId,
         handledFocusNodeIdRef,
         hoveredNodeId,
         imageBriefInitialId,
@@ -165,6 +167,7 @@ function InfiniteCanvasPage() {
         setDialogNodeId,
         setEditRequestNonce,
         setEditingNodeId,
+        setExpandedTextNodeId,
         setHoveredNodeId,
         setImageBriefOpen,
         setInfoNodeId,
@@ -396,6 +399,7 @@ function InfiniteCanvasPage() {
         angleNodeId,
         previewNodeId,
     });
+    const expandedTextNode = expandedTextNodeId ? nodeById.get(expandedTextNodeId) || null : null;
     const { episodeWorkbenchStats, episodeProductionLabel, timelineShots, timelineShotGroups, activeTimelineShot, activeTimelineShotGroups, activeTimelineNodeIds, activeTimelineNodes, productionPackages, productionPackageLabelMap, relatedHighlight } =
         useCanvasProductionWorkbenchState({
             canvasId,
@@ -615,13 +619,14 @@ function InfiniteCanvasPage() {
         workspaceProjectTitle,
     });
 
+    const { deleteConnection, deleteSelection } = useCanvasDeleteActions({ deleteNodes, selectedConnectionId, selectedNodeIdsRef, setConnections, setSelectedConnectionId });
+
     const toolbarActions = useCanvasToolbarActions({
         createNode,
         handleUploadRequest,
-        deleteNodes,
+        deleteSelection,
         deselectCanvas,
         openEpisodeWorkbench,
-        selectedNodeIds,
         setClearConfirmOpen,
         setAssetPickerTab,
         setAssetPickerOpen,
@@ -665,8 +670,6 @@ function InfiniteCanvasPage() {
         containerRef,
         nodesRef,
         selectedNodeIdsRef,
-        selectedConnectionId,
-        setConnections,
         setSelectedNodeIds,
         setSelectedConnectionId,
         setContextMenu,
@@ -677,7 +680,7 @@ function InfiniteCanvasPage() {
         copySelectedNodes,
         pasteCopiedNodes,
         pasteSystemClipboard,
-        deleteNodes,
+        deleteSelection,
     });
 
     const { normalizeVideoFrameReferences, refreshingReviewNodeId, refreshNodeVolcengineReview, submittingReviewNodeId, submitNodeVolcengineReview } = useCanvasNodeMediaQualityActions({
@@ -876,6 +879,7 @@ function InfiniteCanvasPage() {
                         relatedConnectionIds={relatedHighlight.connectionIds}
                         selectedConnectionId={selectedConnectionId}
                         onSelectConnection={renderActions.selectConnection}
+                        onDeleteConnection={deleteConnection}
                     />
 
                     <CanvasNodesLayer
@@ -923,6 +927,7 @@ function InfiniteCanvasPage() {
                         setSelectedNodeIds={setSelectedNodeIds}
                         setNodeImageSettingsOpen={setNodeImageSettingsOpen}
                         setToolbarNodeId={setToolbarNodeId}
+                        onExpandText={setExpandedTextNodeId}
                         showImageInfo={showImageInfo}
                         submittingReviewNodeId={submittingReviewNodeId}
                         toggleBatchExpanded={toggleBatchExpanded}
@@ -997,6 +1002,7 @@ function InfiniteCanvasPage() {
                     imageBriefOpenRequestId={imageBriefOpenRequestId}
                     imageInputRef={imageInputRef}
                     infoNode={infoNode}
+                    expandedTextNode={expandedTextNode}
                     nodes={nodes}
                     previewNode={previewNode}
                     projectId={workspaceProjectId}
@@ -1015,6 +1021,7 @@ function InfiniteCanvasPage() {
                     onCloseCrop={renderActions.closeCrop}
                     onCloseImageBrief={renderActions.closeImageBrief}
                     onCloseInfo={renderActions.closeInfo}
+                    onCloseTextEditor={() => setExpandedTextNodeId(null)}
                     onClosePreview={renderActions.closePreview}
                     onCloseScriptManager={renderActions.closeScriptManager}
                     onCloseStoryboardManager={renderActions.closeStoryboardManager}
@@ -1023,6 +1030,7 @@ function InfiniteCanvasPage() {
                     onGenerateAngleNode={(node, params) => void generateAngleNode(node, params)}
                     onImageInputChange={handleImageInputChange}
                     onOpenStoryboardGroup={renderActions.openStoryboardGroup}
+                    onSaveTextNode={handleNodeContentChange}
                 />
             </section>
             <CanvasSideInspector

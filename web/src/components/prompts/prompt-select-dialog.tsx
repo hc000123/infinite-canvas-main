@@ -88,10 +88,15 @@ export function PromptSelectDialog({
         if (tag === ALL_PROMPTS_OPTION) return setSelectedTags([]);
         setSelectedTags((items) => (items.includes(tag) ? items.filter((item) => item !== tag) : [...items, tag]));
     };
+    const closeDialog = () => {
+        setSelectedPrompt(null);
+        setCreateOpen(false);
+        createForm.resetFields();
+        onOpenChange(false);
+    };
     const selectPrompt = (promptText: string) => {
         onSelect(promptText);
-        setSelectedPrompt(null);
-        onOpenChange(false);
+        closeDialog();
     };
 
     const defaultCreateNodeGroup = () => {
@@ -164,7 +169,11 @@ export function PromptSelectDialog({
     };
 
     useEffect(() => {
-        if (!open) return;
+        if (!open) {
+            setSelectedPrompt(null);
+            setCreateOpen(false);
+            return;
+        }
         setSelectedNodeGroup(nodeGroup || ALL_PROMPTS_OPTION);
         setSelectedType(ALL_PROMPTS_OPTION);
         setSelectedScenario(ALL_PROMPTS_OPTION);
@@ -182,7 +191,7 @@ export function PromptSelectDialog({
     };
 
     return (
-        <Modal rootClassName="studio-modal" title="提示词库" open={open} onCancel={() => onOpenChange(false)} footer={null} width={1040} centered styles={{ body: { maxHeight: "calc(100dvh - 160px)", overflowY: "auto" } }}>
+        <Modal rootClassName="studio-modal" title="提示词库" open={open} onCancel={closeDialog} footer={null} width={1040} centered destroyOnHidden styles={{ body: { maxHeight: "calc(100dvh - 160px)", overflowY: "auto" } }}>
             <div data-canvas-no-zoom onWheelCapture={(event) => event.stopPropagation()}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 flex-1 gap-2 sm:max-w-2xl">
@@ -191,7 +200,7 @@ export function PromptSelectDialog({
                             新建
                         </Button>
                     </div>
-                    <Button size="large" icon={<X className="size-4" />} onClick={() => onOpenChange(false)}>
+                    <Button size="large" icon={<X className="size-4" />} onClick={closeDialog}>
                         关闭
                     </Button>
                 </div>
@@ -294,8 +303,8 @@ export function PromptSelectDialog({
                     ) : null}
                 </div>
             </div>
-            <PromptDetailDialog prompt={selectedPrompt} projectId={projectId} onClose={() => setSelectedPrompt(null)} onCopy={(text) => selectPrompt(text)} onUse={selectPrompt} />
-            <PromptCreateDialog form={createForm} open={createOpen} categories={promptCategories} saving={isSavingPrompt} onCancel={() => setCreateOpen(false)} onSave={saveCreatedPrompt} />
+            <PromptDetailDialog prompt={selectedPrompt} projectId={projectId} onClose={closeDialog} onCopy={(text) => selectPrompt(text)} onUse={selectPrompt} />
+            <PromptCreateDialog form={createForm} open={createOpen} categories={promptCategories} saving={isSavingPrompt} onCancel={closeDialog} onSave={saveCreatedPrompt} />
         </Modal>
     );
 }

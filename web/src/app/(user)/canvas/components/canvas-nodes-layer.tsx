@@ -3,6 +3,7 @@
 import type { Dispatch, MouseEvent, MutableRefObject, SetStateAction } from "react";
 
 import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions";
+import type { CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import { getNodeProductionPackageId, type CanvasProductionPackageSummary } from "../utils/canvas-production-packages";
 import { getInputSummary, productionNodeBadge } from "../utils/canvas-page-helpers";
 import { CanvasNodeType, type CanvasConnection, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata, type ContextMenuState, type SelectionBox, type ViewportTransform } from "../types";
@@ -48,7 +49,7 @@ type Props = {
     handleGenerateNode: (nodeId: string, mode: CanvasGenerationMode, prompt: string) => void | Promise<unknown>;
     handleNodeContentChange: (nodeId: string, content: string) => void;
     handleNodeMouseDown: (event: MouseEvent, nodeId: string) => void;
-    handleNodePromptChange: (nodeId: string, prompt: string) => void;
+    handleNodePromptChange: (nodeId: string, prompt: string, promptDocument?: CanvasPromptDocument) => void;
     handleNodeResize: (nodeId: string, width: number, height: number, position?: { x: number; y: number }) => void;
     handleRefreshVideoTask: (node: CanvasNodeData) => void | Promise<void>;
     hideNodeToolbar: () => void;
@@ -62,6 +63,7 @@ type Props = {
     setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
     setNodeImageSettingsOpen: Dispatch<SetStateAction<boolean>>;
     setToolbarNodeId: Dispatch<SetStateAction<string | null>>;
+    onExpandText: (nodeId: string) => void;
     toggleBatchExpanded: (nodeId: string) => void;
 };
 
@@ -115,6 +117,7 @@ export function CanvasNodesLayer({
     setSelectedNodeIds,
     setNodeImageSettingsOpen,
     setToolbarNodeId,
+    onExpandText,
     toggleBatchExpanded,
 }: Props) {
     return (
@@ -156,6 +159,10 @@ export function CanvasNodesLayer({
                                 }}
                                 referenceMentionOptions={panelNode.type === CanvasNodeType.Video ? buildReferenceMentionOptions(generationInputs) : []}
                                 hasConnectedText={generationInputs.some((input) => input.type === "text" && Boolean(input.text?.trim()))}
+                                onPreviewReference={(nodeId) => {
+                                    const referenceNode = nodesRef.current.find((item) => item.id === nodeId);
+                                    if (referenceNode?.type === CanvasNodeType.Image) nodeToolActions.onViewImage(referenceNode);
+                                }}
                             />
                         );
                     }}
@@ -205,6 +212,7 @@ export function CanvasNodesLayer({
                         setDialogNodeId(targetNode.id);
                         setToolbarNodeId(null);
                     }}
+                    onExpandText={(node) => onExpandText(node.id)}
                     onDownload={nodeToolActions.onDownload}
                     onViewImage={nodeToolActions.onViewImage}
                     onReviewAsset={nodeToolActions.onReviewAsset}

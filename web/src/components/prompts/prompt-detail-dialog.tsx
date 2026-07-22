@@ -44,7 +44,7 @@ export function PromptDetailDialog({
 
     return (
         <>
-            <Modal rootClassName="studio-modal" title={prompt?.title} open={Boolean(prompt)} onCancel={onClose} footer={null} width={860}>
+            <Modal rootClassName="studio-modal" title={prompt?.title} open={Boolean(prompt)} onCancel={onClose} footer={null} width={860} destroyOnHidden>
                 {prompt ? (
                     <>
                         <div className={hasPreviewPanel ? "grid gap-5 md:grid-cols-[300px_minmax(0,1fr)]" : "grid gap-5"}>

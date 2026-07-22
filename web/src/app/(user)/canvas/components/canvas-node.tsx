@@ -43,6 +43,7 @@ type CanvasNodeProps = {
     onRefreshVideoTask?: (node: CanvasNodeData) => void;
     onGenerateImage?: (node: CanvasNodeData) => void;
     onImageQuickAction?: (node: CanvasNodeData, action: "image-to-image" | "upscale") => void;
+    onExpandText?: (node: CanvasNodeData) => void;
     onDownload?: (node: CanvasNodeData) => void;
     onViewImage?: (node: CanvasNodeData) => void;
     onReviewAsset?: (node: CanvasNodeData) => void;
@@ -85,6 +86,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onRefreshVideoTask,
     onGenerateImage,
     onImageQuickAction,
+    onExpandText,
     onDownload,
     onViewImage,
     onReviewAsset,
@@ -311,6 +313,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onRefreshVideoTask={onRefreshVideoTask}
                         onGenerateImage={onGenerateImage}
                         onImageQuickAction={onImageQuickAction}
+                        onExpandText={onExpandText}
                         onDownload={onDownload}
                         onReviewAsset={onReviewAsset}
                         reviewSubmitting={reviewSubmitting}

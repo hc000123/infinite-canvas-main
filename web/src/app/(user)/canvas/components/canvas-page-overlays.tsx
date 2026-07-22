@@ -13,6 +13,7 @@ import { CanvasImagePreviewModal, ClearCanvasConfirmModal } from "./canvas-page-
 import { ImageBriefWorkbenchDrawer } from "./image-brief-workbench-drawer";
 import { ScriptManagerDrawer } from "./script-manager-drawer";
 import { StoryboardManagerDrawer } from "./storyboard-manager-drawer";
+import { CanvasTextEditorModal } from "./canvas-text-editor-modal";
 
 type Props = {
     angleNode: CanvasNodeData | null;
@@ -26,6 +27,7 @@ type Props = {
     imageBriefOpenRequestId: number;
     imageInputRef: RefObject<HTMLInputElement | null>;
     infoNode: CanvasNodeData | null;
+    expandedTextNode: CanvasNodeData | null;
     previewNode: CanvasNodeData | null;
     projectId: string;
     projectTitle: string;
@@ -44,6 +46,7 @@ type Props = {
     onCloseCrop: () => void;
     onCloseImageBrief: () => void;
     onCloseInfo: () => void;
+    onCloseTextEditor: () => void;
     onClosePreview: () => void;
     onCloseScriptManager: () => void;
     onCloseStoryboardManager: () => void;
@@ -52,6 +55,7 @@ type Props = {
     onGenerateAngleNode: (node: CanvasNodeData, params: CanvasImageAngleParams) => void;
     onImageInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
     onOpenStoryboardGroup: (groupId: string) => void;
+    onSaveTextNode: (nodeId: string, content: string) => void;
 };
 
 export function CanvasPageOverlays({
@@ -66,6 +70,7 @@ export function CanvasPageOverlays({
     imageBriefOpenRequestId,
     imageInputRef,
     infoNode,
+    expandedTextNode,
     previewNode,
     projectId,
     projectTitle,
@@ -84,6 +89,7 @@ export function CanvasPageOverlays({
     onCloseCrop,
     onCloseImageBrief,
     onCloseInfo,
+    onCloseTextEditor,
     onClosePreview,
     onCloseScriptManager,
     onCloseStoryboardManager,
@@ -92,12 +98,15 @@ export function CanvasPageOverlays({
     onGenerateAngleNode,
     onImageInputChange,
     onOpenStoryboardGroup,
+    onSaveTextNode,
 }: Props) {
     return (
         <>
             <input ref={imageInputRef} type="file" accept="image/*,video/*,audio/*" className="hidden" multiple onChange={onImageInputChange} />
 
             <CanvasNodeInfoModal node={infoNode} open={Boolean(infoNode)} onClose={onCloseInfo} />
+
+            <CanvasTextEditorModal node={expandedTextNode} onClose={onCloseTextEditor} onSave={onSaveTextNode} />
 
             {cropNode?.metadata?.content ? (
                 <CanvasNodeCropDialog dataUrl={cropNode.metadata.content} open={Boolean(cropNode)} onClose={onCloseCrop} onConfirm={(crop) => onCropImageNode(cropNode, crop)} onConfirmGrid={() => onCropImageNode(cropNode, { x: 0, y: 0, width: 1, height: 1 }, "grid")} />

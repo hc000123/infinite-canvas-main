@@ -11,11 +11,12 @@ type Props = {
     nodeById: Map<string, CanvasNodeData>;
     nodes: CanvasNodeData[];
     onSelectConnection: (connectionId: string) => void;
+    onDeleteConnection: (connectionId: string) => void;
     relatedConnectionIds: Set<string>;
     selectedConnectionId: string | null;
 };
 
-export function CanvasConnectionsLayer({ connectingParams, connections, mouseWorld, nodeById, nodes, onSelectConnection, relatedConnectionIds, selectedConnectionId }: Props) {
+export function CanvasConnectionsLayer({ connectingParams, connections, mouseWorld, nodeById, nodes, onSelectConnection, onDeleteConnection, relatedConnectionIds, selectedConnectionId }: Props) {
     return (
         <svg className="absolute left-0 top-0 h-[10000px] w-[10000px] overflow-visible" style={{ pointerEvents: "none", transform: "translateZ(0)", zIndex: 0 }}>
             {connections
@@ -29,7 +30,18 @@ export function CanvasConnectionsLayer({ connectingParams, connections, mouseWor
                     const to = nodeById.get(connection.toNodeId);
                     if (!from || !to) return null;
 
-                    return <ConnectionPath key={connection.id} connection={connection} from={from} to={to} active={selectedConnectionId === connection.id || relatedConnectionIds.has(connection.id)} onSelect={() => onSelectConnection(connection.id)} />;
+                    return (
+                        <ConnectionPath
+                            key={connection.id}
+                            connection={connection}
+                            from={from}
+                            to={to}
+                            active={selectedConnectionId === connection.id || relatedConnectionIds.has(connection.id)}
+                            selected={selectedConnectionId === connection.id}
+                            onSelect={() => onSelectConnection(connection.id)}
+                            onDelete={() => onDeleteConnection(connection.id)}
+                        />
+                    );
                 })}
             {connectingParams ? <ActiveConnectionPath node={nodeById.get(connectingParams.nodeId)} handle={connectingParams} mouseWorld={mouseWorld} /> : null}
         </svg>

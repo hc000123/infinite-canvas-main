@@ -5,6 +5,7 @@ import { useCallback, type Dispatch, type PointerEvent as ReactPointerEvent, typ
 import type { AiConfig } from "@/stores/use-config-store";
 import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
 import { collectBatchAwareDeletedNodeIds, removeDeletedNodesFromBatches } from "../utils/canvas-batch-nodes";
+import type { CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import { placeCanvasNodeAwayFromNodes, resolveRightwardNodePosition } from "../utils/canvas-node-placement";
 import { CanvasNodeType, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type ContextMenuState, type Position } from "../types";
 
@@ -238,8 +239,8 @@ export function useCanvasNodeCrudActions({
     );
 
     const handleNodePromptChange = useCallback(
-        (nodeId: string, prompt: string) => {
-            setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, prompt } } : node)));
+        (nodeId: string, prompt: string, promptDocument?: CanvasPromptDocument) => {
+            setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, prompt, ...(promptDocument ? { promptDocument } : {}) } } : node)));
         },
         [setNodes],
     );

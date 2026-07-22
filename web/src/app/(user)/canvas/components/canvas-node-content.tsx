@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode, RefObject } from "react";
-import { AudioLines, ChevronRight, Image as ImageIcon, RefreshCw, Sparkles, Star, Upload } from "lucide-react";
+import { AudioLines, ChevronRight, Image as ImageIcon, Maximize2, RefreshCw, Sparkles, Star, Upload } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
@@ -29,6 +29,7 @@ export type NodeContentRendererProps = {
     onRefreshVideoTask?: (node: CanvasNodeData) => void;
     onGenerateImage?: (node: CanvasNodeData) => void;
     onImageQuickAction?: (node: CanvasNodeData, action: "image-to-image" | "upscale") => void;
+    onExpandText?: (node: CanvasNodeData) => void;
     onDownload?: (node: CanvasNodeData) => void;
     onReviewAsset?: (node: CanvasNodeData) => void;
     reviewSubmitting?: boolean;
@@ -121,25 +122,42 @@ function ErrorContent({ node, theme, onRetry, onRefreshVideoTask, showPanel }: P
     );
 }
 
-function TextContent({ node, theme, isEditingContent, textareaRef, onContentChange, onStopEditing, onGenerateImage }: NodeContentRendererProps) {
+function TextContent({ node, theme, isEditingContent, textareaRef, onContentChange, onStopEditing, onGenerateImage, onExpandText }: NodeContentRendererProps) {
     return (
         <div className="flex h-full w-full flex-col overflow-hidden pt-8">
-            <button
-                type="button"
-                className="absolute right-3 top-3 z-20 inline-flex h-8 items-center gap-1 rounded-full border px-2.5 text-xs font-medium opacity-85 backdrop-blur-md transition hover:scale-[1.02] hover:opacity-100"
-                style={{ background: `${theme.toolbar.panel}dd`, borderColor: theme.node.stroke, color: theme.node.text }}
-                onClick={(event) => {
-                    event.stopPropagation();
-                    onGenerateImage?.(node);
-                }}
-                onMouseDown={(event) => event.stopPropagation()}
-                onPointerDown={(event) => event.stopPropagation()}
-                title="用文本生图"
-                aria-label="用文本生图"
-            >
-                <ImageIcon className="size-3.5" />
-                生图
-            </button>
+            <div className="absolute right-3 top-3 z-20 flex items-center gap-1">
+                <button
+                    type="button"
+                    className="inline-flex size-8 items-center justify-center rounded-full border opacity-85 backdrop-blur-md transition hover:scale-[1.02] hover:opacity-100"
+                    style={{ background: `${theme.toolbar.panel}dd`, borderColor: theme.node.stroke, color: theme.node.text }}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onExpandText?.(node);
+                    }}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    title="放大编辑文本"
+                    aria-label="放大编辑文本"
+                >
+                    <Maximize2 className="size-3.5" />
+                </button>
+                <button
+                    type="button"
+                    className="inline-flex h-8 items-center gap-1 rounded-full border px-2.5 text-xs font-medium opacity-85 backdrop-blur-md transition hover:scale-[1.02] hover:opacity-100"
+                    style={{ background: `${theme.toolbar.panel}dd`, borderColor: theme.node.stroke, color: theme.node.text }}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onGenerateImage?.(node);
+                    }}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    title="用文本生图"
+                    aria-label="用文本生图"
+                >
+                    <ImageIcon className="size-3.5" />
+                    生图
+                </button>
+            </div>
             {isEditingContent ? (
                 <textarea
                     ref={textareaRef}
