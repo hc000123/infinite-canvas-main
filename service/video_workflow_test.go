@@ -224,6 +224,50 @@ func TestAssetImagePromptQualityGateKeepsExactUpstreamIDs(t *testing.T) {
 	}
 }
 
+func TestValidateAssetExtractionArtifactAcceptsCharacterVariant(t *testing.T) {
+	report := ValidateAssetExtractionArtifact(json.RawMessage(`{"items":[
+		{"logicalAssetId":"CHAR-001","kind":"character","name":"林秋","scriptEvidence":"林秋躺在床上","description":"六十岁女性"},
+		{"logicalAssetId":"COSTUME-001","kind":"costume","name":"病中旧棉衣","scriptEvidence":"林秋穿着旧棉衣","description":"褪色旧棉衣","parentLogicalAssetId":"CHAR-001","variantType":"costume","variantName":"病中旧棉衣"}
+	]}`))
+	if !report.Passed {
+		t.Fatalf("expected linked variant to pass: %+v", report.Issues)
+	}
+}
+
+func TestValidateAssetExtractionArtifactRejectsOrphanCharacterVariant(t *testing.T) {
+	report := ValidateAssetExtractionArtifact(json.RawMessage(`{"items":[
+		{"logicalAssetId":"COSTUME-001","kind":"costume","name":"旧棉衣","scriptEvidence":"她穿旧棉衣","description":"褪色旧棉衣","parentLogicalAssetId":"CHAR-999","variantType":"costume","variantName":"旧棉衣"}
+	]}`))
+	if report.Passed {
+		t.Fatal("expected orphan variant to fail")
+	}
+	codes := map[string]bool{}
+	for _, issue := range report.Issues {
+		codes[issue.Code] = true
+	}
+	if !codes["invalid_variant_parent"] {
+		t.Fatalf("issues=%+v", report.Issues)
+	}
+}
+
+func TestAssetImagePromptQualityGatePreservesCharacterVariantRelationship(t *testing.T) {
+	report := ValidateAssetImagePromptArtifact(json.RawMessage(`{"items":[
+		{"logicalAssetId":"CHAR-001","kind":"character","name":"林秋","scriptEvidence":"林秋","description":"角色","imagePrompt":"角色设定图","status":"ready"},
+		{"logicalAssetId":"COSTUME-001","kind":"costume","name":"旧棉衣","scriptEvidence":"穿旧棉衣","description":"服装","imagePrompt":"服装设定图","status":"ready","parentLogicalAssetId":"CHAR-001","variantType":"costume","variantName":"另一个名称"}
+	]}`))
+	validateWorkflowAssetIdentity(
+		[]byte(`{"items":[{"logicalAssetId":"CHAR-001"},{"logicalAssetId":"COSTUME-001","parentLogicalAssetId":"CHAR-001","variantType":"costume","variantName":"旧棉衣"}]}`),
+		[]byte(`{"items":[{"logicalAssetId":"CHAR-001"},{"logicalAssetId":"COSTUME-001","parentLogicalAssetId":"CHAR-001","variantType":"costume","variantName":"另一个名称"}]}`),
+		&report,
+	)
+	if report.Passed {
+		t.Fatal("expected changed character variant relationship to fail")
+	}
+	if report.Issues[len(report.Issues)-1].Code != "changed_asset_relationship" {
+		t.Fatalf("issues=%+v", report.Issues)
+	}
+}
+
 func setupVideoWorkflowTest(t *testing.T) {
 	t.Helper()
 	setupAITaskTestDB(t)

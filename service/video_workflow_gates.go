@@ -40,6 +40,12 @@ func ValidateAssetExtractionArtifact(raw json.RawMessage) WorkflowGateReport {
 	if len(items) > 300 {
 		report.add("too_many_assets", "单次美术产物不能超过 300 条资产", "")
 	}
+	characterIDs := map[string]bool{}
+	for _, item := range items {
+		if workflowString(item, "kind", "type", "category") == "character" {
+			characterIDs[workflowString(item, "logicalAssetId")] = true
+		}
+	}
 	seen := map[string]bool{}
 	for index, item := range items {
 		itemID := workflowString(item, "logicalAssetId")
@@ -55,7 +61,8 @@ func ValidateAssetExtractionArtifact(raw json.RawMessage) WorkflowGateReport {
 		if workflowString(item, "name", "title") == "" {
 			report.add("missing_asset_name", "资产缺少名称", itemID)
 		}
-		if workflowString(item, "kind", "type", "category") == "" {
+		kind := workflowString(item, "kind", "type", "category")
+		if kind == "" {
 			report.add("missing_asset_kind", "资产缺少角色、场景或道具类型", itemID)
 		}
 		if workflowString(item, "scriptEvidence") == "" {
@@ -63,6 +70,19 @@ func ValidateAssetExtractionArtifact(raw json.RawMessage) WorkflowGateReport {
 		}
 		if workflowString(item, "description") == "" {
 			report.add("missing_asset_description", "资产缺少从剧本提取的描述", itemID)
+		}
+		if kind == "costume" {
+			parentID := workflowString(item, "parentLogicalAssetId")
+			if parentID == "" || !characterIDs[parentID] {
+				report.add("invalid_variant_parent", "角色马甲必须绑定当前产物中的角色编号", itemID)
+			}
+			variantType := workflowString(item, "variantType")
+			if !map[string]bool{"costume": true, "hair": true, "makeup": true, "age": true, "injury": true, "other": true}[variantType] {
+				report.add("invalid_variant_type", "角色马甲必须标记服装、发型、妆容、年龄、伤势或其他外观变化", itemID)
+			}
+			if workflowString(item, "variantName") == "" {
+				report.add("missing_variant_name", "角色马甲缺少马甲名称", itemID)
+			}
 		}
 	}
 	return report.finish()
