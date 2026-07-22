@@ -23,6 +23,7 @@ export function collectAssetPackageFiles(assets: Asset[]): AssetPackageFileSourc
         const versions = Array.isArray(asset.metadata?.assetVersions) ? asset.metadata.assetVersions : [];
         versions.forEach((value) => {
             const version = readRecord(value);
+            if (!version) return;
             const kind = version?.kind;
             if (kind === "text" || kind === "image" || kind === "video" || kind === "audio") add(kind, version.data);
         });

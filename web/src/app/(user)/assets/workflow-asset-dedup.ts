@@ -103,7 +103,7 @@ function mergeWorkflowAssetGroup(canonical: WorkflowAssetEntry, aliases: Workflo
 
 function mergeAssetVersions(group: WorkflowAssetEntry[], metadata: Record<string, unknown>) {
     const existing = mergeUnknownLists(group.flatMap((entry) => readList(entry.asset.metadata?.assetVersions)));
-    let versionNumber = existing.reduce((max, value) => Math.max(max, readNumber(readRecord(value)?.versionNumber)), 0);
+    let versionNumber = existing.reduce<number>((max, value) => Math.max(max, readNumber(readRecord(value)?.versionNumber)), 0);
     const aliases = group.slice(1).map((entry) => snapshotAssetVersion(entry.asset, ++versionNumber, `workflow-alias-${entry.asset.id}`));
     const currentVersionId = readString(metadata.currentAssetVersionId);
     if (currentVersionId) return { assetVersions: mergeUnknownLists([...existing, ...aliases]), currentAssetVersionId: currentVersionId };
