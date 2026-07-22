@@ -169,6 +169,18 @@ export function currentCanvasMediaVersion(node: CanvasNodeData) {
     return versions.find((item) => item.id === node.metadata?.currentMediaVersionId) || versions.at(-1);
 }
 
+export function patchCurrentCanvasMediaVersion(node: CanvasNodeData, patch: Partial<CanvasNodeMetadata>): CanvasNodeData {
+    const currentId = currentCanvasMediaVersion(node)?.id;
+    return {
+        ...node,
+        metadata: {
+            ...node.metadata,
+            ...patch,
+            mediaVersions: node.metadata?.mediaVersions?.map((version) => (version.id === currentId ? { ...version, metadata: { ...version.metadata, ...patch } } : version)),
+        },
+    };
+}
+
 export function hasDirtyCanvasPromptDraft(node: CanvasNodeData) {
     if (node.metadata?.promptDraft === undefined && node.metadata?.promptDraftDocument === undefined) return false;
     return node.metadata.promptDraft !== (node.metadata.prompt || "") || JSON.stringify(node.metadata.promptDraftDocument) !== JSON.stringify(node.metadata.promptDocument);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyGeneratedImageToNodes, applyImageGenerationFinalStatus, applyImageGenerationStartNodes, applyImageTargetError, buildCompletedImageNode, buildCompletedVideoNode } from "./canvas-node-status.ts";
+import { applyCompletedImageVersionToNodes, applyGeneratedImageToNodes, applyImageGenerationFinalStatus, applyImageGenerationStartNodes, applyImageTargetError, buildCompletedImageNode, buildCompletedVideoNode } from "./canvas-node-status.ts";
 import type { CanvasNodeData } from "../types.ts";
 
 const node = (id: string, type: CanvasNodeData["type"], metadata: CanvasNodeData["metadata"] = {}): CanvasNodeData => ({
@@ -89,6 +89,22 @@ test("builds completed image node with merged generation metadata", () => {
     assert.equal(result.metadata?.prompt, "新的提示词");
     assert.equal(result.metadata?.generationType, "edit");
     assert.equal(result.metadata?.errorDetails, undefined);
+});
+
+test("completed image regeneration appends a version on the same node", () => {
+    const source = node("image", "image", { content: "blob:old", storageKey: "image:old", status: "success", prompt: "旧提示词", promptDraft: "新提示词" });
+    const completed = { ...source, width: 320, height: 180, metadata: { ...source.metadata, content: "blob:new", storageKey: "image:new", status: "success" as const } };
+    const downstream = node("downstream", "video", { productionPackageId: "P01" });
+
+    const next = applyCompletedImageVersionToNodes([source, downstream], source.id, completed, "新提示词", "2026-07-22T16:00:00.000Z");
+
+    assert.deepEqual(
+        next.map((item) => item.id),
+        [source.id, downstream.id],
+    );
+    assert.equal(next[0].metadata?.mediaVersions?.length, 2);
+    assert.equal(next[0].metadata?.promptDraft, undefined);
+    assert.equal(next[0].metadata?.content, "blob:new");
 });
 
 test("builds completed video node with centered size and merged metadata", () => {

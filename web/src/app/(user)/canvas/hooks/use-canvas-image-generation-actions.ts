@@ -14,7 +14,9 @@ import { createImageGenerationNodes } from "../utils/canvas-generation-nodes";
 import { runCanvasImageGeneration } from "../utils/canvas-generation-runner";
 import { aiTaskLedgerNodeMetadata, buildCanvasAiTaskTrace } from "../utils/canvas-ai-task-trace";
 import { fitNodeSize } from "../utils/canvas-node-size";
-import { applyGeneratedImageToNodes, applyImageGenerationFinalStatus, applyImageGenerationStartNodes, applyImageTargetError } from "../utils/canvas-node-status";
+import { applyCompletedImageVersionToNodes, applyGeneratedImageToNodes, applyImageGenerationFinalStatus, applyImageGenerationStartNodes, applyImageTargetError, buildCompletedImageNode } from "../utils/canvas-node-status";
+import { patchCurrentCanvasMediaVersion } from "../utils/canvas-media-versions";
+import { NODE_DEFAULT_SIZE } from "../constants";
 import type { CanvasConnection, CanvasNodeData, CanvasNodeMetadata } from "../types";
 
 type UseCanvasImageGenerationActionsOptions = {
@@ -60,8 +62,9 @@ export function useCanvasImageGenerationActions({
     const generateImageNode = useCallback(
         async ({ nodeId, sourceNode, prompt, effectivePrompt, generationConfig, contextReferenceImages }: GenerateImageNodeInput) => {
             const createdAt = new Date().toISOString();
-            const count = imageGenerationCount(generationConfig.count);
             const isImageNode = sourceNode?.type === "image";
+            const isCompletedImageNode = isImageNode && Boolean(sourceNode?.metadata?.content);
+            const count = isCompletedImageNode ? 1 : imageGenerationCount(generationConfig.count);
             const sourceReference =
                 isImageNode && sourceNode?.metadata?.content
                     ? [
@@ -78,6 +81,46 @@ export function useCanvasImageGenerationActions({
             const referenceImages = sourceReference.length ? sourceReference : contextReferenceImages;
             const generationType = referenceImages.length ? ("edit" as const) : ("generation" as const);
             const generationMetadata = buildImageGenerationMetadata(generationType, generationConfig, count, referenceImages);
+            if (isCompletedImageNode && sourceNode) {
+                setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: "loading", errorDetails: undefined } } : node)));
+                setSelectedNodeIds(new Set([nodeId]));
+                setSelectedConnectionId(null);
+                setDialogNodeId(nodeId);
+                try {
+                    const trace = buildCanvasAiTaskTrace({ projectId, canvasId, nodeId, metadata: sourceNode.metadata });
+                    const uploaded = await runCanvasImageGeneration({ ...generationConfig, count: "1" }, effectivePrompt, referenceImages, trace, {
+                        projectId,
+                        canvasId,
+                        episodeId: sourceNode.metadata?.episodeId || episodeContext?.episodeId,
+                        sourceType: sourceNode.metadata?.briefId ? "brief_image_generation" : "image_generation",
+                        sourceId: sourceNode.metadata?.briefId || nodeId,
+                        inputSummary: summarizeLocalImageInput(effectivePrompt, referenceImages.length),
+                    });
+                    const imageSize = fitNodeSize(uploaded.width, uploaded.height, NODE_DEFAULT_SIZE.image.width, NODE_DEFAULT_SIZE.image.height);
+                    const completed = buildCompletedImageNode({
+                        imageNode: sourceNode,
+                        imageSize,
+                        imageMetadata: { ...toImageMetadata(uploaded), ...aiTaskLedgerNodeMetadata(uploaded.aiTask) },
+                        generationMetadata: { ...generationMetadata, ...canvasEpisodeMetadata(episodeContext), batchUsesReferenceImages: referenceImages.length > 0 },
+                        prompt,
+                    });
+                    setNodes((prev) => applyCompletedImageVersionToNodes(prev, nodeId, completed, prompt, createdAt, sourceNode.metadata?.promptDraftDocument));
+                    const asset = buildGeneratedImageAsset(completed, { canvasId, projectId, projectTitle, projectPreset, episodeContext, prompt, effectivePrompt, config: { ...generationConfig, count: "1" }, createdAt });
+                    if (asset) {
+                        try {
+                            const sourceAssetId = await archiveGeneratedAsset(asset);
+                            if (sourceAssetId) setNodes((prev) => prev.map((node) => (node.id === nodeId ? patchCurrentCanvasMediaVersion(node, { sourceAssetId }) : node)));
+                        } catch {
+                            showError("图片已生成，但同步到我的素材失败");
+                        }
+                    }
+                } catch (error) {
+                    const errorDetails = error instanceof Error ? error.message : "生成失败";
+                    setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: "success", errorDetails } } : node)));
+                    showError(errorDetails);
+                }
+                return { pendingChildIds: [] };
+            }
             const { isConfigNode, isEmptyImageNode, parentConfig, imageConfig, rootId, targetIds, pendingChildIds, rootNode, childNodes, connections } = createImageGenerationNodes({
                 nodeId,
                 sourceNode,

@@ -1,5 +1,7 @@
 import type { CanvasNodeData, CanvasNodeMetadata } from "../types.ts";
 import { withProductionVersionAsCurrent } from "./canvas-production-packages.ts";
+import { appendCanvasMediaVersion } from "./canvas-media-versions.ts";
+import type { CanvasPromptDocument } from "./canvas-prompt-document.ts";
 
 const NODE_STATUS_SUCCESS = "success" as const;
 const NODE_STATUS_ERROR = "error" as const;
@@ -129,6 +131,10 @@ export function buildCompletedImageNode({
             errorDetails: undefined,
         },
     };
+}
+
+export function applyCompletedImageVersionToNodes(nodes: CanvasNodeData[], nodeId: string, completed: CanvasNodeData, prompt: string, createdAt: string, promptDocument?: CanvasPromptDocument) {
+    return nodes.map((node) => (node.id === nodeId ? appendCanvasMediaVersion(node, completed, prompt, createdAt, promptDocument) : node));
 }
 
 export function buildCompletedVideoNode({
