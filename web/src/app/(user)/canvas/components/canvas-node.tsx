@@ -50,6 +50,7 @@ type CanvasNodeProps = {
     reviewSubmitting?: boolean;
     frameReferenceNodes?: { first?: CanvasNodeData; last?: CanvasNodeData };
     onNormalizeFrameReferences?: (videoNode: CanvasNodeData, firstNode: CanvasNodeData, lastNode: CanvasNodeData) => void;
+    onSwitchMediaVersion?: (node: CanvasNodeData, versionId: string) => void;
     onContextMenu: (event: React.MouseEvent, nodeId: string) => void;
 };
 
@@ -93,6 +94,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     reviewSubmitting = false,
     frameReferenceNodes,
     onNormalizeFrameReferences,
+    onSwitchMediaVersion,
     onContextMenu,
 }: CanvasNodeProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -319,6 +321,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                         reviewSubmitting={reviewSubmitting}
                         frameReferenceNodes={frameReferenceNodes}
                         onNormalizeFrameReferences={onNormalizeFrameReferences}
+                        onSwitchMediaVersion={onSwitchMediaVersion}
                         onToggleBatch={() => onToggleBatch?.(data.id)}
                         onSetBatchPrimary={() => onSetBatchPrimary?.(data)}
                     />

@@ -169,6 +169,20 @@ export function currentCanvasMediaVersion(node: CanvasNodeData) {
     return versions.find((item) => item.id === node.metadata?.currentMediaVersionId) || versions.at(-1);
 }
 
+export function canvasMediaVersionNavigation(node: CanvasNodeData) {
+    const versions = node.metadata?.mediaVersions || [];
+    const current = currentCanvasMediaVersion(node);
+    const currentIndex = Math.max(0, versions.findIndex((item) => item.id === current?.id));
+    return {
+        versions,
+        current,
+        currentIndex,
+        label: current ? `v${current.versionNumber} / ${versions.length}` : "",
+        previousId: currentIndex > 0 ? versions[currentIndex - 1]?.id : undefined,
+        nextId: currentIndex < versions.length - 1 ? versions[currentIndex + 1]?.id : undefined,
+    };
+}
+
 export function patchCurrentCanvasMediaVersion(node: CanvasNodeData, patch: Partial<CanvasNodeMetadata>): CanvasNodeData {
     const currentId = currentCanvasMediaVersion(node)?.id;
     return {

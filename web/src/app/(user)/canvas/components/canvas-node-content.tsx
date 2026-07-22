@@ -10,6 +10,7 @@ import { CanvasNodeType, type CanvasNodeData } from "../types";
 import { GeneratedPromptToggle, MediaReviewStatusBadge } from "./canvas-media-node-controls";
 import { VideoNodeContent } from "./canvas-video-node-content";
 import { VideoTaskProgressPanel } from "./canvas-video-task-progress-panel";
+import { CanvasMediaVersionControl } from "./canvas-media-version-control";
 
 export type NodeContentRendererProps = {
     node: CanvasNodeData;
@@ -37,11 +38,13 @@ export type NodeContentRendererProps = {
     onNormalizeFrameReferences?: (videoNode: CanvasNodeData, firstNode: CanvasNodeData, lastNode: CanvasNodeData) => void;
     onToggleBatch?: () => void;
     onSetBatchPrimary?: () => void;
+    onSwitchMediaVersion?: (node: CanvasNodeData, versionId: string) => void;
 };
 
 export function NodeContent(props: NodeContentRendererProps) {
     if (props.node.type === CanvasNodeType.Config && props.renderNodeContent) return props.renderNodeContent(props.node);
     if (props.isBatchRoot) return <ImageNodeContent {...props} />;
+    if (props.node.type === CanvasNodeType.Image && props.node.metadata?.content) return <ImageNodeContent {...props} />;
     if (props.node.type === CanvasNodeType.Video && props.node.metadata?.content) return <VideoNodeContent {...props} />;
     if (props.node.metadata?.status === "loading") return <LoadingContent node={props.node} theme={props.theme} onRefreshVideoTask={props.onRefreshVideoTask} showPanel={props.showPanel} />;
     if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} onRefreshVideoTask={props.onRefreshVideoTask} showPanel={props.showPanel} />;
@@ -216,6 +219,7 @@ function ImageNodeContent(props: NodeContentRendererProps) {
             onSetBatchPrimary={props.onSetBatchPrimary}
             onReviewAsset={props.onReviewAsset}
             reviewSubmitting={props.reviewSubmitting}
+            onSwitchMediaVersion={props.onSwitchMediaVersion}
         />
     );
 }
@@ -290,6 +294,7 @@ function ImageContent({
     onToggleBatch,
     onSetBatchPrimary,
     reviewSubmitting,
+    onSwitchMediaVersion,
 }: {
     node: CanvasNodeData;
     isBatchRoot: boolean;
@@ -301,6 +306,7 @@ function ImageContent({
     onSetBatchPrimary?: () => void;
     onReviewAsset?: (node: CanvasNodeData) => void;
     reviewSubmitting?: boolean;
+    onSwitchMediaVersion?: (node: CanvasNodeData, versionId: string) => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const isBatchChild = Boolean(node.metadata?.batchRootId);
@@ -319,6 +325,12 @@ function ImageContent({
             <div className="absolute left-2.5 top-2.5 z-30">
                 <GeneratedPromptToggle node={node} theme={theme} />
             </div>
+            <CanvasMediaVersionControl node={node} disabled={node.metadata?.status === "loading"} className="absolute left-1/2 top-2.5 z-30 -translate-x-1/2" onSwitch={onSwitchMediaVersion} />
+            {node.metadata?.status === "loading" ? (
+                <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-black/20 backdrop-blur-[1px]">
+                    <div className="size-8 animate-spin rounded-full border-2 border-white/35 border-t-white" />
+                </div>
+            ) : null}
             <MediaReviewStatusBadge node={node} theme={theme} submitting={reviewSubmitting} className="absolute bottom-2.5 left-2.5 z-30" />
             {isBatchRoot ? (
                 <button

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { ArrowUp, LoaderCircle, Maximize2 } from "lucide-react";
 import { Alert, Button, Input, Modal } from "antd";
@@ -23,6 +23,7 @@ import { CanvasImagePresetPopover, type CanvasImagePreset } from "./canvas-image
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
+import { CanvasMediaVersionControl } from "./canvas-media-version-control";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata } from "../types";
 
 const CanvasPromptEditor = dynamic(() => import("./canvas-prompt-editor").then((module) => module.CanvasPromptEditor), { ssr: false });
@@ -41,9 +42,10 @@ type CanvasNodePromptPanelProps = {
     referenceMentionOptions?: CanvasReferenceMentionOption[];
     hasConnectedText?: boolean;
     onPreviewReference?: (nodeId: string) => void;
+    onSwitchMediaVersion?: (node: CanvasNodeData, versionId: string) => void;
 };
 
-export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, projectId, onPromptChange, onConfigChange, onGenerate, onImageSettingsOpenChange, referenceMentionOptions = [], hasConnectedText = false, onPreviewReference }: CanvasNodePromptPanelProps) {
+export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, projectId, onPromptChange, onConfigChange, onGenerate, onImageSettingsOpenChange, referenceMentionOptions = [], hasConnectedText = false, onPreviewReference, onSwitchMediaVersion }: CanvasNodePromptPanelProps) {
     const localConfig = useConfigStore((state) => state.config);
     const publicSettings = useConfigStore((state) => state.publicSettings);
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
@@ -64,14 +66,17 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
     const [expandedEditorOpen, setExpandedEditorOpen] = useState(false);
     const [expandedPrompt, setExpandedPrompt] = useState(prompt);
     const [expandedPromptDocument, setExpandedPromptDocument] = useState(promptDocument);
+    const latestNodeRef = useRef(node);
+    latestNodeRef.current = node;
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "image" ? config.count : 1 });
     const missingReferenceIds = mode === "video" ? validatePromptDocument(promptDocument, referenceMentionOptions) : [];
     const canSubmit = canSubmitCanvasPrompt(prompt, isRunning, hasConnectedText) && missingReferenceIds.length === 0;
 
     useEffect(() => {
-        const nextPrompt = hasTextContent ? "" : canvasPromptEditorValue(node);
+        const currentNode = latestNodeRef.current;
+        const nextPrompt = hasTextContent ? "" : canvasPromptEditorValue(currentNode);
         setPrompt(nextPrompt);
-        setPromptDocument(canvasPromptEditorDocument(node) || promptDocumentFromText(nextPrompt));
+        setPromptDocument(canvasPromptEditorDocument(currentNode) || promptDocumentFromText(nextPrompt));
         setEditorRevision((revision) => revision + 1);
     }, [hasTextContent, node.id, node.metadata?.currentMediaVersionId]);
 
@@ -138,6 +143,7 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
             onPointerDown={(event) => event.stopPropagation()}
             onWheel={(event) => event.stopPropagation()}
         >
+            <CanvasMediaVersionControl node={node} disabled={isRunning} variant="panel" className="mb-3" onSwitch={onSwitchMediaVersion} />
             {mode === "video" ? (
                 <CanvasPromptEditor
                     key={`${node.id}:${editorRevision}`}
@@ -237,8 +243,9 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
                         <ModelPicker className="h-10 !min-w-[140px] flex-1" fullWidth config={config} modelType="text" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />
                     )}
                 </div>
-                <Button type="primary" className="!h-10 !min-w-[84px] shrink-0 !rounded-full !px-3" disabled={!canSubmit} onClick={submit} aria-label="生成">
+                <Button type="primary" className="!h-10 !min-w-[126px] shrink-0 !rounded-full !px-3" disabled={!canSubmit} onClick={submit} aria-label={isGeneratedMedia ? "生成新版本" : "生成"} title={isGeneratedMedia ? "生成新版本" : "生成"}>
                     <span className="flex items-center gap-1.5">
+                        <span className="text-xs font-medium">{isGeneratedMedia ? "新版本" : "生成"}</span>
                         <span className="inline-flex items-center gap-1 text-xs font-medium tabular-nums">
                             <CreditSymbol />
                             {credits.toLocaleString()}

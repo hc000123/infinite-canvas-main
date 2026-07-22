@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { CanvasNodeData } from "../types.ts";
-import { appendCanvasMediaVersion, applyCanvasPromptDraft, canvasPromptEditorValue, completePendingCanvasMediaVersion, hydrateCanvasMediaVersionUrls, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion, switchCanvasMediaVersion } from "./canvas-media-versions.ts";
+import { appendCanvasMediaVersion, applyCanvasPromptDraft, canvasMediaVersionNavigation, canvasPromptEditorValue, completePendingCanvasMediaVersion, hydrateCanvasMediaVersionUrls, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion, switchCanvasMediaVersion } from "./canvas-media-versions.ts";
 
 const now = "2026-07-22T16:00:00.000Z";
 
@@ -161,4 +161,19 @@ test("rolls back a failed pending video and keeps its prompt draft", () => {
     assert.equal(rolledBack.metadata?.pendingMediaVersion, undefined);
     assert.equal(rolledBack.metadata?.promptDraft, "失败草稿");
     assert.equal(rolledBack.metadata?.errorDetails, "视频生成失败");
+});
+
+test("builds bounded previous and next version navigation", () => {
+    const completed: CanvasNodeData = { ...legacyImageNode, metadata: { ...legacyImageNode.metadata, content: "blob:new" } };
+    const versioned = appendCanvasMediaVersion(legacyImageNode, completed, "新提示词", now);
+    const current = canvasMediaVersionNavigation(versioned);
+
+    assert.equal(current.label, "v2 / 2");
+    assert.equal(current.previousId, versioned.metadata?.mediaVersions?.[0]?.id);
+    assert.equal(current.nextId, undefined);
+
+    const first = canvasMediaVersionNavigation(switchCanvasMediaVersion(versioned, versioned.metadata!.mediaVersions![0]!.id));
+    assert.equal(first.label, "v1 / 2");
+    assert.equal(first.previousId, undefined);
+    assert.equal(first.nextId, versioned.metadata?.mediaVersions?.[1]?.id);
 });

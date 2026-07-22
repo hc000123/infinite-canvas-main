@@ -40,6 +40,7 @@ import { useCanvasNodeToolbarState } from "../hooks/use-canvas-node-toolbar-stat
 import { useCanvasToolbarActions } from "../hooks/use-canvas-toolbar-actions";
 import { useCanvasUiActions } from "../hooks/use-canvas-ui-actions";
 import { useCanvasVideoTaskRecovery } from "../hooks/use-canvas-video-task-recovery";
+import { useCanvasMediaVersionActions } from "../hooks/use-canvas-media-version-actions";
 import { useCanvasViewportGeometry } from "../hooks/use-canvas-viewport-geometry";
 import { useCanvasWorkspaceStores } from "../hooks/use-canvas-workspace-stores";
 import { App } from "antd";
@@ -620,6 +621,7 @@ function InfiniteCanvasPage() {
     });
 
     const { deleteConnection, deleteSelection } = useCanvasDeleteActions({ deleteNodes, selectedConnectionId, selectedNodeIdsRef, setConnections, setSelectedConnectionId });
+    const { switchMediaVersion } = useCanvasMediaVersionActions({ modal, setNodes });
 
     const toolbarActions = useCanvasToolbarActions({
         createNode,
@@ -905,6 +907,7 @@ function InfiniteCanvasPage() {
                         handleNodePromptChange={handleNodePromptChange}
                         handleNodeResize={handleNodeResize}
                         handleRefreshVideoTask={handleRefreshVideoTask}
+                        handleSwitchMediaVersion={switchMediaVersion}
                         hideNodeToolbar={hideNodeToolbar}
                         isConnecting={Boolean(connectingParams)}
                         keepNodeToolbar={keepNodeToolbar}

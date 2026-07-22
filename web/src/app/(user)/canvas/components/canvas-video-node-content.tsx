@@ -8,6 +8,7 @@ import { formatBytes } from "@/lib/image-utils";
 import type { CanvasNodeData } from "../types";
 import { GeneratedPromptToggle, MediaReviewStatusBadge } from "./canvas-media-node-controls";
 import { shortTaskId, VideoTaskProgressPanel, videoStatusLabel } from "./canvas-video-task-progress-panel";
+import { CanvasMediaVersionControl } from "./canvas-media-version-control";
 
 export function VideoNodeContent({
     node,
@@ -16,6 +17,7 @@ export function VideoNodeContent({
     reviewSubmitting,
     frameReferenceNodes,
     onNormalizeFrameReferences,
+    onSwitchMediaVersion,
 }: {
     node: CanvasNodeData;
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
@@ -23,6 +25,7 @@ export function VideoNodeContent({
     reviewSubmitting?: boolean;
     frameReferenceNodes?: { first?: CanvasNodeData; last?: CanvasNodeData };
     onNormalizeFrameReferences?: (videoNode: CanvasNodeData, firstNode: CanvasNodeData, lastNode: CanvasNodeData) => void;
+    onSwitchMediaVersion?: (node: CanvasNodeData, versionId: string) => void;
 }) {
     const [detailsOpen, setDetailsOpen] = useState(false);
     const frameStrip = <FrameReferenceStrip videoNode={node} theme={theme} frameReferenceNodes={frameReferenceNodes} onNormalizeFrameReferences={onNormalizeFrameReferences} />;
@@ -65,6 +68,7 @@ export function VideoNodeContent({
                 </div>
             ) : null}
             <MediaReviewStatusBadge node={node} theme={theme} submitting={reviewSubmitting} className="absolute right-2.5 top-2.5 z-30" dark />
+            <CanvasMediaVersionControl node={node} disabled={node.metadata?.status === "loading"} className="absolute left-1/2 top-2.5 z-30 -translate-x-1/2" onSwitch={onSwitchMediaVersion} />
             <VideoNodeStatusPill node={node} offsetTop={node.metadata?.taskId || node.metadata?.prompt ? 46 : 10} />
             {detailsOpen ? (
                 <div className="absolute left-2.5 top-12 z-40">

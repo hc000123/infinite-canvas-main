@@ -54,6 +54,7 @@ type Props = {
     handleNodePromptChange: (nodeId: string, prompt: string, promptDocument?: CanvasPromptDocument) => void;
     handleNodeResize: (nodeId: string, width: number, height: number, position?: { x: number; y: number }) => void;
     handleRefreshVideoTask: (node: CanvasNodeData) => void | Promise<void>;
+    handleSwitchMediaVersion: (node: CanvasNodeData, versionId: string) => void;
     hideNodeToolbar: () => void;
     keepNodeToolbar: (nodeId: string) => void;
     normalizeVideoFrameReferences: (videoNode: CanvasNodeData, firstNode: CanvasNodeData, lastNode: CanvasNodeData) => void | Promise<void>;
@@ -109,6 +110,7 @@ export function CanvasNodesLayer({
     handleNodePromptChange,
     handleNodeResize,
     handleRefreshVideoTask,
+    handleSwitchMediaVersion,
     hideNodeToolbar,
     keepNodeToolbar,
     normalizeVideoFrameReferences,
@@ -167,6 +169,7 @@ export function CanvasNodesLayer({
                                     const referenceNode = nodesRef.current.find((item) => item.id === nodeId);
                                     if (referenceNode?.type === CanvasNodeType.Image) nodeToolActions.onViewImage(referenceNode);
                                 }}
+                                onSwitchMediaVersion={handleSwitchMediaVersion}
                             />
                         );
                     }}
@@ -224,6 +227,7 @@ export function CanvasNodesLayer({
                     reviewSubmitting={submittingReviewNodeId === node.id}
                     frameReferenceNodes={frameReferencesByVideoId.get(node.id)}
                     onNormalizeFrameReferences={(videoNode, firstNode, lastNode) => void normalizeVideoFrameReferences(videoNode, firstNode, lastNode)}
+                    onSwitchMediaVersion={handleSwitchMediaVersion}
                     onContextMenu={(event, id) => {
                         event.preventDefault();
                         event.stopPropagation();
