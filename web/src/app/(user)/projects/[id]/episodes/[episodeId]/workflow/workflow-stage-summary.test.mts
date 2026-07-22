@@ -25,6 +25,22 @@ test("summarizes review and approved remote stages", () => {
     assert.equal(result.find((item) => item.key === "storyboard")?.status, "needs_review");
 });
 
+test("uses the latest stage attempt and unlocks storyboard after art is applied", () => {
+    const result = summarizeWorkflowStages({
+        scriptReady: true,
+        workerReady: true,
+        remoteStages: [
+            { attempt: 1, stageId: "art-design", status: "applied" },
+            { attempt: 0, stageId: "art-design", status: "ready" },
+            { attempt: 0, stageId: "seedance-storyboard", status: "blocked" },
+        ],
+    });
+
+    assert.equal(result.find((item) => item.key === "art")?.status, "applied");
+    assert.equal(result.find((item) => item.key === "assets")?.status, "complete");
+    assert.equal(result.find((item) => item.key === "storyboard")?.status, "ready");
+});
+
 test("marks delivery complete when every production package has a result", () => {
     const result = summarizeWorkflowStages({ generatedCount: 3, packageCount: 3, scriptReady: true, workerReady: true });
 

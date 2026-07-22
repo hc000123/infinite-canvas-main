@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -95,6 +96,8 @@ func ValidateStoryboardArtifact(raw json.RawMessage) WorkflowGateReport {
 		prompt := workflowString(item, "prompt", "seedancePrompt", "videoPrompt")
 		if prompt == "" {
 			report.add("missing_shot_prompt", "分镜缺少 Seedance 提示词", itemID)
+		} else if !validStoryboardPromptStructure(prompt) {
+			report.add("invalid_shot_prompt_structure", "分镜提示词必须使用完整 Copy-only、Skill 5 或执行稿字段合同，不能只提交摘要描述", itemID)
 		}
 		if strings.Contains(prompt, "@图0") {
 			report.add("invalid_reference", "素材引用必须从 @图1 开始", itemID)
@@ -109,6 +112,31 @@ func ValidateStoryboardArtifact(raw json.RawMessage) WorkflowGateReport {
 		}
 	}
 	return report.finish()
+}
+
+func validStoryboardPromptStructure(prompt string) bool {
+	copyOnly := []string{"场景：", "声音：", "画面内容：", "限制："}
+	if containsWorkflowFields(prompt, copyOnly) && regexp.MustCompile(`\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?秒`).MatchString(prompt) {
+		return true
+	}
+	skill5 := []string{"场景：", "人物位置关系：", "情绪基调：", "焦段：", "光圈：", "机位：", "构图：", "运镜：", "主体动作/表情："}
+	if containsWorkflowFields(prompt, skill5) && len(regexp.MustCompile(`【分镜\s*[^】]+】`).FindAllString(prompt, -1)) >= 2 {
+		return true
+	}
+	legacy := []string{"基础设定", "场景起始状态", "场景固定视觉设定", "画面内容分镜", "兜底约束", "生产审核用时间预算校验", "场景空间", "固定画幅", "景别：", "构图：", "运镜手法：", "画面内容：", "声音/台词："}
+	return containsWorkflowFields(prompt, legacy) && len(regexp.MustCompile(`分镜\s*[一二三四五六七八九十百\d]+`).FindAllString(prompt, -1)) >= 2
+}
+
+func containsWorkflowFields(text string, fields []string) bool {
+	for _, field := range fields {
+		if strings.HasSuffix(field, "：") && (strings.Contains(text, field) || strings.Contains(text, strings.TrimSuffix(field, "：")+":")) {
+			continue
+		}
+		if !strings.Contains(text, field) {
+			return false
+		}
+	}
+	return true
 }
 
 func validateWorkflowReferenceEvidence(raw json.RawMessage, manifestJSON string, report *WorkflowGateReport) {

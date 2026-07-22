@@ -83,6 +83,7 @@ function eventLabel(type: string) {
         (
             {
                 "stage.approved": "阶段已批准",
+                "stage.applied": "阶段已写入",
                 "stage.cancelled": "阶段已停止",
                 "stage.failed": "阶段执行失败",
                 "stage.needs_review": "产物等待审核",

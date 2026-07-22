@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { App } from "antd";
 
 import { cancelWorkflowStage, retryWorkflowStage, reviewWorkflowStage, startWorkflowStage, type RemoteWorkflowRunDetail } from "@/services/api/workflow-runs";
@@ -10,10 +10,13 @@ import { workflowStageActions } from "./workflow-stage-actions";
 export function useWorkflowStageActions(input: { detail: RemoteWorkflowRunDetail | null; refresh: () => void | Promise<void>; stageId: string }) {
     const { message } = App.useApp();
     const [busyAction, setBusyAction] = useState("");
-    const stage = input.detail?.stages.find((item) => item.stageId === input.stageId) || null;
+    const stageFor = (stageId: string) => input.detail?.stages.filter((item) => item.stageId === stageId).reduce((latest, item) => (!latest || item.attempt > latest.attempt ? item : latest), null as RemoteWorkflowRunDetail["stages"][number] | null) || null;
+    const rawStage = stageFor(input.stageId);
+    const dependency = input.stageId === "seedance-storyboard" ? stageFor("art-design") : null;
+    const stage = rawStage?.status === "blocked" && dependency && ["approved", "applied"].includes(dependency.status) ? { ...rawStage, status: "ready" as const } : rawStage;
     const artifact = input.detail?.artifacts.find((item) => item.id === stage?.outputArtifactId) || null;
     const gate = input.detail?.gates.find((item) => item.artifactId === artifact?.id) || null;
-    const actions = useMemo(() => workflowStageActions(stage ? { hasArtifact: Boolean(artifact), status: stage.status } : null, Boolean(gate?.passed)), [artifact, gate?.passed, stage]);
+    const actions = workflowStageActions(stage ? { hasArtifact: Boolean(artifact), status: stage.status } : null, Boolean(gate?.passed));
 
     const execute = async (key: string, action: () => Promise<unknown>, success: string) => {
         if (busyAction) return false;

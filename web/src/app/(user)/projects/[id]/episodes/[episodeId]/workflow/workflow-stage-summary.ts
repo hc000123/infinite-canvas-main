@@ -1,6 +1,6 @@
 import type { WorkflowStageView, WorkflowViewStatus } from "./workflow-view-types";
 
-type RemoteStageSummary = { stageId: string; status: WorkflowViewStatus };
+type RemoteStageSummary = { attempt?: number; stageId: string; status: WorkflowViewStatus };
 
 export type WorkflowStageSummaryInput = {
     generatedCount?: number;
@@ -21,7 +21,12 @@ const stageDefinitions: Array<Pick<WorkflowStageView, "description" | "key" | "l
 ];
 
 export function summarizeWorkflowStages(input: WorkflowStageSummaryInput): WorkflowStageView[] {
-    const remote = new Map((input.remoteStages || []).map((stage) => [stage.stageId, stage.status]));
+    const latest = new Map<string, RemoteStageSummary>();
+    for (const stage of input.remoteStages || []) {
+        const current = latest.get(stage.stageId);
+        if (!current || (stage.attempt || 0) > (current.attempt || 0)) latest.set(stage.stageId, stage);
+    }
+    const remote = new Map(Array.from(latest, ([stageId, stage]) => [stageId, stage.status]));
     const packageCount = input.packageCount || 0;
     const generatedCount = input.generatedCount || 0;
     const missingAssetCount = input.missingAssetCount || 0;
@@ -35,7 +40,7 @@ export function summarizeWorkflowStages(input: WorkflowStageSummaryInput): Workf
             const ready = artStatus === "approved" || artStatus === "applied";
             return {
                 ...stage,
-                status: !ready ? "idle" : missingAssetCount ? "blocked" : packageCount ? "complete" : "ready",
+                status: artStatus === "applied" ? "complete" : !ready ? "idle" : missingAssetCount ? "blocked" : packageCount ? "complete" : "ready",
                 count: missingAssetCount ? `${missingAssetCount} 个缺口` : undefined,
                 blockingReason: missingAssetCount ? "仍有参考资产需要补齐或接受文本生成风险" : undefined,
             };
@@ -47,6 +52,7 @@ export function summarizeWorkflowStages(input: WorkflowStageSummaryInput): Workf
 }
 
 function remoteStatus(status: WorkflowViewStatus | undefined, workerReady: boolean, dependencyReady: boolean): WorkflowViewStatus {
+    if (status === "blocked" && dependencyReady && workerReady) return "ready";
     if (status && status !== "idle") return status;
     if (!dependencyReady || !workerReady) return "blocked";
     return "ready";

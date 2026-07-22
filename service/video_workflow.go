@@ -448,7 +448,7 @@ func workflowStagePrompts(run model.WorkflowRun, stageID string, input model.Wor
 	if stageID == WorkflowStageArtDesign {
 		return "你是影视导演与美术设定师。只输出 JSON，包含 directorSummary、referenceEvidence 和 items；每个 item 必须有 id、kind、name、prompt。referenceEvidence 在无图时输出空数组；收到参考图时必须逐图写出 imageRef（@图N）、observations 和 appliedTo，证明提示词确实基于画面。不得改变剧本事实。", fmt.Sprintf("工作流版本：%s\n请根据以下已确认生产剧本生成角色、场景、道具设定：\n%s", run.WorkflowVersion, run.ScriptSnapshot)
 	}
-	return "你是 Seedance 分镜师。只输出 JSON，包含 referenceEvidence 和 shots；每个 shot 必须有 id、sceneId、prompt、duration，可选 dialogue。referenceEvidence 在无图时输出空数组；收到参考图时必须逐图写出 imageRef（@图N）、observations 和 appliedTo，证明提示词确实基于画面。duration 必须为 4–15 秒，素材引用使用 @图N。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准美术产物：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
+	return "你是 Seedance 分镜师。只输出 JSON，包含 referenceEvidence 和 shots；每个 shot 必须有 id、sceneId、prompt、duration，可选 dialogue。每条 prompt 必须是可直接生成视频的完整 Copy-only 合同，依次包含“场景：”“声音：”“画面内容：”“限制：”，画面内容必须按 0-2秒、2-4秒等连续时间段描述；禁止只写电影感摘要。referenceEvidence 在无图时输出空数组；收到参考图时必须逐图写出 imageRef（@图N）、observations 和 appliedTo，证明提示词确实基于画面。duration 必须为 4–15 秒，素材引用使用 @图N。", fmt.Sprintf("工作流版本：%s\n生产剧本：\n%s\n\n已批准美术产物：\n%s", run.WorkflowVersion, run.ScriptSnapshot, input.ContentJSON)
 }
 
 func workflowStageAgentKind(stageID string) string {

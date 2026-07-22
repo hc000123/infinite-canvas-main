@@ -318,7 +318,7 @@ function Panel({ children, description, icon, title }: { children: React.ReactNo
 function StageBadge({ status }: { status: string }) {
     const blocked = ["blocked", "failed", "rejected"].includes(status);
     const done = ["approved", "applied", "complete"].includes(status);
-    const labels: Record<string, string> = { approved: "已批准", applied: "已应用", blocked: "被阻断", complete: "已完成", failed: "失败", idle: "未开始", queued: "排队中", ready: "可开始", rejected: "已退回", review: "待审核", running: "运行中" };
+    const labels: Record<string, string> = { approved: "已批准", applied: "已应用", blocked: "被阻断", cancel_requested: "停止中", cancelled: "已停止", complete: "已完成", failed: "失败", idle: "未开始", needs_review: "待审核", queued: "排队中", ready: "可开始", rejected: "已退回", review: "待审核", running: "运行中" };
     return (
         <span
             className={cn(

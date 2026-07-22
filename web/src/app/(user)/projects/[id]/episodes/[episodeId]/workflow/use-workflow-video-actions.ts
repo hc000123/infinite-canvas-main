@@ -7,7 +7,7 @@ import { runCanvasVideoGeneration } from "@/app/(user)/canvas/utils/canvas-gener
 import { alignWorkflowPromptReferencesForSeedance, enterpriseVideoChannelReadiness, resolveWorkflowReferenceImages, workflowVideoGenerationReadiness } from "@/app/(user)/video/video-package-builders";
 import { formatVideoGenerationError } from "@/app/(user)/video/video-generation-errors";
 import { aiTaskLedgerFromVideoTask, buildPackageAssetGeneration, buildPackageVideoConfig, generationFromTask, resolvePackageVideoModel } from "@/app/(user)/video/video-page-utils";
-import { useVideoPackageStore, type PackageGeneration, type ProductionPackage } from "@/app/(user)/video/use-video-package-store";
+import { useVideoPackageStore, type PackageGeneration, type ProductionPackage, type ProductionPackageConfig } from "@/app/(user)/video/use-video-package-store";
 import { fetchVideoTaskContent, preflightVideoGeneration, RecoverableVideoTaskError, refreshVideoTask, type NormalizedVideoTask } from "@/services/api/video";
 import { uploadMediaFile } from "@/services/file-storage";
 import { useAssetStore, type AssetWriteInput } from "@/stores/use-asset-store";
@@ -187,5 +187,26 @@ export function useWorkflowVideoActions(packages: ProductionPackage[]) {
         return eligible;
     };
 
-    return { batch, channelPreflight, channelPreflighting, eligibility: eligibleBatchPackages(packages), generate, generating, preflight, preflightChannel, preflighting, scopeKey, sync };
+    const updateConfig = (item: ProductionPackage, patch: Partial<ProductionPackageConfig>) => {
+        const config = {
+            ...item.config,
+            ...patch,
+            ...(patch.duration ? { videoSeconds: patch.duration.match(/\d+/)?.[0] || patch.duration } : {}),
+            ...(patch.ratio ? { size: patch.ratio } : {}),
+            ...(patch.resolution ? { vquality: patch.resolution.match(/\d+/)?.[0] || patch.resolution } : {}),
+        };
+        updatePackage(item, { config, ...(patch.duration ? { duration: patch.duration } : {}) });
+    };
+
+    const configSummary = (item: ProductionPackage) => {
+        const config = buildPackageVideoConfig(effectiveConfig, item);
+        return {
+            duration: `${config.videoSeconds || "6"}秒`,
+            model: config.videoModel || config.seedanceModel || resolvePackageVideoModel(config),
+            ratio: config.size || item.config.ratio,
+            resolution: `${config.vquality || "720"}p`,
+        };
+    };
+
+    return { batch, channelPreflight, channelPreflighting, configSummary, eligibility: eligibleBatchPackages(packages), generate, generating, preflight, preflightChannel, preflighting, scopeKey, sync, updateConfig };
 }
