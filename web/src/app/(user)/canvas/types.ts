@@ -1,6 +1,7 @@
 import type { SeedanceImageRoleMode } from "@/services/api/video-reference";
 import type { AssetVersionReference } from "../assets/asset-version-references";
 import type { AssistantCanvasAction } from "./utils/canvas-assistant-actions";
+import type { CanvasPromptDocument } from "./utils/canvas-prompt-document";
 
 export type Position = {
     x: number;
@@ -34,6 +35,7 @@ export type CanvasProductionPackageRole = "script" | "asset" | "prompt" | "video
 export type CanvasNodeMetadata = {
     content?: string;
     prompt?: string;
+    promptDocument?: CanvasPromptDocument;
     status?: CanvasNodeStatus;
     errorDetails?: string;
     fontSize?: number;

@@ -54,6 +54,7 @@ export function useCanvasPageLocalState() {
     const [cropNodeId, setCropNodeId] = useState<string | null>(null);
     const [angleNodeId, setAngleNodeId] = useState<string | null>(null);
     const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
+    const [expandedTextNodeId, setExpandedTextNodeId] = useState<string | null>(null);
     const [, setAssistantCollapsed] = useState(true);
     const [assistantMounted, setAssistantMounted] = useState(false);
     const [inspectorView, setInspectorView] = useState<CanvasInspectorView>("context");
@@ -88,6 +89,7 @@ export function useCanvasPageLocalState() {
         didInitialCenterRef,
         editRequestNonce,
         editingNodeId,
+        expandedTextNodeId,
         handledFocusNodeIdRef,
         hoveredNodeId,
         imageBriefInitialId,
@@ -129,6 +131,7 @@ export function useCanvasPageLocalState() {
         setDialogNodeId,
         setEditRequestNonce,
         setEditingNodeId,
+        setExpandedTextNodeId,
         setHoveredNodeId,
         setImageBriefOpen,
         setInfoNodeId,

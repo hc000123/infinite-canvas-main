@@ -42,6 +42,7 @@ type CanvasNodeProps = {
     onRetry?: (node: CanvasNodeData) => void;
     onRefreshVideoTask?: (node: CanvasNodeData) => void;
     onGenerateImage?: (node: CanvasNodeData) => void;
+    onExpandText?: (node: CanvasNodeData) => void;
     onDownload?: (node: CanvasNodeData) => void;
     onViewImage?: (node: CanvasNodeData) => void;
     onReviewAsset?: (node: CanvasNodeData) => void;
@@ -83,6 +84,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onRetry,
     onRefreshVideoTask,
     onGenerateImage,
+    onExpandText,
     onDownload,
     onViewImage,
     onReviewAsset,
@@ -308,6 +310,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onRetry={onRetry}
                         onRefreshVideoTask={onRefreshVideoTask}
                         onGenerateImage={onGenerateImage}
+                        onExpandText={onExpandText}
                         onDownload={onDownload}
                         onReviewAsset={onReviewAsset}
                         reviewSubmitting={reviewSubmitting}

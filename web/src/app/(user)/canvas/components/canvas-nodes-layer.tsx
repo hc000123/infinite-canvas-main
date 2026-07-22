@@ -3,6 +3,7 @@
 import type { Dispatch, MouseEvent, MutableRefObject, SetStateAction } from "react";
 
 import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions";
+import type { CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import { getNodeProductionPackageId, type CanvasProductionPackageSummary } from "../utils/canvas-production-packages";
 import { getInputSummary, productionNodeBadge } from "../utils/canvas-page-helpers";
 import { CanvasNodeType, type CanvasConnection, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata, type ContextMenuState, type SelectionBox, type ViewportTransform } from "../types";
@@ -48,7 +49,7 @@ type Props = {
     handleGenerateNode: (nodeId: string, mode: CanvasGenerationMode, prompt: string) => void | Promise<unknown>;
     handleNodeContentChange: (nodeId: string, content: string) => void;
     handleNodeMouseDown: (event: MouseEvent, nodeId: string) => void;
-    handleNodePromptChange: (nodeId: string, prompt: string) => void;
+    handleNodePromptChange: (nodeId: string, prompt: string, promptDocument?: CanvasPromptDocument) => void;
     handleNodeResize: (nodeId: string, width: number, height: number, position?: { x: number; y: number }) => void;
     handleRefreshVideoTask: (node: CanvasNodeData) => void | Promise<void>;
     hideNodeToolbar: () => void;
@@ -59,6 +60,7 @@ type Props = {
     setHoveredNodeId: Dispatch<SetStateAction<string | null>>;
     setNodeImageSettingsOpen: Dispatch<SetStateAction<boolean>>;
     setToolbarNodeId: Dispatch<SetStateAction<string | null>>;
+    onExpandText: (nodeId: string) => void;
     toggleBatchExpanded: (nodeId: string) => void;
 };
 
@@ -109,6 +111,7 @@ export function CanvasNodesLayer({
     setHoveredNodeId,
     setNodeImageSettingsOpen,
     setToolbarNodeId,
+    onExpandText,
     toggleBatchExpanded,
 }: Props) {
     return (
@@ -147,6 +150,10 @@ export function CanvasNodesLayer({
                                 if (open) setToolbarNodeId(null);
                             }}
                             referenceMentionOptions={panelNode.type === CanvasNodeType.Video ? buildReferenceMentionOptions(buildNodeGenerationInputs(panelNode.id, nodes, connections)) : []}
+                            onPreviewReference={(nodeId) => {
+                                const referenceNode = nodesRef.current.find((item) => item.id === nodeId);
+                                if (referenceNode?.type === CanvasNodeType.Image) nodeToolActions.onViewImage(referenceNode);
+                            }}
                         />
                     )}
                     renderNodeContent={(contentNode) => (
@@ -181,6 +188,7 @@ export function CanvasNodesLayer({
                     onRetry={nodeToolActions.onRetry}
                     onRefreshVideoTask={(node) => void handleRefreshVideoTask(node)}
                     onGenerateImage={nodeToolActions.onGenerateImage}
+                    onExpandText={(node) => onExpandText(node.id)}
                     onDownload={nodeToolActions.onDownload}
                     onViewImage={nodeToolActions.onViewImage}
                     onReviewAsset={nodeToolActions.onReviewAsset}

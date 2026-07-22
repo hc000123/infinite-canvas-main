@@ -1,13 +1,12 @@
 import { useEffect, type Dispatch, type RefObject, type SetStateAction } from "react";
 
-import type { CanvasConnection, CanvasNodeData, ContextMenuState } from "../types";
+import type { CanvasNodeData, ContextMenuState } from "../types";
+import { shouldBlockCanvasShortcut } from "../utils/canvas-shortcuts";
 
 type UseCanvasKeyboardShortcutsOptions = {
     containerRef: RefObject<HTMLDivElement | null>;
     nodesRef: RefObject<CanvasNodeData[]>;
     selectedNodeIdsRef: RefObject<Set<string>>;
-    selectedConnectionId: string | null;
-    setConnections: Dispatch<SetStateAction<CanvasConnection[]>>;
     setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
     setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
     setContextMenu: Dispatch<SetStateAction<ContextMenuState | null>>;
@@ -18,15 +17,13 @@ type UseCanvasKeyboardShortcutsOptions = {
     copySelectedNodes: () => void;
     pasteCopiedNodes: () => boolean;
     pasteSystemClipboard: () => Promise<void>;
-    deleteNodes: (ids: Set<string>) => void;
+    deleteSelection: () => void;
 };
 
 export function useCanvasKeyboardShortcuts({
     containerRef,
     nodesRef,
     selectedNodeIdsRef,
-    selectedConnectionId,
-    setConnections,
     setSelectedNodeIds,
     setSelectedConnectionId,
     setContextMenu,
@@ -37,7 +34,7 @@ export function useCanvasKeyboardShortcuts({
     copySelectedNodes,
     pasteCopiedNodes,
     pasteSystemClipboard,
-    deleteNodes,
+    deleteSelection,
 }: UseCanvasKeyboardShortcutsOptions) {
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -81,12 +78,8 @@ export function useCanvasKeyboardShortcuts({
             }
 
             if (event.key === "Delete" || event.key === "Backspace") {
-                if (selectedNodeIdsRef.current.size) {
-                    deleteNodes(new Set(selectedNodeIdsRef.current));
-                } else if (selectedConnectionId) {
-                    setConnections((prev) => prev.filter((conn) => conn.id !== selectedConnectionId));
-                    setSelectedConnectionId(null);
-                }
+                event.preventDefault();
+                deleteSelection();
             }
 
             if (event.key === "Escape") {
@@ -105,14 +98,12 @@ export function useCanvasKeyboardShortcuts({
         closeCanvasOverlays,
         containerRef,
         copySelectedNodes,
-        deleteNodes,
+        deleteSelection,
         nodesRef,
         pasteCopiedNodes,
         pasteSystemClipboard,
         redoCanvas,
-        selectedConnectionId,
         selectedNodeIdsRef,
-        setConnections,
         setContextMenu,
         setSelectedConnectionId,
         setSelectedNodeIds,
@@ -127,10 +118,13 @@ function shouldIgnoreCanvasShortcut(event: KeyboardEvent, canvasRoot: HTMLElemen
     const key = event.key.toLowerCase();
     const canvasHasFocus = Boolean(canvasRoot && activeElement && (activeElement === canvasRoot || canvasRoot.contains(activeElement)));
 
-    if (element?.closest("input, textarea, select, button, a, [contenteditable='true'], [role='textbox'], [data-canvas-shortcut-scope='ignore']")) return true;
-    if (element?.closest(".ant-modal, .ant-drawer, .ant-dropdown, .ant-popover, .ant-picker-dropdown, .ant-select-dropdown")) return true;
-    if (document.querySelector(".ant-modal-root .ant-modal, .ant-drawer-content-wrapper")) return true;
-    if (!canvasHasFocus) return true;
-    if ((event.metaKey || event.ctrlKey) && key === "c" && window.getSelection()?.toString().trim()) return true;
-    return false;
+    const visibleOverlay = Array.from(document.querySelectorAll<HTMLElement>(".ant-modal-root .ant-modal, .ant-drawer-content-wrapper")).some((overlay) => overlay.getClientRects().length > 0 && overlay.getAttribute("aria-hidden") !== "true");
+    return shouldBlockCanvasShortcut({
+        canvasHasFocus,
+        targetIsEditable: Boolean(element?.closest("input, textarea, select, button, a, [contenteditable='true'], [role='textbox'], [data-canvas-shortcut-scope='ignore']")),
+        targetIsInOverlay: Boolean(element?.closest(".ant-modal, .ant-drawer, .ant-dropdown, .ant-popover, .ant-picker-dropdown, .ant-select-dropdown")),
+        hasVisibleOverlay: visibleOverlay,
+        hasTextSelection: Boolean(window.getSelection()?.toString().trim()),
+        isCopyShortcut: (event.metaKey || event.ctrlKey) && key === "c",
+    });
 }

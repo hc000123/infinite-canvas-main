@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, AudioLines, Image as ImageIcon, LoaderCircle, Video } from "lucide-react";
-import { Button } from "antd";
+import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+import { ArrowUp, LoaderCircle } from "lucide-react";
+import { Alert, Button } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
 import { ModelThinkingSettings } from "@/components/image-settings-panel";
@@ -13,12 +14,15 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { buildCanvasVideoConfig, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
 import { promptPreviewNoZoomProps, promptPreviewTextareaClass, promptPreviewTextareaStyle } from "../utils/canvas-prompt-preview";
-import { applyReferenceMention, filterReferenceMentions, findReferenceMentionTrigger, type CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
+import type { CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
+import { promptDocumentFromText, serializePromptDocument, validatePromptDocument, type CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata } from "../types";
+
+const CanvasPromptEditor = dynamic(() => import("./canvas-prompt-editor").then((module) => module.CanvasPromptEditor), { ssr: false });
 
 export type CanvasNodeGenerationMode = CanvasGenerationMode;
 
@@ -26,14 +30,15 @@ type CanvasNodePromptPanelProps = {
     node: CanvasNodeData;
     isRunning: boolean;
     projectId?: string;
-    onPromptChange: (nodeId: string, prompt: string) => void;
+    onPromptChange: (nodeId: string, prompt: string, promptDocument?: CanvasPromptDocument) => void;
     onConfigChange: (nodeId: string, patch: Partial<CanvasNodeMetadata>) => void;
     onGenerate: (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => void;
     onImageSettingsOpenChange?: (open: boolean) => void;
     referenceMentionOptions?: CanvasReferenceMentionOption[];
+    onPreviewReference?: (nodeId: string) => void;
 };
 
-export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChange, onConfigChange, onGenerate, onImageSettingsOpenChange, referenceMentionOptions = [] }: CanvasNodePromptPanelProps) {
+export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChange, onConfigChange, onGenerate, onImageSettingsOpenChange, referenceMentionOptions = [], onPreviewReference }: CanvasNodePromptPanelProps) {
     const localConfig = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
     const publicSettings = useConfigStore((state) => state.publicSettings);
@@ -48,15 +53,10 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
     const hasSourceVideo = node.type === CanvasNodeType.Video && Boolean(node.metadata?.content);
     const isEditingExistingContent = hasTextContent || hasImageContent;
     const [prompt, setPrompt] = useState(isEditingExistingContent ? "" : node.metadata?.prompt || "");
-    const [caret, setCaret] = useState(0);
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const [promptDocument, setPromptDocument] = useState<CanvasPromptDocument>(() => node.metadata?.promptDocument || promptDocumentFromText(isEditingExistingContent ? "" : node.metadata?.prompt || ""));
+    const [editorRevision, setEditorRevision] = useState(0);
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "image" ? config.count : 1 });
-    const mentionTrigger = mode === "video" ? findReferenceMentionTrigger(prompt, caret) : null;
-    const mentionMatches = useMemo(() => (mentionTrigger ? filterReferenceMentions(referenceMentionOptions, mentionTrigger.query).slice(0, 9) : []), [mentionTrigger?.query, mentionTrigger?.start, referenceMentionOptions]);
-
-    useEffect(() => {
-        setPrompt(isEditingExistingContent ? "" : node.metadata?.prompt || "");
-    }, [isEditingExistingContent, node.id]);
+    const missingReferenceIds = mode === "video" ? validatePromptDocument(promptDocument, referenceMentionOptions) : [];
 
     useEffect(() => {
         if (mode !== "video" || config.videoProtocol !== "volcengine-ark" || hasSourceVideo || (config.videoTaskMode !== "edit" && config.videoTaskMode !== "extend")) return;
@@ -65,24 +65,29 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
 
     const updatePrompt = (value: string) => {
         setPrompt(value);
-        if (!isEditingExistingContent) onPromptChange(node.id, value);
+        if (mode === "video") {
+            const nextDocument = promptDocumentFromText(value);
+            setPromptDocument(nextDocument);
+            setEditorRevision((revision) => revision + 1);
+            if (!isEditingExistingContent) onPromptChange(node.id, value, nextDocument);
+        } else if (!isEditingExistingContent) onPromptChange(node.id, value);
     };
-    const updateCaret = () => setCaret(textareaRef.current?.selectionStart ?? 0);
-    const insertReferenceMention = (option: CanvasReferenceMentionOption) => {
-        const next = applyReferenceMention(prompt, caret, option.label);
-        updatePrompt(next.text);
-        setCaret(next.caret);
-        requestAnimationFrame(() => {
-            textareaRef.current?.focus();
-            textareaRef.current?.setSelectionRange(next.caret, next.caret);
-        });
+    const updatePromptDocument = (nextDocument: CanvasPromptDocument) => {
+        const value = serializePromptDocument(nextDocument, referenceMentionOptions);
+        setPromptDocument(nextDocument);
+        setPrompt(value);
+        if (!isEditingExistingContent) onPromptChange(node.id, value, nextDocument);
     };
 
     const submit = () => {
         const text = prompt.trim();
-        if (!text || isRunning) return;
+        if (!text || isRunning || missingReferenceIds.length) return;
         onGenerate(node.id, mode, text);
         setPrompt("");
+        if (mode === "video") {
+            setPromptDocument(promptDocumentFromText(""));
+            setEditorRevision((revision) => revision + 1);
+        }
     };
 
     return (
@@ -93,18 +98,23 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
             onPointerDown={(event) => event.stopPropagation()}
             onWheel={(event) => event.stopPropagation()}
         >
+            {mode === "video" ? (
+                <CanvasPromptEditor
+                    key={`${node.id}:${editorRevision}`}
+                    initialDocument={promptDocument}
+                    options={referenceMentionOptions}
+                    placeholder="输入 @ 选择图片、视频或音频参考素材"
+                    onChange={updatePromptDocument}
+                    onPreviewReference={onPreviewReference}
+                />
+            ) : (
             <div className="relative">
                 <textarea
-                    ref={textareaRef}
                     {...promptPreviewNoZoomProps()}
                     value={prompt}
                     onChange={(event) => {
                         updatePrompt(event.target.value);
-                        setCaret(event.target.selectionStart);
                     }}
-                    onClick={updateCaret}
-                    onKeyUp={updateCaret}
-                    onSelect={updateCaret}
                     onKeyDown={(event) => {
                         if (event.key !== "Enter" || event.ctrlKey || event.metaKey || event.shiftKey) return;
                         event.preventDefault();
@@ -116,9 +126,7 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                     onMouseDown={(event) => event.stopPropagation()}
                     onPointerDown={(event) => event.stopPropagation()}
                     placeholder={
-                        mode === "video"
-                            ? "输入 @ 选择图片、视频或音频参考素材"
-                            : mode === "image"
+                        mode === "image"
                               ? hasImageContent
                                   ? "请输入你想要把这张图修改成什么"
                                   : "描述要生成的图片内容"
@@ -127,28 +135,9 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                                 : "请输入你想要生成的文本内容"
                     }
                 />
-                {mentionTrigger && mentionMatches.length ? (
-                    <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-lg border p-1 shadow-[var(--studio-shadow)]" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }}>
-                        {mentionMatches.map((option) => (
-                            <button
-                                key={option.id}
-                                type="button"
-                                className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
-                                onMouseDown={(event) => {
-                                    event.preventDefault();
-                                    insertReferenceMention(option);
-                                }}
-                            >
-                                <ReferenceMentionPreview option={option} />
-                                <span className="min-w-0 flex-1">
-                                    <span className="block font-medium">{option.label}</span>
-                                    {option.detail ? <span className="block truncate opacity-55">{option.detail}</span> : null}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-                ) : null}
             </div>
+            )}
+            {missingReferenceIds.length ? <Alert className="mt-2" type="warning" showIcon message="有参考素材已被删除，请移除失效的引用后再生成" /> : null}
 
             <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
                 <div className="flex min-w-[220px] flex-1 flex-wrap items-center gap-2">
@@ -190,7 +179,7 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
                         <ModelPicker className="h-10 !min-w-[140px] flex-1" fullWidth config={config} modelType="text" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />
                     )}
                 </div>
-                <Button type="primary" className="!h-10 !min-w-[84px] shrink-0 !rounded-full !px-3" disabled={isRunning || !prompt.trim()} onClick={submit} aria-label="生成">
+                <Button type="primary" className="!h-10 !min-w-[84px] shrink-0 !rounded-full !px-3" disabled={isRunning || !prompt.trim() || Boolean(missingReferenceIds.length)} onClick={submit} aria-label="生成">
                     <span className="flex items-center gap-1.5">
                         <span className="inline-flex items-center gap-1 text-xs font-medium tabular-nums">
                             <CreditSymbol />
@@ -202,22 +191,6 @@ export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChan
             </div>
         </div>
     );
-}
-
-function ReferenceMentionPreview({ option }: { option: CanvasReferenceMentionOption }) {
-    const content =
-        option.previewUrl && option.previewType === "image" ? (
-            <img src={option.previewUrl} alt={option.label} className="h-full w-full object-cover" />
-        ) : option.previewUrl && option.previewType === "video" ? (
-            <video src={option.previewUrl} className="h-full w-full object-cover" muted playsInline preload="metadata" />
-        ) : option.previewType === "video" ? (
-            <Video className="size-4 opacity-70" />
-        ) : option.previewType === "audio" ? (
-            <AudioLines className="size-4 opacity-70" />
-        ) : (
-            <ImageIcon className="size-4 opacity-70" />
-        );
-    return <span className="flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-black/25">{content}</span>;
 }
 
 function defaultMode(type: CanvasNodeData["type"]): CanvasNodeGenerationMode {
