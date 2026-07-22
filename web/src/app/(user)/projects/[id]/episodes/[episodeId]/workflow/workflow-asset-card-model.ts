@@ -58,6 +58,12 @@ export function defaultWorkflowAssetSelection(cards: WorkflowAssetCard[]) {
     return cards.flatMap((card) => card.variants.filter((variant) => !variant.missingParent && variant.row.imagePrompt && variant.asset?.kind !== "image").map((variant) => variant.logicalAssetId));
 }
 
+export function workflowAssetGenerationProgress(cards: WorkflowAssetCard[]) {
+    const required = cards.flatMap((card) => card.variants).filter((variant) => !variant.missingParent && variant.row.imagePrompt);
+    const generated = required.filter((variant) => variant.asset?.kind === "image").length;
+    return { generated, pending: required.length - generated, ready: required.length > 0 && generated === required.length, required: required.length };
+}
+
 export function workflowAssetEditPatch(asset: Asset, input: { description: string; imagePrompt: string }): Partial<Asset> {
     const description = input.description.trim();
     const imagePrompt = input.imagePrompt.trim();

@@ -75,7 +75,7 @@ export function WorkflowAssetCard(props: {
                     />
                 ) : (
                     <div className="grid h-full place-items-center text-center text-xs text-[var(--studio-text-muted)]">
-                        <div><ImageIcon className="mx-auto mb-2 size-6 opacity-60" />尚未生成预览图</div>
+                        <div><ImageIcon className="mx-auto mb-2 size-6 opacity-60" />尚未生成资产草图</div>
                     </div>
                 )}
                 <div className="absolute left-2 top-2 rounded bg-black/60 px-2 py-1 font-mono text-[10px] text-white">{active.logicalAssetId}</div>
@@ -86,7 +86,7 @@ export function WorkflowAssetCard(props: {
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                         <h3 className="truncate text-sm font-semibold">{props.card.name}</h3>
-                        <p className="mt-1 text-[10px] text-[var(--studio-text-muted)]">{categoryLabel(props.card.category)} · {isImage ? "图片已绑定" : "待生成"}</p>
+                        <p className="mt-1 text-[10px] text-[var(--studio-text-muted)]">{categoryLabel(props.card.category)} · {isImage ? "草图已绑定" : "待生成草图"}</p>
                     </div>
                     <Checkbox checked={props.selectedIds.includes(active.logicalAssetId)} disabled={!asset || active.missingParent} onChange={(event) => props.onSelectionChange(active.logicalAssetId, event.target.checked)}>选择生成</Checkbox>
                 </div>
@@ -111,7 +111,7 @@ export function WorkflowAssetCard(props: {
                     <Button size="small" icon={<Pencil className="size-3.5" />} disabled={!asset} onClick={openEdit}>编辑</Button>
                     {asset ? <Button size="small" icon={<ExternalLink className="size-3.5" />} href={buildImageWorkbenchHref(asset, workflowAssetPrompt(asset), workflowAssetInfo(asset))}>图片工作台</Button> : null}
                     {isImage ? <Button size="small" icon={<Download className="size-3.5" />} onClick={() => void download()}>下载原图</Button> : null}
-                    <Button className="ml-auto" size="small" type="primary" icon={<WandSparkles className="size-3.5" />} disabled={!asset || !values.imagePrompt || active.missingParent} loading={generating} onClick={() => asset && props.onGenerate(asset)}>{isImage ? "重新生成" : "生成资产"}</Button>
+                    <Button className="ml-auto" size="small" type="primary" icon={<WandSparkles className="size-3.5" />} disabled={!asset || !values.imagePrompt || active.missingParent} loading={generating} onClick={() => asset && props.onGenerate(asset)}>{isImage ? "重新生成草图" : "生成草图"}</Button>
                 </div>
             </div>
 

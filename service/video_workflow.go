@@ -476,6 +476,9 @@ func workflowStageInputArtifact(detail WorkflowRunDetail, stageID string) (model
 		message = "请先批准分镜拆解阶段"
 	}
 	stage := workflowDetailStage(detail, dependency)
+	if stageID == WorkflowStageShotBreakdown && stage.Status != model.WorkflowStageRunStatusApplied {
+		return model.WorkflowArtifact{}, safeMessageError{message: "请先生成并绑定全部资产图"}
+	}
 	if stage.Status != model.WorkflowStageRunStatusApproved && stage.Status != model.WorkflowStageRunStatusApplied {
 		return model.WorkflowArtifact{}, safeMessageError{message: message}
 	}

@@ -13,10 +13,12 @@ export function useWorkflowStageActions(input: { detail: RemoteWorkflowRunDetail
     const stageFor = (stageId: string) => input.detail?.stages.filter((item) => item.stageId === stageId).reduce((latest, item) => (!latest || item.attempt > latest.attempt ? item : latest), null as RemoteWorkflowRunDetail["stages"][number] | null) || null;
     const rawStage = stageFor(input.stageId);
     const dependency = input.stageId === "asset-image-prompt" ? stageFor("asset-extraction") : input.stageId === "shot-breakdown" ? stageFor("asset-image-prompt") : input.stageId === "shot-prompt" ? stageFor("shot-breakdown") : null;
-    const stage = rawStage?.status === "blocked" && dependency && ["approved", "applied"].includes(dependency.status) ? { ...rawStage, status: "ready" as const } : rawStage;
+    const dependencyReady = input.stageId === "shot-breakdown" ? dependency?.status === "applied" : Boolean(dependency && ["approved", "applied"].includes(dependency.status));
+    const stage = rawStage?.status === "blocked" && dependencyReady ? { ...rawStage, status: "ready" as const } : rawStage;
     const artifact = input.detail?.artifacts.find((item) => item.id === stage?.outputArtifactId) || null;
     const gate = input.detail?.gates.find((item) => item.artifactId === artifact?.id) || null;
     const actions = workflowStageActions(stage ? { hasArtifact: Boolean(artifact), status: stage.status } : null, Boolean(gate?.passed));
+    if (input.stageId === "shot-breakdown" && rawStage?.status === "blocked" && dependency?.status !== "applied") actions.reason = "请先生成并绑定全部资产草图";
     if (input.stageId === "shot-prompt" && canStartFreshShotPrompt(stage?.status)) actions.canStart = true;
 
     const execute = async (key: string, action: () => Promise<unknown>, success: string) => {

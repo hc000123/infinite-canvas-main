@@ -41,7 +41,7 @@ export function WorkflowReferenceImagePanel(props: { images: WorkflowReferenceIm
             )}
             <div className="mt-3 flex items-center gap-2 rounded-md bg-[var(--studio-panel-muted-bg)] px-3 py-2 text-[11px] text-[var(--studio-text-secondary)]">
                 <Eye className="size-3.5 shrink-0 text-[var(--studio-accent)]" />
-                参考图只在本次任务中临时上传并冻结；没有图片时可明确降级为纯文本生成。
+                参考图只在本次任务中临时上传并冻结；资产图未准备齐时保持阻断，避免纯文本提示词丢失角色与场景一致性。
             </div>
         </section>
     );

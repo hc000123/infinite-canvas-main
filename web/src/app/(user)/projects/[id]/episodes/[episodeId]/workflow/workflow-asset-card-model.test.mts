@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildWorkflowAssetCards, defaultWorkflowAssetSelection, workflowAssetCategoryCounts, workflowAssetEditPatch } from "./workflow-asset-card-model.ts";
+import { buildWorkflowAssetCards, defaultWorkflowAssetSelection, workflowAssetCategoryCounts, workflowAssetEditPatch, workflowAssetGenerationProgress } from "./workflow-asset-card-model.ts";
 import { mapAssetDesignArtifactToAssets } from "./workflow-artifact-mapping.ts";
 
 const artifact = JSON.stringify({ items: [
@@ -37,6 +37,19 @@ test("keeps generated image out of default selection", () => {
 
     assert.equal(cards[0].variants[0].asset?.id, "image-1");
     assert.equal(defaultWorkflowAssetSelection(cards).includes("CHAR-001"), false);
+});
+
+test("only marks asset preparation complete after every valid card variant has an image", () => {
+    const textAssets = [
+        { id: "text-1", kind: "text", title: "林秋", metadata: { originalWorkflow: { importKey: "p1:e1:CHAR-001" } } },
+        { id: "text-2", kind: "text", title: "旧棉衣", metadata: { originalWorkflow: { importKey: "p1:e1:COSTUME-001" } } },
+        { id: "image-1", kind: "image", title: "土坯房", metadata: { originalWorkflow: { importKey: "p1:e1:SCENE-001" } } },
+        { id: "image-2", kind: "image", title: "煤油灯", metadata: { originalWorkflow: { importKey: "p1:e1:PROP-001" } } },
+    ];
+    const rows = mapAssetDesignArtifactToAssets(artifact, textAssets, { episodeId: "e1", projectId: "p1" }).items;
+    const progress = workflowAssetGenerationProgress(buildWorkflowAssetCards(rows, textAssets as never));
+
+    assert.deepEqual(progress, { generated: 2, pending: 2, ready: false, required: 4 });
 });
 
 test("updates prompt metadata without replacing image data or history", () => {

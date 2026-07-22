@@ -20,16 +20,12 @@ export function useWorkflowAssetAutomation(input: {
     const consumed = useRef(new Set<string>());
     const [executing, setExecuting] = useState("");
     const [localError, setLocalError] = useState("");
-    const action = useMemo(
-        () =>
-            nextWorkflowAssetAction({
-                enabled: input.enabled,
-                workerReady: input.workerReady,
-                extraction: stageSnapshot(input.extraction),
-                prompts: stageSnapshot(input.prompts),
-            }),
-        [input.enabled, input.extraction.gate?.passed, input.extraction.stage?.status, input.prompts.gate?.passed, input.prompts.stage?.status, input.workerReady],
-    );
+    const action = nextWorkflowAssetAction({
+        enabled: input.enabled,
+        workerReady: input.workerReady,
+        extraction: stageSnapshot(input.extraction),
+        prompts: stageSnapshot(input.prompts),
+    });
     const actionKey = useMemo(() => automationActionKey(action.type, input.extraction, input.prompts), [action.type, input.extraction, input.prompts]);
 
     useEffect(() => {
