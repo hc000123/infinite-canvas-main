@@ -28,6 +28,7 @@ import { useAgentSettingsStore } from "../use-agent-settings-store";
 import { useAgentRunnerStore } from "../use-agent-runner-store";
 import { useCreativeProjectStore } from "../use-creative-project-store";
 import { ProjectEpisodeBoard, type ProjectDetailTab, type ProjectEpisodeBoardRow } from "./components/project-episode-board";
+import { buildOriginalScriptEditPatch } from "./project-episode-script-edit";
 
 type EpisodeImportFormValues = {
     title: string;
@@ -443,6 +444,15 @@ export default function CreativeProjectDetailPage() {
         window.location.assign(videoWorkflowHref(episode.order, project.id, episode.id));
     };
 
+    const saveEpisodeScript = (episodeId: string, script: string) => {
+        try {
+            updateEpisode(episodeId, buildOriginalScriptEditPatch(script));
+            message.success("原剧本已更新，旧提取结果已清空");
+        } catch (error) {
+            message.warning(error instanceof Error ? error.message : "剧本保存失败");
+        }
+    };
+
     const syncVideoWorkflowScript = async (order: number, content: string) => {
         const episode = videoWorkflowEpisodeKey(order, project.id);
         try {
@@ -490,6 +500,7 @@ export default function CreativeProjectDetailPage() {
                 onClearOptimizedScript={clearEpisodeOptimizedScript}
                 onOptimizeEpisodeScript={(episodeId) => void optimizeExistingEpisodeScript(episodeId)}
                 onOpenEpisode={openEpisodeWorkflow}
+                onSaveEpisodeScript={saveEpisodeScript}
                 onScriptSkillChange={selectScriptSkill}
                 onTabChange={setActiveTab}
                 optimizingEpisodeId={optimizingEpisodeId}

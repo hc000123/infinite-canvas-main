@@ -59,9 +59,10 @@ export function canvasEpisodeContextFromCreateBinding(projectId: string, scriptB
 }
 
 export function buildEpisodeScriptSnapshot(episode: ScriptEpisode, scenes: ScriptScene[] = []) {
+    const sourceScript = episode.sourceSummary?.trim() || episode.summary.trim();
     const parts = [
         `# ${episode.title}`,
-        episode.summary ? `摘要：${episode.summary}` : "",
+        sourceScript,
         episode.hook ? `开场钩子：${episode.hook}` : "",
         episode.turningPoint ? `转折：${episode.turningPoint}` : "",
         episode.cliffhanger ? `结尾悬念：${episode.cliffhanger}` : "",

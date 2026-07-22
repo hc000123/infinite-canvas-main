@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button, Empty, Select, Tag } from "antd";
+import { Button, Empty, Input, Select, Tag } from "antd";
 import { Archive, ArrowRight, BarChart3, Bot, Clapperboard, Edit3, FileText, Image, Library, ListChecks, Maximize2, Plus, Sparkles, Trash2, TriangleAlert, Video, Wand2, type LucideIcon } from "lucide-react";
 
 import type { AssetKind } from "@/stores/use-asset-store";
@@ -67,6 +67,7 @@ type ProjectEpisodeBoardProps = {
     onImportEpisode: () => void;
     onOptimizeEpisodeScript: (episodeId: string) => void;
     onOpenEpisode: (episodeId: string) => void;
+    onSaveEpisodeScript: (episodeId: string, script: string) => void;
     onScriptSkillChange: (workflowId: string) => void;
     onTabChange: (tab: ProjectDetailTab) => void;
 };
@@ -106,6 +107,7 @@ export function ProjectEpisodeBoard({
     onImportEpisode,
     onOptimizeEpisodeScript,
     onOpenEpisode,
+    onSaveEpisodeScript,
     onScriptSkillChange,
     onTabChange,
 }: ProjectEpisodeBoardProps) {
@@ -167,6 +169,7 @@ export function ProjectEpisodeBoard({
                         onFilterChange={onFilterChange}
                         onOptimizeEpisodeScript={onOptimizeEpisodeScript}
                         onOpenEpisode={onOpenEpisode}
+                        onSaveEpisodeScript={onSaveEpisodeScript}
                         onScriptSkillChange={onScriptSkillChange}
                         optimizingEpisodeId={optimizingEpisodeId}
                         progress={progress}
@@ -195,6 +198,7 @@ function ProjectEpisodeProductionPanel({
     onFilterChange,
     onOptimizeEpisodeScript,
     onOpenEpisode,
+    onSaveEpisodeScript,
     onScriptSkillChange,
     optimizingEpisodeId,
     progress,
@@ -216,6 +220,7 @@ function ProjectEpisodeProductionPanel({
     onFilterChange: (filter: EpisodeFilter) => void;
     onOptimizeEpisodeScript: (episodeId: string) => void;
     onOpenEpisode: (episodeId: string) => void;
+    onSaveEpisodeScript: (episodeId: string, script: string) => void;
     onScriptSkillChange: (workflowId: string) => void;
     optimizingEpisodeId: string;
     progress: number;
@@ -228,6 +233,8 @@ function ProjectEpisodeProductionPanel({
 }) {
     const defaultSelectedId = currentEpisode?.id || rows[0]?.id || "";
     const [selectedId, setSelectedId] = useState(defaultSelectedId);
+    const [editingScript, setEditingScript] = useState(false);
+    const [scriptDraft, setScriptDraft] = useState("");
 
     useEffect(() => {
         if (selectedId !== defaultSelectedId && !rows.some((row) => row.id === selectedId)) setSelectedId(defaultSelectedId);
@@ -238,6 +245,11 @@ function ProjectEpisodeProductionPanel({
     const selectedOptimizedScript = selectedEpisode?.optimizedScriptPreview.trim() || "";
     const selectedOptimizeError = selectedEpisode ? scriptOptimizeErrors[selectedEpisode.id] || "" : "";
     const selectedOptimizing = Boolean(selectedEpisode && optimizingEpisodeId === selectedEpisode.id);
+
+    useEffect(() => {
+        setEditingScript(false);
+        setScriptDraft(selectedScript);
+    }, [selectedEpisode?.id, selectedScript]);
 
     return (
         <section className="grid gap-3">
@@ -336,6 +348,9 @@ function ProjectEpisodeProductionPanel({
                                     <Button size="small" icon={<Wand2 className="size-3.5" />} loading={selectedOptimizing} disabled={!selectedScript} onClick={() => onOptimizeEpisodeScript(selectedEpisode.id)}>
                                         剧本优化
                                     </Button>
+                                    <Button size="small" icon={<Edit3 className="size-3.5" />} disabled={selectedOptimizing} onClick={() => setEditingScript(true)}>
+                                        编辑剧本
+                                    </Button>
                                     <button
                                         type="button"
                                         className="grid size-9 place-items-center rounded-md text-[var(--studio-text-muted)] transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-accent)]"
@@ -350,7 +365,17 @@ function ProjectEpisodeProductionPanel({
                         </div>
                         <div className="mt-3 min-h-0 flex-1 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-elevated-bg)] p-4">
                             {selectedEpisode ? (
-                                <pre className="max-h-[520px] whitespace-pre-wrap break-words font-sans text-sm leading-7 text-[var(--studio-text-secondary)]">{selectedScript || "暂无剧本正文。点击“新建分集”导入本集剧本后，这里会显示缩略预览。"}</pre>
+                                editingScript ? (
+                                    <div className="flex h-full min-h-[520px] flex-col gap-3">
+                                        <Input.TextArea className="min-h-0 flex-1" value={scriptDraft} autoSize={false} onChange={(event) => setScriptDraft(event.target.value)} />
+                                        <div className="flex justify-end gap-2">
+                                            <Button onClick={() => { setEditingScript(false); setScriptDraft(selectedScript); }}>取消</Button>
+                                            <Button type="primary" onClick={() => { onSaveEpisodeScript(selectedEpisode.id, scriptDraft); setEditingScript(false); }}>保存原剧本</Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <pre className="max-h-[520px] whitespace-pre-wrap break-words font-sans text-sm leading-7 text-[var(--studio-text-secondary)]">{selectedScript || "暂无剧本正文。点击“编辑剧本”或“新建分集”补充本集剧本。"}</pre>
+                                )
                             ) : (
                                 <div className="grid h-[520px] place-items-center text-center">
                                     <div>
