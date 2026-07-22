@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,6 +26,7 @@ import (
 const (
 	maxAIRequestBodyBytes = 100 * 1024 * 1024
 	maxAIRequestCount     = 15
+	maxImageDownloadBytes = 50 * 1024 * 1024
 	maxVideoDownloadBytes = 1024 * 1024 * 1024
 )
 
@@ -303,7 +305,13 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		})
 		return
 	}
-	copyAIResponse(w, request, refundAndFailTask, func(_ int, payload []byte, responseContentType string) {
+	copyResponse := copyAIResponse
+	if path == "/images/generations" || path == "/images/edits" {
+		copyResponse = func(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onSuccess ...func(int, []byte, string)) {
+			copyAIImageResponse(w, request, r.Context(), onFailure, onSuccess...)
+		}
+	}
+	copyResponse(w, request, refundAndFailTask, func(_ int, payload []byte, responseContentType string) {
 		if err := service.MarkAITaskSucceeded(aiTask.ID, payload, responseContentType); err != nil {
 			log.Printf("AI proxy mark task succeeded failed: task=%s err=%v", aiTask.ID, err)
 		}
@@ -834,7 +842,19 @@ func doAIHTTPRequest(client *http.Client, request *http.Request) (*http.Response
 }
 
 func copyAIResponse(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onSuccess ...func(int, []byte, string)) {
-	response, err := service.DoAIHTTPRequest(request)
+	copyAIResponseWithTransform(w, request, service.DoAIHTTPRequest, onFailure, nil, onSuccess...)
+}
+
+func copyAIImageResponse(w http.ResponseWriter, request *http.Request, ctx context.Context, onFailure func(string, []byte), onSuccess ...func(int, []byte, string)) {
+	copyAIResponseWithTransform(w, request, service.DoAIImageHTTPRequest, onFailure, func(payload []byte, _ string) ([]byte, error) {
+		return normalizeImageGenerationPayload(payload, func(rawURL string) ([]byte, string, error) {
+			return downloadGeneratedImage(ctx, rawURL)
+		})
+	}, onSuccess...)
+}
+
+func copyAIResponseWithTransform(w http.ResponseWriter, request *http.Request, doRequest func(*http.Request) (*http.Response, error), onFailure func(string, []byte), transform func([]byte, string) ([]byte, error), onSuccess ...func(int, []byte, string)) {
+	response, err := doRequest(request)
 	if err != nil {
 		log.Printf("AI proxy request failed: url=%s err=%v", safeLogRequestURL(request), err)
 		if onFailure != nil {
@@ -857,6 +877,18 @@ func copyAIResponse(w http.ResponseWriter, request *http.Request, onFailure func
 	}
 
 	payload, _ := io.ReadAll(response.Body)
+	if transform != nil {
+		payload, err = transform(payload, response.Header.Get("Content-Type"))
+		if err != nil {
+			log.Printf("AI image archive failed: url=%s err=%v", safeLogRequestURL(request), err)
+			if onFailure != nil {
+				onFailure("图片结果归档失败", nil)
+			}
+			Fail(w, "图片结果归档失败")
+			return
+		}
+		response.Header.Set("Content-Type", "application/json")
+	}
 	if len(onSuccess) > 0 && onSuccess[0] != nil {
 		onSuccess[0](response.StatusCode, payload, response.Header.Get("Content-Type"))
 	}
@@ -870,6 +902,87 @@ func copyAIResponse(w http.ResponseWriter, request *http.Request, onFailure func
 	}
 	w.WriteHeader(response.StatusCode)
 	_, _ = w.Write(payload)
+}
+
+func normalizeImageGenerationPayload(payload []byte, resolve func(string) ([]byte, string, error)) ([]byte, error) {
+	var response map[string]any
+	if err := json.Unmarshal(payload, &response); err != nil {
+		return nil, err
+	}
+	items, ok := response["data"].([]any)
+	if !ok {
+		return payload, nil
+	}
+	changed := false
+	for _, value := range items {
+		item, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		if encoded, _ := item["b64_json"].(string); strings.TrimSpace(encoded) != "" {
+			continue
+		}
+		rawURL, _ := item["url"].(string)
+		if strings.TrimSpace(rawURL) == "" {
+			continue
+		}
+		if strings.HasPrefix(rawURL, "data:image/") {
+			item["b64_json"] = rawURL
+			delete(item, "url")
+			changed = true
+			continue
+		}
+		body, contentType, err := resolve(rawURL)
+		if err != nil {
+			return nil, err
+		}
+		item["b64_json"] = "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(body)
+		delete(item, "url")
+		changed = true
+	}
+	if !changed {
+		return payload, nil
+	}
+	return json.Marshal(response)
+}
+
+func downloadGeneratedImage(ctx context.Context, rawURL string) ([]byte, string, error) {
+	if err := validateProxyDownloadURL(ctx, rawURL); err != nil {
+		return nil, "", err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	client := newPublicNetworkHTTPClient(ctx, service.AIVideoContentTimeout, func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 5 {
+			return http.ErrUseLastResponse
+		}
+		return validateProxyDownloadURL(ctx, req.URL.String())
+	})
+	response, err := client.Do(request)
+	if err != nil {
+		return nil, "", err
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= http.StatusBadRequest {
+		return nil, "", fmt.Errorf("image URL returned %d", response.StatusCode)
+	}
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(response.Header.Get("Content-Type"), ";")[0]))
+	if !strings.HasPrefix(contentType, "image/") {
+		return nil, "", errors.New("image URL did not return an image")
+	}
+	if response.ContentLength > maxImageDownloadBytes {
+		return nil, "", errors.New("generated image is too large")
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxImageDownloadBytes+1))
+	if err != nil {
+		return nil, "", err
+	}
+	if len(body) > maxImageDownloadBytes {
+		return nil, "", errors.New("generated image is too large")
+	}
+	return body, contentType, nil
 }
 
 func writeAITaskHeaders(w http.ResponseWriter, task model.AITask, creditLogID string, upstreamTaskID string, status string) {

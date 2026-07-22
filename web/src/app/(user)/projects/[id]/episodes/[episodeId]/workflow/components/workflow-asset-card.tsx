@@ -154,7 +154,7 @@ export function WorkflowAssetCard(props: {
                 <div className="mt-4 flex flex-wrap gap-2">
                     <Button size="small" icon={<Pencil className="size-3.5" />} disabled={!asset} onClick={openEdit}>编辑</Button>
                     {asset ? <Button size="small" icon={<ExternalLink className="size-3.5" />} href={buildImageWorkbenchHref(asset, workflowAssetPrompt(asset), workflowAssetInfo(asset))}>图片工作台</Button> : null}
-                    {asset ? <Dropdown menu={{ items: [{ key: "local", label: "从本地导入" }, { key: "library", label: "从素材库导入" }], onClick: ({ key }) => props.onImport(asset, active.logicalAssetId, key as "local" | "library") }}><Button size="small" icon={<Upload className="size-3.5" />}>导入资产</Button></Dropdown> : null}
+                    {asset ? <Dropdown trigger={["click"]} menu={{ items: [{ key: "local", label: "从本地导入" }, { key: "library", label: "从素材库导入" }], onClick: ({ key }) => props.onImport(asset, active.logicalAssetId, key as "local" | "library") }}><Button size="small" icon={<Upload className="size-3.5" />}>导入资产</Button></Dropdown> : null}
                     {isImage ? <Button size="small" icon={<Download className="size-3.5" />} onClick={() => void download()}>下载原图</Button> : null}
                     <Button className="ml-auto" size="small" type="primary" icon={<WandSparkles className="size-3.5" />} disabled={!asset || !values.imagePrompt || active.missingParent} loading={generating} onClick={() => asset && props.onGenerate(asset)}>{isImage ? "重新生成草图" : "生成草图"}</Button>
                 </div>

@@ -1,0 +1,1 @@
+export const IMAGE_GENERATION_TIMEOUT_MS = 10 * 60_000;

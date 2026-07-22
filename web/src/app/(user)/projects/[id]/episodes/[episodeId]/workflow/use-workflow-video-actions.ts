@@ -103,6 +103,23 @@ export function useWorkflowVideoActions(packages: ProductionPackage[]) {
         }
     };
 
+    const bindTailFrame = async (item: ProductionPackage, input: { lastFrameUrl?: string; videoUrl?: string }, sourceVideoVersion: string) => {
+        const tail = await archiveVideoLastFrame(input);
+        if (!tail) throw new Error("没有可提取的尾帧来源");
+        const savedAt = new Date().toISOString();
+        const tailAssetId = await addAssetOnce({ coverUrl: tail.url, data: { bytes: tail.bytes, dataUrl: tail.url, height: tail.height, mimeType: tail.mimeType, storageKey: tail.storageKey, width: tail.width }, kind: "image", metadata: { originalWorkflow: { episode: item.episodeId, kind: "scene", name: `${item.id} 尾帧连续性参考`, projectId: item.projectId, role: "continuity_reference", sourceShotId: item.id, sourceVideoVersion, version: savedAt } }, note: "上一视频的尾帧参考图；供下一连续镜头理解剧情延续，不作为首帧。", source: "workflow-video-tail-frame", tags: ["视频工作流", "尾帧连续性参考", item.episodeId, item.id], title: `${item.id} 尾帧连续性参考` });
+        const completed = { ...item, lastFrameAssetId: tailAssetId, lastFrameVersion: savedAt };
+        updatePackage(item, { lastFrameAssetId: tailAssetId, lastFrameVersion: savedAt });
+        const ordered = [...packages].sort((left, right) => left.order - right.order);
+        const nextShot = ordered[ordered.findIndex((entry) => entry.id === item.id) + 1];
+        if (nextShot && nextShot.sceneKey === item.sceneKey && nextShot.shotDraft?.continuityMode === "continuous") {
+            const reference = buildContinuityReference(completed);
+            if (reference && !nextShot.continuityReference) updatePackage(nextShot, updateContinuityReference(nextShot, reference));
+            else if (reference && nextShot.continuityReference && nextShot.continuityReference.version !== reference.version) updatePackage(nextShot, { continuityReference: { ...nextShot.continuityReference, updateAvailable: true } });
+        }
+        return tailAssetId;
+    };
+
     const archiveResult = async (item: ProductionPackage, config: ReturnType<typeof buildPackageVideoConfig>, video: Awaited<ReturnType<typeof uploadMediaFile>> & { aiTask?: ReturnType<typeof aiTaskLedgerFromVideoTask> }, task: NormalizedVideoTask | null) => {
         const savedAt = new Date().toISOString();
         const generationRecord = buildPackageAssetGeneration(item, config, video, task, savedAt);
@@ -118,22 +135,10 @@ export function useWorkflowVideoActions(packages: ProductionPackage[]) {
         } satisfies AssetWriteInput;
         const assetId = await addAssetOnce(input);
         const next: PackageGeneration = { aiTaskCredits: video.aiTask?.aiTaskCredits, aiTaskId: video.aiTask?.aiTaskId, assetId, status: "succeeded", taskId: task?.id, taskStatus: task?.rawStatus || task?.status || "succeeded", updatedAt: savedAt, video: input.data };
-        let tailAssetId = "";
-        try {
-            const tail = await archiveVideoLastFrame({ lastFrameUrl: task?.lastFrameUrl, videoUrl: video.url });
-            if (tail) tailAssetId = await addAssetOnce({ coverUrl: tail.url, data: { bytes: tail.bytes, dataUrl: tail.url, height: tail.height, mimeType: tail.mimeType, storageKey: tail.storageKey, width: tail.width }, kind: "image", metadata: { originalWorkflow: { episode: item.episodeId, kind: "scene", name: `${item.id} 尾帧连续性参考`, projectId: item.projectId, role: "continuity_reference", sourceShotId: item.id, sourceVideoVersion: task?.id || savedAt, version: savedAt } }, note: "上一视频的尾帧参考图；供下一连续镜头理解剧情延续，不作为首帧。", source: "workflow-video-tail-frame", tags: ["视频工作流", "尾帧连续性参考", item.episodeId, item.id], title: `${item.id} 尾帧连续性参考` });
-        } catch { message.warning(`${item.id} 视频已归档，但尾帧提取失败，可稍后从视频重新提取`); }
-        const completed = { ...item, canvasStatus: "已生成" as const, generation: next, generationVersions: [...(item.generationVersions || []), next], promptStatus: "已确认" as const, ...(tailAssetId ? { lastFrameAssetId: tailAssetId, lastFrameVersion: savedAt } : {}) };
+        const completed = { ...item, canvasStatus: "已生成" as const, generation: next, generationVersions: [...(item.generationVersions || []), next], promptStatus: "已确认" as const };
         updatePackage(item, completed);
-        if (tailAssetId) {
-            const ordered = [...packages].sort((left, right) => left.order - right.order);
-            const nextShot = ordered[ordered.findIndex((entry) => entry.id === item.id) + 1];
-            if (nextShot && nextShot.sceneKey === item.sceneKey && nextShot.shotDraft?.continuityMode === "continuous") {
-                const reference = buildContinuityReference(completed);
-                if (reference && !nextShot.continuityReference) updatePackage(nextShot, updateContinuityReference(nextShot, reference));
-                else if (reference && nextShot.continuityReference && nextShot.continuityReference.version !== reference.version) updatePackage(nextShot, { continuityReference: { ...nextShot.continuityReference, updateAvailable: true } });
-            }
-        }
+        try { await bindTailFrame(completed, { lastFrameUrl: task?.lastFrameUrl, videoUrl: video.url }, task?.id || savedAt); }
+        catch { message.warning(`${item.id} 视频已归档，但尾帧提取失败，可稍后从视频重新提取`); }
     };
 
     const generate = async (item: ProductionPackage, skipPreflight = false) => {
@@ -198,6 +203,26 @@ export function useWorkflowVideoActions(packages: ProductionPackage[]) {
         }
     };
 
+    const retryTailFrame = async (item: ProductionPackage) => {
+        const videoUrl = item.generation?.video?.url;
+        if (!videoUrl) {
+            message.warning("当前分镜没有可提取尾帧的已归档视频");
+            return false;
+        }
+        const key = scopeKey(item);
+        setGenerating((current) => ({ ...current, [key]: true }));
+        try {
+            await bindTailFrame(item, { videoUrl }, item.generation?.taskId || item.generation?.updatedAt || new Date().toISOString());
+            message.success(`${item.id} 尾帧已提取，并作为下一连续镜头的剧情延续参考`);
+            return true;
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "尾帧提取失败");
+            return false;
+        } finally {
+            setGenerating((current) => ({ ...current, [key]: false }));
+        }
+    };
+
     const batch = async () => {
         const eligible = eligibleBatchPackages(packages);
         for (const item of eligible.included) await generate(item);
@@ -225,5 +250,5 @@ export function useWorkflowVideoActions(packages: ProductionPackage[]) {
         };
     };
 
-    return { batch, channelPreflight, channelPreflighting, configSummary, eligibility: eligibleBatchPackages(packages), generate, generating, preflight, preflightChannel, preflighting, scopeKey, sync, updateConfig };
+    return { batch, channelPreflight, channelPreflighting, configSummary, eligibility: eligibleBatchPackages(packages), generate, generating, preflight, preflightChannel, preflighting, retryTailFrame, scopeKey, sync, updateConfig };
 }

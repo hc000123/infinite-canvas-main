@@ -106,6 +106,31 @@ func TestCloudVideoProxyIgnoresFrontendVolcengineKey(t *testing.T) {
 	}
 }
 
+func TestNormalizeImageGenerationPayloadArchivesRemoteURLs(t *testing.T) {
+	payload := []byte(`{"created":1,"data":[{"url":"https://cdn.example.com/generated.webp"}]}`)
+	normalized, err := normalizeImageGenerationPayload(payload, func(rawURL string) ([]byte, string, error) {
+		if rawURL != "https://cdn.example.com/generated.webp" {
+			t.Fatalf("unexpected image URL %q", rawURL)
+		}
+		return []byte("image-bytes"), "image/webp", nil
+	})
+	if err != nil {
+		t.Fatalf("normalizeImageGenerationPayload returned error: %v", err)
+	}
+	var result struct {
+		Data []map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(normalized, &result); err != nil {
+		t.Fatalf("invalid normalized JSON: %v", err)
+	}
+	if result.Data[0]["url"] != nil {
+		t.Fatalf("remote URL was not removed: %#v", result.Data[0])
+	}
+	if result.Data[0]["b64_json"] != "data:image/webp;base64,aW1hZ2UtYnl0ZXM=" {
+		t.Fatalf("unexpected archived image: %#v", result.Data[0]["b64_json"])
+	}
+}
+
 func TestLegacyLocalArkVideoPayloadUsesBackendChannel(t *testing.T) {
 	setupAIHandlerTestDB(t)
 	upstreamCalled := false

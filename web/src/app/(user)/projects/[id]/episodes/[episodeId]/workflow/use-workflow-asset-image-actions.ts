@@ -7,6 +7,7 @@ import { requestGeneration } from "@/services/api/image";
 import { uploadImage } from "@/services/image-storage";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { useEffectiveConfig } from "@/stores/use-config-store";
+import { mapWithConcurrency } from "./workflow-background-task";
 
 export function useWorkflowAssetImageActions() {
     const config = useEffectiveConfig();
@@ -19,7 +20,7 @@ export function useWorkflowAssetImageActions() {
         const failed: Array<{ id: string; message: string }> = [];
         setGeneratingIds(assets.map((asset) => asset.id));
         try {
-            for (const asset of assets) {
+            await mapWithConcurrency(assets, 2, async (asset) => {
                 try {
                     const prompt = workflowAssetPrompt(asset);
                     if (!prompt) throw new Error("缺少生图提示词");
@@ -32,8 +33,10 @@ export function useWorkflowAssetImageActions() {
                     succeededIds.push(asset.id);
                 } catch (error) {
                     failed.push({ id: asset.id, message: error instanceof Error ? error.message : "生成失败" });
+                } finally {
+                    setGeneratingIds((ids) => ids.filter((id) => id !== asset.id));
                 }
-            }
+            });
             return { failed, succeededIds };
         } finally {
             setGeneratingIds([]);

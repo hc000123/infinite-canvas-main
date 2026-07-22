@@ -1,21 +1,33 @@
 import type { UploadedImage } from "@/services/image-storage";
 
 export function selectLastFrameSource(input: { lastFrameUrl?: string; videoUrl?: string }) {
-    if (input.lastFrameUrl) return { kind: "provider" as const, url: input.lastFrameUrl };
-    if (input.videoUrl) return { kind: "video" as const, url: input.videoUrl };
-    return null;
+    return lastFrameSources(input)[0] || null;
+}
+
+export function lastFrameSources(input: { lastFrameUrl?: string; videoUrl?: string }) {
+    return [
+        ...(input.lastFrameUrl ? [{ kind: "provider" as const, url: input.lastFrameUrl }] : []),
+        ...(input.videoUrl ? [{ kind: "video" as const, url: input.videoUrl }] : []),
+    ];
 }
 
 export async function archiveVideoLastFrame(input: { lastFrameUrl?: string; videoUrl?: string }): Promise<UploadedImage | null> {
     const { uploadImage } = await import("@/services/image-storage");
-    const source = selectLastFrameSource(input);
-    if (!source) return null;
-    if (source.kind === "provider") {
-        const response = await fetch(source.url);
-        if (!response.ok) throw new Error("视频尾帧读取失败");
-        return uploadImage(await response.blob());
+    let failure: unknown;
+    for (const source of lastFrameSources(input)) {
+        try {
+            if (source.kind === "provider") {
+                const response = await fetch(source.url);
+                if (!response.ok) throw new Error("视频尾帧读取失败");
+                return await uploadImage(await response.blob());
+            }
+            return await uploadImage(await extractLastFrame(source.url));
+        } catch (error) {
+            failure = error;
+        }
     }
-    return uploadImage(await extractLastFrame(source.url));
+    if (failure) throw failure;
+    return null;
 }
 
 function extractLastFrame(url: string) {

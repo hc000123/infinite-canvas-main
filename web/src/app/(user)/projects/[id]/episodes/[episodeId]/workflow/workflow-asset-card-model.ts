@@ -56,13 +56,23 @@ export function workflowAssetCategoryCounts(cards: WorkflowAssetCard[]): Record<
 }
 
 export function defaultWorkflowAssetSelection(cards: WorkflowAssetCard[]) {
-    return cards.flatMap((card) => card.variants.filter((variant) => !variant.missingParent && variant.row.imagePrompt && variant.asset?.kind !== "image").map((variant) => variant.logicalAssetId));
+    return cards.flatMap((card) => card.variants.filter((variant) => !variant.missingParent && variant.row.imagePrompt && variant.asset?.kind !== "image" && !assetSkipped(variant.asset)).map((variant) => variant.logicalAssetId));
 }
 
 export function workflowAssetGenerationProgress(cards: WorkflowAssetCard[]) {
-    const required = cards.flatMap((card) => card.variants).filter((variant) => !variant.missingParent && variant.row.imagePrompt);
+    const required = cards.flatMap((card) => card.variants).filter((variant) => !variant.missingParent && variant.row.imagePrompt && !assetSkipped(variant.asset));
     const generated = required.filter((variant) => variant.asset?.kind === "image").length;
     return { generated, pending: required.length - generated, ready: required.length > 0 && generated === required.length, required: required.length };
+}
+
+export function workflowAssetSelectionPatch(asset: Asset, selected: boolean): Partial<Asset> {
+    const workflow = readRecord(asset.metadata?.originalWorkflow);
+    return { metadata: { ...(asset.metadata || {}), originalWorkflow: { ...workflow, generationSelected: selected } } };
+}
+
+export function clearWorkflowAssetFailures(failed: Record<string, string>, logicalAssetIds: string[]) {
+    const retried = new Set(logicalAssetIds);
+    return Object.fromEntries(Object.entries(failed).filter(([id]) => !retried.has(id)));
 }
 
 export function workflowAssetVersionChoices(asset: Asset): AssetVersionRecord[] {
@@ -93,4 +103,8 @@ function normalizeCategory(kind: string): Exclude<WorkflowAssetCategory, "all"> 
 
 function readRecord(value: unknown) {
     return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function assetSkipped(asset?: Asset) {
+    return readRecord(asset?.metadata?.originalWorkflow).generationSelected === false;
 }

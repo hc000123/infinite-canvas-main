@@ -11,7 +11,7 @@ import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 
 import type { useWorkflowAssetAutomation } from "../use-workflow-asset-automation";
 import { useWorkflowAssetImageActions } from "../use-workflow-asset-image-actions";
-import { buildWorkflowAssetCards, defaultWorkflowAssetSelection, workflowAssetCategoryCounts, workflowAssetEditPatch, workflowAssetGenerationProgress, type WorkflowAssetCategory } from "../workflow-asset-card-model";
+import { buildWorkflowAssetCards, clearWorkflowAssetFailures, defaultWorkflowAssetSelection, workflowAssetCategoryCounts, workflowAssetEditPatch, workflowAssetGenerationProgress, workflowAssetSelectionPatch, type WorkflowAssetCategory } from "../workflow-asset-card-model";
 import { startBackgroundTask } from "../workflow-background-task";
 import { mapAssetDesignArtifactToAssets } from "../workflow-artifact-mapping";
 import { WorkflowAssetCard } from "./workflow-asset-card";
@@ -118,8 +118,13 @@ export function WorkflowAssetPanel(props: {
     }, [addAssetOnce, applying, ensureProjectFolder, mapping.items, message, props, updateAsset]);
 
     useEffect(() => {
-        if (["approved", "applied"].includes(props.stage?.status || "") && mapping.items.some((item) => !item.targetAssetId)) void materialize();
-    }, [mapping.items, materialize, props.stage?.status]);
+        const needsSync = mapping.items.some((item) => {
+            const asset = item.targetAssetId ? assets.find((entry) => entry.id === item.targetAssetId) : undefined;
+            const workflow = readRecord(asset?.metadata?.originalWorkflow);
+            return !asset || !readString(workflow.kind) || !readString(workflow.logicalAssetId) || !readString(workflow.sourceEpisodeId) || !readString(workflow.sourceProjectId);
+        });
+        if (["approved", "applied"].includes(props.stage?.status || "") && needsSync) void materialize();
+    }, [assets, mapping.items, materialize, props.stage?.status]);
 
     useEffect(() => {
         if (!props.artifact || !props.stage || props.stage.status !== "approved" || !generationProgress.ready || applying) return;
@@ -144,13 +149,18 @@ export function WorkflowAssetPanel(props: {
         setSelectedIds(defaultWorkflowAssetSelection(cards));
     }, [cards, props.artifact?.contentHash]);
 
-    const setVariantSelected = (logicalAssetId: string, checked: boolean) => setSelectedIds((ids) => (checked ? [...new Set([...ids, logicalAssetId])] : ids.filter((id) => id !== logicalAssetId)));
+    const setVariantSelected = (logicalAssetId: string, checked: boolean) => {
+        const asset = variants.find((variant) => variant.logicalAssetId === logicalAssetId)?.asset;
+        if (asset) updateAsset(asset.id, workflowAssetSelectionPatch(asset, checked));
+        setSelectedIds((ids) => (checked ? [...new Set([...ids, logicalAssetId])] : ids.filter((id) => id !== logicalAssetId)));
+    };
     const saveVariant = (asset: Asset, input: { description: string; imagePrompt: string }) => {
         updateAsset(asset.id, workflowAssetEditPatch(asset, input));
         message.success("资产卡片已更新");
     };
     const runGeneration = async (targets: Asset[]) => {
         const logicalByAsset = new Map(variants.filter((variant) => variant.asset).map((variant) => [variant.asset!.id, variant.logicalAssetId]));
+        setFailed((current) => clearWorkflowAssetFailures(current, targets.map((asset) => logicalByAsset.get(asset.id) || asset.id)));
         const result = await imageActions.generate(targets);
         const errors = Object.fromEntries(result.failed.map((item) => [logicalByAsset.get(item.id) || item.id, item.message]));
         setFailed((current) => ({ ...current, ...errors }));

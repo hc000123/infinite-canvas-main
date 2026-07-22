@@ -111,6 +111,7 @@ export function buildWorkflowGeneratedImagePatch(
             source: "original-workflow",
             prompt,
             originalWorkflow: {
+                ...workflowAssetRaw(asset),
                 ...(info || {}),
                 imagePrompt: prompt,
                 libraryAssetId: asset.id,
@@ -156,6 +157,7 @@ export function buildWorkflowUploadedImagePatch(asset: Asset, image: UploadedIma
             source: "original-workflow",
             prompt,
             originalWorkflow: {
+                ...workflowAssetRaw(asset),
                 ...(info || {}),
                 prompt,
                 status: "image_generated",
@@ -196,6 +198,7 @@ export function buildWorkflowMatchedImagePatch(asset: Asset, source: Extract<Ass
             source: "original-workflow",
             prompt,
             originalWorkflow: {
+                ...workflowAssetRaw(asset),
                 ...(info || {}),
                 prompt,
                 status: "image_generated",
@@ -255,6 +258,10 @@ function readPromptFromAssetContent(asset: Asset | null | undefined) {
 
 function readRecord(value: unknown): Record<string, unknown> | null {
     return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function workflowAssetRaw(asset: Asset) {
+    return readRecord(asset.metadata?.originalWorkflow) || {};
 }
 
 function readString(value: unknown) {

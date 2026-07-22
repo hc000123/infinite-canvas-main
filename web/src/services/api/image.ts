@@ -10,6 +10,7 @@ import { dataUrlToFile } from "@/lib/image-utils";
 import { imageToDataUrl } from "@/services/image-storage";
 import { useLocalAiTaskLogStore, type LocalAiTaskSourceType } from "@/stores/use-local-ai-task-log-store";
 import type { ReferenceImage } from "@/types/image";
+import { IMAGE_GENERATION_TIMEOUT_MS } from "./image-request-policy";
 
 export type ChatCompletionMessage = {
     role: "system" | "user" | "assistant";
@@ -272,7 +273,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, trace?
 function postImageGeneration(config: AiConfig, payload: Record<string, unknown>, trace?: AiTaskTrace) {
     return axios.post<ImageApiResponse>(aiApiUrl(config, "/images/generations"), payload, {
         headers: { ...aiHeaders(config, "application/json"), ...aiTaskTraceHeaders(config, trace) },
-        timeout: AI_REQUEST_TIMEOUT_MS,
+        timeout: IMAGE_GENERATION_TIMEOUT_MS,
     });
 }
 

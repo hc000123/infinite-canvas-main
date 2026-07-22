@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildWorkflowAssetCards, defaultWorkflowAssetSelection, workflowAssetCategoryCounts, workflowAssetEditPatch, workflowAssetGenerationProgress, workflowAssetVersionChoices } from "./workflow-asset-card-model.ts";
+import { buildWorkflowAssetCards, clearWorkflowAssetFailures, defaultWorkflowAssetSelection, workflowAssetCategoryCounts, workflowAssetEditPatch, workflowAssetGenerationProgress, workflowAssetSelectionPatch, workflowAssetVersionChoices } from "./workflow-asset-card-model.ts";
 import { mapAssetDesignArtifactToAssets } from "./workflow-artifact-mapping.ts";
 
 const artifact = JSON.stringify({ items: [
@@ -50,6 +50,25 @@ test("only marks asset preparation complete after every valid card variant has a
     const progress = workflowAssetGenerationProgress(buildWorkflowAssetCards(rows, textAssets as never));
 
     assert.deepEqual(progress, { generated: 2, pending: 2, ready: false, required: 4 });
+});
+
+test("treats a deliberately skipped asset as optional for stage completion", () => {
+    const assets = [
+        { id: "image-1", kind: "image", title: "林秋", metadata: { originalWorkflow: { importKey: "p1:e1:CHAR-001" } } },
+        { id: "image-2", kind: "image", title: "旧棉衣", metadata: { originalWorkflow: { importKey: "p1:e1:COSTUME-001" } } },
+        { id: "image-3", kind: "image", title: "土坯房", metadata: { originalWorkflow: { importKey: "p1:e1:SCENE-001" } } },
+        { id: "text-1", kind: "text", title: "煤油灯", metadata: { originalWorkflow: { importKey: "p1:e1:PROP-001" } } },
+    ];
+    Object.assign(assets[3], workflowAssetSelectionPatch(assets[3] as never, false));
+    const rows = mapAssetDesignArtifactToAssets(artifact, assets, { episodeId: "e1", projectId: "p1" }).items;
+    const cards = buildWorkflowAssetCards(rows, assets as never);
+
+    assert.equal(defaultWorkflowAssetSelection(cards).includes("PROP-001"), false);
+    assert.deepEqual(workflowAssetGenerationProgress(cards), { generated: 3, pending: 0, ready: true, required: 3 });
+});
+
+test("clears stale card errors before retrying only the selected assets", () => {
+    assert.deepEqual(clearWorkflowAssetFailures({ "CHAR-001": "old", "SCENE-001": "keep" }, ["CHAR-001"]), { "SCENE-001": "keep" });
 });
 
 test("updates prompt metadata without replacing image data or history", () => {
