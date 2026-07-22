@@ -1,4 +1,4 @@
-import { resolveEffectiveConfig, type AiConfig } from "../../../../stores/use-config-store.ts";
+import type { AiConfig } from "../../../../stores/use-config-store.ts";
 import { protocolForModel, resolveGenerationModel } from "../../../../lib/ai-model-catalog.ts";
 import type { AdminPublicSettings } from "../../../../services/api/admin.ts";
 import { inferVideoReferenceMode, normalizeSeedanceImageRoleMode, normalizeVideoReferenceMode } from "../../../../services/api/video-reference.ts";
@@ -52,8 +52,8 @@ export function buildCanvasVideoConfig(config: AiConfig, metadata?: CanvasNodeMe
     };
 }
 
-export function resolveCanvasVideoChannelConfig(localConfig: AiConfig, _effectiveConfig: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null | undefined, _channelMode?: AiConfig["channelMode"]) {
-    return resolveEffectiveConfig({ ...localConfig, channelMode: "remote" }, modelChannel || null);
+export function resolveCanvasVideoChannelConfig(_localConfig: AiConfig, effectiveConfig: AiConfig, _modelChannel: AdminPublicSettings["modelChannel"] | null | undefined, _channelMode?: AiConfig["channelMode"]): AiConfig {
+    return { ...effectiveConfig, channelMode: "remote" };
 }
 
 export function buildCanvasVideoModePatch(config: AiConfig): Partial<CanvasNodeMetadata> {

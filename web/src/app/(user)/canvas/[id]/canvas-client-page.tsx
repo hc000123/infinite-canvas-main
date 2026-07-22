@@ -884,6 +884,7 @@ function InfiniteCanvasPage() {
 
                     <CanvasNodesLayer
                         activeNodeId={activeNodeId}
+                        canvasAiConfig={canvasAiConfig}
                         activeProductionPackageId={activeProductionPackageId}
                         activeTimelineNodeIds={activeTimelineNodeIds}
                         batchChildCountById={batchChildCountById}

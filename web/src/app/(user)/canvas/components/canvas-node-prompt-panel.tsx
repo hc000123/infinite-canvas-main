@@ -8,7 +8,7 @@ import { Alert, Button, Input, Modal } from "antd";
 import { ModelPicker } from "@/components/model-picker";
 import { ModelThinkingSettings } from "@/components/image-settings-panel";
 import { inferRemoteVideoProtocol } from "@/services/api/ai-channel-boundary";
-import { defaultConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { defaultConfig, useConfigStore, type AiConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -30,6 +30,7 @@ export type CanvasNodeGenerationMode = CanvasGenerationMode;
 
 type CanvasNodePromptPanelProps = {
     node: CanvasNodeData;
+    canvasAiConfig: AiConfig;
     isRunning: boolean;
     projectId?: string;
     onPromptChange: (nodeId: string, prompt: string, promptDocument?: CanvasPromptDocument) => void;
@@ -41,15 +42,14 @@ type CanvasNodePromptPanelProps = {
     onPreviewReference?: (nodeId: string) => void;
 };
 
-export function CanvasNodePromptPanel({ node, isRunning, projectId, onPromptChange, onConfigChange, onGenerate, onImageSettingsOpenChange, referenceMentionOptions = [], hasConnectedText = false, onPreviewReference }: CanvasNodePromptPanelProps) {
+export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, projectId, onPromptChange, onConfigChange, onGenerate, onImageSettingsOpenChange, referenceMentionOptions = [], hasConnectedText = false, onPreviewReference }: CanvasNodePromptPanelProps) {
     const localConfig = useConfigStore((state) => state.config);
-    const effectiveConfig = useEffectiveConfig();
     const publicSettings = useConfigStore((state) => state.publicSettings);
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const mode = defaultMode(node.type);
-    const globalConfig = resolveCanvasVideoChannelConfig(localConfig, effectiveConfig, publicSettings?.modelChannel, mode === "video" ? node.metadata?.channelMode : undefined);
+    const globalConfig = resolveCanvasVideoChannelConfig(localConfig, canvasAiConfig, publicSettings?.modelChannel, mode === "video" ? node.metadata?.channelMode : undefined);
     const config = buildNodeConfig(globalConfig, node, mode);
     const hasTextContent = node.type === CanvasNodeType.Text && Boolean(node.metadata?.content?.trim());
     const hasImageContent = node.type === CanvasNodeType.Image && Boolean(node.metadata?.content);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildCanvasVideoConfig, buildCanvasVideoDefaultsPatch, buildCanvasVideoModePatch } from "./canvas-video-config.ts";
+import { buildCanvasVideoConfig, buildCanvasVideoDefaultsPatch, buildCanvasVideoModePatch, resolveCanvasVideoChannelConfig } from "./canvas-video-config.ts";
 
 const baseConfig = {
     channelMode: "local",
@@ -44,6 +44,21 @@ const baseConfig = {
 } as const;
 
 const cloudConfig = { ...baseConfig, channelMode: "remote" } as const;
+
+test("node panels keep the current canvas preset defaults", () => {
+    const canvasPresetConfig = {
+        ...cloudConfig,
+        size: "9:16",
+        vquality: "1080",
+        videoSeconds: "8",
+    } as const;
+
+    const resolved = resolveCanvasVideoChannelConfig(baseConfig, canvasPresetConfig, undefined);
+
+    assert.equal(resolved.size, "9:16");
+    assert.equal(resolved.vquality, "1080");
+    assert.equal(resolved.videoSeconds, "8");
+});
 
 const catalogConfig = {
     ...cloudConfig,

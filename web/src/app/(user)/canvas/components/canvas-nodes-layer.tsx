@@ -2,6 +2,7 @@
 
 import type { Dispatch, MouseEvent, MutableRefObject, SetStateAction } from "react";
 
+import type { AiConfig } from "@/stores/use-config-store";
 import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions";
 import type { CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import { getNodeProductionPackageId, type CanvasProductionPackageSummary } from "../utils/canvas-production-packages";
@@ -15,6 +16,7 @@ import { CanvasNodePromptPanel } from "./canvas-node-prompt-panel";
 
 type Props = {
     activeNodeId: string | null;
+    canvasAiConfig: AiConfig;
     activeProductionPackageId: string;
     activeTimelineNodeIds: Set<string>;
     batchChildCountById: Map<string, number>;
@@ -69,6 +71,7 @@ type Props = {
 
 export function CanvasNodesLayer({
     activeNodeId,
+    canvasAiConfig,
     activeProductionPackageId,
     activeTimelineNodeIds,
     batchChildCountById,
@@ -148,6 +151,7 @@ export function CanvasNodesLayer({
                         return (
                             <CanvasNodePromptPanel
                                 node={panelNode}
+                                canvasAiConfig={canvasAiConfig}
                                 isRunning={runningNodeId === panelNode.id}
                                 projectId={workspaceProjectId}
                                 onPromptChange={handleNodePromptChange}
@@ -169,6 +173,7 @@ export function CanvasNodesLayer({
                     renderNodeContent={(contentNode) => (
                         <CanvasConfigNodePanel
                             node={contentNode}
+                            canvasAiConfig={canvasAiConfig}
                             isRunning={runningNodeId === contentNode.id}
                             inputSummary={getInputSummary(configInputsById.get(contentNode.id) || [])}
                             inputs={configInputsById.get(contentNode.id) || []}

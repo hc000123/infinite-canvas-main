@@ -8,7 +8,7 @@ import { App, Button, Segmented } from "antd";
 import { ModelPicker } from "@/components/model-picker";
 import { ModelThinkingSettings } from "@/components/image-settings-panel";
 import { videoRatioLabel, videoResolutionLabel, videoSecondsLabel } from "@/components/video-settings-panel";
-import { defaultConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { defaultConfig, useConfigStore, type AiConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { defaultSeedanceImageRole, normalizeSeedanceImageRole, seedanceReferenceLabelRange } from "@/services/api/video-reference";
@@ -24,6 +24,7 @@ import type { ReferenceImageRole } from "@/types/image";
 
 type CanvasConfigNodePanelProps = {
     node: CanvasNodeData;
+    canvasAiConfig: AiConfig;
     isRunning: boolean;
     inputSummary: { textCount: number; imageCount: number; videoCount: number; audioCount: number };
     inputs: NodeGenerationInput[];
@@ -32,19 +33,18 @@ type CanvasConfigNodePanelProps = {
     onGenerate: (nodeId: string) => void;
 };
 
-export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, onConfigChange, onTextInputChange, onGenerate }: CanvasConfigNodePanelProps) {
+export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSummary, inputs, onConfigChange, onTextInputChange, onGenerate }: CanvasConfigNodePanelProps) {
     const { message } = App.useApp();
     const [previewOpen, setPreviewOpen] = useState(false);
     const [editingTextId, setEditingTextId] = useState<string | null>(null);
     const [editingText, setEditingText] = useState("");
     const localConfig = useConfigStore((state) => state.config);
-    const effectiveConfig = useEffectiveConfig();
     const publicSettings = useConfigStore((state) => state.publicSettings);
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const mode = node.metadata?.generationMode || "image";
-    const globalConfig = resolveCanvasVideoChannelConfig(localConfig, effectiveConfig, publicSettings?.modelChannel, mode === "video" ? node.metadata?.channelMode : undefined);
+    const globalConfig = resolveCanvasVideoChannelConfig(localConfig, canvasAiConfig, publicSettings?.modelChannel, mode === "video" ? node.metadata?.channelMode : undefined);
     const config = buildNodeConfig(globalConfig, node, mode);
     const count = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(node.metadata?.count || CANVAS_IMAGE_GENERATION_DEFAULT_COUNT)) || 1)));
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "image" ? count : 1 });
