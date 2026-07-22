@@ -37,10 +37,17 @@ export type WorkflowShotDraft = {
     continuityMode: "continuous" | "cut";
 };
 
+export type WorkflowReferenceRole = "character" | "character_variant" | "scene" | "prop" | "blocking" | "continuity_reference";
+
 export type WorkflowReferenceBinding = {
-    logicalAssetId: string;
+    role: WorkflowReferenceRole;
+    label: string;
+    logicalAssetId?: string;
+    parentLogicalAssetId?: string;
+    variantName?: string;
     libraryAssetId: string;
     version: string;
+    sourceShotId?: string;
     usage: string;
 };
 

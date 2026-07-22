@@ -42,6 +42,8 @@ type WorkflowShotPromptContext struct {
 }
 
 type WorkflowReferenceContext struct {
+	Role                 string `json:"role"`
+	Label                string `json:"label"`
 	LogicalAssetID       string `json:"logicalAssetId"`
 	LibraryAssetID       string `json:"libraryAssetId"`
 	ParentLogicalAssetID string `json:"parentLogicalAssetId,omitempty"`
@@ -49,8 +51,8 @@ type WorkflowReferenceContext struct {
 	Version              string `json:"version"`
 	Usage                string `json:"usage"`
 	Ref                  string `json:"ref"`
-	Label                string `json:"label"`
 	Kind                 string `json:"kind"`
+	SourceShotID         string `json:"sourceShotId,omitempty"`
 }
 
 type EnsureWorkflowRunInput struct {

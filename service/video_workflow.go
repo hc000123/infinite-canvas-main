@@ -530,8 +530,17 @@ func validateWorkflowStageContext(stageID string, raw json.RawMessage) (*Workflo
 	if json.Unmarshal(raw, &context) != nil || strings.TrimSpace(context.ShotID) == "" || strings.TrimSpace(context.SourceScript) == "" || len(context.ShotDraft) == 0 || strings.TrimSpace(context.PromptInputHash) == "" {
 		return nil, safeMessageError{message: "镜头上下文缺少 shotId、sourceScript、shotDraft 或 promptInputHash"}
 	}
-	if len(context.References) > 32 {
+	if len(context.References) > 9 {
 		return nil, safeMessageError{message: "镜头上下文参考图片过多"}
+	}
+	allowedRoles := map[string]bool{"character": true, "character_variant": true, "scene": true, "prop": true, "blocking": true, "continuity_reference": true}
+	for _, reference := range context.References {
+		if !allowedRoles[strings.TrimSpace(reference.Role)] || strings.TrimSpace(reference.Label) == "" || strings.TrimSpace(reference.LibraryAssetID) == "" || strings.TrimSpace(reference.Version) == "" {
+			return nil, safeMessageError{message: "参考图缺少有效的类型、名称、素材或版本定义"}
+		}
+		if reference.Role != "blocking" && reference.Role != "continuity_reference" && strings.TrimSpace(reference.LogicalAssetID) == "" {
+			return nil, safeMessageError{message: "角色、场景或道具参考图必须绑定资产编号"}
+		}
 	}
 	return &context, nil
 }
