@@ -240,7 +240,18 @@ export function useCanvasNodeCrudActions({
 
     const handleNodePromptChange = useCallback(
         (nodeId: string, prompt: string, promptDocument?: CanvasPromptDocument) => {
-            setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, prompt, ...(promptDocument ? { promptDocument } : {}) } } : node)));
+            setNodes((prev) =>
+                prev.map((node) => {
+                    if (node.id !== nodeId) return node;
+                    const isGeneratedMedia = (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video) && Boolean(node.metadata?.content);
+                    return {
+                        ...node,
+                        metadata: isGeneratedMedia
+                            ? { ...node.metadata, promptDraft: prompt, promptDraftDocument: promptDocument }
+                            : { ...node.metadata, prompt, ...(promptDocument ? { promptDocument } : {}) },
+                    };
+                }),
+            );
         },
         [setNodes],
     );

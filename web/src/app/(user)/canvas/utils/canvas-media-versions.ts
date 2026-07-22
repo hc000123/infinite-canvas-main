@@ -173,3 +173,34 @@ export function hasDirtyCanvasPromptDraft(node: CanvasNodeData) {
     if (node.metadata?.promptDraft === undefined && node.metadata?.promptDraftDocument === undefined) return false;
     return node.metadata.promptDraft !== (node.metadata.prompt || "") || JSON.stringify(node.metadata.promptDraftDocument) !== JSON.stringify(node.metadata.promptDocument);
 }
+
+export function canvasPromptEditorValue(node: CanvasNodeData) {
+    return node.metadata?.promptDraft ?? node.metadata?.prompt ?? "";
+}
+
+export function canvasPromptEditorDocument(node: CanvasNodeData) {
+    return node.metadata?.promptDraftDocument ?? node.metadata?.promptDocument;
+}
+
+export async function hydrateCanvasMediaVersionUrls(
+    node: CanvasNodeData,
+    resolveImage: (storageKey: string, fallbackUrl?: string) => Promise<string>,
+    resolveMedia: (storageKey: string, fallbackUrl?: string) => Promise<string>,
+) {
+    const versions = node.metadata?.mediaVersions;
+    if (!versions?.length) return node;
+    return {
+        ...node,
+        metadata: {
+            ...node.metadata,
+            mediaVersions: await Promise.all(
+                versions.map(async (version) => {
+                    const storageKey = version.metadata.storageKey;
+                    if (!storageKey) return version;
+                    const content = await (version.kind === "video" ? resolveMedia(storageKey, version.metadata.content) : resolveImage(storageKey, version.metadata.content));
+                    return { ...version, metadata: { ...version.metadata, content } };
+                }),
+            ),
+        },
+    };
+}

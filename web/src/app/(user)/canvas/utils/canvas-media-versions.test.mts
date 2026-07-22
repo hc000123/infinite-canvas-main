@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { CanvasNodeData } from "../types.ts";
-import { appendCanvasMediaVersion, applyCanvasPromptDraft, switchCanvasMediaVersion } from "./canvas-media-versions.ts";
+import { appendCanvasMediaVersion, applyCanvasPromptDraft, canvasPromptEditorValue, hydrateCanvasMediaVersionUrls, switchCanvasMediaVersion } from "./canvas-media-versions.ts";
 
 const now = "2026-07-22T16:00:00.000Z";
 
@@ -83,4 +83,28 @@ test("prompt drafts do not mutate the current version prompt", () => {
     assert.equal(edited.metadata?.prompt, "当前版本提示词");
     assert.equal(edited.metadata?.promptDraft, "草稿提示词");
     assert.equal(edited.metadata?.mediaVersions?.[1]?.prompt, "当前版本提示词");
+});
+
+test("uses a saved draft before the current version prompt", () => {
+    const node = applyCanvasPromptDraft(legacyImageNode, "未生成草稿");
+    assert.equal(canvasPromptEditorValue(node), "未生成草稿");
+    assert.equal(canvasPromptEditorValue(legacyImageNode), "旧提示词");
+});
+
+test("hydrates every version storage key", async () => {
+    const completed: CanvasNodeData = {
+        ...legacyImageNode,
+        metadata: { ...legacyImageNode.metadata, content: "blob:stale-new", storageKey: "image:new" },
+    };
+    const versionedNode = appendCanvasMediaVersion(legacyImageNode, completed, "新的提示词", now);
+
+    const hydrated = await hydrateCanvasMediaVersionUrls(
+        versionedNode,
+        async (storageKey) => `blob:resolved-${storageKey.split(":")[1]}`,
+        async (storageKey) => `blob:video-${storageKey}`,
+    );
+
+    assert.equal(hydrated.metadata?.mediaVersions?.[0]?.metadata.content, "blob:resolved-old");
+    assert.equal(hydrated.metadata?.mediaVersions?.[1]?.metadata.content, "blob:resolved-new");
+    assert.equal(hydrated.metadata?.content, "blob:stale-new");
 });

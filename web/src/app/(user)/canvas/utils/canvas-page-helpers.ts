@@ -7,6 +7,7 @@ import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, CanvasNo
 import { CanvasNodeType } from "../types";
 import { getNodeProductionPackageId, getNodeProductionPackageRole, productionPackageRoleLabel, type CanvasProductionPackageSummary } from "./canvas-production-packages";
 import { nodeSizeFromRatio } from "./canvas-node-size";
+import { hydrateCanvasMediaVersionUrls } from "./canvas-media-versions";
 
 export const NODE_STATUS_SUCCESS = "success" as const;
 
@@ -65,7 +66,8 @@ export function audioMetadata(audio: UploadedFile): CanvasNodeMetadata {
 
 export async function hydrateCanvasImages(nodes: CanvasNodeData[]) {
     return Promise.all(
-        nodes.map(async (node) => {
+        nodes.map(async (storedNode) => {
+            const node = await hydrateCanvasMediaVersionUrls(storedNode, resolveImageUrl, resolveMediaUrl);
             const content = node.metadata?.content;
             if ((node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && node.metadata?.storageKey) return { ...node, metadata: { ...node.metadata, content: await resolveMediaUrl(node.metadata.storageKey, content) } };
             if (node.type !== CanvasNodeType.Image || !content) return node;

@@ -17,6 +17,7 @@ import { canSubmitCanvasPrompt, promptPreviewNoZoomProps, promptPreviewTextareaC
 import type { CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
 import { promptDocumentFromText, serializePromptDocument, validatePromptDocument, type CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
+import { canvasPromptEditorDocument, canvasPromptEditorValue } from "../utils/canvas-media-versions";
 import { CanvasImageCameraPopover } from "./canvas-image-camera-popover";
 import { CanvasImagePresetPopover, type CanvasImagePreset } from "./canvas-image-preset-popover";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
@@ -54,9 +55,11 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
     const hasTextContent = node.type === CanvasNodeType.Text && Boolean(node.metadata?.content?.trim());
     const hasImageContent = node.type === CanvasNodeType.Image && Boolean(node.metadata?.content);
     const hasSourceVideo = node.type === CanvasNodeType.Video && Boolean(node.metadata?.content);
+    const isGeneratedMedia = hasImageContent || hasSourceVideo;
     const isEditingExistingContent = hasTextContent || hasImageContent;
-    const [prompt, setPrompt] = useState(isEditingExistingContent ? "" : node.metadata?.prompt || "");
-    const [promptDocument, setPromptDocument] = useState<CanvasPromptDocument>(() => node.metadata?.promptDocument || promptDocumentFromText(isEditingExistingContent ? "" : node.metadata?.prompt || ""));
+    const initialPrompt = hasTextContent ? "" : canvasPromptEditorValue(node);
+    const [prompt, setPrompt] = useState(initialPrompt);
+    const [promptDocument, setPromptDocument] = useState<CanvasPromptDocument>(() => canvasPromptEditorDocument(node) || promptDocumentFromText(initialPrompt));
     const [editorRevision, setEditorRevision] = useState(0);
     const [expandedEditorOpen, setExpandedEditorOpen] = useState(false);
     const [expandedPrompt, setExpandedPrompt] = useState(prompt);
@@ -66,11 +69,11 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
     const canSubmit = canSubmitCanvasPrompt(prompt, isRunning, hasConnectedText) && missingReferenceIds.length === 0;
 
     useEffect(() => {
-        const nextPrompt = isEditingExistingContent ? "" : node.metadata?.prompt || "";
+        const nextPrompt = hasTextContent ? "" : canvasPromptEditorValue(node);
         setPrompt(nextPrompt);
-        setPromptDocument(node.metadata?.promptDocument || promptDocumentFromText(nextPrompt));
+        setPromptDocument(canvasPromptEditorDocument(node) || promptDocumentFromText(nextPrompt));
         setEditorRevision((revision) => revision + 1);
-    }, [isEditingExistingContent, node.id]);
+    }, [hasTextContent, node.id, node.metadata?.currentMediaVersionId]);
 
     useEffect(() => {
         if (mode !== "video" || config.videoProtocol !== "volcengine-ark" || hasSourceVideo || (config.videoTaskMode !== "edit" && config.videoTaskMode !== "extend")) return;
@@ -83,14 +86,14 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
             const nextDocument = promptDocumentFromText(value);
             setPromptDocument(nextDocument);
             setEditorRevision((revision) => revision + 1);
-            if (!isEditingExistingContent) onPromptChange(node.id, value, nextDocument);
-        } else if (!isEditingExistingContent) onPromptChange(node.id, value);
+            if (!hasTextContent) onPromptChange(node.id, value, nextDocument);
+        } else if (!hasTextContent) onPromptChange(node.id, value);
     };
     const updatePromptDocument = (nextDocument: CanvasPromptDocument) => {
         const value = serializePromptDocument(nextDocument, referenceMentionOptions);
         setPromptDocument(nextDocument);
         setPrompt(value);
-        if (!isEditingExistingContent) onPromptChange(node.id, value, nextDocument);
+        if (!hasTextContent) onPromptChange(node.id, value, nextDocument);
     };
     const openExpandedEditor = () => {
         setExpandedPrompt(prompt);
@@ -109,8 +112,8 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
         const text = prompt.trim();
         if (!canSubmit) return;
         onGenerate(node.id, mode, mode === "image" ? appendImageCameraPrompt(text, node.metadata) : text);
-        setPrompt("");
-        if (mode === "video") {
+        if (!isGeneratedMedia) setPrompt("");
+        if (mode === "video" && !isGeneratedMedia) {
             setPromptDocument(promptDocumentFromText(""));
             setEditorRevision((revision) => revision + 1);
         }
