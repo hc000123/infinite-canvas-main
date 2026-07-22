@@ -24,13 +24,14 @@ export function mapAssetDesignArtifactToAssets(contentJson: string, existingAsse
             return [];
         }
         const importKey = `${scope.projectId}:${scope.episodeId}:${item.logicalAssetId}`;
-        const existing = existingAssets.find((asset) => {
-            if (readImportKey(asset.metadata) === importKey) return true;
-            const workflow = readWorkflowMetadata(asset.metadata);
-            const projectId = readString(workflow?.sourceProjectId) || readString(workflow?.projectId);
-            const episodeId = readString(workflow?.sourceEpisodeId) || readString(workflow?.episode);
-            return readLogicalAssetID(asset.metadata) === item.logicalAssetId && projectId === scope.projectId && episodeId === scope.episodeId;
-        });
+        const existing =
+            existingAssets.find((asset) => {
+                if (readImportKey(asset.metadata) === importKey) return true;
+                const workflow = readWorkflowMetadata(asset.metadata);
+                const projectId = readString(workflow?.sourceProjectId) || readString(workflow?.projectId);
+                const episodeId = readString(workflow?.sourceEpisodeId) || readString(workflow?.episode);
+                return readLogicalAssetID(asset.metadata) === item.logicalAssetId && projectId === scope.projectId && episodeId === scope.episodeId;
+            }) || existingAssets.find((asset) => matchesScopedWorkflowName(asset, item.name, scope));
         return [{ ...item, action: existing ? "update_metadata" : "create", importKey, libraryAssetId: existing?.id, preserveImage: existing?.kind === "image", targetAssetId: existing?.id }];
     });
     return { items, warnings };
@@ -85,5 +86,16 @@ function readImportKey(metadata?: Record<string, unknown>) {
 function readLogicalAssetID(metadata?: Record<string, unknown>) {
     return readString(readWorkflowMetadata(metadata)?.logicalAssetId);
 }
+
+function matchesScopedWorkflowName(asset: WorkflowArtifactAsset, name: string, scope: { episodeId: string; projectId: string }) {
+    const workflow = readWorkflowMetadata(asset.metadata);
+    if (!workflow) return false;
+    const projectId = readString(workflow.sourceProjectId) || readString(workflow.projectId);
+    const episodeId = readString(workflow.sourceEpisodeId) || readString(workflow.episode);
+    const workflowName = readString(workflow.name) || asset.title;
+    return projectId === scope.projectId && episodeId === scope.episodeId && normalizeName(workflowName) === normalizeName(name);
+}
+
+function normalizeName(value: string) { return value.trim().replace(/\s+/g, " ").toLowerCase(); }
 
 function readString(value: unknown) { return typeof value === "string" ? value.trim() : ""; }

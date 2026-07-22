@@ -66,6 +66,10 @@ export function assetImportSuccessMessage(count: number, folderName?: string) {
     return `已导入 ${count} 个素材${folderName ? `到「${folderName}」` : ""}`;
 }
 
+export function uniqueImportedAssetIds(ids: string[]) {
+    return Array.from(new Set(ids));
+}
+
 function importedFileTitle(filename: string) {
     return filename.replace(/\.[^.]+$/, "") || "未命名素材";
 }

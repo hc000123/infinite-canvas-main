@@ -27,6 +27,16 @@ export function assetFingerprintCandidates(asset: Asset) {
     return [readString(asset.metadata?.fingerprint), fallbackAssetFingerprint(asset)].filter(Boolean);
 }
 
+export function findWorkflowAssetDuplicate(assets: Asset[], incoming: AssetWriteInput) {
+    const target = workflowAssetIdentity(incoming);
+    if (!target) return undefined;
+    return assets.find((asset) => {
+        const candidate = workflowAssetIdentity(asset);
+        if (!candidate || candidate.projectId !== target.projectId || candidate.episodeId !== target.episodeId || candidate.name !== target.name) return false;
+        return candidate.logicalAssetId === target.logicalAssetId || isStableWorkflowAssetId(candidate.logicalAssetId) || isStableWorkflowAssetId(target.logicalAssetId);
+    });
+}
+
 export function mergeDuplicateAsset(existing: Asset, incoming: AssetWriteInput, fingerprint: string, now = new Date().toISOString()): Asset {
     return {
         ...existing,
@@ -42,6 +52,9 @@ export function mergeDuplicateAsset(existing: Asset, incoming: AssetWriteInput, 
 
 export function mergeAssetMetadata(current?: Asset["metadata"], incoming?: AssetWriteInput["metadata"], fingerprint?: string) {
     const metadata: NonNullable<Asset["metadata"]> = { ...(current || {}), ...(incoming || {}) };
+    const currentWorkflow = readRecord(current?.originalWorkflow);
+    const incomingWorkflow = readRecord(incoming?.originalWorkflow);
+    if (currentWorkflow || incomingWorkflow) metadata.originalWorkflow = { ...(currentWorkflow || {}), ...(incomingWorkflow || {}) };
     if (fingerprint) metadata.fingerprint = fingerprint;
     const sourceRefs = mergeStringLists(
         readStringList(current?.sourceRefs),
@@ -85,4 +98,22 @@ function readStringList(value: unknown) {
 
 function readUnknownList(value: unknown) {
     return Array.isArray(value) ? value : [];
+}
+
+function workflowAssetIdentity(asset: Asset | AssetWriteInput) {
+    const workflow = readRecord(asset.metadata?.originalWorkflow);
+    if (!workflow) return null;
+    const projectId = readString(workflow.sourceProjectId) || readString(workflow.projectId);
+    const episodeId = readString(workflow.sourceEpisodeId) || readString(workflow.episode);
+    const logicalAssetId = readString(workflow.logicalAssetId) || readString(workflow.assetId);
+    const name = (readString(workflow.name) || asset.title).trim().replace(/\s+/g, " ").toLowerCase();
+    return projectId && episodeId && logicalAssetId && name ? { projectId, episodeId, logicalAssetId, name } : null;
+}
+
+function isStableWorkflowAssetId(value: string) {
+    return /^(CHAR|SCENE|PROP|COSTUME)-\d{3}$/.test(value);
+}
+
+function readRecord(value: unknown) {
+    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }

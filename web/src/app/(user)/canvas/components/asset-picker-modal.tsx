@@ -11,6 +11,7 @@ import { uploadMediaFile } from "@/services/file-storage";
 import { useAssetStore, type VolcengineAssetMetadata } from "@/stores/use-asset-store";
 import { fetchAssetLibrary, type AssetLibraryItem } from "@/services/api/assets";
 import { buildInsertAssetPayload, type InsertAssetPayload } from "../utils/asset-insert-payload";
+import { buildWorkflowAssetCanonicalView } from "../../assets/workflow-asset-dedup";
 
 export type AssetPickerTab = "my-assets" | "library";
 type AssetPickerKind = InsertAssetPayload["kind"];
@@ -183,7 +184,9 @@ function PickerCard({ title, kind, cover, previewUrl, loading, onClick }: { titl
                     <Spin size="small" />
                 </div>
             )}
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--studio-media-overlay-soft)] text-sm font-medium text-[var(--studio-on-media)] opacity-0 transition group-hover:bg-[var(--studio-media-overlay)] group-hover:opacity-100">插入</div>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--studio-media-overlay-soft)] text-sm font-medium text-[var(--studio-on-media)] opacity-0 transition group-hover:bg-[var(--studio-media-overlay)] group-hover:opacity-100">
+                插入
+            </div>
         </button>
     );
 }
@@ -217,7 +220,8 @@ function assetTypeLabel(type: string) {
 }
 
 function MyAssetsTab({ allowedKinds, defaultKind = "all", onInsert }: { allowedKinds?: AssetPickerKind[]; defaultKind?: AssetPickerKind | "all"; onInsert: (payload: InsertAssetPayload) => void }) {
-    const assets = useAssetStore((state) => state.assets);
+    const rawAssets = useAssetStore((state) => state.assets);
+    const assets = useMemo(() => buildWorkflowAssetCanonicalView(rawAssets).assets, [rawAssets]);
     const [keyword, setKeyword] = useState("");
     const [kindFilter, setKindFilter] = useState(defaultKind);
     const [page, setPage] = useState(1);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assetFingerprintCandidates, buildBlobFingerprint, fallbackAssetFingerprint, mergeAssetMetadata, mergeDuplicateAsset } from "./asset-dedupe.ts";
+import { assetFingerprintCandidates, buildBlobFingerprint, fallbackAssetFingerprint, findWorkflowAssetDuplicate, mergeAssetMetadata, mergeDuplicateAsset } from "./asset-dedupe.ts";
 import type { Asset, AssetWriteInput } from "./use-asset-store.ts";
 
 const imageAsset = (patch: Partial<AssetWriteInput> = {}): AssetWriteInput => ({
@@ -85,3 +85,34 @@ test("creates metadata for a newly written deduped asset", () => {
     assert.deepEqual(metadata.generations, [{ prompt: "原提示词" }]);
     assert.deepEqual(assetFingerprintCandidates({ ...imageAsset(), id: "asset-2", createdAt: "", updatedAt: "", metadata } as Asset), ["sha256:new", "storage:image:one:12:image/png"]);
 });
+
+test("finds the same scoped workflow asset when a stable text record replaces a legacy record", () => {
+    const legacy = textAsset("legacy", "红色纸飞机", {
+        originalWorkflow: { projectId: "project-1", episode: "episode-1", assetId: "prop_red_paper_airplane", name: "红色纸飞机" },
+    });
+    const incoming = textAssetInput("红色纸飞机", {
+        originalWorkflow: { projectId: "project-1", episode: "episode-1", logicalAssetId: "PROP-001", name: "红色纸飞机" },
+    });
+
+    assert.equal(findWorkflowAssetDuplicate([legacy], incoming)?.id, "legacy");
+    assert.equal(findWorkflowAssetDuplicate([legacy], textAssetInput("红色纸飞机", { originalWorkflow: { projectId: "project-2", episode: "episode-1", logicalAssetId: "PROP-001", name: "红色纸飞机" } })), undefined);
+});
+
+test("keeps existing workflow linkage when duplicate metadata is merged", () => {
+    const metadata = mergeAssetMetadata({ originalWorkflow: { assetId: "legacy", libraryAssetId: "asset-1", prompt: "旧提示词" } }, { originalWorkflow: { logicalAssetId: "PROP-001", prompt: "新提示词" } });
+
+    assert.deepEqual(metadata.originalWorkflow, {
+        assetId: "legacy",
+        libraryAssetId: "asset-1",
+        logicalAssetId: "PROP-001",
+        prompt: "新提示词",
+    });
+});
+
+function textAsset(id: string, title: string, metadata: Asset["metadata"]): Asset {
+    return { id, kind: "text", title, coverUrl: "", tags: [], createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", metadata, data: { content: title } };
+}
+
+function textAssetInput(title: string, metadata: AssetWriteInput["metadata"]): AssetWriteInput {
+    return { kind: "text", title, coverUrl: "", tags: [], metadata, data: { content: title } };
+}

@@ -30,7 +30,7 @@ export function WorkflowAssetPanel(props: {
     const [failed, setFailed] = useState<Record<string, string>>({});
     const selectionForArtifact = useRef("");
     const assets = useAssetStore((state) => state.assets);
-    const addAsset = useAssetStore((state) => state.addAsset);
+    const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
     const ensureProjectFolder = useAssetStore((state) => state.ensureProjectFolder);
     const updateAsset = useAssetStore((state) => state.updateAsset);
     const mapping = useMemo(() => mapAssetDesignArtifactToAssets(props.artifact?.contentJson || "", assets, { episodeId: props.episodeId, projectId: props.projectId }), [assets, props.artifact?.contentJson, props.episodeId, props.projectId]);
@@ -89,7 +89,7 @@ export function WorkflowAssetPanel(props: {
                     });
                     continue;
                 }
-                const libraryAssetId = addAsset({
+                const libraryAssetId = await addAssetOnce({
                     coverUrl: "",
                     data: { content: imagePrompt },
                     folderId,
@@ -108,7 +108,7 @@ export function WorkflowAssetPanel(props: {
         } finally {
             setApplying(false);
         }
-    }, [addAsset, applying, ensureProjectFolder, mapping.items, message, props, updateAsset]);
+    }, [addAssetOnce, applying, ensureProjectFolder, mapping.items, message, props, updateAsset]);
 
     useEffect(() => {
         if (props.stage?.status === "approved" && mapping.items.some((item) => !item.targetAssetId)) void materialize();
@@ -117,7 +117,14 @@ export function WorkflowAssetPanel(props: {
     useEffect(() => {
         if (!props.artifact || !props.stage || props.stage.status !== "approved" || !generationProgress.ready || applying) return;
         setApplying(true);
-        void applyWorkflowStage(props.stage.id, { appliedCount: generationProgress.generated, artifactHash: props.artifact.contentHash, skippedCount: mapping.warnings.length, target: "asset_store", targetIds: mapping.items.flatMap((item) => item.targetAssetId ? [item.targetAssetId] : []), version: String(props.artifact.version) })
+        void applyWorkflowStage(props.stage.id, {
+            appliedCount: generationProgress.generated,
+            artifactHash: props.artifact.contentHash,
+            skippedCount: mapping.warnings.length,
+            target: "asset_store",
+            targetIds: mapping.items.flatMap((item) => (item.targetAssetId ? [item.targetAssetId] : [])),
+            version: String(props.artifact.version),
+        })
             .then(() => props.onApplied())
             .catch((error) => message.error(error instanceof Error ? error.message : "资产图片绑定完成，但阶段状态更新失败"))
             .finally(() => setApplying(false));
@@ -130,7 +137,7 @@ export function WorkflowAssetPanel(props: {
         setSelectedIds(defaultWorkflowAssetSelection(cards));
     }, [cards, props.artifact?.contentHash]);
 
-    const setVariantSelected = (logicalAssetId: string, checked: boolean) => setSelectedIds((ids) => checked ? [...new Set([...ids, logicalAssetId])] : ids.filter((id) => id !== logicalAssetId));
+    const setVariantSelected = (logicalAssetId: string, checked: boolean) => setSelectedIds((ids) => (checked ? [...new Set([...ids, logicalAssetId])] : ids.filter((id) => id !== logicalAssetId)));
     const saveVariant = (asset: Asset, input: { description: string; imagePrompt: string }) => {
         updateAsset(asset.id, workflowAssetEditPatch(asset, input));
         message.success("资产卡片已更新");
@@ -155,23 +162,32 @@ export function WorkflowAssetPanel(props: {
             },
         });
     };
-    const selectedAssets = variants.flatMap((variant) => variant.asset && selectedIds.includes(variant.logicalAssetId) && workflowAssetPrompt(variant.asset) ? [variant.asset] : []);
+    const selectedAssets = variants.flatMap((variant) => (variant.asset && selectedIds.includes(variant.logicalAssetId) && workflowAssetPrompt(variant.asset) ? [variant.asset] : []));
 
     return (
         <div className="space-y-4">
             <section className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-4 shadow-[var(--studio-shadow)]">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <div className="flex items-center gap-2 text-sm font-semibold"><Library className="size-4 text-[var(--studio-accent)]" />资产设计台</div>
+                        <div className="flex items-center gap-2 text-sm font-semibold">
+                            <Library className="size-4 text-[var(--studio-accent)]" />
+                            资产设计台
+                        </div>
                         <p className="mt-1 text-xs text-[var(--studio-text-muted)]">系统自动提取资产并生成提示词；你只需修改有误的卡片，并在真实生图时确认一次。</p>
                         <div className={`mt-2 flex items-center gap-1.5 text-xs ${automation.status === "error" ? "text-[var(--studio-warning)]" : automation.status === "ready" ? "text-[var(--studio-success)]" : "text-[var(--studio-accent)]"}`}>
                             {automation.status === "ready" ? <CheckCircle2 className="size-3.5" /> : <RefreshCw className={`size-3.5 ${automation.status === "organizing" ? "animate-spin" : ""}`} />}
-                            {applying ? "正在绑定资产结果" : generationProgress.required && automation.status === "ready" ? generationProgress.ready ? "全部资产图已绑定" : `${generationProgress.pending} 张资产草图待生成` : automation.message}
+                            {applying ? "正在绑定资产结果" : generationProgress.required && automation.status === "ready" ? (generationProgress.ready ? "全部资产图已绑定" : `${generationProgress.pending} 张资产草图待生成`) : automation.message}
                         </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        {automation.status === "error" ? <Button icon={<RefreshCw className="size-4" />} loading={automation.busy} onClick={() => void automation.retry()}>重新整理</Button> : null}
-                        <Button type="primary" icon={<WandSparkles className="size-4" />} disabled={!selectedAssets.length} loading={Boolean(imageActions.generatingIds.length)} onClick={() => confirmGenerate(selectedAssets)}>确认生成 {selectedAssets.length} 张草图</Button>
+                        {automation.status === "error" ? (
+                            <Button icon={<RefreshCw className="size-4" />} loading={automation.busy} onClick={() => void automation.retry()}>
+                                重新整理
+                            </Button>
+                        ) : null}
+                        <Button type="primary" icon={<WandSparkles className="size-4" />} disabled={!selectedAssets.length} loading={Boolean(imageActions.generatingIds.length)} onClick={() => confirmGenerate(selectedAssets)}>
+                            确认生成 {selectedAssets.length} 张草图
+                        </Button>
                     </div>
                 </div>
                 {cards.length ? (
@@ -213,7 +229,12 @@ export function WorkflowAssetPanel(props: {
                     </section>
                 </Image.PreviewGroup>
             )}
-            {mapping.warnings.length ? <div className="flex gap-2 rounded-md border border-[var(--studio-warning)]/40 p-3 text-xs text-[var(--studio-warning)]"><TriangleAlert className="size-4 shrink-0" />请先修正有警告的资产，再开始生成。</div> : null}
+            {mapping.warnings.length ? (
+                <div className="flex gap-2 rounded-md border border-[var(--studio-warning)]/40 p-3 text-xs text-[var(--studio-warning)]">
+                    <TriangleAlert className="size-4 shrink-0" />
+                    请先修正有警告的资产，再开始生成。
+                </div>
+            ) : null}
         </div>
     );
 }

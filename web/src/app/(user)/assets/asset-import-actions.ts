@@ -3,7 +3,7 @@ import { uploadImage } from "../../../services/image-storage";
 import type { AssetWriteInput } from "../../../stores/use-asset-store";
 import { readAssetPackage } from "./asset-transfer";
 import { assetFileKind, isImportableAssetFile } from "./asset-utils";
-import { importedImageAssetInput, importedMediaAssetInput, importedPackageAssetInput } from "./asset-import-payloads";
+import { importedImageAssetInput, importedMediaAssetInput, importedPackageAssetInput, uniqueImportedAssetIds } from "./asset-import-payloads";
 
 type AddAssetOnce = (asset: AssetWriteInput) => Promise<string>;
 export type AssetImportResult = {
@@ -20,7 +20,8 @@ export async function importAssetFileList(files: File[], options: { folderId?: s
     for (const file of files) {
         assetIds.push(...(await importAssetFile(file, options)));
     }
-    return { count: assetIds.length, assetIds };
+    const uniqueAssetIds = uniqueImportedAssetIds(assetIds);
+    return { count: uniqueAssetIds.length, assetIds: uniqueAssetIds };
 }
 
 export async function importAssetFile(file: File, { folderId, addAssetOnce }: { folderId?: string; addAssetOnce: AddAssetOnce }): Promise<string[]> {

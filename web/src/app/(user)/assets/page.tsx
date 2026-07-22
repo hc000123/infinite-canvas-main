@@ -97,6 +97,7 @@ function AssetsPageContent() {
     const {
         activeFolderId,
         activeFolderName,
+        assetAliasIdsByCanonicalId,
         assetPaginationEnabled,
         canvasLibraryTitles,
         episodeFilter,
@@ -169,25 +170,7 @@ function AssetsPageContent() {
         setFolderFilter,
         updateFolder,
     });
-    const {
-        content,
-        coverUrl,
-        editingAsset,
-        formKind,
-        imageDraft,
-        isAssetOpen,
-        mediaDraft,
-        tags,
-        title,
-        openCreate,
-        openEdit,
-        readCoverFile,
-        readImageFile,
-        readMediaFile,
-        saveAsset,
-        setIsAssetOpen,
-        updateFormKind,
-    } = useAssetEditorActions({
+    const { content, coverUrl, editingAsset, formKind, imageDraft, isAssetOpen, mediaDraft, tags, title, openCreate, openEdit, readCoverFile, readImageFile, readMediaFile, saveAsset, setIsAssetOpen, updateFormKind } = useAssetEditorActions({
         activeFolderId: activeFolderId || undefined,
         addAsset,
         addAssetOnce,
@@ -263,6 +246,7 @@ function AssetsPageContent() {
         message,
         projectContextFilter,
         removeAsset,
+        assetAliasIdsByCanonicalId,
         selectedAssets,
         updateAsset,
     });
@@ -304,6 +288,7 @@ function AssetsPageContent() {
     const { confirmDelete, copyAssetText, deletingAsset, downloadAssetVersion, downloadMedia, exportAllAssets, exportSelectedAssets, restoreAssetVersion, setDeletingAsset } = useAssetMediaActions({
         message,
         removeAsset,
+        assetAliasIdsByCanonicalId,
         selectedAssets,
         setPreviewAsset,
         updateAsset,
@@ -403,16 +388,7 @@ function AssetsPageContent() {
             <main className="studio-shell relative min-h-0 flex-1 overflow-y-auto px-6 py-8" onDragEnter={handleUploadDragEnter} onDragLeave={handleUploadDragLeave} onDragOver={handleUploadDragOver} onDrop={handleUploadDrop}>
                 {isDraggingUpload ? <AssetUploadDropOverlay activeFolderName={activeFolderName} /> : null}
                 <div className="mx-auto max-w-[1680px] pb-8">
-                    <AssetPageHeader
-                        filteredCount={filteredAssets.length}
-                        returnHref={returnTarget.href}
-                        returnLabel={returnTarget.label}
-                        selectedCount={selectedAssets.length}
-                        totalCount={validAssets.length}
-                        onCreate={openCreate}
-                        onExportAll={() => void exportAllAssets()}
-                        onImportClick={() => assetInputRef.current?.click()}
-                    />
+                    <AssetPageHeader returnHref={returnTarget.href} returnLabel={returnTarget.label} onCreate={openCreate} onExportAll={() => void exportAllAssets()} onImportClick={() => assetInputRef.current?.click()} />
 
                     <AssetFilterPanel
                         actions={{
@@ -434,10 +410,8 @@ function AssetsPageContent() {
                             onStoryboardGroupFilterChange: assetFilterActions.changeStoryboardGroupFilter,
                         }}
                         counts={{
-                            filteredCount: filteredAssets.length,
                             folderCounts,
                             outdatedUsageCount: outdatedAssetVersionUsages.length,
-                            selectedCount: selectedAssets.length,
                             validAssetCount: validAssets.length,
                         }}
                         options={{

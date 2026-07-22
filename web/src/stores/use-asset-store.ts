@@ -8,7 +8,8 @@ import { localForageStorage } from "@/lib/localforage-storage";
 import { cleanupUnusedImages, getImageBlob, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { cleanupUnusedMedia, getMediaBlob, resolveMediaUrl } from "@/services/file-storage";
 import type { VolcengineReviewMetadata } from "@/services/volcengine-asset-metadata";
-import { assetFingerprintCandidates, buildBlobFingerprint, fallbackAssetFingerprint, mergeAssetMetadata, mergeDuplicateAsset } from "./asset-dedupe";
+import { assetFingerprintCandidates, buildBlobFingerprint, fallbackAssetFingerprint, findWorkflowAssetDuplicate, mergeAssetMetadata, mergeDuplicateAsset } from "./asset-dedupe";
+import { createAssetStoreHydrationGate, mergeHydratedAssetCollections } from "./asset-store-hydration";
 
 export type AssetKind = "text" | "image" | "video" | "audio";
 export type VolcengineAssetMetadata = VolcengineReviewMetadata;
@@ -55,6 +56,7 @@ type AssetStore = {
 };
 
 const ASSET_STORE_KEY = "infinite-canvas:asset_store";
+const assetStoreHydration = createAssetStoreHydrationGate();
 
 const assetStorage: PersistStorage<AssetStore> = {
     getItem: async (name) => {
@@ -96,7 +98,13 @@ export const useAssetStore = create<AssetStore>()(
                 return id;
             },
             addAssetOnce: async (asset, options) => {
-                if (asset.kind === "text") return get().addAsset(asset);
+                await assetStoreHydration.wait();
+                if (asset.kind === "text") {
+                    const matched = findWorkflowAssetDuplicate(get().assets, asset);
+                    if (!matched) return get().addAsset(asset);
+                    set((state) => ({ assets: state.assets.map((item) => (item.id === matched.id ? mergeDuplicateAsset(item, asset, "") : item)) }));
+                    return matched.id;
+                }
                 const fingerprint = await buildAssetFingerprint(asset, options?.blob);
                 if (!fingerprint) return get().addAsset(asset);
                 const fallback = fallbackAssetFingerprint(asset);
@@ -168,6 +176,11 @@ export const useAssetStore = create<AssetStore>()(
             name: ASSET_STORE_KEY,
             storage: assetStorage,
             partialize: (state) => ({ assets: state.assets, folders: state.folders }) as StorageValue<AssetStore>["state"],
+            merge: (persisted, current) => {
+                const saved = (persisted || {}) as Partial<AssetStore>;
+                return { ...current, ...saved, ...mergeHydratedAssetCollections(saved, current) };
+            },
+            onRehydrateStorage: () => () => assetStoreHydration.release(),
         },
     ),
 );

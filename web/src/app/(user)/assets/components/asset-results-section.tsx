@@ -154,7 +154,6 @@ export function AssetResultsSection({
     const hasVisibleResults = visibleAssetGroups.some((group) => group.assets.length || group.productionBibleItems.length);
     const showAssetPagination = assetPaginationEnabled && filteredCount > pageSize;
     const toggleAssetTypeGroup = (id: string) => setCollapsedAssetTypeGroups((value) => ({ ...value, [id]: !value[id] }));
-    const expandAssetTypeGroup = (id: string) => setCollapsedAssetTypeGroups((value) => ({ ...value, [id]: false }));
     const renderAssetTypeGroups = (groupId: string, typeGroups: AssetTypeGroup[], scopeId = "") => (
         <div className="grid gap-3">
             {typeGroups.map((typeGroup) => {
@@ -266,32 +265,10 @@ export function AssetResultsSection({
                                             <div className="text-xs font-semibold tracking-normal text-[var(--studio-accent)]">项目素材库</div>
                                             <h2 className="mt-1 truncate text-xl font-semibold leading-7 text-[var(--studio-text-primary)]">{group.title}</h2>
                                         </div>
-                                        <div className="flex flex-wrap gap-2 text-xs font-medium text-[var(--studio-text-secondary)]">
-                                            <span className="rounded-md border border-[var(--studio-border-subtle)] px-2.5 py-1">设定 {group.productionBibleItems.length}</span>
-                                            <span className="rounded-md border border-[var(--studio-border-subtle)] px-2.5 py-1">素材 {group.assets.length}</span>
+                                        <div className="text-xs text-[var(--studio-text-muted)]">
+                                            设定 {group.productionBibleItems.length} · 素材 {group.assets.length}
                                         </div>
                                     </div>
-                                    {showEpisodeGroups && episodeGroups.length ? (
-                                        <div className="flex flex-wrap gap-2">
-                                            {episodeGroups.map((episodeGroup) => (
-                                                <span key={episodeGroup.id} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-2.5 py-1 text-xs font-medium text-[var(--studio-text-secondary)]">
-                                                    {episodeGroup.title} {episodeGroup.assets.length}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    ) : null}
-                                    {!showEpisodeGroups && projectTypeGroups.length ? (
-                                        <div className="flex flex-wrap gap-2">
-                                            {projectTypeGroups.map((typeGroup) => {
-                                                const typeGroupId = assetTypeGroupDomId(group.id, typeGroup.id);
-                                                return (
-                                                    <button key={typeGroup.id} type="button" className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-2.5 py-1 text-xs font-medium text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-accent)] hover:text-[var(--studio-accent)]" onClick={() => expandAssetTypeGroup(typeGroupId)}>
-                                                        {typeGroup.title} {typeGroup.assets.length}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    ) : null}
 
                                     {group.productionBibleItems.length ? (
                                         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -314,16 +291,6 @@ export function AssetResultsSection({
                                                             </div>
                                                             <span className="text-xs text-[var(--studio-text-muted)]">素材 {episodeGroup.assets.length}</span>
                                                         </div>
-                                                        <div className="flex flex-wrap gap-2 px-1">
-                                                            {assetTypeGroups.map((typeGroup) => {
-                                                                const typeGroupId = assetTypeGroupDomId(group.id, `${episodeGroup.id}-${typeGroup.id}`);
-                                                                return (
-                                                                    <button key={typeGroup.id} type="button" className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-2.5 py-1 text-xs font-medium text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-accent)] hover:text-[var(--studio-accent)]" onClick={() => expandAssetTypeGroup(typeGroupId)}>
-                                                                        {typeGroup.title} {typeGroup.assets.length}
-                                                                    </button>
-                                                                );
-                                                            })}
-                                                        </div>
                                                         {renderAssetTypeGroups(group.id, assetTypeGroups, episodeGroup.id)}
                                                     </section>
                                                 );
@@ -340,7 +307,7 @@ export function AssetResultsSection({
 
                     {showAssetPagination ? (
                         <div className="flex justify-center">
-                            <Pagination current={page} pageSize={pageSize} total={filteredCount} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={onPageChange} />
+                            <Pagination current={page} pageSize={pageSize} total={filteredCount} showSizeChanger pageSizeOptions={[30, 60, 100]} onChange={onPageChange} />
                         </div>
                     ) : null}
                 </>

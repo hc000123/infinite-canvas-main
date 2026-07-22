@@ -17,6 +17,7 @@ import {
     activeAssetFolderId,
     buildAssetProjectContexts,
     filterAssetList,
+    paginateAssetList,
     projectReferencedAssetIds as collectProjectReferencedAssetIds,
     sortAssetList,
     storyboardGroupReferencedAssetIds as collectStoryboardGroupReferencedAssetIds,
@@ -25,6 +26,7 @@ import {
     type ProjectLibraryFilter,
 } from "./asset-page-filters";
 import { assetSearchText, countFolderAssets } from "./asset-utils";
+import { buildWorkflowAssetCanonicalView } from "./workflow-asset-dedup";
 
 export type ReferenceVersionFilter = "all" | "outdated";
 
@@ -59,9 +61,11 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
     const [storyboardGroupFilter, setStoryboardGroupFilter] = useState("");
     const [sortMode, setSortMode] = useState<AssetSortMode>("default");
     const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
+    const [pageSize, setPageSize] = useState(30);
     const activeFolderId = activeAssetFolderId(folderFilter);
-    const validAssets = useMemo(() => supportedAssetList(assets), [assets]);
+    const canonicalAssetView = useMemo(() => buildWorkflowAssetCanonicalView(supportedAssetList(assets)), [assets]);
+    const validAssets = canonicalAssetView.assets;
+    const assetAliasIdsByCanonicalId = canonicalAssetView.aliasIdsByCanonicalId;
     const folderMap = useMemo(() => new Map(folders.map((folder) => [folder.id, folder])), [folders]);
     const activeFolderName = activeFolderId ? folderMap.get(activeFolderId)?.name || "当前文件夹" : "";
     const folderCounts = useMemo(() => countFolderAssets(validAssets), [validAssets]);
@@ -78,7 +82,18 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
     const projectContexts = useMemo(() => buildAssetProjectContexts(creativeProjects, projects), [creativeProjects, projects]);
     const projectLibraryProjectTitles = useMemo(() => Object.fromEntries(projectContexts.map((project) => [project.id, project.title])), [projectContexts]);
     const projectReferenceIds = useMemo(
-        () => Array.from(new Set([...projectContexts.map((project) => project.id), ...productionBibleItems.map((item) => item.projectId), ...storyboardGroups.map((group) => group.projectId), ...storyboardTableShots.map((shot) => shot.projectId), ...shotGroups.map((group) => group.projectId)].filter(Boolean))),
+        () =>
+            Array.from(
+                new Set(
+                    [
+                        ...projectContexts.map((project) => project.id),
+                        ...productionBibleItems.map((item) => item.projectId),
+                        ...storyboardGroups.map((group) => group.projectId),
+                        ...storyboardTableShots.map((shot) => shot.projectId),
+                        ...shotGroups.map((group) => group.projectId),
+                    ].filter(Boolean),
+                ),
+            ),
         [productionBibleItems, projectContexts, shotGroups, storyboardGroups, storyboardTableShots],
     );
     const projectReferencedAssetIdsByProject = useMemo(
@@ -170,8 +185,8 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
         const assetsByEpisode = activeEpisodeOption ? projectFilteredAssets.filter((asset) => assetMatchesEpisodeOption(asset, activeEpisodeOption)) : projectFilteredAssets;
         return sortAssetList(assetsByEpisode, sortMode);
     }, [activeEpisodeOption, projectFilteredAssets, sortMode]);
-    const assetPaginationEnabled = false;
-    const visibleAssets = filteredAssets;
+    const assetPaginationEnabled = true;
+    const visibleAssets = paginateAssetList(filteredAssets, page, pageSize);
     const visibleProductionBibleItems = useMemo(() => {
         if (referenceVersionFilter !== "all" || kindFilter !== "all" || episodeFilter) return [];
         if (generationSourceFilter || generationActionFilter || generationModelProviderFilter || generationTaskFilter !== "all" || storyboardGroupFilter || projectLibraryFilter !== "all") return [];
@@ -180,7 +195,21 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
         return productionBibleItems
             .filter((item) => isReadableProductionBibleItem(item) && (!projectContextFilter || item.projectId === projectContextFilter) && (!query || productionBibleSearchText(item).includes(query)))
             .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    }, [episodeFilter, folderFilter, generationActionFilter, generationModelProviderFilter, generationSourceFilter, generationTaskFilter, keyword, kindFilter, productionBibleItems, projectContextFilter, projectLibraryFilter, referenceVersionFilter, storyboardGroupFilter]);
+    }, [
+        episodeFilter,
+        folderFilter,
+        generationActionFilter,
+        generationModelProviderFilter,
+        generationSourceFilter,
+        generationTaskFilter,
+        keyword,
+        kindFilter,
+        productionBibleItems,
+        projectContextFilter,
+        projectLibraryFilter,
+        referenceVersionFilter,
+        storyboardGroupFilter,
+    ]);
     const visibleAssetGroups = useMemo(
         () =>
             buildAssetProjectResultGroups({
@@ -230,6 +259,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
         activeFolderId,
         activeFolderName,
         assetPaginationEnabled,
+        assetAliasIdsByCanonicalId,
         canvasLibraryFilter,
         canvasLibraryTitles,
         episodeFilter,

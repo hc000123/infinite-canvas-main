@@ -25,6 +25,16 @@ test("does not bind the same logical asset id from another project or episode", 
     assert.equal(result.items[0].importKey, "p1:e1:CHAR-001");
 });
 
+test("reuses a scoped legacy workflow record when the stable logical id is introduced", () => {
+    const artifact = JSON.stringify({ items: [{ logicalAssetId: "PROP-001", kind: "prop", name: "红色纸飞机", scriptEvidence: "桌上有一只红色纸飞机", description: "红色折纸飞机", imagePrompt: "红色纸飞机道具设定图" }] });
+    const existing = [{ id: "legacy-paper-plane", kind: "text", title: "红色纸飞机", metadata: { originalWorkflow: { logicalAssetId: "prop_red_paper_airplane", name: "红色纸飞机", sourceProjectId: "p1", sourceEpisodeId: "e1" } } }];
+
+    const result = mapAssetDesignArtifactToAssets(artifact, existing, { episodeId: "e1", projectId: "p1" });
+
+    assert.equal(result.items[0].action, "update_metadata");
+    assert.equal(result.items[0].targetAssetId, "legacy-paper-plane");
+});
+
 test("maps approved art artifact without overwriting an existing image", () => {
     const artifact = JSON.stringify({ items: [{ id: "character-linxia", kind: "character", name: "林夏", prompt: "雨衣造型，真实影视定妆照" }] });
     const existing = [{ id: "asset-1", kind: "image", title: "林夏", metadata: { originalWorkflow: { importKey: "p1:e1:character-linxia" } } }];

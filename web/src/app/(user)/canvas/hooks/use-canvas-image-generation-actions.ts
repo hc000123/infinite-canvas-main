@@ -132,7 +132,13 @@ export function useCanvasImageGenerationActions({
                             },
                             { canvasId, projectId, projectTitle, projectPreset, episodeContext, prompt, effectivePrompt, config: generationConfig, createdAt },
                         );
-                        if (asset) void archiveGeneratedAsset(asset).catch(() => undefined);
+                        if (asset) {
+                            try {
+                                await archiveGeneratedAsset(asset);
+                            } catch {
+                                showError("图片已生成，但同步到我的素材失败");
+                            }
+                        }
                         hasSuccess = true;
                         if (isConfigNode) setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: "success", errorDetails: undefined } } : node)));
                         return true;

@@ -1,9 +1,11 @@
 import { saveAs } from "file-saver";
+import { nanoid } from "nanoid";
 
 import { createZip, readZip } from "@/lib/zip";
 import { getMediaBlob, setMediaBlob } from "@/services/file-storage";
 import { getImageBlob, setImageBlob } from "@/services/image-storage";
 import type { Asset } from "@/stores/use-asset-store";
+import { collectAssetPackageFiles, remapAssetPackageStorageKeys } from "./asset-transfer-files";
 import { validateAssetPackageData, type AssetExportFile, type AssetExportItem } from "./asset-transfer-validation";
 
 export async function exportAssets(assets: Asset[]) {
@@ -11,14 +13,11 @@ export async function exportAssets(assets: Asset[]) {
     const zipFiles: { name: string; data: BlobPart }[] = [];
 
     await Promise.all(
-        assets.map(async (asset) => {
-            if (asset.kind === "text") return;
-            const storageKey = asset.data.storageKey;
-            if (!storageKey) return;
-            const blob = asset.kind === "image" ? await getImageBlob(storageKey) : await getMediaBlob(storageKey);
+        collectAssetPackageFiles(assets).map(async (file) => {
+            const blob = file.kind === "image" ? await getImageBlob(file.storageKey) : await getMediaBlob(file.storageKey);
             if (!blob) return;
-            const path = `files/${safeFileName(storageKey)}.${fileExtension(blob.type, asset.kind)}`;
-            files.push({ storageKey, path, mimeType: blob.type || asset.data.mimeType, bytes: blob.size });
+            const path = `files/${safeFileName(file.storageKey)}.${fileExtension(blob.type || file.mimeType, file.kind)}`;
+            files.push({ storageKey: file.storageKey, path, mimeType: blob.type || file.mimeType, bytes: blob.size });
             zipFiles.push({ name: path, data: blob });
         }),
     );
@@ -33,15 +32,17 @@ export async function readAssetPackage(file: File) {
     const assetFile = zip.get("assets.json");
     if (!assetFile) throw new Error("素材包缺少 assets.json");
     const data = validateAssetPackageData(JSON.parse(await assetFile.text()));
+    const storageKeys = new Map(data.files.map((item) => [item.storageKey, `${item.storageKey.split(":")[0] || (item.mimeType.startsWith("image/") ? "image" : "file")}:${nanoid()}`]));
     await Promise.all(
         data.files.map(async (item) => {
             const blob = zip.get(item.path);
             if (!blob) return;
             const typedBlob = blob.type ? blob : blob.slice(0, blob.size, item.mimeType);
-            await (item.storageKey.startsWith("image:") ? setImageBlob(item.storageKey, typedBlob) : setMediaBlob(item.storageKey, typedBlob));
+            const storageKey = storageKeys.get(item.storageKey) || item.storageKey;
+            await (item.storageKey.startsWith("image:") ? setImageBlob(storageKey, typedBlob) : setMediaBlob(storageKey, typedBlob));
         }),
     );
-    return data.assets;
+    return remapAssetPackageStorageKeys(data.assets, storageKeys);
 }
 
 function safeFileName(value: string) {

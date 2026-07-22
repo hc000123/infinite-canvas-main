@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { Asset } from "@/stores/use-asset-store";
 import { buildBulkMoveAssetPatches, buildBulkTagAssetPatches, normalizeTags } from "./asset-bulk-actions";
 import { buildProjectLibraryAssetPatch, buildRemoveProjectLibraryAssetPatch } from "./asset-project-library";
+import { workflowAssetDeleteIds } from "./workflow-asset-dedup";
 
 type AssetBulkMessage = {
     success: (text: string) => void;
@@ -11,6 +12,7 @@ type AssetBulkMessage = {
 
 export function useAssetBulkActions({
     activeFolderId,
+    assetAliasIdsByCanonicalId,
     clearSelectedAssets,
     message,
     projectContextFilter,
@@ -19,6 +21,7 @@ export function useAssetBulkActions({
     updateAsset,
 }: {
     activeFolderId?: string;
+    assetAliasIdsByCanonicalId: Map<string, string[]>;
     clearSelectedAssets: () => void;
     message: AssetBulkMessage;
     projectContextFilter: string;
@@ -65,7 +68,7 @@ export function useAssetBulkActions({
 
     const applyBulkDelete = () => {
         const count = selectedAssets.length;
-        selectedAssets.forEach((asset) => removeAsset(asset.id));
+        selectedAssets.flatMap((asset) => workflowAssetDeleteIds(asset.id, assetAliasIdsByCanonicalId)).forEach(removeAsset);
         clearSelectedAssets();
         setBulkDeleteOpen(false);
         message.success(`已删除 ${count} 个素材`);

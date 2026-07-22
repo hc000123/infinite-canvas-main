@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { Asset } from "../../../stores/use-asset-store.ts";
-import { assetImportSuccessMessage, importedImageAssetInput, importedMediaAssetInput, importedPackageAssetInput } from "./asset-import-payloads.ts";
+import { assetImportSuccessMessage, importedImageAssetInput, importedMediaAssetInput, importedPackageAssetInput, uniqueImportedAssetIds } from "./asset-import-payloads.ts";
 
 const now = "2026-06-05T00:00:00.000Z";
 
@@ -106,4 +106,8 @@ test("strips package asset identity and applies import folder", () => {
         data: { content: "内容" },
     });
     assert.equal(assetImportSuccessMessage(3, "项目素材"), "已导入 3 个素材到「项目素材」");
+});
+
+test("counts a deduplicated import result once", () => {
+    assert.deepEqual(uniqueImportedAssetIds(["asset-1", "asset-1", "asset-2"]), ["asset-1", "asset-2"]);
 });

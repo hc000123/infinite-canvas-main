@@ -4,13 +4,18 @@ import { useState, type Dispatch, type SetStateAction } from "react";
 import { saveAs } from "file-saver";
 
 import { useCopyText } from "@/hooks/use-copy-text";
+import { getMediaBlob } from "@/services/file-storage";
+import { getImageBlob } from "@/services/image-storage";
 import type { Asset } from "@/stores/use-asset-store";
+import { resolveAssetDownloadTarget } from "./asset-download";
 import { exportAssets } from "./asset-transfer";
 import { assetVersionFileName, resolveAssetVersionDownloadTarget, resolveRestoredAssetPatch } from "./asset-version-files";
 import { assetVersionRecords, buildRestoreAssetVersionPatch } from "./asset-version-history";
 import { workflowAssetPrompt } from "./workflow-asset-image";
+import { workflowAssetDeleteIds } from "./workflow-asset-dedup";
 
 type Props = {
+    assetAliasIdsByCanonicalId: Map<string, string[]>;
     message: {
         error: (content: string) => void;
         success: (content: string) => void;
@@ -23,7 +28,7 @@ type Props = {
     validAssets: Asset[];
 };
 
-export function useAssetMediaActions({ message, removeAsset, selectedAssets, setPreviewAsset, updateAsset, validAssets }: Props) {
+export function useAssetMediaActions({ assetAliasIdsByCanonicalId, message, removeAsset, selectedAssets, setPreviewAsset, updateAsset, validAssets }: Props) {
     const copyText = useCopyText();
     const [deletingAsset, setDeletingAsset] = useState<Asset | null>(null);
 
@@ -46,9 +51,15 @@ export function useAssetMediaActions({ message, removeAsset, selectedAssets, set
         copyText(prompt || asset.data.content, prompt ? "提示词已复制" : "文本已复制");
     };
 
-    const downloadMedia = (asset: Asset) => {
+    const downloadMedia = async (asset: Asset) => {
         if (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio") return;
-        saveAs(asset.kind === "image" ? asset.data.dataUrl : asset.data.url, `${asset.title || "asset"}.${asset.data.mimeType.split("/")[1] || "bin"}`);
+        try {
+            const target = await resolveAssetDownloadTarget(asset, { getImageBlob, getMediaBlob });
+            if (!target) return message.error("没有可下载的本地文件");
+            saveAs(target, `${asset.title || "asset"}.${asset.data.mimeType.split("/")[1] || "bin"}`);
+        } catch {
+            message.error("下载失败，请稍后重试");
+        }
     };
 
     const downloadAssetVersion = async (asset: Asset, versionId: string) => {
@@ -83,7 +94,7 @@ export function useAssetMediaActions({ message, removeAsset, selectedAssets, set
 
     const confirmDelete = () => {
         if (!deletingAsset) return;
-        removeAsset(deletingAsset.id);
+        workflowAssetDeleteIds(deletingAsset.id, assetAliasIdsByCanonicalId).forEach(removeAsset);
         message.success("素材已删除");
         setDeletingAsset(null);
     };
