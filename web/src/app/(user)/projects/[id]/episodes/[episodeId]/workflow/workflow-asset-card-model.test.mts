@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildWorkflowAssetCards, defaultWorkflowAssetSelection, workflowAssetCategoryCounts, workflowAssetEditPatch, workflowAssetGenerationProgress } from "./workflow-asset-card-model.ts";
+import { buildWorkflowAssetCards, defaultWorkflowAssetSelection, workflowAssetCategoryCounts, workflowAssetEditPatch, workflowAssetGenerationProgress, workflowAssetVersionChoices } from "./workflow-asset-card-model.ts";
 import { mapAssetDesignArtifactToAssets } from "./workflow-artifact-mapping.ts";
 
 const artifact = JSON.stringify({ items: [
@@ -63,4 +63,20 @@ test("updates prompt metadata without replacing image data or history", () => {
     assert.equal((patch.metadata?.originalWorkflow as Record<string, unknown>).imagePrompt, "新提示词");
     assert.deepEqual(patch.metadata?.versions, [{ id: "v1" }]);
     assert.equal("data" in patch, false);
+});
+
+test("lists image versions newest first and identifies the current choice", () => {
+    const versions = workflowAssetVersionChoices({
+        id: "image-1", kind: "image", title: "摄影棚", coverUrl: "/v1.png", tags: [], createdAt: "now", updatedAt: "now",
+        data: { dataUrl: "/v1.png", width: 1280, height: 720, bytes: 10, mimeType: "image/png" },
+        metadata: {
+            currentAssetVersionId: "v1",
+            assetVersions: [
+                { id: "v1", versionNumber: 1, kind: "image", title: "摄影棚", coverUrl: "/v1.png", data: { dataUrl: "/v1.png", storageKey: "image:v1", mimeType: "image/png" }, createdAt: "2026-07-20T10:00:00.000Z", changeNote: "初始版本", source: "initial" },
+                { id: "v2", versionNumber: 2, kind: "image", title: "摄影棚", coverUrl: "/v2.png", data: { dataUrl: "/v2.png", storageKey: "image:v2", mimeType: "image/png" }, createdAt: "2026-07-21T10:00:00.000Z", changeNote: "重新生成", source: "manual_edit" },
+            ],
+        },
+    });
+
+    assert.deepEqual(versions.map((version) => [version.id, version.isCurrent]), [["v2", false], ["v1", true]]);
 });

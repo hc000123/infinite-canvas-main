@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { App, Button, Checkbox, Image, Input, Modal } from "antd";
-import { Download, ExternalLink, ImageIcon, Pencil, WandSparkles } from "lucide-react";
+import { Check, Download, ExternalLink, History, ImageIcon, Pencil, WandSparkles } from "lucide-react";
 import { saveAs } from "file-saver";
 
-import { assetVersionRecords } from "@/app/(user)/assets/asset-version-history";
+import { buildRestoreAssetVersionPatch } from "@/app/(user)/assets/asset-version-history";
+import { resolveRestoredAssetPatch } from "@/app/(user)/assets/asset-version-files";
 import { buildImageWorkbenchHref } from "@/app/(user)/assets/use-workflow-asset-image-actions";
 import { workflowAssetInfo, workflowAssetPrompt } from "@/app/(user)/assets/workflow-asset-image";
-import { getImageBlob } from "@/services/image-storage";
-import type { Asset } from "@/stores/use-asset-store";
+import { getImageBlob, resolveImageUrl } from "@/services/image-storage";
+import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 
-import type { WorkflowAssetCard as WorkflowAssetCardModel, WorkflowAssetVariant } from "../workflow-asset-card-model";
+import { workflowAssetVersionChoices, type WorkflowAssetCard as WorkflowAssetCardModel, type WorkflowAssetVariant } from "../workflow-asset-card-model";
 
 export function WorkflowAssetCard(props: {
     card: WorkflowAssetCardModel;
@@ -23,10 +24,15 @@ export function WorkflowAssetCard(props: {
     selectedIds: string[];
 }) {
     const { message } = App.useApp();
+    const updateAsset = useAssetStore((state) => state.updateAsset);
     const [activeId, setActiveId] = useState(props.card.variants[0]?.logicalAssetId || "");
     const [editing, setEditing] = useState<WorkflowAssetVariant | null>(null);
     const [description, setDescription] = useState("");
     const [imagePrompt, setImagePrompt] = useState("");
+    const [versionPickerOpen, setVersionPickerOpen] = useState(false);
+    const [selectedVersionId, setSelectedVersionId] = useState("");
+    const [switchingVersion, setSwitchingVersion] = useState(false);
+    const [versionUrls, setVersionUrls] = useState<Record<string, string>>({});
     useEffect(() => {
         if (!props.card.variants.some((item) => item.logicalAssetId === activeId)) setActiveId(props.card.variants[0]?.logicalAssetId || "");
     }, [activeId, props.card.variants]);
@@ -35,7 +41,25 @@ export function WorkflowAssetCard(props: {
     const values = variantValues(active);
     const isImage = asset?.kind === "image";
     const generating = Boolean(asset && props.generatingIds.includes(asset.id));
-    const versionCount = asset ? Math.max(1, assetVersionRecords(asset).length) : 0;
+    const versions = useMemo(() => (asset ? workflowAssetVersionChoices(asset) : []), [asset]);
+    const selectedVersion = versions.find((version) => version.id === selectedVersionId);
+
+    useEffect(() => {
+        if (!versionPickerOpen) return;
+        let active = true;
+        void Promise.all(
+            versions.map(async (version) => {
+                const storageKey = readString(version.data.storageKey);
+                const fallback = readString(version.data.dataUrl) || version.coverUrl;
+                return [version.id, await resolveImageUrl(storageKey, fallback)] as const;
+            }),
+        ).then((entries) => {
+            if (active) setVersionUrls(Object.fromEntries(entries));
+        });
+        return () => {
+            active = false;
+        };
+    }, [versionPickerOpen, versions]);
 
     const openEdit = () => {
         if (!active?.asset) return;
@@ -59,6 +83,25 @@ export function WorkflowAssetCard(props: {
             message.error("原图下载失败，请稍后重试");
         }
     };
+    const openVersionPicker = () => {
+        setSelectedVersionId(versions.find((version) => version.isCurrent)?.id || versions[0]?.id || "");
+        setVersionPickerOpen(true);
+    };
+    const switchVersion = async () => {
+        if (!asset || !selectedVersion || selectedVersion.isCurrent) return;
+        const patch = buildRestoreAssetVersionPatch(asset, selectedVersion.id, new Date().toISOString());
+        if (!patch) return message.error("无法读取该资产版本");
+        setSwitchingVersion(true);
+        try {
+            updateAsset(asset.id, await resolveRestoredAssetPatch(patch));
+            setVersionPickerOpen(false);
+            message.success(`已将 v${selectedVersion.versionNumber} 设为当前资产图`);
+        } catch {
+            message.error("版本切换失败，请稍后重试");
+        } finally {
+            setSwitchingVersion(false);
+        }
+    };
 
     if (!active) return null;
     return (
@@ -79,7 +122,7 @@ export function WorkflowAssetCard(props: {
                     </div>
                 )}
                 <div className="absolute left-2 top-2 rounded bg-black/60 px-2 py-1 font-mono text-[10px] text-white">{active.logicalAssetId}</div>
-                {isImage ? <div className="absolute right-2 top-2 rounded bg-black/60 px-2 py-1 text-[10px] text-white">{versionCount} 个版本</div> : null}
+                {isImage && versions.length ? <button type="button" className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded bg-black/70 px-2 py-1 text-[10px] text-white transition hover:bg-black/90" onClick={openVersionPicker} aria-label={`选择 ${versions.length} 个资产版本`}><History className="size-3" />{versions.length} 个版本</button> : null}
             </div>
 
             <div className="p-4">
@@ -121,6 +164,39 @@ export function WorkflowAssetCard(props: {
                 <label className="mt-4 block text-xs text-[var(--studio-text-secondary)]">生图提示词</label>
                 <Input.TextArea className="mt-2" autoSize={{ minRows: 6, maxRows: 14 }} value={imagePrompt} onChange={(event) => setImagePrompt(event.target.value)} />
             </Modal>
+            <Modal
+                title={`${active.logicalAssetId} · 选择资产版本`}
+                open={versionPickerOpen}
+                width={760}
+                okText={selectedVersion?.isCurrent ? "当前版本" : "设为当前版本"}
+                cancelText="取消"
+                okButtonProps={{ disabled: !selectedVersion || selectedVersion.isCurrent }}
+                confirmLoading={switchingVersion}
+                onCancel={() => setVersionPickerOpen(false)}
+                onOk={() => void switchVersion()}
+            >
+                <p className="mb-4 text-xs leading-5 text-[var(--studio-text-muted)]">选择一个历史版本查看原图，确认后将它设为当前资产图；其他版本仍会保留。</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                    {versions.map((version) => {
+                        const selected = version.id === selectedVersionId;
+                        const url = versionUrls[version.id] || readString(version.data.dataUrl) || version.coverUrl;
+                        return (
+                            <div key={version.id} className={`overflow-hidden rounded-lg border transition ${selected ? "border-[var(--studio-accent)] bg-[var(--studio-active-bg)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]"}`}>
+                                <div className="grid aspect-video place-items-center overflow-hidden border-b border-[var(--studio-border-subtle)] bg-[var(--studio-elevated-bg)]">
+                                    {url ? <Image alt={`${active.logicalAssetId} v${version.versionNumber}`} className="!h-full !w-full object-cover" height="100%" preview={{ mask: <span className="text-xs">放大版本原图</span> }} src={url} width="100%" /> : <ImageIcon className="size-6 text-[var(--studio-text-muted)]" />}
+                                </div>
+                                <button type="button" className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left" aria-label={`选择版本 v${version.versionNumber}`} aria-pressed={selected} onClick={() => setSelectedVersionId(version.id)}>
+                                    <span className="min-w-0">
+                                        <span className="flex items-center gap-2 text-sm font-semibold text-[var(--studio-text-primary)]">v{version.versionNumber}{version.isCurrent ? <span className="rounded bg-[var(--studio-accent-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--studio-accent)]">当前版本</span> : null}</span>
+                                        <span className="mt-1 block truncate text-[11px] text-[var(--studio-text-muted)]">{version.changeNote || "资产版本"}{version.createdAt ? ` · ${formatVersionDate(version.createdAt)}` : ""}</span>
+                                    </span>
+                                    <span className={`grid size-6 shrink-0 place-items-center rounded-full border ${selected ? "border-[var(--studio-accent)] bg-[var(--studio-accent)] text-white" : "border-[var(--studio-border-strong)] text-transparent"}`}><Check className="size-3.5" /></span>
+                                </button>
+                            </div>
+                        );
+                    })}
+                </div>
+            </Modal>
         </article>
     );
 }
@@ -148,4 +224,9 @@ function readRecord(value: unknown) {
 
 function readString(value: unknown) {
     return typeof value === "string" ? value.trim() : "";
+}
+
+function formatVersionDate(value: string) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
