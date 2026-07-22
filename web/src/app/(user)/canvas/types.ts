@@ -33,10 +33,33 @@ export type CanvasVideoEditType = "replace" | "add" | "remove" | "inpaint";
 export type CanvasVideoExtendDirection = "forward" | "backward";
 export type CanvasProductionPackageRole = "script" | "asset" | "prompt" | "video_config" | "video_result" | "reference" | "manual";
 
+export type CanvasMediaVersion = {
+    id: string;
+    versionNumber: number;
+    kind: "image" | "video";
+    createdAt: string;
+    prompt: string;
+    promptDocument?: CanvasPromptDocument;
+    width: number;
+    height: number;
+    metadata: Partial<CanvasNodeMetadata>;
+};
+
+export type CanvasPendingMediaVersion = {
+    prompt: string;
+    promptDocument?: CanvasPromptDocument;
+    startedAt: string;
+};
+
 export type CanvasNodeMetadata = {
     content?: string;
     prompt?: string;
     promptDocument?: CanvasPromptDocument;
+    mediaVersions?: CanvasMediaVersion[];
+    currentMediaVersionId?: string;
+    promptDraft?: string;
+    promptDraftDocument?: CanvasPromptDocument;
+    pendingMediaVersion?: CanvasPendingMediaVersion;
     status?: CanvasNodeStatus;
     errorDetails?: string;
     fontSize?: number;
