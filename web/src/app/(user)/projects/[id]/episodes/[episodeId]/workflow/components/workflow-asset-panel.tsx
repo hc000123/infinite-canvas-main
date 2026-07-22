@@ -11,6 +11,7 @@ import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import type { useWorkflowAssetAutomation } from "../use-workflow-asset-automation";
 import { useWorkflowAssetImageActions } from "../use-workflow-asset-image-actions";
 import { buildWorkflowAssetCards, defaultWorkflowAssetSelection, workflowAssetCategoryCounts, workflowAssetEditPatch, workflowAssetGenerationProgress, type WorkflowAssetCategory } from "../workflow-asset-card-model";
+import { startBackgroundTask } from "../workflow-background-task";
 import { mapAssetDesignArtifactToAssets } from "../workflow-artifact-mapping";
 import { WorkflowAssetCard } from "./workflow-asset-card";
 
@@ -142,23 +143,27 @@ export function WorkflowAssetPanel(props: {
         updateAsset(asset.id, workflowAssetEditPatch(asset, input));
         message.success("资产卡片已更新");
     };
+    const runGeneration = async (targets: Asset[]) => {
+        const logicalByAsset = new Map(variants.filter((variant) => variant.asset).map((variant) => [variant.asset!.id, variant.logicalAssetId]));
+        const result = await imageActions.generate(targets);
+        const errors = Object.fromEntries(result.failed.map((item) => [logicalByAsset.get(item.id) || item.id, item.message]));
+        setFailed((current) => ({ ...current, ...errors }));
+        if (result.succeededIds.length) {
+            setSelectedIds((ids) => ids.filter((id) => !result.succeededIds.some((assetId) => logicalByAsset.get(assetId) === id)));
+            message.success(`已生成并绑定 ${result.succeededIds.length} 张资产图`);
+        }
+        if (result.failed.length) message.warning(`${result.failed.length} 张资产图生成失败，可在卡片中直接重试`);
+    };
     const confirmGenerate = (targets: Asset[]) => {
         if (!targets.length) return;
         modal.confirm({
             title: `生成 ${targets.length} 张资产草图？`,
-            content: `将使用 ${imageActions.model}，确认后自动生成草图、归档版本并绑定资产编号。单张失败不会取消其他任务；全部有效资产图完成后自动解锁镜头生产。`,
-            okText: "确认生成",
+            content: `将使用 ${imageActions.model}，确认后转入后台生成、归档版本并绑定资产编号。你可以继续编辑或切换页面；全部有效资产图完成后自动解锁镜头生产。`,
+            okText: "转入后台生成",
             cancelText: "取消",
-            onOk: async () => {
-                const logicalByAsset = new Map(variants.filter((variant) => variant.asset).map((variant) => [variant.asset!.id, variant.logicalAssetId]));
-                const result = await imageActions.generate(targets);
-                const errors = Object.fromEntries(result.failed.map((item) => [logicalByAsset.get(item.id) || item.id, item.message]));
-                setFailed((current) => ({ ...current, ...errors }));
-                if (result.succeededIds.length) {
-                    setSelectedIds((ids) => ids.filter((id) => !result.succeededIds.some((assetId) => logicalByAsset.get(assetId) === id)));
-                    message.success(`已生成并绑定 ${result.succeededIds.length} 张资产图`);
-                }
-                if (result.failed.length) message.warning(`${result.failed.length} 张资产图生成失败，可在卡片中直接重试`);
+            onOk: () => {
+                message.info(`已提交 ${targets.length} 张资产草图，可继续其他操作`);
+                startBackgroundTask(() => runGeneration(targets), (error) => message.error(error instanceof Error ? error.message : "资产草图任务启动失败"));
             },
         });
     };
@@ -176,7 +181,7 @@ export function WorkflowAssetPanel(props: {
                         <p className="mt-1 text-xs text-[var(--studio-text-muted)]">系统自动提取资产并生成提示词；你只需修改有误的卡片，并在真实生图时确认一次。</p>
                         <div className={`mt-2 flex items-center gap-1.5 text-xs ${automation.status === "error" ? "text-[var(--studio-warning)]" : automation.status === "ready" ? "text-[var(--studio-success)]" : "text-[var(--studio-accent)]"}`}>
                             {automation.status === "ready" ? <CheckCircle2 className="size-3.5" /> : <RefreshCw className={`size-3.5 ${automation.status === "organizing" ? "animate-spin" : ""}`} />}
-                            {applying ? "正在绑定资产结果" : generationProgress.required && automation.status === "ready" ? (generationProgress.ready ? "全部资产图已绑定" : `${generationProgress.pending} 张资产草图待生成`) : automation.message}
+                            {applying ? "正在绑定资产结果" : imageActions.generatingIds.length ? `${imageActions.generatingIds.length} 张草图后台生成中，可继续操作` : generationProgress.required && automation.status === "ready" ? (generationProgress.ready ? "全部资产图已绑定" : `${generationProgress.pending} 张资产草图待生成`) : automation.message}
                         </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
