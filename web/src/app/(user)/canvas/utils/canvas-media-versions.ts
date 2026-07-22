@@ -181,6 +181,28 @@ export function patchCurrentCanvasMediaVersion(node: CanvasNodeData, patch: Part
     };
 }
 
+export function completePendingCanvasMediaVersion(node: CanvasNodeData, completed: CanvasNodeData, createdAt = new Date().toISOString()) {
+    const pending = node.metadata?.pendingMediaVersion;
+    return pending ? appendCanvasMediaVersion(node, completed, pending.prompt, createdAt, pending.promptDocument) : completed;
+}
+
+export function rollbackPendingCanvasMediaVersion(node: CanvasNodeData, errorDetails: string) {
+    const pending = node.metadata?.pendingMediaVersion;
+    const currentId = currentCanvasMediaVersion(node)?.id;
+    const restored = currentId ? switchCanvasMediaVersion(node, currentId) : node;
+    return {
+        ...restored,
+        metadata: {
+            ...restored.metadata,
+            status: "success" as const,
+            errorDetails,
+            pendingMediaVersion: undefined,
+            promptDraft: pending?.prompt,
+            promptDraftDocument: pending?.promptDocument,
+        },
+    };
+}
+
 export function hasDirtyCanvasPromptDraft(node: CanvasNodeData) {
     if (node.metadata?.promptDraft === undefined && node.metadata?.promptDraftDocument === undefined) return false;
     return node.metadata.promptDraft !== (node.metadata.prompt || "") || JSON.stringify(node.metadata.promptDraftDocument) !== JSON.stringify(node.metadata.promptDocument);

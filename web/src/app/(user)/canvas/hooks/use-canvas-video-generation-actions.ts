@@ -16,6 +16,7 @@ import { buildCanvasAiTaskTrace } from "../utils/canvas-ai-task-trace";
 import { appendSeedanceMediaReviewDiagnostic } from "../utils/canvas-volcengine-review-diagnostics";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
 import { applyCompletedVideoNodeToNodes, buildCompletedVideoNode } from "../utils/canvas-node-status";
+import { completePendingCanvasMediaVersion, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion } from "../utils/canvas-media-versions";
 import { buildNextProductionVideoVersionMetadata } from "../utils/canvas-production-packages";
 import type { VideoGenerationPlan } from "../utils/canvas-video-generation-plan";
 import { useStoryboardStore } from "../stores/use-storyboard-store";
@@ -85,6 +86,7 @@ export function useCanvasVideoGenerationActions({
             const pendingSpec = NODE_DEFAULT_SIZE[CanvasNodeType.Video];
             const generationStartedAt = Date.now();
             const createdAt = new Date(generationStartedAt).toISOString();
+            const replaceExistingResult = sourceNode?.type === CanvasNodeType.Video && Boolean(sourceNode.metadata?.content);
             const generationMetadata = {
                 ...buildVideoGenerationMetadata(generationConfig, videoPlan.references, videoPlan.relation),
                 ...canvasEpisodeMetadata(episodeContext),
@@ -105,13 +107,28 @@ export function useCanvasVideoGenerationActions({
                 sourceConnections,
                 prompt: effectivePrompt,
                 spec: pendingSpec,
-                metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, generationStartedAt, ...generationMetadata },
+                metadata: {
+                    prompt: effectivePrompt,
+                    status: NODE_STATUS_LOADING,
+                    generationStartedAt,
+                    ...generationMetadata,
+                    ...(replaceExistingResult
+                        ? {
+                              pendingMediaVersion: {
+                                  prompt: effectivePrompt,
+                                  promptDocument: sourceNode?.metadata?.promptDraftDocument,
+                                  startedAt: createdAt,
+                              },
+                          }
+                        : {}),
+                },
+                replaceExistingResult,
             });
             useStoryboardStore.getState().markShotGenerating({ storyboardShotId: generationMetadata.storyboardShotId, nodeId: videoId });
             useStoryboardStore.getState().markShotGroupGenerating({ shotGroupId: generationMetadata.shotGroupId, taskId: undefined });
             setPendingChildIds([videoId]);
             setNodes((prev) =>
-                isEmptyVideoNode ? prev.map((node) => (node.id === nodeId ? { ...node, ...videoNode } : node)) : [...prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), videoNode],
+                isEmptyVideoNode || replaceExistingResult ? prev.map((node) => (node.id === nodeId ? { ...node, ...videoNode } : node)) : [...prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), videoNode],
             );
             if (connections.length) setConnections((prev) => [...prev, ...connections]);
 
@@ -139,11 +156,15 @@ export function useCanvasVideoGenerationActions({
                     generationMetadata,
                     prompt: effectivePrompt,
                 });
-                setNodes((prev) => applyCompletedVideoNodeToNodes(prev, finalVideoNode));
+                setNodes((prev) =>
+                    replaceExistingResult
+                        ? prev.map((node) => (node.id === videoId ? completePendingCanvasMediaVersion(node, finalVideoNode) : node))
+                        : applyCompletedVideoNodeToNodes(prev, finalVideoNode),
+                );
                 const asset = buildGeneratedVideoAsset(finalVideoNode, { canvasId, projectId, projectTitle, projectPreset, episodeContext, prompt: effectivePrompt, effectivePrompt, config: generationConfig, createdAt });
                 const assetId = asset ? await archiveGeneratedAsset(asset).catch(() => undefined) : undefined;
                 if (typeof assetId === "string") {
-                    setNodes((prev) => prev.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, sourceAssetId: assetId } } : node)));
+                    setNodes((prev) => prev.map((node) => (node.id === videoId ? (replaceExistingResult ? patchCurrentCanvasMediaVersion(node, { sourceAssetId: assetId }) : { ...node, metadata: { ...node.metadata, sourceAssetId: assetId } }) : node)));
                 }
                 useStoryboardStore.getState().markShotSucceeded({ storyboardShotId: generationMetadata.storyboardShotId, assetId: typeof assetId === "string" ? assetId : undefined, nodeId: videoId, taskId: finalVideoNode.metadata?.taskId });
                 useStoryboardStore.getState().markShotGroupSucceeded({ shotGroupId: generationMetadata.shotGroupId, assetId: typeof assetId === "string" ? assetId : undefined, taskId: finalVideoNode.metadata?.taskId });
@@ -173,6 +194,7 @@ export function useCanvasVideoGenerationActions({
                 const latestTaskId = useStoryboardStore.getState().shots.find((shot) => shot.id === generationMetadata.storyboardShotId)?.lastTaskId;
                 useStoryboardStore.getState().markShotFailed({ storyboardShotId: generationMetadata.storyboardShotId, nodeId: videoId, taskId: latestTaskId, errorMessage });
                 useStoryboardStore.getState().markShotGroupFailed({ shotGroupId: generationMetadata.shotGroupId, taskId: latestTaskId, errorMessage });
+                if (replaceExistingResult) setNodes((prev) => prev.map((node) => (node.id === videoId ? rollbackPendingCanvasMediaVersion(node, errorMessage) : node)));
                 throw new Error(errorMessage);
             }
         },

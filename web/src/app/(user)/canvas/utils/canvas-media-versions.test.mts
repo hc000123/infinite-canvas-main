@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { CanvasNodeData } from "../types.ts";
-import { appendCanvasMediaVersion, applyCanvasPromptDraft, canvasPromptEditorValue, hydrateCanvasMediaVersionUrls, patchCurrentCanvasMediaVersion, switchCanvasMediaVersion } from "./canvas-media-versions.ts";
+import { appendCanvasMediaVersion, applyCanvasPromptDraft, canvasPromptEditorValue, completePendingCanvasMediaVersion, hydrateCanvasMediaVersionUrls, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion, switchCanvasMediaVersion } from "./canvas-media-versions.ts";
 
 const now = "2026-07-22T16:00:00.000Z";
 
@@ -121,4 +121,44 @@ test("patches archived asset identity into the selected version", () => {
     assert.equal(patched.metadata?.sourceAssetId, "asset-new");
     assert.equal(patched.metadata?.mediaVersions?.[1]?.metadata.sourceAssetId, "asset-new");
     assert.equal(patched.metadata?.mediaVersions?.[0]?.metadata.sourceAssetId, undefined);
+});
+
+test("completes a pending video as a new version", () => {
+    const pendingNode: CanvasNodeData = {
+        ...legacyImageNode,
+        type: "video" as CanvasNodeData["type"],
+        metadata: {
+            ...legacyImageNode.metadata,
+            mediaVersions: undefined,
+            pendingMediaVersion: { prompt: "新视频提示词", startedAt: now },
+        },
+    };
+    const completedNode: CanvasNodeData = {
+        ...pendingNode,
+        metadata: { ...pendingNode.metadata, content: "blob:video-new", storageKey: "video:new", taskId: "task-2", taskStatus: "succeeded", status: "success" },
+    };
+
+    const completed = completePendingCanvasMediaVersion(pendingNode, completedNode, "2026-07-22T16:01:00.000Z");
+
+    assert.equal(completed.metadata?.mediaVersions?.length, 2);
+    assert.equal(completed.metadata?.mediaVersions?.[1]?.prompt, "新视频提示词");
+    assert.equal(completed.metadata?.pendingMediaVersion, undefined);
+    assert.equal(completed.metadata?.promptDraft, undefined);
+});
+
+test("rolls back a failed pending video and keeps its prompt draft", () => {
+    const source: CanvasNodeData = { ...legacyImageNode, type: "video" as CanvasNodeData["type"] };
+    const versioned = appendCanvasMediaVersion(source, { ...source, metadata: { ...source.metadata, content: "blob:current" } }, "当前提示词", now);
+    const pending: CanvasNodeData = {
+        ...versioned,
+        metadata: { ...versioned.metadata, status: "loading", pendingMediaVersion: { prompt: "失败草稿", startedAt: now }, taskId: "task-failed" },
+    };
+
+    const rolledBack = rollbackPendingCanvasMediaVersion(pending, "视频生成失败");
+
+    assert.equal(rolledBack.metadata?.content, "blob:current");
+    assert.equal(rolledBack.metadata?.status, "success");
+    assert.equal(rolledBack.metadata?.pendingMediaVersion, undefined);
+    assert.equal(rolledBack.metadata?.promptDraft, "失败草稿");
+    assert.equal(rolledBack.metadata?.errorDetails, "视频生成失败");
 });

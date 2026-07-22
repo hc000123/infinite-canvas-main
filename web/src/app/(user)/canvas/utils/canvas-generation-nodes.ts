@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 
 import { NODE_DEFAULT_SIZE } from "../constants.ts";
 import type { CanvasConnection, CanvasNodeData, CanvasNodeMetadata } from "../types.ts";
+import { ensureCanvasMediaVersions } from "./canvas-media-versions.ts";
 
 export function createVideoGenerationNode({
     nodeId,
@@ -10,6 +11,7 @@ export function createVideoGenerationNode({
     spec,
     metadata,
     sourceConnections = [],
+    replaceExistingResult = false,
 }: {
     nodeId: string;
     sourceNode?: CanvasNodeData;
@@ -17,23 +19,38 @@ export function createVideoGenerationNode({
     spec: { width: number; height: number };
     metadata: CanvasNodeMetadata;
     sourceConnections?: CanvasConnection[];
+    replaceExistingResult?: boolean;
 }) {
     const isEmptyVideoNode = sourceNode?.type === "video" && !sourceNode.metadata?.content;
     const isVariantNode = metadata.relationType === "variant" || metadata.videoActionType === "variant" || metadata.actionType === "variant";
     const inheritsSourceInputs = sourceNode?.type === "video" && Boolean(sourceNode.metadata?.content) && sourceConnections.length > 0;
-    const videoId = isEmptyVideoNode ? nodeId : nanoid();
+    const videoId = isEmptyVideoNode || replaceExistingResult ? nodeId : nanoid();
     const parent = sourceNode?.position || { x: 0, y: 0 };
+    const versions = replaceExistingResult && sourceNode ? ensureCanvasMediaVersions(sourceNode, metadata.pendingMediaVersion?.startedAt) : undefined;
+    const versionMetadata =
+        replaceExistingResult && sourceNode
+            ? {
+                  ...sourceNode.metadata,
+                  ...metadata,
+                  prompt: sourceNode.metadata?.prompt,
+                  promptDocument: sourceNode.metadata?.promptDocument,
+                  promptDraft: sourceNode.metadata?.promptDraft ?? metadata.pendingMediaVersion?.prompt,
+                  promptDraftDocument: sourceNode.metadata?.promptDraftDocument ?? metadata.pendingMediaVersion?.promptDocument,
+                  mediaVersions: versions,
+                  currentMediaVersionId: sourceNode.metadata?.currentMediaVersionId || versions?.at(-1)?.id,
+              }
+            : metadata;
     const videoNode: CanvasNodeData = {
         id: videoId,
         type: "video" as CanvasNodeData["type"],
-        title: prompt.slice(0, 32) || "Generated Video",
-        position: isEmptyVideoNode ? sourceNode.position : isVariantNode && sourceNode ? { x: parent.x + 48, y: parent.y + sourceNode.height + 72 } : { x: parent.x + (sourceNode?.width || spec.width) + 96, y: parent.y },
-        width: isEmptyVideoNode ? sourceNode.width : spec.width,
-        height: isEmptyVideoNode ? sourceNode.height : spec.height,
-        metadata,
+        title: replaceExistingResult && sourceNode ? sourceNode.title : prompt.slice(0, 32) || "Generated Video",
+        position: isEmptyVideoNode || (replaceExistingResult && sourceNode) ? sourceNode.position : isVariantNode && sourceNode ? { x: parent.x + 48, y: parent.y + sourceNode.height + 72 } : { x: parent.x + (sourceNode?.width || spec.width) + 96, y: parent.y },
+        width: isEmptyVideoNode || replaceExistingResult ? sourceNode?.width || spec.width : spec.width,
+        height: isEmptyVideoNode || replaceExistingResult ? sourceNode?.height || spec.height : spec.height,
+        metadata: versionMetadata,
     };
-    const connection: CanvasConnection | null = isEmptyVideoNode || isVariantNode || !sourceNode ? null : { id: nanoid(), fromNodeId: nodeId, toNodeId: videoId };
-    const inheritedConnections = inheritsSourceInputs ? sourceConnections.map((item) => ({ ...item, id: nanoid(), toNodeId: videoId })) : [];
+    const connection: CanvasConnection | null = isEmptyVideoNode || replaceExistingResult || isVariantNode || !sourceNode ? null : { id: nanoid(), fromNodeId: nodeId, toNodeId: videoId };
+    const inheritedConnections = inheritsSourceInputs && !replaceExistingResult ? sourceConnections.map((item) => ({ ...item, id: nanoid(), toNodeId: videoId })) : [];
     return { videoId, videoNode, isEmptyVideoNode, connections: [...inheritedConnections, ...(connection ? [connection] : [])] };
 }
 

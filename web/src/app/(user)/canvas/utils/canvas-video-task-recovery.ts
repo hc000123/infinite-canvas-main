@@ -2,7 +2,7 @@ import type { CanvasNodeData, CanvasNodeMetadata } from "../types.ts";
 
 export function resetInterruptedGeneration(nodes: CanvasNodeData[]) {
     return nodes.map((node) => {
-        if (isCompletedMediaNodeWithStaleStatus(node)) {
+        if (!node.metadata?.pendingMediaVersion && isCompletedMediaNodeWithStaleStatus(node)) {
             return {
                 ...node,
                 metadata: {
@@ -35,7 +35,7 @@ export function recoverableVideoTaskNodes(nodes: CanvasNodeData[]) {
 
 export function isRecoverableVideoTaskNode(node: CanvasNodeData) {
     const metadata = node.metadata;
-    if (node.type !== "video" || !metadata?.taskId || metadata.content) return false;
+    if (node.type !== "video" || !metadata?.taskId || (metadata.content && !metadata.pendingMediaVersion)) return false;
     const taskStatus = normalizedTaskStatus(metadata);
     if (taskStatus === "failed" || taskStatus === "cancelled") return false;
     return metadata.status === "loading" || metadata.status === "error";

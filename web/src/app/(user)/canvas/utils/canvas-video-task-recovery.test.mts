@@ -40,13 +40,14 @@ test("finds unfinished video task nodes for automatic recovery refresh", () => {
         { id: "video-caching", type: "video", title: "待回填视频", position: { x: 0, y: 0 }, width: 420, height: 236, metadata: { status: "error", taskId: "task-caching", taskStatus: "succeeded", videoUrl: "https://example.com/video.mp4" } },
         { id: "video-failed", type: "video", title: "失败视频", position: { x: 0, y: 0 }, width: 420, height: 236, metadata: { status: "error", taskId: "task-failed", taskStatus: "failed" } },
         { id: "video-has-content", type: "video", title: "已有视频", position: { x: 0, y: 0 }, width: 420, height: 236, metadata: { status: "error", taskId: "task-content", taskStatus: "running", content: "blob:video" } },
+        { id: "video-version-task", type: "video", title: "版本生成中", position: { x: 0, y: 0 }, width: 420, height: 236, metadata: { status: "loading", taskId: "task-version", taskStatus: "running", content: "blob:old", pendingMediaVersion: { prompt: "新提示词", startedAt: "2026-07-22T16:00:00.000Z" } } },
         { id: "video-done", type: "video", title: "完成视频", position: { x: 0, y: 0 }, width: 420, height: 236, metadata: { status: "success", taskId: "task-2" } },
         { id: "image-task", type: "image", title: "图片", position: { x: 0, y: 0 }, width: 340, height: 240, metadata: { status: "loading", taskId: "task-3" } },
     ];
 
     assert.deepEqual(
         recoverableVideoTaskNodes(nodes).map((node) => node.id),
-        ["video-task", "video-interrupted", "video-caching"],
+        ["video-task", "video-interrupted", "video-caching", "video-version-task"],
     );
 });
 
