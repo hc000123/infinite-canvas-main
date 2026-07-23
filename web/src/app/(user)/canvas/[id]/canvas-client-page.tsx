@@ -736,6 +736,7 @@ function InfiniteCanvasPage() {
             toVideoMetadata: videoMetadata,
         },
         retry: {
+            assets,
             canvasAiConfig,
             nodesRef,
             connectionsRef,

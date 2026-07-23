@@ -7,20 +7,24 @@ import type { UploadedFile } from "@/services/file-storage";
 import type { UploadedImage } from "@/services/image-storage";
 import type { AiConfig } from "@/stores/use-config-store";
 import { defaultConfig } from "@/stores/use-config-store";
-import type { AssetWriteInput } from "@/stores/use-asset-store";
+import type { Asset, AssetWriteInput } from "@/stores/use-asset-store";
 
 import { NODE_DEFAULT_SIZE, VIDEO_NODE_MAX_HEIGHT, VIDEO_NODE_MAX_WIDTH } from "../constants";
 import { buildNodeGenerationContext, hydrateNodeGenerationContext, type NodeGenerationContext } from "../components/canvas-node-generation";
 import { buildRetryGenerationConfig } from "../utils/canvas-generation-config";
-import { buildRetryImageGenerationMetadata, buildVideoGenerationMetadata, buildVideoReferenceInput, videoTaskMetadata } from "../utils/canvas-generation-metadata";
+import { buildRetryImageGenerationMetadata, buildVideoGenerationMetadata, videoTaskMetadata } from "../utils/canvas-generation-metadata";
 import { findRetrySourceNode, resolveMetadataReferences, resolveStoredAudioReferences, resolveStoredImageReferences, resolveStoredVideoReferences, sourceNodeReferenceImages, storedVideoReferenceInputs } from "../utils/canvas-generation-references";
+import { canvasNodeRetryPrompt, completeCanvasNodeRetry, failCanvasNodeRetry, startCanvasNodeRetry } from "../utils/canvas-generation-retry-state";
 import { runCanvasImageGeneration, runCanvasVideoGeneration } from "../utils/canvas-generation-runner";
 import { buildGeneratedImageAsset, buildGeneratedVideoAsset } from "../utils/canvas-generated-asset";
 import { aiTaskLedgerNodeMetadata, buildCanvasAiTaskTraceFromNode } from "../utils/canvas-ai-task-trace";
 import type { CanvasEpisodeContext } from "../utils/canvas-episode-context";
+import { patchCurrentCanvasMediaVersion } from "../utils/canvas-media-versions";
 import type { CanvasProjectPreset } from "../utils/canvas-project-preset";
 import { fitNodeSize } from "../utils/canvas-node-size";
 import { applyCompletedVideoNodeToNodes, buildCompletedImageNode, buildCompletedVideoNode } from "../utils/canvas-node-status";
+import { buildVideoGenerationPlan } from "../utils/canvas-video-generation-plan";
+import { syncCanvasVolcengineAssetsFromLibrary } from "../utils/canvas-volcengine-asset-sync";
 import { useStoryboardStore } from "../stores/use-storyboard-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "../types";
 
@@ -33,6 +37,7 @@ type CanvasActionMessage = {
 };
 
 type UseCanvasGenerationRetryActionsOptions = {
+    assets: Asset[];
     canvasAiConfig: AiConfig;
     nodesRef: MutableRefObject<CanvasNodeData[]>;
     connectionsRef: MutableRefObject<CanvasConnection[]>;
@@ -54,6 +59,7 @@ type UseCanvasGenerationRetryActionsOptions = {
 };
 
 export function useCanvasGenerationRetryActions({
+    assets,
     canvasAiConfig,
     nodesRef,
     connectionsRef,
@@ -74,9 +80,16 @@ export function useCanvasGenerationRetryActions({
     archiveGeneratedAsset,
 }: UseCanvasGenerationRetryActionsOptions) {
     const handleRetryNode = useCallback(
-        async (node: CanvasNodeData) => {
-            const sourceNode = findRetrySourceNode(node.id, nodesRef.current, connectionsRef.current) || node;
-            const batchRoot = node.metadata?.batchRootId ? nodesRef.current.find((item) => item.id === node.metadata?.batchRootId) : null;
+        async (requestedNode: CanvasNodeData) => {
+            const synced = syncCanvasVolcengineAssetsFromLibrary(nodesRef.current, assets);
+            const retryNodes = synced.nodes;
+            if (synced.changed) {
+                nodesRef.current = retryNodes;
+                setNodes(retryNodes);
+            }
+            const node = retryNodes.find((item) => item.id === requestedNode.id) || requestedNode;
+            const sourceNode = findRetrySourceNode(node.id, retryNodes, connectionsRef.current) || node;
+            const batchRoot = node.metadata?.batchRootId ? retryNodes.find((item) => item.id === node.metadata?.batchRootId) : null;
             const savedImageMetadata = node.type === CanvasNodeType.Image ? { ...batchRoot?.metadata, ...node.metadata } : undefined;
             const hasSavedImageMetadata = Boolean(savedImageMetadata?.generationType);
             const generationConfig = buildRetryGenerationConfig({ config: canvasAiConfig, sourceNode, targetNode: node, savedImageMetadata, defaults: defaultConfig });
@@ -85,8 +98,9 @@ export function useCanvasGenerationRetryActions({
                 return;
             }
 
-            const context = hasSavedImageMetadata ? null : await hydrateNodeGenerationContext(buildNodeGenerationContext(sourceNode.id, nodesRef.current, connectionsRef.current, sourceNode.metadata?.prompt || node.metadata?.prompt || ""));
-            const prompt = (savedImageMetadata?.prompt || context?.prompt || "").trim();
+            const retryPrompt = canvasNodeRetryPrompt(node, sourceNode);
+            const context = hasSavedImageMetadata ? null : await hydrateNodeGenerationContext(buildNodeGenerationContext(sourceNode.id, retryNodes, connectionsRef.current, retryPrompt));
+            const prompt = (node.metadata?.promptDraft || (hasSavedImageMetadata ? savedImageMetadata?.prompt : context?.prompt) || retryPrompt).trim();
             if (!prompt) {
                 message.warning("找不到提示词，无法重试");
                 return;
@@ -95,9 +109,10 @@ export function useCanvasGenerationRetryActions({
             const useReferenceImages = generationType ? generationType === "edit" : Boolean(context?.referenceImages.length);
             const retryReferenceImages =
                 hasSavedImageMetadata && savedImageMetadata ? await resolveMetadataReferences(savedImageMetadata) : useReferenceImages ? (context?.referenceImages.length ? context.referenceImages : sourceNodeReferenceImages(batchRoot || sourceNode)) : [];
-            const savedVideoImages = node.type === CanvasNodeType.Video ? await resolveStoredImageReferences(node.metadata || {}) : undefined;
-            const savedVideoVideos = node.type === CanvasNodeType.Video ? await resolveStoredVideoReferences(node.metadata || {}) : undefined;
-            const savedVideoAudios = node.type === CanvasNodeType.Video ? await resolveStoredAudioReferences(node.metadata || {}) : undefined;
+            const hasCurrentVideoReferences = Boolean(node.type === CanvasNodeType.Video && context && (context.referenceImages.length || context.referenceVideos.length || context.referenceAudios.length || context.referenceInputs?.length));
+            const savedVideoImages = node.type === CanvasNodeType.Video && !hasCurrentVideoReferences ? await resolveStoredImageReferences(node.metadata || {}) : undefined;
+            const savedVideoVideos = node.type === CanvasNodeType.Video && !hasCurrentVideoReferences ? await resolveStoredVideoReferences(node.metadata || {}) : undefined;
+            const savedVideoAudios = node.type === CanvasNodeType.Video && !hasCurrentVideoReferences ? await resolveStoredAudioReferences(node.metadata || {}) : undefined;
             if (useReferenceImages && !retryReferenceImages) {
                 message.error("参考图片已丢失，无法继续重试");
                 setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: "参考图片已丢失，无法继续重试" } } : item)));
@@ -120,17 +135,8 @@ export function useCanvasGenerationRetryActions({
             }
 
             setRunningNodeId(node.id);
-            const generationStartedAt = node.type === CanvasNodeType.Video ? Date.now() : undefined;
-            setNodes((prev) =>
-                prev.map((item) =>
-                    item.id === node.id
-                        ? {
-                              ...item,
-                              metadata: { ...item.metadata, ...retryingVideoTaskMetadata(item.type), status: NODE_STATUS_LOADING, errorDetails: undefined, ...(generationStartedAt ? { generationStartedAt } : {}) },
-                          }
-                        : item,
-                ),
-            );
+            const generationStartedAt = Date.now();
+            setNodes((prev) => prev.map((item) => (item.id === node.id ? startCanvasNodeRetry(item, prompt, generationStartedAt) : item)));
             if (node.type === CanvasNodeType.Video) {
                 useStoryboardStore.getState().markShotGenerating({ storyboardShotId: node.metadata?.storyboardShotId, nodeId: node.id });
                 useStoryboardStore.getState().markShotGroupGenerating({ shotGroupId: node.metadata?.shotGroupId });
@@ -143,13 +149,15 @@ export function useCanvasGenerationRetryActions({
                     return;
                 }
                 if (node.type === CanvasNodeType.Video) {
-                    const videoReferences = buildVideoReferenceInput(
-                        savedVideoImages ?? context?.referenceImages ?? [],
-                        savedVideoVideos ?? context?.referenceVideos ?? [],
-                        savedVideoAudios ?? context?.referenceAudios ?? [],
-                        storedVideoReferenceInputs(node.metadata || {}, savedVideoImages || [], savedVideoVideos || [], savedVideoAudios || []) || context?.referenceInputs,
-                        generationConfig.videoReferenceImageMode,
-                    );
+                    const videoImages = hasCurrentVideoReferences ? context?.referenceImages || [] : savedVideoImages || [];
+                    const videoVideos = hasCurrentVideoReferences ? context?.referenceVideos || [] : savedVideoVideos || [];
+                    const videoAudios = hasCurrentVideoReferences ? context?.referenceAudios || [] : savedVideoAudios || [];
+                    const videoInputs = hasCurrentVideoReferences ? context?.referenceInputs : storedVideoReferenceInputs(node.metadata || {}, videoImages, videoVideos, videoAudios);
+                    const referenceSet = { images: videoImages, videos: videoVideos, audios: videoAudios, inputs: videoInputs };
+                    const videoPlan = buildVideoGenerationPlan({ config: generationConfig, sourceNode, sourceReferences: referenceSet, contextReferences: referenceSet, storedVariantReferences: referenceSet });
+                    if (videoPlan.sourceVideoRequiredError) throw new Error(videoPlan.sourceVideoRequiredError);
+                    if (videoPlan.imageReviewRequiredError) throw new Error(videoPlan.imageReviewRequiredError);
+                    const videoReferences = videoPlan.references;
                     const trace = buildCanvasAiTaskTraceFromNode({ projectId: workspaceProjectId, canvasId, node });
                     const { video, completedTask } = await runCanvasVideoGeneration(
                         generationConfig,
@@ -172,7 +180,7 @@ export function useCanvasGenerationRetryActions({
                         cachedVideoMetadata: cachedVideo,
                         taskMetadata: completedTask ? videoTaskMetadata(completedTask) : undefined,
                         generationMetadata: {
-                            ...buildVideoGenerationMetadata(generationConfig, videoReferences),
+                            ...buildVideoGenerationMetadata(generationConfig, videoReferences, videoPlan.relation),
                             storyboardGroupId: latestVideoNode.metadata?.storyboardGroupId,
                             storyboardShotId: latestVideoNode.metadata?.storyboardShotId,
                             shotGroupId: latestVideoNode.metadata?.shotGroupId,
@@ -188,7 +196,11 @@ export function useCanvasGenerationRetryActions({
                         },
                         prompt,
                     });
-                    setNodes((prev) => applyCompletedVideoNodeToNodes(prev, finalVideoNode));
+                    setNodes((prev) => {
+                        const retryingNode = prev.find((item) => item.id === node.id);
+                        const completedNodes = applyCompletedVideoNodeToNodes(prev, finalVideoNode);
+                        return retryingNode ? completedNodes.map((item) => (item.id === node.id ? completeCanvasNodeRetry(retryingNode, item) : item)) : completedNodes;
+                    });
                     if (finalVideoNode) {
                         const asset = buildGeneratedVideoAsset(finalVideoNode, {
                             projectId: workspaceProjectId,
@@ -203,7 +215,7 @@ export function useCanvasGenerationRetryActions({
                         });
                         const assetId = asset ? await archiveGeneratedAsset(asset).catch(() => undefined) : undefined;
                         if (typeof assetId === "string") {
-                            setNodes((prev) => prev.map((item) => (item.id === finalVideoNode.id ? { ...item, metadata: { ...item.metadata, sourceAssetId: assetId } } : item)));
+                            setNodes((prev) => prev.map((item) => (item.id === finalVideoNode.id ? patchCurrentCanvasMediaVersion(item, { sourceAssetId: assetId }) : item)));
                         }
                         useStoryboardStore.getState().markShotSucceeded({ storyboardShotId: finalVideoNode.metadata?.storyboardShotId, assetId: typeof assetId === "string" ? assetId : undefined, nodeId: node.id, taskId: finalVideoNode.metadata?.taskId });
                         useStoryboardStore.getState().markShotGroupSucceeded({ shotGroupId: finalVideoNode.metadata?.shotGroupId, assetId: typeof assetId === "string" ? assetId : undefined, taskId: finalVideoNode.metadata?.taskId });
@@ -226,13 +238,16 @@ export function useCanvasGenerationRetryActions({
                 setNodes((prev) =>
                     prev.map((item) =>
                         item.id === node.id
-                            ? buildCompletedImageNode({
-                                  imageNode: item,
-                                  imageSize,
-                                  imageMetadata: { ...imageMetadata(uploadedImage), ...aiTaskLedgerNodeMetadata(uploadedImage.aiTask) },
-                                  generationMetadata,
-                                  prompt,
-                              })
+                            ? completeCanvasNodeRetry(
+                                  item,
+                                  buildCompletedImageNode({
+                                      imageNode: item,
+                                      imageSize,
+                                      imageMetadata: { ...imageMetadata(uploadedImage), ...aiTaskLedgerNodeMetadata(uploadedImage.aiTask) },
+                                      generationMetadata,
+                                      prompt,
+                                  }),
+                              )
                             : item,
                     ),
                 );
@@ -248,7 +263,7 @@ export function useCanvasGenerationRetryActions({
                     createdAt: new Date().toISOString(),
                 });
                 const assetId = asset ? await archiveGeneratedAsset(asset).catch(() => undefined) : undefined;
-                if (typeof assetId === "string") setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, sourceAssetId: assetId } } : item)));
+                if (typeof assetId === "string") setNodes((prev) => prev.map((item) => (item.id === node.id ? patchCurrentCanvasMediaVersion(item, { sourceAssetId: assetId }) : item)));
             } catch (error) {
                 const errorDetails = error instanceof Error ? error.message : "生成失败";
                 const failedAt = Date.now();
@@ -279,13 +294,14 @@ export function useCanvasGenerationRetryActions({
                     useStoryboardStore.getState().markShotFailed({ storyboardShotId: node.metadata?.storyboardShotId, nodeId: node.id, taskId: node.metadata?.taskId, errorMessage: errorDetails });
                     useStoryboardStore.getState().markShotGroupFailed({ shotGroupId: node.metadata?.shotGroupId, taskId: node.metadata?.taskId, errorMessage: errorDetails });
                 }
-                setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails, ...(item.type === CanvasNodeType.Video ? { taskUpdatedAt: failedAt } : {}) } } : item)));
+                setNodes((prev) => prev.map((item) => (item.id === node.id ? failCanvasNodeRetry(item, errorDetails, failedAt) : item)));
             } finally {
                 setRunningNodeId(null);
             }
         },
         [
             archiveGeneratedAsset,
+            assets,
             cacheUploadedCanvasMedia,
             canvasAiConfig,
             canvasEpisodeContext,
@@ -307,27 +323,4 @@ export function useCanvasGenerationRetryActions({
     );
 
     return { handleRetryNode };
-}
-
-function retryingVideoTaskMetadata(nodeType: CanvasNodeType): CanvasNodeMetadata {
-    if (nodeType !== CanvasNodeType.Video) return {};
-    return {
-        taskId: undefined,
-        taskStatus: undefined,
-        rawTaskStatus: undefined,
-        taskCreatedAt: undefined,
-        taskUpdatedAt: undefined,
-        executionExpiresAfter: undefined,
-        videoUrlExpiresAt: undefined,
-        videoUrl: undefined,
-        lastFrameUrl: undefined,
-        aiTaskId: undefined,
-        upstreamTaskId: undefined,
-        aiTaskStatus: undefined,
-        aiTaskCredits: undefined,
-        creditLogId: undefined,
-        creditsRefunded: undefined,
-        refundedAt: undefined,
-        finishedAt: undefined,
-    };
 }
