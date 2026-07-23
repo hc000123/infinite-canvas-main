@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import * as canvasNodeStatus from "./canvas-node-status.ts";
 import { applyCompletedImageVersionToNodes, applyGeneratedImageToNodes, applyImageGenerationFinalStatus, applyImageGenerationStartNodes, applyImageTargetError, buildCompletedImageNode, buildCompletedVideoNode } from "./canvas-node-status.ts";
 import type { CanvasNodeData } from "../types.ts";
 
@@ -12,6 +13,14 @@ const node = (id: string, type: CanvasNodeData["type"], metadata: CanvasNodeData
     width: 100,
     height: 80,
     metadata,
+});
+
+test("shows progress for a pending media version even while old content is preserved", () => {
+    assert.equal(typeof canvasNodeStatus.shouldShowCanvasNodeProgress, "function");
+    assert.equal(canvasNodeStatus.shouldShowCanvasNodeProgress?.(node("image", "image", { content: "blob:old", status: "loading", pendingMediaVersion: { prompt: "新提示词", startedAt: "2026-07-23T00:00:00.000Z" } })), true);
+    assert.equal(canvasNodeStatus.shouldShowCanvasNodeProgress?.(node("video", "video", { content: "blob:old", status: "loading", pendingMediaVersion: { prompt: "新提示词", startedAt: "2026-07-23T00:00:00.000Z" } })), true);
+    assert.equal(canvasNodeStatus.shouldShowCanvasNodeProgress?.(node("image", "image", { content: "blob:old", status: "loading" })), false);
+    assert.equal(canvasNodeStatus.shouldShowCanvasNodeProgress?.(node("image", "image", { status: "loading" })), true);
 });
 
 test("starts image generation by updating source node and appending generated nodes", () => {

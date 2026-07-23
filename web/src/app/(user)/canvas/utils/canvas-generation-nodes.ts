@@ -38,6 +38,17 @@ export function createVideoGenerationNode({
                   promptDraftDocument: sourceNode.metadata?.promptDraftDocument ?? metadata.pendingMediaVersion?.promptDocument,
                   mediaVersions: versions,
                   currentMediaVersionId: sourceNode.metadata?.currentMediaVersionId || versions?.at(-1)?.id,
+                  taskId: metadata.taskId,
+                  taskStatus: metadata.taskStatus,
+                  rawTaskStatus: metadata.rawTaskStatus,
+                  taskCreatedAt: metadata.taskCreatedAt,
+                  taskUpdatedAt: metadata.taskUpdatedAt,
+                  taskDuration: metadata.taskDuration,
+                  finishedAt: metadata.finishedAt,
+                  aiTaskId: metadata.aiTaskId,
+                  upstreamTaskId: metadata.upstreamTaskId,
+                  aiTaskStatus: metadata.aiTaskStatus,
+                  errorDetails: metadata.errorDetails,
               }
             : metadata;
     const videoNode: CanvasNodeData = {

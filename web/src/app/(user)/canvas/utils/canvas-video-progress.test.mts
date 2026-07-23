@@ -26,6 +26,19 @@ test("treats saved video content as completed even with stale loading error meta
     assert.equal(progress.percent, 100);
 });
 
+test("treats preserved old content as a running pending version instead of completed", () => {
+    const metadata = {
+        content: "blob:old-video",
+        taskStatus: "running",
+        generationStartedAt: Date.now() - 12_000,
+        pendingMediaVersion: { prompt: "新提示词", startedAt: "2026-07-23T00:00:00.000Z" },
+    };
+
+    assert.equal(buildCanvasVideoProgress(metadata, "loading").stage, "running");
+    assert.equal(buildCanvasVideoProgress(metadata, "loading").label, "生成中");
+    assert.equal(isVideoElapsedTerminal(metadata, "loading"), false);
+});
+
 test("keeps failed creation progress at the creation stage before task id exists", () => {
     assert.deepEqual(buildCanvasVideoProgress({ generationStartedAt: Date.now() - 120_000 }, "error"), { stage: "failed", label: "创建失败", percent: 8, currentStep: 1, steps: ["创建任务", "排队", "生成", "回填", "完成"] });
     assert.deepEqual(buildCanvasVideoProgress({ taskId: "task-1", taskStatus: "failed" }, "error"), { stage: "failed", label: "生成失败", percent: 72, currentStep: 3, steps: ["创建任务", "排队", "生成", "回填", "完成"] });

@@ -7,6 +7,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData } from "../types";
+import { shouldShowCanvasNodeProgress } from "../utils/canvas-node-status";
 import { GeneratedPromptToggle, MediaReviewStatusBadge } from "./canvas-media-node-controls";
 import { VideoNodeContent } from "./canvas-video-node-content";
 import { VideoTaskProgressPanel } from "./canvas-video-task-progress-panel";
@@ -43,6 +44,7 @@ export type NodeContentRendererProps = {
 
 export function NodeContent(props: NodeContentRendererProps) {
     if (props.node.type === CanvasNodeType.Config && props.renderNodeContent) return props.renderNodeContent(props.node);
+    if (shouldShowCanvasNodeProgress(props.node)) return <LoadingContent node={props.node} theme={props.theme} onRefreshVideoTask={props.onRefreshVideoTask} showPanel={props.showPanel} />;
     if (props.isBatchRoot) return <ImageNodeContent {...props} />;
     if (props.node.type === CanvasNodeType.Image && props.node.metadata?.content) return <ImageNodeContent {...props} />;
     if (props.node.type === CanvasNodeType.Video && props.node.metadata?.content) return <VideoNodeContent {...props} />;
@@ -80,7 +82,7 @@ function LoadingContent({ node, theme, onRefreshVideoTask, showPanel }: Pick<Nod
     return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.activeStroke }}>
             <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />
-            <span className="text-[10px] tracking-[0.2em]">生成中</span>
+            <span className="text-[10px] tracking-[0.2em]">{node.metadata?.pendingMediaVersion ? "新版本生成中" : "生成中"}</span>
         </div>
     );
 }

@@ -20,3 +20,14 @@ test("node hover toolbar always stays above the node content", () => {
     assert.match(toolbar, /-translate-x-1\/2 -translate-y-full/);
     assert.doesNotMatch(toolbar, /shouldOverlayMedia/);
 });
+
+test("node content checks pending generation progress before rendering stored media", () => {
+    const content = readCanvasFile("../components/canvas-node-content.tsx");
+    const progressCheck = content.indexOf("if (shouldShowCanvasNodeProgress(props.node))");
+    const imageContentCheck = content.indexOf("if (props.node.type === CanvasNodeType.Image && props.node.metadata?.content)");
+    const videoContentCheck = content.indexOf("if (props.node.type === CanvasNodeType.Video && props.node.metadata?.content)");
+
+    assert.ok(progressCheck >= 0);
+    assert.ok(progressCheck < imageContentCheck);
+    assert.ok(progressCheck < videoContentCheck);
+});

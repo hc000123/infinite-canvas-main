@@ -147,6 +147,21 @@ export function appendCanvasMediaVersion(source: CanvasNodeData, completed: Canv
     };
 }
 
+export function beginPendingCanvasMediaVersion(node: CanvasNodeData, prompt: string, startedAt: string, promptDocument?: CanvasPromptDocument): CanvasNodeData {
+    const versions = ensureCanvasMediaVersions(node, startedAt);
+    return {
+        ...node,
+        metadata: {
+            ...node.metadata,
+            status: "loading",
+            errorDetails: undefined,
+            mediaVersions: versions,
+            currentMediaVersionId: node.metadata?.currentMediaVersionId || versions.at(-1)?.id,
+            pendingMediaVersion: { prompt, promptDocument, startedAt },
+        },
+    };
+}
+
 export function switchCanvasMediaVersion(node: CanvasNodeData, versionId: string) {
     const version = node.metadata?.mediaVersions?.find((item) => item.id === versionId);
     return version ? projectVersion(node, version) : node;

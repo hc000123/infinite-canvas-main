@@ -42,7 +42,7 @@ test("completed video regeneration targets the existing node", () => {
         position: { x: 100, y: 200 },
         width: 420,
         height: 236,
-        metadata: { content: "blob:old", storageKey: "video:old", prompt: "旧提示词", status: "success" as const },
+        metadata: { content: "blob:old", storageKey: "video:old", prompt: "旧提示词", status: "success" as const, taskId: "task-old", taskStatus: "succeeded" },
     };
     const result = createVideoGenerationNode({
         nodeId: sourceNode.id,
@@ -62,6 +62,8 @@ test("completed video regeneration targets the existing node", () => {
     assert.equal(result.videoNode.metadata?.prompt, "旧提示词");
     assert.equal(result.videoNode.metadata?.mediaVersions?.length, 1);
     assert.equal(result.videoNode.metadata?.pendingMediaVersion?.prompt, "新提示词");
+    assert.equal(result.videoNode.metadata?.taskId, undefined);
+    assert.equal(result.videoNode.metadata?.taskStatus, undefined);
 });
 
 test("uses short generated image titles while keeping the full prompt in metadata", () => {

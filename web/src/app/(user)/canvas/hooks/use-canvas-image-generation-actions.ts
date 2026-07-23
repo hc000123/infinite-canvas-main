@@ -15,7 +15,7 @@ import { runCanvasImageGeneration } from "../utils/canvas-generation-runner";
 import { aiTaskLedgerNodeMetadata, buildCanvasAiTaskTrace } from "../utils/canvas-ai-task-trace";
 import { fitNodeSize } from "../utils/canvas-node-size";
 import { applyCompletedImageVersionToNodes, applyGeneratedImageToNodes, applyImageGenerationFinalStatus, applyImageGenerationStartNodes, applyImageTargetError, buildCompletedImageNode } from "../utils/canvas-node-status";
-import { patchCurrentCanvasMediaVersion } from "../utils/canvas-media-versions";
+import { beginPendingCanvasMediaVersion, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion } from "../utils/canvas-media-versions";
 import { NODE_DEFAULT_SIZE } from "../constants";
 import type { CanvasConnection, CanvasNodeData, CanvasNodeMetadata } from "../types";
 
@@ -82,7 +82,7 @@ export function useCanvasImageGenerationActions({
             const generationType = referenceImages.length ? ("edit" as const) : ("generation" as const);
             const generationMetadata = buildImageGenerationMetadata(generationType, generationConfig, count, referenceImages);
             if (isCompletedImageNode && sourceNode) {
-                setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: "loading", errorDetails: undefined } } : node)));
+                setNodes((prev) => prev.map((node) => (node.id === nodeId ? beginPendingCanvasMediaVersion(node, prompt, createdAt, sourceNode.metadata?.promptDraftDocument) : node)));
                 setSelectedNodeIds(new Set([nodeId]));
                 setSelectedConnectionId(null);
                 setDialogNodeId(nodeId);
@@ -116,7 +116,7 @@ export function useCanvasImageGenerationActions({
                     }
                 } catch (error) {
                     const errorDetails = error instanceof Error ? error.message : "生成失败";
-                    setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: "success", errorDetails } } : node)));
+                    setNodes((prev) => prev.map((node) => (node.id === nodeId ? rollbackPendingCanvasMediaVersion(node, errorDetails) : node)));
                     showError(errorDetails);
                 }
                 return { pendingChildIds: [] };

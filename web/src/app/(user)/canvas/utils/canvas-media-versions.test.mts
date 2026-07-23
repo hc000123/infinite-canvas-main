@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { CanvasNodeData } from "../types.ts";
+import * as mediaVersions from "./canvas-media-versions.ts";
 import { appendCanvasMediaVersion, applyCanvasPromptDraft, canvasMediaVersionNavigation, canvasPromptEditorValue, completePendingCanvasMediaVersion, hydrateCanvasMediaVersionUrls, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion, switchCanvasMediaVersion } from "./canvas-media-versions.ts";
 
 const now = "2026-07-22T16:00:00.000Z";
@@ -23,6 +24,16 @@ const legacyImageNode: CanvasNodeData = {
         productionPackageId: "P01",
     },
 };
+
+test("starts a pending image version after preserving the completed current version", () => {
+    assert.equal(typeof mediaVersions.beginPendingCanvasMediaVersion, "function");
+    const pending = mediaVersions.beginPendingCanvasMediaVersion?.(legacyImageNode, "新提示词", now);
+
+    assert.equal(pending?.metadata?.status, "loading");
+    assert.equal(pending?.metadata?.content, "blob:old");
+    assert.equal(pending?.metadata?.pendingMediaVersion?.prompt, "新提示词");
+    assert.equal(pending?.metadata?.mediaVersions?.[0]?.metadata.status, "success");
+});
 
 test("appends v2 to a legacy generated node without changing node identity", () => {
     const completed: CanvasNodeData = {

@@ -3,6 +3,10 @@ import { withProductionVersionAsCurrent } from "./canvas-production-packages.ts"
 import { appendCanvasMediaVersion } from "./canvas-media-versions.ts";
 import type { CanvasPromptDocument } from "./canvas-prompt-document.ts";
 
+export function shouldShowCanvasNodeProgress(node: CanvasNodeData) {
+    return node.metadata?.status === "loading" && (!node.metadata.content || Boolean(node.metadata.pendingMediaVersion));
+}
+
 const NODE_STATUS_SUCCESS = "success" as const;
 const NODE_STATUS_ERROR = "error" as const;
 
