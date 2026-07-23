@@ -3,7 +3,7 @@
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
 import { ArrowRight, AudioLines, Clapperboard, Eye, Image as ImageIcon, LoaderCircle, MessageSquare, Play, Video } from "lucide-react";
-import { App, Button, Segmented } from "antd";
+import { Alert, App, Button, Segmented } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
 import { ModelThinkingSettings } from "@/components/image-settings-panel";
@@ -14,6 +14,8 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { defaultSeedanceImageRole, normalizeSeedanceImageRole, seedanceReferenceLabelRange } from "@/services/api/video-reference";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { buildCanvasVideoConfig, buildCanvasVideoModePatch, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
+import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions";
+import { promptDocumentFromText, serializePromptDocument, validatePromptDocument, type CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
 import { CanvasConfigNodePreview } from "./canvas-config-node-preview";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
@@ -31,9 +33,10 @@ type CanvasConfigNodePanelProps = {
     onConfigChange: (nodeId: string, patch: Partial<CanvasNodeMetadata>) => void;
     onTextInputChange: (nodeId: string, content: string) => void;
     onGenerate: (nodeId: string) => void;
+    onPreviewReference?: (nodeId: string) => void;
 };
 
-export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSummary, inputs, onConfigChange, onTextInputChange, onGenerate }: CanvasConfigNodePanelProps) {
+export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSummary, inputs, onConfigChange, onTextInputChange, onGenerate, onPreviewReference }: CanvasConfigNodePanelProps) {
     const { message } = App.useApp();
     const [previewOpen, setPreviewOpen] = useState(false);
     const [editingTextId, setEditingTextId] = useState<string | null>(null);
@@ -54,10 +57,12 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
     const videoInputs = inputs.filter((input) => input.type === "video");
     const audioInputs = inputs.filter((input) => input.type === "audio");
     const mediaInputs = inputs.filter((input) => input.type === "image" || input.type === "video" || input.type === "audio");
-    const ownPrompt = String(node.metadata?.prompt || node.metadata?.finalPrompt || "").trim();
-    const promptCount = inputSummary.textCount + (ownPrompt ? 1 : 0);
+    const ownPrompt = String(node.metadata?.prompt || node.metadata?.finalPrompt || "");
+    const referenceMentionOptions = buildReferenceMentionOptions(inputs);
+    const ownPromptDocument = node.metadata?.promptDocument || promptDocumentFromText(ownPrompt);
+    const missingReferenceIds = validatePromptDocument(ownPromptDocument, referenceMentionOptions);
+    const promptCount = inputSummary.textCount + (ownPrompt.trim() ? 1 : 0);
     const hasGenerationInput = Boolean(promptCount || inputSummary.imageCount || inputSummary.videoCount || inputSummary.audioCount);
-    const hasPreviewContent = Boolean(inputs.length || ownPrompt);
     const hasSourceVideo = videoInputs.some((input) => Boolean(input.video?.url));
     const imageReferenceValue = mode === "video" && imageInputs.length ? seedanceReferenceLabelRange("image", imageInputs.length) : `${inputSummary.imageCount} 张`;
     const videoReferenceValue = videoInputs.length ? seedanceReferenceLabelRange("video", videoInputs.length) : `${inputSummary.videoCount} 个`;
@@ -98,6 +103,12 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
     const startTextEdit = (input: NodeGenerationInput) => {
         setEditingTextId(input.nodeId);
         setEditingText(input.text || "");
+    };
+    const changeOwnPrompt = (document: CanvasPromptDocument) => {
+        onConfigChange(node.id, {
+            promptDocument: document,
+            prompt: serializePromptDocument(document, referenceMentionOptions),
+        });
     };
 
     useEffect(() => {
@@ -171,6 +182,8 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                     </div>
                 </button>
 
+                {missingReferenceIds.length ? <Alert type="warning" showIcon message="有参考素材已断开，请移除失效引用或恢复连线" /> : null}
+
                 <div className="flex shrink-0 items-center gap-1.5" onMouseDown={(event) => event.stopPropagation()}>
                     <ModelPicker
                         className="canvas-compact-control h-8 !min-w-[78px] !flex-1 !rounded-lg !px-2 !text-xs"
@@ -202,9 +215,9 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                     <Button
                         type="primary"
                         className="!h-8 !min-w-[68px] shrink-0 !cursor-pointer !rounded-lg !px-2"
-                        disabled={isRunning || !hasGenerationInput}
+                        disabled={isRunning || !hasGenerationInput || missingReferenceIds.length > 0}
                         onClick={() => onGenerate(node.id)}
-                        title={hasGenerationInput ? "开始生成" : emptyHint}
+                        title={missingReferenceIds.length ? "请先处理失效的素材引用" : hasGenerationInput ? "开始生成" : emptyHint}
                     >
                         <span className="inline-flex items-center gap-1">
                             <span className="inline-flex items-center gap-0.5 text-[11px]">
@@ -220,7 +233,6 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                     audioInputs={audioInputs}
                     editingText={editingText}
                     editingTextId={editingTextId}
-                    hasPreviewContent={hasPreviewContent}
                     imageInputs={imageInputs}
                     imageReferenceRole={imageReferenceRole}
                     mediaInputs={mediaInputs}
@@ -229,12 +241,14 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                     onClose={() => setPreviewOpen(false)}
                     onEditingTextChange={setEditingText}
                     onMoveInput={moveInput}
+                    onOwnPromptChange={changeOwnPrompt}
+                    onPreviewReference={onPreviewReference}
                     onSaveTextEdit={saveTextEdit}
                     onStartTextEdit={startTextEdit}
                     onStopTextEdit={() => setEditingTextId(null)}
                     open={previewOpen}
-                    ownPrompt={ownPrompt}
-                    promptCount={promptCount}
+                    ownPromptDocument={ownPromptDocument}
+                    referenceMentionOptions={referenceMentionOptions}
                     textInputs={textInputs}
                     theme={theme}
                     videoInputs={videoInputs}
@@ -304,6 +318,8 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                 </div>
             ) : null}
 
+            {missingReferenceIds.length ? <Alert type="warning" showIcon message="有参考素材已断开，请移除失效引用或恢复连线" /> : null}
+
             <div className="grid min-w-0 shrink-0 cursor-default gap-1.5" onMouseDown={(event) => event.stopPropagation()}>
                 <ModelPicker
                     className="canvas-compact-control h-8 !rounded-lg !px-2 !text-xs"
@@ -329,10 +345,10 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
             <Button
                 type="primary"
                 className="mt-auto !h-9 !w-full !cursor-pointer !rounded-lg"
-                disabled={isRunning || !hasGenerationInput}
+                disabled={isRunning || !hasGenerationInput || missingReferenceIds.length > 0}
                 onMouseDown={(event) => event.stopPropagation()}
                 onClick={() => onGenerate(node.id)}
-                title={hasGenerationInput ? "开始生成" : emptyHint}
+                title={missingReferenceIds.length ? "请先处理失效的素材引用" : hasGenerationInput ? "开始生成" : emptyHint}
             >
                 <span className="inline-flex items-center gap-1.5">
                     <span className="inline-flex items-center gap-1">
@@ -347,7 +363,6 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                 audioInputs={audioInputs}
                 editingText={editingText}
                 editingTextId={editingTextId}
-                hasPreviewContent={hasPreviewContent}
                 imageInputs={imageInputs}
                 imageReferenceRole={imageReferenceRole}
                 mediaInputs={mediaInputs}
@@ -356,12 +371,14 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                 onClose={() => setPreviewOpen(false)}
                 onEditingTextChange={setEditingText}
                 onMoveInput={moveInput}
+                onOwnPromptChange={changeOwnPrompt}
+                onPreviewReference={onPreviewReference}
                 onSaveTextEdit={saveTextEdit}
                 onStartTextEdit={startTextEdit}
                 onStopTextEdit={() => setEditingTextId(null)}
                 open={previewOpen}
-                ownPrompt={ownPrompt}
-                promptCount={promptCount}
+                ownPromptDocument={ownPromptDocument}
+                referenceMentionOptions={referenceMentionOptions}
                 textInputs={textInputs}
                 theme={theme}
                 videoInputs={videoInputs}

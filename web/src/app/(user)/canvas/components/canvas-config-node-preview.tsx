@@ -1,20 +1,24 @@
 "use client";
 
 import type { ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AudioLines, Edit3 } from "lucide-react";
-import { Button, Empty, Input, Modal, Segmented } from "antd";
+import { Button, Input, Modal, Segmented } from "antd";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { seedanceReferenceLabel } from "@/services/api/video-reference";
 import type { ReferenceImageRole } from "@/types/image";
 import type { CanvasGenerationMode } from "../types";
+import type { CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
+import type { CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import type { NodeGenerationInput } from "./canvas-node-generation";
+
+const CanvasPromptEditor = dynamic(() => import("./canvas-prompt-editor").then((module) => module.CanvasPromptEditor), { ssr: false });
 
 export function CanvasConfigNodePreview({
     audioInputs,
     editingText,
     editingTextId,
-    hasPreviewContent,
     imageInputs,
     imageReferenceRole,
     mediaInputs,
@@ -23,12 +27,14 @@ export function CanvasConfigNodePreview({
     onClose,
     onEditingTextChange,
     onMoveInput,
+    onOwnPromptChange,
+    onPreviewReference,
     onSaveTextEdit,
     onStartTextEdit,
     onStopTextEdit,
     open,
-    ownPrompt,
-    promptCount,
+    ownPromptDocument,
+    referenceMentionOptions,
     textInputs,
     theme,
     videoInputs,
@@ -36,7 +42,6 @@ export function CanvasConfigNodePreview({
     audioInputs: NodeGenerationInput[];
     editingText: string;
     editingTextId: string | null;
-    hasPreviewContent: boolean;
     imageInputs: NodeGenerationInput[];
     imageReferenceRole: (input: NodeGenerationInput, index: number) => ReferenceImageRole;
     mediaInputs: NodeGenerationInput[];
@@ -45,12 +50,14 @@ export function CanvasConfigNodePreview({
     onClose: () => void;
     onEditingTextChange: (value: string) => void;
     onMoveInput: (input: NodeGenerationInput, offset: number, scopedInputs?: NodeGenerationInput[]) => void;
+    onOwnPromptChange: (document: CanvasPromptDocument) => void;
+    onPreviewReference?: (nodeId: string) => void;
     onSaveTextEdit: () => void;
     onStartTextEdit: (input: NodeGenerationInput) => void;
     onStopTextEdit: () => void;
     open: boolean;
-    ownPrompt: string;
-    promptCount: number;
+    ownPromptDocument: CanvasPromptDocument;
+    referenceMentionOptions: CanvasReferenceMentionOption[];
     textInputs: NodeGenerationInput[];
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     videoInputs: NodeGenerationInput[];
@@ -74,8 +81,7 @@ export function CanvasConfigNodePreview({
             )}
         >
             <div onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheelCapture={(event) => event.stopPropagation()}>
-                {hasPreviewContent ? (
-                    <div className="flex h-[min(72vh,700px)] flex-col gap-3 overflow-hidden">
+                <div className="flex h-[min(72vh,700px)] flex-col gap-3 overflow-hidden">
                         <div className="shrink-0 space-y-3">
                             {mode === "video" ? (
                                 <PreviewSection title="多模态参考" count={mediaInputs.length} empty="暂无参考素材">
@@ -114,16 +120,15 @@ export function CanvasConfigNodePreview({
                         </div>
                         <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-hidden">
                             <div className="thin-scrollbar min-h-0 overflow-y-auto pr-1.5">
-                                <PreviewSection title="文本提示词" count={promptCount} empty="暂无文本提示词">
+                                <PreviewSection title="上游文本提示词" count={textInputs.length} empty="暂无上游文本提示词">
                                     <div className="space-y-1.5">
-                                        {ownPrompt ? <OwnPromptPreviewCard prompt={ownPrompt} theme={theme} /> : null}
                                         {textInputs.map((input, index) => (
                                             <TextSortCard key={input.nodeId} input={input} textIndex={index} textTotal={textInputs.length} theme={theme} onMove={onMoveInput} onEdit={onStartTextEdit} />
                                         ))}
                                     </div>
                                 </PreviewSection>
                             </div>
-                            <div className="flex min-h-0 flex-col rounded-xl border p-2.5" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+                            <div className="thin-scrollbar flex min-h-0 flex-col overflow-y-auto rounded-xl border p-2.5" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
                                 {editingTextId ? (
                                     <>
                                         <div className="mb-2 flex items-center justify-between">
@@ -143,17 +148,22 @@ export function CanvasConfigNodePreview({
                                         </div>
                                     </>
                                 ) : (
-                                    <div className="flex h-full flex-col justify-center rounded-xl border border-dashed px-4 text-center text-xs leading-5 opacity-45" style={{ borderColor: theme.node.stroke }}>
-                                        <Edit3 className="mx-auto mb-2 size-5" />
-                                        选择一条文本后在这里编辑
-                                    </div>
+                                    <>
+                                        <div className="mb-2 text-sm font-semibold">节点提示词</div>
+                                        <CanvasPromptEditor
+                                            key={`config-prompt:${open}`}
+                                            initialDocument={ownPromptDocument}
+                                            options={referenceMentionOptions}
+                                            placeholder="输入 @ 选择已连接的图片、视频或音频参考素材"
+                                            expanded
+                                            onChange={onOwnPromptChange}
+                                            onPreviewReference={onPreviewReference}
+                                        />
+                                    </>
                                 )}
                             </div>
                         </div>
-                    </div>
-                ) : (
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无提示词或参考素材" className="py-8" />
-                )}
+                </div>
             </div>
         </Modal>
     );
@@ -168,15 +178,6 @@ function PreviewSection({ title, count, empty, children }: { title: string; coun
             </div>
             {count ? children : <div className="rounded-xl border border-dashed px-3 py-5 text-center text-xs opacity-45">{empty}</div>}
         </section>
-    );
-}
-
-function OwnPromptPreviewCard({ prompt, theme }: { prompt: string; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
-    return (
-        <div className="rounded-md border px-2 py-1.5" style={{ background: `${theme.node.fill}99`, borderColor: theme.node.stroke }}>
-            <div className="mb-0.5 text-[10px] font-medium opacity-50">节点提示词</div>
-            <div className="line-clamp-3 whitespace-pre-wrap break-words text-[11px] leading-4 opacity-80">{prompt}</div>
-        </div>
     );
 }
 

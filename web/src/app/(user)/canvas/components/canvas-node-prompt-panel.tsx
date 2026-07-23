@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { ArrowUp, LoaderCircle, Maximize2 } from "lucide-react";
-import { Alert, Button, Input, Modal } from "antd";
+import { ArrowUp, LoaderCircle } from "lucide-react";
+import { Alert, Button, Modal } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
 import { ModelThinkingSettings } from "@/components/image-settings-panel";
@@ -13,7 +13,7 @@ import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { buildCanvasVideoConfig, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
-import { canSubmitCanvasPrompt, promptPreviewNoZoomProps, promptPreviewTextareaClass, promptPreviewTextareaStyle } from "../utils/canvas-prompt-preview";
+import { canSubmitCanvasPrompt } from "../utils/canvas-prompt-preview";
 import type { CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
 import { promptDocumentFromText, serializePromptDocument, validatePromptDocument, type CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
@@ -59,26 +59,25 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
     const hasSourceVideo = node.type === CanvasNodeType.Video && Boolean(node.metadata?.content);
     const isGeneratedMedia = hasImageContent || hasSourceVideo;
     const isEditingExistingContent = hasTextContent || hasImageContent;
-    const initialPrompt = hasTextContent ? "" : canvasPromptEditorValue(node);
+    const initialPrompt = canvasPromptEditorValue(node);
     const [prompt, setPrompt] = useState(initialPrompt);
     const [promptDocument, setPromptDocument] = useState<CanvasPromptDocument>(() => canvasPromptEditorDocument(node) || promptDocumentFromText(initialPrompt));
     const [editorRevision, setEditorRevision] = useState(0);
     const [expandedEditorOpen, setExpandedEditorOpen] = useState(false);
-    const [expandedPrompt, setExpandedPrompt] = useState(prompt);
     const [expandedPromptDocument, setExpandedPromptDocument] = useState(promptDocument);
     const latestNodeRef = useRef(node);
     latestNodeRef.current = node;
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "image" ? config.count : 1 });
-    const missingReferenceIds = mode === "video" ? validatePromptDocument(promptDocument, referenceMentionOptions) : [];
+    const missingReferenceIds = validatePromptDocument(promptDocument, referenceMentionOptions);
     const canSubmit = canSubmitCanvasPrompt(prompt, isRunning, hasConnectedText) && missingReferenceIds.length === 0;
 
     useEffect(() => {
         const currentNode = latestNodeRef.current;
-        const nextPrompt = hasTextContent ? "" : canvasPromptEditorValue(currentNode);
+        const nextPrompt = canvasPromptEditorValue(currentNode);
         setPrompt(nextPrompt);
         setPromptDocument(canvasPromptEditorDocument(currentNode) || promptDocumentFromText(nextPrompt));
         setEditorRevision((revision) => revision + 1);
-    }, [hasTextContent, node.id, node.metadata?.currentMediaVersionId]);
+    }, [node.id, node.metadata?.currentMediaVersionId]);
 
     useEffect(() => {
         if (mode !== "video" || config.videoProtocol !== "volcengine-ark" || hasSourceVideo || (config.videoTaskMode !== "edit" && config.videoTaskMode !== "extend")) return;
@@ -86,30 +85,25 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
     }, [config.videoProtocol, config.videoTaskMode, hasSourceVideo, mode, node.id, onConfigChange]);
 
     const updatePrompt = (value: string) => {
+        const nextDocument = promptDocumentFromText(value);
         setPrompt(value);
-        if (mode === "video") {
-            const nextDocument = promptDocumentFromText(value);
-            setPromptDocument(nextDocument);
-            setEditorRevision((revision) => revision + 1);
-            if (!hasTextContent) onPromptChange(node.id, value, nextDocument);
-        } else if (!hasTextContent) onPromptChange(node.id, value);
+        setPromptDocument(nextDocument);
+        setEditorRevision((revision) => revision + 1);
+        onPromptChange(node.id, value, nextDocument);
     };
     const updatePromptDocument = (nextDocument: CanvasPromptDocument) => {
         const value = serializePromptDocument(nextDocument, referenceMentionOptions);
         setPromptDocument(nextDocument);
         setPrompt(value);
-        if (!hasTextContent) onPromptChange(node.id, value, nextDocument);
+        onPromptChange(node.id, value, nextDocument);
     };
     const openExpandedEditor = () => {
-        setExpandedPrompt(prompt);
         setExpandedPromptDocument(promptDocument);
         setExpandedEditorOpen(true);
     };
     const saveExpandedEditor = () => {
-        if (mode === "video") {
-            updatePromptDocument(expandedPromptDocument);
-            setEditorRevision((revision) => revision + 1);
-        } else updatePrompt(expandedPrompt);
+        updatePromptDocument(expandedPromptDocument);
+        setEditorRevision((revision) => revision + 1);
         setExpandedEditorOpen(false);
     };
 
@@ -117,8 +111,8 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
         const text = prompt.trim();
         if (!canSubmit) return;
         onGenerate(node.id, mode, mode === "image" ? appendImageCameraPrompt(text, node.metadata) : text);
-        if (!isGeneratedMedia) setPrompt("");
-        if (mode === "video" && !isGeneratedMedia) {
+        if (!isGeneratedMedia) {
+            setPrompt("");
             setPromptDocument(promptDocumentFromText(""));
             setEditorRevision((revision) => revision + 1);
         }
@@ -144,57 +138,15 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
             onWheel={(event) => event.stopPropagation()}
         >
             <CanvasMediaVersionControl node={node} disabled={isRunning} variant="panel" className="mb-3" onSwitch={onSwitchMediaVersion} />
-            {mode === "video" ? (
-                <CanvasPromptEditor
-                    key={`${node.id}:${editorRevision}`}
-                    initialDocument={promptDocument}
-                    options={referenceMentionOptions}
-                    placeholder="输入 @ 选择图片、视频或音频参考素材"
-                    onChange={updatePromptDocument}
-                    onPreviewReference={onPreviewReference}
-                    onExpand={openExpandedEditor}
-                />
-            ) : (
-            <div className="relative">
-                <textarea
-                    {...promptPreviewNoZoomProps()}
-                    value={prompt}
-                    onChange={(event) => {
-                        updatePrompt(event.target.value);
-                    }}
-                    onKeyDown={(event) => {
-                        if (event.key !== "Enter" || event.ctrlKey || event.metaKey || event.shiftKey) return;
-                        event.preventDefault();
-                        submit();
-                    }}
-                    className={`${promptPreviewTextareaClass(mode)} !pr-12`}
-                    style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text, ...promptPreviewTextareaStyle(mode) }}
-                    onWheelCapture={(event) => event.stopPropagation()}
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    placeholder={
-                        mode === "image"
-                              ? hasImageContent
-                                  ? "请输入你想要把这张图修改成什么"
-                                  : "描述要生成的图片内容"
-                              : hasTextContent
-                                ? "请输入你想要将本段文本修改成什么"
-                                : "请输入你想要生成的文本内容"
-                    }
-                />
-                <button
-                    type="button"
-                    className="absolute right-2 top-2 z-10 flex size-8 items-center justify-center rounded-md border backdrop-blur transition hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
-                    style={{ background: `${theme.toolbar.panel}e6`, borderColor: theme.toolbar.border, color: theme.node.text }}
-                    aria-label="展开编辑提示词"
-                    title="展开编辑提示词"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={openExpandedEditor}
-                >
-                    <Maximize2 className="size-4" />
-                </button>
-            </div>
-            )}
+            <CanvasPromptEditor
+                key={`${node.id}:${editorRevision}`}
+                initialDocument={promptDocument}
+                options={referenceMentionOptions}
+                placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent)}
+                onChange={updatePromptDocument}
+                onPreviewReference={onPreviewReference}
+                onExpand={openExpandedEditor}
+            />
             {missingReferenceIds.length ? <Alert className="mt-2" type="warning" showIcon message="有参考素材已被删除，请移除失效的引用后再生成" /> : null}
 
             <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
@@ -265,30 +217,15 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
                 onCancel={() => setExpandedEditorOpen(false)}
                 onOk={saveExpandedEditor}
             >
-                {mode === "video" ? (
-                    <CanvasPromptEditor
-                        key={`${node.id}:expanded:${expandedEditorOpen}`}
-                        initialDocument={expandedPromptDocument}
-                        options={referenceMentionOptions}
-                        placeholder="输入 @ 选择图片、视频或音频参考素材"
-                        expanded
-                        onChange={(nextDocument) => {
-                            setExpandedPromptDocument(nextDocument);
-                            setExpandedPrompt(serializePromptDocument(nextDocument, referenceMentionOptions));
-                        }}
-                        onPreviewReference={onPreviewReference}
-                    />
-                ) : (
-                    <Input.TextArea
-                        autoFocus
-                        value={expandedPrompt}
-                        onChange={(event) => setExpandedPrompt(event.target.value)}
-                        className="thin-scrollbar !min-h-[62dvh] !max-h-[72dvh] !resize-y !leading-7"
-                        placeholder={mode === "image" ? "描述要生成或修改的图片内容" : "输入文本生成或修改要求"}
-                        data-canvas-no-zoom
-                        data-canvas-shortcut-scope="ignore"
-                    />
-                )}
+                <CanvasPromptEditor
+                    key={`${node.id}:expanded:${expandedEditorOpen}`}
+                    initialDocument={expandedPromptDocument}
+                    options={referenceMentionOptions}
+                    placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent)}
+                    expanded
+                    onChange={setExpandedPromptDocument}
+                    onPreviewReference={onPreviewReference}
+                />
             </Modal>
         </div>
     );
@@ -296,6 +233,11 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
 
 function defaultMode(type: CanvasNodeData["type"]): CanvasNodeGenerationMode {
     return type === CanvasNodeType.Text ? "text" : type === CanvasNodeType.Video ? "video" : "image";
+}
+
+function promptPlaceholder(mode: CanvasNodeGenerationMode, hasImageContent: boolean, hasTextContent: boolean) {
+    const action = mode === "image" ? (hasImageContent ? "描述要如何修改图片" : "描述要生成的图片") : mode === "text" ? (hasTextContent ? "输入文本修改要求" : "输入文本生成要求") : "描述要生成或修改的视频";
+    return `${action}，输入 @ 选择已连接的参考素材`;
 }
 
 function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: CanvasNodeGenerationMode): AiConfig {

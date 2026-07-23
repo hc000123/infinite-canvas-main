@@ -163,7 +163,7 @@ export function CanvasNodesLayer({
                                     setNodeImageSettingsOpen(open);
                                     if (open) setToolbarNodeId(null);
                                 }}
-                                referenceMentionOptions={panelNode.type === CanvasNodeType.Video ? buildReferenceMentionOptions(generationInputs) : []}
+                                referenceMentionOptions={buildReferenceMentionOptions(generationInputs)}
                                 hasConnectedText={generationInputs.some((input) => input.type === "text" && Boolean(input.text?.trim()))}
                                 onPreviewReference={(nodeId) => {
                                     const referenceNode = nodesRef.current.find((item) => item.id === nodeId);
@@ -182,6 +182,10 @@ export function CanvasNodesLayer({
                             inputs={configInputsById.get(contentNode.id) || []}
                             onConfigChange={handleConfigNodeChange}
                             onTextInputChange={handleNodeContentChange}
+                            onPreviewReference={(nodeId) => {
+                                const referenceNode = nodesRef.current.find((item) => item.id === nodeId);
+                                if (referenceNode?.type === CanvasNodeType.Image) nodeToolActions.onViewImage(referenceNode);
+                            }}
                             onGenerate={(nodeId) => {
                                 const target = nodesRef.current.find((item) => item.id === nodeId);
                                 void handleGenerateNode(nodeId, target?.metadata?.generationMode || "image", target?.metadata?.prompt || "");
