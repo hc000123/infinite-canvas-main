@@ -87,9 +87,8 @@ export function CanvasNodeHoverToolbar({ node, viewport, onKeep, onLeave, action
 
     if (!node) return null;
 
-    const shouldOverlayMedia = [CanvasNodeType.Image, CanvasNodeType.Video, CanvasNodeType.Audio].includes(node.type) && Boolean(node.metadata?.content);
     const left = viewport.x + (node.position.x + node.width / 2) * viewport.k;
-    const top = viewport.y + node.position.y * viewport.k + (shouldOverlayMedia ? 12 : -14);
+    const top = viewport.y + node.position.y * viewport.k - 12;
     const items = buildNodeToolbarActions({
         node,
         actions: toolbarActions,
@@ -98,7 +97,7 @@ export function CanvasNodeHoverToolbar({ node, viewport, onKeep, onLeave, action
 
     return (
         <div
-            className={`absolute z-[70] flex h-12 -translate-x-1/2 items-center overflow-visible rounded-lg border text-[15px] shadow-[var(--studio-shadow)] backdrop-blur ${shouldOverlayMedia ? "" : "-translate-y-full"}`}
+            className="absolute z-[70] flex h-12 -translate-x-1/2 -translate-y-full items-center overflow-visible rounded-lg border text-[15px] shadow-[var(--studio-shadow)] backdrop-blur"
             style={{ left, top, background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item }}
             onMouseEnter={() => onKeep(node.id)}
             onMouseLeave={onLeave}

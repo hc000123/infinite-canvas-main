@@ -24,12 +24,13 @@ export function CanvasMediaVersionControl({ node, disabled = false, variant = "m
 
     return (
         <div
-            className={`flex items-center gap-0.5 ${className}`}
+            className={`inline-flex shrink-0 items-center overflow-hidden whitespace-nowrap rounded-lg border shadow-[var(--studio-shadow)] backdrop-blur-md ${className}`}
+            style={buttonStyle}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
         >
-            <VersionArrow label="上一版本" disabled={disabled || !navigation.previousId} style={buttonStyle} onClick={() => switchTo(navigation.previousId)}>
+            <VersionArrow label="上一版本" disabled={disabled || !navigation.previousId} onClick={() => switchTo(navigation.previousId)}>
                 <ChevronLeft className="size-3.5" />
             </VersionArrow>
             <Popover
@@ -51,25 +52,24 @@ export function CanvasMediaVersionControl({ node, disabled = false, variant = "m
                 <button
                     type="button"
                     disabled={disabled}
-                    className="inline-flex h-7 min-w-[70px] items-center justify-center gap-1.5 border px-2 text-[11px] font-semibold tabular-nums backdrop-blur-md transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-45"
-                    style={buttonStyle}
+                    className="inline-flex h-7 shrink-0 whitespace-nowrap items-center justify-center border-x px-2.5 text-[11px] font-semibold tabular-nums transition hover:bg-[var(--studio-hover-bg)] disabled:cursor-not-allowed disabled:opacity-45"
+                    style={{ borderColor: buttonStyle.borderColor }}
                     title="查看全部版本"
                     aria-label={`当前 ${navigation.label}，查看全部版本`}
                 >
-                    <History className="size-3" />
-                    {navigation.label}
+                    <span className="whitespace-nowrap">{navigation.label}</span>
                 </button>
             </Popover>
-            <VersionArrow label="下一版本" disabled={disabled || !navigation.nextId} style={buttonStyle} onClick={() => switchTo(navigation.nextId)}>
+            <VersionArrow label="下一版本" disabled={disabled || !navigation.nextId} onClick={() => switchTo(navigation.nextId)}>
                 <ChevronRight className="size-3.5" />
             </VersionArrow>
         </div>
     );
 }
 
-function VersionArrow({ label, disabled, style, onClick, children }: { label: string; disabled: boolean; style: React.CSSProperties; onClick: () => void; children: React.ReactNode }) {
+function VersionArrow({ label, disabled, onClick, children }: { label: string; disabled: boolean; onClick: () => void; children: React.ReactNode }) {
     return (
-        <button type="button" disabled={disabled} className="grid size-7 place-items-center border backdrop-blur-md transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-35" style={style} onClick={onClick} title={label} aria-label={label}>
+        <button type="button" disabled={disabled} className="grid size-7 shrink-0 place-items-center transition hover:bg-[var(--studio-hover-bg)] disabled:cursor-not-allowed disabled:opacity-35" onClick={onClick} title={label} aria-label={label}>
             {children}
         </button>
     );
