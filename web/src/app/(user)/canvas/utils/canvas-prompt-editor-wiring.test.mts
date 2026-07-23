@@ -21,3 +21,10 @@ test("the nodes layer passes upstream mention options without a video-only gate"
     assert.match(layer, /referenceMentionOptions=\{buildReferenceMentionOptions\(generationInputs\)\}/);
     assert.doesNotMatch(layer, /panelNode\.type === CanvasNodeType\.Video\s*\?\s*buildReferenceMentionOptions/);
 });
+
+test("the prompt editor uses the canvas mention matcher instead of Lexical's whitespace-only trigger", () => {
+    const editor = readCanvasFile("../components/canvas-prompt-editor.tsx");
+
+    assert.match(editor, /triggerFn=\{matchCanvasReferenceMention\}/);
+    assert.doesNotMatch(editor, /useBasicTypeaheadTriggerMatch/);
+});

@@ -31,6 +31,17 @@ export function findReferenceMentionTrigger(text: string, caret: number): Canvas
     return { start: atIndex, query };
 }
 
+export function matchCanvasReferenceMention(text: string) {
+    const trigger = findReferenceMentionTrigger(text, text.length);
+    if (!trigger || trigger.query.length > 40) return null;
+
+    return {
+        leadOffset: trigger.start,
+        matchingString: trigger.query,
+        replaceableString: `@${trigger.query}`,
+    };
+}
+
 export function filterReferenceMentions(options: CanvasReferenceMentionOption[], query: string) {
     const normalizedQuery = normalizeReferenceMentionText(query);
     if (!normalizedQuery) return options;

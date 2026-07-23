@@ -10,7 +10,7 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
-import { LexicalTypeaheadMenuPlugin, MenuOption, useBasicTypeaheadTriggerMatch } from "@lexical/react/LexicalTypeaheadMenuPlugin";
+import { LexicalTypeaheadMenuPlugin, MenuOption } from "@lexical/react/LexicalTypeaheadMenuPlugin";
 import {
     $applyNodeReplacement,
     $createLineBreakNode,
@@ -33,7 +33,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasPromptDocument, CanvasPromptReferenceBlock } from "../utils/canvas-prompt-document";
 import { promptEditorContentClass } from "../utils/canvas-prompt-editor-layout";
-import { filterReferenceMentions, type CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
+import { filterReferenceMentions, matchCanvasReferenceMention, type CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
 
 type CanvasPromptEditorProps = {
     initialDocument: CanvasPromptDocument;
@@ -179,14 +179,13 @@ function ReferenceTypeaheadPlugin({ options }: { options: CanvasReferenceMention
     const [editor] = useLexicalComposerContext();
     const [query, setQuery] = useState<string | null>(null);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const triggerFn = useBasicTypeaheadTriggerMatch("@", { minLength: 0, maxLength: 40 });
     const matches = useMemo(() => filterReferenceMentions(options, query || "").slice(0, 9).map((option) => new ReferenceMenuOption(option)), [options, query]);
 
     return (
         <LexicalTypeaheadMenuPlugin
             anchorClassName="z-[1000]"
             options={matches}
-            triggerFn={triggerFn}
+            triggerFn={matchCanvasReferenceMention}
             onQueryChange={setQuery}
             onSelectOption={(menuOption, textNodeContainingQuery, closeMenu) => {
                 const option = menuOption.option;

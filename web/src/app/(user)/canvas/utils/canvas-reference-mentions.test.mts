@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import * as referenceMentions from "./canvas-reference-mentions.ts";
 import { applyReferenceMention, buildReferenceMentionOptions, filterReferenceMentions, findReferenceMentionTrigger } from "./canvas-reference-mentions.ts";
 
 test("finds the active @ mention before the caret", () => {
@@ -40,4 +41,11 @@ test("builds reference mention options with preview urls", () => {
 test("replaces the active @ token with the official Seedance label", () => {
     assert.deepEqual(applyReferenceMention("让@图", 3, "图片 1"), { text: "让图片 1", caret: 5 });
     assert.deepEqual(applyReferenceMention("参考 @视频1 的运动", 7, "视频 1"), { text: "参考 视频 1 的运动", caret: 7 });
+});
+
+test("matches @ mentions after existing prompt text for the Lexical editor", () => {
+    assert.equal(typeof referenceMentions.matchCanvasReferenceMention, "function");
+    assert.deepEqual(referenceMentions.matchCanvasReferenceMention?.("已有提示词@"), { leadOffset: 5, matchingString: "", replaceableString: "@" });
+    assert.deepEqual(referenceMentions.matchCanvasReferenceMention?.("已有提示词@图片"), { leadOffset: 5, matchingString: "图片", replaceableString: "@图片" });
+    assert.deepEqual(referenceMentions.matchCanvasReferenceMention?.("已有提示词 @视频"), { leadOffset: 6, matchingString: "视频", replaceableString: "@视频" });
 });
