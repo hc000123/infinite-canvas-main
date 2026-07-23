@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { freezeCanvasConnectionSources, planCanvasBatchConnections } from "./canvas-batch-connections.ts";
@@ -64,4 +65,14 @@ test("reuses frozen sources when one new target is created", () => {
     });
 
     assert.deepEqual(result.connections.map((item) => item.fromNodeId), ["image-1", "image-2"]);
+});
+
+test("the connection hook freezes selected sources and the page supplies the selection ref", () => {
+    const hook = readFileSync(new URL("../hooks/use-canvas-connections.ts", import.meta.url), "utf8");
+    const page = readFileSync(new URL("../[id]/canvas-client-page.tsx", import.meta.url), "utf8");
+
+    assert.match(hook, /freezeCanvasConnectionSources\(anchor, selectedNodeIdsRef\.current, nodesRef\.current\)/);
+    assert.match(hook, /connections:\s*connectingSourcesRef\.current/);
+    assert.match(hook, /planCanvasBatchConnections\(/);
+    assert.match(page, /useCanvasConnections\([\s\S]*?selectedNodeIdsRef,/);
 });

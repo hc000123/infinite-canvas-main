@@ -329,6 +329,7 @@ function InfiniteCanvasPage() {
         {
             nodesRef,
             connectionsRef,
+            selectedNodeIdsRef,
             screenToCanvas,
             normalizeConnection,
             isNodeHidden: isHiddenBatchChild,

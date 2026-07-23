@@ -3,25 +3,21 @@ import { nanoid } from "nanoid";
 
 import { getNodeSpec } from "../constants";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type ConnectionHandle, type ContextMenuState, type Position } from "../types";
+import { freezeCanvasConnectionSources, planCanvasBatchConnections, type CanvasConnectionDraft } from "../utils/canvas-batch-connections";
 import { placeCanvasNodeAwayFromNodes } from "../utils/canvas-node-placement";
 
 export type CanvasPendingConnectionCreate = {
     connection: ConnectionHandle;
+    connections: ConnectionHandle[];
     position: Position;
-};
-
-type ConnectionDraft = {
-    fromNodeId: string;
-    toNodeId: string;
-    fromHandle?: string;
-    toHandle?: string;
 };
 
 type UseCanvasConnectionsOptions = {
     nodesRef: RefObject<CanvasNodeData[]>;
     connectionsRef: RefObject<CanvasConnection[]>;
+    selectedNodeIdsRef: RefObject<Set<string>>;
     screenToCanvas: (clientX: number, clientY: number) => Position;
-    normalizeConnection: (firstNodeId: string, secondNodeId: string, nodes: CanvasNodeData[], firstHandleType: "source" | "target", firstHandleId?: string) => ConnectionDraft | null;
+    normalizeConnection: (firstNodeId: string, secondNodeId: string, nodes: CanvasNodeData[], firstHandleType: "source" | "target", firstHandleId?: string) => CanvasConnectionDraft | null;
     isNodeHidden: (node: CanvasNodeData, nodes: CanvasNodeData[]) => boolean;
     createNode: (type: CanvasNodeType, position: Position, metadata?: CanvasNodeMetadata) => CanvasNodeData;
     configNodeMetadata: CanvasNodeMetadata;
@@ -37,6 +33,7 @@ type UseCanvasConnectionsOptions = {
 export function useCanvasConnections({
     nodesRef,
     connectionsRef,
+    selectedNodeIdsRef,
     screenToCanvas,
     normalizeConnection,
     isNodeHidden,
@@ -55,6 +52,7 @@ export function useCanvasConnections({
     const [pendingConnectionCreate, setPendingConnectionCreate] = useState<CanvasPendingConnectionCreate | null>(null);
     const [mouseWorld, setMouseWorld] = useState<Position>({ x: 0, y: 0 });
     const connectingParamsRef = useRef<ConnectionHandle | null>(null);
+    const connectingSourcesRef = useRef<ConnectionHandle[]>([]);
     const connectionTargetNodeIdRef = useRef<string | null>(null);
     const pendingConnectionCreateRef = useRef<CanvasPendingConnectionCreate | null>(null);
 
@@ -62,6 +60,7 @@ export function useCanvasConnections({
         connectingParamsRef.current = next;
         setConnectingParams(next);
         if (!next) {
+            connectingSourcesRef.current = [];
             connectionTargetNodeIdRef.current = null;
             setConnectionTargetNodeId(null);
         }
@@ -74,7 +73,7 @@ export function useCanvasConnections({
     }, [setConnecting]);
 
     const applyConnectionHandleMetadata = useCallback(
-        (connection: ConnectionDraft, scopedNodes?: CanvasNodeData[]) => {
+        (connection: CanvasConnectionDraft, scopedNodes?: CanvasNodeData[]) => {
             if (scopedNodes) {
                 const nextNodes = applyFrameConnectionMetadata(scopedNodes, connection);
                 if (nextNodes !== scopedNodes) setNodes(nextNodes);
@@ -87,6 +86,18 @@ export function useCanvasConnections({
 
     const connectNodes = useCallback(
         (current: ConnectionHandle, targetNodeId: string, dropPosition?: Position) => {
+            const sources = connectingSourcesRef.current.length ? connectingSourcesRef.current : [current];
+            if (sources.length > 1) {
+                const plan = planCanvasBatchConnections({ sources, targetNodeId, nodes: nodesRef.current, existingConnections: connectionsRef.current, normalizeConnection });
+                if (!plan.connections.length) {
+                    showWarning("没有可新增的有效连线");
+                    return;
+                }
+                setConnections((prev) => [...prev, ...plan.connections.map((connection) => ({ id: nanoid(), ...connection }))]);
+                setNodes((prev) => plan.connections.reduce(applyFrameConnectionMetadata, prev));
+                setContextMenu(null);
+                return;
+            }
             if (current.nodeId === targetNodeId) return;
 
             const connection = normalizeConnection(current.nodeId, targetNodeId, nodesRef.current, current.handleType, current.handleId);
@@ -99,7 +110,7 @@ export function useCanvasConnections({
             const { fromNodeId, toNodeId } = connection;
             const exists = connectionsRef.current.some((conn) => conn.fromNodeId === fromNodeId && conn.toNodeId === toNodeId && conn.fromHandle === connection.fromHandle && conn.toHandle === connection.toHandle);
             if (!exists) {
-                setConnections((prev) => [...prev, { id: `conn-${Date.now()}`, ...connection }]);
+                setConnections((prev) => [...prev, { id: nanoid(), ...connection }]);
                 applyConnectionHandleMetadata(connection);
             }
             setContextMenu(null);
@@ -111,14 +122,21 @@ export function useCanvasConnections({
         (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Config | CanvasNodeType.Video | CanvasNodeType.Audio, pending: CanvasPendingConnectionCreate) => {
             const metadata = type === CanvasNodeType.Config ? configNodeMetadata : undefined;
             const newNode = placeCanvasNodeAwayFromNodes(createNode(type, connectedNodePosition(type, pending, nodesRef.current), metadata), nodesRef.current);
-            const connection = normalizeConnection(pending.connection.nodeId, newNode.id, [...nodesRef.current, newNode], pending.connection.handleType, pending.connection.handleId);
-            if (!connection) {
-                showWarning("配置节点之间不能连接");
+            const nodesWithTarget = [...nodesRef.current, newNode];
+            const plan = planCanvasBatchConnections({
+                sources: pending.connections,
+                targetNodeId: newNode.id,
+                nodes: nodesWithTarget,
+                existingConnections: connectionsRef.current,
+                normalizeConnection,
+            });
+            if (!plan.connections.length) {
+                showWarning("没有可新增的有效连线");
                 return;
             }
-            const nextNodes = applyFrameConnectionMetadata([...nodesRef.current, newNode], connection);
+            const nextNodes = plan.connections.reduce(applyFrameConnectionMetadata, nodesWithTarget);
             setNodes(nextNodes);
-            setConnections((prev) => [...prev, { id: nanoid(), ...connection }]);
+            setConnections((prev) => [...prev, ...plan.connections.map((connection) => ({ id: nanoid(), ...connection }))]);
             setSelectedNodeIds(new Set([newNode.id]));
             setSelectedConnectionId(null);
             if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Audio) setDialogNodeId(newNode.id);
@@ -126,20 +144,20 @@ export function useCanvasConnections({
             setPendingConnectionCreate(null);
             setConnecting(null);
         },
-        [configNodeMetadata, createNode, normalizeConnection, nodesRef, setConnecting, setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, showWarning],
+        [configNodeMetadata, connectionsRef, createNode, normalizeConnection, nodesRef, setConnecting, setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, showWarning],
     );
 
     const getConnectableNodeAtPoint = useCallback(
         (clientX: number, clientY: number, current: ConnectionHandle) => {
             const world = screenToCanvas(clientX, clientY);
+            const sources = connectingSourcesRef.current.length ? connectingSourcesRef.current : [current];
             return (
                 [...nodesRef.current]
                     .filter((node) => !isNodeHidden(node, nodesRef.current))
                     .reverse()
                     .find(
                         (node) =>
-                            node.id !== current.nodeId &&
-                            Boolean(normalizeConnection(current.nodeId, node.id, nodesRef.current, current.handleType, current.handleId)) &&
+                            sources.some((source) => source.nodeId !== node.id && Boolean(normalizeConnection(source.nodeId, node.id, nodesRef.current, source.handleType, source.handleId))) &&
                             world.x >= node.position.x &&
                             world.x <= node.position.x + node.width &&
                             world.y >= node.position.y &&
@@ -176,7 +194,11 @@ export function useCanvasConnections({
             }
             const position = screenToCanvas(clientX, clientY);
             setMouseWorld(position);
-            const pending = { connection: currentConnection, position };
+            const pending = {
+                connection: currentConnection,
+                connections: connectingSourcesRef.current.length ? connectingSourcesRef.current : [currentConnection],
+                position,
+            };
             pendingConnectionCreateRef.current = pending;
             setPendingConnectionCreate(pending);
         },
@@ -187,12 +209,14 @@ export function useCanvasConnections({
         (event: ReactMouseEvent, nodeId: string, handleType: "source" | "target", handleId?: string) => {
             event.stopPropagation();
             setMouseWorld(screenToCanvas(event.clientX, event.clientY));
-            setConnecting({ nodeId, handleType, handleId });
+            const anchor = { nodeId, handleType, handleId };
+            setConnecting(anchor);
+            connectingSourcesRef.current = freezeCanvasConnectionSources(anchor, selectedNodeIdsRef.current, nodesRef.current);
             connectionTargetNodeIdRef.current = null;
             setConnectionTargetNodeId(null);
             setSelectedConnectionId(null);
         },
-        [screenToCanvas, setConnecting, setSelectedConnectionId],
+        [nodesRef, screenToCanvas, selectedNodeIdsRef, setConnecting, setSelectedConnectionId],
     );
 
     return {
@@ -209,7 +233,7 @@ export function useCanvasConnections({
     };
 }
 
-function inferFrameTargetHandle(current: ConnectionHandle, connection: ConnectionDraft, targetNodeId: string, nodes: CanvasNodeData[], dropPosition?: Position) {
+function inferFrameTargetHandle(current: ConnectionHandle, connection: CanvasConnectionDraft, targetNodeId: string, nodes: CanvasNodeData[], dropPosition?: Position) {
     if (connection.toHandle || current.handleType !== "source" || !dropPosition) return undefined;
     const fromNode = nodes.find((node) => node.id === connection.fromNodeId);
     const toNode = nodes.find((node) => node.id === targetNodeId);
@@ -218,7 +242,7 @@ function inferFrameTargetHandle(current: ConnectionHandle, connection: Connectio
     return dropPosition.x <= midpoint ? "first_frame" : "last_frame";
 }
 
-function applyFrameConnectionMetadata(nodes: CanvasNodeData[], connection: ConnectionDraft): CanvasNodeData[] {
+function applyFrameConnectionMetadata(nodes: CanvasNodeData[], connection: CanvasConnectionDraft): CanvasNodeData[] {
     if (connection.toHandle !== "first_frame" && connection.toHandle !== "last_frame") return nodes;
     const fromNode = nodes.find((node) => node.id === connection.fromNodeId);
     const toNode = nodes.find((node) => node.id === connection.toNodeId);
