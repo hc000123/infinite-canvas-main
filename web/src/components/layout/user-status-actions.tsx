@@ -13,6 +13,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { useActivityAudit } from "@/hooks/use-activity-audit";
 
 type UserStatusActionsProps = {
     showConfig?: boolean;
@@ -29,6 +30,7 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
     const logout = useUserStore((state) => state.clearSession);
+    const reportActivity = useActivityAudit();
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const canvasTheme = canvasThemes[theme];
     const userName = user?.displayName || user?.username || "";
@@ -48,7 +50,15 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
         ...(user?.role === "admin" || user?.role === "superadmin" ? [{ key: "admin", icon: <Shield className="size-4" />, label: <Link href="/admin">管理后台</Link> }] : []),
         ...(onOpenShortcuts ? [{ key: "shortcuts", icon: <Keyboard className="size-4" />, label: "快捷键", onClick: onOpenShortcuts }] : []),
         { type: "divider" },
-        { key: "logout", icon: <LogOut className="size-4" />, label: "退出登录", onClick: logout },
+        {
+            key: "logout",
+            icon: <LogOut className="size-4" />,
+            label: "退出登录",
+            onClick: () => {
+                reportActivity("account.logout", { summary: "退出登录" });
+                logout();
+            },
+        },
     ];
 
     return (
