@@ -47,11 +47,23 @@ func TestValidateStoryboardArtifactAcceptsAsciiContractColons(t *testing.T) {
 	}
 }
 
-func TestStoryboardStagePromptRequiresCopyOnlyContract(t *testing.T) {
-	systemPrompt, _ := workflowStagePrompts(model.WorkflowRun{}, WorkflowStageShotPrompt, model.WorkflowArtifact{}, &WorkflowShotPromptContext{ShotID: "shot-1", SourceScript: "剧本", ShotDraft: map[string]any{"action": "动作"}})
-	for _, field := range []string{"场景：", "声音：", "画面内容：", "限制：", "连续时间段", "禁止只写电影感摘要"} {
-		if !strings.Contains(systemPrompt, field) {
-			t.Fatalf("system prompt missing %q", field)
+func TestWorkflowStagePromptGetsDomainRulesFromPublishedSkill(t *testing.T) {
+	setupAITaskTestDB(t)
+	if err := EnsureWorkflowSkillSeeds(); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := ResolvePublishedWorkflowSkill(WorkflowSkillStageVideo, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	basePrompt, _ := workflowStagePrompts(model.WorkflowRun{}, WorkflowStageShotPrompt, model.WorkflowArtifact{}, &WorkflowShotPromptContext{ShotID: "shot-1", SourceScript: "剧本", ShotDraft: map[string]any{"action": "动作"}})
+	if strings.Contains(basePrompt, "continuity_reference") {
+		t.Fatal("base transport prompt contains Skill domain rule")
+	}
+	finalPrompt := basePrompt + workflowSkillInstructions(resolved)
+	for _, field := range []string{"场景：", "声音：", "画面内容：", "限制：", "continuity_reference", "不得当作首帧"} {
+		if !strings.Contains(finalPrompt, field) {
+			t.Fatalf("final prompt missing %q", field)
 		}
 	}
 }
