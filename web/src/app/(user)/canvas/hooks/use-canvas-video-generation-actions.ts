@@ -16,7 +16,7 @@ import { buildCanvasAiTaskTrace } from "../utils/canvas-ai-task-trace";
 import { appendSeedanceMediaReviewDiagnostic } from "../utils/canvas-volcengine-review-diagnostics";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
 import { applyCompletedVideoNodeToNodes, buildCompletedVideoNode } from "../utils/canvas-node-status";
-import { completePendingCanvasMediaVersion, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion } from "../utils/canvas-media-versions";
+import { bindPendingCanvasMediaVersionTask, completePendingCanvasMediaVersion, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion } from "../utils/canvas-media-versions";
 import { buildNextProductionVideoVersionMetadata } from "../utils/canvas-production-packages";
 import type { VideoGenerationPlan } from "../utils/canvas-video-generation-plan";
 import { useStoryboardStore } from "../stores/use-storyboard-store";
@@ -141,7 +141,13 @@ export function useCanvasVideoGenerationActions({
                     (task) => {
                         useStoryboardStore.getState().markShotGenerating({ storyboardShotId: generationMetadata.storyboardShotId, nodeId: videoId, taskId: task.id });
                         useStoryboardStore.getState().markShotGroupGenerating({ shotGroupId: generationMetadata.shotGroupId, taskId: task.id });
-                        setNodes((prev) => prev.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, ...videoTaskMetadata(task), errorDetails: task.errorMessage } } : node)));
+                        setNodes((prev) =>
+                            prev.map((node) => {
+                                if (node.id !== videoId) return node;
+                                const taskNode = replaceExistingResult ? bindPendingCanvasMediaVersionTask(node, effectivePrompt, createdAt, task.id, sourceNode?.metadata?.promptDraftDocument) : node;
+                                return { ...taskNode, metadata: { ...taskNode.metadata, ...videoTaskMetadata(task), errorDetails: task.errorMessage } };
+                            }),
+                        );
                     },
                     trace,
                 );

@@ -9,7 +9,7 @@ import { NODE_DEFAULT_SIZE, VIDEO_NODE_MAX_HEIGHT, VIDEO_NODE_MAX_WIDTH } from "
 import { buildGenerationConfig } from "../utils/canvas-generation-config";
 import { videoTaskMetadata } from "../utils/canvas-generation-metadata";
 import { fitNodeSize } from "../utils/canvas-node-size";
-import { completePendingCanvasMediaVersion, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion } from "../utils/canvas-media-versions";
+import { completePendingCanvasMediaVersion, hasUncommittedCanvasMediaVersion, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion } from "../utils/canvas-media-versions";
 import { recoverableVideoTaskNodes, recoveredVideoTaskNodeStatus } from "../utils/canvas-video-task-recovery";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata } from "../types";
 
@@ -89,7 +89,7 @@ async function recoverVideoTaskNode({
             setNodes((prev) =>
                 prev.map((item) =>
                     item.id === node.id
-                        ? item.metadata?.pendingMediaVersion && nextStatus === "error"
+                        ? hasUncommittedCanvasMediaVersion(item) && nextStatus === "error"
                             ? rollbackPendingCanvasMediaVersion(item, task.errorMessage || "视频生成失败")
                             : {
                                   ...item,
@@ -124,21 +124,15 @@ async function recoverVideoTaskNode({
                 errorDetails: undefined,
             },
         };
-        const finalVideoNode = node.metadata?.pendingMediaVersion ? completePendingCanvasMediaVersion(node, completedVideoNode) : completedVideoNode;
+        const finalVideoNode = completePendingCanvasMediaVersion(node, completedVideoNode);
         setNodes((prev) =>
             prev.map((item) =>
                 item.id === node.id
-                    ? item.metadata?.pendingMediaVersion
-                        ? completePendingCanvasMediaVersion(item, {
-                              ...completedVideoNode,
-                              position: { x: item.position.x + item.width / 2 - videoSize.width / 2, y: item.position.y + item.height / 2 - videoSize.height / 2 },
-                              metadata: { ...item.metadata, ...completedVideoNode.metadata },
-                          })
-                        : {
-                              ...finalVideoNode,
-                              position: { x: item.position.x + item.width / 2 - videoSize.width / 2, y: item.position.y + item.height / 2 - videoSize.height / 2 },
-                              metadata: { ...item.metadata, ...finalVideoNode.metadata },
-                          }
+                    ? completePendingCanvasMediaVersion(item, {
+                          ...completedVideoNode,
+                          position: { x: item.position.x + item.width / 2 - videoSize.width / 2, y: item.position.y + item.height / 2 - videoSize.height / 2 },
+                          metadata: { ...item.metadata, ...completedVideoNode.metadata },
+                      })
                     : item,
             ),
         );

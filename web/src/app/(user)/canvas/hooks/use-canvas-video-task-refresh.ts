@@ -9,7 +9,7 @@ import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata } from "..
 import { buildGenerationConfig } from "../utils/canvas-generation-config";
 import { videoTaskMetadata } from "../utils/canvas-generation-metadata";
 import { fitNodeSize } from "../utils/canvas-node-size";
-import { completePendingCanvasMediaVersion, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion } from "../utils/canvas-media-versions";
+import { completePendingCanvasMediaVersion, hasUncommittedCanvasMediaVersion, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion } from "../utils/canvas-media-versions";
 
 type CanvasVideoTaskRefreshMessage = {
     error: (text: string) => void;
@@ -60,21 +60,15 @@ export function useCanvasVideoTaskRefresh({
                             errorDetails: undefined,
                         },
                     };
-                    const finalVideoNode = node.metadata.pendingMediaVersion ? completePendingCanvasMediaVersion(node, completedVideoNode) : completedVideoNode;
+                    const finalVideoNode = completePendingCanvasMediaVersion(node, completedVideoNode);
                     setNodes((prev) =>
                         prev.map((item) =>
                             item.id === node.id
-                                ? item.metadata?.pendingMediaVersion
-                                    ? completePendingCanvasMediaVersion(item, {
-                                          ...completedVideoNode,
-                                          position: { x: item.position.x + item.width / 2 - videoSize.width / 2, y: item.position.y + item.height / 2 - videoSize.height / 2 },
-                                          metadata: { ...item.metadata, ...completedVideoNode.metadata },
-                                      })
-                                    : {
-                                          ...finalVideoNode,
-                                          position: { x: item.position.x + item.width / 2 - videoSize.width / 2, y: item.position.y + item.height / 2 - videoSize.height / 2 },
-                                          metadata: { ...item.metadata, ...finalVideoNode.metadata },
-                                      }
+                                ? completePendingCanvasMediaVersion(item, {
+                                      ...completedVideoNode,
+                                      position: { x: item.position.x + item.width / 2 - videoSize.width / 2, y: item.position.y + item.height / 2 - videoSize.height / 2 },
+                                      metadata: { ...item.metadata, ...completedVideoNode.metadata },
+                                  })
                                 : item,
                         ),
                     );
@@ -86,7 +80,7 @@ export function useCanvasVideoTaskRefresh({
                 setNodes((prev) =>
                     prev.map((item) =>
                         item.id === node.id
-                            ? item.metadata?.pendingMediaVersion && (task.status === "failed" || task.status === "cancelled")
+                            ? hasUncommittedCanvasMediaVersion(item) && (task.status === "failed" || task.status === "cancelled")
                                 ? rollbackPendingCanvasMediaVersion(item, task.errorMessage || "视频生成失败")
                                 : { ...item, metadata: { ...item.metadata, ...videoTaskMetadata(task), errorDetails: task.errorMessage } }
                             : item,

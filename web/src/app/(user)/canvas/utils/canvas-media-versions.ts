@@ -162,6 +162,18 @@ export function beginPendingCanvasMediaVersion(node: CanvasNodeData, prompt: str
     };
 }
 
+export function bindPendingCanvasMediaVersionTask(node: CanvasNodeData, prompt: string, startedAt: string, taskId: string, promptDocument?: CanvasPromptDocument): CanvasNodeData {
+    if ((node.type !== "image" && node.type !== "video") || !node.metadata?.content) return node;
+    const pendingNode = node.metadata.pendingMediaVersion ? node : beginPendingCanvasMediaVersion(node, prompt, startedAt, promptDocument);
+    return {
+        ...pendingNode,
+        metadata: {
+            ...pendingNode.metadata,
+            pendingMediaVersion: { ...(pendingNode.metadata?.pendingMediaVersion || { prompt, promptDocument, startedAt }), taskId },
+        },
+    };
+}
+
 export function switchCanvasMediaVersion(node: CanvasNodeData, versionId: string) {
     const version = node.metadata?.mediaVersions?.find((item) => item.id === versionId);
     return version ? projectVersion(node, version) : node;
@@ -212,11 +224,30 @@ export function patchCurrentCanvasMediaVersion(node: CanvasNodeData, patch: Part
 
 export function completePendingCanvasMediaVersion(node: CanvasNodeData, completed: CanvasNodeData, createdAt = new Date().toISOString()) {
     const pending = node.metadata?.pendingMediaVersion;
-    return pending ? appendCanvasMediaVersion(node, completed, pending.prompt, createdAt, pending.promptDocument) : completed;
+    if (pending) return appendCanvasMediaVersion(node, completed, pending.prompt, createdAt, pending.promptDocument);
+    if (!hasUncommittedCanvasMediaVersion(node)) return completed;
+    return appendCanvasMediaVersion(
+        node,
+        completed,
+        node.metadata?.promptDraft ?? completed.metadata?.prompt ?? node.metadata?.prompt ?? "",
+        createdAt,
+        node.metadata?.promptDraftDocument ?? completed.metadata?.promptDocument ?? node.metadata?.promptDocument,
+    );
+}
+
+export function hasUncommittedCanvasMediaVersion(node: CanvasNodeData) {
+    if (node.metadata?.pendingMediaVersion) return true;
+    const current = currentCanvasMediaVersion(node);
+    const taskId = node.metadata?.taskId;
+    const currentTaskId = current?.metadata.taskId;
+    if (!current || !taskId || !currentTaskId) return false;
+    return taskId !== currentTaskId;
 }
 
 export function rollbackPendingCanvasMediaVersion(node: CanvasNodeData, errorDetails: string) {
     const pending = node.metadata?.pendingMediaVersion;
+    const promptDraft = pending?.prompt ?? node.metadata?.promptDraft;
+    const promptDraftDocument = pending?.promptDocument ?? node.metadata?.promptDraftDocument;
     const currentId = currentCanvasMediaVersion(node)?.id;
     const restored = currentId ? switchCanvasMediaVersion(node, currentId) : node;
     return {
@@ -226,8 +257,8 @@ export function rollbackPendingCanvasMediaVersion(node: CanvasNodeData, errorDet
             status: "success" as const,
             errorDetails,
             pendingMediaVersion: undefined,
-            promptDraft: pending?.prompt,
-            promptDraftDocument: pending?.promptDocument,
+            promptDraft,
+            promptDraftDocument,
         },
     };
 }

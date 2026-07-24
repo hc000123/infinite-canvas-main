@@ -35,6 +35,16 @@ test("starts a pending image version after preserving the completed current vers
     assert.equal(pending?.metadata?.mediaVersions?.[0]?.metadata.status, "success");
 });
 
+test("restores a pending video version when its task is created after a refresh", () => {
+    assert.equal(typeof mediaVersions.bindPendingCanvasMediaVersionTask, "function");
+
+    const pending = mediaVersions.bindPendingCanvasMediaVersionTask?.(legacyImageNode, "刷新前的新提示词", now, "task-new");
+
+    assert.equal(pending?.metadata?.mediaVersions?.length, 1);
+    assert.equal(pending?.metadata?.pendingMediaVersion?.prompt, "刷新前的新提示词");
+    assert.equal(pending?.metadata?.pendingMediaVersion?.taskId, "task-new");
+});
+
 test("appends v2 to a legacy generated node without changing node identity", () => {
     const completed: CanvasNodeData = {
         ...legacyImageNode,
@@ -155,6 +165,62 @@ test("completes a pending video as a new version", () => {
     assert.equal(completed.metadata?.mediaVersions?.[1]?.prompt, "新视频提示词");
     assert.equal(completed.metadata?.pendingMediaVersion, undefined);
     assert.equal(completed.metadata?.promptDraft, undefined);
+});
+
+test("recovers a completed video version when the pending marker was lost", () => {
+    const source: CanvasNodeData = {
+        ...legacyImageNode,
+        type: "video" as CanvasNodeData["type"],
+        metadata: {
+            ...legacyImageNode.metadata,
+            taskId: "task-old",
+            mediaVersions: [
+                {
+                    id: "version-1",
+                    versionNumber: 1,
+                    kind: "video",
+                    createdAt: now,
+                    prompt: "旧提示词",
+                    width: legacyImageNode.width,
+                    height: legacyImageNode.height,
+                    metadata: { ...legacyImageNode.metadata, taskId: "task-old" },
+                },
+            ],
+            currentMediaVersionId: "version-1",
+            promptDraft: "刷新前的新提示词",
+            status: "loading",
+            taskId: "task-new",
+            taskStatus: "running",
+        },
+    };
+    const completedNode: CanvasNodeData = {
+        ...source,
+        metadata: { ...source.metadata, content: "blob:video-new", storageKey: "video:new", status: "success", taskId: "task-new", taskStatus: "succeeded" },
+    };
+
+    const completed = completePendingCanvasMediaVersion(source, completedNode, "2026-07-22T16:01:00.000Z");
+
+    assert.equal(completed.metadata?.mediaVersions?.length, 2);
+    assert.equal(completed.metadata?.mediaVersions?.[1]?.prompt, "刷新前的新提示词");
+    assert.equal(completed.metadata?.content, "blob:video-new");
+    assert.equal(completed.metadata?.promptDraft, undefined);
+});
+
+test("does not create a second version for a first completed generation", () => {
+    const source: CanvasNodeData = {
+        ...legacyImageNode,
+        type: "video" as CanvasNodeData["type"],
+        metadata: { prompt: "首次提示词", status: "loading", taskId: "task-first", taskStatus: "running" },
+    };
+    const completedNode: CanvasNodeData = {
+        ...source,
+        metadata: { ...source.metadata, content: "blob:first-video", storageKey: "video:first", status: "success", taskStatus: "succeeded" },
+    };
+
+    const completed = completePendingCanvasMediaVersion(source, completedNode, "2026-07-22T16:01:00.000Z");
+
+    assert.equal(completed.metadata?.mediaVersions, undefined);
+    assert.equal(completed.metadata?.content, "blob:first-video");
 });
 
 test("rolls back a failed pending video and keeps its prompt draft", () => {

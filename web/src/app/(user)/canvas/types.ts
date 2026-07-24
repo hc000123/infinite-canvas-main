@@ -49,6 +49,7 @@ export type CanvasPendingMediaVersion = {
     prompt: string;
     promptDocument?: CanvasPromptDocument;
     startedAt: string;
+    taskId?: string;
 };
 
 export type CanvasNodeMetadata = {

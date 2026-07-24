@@ -19,7 +19,7 @@ import { runCanvasImageGeneration, runCanvasVideoGeneration } from "../utils/can
 import { buildGeneratedImageAsset, buildGeneratedVideoAsset } from "../utils/canvas-generated-asset";
 import { aiTaskLedgerNodeMetadata, buildCanvasAiTaskTraceFromNode } from "../utils/canvas-ai-task-trace";
 import type { CanvasEpisodeContext } from "../utils/canvas-episode-context";
-import { patchCurrentCanvasMediaVersion } from "../utils/canvas-media-versions";
+import { bindPendingCanvasMediaVersionTask, patchCurrentCanvasMediaVersion } from "../utils/canvas-media-versions";
 import type { CanvasProjectPreset } from "../utils/canvas-project-preset";
 import { fitNodeSize } from "../utils/canvas-node-size";
 import { applyCompletedVideoNodeToNodes, buildCompletedImageNode, buildCompletedVideoNode } from "../utils/canvas-node-status";
@@ -166,7 +166,13 @@ export function useCanvasGenerationRetryActions({
                         (task) => {
                             useStoryboardStore.getState().markShotGenerating({ storyboardShotId: node.metadata?.storyboardShotId, nodeId: node.id, taskId: task.id });
                             useStoryboardStore.getState().markShotGroupGenerating({ shotGroupId: node.metadata?.shotGroupId, taskId: task.id });
-                            setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, ...videoTaskMetadata(task), errorDetails: task.errorMessage } } : item)));
+                            setNodes((prev) =>
+                                prev.map((item) => {
+                                    if (item.id !== node.id) return item;
+                                    const taskNode = bindPendingCanvasMediaVersionTask(item, prompt, new Date(generationStartedAt).toISOString(), task.id, node.metadata?.promptDraftDocument);
+                                    return { ...taskNode, metadata: { ...taskNode.metadata, ...videoTaskMetadata(task), errorDetails: task.errorMessage } };
+                                }),
+                            );
                         },
                         trace,
                     );

@@ -28,7 +28,7 @@ export function startCanvasNodeRetry(node: CanvasNodeData, prompt: string, start
 }
 
 export function completeCanvasNodeRetry(node: CanvasNodeData, completed: CanvasNodeData, createdAt?: string) {
-    return node.metadata?.pendingMediaVersion ? completePendingCanvasMediaVersion(node, completed, createdAt) : completed;
+    return completePendingCanvasMediaVersion(node, completed, createdAt);
 }
 
 export function failCanvasNodeRetry(node: CanvasNodeData, errorDetails: string, failedAt: number) {
