@@ -11,6 +11,7 @@ export function createVideoGenerationNode({
     spec,
     metadata,
     sourceConnections = [],
+    referenceNodeIds = [],
     replaceExistingResult = false,
 }: {
     nodeId: string;
@@ -19,11 +20,11 @@ export function createVideoGenerationNode({
     spec: { width: number; height: number };
     metadata: CanvasNodeMetadata;
     sourceConnections?: CanvasConnection[];
+    referenceNodeIds?: string[];
     replaceExistingResult?: boolean;
 }) {
     const isEmptyVideoNode = sourceNode?.type === "video" && !sourceNode.metadata?.content;
     const isVariantNode = metadata.relationType === "variant" || metadata.videoActionType === "variant" || metadata.actionType === "variant";
-    const inheritsSourceInputs = sourceNode?.type === "video" && Boolean(sourceNode.metadata?.content) && sourceConnections.length > 0;
     const videoId = isEmptyVideoNode || replaceExistingResult ? nodeId : nanoid();
     const parent = sourceNode?.position || { x: 0, y: 0 };
     const versions = replaceExistingResult && sourceNode ? ensureCanvasMediaVersions(sourceNode, metadata.pendingMediaVersion?.startedAt) : undefined;
@@ -61,11 +62,27 @@ export function createVideoGenerationNode({
         metadata: versionMetadata,
     };
     const connection: CanvasConnection | null = isEmptyVideoNode || replaceExistingResult || isVariantNode || !sourceNode ? null : { id: nanoid(), fromNodeId: nodeId, toNodeId: videoId };
-    const inheritedConnections = inheritsSourceInputs && !replaceExistingResult ? sourceConnections.map((item) => ({ ...item, id: nanoid(), toNodeId: videoId })) : [];
+    const inheritedConnections = inheritReferenceConnections(sourceConnections, referenceNodeIds, [videoId]);
     return { videoId, videoNode, isEmptyVideoNode, connections: [...inheritedConnections, ...(connection ? [connection] : [])] };
 }
 
-export function createImageGenerationNodes({ nodeId, sourceNode, prompt, count, metadata }: { nodeId: string; sourceNode?: CanvasNodeData; prompt: string; count: number; metadata: CanvasNodeMetadata }) {
+export function createImageGenerationNodes({
+    nodeId,
+    sourceNode,
+    prompt,
+    count,
+    metadata,
+    sourceConnections = [],
+    referenceNodeIds = [],
+}: {
+    nodeId: string;
+    sourceNode?: CanvasNodeData;
+    prompt: string;
+    count: number;
+    metadata: CanvasNodeMetadata;
+    sourceConnections?: CanvasConnection[];
+    referenceNodeIds?: string[];
+}) {
     const isConfigNode = sourceNode?.type === "config";
     const isImageNode = sourceNode?.type === "image";
     const isEmptyImageNode = isImageNode && !sourceNode?.metadata?.content;
@@ -107,9 +124,27 @@ export function createImageGenerationNodes({ nodeId, sourceNode, prompt, count, 
         height: imageConfig.height,
         metadata: { prompt, status: "loading", batchRootId: count > 1 ? rootId : undefined, ...metadata },
     }));
-    const connections = [...(isEmptyImageNode ? [] : [{ id: nanoid(), fromNodeId: nodeId, toNodeId: rootId }]), ...childIds.map((childId) => ({ id: nanoid(), fromNodeId: rootId, toNodeId: childId }))];
+    const connections = [
+        ...(isEmptyImageNode ? [] : [{ id: nanoid(), fromNodeId: nodeId, toNodeId: rootId }]),
+        ...childIds.map((childId) => ({ id: nanoid(), fromNodeId: rootId, toNodeId: childId })),
+        ...inheritReferenceConnections(sourceConnections, referenceNodeIds, [rootId, ...childIds]),
+    ];
 
     return { isConfigNode, isImageNode, isEmptyImageNode, parentConfig, imageConfig, rootId, childIds, targetIds, pendingChildIds, rootNode, childNodes, connections };
+}
+
+function inheritReferenceConnections(sourceConnections: CanvasConnection[], referenceNodeIds: string[], targetNodeIds: string[]) {
+    const references = new Set(referenceNodeIds);
+    const keys = new Set<string>();
+    return targetNodeIds.flatMap((toNodeId) =>
+        sourceConnections.flatMap((connection) => {
+            if (connection.toNodeId === toNodeId || !references.has(connection.fromNodeId)) return [];
+            const key = `${connection.fromNodeId}:${toNodeId}:${connection.fromHandle || ""}:${connection.toHandle || ""}`;
+            if (keys.has(key)) return [];
+            keys.add(key);
+            return [{ ...connection, id: nanoid(), toNodeId }];
+        }),
+    );
 }
 
 export function createTextGenerationChildNodes({ nodeId, sourceNode, prompt, textCount, editingTextNode }: { nodeId: string; sourceNode?: CanvasNodeData; prompt: string; textCount: number; editingTextNode: boolean }) {

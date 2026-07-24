@@ -16,7 +16,7 @@ import { buildCanvasAiTaskTrace } from "../utils/canvas-ai-task-trace";
 import { appendSeedanceMediaReviewDiagnostic } from "../utils/canvas-volcengine-review-diagnostics";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
 import { applyCompletedVideoNodeToNodes, buildCompletedVideoNode } from "../utils/canvas-node-status";
-import { bindPendingCanvasMediaVersionTask, completePendingCanvasMediaVersion, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion } from "../utils/canvas-media-versions";
+import { bindPendingCanvasMediaVersionTask, canvasPromptEditorDocument, completePendingCanvasMediaVersion, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion } from "../utils/canvas-media-versions";
 import { buildNextProductionVideoVersionMetadata } from "../utils/canvas-production-packages";
 import type { VideoGenerationPlan } from "../utils/canvas-video-generation-plan";
 import { useStoryboardStore } from "../stores/use-storyboard-store";
@@ -86,9 +86,11 @@ export function useCanvasVideoGenerationActions({
             const pendingSpec = NODE_DEFAULT_SIZE[CanvasNodeType.Video];
             const generationStartedAt = Date.now();
             const createdAt = new Date(generationStartedAt).toISOString();
+            const promptDocument = sourceNode ? canvasPromptEditorDocument(sourceNode) : undefined;
             const replaceExistingResult = sourceNode?.type === CanvasNodeType.Video && Boolean(sourceNode.metadata?.content);
             const generationMetadata = {
                 ...buildVideoGenerationMetadata(generationConfig, videoPlan.references, videoPlan.relation),
+                promptDocument,
                 ...canvasEpisodeMetadata(episodeContext),
                 storyboardGroupId: sourceNode?.metadata?.storyboardGroupId,
                 storyboardShotId: sourceNode?.metadata?.storyboardShotId,
@@ -105,6 +107,9 @@ export function useCanvasVideoGenerationActions({
                 nodeId,
                 sourceNode,
                 sourceConnections,
+                referenceNodeIds: videoPlan.references.inputs
+                    .map((input) => input.nodeId)
+                    .filter((id): id is string => Boolean(id)),
                 prompt: effectivePrompt,
                 spec: pendingSpec,
                 metadata: {
@@ -116,7 +121,7 @@ export function useCanvasVideoGenerationActions({
                         ? {
                               pendingMediaVersion: {
                                   prompt: effectivePrompt,
-                                  promptDocument: sourceNode?.metadata?.promptDraftDocument,
+                                  promptDocument,
                                   startedAt: createdAt,
                               },
                           }
@@ -144,7 +149,7 @@ export function useCanvasVideoGenerationActions({
                         setNodes((prev) =>
                             prev.map((node) => {
                                 if (node.id !== videoId) return node;
-                                const taskNode = replaceExistingResult ? bindPendingCanvasMediaVersionTask(node, effectivePrompt, createdAt, task.id, sourceNode?.metadata?.promptDraftDocument) : node;
+                                const taskNode = replaceExistingResult ? bindPendingCanvasMediaVersionTask(node, effectivePrompt, createdAt, task.id, promptDocument) : node;
                                 return { ...taskNode, metadata: { ...taskNode.metadata, ...videoTaskMetadata(task), errorDetails: task.errorMessage } };
                             }),
                         );

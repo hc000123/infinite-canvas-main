@@ -15,7 +15,7 @@ import { runCanvasImageGeneration } from "../utils/canvas-generation-runner";
 import { aiTaskLedgerNodeMetadata, buildCanvasAiTaskTrace } from "../utils/canvas-ai-task-trace";
 import { fitNodeSize } from "../utils/canvas-node-size";
 import { applyCompletedImageVersionToNodes, applyGeneratedImageToNodes, applyImageGenerationFinalStatus, applyImageGenerationStartNodes, applyImageTargetError, buildCompletedImageNode } from "../utils/canvas-node-status";
-import { beginPendingCanvasMediaVersion, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion } from "../utils/canvas-media-versions";
+import { beginPendingCanvasMediaVersion, canvasPromptEditorDocument, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion } from "../utils/canvas-media-versions";
 import { NODE_DEFAULT_SIZE } from "../constants";
 import type { CanvasConnection, CanvasNodeData, CanvasNodeMetadata } from "../types";
 
@@ -42,6 +42,7 @@ type GenerateImageNodeInput = {
     effectivePrompt: string;
     generationConfig: AiConfig;
     contextReferenceImages: ReferenceImage[];
+    sourceConnections: CanvasConnection[];
 };
 
 export function useCanvasImageGenerationActions({
@@ -60,8 +61,9 @@ export function useCanvasImageGenerationActions({
     archiveGeneratedAsset,
 }: UseCanvasImageGenerationActionsOptions) {
     const generateImageNode = useCallback(
-        async ({ nodeId, sourceNode, prompt, effectivePrompt, generationConfig, contextReferenceImages }: GenerateImageNodeInput) => {
+        async ({ nodeId, sourceNode, prompt, effectivePrompt, generationConfig, contextReferenceImages, sourceConnections }: GenerateImageNodeInput) => {
             const createdAt = new Date().toISOString();
+            const promptDocument = sourceNode ? canvasPromptEditorDocument(sourceNode) : undefined;
             const isImageNode = sourceNode?.type === "image";
             const isCompletedImageNode = isImageNode && Boolean(sourceNode?.metadata?.content);
             const count = isCompletedImageNode ? 1 : imageGenerationCount(generationConfig.count);
@@ -82,7 +84,7 @@ export function useCanvasImageGenerationActions({
             const generationType = referenceImages.length ? ("edit" as const) : ("generation" as const);
             const generationMetadata = buildImageGenerationMetadata(generationType, generationConfig, count, referenceImages);
             if (isCompletedImageNode && sourceNode) {
-                setNodes((prev) => prev.map((node) => (node.id === nodeId ? beginPendingCanvasMediaVersion(node, prompt, createdAt, sourceNode.metadata?.promptDraftDocument) : node)));
+                setNodes((prev) => prev.map((node) => (node.id === nodeId ? beginPendingCanvasMediaVersion(node, prompt, createdAt, promptDocument) : node)));
                 setSelectedNodeIds(new Set([nodeId]));
                 setSelectedConnectionId(null);
                 setDialogNodeId(nodeId);
@@ -101,10 +103,10 @@ export function useCanvasImageGenerationActions({
                         imageNode: sourceNode,
                         imageSize,
                         imageMetadata: { ...toImageMetadata(uploaded), ...aiTaskLedgerNodeMetadata(uploaded.aiTask) },
-                        generationMetadata: { ...generationMetadata, ...canvasEpisodeMetadata(episodeContext), batchUsesReferenceImages: referenceImages.length > 0 },
+                        generationMetadata: { ...generationMetadata, promptDocument, ...canvasEpisodeMetadata(episodeContext), batchUsesReferenceImages: referenceImages.length > 0 },
                         prompt,
                     });
-                    setNodes((prev) => applyCompletedImageVersionToNodes(prev, nodeId, completed, prompt, createdAt, sourceNode.metadata?.promptDraftDocument));
+                    setNodes((prev) => applyCompletedImageVersionToNodes(prev, nodeId, completed, prompt, createdAt, promptDocument));
                     const asset = buildGeneratedImageAsset(completed, { canvasId, projectId, projectTitle, projectPreset, episodeContext, prompt, effectivePrompt, config: { ...generationConfig, count: "1" }, createdAt });
                     if (asset) {
                         try {
@@ -126,7 +128,9 @@ export function useCanvasImageGenerationActions({
                 sourceNode,
                 prompt: effectivePrompt,
                 count,
-                metadata: { ...generationMetadata, ...canvasEpisodeMetadata(episodeContext), batchUsesReferenceImages: referenceImages.length > 0 },
+                metadata: { ...generationMetadata, promptDocument, ...canvasEpisodeMetadata(episodeContext), batchUsesReferenceImages: referenceImages.length > 0 },
+                sourceConnections,
+                referenceNodeIds: referenceImages.map((reference) => reference.id),
             });
 
             setNodes((prev) =>

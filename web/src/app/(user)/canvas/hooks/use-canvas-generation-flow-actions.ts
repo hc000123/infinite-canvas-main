@@ -50,6 +50,7 @@ type UseCanvasGenerationFlowActionsOptions = {
         effectivePrompt: string;
         generationConfig: AiConfig;
         contextReferenceImages: Awaited<ReturnType<typeof hydrateNodeGenerationContext>>["referenceImages"];
+        sourceConnections: CanvasConnection[];
     }) => Promise<{ pendingChildIds: string[] }>;
     generateVideoNode: (input: {
         nodeId: string;
@@ -128,6 +129,7 @@ export function useCanvasGenerationFlowActions({
                         effectivePrompt,
                         generationConfig,
                         contextReferenceImages: generationContext.referenceImages,
+                        sourceConnections: connectionsRef.current.filter((connection) => connection.toNodeId === nodeId),
                     });
                     pendingChildIds = imageResult.pendingChildIds;
                     return;

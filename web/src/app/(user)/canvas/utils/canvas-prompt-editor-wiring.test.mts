@@ -51,3 +51,15 @@ test("expanded prompt editing autosaves without a manual save action", () => {
     assert.doesNotMatch(promptPanel, /saveExpandedEditor/);
     assert.doesNotMatch(promptPanel, /okText="保存"/);
 });
+
+test("image and video generation preserve the active prompt document", () => {
+    const flow = readCanvasFile("../hooks/use-canvas-generation-flow-actions.ts");
+    const image = readCanvasFile("../hooks/use-canvas-image-generation-actions.ts");
+    const video = readCanvasFile("../hooks/use-canvas-video-generation-actions.ts");
+
+    assert.match(flow, /sourceConnections: connectionsRef\.current\.filter/);
+    assert.match(image, /canvasPromptEditorDocument\(sourceNode\)/);
+    assert.match(image, /referenceNodeIds: referenceImages\.map\(\(reference\) => reference\.id\)/);
+    assert.match(video, /canvasPromptEditorDocument\(sourceNode\)/);
+    assert.match(video, /referenceNodeIds: videoPlan\.references\.inputs/);
+});
