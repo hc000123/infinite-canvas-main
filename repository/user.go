@@ -48,7 +48,7 @@ func HasAdmin() (bool, error) {
 		return false, err
 	}
 	var total int64
-	err = db.Model(&model.User{}).Where("role = ?", model.UserRoleAdmin).Count(&total).Error
+	err = db.Model(&model.User{}).Where("role IN ?", []model.UserRole{model.UserRoleAdmin, model.UserRoleSuperAdmin}).Count(&total).Error
 	return total > 0, err
 }
 

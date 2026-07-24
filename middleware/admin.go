@@ -12,7 +12,18 @@ import (
 
 func AdminAuth(c *gin.Context) {
 	user, ok := authUser(c)
-	if !ok || user.Role != model.UserRoleAdmin {
+	if !ok || !model.IsAdminRole(user.Role) {
+		handler.Fail(c.Writer, "未登录或权限不足")
+		c.Abort()
+		return
+	}
+	c.Request = c.Request.WithContext(service.WithUser(c.Request.Context(), user))
+	c.Next()
+}
+
+func SuperAdminAuth(c *gin.Context) {
+	user, ok := authUser(c)
+	if !ok || !model.IsSuperAdminRole(user.Role) {
 		handler.Fail(c.Writer, "未登录或权限不足")
 		c.Abort()
 		return

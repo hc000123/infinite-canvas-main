@@ -3,10 +3,19 @@ package model
 type UserRole string
 
 const (
-	UserRoleGuest UserRole = "guest"
-	UserRoleUser  UserRole = "user"
-	UserRoleAdmin UserRole = "admin"
+	UserRoleGuest      UserRole = "guest"
+	UserRoleUser       UserRole = "user"
+	UserRoleAdmin      UserRole = "admin"
+	UserRoleSuperAdmin UserRole = "superadmin"
 )
+
+func IsAdminRole(role UserRole) bool {
+	return role == UserRoleAdmin || role == UserRoleSuperAdmin
+}
+
+func IsSuperAdminRole(role UserRole) bool {
+	return role == UserRoleSuperAdmin
+}
 
 type UserStatus string
 

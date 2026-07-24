@@ -49,7 +49,7 @@ func EnsureDefaultAdmin() error {
 		ID:        newID("user"),
 		Username:  strings.TrimSpace(config.Cfg.AdminUsername),
 		Password:  hash,
-		Role:      model.UserRoleAdmin,
+		Role:      model.UserRoleSuperAdmin,
 		AffCode:   newAffCode(),
 		Status:    model.UserStatusActive,
 		CreatedAt: now(),
