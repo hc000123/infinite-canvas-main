@@ -5,6 +5,7 @@ import { useCallback, type Dispatch, type PointerEvent as ReactPointerEvent, typ
 import type { AiConfig } from "@/stores/use-config-store";
 import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
 import { collectBatchAwareDeletedNodeIds, removeDeletedNodesFromBatches } from "../utils/canvas-batch-nodes";
+import { copySelectedCanvasItems, pasteCanvasClipboard } from "../utils/canvas-clipboard";
 import type { CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import { placeCanvasNodeAwayFromNodes, resolveRightwardNodePosition } from "../utils/canvas-node-placement";
 import { CanvasNodeType, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type ContextMenuState, type Position } from "../types";
@@ -13,6 +14,7 @@ type UseCanvasNodeCrudActionsOptions = {
     canvasAiConfig: AiConfig;
     canvasId: string;
     chatSessions: CanvasAssistantSession[];
+    connectionsRef: RefObject<CanvasConnection[]>;
     nodesRef: RefObject<CanvasNodeData[]>;
     screenToCanvas: (clientX: number, clientY: number) => Position;
     getAppendNodeCenter: (type: CanvasNodeType) => Position;
@@ -43,6 +45,7 @@ export function useCanvasNodeCrudActions({
     canvasAiConfig,
     canvasId,
     chatSessions,
+    connectionsRef,
     nodesRef,
     screenToCanvas,
     getAppendNodeCenter,
@@ -177,23 +180,28 @@ export function useCanvasNodeCrudActions({
             const source = nodesRef.current.find((node) => node.id === nodeId);
             if (!source) return;
 
-            const id = `${source.type}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            const next: CanvasNodeData = placeCanvasNodeAwayFromNodes(
+            const clipboard = copySelectedCanvasItems(nodesRef.current, connectionsRef.current, new Set([nodeId]));
+            const pasted = pasteCanvasClipboard(
+                clipboard,
                 {
-                    ...source,
-                    id,
-                    title: `${source.title} Copy`,
-                    position: { x: source.position.x + 36, y: source.position.y + 36 },
+                    x: source.position.x + source.width / 2 + 36,
+                    y: source.position.y + source.height / 2 + 36,
                 },
+                undefined,
                 nodesRef.current,
             );
+            if (!pasted) return;
+            const [draft] = pasted.nodes;
+            if (!draft) return;
+            const next = placeCanvasNodeAwayFromNodes(draft, nodesRef.current);
 
             setNodes((prev) => [...prev, next]);
-            setSelectedNodeIds(new Set([id]));
+            setConnections((prev) => [...prev, ...pasted.connections]);
+            setSelectedNodeIds(new Set([next.id]));
             setSelectedConnectionId(null);
-            setDialogNodeId(id);
+            setDialogNodeId(next.id);
         },
-        [nodesRef, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds],
+        [connectionsRef, nodesRef, setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds],
     );
 
     const handleNodeResize = useCallback(

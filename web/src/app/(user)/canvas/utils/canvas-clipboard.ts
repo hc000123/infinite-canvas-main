@@ -1,4 +1,5 @@
-import type { CanvasConnection, CanvasNodeData, Position } from "../types";
+import type { CanvasConnection, CanvasNodeData, CanvasNodeMetadata, Position } from "../types";
+import type { CanvasPromptDocument } from "./canvas-prompt-document";
 
 export type CanvasClipboard = {
     nodes: CanvasNodeData[];
@@ -28,9 +29,19 @@ export function copySelectedCanvasItems(nodes: CanvasNodeData[], connections: Ca
 
     if (!copiedNodes.length) return null;
 
+    const nodeIds = new Set(nodes.map((node) => node.id));
+    const connectionKeys = new Set<string>();
+    const copiedConnections = connections.filter((connection) => {
+        if (!selectedIds.has(connection.toNodeId) || !nodeIds.has(connection.fromNodeId)) return false;
+        const key = `${connection.fromNodeId}:${connection.toNodeId}:${connection.fromHandle || ""}:${connection.toHandle || ""}`;
+        if (connectionKeys.has(key)) return false;
+        connectionKeys.add(key);
+        return true;
+    });
+
     return {
         nodes: copiedNodes,
-        connections: connections.filter((connection) => selectedIds.has(connection.fromNodeId) && selectedIds.has(connection.toNodeId)).map((connection) => ({ ...connection })),
+        connections: copiedConnections.map((connection) => ({ ...connection })),
     };
 }
 
@@ -56,10 +67,9 @@ export function pasteCanvasClipboard(clipboard: CanvasClipboard | null, center: 
         dx += 32;
         dy += 32;
     }
-    const idMap = new Map<string, string>();
-    const nodes = clipboard.nodes.map((node, index) => {
-        const id = idFactory.nodeId(node, index);
-        idMap.set(node.id, id);
+    const idMap = new Map(clipboard.nodes.map((node, index) => [node.id, idFactory.nodeId(node, index)]));
+    const nodes = clipboard.nodes.map((node) => {
+        const id = idMap.get(node.id)!;
         return {
             ...node,
             id,
@@ -68,12 +78,12 @@ export function pasteCanvasClipboard(clipboard: CanvasClipboard | null, center: 
                 x: node.position.x + dx,
                 y: node.position.y + dy,
             },
-            metadata: node.metadata ? { ...node.metadata } : undefined,
+            metadata: duplicateCanvasNodeMetadata(node, idMap),
         };
     });
 
     const connections = clipboard.connections.flatMap((connection, index) => {
-        const fromNodeId = idMap.get(connection.fromNodeId);
+        const fromNodeId = idMap.get(connection.fromNodeId) || connection.fromNodeId;
         const toNodeId = idMap.get(connection.toNodeId);
         if (!fromNodeId || !toNodeId) return [];
         return [
@@ -87,4 +97,110 @@ export function pasteCanvasClipboard(clipboard: CanvasClipboard | null, center: 
     });
 
     return { nodes, connections };
+}
+
+const DUPLICATED_MEDIA_RESULT_KEYS = [
+    "content",
+    "videoUrl",
+    "cacheUrl",
+    "cachePath",
+    "cacheFilename",
+    "lastFrameUrl",
+    "lastFrameStorageKey",
+    "storageKey",
+    "mimeType",
+    "bytes",
+    "naturalWidth",
+    "naturalHeight",
+    "volcengineAsset",
+    "aiTaskCredits",
+    "creditLogId",
+    "creditsRefunded",
+    "refundedAt",
+    "taskDuration",
+    "executionExpiresAfter",
+    "videoUrlExpiresAt",
+    "localStoredAt",
+    "sourceAssetId",
+    "assetVersion",
+    "assetReferenceMode",
+    "assetNodeNumber",
+    "canvasSource",
+    "variantOfNodeId",
+    "continuationOfNodeId",
+    "sourceVideoNodeId",
+    "capturedFrameSourceVideoNodeId",
+    "capturedFrameTime",
+    "capturedFrameAt",
+    "capturedFrameSource",
+    "videoReferences",
+    "audioReferences",
+    "references",
+    "isBatchRoot",
+    "batchRootId",
+    "batchChildIds",
+    "batchUsesReferenceImages",
+    "primaryImageId",
+    "imageBatchExpanded",
+    "productionVideoVersionId",
+    "productionVideoVersionNumber",
+    "productionVideoVersionCreatedAt",
+    "productionVideoVersionNote",
+    "productionVideoVersionHidden",
+    "isCurrentProductionVersion",
+] as const satisfies readonly (keyof CanvasNodeMetadata)[];
+
+function duplicateCanvasNodeMetadata(node: CanvasNodeData, idMap: ReadonlyMap<string, string>): CanvasNodeMetadata | undefined {
+    if (!node.metadata) return undefined;
+    const metadata: CanvasNodeMetadata = {
+        ...node.metadata,
+        prompt: node.metadata.promptDraft ?? node.metadata.prompt,
+        promptDocument: remapPromptDocument(node.metadata.promptDraftDocument ?? node.metadata.promptDocument, idMap),
+        promptDraft: undefined,
+        promptDraftDocument: undefined,
+        pendingMediaVersion: undefined,
+        mediaVersions: undefined,
+        currentMediaVersionId: undefined,
+        errorDetails: undefined,
+        taskId: undefined,
+        taskStatus: undefined,
+        rawTaskStatus: undefined,
+        aiTaskId: undefined,
+        upstreamTaskId: undefined,
+        aiTaskStatus: undefined,
+        aiTaskCredits: undefined,
+        creditLogId: undefined,
+        creditsRefunded: undefined,
+        refundedAt: undefined,
+        generationStartedAt: undefined,
+        taskCreatedAt: undefined,
+        taskUpdatedAt: undefined,
+        taskDuration: undefined,
+        executionExpiresAfter: undefined,
+        videoUrlExpiresAt: undefined,
+        localStoredAt: undefined,
+        finishedAt: undefined,
+        actionType: undefined,
+        videoActionType: undefined,
+        relationType: undefined,
+        inputOrder: node.metadata.inputOrder?.map((id) => idMap.get(id) || id),
+        referenceOrder: node.metadata.referenceOrder?.map((item) => ({ ...item, nodeId: item.nodeId ? idMap.get(item.nodeId) || item.nodeId : undefined })),
+        referenceRoles: node.metadata.referenceRoles?.map((item) => ({ ...item, nodeId: idMap.get(item.nodeId) || item.nodeId })),
+    };
+
+    if (node.type === "image" || node.type === "video") {
+        DUPLICATED_MEDIA_RESULT_KEYS.forEach((key) => Reflect.deleteProperty(metadata, key));
+        metadata.status = "idle";
+    } else if (node.type === "config") {
+        metadata.status = "idle";
+    }
+    return metadata;
+}
+
+function remapPromptDocument(document: CanvasPromptDocument | undefined, idMap: ReadonlyMap<string, string>): CanvasPromptDocument | undefined {
+    if (!document) return undefined;
+    return {
+        ...document,
+        blocks: document.blocks.map((block) => (block.type === "reference" ? { ...block, nodeId: idMap.get(block.nodeId) || block.nodeId } : { ...block })),
+    };
 }
