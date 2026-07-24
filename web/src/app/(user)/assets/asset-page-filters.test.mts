@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { Asset } from "../../../stores/use-asset-store.ts";
-import { buildAssetProjectContexts, filterAssetList, paginateAssetList, projectReferencedAssetIds, selectedAssetSummary, selectedAssetsFromIds, sortAssetList, storyboardGroupReferencedAssetIds } from "./asset-page-filters.ts";
+import { buildAssetProjectContexts, DEFAULT_ASSET_SORT_MODE, filterAssetList, paginateAssetList, projectReferencedAssetIds, selectedAssetSummary, selectedAssetsFromIds, sortAssetList, storyboardGroupReferencedAssetIds } from "./asset-page-filters.ts";
 
 const now = "2026-06-05T00:00:00.000Z";
 
@@ -206,6 +206,16 @@ test("sorts assets by update, generation time and title", () => {
     assert.deepEqual(
         sortAssetList(assets, "title_asc").map((asset) => asset.id),
         ["c", "a", "b"],
+    );
+});
+
+test("uses natural title order as the asset page default", () => {
+    const assets = [textAsset("node-10", "节点 10 · 成片"), textAsset("node-2", "节点 2 · 成片"), textAsset("node-1", "节点 1 · 成片")];
+
+    assert.equal(DEFAULT_ASSET_SORT_MODE, "title_asc");
+    assert.deepEqual(
+        sortAssetList(assets, DEFAULT_ASSET_SORT_MODE).map((asset) => asset.id),
+        ["node-1", "node-2", "node-10"],
     );
 });
 

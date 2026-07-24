@@ -49,6 +49,12 @@ type ShotGroupLike = {
 };
 
 export type AssetSortMode = "default" | "updated_desc" | "created_desc" | "generation_desc" | "title_asc";
+export const DEFAULT_ASSET_SORT_MODE: AssetSortMode = "title_asc";
+
+const assetTitleCollator = new Intl.Collator("zh-Hans-CN", {
+    numeric: true,
+    sensitivity: "base",
+});
 export type ProjectLibraryFilter = "all" | "shared" | "not_shared";
 
 type AssetListFilters = {
@@ -130,7 +136,7 @@ export function filterAssetList(assets: Asset[], filters: AssetListFilters) {
 export function sortAssetList(assets: Asset[], sortMode: AssetSortMode) {
     if (sortMode === "default") return assets;
     return [...assets].sort((a, b) => {
-        if (sortMode === "title_asc") return (a.title || "").localeCompare(b.title || "", "zh-Hans-CN");
+        if (sortMode === "title_asc") return assetTitleCollator.compare(a.title || "", b.title || "");
         if (sortMode === "created_desc") return compareTimeDesc(a.createdAt, b.createdAt);
         if (sortMode === "generation_desc") return compareTimeDesc(latestGenerationTime(a), latestGenerationTime(b));
         return compareTimeDesc(a.updatedAt, b.updatedAt);

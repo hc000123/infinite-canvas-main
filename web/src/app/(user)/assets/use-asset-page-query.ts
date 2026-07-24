@@ -16,6 +16,7 @@ import { collectAssetVersionUsageReferences } from "./asset-version-references";
 import {
     activeAssetFolderId,
     buildAssetProjectContexts,
+    DEFAULT_ASSET_SORT_MODE,
     filterAssetList,
     paginateAssetList,
     projectReferencedAssetIds as collectProjectReferencedAssetIds,
@@ -59,7 +60,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
     const canvasLibraryFilter = "";
     const [referenceVersionFilter, setReferenceVersionFilter] = useState<ReferenceVersionFilter>("all");
     const [storyboardGroupFilter, setStoryboardGroupFilter] = useState("");
-    const [sortMode, setSortMode] = useState<AssetSortMode>("default");
+    const [sortMode, setSortMode] = useState<AssetSortMode>(DEFAULT_ASSET_SORT_MODE);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(30);
     const activeFolderId = activeAssetFolderId(folderFilter);

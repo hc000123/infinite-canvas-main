@@ -91,11 +91,11 @@ export function AssetListToolbar({
                         className="w-32"
                         value={sortMode}
                         options={[
-                            { label: "默认排序", value: "default" },
+                            { label: "名称升序", value: "title_asc" },
+                            { label: "原始顺序", value: "default" },
                             { label: "最近更新", value: "updated_desc" },
                             { label: "最近生成", value: "generation_desc" },
                             { label: "创建时间", value: "created_desc" },
-                            { label: "标题 A-Z", value: "title_asc" },
                         ]}
                         onChange={(value) => onSortModeChange(value as AssetSortMode)}
                     />
