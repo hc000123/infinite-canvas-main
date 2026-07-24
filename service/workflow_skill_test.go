@@ -100,6 +100,44 @@ func TestValidateWorkflowSkillPackageRejectsUnsafeFilesAndTooManyImages(t *testi
 	}
 }
 
+func TestNormalizeWorkflowSkillPackageRejectsUnsupportedAndOversizedFiles(t *testing.T) {
+	contract := validWorkflowSkillTestContract()
+	cases := []map[string]string{
+		{"SKILL.md": "ok", "rules.txt": "not allowed"},
+		{"SKILL.md": "ok", "examples/bad.json": "{"},
+		{"SKILL.md": strings.Repeat("x", workflowSkillMaxFileBytes+1)},
+		{"SKILL.md": strings.Repeat("x", workflowSkillMaxPackageBytes), "rules/a.md": "x"},
+	}
+	for _, files := range cases {
+		if _, err := NormalizeWorkflowSkillPackage(files, contract); err == nil {
+			t.Fatalf("expected invalid package: %#v", files)
+		}
+	}
+}
+
+func TestWorkflowSkillInstructionsIncludesAllFilesInStableOrder(t *testing.T) {
+	resolved := ResolvedWorkflowSkill{
+		Skill:   model.WorkflowSkill{Name: "分镜"},
+		Version: model.WorkflowSkillVersion{Version: "3.0.0", ContentHash: "hash"},
+		Package: WorkflowSkillPackage{Files: map[string]string{
+			"examples/good-output.json":    `{"shots":[]}`,
+			"SKILL.md":                     "主说明",
+			"templates/output-template.md": "模板",
+			"rules/domain-rules.md":        "规则",
+		}},
+	}
+	instructions := workflowSkillInstructions(resolved)
+	expectedOrder := []string{"SKILL.md", "rules/domain-rules.md", "templates/output-template.md", "examples/good-output.json"}
+	previous := -1
+	for _, name := range expectedOrder {
+		index := strings.Index(instructions, name)
+		if index <= previous {
+			t.Fatalf("unstable order in %q", instructions)
+		}
+		previous = index
+	}
+}
+
 func createWorkflowSkillTestDraft(t *testing.T, stageKey string, versionName string) model.WorkflowSkillVersion {
 	t.Helper()
 	if err := EnsureWorkflowSkillSeeds(); err != nil {

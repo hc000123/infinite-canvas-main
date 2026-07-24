@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"path"
 	"sort"
 	"strings"
 
@@ -200,9 +199,6 @@ func GetWorkflowSkillVersionPackage(versionID string) (model.WorkflowSkillVersio
 }
 
 func NormalizeWorkflowSkillPackage(files map[string]string, contract WorkflowSkillContract) (WorkflowSkillPackage, error) {
-	if strings.TrimSpace(files["SKILL.md"]) == "" {
-		return WorkflowSkillPackage{}, safeMessageError{message: "Skill 必须包含非空 SKILL.md"}
-	}
 	if contract.ImagePolicy.Min < 0 || contract.ImagePolicy.Max < contract.ImagePolicy.Min || contract.ImagePolicy.Max > 9 {
 		return WorkflowSkillPackage{}, safeMessageError{message: "图片契约必须限制在 0–9 张"}
 	}
@@ -220,21 +216,9 @@ func NormalizeWorkflowSkillPackage(files map[string]string, contract WorkflowSki
 			return WorkflowSkillPackage{}, safeMessageError{message: "存在未知写入目标"}
 		}
 	}
-	normalizedFiles := make(map[string]string, len(files))
-	for logicalPath, content := range files {
-		logicalPath = strings.ReplaceAll(strings.TrimSpace(logicalPath), "\\", "/")
-		cleaned := path.Clean(logicalPath)
-		ext := strings.ToLower(path.Ext(cleaned))
-		if logicalPath == "" || strings.HasPrefix(logicalPath, "/") || cleaned != logicalPath || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
-			return WorkflowSkillPackage{}, safeMessageError{message: "Skill 文件路径不安全"}
-		}
-		if map[string]bool{".sh": true, ".exe": true, ".bat": true, ".cmd": true, ".com": true, ".ps1": true}[ext] {
-			return WorkflowSkillPackage{}, safeMessageError{message: "Skill 不允许包含可执行文件"}
-		}
-		normalizedFiles[cleaned] = normalizeWorkflowSkillText(content)
-	}
-	if len(normalizedFiles) > 32 {
-		return WorkflowSkillPackage{}, safeMessageError{message: "Skill 文件不能超过 32 个"}
+	normalizedFiles, err := validateWorkflowSkillFiles(files)
+	if err != nil {
+		return WorkflowSkillPackage{}, err
 	}
 	packageValue := WorkflowSkillPackage{Files: normalizedFiles, Contract: contract}
 	packageValue.ContentHash = workflowSkillPackageHash(packageValue)
@@ -484,7 +468,7 @@ func workflowSkillSnapshotJSON(resolved ResolvedWorkflowSkill) string {
 }
 
 func workflowSkillInstructions(resolved ResolvedWorkflowSkill) string {
-	return fmt.Sprintf("\n\n【当前阶段 Skill %s@%s，内容哈希 %s】\n%s", resolved.Skill.Name, resolved.Version.Version, resolved.Version.ContentHash, strings.TrimSpace(resolved.Package.Files["SKILL.md"]))
+	return fmt.Sprintf("\n\n【当前阶段 Skill %s@%s，内容哈希 %s】\n%s", resolved.Skill.Name, resolved.Version.Version, resolved.Version.ContentHash, workflowSkillPackageInstructions(resolved.Package.Files))
 }
 
 func workflowSkillInstructionsFromSnapshot(snapshotJSON string) (string, error) {
@@ -497,5 +481,5 @@ func workflowSkillInstructionsFromSnapshot(snapshotJSON string) (string, error) 
 	if json.Unmarshal([]byte(snapshotJSON), &snapshot) != nil || strings.TrimSpace(snapshot.Files["SKILL.md"]) == "" {
 		return "", safeMessageError{message: "原任务 Skill 快照损坏"}
 	}
-	return fmt.Sprintf("\n\n【当前阶段 Skill %s@%s，内容哈希 %s】\n%s", snapshot.Name, snapshot.Version, snapshot.ContentHash, strings.TrimSpace(snapshot.Files["SKILL.md"])), nil
+	return fmt.Sprintf("\n\n【当前阶段 Skill %s@%s，内容哈希 %s】\n%s", snapshot.Name, snapshot.Version, snapshot.ContentHash, workflowSkillPackageInstructions(snapshot.Files)), nil
 }
