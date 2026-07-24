@@ -10,7 +10,7 @@ import { useProductionBibleStore } from "../stores/use-production-bible-store";
 import type { CanvasNodeData } from "../types";
 import { aiTaskIdFromGeneration, buildFrontendArtifactTrace } from "../utils/canvas-ai-task-trace";
 import type { CanvasEpisodeContext } from "../utils/canvas-episode-context";
-import { buildGeneratedVideoAsset } from "../utils/canvas-generated-asset";
+import { buildGeneratedVideoAsset, numberCanvasAssetNode } from "../utils/canvas-generated-asset";
 import type { CanvasProjectPreset } from "../utils/canvas-project-preset";
 import { buildImageBriefResultPatch, buildProductionBibleBriefAssetRefs } from "../utils/image-brief";
 
@@ -18,7 +18,9 @@ export function useCanvasGeneratedAssetArchive({
     addAssetOnce,
     canvasEpisodeContext,
     canvasId,
+    canvasTitle,
     ensureProjectFolder,
+    getNodes,
     projectPreset,
     setNodes,
     workspaceProjectId,
@@ -27,12 +29,24 @@ export function useCanvasGeneratedAssetArchive({
     addAssetOnce: (asset: AssetWriteInput, options?: { blob?: Blob }) => Promise<string>;
     canvasEpisodeContext?: CanvasEpisodeContext;
     canvasId: string;
+    canvasTitle: string;
     ensureProjectFolder: (projectId: string, name: string) => string;
+    getNodes: () => CanvasNodeData[];
     projectPreset?: CanvasProjectPreset;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     workspaceProjectId: string;
     workspaceProjectTitle: string;
 }) {
+    const prepareGeneratedAssetNode = useCallback(
+        (node: CanvasNodeData) => {
+            const numberedNode = numberCanvasAssetNode(node, getNodes());
+            const assetNodeNumber = numberedNode.metadata?.assetNodeNumber;
+            setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, assetNodeNumber } } : item)));
+            return numberedNode;
+        },
+        [getNodes, setNodes],
+    );
+
     const archiveGeneratedAsset = useCallback(
         async (asset: AssetWriteInput) => {
             const archivedAsset = asset.kind === "video" ? { ...asset, folderId: asset.folderId || ensureProjectFolder(workspaceProjectId, workspaceProjectTitle) } : asset;
@@ -75,9 +89,10 @@ export function useCanvasGeneratedAssetArchive({
     const archiveGeneratedVideoNode = useCallback(
         async (node: CanvasNodeData, generationConfig: AiConfig, prompt = node.metadata?.prompt || "") => {
             const effectivePrompt = node.metadata?.finalPrompt || prompt;
-            const asset = buildGeneratedVideoAsset(node, {
+            const asset = buildGeneratedVideoAsset(prepareGeneratedAssetNode(node), {
                 projectId: workspaceProjectId,
                 canvasId,
+                canvasTitle,
                 projectTitle: workspaceProjectTitle,
                 projectPreset,
                 episodeContext: canvasEpisodeContext,
@@ -90,8 +105,8 @@ export function useCanvasGeneratedAssetArchive({
             if (typeof assetId === "string") setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, sourceAssetId: assetId } } : item)));
             return assetId;
         },
-        [archiveGeneratedAsset, canvasEpisodeContext, projectPreset, setNodes, workspaceProjectId, workspaceProjectTitle],
+        [archiveGeneratedAsset, canvasEpisodeContext, canvasId, canvasTitle, prepareGeneratedAssetNode, projectPreset, setNodes, workspaceProjectId, workspaceProjectTitle],
     );
 
-    return { archiveGeneratedAsset, archiveGeneratedVideoNode };
+    return { archiveGeneratedAsset, archiveGeneratedVideoNode, prepareGeneratedAssetNode };
 }

@@ -29,10 +29,12 @@ type UseCanvasImageGenerationActionsOptions = {
     toImageMetadata: (image: UploadedImage) => CanvasNodeMetadata;
     projectId: string;
     canvasId: string;
+    canvasTitle: string;
     projectTitle: string;
     projectPreset?: CanvasProjectPreset;
     episodeContext?: CanvasEpisodeContext;
     archiveGeneratedAsset: (asset: AssetWriteInput) => Promise<string | void>;
+    prepareGeneratedAssetNode: (node: CanvasNodeData) => CanvasNodeData;
 };
 
 type GenerateImageNodeInput = {
@@ -55,10 +57,12 @@ export function useCanvasImageGenerationActions({
     toImageMetadata,
     projectId,
     canvasId,
+    canvasTitle,
     projectTitle,
     projectPreset,
     episodeContext,
     archiveGeneratedAsset,
+    prepareGeneratedAssetNode,
 }: UseCanvasImageGenerationActionsOptions) {
     const generateImageNode = useCallback(
         async ({ nodeId, sourceNode, prompt, effectivePrompt, generationConfig, contextReferenceImages, sourceConnections }: GenerateImageNodeInput) => {
@@ -107,7 +111,19 @@ export function useCanvasImageGenerationActions({
                         prompt,
                     });
                     setNodes((prev) => applyCompletedImageVersionToNodes(prev, nodeId, completed, prompt, createdAt, promptDocument));
-                    const asset = buildGeneratedImageAsset(completed, { canvasId, projectId, projectTitle, projectPreset, episodeContext, prompt, effectivePrompt, config: { ...generationConfig, count: "1" }, createdAt });
+                    const asset = buildGeneratedImageAsset(prepareGeneratedAssetNode(completed), {
+                        canvasId,
+                        canvasTitle,
+                        projectId,
+                        projectTitle,
+                        projectPreset,
+                        episodeContext,
+                        prompt,
+                        effectivePrompt,
+                        config: { ...generationConfig, count: "1" },
+                        createdAt,
+                        versionNumber: (sourceNode.metadata?.mediaVersions?.length || 1) + 1,
+                    });
                     if (asset) {
                         try {
                             const sourceAssetId = await archiveGeneratedAsset(asset);
@@ -171,13 +187,13 @@ export function useCanvasImageGenerationActions({
                         setNodes((prev) => applyGeneratedImageToNodes({ nodes: prev, rootId, targetId, imageSize, imageMetadata: metadata }));
                         const targetNode = [rootNode, ...childNodes].find((node) => node.id === targetId) || rootNode;
                         const asset = buildGeneratedImageAsset(
-                            {
+                            prepareGeneratedAssetNode({
                                 ...targetNode,
                                 width: imageSize.width,
                                 height: imageSize.height,
                                 metadata: { ...targetNode.metadata, ...metadata },
-                            },
-                            { canvasId, projectId, projectTitle, projectPreset, episodeContext, prompt, effectivePrompt, config: generationConfig, createdAt },
+                            }),
+                            { canvasId, canvasTitle, projectId, projectTitle, projectPreset, episodeContext, prompt, effectivePrompt, config: generationConfig, createdAt },
                         );
                         if (asset) {
                             try {
@@ -201,7 +217,7 @@ export function useCanvasImageGenerationActions({
             setNodes((prev) => applyImageGenerationFinalStatus({ nodes: prev, nodeId, rootId, isConfigNode, isEmptyImageNode, hasSuccess }));
             return { pendingChildIds };
         },
-        [archiveGeneratedAsset, canvasId, episodeContext, projectId, projectPreset, projectTitle, setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, showError, toImageMetadata],
+        [archiveGeneratedAsset, canvasId, canvasTitle, episodeContext, prepareGeneratedAssetNode, projectId, projectPreset, projectTitle, setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, showError, toImageMetadata],
     );
 
     return { generateImageNode };

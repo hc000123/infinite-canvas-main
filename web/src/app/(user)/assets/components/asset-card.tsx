@@ -1,4 +1,4 @@
-import { CheckCircle, CheckSquare, Copy, Download, Eye, Folder, ImageIcon, ImagePlus, Link2, PencilLine, RefreshCw, ShieldCheck, Square, Trash2, Upload } from "lucide-react";
+import { CheckCircle, CheckSquare, Copy, Download, Eye, Folder, ImageIcon, ImagePlus, Link2, PencilLine, RefreshCw, ShieldCheck, Square, Star, Trash2, Upload } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { Button, Card, Tag, Tooltip, Typography } from "antd";
 
@@ -205,6 +205,7 @@ export function AssetRow({
     onCopy,
     onDownload,
     onDelete,
+    onToggleFavorite,
     submittingReview,
     onReview,
     onRefreshReview,
@@ -223,6 +224,7 @@ export function AssetRow({
     onCopy: (asset: Asset) => void;
     onDownload: (asset: Asset) => void;
     onDelete: () => void;
+    onToggleFavorite: () => void;
     submittingReview: boolean;
     onReview: () => void;
     onRefreshReview: () => void;
@@ -367,6 +369,7 @@ export function AssetRow({
                     ) : null}
                 </div>
                 <div className="flex items-center gap-1">
+                    <AssetIconButton title={asset.favorite ? "取消收藏" : "收藏"} icon={<Star className={cn("size-3.5", asset.favorite && "fill-current text-[var(--studio-accent)]")} />} onClick={onToggleFavorite} />
                     <AssetIconButton title="查看" icon={<Eye className="size-3.5" />} onClick={onOpen} />
                     <AssetIconButton title="编辑" icon={<PencilLine className="size-3.5" />} onClick={onEdit} />
                     {asset.kind === "text" ? <AssetIconButton title="复制" icon={<Copy className="size-3.5" />} onClick={() => void onCopy(asset)} /> : null}

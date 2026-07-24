@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronUp, FolderPlus, PencilLine, Search, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, FolderPlus, PencilLine, Search, Star, Trash2 } from "lucide-react";
 import { Button, Input, Select, Tag } from "antd";
 
 import { cn } from "@/lib/utils";
@@ -21,6 +21,7 @@ type AssetFilterPanelActions = {
     onEditFolder: (folder: AssetFolder) => void;
     onEpisodeFilterChange: (value: string) => void;
     onFolderFilterChange: (value: string) => void;
+    onFavoriteOnlyChange: (value: boolean) => void;
     onGenerationActionFilterChange: (value?: string) => void;
     onGenerationModelProviderFilterChange: (value?: string) => void;
     onGenerationSourceFilterChange: (value?: string) => void;
@@ -48,6 +49,7 @@ type AssetFilterPanelValues = {
     activeFolderId?: string;
     episodeFilter: string;
     folderFilter: string;
+    favoriteOnly: boolean;
     generationActionFilter?: string;
     generationModelProviderFilter?: string;
     generationSourceFilter?: string;
@@ -74,6 +76,7 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
         activeFolderId,
         episodeFilter,
         folderFilter,
+        favoriteOnly,
         generationActionFilter,
         generationModelProviderFilter,
         generationSourceFilter,
@@ -94,6 +97,7 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
         onEditFolder,
         onEpisodeFilterChange,
         onFolderFilterChange,
+        onFavoriteOnlyChange,
         onGenerationActionFilterChange,
         onGenerationModelProviderFilterChange,
         onGenerationSourceFilterChange,
@@ -175,6 +179,12 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
                                 {option.label}
                             </Tag.CheckableTag>
                         ))}
+                        <Tag.CheckableTag checked={favoriteOnly} className={cn("prompt-filter-tag", favoriteOnly && "is-active")} onChange={onFavoriteOnlyChange}>
+                            <span className="inline-flex items-center gap-1.5">
+                                <Star className={cn("size-3.5", favoriteOnly && "fill-current")} />
+                                收藏
+                            </span>
+                        </Tag.CheckableTag>
                     </div>
                 </FilterBlock>
                 <FilterBlock label="项目">

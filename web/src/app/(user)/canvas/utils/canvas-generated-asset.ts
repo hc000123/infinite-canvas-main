@@ -7,12 +7,14 @@ import { canvasProjectPresetConfig, type CanvasProjectPreset } from "./canvas-pr
 
 type CanvasGeneratedAssetContext = {
     canvasId: string;
+    canvasTitle: string;
     projectId: string;
     projectTitle: string;
     prompt: string;
     effectivePrompt: string;
     config: AiConfig;
     createdAt: string;
+    versionNumber?: number;
     projectPreset?: CanvasProjectPreset;
     episodeContext?: CanvasEpisodeContext;
 };
@@ -25,7 +27,7 @@ export function buildGeneratedImageAsset(node: CanvasNodeData, context: CanvasGe
     const dataUrl = metadata.storageKey ? "" : content;
     return {
         kind: "image",
-        title: node.title || context.prompt.slice(0, 32) || "画布生成图片",
+        title: generatedCanvasAssetTitle(node, context),
         coverUrl: content,
         tags: [],
         source: "Canvas",
@@ -45,6 +47,7 @@ export function buildGeneratedImageAsset(node: CanvasNodeData, context: CanvasGe
                 projectId: context.projectId,
                 projectTitle: context.projectTitle,
                 canvasId: context.canvasId,
+                canvasTitle: context.canvasTitle,
                 nodeId: node.id,
                 prompt: context.prompt,
                 generationParams: buildAssetGenerationConfig(node.metadata, context.config, context.projectPreset),
@@ -63,7 +66,7 @@ export function buildGeneratedVideoAsset(node: CanvasNodeData, context: CanvasGe
     if (!content) return null;
     return {
         kind: "video",
-        title: node.title || context.prompt.slice(0, 32) || "画布生成视频",
+        title: generatedCanvasAssetTitle(node, context),
         coverUrl: "",
         tags: [],
         source: "Canvas",
@@ -83,6 +86,7 @@ export function buildGeneratedVideoAsset(node: CanvasNodeData, context: CanvasGe
                 projectId: context.projectId,
                 projectTitle: context.projectTitle,
                 canvasId: context.canvasId,
+                canvasTitle: context.canvasTitle,
                 nodeId: node.id,
                 prompt: context.prompt,
                 generationParams: buildAssetGenerationConfig(node.metadata, context.config, context.projectPreset),
@@ -110,6 +114,9 @@ export function buildGeneratedVideoStoryboardMetadata(metadata: CanvasNodeMetada
 function buildGeneratedAssetMetadata(node: CanvasNodeData, context: CanvasGeneratedAssetContext, actionType: CanvasVideoActionType | "generate" | "edit", providerOverride?: string) {
     return {
         source: "canvas",
+        canvasId: context.canvasId,
+        canvasTitle: context.canvasTitle,
+        assetNodeNumber: canvasAssetNodeNumber(node, [node]),
         projectId: context.projectId,
         projectTitle: context.projectTitle,
         episodeId: context.episodeContext?.episodeId || node.metadata?.episodeId,
@@ -157,6 +164,30 @@ function buildGeneratedAssetMetadata(node: CanvasNodeData, context: CanvasGenera
         finishedAt: node.metadata?.finishedAt,
         createdAt: context.createdAt,
     };
+}
+
+export function numberCanvasAssetNode(node: CanvasNodeData, nodes: CanvasNodeData[]) {
+    const existing = node.metadata?.assetNodeNumber || nodes.find((item) => item.id === node.id)?.metadata?.assetNodeNumber;
+    const nodeNumber = existing || Math.max(1, nodes.findIndex((item) => item.id === node.id) + 1);
+    return { ...node, metadata: { ...node.metadata, assetNodeNumber: nodeNumber } };
+}
+
+export function canvasAssetNodeNumber(node: CanvasNodeData, nodes: CanvasNodeData[]) {
+    return numberCanvasAssetNode(node, nodes).metadata?.assetNodeNumber || 1;
+}
+
+export function generatedCanvasAssetVersionNumber(node: CanvasNodeData) {
+    const versions = node.metadata?.mediaVersions || [];
+    if (node.metadata?.pendingMediaVersion) return versions.length + 1;
+    const current = versions.find((version) => version.id === node.metadata?.currentMediaVersionId) || versions.at(-1);
+    return current?.versionNumber || node.metadata?.productionVideoVersionNumber || 1;
+}
+
+function generatedCanvasAssetTitle(node: CanvasNodeData, context: CanvasGeneratedAssetContext) {
+    const canvasTitle = context.canvasTitle.trim() || "未命名画布";
+    const nodeNumber = String(canvasAssetNodeNumber(node, [node])).padStart(3, "0");
+    const versionNumber = context.versionNumber || generatedCanvasAssetVersionNumber(node);
+    return `${canvasTitle} · 节点 ${nodeNumber} · v${versionNumber}`;
 }
 
 function buildAssetGenerationReferences(metadata: CanvasNodeMetadata | undefined) {

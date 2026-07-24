@@ -35,10 +35,12 @@ type UseCanvasVideoGenerationActionsOptions = {
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
     projectId: string;
     canvasId: string;
+    canvasTitle: string;
     projectTitle: string;
     projectPreset?: CanvasProjectPreset;
     episodeContext?: CanvasEpisodeContext;
     archiveGeneratedAsset: (asset: AssetWriteInput) => Promise<string | void>;
+    prepareGeneratedAssetNode: (node: CanvasNodeData) => CanvasNodeData;
 };
 
 type GenerateVideoNodeInput = {
@@ -60,10 +62,12 @@ export function useCanvasVideoGenerationActions({
     toVideoMetadata,
     projectId,
     canvasId,
+    canvasTitle,
     projectTitle,
     projectPreset,
     episodeContext,
     archiveGeneratedAsset,
+    prepareGeneratedAssetNode,
 }: UseCanvasVideoGenerationActionsOptions) {
     const generateVideoNode = useCallback(
         async ({ nodeId, sourceNode, sourceConnections, effectivePrompt, generationConfig, videoPlan, setPendingChildIds }: GenerateVideoNodeInput) => {
@@ -107,9 +111,7 @@ export function useCanvasVideoGenerationActions({
                 nodeId,
                 sourceNode,
                 sourceConnections,
-                referenceNodeIds: videoPlan.references.inputs
-                    .map((input) => input.nodeId)
-                    .filter((id): id is string => Boolean(id)),
+                referenceNodeIds: videoPlan.references.inputs.map((input) => input.nodeId).filter((id): id is string => Boolean(id)),
                 prompt: effectivePrompt,
                 spec: pendingSpec,
                 metadata: {
@@ -133,7 +135,9 @@ export function useCanvasVideoGenerationActions({
             useStoryboardStore.getState().markShotGroupGenerating({ shotGroupId: generationMetadata.shotGroupId, taskId: undefined });
             setPendingChildIds([videoId]);
             setNodes((prev) =>
-                isEmptyVideoNode || replaceExistingResult ? prev.map((node) => (node.id === nodeId ? { ...node, ...videoNode } : node)) : [...prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), videoNode],
+                isEmptyVideoNode || replaceExistingResult
+                    ? prev.map((node) => (node.id === nodeId ? { ...node, ...videoNode } : node))
+                    : [...prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), videoNode],
             );
             if (connections.length) setConnections((prev) => [...prev, ...connections]);
 
@@ -167,12 +171,19 @@ export function useCanvasVideoGenerationActions({
                     generationMetadata,
                     prompt: effectivePrompt,
                 });
-                setNodes((prev) =>
-                    replaceExistingResult
-                        ? prev.map((node) => (node.id === videoId ? completePendingCanvasMediaVersion(node, finalVideoNode) : node))
-                        : applyCompletedVideoNodeToNodes(prev, finalVideoNode),
-                );
-                const asset = buildGeneratedVideoAsset(finalVideoNode, { canvasId, projectId, projectTitle, projectPreset, episodeContext, prompt: effectivePrompt, effectivePrompt, config: generationConfig, createdAt });
+                setNodes((prev) => (replaceExistingResult ? prev.map((node) => (node.id === videoId ? completePendingCanvasMediaVersion(node, finalVideoNode) : node)) : applyCompletedVideoNodeToNodes(prev, finalVideoNode)));
+                const asset = buildGeneratedVideoAsset(prepareGeneratedAssetNode(finalVideoNode), {
+                    canvasId,
+                    canvasTitle,
+                    projectId,
+                    projectTitle,
+                    projectPreset,
+                    episodeContext,
+                    prompt: effectivePrompt,
+                    effectivePrompt,
+                    config: generationConfig,
+                    createdAt,
+                });
                 const assetId = asset ? await archiveGeneratedAsset(asset).catch(() => undefined) : undefined;
                 if (typeof assetId === "string") {
                     setNodes((prev) => prev.map((node) => (node.id === videoId ? (replaceExistingResult ? patchCurrentCanvasMediaVersion(node, { sourceAssetId: assetId }) : { ...node, metadata: { ...node.metadata, sourceAssetId: assetId } }) : node)));
@@ -209,7 +220,7 @@ export function useCanvasVideoGenerationActions({
                 throw new Error(errorMessage);
             }
         },
-        [archiveGeneratedAsset, cacheUploadedCanvasMedia, canvasId, episodeContext, getNodes, projectId, projectPreset, projectTitle, setConnections, setNodes, showWarning, toVideoMetadata],
+        [archiveGeneratedAsset, cacheUploadedCanvasMedia, canvasId, canvasTitle, episodeContext, getNodes, prepareGeneratedAssetNode, projectId, projectPreset, projectTitle, setConnections, setNodes, showWarning, toVideoMetadata],
     );
 
     return { generateVideoNode };

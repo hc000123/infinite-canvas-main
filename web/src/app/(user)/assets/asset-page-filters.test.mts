@@ -120,6 +120,36 @@ test("filters assets by kind, folder, project references and keyword", () => {
     );
 });
 
+test("filters favorite assets and composes with kind", () => {
+    const favoriteText = { ...textAsset("favorite-text", "收藏文本"), favorite: true } as Asset;
+    const normalText = textAsset("normal-text", "普通文本");
+    const favoriteVideo = {
+        ...textAsset("favorite-video", "收藏视频"),
+        kind: "video" as const,
+        favorite: true,
+        data: { url: "blob:favorite-video", width: 720, height: 1280, bytes: 1, mimeType: "video/mp4" },
+    } as Asset;
+    const baseFilters = {
+        keyword: "",
+        folderFilter: "all" as const,
+        generationTaskFilter: "all" as const,
+        projectContextFilter: "",
+        projectLibraryFilter: "all" as const,
+        projectReferencedAssetIds: new Set<string>(),
+        favoriteOnly: true,
+        searchText: (asset: Asset) => asset.title,
+    };
+
+    assert.deepEqual(
+        filterAssetList([favoriteText, normalText, favoriteVideo], { ...baseFilters, kindFilter: "all" }).map((asset) => asset.id),
+        ["favorite-text", "favorite-video"],
+    );
+    assert.deepEqual(
+        filterAssetList([favoriteText, normalText, favoriteVideo], { ...baseFilters, kindFilter: "video" }).map((asset) => asset.id),
+        ["favorite-video"],
+    );
+});
+
 test("filters assets by storyboard group references and generation metadata", () => {
     const assets = [textAsset("ref-a", "分镜参考"), textAsset("generated-a", "分镜生成", undefined, { generation: { storyboardGroupId: "group-1", createdAt: "2026-01-02T00:00:00.000Z" } }), textAsset("other", "其他素材")];
 

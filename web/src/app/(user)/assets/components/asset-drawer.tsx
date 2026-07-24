@@ -7,6 +7,7 @@ import { assetCanvasLibraryEntries } from "../asset-canvas-library";
 import { assetProjectLibraryEntries, projectLibraryRoleLabel, projectLibrarySyncStatusLabel } from "../asset-project-library";
 import { assetVersionMediaSummary, assetVersionRecords, type AssetVersionRecord } from "../asset-version-history";
 import type { AssetVersionUsageReference } from "../asset-version-references";
+import { assetVideoPlayerStyle } from "../asset-video-player-layout";
 import { assetKindDownloadLabel, assetKindLabel, assetMediaInfo, volcengineReviewActionLabel } from "../asset-utils";
 import { workflowAssetCanGenerate, workflowAssetInfo, workflowAssetPrompt } from "../workflow-asset-image";
 import { VolcengineAssetTag } from "./asset-card";
@@ -48,7 +49,6 @@ export function AssetDrawer({
     onRestoreVersion: (asset: Asset, versionId: string) => void;
 }) {
     const cover = asset ? asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "") : "";
-    const videoPreviewUrl = asset?.kind === "video" ? videoCoverUrl(asset.data.url) : "";
     const mediaInfo = asset ? assetMediaInfo(asset) : "";
     const workflowInfo = workflowAssetInfo(asset);
     const workflowPrompt = workflowAssetPrompt(asset);
@@ -77,10 +77,8 @@ export function AssetDrawer({
                 />
             ) : asset ? (
                 <div className="space-y-5">
-                    {cover ? (
+                    {asset.kind === "video" ? null : cover ? (
                         <Image src={cover} alt={asset.title} className="rounded-md" />
-                    ) : asset.kind === "video" ? (
-                        <video src={videoPreviewUrl} muted playsInline preload="metadata" className="aspect-video w-full rounded-md bg-black object-cover" />
                     ) : (
                         <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-5 text-sm leading-6 text-[var(--studio-text-secondary)]">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>
                     )}
@@ -103,24 +101,26 @@ export function AssetDrawer({
                             {(asset.kind === "image" || asset.kind === "video") && asset.metadata?.volcengineAsset ? <VolcengineAssetTag status={asset.metadata.volcengineAsset.status} /> : null}
                         </Space>
                     </div>
-                    <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
-                        <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">内容</Typography.Text>
-                        {asset.kind === "text" ? (
-                            <Typography.Paragraph className="mt-2 whitespace-pre-wrap !text-[var(--studio-text-primary)]">{asset.data.content}</Typography.Paragraph>
-                        ) : asset.kind === "video" ? (
-                            <>
-                                <video src={asset.data.url} controls className="mt-2 aspect-video w-full rounded-md bg-black" />
+                    {asset.kind === "video" ? (
+                        <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
+                            <video src={asset.data.url} controls playsInline preload="metadata" className="mx-auto block rounded-md bg-black object-contain" style={assetVideoPlayerStyle(asset.data.width, asset.data.height)} />
+                            <Typography.Text className="mt-3 block !text-[var(--studio-text-secondary)]">{mediaInfo}</Typography.Text>
+                        </div>
+                    ) : (
+                        <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
+                            <Typography.Text className="block text-sm font-medium !text-[var(--studio-text-secondary)]">内容</Typography.Text>
+                            {asset.kind === "text" ? (
+                                <Typography.Paragraph className="mt-2 whitespace-pre-wrap !text-[var(--studio-text-primary)]">{asset.data.content}</Typography.Paragraph>
+                            ) : asset.kind === "audio" ? (
+                                <>
+                                    <audio src={asset.data.url} controls className="mt-2 w-full" />
+                                    <Typography.Text className="mt-2 block !text-[var(--studio-text-secondary)]">{mediaInfo}</Typography.Text>
+                                </>
+                            ) : (
                                 <Typography.Text className="mt-2 block !text-[var(--studio-text-secondary)]">{mediaInfo}</Typography.Text>
-                            </>
-                        ) : asset.kind === "audio" ? (
-                            <>
-                                <audio src={asset.data.url} controls className="mt-2 w-full" />
-                                <Typography.Text className="mt-2 block !text-[var(--studio-text-secondary)]">{mediaInfo}</Typography.Text>
-                            </>
-                        ) : (
-                            <Typography.Text className="mt-2 block !text-[var(--studio-text-secondary)]">{mediaInfo}</Typography.Text>
-                        )}
-                    </div>
+                            )}
+                        </div>
+                    )}
                     {asset.note ? (
                         <div>
                             <Typography.Text className="!text-[var(--studio-text-secondary)]">备注</Typography.Text>
@@ -309,7 +309,9 @@ function WorkflowAssetLargePreview({ asset, compact = false }: { asset: Asset; c
     const info = workflowAssetInfo(asset);
     const prompt = workflowAssetPrompt(asset);
     return (
-        <div className={`${compact ? "min-h-40" : "min-h-72"} grid place-items-center rounded-md border border-[var(--studio-border-subtle)] bg-[linear-gradient(135deg,var(--studio-accent-soft),color-mix(in_srgb,var(--studio-success)_14%,transparent))] p-6 text-center`}>
+        <div
+            className={`${compact ? "min-h-40" : "min-h-72"} grid place-items-center rounded-md border border-[var(--studio-border-subtle)] bg-[linear-gradient(135deg,var(--studio-accent-soft),color-mix(in_srgb,var(--studio-success)_14%,transparent))] p-6 text-center`}
+        >
             <div className="max-w-xl">
                 <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-[var(--studio-text-muted)]">
                     <ImagePlus className="size-6" />
@@ -331,11 +333,6 @@ function WorkflowAssetLargePreview({ asset, compact = false }: { asset: Asset; c
             </div>
         </div>
     );
-}
-
-function videoCoverUrl(url: string) {
-    if (!url || url.includes("#")) return url;
-    return `${url}#t=0.1`;
 }
 
 function AssetVersionHistory({

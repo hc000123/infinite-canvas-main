@@ -52,10 +52,12 @@ type UseCanvasGenerationRetryActionsOptions = {
     imageMetadata: (image: UploadedImage) => CanvasNodeMetadata;
     workspaceProjectId: string;
     workspaceProjectTitle: string;
+    canvasTitle: string;
     projectPreset?: CanvasProjectPreset;
     canvasEpisodeContext?: CanvasEpisodeContext;
     canvasId: string;
     archiveGeneratedAsset: (asset: AssetWriteInput) => Promise<string | void>;
+    prepareGeneratedAssetNode: (node: CanvasNodeData) => CanvasNodeData;
 };
 
 export function useCanvasGenerationRetryActions({
@@ -74,10 +76,12 @@ export function useCanvasGenerationRetryActions({
     imageMetadata,
     workspaceProjectId,
     workspaceProjectTitle,
+    canvasTitle,
     projectPreset,
     canvasEpisodeContext,
     canvasId,
     archiveGeneratedAsset,
+    prepareGeneratedAssetNode,
 }: UseCanvasGenerationRetryActionsOptions) {
     const handleRetryNode = useCallback(
         async (requestedNode: CanvasNodeData) => {
@@ -208,9 +212,10 @@ export function useCanvasGenerationRetryActions({
                         return retryingNode ? completedNodes.map((item) => (item.id === node.id ? completeCanvasNodeRetry(retryingNode, item) : item)) : completedNodes;
                     });
                     if (finalVideoNode) {
-                        const asset = buildGeneratedVideoAsset(finalVideoNode, {
+                        const asset = buildGeneratedVideoAsset(prepareGeneratedAssetNode(finalVideoNode), {
                             projectId: workspaceProjectId,
                             canvasId,
+                            canvasTitle,
                             projectTitle: workspaceProjectTitle,
                             projectPreset,
                             episodeContext: canvasEpisodeContext,
@@ -218,6 +223,7 @@ export function useCanvasGenerationRetryActions({
                             effectivePrompt: prompt,
                             config: generationConfig,
                             createdAt: new Date().toISOString(),
+                            versionNumber: node.metadata?.content ? (node.metadata.mediaVersions?.length || 1) + 1 : 1,
                         });
                         const assetId = asset ? await archiveGeneratedAsset(asset).catch(() => undefined) : undefined;
                         if (typeof assetId === "string") {
@@ -257,8 +263,9 @@ export function useCanvasGenerationRetryActions({
                             : item,
                     ),
                 );
-                const asset = buildGeneratedImageAsset(completedNode, {
+                const asset = buildGeneratedImageAsset(prepareGeneratedAssetNode(completedNode), {
                     canvasId,
+                    canvasTitle,
                     projectId: workspaceProjectId,
                     projectTitle: workspaceProjectTitle,
                     projectPreset,
@@ -267,6 +274,7 @@ export function useCanvasGenerationRetryActions({
                     effectivePrompt: prompt,
                     config: generationConfig,
                     createdAt: new Date().toISOString(),
+                    versionNumber: node.metadata?.content ? (node.metadata.mediaVersions?.length || 1) + 1 : 1,
                 });
                 const assetId = asset ? await archiveGeneratedAsset(asset).catch(() => undefined) : undefined;
                 if (typeof assetId === "string") setNodes((prev) => prev.map((item) => (item.id === node.id ? patchCurrentCanvasMediaVersion(item, { sourceAssetId: assetId }) : item)));
@@ -325,6 +333,8 @@ export function useCanvasGenerationRetryActions({
             videoMetadata,
             workspaceProjectId,
             workspaceProjectTitle,
+            canvasTitle,
+            prepareGeneratedAssetNode,
         ],
     );
 

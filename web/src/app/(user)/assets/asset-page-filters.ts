@@ -58,6 +58,7 @@ const assetTitleCollator = new Intl.Collator("zh-Hans-CN", {
 export type ProjectLibraryFilter = "all" | "shared" | "not_shared";
 
 type AssetListFilters = {
+    favoriteOnly?: boolean;
     keyword: string;
     kindFilter: AssetKind | "all";
     folderFilter: string | "all" | "root";
@@ -117,6 +118,7 @@ export function filterAssetList(assets: Asset[], filters: AssetListFilters) {
     const query = filters.keyword.trim().toLowerCase();
     const activeFolderId = activeAssetFolderId(filters.folderFilter);
     return assets.filter((asset) => {
+        if (filters.favoriteOnly && !asset.favorite) return false;
         if (filters.kindFilter !== "all" && asset.kind !== filters.kindFilter) return false;
         if (filters.folderFilter === "root" && asset.folderId) return false;
         if (activeFolderId && asset.folderId !== activeFolderId) return false;

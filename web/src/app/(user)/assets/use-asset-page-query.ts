@@ -49,6 +49,7 @@ type Props = {
 export function useAssetPageQuery({ assets, creativeProjects, folders, initialProjectId, previewAsset, productionBibleItems, projects, scriptEpisodes, shotGroups, storyboardGroups, storyboardShots, storyboardTableShots }: Props) {
     const [keyword, setKeyword] = useState("");
     const [kindFilter, setKindFilter] = useState<AssetKind | "all">("all");
+    const [favoriteOnly, setFavoriteOnly] = useState(false);
     const [folderFilter, setFolderFilter] = useState<string | "all" | "root">("all");
     const [generationSourceFilter, setGenerationSourceFilter] = useState<string>();
     const [generationActionFilter, setGenerationActionFilter] = useState<string>();
@@ -146,6 +147,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
     const projectFilteredAssets = useMemo(
         () =>
             filterAssetList(validAssets, {
+                favoriteOnly,
                 keyword,
                 kindFilter,
                 folderFilter,
@@ -163,6 +165,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
             }),
         [
             validAssets,
+            favoriteOnly,
             keyword,
             kindFilter,
             folderFilter,
@@ -189,7 +192,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
     const assetPaginationEnabled = true;
     const visibleAssets = paginateAssetList(filteredAssets, page, pageSize);
     const visibleProductionBibleItems = useMemo(() => {
-        if (referenceVersionFilter !== "all" || kindFilter !== "all" || episodeFilter) return [];
+        if (favoriteOnly || referenceVersionFilter !== "all" || kindFilter !== "all" || episodeFilter) return [];
         if (generationSourceFilter || generationActionFilter || generationModelProviderFilter || generationTaskFilter !== "all" || storyboardGroupFilter || projectLibraryFilter !== "all") return [];
         if (!projectContextFilter && folderFilter !== "all") return [];
         const query = keyword.trim().toLowerCase();
@@ -198,6 +201,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
             .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     }, [
         episodeFilter,
+        favoriteOnly,
         folderFilter,
         generationActionFilter,
         generationModelProviderFilter,
@@ -266,6 +270,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
         episodeFilter,
         episodeOptions,
         episodeTitleMap,
+        favoriteOnly,
         filteredAssets,
         folderCounts,
         folderFilter,
@@ -289,6 +294,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
         referenceVersionFilter,
         regularFolders,
         setEpisodeFilter,
+        setFavoriteOnly,
         setFolderFilter,
         setGenerationActionFilter,
         setGenerationModelProviderFilter,

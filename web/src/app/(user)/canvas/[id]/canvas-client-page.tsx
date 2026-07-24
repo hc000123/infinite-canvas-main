@@ -232,11 +232,13 @@ function InfiniteCanvasPage() {
         getCleanupHistory,
         message,
     });
-    const { archiveGeneratedAsset, archiveGeneratedVideoNode } = useCanvasGeneratedAssetArchive({
+    const { archiveGeneratedAsset, archiveGeneratedVideoNode, prepareGeneratedAssetNode } = useCanvasGeneratedAssetArchive({
         addAssetOnce,
         canvasEpisodeContext,
         canvasId,
+        canvasTitle: currentProject?.title || "未命名画布",
         ensureProjectFolder,
+        getNodes: () => nodesRef.current,
         projectPreset: currentProject?.preset,
         setNodes,
         workspaceProjectId,
@@ -246,8 +248,10 @@ function InfiniteCanvasPage() {
         archiveGeneratedAsset,
         cacheUploadedCanvasMedia,
         canvasId,
+        canvasTitle: currentProject?.title || "未命名画布",
         episodeContext: canvasEpisodeContext,
         getNodes: () => nodesRef.current,
+        prepareGeneratedAssetNode,
         projectId: workspaceProjectId,
         projectPreset: currentProject?.preset,
         projectTitle: workspaceProjectTitle,
@@ -751,10 +755,12 @@ function InfiniteCanvasPage() {
             imageMetadata,
             workspaceProjectId,
             workspaceProjectTitle,
+            canvasTitle: currentProject?.title || "未命名画布",
             projectPreset: currentProject?.preset,
             canvasEpisodeContext,
             canvasId,
             archiveGeneratedAsset,
+            prepareGeneratedAssetNode,
         },
         derivative: {
             addCanvasNodeToAssets,

@@ -53,6 +53,7 @@ export type CanvasPendingMediaVersion = {
 };
 
 export type CanvasNodeMetadata = {
+    assetNodeNumber?: number;
     content?: string;
     prompt?: string;
     promptDocument?: CanvasPromptDocument;

@@ -82,6 +82,7 @@ type Props = {
     onSubmitAssetReview: (asset: Asset) => void;
     onSubmitSelectedReviews: () => void;
     onToggleAsset: (assetId: string) => void;
+    onToggleFavorite: (asset: Asset) => void;
     onToggleOutdatedUsage: (usageId: string) => void;
     onToggleProductionBibleItem: (itemId: string) => void;
     onUpdateOutdatedUsage: (usage: OutdatedAssetVersionUsage) => void;
@@ -148,6 +149,7 @@ export function AssetResultsSection({
     onSubmitAssetReview,
     onSubmitSelectedReviews,
     onToggleAsset,
+    onToggleFavorite,
     onToggleOutdatedUsage,
     onToggleProductionBibleItem,
     onUpdateOutdatedUsage,
@@ -190,6 +192,7 @@ export function AssetResultsSection({
                                               onSelect={() => onToggleAsset(asset.id)}
                                               onOpen={() => onOpenAsset(asset)}
                                               onEdit={() => onEditAsset(asset)}
+                                              onToggleFavorite={() => onToggleFavorite(asset)}
                                               onDownload={() => onDownloadAsset(asset)}
                                               onDelete={() => onDeleteAsset(asset)}
                                               onReview={() => onSubmitAssetReview(asset)}
@@ -207,6 +210,7 @@ export function AssetResultsSection({
                                               onSelect={() => onToggleAsset(asset.id)}
                                               onOpen={() => onOpenAsset(asset)}
                                               onEdit={() => onEditAsset(asset)}
+                                              onToggleFavorite={() => onToggleFavorite(asset)}
                                               onCopy={onCopyAsset}
                                               onDownload={onDownloadAsset}
                                               onDelete={() => onDeleteAsset(asset)}

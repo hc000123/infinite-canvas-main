@@ -9,8 +9,10 @@ type UseCanvasGenerationNodeActionsOptions = {
     archiveGeneratedAsset: ImageGenerationOptions["archiveGeneratedAsset"];
     cacheUploadedCanvasMedia: VideoGenerationOptions["cacheUploadedCanvasMedia"];
     canvasId: ImageGenerationOptions["canvasId"];
+    canvasTitle: ImageGenerationOptions["canvasTitle"];
     episodeContext: ImageGenerationOptions["episodeContext"];
     getNodes: VideoGenerationOptions["getNodes"];
+    prepareGeneratedAssetNode: ImageGenerationOptions["prepareGeneratedAssetNode"];
     projectId: ImageGenerationOptions["projectId"];
     projectPreset: ImageGenerationOptions["projectPreset"];
     projectTitle: ImageGenerationOptions["projectTitle"];
@@ -29,8 +31,10 @@ export function useCanvasGenerationNodeActions({
     archiveGeneratedAsset,
     cacheUploadedCanvasMedia,
     canvasId,
+    canvasTitle,
     episodeContext,
     getNodes,
+    prepareGeneratedAssetNode,
     projectId,
     projectPreset,
     projectTitle,
@@ -54,6 +58,8 @@ export function useCanvasGenerationNodeActions({
         toImageMetadata,
         projectId,
         canvasId,
+        canvasTitle,
+        prepareGeneratedAssetNode,
         projectTitle,
         projectPreset,
         episodeContext,
@@ -72,6 +78,8 @@ export function useCanvasGenerationNodeActions({
         toVideoMetadata,
         projectId,
         canvasId,
+        canvasTitle,
+        prepareGeneratedAssetNode,
         projectTitle,
         projectPreset,
         episodeContext,

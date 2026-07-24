@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckSquare, Download, PencilLine, RefreshCw, ShieldCheck, Square, Trash2 } from "lucide-react";
+import { CheckSquare, Download, PencilLine, RefreshCw, ShieldCheck, Square, Star, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { canSubmitVolcengineReview, isVolcengineReviewProcessing, shouldShowVolcengineReviewAction } from "@/services/volcengine-asset-metadata";
@@ -16,6 +16,7 @@ export function CompactVideoAssetCard(props: {
     onSelect: () => void;
     onOpen: () => void;
     onEdit: () => void;
+    onToggleFavorite: () => void;
     onDownload: () => void;
     onDelete: () => void;
     onReview: () => void;
@@ -43,6 +44,19 @@ export function CompactVideoAssetCard(props: {
                     onClick={props.onSelect}
                 >
                     {props.selected ? <CheckSquare className="size-4" /> : <Square className="size-4" />}
+                </button>
+                <button
+                    type="button"
+                    aria-label={asset.favorite ? `取消收藏素材 ${asset.title}` : `收藏素材 ${asset.title}`}
+                    aria-pressed={Boolean(asset.favorite)}
+                    title={asset.favorite ? "取消收藏" : "收藏"}
+                    className={cn(
+                        "absolute right-2 top-2 z-10 grid size-7 place-items-center rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-media-overlay)] text-[var(--studio-on-media)] backdrop-blur transition hover:border-[var(--studio-accent)] hover:text-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]",
+                        asset.favorite && "border-[var(--studio-accent)] text-[var(--studio-accent)]",
+                    )}
+                    onClick={props.onToggleFavorite}
+                >
+                    <Star className={cn("size-4", asset.favorite && "fill-current")} />
                 </button>
                 <button type="button" className="size-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--studio-accent)]" aria-label={`查看素材详情：${asset.title}`} onClick={props.onOpen}>
                     {asset.coverUrl ? <img src={asset.coverUrl} alt={asset.title} className="size-full object-cover" /> : <video src={previewUrl} muted playsInline preload="metadata" className="size-full object-cover" />}

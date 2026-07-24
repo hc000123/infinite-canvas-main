@@ -103,6 +103,7 @@ function AssetsPageContent() {
         episodeFilter,
         episodeOptions,
         episodeTitleMap,
+        favoriteOnly,
         filteredAssets,
         folderCounts,
         folderFilter,
@@ -126,6 +127,7 @@ function AssetsPageContent() {
         referenceVersionFilter,
         regularFolders,
         setEpisodeFilter,
+        setFavoriteOnly,
         setFolderFilter,
         setGenerationActionFilter,
         setGenerationModelProviderFilter,
@@ -207,6 +209,7 @@ function AssetsPageContent() {
     } = useAssetSelection({ filteredAssets, outdatedAssetVersionUsages, productionBibleItems, validAssets, visibleProductionBibleItems });
     const assetFilterActions = useAssetFilterActions({
         setEpisodeFilter,
+        setFavoriteOnly,
         setFolderFilter,
         setGenerationActionFilter,
         setGenerationModelProviderFilter,
@@ -371,6 +374,11 @@ function AssetsPageContent() {
         message.success("设定已删除");
         setDeletingProductionBibleItem(null);
     };
+    const toggleFavorite = (asset: Asset) => {
+        const favorite = !asset.favorite;
+        updateAsset(asset.id, { favorite });
+        if (previewAsset?.id === asset.id) setPreviewAsset({ ...previewAsset, favorite });
+    };
     const openBulkProductionBibleDelete = () => {
         if (!selectedProductionBibleItems.length) return message.warning("请先选择设定");
         setBulkProductionBibleDeleteOpen(true);
@@ -398,6 +406,7 @@ function AssetsPageContent() {
                             onEditFolder: openEditFolder,
                             onEpisodeFilterChange: assetFilterActions.changeEpisodeFilter,
                             onFolderFilterChange: assetFilterActions.changeFolderFilter,
+                            onFavoriteOnlyChange: assetFilterActions.changeFavoriteOnly,
                             onGenerationActionFilterChange: assetFilterActions.changeGenerationActionFilter,
                             onGenerationModelProviderFilterChange: assetFilterActions.changeGenerationModelProviderFilter,
                             onGenerationSourceFilterChange: assetFilterActions.changeGenerationSourceFilter,
@@ -425,6 +434,7 @@ function AssetsPageContent() {
                             activeFolderId,
                             episodeFilter,
                             folderFilter,
+                            favoriteOnly,
                             generationActionFilter,
                             generationModelProviderFilter,
                             generationSourceFilter,
@@ -503,6 +513,7 @@ function AssetsPageContent() {
                     onSubmitAssetReview={(asset) => void submitImageReview(asset)}
                     onSubmitSelectedReviews={() => void submitSelectedVolcengineReviews()}
                     onToggleAsset={toggleAssetSelected}
+                    onToggleFavorite={toggleFavorite}
                     onToggleOutdatedUsage={toggleOutdatedUsageSelected}
                     onToggleProductionBibleItem={toggleProductionBibleItemSelected}
                     onUpdateOutdatedUsage={updateOutdatedUsageToLatest}

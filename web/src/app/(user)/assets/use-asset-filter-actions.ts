@@ -10,6 +10,7 @@ type GenerationTaskFilter = "all" | "with" | "without";
 
 type Props = {
     setEpisodeFilter: Dispatch<SetStateAction<string>>;
+    setFavoriteOnly: Dispatch<SetStateAction<boolean>>;
     setFolderFilter: Dispatch<SetStateAction<string>>;
     setGenerationActionFilter: Dispatch<SetStateAction<string | undefined>>;
     setGenerationModelProviderFilter: Dispatch<SetStateAction<string | undefined>>;
@@ -27,6 +28,7 @@ type Props = {
 
 export function useAssetFilterActions({
     setEpisodeFilter,
+    setFavoriteOnly,
     setFolderFilter,
     setGenerationActionFilter,
     setGenerationModelProviderFilter,
@@ -47,6 +49,10 @@ export function useAssetFilterActions({
             resetPage();
             setEpisodeFilter("");
             setFolderFilter(value);
+        },
+        changeFavoriteOnly(value: boolean) {
+            resetPage();
+            setFavoriteOnly(value);
         },
         changeEpisodeFilter(value: string) {
             resetPage();
