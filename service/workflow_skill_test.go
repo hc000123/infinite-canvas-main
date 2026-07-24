@@ -138,6 +138,43 @@ func TestWorkflowSkillInstructionsIncludesAllFilesInStableOrder(t *testing.T) {
 	}
 }
 
+func TestNormalizeWorkflowSkillPackageRejectsInvalidOutputSchema(t *testing.T) {
+	contract := validWorkflowSkillTestContract()
+	contract.OutputSchema = map[string]any{"type": "definitely-not-a-json-schema-type"}
+	if _, err := NormalizeWorkflowSkillPackage(map[string]string{"SKILL.md": "ok"}, contract); err == nil {
+		t.Fatal("expected invalid schema")
+	}
+}
+
+func TestWorkflowSkillOutputSchemaAddsBlockingIssue(t *testing.T) {
+	contract := validWorkflowSkillTestContract()
+	contract.OutputSchema = map[string]any{
+		"type":       "object",
+		"required":   []string{"items"},
+		"properties": map[string]any{"items": map[string]any{"type": "array", "minItems": 1}},
+	}
+	report := newWorkflowGateReport()
+	appendWorkflowSkillSchemaIssues([]byte(`{"wrong":[]}`), contract, &report)
+	if report.finish().Passed || len(report.Issues) == 0 || report.Issues[0].Code != "output_schema" {
+		t.Fatalf("report=%+v", report)
+	}
+}
+
+func TestWorkflowSkillRuntimeInputRequiresConfiguredImages(t *testing.T) {
+	contract := validWorkflowSkillTestContract()
+	contract.RequiredInputs = []string{"workflow", "script", "upstreamArtifact", "shotContext"}
+	contract.ImagePolicy.Min = 1
+	contract.ImagePolicy.Max = 9
+	contract.ImagePolicy.AllowTextFallback = false
+	detail := WorkflowRunDetail{Run: model.WorkflowRun{ID: "workflow-1", UserID: "user-1", ScriptSnapshot: "剧本"}}
+	artifact := model.WorkflowArtifact{ID: "artifact-1", ContentJSON: `{"shots":[]}`}
+	input := WorkflowStageStartInput{Context: json.RawMessage(`{"shotId":"shot-1"}`)}
+	err := validateWorkflowSkillRuntimeInput("user-1", detail, WorkflowStageShotPrompt, artifact, input, contract)
+	if err == nil || !strings.Contains(err.Error(), "至少需要 1 张参考图片") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func createWorkflowSkillTestDraft(t *testing.T, stageKey string, versionName string) model.WorkflowSkillVersion {
 	t.Helper()
 	if err := EnsureWorkflowSkillSeeds(); err != nil {

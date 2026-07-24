@@ -155,6 +155,7 @@ func callWorkflowSkillEvaluation(executor AgentRunExecutor, skill model.Workflow
 	}
 	content := workflowAgentRunContent(model.AgentRun{RawOutput: call.rawOutput, StructuredDraftJSON: call.structuredJSON})
 	gate := workflowSkillEvaluationGate(skill.StageKey, content)
+	appendWorkflowSkillSchemaIssues(content, packageValue.Contract, &gate)
 	var structured any
 	_ = json.Unmarshal(content, &structured)
 	status := "passed"

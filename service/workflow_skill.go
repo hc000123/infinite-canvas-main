@@ -199,22 +199,8 @@ func GetWorkflowSkillVersionPackage(versionID string) (model.WorkflowSkillVersio
 }
 
 func NormalizeWorkflowSkillPackage(files map[string]string, contract WorkflowSkillContract) (WorkflowSkillPackage, error) {
-	if contract.ImagePolicy.Min < 0 || contract.ImagePolicy.Max < contract.ImagePolicy.Min || contract.ImagePolicy.Max > 9 {
-		return WorkflowSkillPackage{}, safeMessageError{message: "图片契约必须限制在 0–9 张"}
-	}
-	if !strings.HasPrefix(strings.TrimSpace(contract.OutputSchemaVersion), "1.") {
-		return WorkflowSkillPackage{}, safeMessageError{message: "当前仅支持 1.x 输出契约"}
-	}
-	allowedGates := map[string]bool{"schema": true, "script": true, "art": true, "storyboard": true, "media": true, "delivery": true}
-	for _, gate := range contract.QualityGateProfile {
-		if !allowedGates[strings.TrimSpace(gate)] {
-			return WorkflowSkillPackage{}, safeMessageError{message: "存在未知质量门"}
-		}
-	}
-	for _, target := range contract.ApplyTargets {
-		if !workflowSkillStages[strings.TrimSpace(target)] {
-			return WorkflowSkillPackage{}, safeMessageError{message: "存在未知写入目标"}
-		}
+	if err := validateWorkflowSkillContract(contract); err != nil {
+		return WorkflowSkillPackage{}, err
 	}
 	normalizedFiles, err := validateWorkflowSkillFiles(files)
 	if err != nil {

@@ -206,13 +206,13 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, inp
 		if err != nil {
 			return current, err
 		}
+		if err := validateWorkflowSkillRuntimeInput(userID, detail, stageID, inputArtifact, input, resolvedSkill.Package.Contract); err != nil {
+			return current, err
+		}
 		systemPrompt += workflowSkillInstructions(resolvedSkill)
 		skillID, skillVersionID = resolvedSkill.Skill.ID, resolvedSkill.Version.ID
 		skillVersion, skillContentHash = resolvedSkill.Version.Version, resolvedSkill.Version.ContentHash
 		skillSnapshotJSON = workflowSkillSnapshotJSON(resolvedSkill)
-		if resolvedSkill.Package.Contract.ImagePolicy.Required && strings.TrimSpace(input.MediaBatchID) == "" {
-			return current, safeMessageError{message: "当前 Skill 要求上传参考图片"}
-		}
 	}
 	if context != nil {
 		sourceSnapshot = map[string]any{"shotId": context.ShotID, "promptInputHash": context.PromptInputHash}
@@ -311,6 +311,14 @@ func CompleteWorkflowStageAgentRun(run model.AgentRun) error {
 			return err
 		} else if ok {
 			validateWorkflowAssetIdentity([]byte(inputArtifact.ContentJSON), content, &report)
+		}
+	}
+	if strings.TrimSpace(run.SkillSnapshotJSON) != "" {
+		contract, err := workflowSkillContractFromSnapshot(run.SkillSnapshotJSON)
+		if err != nil {
+			report.add("output_schema", err.Error(), "")
+		} else {
+			appendWorkflowSkillSchemaIssues(content, contract, &report)
 		}
 	}
 	gate := workflowGateResult(workflowRun, stage, artifact, report, stamp)

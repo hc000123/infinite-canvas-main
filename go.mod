@@ -18,7 +18,10 @@ require (
 	gorm.io/gorm v1.31.1
 )
 
-require github.com/rogpeppe/go-internal v1.15.0 // indirect
+require (
+	github.com/rogpeppe/go-internal v1.15.0 // indirect
+	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1 // indirect
+)
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
