@@ -33,6 +33,8 @@ export type AdminUserListResponse = {
     total: number;
 };
 
+export type AdminUserSummary = Pick<AdminUser, "id" | "username" | "displayName">;
+
 export type AdminAccount = Omit<AdminUser, "role"> & { role: "admin" | "superadmin" };
 
 export type AdminAccountQuery = AdminUserQuery & {
@@ -72,6 +74,7 @@ export type AdminCreditLog = {
     remark: string;
     extra: string;
     createdAt: string;
+    user?: AdminUserSummary;
 };
 
 export type AdminCreditLogListResponse = {
@@ -104,6 +107,7 @@ export type AdminAITask = {
     refundedAt: string;
     createdAt: string;
     updatedAt: string;
+    user?: AdminUserSummary;
     frontendTrace?: AdminAITaskFrontendTrace;
     frontendArtifacts?: AdminAITaskFrontendArtifact[];
 };

@@ -2,11 +2,12 @@
 
 import { EyeOutlined, ReloadOutlined, RollbackOutlined, SearchOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { App, Button, Card, Col, DatePicker, Descriptions, Drawer, Form, Input, Row, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { App, Button, Card, Col, DatePicker, Descriptions, Drawer, Flex, Form, Input, Row, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 
 import type { AdminAITask, AdminAITaskFrontendArtifact, AdminAITaskQuery, AdminCreditLog } from "@/services/api/admin";
+import { adminUsageUserDisplay } from "../users/admin-user-display";
 import { useAdminAITasks } from "./use-admin-ai-tasks";
 
 const statusLabels: Record<string, string> = {
@@ -49,7 +50,19 @@ export default function AdminAITasksPage() {
             title: "用户",
             dataIndex: "userId",
             width: 180,
-            render: (_, item) => <Typography.Text copyable>{item.userId || "-"}</Typography.Text>,
+            render: (_, item) => {
+                const display = adminUsageUserDisplay(item);
+                return (
+                    <Flex vertical style={{ minWidth: 0 }}>
+                        <Typography.Text strong={!display.deleted} type={display.deleted ? "secondary" : undefined} ellipsis>
+                            {display.primary}
+                        </Typography.Text>
+                        <Typography.Text type="secondary" copyable={{ text: item.userId }} ellipsis>
+                            {display.secondary}
+                        </Typography.Text>
+                    </Flex>
+                );
+            },
         },
         {
             title: "类型",
@@ -174,7 +187,7 @@ export default function AdminAITasksPage() {
                             </Col>
                             <Col flex="180px">
                                 <Form.Item label="用户">
-                                    <Input value={draft.user || ""} placeholder="用户 ID" onChange={(event) => setDraft({ ...draft, user: event.target.value })} />
+                                    <Input value={draft.user || ""} placeholder="用户名、昵称或用户 ID" onChange={(event) => setDraft({ ...draft, user: event.target.value })} />
                                 </Form.Item>
                             </Col>
                             <Col flex="150px">
