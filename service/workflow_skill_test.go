@@ -201,6 +201,51 @@ func TestNormalizeWorkflowSkillPackageRejectsInvalidOutputSchema(t *testing.T) {
 	}
 }
 
+func TestNormalizeWorkflowSkillPackageRequiresStrictContractBoundaries(t *testing.T) {
+	cases := []func(*WorkflowSkillContract){
+		func(contract *WorkflowSkillContract) { contract.RequiredInputs = nil },
+		func(contract *WorkflowSkillContract) { contract.QualityGateProfile = []string{"schema"} },
+		func(contract *WorkflowSkillContract) { contract.ApplyTargets = nil },
+		func(contract *WorkflowSkillContract) {
+			contract.RequiredInputs = append(contract.RequiredInputs, "referenceImages")
+			contract.ImagePolicy.Max = 9
+			contract.ImagePolicy.AllowedTypes = []string{"image/png"}
+			contract.ImagePolicy.AllowTextFallback = true
+		},
+	}
+	for _, mutate := range cases {
+		contract := validWorkflowSkillTestContract()
+		mutate(&contract)
+		if _, err := NormalizeWorkflowSkillPackage(map[string]string{"SKILL.md": "ok"}, contract); err == nil {
+			t.Fatalf("expected strict contract rejection: %+v", contract)
+		}
+	}
+}
+
+func TestWorkflowSkillSeedSchemasRejectInvalidOutputs(t *testing.T) {
+	evidence := make([]map[string]any, 10)
+	for index := range evidence {
+		evidence[index] = map[string]any{"imageRef": "@图1", "observations": []string{"可见特征"}, "appliedTo": []string{"CHAR-001"}}
+	}
+	video, _ := json.Marshal(map[string]any{"shotId": "shot-001", "prompt": "场景：室内。\n声音：环境音。\n画面内容：0-6秒，人物进门。\n限制：不切镜。", "promptInputHash": "hash", "referenceEvidence": evidence})
+	cases := []struct {
+		stageKey string
+		content  []byte
+	}{
+		{WorkflowSkillStageArt, []byte(`{"items":[{"logicalAssetId":"CHAR-001","kind":"vehicle","name":"林秋","scriptEvidence":"林秋进门","description":"主要角色"}]}`)},
+		{WorkflowSkillStageAssets, []byte(`{"items":[{"logicalAssetId":"CHAR-001","kind":"character","name":"林秋","scriptEvidence":"林秋进门","description":"主要角色","imagePrompt":42,"status":"ready"}]}`)},
+		{WorkflowSkillStageStoryboard, []byte(`{"shots":[{"shotId":"shot-001","sceneKey":"scene-001","sourceScript":"林秋进门。","shotDraft":{"shotSize":"中景","camera":"平视","movement":"推近","action":"进门","performance":"克制","dialogue":"","durationSeconds":16,"continuityMode":"unknown"}}]}`)},
+		{WorkflowSkillStageVideo, video},
+	}
+	for _, testCase := range cases {
+		report := newWorkflowGateReport()
+		appendWorkflowSkillSchemaIssues(testCase.content, workflowSkillSeedContract(testCase.stageKey), &report)
+		if report.finish().Passed {
+			t.Fatalf("stage=%s accepted invalid output", testCase.stageKey)
+		}
+	}
+}
+
 func TestWorkflowSkillOutputSchemaAddsBlockingIssue(t *testing.T) {
 	contract := validWorkflowSkillTestContract()
 	contract.OutputSchema = map[string]any{
@@ -241,6 +286,7 @@ func createWorkflowSkillTestDraft(t *testing.T, stageKey string, versionName str
 	}
 	contract := validWorkflowSkillTestContract()
 	contract.ApplyTargets = []string{stageKey}
+	contract.QualityGateProfile = []string{"schema", workflowSkillRequiredGateByTarget[stageKey]}
 	packageValue, err := NormalizeWorkflowSkillPackage(map[string]string{"SKILL.md": "生成可审核的结构化结果。"}, contract)
 	if err != nil {
 		t.Fatal(err)
@@ -263,7 +309,7 @@ func validWorkflowSkillTestContract() WorkflowSkillContract {
 		RequiredInputs:      []string{"script"},
 		OutputSchemaVersion: "1.0.0",
 		OutputSchema:        map[string]any{"type": "object"},
-		QualityGateProfile:  []string{"schema"},
+		QualityGateProfile:  []string{"schema", "art"},
 		ApplyTargets:        []string{WorkflowSkillStageArt},
 	}
 	contract.ImagePolicy.Max = 9

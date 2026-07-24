@@ -17,11 +17,19 @@ var workflowSkillAllowedGates = map[string]bool{
 	"schema": true, "script": true, "art": true, "storyboard": true, "media": true, "delivery": true,
 }
 
+var workflowSkillRequiredGateByTarget = map[string]string{
+	WorkflowSkillStageScript: "script", WorkflowSkillStageArt: "art", WorkflowSkillStageAssets: "media",
+	WorkflowSkillStageStoryboard: "storyboard", WorkflowSkillStageVideo: "media", WorkflowSkillStageDelivery: "delivery",
+}
+
 var workflowSkillAllowedImageTypes = map[string]bool{
 	"image/png": true, "image/jpeg": true, "image/webp": true,
 }
 
 func validateWorkflowSkillContract(contract WorkflowSkillContract) error {
+	if len(contract.RequiredInputs) == 0 {
+		return safeMessageError{message: "Skill 必须声明必需输入"}
+	}
 	if contract.ImagePolicy.Min < 0 || contract.ImagePolicy.Max < contract.ImagePolicy.Min || contract.ImagePolicy.Max > 9 {
 		return safeMessageError{message: "图片契约必须限制在 0–9 张"}
 	}
@@ -35,6 +43,9 @@ func validateWorkflowSkillContract(contract WorkflowSkillContract) error {
 			return safeMessageError{message: "存在未知或重复的必需输入"}
 		}
 		seenInputs[name] = true
+	}
+	if seenInputs["referenceImages"] && (contract.ImagePolicy.Min == 0 || contract.ImagePolicy.AllowTextFallback) {
+		return safeMessageError{message: "必需参考图输入必须设置最少图片且禁止无图降级"}
 	}
 	seenTypes := map[string]bool{}
 	for _, mimeType := range contract.ImagePolicy.AllowedTypes {
@@ -61,6 +72,12 @@ func validateWorkflowSkillContract(contract WorkflowSkillContract) error {
 		}
 		seenGates[gate] = true
 	}
+	if !seenGates["schema"] {
+		return safeMessageError{message: "Skill 必须启用 Schema 质量门"}
+	}
+	if len(contract.ApplyTargets) == 0 {
+		return safeMessageError{message: "Skill 必须声明写入目标"}
+	}
 	seenTargets := map[string]bool{}
 	for _, target := range contract.ApplyTargets {
 		target = strings.TrimSpace(target)
@@ -68,6 +85,9 @@ func validateWorkflowSkillContract(contract WorkflowSkillContract) error {
 			return safeMessageError{message: "存在未知或重复的写入目标"}
 		}
 		seenTargets[target] = true
+		if !seenGates[workflowSkillRequiredGateByTarget[target]] {
+			return safeMessageError{message: "Skill 不能关闭当前阶段硬质量门"}
+		}
 	}
 	return nil
 }
