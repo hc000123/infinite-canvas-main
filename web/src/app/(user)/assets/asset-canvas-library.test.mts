@@ -31,6 +31,14 @@ test("normalizes canvas library entries", () => {
     assert.equal(assetInCanvasLibrary(asset({ canvasLibraries: entries }), "canvas-1"), true);
 });
 
+test("matches canvas membership and generated canvas lineage", () => {
+    assert.equal(assetInCanvasLibrary(asset({ canvasLibraries: [{ canvasId: "canvas-1", addedAt: "old", updatedAt: "old" }] }), "canvas-1"), true);
+    assert.equal(assetInCanvasLibrary(asset({ generation: { source: "canvas", canvasId: "canvas-1" } }), "canvas-1"), true);
+    assert.equal(assetInCanvasLibrary(asset({ generations: [{ source: "canvas", canvasId: "canvas-1" }] }), "canvas-1"), true);
+    assert.equal(assetInCanvasLibrary(asset({ canvasSource: { canvasId: "canvas-1" } }), "canvas-1"), true);
+    assert.equal(assetInCanvasLibrary(asset({ generation: { source: "canvas", canvasId: "canvas-2" } }), "canvas-1"), false);
+});
+
 test("adds and removes canvas library entries while preserving metadata", () => {
     const source = asset({ generation: { source: "canvas" }, canvasLibraries: [{ canvasId: "canvas-1", addedAt: "old", updatedAt: "old" }] });
     const added = buildAddCanvasLibraryAssetPatch(source, ["canvas-1", "canvas-2", "canvas-2"], "now");

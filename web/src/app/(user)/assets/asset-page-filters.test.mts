@@ -150,6 +150,38 @@ test("filters favorite assets and composes with kind", () => {
     );
 });
 
+test("filters favorite videos by canvas lineage", () => {
+    const video = (id: string, favorite: boolean, metadata: Asset["metadata"]): Asset =>
+        ({
+            ...textAsset(id, id, undefined, metadata),
+            kind: "video",
+            favorite,
+            data: { url: `blob:${id}`, width: 720, height: 1280, bytes: 1, mimeType: "video/mp4" },
+        }) as Asset;
+    const assets = [
+        video("matching", true, { generation: { source: "canvas", canvasId: "canvas-1" } }),
+        video("not-favorite", false, { generation: { source: "canvas", canvasId: "canvas-1" } }),
+        video("other-canvas", true, { generation: { source: "canvas", canvasId: "canvas-2" } }),
+        textAsset("matching-text", "matching-text", undefined, { generation: { source: "canvas", canvasId: "canvas-1" } }),
+    ];
+
+    assert.deepEqual(
+        filterAssetList(assets, {
+            keyword: "",
+            kindFilter: "video",
+            favoriteOnly: true,
+            folderFilter: "all",
+            generationTaskFilter: "all",
+            projectContextFilter: "",
+            projectLibraryFilter: "all",
+            canvasLibraryFilter: "canvas-1",
+            projectReferencedAssetIds: new Set(),
+            searchText: (asset) => asset.title,
+        }).map((asset) => asset.id),
+        ["matching"],
+    );
+});
+
 test("filters assets by storyboard group references and generation metadata", () => {
     const assets = [textAsset("ref-a", "分镜参考"), textAsset("generated-a", "分镜生成", undefined, { generation: { storyboardGroupId: "group-1", createdAt: "2026-01-02T00:00:00.000Z" } }), textAsset("other", "其他素材")];
 
