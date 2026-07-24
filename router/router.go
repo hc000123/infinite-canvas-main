@@ -147,6 +147,19 @@ func New() *gin.Engine {
 		handler.AdminDeleteAsset(c.Writer, c.Request, c.Param("id"))
 	})
 
+	superAdmin := api.Group("/admin", middleware.SuperAdminAuth)
+	superAdmin.GET("/admins", gin.WrapF(handler.AdminAccounts))
+	superAdmin.POST("/admins", gin.WrapF(handler.CreateAdminAccount))
+	superAdmin.PATCH("/admins/:id", func(c *gin.Context) {
+		handler.UpdateAdminAccount(c.Writer, c.Request, c.Param("id"))
+	})
+	superAdmin.POST("/admins/:id/password", func(c *gin.Context) {
+		handler.ResetAdminAccountPassword(c.Writer, c.Request, c.Param("id"))
+	})
+	superAdmin.DELETE("/admins/:id", func(c *gin.Context) {
+		handler.DeleteAdminAccount(c.Writer, c.Request, c.Param("id"))
+	})
+
 	workflowSkillAdmin := api.Group("/v1/admin", middleware.AdminAuth)
 	workflowSkillAdmin.GET("/workflow-skills", gin.WrapF(handler.AdminWorkflowSkills))
 	workflowSkillAdmin.PATCH("/workflow-skills/:id", func(c *gin.Context) {

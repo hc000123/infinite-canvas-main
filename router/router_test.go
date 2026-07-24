@@ -71,3 +71,16 @@ func TestWorkflowRoutesRequireAuth(t *testing.T) {
 		}
 	}
 }
+
+func TestSuperAdminRoutesRequireSuperAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	recorder := httptest.NewRecorder()
+	app.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/admins", nil))
+	if recorder.Code == http.StatusNotFound {
+		t.Fatal("superadmin administrator route is missing")
+	}
+	if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+		t.Fatalf("administrator route did not reach superadmin auth: %s", recorder.Body.String())
+	}
+}
