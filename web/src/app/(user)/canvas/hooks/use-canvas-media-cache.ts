@@ -7,6 +7,7 @@ import { saveAs } from "file-saver";
 import { cacheCanvasMedia } from "@/services/api/media-cache";
 import { getMediaBlob, resolveMediaUrl, type UploadedFile } from "@/services/file-storage";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata } from "../types";
+import { canvasMediaDownloadFilename } from "../utils/canvas-media-download";
 
 type CanvasMessage = {
     info: (content: string) => void;
@@ -20,7 +21,7 @@ export function useCanvasMediaCache({ token, message, setNodes }: { token?: stri
             if (node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) return;
             const content = node.metadata?.content || "";
             if (!content && !node.metadata?.storageKey) return;
-            const filename = `canvas-${node.type}-${node.id}.${canvasMediaExtension(node, content)}`;
+            const filename = canvasMediaDownloadFilename(node);
 
             if (node.metadata?.cacheUrl) {
                 triggerCanvasDownload(node.metadata.cacheUrl, filename);
@@ -161,21 +162,4 @@ function readCanvasDownloadError(error: unknown, fallback: string) {
         return error.message;
     }
     return fallback;
-}
-
-function canvasMediaExtension(node: CanvasNodeData, content: string) {
-    if (node.type === CanvasNodeType.Video) return "mp4";
-    if (node.type === CanvasNodeType.Audio) return audioExtension(node.metadata?.mimeType);
-    return imageExtension(content);
-}
-
-function imageExtension(dataUrl: string) {
-    return dataUrl.match(/^data:image[/]([^;]+)/)?.[1] || dataUrl.match(/image[/]([^;]+)/)?.[1] || "png";
-}
-
-function audioExtension(mimeType?: string) {
-    const subtype = mimeType?.split(";")[0]?.split("/")[1]?.toLowerCase();
-    if (!subtype || subtype === "mpeg") return "mp3";
-    if (subtype === "x-wav") return "wav";
-    return subtype;
 }
