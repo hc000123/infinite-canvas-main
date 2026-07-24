@@ -7,7 +7,7 @@ import type { Asset } from "@/stores/use-asset-store";
 import { cn } from "@/lib/utils";
 import { assetInCanvasLibrary } from "../asset-canvas-library";
 import { assetInProjectLibrary } from "../asset-project-library";
-import { assetKindLabel, assetMediaInfo, assetSummary, volcengineReviewActionLabel } from "../asset-utils";
+import { assetKindLabel, assetMediaInfo, assetSummary, videoPreviewUrl, volcengineReviewActionLabel } from "../asset-utils";
 import { workflowAssetCanGenerate, workflowAssetInfo, workflowAssetPrompt } from "../workflow-asset-image";
 
 export function AssetCard({
@@ -50,7 +50,7 @@ export function AssetCard({
     const cover = asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "");
     const workflowInfo = workflowAssetInfo(asset);
     const canGenerateWorkflowImage = workflowAssetCanGenerate(asset);
-    const videoPreviewUrl = asset.kind === "video" ? videoCoverUrl(asset.data.url) : "";
+    const videoPreview = asset.kind === "video" ? videoPreviewUrl(asset.data.url) : "";
     const mediaInfo = assetMediaInfo(asset);
     const summary = assetSummary(asset);
     const openOnKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -117,7 +117,7 @@ export function AssetCard({
                     {cover ? (
                         <img src={cover} alt={asset.title} className="aspect-[4/3] w-full object-cover" />
                     ) : asset.kind === "video" ? (
-                        <video src={videoPreviewUrl} muted playsInline preload="metadata" className="aspect-[4/3] w-full bg-[var(--studio-shell-bg)] object-cover" />
+                        <video src={videoPreview} muted playsInline preload="metadata" className="aspect-[4/3] w-full bg-[var(--studio-shell-bg)] object-cover" />
                     ) : (
                         <div className="flex aspect-[4/3] items-center justify-center bg-[var(--studio-panel-muted-bg)] p-5 text-center text-sm leading-6 text-[var(--studio-text-secondary)]">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>
                     )}
@@ -235,7 +235,7 @@ export function AssetRow({
     const cover = asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "");
     const workflowInfo = workflowAssetInfo(asset);
     const canGenerateWorkflowImage = workflowAssetCanGenerate(asset);
-    const videoPreviewUrl = asset.kind === "video" ? videoCoverUrl(asset.data.url) : "";
+    const videoPreview = asset.kind === "video" ? videoPreviewUrl(asset.data.url) : "";
     const mediaInfo = assetMediaInfo(asset);
     const summary = workflowInfo ? workflowAssetContentField(asset, ["视觉描述", "描述", "用途", "资产用途"]) || assetSummary(asset) : assetSummary(asset);
     const isGenerated = asset.kind === "image" || workflowInfo?.status === "image_generated";
@@ -251,13 +251,21 @@ export function AssetRow({
     };
 
     return (
-        <article className={cn("group grid min-h-[96px] grid-cols-[auto_minmax(0,124px)_minmax(0,1fr)] items-stretch gap-3 rounded-lg border bg-[var(--studio-elevated-bg)] p-3 transition lg:grid-cols-[auto_minmax(0,132px)_minmax(0,1fr)_auto]", selected ? "border-[var(--studio-accent)] shadow-[0_0_0_1px_var(--studio-accent)]" : "border-[var(--studio-border-subtle)] hover:border-[var(--studio-accent)]")}>
+        <article
+            className={cn(
+                "group grid min-h-[96px] grid-cols-[auto_minmax(0,124px)_minmax(0,1fr)] items-stretch gap-3 rounded-lg border bg-[var(--studio-elevated-bg)] p-3 transition lg:grid-cols-[auto_minmax(0,132px)_minmax(0,1fr)_auto]",
+                selected ? "border-[var(--studio-accent)] shadow-[0_0_0_1px_var(--studio-accent)]" : "border-[var(--studio-border-subtle)] hover:border-[var(--studio-accent)]",
+            )}
+        >
             <Tooltip title={selected ? "取消选择素材" : "选择素材"}>
                 <button
                     type="button"
                     aria-label={selected ? `取消选择素材 ${asset.title}` : `选择素材 ${asset.title}`}
                     aria-pressed={selected}
-                    className={cn("mt-1 grid h-7 w-7 place-items-center rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-control-bg)] text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-accent)] hover:text-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]", selected && "border-[var(--studio-accent)] bg-[var(--studio-accent)] text-[var(--primary-foreground)] hover:text-[var(--primary-foreground)]")}
+                    className={cn(
+                        "mt-1 grid h-7 w-7 place-items-center rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-control-bg)] text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-accent)] hover:text-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)]",
+                        selected && "border-[var(--studio-accent)] bg-[var(--studio-accent)] text-[var(--primary-foreground)] hover:text-[var(--primary-foreground)]",
+                    )}
                     onClick={(event) => {
                         event.stopPropagation();
                         onSelect();
@@ -278,7 +286,7 @@ export function AssetRow({
                 {cover ? (
                     <img src={cover} alt={asset.title} className={`size-full ${previewFitClass}`} />
                 ) : asset.kind === "video" ? (
-                    <video src={videoPreviewUrl} muted playsInline preload="metadata" className="size-full bg-[var(--studio-shell-bg)] object-cover" />
+                    <video src={videoPreview} muted playsInline preload="metadata" className="size-full bg-[var(--studio-shell-bg)] object-cover" />
                 ) : (
                     <div className="flex size-full flex-col items-center justify-center gap-1.5 px-4 text-center text-xs leading-5 text-[var(--studio-text-muted)]">
                         <ImageIcon className="size-6" />
@@ -286,7 +294,11 @@ export function AssetRow({
                     </div>
                 )}
                 <span className="absolute left-1.5 top-1.5 rounded border border-[var(--studio-border-subtle)] bg-[var(--studio-media-overlay)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--studio-on-media)] backdrop-blur">{statusLabel}</span>
-                {mediaInfo ? <span className="absolute bottom-1.5 right-1.5 max-w-[calc(100%-12px)] truncate rounded border border-[var(--studio-border-subtle)] bg-[var(--studio-media-overlay)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--studio-on-media)] backdrop-blur">{mediaInfo}</span> : null}
+                {mediaInfo ? (
+                    <span className="absolute bottom-1.5 right-1.5 max-w-[calc(100%-12px)] truncate rounded border border-[var(--studio-border-subtle)] bg-[var(--studio-media-overlay)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--studio-on-media)] backdrop-blur">
+                        {mediaInfo}
+                    </span>
+                ) : null}
             </div>
 
             <div
@@ -361,7 +373,12 @@ export function AssetRow({
                     {asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" ? <AssetIconButton title="下载" icon={<Download className="size-3.5" />} onClick={() => onDownload(asset)} /> : null}
                     {shouldShowVolcengineReviewAction(asset.kind) ? (
                         asset.metadata?.volcengineAsset?.assetId && !canSubmitVolcengineReview(asset.metadata.volcengineAsset) ? (
-                            <AssetIconButton title={volcengineReviewActionLabel(asset.metadata.volcengineAsset.status)} icon={<RefreshCw className={`size-3.5 ${isVolcengineReviewProcessing(asset.metadata.volcengineAsset) && !refreshingReview ? "animate-spin" : ""}`} />} loading={refreshingReview} onClick={onRefreshReview} />
+                            <AssetIconButton
+                                title={volcengineReviewActionLabel(asset.metadata.volcengineAsset.status)}
+                                icon={<RefreshCw className={`size-3.5 ${isVolcengineReviewProcessing(asset.metadata.volcengineAsset) && !refreshingReview ? "animate-spin" : ""}`} />}
+                                loading={refreshingReview}
+                                onClick={onRefreshReview}
+                            />
                         ) : (
                             <AssetIconButton title={asset.metadata?.volcengineAsset?.status === "Failed" ? "重新加白" : "加白"} icon={<ShieldCheck className="size-3.5" />} loading={submittingReview} onClick={onReview} />
                         )
@@ -541,18 +558,16 @@ function workflowAssetContentField(asset: Asset, labels: string[]) {
     return "";
 }
 
-function videoCoverUrl(url: string) {
-    if (!url || url.includes("#")) return url;
-    return `${url}#t=0.1`;
-}
-
 export function AssetIconButton({ title, icon, danger, loading, onClick }: { title: string; icon: ReactNode; danger?: boolean; loading?: boolean; onClick: () => void }) {
     return (
         <Tooltip title={title}>
             <Button
                 type="text"
                 size="small"
-                className={cn("!h-8 !w-8 !min-w-8 !bg-transparent !p-0 !text-[var(--studio-text-secondary)] hover:!bg-[var(--studio-accent-soft)] hover:!text-[var(--studio-accent)]", danger && "hover:!bg-[color-mix(in_srgb,var(--studio-danger)_10%,transparent)] hover:!text-[var(--studio-danger)]")}
+                className={cn(
+                    "!h-8 !w-8 !min-w-8 !bg-transparent !p-0 !text-[var(--studio-text-secondary)] hover:!bg-[var(--studio-accent-soft)] hover:!text-[var(--studio-accent)]",
+                    danger && "hover:!bg-[color-mix(in_srgb,var(--studio-danger)_10%,transparent)] hover:!text-[var(--studio-danger)]",
+                )}
                 danger={danger}
                 icon={icon}
                 loading={loading}

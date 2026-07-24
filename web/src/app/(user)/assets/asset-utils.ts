@@ -38,6 +38,11 @@ export function assetMediaInfo(asset: Asset) {
     return `${asset.data.width}x${asset.data.height} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
 }
 
+export function videoPreviewUrl(url: string) {
+    if (!url || url.includes("#")) return url;
+    return `${url}#t=0.1`;
+}
+
 export function assetSearchText(asset: Asset) {
     return [
         asset.title,
