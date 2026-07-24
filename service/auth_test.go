@@ -50,3 +50,49 @@ func TestEnsureDefaultAdminCreatesSuperAdmin(t *testing.T) {
 		t.Fatalf("second EnsureDefaultAdmin: %v", err)
 	}
 }
+
+func TestSaveAdminUserRejectsPrivilegedTargetForOrdinaryAdmin(t *testing.T) {
+	setupAuthTestDB(t)
+	actor := model.AuthUser{ID: "admin-1", Role: model.UserRoleAdmin}
+	if _, err := SaveAdminUser(actor, model.User{Username: "forged-admin", Role: model.UserRoleSuperAdmin}, "password123"); err == nil {
+		t.Fatal("ordinary admin created a privileged account")
+	}
+}
+
+func TestDeleteAdminUserRejectsPrivilegedTarget(t *testing.T) {
+	setupAuthTestDB(t)
+	_, err := repository.SaveUser(model.User{ID: "admin-target", Username: "admin-target", Role: model.UserRoleAdmin, Status: model.UserStatusActive, AffCode: "aff-admin-target"})
+	if err != nil {
+		t.Fatalf("SaveUser: %v", err)
+	}
+	actor := model.AuthUser{ID: "admin-1", Role: model.UserRoleAdmin}
+	if err := DeleteAdminUser(actor, "admin-target"); err == nil {
+		t.Fatal("ordinary user-management delete removed an admin")
+	}
+}
+
+func TestAdjustAdminUserCreditsRejectsPrivilegedTarget(t *testing.T) {
+	setupAuthTestDB(t)
+	_, err := repository.SaveUser(model.User{ID: "super-target", Username: "super-target", Role: model.UserRoleSuperAdmin, Status: model.UserStatusActive, AffCode: "aff-super-target"})
+	if err != nil {
+		t.Fatalf("SaveUser: %v", err)
+	}
+	actor := model.AuthUser{ID: "admin-1", Role: model.UserRoleAdmin}
+	if _, err := AdjustAdminUserCredits(actor, "super-target", 100); err == nil {
+		t.Fatal("ordinary user-management credits modified a superadmin")
+	}
+}
+
+func setupAuthTestDB(t *testing.T) {
+	t.Helper()
+	oldDriver := config.Cfg.StorageDriver
+	oldDSN := config.Cfg.DatabaseDSN
+	config.Cfg.StorageDriver = "sqlite"
+	config.Cfg.DatabaseDSN = filepath.Join(t.TempDir(), "test.db")
+	repository.ResetForTest()
+	t.Cleanup(func() {
+		config.Cfg.StorageDriver = oldDriver
+		config.Cfg.DatabaseDSN = oldDSN
+		repository.ResetForTest()
+	})
+}

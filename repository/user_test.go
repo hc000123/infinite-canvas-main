@@ -39,3 +39,24 @@ func TestListCreditLogsSearchesLocalizedTypeLabels(t *testing.T) {
 		}
 	}
 }
+
+func TestListUsersOnlyReturnsOrdinaryUsers(t *testing.T) {
+	setupRepositoryTestDB(t)
+	db, err := DB()
+	if err != nil {
+		t.Fatalf("DB returned error: %v", err)
+	}
+	users := []model.User{
+		{ID: "user-list-user", Username: "list-user", Role: model.UserRoleUser, Status: model.UserStatusActive, AffCode: "aff-list-user"},
+		{ID: "user-list-admin", Username: "list-admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive, AffCode: "aff-list-admin"},
+		{ID: "user-list-super", Username: "list-super", Role: model.UserRoleSuperAdmin, Status: model.UserStatusActive, AffCode: "aff-list-super"},
+	}
+	if err := db.Create(&users).Error; err != nil {
+		t.Fatalf("Create users: %v", err)
+	}
+
+	items, total, err := ListUsers(model.Query{Page: 1, PageSize: 10})
+	if err != nil || total != 1 || len(items) != 1 || items[0].ID != "user-list-user" {
+		t.Fatalf("ListUsers items=%#v total=%d err=%v", items, total, err)
+	}
+}

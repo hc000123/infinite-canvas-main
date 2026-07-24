@@ -82,7 +82,7 @@ func AdminLogin(w http.ResponseWriter, r *http.Request) {
 		FailError(w, err)
 		return
 	}
-	if session.User.Role != model.UserRoleAdmin {
+	if !model.IsAdminRole(session.User.Role) {
 		Fail(w, "需要管理员权限")
 		return
 	}
@@ -109,7 +109,12 @@ func AdminUsers(w http.ResponseWriter, r *http.Request) {
 func AdminSaveUser(w http.ResponseWriter, r *http.Request) {
 	var request saveUserRequest
 	_ = json.NewDecoder(r.Body).Decode(&request)
-	user, err := service.SaveUser(model.User{
+	actor, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	user, err := service.SaveAdminUser(actor, model.User{
 		ID:          request.ID,
 		Username:    request.Username,
 		Email:       request.Email,
@@ -127,7 +132,12 @@ func AdminSaveUser(w http.ResponseWriter, r *http.Request) {
 func AdminAdjustUserCredits(w http.ResponseWriter, r *http.Request, id string) {
 	var request adjustUserCreditsRequest
 	_ = json.NewDecoder(r.Body).Decode(&request)
-	user, err := service.AdjustUserCredits(id, request.Credits)
+	actor, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	user, err := service.AdjustAdminUserCredits(actor, id, request.Credits)
 	if err != nil {
 		FailError(w, err)
 		return
@@ -178,7 +188,12 @@ func loginRedirect(r *http.Request, redirect string, token string, message strin
 }
 
 func AdminDeleteUser(w http.ResponseWriter, r *http.Request, id string) {
-	if err := service.DeleteUser(id); err != nil {
+	actor, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	if err := service.DeleteAdminUser(actor, id); err != nil {
 		FailError(w, err)
 		return
 	}

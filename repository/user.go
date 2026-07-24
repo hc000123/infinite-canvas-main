@@ -15,7 +15,7 @@ func ListUsers(q model.Query) ([]model.User, int64, error) {
 		return nil, 0, err
 	}
 	q.Normalize()
-	tx := db.Model(&model.User{})
+	tx := db.Model(&model.User{}).Where("role = ?", model.UserRoleUser)
 	if keyword := strings.TrimSpace(q.Keyword); keyword != "" {
 		like := "%" + keyword + "%"
 		tx = tx.Where("username LIKE ? OR display_name LIKE ? OR email LIKE ? OR linux_do_id LIKE ?", like, like, like, like)

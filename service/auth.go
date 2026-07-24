@@ -243,7 +243,27 @@ func ListUsers(q model.Query) (model.UserList, error) {
 	return model.UserList{Items: users, Total: int(total)}, nil
 }
 
-func SaveUser(user model.User, password string) (model.User, error) {
+func SaveAdminUser(actor model.AuthUser, user model.User, password string) (model.User, error) {
+	if !model.IsAdminRole(actor.Role) {
+		return user, safeMessageError{message: "权限不足"}
+	}
+	if user.Role != "" && user.Role != model.UserRoleUser && user.Role != model.UserRoleGuest {
+		return user, safeMessageError{message: "无权创建或修改管理员账号"}
+	}
+	if user.ID != "" {
+		saved, ok, err := repository.GetUserByID(user.ID)
+		if err != nil {
+			return user, err
+		}
+		if !ok || saved.Role != model.UserRoleUser {
+			return user, safeMessageError{message: "用户不存在或无权修改"}
+		}
+	}
+	user.Role = model.UserRoleUser
+	return saveUser(user, password)
+}
+
+func saveUser(user model.User, password string) (model.User, error) {
 	user.Username = strings.TrimSpace(user.Username)
 	if strings.ContainsAny(user.Username, " \t\r\n") {
 		return user, safeMessageError{message: "用户名不能包含空格"}
@@ -329,6 +349,20 @@ func AdjustUserCredits(id string, credits int) (model.User, error) {
 	return user, err
 }
 
+func AdjustAdminUserCredits(actor model.AuthUser, id string, credits int) (model.User, error) {
+	if !model.IsAdminRole(actor.Role) {
+		return model.User{}, safeMessageError{message: "权限不足"}
+	}
+	user, ok, err := repository.GetUserByID(id)
+	if err != nil {
+		return user, err
+	}
+	if !ok || user.Role != model.UserRoleUser {
+		return user, safeMessageError{message: "用户不存在或无权修改"}
+	}
+	return AdjustUserCredits(id, credits)
+}
+
 func ConsumeUserCredits(userID string, modelName string, credits int, path string) error {
 	return ConsumeUserCreditsForTask(userID, modelName, credits, path, "")
 }
@@ -409,7 +443,17 @@ func DeleteCreditLog(id string) error {
 	return repository.DeleteCreditLog(id)
 }
 
-func DeleteUser(id string) error {
+func DeleteAdminUser(actor model.AuthUser, id string) error {
+	if !model.IsAdminRole(actor.Role) {
+		return safeMessageError{message: "权限不足"}
+	}
+	user, ok, err := repository.GetUserByID(id)
+	if err != nil {
+		return err
+	}
+	if !ok || user.Role != model.UserRoleUser {
+		return safeMessageError{message: "用户不存在或无权删除"}
+	}
 	return repository.DeleteUser(id)
 }
 
