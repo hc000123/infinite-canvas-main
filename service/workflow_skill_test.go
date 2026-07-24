@@ -91,6 +91,61 @@ func TestEnsureWorkflowSkillSeedsKeepsCustomGlobalBinding(t *testing.T) {
 	}
 }
 
+func TestWorkflowSkillSeedsContainProductionPackagesAndStrictSchemas(t *testing.T) {
+	setupAITaskTestDB(t)
+	if err := EnsureWorkflowSkillSeeds(); err != nil {
+		t.Fatal(err)
+	}
+	for _, stageKey := range workflowSkillSeedStageKeys {
+		resolved, err := ResolvePublishedWorkflowSkill(stageKey, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resolved.Version.Version != "3.0.0" {
+			t.Fatalf("stage=%s version=%s", stageKey, resolved.Version.Version)
+		}
+		for _, path := range []string{"SKILL.md", "rules/domain-rules.md", "templates/output-template.md", "examples/good-output.json"} {
+			if strings.TrimSpace(resolved.Package.Files[path]) == "" {
+				t.Fatalf("stage=%s missing=%s", stageKey, path)
+			}
+		}
+		required, ok := resolved.Package.Contract.OutputSchema["required"].([]any)
+		if !ok || len(required) == 0 {
+			t.Fatalf("stage=%s has loose schema: %#v", stageKey, resolved.Package.Contract.OutputSchema)
+		}
+		report := newWorkflowGateReport()
+		appendWorkflowSkillSchemaIssues([]byte(resolved.Package.Files["examples/good-output.json"]), resolved.Package.Contract, &report)
+		if !report.finish().Passed {
+			t.Fatalf("stage=%s example does not match schema: %+v", stageKey, report.Issues)
+		}
+		if stageKey != WorkflowSkillStageVideo && resolved.Package.Contract.ImagePolicy.Max != 0 {
+			t.Fatalf("stage=%s unexpectedly accepts images", stageKey)
+		}
+	}
+}
+
+func TestWorkflowSkillSeedsExcludeLocalCodexOperations(t *testing.T) {
+	setupAITaskTestDB(t)
+	if err := EnsureWorkflowSkillSeeds(); err != nil {
+		t.Fatal(err)
+	}
+	for _, stageKey := range workflowSkillSeedStageKeys {
+		resolved, err := ResolvePublishedWorkflowSkill(stageKey, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		content := ""
+		for _, fileContent := range resolved.Package.Files {
+			content += "\n" + fileContent
+		}
+		for _, forbidden := range []string{"/goal", "dreamina ", "Suno", "ElevenLabs", "MCP", "signals.jsonl", "PostToolUse", "Stop hook"} {
+			if strings.Contains(content, forbidden) {
+				t.Fatalf("stage=%s contains local operation %q", stageKey, forbidden)
+			}
+		}
+	}
+}
+
 func TestValidateWorkflowSkillPackageRejectsUnsafeFilesAndTooManyImages(t *testing.T) {
 	contract := validWorkflowSkillTestContract()
 	contract.ImagePolicy.Max = 10

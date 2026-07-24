@@ -1,8 +1,10 @@
 package service
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"strings"
 
 	"github.com/basketikun/infinite-canvas/model"
@@ -13,37 +15,46 @@ type workflowSkillSeed struct {
 	StageKey    string
 	Name        string
 	Description string
-	Instruction string
 	Gate        string
 }
 
-const workflowSkillSeedVersion = "2.0.2"
+//go:embed workflow_skill_seeds/*
+var workflowSkillSeedFS embed.FS
+
+const workflowSkillSeedVersion = "3.0.0"
+
+var workflowSkillSeedStageKeys = []string{
+	WorkflowSkillStageScript,
+	WorkflowSkillStageArt,
+	WorkflowSkillStageAssets,
+	WorkflowSkillStageStoryboard,
+	WorkflowSkillStageVideo,
+	WorkflowSkillStageDelivery,
+}
 
 func EnsureWorkflowSkillSeeds() error {
 	seeds := []workflowSkillSeed{
-		{WorkflowSkillStageScript, "剧本整理", "确认生产剧本并形成稳定输入。", "保持剧情事实、人物关系和场次顺序，输出可审核的生产剧本结构。", "script"},
-		{WorkflowSkillStageArt, "资产提取", "只从剧本提取角色、场景、道具和角色外观马甲。", "只提取剧本已有资产事实和证据，为每项生成稳定 logicalAssetId；ID 必须严格使用 CHAR-001/SCENE-001/PROP-001/COSTUME-001 格式，连字符不得省略；kind 只能是 character/scene/prop/costume。服装、发型、妆容、年龄阶段和受伤状态统一输出为 costume 角色马甲，并必须提供 parentLogicalAssetId、variantType、variantName；parentLogicalAssetId 必须指向本次 items 中的 CHAR-xxx。variantType 只能是 costume/hair/makeup/age/injury/other。不生成生图提示词，不猜测剧本未提供的外观。", "art"},
-		{WorkflowSkillStageAssets, "资产生图提示词", "把已批准资产描述转成逐项可执行生图提示词。", "逐项保留 logicalAssetId、kind、name、scriptEvidence、description，以及角色马甲的 parentLogicalAssetId、variantType、variantName，新增 imagePrompt 与 status=ready，不得遗漏、合并或重编号。", "media"},
-		{WorkflowSkillStageStoryboard, "分镜拆解", "把原剧本拆成可编辑、可确认的结构化镜头。", "只生成 shots[].shotId/sceneKey/sourceScript/shotDraft，不生成最终视频提示词；每镜必须保留对应原剧本和可编辑镜头字段。", "storyboard"},
-		{WorkflowSkillStageVideo, "镜头提示词", "结合已确认分镜与实际参考图生成单镜头视频提示词。", "先理解参考图片，再结合原剧本和已确认 shotDraft 生成单镜头最终提示词；上一镜尾帧只能作为 continuity_reference，不得当作首帧复刻。", "media"},
-		{WorkflowSkillStageDelivery, "成片交付", "检查生成结果、失败项与导出清单。", "汇总视频结果、失败原因、重试建议和导出清单，不绕过人工确认与质量门。", "delivery"},
+		{WorkflowSkillStageScript, "剧本整理", "确认生产剧本并形成稳定输入。", "script"},
+		{WorkflowSkillStageArt, "资产提取", "从剧本证据提取角色、场景、道具和角色外观马甲。", "art"},
+		{WorkflowSkillStageAssets, "资产生图提示词", "把已批准资产转成一致、可执行的生图提示词。", "media"},
+		{WorkflowSkillStageStoryboard, "分镜拆解", "把生产剧本拆成 4–15 秒的可编辑结构化镜头。", "storyboard"},
+		{WorkflowSkillStageVideo, "镜头提示词", "结合已确认分镜与实际参考图生成单镜头最终提示词。", "media"},
+		{WorkflowSkillStageDelivery, "成片交付", "审计生成结果、失败项、重试建议与导出清单。", "delivery"},
 	}
 	for _, seed := range seeds {
 		skill, exists, err := repository.FindWorkflowSkillByStage(seed.StageKey)
 		if err != nil {
 			return err
 		}
-		contract := WorkflowSkillContract{
-			RequiredInputs: []string{"workflow", "upstreamArtifact"}, OutputSchemaVersion: "1.0.0",
-			OutputSchema: map[string]any{"type": "object"}, QualityGateProfile: []string{"schema", seed.Gate},
-			ApplyTargets: []string{seed.StageKey},
-		}
-		contract.ImagePolicy.Max = 9
-		contract.ImagePolicy.AllowedTypes = []string{"image/png", "image/jpeg", "image/webp"}
-		contract.ImagePolicy.AllowTextFallback = true
-		packageValue, err := NormalizeWorkflowSkillPackage(map[string]string{"SKILL.md": seed.Instruction}, contract)
+		files, err := loadWorkflowSkillSeedFiles(seed.StageKey)
 		if err != nil {
 			return err
+		}
+		contract := workflowSkillSeedContract(seed.StageKey)
+		contract.QualityGateProfile = []string{"schema", seed.Gate}
+		packageValue, err := NormalizeWorkflowSkillPackage(files, contract)
+		if err != nil {
+			return fmt.Errorf("normalize workflow skill %s: %w", seed.StageKey, err)
 		}
 		filesJSON, _ := json.Marshal(packageValue.Files)
 		contractJSON, _ := json.Marshal(packageValue.Contract)
@@ -83,4 +94,137 @@ func EnsureWorkflowSkillSeeds() error {
 		}
 	}
 	return nil
+}
+
+func loadWorkflowSkillSeedFiles(stageKey string) (map[string]string, error) {
+	if !workflowSkillStages[stageKey] {
+		return nil, fmt.Errorf("未知 Workflow Skill 阶段 %q", stageKey)
+	}
+	prefix := "workflow_skill_seeds/" + stageKey
+	files := map[string]string{}
+	err := fs.WalkDir(workflowSkillSeedFS, prefix, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		content, err := workflowSkillSeedFS.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		files[strings.TrimPrefix(path, prefix+"/")] = string(content)
+		return nil
+	})
+	return files, err
+}
+
+func workflowSkillSeedContract(stageKey string) WorkflowSkillContract {
+	contract := WorkflowSkillContract{
+		RequiredInputs:      []string{"workflow", "script", "upstreamArtifact"},
+		OutputSchemaVersion: "1.0.0",
+		ApplyTargets:        []string{stageKey},
+	}
+	contract.ImagePolicy.AllowTextFallback = true
+	switch stageKey {
+	case WorkflowSkillStageScript:
+		contract.RequiredInputs = []string{"workflow", "script"}
+		contract.OutputSchema = workflowScriptOutputSchema()
+	case WorkflowSkillStageArt:
+		contract.OutputSchema = workflowAssetOutputSchema(false)
+	case WorkflowSkillStageAssets:
+		contract.OutputSchema = workflowAssetOutputSchema(true)
+	case WorkflowSkillStageStoryboard:
+		contract.OutputSchema = workflowStoryboardOutputSchema()
+	case WorkflowSkillStageVideo:
+		contract.RequiredInputs = []string{"workflow", "script", "upstreamArtifact", "shotContext"}
+		contract.ImagePolicy.Max = 9
+		contract.ImagePolicy.AllowedTypes = []string{"image/png", "image/jpeg", "image/webp"}
+		contract.OutputSchema = workflowVideoOutputSchema()
+	case WorkflowSkillStageDelivery:
+		contract.OutputSchema = workflowDeliveryOutputSchema()
+	}
+	return contract
+}
+
+func workflowScriptOutputSchema() map[string]any {
+	return map[string]any{"type": "object", "additionalProperties": false, "required": []string{"productionScript"}, "properties": map[string]any{"productionScript": map[string]any{"type": "string", "minLength": 1}}}
+}
+
+func workflowAssetOutputSchema(withPrompt bool) map[string]any {
+	properties := map[string]any{
+		"logicalAssetId":       map[string]any{"type": "string", "pattern": `^(CHAR|SCENE|PROP|COSTUME)-\d{3}$`},
+		"kind":                 map[string]any{"type": "string", "enum": []string{"character", "scene", "prop", "costume"}},
+		"name":                 map[string]any{"type": "string", "minLength": 1},
+		"scriptEvidence":       map[string]any{"type": "string", "minLength": 1},
+		"description":          map[string]any{"type": "string", "minLength": 1},
+		"parentLogicalAssetId": map[string]any{"type": "string", "pattern": `^CHAR-\d{3}$`},
+		"variantType":          map[string]any{"type": "string", "enum": []string{"costume", "hair", "makeup", "age", "injury", "other"}},
+		"variantName":          map[string]any{"type": "string", "minLength": 1},
+	}
+	required := []string{"logicalAssetId", "kind", "name", "scriptEvidence", "description"}
+	if withPrompt {
+		properties["imagePrompt"] = map[string]any{"type": "string", "minLength": 1}
+		properties["status"] = map[string]any{"const": "ready"}
+		required = append(required, "imagePrompt", "status")
+	}
+	item := map[string]any{
+		"type": "object", "additionalProperties": false, "required": required, "properties": properties,
+		"allOf": []any{map[string]any{"if": map[string]any{"properties": map[string]any{"kind": map[string]any{"const": "costume"}}, "required": []string{"kind"}}, "then": map[string]any{"required": []string{"parentLogicalAssetId", "variantType", "variantName"}}}},
+	}
+	return map[string]any{"type": "object", "additionalProperties": false, "required": []string{"items"}, "properties": map[string]any{"items": map[string]any{"type": "array", "minItems": 1, "maxItems": 300, "items": item}}}
+}
+
+func workflowStoryboardOutputSchema() map[string]any {
+	draft := map[string]any{
+		"type": "object", "additionalProperties": false,
+		"required": []string{"shotSize", "camera", "movement", "action", "performance", "dialogue", "durationSeconds", "continuityMode"},
+		"properties": map[string]any{
+			"shotSize": map[string]any{"type": "string", "minLength": 1}, "camera": map[string]any{"type": "string", "minLength": 1},
+			"movement": map[string]any{"type": "string", "minLength": 1}, "action": map[string]any{"type": "string", "minLength": 1},
+			"performance": map[string]any{"type": "string", "minLength": 1}, "dialogue": map[string]any{"type": "string"},
+			"durationSeconds": map[string]any{"type": "number", "minimum": 4, "maximum": 15},
+			"continuityMode":  map[string]any{"type": "string", "enum": []string{"continuous", "cut"}},
+		},
+	}
+	shot := map[string]any{
+		"type": "object", "additionalProperties": false, "required": []string{"shotId", "sceneKey", "sourceScript", "shotDraft"},
+		"properties": map[string]any{
+			"shotId": map[string]any{"type": "string", "pattern": `^shot-\d{3,}$`}, "sceneKey": map[string]any{"type": "string", "pattern": `^scene-\d{3,}$`},
+			"sourceScript": map[string]any{"type": "string", "minLength": 1}, "shotDraft": draft,
+		},
+	}
+	return map[string]any{"type": "object", "additionalProperties": false, "required": []string{"shots"}, "properties": map[string]any{"shots": map[string]any{"type": "array", "minItems": 1, "maxItems": 2000, "items": shot}}}
+}
+
+func workflowVideoOutputSchema() map[string]any {
+	evidence := map[string]any{
+		"type": "object", "additionalProperties": false, "required": []string{"imageRef", "observations", "appliedTo"},
+		"properties": map[string]any{
+			"imageRef":     map[string]any{"type": "string", "pattern": `^@图[1-9]$`},
+			"observations": map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string", "minLength": 1}},
+			"appliedTo":    map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string", "minLength": 1}},
+		},
+	}
+	return map[string]any{
+		"type": "object", "additionalProperties": false, "required": []string{"shotId", "prompt", "promptInputHash", "referenceEvidence"},
+		"properties": map[string]any{
+			"shotId": map[string]any{"type": "string", "minLength": 1}, "prompt": map[string]any{"type": "string", "minLength": 20},
+			"promptInputHash": map[string]any{"type": "string", "minLength": 1}, "referenceEvidence": map[string]any{"type": "array", "maxItems": 9, "items": evidence},
+		},
+	}
+}
+
+func workflowDeliveryOutputSchema() map[string]any {
+	row := func(required []string, properties map[string]any) map[string]any {
+		return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}
+	}
+	text := map[string]any{"type": "string", "minLength": 1}
+	return map[string]any{
+		"type": "object", "additionalProperties": false, "required": []string{"summary", "succeeded", "failed", "retrySuggestions", "exportManifest"},
+		"properties": map[string]any{
+			"summary":          text,
+			"succeeded":        map[string]any{"type": "array", "items": row([]string{"shotId", "output"}, map[string]any{"shotId": text, "output": text})},
+			"failed":           map[string]any{"type": "array", "items": row([]string{"shotId", "reason"}, map[string]any{"shotId": text, "reason": text})},
+			"retrySuggestions": map[string]any{"type": "array", "items": row([]string{"shotId", "suggestion"}, map[string]any{"shotId": text, "suggestion": text})},
+			"exportManifest":   map[string]any{"type": "array", "items": row([]string{"shotId", "file", "status"}, map[string]any{"shotId": text, "file": text, "status": map[string]any{"type": "string", "enum": []string{"ready", "failed"}}})},
+		},
+	}
 }
