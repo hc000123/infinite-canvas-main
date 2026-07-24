@@ -5,7 +5,7 @@ import type { Dispatch, MouseEvent, MutableRefObject, SetStateAction } from "rea
 import type { AiConfig } from "@/stores/use-config-store";
 import { buildCanvasConnectedMedia } from "../utils/canvas-connected-media";
 import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions";
-import type { CanvasPromptDocument } from "../utils/canvas-prompt-document";
+import { serializePromptDocument, type CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import { getNodeProductionPackageId, type CanvasProductionPackageSummary } from "../utils/canvas-production-packages";
 import { getInputSummary, productionNodeBadge } from "../utils/canvas-page-helpers";
 import type { CanvasConnection, CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata, ContextMenuState, SelectionBox, ViewportTransform } from "../types";
@@ -198,7 +198,11 @@ export function CanvasNodesLayer({
                                 }}
                                 onGenerate={(nodeId) => {
                                     const target = nodesRef.current.find((item) => item.id === nodeId);
-                                    void handleGenerateNode(nodeId, target?.metadata?.generationMode || "image", target?.metadata?.prompt || "");
+                                    const inputs = configInputsById.get(nodeId) || [];
+                                    const prompt = target?.metadata?.promptDocument
+                                        ? serializePromptDocument(target.metadata.promptDocument, buildReferenceMentionOptions(inputs))
+                                        : target?.metadata?.prompt || "";
+                                    void handleGenerateNode(nodeId, target?.metadata?.generationMode || "image", prompt);
                                 }}
                             />
                         );

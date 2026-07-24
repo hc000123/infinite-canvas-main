@@ -63,3 +63,11 @@ test("image and video generation preserve the active prompt document", () => {
     assert.match(video, /canvasPromptEditorDocument\(sourceNode\)/);
     assert.match(video, /referenceNodeIds: videoPlan\.references\.inputs/);
 });
+
+test("generation serializes structured references against the latest input order", () => {
+    const promptPanel = readCanvasFile("../components/canvas-node-prompt-panel.tsx");
+    const layer = readCanvasFile("../components/canvas-nodes-layer.tsx");
+
+    assert.match(promptPanel, /serializePromptDocument\(promptDocument, referenceMentionOptions\)\.trim\(\)/);
+    assert.match(layer, /serializePromptDocument\(target\.metadata\.promptDocument, buildReferenceMentionOptions\(inputs\)\)/);
+});
