@@ -74,5 +74,7 @@ test("the connection hook freezes selected sources and the page supplies the sel
     assert.match(hook, /freezeCanvasConnectionSources\(anchor, selectedNodeIdsRef\.current, nodesRef\.current\)/);
     assert.match(hook, /connections:\s*connectingSourcesRef\.current/);
     assert.match(hook, /planCanvasBatchConnections\(/);
+    assert.match(hook, /applyCanvasInputOrder/);
+    assert.match(hook, /nextInputSourceIds/);
     assert.match(page, /useCanvasConnections\([\s\S]*?selectedNodeIdsRef,/);
 });

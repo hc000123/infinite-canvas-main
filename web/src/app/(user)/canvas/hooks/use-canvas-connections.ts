@@ -4,6 +4,7 @@ import { nanoid } from "nanoid";
 import { getNodeSpec } from "../constants";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type ConnectionHandle, type ContextMenuState, type Position } from "../types";
 import { freezeCanvasConnectionSources, planCanvasBatchConnections, type CanvasConnectionDraft } from "../utils/canvas-batch-connections";
+import { applyCanvasInputOrder } from "../utils/canvas-generation-inputs";
 import { placeCanvasNodeAwayFromNodes } from "../utils/canvas-node-placement";
 
 export type CanvasPendingConnectionCreate = {
@@ -72,18 +73,6 @@ export function useCanvasConnections({
         setConnecting(null);
     }, [setConnecting]);
 
-    const applyConnectionHandleMetadata = useCallback(
-        (connection: CanvasConnectionDraft, scopedNodes?: CanvasNodeData[]) => {
-            if (scopedNodes) {
-                const nextNodes = applyFrameConnectionMetadata(scopedNodes, connection);
-                if (nextNodes !== scopedNodes) setNodes(nextNodes);
-                return;
-            }
-            setNodes((prev) => applyFrameConnectionMetadata(prev, connection));
-        },
-        [setNodes],
-    );
-
     const connectNodes = useCallback(
         (current: ConnectionHandle, targetNodeId: string, dropPosition?: Position) => {
             const sources = connectingSourcesRef.current.length ? connectingSourcesRef.current : [current];
@@ -94,7 +83,13 @@ export function useCanvasConnections({
                     return;
                 }
                 setConnections((prev) => [...prev, ...plan.connections.map((connection) => ({ id: nanoid(), ...connection }))]);
-                setNodes((prev) => plan.connections.reduce(applyFrameConnectionMetadata, prev));
+                setNodes((prev) =>
+                    applyCanvasInputOrder(
+                        plan.connections.reduce(applyFrameConnectionMetadata, prev),
+                        targetNodeId,
+                        nextInputSourceIds(targetNodeId, connectionsRef.current, plan.connections),
+                    ),
+                );
                 setContextMenu(null);
                 return;
             }
@@ -111,11 +106,17 @@ export function useCanvasConnections({
             const exists = connectionsRef.current.some((conn) => conn.fromNodeId === fromNodeId && conn.toNodeId === toNodeId && conn.fromHandle === connection.fromHandle && conn.toHandle === connection.toHandle);
             if (!exists) {
                 setConnections((prev) => [...prev, { id: nanoid(), ...connection }]);
-                applyConnectionHandleMetadata(connection);
+                setNodes((prev) =>
+                    applyCanvasInputOrder(
+                        applyFrameConnectionMetadata(prev, connection),
+                        toNodeId,
+                        nextInputSourceIds(toNodeId, connectionsRef.current, [connection]),
+                    ),
+                );
             }
             setContextMenu(null);
         },
-        [applyConnectionHandleMetadata, connectionsRef, normalizeConnection, nodesRef, setConnections, setContextMenu, showWarning],
+        [connectionsRef, normalizeConnection, nodesRef, setConnections, setContextMenu, setNodes, showWarning],
     );
 
     const createConnectedNode = useCallback(
@@ -134,7 +135,11 @@ export function useCanvasConnections({
                 showWarning("没有可新增的有效连线");
                 return;
             }
-            const nextNodes = plan.connections.reduce(applyFrameConnectionMetadata, nodesWithTarget);
+            const nextNodes = applyCanvasInputOrder(
+                plan.connections.reduce(applyFrameConnectionMetadata, nodesWithTarget),
+                newNode.id,
+                nextInputSourceIds(newNode.id, connectionsRef.current, plan.connections),
+            );
             setNodes(nextNodes);
             setConnections((prev) => [...prev, ...plan.connections.map((connection) => ({ id: nanoid(), ...connection }))]);
             setSelectedNodeIds(new Set([newNode.id]));
@@ -231,6 +236,13 @@ export function useCanvasConnections({
         handleConnectStart,
         moveConnectionTarget,
     };
+}
+
+function nextInputSourceIds(targetNodeId: string, currentConnections: CanvasConnection[], additions: CanvasConnectionDraft[]) {
+    return [
+        ...currentConnections.filter((connection) => connection.toNodeId === targetNodeId).map((connection) => connection.fromNodeId),
+        ...additions.filter((connection) => connection.toNodeId === targetNodeId).map((connection) => connection.fromNodeId),
+    ];
 }
 
 function inferFrameTargetHandle(current: ConnectionHandle, connection: CanvasConnectionDraft, targetNodeId: string, nodes: CanvasNodeData[], dropPosition?: Position) {

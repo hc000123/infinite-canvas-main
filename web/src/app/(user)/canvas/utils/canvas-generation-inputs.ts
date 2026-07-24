@@ -55,6 +55,26 @@ export type NodeGenerationInput = {
     audio?: ReferenceAudio;
 };
 
+export function applyCanvasInputOrder<T extends CanvasGenerationNodeLike>(nodes: T[], targetNodeId: string, sourceNodeIds: string[]): T[] {
+    const connectedIds = [...new Set(sourceNodeIds)];
+    return nodes.map((node) => {
+        if (node.id !== targetNodeId) return node;
+        const current = node.metadata?.inputOrder || [];
+        const next = [
+            ...current.filter((id) => connectedIds.includes(id)),
+            ...connectedIds.filter((id) => !current.includes(id)),
+        ];
+        if (next.length === current.length && next.every((id, index) => id === current[index])) return node;
+        return {
+            ...node,
+            metadata: {
+                ...node.metadata,
+                inputOrder: next,
+            },
+        };
+    });
+}
+
 export function buildCanvasGenerationContext(nodeId: string, nodes: CanvasGenerationNodeLike[], connections: CanvasGenerationConnectionLike[], prompt: string): NodeGenerationContext {
     const inputs = buildCanvasGenerationInputs(nodeId, nodes, connections);
     const upstreamText = inputs
