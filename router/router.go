@@ -13,7 +13,7 @@ import (
 func New() *gin.Engine {
 	router := gin.Default()
 	router.RedirectTrailingSlash = false
-	_ = router.SetTrustedProxies(nil)
+	_ = router.SetTrustedProxies(config.Cfg.TrustedProxies)
 	router.Use(middleware.RequestMeta)
 	router.Use(uploadedAssetSecurityHeaders)
 	api := router.Group("/api")
@@ -22,6 +22,8 @@ func New() *gin.Engine {
 	})
 	api.POST("/auth/register", gin.WrapF(handler.Register))
 	api.POST("/auth/login", gin.WrapF(handler.Login))
+	api.GET("/auth/login-approval/status", gin.WrapF(handler.LoginApprovalStatus))
+	api.POST("/auth/login-approval/exchange", gin.WrapF(handler.ExchangeLoginApproval))
 	api.GET("/auth/me", middleware.OptionalAuth, gin.WrapF(handler.CurrentUser))
 	api.GET("/settings", gin.WrapF(handler.Settings))
 	api.Static("/uploaded-assets", config.Cfg.PublicAssetDir)
@@ -104,6 +106,14 @@ func New() *gin.Engine {
 	admin.GET("/users/:id/ai-tasks", func(c *gin.Context) { handler.AdminUserAITasks(c.Writer, c.Request, c.Param("id")) })
 	admin.GET("/users/:id/credit-logs", func(c *gin.Context) { handler.AdminUserCreditLogs(c.Writer, c.Request, c.Param("id")) })
 	admin.GET("/users/:id/activity-logs", func(c *gin.Context) { handler.AdminUserActivities(c.Writer, c.Request, c.Param("id")) })
+	admin.GET("/users/:id/allowed-ips", func(c *gin.Context) { handler.AdminUserAllowedIPs(c.Writer, c.Request, c.Param("id")) })
+	admin.POST("/users/:id/allowed-ips", func(c *gin.Context) { handler.AdminAddUserAllowedIP(c.Writer, c.Request, c.Param("id")) })
+	admin.DELETE("/users/:id/allowed-ips/:ipId", func(c *gin.Context) {
+		handler.AdminDeleteUserAllowedIP(c.Writer, c.Request, c.Param("id"), c.Param("ipId"))
+	})
+	admin.PUT("/users/:id/ip-policy", func(c *gin.Context) { handler.AdminSetUserIPPolicy(c.Writer, c.Request, c.Param("id")) })
+	admin.GET("/login-approvals", gin.WrapF(handler.AdminLoginApprovals))
+	admin.POST("/login-approvals/:id/decision", func(c *gin.Context) { handler.AdminDecideLoginApproval(c.Writer, c.Request, c.Param("id")) })
 	admin.POST("/users", gin.WrapF(handler.AdminSaveUser))
 	admin.POST("/users/:id/credits", func(c *gin.Context) {
 		handler.AdminAdjustUserCredits(c.Writer, c.Request, c.Param("id"))

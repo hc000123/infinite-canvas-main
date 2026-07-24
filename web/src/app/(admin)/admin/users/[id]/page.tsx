@@ -5,6 +5,7 @@ import { ProTable, type ProColumns } from "@ant-design/pro-components";
 import { Avatar, Button, Card, Col, Descriptions, Flex, Input, Result, Row, Select, Space, Statistic, Switch, Tabs, Tag, Typography } from "antd";
 import dayjs from "dayjs";
 import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 
 import type { AdminAITask, AdminCreditLog, AdminUserActivity } from "@/services/api/admin";
 import { activityActionLabel, activityRiskLabel } from "./admin-user-activity-view";
@@ -15,6 +16,7 @@ export default function AdminUserDetailPage() {
     const router = useRouter();
     const params = useParams<{ id: string }>();
     const userId = decodeURIComponent(params.id);
+    const [newCIDR, setNewCIDR] = useState("");
     const detail = useAdminUserDetail(userId);
     if (detail.error) return <Result status="404" title="用户不存在" extra={<Button onClick={() => router.push("/admin/users")}>返回用户列表</Button>} />;
     if (!detail.overview)
@@ -84,6 +86,50 @@ export default function AdminUserDetailPage() {
                             { key: "created", label: "注册时间", children: formatTime(overview.user.createdAt) },
                         ]}
                     />
+                </Card>
+                <Card
+                    variant="borderless"
+                    title="登录 IP 限制"
+                    extra={
+                        <Space>
+                            <Typography.Text type="secondary">白名单外登录需管理员审批</Typography.Text>
+                            <Switch checked={overview.user.ipApprovalEnabled} onChange={(enabled) => void detail.setIPPolicy(enabled)} />
+                        </Space>
+                    }
+                >
+                    <Flex vertical gap={12}>
+                        <Space.Compact style={{ maxWidth: 480, width: "100%" }}>
+                            <Input value={newCIDR} placeholder="输入 IP 或 CIDR，例如 10.20.0.0/16" onChange={(event) => setNewCIDR(event.target.value)} />
+                            <Button
+                                type="primary"
+                                onClick={async () => {
+                                    if (!newCIDR.trim()) return;
+                                    await detail.addAllowedIP(newCIDR);
+                                    setNewCIDR("");
+                                }}
+                            >
+                                添加白名单
+                            </Button>
+                        </Space.Compact>
+                        <Space wrap>
+                            {detail.allowedIPs.length ? (
+                                detail.allowedIPs.map((item) => (
+                                    <Tag
+                                        key={item.id}
+                                        closable
+                                        onClose={(event) => {
+                                            event.preventDefault();
+                                            void detail.deleteAllowedIP(item.id);
+                                        }}
+                                    >
+                                        {item.cidr}
+                                    </Tag>
+                                ))
+                            ) : (
+                                <Typography.Text type="secondary">尚未设置工作 IP。开启限制前建议先添加白名单。</Typography.Text>
+                            )}
+                        </Space>
+                    </Flex>
                 </Card>
                 <Row gutter={[16, 16]}>
                     {stats.map((item) => (

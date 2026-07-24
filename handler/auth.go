@@ -48,12 +48,12 @@ func Register(w http.ResponseWriter, r *http.Request) {
 func Login(w http.ResponseWriter, r *http.Request) {
 	var request loginRequest
 	_ = json.NewDecoder(r.Body).Decode(&request)
-	session, err := service.Login(request.Username, request.Password)
+	result, err := service.LoginWithRequest(r.Context(), request.Username, request.Password)
 	if err != nil {
 		FailError(w, err)
 		return
 	}
-	OK(w, session)
+	OK(w, result)
 }
 
 func LinuxDoAuthorize(w http.ResponseWriter, r *http.Request) {
@@ -77,16 +77,16 @@ func LinuxDoCallback(w http.ResponseWriter, r *http.Request) {
 func AdminLogin(w http.ResponseWriter, r *http.Request) {
 	var request loginRequest
 	_ = json.NewDecoder(r.Body).Decode(&request)
-	session, err := service.Login(request.Username, request.Password)
+	result, err := service.LoginWithRequest(r.Context(), request.Username, request.Password)
 	if err != nil {
 		FailError(w, err)
 		return
 	}
-	if !model.IsAdminRole(session.User.Role) {
+	if result.Status != "authenticated" || !model.IsAdminRole(result.Session.User.Role) {
 		Fail(w, "需要管理员权限")
 		return
 	}
-	OK(w, session)
+	OK(w, result.Session)
 }
 
 func CurrentUser(w http.ResponseWriter, r *http.Request) {

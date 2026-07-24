@@ -65,5 +65,5 @@ func authUser(c *gin.Context) (model.AuthUser, bool) {
 	if strings.TrimSpace(token) == "" {
 		return model.AuthUser{}, false
 	}
-	return service.CurrentAuthUser(token)
+	return service.CurrentAuthUserForRequest(token, c.ClientIP())
 }

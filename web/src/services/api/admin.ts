@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm, compactApiParams } from "@/services/api/request";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm, apiPut, compactApiParams } from "@/services/api/request";
 import type { Prompt, PromptListResponse } from "@/services/api/prompts";
 
 export type AdminPromptCategory = {
@@ -26,6 +26,7 @@ export type AdminUser = {
     lastLoginAt: string;
     createdAt: string;
     updatedAt: string;
+    ipApprovalEnabled: boolean;
 };
 
 export type AdminUserListResponse = {
@@ -214,6 +215,39 @@ export async function adjustAdminUserCredits(token: string, id: string, credits:
 
 export async function deleteAdminUser(token: string, id: string) {
     return apiDelete<boolean>(`/api/admin/users/${encodeURIComponent(id)}`, token);
+}
+
+export type AdminAllowedIP = { id: string; userId: string; cidr: string; createdBy: string; createdAt: string };
+export type AdminLoginApproval = {
+    id: string;
+    userId: string;
+    user: AdminUserSummary;
+    requestedIp: string;
+    userAgent: string;
+    status: "pending" | "approved" | "rejected" | "consumed" | "expired";
+    scope: "once" | "whitelist" | "";
+    decidedBy: string;
+    decidedAt: string;
+    expiresAt: string;
+    createdAt: string;
+};
+export function fetchAdminLoginApprovals(token: string, query: AdminUserQuery & { status?: string }) {
+    return apiGet<{ items: AdminLoginApproval[]; total: number }>("/api/admin/login-approvals", compactApiParams(query), token);
+}
+export function decideAdminLoginApproval(token: string, id: string, approve: boolean, scope?: "once" | "whitelist") {
+    return apiPost<AdminLoginApproval>(`/api/admin/login-approvals/${encodeURIComponent(id)}/decision`, { approve, scope }, token);
+}
+export function fetchAdminUserAllowedIPs(token: string, userId: string) {
+    return apiGet<AdminAllowedIP[]>(`/api/admin/users/${encodeURIComponent(userId)}/allowed-ips`, undefined, token);
+}
+export function addAdminUserAllowedIP(token: string, userId: string, cidr: string) {
+    return apiPost<AdminAllowedIP>(`/api/admin/users/${encodeURIComponent(userId)}/allowed-ips`, { cidr }, token);
+}
+export function deleteAdminUserAllowedIP(token: string, userId: string, id: string) {
+    return apiDelete<boolean>(`/api/admin/users/${encodeURIComponent(userId)}/allowed-ips/${encodeURIComponent(id)}`, token);
+}
+export function setAdminUserIPPolicy(token: string, userId: string, enabled: boolean) {
+    return apiPut<AdminUser>(`/api/admin/users/${encodeURIComponent(userId)}/ip-policy`, { enabled }, token);
 }
 
 export async function fetchAdminCreditLogs(token: string, query: AdminUserQuery = {}) {

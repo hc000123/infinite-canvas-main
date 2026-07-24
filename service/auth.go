@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -22,9 +23,10 @@ import (
 )
 
 type TokenClaims struct {
-	UserID   string         `json:"userId"`
-	Username string         `json:"username"`
-	Role     model.UserRole `json:"role"`
+	UserID    string         `json:"userId"`
+	Username  string         `json:"username"`
+	Role      model.UserRole `json:"role"`
+	IPAddress string         `json:"ipAddress,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -101,24 +103,14 @@ func Register(username string, password string) (model.AuthSession, error) {
 }
 
 func Login(username string, password string) (model.AuthSession, error) {
-	user, ok, err := repository.GetUserByUsername(strings.TrimSpace(username))
+	result, err := LoginWithRequest(context.Background(), username, password)
 	if err != nil {
 		return model.AuthSession{}, err
 	}
-	if !ok || bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)) != nil {
-		return model.AuthSession{}, safeMessageError{message: "用户名或密码错误"}
+	if result.Status != "authenticated" {
+		return model.AuthSession{}, safeMessageError{message: "登录需要管理员审批"}
 	}
-	if user.Status == model.UserStatusBan {
-		return model.AuthSession{}, safeMessageError{message: "账号已被禁用"}
-	}
-	normalizeUserDefaults(&user)
-	user.LastLoginAt = now()
-	user.UpdatedAt = now()
-	user, err = repository.SaveUser(user)
-	if err != nil {
-		return model.AuthSession{}, err
-	}
-	return newSession(user)
+	return result.Session, nil
 }
 
 func LinuxDoAuthorizeURL(r *http.Request, redirect string) (string, error) {
@@ -217,6 +209,10 @@ func ParseToken(tokenText string) (TokenClaims, error) {
 }
 
 func CurrentAuthUser(tokenText string) (model.AuthUser, bool) {
+	return CurrentAuthUserForRequest(tokenText, "")
+}
+
+func CurrentAuthUserForRequest(tokenText string, ipAddress string) (model.AuthUser, bool) {
 	claims, err := ParseToken(tokenText)
 	if err != nil {
 		return model.AuthUser{}, false
@@ -226,6 +222,9 @@ func CurrentAuthUser(tokenText string) (model.AuthUser, bool) {
 		return model.AuthUser{}, false
 	}
 	if user.Status == model.UserStatusBan {
+		return model.AuthUser{}, false
+	}
+	if claims.IPAddress != "" && strings.TrimSpace(ipAddress) != "" && claims.IPAddress != strings.TrimSpace(ipAddress) {
 		return model.AuthUser{}, false
 	}
 	return model.PublicUser(user), true
@@ -305,6 +304,7 @@ func saveUser(user model.User, password string) (model.User, error) {
 			user.LinuxDoID = saved.LinuxDoID
 		}
 		user.LastLoginAt = saved.LastLoginAt
+		user.IPApprovalEnabled = saved.IPApprovalEnabled
 	}
 	if password != "" {
 		hash, err := hashPassword(password)
@@ -481,7 +481,11 @@ func GuestUser() model.AuthUser {
 }
 
 func newSession(user model.User) (model.AuthSession, error) {
-	token, err := newToken(user)
+	return newSessionWithIP(user, "")
+}
+
+func newSessionWithIP(user model.User, ipAddress string) (model.AuthSession, error) {
+	token, err := newTokenWithIP(user, ipAddress)
 	if err != nil {
 		return model.AuthSession{}, err
 	}
@@ -489,14 +493,19 @@ func newSession(user model.User) (model.AuthSession, error) {
 }
 
 func newToken(user model.User) (string, error) {
+	return newTokenWithIP(user, "")
+}
+
+func newTokenWithIP(user model.User, ipAddress string) (string, error) {
 	expireHours := config.Cfg.JWTExpireHours
 	if expireHours <= 0 {
 		expireHours = 168
 	}
 	claims := TokenClaims{
-		UserID:   user.ID,
-		Username: user.Username,
-		Role:     user.Role,
+		UserID:    user.ID,
+		Username:  user.Username,
+		Role:      user.Role,
+		IPAddress: strings.TrimSpace(ipAddress),
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expireHours) * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

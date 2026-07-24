@@ -1,6 +1,20 @@
 "use client";
 
-import { ApartmentOutlined, ArrowLeftOutlined, FileTextOutlined, HomeOutlined, LogoutOutlined, MenuOutlined, PictureOutlined, RobotOutlined, SafetyCertificateOutlined, SettingOutlined, TransactionOutlined, UserOutlined } from "@ant-design/icons";
+import {
+    ApartmentOutlined,
+    ArrowLeftOutlined,
+    AuditOutlined,
+    FileTextOutlined,
+    HomeOutlined,
+    LogoutOutlined,
+    MenuOutlined,
+    PictureOutlined,
+    RobotOutlined,
+    SafetyCertificateOutlined,
+    SettingOutlined,
+    TransactionOutlined,
+    UserOutlined,
+} from "@ant-design/icons";
 import { Button, Drawer, Flex, Grid, Layout, Menu, Spin, Typography, theme } from "antd";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
@@ -11,6 +25,7 @@ import { adminLayoutStyle } from "@/lib/app-theme";
 import { useUserStore } from "@/stores/use-user-store";
 
 const baseAdminMenus = [
+    { key: "/admin/login-approvals", icon: <AuditOutlined />, label: "登录审批" },
     { key: "/admin/credit-logs", icon: <TransactionOutlined />, label: "算力点日志" },
     { key: "/admin/ai-tasks", icon: <RobotOutlined />, label: "AI 任务日志" },
     { key: "/admin/prompts", icon: <FileTextOutlined />, label: "提示词管理" },
@@ -38,38 +53,42 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         () => [{ key: "/admin/users", icon: <UserOutlined />, label: "用户管理" }, ...(user?.role === "superadmin" ? [{ key: "/admin/admins", icon: <SafetyCertificateOutlined />, label: "管理员管理" }] : []), ...baseAdminMenus],
         [user?.role],
     );
-    const activeKey = pathname.startsWith("/admin/admins")
-        ? "/admin/admins"
-        : pathname.startsWith("/admin/workflow-skills")
-          ? "/admin/workflow-skills"
-          : pathname.startsWith("/admin/settings")
-            ? "/admin/settings"
-            : pathname.startsWith("/admin/assets")
-              ? "/admin/assets"
-              : pathname.startsWith("/admin/prompts")
-                ? "/admin/prompts"
-                : pathname.startsWith("/admin/ai-tasks")
-                  ? "/admin/ai-tasks"
-                  : pathname.startsWith("/admin/credit-logs")
-                    ? "/admin/credit-logs"
-                    : pathname.startsWith("/admin/users")
-                      ? "/admin/users"
-                      : "";
-    const pageTitle = pathname.startsWith("/admin/admins")
-        ? "管理员管理"
-        : pathname.startsWith("/admin/workflow-skills")
-          ? "工作流 Skill"
-          : pathname.startsWith("/admin/settings")
-            ? "系统设置"
-            : pathname.startsWith("/admin/assets")
-              ? "素材管理"
-              : pathname.startsWith("/admin/prompts")
-                ? "提示词管理"
-                : pathname.startsWith("/admin/ai-tasks")
-                  ? "AI 任务日志"
-                  : pathname.startsWith("/admin/credit-logs")
-                    ? "算力点日志"
-                    : "用户管理";
+    const activeKey = pathname.startsWith("/admin/login-approvals")
+        ? "/admin/login-approvals"
+        : pathname.startsWith("/admin/admins")
+          ? "/admin/admins"
+          : pathname.startsWith("/admin/workflow-skills")
+            ? "/admin/workflow-skills"
+            : pathname.startsWith("/admin/settings")
+              ? "/admin/settings"
+              : pathname.startsWith("/admin/assets")
+                ? "/admin/assets"
+                : pathname.startsWith("/admin/prompts")
+                  ? "/admin/prompts"
+                  : pathname.startsWith("/admin/ai-tasks")
+                    ? "/admin/ai-tasks"
+                    : pathname.startsWith("/admin/credit-logs")
+                      ? "/admin/credit-logs"
+                      : pathname.startsWith("/admin/users")
+                        ? "/admin/users"
+                        : "";
+    const pageTitle = pathname.startsWith("/admin/login-approvals")
+        ? "登录审批"
+        : pathname.startsWith("/admin/admins")
+          ? "管理员管理"
+          : pathname.startsWith("/admin/workflow-skills")
+            ? "工作流 Skill"
+            : pathname.startsWith("/admin/settings")
+              ? "系统设置"
+              : pathname.startsWith("/admin/assets")
+                ? "素材管理"
+                : pathname.startsWith("/admin/prompts")
+                  ? "提示词管理"
+                  : pathname.startsWith("/admin/ai-tasks")
+                    ? "AI 任务日志"
+                    : pathname.startsWith("/admin/credit-logs")
+                      ? "算力点日志"
+                      : "用户管理";
 
     useEffect(() => {
         if (!isReady) return;

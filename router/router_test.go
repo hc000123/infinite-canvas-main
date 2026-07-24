@@ -96,3 +96,15 @@ func TestAdminUserDetailRoutes(t *testing.T) {
 		}
 	}
 }
+
+func TestLoginApprovalRoutesExist(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	for _, item := range []struct{ method, path string }{{http.MethodGet, "/api/auth/login-approval/status"}, {http.MethodPost, "/api/auth/login-approval/exchange"}, {http.MethodGet, "/api/admin/login-approvals"}, {http.MethodGet, "/api/admin/users/user-1/allowed-ips"}} {
+		recorder := httptest.NewRecorder()
+		app.ServeHTTP(recorder, httptest.NewRequest(item.method, item.path, nil))
+		if recorder.Code == http.StatusNotFound {
+			t.Fatalf("login approval route missing: %s", item.path)
+		}
+	}
+}
