@@ -162,6 +162,25 @@ export async function fetchAdminUsers(token: string, query: AdminUserQuery = {})
     return apiGet<AdminUserListResponse>("/api/admin/users", compactApiParams(query), token);
 }
 
+export type AdminUserOverview = {
+    user: AdminUser;
+    aiTaskCount: number;
+    aiCreditsConsumed: number;
+    creditLogCount: number;
+};
+
+export function fetchAdminUser(token: string, id: string) {
+    return apiGet<AdminUserOverview>(`/api/admin/users/${encodeURIComponent(id)}`, undefined, token);
+}
+
+export function fetchAdminUserAITasks(token: string, id: string, query: AdminAITaskQuery) {
+    return apiGet<AdminAITaskListResponse>(`/api/admin/users/${encodeURIComponent(id)}/ai-tasks`, compactApiParams(query), token);
+}
+
+export function fetchAdminUserCreditLogs(token: string, id: string, query: AdminUserQuery) {
+    return apiGet<AdminCreditLogListResponse>(`/api/admin/users/${encodeURIComponent(id)}/credit-logs`, compactApiParams(query), token);
+}
+
 export async function saveAdminUser(token: string, user: Partial<AdminUser> & { password?: string }) {
     return apiPost<AdminUser>("/api/admin/users", user, token);
 }
