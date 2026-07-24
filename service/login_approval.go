@@ -75,7 +75,7 @@ func authenticatedLogin(ctx context.Context, user model.User, ipAllowed bool) (m
 	if saved.Role == model.UserRoleUser && saved.IPApprovalEnabled {
 		boundIP = RequestMetaFromContext(ctx).IPAddress
 	}
-	session, err := newSessionWithIP(saved, boundIP)
+	session, err := newSessionWithIPPolicy(saved, boundIP, ipAllowed)
 	if err != nil {
 		return model.LoginResult{}, err
 	}

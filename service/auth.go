@@ -27,6 +27,7 @@ type TokenClaims struct {
 	Username  string         `json:"username"`
 	Role      model.UserRole `json:"role"`
 	IPAddress string         `json:"ipAddress,omitempty"`
+	IPAllowed bool           `json:"ipAllowed"`
 	jwt.RegisteredClaims
 }
 
@@ -485,7 +486,11 @@ func newSession(user model.User) (model.AuthSession, error) {
 }
 
 func newSessionWithIP(user model.User, ipAddress string) (model.AuthSession, error) {
-	token, err := newTokenWithIP(user, ipAddress)
+	return newSessionWithIPPolicy(user, ipAddress, true)
+}
+
+func newSessionWithIPPolicy(user model.User, ipAddress string, ipAllowed bool) (model.AuthSession, error) {
+	token, err := newTokenWithIPPolicy(user, ipAddress, ipAllowed)
 	if err != nil {
 		return model.AuthSession{}, err
 	}
@@ -497,6 +502,10 @@ func newToken(user model.User) (string, error) {
 }
 
 func newTokenWithIP(user model.User, ipAddress string) (string, error) {
+	return newTokenWithIPPolicy(user, ipAddress, true)
+}
+
+func newTokenWithIPPolicy(user model.User, ipAddress string, ipAllowed bool) (string, error) {
 	expireHours := config.Cfg.JWTExpireHours
 	if expireHours <= 0 {
 		expireHours = 168
@@ -506,6 +515,7 @@ func newTokenWithIP(user model.User, ipAddress string) (string, error) {
 		Username:  user.Username,
 		Role:      user.Role,
 		IPAddress: strings.TrimSpace(ipAddress),
+		IPAllowed: ipAllowed,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expireHours) * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

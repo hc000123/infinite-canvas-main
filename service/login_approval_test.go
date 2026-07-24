@@ -45,6 +45,10 @@ func TestRestrictedSessionIsBoundToLoginIP(t *testing.T) {
 	if err != nil || result.Session.Token == "" {
 		t.Fatalf("login=%#v err=%v", result, err)
 	}
+	claims, err := ParseToken(result.Session.Token)
+	if err != nil || !claims.IPAllowed {
+		t.Fatalf("allowlisted session claims=%#v err=%v", claims, err)
+	}
 	if _, ok := CurrentAuthUserForRequest(result.Session.Token, "203.0.113.9"); ok {
 		t.Fatal("restricted session accepted another IP")
 	}
