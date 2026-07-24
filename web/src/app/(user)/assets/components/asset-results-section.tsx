@@ -8,11 +8,11 @@ import type { Asset } from "@/stores/use-asset-store";
 import { cn } from "@/lib/utils";
 import { assetEpisodeTitle, primaryAssetEpisodeKey } from "../asset-episode";
 import { isCompactVideoAssetGroup } from "../asset-result-layout";
+import { assetTypeGroupDomId, buildAssetTypeGroups, type AssetTypeGroup } from "../asset-type-groups";
 import type { AssetProjectResultGroup } from "../asset-project-groups";
 import type { AssetSortMode } from "../asset-page-filters";
 import type { OutdatedAssetVersionUsage } from "../asset-version-outdated-references";
 import { productionBibleKindLabel, type ProductionBibleItem } from "../../canvas/utils/production-bible";
-import { assetKindLabel } from "../asset-utils";
 import { workflowAssetInfo } from "../workflow-asset-image";
 import { AssetRow } from "./asset-card";
 import { AssetListToolbar } from "./asset-list-toolbar";
@@ -361,46 +361,6 @@ function buildAssetEpisodeGroups(assets: Asset[], labels: Record<string, string>
 function assetEpisodeSortIndex(title: string) {
     const match = title.match(/第\s*(\d+)\s*集/);
     return match?.[1] ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
-}
-
-type AssetTypeGroup = {
-    id: string;
-    title: string;
-    assets: Asset[];
-};
-
-function buildAssetTypeGroups(assets: Asset[]): AssetTypeGroup[] {
-    const groups = new Map<string, AssetTypeGroup>();
-    assets.forEach((asset) => {
-        const title = assetTypeGroupTitle(asset);
-        const id = normalizeAssetTypeGroupId(title);
-        const group = groups.get(id) || { id, title, assets: [] };
-        group.assets.push(asset);
-        groups.set(id, group);
-    });
-    return Array.from(groups.values()).sort((a, b) => assetTypeSortIndex(a.title) - assetTypeSortIndex(b.title) || a.title.localeCompare(b.title, "zh-Hans-CN"));
-}
-
-function assetTypeGroupTitle(asset: Asset) {
-    const workflowType = workflowAssetInfo(asset)?.type?.trim();
-    if (workflowType) return workflowType;
-    const titleType = asset.title.split("·").pop()?.trim();
-    if (titleType && titleType.length <= 8) return titleType;
-    return assetKindLabel(asset.kind);
-}
-
-function normalizeAssetTypeGroupId(value: string) {
-    return value.replace(/\s+/g, "-").replace(/[^\w\u4e00-\u9fa5-]/g, "") || "asset";
-}
-
-function assetTypeGroupDomId(projectId: string, typeId: string) {
-    return `asset-group-${normalizeAssetTypeGroupId(projectId)}-${normalizeAssetTypeGroupId(typeId)}`;
-}
-
-function assetTypeSortIndex(title: string) {
-    const order = ["角色", "人物", "场景", "环境", "道具", "服装", "妆发", "图片", "视频", "音频", "文本"];
-    const index = order.findIndex((item) => title.includes(item));
-    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
 }
 
 function workflowAssetTypeStats(assets: Asset[]) {

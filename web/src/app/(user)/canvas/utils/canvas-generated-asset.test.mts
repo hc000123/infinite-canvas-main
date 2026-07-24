@@ -72,7 +72,7 @@ test("builds generated image asset with canvas generation metadata", () => {
     );
 
     assert.equal(asset?.kind, "image");
-    assert.equal(asset?.title, "毕业典礼画布 · 节点 001 · v1");
+    assert.equal(asset?.title, "毕业典礼画布-节点001-v1");
     assert.equal(asset?.data.storageKey, "image:one");
     const generation = asset?.metadata?.generation as Record<string, any>;
     assert.equal(generation.source, "canvas");
@@ -116,7 +116,7 @@ test("names generated assets by canvas, stable node number and current media ver
         context,
     );
 
-    assert.equal(asset?.title, "毕业典礼画布 · 节点 007 · v3");
+    assert.equal(asset?.title, "毕业典礼画布-节点007-v3");
     assert.equal((asset?.metadata?.generation as Record<string, any>).canvasTitle, "毕业典礼画布");
     assert.equal((asset?.metadata?.generation as Record<string, any>).assetNodeNumber, 7);
 });
@@ -132,8 +132,8 @@ test("persists a first archive node number from canvas order and reuses it", () 
 });
 
 test("uses production version then v1 when no media version exists", () => {
-    assert.equal(buildGeneratedVideoAsset(videoNode({ assetNodeNumber: 2, productionVideoVersionNumber: 5 }), context)?.title, "毕业典礼画布 · 节点 002 · v5");
-    assert.equal(buildGeneratedVideoAsset(videoNode({ assetNodeNumber: 2 }), context)?.title, "毕业典礼画布 · 节点 002 · v1");
+    assert.equal(buildGeneratedVideoAsset(videoNode({ assetNodeNumber: 2, productionVideoVersionNumber: 5 }), context)?.title, "毕业典礼画布-节点002-v5");
+    assert.equal(buildGeneratedVideoAsset(videoNode({ assetNodeNumber: 2 }), context)?.title, "毕业典礼画布-节点002-v1");
 });
 
 test("does not build generated image asset for failed nodes", () => {

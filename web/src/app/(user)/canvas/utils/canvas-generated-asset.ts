@@ -187,7 +187,7 @@ function generatedCanvasAssetTitle(node: CanvasNodeData, context: CanvasGenerate
     const canvasTitle = context.canvasTitle.trim() || "未命名画布";
     const nodeNumber = String(canvasAssetNodeNumber(node, [node])).padStart(3, "0");
     const versionNumber = context.versionNumber || generatedCanvasAssetVersionNumber(node);
-    return `${canvasTitle} · 节点 ${nodeNumber} · v${versionNumber}`;
+    return `${canvasTitle}-节点${nodeNumber}-v${versionNumber}`;
 }
 
 function buildAssetGenerationReferences(metadata: CanvasNodeMetadata | undefined) {
