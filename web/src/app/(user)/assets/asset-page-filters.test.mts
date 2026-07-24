@@ -112,11 +112,12 @@ test("filters assets by kind, folder, project references and keyword", () => {
             folderFilter: "all",
             generationTaskFilter: "all",
             projectContextFilter: "project-1",
+            projectAssetIds: new Set(["asset-a", "asset-b"]),
             projectLibraryFilter: "all",
             projectReferencedAssetIds: new Set(["asset-b"]),
             searchText,
         }).map((asset) => asset.id),
-        ["asset-a", "asset-b", "asset-c"],
+        ["asset-a", "asset-b"],
     );
 });
 
@@ -180,6 +181,28 @@ test("filters favorite videos by canvas lineage", () => {
         }).map((asset) => asset.id),
         ["matching"],
     );
+});
+
+test("composes project membership with workflow and child canvas source scopes", () => {
+    const workflow = textAsset("workflow", "工作流", undefined, { originalWorkflow: { sourceProjectId: "project-1" } });
+    const canvasA = textAsset("canvas-a", "画布 A", undefined, { generation: { source: "canvas", canvasId: "canvas-a" } });
+    const canvasB = textAsset("canvas-b", "画布 B", undefined, { generation: { source: "canvas", canvasId: "canvas-b" } });
+    const unrelated = textAsset("unrelated", "其他");
+    const baseFilters = {
+        keyword: "",
+        kindFilter: "all" as const,
+        folderFilter: "all" as const,
+        generationTaskFilter: "all" as const,
+        projectContextFilter: "project-1",
+        projectLibraryFilter: "all" as const,
+        projectReferencedAssetIds: new Set<string>(),
+        projectAssetIds: new Set(["workflow", "canvas-a", "canvas-b"]),
+        projectCanvasIds: new Set(["canvas-a", "canvas-b"]),
+        searchText: (asset: Asset) => asset.title,
+    };
+
+    assert.deepEqual(filterAssetList([workflow, canvasA, canvasB, unrelated], { ...baseFilters, sourceScope: "workflow" }).map((asset) => asset.id), ["workflow"]);
+    assert.deepEqual(filterAssetList([workflow, canvasA, canvasB, unrelated], { ...baseFilters, sourceScope: "canvas", canvasLibraryFilter: "canvas-a" }).map((asset) => asset.id), ["canvas-a"]);
 });
 
 test("filters assets by storyboard group references and generation metadata", () => {

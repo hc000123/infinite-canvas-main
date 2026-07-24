@@ -123,7 +123,7 @@ function AssetsPageContent() {
         pageSize,
         previewAssetUsageReferences,
         projectContextFilter,
-        projectFolderRows,
+        projectOptions,
         projectLibraryFilter,
         projectLibraryProjectTitles,
         referenceVersionFilter,
@@ -144,14 +144,15 @@ function AssetsPageContent() {
         setProjectLibraryFilter,
         setReferenceVersionFilter,
         setSortMode,
+        setSourceScope,
         setStoryboardGroupFilter,
         sortMode,
+        sourceScope,
         storyboardGroupFilter,
         storyboardGroupOptions,
         validAssets,
         visibleAssetGroups,
         visibleProductionBibleItems,
-        workflowProjectOptions,
     } = useAssetPageQuery({
         assets,
         creativeProjects,
@@ -227,6 +228,7 @@ function AssetsPageContent() {
         setProjectLibraryFilter,
         setReferenceVersionFilter,
         setSortMode,
+        setSourceScope,
         setStoryboardGroupFilter,
     });
     const {
@@ -422,6 +424,7 @@ function AssetsPageContent() {
                             onProjectContextFilterChange: assetFilterActions.changeProjectContextFilter,
                             onProjectLibraryFilterChange: assetFilterActions.changeProjectLibraryFilter,
                             onReferenceVersionFilterChange: assetFilterActions.changeReferenceVersionFilter,
+                            onSourceScopeChange: assetFilterActions.changeSourceScope,
                             onStoryboardGroupFilterChange: assetFilterActions.changeStoryboardGroupFilter,
                         }}
                         counts={{
@@ -433,10 +436,9 @@ function AssetsPageContent() {
                             canvasProjectOptions,
                             episodeOptions,
                             generationFilterOptions,
-                            projectFolderRows,
+                            projectOptions,
                             regularFolders,
                             storyboardGroupOptions,
-                            workflowProjectOptions,
                         }}
                         values={{
                             activeFolderId,
@@ -453,6 +455,7 @@ function AssetsPageContent() {
                             projectContextFilter,
                             projectLibraryFilter,
                             referenceVersionFilter,
+                            sourceScope,
                             storyboardGroupFilter,
                         }}
                     />
@@ -484,7 +487,7 @@ function AssetsPageContent() {
                     selectedProductionBibleSummary={selectedProductionBibleItemSummary}
                     selectedVolcengineRefreshCount={selectedVolcengineRefreshAssets.length}
                     selectedVolcengineSubmitCount={selectedVolcengineSubmitAssets.length}
-                    showEpisodeGroups={Boolean(projectContextFilter)}
+                    showEpisodeGroups={Boolean(projectContextFilter && sourceScope !== "canvas")}
                     sortMode={sortMode}
                     submittingReviewId={submittingReviewId}
                     usages={outdatedAssetVersionUsages}

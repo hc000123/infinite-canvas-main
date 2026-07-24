@@ -2,6 +2,7 @@ import type { Asset, AssetKind } from "../../../stores/use-asset-store.ts";
 import { assetGenerationRecords, assetMatchesGenerationFilters, readString } from "./asset-generation.ts";
 import { assetInCanvasLibrary } from "./asset-canvas-library.ts";
 import { assetInProjectLibrary } from "./asset-project-library.ts";
+import { assetMatchesSourceScope, type AssetSourceScope } from "./asset-project-scope.ts";
 
 export type AssetProjectContext = {
     id: string;
@@ -67,6 +68,9 @@ type AssetListFilters = {
     generationModelProviderFilter?: string;
     generationTaskFilter: "all" | "with" | "without";
     projectContextFilter: string;
+    projectAssetIds?: Set<string>;
+    projectCanvasIds?: Set<string>;
+    sourceScope?: AssetSourceScope;
     projectLibraryFilter: ProjectLibraryFilter;
     canvasLibraryFilter: string;
     projectReferencedAssetIds: Set<string>;
@@ -122,6 +126,8 @@ export function filterAssetList(assets: Asset[], filters: AssetListFilters) {
         if (filters.kindFilter !== "all" && asset.kind !== filters.kindFilter) return false;
         if (filters.folderFilter === "root" && asset.folderId) return false;
         if (activeFolderId && asset.folderId !== activeFolderId) return false;
+        if (filters.projectContextFilter && filters.projectAssetIds && !filters.projectAssetIds.has(asset.id)) return false;
+        if (filters.projectContextFilter && filters.sourceScope && !assetMatchesSourceScope(asset, filters.sourceScope, filters.projectCanvasIds || new Set(), filters.canvasLibraryFilter)) return false;
         const inProjectLibrary = assetInProjectLibrary(asset, filters.projectContextFilter);
         if (filters.projectLibraryFilter === "shared" && !inProjectLibrary) return false;
         if (filters.projectLibraryFilter === "not_shared" && inProjectLibrary) return false;

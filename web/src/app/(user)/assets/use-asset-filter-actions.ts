@@ -5,6 +5,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { AssetKind } from "@/stores/use-asset-store";
 import type { AssetSortMode, ProjectLibraryFilter } from "./asset-page-filters";
 import type { ReferenceVersionFilter } from "./use-asset-page-query";
+import type { AssetSourceScope } from "./asset-project-scope";
 
 type GenerationTaskFilter = "all" | "with" | "without";
 
@@ -24,6 +25,7 @@ type Props = {
     setProjectLibraryFilter: Dispatch<SetStateAction<ProjectLibraryFilter>>;
     setReferenceVersionFilter: Dispatch<SetStateAction<ReferenceVersionFilter>>;
     setSortMode: Dispatch<SetStateAction<AssetSortMode>>;
+    setSourceScope: Dispatch<SetStateAction<AssetSourceScope>>;
     setStoryboardGroupFilter: Dispatch<SetStateAction<string>>;
 };
 
@@ -43,6 +45,7 @@ export function useAssetFilterActions({
     setProjectLibraryFilter,
     setReferenceVersionFilter,
     setSortMode,
+    setSourceScope,
     setStoryboardGroupFilter,
 }: Props) {
     const resetPage = () => setPage(1);
@@ -90,7 +93,13 @@ export function useAssetFilterActions({
         },
         changeProjectContextFilter(value: string) {
             resetPage();
+            setCanvasLibraryFilter("");
             setEpisodeFilter("");
+            setFolderFilter("all");
+            setProjectLibraryFilter("all");
+            setReferenceVersionFilter("all");
+            setSourceScope("all");
+            setStoryboardGroupFilter("");
             setProjectContextFilter(value);
         },
         changeProjectLibraryFilter(value: ProjectLibraryFilter) {
@@ -104,6 +113,15 @@ export function useAssetFilterActions({
         changeSortMode(value: AssetSortMode) {
             resetPage();
             setSortMode(value);
+        },
+        changeSourceScope(value: AssetSourceScope) {
+            resetPage();
+            setCanvasLibraryFilter("");
+            setEpisodeFilter("");
+            setProjectLibraryFilter("all");
+            setReferenceVersionFilter("all");
+            setSourceScope(value);
+            setStoryboardGroupFilter("");
         },
         changeStoryboardGroupFilter(value: string) {
             resetPage();
