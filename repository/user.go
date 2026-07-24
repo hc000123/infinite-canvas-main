@@ -250,12 +250,23 @@ func SaveCreditLog(log model.CreditLog) (model.CreditLog, error) {
 }
 
 func ListCreditLogs(q model.Query) ([]model.CreditLog, int64, error) {
+	return listCreditLogs("", q)
+}
+
+func ListCreditLogsForUser(userID string, q model.Query) ([]model.CreditLog, int64, error) {
+	return listCreditLogs(strings.TrimSpace(userID), q)
+}
+
+func listCreditLogs(userID string, q model.Query) ([]model.CreditLog, int64, error) {
 	db, err := DB()
 	if err != nil {
 		return nil, 0, err
 	}
 	q.Normalize()
 	tx := db.Model(&model.CreditLog{})
+	if userID != "" {
+		tx = tx.Where("user_id = ?", userID)
+	}
 	if keyword := strings.TrimSpace(q.Keyword); keyword != "" {
 		like := "%" + keyword + "%"
 		userMatch := "user_id LIKE ? OR user_id IN (SELECT id FROM users WHERE username LIKE ? OR display_name LIKE ?)"

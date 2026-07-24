@@ -98,6 +98,9 @@ func New() *gin.Engine {
 
 	admin := api.Group("/admin", middleware.AdminAuth)
 	admin.GET("/users", gin.WrapF(handler.AdminUsers))
+	admin.GET("/users/:id", func(c *gin.Context) { handler.AdminUser(c.Writer, c.Request, c.Param("id")) })
+	admin.GET("/users/:id/ai-tasks", func(c *gin.Context) { handler.AdminUserAITasks(c.Writer, c.Request, c.Param("id")) })
+	admin.GET("/users/:id/credit-logs", func(c *gin.Context) { handler.AdminUserCreditLogs(c.Writer, c.Request, c.Param("id")) })
 	admin.POST("/users", gin.WrapF(handler.AdminSaveUser))
 	admin.POST("/users/:id/credits", func(c *gin.Context) {
 		handler.AdminAdjustUserCredits(c.Writer, c.Request, c.Param("id"))

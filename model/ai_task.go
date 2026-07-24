@@ -70,6 +70,7 @@ type AITaskFrontendArtifact struct {
 type AITaskQuery struct {
 	Keyword        string
 	User           string
+	ExactUserID    string
 	Status         string
 	Kind           string
 	ActionType     string

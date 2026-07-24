@@ -84,3 +84,15 @@ func TestSuperAdminRoutesRequireSuperAdmin(t *testing.T) {
 		t.Fatalf("administrator route did not reach superadmin auth: %s", recorder.Body.String())
 	}
 }
+
+func TestAdminUserDetailRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	for _, path := range []string{"/api/admin/users/user-1", "/api/admin/users/user-1/ai-tasks", "/api/admin/users/user-1/credit-logs"} {
+		recorder := httptest.NewRecorder()
+		app.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code == http.StatusNotFound {
+			t.Fatalf("admin user detail route missing: %s", path)
+		}
+	}
+}
