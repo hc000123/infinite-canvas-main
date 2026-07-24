@@ -55,6 +55,7 @@ func DB() (*gorm.DB, error) {
 			&model.User{},
 			&model.CreditLog{},
 			&model.AITask{},
+			&model.UserActivityLog{},
 			&model.AgentConfigRecord{},
 			&model.AgentRun{},
 			&model.WorkflowRun{},
