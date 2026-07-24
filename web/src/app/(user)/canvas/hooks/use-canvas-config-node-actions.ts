@@ -1,8 +1,8 @@
 import { useCallback, useMemo, type Dispatch, type RefObject, type SetStateAction } from "react";
 
 import type { AiConfig } from "@/stores/use-config-store";
-import { buildNodeGenerationInputs, type NodeGenerationInput } from "../components/canvas-node-generation";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "../types";
+import { buildCanvasGenerationInputIndex, buildCanvasGenerationInputsFromIndex, type NodeGenerationInput } from "../utils/canvas-generation-inputs";
 import { buildCanvasVideoDefaultsPatch } from "../utils/canvas-video-config";
 import { applyNodeConfigPatch, shouldRememberVideoDefaults } from "../utils/canvas-page-helpers";
 
@@ -23,9 +23,10 @@ export function useCanvasConfigNodeActions({
 }) {
     const configInputsById = useMemo(() => {
         const map = new Map<string, NodeGenerationInput[]>();
+        const inputIndex = buildCanvasGenerationInputIndex(nodes, connections);
         nodes.forEach((node) => {
             if (node.type !== CanvasNodeType.Config) return;
-            map.set(node.id, buildNodeGenerationInputs(node.id, nodes, connections));
+            map.set(node.id, buildCanvasGenerationInputsFromIndex(node.id, inputIndex));
         });
         return map;
     }, [connections, nodes]);

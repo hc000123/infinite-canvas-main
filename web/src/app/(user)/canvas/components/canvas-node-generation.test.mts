@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyCanvasInputOrder, buildCanvasGenerationContext } from "../utils/canvas-generation-inputs.ts";
+import { applyCanvasInputOrder, buildCanvasGenerationContext, buildCanvasGenerationInputIndex, buildCanvasGenerationInputs, buildCanvasGenerationInputsFromIndex } from "../utils/canvas-generation-inputs.ts";
 
 test("builds generation context with upstream video references", () => {
     const context = buildCanvasGenerationContext(
@@ -244,6 +244,41 @@ test("keeps first and last frame roles stable when connection storage order chan
         context.referenceImages.map((image) => [image.id, image.seedanceRole]),
         [
             ["image-a", "first_frame"],
+            ["image-b", "last_frame"],
+        ],
+    );
+});
+
+test("builds the same ordered inputs from a shared topology index", () => {
+    const nodes = [
+        { id: "text", type: "text", title: "描述", metadata: { content: "雨夜街道" } },
+        { id: "image-a", type: "image", title: "首帧", metadata: { content: "asset://A" } },
+        { id: "image-b", type: "image", title: "尾帧", metadata: { content: "asset://B" } },
+        {
+            id: "target",
+            type: "config",
+            title: "视频配置",
+            metadata: {
+                inputOrder: ["image-a", "text", "image-b"],
+                videoReferenceImageMode: "first_last_frame" as const,
+            },
+        },
+    ];
+    const connections = [
+        { fromNodeId: "image-b", toNodeId: "target" },
+        { fromNodeId: "text", toNodeId: "target" },
+        { fromNodeId: "image-a", toNodeId: "target" },
+    ];
+
+    const expected = buildCanvasGenerationInputs("target", nodes, connections);
+    const indexed = buildCanvasGenerationInputsFromIndex("target", buildCanvasGenerationInputIndex(nodes, connections));
+
+    assert.deepEqual(indexed, expected);
+    assert.deepEqual(
+        indexed.map((input) => [input.nodeId, input.image?.seedanceRole]),
+        [
+            ["image-a", "first_frame"],
+            ["text", undefined],
             ["image-b", "last_frame"],
         ],
     );

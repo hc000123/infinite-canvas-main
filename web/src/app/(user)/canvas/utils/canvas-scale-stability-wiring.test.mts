@@ -25,3 +25,11 @@ test("nodes and connections share viewport visibility helpers", () => {
     assert.match(connectionsLayer, /canvasViewportBounds\(viewport, viewportSize, 600\)/);
     assert.match(page, /viewportSize=\{size\}/);
 });
+
+test("config nodes reuse one generation input topology index", () => {
+    const actions = readCanvasFile("../hooks/use-canvas-config-node-actions.ts");
+
+    assert.match(actions, /const inputIndex = buildCanvasGenerationInputIndex\(nodes, connections\)/);
+    assert.match(actions, /buildCanvasGenerationInputsFromIndex\(node\.id, inputIndex\)/);
+    assert.doesNotMatch(actions, /buildNodeGenerationInputs\(node\.id, nodes, connections\)/);
+});

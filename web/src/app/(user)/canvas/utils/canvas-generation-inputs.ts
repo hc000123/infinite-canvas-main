@@ -33,6 +33,11 @@ export type CanvasGenerationConnectionLike = {
     toHandle?: string;
 };
 
+export type CanvasGenerationInputIndex = {
+    nodeById: Map<string, CanvasGenerationNodeLike>;
+    incomingConnectionsByTarget: Map<string, CanvasGenerationConnectionLike[]>;
+};
+
 export type NodeGenerationContext = {
     prompt: string;
     referenceImages: ReferenceImage[];
@@ -100,8 +105,24 @@ export function buildCanvasGenerationContext(nodeId: string, nodes: CanvasGenera
 }
 
 export function buildCanvasGenerationInputs(nodeId: string, nodes: CanvasGenerationNodeLike[], connections: CanvasGenerationConnectionLike[]): NodeGenerationInput[] {
-    const target = nodes.find((node) => node.id === nodeId);
-    const inputs = getOrderedUpstreamNodes(nodeId, nodes, connections).flatMap((node): NodeGenerationInput[] => {
+    return buildCanvasGenerationInputsFromIndex(nodeId, buildCanvasGenerationInputIndex(nodes, connections));
+}
+
+export function buildCanvasGenerationInputIndex(nodes: CanvasGenerationNodeLike[], connections: CanvasGenerationConnectionLike[]): CanvasGenerationInputIndex {
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const incomingConnectionsByTarget = new Map<string, CanvasGenerationConnectionLike[]>();
+    connections.forEach((connection) => {
+        const incoming = incomingConnectionsByTarget.get(connection.toNodeId);
+        if (incoming) incoming.push(connection);
+        else incomingConnectionsByTarget.set(connection.toNodeId, [connection]);
+    });
+    return { nodeById, incomingConnectionsByTarget };
+}
+
+export function buildCanvasGenerationInputsFromIndex(nodeId: string, index: CanvasGenerationInputIndex): NodeGenerationInput[] {
+    const target = index.nodeById.get(nodeId);
+    const connections = index.incomingConnectionsByTarget.get(nodeId) || [];
+    const inputs = getOrderedUpstreamNodes(target, connections, index.nodeById).flatMap((node): NodeGenerationInput[] => {
         const image = readReferenceImage(node);
         if (image) return [{ nodeId: node.id, type: "image", title: node.title, image }];
         const video = readReferenceVideo(node);
@@ -115,7 +136,7 @@ export function buildCanvasGenerationInputs(nodeId: string, nodes: CanvasGenerat
     return applySeedanceImageRoles(
         inputs,
         target,
-        connections.filter((connection) => connection.toNodeId === nodeId),
+        connections,
     );
 }
 
@@ -195,11 +216,9 @@ function resolveSeedanceImageRole(target: CanvasGenerationNodeLike | undefined, 
     return normalizeSeedanceImageRole(configuredRole) || normalizeSeedanceImageRole(connectionRole) || defaultSeedanceImageRole(index, target?.metadata?.videoReferenceImageMode);
 }
 
-function getOrderedUpstreamNodes(nodeId: string, nodes: CanvasGenerationNodeLike[], connections: CanvasGenerationConnectionLike[]) {
-    const target = nodes.find((node) => node.id === nodeId);
+function getOrderedUpstreamNodes(target: CanvasGenerationNodeLike | undefined, connections: CanvasGenerationConnectionLike[], nodeById: ReadonlyMap<string, CanvasGenerationNodeLike>) {
     const upstreamNodes = connections
-        .filter((connection) => connection.toNodeId === nodeId)
-        .map((connection) => nodes.find((node) => node.id === connection.fromNodeId))
+        .map((connection) => nodeById.get(connection.fromNodeId))
         .filter((node): node is CanvasGenerationNodeLike => Boolean(node));
     const order = target?.metadata?.inputOrder || [];
     return [...order.map((id) => upstreamNodes.find((node) => node.id === id)).filter((node): node is CanvasGenerationNodeLike => Boolean(node)), ...upstreamNodes.filter((node) => !order.includes(node.id))];
