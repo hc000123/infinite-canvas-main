@@ -24,12 +24,11 @@ type BulkReviewAction = "submit" | "refresh" | "";
 type Props = {
     allFilteredSelected: boolean;
     allVisibleProductionBibleSelected: boolean;
-    assetPaginationEnabled: boolean;
     bulkReviewAction: BulkReviewAction;
     episodeTitleMap: Record<string, string>;
     filteredCount: number;
     page: number;
-    pageSize: number;
+    pageCount: number;
     productionBibleCount: number;
     projectContextFilter: string;
     referenceVersionFilter: "all" | "outdated";
@@ -68,7 +67,7 @@ type Props = {
     onExportSelected: () => void;
     onOpenAsset: (asset: Asset) => void;
     onOpenBulkOutdated: () => void;
-    onPageChange: (page: number, pageSize: number) => void;
+    onPageChange: (page: number) => void;
     onRefreshAssetReview: (asset: Asset) => void;
     onGenerateWorkflowImage: (asset: Asset) => void;
     onMatchWorkflowImage: (asset: Asset) => void;
@@ -91,12 +90,11 @@ type Props = {
 export function AssetResultsSection({
     allFilteredSelected,
     allVisibleProductionBibleSelected,
-    assetPaginationEnabled,
     bulkReviewAction,
     episodeTitleMap,
     filteredCount,
     page,
-    pageSize,
+    pageCount,
     productionBibleCount,
     projectContextFilter,
     referenceVersionFilter,
@@ -156,7 +154,7 @@ export function AssetResultsSection({
 }: Props) {
     const [collapsedAssetTypeGroups, setCollapsedAssetTypeGroups] = useState<Record<string, boolean>>({});
     const hasVisibleResults = visibleAssetGroups.some((group) => group.assets.length || group.productionBibleItems.length);
-    const showAssetPagination = assetPaginationEnabled && filteredCount > pageSize;
+    const showAssetPagination = pageCount > 1;
     const toggleAssetTypeGroup = (id: string) => setCollapsedAssetTypeGroups((value) => ({ ...value, [id]: !value[id] }));
     const renderAssetTypeGroups = (groupId: string, typeGroups: AssetTypeGroup[], scopeId = "") => (
         <div className="grid gap-3">
@@ -331,7 +329,7 @@ export function AssetResultsSection({
 
                     {showAssetPagination ? (
                         <div className="flex justify-center">
-                            <Pagination current={page} pageSize={pageSize} total={filteredCount} showSizeChanger pageSizeOptions={[30, 60, 100]} onChange={onPageChange} />
+                            <Pagination current={page} pageSize={1} total={pageCount} showSizeChanger={false} onChange={onPageChange} />
                         </div>
                     ) : null}
                 </>

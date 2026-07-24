@@ -158,11 +158,6 @@ export function sortAssetList(assets: Asset[], sortMode: AssetSortMode) {
     });
 }
 
-export function paginateAssetList(assets: Asset[], page: number, pageSize: number) {
-    const start = (page - 1) * pageSize;
-    return assets.slice(start, start + pageSize);
-}
-
 export function selectedAssetsFromIds(assets: Asset[], selectedAssetIds: Set<string>) {
     return assets.filter((asset) => selectedAssetIds.has(asset.id));
 }

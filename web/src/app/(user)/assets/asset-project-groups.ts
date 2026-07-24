@@ -1,7 +1,7 @@
 import type { Asset, AssetFolder } from "@/stores/use-asset-store";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible";
-import { assetGenerationProjectId, assetGenerationRecords } from "./asset-generation";
-import { assetProjectLibraryEntries } from "./asset-project-library";
+import { assetGenerationProjectId, assetGenerationRecords } from "./asset-generation.ts";
+import { assetProjectLibraryEntries } from "./asset-project-library.ts";
 
 const UNFILED_GROUP_ID = "__unfiled_project_assets__";
 
@@ -16,6 +16,7 @@ export type AssetProjectResultGroup = {
 export function buildAssetProjectResultGroups({
     assets,
     folderMap,
+    forcedProjectId,
     productionBibleItems,
     projectOrder,
     projectReferencedAssetIdsByProject,
@@ -23,6 +24,7 @@ export function buildAssetProjectResultGroups({
 }: {
     assets: Asset[];
     folderMap: Map<string, AssetFolder>;
+    forcedProjectId?: string;
     productionBibleItems: ProductionBibleItem[];
     projectOrder: string[];
     projectReferencedAssetIdsByProject: Map<string, Set<string>>;
@@ -45,7 +47,7 @@ export function buildAssetProjectResultGroups({
     };
 
     assets.forEach((asset) => {
-        ensureGroup(resolveAssetProjectId(asset, folderMap, projectReferencedAssetIdsByProject)).assets.push(asset);
+        ensureGroup(forcedProjectId || resolveAssetProjectId(asset, folderMap, projectReferencedAssetIdsByProject)).assets.push(asset);
     });
     productionBibleItems.forEach((item) => {
         ensureGroup(item.projectId).productionBibleItems.push(item);

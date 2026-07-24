@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { Asset } from "../../../stores/use-asset-store.ts";
-import { buildAssetProjectContexts, DEFAULT_ASSET_SORT_MODE, filterAssetList, paginateAssetList, projectReferencedAssetIds, selectedAssetSummary, selectedAssetsFromIds, sortAssetList, storyboardGroupReferencedAssetIds } from "./asset-page-filters.ts";
+import { buildAssetProjectContexts, DEFAULT_ASSET_SORT_MODE, filterAssetList, projectReferencedAssetIds, selectedAssetSummary, selectedAssetsFromIds, sortAssetList, storyboardGroupReferencedAssetIds } from "./asset-page-filters.ts";
 
 const now = "2026-06-05T00:00:00.000Z";
 
@@ -304,12 +304,8 @@ test("uses natural title order as the asset page default", () => {
     );
 });
 
-test("paginates and summarizes selected assets", () => {
+test("summarizes selected assets", () => {
     const assets = [textAsset("a", "素材一"), textAsset("b", "素材二"), textAsset("c", "素材三"), textAsset("d", "素材四")];
-    assert.deepEqual(
-        paginateAssetList(assets, 2, 2).map((asset) => asset.id),
-        ["c", "d"],
-    );
     assert.deepEqual(
         selectedAssetsFromIds(assets, new Set(["b", "d"])).map((asset) => asset.id),
         ["b", "d"],

@@ -98,7 +98,6 @@ function AssetsPageContent() {
         activeFolderId,
         activeFolderName,
         assetAliasIdsByCanonicalId,
-        assetPaginationEnabled,
         canvasLibraryFilter,
         canvasLibraryTitles,
         canvasProjectOptions,
@@ -120,7 +119,7 @@ function AssetsPageContent() {
         keyword,
         outdatedAssetVersionUsages,
         page,
-        pageSize,
+        pageCount,
         previewAssetUsageReferences,
         projectContextFilter,
         projectOptions,
@@ -139,7 +138,6 @@ function AssetsPageContent() {
         setKindFilter,
         setKeyword,
         setPage,
-        setPageSize,
         setProjectContextFilter,
         setProjectLibraryFilter,
         setReferenceVersionFilter,
@@ -464,12 +462,11 @@ function AssetsPageContent() {
                 <AssetResultsSection
                     allFilteredSelected={allFilteredSelected}
                     allVisibleProductionBibleSelected={allVisibleProductionBibleSelected}
-                    assetPaginationEnabled={assetPaginationEnabled}
                     bulkReviewAction={bulkReviewAction}
                     episodeTitleMap={episodeTitleMap}
                     filteredCount={filteredAssets.length}
                     page={page}
-                    pageSize={pageSize}
+                    pageCount={pageCount}
                     productionBibleCount={visibleProductionBibleItems.length}
                     projectContextFilter={projectContextFilter}
                     referenceVersionFilter={referenceVersionFilter}
@@ -508,10 +505,7 @@ function AssetsPageContent() {
                     onExportSelected={() => void exportSelectedAssets()}
                     onOpenAsset={setPreviewAsset}
                     onOpenBulkOutdated={() => setBulkOutdatedOpen(true)}
-                    onPageChange={(nextPage, nextPageSize) => {
-                        setPage(nextPage);
-                        setPageSize(nextPageSize);
-                    }}
+                    onPageChange={setPage}
                     onRefreshAssetReview={(asset) => void refreshImageReview(asset)}
                     onGenerateWorkflowImage={(asset) => void generateWorkflowAssetImage(asset)}
                     onMatchWorkflowImage={openWorkflowImageMatch}
