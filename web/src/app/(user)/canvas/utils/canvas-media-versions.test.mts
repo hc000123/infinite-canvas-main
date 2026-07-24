@@ -6,6 +6,14 @@ import * as mediaVersions from "./canvas-media-versions.ts";
 import { appendCanvasMediaVersion, applyCanvasPromptDraft, canvasMediaVersionNavigation, canvasPromptEditorValue, completePendingCanvasMediaVersion, hydrateCanvasMediaVersionUrls, patchCurrentCanvasMediaVersion, rollbackPendingCanvasMediaVersion, switchCanvasMediaVersion } from "./canvas-media-versions.ts";
 
 const now = "2026-07-22T16:00:00.000Z";
+const oldPromptDocument = {
+    version: 1 as const,
+    blocks: [{ type: "reference" as const, nodeId: "image-old", kind: "image" as const, label: "旧参考图" }],
+};
+const newPromptDocument = {
+    version: 1 as const,
+    blocks: [{ type: "reference" as const, nodeId: "image-new", kind: "image" as const, label: "新参考图" }],
+};
 
 const legacyImageNode: CanvasNodeData = {
     id: "image-1",
@@ -18,6 +26,7 @@ const legacyImageNode: CanvasNodeData = {
         content: "blob:old",
         storageKey: "image:old",
         prompt: "旧提示词",
+        promptDocument: oldPromptDocument,
         model: "image-model-old",
         ratio: "16:9",
         status: "success",
@@ -74,14 +83,16 @@ test("appends v2 to a legacy generated node without changing node identity", () 
     assert.equal(next.metadata?.prompt, "新的提示词");
 });
 
-test("switching versions restores generated fields but preserves canvas bindings", () => {
+test("switching versions restores generated fields and each version's prompt document", () => {
     const completed: CanvasNodeData = {
         ...legacyImageNode,
         metadata: { ...legacyImageNode.metadata, content: "blob:new", storageKey: "image:new", model: "image-model-new", ratio: "1:1" },
     };
-    const versionedNode = appendCanvasMediaVersion(legacyImageNode, completed, "新的提示词", now);
+    const versionedNode = appendCanvasMediaVersion(legacyImageNode, completed, "新的提示词", now, newPromptDocument);
     const firstVersionId = versionedNode.metadata?.mediaVersions?.[0]?.id;
+    const secondVersionId = versionedNode.metadata?.mediaVersions?.[1]?.id;
     assert.ok(firstVersionId);
+    assert.ok(secondVersionId);
 
     const switched = switchCanvasMediaVersion(versionedNode, firstVersionId);
 
@@ -89,6 +100,8 @@ test("switching versions restores generated fields but preserves canvas bindings
     assert.equal(switched.metadata?.prompt, "旧提示词");
     assert.equal(switched.metadata?.model, "image-model-old");
     assert.equal(switched.metadata?.productionPackageId, "P01");
+    assert.deepEqual(switched.metadata?.promptDocument, oldPromptDocument);
+    assert.deepEqual(switchCanvasMediaVersion(versionedNode, secondVersionId).metadata?.promptDocument, newPromptDocument);
     assert.deepEqual(switched.position, legacyImageNode.position);
 });
 
@@ -151,7 +164,7 @@ test("completes a pending video as a new version", () => {
         metadata: {
             ...legacyImageNode.metadata,
             mediaVersions: undefined,
-            pendingMediaVersion: { prompt: "新视频提示词", startedAt: now },
+            pendingMediaVersion: { prompt: "新视频提示词", promptDocument: newPromptDocument, startedAt: now },
         },
     };
     const completedNode: CanvasNodeData = {
@@ -163,6 +176,7 @@ test("completes a pending video as a new version", () => {
 
     assert.equal(completed.metadata?.mediaVersions?.length, 2);
     assert.equal(completed.metadata?.mediaVersions?.[1]?.prompt, "新视频提示词");
+    assert.deepEqual(completed.metadata?.mediaVersions?.[1]?.promptDocument, newPromptDocument);
     assert.equal(completed.metadata?.pendingMediaVersion, undefined);
     assert.equal(completed.metadata?.promptDraft, undefined);
 });
