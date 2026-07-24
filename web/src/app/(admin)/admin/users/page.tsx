@@ -11,10 +11,7 @@ import { useAdminUsers } from "./use-admin-users";
 
 type UserFormValues = Partial<AdminUser> & { password?: string };
 
-const roleOptions = [
-    { label: "普通用户", value: "user" },
-    { label: "管理员", value: "admin" },
-];
+const roleOptions = [{ label: "普通用户", value: "user" }];
 
 const statusOptions = [
     { label: "正常", value: "active" },
@@ -230,7 +227,8 @@ export default function AdminUsersPage() {
                 </Form>
             </Modal>
 
-            <Modal rootClassName="studio-modal"
+            <Modal
+                rootClassName="studio-modal"
                 title="删除用户"
                 open={Boolean(deletingUser)}
                 onCancel={() => setDeletingUser(null)}

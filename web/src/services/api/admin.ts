@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, apiPostForm, compactApiParams } from "@/services/api/request";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm, compactApiParams } from "@/services/api/request";
 import type { Prompt, PromptListResponse } from "@/services/api/prompts";
 
 export type AdminPromptCategory = {
@@ -16,7 +16,7 @@ export type AdminUser = {
     email: string;
     displayName: string;
     avatarUrl: string;
-    role: "user" | "admin";
+    role: "user" | "admin" | "superadmin";
     credits: number;
     affCode: string;
     affCount: number;
@@ -32,6 +32,35 @@ export type AdminUserListResponse = {
     items: AdminUser[];
     total: number;
 };
+
+export type AdminAccount = Omit<AdminUser, "role"> & { role: "admin" | "superadmin" };
+
+export type AdminAccountQuery = AdminUserQuery & {
+    role?: "admin" | "superadmin";
+    status?: "active" | "ban";
+};
+
+export type AdminAccountUpdate = Pick<AdminAccount, "username" | "displayName" | "email" | "role" | "status">;
+
+export async function fetchAdminAccounts(token: string, query: AdminAccountQuery = {}) {
+    return apiGet<{ items: AdminAccount[]; total: number }>("/api/admin/admins", compactApiParams(query), token);
+}
+
+export async function createAdminAccount(token: string, input: AdminAccountUpdate & { password: string }) {
+    return apiPost<AdminAccount>("/api/admin/admins", input, token);
+}
+
+export async function updateAdminAccount(token: string, id: string, input: AdminAccountUpdate) {
+    return apiPatch<AdminAccount>(`/api/admin/admins/${encodeURIComponent(id)}`, input, token);
+}
+
+export async function resetAdminAccountPassword(token: string, id: string, password: string) {
+    return apiPost<boolean>(`/api/admin/admins/${encodeURIComponent(id)}/password`, { password }, token);
+}
+
+export async function deleteAdminAccount(token: string, id: string) {
+    return apiDelete<boolean>(`/api/admin/admins/${encodeURIComponent(id)}`, token);
+}
 
 export type AdminCreditLog = {
     id: string;

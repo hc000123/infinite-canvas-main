@@ -1,17 +1,16 @@
 "use client";
 
-import { ApartmentOutlined, ArrowLeftOutlined, FileTextOutlined, HomeOutlined, LogoutOutlined, MenuOutlined, PictureOutlined, RobotOutlined, SettingOutlined, TransactionOutlined, UserOutlined } from "@ant-design/icons";
+import { ApartmentOutlined, ArrowLeftOutlined, FileTextOutlined, HomeOutlined, LogoutOutlined, MenuOutlined, PictureOutlined, RobotOutlined, SafetyCertificateOutlined, SettingOutlined, TransactionOutlined, UserOutlined } from "@ant-design/icons";
 import { Button, Drawer, Flex, Grid, Layout, Menu, Spin, Typography, theme } from "antd";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { adminLayoutStyle } from "@/lib/app-theme";
 import { useUserStore } from "@/stores/use-user-store";
 
-const adminMenus = [
-    { key: "/admin/users", icon: <UserOutlined />, label: "用户管理" },
+const baseAdminMenus = [
     { key: "/admin/credit-logs", icon: <TransactionOutlined />, label: "算力点日志" },
     { key: "/admin/ai-tasks", icon: <RobotOutlined />, label: "AI 任务日志" },
     { key: "/admin/prompts", icon: <FileTextOutlined />, label: "提示词管理" },
@@ -34,34 +33,43 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     const [, startTransition] = useTransition();
     const screens = Grid.useBreakpoint();
     const isCompact = screens.md === false;
-    const activeKey = pathname.startsWith("/admin/workflow-skills")
-        ? "/admin/workflow-skills"
-        : pathname.startsWith("/admin/settings")
-          ? "/admin/settings"
-          : pathname.startsWith("/admin/assets")
-            ? "/admin/assets"
-            : pathname.startsWith("/admin/prompts")
-              ? "/admin/prompts"
-              : pathname.startsWith("/admin/ai-tasks")
-                ? "/admin/ai-tasks"
-                : pathname.startsWith("/admin/credit-logs")
-                  ? "/admin/credit-logs"
-                  : pathname.startsWith("/admin/users")
-                    ? "/admin/users"
-                    : "";
-    const pageTitle = pathname.startsWith("/admin/workflow-skills")
-        ? "工作流 Skill"
-        : pathname.startsWith("/admin/settings")
-          ? "系统设置"
-          : pathname.startsWith("/admin/assets")
-            ? "素材管理"
-            : pathname.startsWith("/admin/prompts")
-              ? "提示词管理"
-              : pathname.startsWith("/admin/ai-tasks")
-                ? "AI 任务日志"
-                : pathname.startsWith("/admin/credit-logs")
-                  ? "算力点日志"
-                  : "用户管理";
+    const hasAdminAccess = user?.role === "admin" || user?.role === "superadmin";
+    const adminMenus = useMemo(
+        () => [{ key: "/admin/users", icon: <UserOutlined />, label: "用户管理" }, ...(user?.role === "superadmin" ? [{ key: "/admin/admins", icon: <SafetyCertificateOutlined />, label: "管理员管理" }] : []), ...baseAdminMenus],
+        [user?.role],
+    );
+    const activeKey = pathname.startsWith("/admin/admins")
+        ? "/admin/admins"
+        : pathname.startsWith("/admin/workflow-skills")
+          ? "/admin/workflow-skills"
+          : pathname.startsWith("/admin/settings")
+            ? "/admin/settings"
+            : pathname.startsWith("/admin/assets")
+              ? "/admin/assets"
+              : pathname.startsWith("/admin/prompts")
+                ? "/admin/prompts"
+                : pathname.startsWith("/admin/ai-tasks")
+                  ? "/admin/ai-tasks"
+                  : pathname.startsWith("/admin/credit-logs")
+                    ? "/admin/credit-logs"
+                    : pathname.startsWith("/admin/users")
+                      ? "/admin/users"
+                      : "";
+    const pageTitle = pathname.startsWith("/admin/admins")
+        ? "管理员管理"
+        : pathname.startsWith("/admin/workflow-skills")
+          ? "工作流 Skill"
+          : pathname.startsWith("/admin/settings")
+            ? "系统设置"
+            : pathname.startsWith("/admin/assets")
+              ? "素材管理"
+              : pathname.startsWith("/admin/prompts")
+                ? "提示词管理"
+                : pathname.startsWith("/admin/ai-tasks")
+                  ? "AI 任务日志"
+                  : pathname.startsWith("/admin/credit-logs")
+                    ? "算力点日志"
+                    : "用户管理";
 
     useEffect(() => {
         if (!isReady) return;
@@ -69,14 +77,16 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             router.replace("/login?redirect=/admin");
             return;
         }
-        if (user?.role !== "admin") {
+        if (user && user.role !== "admin" && user.role !== "superadmin") {
             router.replace("/");
+            return;
         }
-    }, [isReady, router, token, user?.role]);
+        if (pathname.startsWith("/admin/admins") && user?.role !== "superadmin") router.replace("/admin/users");
+    }, [isReady, pathname, router, token, user]);
 
     useEffect(() => {
         adminMenus.forEach((item) => router.prefetch(item.key));
-    }, [router]);
+    }, [adminMenus, router]);
 
     useEffect(() => {
         setPendingMenuKey("");
@@ -100,7 +110,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         router.push("/projects");
     };
 
-    if (!isReady || !token || user?.role !== "admin") {
+    if (!isReady || !token || !hasAdminAccess) {
         const fallbackTitle = !isReady ? (authWaitExpired ? "登录状态确认较慢" : "正在进入管理后台") : !token ? "请先登录管理员账号" : "当前账号没有管理后台权限";
         const fallbackDescription = !isReady ? (authWaitExpired ? "你可以重新登录，或先回到项目中心。" : "正在确认登录状态，请稍候。") : !token ? "登录后会自动回到管理后台。" : "你可以返回项目中心继续使用。";
 
@@ -125,7 +135,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                                     去登录
                                 </Button>
                             ) : null}
-                            {(isReady && token && user?.role !== "admin") || authWaitExpired ? <Button href="/projects">前往项目</Button> : null}
+                            {(isReady && token && !hasAdminAccess) || authWaitExpired ? <Button href="/projects">前往项目</Button> : null}
                         </Flex>
                     </Flex>
                 </div>
