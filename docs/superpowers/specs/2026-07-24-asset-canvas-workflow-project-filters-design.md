@@ -39,7 +39,7 @@
 
 - 素材的 `metadata.canvasLibraries` 包含该画布 ID；
 - 素材任一生成记录的 `canvasId` 等于该画布 ID；
-- 素材生成记录使用旧结构，且画布 ID 记录在 `projectId`，同时生成来源为画布。
+- 旧素材的 `metadata.canvasSource.canvasId` 等于该画布 ID。
 
 匹配逻辑集中在素材库的纯函数工具中，页面只管理筛选状态，不在组件内解析元数据。
 
