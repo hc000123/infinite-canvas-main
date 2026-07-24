@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckSquare, Download, Eye, PencilLine, RefreshCw, ShieldCheck, Square, Trash2 } from "lucide-react";
+import { CheckSquare, Download, PencilLine, RefreshCw, ShieldCheck, Square, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { canSubmitVolcengineReview, isVolcengineReviewProcessing, shouldShowVolcengineReviewAction } from "@/services/volcengine-asset-metadata";
@@ -49,11 +49,10 @@ export function CompactVideoAssetCard(props: {
                 </button>
                 <div
                     className={cn(
-                        "absolute bottom-2 left-2 right-2 flex flex-wrap justify-end gap-1 rounded-md bg-[var(--studio-media-overlay)] p-1 opacity-100 backdrop-blur transition lg:opacity-0 lg:group-focus-within:opacity-100 lg:group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100",
-                        props.selected && "lg:opacity-100",
+                        "absolute bottom-2 left-2 right-2 flex justify-end gap-0.5 rounded-md bg-[var(--studio-media-overlay)] p-1 opacity-0 backdrop-blur transition group-focus-within:opacity-100 group-hover:opacity-100 [&_.ant-btn]:!h-7 [&_.ant-btn]:!min-w-7 [&_.ant-btn]:!text-[var(--studio-on-media)] [&_.ant-btn]:!w-7 [@media(pointer:coarse)]:opacity-100",
+                        props.selected && "opacity-100",
                     )}
                 >
-                    <AssetIconButton title="查看" icon={<Eye className="size-3.5" />} onClick={props.onOpen} />
                     <AssetIconButton title="编辑" icon={<PencilLine className="size-3.5" />} onClick={props.onEdit} />
                     <AssetIconButton title="下载" icon={<Download className="size-3.5" />} onClick={props.onDownload} />
                     {shouldShowVolcengineReviewAction(asset.kind) ? (

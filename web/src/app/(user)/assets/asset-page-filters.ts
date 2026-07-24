@@ -90,7 +90,14 @@ export function buildAssetProjectContexts(creativeProjects: CreativeProjectLike[
     ];
 }
 
-export function projectReferencedAssetIds(projectId: string, productionBibleItems: ProductionBibleAssetSource[], storyboardGroups: StoryboardGroupLike[], storyboardShots: StoryboardShotLike[], storyboardTableShots: StoryboardTableShotLike[] = [], shotGroups: ShotGroupLike[] = []) {
+export function projectReferencedAssetIds(
+    projectId: string,
+    productionBibleItems: ProductionBibleAssetSource[],
+    storyboardGroups: StoryboardGroupLike[],
+    storyboardShots: StoryboardShotLike[],
+    storyboardTableShots: StoryboardTableShotLike[] = [],
+    shotGroups: ShotGroupLike[] = [],
+) {
     if (!projectId) return new Set<string>();
     const groupIds = new Set(storyboardGroups.filter((group) => group.projectId === projectId).map((group) => group.id));
     return new Set<string>([

@@ -162,7 +162,7 @@ export function AssetResultsSection({
                 const typeGroupId = assetTypeGroupDomId(groupId, scopeId ? `${scopeId}-${typeGroup.id}` : typeGroup.id);
                 const collapsed = collapsedAssetTypeGroups[typeGroupId] === true;
                 const stats = workflowAssetTypeStats(typeGroup.assets);
-                const compactVideos = isCompactVideoAssetGroup(typeGroup.assets);
+                const compactVideoAssets = isCompactVideoAssetGroup(typeGroup.assets) ? typeGroup.assets : null;
                 return (
                     <section key={typeGroup.id} id={typeGroupId} className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]">
                         <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={() => toggleAssetTypeGroup(typeGroupId)} aria-expanded={!collapsed}>
@@ -178,9 +178,9 @@ export function AssetResultsSection({
                             ) : null}
                         </button>
                         {!collapsed ? (
-                            <div className={cn("border-t border-[var(--studio-border-subtle)] p-3", compactVideos ? "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6" : "grid gap-2.5")}>
-                                {compactVideos
-                                    ? typeGroup.assets.map((asset) => (
+                            <div className={cn("border-t border-[var(--studio-border-subtle)] p-3", compactVideoAssets ? "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6" : "grid gap-2.5")}>
+                                {compactVideoAssets
+                                    ? compactVideoAssets.map((asset) => (
                                           <CompactVideoAssetCard
                                               key={asset.id}
                                               asset={asset}
