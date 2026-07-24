@@ -40,3 +40,23 @@ test("rightward placement only moves along the x axis", () => {
 
     assert.deepEqual(position, { x: 852, y: 100 });
 });
+
+test("rightward placement keeps searching beyond the fixed ring count", () => {
+    const occupied = Array.from({ length: 30 }, (_, index) => ({
+        position: { x: 100 + index * 376, y: 100 },
+        width: 340,
+        height: 240,
+    }));
+
+    const position = resolveRightwardNodePosition(occupied, { x: 100, y: 100 }, { width: 340, height: 240 });
+
+    assert.deepEqual(position, { x: 100 + 30 * 376, y: 100 });
+});
+
+test("dense fallback always lands beyond the occupied right boundary", () => {
+    const occupied = [{ position: { x: -10_000, y: -10_000 }, width: 20_000, height: 20_000 }];
+
+    const position = resolveNonOverlappingNodePosition(occupied, { x: 100, y: 100 }, { width: 340, height: 240 });
+
+    assert.deepEqual(position, { x: 10_036, y: 100 });
+});

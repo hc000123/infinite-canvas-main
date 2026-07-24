@@ -18,7 +18,7 @@ export function resolveNonOverlappingNodePosition(nodes: NodeRect[], position: P
         }
     }
 
-    return { x: base.x + (MAX_RING + 1) * stepX, y: base.y };
+    return positionOutsideRightBoundary(nodes, base.y, gap);
 }
 
 export function placeCanvasNodeAwayFromNodes<T extends CanvasNodeData>(node: T, nodes: NodeRect[], gap = DEFAULT_GAP): T {
@@ -29,11 +29,15 @@ export function placeCanvasNodeAwayFromNodes<T extends CanvasNodeData>(node: T, 
 export function resolveRightwardNodePosition(nodes: NodeRect[], position: Position, size: { width: number; height: number }, gap = DEFAULT_GAP): Position {
     let candidate = { x: position.x, y: position.y };
     const stepX = size.width + gap;
-    for (let index = 0; index <= MAX_RING; index += 1) {
+    for (let index = 0; index <= nodes.length + MAX_RING; index += 1) {
         if (!overlapsAny(nodes, candidate, size, gap)) return candidate;
         candidate = { x: candidate.x + stepX, y: position.y };
     }
-    return candidate;
+    return positionOutsideRightBoundary(nodes, position.y, gap);
+}
+
+function positionOutsideRightBoundary(nodes: NodeRect[], y: number, gap: number): Position {
+    return { x: Math.max(...nodes.map((node) => node.position.x + node.width)) + gap, y };
 }
 
 function overlapsAny(nodes: NodeRect[], position: Position, size: { width: number; height: number }, gap: number) {
