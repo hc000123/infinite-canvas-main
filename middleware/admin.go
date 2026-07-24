@@ -10,6 +10,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func RequestMeta(c *gin.Context) {
+	meta := service.RequestMeta{IPAddress: c.ClientIP(), UserAgent: c.Request.UserAgent(), IPAllowed: true}
+	c.Request = c.Request.WithContext(service.WithRequestMeta(c.Request.Context(), meta))
+	c.Next()
+}
+
 func AdminAuth(c *gin.Context) {
 	user, ok := authUser(c)
 	if !ok || !model.IsAdminRole(user.Role) {

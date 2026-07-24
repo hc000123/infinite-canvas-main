@@ -14,6 +14,7 @@ func New() *gin.Engine {
 	router := gin.Default()
 	router.RedirectTrailingSlash = false
 	_ = router.SetTrustedProxies(nil)
+	router.Use(middleware.RequestMeta)
 	router.Use(uploadedAssetSecurityHeaders)
 	api := router.Group("/api")
 	api.GET("/health", func(c *gin.Context) {
@@ -92,6 +93,7 @@ func New() *gin.Engine {
 		handler.UserAITaskFrontendArtifact(c.Writer, c.Request, c.Param("id"))
 	})
 	v1.POST("/proxy/video-download", gin.WrapF(handler.AIProxyVideoDownload))
+	v1.POST("/activity-logs", gin.WrapF(handler.UserActivityReport))
 	api.GET("/prompts", middleware.OptionalAuth, gin.WrapF(handler.Prompts))
 	api.GET("/assets", middleware.OptionalAuth, gin.WrapF(handler.Assets))
 	api.POST("/admin/login", gin.WrapF(handler.AdminLogin))
@@ -101,6 +103,7 @@ func New() *gin.Engine {
 	admin.GET("/users/:id", func(c *gin.Context) { handler.AdminUser(c.Writer, c.Request, c.Param("id")) })
 	admin.GET("/users/:id/ai-tasks", func(c *gin.Context) { handler.AdminUserAITasks(c.Writer, c.Request, c.Param("id")) })
 	admin.GET("/users/:id/credit-logs", func(c *gin.Context) { handler.AdminUserCreditLogs(c.Writer, c.Request, c.Param("id")) })
+	admin.GET("/users/:id/activity-logs", func(c *gin.Context) { handler.AdminUserActivities(c.Writer, c.Request, c.Param("id")) })
 	admin.POST("/users", gin.WrapF(handler.AdminSaveUser))
 	admin.POST("/users/:id/credits", func(c *gin.Context) {
 		handler.AdminAdjustUserCredits(c.Writer, c.Request, c.Param("id"))
