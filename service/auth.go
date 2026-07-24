@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -22,9 +23,11 @@ import (
 )
 
 type TokenClaims struct {
-	UserID   string         `json:"userId"`
-	Username string         `json:"username"`
-	Role     model.UserRole `json:"role"`
+	UserID    string         `json:"userId"`
+	Username  string         `json:"username"`
+	Role      model.UserRole `json:"role"`
+	IPAddress string         `json:"ipAddress,omitempty"`
+	IPAllowed bool           `json:"ipAllowed"`
 	jwt.RegisteredClaims
 }
 
@@ -49,7 +52,7 @@ func EnsureDefaultAdmin() error {
 		ID:        newID("user"),
 		Username:  strings.TrimSpace(config.Cfg.AdminUsername),
 		Password:  hash,
-		Role:      model.UserRoleAdmin,
+		Role:      model.UserRoleSuperAdmin,
 		AffCode:   newAffCode(),
 		Status:    model.UserStatusActive,
 		CreatedAt: now(),
@@ -101,24 +104,14 @@ func Register(username string, password string) (model.AuthSession, error) {
 }
 
 func Login(username string, password string) (model.AuthSession, error) {
-	user, ok, err := repository.GetUserByUsername(strings.TrimSpace(username))
+	result, err := LoginWithRequest(context.Background(), username, password)
 	if err != nil {
 		return model.AuthSession{}, err
 	}
-	if !ok || bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)) != nil {
-		return model.AuthSession{}, safeMessageError{message: "用户名或密码错误"}
+	if result.Status != "authenticated" {
+		return model.AuthSession{}, safeMessageError{message: "登录需要管理员审批"}
 	}
-	if user.Status == model.UserStatusBan {
-		return model.AuthSession{}, safeMessageError{message: "账号已被禁用"}
-	}
-	normalizeUserDefaults(&user)
-	user.LastLoginAt = now()
-	user.UpdatedAt = now()
-	user, err = repository.SaveUser(user)
-	if err != nil {
-		return model.AuthSession{}, err
-	}
-	return newSession(user)
+	return result.Session, nil
 }
 
 func LinuxDoAuthorizeURL(r *http.Request, redirect string) (string, error) {
@@ -217,6 +210,10 @@ func ParseToken(tokenText string) (TokenClaims, error) {
 }
 
 func CurrentAuthUser(tokenText string) (model.AuthUser, bool) {
+	return CurrentAuthUserForRequest(tokenText, "")
+}
+
+func CurrentAuthUserForRequest(tokenText string, ipAddress string) (model.AuthUser, bool) {
 	claims, err := ParseToken(tokenText)
 	if err != nil {
 		return model.AuthUser{}, false
@@ -226,6 +223,9 @@ func CurrentAuthUser(tokenText string) (model.AuthUser, bool) {
 		return model.AuthUser{}, false
 	}
 	if user.Status == model.UserStatusBan {
+		return model.AuthUser{}, false
+	}
+	if claims.IPAddress != "" && strings.TrimSpace(ipAddress) != "" && claims.IPAddress != strings.TrimSpace(ipAddress) {
 		return model.AuthUser{}, false
 	}
 	return model.PublicUser(user), true
@@ -243,7 +243,27 @@ func ListUsers(q model.Query) (model.UserList, error) {
 	return model.UserList{Items: users, Total: int(total)}, nil
 }
 
-func SaveUser(user model.User, password string) (model.User, error) {
+func SaveAdminUser(actor model.AuthUser, user model.User, password string) (model.User, error) {
+	if !model.IsAdminRole(actor.Role) {
+		return user, safeMessageError{message: "权限不足"}
+	}
+	if user.Role != "" && user.Role != model.UserRoleUser && user.Role != model.UserRoleGuest {
+		return user, safeMessageError{message: "无权创建或修改管理员账号"}
+	}
+	if user.ID != "" {
+		saved, ok, err := repository.GetUserByID(user.ID)
+		if err != nil {
+			return user, err
+		}
+		if !ok || saved.Role != model.UserRoleUser {
+			return user, safeMessageError{message: "用户不存在或无权修改"}
+		}
+	}
+	user.Role = model.UserRoleUser
+	return saveUser(user, password)
+}
+
+func saveUser(user model.User, password string) (model.User, error) {
 	user.Username = strings.TrimSpace(user.Username)
 	if strings.ContainsAny(user.Username, " \t\r\n") {
 		return user, safeMessageError{message: "用户名不能包含空格"}
@@ -285,6 +305,7 @@ func SaveUser(user model.User, password string) (model.User, error) {
 			user.LinuxDoID = saved.LinuxDoID
 		}
 		user.LastLoginAt = saved.LastLoginAt
+		user.IPApprovalEnabled = saved.IPApprovalEnabled
 	}
 	if password != "" {
 		hash, err := hashPassword(password)
@@ -327,6 +348,20 @@ func AdjustUserCredits(id string, credits int) (model.User, error) {
 	}
 	user.Password = ""
 	return user, err
+}
+
+func AdjustAdminUserCredits(actor model.AuthUser, id string, credits int) (model.User, error) {
+	if !model.IsAdminRole(actor.Role) {
+		return model.User{}, safeMessageError{message: "权限不足"}
+	}
+	user, ok, err := repository.GetUserByID(id)
+	if err != nil {
+		return user, err
+	}
+	if !ok || user.Role != model.UserRoleUser {
+		return user, safeMessageError{message: "用户不存在或无权修改"}
+	}
+	return AdjustUserCredits(id, credits)
 }
 
 func ConsumeUserCredits(userID string, modelName string, credits int, path string) error {
@@ -394,7 +429,26 @@ func ListCreditLogs(q model.Query) (model.CreditLogList, error) {
 	if err != nil {
 		return model.CreditLogList{}, err
 	}
+	logs, err = hydrateCreditLogUsers(logs)
+	if err != nil {
+		return model.CreditLogList{}, err
+	}
 	return model.CreditLogList{Items: logs, Total: int(total)}, nil
+}
+
+func hydrateCreditLogUsers(logs []model.CreditLog) ([]model.CreditLog, error) {
+	ids := make([]string, 0, len(logs))
+	for _, item := range logs {
+		ids = append(ids, item.UserID)
+	}
+	users, err := repository.ListUserSummariesByIDs(ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range logs {
+		logs[i].User = users[logs[i].UserID]
+	}
+	return logs, nil
 }
 
 func SaveCreditLog(log model.CreditLog) (model.CreditLog, error) {
@@ -409,7 +463,17 @@ func DeleteCreditLog(id string) error {
 	return repository.DeleteCreditLog(id)
 }
 
-func DeleteUser(id string) error {
+func DeleteAdminUser(actor model.AuthUser, id string) error {
+	if !model.IsAdminRole(actor.Role) {
+		return safeMessageError{message: "权限不足"}
+	}
+	user, ok, err := repository.GetUserByID(id)
+	if err != nil {
+		return err
+	}
+	if !ok || user.Role != model.UserRoleUser {
+		return safeMessageError{message: "用户不存在或无权删除"}
+	}
 	return repository.DeleteUser(id)
 }
 
@@ -418,7 +482,15 @@ func GuestUser() model.AuthUser {
 }
 
 func newSession(user model.User) (model.AuthSession, error) {
-	token, err := newToken(user)
+	return newSessionWithIP(user, "")
+}
+
+func newSessionWithIP(user model.User, ipAddress string) (model.AuthSession, error) {
+	return newSessionWithIPPolicy(user, ipAddress, true)
+}
+
+func newSessionWithIPPolicy(user model.User, ipAddress string, ipAllowed bool) (model.AuthSession, error) {
+	token, err := newTokenWithIPPolicy(user, ipAddress, ipAllowed)
 	if err != nil {
 		return model.AuthSession{}, err
 	}
@@ -426,14 +498,24 @@ func newSession(user model.User) (model.AuthSession, error) {
 }
 
 func newToken(user model.User) (string, error) {
+	return newTokenWithIP(user, "")
+}
+
+func newTokenWithIP(user model.User, ipAddress string) (string, error) {
+	return newTokenWithIPPolicy(user, ipAddress, true)
+}
+
+func newTokenWithIPPolicy(user model.User, ipAddress string, ipAllowed bool) (string, error) {
 	expireHours := config.Cfg.JWTExpireHours
 	if expireHours <= 0 {
 		expireHours = 168
 	}
 	claims := TokenClaims{
-		UserID:   user.ID,
-		Username: user.Username,
-		Role:     user.Role,
+		UserID:    user.ID,
+		Username:  user.Username,
+		Role:      user.Role,
+		IPAddress: strings.TrimSpace(ipAddress),
+		IPAllowed: ipAllowed,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expireHours) * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

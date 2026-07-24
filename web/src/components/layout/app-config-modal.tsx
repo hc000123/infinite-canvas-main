@@ -25,7 +25,7 @@ export function AppConfigModal() {
     const modelChannel = publicSettings?.modelChannel;
     const modelConfig = effectiveConfig;
     const videoModel = modelConfig.videoModel;
-    const isAdmin = user?.role === "admin";
+    const isAdmin = user?.role === "admin" || user?.role === "superadmin";
     const showAdminSettingsEntry = isAdmin;
     const allowCustomModel = modelChannel?.allowCustomChannel !== false;
 

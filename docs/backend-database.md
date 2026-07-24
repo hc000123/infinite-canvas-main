@@ -17,6 +17,9 @@
 - `users`
 - `credit_logs`
 - `ai_tasks`
+- `user_activity_logs`
+- `user_allowed_ips`
+- `login_approvals`
 - `agent_config_records`
 - `agent_runs`
 - `workflow_runs`
@@ -48,7 +51,7 @@
 | `email`         | string | 邮箱                                                 |
 | `display_name`  | string | 昵称                                                 |
 | `avatar_url`    | string | 头像地址                                             |
-| `role`          | string | 角色：`user`、`admin`                                |
+| `role`          | string | 角色：`user`、`admin`、`superadmin`                  |
 | `credits`       | number | 算力点余额                                           |
 | `aff_code`      | string | 用户自己的邀请码，唯一索引                           |
 | `aff_count`     | number | 已邀请用户数量，冗余统计字段                         |
@@ -61,6 +64,33 @@
 | `extra`         | json   | 扩展信息，保留历史第三方资料                          |
 | `created_at`    | string | 创建时间                                             |
 | `updated_at`    | string | 更新时间                                             |
+| `ip_approval_enabled` | bool | 普通用户是否启用登录 IP 审批；管理员角色不受此限制 |
+
+`superadmin` 可管理管理员账号；普通 `admin` 只能管理 `user`。系统禁止超级管理员修改或删除自己，也禁止降级、禁用或删除最后一个有效超级管理员。
+
+### user_activity_logs
+
+低频用户操作审计表。只记录登录、安全审批、项目/画布/素材完成动作、AI 工具调用、导入导出和算力点等业务事件；不记录拖拽、缩放、选择、输入、轮询或自动保存。浏览器本地项目/画布/素材事件只是审计记录，不代表这些本地业务数据已云同步。
+
+| 字段 | 说明 |
+| ---- | ---- |
+| `id`、`user_id` | 事件主键与稳定用户 ID |
+| `category`、`action`、`result` | 受控分类、动作和结果枚举 |
+| `target_type`、`target_id`、`target_name` | 业务对象摘要 |
+| `summary`、`metadata` | 截断并去敏后的摘要与允许字段 |
+| `ip_address`、`ip_allowed` | 服务端解析的客户端 IP 及是否在工作 IP 范围 |
+| `session_id`、`login_approval_id` | 会话和登录审批关联 |
+| `user_agent` | 截断后的设备信息 |
+| `client_event_id` | 每用户幂等事件 ID；服务端事件使用内部 ID |
+| `created_at` | 发生时间 |
+
+### user_allowed_ips
+
+普通用户的登录 IP/CIDR 白名单，`user_id + cidr` 唯一。地址使用标准 IPv4 `/32`、IPv6 `/128` 或规范化网段格式。
+
+### login_approvals
+
+白名单外登录审批表。只保存随机审批凭证的 SHA-256 哈希，不保存明文凭证；记录申请用户、服务端解析 IP、设备、状态、单次/加入白名单范围、审批人、审批时间、10 分钟有效期和消费时间。管理员与超级管理员登录绕过 IP 限制；受限普通用户登录后的 JWT 绑定获批 IP。
 
 ### prompts
 

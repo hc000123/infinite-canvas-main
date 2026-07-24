@@ -2,11 +2,12 @@
 
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { Button, Card, Col, Form, Input, InputNumber, Modal, Row, Select, Space, Tag, Tooltip, Typography } from "antd";
+import { Button, Card, Col, Flex, Form, Input, InputNumber, Modal, Row, Select, Space, Tag, Tooltip, Typography } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 
 import type { AdminCreditLog } from "@/services/api/admin";
+import { adminUsageUserDisplay } from "../users/admin-user-display";
 import { useAdminCreditLogs } from "./use-admin-credit-logs";
 
 type CreditLogFormValues = Partial<AdminCreditLog>;
@@ -39,10 +40,22 @@ export default function AdminCreditLogsPage() {
 
     const columns: ProColumns<AdminCreditLog>[] = [
         {
-            title: "用户 ID",
+            title: "用户",
             dataIndex: "userId",
             width: 220,
-            render: (_, item) => <Typography.Text copyable>{item.userId}</Typography.Text>,
+            render: (_, item) => {
+                const display = adminUsageUserDisplay(item);
+                return (
+                    <Flex vertical style={{ minWidth: 0 }}>
+                        <Typography.Text strong={!display.deleted} type={display.deleted ? "secondary" : undefined} ellipsis>
+                            {display.primary}
+                        </Typography.Text>
+                        <Typography.Text type="secondary" copyable={{ text: item.userId }} ellipsis>
+                            {display.secondary}
+                        </Typography.Text>
+                    </Flex>
+                );
+            },
         },
         {
             title: "类型",
@@ -101,7 +114,7 @@ export default function AdminCreditLogsPage() {
                                 <Form.Item label="关键词">
                                     <Input.Search
                                         value={keywordText}
-                                        placeholder="搜索用户 ID、类型、备注或关联 ID"
+                                        placeholder="搜索用户名、用户 ID、类型、备注或关联 ID"
                                         allowClear
                                         enterButton={<SearchOutlined />}
                                         onSearch={() => searchLogs(keywordText)}
@@ -209,7 +222,8 @@ export default function AdminCreditLogsPage() {
                 </Form>
             </Modal>
 
-            <Modal rootClassName="studio-modal"
+            <Modal
+                rootClassName="studio-modal"
                 title="删除日志"
                 open={Boolean(deletingLog)}
                 onCancel={() => setDeletingLog(null)}

@@ -48,12 +48,12 @@ func Register(w http.ResponseWriter, r *http.Request) {
 func Login(w http.ResponseWriter, r *http.Request) {
 	var request loginRequest
 	_ = json.NewDecoder(r.Body).Decode(&request)
-	session, err := service.Login(request.Username, request.Password)
+	result, err := service.LoginWithRequest(r.Context(), request.Username, request.Password)
 	if err != nil {
 		FailError(w, err)
 		return
 	}
-	OK(w, session)
+	OK(w, result)
 }
 
 func LinuxDoAuthorize(w http.ResponseWriter, r *http.Request) {
@@ -77,16 +77,16 @@ func LinuxDoCallback(w http.ResponseWriter, r *http.Request) {
 func AdminLogin(w http.ResponseWriter, r *http.Request) {
 	var request loginRequest
 	_ = json.NewDecoder(r.Body).Decode(&request)
-	session, err := service.Login(request.Username, request.Password)
+	result, err := service.LoginWithRequest(r.Context(), request.Username, request.Password)
 	if err != nil {
 		FailError(w, err)
 		return
 	}
-	if session.User.Role != model.UserRoleAdmin {
+	if result.Status != "authenticated" || !model.IsAdminRole(result.Session.User.Role) {
 		Fail(w, "需要管理员权限")
 		return
 	}
-	OK(w, session)
+	OK(w, result.Session)
 }
 
 func CurrentUser(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +109,12 @@ func AdminUsers(w http.ResponseWriter, r *http.Request) {
 func AdminSaveUser(w http.ResponseWriter, r *http.Request) {
 	var request saveUserRequest
 	_ = json.NewDecoder(r.Body).Decode(&request)
-	user, err := service.SaveUser(model.User{
+	actor, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	user, err := service.SaveAdminUser(actor, model.User{
 		ID:          request.ID,
 		Username:    request.Username,
 		Email:       request.Email,
@@ -127,7 +132,12 @@ func AdminSaveUser(w http.ResponseWriter, r *http.Request) {
 func AdminAdjustUserCredits(w http.ResponseWriter, r *http.Request, id string) {
 	var request adjustUserCreditsRequest
 	_ = json.NewDecoder(r.Body).Decode(&request)
-	user, err := service.AdjustUserCredits(id, request.Credits)
+	actor, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	user, err := service.AdjustAdminUserCredits(actor, id, request.Credits)
 	if err != nil {
 		FailError(w, err)
 		return
@@ -178,7 +188,12 @@ func loginRedirect(r *http.Request, redirect string, token string, message strin
 }
 
 func AdminDeleteUser(w http.ResponseWriter, r *http.Request, id string) {
-	if err := service.DeleteUser(id); err != nil {
+	actor, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	if err := service.DeleteAdminUser(actor, id); err != nil {
 		FailError(w, err)
 		return
 	}

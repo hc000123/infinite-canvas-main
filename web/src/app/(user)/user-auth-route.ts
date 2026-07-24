@@ -10,8 +10,8 @@ export function userLoginHref(pathname: string) {
     return `/login?redirect=${encodeURIComponent(pathname.startsWith("/") ? pathname : "/projects")}`;
 }
 
-export function postLoginHref(redirect: string, role: "guest" | "user" | "admin") {
+export function postLoginHref(redirect: string, role: "guest" | "user" | "admin" | "superadmin") {
     if (!redirect.startsWith("/") || redirect.startsWith("//")) return "/projects";
-    if (redirect.startsWith("/admin") && role !== "admin") return "/projects";
+    if (redirect.startsWith("/admin") && role !== "admin" && role !== "superadmin") return "/projects";
     return redirect;
 }
