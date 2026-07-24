@@ -38,7 +38,7 @@ func TestBuildJimengText2VideoArgsRejectsReferenceInputs(t *testing.T) {
 			{"type": "image_url", "image_url": {"url": "asset://image-id"}}
 		]
 	}`), "application/json", "seedance2.0fast", 0)
-	if err == nil || err.Error() != "即梦 CLI 第一版只支持文生视频，请先移除参考图片、视频或音频" {
+	if err == nil || err.Error() != "即梦 CLI 参考生成需要上传图片、视频或音频文件，暂不支持 JSON 或 URL 参考" {
 		t.Fatalf("err = %v, want reference rejection", err)
 	}
 }

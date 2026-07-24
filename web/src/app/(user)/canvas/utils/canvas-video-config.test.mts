@@ -278,6 +278,7 @@ test("video config infers Dreamina modes for legacy nodes", () => {
     assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: ["first.png", "last.png"], videoReferenceImageMode: "first_last_frame" }).videoReferenceMode, "frames2video");
     assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: ["1.png", "2.png", "3.png"] }).videoReferenceMode, "multiframe2video");
     assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: ["image.png"], videoReferences: ["video.mp4"] }).videoReferenceMode, "multimodal2video");
+    assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: ["tail-frame.png"], videoReferenceImageMode: "continue" }).videoReferenceMode, "multimodal2video");
 });
 
 test("builds global video defaults from config node metadata changes", () => {

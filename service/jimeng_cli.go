@@ -298,7 +298,7 @@ func BuildJimengText2VideoArgs(body []byte, contentType string, modelVersion str
 		return nil, err
 	}
 	if fields.HasReferences {
-		return nil, errors.New("即梦 CLI 第一版只支持文生视频，请先移除参考图片、视频或音频")
+		return nil, errors.New("即梦 CLI 参考生成需要上传图片、视频或音频文件，暂不支持 JSON 或 URL 参考")
 	}
 	prompt := strings.TrimSpace(fields.Prompt)
 	if prompt == "" {

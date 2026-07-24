@@ -76,7 +76,7 @@ export function seedanceAssetURIFromVideoReference(video: { assetUri?: string; u
 export function defaultSeedanceImageRole(index: number, mode?: string): SeedanceImageRole {
     const imageIndex = Math.max(0, Math.floor(index) || 0);
     const roleMode = normalizeSeedanceImageRoleMode(mode);
-    if ((roleMode === "first_frame" || roleMode === "continue") && imageIndex === 0) return "first_frame";
+    if (roleMode === "first_frame" && imageIndex === 0) return "first_frame";
     if (roleMode === "first_last_frame" && imageIndex === 0) return "first_frame";
     if (roleMode === "first_last_frame" && imageIndex === 1) return "last_frame";
     return "reference_image";
@@ -102,8 +102,9 @@ export function normalizeVideoReferenceMode(mode?: string): VideoReferenceMode {
 
 export function inferVideoReferenceMode(input: { imageCount: number; videoCount?: number; audioCount?: number; imageRoleMode?: string }): Exclude<VideoReferenceMode, "auto"> {
     if (input.videoCount || input.audioCount) return "multimodal2video";
+    if (input.imageRoleMode === "continue" && input.imageCount) return "multimodal2video";
     if (input.imageRoleMode === "first_last_frame" && input.imageCount >= 2) return "frames2video";
-    if ((input.imageRoleMode === "first_frame" || input.imageRoleMode === "continue") && input.imageCount) return "image2video";
+    if (input.imageRoleMode === "first_frame" && input.imageCount) return "image2video";
     if (input.imageCount >= 2) return "multiframe2video";
     if (input.imageCount === 1) return "image2video";
     return "text2video";

@@ -280,7 +280,7 @@
   3. 即梦 CLI 渠道抽屉新增网页登录验证：后端受控调用 `dreamina login --headless` 获取验证网页、验证码和 `device_code`，用户网页确认后再调用 `dreamina login checklogin` 完成登录态写入。
   4. 后端 `/api/v1/videos` 对 `jimeng-cli` 渠道受控调用 `text2video`、`image2video`、`frames2video`、`multiframe2video` 与 `multimodal2video`，支持提交、查询、下载回填和 AI 任务账本记录。
   5. 画布保存明确的五模式字段，图生视频和全能参考不再折叠；没有新字段的旧节点会按素材数量、类型和图片角色推导。
-  6. 图片、视频和音频以 multipart 上传到后端独立临时目录，完成 CLI 提交后自动清理；非法扩展、文件签名、数量或模式组合会被阻断，已扣算力点按任务规则退款。
+  6. 图片、视频和音频以 multipart 上传到后端独立临时目录，完成 CLI 提交后自动清理；旧 `input_reference[]` 图片字段会兼容为图生/多图参考；非法扩展、文件签名、数量或模式组合会被阻断，已扣算力点按任务规则退款。
   7. Docker 镜像按 amd64 / arm64 安装并校验官方 Dreamina CLI，登录态和输出目录通过现有 `/app/data` 数据卷持久化。
   8. 所有 Dreamina 子进程在单实例内串行执行；只有 `seedance2.0_vip` 允许 1080p，其余模型使用 720p。
   9. 已通过五模式前端 payload、Go service、Handler、退款、生产构建和 Docker 健康检查；容器内版本为 `7fddbed-dirty`，arm64 SHA256 为 `916e70bb2efb7de23ca4d1e1703411ae2e29fa1e26cecf4c397ff16414fe6eb7`。
@@ -297,7 +297,8 @@
   6. 继续通过应用生成链路执行单图、首尾帧、多帧和全能参考真实冒烟；文生视频已经通过，剩余模式优先复用最低消耗参数，每次记录任务 ID、最终状态、下载回填和额度变化，避免重复提交。
   7. 图生视频传 0/2 张图片、首尾帧传 1 张图片、多帧传视频、全能参考只传音频时，应在上游创建前返回明确错误；应用算力点不得净扣除。
   8. 对非 `seedance2.0_vip` 选择 1080p，实际 CLI 参数应仍为 720p；VIP 可按所选清晰度传 1080p。
-  9. 即梦网页首次使用若返回 `AigcComplianceConfirmationRequired`，先在网页完成一次性内容合规确认，再重试应用生成。
+  9. 连续镜头自动带入上一镜尾帧时，应保持 `continuity_reference` 普通参考语义，不应提交为 `first_frame` 或进入图生视频首帧模式。
+  10. 即梦网页首次使用若返回 `AigcComplianceConfirmationRequired`，先在网页完成一次性内容合规确认，再重试应用生成。
 
 #### v0.2.94：模型选择先选来源再选模型
 

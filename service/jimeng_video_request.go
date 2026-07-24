@@ -40,7 +40,8 @@ func prepareJimengVideoCommand(body []byte, contentType, modelVersion string, se
 	if prompt == "" {
 		return jimengPreparedVideoCommand{}, errors.New("缺少视频提示词")
 	}
-	images, imageRoles := form.File["input_image[]"], form.Value["input_image_role[]"]
+	images := appendJimengFileHeaders(form.File["input_image[]"], form.File["input_reference[]"])
+	imageRoles := appendJimengValues(form.Value["input_image_role[]"], form.Value["input_reference_role[]"])
 	videos, audios := form.File["input_video[]"], form.File["input_audio[]"]
 	if mode == "" || mode == "auto" {
 		mode = inferJimengMode(len(images), len(videos), len(audios), imageRoles)
@@ -87,6 +88,24 @@ func prepareJimengVideoCommand(body []byte, contentType, modelVersion string, se
 		return fail(err)
 	}
 	return jimengPreparedVideoCommand{args: args, tempDir: tempDir, cleanup: cleanup}, nil
+}
+
+func appendJimengFileHeaders(primary, legacy []*multipart.FileHeader) []*multipart.FileHeader {
+	if len(legacy) == 0 {
+		return primary
+	}
+	result := make([]*multipart.FileHeader, 0, len(primary)+len(legacy))
+	result = append(result, primary...)
+	return append(result, legacy...)
+}
+
+func appendJimengValues(primary, legacy []string) []string {
+	if len(legacy) == 0 {
+		return primary
+	}
+	result := make([]string, 0, len(primary)+len(legacy))
+	result = append(result, primary...)
+	return append(result, legacy...)
 }
 
 func inferJimengMode(imageCount, videoCount, audioCount int, roles []string) string {

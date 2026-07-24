@@ -31,7 +31,7 @@ test("defaults Seedance image references to normal reference mode", () => {
     assert.equal(defaultSeedanceImageRole(1, "first_frame"), "reference_image");
     assert.equal(defaultSeedanceImageRole(0, "first_last_frame"), "first_frame");
     assert.equal(defaultSeedanceImageRole(1, "first_last_frame"), "last_frame");
-    assert.equal(defaultSeedanceImageRole(0, "continue"), "first_frame");
+    assert.equal(defaultSeedanceImageRole(0, "continue"), "reference_image");
 });
 
 test("limits Seedance omni references to 9 images, 3 videos, and 12 files total", () => {

@@ -34,6 +34,7 @@ func TestPrepareJimengVideoCommandBuildsAllModes(t *testing.T) {
 	}{
 		{name: "text", mode: "text2video", wantPrefix: []string{"text2video", "--prompt=镜头推进", "--duration=6", "--ratio=9:16", "--video_resolution=720p", "--model_version=seedance2.0fast"}},
 		{name: "image", mode: "image2video", uploads: []jimengUpload{{field: "input_image[]", name: "first.png", content: png, fileType: "image/png", role: "first_frame"}}, wantPrefix: []string{"image2video"}, wantParts: []string{"--image=", "--prompt=镜头推进", "--duration=6", "--video_resolution=720p", "--model_version=seedance2.0fast"}},
+		{name: "legacy reference image", mode: "auto", uploads: []jimengUpload{{field: "input_reference[]", name: "legacy.png", content: png, fileType: "image/png", role: "reference_image"}}, wantPrefix: []string{"image2video"}, wantParts: []string{"--image=", "--prompt=镜头推进", "--duration=6"}},
 		{name: "frames", mode: "frames2video", uploads: []jimengUpload{{field: "input_image[]", name: "last.png", content: png, fileType: "image/png", role: "last_frame"}, {field: "input_image[]", name: "first.png", content: png, fileType: "image/png", role: "first_frame"}}, wantPrefix: []string{"frames2video"}, wantParts: []string{"--first=", "--last=", "--prompt=镜头推进", "--duration=6"}},
 		{name: "multiframe", mode: "multiframe2video", uploads: []jimengUpload{{field: "input_image[]", name: "1.png", content: png, fileType: "image/png"}, {field: "input_image[]", name: "2.png", content: png, fileType: "image/png"}, {field: "input_image[]", name: "3.png", content: png, fileType: "image/png"}}, wantPrefix: []string{"multiframe2video"}, wantParts: []string{"--images=", "--transition-prompt=镜头推进", "--transition-prompt=镜头推进", "--transition-duration=3", "--transition-duration=3"}},
 		{name: "multimodal", mode: "multimodal2video", uploads: []jimengUpload{{field: "input_image[]", name: "image.png", content: png, fileType: "image/png"}, {field: "input_video[]", name: "clip.mp4", content: mp4, fileType: "video/mp4"}, {field: "input_audio[]", name: "voice.mp3", content: mp3, fileType: "audio/mpeg"}}, wantPrefix: []string{"multimodal2video"}, wantParts: []string{"--image=", "--video=", "--audio=", "--prompt=镜头推进", "--ratio=9:16"}},
@@ -136,8 +137,15 @@ func buildJimengMultipart(t *testing.T, mode string, uploads []jimengUpload) ([]
 		if _, err := part.Write(upload.content); err != nil {
 			t.Fatal(err)
 		}
+		roleField := ""
 		if upload.field == "input_image[]" {
-			if err := writer.WriteField("input_image_role[]", upload.role); err != nil {
+			roleField = "input_image_role[]"
+		}
+		if upload.field == "input_reference[]" {
+			roleField = "input_reference_role[]"
+		}
+		if roleField != "" {
+			if err := writer.WriteField(roleField, upload.role); err != nil {
 				t.Fatal(err)
 			}
 		}

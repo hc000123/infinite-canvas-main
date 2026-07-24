@@ -57,7 +57,7 @@ test("builds a last-frame image and next video node for continuous Seedance chai
     assert.equal(chain.nextVideoNode.metadata?.variantOfNodeId, undefined);
     assert.equal(chain.nextVideoNode.metadata?.videoReferenceImageMode, "continue");
     assert.equal(chain.nextVideoNode.metadata?.referenceRoles?.[0]?.nodeId, chain.lastFrameNode.id);
-    assert.equal(chain.nextVideoNode.metadata?.referenceRoles?.[0]?.role, "first_frame");
+    assert.equal(chain.nextVideoNode.metadata?.referenceRoles?.[0]?.role, "continuity_reference");
     assert.deepEqual(
         chain.connections.map((connection) => [connection.fromNodeId, connection.toNodeId]),
         [

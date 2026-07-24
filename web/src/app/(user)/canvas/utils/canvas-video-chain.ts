@@ -73,7 +73,7 @@ export function buildContinuousVideoChain({ videoNode, lastFrameImage, lastFrame
             relationType: "continuation",
             sourceVideoNodeId: videoNode.id,
             continuationOfNodeId: videoNode.id,
-            referenceRoles: [{ nodeId: lastFrameNodeId, kind: "image", role: "first_frame", index: 1 }],
+            referenceRoles: [{ nodeId: lastFrameNodeId, kind: "image", role: "continuity_reference", index: 1 }],
         },
     };
     return {
