@@ -41,3 +41,13 @@ test("all prompt node panels expose connected media preview and exact unlink act
     assert.match(configPanel, /<CanvasConnectedMediaStrip/);
     assert.match(page, /deleteConnection=\{deleteConnection\}/);
 });
+
+test("expanded prompt editing autosaves without a manual save action", () => {
+    const promptPanel = readCanvasFile("../components/canvas-node-prompt-panel.tsx");
+
+    assert.match(promptPanel, /const closeExpandedEditor = \(\) =>/);
+    assert.match(promptPanel, /expanded\s+onChange=\{updatePromptDocument\}/);
+    assert.match(promptPanel, /footer=\{null\}/);
+    assert.doesNotMatch(promptPanel, /saveExpandedEditor/);
+    assert.doesNotMatch(promptPanel, /okText="保存"/);
+});

@@ -68,7 +68,6 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
     const [promptDocument, setPromptDocument] = useState<CanvasPromptDocument>(() => canvasPromptEditorDocument(node) || promptDocumentFromText(initialPrompt));
     const [editorRevision, setEditorRevision] = useState(0);
     const [expandedEditorOpen, setExpandedEditorOpen] = useState(false);
-    const [expandedPromptDocument, setExpandedPromptDocument] = useState(promptDocument);
     const latestNodeRef = useRef(node);
     latestNodeRef.current = node;
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "image" ? config.count : 1 });
@@ -101,14 +100,10 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
         setPrompt(value);
         onPromptChange(node.id, value, nextDocument);
     };
-    const openExpandedEditor = () => {
-        setExpandedPromptDocument(promptDocument);
-        setExpandedEditorOpen(true);
-    };
-    const saveExpandedEditor = () => {
-        updatePromptDocument(expandedPromptDocument);
-        setEditorRevision((revision) => revision + 1);
+    const openExpandedEditor = () => setExpandedEditorOpen(true);
+    const closeExpandedEditor = () => {
         setExpandedEditorOpen(false);
+        setEditorRevision((revision) => revision + 1);
     };
 
     const submit = () => {
@@ -213,22 +208,20 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
             </div>
             <Modal
                 rootClassName="studio-modal"
-                title="展开编辑提示词"
+                title="展开编辑提示词 · 自动保存"
                 open={expandedEditorOpen}
                 width="min(1040px, calc(100vw - 32px))"
-                okText="保存"
-                cancelText="取消"
+                footer={null}
                 destroyOnHidden
-                onCancel={() => setExpandedEditorOpen(false)}
-                onOk={saveExpandedEditor}
+                onCancel={closeExpandedEditor}
             >
                 <CanvasPromptEditor
                     key={`${node.id}:expanded:${expandedEditorOpen}`}
-                    initialDocument={expandedPromptDocument}
+                    initialDocument={promptDocument}
                     options={referenceMentionOptions}
                     placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent)}
                     expanded
-                    onChange={setExpandedPromptDocument}
+                    onChange={updatePromptDocument}
                     onPreviewReference={onPreviewReference}
                 />
             </Modal>
