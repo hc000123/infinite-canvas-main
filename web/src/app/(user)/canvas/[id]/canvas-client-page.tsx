@@ -9,6 +9,7 @@ import { audioMetadata, createCanvasNode, imageMetadata, normalizeConnection, vi
 import { useCanvasConnections } from "../hooks/use-canvas-connections";
 import { useCanvasClipboardActions } from "../hooks/use-canvas-clipboard-actions";
 import { useCanvasConfigNodeActions } from "../hooks/use-canvas-config-node-actions";
+import { useCanvasCapacity } from "../hooks/use-canvas-capacity";
 import { useCanvasDerivedState } from "../hooks/use-canvas-derived-state";
 import { useCanvasDeleteActions } from "../hooks/use-canvas-delete-actions";
 import { useCanvasGlobalPointerEvents } from "../hooks/use-canvas-global-pointer-events";
@@ -204,6 +205,7 @@ function InfiniteCanvasPage() {
         viewport,
         viewportRef,
     } = useCanvasPageLocalState();
+    const capacity = useCanvasCapacity(nodes, connections);
     const { downloadNodeMedia, cacheUploadedCanvasMedia } = useCanvasMediaCache({ token, message, setNodes });
     const { historyState, resetHistory, undoCanvas, redoCanvas, pauseHistory, resumeHistory, skipNextHistoryCommit, getCleanupHistory } = useCanvasHistory({
         projectId: canvasId,
@@ -852,6 +854,7 @@ function InfiniteCanvasPage() {
                     onCancelTitleEditing={() => setTitleEditing(false)}
                     canUndo={historyState.canUndo}
                     canRedo={historyState.canRedo}
+                    capacity={capacity}
                     returnLabel={returnTarget.label}
                     onReturnParent={returnToParent}
                     onHome={openProjectsHome}

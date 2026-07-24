@@ -4,6 +4,8 @@ import { Button, Dropdown, Modal } from "antd";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
+import type { CanvasCapacitySnapshot } from "../utils/canvas-capacity";
+import { CanvasCapacityIndicator } from "./canvas-capacity-indicator";
 
 export function CanvasTopBar({
     title,
@@ -18,6 +20,7 @@ export function CanvasTopBar({
     onCancelTitleEditing,
     canUndo,
     canRedo,
+    capacity,
     returnLabel,
     onReturnParent,
     onHome,
@@ -45,6 +48,7 @@ export function CanvasTopBar({
     onCancelTitleEditing: () => void;
     canUndo: boolean;
     canRedo: boolean;
+    capacity: CanvasCapacitySnapshot;
     returnLabel: string;
     onReturnParent: () => void;
     onHome: () => void;
@@ -161,12 +165,15 @@ export function CanvasTopBar({
                     </div>
                 </div>
 
-                <div className="pointer-events-auto hidden shrink-0 items-center gap-1 md:flex">
-                    <TopAction icon={<ImagePlus className="size-4" />} label="生成图片" onClick={onGenerateImage} />
-                    <TopAction icon={<Upload className="size-4" />} label="导入" onClick={onImportImage} />
-                    <TopAction icon={<FolderOpen className="size-4" />} label="素材" onClick={onOpenAssets} />
-                    <TopAction icon={<LayoutGrid className="size-4" />} label="整理画布" onClick={onOrganizeCanvas} />
-                    <TopAction icon={<Settings className="size-4" />} label="设置" onClick={onOpenSettings} />
+                <div className="pointer-events-auto flex shrink-0 items-center gap-1">
+                    <CanvasCapacityIndicator capacity={capacity} />
+                    <div className="hidden items-center gap-1 md:flex">
+                        <TopAction icon={<ImagePlus className="size-4" />} label="生成图片" onClick={onGenerateImage} />
+                        <TopAction icon={<Upload className="size-4" />} label="导入" onClick={onImportImage} />
+                        <TopAction icon={<FolderOpen className="size-4" />} label="素材" onClick={onOpenAssets} />
+                        <TopAction icon={<LayoutGrid className="size-4" />} label="整理画布" onClick={onOrganizeCanvas} />
+                        <TopAction icon={<Settings className="size-4" />} label="设置" onClick={onOpenSettings} />
+                    </div>
                 </div>
             </div>
             <Modal rootClassName="studio-modal" title="快捷键" open={shortcutsOpen} onCancel={() => setShortcutsOpen(false)} footer={null} centered>
