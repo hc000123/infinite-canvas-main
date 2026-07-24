@@ -181,6 +181,29 @@ export function fetchAdminUserCreditLogs(token: string, id: string, query: Admin
     return apiGet<AdminCreditLogListResponse>(`/api/admin/users/${encodeURIComponent(id)}/credit-logs`, compactApiParams(query), token);
 }
 
+export type AdminUserActivity = {
+    id: string;
+    userId: string;
+    category: string;
+    action: string;
+    result: "success" | "failed" | "rejected";
+    targetType: string;
+    targetId: string;
+    targetName: string;
+    summary: string;
+    ipAddress: string;
+    ipAllowed: boolean;
+    sessionId: string;
+    loginApprovalId: string;
+    userAgent: string;
+    metadata: string;
+    createdAt: string;
+};
+export type AdminUserActivityQuery = AdminUserQuery & { category?: string; action?: string; result?: string; ipAddress?: string; outsideIP?: boolean; startAt?: string; endAt?: string };
+export function fetchAdminUserActivities(token: string, id: string, query: AdminUserActivityQuery) {
+    return apiGet<{ items: AdminUserActivity[]; total: number }>(`/api/admin/users/${encodeURIComponent(id)}/activity-logs`, compactApiParams({ ...query, outsideIP: query.outsideIP ? "true" : undefined }), token);
+}
+
 export async function saveAdminUser(token: string, user: Partial<AdminUser> & { password?: string }) {
     return apiPost<AdminUser>("/api/admin/users", user, token);
 }

@@ -2,11 +2,12 @@
 
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { Avatar, Button, Card, Col, Descriptions, Flex, Result, Row, Space, Statistic, Tabs, Tag, Typography } from "antd";
+import { Avatar, Button, Card, Col, Descriptions, Flex, Input, Result, Row, Select, Space, Statistic, Switch, Tabs, Tag, Typography } from "antd";
 import dayjs from "dayjs";
 import { useParams, useRouter } from "next/navigation";
 
-import type { AdminAITask, AdminCreditLog } from "@/services/api/admin";
+import type { AdminAITask, AdminCreditLog, AdminUserActivity } from "@/services/api/admin";
+import { activityActionLabel, activityRiskLabel } from "./admin-user-activity-view";
 import { adminUserDetailStats, adminUserDetailTabs } from "./admin-user-detail-view";
 import { useAdminUserDetail } from "./use-admin-user-detail";
 
@@ -38,6 +39,23 @@ export default function AdminUserDetailPage() {
         { title: "变动", dataIndex: "amount" },
         { title: "余额", dataIndex: "balance" },
         { title: "备注", dataIndex: "remark" },
+    ];
+    const activityColumns: ProColumns<AdminUserActivity>[] = [
+        { title: "时间", dataIndex: "createdAt", width: 170, render: (_, item) => formatTime(item.createdAt) },
+        { title: "操作", dataIndex: "action", width: 160, render: (_, item) => activityActionLabel(item.action) },
+        { title: "对象", dataIndex: "targetName", render: (_, item) => item.targetName || item.targetId || "-" },
+        { title: "结果", dataIndex: "result", width: 90, render: (_, item) => <Tag color={item.result === "success" ? "success" : "error"}>{item.result === "success" ? "成功" : item.result === "rejected" ? "已拒绝" : "失败"}</Tag> },
+        { title: "登录 IP", dataIndex: "ipAddress", width: 150, render: (_, item) => item.ipAddress || "-" },
+        {
+            title: "风险",
+            key: "risk",
+            width: 120,
+            render: (_, item) => {
+                const risk = activityRiskLabel(item);
+                return risk ? <Tag color={risk.color}>{risk.text}</Tag> : "-";
+            },
+        },
+        { title: "摘要", dataIndex: "summary", ellipsis: true },
     ];
     return (
         <main style={{ padding: 24 }}>
@@ -79,7 +97,50 @@ export default function AdminUserDetailPage() {
                 <Card variant="borderless">
                     <Tabs
                         items={[
-                            { key: "activity", label: tabLabels[0], children: <Result status="info" title="操作审计将在下一阶段接入" /> },
+                            {
+                                key: "activity",
+                                label: tabLabels[0],
+                                children: (
+                                    <Flex vertical gap={12}>
+                                        <Space wrap>
+                                            <Input.Search placeholder="搜索操作、对象或摘要" allowClear onSearch={(keyword) => detail.setActivityQuery({ ...detail.activityQuery, keyword, page: 1 })} />
+                                            <Select
+                                                allowClear
+                                                placeholder="操作分类"
+                                                style={{ width: 150 }}
+                                                options={[
+                                                    { value: "account", label: "账号" },
+                                                    { value: "security", label: "安全" },
+                                                    { value: "project", label: "项目" },
+                                                    { value: "canvas", label: "画布" },
+                                                    { value: "asset", label: "素材" },
+                                                    { value: "ai", label: "AI" },
+                                                    { value: "credit", label: "算力点" },
+                                                ]}
+                                                onChange={(category) => detail.setActivityQuery({ ...detail.activityQuery, category, page: 1 })}
+                                            />
+                                            <Space>
+                                                <Switch checked={detail.activityQuery.outsideIP} onChange={(outsideIP) => detail.setActivityQuery({ ...detail.activityQuery, outsideIP, page: 1 })} />
+                                                仅非白名单 IP
+                                            </Space>
+                                        </Space>
+                                        <ProTable
+                                            rowKey="id"
+                                            search={false}
+                                            options={false}
+                                            columns={activityColumns}
+                                            dataSource={detail.activities}
+                                            loading={detail.isLoading}
+                                            pagination={{
+                                                current: detail.activityQuery.page,
+                                                pageSize: detail.activityQuery.pageSize,
+                                                total: detail.activityTotal,
+                                                onChange: (page, pageSize) => detail.setActivityQuery({ ...detail.activityQuery, page, pageSize }),
+                                            }}
+                                        />
+                                    </Flex>
+                                ),
+                            },
                             {
                                 key: "tasks",
                                 label: tabLabels[1],
