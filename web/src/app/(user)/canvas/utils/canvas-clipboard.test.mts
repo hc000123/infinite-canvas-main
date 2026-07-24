@@ -127,6 +127,10 @@ test("duplicates a generated node with upstream connections but without generate
                 status: "success",
                 sourceAssetId: "asset-old",
                 errorDetails: "旧错误",
+                actionType: "variant",
+                videoActionType: "variant",
+                relationType: "variant",
+                variantOfNodeId: "video-source",
             },
         },
         { id: "downstream", type: "config", title: "下游", position: { x: 760, y: 0 }, width: 340, height: 240, metadata: {} },
@@ -162,13 +166,17 @@ test("duplicates a generated node with upstream connections but without generate
     assert.equal(copy?.metadata?.taskId, undefined);
     assert.equal(copy?.metadata?.sourceAssetId, undefined);
     assert.equal(copy?.metadata?.errorDetails, undefined);
+    assert.equal(copy?.metadata?.actionType, undefined);
+    assert.equal(copy?.metadata?.videoActionType, undefined);
+    assert.equal(copy?.metadata?.relationType, undefined);
+    assert.equal(copy?.metadata?.variantOfNodeId, undefined);
     assert.equal(copy?.metadata?.status, "idle");
 });
 
 test("remaps selected upstream nodes while keeping external upstream connections", () => {
     const sourceNodes = [
         { id: "external-image", type: "image", title: "外部素材", position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { content: "external" } },
-        { id: "config", type: "config", title: "配置", position: { x: 200, y: 0 }, width: 340, height: 240, metadata: { inputOrder: ["external-image"] } },
+        { id: "config", type: "config", title: "配置", position: { x: 200, y: 0 }, width: 340, height: 240, metadata: { inputOrder: ["external-image"], status: "success", aiTaskCredits: 18, creditLogId: "credit-old" } },
         {
             id: "video",
             type: "video",
@@ -205,6 +213,9 @@ test("remaps selected upstream nodes while keeping external upstream connections
         ],
     );
     assert.deepEqual(pastedConfig?.metadata?.inputOrder, ["external-image"]);
+    assert.equal(pastedConfig?.metadata?.status, "idle");
+    assert.equal(pastedConfig?.metadata?.aiTaskCredits, undefined);
+    assert.equal(pastedConfig?.metadata?.creditLogId, undefined);
     assert.equal(pastedVideo?.metadata?.promptDocument?.blocks[0]?.type, "reference");
     assert.equal((pastedVideo?.metadata?.promptDocument?.blocks[0] as any)?.nodeId, "config-copy");
     assert.equal(pastedVideo?.metadata?.referenceRoles?.[0]?.nodeId, "config-copy");
