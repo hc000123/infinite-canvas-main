@@ -107,7 +107,7 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
     };
 
     const submit = () => {
-        const text = prompt.trim();
+        const text = serializePromptDocument(promptDocument, referenceMentionOptions).trim();
         if (!canSubmit) return;
         onGenerate(node.id, mode, mode === "image" ? appendImageCameraPrompt(text, node.metadata) : text);
         if (!isGeneratedMedia) {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildCanvasGenerationContext } from "../utils/canvas-generation-inputs.ts";
+import { applyCanvasInputOrder, buildCanvasGenerationContext } from "../utils/canvas-generation-inputs.ts";
 
 test("builds generation context with upstream video references", () => {
     const context = buildCanvasGenerationContext(
@@ -199,4 +199,52 @@ test("builds mixed image, video, and audio references in configured input order"
         ["video:video", "image:image", "audio:audio"],
     );
     assert.deepEqual(context.referenceAudios, [{ id: "audio", name: "节奏.mp3", url: "audio-url", storageKey: "audio:ref", type: "audio/mpeg" }]);
+});
+
+test("persists connected input order without replacing an explicit order", () => {
+    const nodes = [
+        { id: "image-a", type: "image", title: "A", metadata: { content: "asset://A" } },
+        { id: "image-b", type: "image", title: "B", metadata: { content: "asset://B" } },
+        { id: "image-c", type: "image", title: "C", metadata: { content: "asset://C" } },
+        { id: "target", type: "video", title: "视频", metadata: { inputOrder: ["missing", "image-b", "image-a"] } },
+    ];
+
+    const next = applyCanvasInputOrder(nodes, "target", ["image-a", "image-b", "image-c", "image-a"]);
+
+    assert.deepEqual(
+        next.find((node) => node.id === "target")?.metadata?.inputOrder,
+        ["image-b", "image-a", "image-c"],
+    );
+});
+
+test("keeps first and last frame roles stable when connection storage order changes", () => {
+    const context = buildCanvasGenerationContext(
+        "target",
+        [
+            { id: "image-a", type: "image", title: "A", metadata: { content: "asset://A" } },
+            { id: "image-b", type: "image", title: "B", metadata: { content: "asset://B" } },
+            {
+                id: "target",
+                type: "video",
+                title: "视频",
+                metadata: {
+                    inputOrder: ["image-a", "image-b"],
+                    videoReferenceImageMode: "first_last_frame",
+                },
+            },
+        ],
+        [
+            { id: "connection-b", fromNodeId: "image-b", toNodeId: "target" },
+            { id: "connection-a", fromNodeId: "image-a", toNodeId: "target" },
+        ],
+        "生成视频",
+    );
+
+    assert.deepEqual(
+        context.referenceImages.map((image) => [image.id, image.seedanceRole]),
+        [
+            ["image-a", "first_frame"],
+            ["image-b", "last_frame"],
+        ],
+    );
 });
