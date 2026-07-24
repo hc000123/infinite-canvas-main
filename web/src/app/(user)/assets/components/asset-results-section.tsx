@@ -7,6 +7,7 @@ import { CheckSquare, ChevronDown, ChevronRight, Square, Trash2 } from "lucide-r
 import type { Asset } from "@/stores/use-asset-store";
 import { cn } from "@/lib/utils";
 import { assetEpisodeTitle, primaryAssetEpisodeKey } from "../asset-episode";
+import { isCompactVideoAssetGroup } from "../asset-result-layout";
 import type { AssetProjectResultGroup } from "../asset-project-groups";
 import type { AssetSortMode } from "../asset-page-filters";
 import type { OutdatedAssetVersionUsage } from "../asset-version-outdated-references";
@@ -15,6 +16,7 @@ import { assetKindLabel } from "../asset-utils";
 import { workflowAssetInfo } from "../workflow-asset-image";
 import { AssetRow } from "./asset-card";
 import { AssetListToolbar } from "./asset-list-toolbar";
+import { CompactVideoAssetCard } from "./compact-video-asset-card";
 import { OutdatedReferencesPanel } from "./outdated-references-panel";
 
 type BulkReviewAction = "submit" | "refresh" | "";
@@ -160,6 +162,7 @@ export function AssetResultsSection({
                 const typeGroupId = assetTypeGroupDomId(groupId, scopeId ? `${scopeId}-${typeGroup.id}` : typeGroup.id);
                 const collapsed = collapsedAssetTypeGroups[typeGroupId] === true;
                 const stats = workflowAssetTypeStats(typeGroup.assets);
+                const compactVideos = isCompactVideoAssetGroup(typeGroup.assets);
                 return (
                     <section key={typeGroup.id} id={typeGroupId} className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]">
                         <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={() => toggleAssetTypeGroup(typeGroupId)} aria-expanded={!collapsed}>
@@ -175,29 +178,46 @@ export function AssetResultsSection({
                             ) : null}
                         </button>
                         {!collapsed ? (
-                            <div className="grid gap-2.5 border-t border-[var(--studio-border-subtle)] p-3">
-                                {typeGroup.assets.map((asset) => (
-                                    <AssetRow
-                                        key={asset.id}
-                                        asset={asset}
-                                        selected={selectedAssetIds.has(asset.id)}
-                                        refreshingReview={refreshingReviewId === asset.id}
-                                        generatingWorkflowImage={generatingWorkflowAssetId === asset.id}
-                                        uploadingWorkflowImage={uploadingWorkflowAssetId === asset.id}
-                                        onSelect={() => onToggleAsset(asset.id)}
-                                        onOpen={() => onOpenAsset(asset)}
-                                        onEdit={() => onEditAsset(asset)}
-                                        onCopy={onCopyAsset}
-                                        onDownload={onDownloadAsset}
-                                        onDelete={() => onDeleteAsset(asset)}
-                                        submittingReview={submittingReviewId === asset.id}
-                                        onReview={() => onSubmitAssetReview(asset)}
-                                        onRefreshReview={() => onRefreshAssetReview(asset)}
-                                        onGenerateWorkflowImage={onGenerateWorkflowImage}
-                                        onMatchWorkflowImage={onMatchWorkflowImage}
-                                        onUploadWorkflowImage={onUploadWorkflowImage}
-                                    />
-                                ))}
+                            <div className={cn("border-t border-[var(--studio-border-subtle)] p-3", compactVideos ? "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6" : "grid gap-2.5")}>
+                                {compactVideos
+                                    ? typeGroup.assets.map((asset) => (
+                                          <CompactVideoAssetCard
+                                              key={asset.id}
+                                              asset={asset}
+                                              selected={selectedAssetIds.has(asset.id)}
+                                              refreshingReview={refreshingReviewId === asset.id}
+                                              submittingReview={submittingReviewId === asset.id}
+                                              onSelect={() => onToggleAsset(asset.id)}
+                                              onOpen={() => onOpenAsset(asset)}
+                                              onEdit={() => onEditAsset(asset)}
+                                              onDownload={() => onDownloadAsset(asset)}
+                                              onDelete={() => onDeleteAsset(asset)}
+                                              onReview={() => onSubmitAssetReview(asset)}
+                                              onRefreshReview={() => onRefreshAssetReview(asset)}
+                                          />
+                                      ))
+                                    : typeGroup.assets.map((asset) => (
+                                          <AssetRow
+                                              key={asset.id}
+                                              asset={asset}
+                                              selected={selectedAssetIds.has(asset.id)}
+                                              refreshingReview={refreshingReviewId === asset.id}
+                                              generatingWorkflowImage={generatingWorkflowAssetId === asset.id}
+                                              uploadingWorkflowImage={uploadingWorkflowAssetId === asset.id}
+                                              onSelect={() => onToggleAsset(asset.id)}
+                                              onOpen={() => onOpenAsset(asset)}
+                                              onEdit={() => onEditAsset(asset)}
+                                              onCopy={onCopyAsset}
+                                              onDownload={onDownloadAsset}
+                                              onDelete={() => onDeleteAsset(asset)}
+                                              submittingReview={submittingReviewId === asset.id}
+                                              onReview={() => onSubmitAssetReview(asset)}
+                                              onRefreshReview={() => onRefreshAssetReview(asset)}
+                                              onGenerateWorkflowImage={onGenerateWorkflowImage}
+                                              onMatchWorkflowImage={onMatchWorkflowImage}
+                                              onUploadWorkflowImage={onUploadWorkflowImage}
+                                          />
+                                      ))}
                             </div>
                         ) : null}
                     </section>
