@@ -460,6 +460,7 @@ function InfiniteCanvasPage() {
         canvasAiConfig,
         canvasId,
         chatSessions,
+        connectionsRef,
         nodesRef,
         screenToCanvas,
         getAppendNodeCenter,
