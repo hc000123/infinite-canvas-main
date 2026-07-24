@@ -1,12 +1,17 @@
 "use client";
 
 import { Button, Modal } from "antd";
-import type { CanvasNodeData } from "../types";
+import { CanvasNodeType, type CanvasNodeData } from "../types";
 
-export function CanvasImagePreviewModal({ node, onClose }: { node?: CanvasNodeData; onClose: () => void }) {
+export function CanvasMediaPreviewModal({ node, onClose }: { node?: CanvasNodeData; onClose: () => void }) {
+    const content = node?.metadata?.content;
+    const title = node?.type === CanvasNodeType.Video ? "视频详情" : node?.type === CanvasNodeType.Audio ? "音频详情" : "图片详情";
+
     return (
-        <Modal rootClassName="studio-modal" title="图片详情" open={Boolean(node?.metadata?.content)} centered onCancel={onClose} footer={null} width="auto" styles={{ body: { padding: 0, display: "flex", justifyContent: "center", alignItems: "center", maxHeight: "80vh" } }}>
-            {node?.metadata?.content ? <img src={node.metadata.content} alt={node.title || "图片"} style={{ maxWidth: "100%", maxHeight: "80vh", objectFit: "contain" }} /> : null}
+        <Modal rootClassName="studio-modal" title={title} open={Boolean(content)} centered onCancel={onClose} footer={null} width="auto" styles={{ body: { padding: 0, display: "flex", justifyContent: "center", alignItems: "center", maxHeight: "80vh" } }}>
+            {node?.type === CanvasNodeType.Image && content ? <img src={content} alt={node.title || "图片"} className="max-h-[80vh] max-w-full object-contain" /> : null}
+            {node?.type === CanvasNodeType.Video && content ? <video src={content} className="max-h-[80vh] max-w-full" controls controlsList="nodownload" playsInline /> : null}
+            {node?.type === CanvasNodeType.Audio && content ? <audio src={content} className="w-[min(640px,80vw)]" controls /> : null}
         </Modal>
     );
 }

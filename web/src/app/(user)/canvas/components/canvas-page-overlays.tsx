@@ -9,7 +9,7 @@ import { AssetPickerModal, type AssetPickerTab, type InsertAssetPayload } from "
 import { CanvasNodeAngleDialog, type CanvasImageAngleParams } from "./canvas-node-angle-dialog";
 import { CanvasNodeCropDialog, type CanvasImageCropRect } from "./canvas-node-crop-dialog";
 import { CanvasNodeInfoModal } from "./canvas-node-info-modal";
-import { CanvasImagePreviewModal, ClearCanvasConfirmModal } from "./canvas-page-modals";
+import { CanvasMediaPreviewModal, ClearCanvasConfirmModal } from "./canvas-page-modals";
 import { ImageBriefWorkbenchDrawer } from "./image-brief-workbench-drawer";
 import { ScriptManagerDrawer } from "./script-manager-drawer";
 import { StoryboardManagerDrawer } from "./storyboard-manager-drawer";
@@ -114,7 +114,7 @@ export function CanvasPageOverlays({
 
             {angleNode?.metadata?.content ? <CanvasNodeAngleDialog dataUrl={angleNode.metadata.content} open={Boolean(angleNode)} onClose={onCloseAngle} onConfirm={(params) => onGenerateAngleNode(angleNode, params)} /> : null}
 
-            <CanvasImagePreviewModal node={previewNode || undefined} onClose={onClosePreview} />
+            <CanvasMediaPreviewModal node={previewNode || undefined} onClose={onClosePreview} />
 
             <ClearCanvasConfirmModal open={clearConfirmOpen} onCancel={onCloseClearConfirm} onConfirm={onClearCanvas} />
 
