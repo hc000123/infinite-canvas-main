@@ -897,6 +897,7 @@ function InfiniteCanvasPage() {
                         configInputsById={configInputsById}
                         connectionTargetNodeId={connectionTargetNodeId}
                         connections={connections}
+                        deleteConnection={deleteConnection}
                         dialogNodeId={dialogNodeId}
                         editRequestNonce={editRequestNonce}
                         editingNodeId={editingNodeId}

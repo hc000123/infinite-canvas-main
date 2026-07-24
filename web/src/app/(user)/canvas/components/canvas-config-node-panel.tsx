@@ -18,11 +18,13 @@ import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions
 import { promptDocumentFromText, serializePromptDocument, validatePromptDocument, type CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
 import { CanvasConfigNodePreview } from "./canvas-config-node-preview";
+import { CanvasConnectedMediaStrip } from "./canvas-connected-media-strip";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import type { NodeGenerationInput } from "./canvas-node-generation";
 import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata } from "../types";
 import type { ReferenceImageRole } from "@/types/image";
+import type { CanvasConnectedMediaItem } from "../utils/canvas-connected-media";
 
 type CanvasConfigNodePanelProps = {
     node: CanvasNodeData;
@@ -34,9 +36,11 @@ type CanvasConfigNodePanelProps = {
     onTextInputChange: (nodeId: string, content: string) => void;
     onGenerate: (nodeId: string) => void;
     onPreviewReference?: (nodeId: string) => void;
+    connectedMedia?: CanvasConnectedMediaItem[];
+    onDisconnectConnectedMedia?: (connectionId: string) => void;
 };
 
-export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSummary, inputs, onConfigChange, onTextInputChange, onGenerate, onPreviewReference }: CanvasConfigNodePanelProps) {
+export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSummary, inputs, onConfigChange, onTextInputChange, onGenerate, onPreviewReference, connectedMedia = [], onDisconnectConnectedMedia }: CanvasConfigNodePanelProps) {
     const { message } = App.useApp();
     const [previewOpen, setPreviewOpen] = useState(false);
     const [editingTextId, setEditingTextId] = useState<string | null>(null);
@@ -154,6 +158,8 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                         />
                     </div>
                 </div>
+
+                {onDisconnectConnectedMedia ? <CanvasConnectedMediaStrip items={connectedMedia} onPreview={onPreviewReference} onDisconnect={onDisconnectConnectedMedia} /> : null}
 
                 <VideoReferenceModeTabs
                     imageCount={imageInputs.length}
@@ -302,6 +308,8 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                     />
                 </div>
             </div>
+
+            {onDisconnectConnectedMedia ? <CanvasConnectedMediaStrip items={connectedMedia} onPreview={onPreviewReference} onDisconnect={onDisconnectConnectedMedia} /> : null}
 
             <div className="grid shrink-0 grid-cols-2 gap-1.5" onMouseDown={(event) => event.stopPropagation()}>
                 <InputChip label="提示" value={`${promptCount}`} style={chipStyle} />

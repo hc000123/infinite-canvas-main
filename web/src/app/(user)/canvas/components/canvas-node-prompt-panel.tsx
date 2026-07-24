@@ -24,6 +24,8 @@ import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import { CanvasMediaVersionControl } from "./canvas-media-version-control";
+import { CanvasConnectedMediaStrip } from "./canvas-connected-media-strip";
+import type { CanvasConnectedMediaItem } from "../utils/canvas-connected-media";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata } from "../types";
 
 const CanvasPromptEditor = dynamic(() => import("./canvas-prompt-editor").then((module) => module.CanvasPromptEditor), { ssr: false });
@@ -42,10 +44,12 @@ type CanvasNodePromptPanelProps = {
     referenceMentionOptions?: CanvasReferenceMentionOption[];
     hasConnectedText?: boolean;
     onPreviewReference?: (nodeId: string) => void;
+    connectedMedia?: CanvasConnectedMediaItem[];
+    onDisconnectConnectedMedia?: (connectionId: string) => void;
     onSwitchMediaVersion?: (node: CanvasNodeData, versionId: string) => void;
 };
 
-export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, projectId, onPromptChange, onConfigChange, onGenerate, onImageSettingsOpenChange, referenceMentionOptions = [], hasConnectedText = false, onPreviewReference, onSwitchMediaVersion }: CanvasNodePromptPanelProps) {
+export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, projectId, onPromptChange, onConfigChange, onGenerate, onImageSettingsOpenChange, referenceMentionOptions = [], hasConnectedText = false, onPreviewReference, connectedMedia = [], onDisconnectConnectedMedia, onSwitchMediaVersion }: CanvasNodePromptPanelProps) {
     const localConfig = useConfigStore((state) => state.config);
     const publicSettings = useConfigStore((state) => state.publicSettings);
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
@@ -138,6 +142,7 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
             onWheel={(event) => event.stopPropagation()}
         >
             <CanvasMediaVersionControl node={node} disabled={isRunning} variant="panel" className="mb-3" onSwitch={onSwitchMediaVersion} />
+            {onDisconnectConnectedMedia ? <CanvasConnectedMediaStrip items={connectedMedia} onPreview={onPreviewReference} onDisconnect={onDisconnectConnectedMedia} /> : null}
             <CanvasPromptEditor
                 key={`${node.id}:${editorRevision}`}
                 initialDocument={promptDocument}

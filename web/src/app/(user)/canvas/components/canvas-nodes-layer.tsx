@@ -3,11 +3,12 @@
 import type { Dispatch, MouseEvent, MutableRefObject, SetStateAction } from "react";
 
 import type { AiConfig } from "@/stores/use-config-store";
+import { buildCanvasConnectedMedia } from "../utils/canvas-connected-media";
 import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions";
 import type { CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import { getNodeProductionPackageId, type CanvasProductionPackageSummary } from "../utils/canvas-production-packages";
 import { getInputSummary, productionNodeBadge } from "../utils/canvas-page-helpers";
-import { CanvasNodeType, type CanvasConnection, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata, type ContextMenuState, type SelectionBox, type ViewportTransform } from "../types";
+import type { CanvasConnection, CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata, ContextMenuState, SelectionBox, ViewportTransform } from "../types";
 import type { CanvasNodeHoverToolbarActions } from "./canvas-node-hover-toolbar";
 import { buildNodeGenerationInputs, type NodeGenerationInput } from "./canvas-node-generation";
 import { CanvasConfigNodePanel } from "./canvas-config-node-panel";
@@ -25,6 +26,7 @@ type Props = {
     configInputsById: Map<string, NodeGenerationInput[]>;
     connectionTargetNodeId: string | null;
     connections: CanvasConnection[];
+    deleteConnection: (connectionId: string) => void;
     dialogNodeId: string | null;
     editRequestNonce: number;
     editingNodeId: string | null;
@@ -81,6 +83,7 @@ export function CanvasNodesLayer({
     configInputsById,
     connectionTargetNodeId,
     connections,
+    deleteConnection,
     dialogNodeId,
     editRequestNonce,
     editingNodeId,
@@ -150,6 +153,7 @@ export function CanvasNodesLayer({
                     isProductionPackageActive={Boolean(productionPackages.length && getNodeProductionPackageId(node) && getNodeProductionPackageId(node) === activeProductionPackageId)}
                     renderPanel={(panelNode) => {
                         const generationInputs = buildNodeGenerationInputs(panelNode.id, nodes, connections);
+                        const connectedMedia = buildCanvasConnectedMedia(panelNode.id, nodes, connections);
                         return (
                             <CanvasNodePromptPanel
                                 node={panelNode}
@@ -165,33 +169,40 @@ export function CanvasNodesLayer({
                                 }}
                                 referenceMentionOptions={buildReferenceMentionOptions(generationInputs)}
                                 hasConnectedText={generationInputs.some((input) => input.type === "text" && Boolean(input.text?.trim()))}
+                                connectedMedia={connectedMedia}
+                                onDisconnectConnectedMedia={deleteConnection}
                                 onPreviewReference={(nodeId) => {
                                     const referenceNode = nodesRef.current.find((item) => item.id === nodeId);
-                                    if (referenceNode?.type === CanvasNodeType.Image) nodeToolActions.onViewImage(referenceNode);
+                                    if (referenceNode) nodeToolActions.onViewImage(referenceNode);
                                 }}
                                 onSwitchMediaVersion={handleSwitchMediaVersion}
                             />
                         );
                     }}
-                    renderNodeContent={(contentNode) => (
-                        <CanvasConfigNodePanel
-                            node={contentNode}
-                            canvasAiConfig={canvasAiConfig}
-                            isRunning={runningNodeId === contentNode.id}
-                            inputSummary={getInputSummary(configInputsById.get(contentNode.id) || [])}
-                            inputs={configInputsById.get(contentNode.id) || []}
-                            onConfigChange={handleConfigNodeChange}
-                            onTextInputChange={handleNodeContentChange}
-                            onPreviewReference={(nodeId) => {
-                                const referenceNode = nodesRef.current.find((item) => item.id === nodeId);
-                                if (referenceNode?.type === CanvasNodeType.Image) nodeToolActions.onViewImage(referenceNode);
-                            }}
-                            onGenerate={(nodeId) => {
-                                const target = nodesRef.current.find((item) => item.id === nodeId);
-                                void handleGenerateNode(nodeId, target?.metadata?.generationMode || "image", target?.metadata?.prompt || "");
-                            }}
-                        />
-                    )}
+                    renderNodeContent={(contentNode) => {
+                        const connectedMedia = buildCanvasConnectedMedia(contentNode.id, nodes, connections);
+                        return (
+                            <CanvasConfigNodePanel
+                                node={contentNode}
+                                canvasAiConfig={canvasAiConfig}
+                                isRunning={runningNodeId === contentNode.id}
+                                inputSummary={getInputSummary(configInputsById.get(contentNode.id) || [])}
+                                inputs={configInputsById.get(contentNode.id) || []}
+                                connectedMedia={connectedMedia}
+                                onDisconnectConnectedMedia={deleteConnection}
+                                onConfigChange={handleConfigNodeChange}
+                                onTextInputChange={handleNodeContentChange}
+                                onPreviewReference={(nodeId) => {
+                                    const referenceNode = nodesRef.current.find((item) => item.id === nodeId);
+                                    if (referenceNode) nodeToolActions.onViewImage(referenceNode);
+                                }}
+                                onGenerate={(nodeId) => {
+                                    const target = nodesRef.current.find((item) => item.id === nodeId);
+                                    void handleGenerateNode(nodeId, target?.metadata?.generationMode || "image", target?.metadata?.prompt || "");
+                                }}
+                            />
+                        );
+                    }}
                     onMouseDown={handleNodeMouseDown}
                     onHoverStart={(nodeId) => {
                         if (nodeDraggingRef.current) return;

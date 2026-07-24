@@ -28,3 +28,16 @@ test("the prompt editor uses the canvas mention matcher instead of Lexical's whi
     assert.match(editor, /triggerFn=\{matchCanvasReferenceMention\}/);
     assert.doesNotMatch(editor, /useBasicTypeaheadTriggerMatch/);
 });
+
+test("all prompt node panels expose connected media preview and exact unlink actions", () => {
+    const layer = readCanvasFile("../components/canvas-nodes-layer.tsx");
+    const promptPanel = readCanvasFile("../components/canvas-node-prompt-panel.tsx");
+    const configPanel = readCanvasFile("../components/canvas-config-node-panel.tsx");
+    const page = readCanvasFile("../[id]/canvas-client-page.tsx");
+
+    assert.match(layer, /buildCanvasConnectedMedia\(panelNode\.id, nodes, connections\)/);
+    assert.match(layer, /onDisconnectConnectedMedia=\{deleteConnection\}/);
+    assert.match(promptPanel, /<CanvasConnectedMediaStrip/);
+    assert.match(configPanel, /<CanvasConnectedMediaStrip/);
+    assert.match(page, /deleteConnection=\{deleteConnection\}/);
+});
