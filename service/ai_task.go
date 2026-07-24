@@ -155,6 +155,19 @@ func ListAdminAITasks(q model.AITaskQuery) (model.AITaskList, error) {
 	for i := range tasks {
 		tasks[i] = hydrateAITaskFrontendLinks(tasks[i])
 	}
+	users, err := repository.ListUserSummariesByIDs(func() []string {
+		ids := make([]string, 0, len(tasks))
+		for _, task := range tasks {
+			ids = append(ids, task.UserID)
+		}
+		return ids
+	}())
+	if err != nil {
+		return model.AITaskList{}, err
+	}
+	for i := range tasks {
+		tasks[i].User = users[tasks[i].UserID]
+	}
 	return model.AITaskList{Items: tasks, Total: int(total)}, nil
 }
 

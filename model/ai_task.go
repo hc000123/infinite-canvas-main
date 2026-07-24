@@ -39,6 +39,7 @@ type AITask struct {
 	UpdatedAt         string                   `json:"updatedAt"`
 	FrontendTrace     AITaskFrontendTrace      `json:"frontendTrace" gorm:"-"`
 	FrontendArtifacts []AITaskFrontendArtifact `json:"frontendArtifacts" gorm:"-"`
+	User              UserSummary              `json:"user" gorm:"-"`
 }
 
 type AITaskFrontendTrace struct {

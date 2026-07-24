@@ -428,7 +428,26 @@ func ListCreditLogs(q model.Query) (model.CreditLogList, error) {
 	if err != nil {
 		return model.CreditLogList{}, err
 	}
+	logs, err = hydrateCreditLogUsers(logs)
+	if err != nil {
+		return model.CreditLogList{}, err
+	}
 	return model.CreditLogList{Items: logs, Total: int(total)}, nil
+}
+
+func hydrateCreditLogUsers(logs []model.CreditLog) ([]model.CreditLog, error) {
+	ids := make([]string, 0, len(logs))
+	for _, item := range logs {
+		ids = append(ids, item.UserID)
+	}
+	users, err := repository.ListUserSummariesByIDs(ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range logs {
+		logs[i].User = users[logs[i].UserID]
+	}
+	return logs, nil
 }
 
 func SaveCreditLog(log model.CreditLog) (model.CreditLog, error) {

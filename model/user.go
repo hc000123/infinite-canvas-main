@@ -53,6 +53,16 @@ type UserList struct {
 	Total int    `json:"total"`
 }
 
+type UserSummary struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"displayName"`
+}
+
+func SummaryUser(user User) UserSummary {
+	return UserSummary{ID: user.ID, Username: user.Username, DisplayName: user.DisplayName}
+}
+
 // AuthUser 用户公开信息。
 type AuthUser struct {
 	ID          string   `json:"id"`
@@ -103,6 +113,7 @@ type CreditLog struct {
 	Remark    string        `json:"remark"`
 	Extra     string        `json:"extra" gorm:"type:text"`
 	CreatedAt string        `json:"createdAt"`
+	User      UserSummary   `json:"user" gorm:"-"`
 }
 
 type CreditLogList struct {

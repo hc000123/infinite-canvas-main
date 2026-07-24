@@ -159,6 +159,38 @@ func GetUserByUsername(username string) (model.User, bool, error) {
 	return findUser(db, "username = ?", username)
 }
 
+func ListUserSummariesByIDs(ids []string) (map[string]model.UserSummary, error) {
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	unique := make([]string, 0, len(ids))
+	seen := map[string]struct{}{}
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	if len(unique) == 0 {
+		return map[string]model.UserSummary{}, nil
+	}
+	var users []model.User
+	if err := db.Where("id IN ?", unique).Find(&users).Error; err != nil {
+		return nil, err
+	}
+	result := make(map[string]model.UserSummary, len(users))
+	for _, user := range users {
+		result[user.ID] = model.SummaryUser(user)
+	}
+	return result, nil
+}
+
 // SaveUser 保存用户信息。
 func SaveUser(user model.User) (model.User, error) {
 	db, err := DB()
@@ -226,10 +258,11 @@ func ListCreditLogs(q model.Query) ([]model.CreditLog, int64, error) {
 	tx := db.Model(&model.CreditLog{})
 	if keyword := strings.TrimSpace(q.Keyword); keyword != "" {
 		like := "%" + keyword + "%"
+		userMatch := "user_id LIKE ? OR user_id IN (SELECT id FROM users WHERE username LIKE ? OR display_name LIKE ?)"
 		if types := creditLogTypesForKeyword(keyword); len(types) > 0 {
-			tx = tx.Where("user_id LIKE ? OR type LIKE ? OR type IN ? OR remark LIKE ? OR related_id LIKE ?", like, like, types, like, like)
+			tx = tx.Where("("+userMatch+") OR type LIKE ? OR type IN ? OR remark LIKE ? OR related_id LIKE ?", like, like, like, like, types, like, like)
 		} else {
-			tx = tx.Where("user_id LIKE ? OR type LIKE ? OR remark LIKE ? OR related_id LIKE ?", like, like, like, like)
+			tx = tx.Where("("+userMatch+") OR type LIKE ? OR remark LIKE ? OR related_id LIKE ?", like, like, like, like, like, like)
 		}
 	}
 	var total int64
