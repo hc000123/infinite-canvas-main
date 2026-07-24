@@ -32,7 +32,8 @@ func TestWorkflowMediaClaimFreezesOrderedManifest(t *testing.T) {
 	setupVideoWorkflowTest(t)
 	setupWorkflowMediaTestDir(t)
 	detail := ensureVideoWorkflowTestRun(t)
-	batch, err := CreateUserWorkflowMediaBatch("user-1", detail.Run.ID, CreateWorkflowMediaBatchInput{StageID: WorkflowStageArtDesign, IdempotencyKey: "media-claim"})
+	detail = approveWorkflowStageForTest(t, detail, WorkflowStageShotBreakdown, `{"shots":[{"shotId":"shot-001","sceneKey":"scene-001","sourceScript":"阿宁进入房间。","shotDraft":{"shotSize":"中景","camera":"固定机位","movement":"缓慢推近","action":"阿宁进入房间","performance":"克制","dialogue":"","durationSeconds":6,"continuityMode":"continuous"}}]}`)
+	batch, err := CreateUserWorkflowMediaBatch("user-1", detail.Run.ID, CreateWorkflowMediaBatchInput{StageID: WorkflowStageShotPrompt, IdempotencyKey: "media-claim"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +47,8 @@ func TestWorkflowMediaClaimFreezesOrderedManifest(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	stage, err := StartWorkflowStageWithMedia("user-1", detail.Run.ID, WorkflowStageArtDesign, "media-claim", batch.Batch.ID)
+	context := json.RawMessage(`{"shotId":"shot-001","sourceScript":"阿宁进入房间。","shotDraft":{"shotSize":"中景","camera":"固定机位","movement":"缓慢推近","action":"阿宁进入房间","performance":"克制","dialogue":"","durationSeconds":6,"continuityMode":"continuous"},"promptInputHash":"media-claim","references":[]}`)
+	stage, err := StartWorkflowStageWithInput("user-1", detail.Run.ID, WorkflowStageShotPrompt, WorkflowStageStartInput{IdempotencyKey: "media-claim", MediaBatchID: batch.Batch.ID, Context: context})
 	if err != nil {
 		t.Fatal(err)
 	}
