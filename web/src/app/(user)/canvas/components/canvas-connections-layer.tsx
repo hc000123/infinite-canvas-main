@@ -1,7 +1,8 @@
 "use client";
 
 import { isHiddenBatchConnectionEndpoint } from "../utils/canvas-batch-nodes";
-import type { CanvasConnection, CanvasNodeData, ConnectionHandle, Position } from "../types";
+import { canvasViewportBounds, filterCanvasVisibleConnections } from "../utils/canvas-visibility";
+import type { CanvasConnection, CanvasNodeData, ConnectionHandle, Position, ViewportTransform } from "../types";
 import { ActiveConnectionPath, ConnectionPath } from "./canvas-connections";
 
 type Props = {
@@ -14,12 +15,18 @@ type Props = {
     onDeleteConnection: (connectionId: string) => void;
     relatedConnectionIds: Set<string>;
     selectedConnectionId: string | null;
+    viewport: ViewportTransform;
+    viewportSize: { width: number; height: number };
 };
 
-export function CanvasConnectionsLayer({ connectingParams, connections, mouseWorld, nodeById, nodes, onSelectConnection, onDeleteConnection, relatedConnectionIds, selectedConnectionId }: Props) {
+export function CanvasConnectionsLayer({ connectingParams, connections, mouseWorld, nodeById, nodes, onSelectConnection, onDeleteConnection, relatedConnectionIds, selectedConnectionId, viewport, viewportSize }: Props) {
+    const forcedConnectionIds = new Set(relatedConnectionIds);
+    if (selectedConnectionId) forcedConnectionIds.add(selectedConnectionId);
+    const visibleConnections = filterCanvasVisibleConnections(connections, nodeById, canvasViewportBounds(viewport, viewportSize, 600), forcedConnectionIds);
+
     return (
         <svg className="absolute left-0 top-0 h-[10000px] w-[10000px] overflow-visible" style={{ pointerEvents: "none", transform: "translateZ(0)", zIndex: 0 }}>
-            {connections
+            {visibleConnections
                 .filter((connection) => {
                     const from = nodeById.get(connection.fromNodeId);
                     const to = nodeById.get(connection.toNodeId);

@@ -891,6 +891,8 @@ function InfiniteCanvasPage() {
                         nodes={nodes}
                         relatedConnectionIds={relatedHighlight.connectionIds}
                         selectedConnectionId={selectedConnectionId}
+                        viewport={viewport}
+                        viewportSize={size}
                         onSelectConnection={renderActions.selectConnection}
                         onDeleteConnection={deleteConnection}
                     />

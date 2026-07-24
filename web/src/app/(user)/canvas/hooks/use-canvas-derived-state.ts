@@ -3,6 +3,7 @@ import { useMemo, type RefObject } from "react";
 import type { Asset } from "@/stores/use-asset-store";
 import { buildFrameReferencesByVideoId } from "../utils/canvas-page-helpers";
 import { isHiddenBatchChild } from "../utils/canvas-batch-nodes";
+import { canvasNodeIntersectsBounds, canvasViewportBounds } from "../utils/canvas-visibility";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type ViewportTransform } from "../types";
 
 export function useCanvasDerivedState({
@@ -31,16 +32,10 @@ export function useCanvasDerivedState({
     viewport: ViewportTransform;
 }) {
     const visibleNodes = useMemo(() => {
-        const padding = 280;
         const rect = containerRef.current?.getBoundingClientRect();
-        const width = rect?.width || size.width;
-        const height = rect?.height || size.height;
-        const viewLeft = -viewport.x / viewport.k - padding;
-        const viewTop = -viewport.y / viewport.k - padding;
-        const viewRight = viewLeft + width / viewport.k + padding * 2;
-        const viewBottom = viewTop + height / viewport.k + padding * 2;
+        const bounds = canvasViewportBounds(viewport, { width: rect?.width || size.width, height: rect?.height || size.height }, 280);
 
-        return nodes.filter((node) => !isHiddenBatchChild(node, nodes, collapsingBatchIds) && node.position.x + node.width > viewLeft && node.position.x < viewRight && node.position.y + node.height > viewTop && node.position.y < viewBottom);
+        return nodes.filter((node) => !isHiddenBatchChild(node, nodes, collapsingBatchIds) && canvasNodeIntersectsBounds(node, bounds));
     }, [collapsingBatchIds, containerRef, nodes, size.height, size.width, viewport.k, viewport.x, viewport.y]);
 
     const frameReferencesByVideoId = useMemo(() => buildFrameReferencesByVideoId(nodes, connections), [connections, nodes]);

@@ -14,3 +14,14 @@ test("the canvas page exposes capacity through the top bar", () => {
     assert.match(topBar, /<CanvasCapacityIndicator capacity=\{capacity\}/);
     assert.match(indicator, /画布容量/);
 });
+
+test("nodes and connections share viewport visibility helpers", () => {
+    const page = readCanvasFile("../[id]/canvas-client-page.tsx");
+    const derived = readCanvasFile("../hooks/use-canvas-derived-state.ts");
+    const connectionsLayer = readCanvasFile("../components/canvas-connections-layer.tsx");
+
+    assert.match(derived, /canvasNodeIntersectsBounds/);
+    assert.match(connectionsLayer, /filterCanvasVisibleConnections/);
+    assert.match(connectionsLayer, /canvasViewportBounds\(viewport, viewportSize, 600\)/);
+    assert.match(page, /viewportSize=\{size\}/);
+});
