@@ -58,7 +58,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
     const [projectContextFilter, setProjectContextFilter] = useState(initialProjectId);
     const [episodeFilter, setEpisodeFilter] = useState("");
     const [projectLibraryFilter, setProjectLibraryFilter] = useState<ProjectLibraryFilter>("all");
-    const canvasLibraryFilter = "";
+    const [canvasLibraryFilter, setCanvasLibraryFilter] = useState("");
     const [referenceVersionFilter, setReferenceVersionFilter] = useState<ReferenceVersionFilter>("all");
     const [storyboardGroupFilter, setStoryboardGroupFilter] = useState("");
     const [sortMode, setSortMode] = useState<AssetSortMode>(DEFAULT_ASSET_SORT_MODE);
@@ -76,6 +76,8 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
         () => creativeProjects.map((project) => ({ project, folder: folders.find((folder) => folder.projectId === project.id) })).filter((item): item is { project: CreativeProject; folder: AssetFolder } => Boolean(item.folder)),
         [creativeProjects, folders],
     );
+    const workflowProjectOptions = useMemo(() => projectFolderRows.map(({ project }) => ({ label: project.title || "未命名工作流项目", value: project.id })), [projectFolderRows]);
+    const canvasProjectOptions = useMemo(() => projects.map((project) => ({ label: project.title || "未命名画布", value: project.id })), [projects]);
     const folderOptions = useMemo(
         () => [{ label: "未分组", value: "" }, ...projectFolderRows.map(({ project, folder }) => ({ label: `项目 / ${project.title || folder.name}`, value: folder.id })), ...regularFolders.map((folder) => ({ label: folder.name, value: folder.id }))],
         [projectFolderRows, regularFolders],
@@ -192,6 +194,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
     const assetPaginationEnabled = true;
     const visibleAssets = paginateAssetList(filteredAssets, page, pageSize);
     const visibleProductionBibleItems = useMemo(() => {
+        if (canvasLibraryFilter) return [];
         if (favoriteOnly || referenceVersionFilter !== "all" || kindFilter !== "all" || episodeFilter) return [];
         if (generationSourceFilter || generationActionFilter || generationModelProviderFilter || generationTaskFilter !== "all" || storyboardGroupFilter || projectLibraryFilter !== "all") return [];
         if (!projectContextFilter && folderFilter !== "all") return [];
@@ -200,6 +203,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
             .filter((item) => isReadableProductionBibleItem(item) && (!projectContextFilter || item.projectId === projectContextFilter) && (!query || productionBibleSearchText(item).includes(query)))
             .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     }, [
+        canvasLibraryFilter,
         episodeFilter,
         favoriteOnly,
         folderFilter,
@@ -242,6 +246,10 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
     }, [activeFolderId, folderMap]);
 
     useEffect(() => {
+        if (canvasLibraryFilter && !projects.some((project) => project.id === canvasLibraryFilter)) setCanvasLibraryFilter("");
+    }, [canvasLibraryFilter, projects]);
+
+    useEffect(() => {
         if (!initialProjectId) return;
         const projectFolder = projectFolderRows.find((item) => item.project.id === initialProjectId)?.folder;
         setProjectContextFilter(initialProjectId);
@@ -267,6 +275,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
         assetAliasIdsByCanonicalId,
         canvasLibraryFilter,
         canvasLibraryTitles,
+        canvasProjectOptions,
         episodeFilter,
         episodeOptions,
         episodeTitleMap,
@@ -294,6 +303,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
         referenceVersionFilter,
         regularFolders,
         setEpisodeFilter,
+        setCanvasLibraryFilter,
         setFavoriteOnly,
         setFolderFilter,
         setGenerationActionFilter,
@@ -316,6 +326,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
         visibleAssetGroups,
         visibleAssets,
         visibleProductionBibleItems,
+        workflowProjectOptions,
     };
 }
 

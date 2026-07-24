@@ -99,7 +99,9 @@ function AssetsPageContent() {
         activeFolderName,
         assetAliasIdsByCanonicalId,
         assetPaginationEnabled,
+        canvasLibraryFilter,
         canvasLibraryTitles,
+        canvasProjectOptions,
         episodeFilter,
         episodeOptions,
         episodeTitleMap,
@@ -127,6 +129,7 @@ function AssetsPageContent() {
         referenceVersionFilter,
         regularFolders,
         setEpisodeFilter,
+        setCanvasLibraryFilter,
         setFavoriteOnly,
         setFolderFilter,
         setGenerationActionFilter,
@@ -148,6 +151,7 @@ function AssetsPageContent() {
         validAssets,
         visibleAssetGroups,
         visibleProductionBibleItems,
+        workflowProjectOptions,
     } = useAssetPageQuery({
         assets,
         creativeProjects,
@@ -208,6 +212,7 @@ function AssetsPageContent() {
         toggleProductionBibleItemSelected,
     } = useAssetSelection({ filteredAssets, outdatedAssetVersionUsages, productionBibleItems, validAssets, visibleProductionBibleItems });
     const assetFilterActions = useAssetFilterActions({
+        setCanvasLibraryFilter,
         setEpisodeFilter,
         setFavoriteOnly,
         setFolderFilter,
@@ -400,6 +405,7 @@ function AssetsPageContent() {
 
                     <AssetFilterPanel
                         actions={{
+                            onCanvasLibraryFilterChange: assetFilterActions.changeCanvasLibraryFilter,
                             onClearSelectedOutdatedUsages: clearSelectedOutdatedUsages,
                             onCreateFolder: openCreateFolder,
                             onDeleteFolder: deleteFolder,
@@ -424,14 +430,17 @@ function AssetsPageContent() {
                             validAssetCount: validAssets.length,
                         }}
                         options={{
+                            canvasProjectOptions,
                             episodeOptions,
                             generationFilterOptions,
                             projectFolderRows,
                             regularFolders,
                             storyboardGroupOptions,
+                            workflowProjectOptions,
                         }}
                         values={{
                             activeFolderId,
+                            canvasLibraryFilter,
                             episodeFilter,
                             folderFilter,
                             favoriteOnly,

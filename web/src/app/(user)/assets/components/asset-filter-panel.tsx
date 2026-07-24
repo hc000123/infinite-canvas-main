@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp, FolderPlus, PencilLine, Search, Star, Trash2 } from "lucide-react";
 import { Button, Input, Select, Tag } from "antd";
 
@@ -15,6 +15,7 @@ type GenerationTaskFilter = "all" | "with" | "without";
 type FilterProjectRow = { project: { id: string; title?: string }; folder: AssetFolder };
 type FilterOption = { label: string; value: string };
 type AssetFilterPanelActions = {
+    onCanvasLibraryFilterChange: (value: string) => void;
     onClearSelectedOutdatedUsages: () => void;
     onCreateFolder: () => void;
     onDeleteFolder: (folder: AssetFolder) => void;
@@ -39,14 +40,17 @@ type AssetFilterPanelCounts = {
     validAssetCount: number;
 };
 type AssetFilterPanelOptions = {
+    canvasProjectOptions: FilterOption[];
     episodeOptions: AssetEpisodeOption[];
     generationFilterOptions: { actions: FilterOption[]; modelProviders: FilterOption[]; sources: FilterOption[] };
     projectFolderRows: FilterProjectRow[];
     regularFolders: AssetFolder[];
     storyboardGroupOptions: FilterOption[];
+    workflowProjectOptions: FilterOption[];
 };
 type AssetFilterPanelValues = {
     activeFolderId?: string;
+    canvasLibraryFilter: string;
     episodeFilter: string;
     folderFilter: string;
     favoriteOnly: boolean;
@@ -69,11 +73,10 @@ const kindOptions = [
     { label: "视频", value: "video" },
     { label: "音频", value: "audio" },
 ];
-const PROJECT_FILTER_COLLAPSED_COUNT = 6;
-
 export function AssetFilterPanel({ actions, counts, options, values }: { actions: AssetFilterPanelActions; counts: AssetFilterPanelCounts; options: AssetFilterPanelOptions; values: AssetFilterPanelValues }) {
     const {
         activeFolderId,
+        canvasLibraryFilter,
         episodeFilter,
         folderFilter,
         favoriteOnly,
@@ -89,8 +92,9 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
         storyboardGroupFilter,
     } = values;
     const { folderCounts, outdatedUsageCount, validAssetCount } = counts;
-    const { episodeOptions, generationFilterOptions, projectFolderRows, regularFolders, storyboardGroupOptions } = options;
+    const { canvasProjectOptions, episodeOptions, generationFilterOptions, projectFolderRows, regularFolders, storyboardGroupOptions, workflowProjectOptions } = options;
     const {
+        onCanvasLibraryFilterChange,
         onClearSelectedOutdatedUsages,
         onCreateFolder,
         onDeleteFolder,
@@ -110,7 +114,6 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
         onStoryboardGroupFilterChange,
     } = actions;
     const activeRegularFolder = activeFolderId ? regularFolders.find((folder) => folder.id === activeFolderId) : undefined;
-    const [projectFiltersExpanded, setProjectFiltersExpanded] = useState(false);
     const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
     const hasActiveAdvancedFilter = Boolean(
         episodeFilter ||
@@ -125,15 +128,8 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
     );
     const showAdvancedFilters = advancedFiltersExpanded;
     const episodeAssetCount = episodeOptions.reduce((sum, option) => sum + option.count, 0);
-    const visibleProjectFolderRows = useMemo(() => {
-        if (projectFiltersExpanded || projectFolderRows.length <= PROJECT_FILTER_COLLAPSED_COUNT) return projectFolderRows;
-        const collapsedRows = projectFolderRows.slice(0, PROJECT_FILTER_COLLAPSED_COUNT);
-        const activeRow = projectFolderRows.find(({ folder, project }) => folder.id === folderFilter || project.id === projectContextFilter);
-        if (!activeRow || collapsedRows.some(({ project }) => project.id === activeRow.project.id)) return collapsedRows;
-        return [...collapsedRows.slice(0, PROJECT_FILTER_COLLAPSED_COUNT - 1), activeRow];
-    }, [folderFilter, projectContextFilter, projectFolderRows, projectFiltersExpanded]);
-    const hiddenProjectCount = Math.max(0, projectFolderRows.length - visibleProjectFolderRows.length);
     const selectAllProjects = () => {
+        onCanvasLibraryFilterChange("");
         onProjectContextFilterChange("");
         onFolderFilterChange("all");
         onStoryboardGroupFilterChange("");
@@ -142,6 +138,7 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
         onClearSelectedOutdatedUsages();
     };
     const selectProjectFolder = (projectId: string, folderId: string) => {
+        onCanvasLibraryFilterChange("");
         onProjectContextFilterChange(projectId);
         onFolderFilterChange(folderId);
         onStoryboardGroupFilterChange("");
@@ -149,7 +146,22 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
         onReferenceVersionFilterChange("all");
         onClearSelectedOutdatedUsages();
     };
+    const selectWorkflowProject = (projectId: string) => {
+        const row = projectFolderRows.find(({ project }) => project.id === projectId);
+        if (!row) return selectAllProjects();
+        selectProjectFolder(projectId, row.folder.id);
+    };
+    const selectCanvas = (canvasId: string) => {
+        onCanvasLibraryFilterChange(canvasId);
+        onProjectContextFilterChange("");
+        onFolderFilterChange("all");
+        onStoryboardGroupFilterChange("");
+        onProjectLibraryFilterChange("all");
+        onReferenceVersionFilterChange("all");
+        onClearSelectedOutdatedUsages();
+    };
     const selectRegularFolder = (value: string) => {
+        onCanvasLibraryFilterChange("");
         onProjectContextFilterChange("");
         onFolderFilterChange(value);
     };
@@ -189,25 +201,31 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
                 </FilterBlock>
                 <FilterBlock label="项目">
                     <div className="flex flex-wrap items-center gap-2">
-                        <Tag.CheckableTag checked={!projectContextFilter && folderFilter === "all"} className={cn("prompt-filter-tag", !projectContextFilter && folderFilter === "all" && "is-active")} onChange={selectAllProjects}>
+                        <Tag.CheckableTag checked={!projectContextFilter && !canvasLibraryFilter && folderFilter === "all"} className={cn("prompt-filter-tag", !projectContextFilter && !canvasLibraryFilter && folderFilter === "all" && "is-active")} onChange={selectAllProjects}>
                             全部项目 {validAssetCount}
                         </Tag.CheckableTag>
-                        {visibleProjectFolderRows.map(({ project, folder }) => (
-                            <Tag.CheckableTag key={project.id} checked={folderFilter === folder.id} className={cn("prompt-filter-tag", folderFilter === folder.id && "is-active")} onChange={() => selectProjectFolder(project.id, folder.id)}>
-                                {project.title || folder.name} {folderCounts[folder.id] || 0}
-                            </Tag.CheckableTag>
-                        ))}
-                        {projectFolderRows.length > PROJECT_FILTER_COLLAPSED_COUNT ? (
-                            <Button
-                                size="middle"
-                                type="text"
-                                className="!h-8 !px-2 !text-[var(--studio-text-secondary)] hover:!text-[var(--studio-text-primary)]"
-                                icon={projectFiltersExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-                                onClick={() => setProjectFiltersExpanded((value) => !value)}
-                            >
-                                {projectFiltersExpanded ? "收起项目" : `展开${hiddenProjectCount ? ` ${hiddenProjectCount} 个` : ""}项目`}
-                            </Button>
-                        ) : null}
+                        <Select
+                            allowClear
+                            showSearch
+                            className="min-w-52"
+                            placeholder="工作流项目"
+                            value={projectContextFilter || undefined}
+                            options={workflowProjectOptions}
+                            optionFilterProp="label"
+                            disabled={!workflowProjectOptions.length}
+                            onChange={(value) => (value ? selectWorkflowProject(value) : selectAllProjects())}
+                        />
+                        <Select
+                            allowClear
+                            showSearch
+                            className="min-w-52"
+                            placeholder="画布"
+                            value={canvasLibraryFilter || undefined}
+                            options={canvasProjectOptions}
+                            optionFilterProp="label"
+                            disabled={!canvasProjectOptions.length}
+                            onChange={(value) => (value ? selectCanvas(value) : selectAllProjects())}
+                        />
                     </div>
                 </FilterBlock>
                 {showAdvancedFilters ? (

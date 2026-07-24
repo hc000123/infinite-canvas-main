@@ -9,6 +9,7 @@ import type { ReferenceVersionFilter } from "./use-asset-page-query";
 type GenerationTaskFilter = "all" | "with" | "without";
 
 type Props = {
+    setCanvasLibraryFilter: Dispatch<SetStateAction<string>>;
     setEpisodeFilter: Dispatch<SetStateAction<string>>;
     setFavoriteOnly: Dispatch<SetStateAction<boolean>>;
     setFolderFilter: Dispatch<SetStateAction<string>>;
@@ -27,6 +28,7 @@ type Props = {
 };
 
 export function useAssetFilterActions({
+    setCanvasLibraryFilter,
     setEpisodeFilter,
     setFavoriteOnly,
     setFolderFilter,
@@ -45,6 +47,10 @@ export function useAssetFilterActions({
 }: Props) {
     const resetPage = () => setPage(1);
     return {
+        changeCanvasLibraryFilter(value: string) {
+            resetPage();
+            setCanvasLibraryFilter(value);
+        },
         changeFolderFilter(value: string) {
             resetPage();
             setEpisodeFilter("");
