@@ -684,22 +684,32 @@ func refundAITaskIfNeeded(task *model.AITask, failIfAlreadyRefunded bool) error 
 		}
 		return nil
 	}
-	total, err := repository.CountCreditLogsByRelatedIDAndType(task.ID, model.CreditLogTypeAIRefund)
+	logs, err := repository.ListCreditLogsByRelatedID(task.ID)
 	if err != nil {
 		return err
 	}
-	if total > 0 {
+	consumed := 0
+	refunded := 0
+	for _, log := range logs {
+		switch log.Type {
+		case model.CreditLogTypeAIConsume:
+			consumed -= log.Amount
+		case model.CreditLogTypeAIRefund:
+			refunded += log.Amount
+		}
+	}
+	if refunded > 0 {
 		if failIfAlreadyRefunded {
 			return safeMessageError{message: "任务已返还，不能重复返还"}
 		}
 		return nil
 	}
-	if task.Credits > 0 {
-		if err := RefundUserCreditsForTask(task.UserID, task.Model, task.Credits, task.Path, task.ID); err != nil {
+	if consumed > 0 {
+		if err := RefundUserCreditsForTask(task.UserID, task.Model, consumed, task.Path, task.ID); err != nil {
 			return err
 		}
 	}
-	task.CreditsRefunded = task.Credits
+	task.CreditsRefunded = consumed
 	task.RefundedAt = now()
 	return nil
 }
