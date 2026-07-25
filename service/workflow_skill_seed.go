@@ -21,7 +21,7 @@ type workflowSkillSeed struct {
 //go:embed workflow_skill_seeds/*
 var workflowSkillSeedFS embed.FS
 
-const workflowSkillSeedVersion = "3.0.0"
+const workflowSkillSeedVersion = "3.0.1"
 
 var workflowSkillSeedStageKeys = []string{
 	WorkflowSkillStageScript,

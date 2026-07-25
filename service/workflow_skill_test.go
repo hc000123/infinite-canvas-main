@@ -91,6 +91,48 @@ func TestEnsureWorkflowSkillSeedsKeepsCustomGlobalBinding(t *testing.T) {
 	}
 }
 
+func TestEnsureWorkflowSkillSeedsUpgradesExisting300BindingTo301(t *testing.T) {
+	setupAITaskTestDB(t)
+	contract := workflowSkillSeedContract(WorkflowSkillStageArt)
+	contract.QualityGateProfile = []string{"schema", "art"}
+	legacyPackage, err := NormalizeWorkflowSkillPackage(map[string]string{"SKILL.md": "old 3.0.0 asset instructions"}, contract)
+	if err != nil {
+		t.Fatal(err)
+	}
+	filesJSON, _ := json.Marshal(legacyPackage.Files)
+	contractJSON, _ := json.Marshal(legacyPackage.Contract)
+	stamp := now()
+	skill := model.WorkflowSkill{ID: "workflow-skill-art", Name: "资产提取", StageKey: WorkflowSkillStageArt, Enabled: true, CreatedAt: stamp, UpdatedAt: stamp}
+	legacy := model.WorkflowSkillVersion{
+		ID: "workflow-skill-version-art-3.0.0", SkillID: skill.ID, Version: "3.0.0", Status: model.WorkflowSkillVersionPublished,
+		FilesJSON: string(filesJSON), ContractJSON: string(contractJSON), ContentHash: legacyPackage.ContentHash,
+		CreatedBy: "system", PublishedAt: stamp, CreatedAt: stamp, UpdatedAt: stamp,
+	}
+	if err := repository.CreateWorkflowSkillAggregate(skill, legacy); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{ID: "workflow-skill-binding-global-art", StageKey: WorkflowSkillStageArt, Scope: model.WorkflowSkillScopeGlobal, SkillVersionID: legacy.ID, CreatedAt: stamp, UpdatedAt: stamp}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := EnsureWorkflowSkillSeeds(); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := ResolvePublishedWorkflowSkill(WorkflowSkillStageArt, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.Version.Version != "3.0.1" {
+		t.Fatalf("version=%s, want 3.0.1", resolved.Version.Version)
+	}
+	if !strings.Contains(resolved.Package.Files["SKILL.md"], "包括标点在内的连续原文子串") {
+		t.Fatalf("3.0.1 art package does not contain the evaluated evidence rule")
+	}
+	if _, ok, err := repository.GetWorkflowSkillVersion(legacy.ID); err != nil || !ok {
+		t.Fatalf("legacy version should remain available for rollback: ok=%v err=%v", ok, err)
+	}
+}
+
 func TestWorkflowSkillSeedsContainProductionPackagesAndStrictSchemas(t *testing.T) {
 	setupAITaskTestDB(t)
 	if err := EnsureWorkflowSkillSeeds(); err != nil {
@@ -101,7 +143,7 @@ func TestWorkflowSkillSeedsContainProductionPackagesAndStrictSchemas(t *testing.
 		if err != nil {
 			t.Fatal(err)
 		}
-		if resolved.Version.Version != "3.0.0" {
+		if resolved.Version.Version != "3.0.1" {
 			t.Fatalf("stage=%s version=%s", stageKey, resolved.Version.Version)
 		}
 		for _, path := range []string{"SKILL.md", "rules/domain-rules.md", "templates/output-template.md", "examples/good-output.json"} {
