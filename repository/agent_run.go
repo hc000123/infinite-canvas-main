@@ -98,47 +98,7 @@ func ClaimNextAgentRun(workerID string, now time.Time, lease time.Duration) (mod
 }
 
 func ClaimNextAgentRunWithUserLimit(workerID string, now time.Time, lease time.Duration, userConcurrency int) (model.AgentRun, bool, error) {
-	db, err := DB()
-	if err != nil {
-		return model.AgentRun{}, false, err
-	}
-	nowText := now.UTC().Format(time.RFC3339Nano)
-	leaseText := now.UTC().Add(lease).Format(time.RFC3339Nano)
-	workerID = strings.TrimSpace(workerID)
-	if userConcurrency <= 0 {
-		userConcurrency = 1
-	}
-	for range 5 {
-		var candidate model.AgentRun
-		query := db.Where("status = ? AND (available_at = '' OR available_at <= ?) AND (lease_expires_at = '' OR lease_expires_at <= ?) AND (SELECT COUNT(*) FROM agent_runs active WHERE active.user_id = agent_runs.user_id AND active.id <> agent_runs.id AND active.status IN ? AND active.lease_expires_at > ?) < ?", model.AgentRunStatusQueued, nowText, nowText, []model.AgentRunStatus{model.AgentRunStatusRunning, model.AgentRunStatusCancelRequested}, nowText, userConcurrency).
-			Order("available_at asc, created_at asc").Limit(1).Find(&candidate)
-		if query.Error != nil {
-			return model.AgentRun{}, false, query.Error
-		}
-		if query.RowsAffected == 0 {
-			return model.AgentRun{}, false, nil
-		}
-		tx := db.Model(&model.AgentRun{}).
-			Where("id = ? AND status = ? AND (lease_expires_at = '' OR lease_expires_at <= ?) AND (SELECT COUNT(*) FROM agent_runs active WHERE active.user_id = ? AND active.id <> ? AND active.status IN ? AND active.lease_expires_at > ?) < ?", candidate.ID, model.AgentRunStatusQueued, nowText, candidate.UserID, candidate.ID, []model.AgentRunStatus{model.AgentRunStatusRunning, model.AgentRunStatusCancelRequested}, nowText, userConcurrency).
-			Updates(map[string]any{
-				"status":           model.AgentRunStatusRunning,
-				"lease_owner":      workerID,
-				"lease_expires_at": leaseText,
-				"heartbeat_at":     nowText,
-				"started_at":       nowText,
-				"updated_at":       nowText,
-				"attempt":          gorm.Expr("attempt + 1"),
-			})
-		if tx.Error != nil {
-			return model.AgentRun{}, false, tx.Error
-		}
-		if tx.RowsAffected == 0 {
-			continue
-		}
-		claimed, ok, err := GetAgentRun(candidate.ID)
-		return claimed, ok, err
-	}
-	return model.AgentRun{}, false, nil
+	return claimNextAgentRunTx(workerID, now.UTC(), lease, userConcurrency, false)
 }
 
 func RenewAgentRunLease(id string, workerID string, now time.Time, lease time.Duration) (bool, error) {
@@ -178,6 +138,7 @@ func RequeueExpiredAgentRuns(now time.Time) (int64, error) {
 	if err := db.Where("status IN ? AND lease_expires_at <> '' AND lease_expires_at <= ?", []model.AgentRunStatus{model.AgentRunStatusRunning, model.AgentRunStatusCancelRequested}, nowText).Find(&runs).Error; err != nil {
 		return 0, err
 	}
+	_ = invokeRepositoryHook("requeue", "candidate_read")
 	var count int64
 	err = db.Transaction(func(tx *gorm.DB) error {
 		for _, run := range runs {
@@ -199,10 +160,56 @@ func RequeueExpiredAgentRuns(now time.Time) (int64, error) {
 				updates["error_message"] = "Worker 租约过期且已达到最大重试次数"
 			}
 			result := tx.Model(&model.AgentRun{}).
-				Where("id = ? AND lease_owner = ? AND lease_expires_at = ?", run.ID, run.LeaseOwner, run.LeaseExpiresAt).
+				Where("id = ? AND status = ? AND lease_owner = ? AND lease_expires_at = ?", run.ID, run.Status, run.LeaseOwner, run.LeaseExpiresAt).
 				Updates(updates)
 			if result.Error != nil {
 				return result.Error
+			}
+			if result.RowsAffected == 1 {
+				var invocationAttempt model.InvocationAttempt
+				attemptResult := tx.Where("agent_run_id = ?", run.ID).Limit(1).Find(&invocationAttempt)
+				if attemptResult.Error != nil {
+					return attemptResult.Error
+				}
+				if attemptResult.RowsAffected == 1 {
+					invocationStatus := model.InvocationStatusQueued
+					attemptStatus := string(model.AgentRunStatusQueued)
+					eventType := "attempt.requeued"
+					attemptUpdates := map[string]any{"status": attemptStatus, "updated_at": nowText}
+					invocationUpdates := map[string]any{"status": invocationStatus, "updated_at": nowText}
+					if run.Status == model.AgentRunStatusCancelRequested {
+						invocationStatus = model.InvocationStatusCancelled
+						attemptStatus = string(model.AgentRunStatusCancelled)
+						eventType = "attempt.cancelled"
+						attemptUpdates = map[string]any{"status": attemptStatus, "finished_at": nowText, "updated_at": nowText}
+						invocationUpdates = map[string]any{"status": invocationStatus, "updated_at": nowText}
+					}
+					if run.Status != model.AgentRunStatusCancelRequested && run.MaxAttempts > 0 && run.Attempt >= run.MaxAttempts {
+						message := "Worker 租约过期且已达到最大重试次数"
+						invocationStatus = model.InvocationStatusFailed
+						attemptStatus = string(model.AgentRunStatusFailed)
+						eventType = "attempt.failed"
+						attemptUpdates = map[string]any{"status": attemptStatus, "error_class": "lease_expired", "error_message": message, "finished_at": nowText, "updated_at": nowText}
+						invocationUpdates = map[string]any{"status": invocationStatus, "aggregate_error_summary": message, "updated_at": nowText}
+					}
+					attemptUpdate := tx.Model(&model.InvocationAttempt{}).Where("id = ? AND invocation_id = ? AND status = ?", invocationAttempt.ID, invocationAttempt.InvocationID, string(model.AgentRunStatusRunning)).Updates(attemptUpdates)
+					if attemptUpdate.Error != nil {
+						return attemptUpdate.Error
+					}
+					if attemptUpdate.RowsAffected != 1 {
+						return ErrInvocationTransitionConflict
+					}
+					runUpdate := tx.Model(&model.InvocationRun{}).Where("id = ? AND user_id = ? AND status = ? AND latest_revision = ? AND latest_attempt = ?", invocationAttempt.InvocationID, invocationAttempt.UserID, model.InvocationStatusRunning, invocationAttempt.Revision, invocationAttempt.Attempt).Updates(invocationUpdates)
+					if runUpdate.Error != nil {
+						return runUpdate.Error
+					}
+					if runUpdate.RowsAffected != 1 {
+						return ErrInvocationTransitionConflict
+					}
+					if err := tx.Create(&model.InvocationEvent{UserID: invocationAttempt.UserID, InvocationID: invocationAttempt.InvocationID, Type: eventType, Level: "warning", DataJSON: `{}`, Revision: invocationAttempt.Revision, Attempt: invocationAttempt.Attempt, CreatedAt: nowText}).Error; err != nil {
+						return err
+					}
+				}
 			}
 			count += result.RowsAffected
 		}
