@@ -14,6 +14,7 @@ export function useAdminUsers() {
     const queryClient = useQueryClient();
     const token = useUserStore((state) => state.token);
     const clearSession = useUserStore((state) => state.clearSession);
+    const hydrateUser = useUserStore((state) => state.hydrateUser);
     const [keyword, setKeyword] = useState("");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(defaultPageSize);
@@ -46,7 +47,7 @@ export function useAdminUsers() {
     const creditMutation = useMutation({
         mutationFn: ({ id, credits }: { id: string; credits: number }) => adjustAdminUserCredits(token, id, credits),
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+            await Promise.all([queryClient.invalidateQueries({ queryKey: ["admin", "users"] }), hydrateUser()]);
             message.success("算力点已调整");
         },
         onError: (error) => message.error(error instanceof Error ? error.message : "调整失败"),
