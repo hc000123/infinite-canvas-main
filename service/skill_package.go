@@ -281,7 +281,7 @@ func compileSkillOutputSchema(contract SkillOutputContract) (*jsonschema.Schema,
 	if err != nil {
 		return nil, err
 	}
-	return jsonschema.CompileString("skill-output-schema.json", string(raw))
+	return compileLocalJSONSchema("skill-output-schema.json", raw)
 }
 
 func appendSkillSchemaIssues(content []byte, contract SkillOutputContract, report *WorkflowGateReport) {

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["assetId", "renditionId", "mediaType", "mediaRef", "generationMetadata"],
+  "properties": {
+    "assetId": {"type": "string", "minLength": 1},
+    "renditionId": {"type": "string", "minLength": 1},
+    "mediaType": {"type": "string", "enum": ["image", "video", "audio"]},
+    "mediaRef": {"type": "string", "minLength": 1},
+    "generationMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "requestId": {"type": "string", "minLength": 1},
+        "seed": {"type": "integer"}
+      }
+    }
+  }
+}

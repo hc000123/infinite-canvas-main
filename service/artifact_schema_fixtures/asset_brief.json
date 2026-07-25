@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["assetId", "brief", "format"],
+  "properties": {
+    "assetId": {"type": "string", "minLength": 1},
+    "brief": {"type": "string", "minLength": 1},
+    "format": {"type": "string", "minLength": 1}
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "items": [
+    {
+      "assetId": "character-001",
+      "kind": "character",
+      "name": "林秋",
+      "sourceEvidence": ["林秋站在站牌下，手里捏着一张折起的车票。"],
+      "coreFacts": ["主要角色", "在旧公交站等车", "手持折起的车票"]
+    },
+    {
+      "assetId": "scene-001",
+      "kind": "scene",
+      "name": "旧公交站",
+      "sourceEvidence": ["场次 1，清晨，旧公交站。"],
+      "coreFacts": ["清晨", "有站牌", "有临时停车区"]
+    },
+    {
+      "assetId": "prop-001",
+      "kind": "prop",
+      "name": "折起的车票",
+      "sourceEvidence": ["手里捏着一张折起的车票。"],
+      "coreFacts": ["纸质车票", "被林秋捏在手中"]
+    }
+  ]
+}

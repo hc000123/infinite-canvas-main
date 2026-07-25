@@ -134,6 +134,85 @@ func TestEnsureSkillSeedsPublishesInvocationReady310WithoutRewritingLegacy(t *te
 	}
 }
 
+func TestInvocationSkillSeedsPassSkillAndCoreOutputSchemas(t *testing.T) {
+	setupAITaskTestDB(t)
+	if err := EnsureSkillSeeds(); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureCoreArtifactSchemas(); err != nil {
+		t.Fatal(err)
+	}
+	wantCardinality := map[string][2]int{
+		WorkflowSkillStageScript: {1, 1}, WorkflowSkillStageArt: {1, 1},
+		WorkflowSkillStageAssets: {1, 300}, WorkflowSkillStageStoryboard: {1, 1},
+		WorkflowSkillStageVideo: {1, 1}, WorkflowSkillStageDelivery: {1, 1},
+	}
+	for _, stageKey := range systemSkillSeedStageKeys {
+		t.Run(stageKey, func(t *testing.T) {
+			version, ok, err := repository.GetSkillVersion("skill-version-system-workflow-" + stageKey + "-3.1.0")
+			if err != nil || !ok {
+				t.Fatalf("version ok=%v err=%v", ok, err)
+			}
+			pkg, err := DecodeSkillPackage(version)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var example any
+			if err := json.Unmarshal([]byte(pkg.Files["examples/good-output.json"]), &example); err != nil {
+				t.Fatal(err)
+			}
+			skillSchema, err := compileSkillOutputSchema(pkg.OutputContract)
+			if err != nil {
+				t.Fatalf("compile Skill schema: %v", err)
+			}
+			if err := skillSchema.Validate(example); err != nil {
+				t.Fatalf("good output fails Skill schema: %v", err)
+			}
+			if len(pkg.OutputContract.ArtifactOutputs) != 1 {
+				t.Fatalf("outputs=%+v", pkg.OutputContract.ArtifactOutputs)
+			}
+			for _, output := range pkg.OutputContract.ArtifactOutputs {
+				want := wantCardinality[stageKey]
+				if output.Min != want[0] || output.Max != want[1] {
+					t.Fatalf("cardinality=%d..%d want=%d..%d", output.Min, output.Max, want[0], want[1])
+				}
+				core, err := ResolveArtifactSchema(output.ArtifactType, output.SchemaVersion)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := ValidateArtifactPayload(core, json.RawMessage(pkg.Files["examples/good-output.json"])); err != nil {
+					t.Fatalf("good output fails core schema %s: %v", output.ArtifactType, err)
+				}
+			}
+		})
+	}
+}
+
+func TestInvocationSkillSeedOverlaysRemoveLegacyOutputGuidance(t *testing.T) {
+	setupAITaskTestDB(t)
+	if err := EnsureSkillSeeds(); err != nil {
+		t.Fatal(err)
+	}
+	for _, stageKey := range []string{WorkflowSkillStageArt, WorkflowSkillStageAssets, WorkflowSkillStageVideo} {
+		version, ok, err := repository.GetSkillVersion("skill-version-system-workflow-" + stageKey + "-3.1.0")
+		if err != nil || !ok {
+			t.Fatalf("stage=%s ok=%v err=%v", stageKey, ok, err)
+		}
+		pkg, err := DecodeSkillPackage(version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, path := range []string{"SKILL.md", "rules/domain-rules.md", "templates/output-template.md", "examples/good-output.json"} {
+			content := pkg.Files[path]
+			for _, forbidden := range []string{"logicalAssetId", "parentLogicalAssetId", "promptInputHash", "referenceEvidence"} {
+				if strings.Contains(content, forbidden) {
+					t.Fatalf("stage=%s file=%s retains legacy output field %s", stageKey, path, forbidden)
+				}
+			}
+		}
+	}
+}
+
 func TestEnsureSkillSeedsKeepsCustomWorkflowBinding(t *testing.T) {
 	setupAITaskTestDB(t)
 	if err := EnsureSkillSeeds(); err != nil {

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "succeeded", "failed", "retrySuggestions", "exportManifest"],
+  "properties": {
+    "summary": {"type": "string", "minLength": 1},
+    "succeeded": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["shotId", "output"],
+        "properties": {
+          "shotId": {"type": "string", "minLength": 1},
+          "output": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "failed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["shotId", "reason"],
+        "properties": {
+          "shotId": {"type": "string", "minLength": 1},
+          "reason": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "retrySuggestions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["shotId", "suggestion"],
+        "properties": {
+          "shotId": {"type": "string", "minLength": 1},
+          "suggestion": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "exportManifest": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["shotId", "file", "status"],
+        "properties": {
+          "shotId": {"type": "string", "minLength": 1},
+          "file": {"type": "string", "minLength": 1},
+          "status": {"type": "string", "enum": ["ready", "failed"]}
+        }
+      }
+    }
+  }
+}

@@ -3,12 +3,15 @@ module github.com/basketikun/infinite-canvas
 go 1.25.0
 
 require (
+	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/caarlos0/env/v11 v11.3.1
+	github.com/cyberphone/json-canonicalization v0.0.0-20241213102144-19d51d7fe467
 	github.com/gin-gonic/gin v1.11.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/joho/godotenv v1.5.1
 	github.com/robfig/cron/v3 v3.0.1
+	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/volcengine/ve-tos-golang-sdk/v2 v2.9.4
 	github.com/volcengine/volcengine-go-sdk v1.2.26
 	golang.org/x/crypto v0.50.0
@@ -18,10 +21,7 @@ require (
 	gorm.io/gorm v1.31.1
 )
 
-require (
-	github.com/rogpeppe/go-internal v1.15.0 // indirect
-	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1 // indirect
-)
+require github.com/rogpeppe/go-internal v1.15.0 // indirect
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect

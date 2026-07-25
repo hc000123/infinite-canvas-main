@@ -71,6 +71,8 @@ func DB() (*gorm.DB, error) {
 			&model.SkillEvaluation{},
 			&model.SkillAuditLog{},
 			&model.WorkflowStageSkillBinding{},
+			&model.ArtifactSchema{},
+			&model.Artifact{},
 			&model.WorkflowMediaBatch{},
 			&model.WorkflowMediaItem{},
 			&model.Prompt{},

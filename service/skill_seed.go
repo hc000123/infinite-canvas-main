@@ -17,7 +17,7 @@ type skillSeed struct {
 	Summary  string
 }
 
-//go:embed skill_seeds/*
+//go:embed skill_seeds/* skill_invocation_seed_overlays/*
 var skillSeedFS embed.FS
 
 const skillSeedVersion = "3.0.1"
@@ -234,6 +234,10 @@ func buildInvocationWorkflowSkillSeedPackage(stageKey string, files map[string]s
 	if err != nil {
 		return SkillPackage{}, err
 	}
+	packageValue.Files, err = loadInvocationSkillSeedFiles(stageKey, packageValue.Files)
+	if err != nil {
+		return SkillPackage{}, err
+	}
 	packageValue.Manifest.ExecutorKind = "text_model"
 	packageValue.Manifest.RequiredTools = []string{}
 	packageValue.InputContract.ArtifactInputs = make([]ArtifactInputSpec, 0, len(packageValue.Manifest.InputArtifactTypes))
@@ -249,10 +253,43 @@ func buildInvocationWorkflowSkillSeedPackage(stageKey string, files map[string]s
 	}
 	packageValue.OutputContract.ArtifactOutputs = make([]ArtifactOutputSpec, 0, len(packageValue.Manifest.OutputArtifactTypes))
 	for _, artifactType := range packageValue.Manifest.OutputArtifactTypes {
+		coreSchema, err := loadCoreArtifactSchema(artifactType)
+		if err != nil {
+			return SkillPackage{}, err
+		}
+		packageValue.OutputContract.SchemaVersion = coreSchema.Version
+		packageValue.OutputContract.Schema = coreSchema.Schema
+		maxOutputs := 1
+		if stageKey == WorkflowSkillStageAssets && artifactType == "asset_brief" {
+			maxOutputs = 300
+		}
 		packageValue.OutputContract.ArtifactOutputs = append(packageValue.OutputContract.ArtifactOutputs, ArtifactOutputSpec{
-			BindingName: artifactType, ArtifactType: artifactType, Min: 1, Max: 1,
-			SchemaVersion: packageValue.OutputContract.SchemaVersion,
+			BindingName: artifactType, ArtifactType: artifactType, Min: 1, Max: maxOutputs,
+			SchemaVersion: coreSchema.Version,
 		})
 	}
 	return ValidateInvocableSkillPackage(packageValue)
+}
+
+func loadInvocationSkillSeedFiles(stageKey string, base map[string]string) (map[string]string, error) {
+	files := make(map[string]string, len(base))
+	for path, content := range base {
+		files[path] = content
+	}
+	if stageKey != WorkflowSkillStageArt && stageKey != WorkflowSkillStageAssets && stageKey != WorkflowSkillStageVideo {
+		return files, nil
+	}
+	prefix := "skill_invocation_seed_overlays/" + stageKey
+	err := fs.WalkDir(skillSeedFS, prefix, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		content, err := skillSeedFS.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		files[strings.TrimPrefix(path, prefix+"/")] = string(content)
+		return nil
+	})
+	return files, err
 }
