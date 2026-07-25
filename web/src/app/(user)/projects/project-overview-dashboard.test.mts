@@ -137,8 +137,8 @@ test("generates next-step suggestions from stats", () => {
         [
             ["script", "primary-canvas"],
             ["storyboard", "storyboard"],
-            ["missing-materials", "asset-references"],
-            ["outdated-references", "asset-references"],
+            ["missing-materials", "assets-page"],
+            ["outdated-references", "assets-page"],
             ["failed-generation", "storyboard"],
             ["clip-export", "storyboard"],
         ],
