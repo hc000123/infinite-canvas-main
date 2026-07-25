@@ -5,11 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { App, Button, Empty, Form, Input, Modal, Spin } from "antd";
 import { Wand2 } from "lucide-react";
 
-import { useAssetStore } from "@/stores/use-asset-store";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasCreateProjectModal } from "../../canvas/components/canvas-create-project-modal";
 import { useCanvasStore } from "../../canvas/stores/use-canvas-store";
-import { useProductionBibleStore } from "../../canvas/stores/use-production-bible-store";
 import { useScriptStore } from "../../canvas/stores/use-script-store";
 import { useStoryboardStore } from "../../canvas/stores/use-storyboard-store";
 import { buildImportedEpisodeWriteInput, canvasEpisodeContextFromCreateBinding, type CanvasCreateScriptBinding } from "../../canvas/utils/canvas-episode-context";
@@ -19,7 +17,6 @@ import { useOriginalWorkflowStore } from "../../original-workflow/use-original-w
 import { videoWorkflowEpisodeKey, videoWorkflowHref, videoWorkflowProjectSlug } from "../../original-workflow/video-workflow-routing";
 import { canvasIdsForCreativeProject, unfiledCanvasProjects } from "../creative-projects";
 import { editableCanvasPreset } from "../project-canvas-preset";
-import { collectProjectAssetReferences, filterProjectAssetReferences, type ProjectAssetReferenceFilters } from "../project-asset-references";
 import { defaultAgentConfigs, mergeAgentConfigs } from "../agent-settings";
 import { builtInAgentWorkflowPresets, resolveWorkflowPreset } from "../agent-workflow-presets";
 import type { ChatCompletionMessage } from "../agent-runner-types";
@@ -64,8 +61,6 @@ export default function CreativeProjectDetailPage() {
     const canvases = useCanvasStore((state) => state.projects);
     const createCanvas = useCanvasStore((state) => state.createProject);
     const updateCanvas = useCanvasStore((state) => state.updateProject);
-    const assets = useAssetStore((state) => state.assets);
-    const productionBibleItems = useProductionBibleStore((state) => state.items);
     const globalAgentConfigs = useAgentSettingsStore((state) => state.globalConfigs);
     const projectAgentConfigs = useAgentSettingsStore((state) => state.projectConfigs);
     const projectWorkflowSelections = useAgentSettingsStore((state) => state.projectWorkflowSelections);
@@ -77,7 +72,6 @@ export default function CreativeProjectDetailPage() {
     const addEpisode = useScriptStore((state) => state.addEpisode);
     const updateEpisode = useScriptStore((state) => state.updateEpisode);
     const [activeTab, setActiveTab] = useState<ProjectDetailTab>("episodes");
-    const [assetReferenceFilters, setAssetReferenceFilters] = useState<ProjectAssetReferenceFilters>({ assetKind: "all", fileStatus: "all", projectLibraryStatus: "all", referenceType: "all", versionStatus: "all" });
     const [canvasCreateOpen, setCanvasCreateOpen] = useState(false);
     const [episodeImportOpen, setEpisodeImportOpen] = useState(false);
     const [projectEditOpen, setProjectEditOpen] = useState(false);
@@ -93,8 +87,6 @@ export default function CreativeProjectDetailPage() {
     const [descriptionDraft, setDescriptionDraft] = useState(project?.description || "");
     const [episodeFilter, setEpisodeFilter] = useState<"all" | "done" | "draft" | "running">("all");
     const [bindingCanvasId, setBindingCanvasId] = useState("");
-    const storyboardGroups = useStoryboardStore((state) => state.groups);
-    const storyboardShots = useStoryboardStore((state) => state.shots);
     const storyboardTableShots = useStoryboardStore((state) => state.tableShots);
     const shotGroups = useStoryboardStore((state) => state.shotGroups);
     const startWorkflowTextRun = useAgentRunnerStore((state) => state.startWorkflowTextRun);
@@ -181,25 +173,6 @@ export default function CreativeProjectDetailPage() {
         if (!episodeRows.length) return 0;
         return Math.round(episodeRows.reduce((total, row) => total + row.progress, 0) / episodeRows.length);
     }, [episodeRows]);
-    const assetReferenceRows = useMemo(
-        () =>
-            project
-                ? collectProjectAssetReferences({
-                      assets,
-                      canvasIds,
-                      canvasProjects: canvases,
-                      productionBibleItems,
-                      projectId: project.id,
-                      projectTitle: project.title,
-                      shotGroups,
-                      storyboardGroups,
-                      storyboardShots,
-                      storyboardTableShots,
-                  })
-                : [],
-        [assets, canvasIds, canvases, productionBibleItems, project, shotGroups, storyboardGroups, storyboardShots, storyboardTableShots],
-    );
-    const filteredAssetReferenceRows = useMemo(() => filterProjectAssetReferences(assetReferenceRows, assetReferenceFilters), [assetReferenceFilters, assetReferenceRows]);
     useEffect(() => {
         if (!episodeImportOpen) {
             setOptimizedImportDraft(undefined);
@@ -471,25 +444,20 @@ export default function CreativeProjectDetailPage() {
         <main className="studio-workspace studio-shell h-full overflow-auto text-[var(--studio-text-primary)]">
             <ProjectEpisodeBoard
                 activeTab={activeTab}
-                assetReferenceFilters={assetReferenceFilters}
-                assetReferenceRows={assetReferenceRows}
                 currentEpisode={currentEpisode}
                 counts={episodeCounts}
                 description={project.description}
                 episodeFilter={episodeFilter}
-                filteredAssetReferenceRows={filteredAssetReferenceRows}
                 filteredRows={filteredEpisodeRows}
                 progress={projectProgress}
                 canvases={projectCanvases}
                 unboundCanvases={unboundCanvases}
                 bindingCanvasId={bindingCanvasId}
-                projectId={project.id}
                 projectTitle={project.title}
                 presetSummary={canvasProjectPresetSummary(project.preset)}
                 rows={episodeRows}
                 onBindCanvas={bindCanvas}
                 onBindingCanvasChange={setBindingCanvasId}
-                onAssetReferenceFiltersChange={setAssetReferenceFilters}
                 onCreateCanvas={() => setCanvasCreateOpen(true)}
                 onEditCanvasPreset={setEditingCanvasPresetId}
                 onEditEpisodeTitle={openEpisodeTitleEdit}

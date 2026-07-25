@@ -4,12 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Empty, Input, Select, Tag } from "antd";
 import { Archive, ArrowRight, BarChart3, Bot, Clapperboard, Edit3, FileText, Image, Library, ListChecks, Maximize2, Plus, Sparkles, Trash2, TriangleAlert, Video, Wand2, type LucideIcon } from "lucide-react";
 
-import type { AssetKind } from "@/stores/use-asset-store";
 import { canvasEpisodeLabel } from "../../../canvas/utils/canvas-episode-context";
 import { canvasProjectPresetSummary } from "../../../canvas/utils/canvas-project-preset";
 import type { CanvasProject } from "../../../canvas/stores/use-canvas-store";
 import { agentKindLabel } from "../../agent-workbench";
-import type { ProjectAssetReferenceFilters, ProjectAssetReferenceItem, ProjectAssetReferenceSummary, ProjectAssetReferenceType } from "../../project-asset-references";
 import type { ProjectOverviewActionTarget, ProjectOverviewDashboard, ProjectOverviewSuggestion } from "../../project-overview-dashboard";
 
 export type ProjectEpisodeBoardRow = {
@@ -30,17 +28,14 @@ export type ProjectEpisodeBoardRow = {
 };
 
 type EpisodeFilter = "all" | "done" | "draft" | "running";
-export type ProjectDetailTab = "episodes" | "canvas" | "asset-references";
+export type ProjectDetailTab = "episodes" | "canvas";
 
 type ProjectEpisodeBoardProps = {
     activeTab: ProjectDetailTab;
-    assetReferenceFilters: ProjectAssetReferenceFilters;
-    assetReferenceRows: ProjectAssetReferenceSummary[];
     currentEpisode?: ProjectEpisodeBoardRow;
     counts: { all: number; done: number; draft: number; running: number };
     description: string;
     episodeFilter: EpisodeFilter;
-    filteredAssetReferenceRows: ProjectAssetReferenceSummary[];
     filteredRows: ProjectEpisodeBoardRow[];
     progress: number;
     canvases: CanvasProject[];
@@ -48,7 +43,6 @@ type ProjectEpisodeBoardProps = {
     bindingCanvasId: string;
     optimizingEpisodeId: string;
     projectTitle: string;
-    projectId: string;
     presetSummary: string;
     rows: ProjectEpisodeBoardRow[];
     scriptOptimizeErrors: Record<string, string>;
@@ -56,7 +50,6 @@ type ProjectEpisodeBoardProps = {
     selectedScriptSkillId: string;
     onBindCanvas: () => void;
     onBindingCanvasChange: (canvasId: string) => void;
-    onAssetReferenceFiltersChange: (filters: ProjectAssetReferenceFilters) => void;
     onClearOptimizedScript: (episodeId: string) => void;
     onCreateCanvas: () => void;
     onEditCanvasPreset: (canvasId: string) => void;
@@ -74,13 +67,10 @@ type ProjectEpisodeBoardProps = {
 
 export function ProjectEpisodeBoard({
     activeTab,
-    assetReferenceFilters,
-    assetReferenceRows,
     currentEpisode,
     counts,
     description,
     episodeFilter,
-    filteredAssetReferenceRows,
     filteredRows,
     progress,
     canvases,
@@ -88,7 +78,6 @@ export function ProjectEpisodeBoard({
     bindingCanvasId,
     optimizingEpisodeId,
     projectTitle,
-    projectId,
     presetSummary,
     rows,
     scriptOptimizeErrors,
@@ -96,7 +85,6 @@ export function ProjectEpisodeBoard({
     selectedScriptSkillId,
     onBindCanvas,
     onBindingCanvasChange,
-    onAssetReferenceFiltersChange,
     onClearOptimizedScript,
     onCreateCanvas,
     onEditCanvasPreset,
@@ -118,7 +106,6 @@ export function ProjectEpisodeBoard({
                 <nav aria-label="项目详情视图" className="order-1 flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-4">
                     <ProjectDetailNavButton active={activeTab === "episodes"} icon={ListChecks} label="分集" onClick={() => onTabChange("episodes")} />
                     <ProjectDetailNavButton active={activeTab === "canvas"} icon={Maximize2} label="画布" onClick={() => onTabChange("canvas")} />
-                    <ProjectDetailNavButton active={activeTab === "asset-references"} icon={Library} label="素材引用" onClick={() => onTabChange("asset-references")} />
                     <button
                         type="button"
                         className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"
@@ -154,8 +141,6 @@ export function ProjectEpisodeBoard({
                         onCreateCanvas={onCreateCanvas}
                         onEditCanvasPreset={onEditCanvasPreset}
                     />
-                ) : activeTab === "asset-references" ? (
-                    <ProjectAssetReferencePanel allRows={assetReferenceRows} filters={assetReferenceFilters} projectId={projectId} rows={filteredAssetReferenceRows} onFiltersChange={onAssetReferenceFiltersChange} />
                 ) : (
                     <ProjectEpisodeProductionPanel
                         counts={counts}
@@ -468,8 +453,8 @@ function ProjectOverviewPanel({ overview, onAction }: { overview: ProjectOvervie
             target: { type: "storyboard" },
         },
         { label: "已生成视频", value: stats.generatedVideoCount, helper: "待验收成片", icon: Sparkles, target: { type: "storyboard" } },
-        { label: "素材缺口", value: stats.missingMaterialCount, helper: "缺引用或本地文件", icon: TriangleAlert, tone: stats.missingMaterialCount ? "danger" : "default", target: { type: "asset-references", missingOnly: true } },
-        { label: "旧版本引用", value: stats.outdatedReferenceCount, helper: "需要手动确认更新", icon: Archive, tone: stats.outdatedReferenceCount ? "warning" : "default", target: { type: "asset-references", versionStatus: "outdated" } },
+        { label: "素材缺口", value: stats.missingMaterialCount, helper: "缺引用或本地文件", icon: TriangleAlert, tone: stats.missingMaterialCount ? "danger" : "default", target: { type: "assets-page" } },
+        { label: "旧版本引用", value: stats.outdatedReferenceCount, helper: "需要手动确认更新", icon: Archive, tone: stats.outdatedReferenceCount ? "warning" : "default", target: { type: "assets-page" } },
         { label: "项目素材", value: stats.projectLibraryAssetCount, helper: "项目库资产", icon: Library, target: { type: "assets-page" } },
     ];
 
@@ -615,156 +600,6 @@ function ProjectOverviewSuggestionCard({ suggestion, onAction }: { suggestion: P
                 <Button className="shrink-0" type={suggestion.priority <= 30 ? "primary" : "default"} icon={<ArrowRight className="size-4" />} onClick={() => onAction(suggestion.target)}>
                     {suggestion.actionLabel}
                 </Button>
-            </div>
-        </article>
-    );
-}
-
-function ProjectAssetReferencePanel({
-    allRows,
-    filters,
-    projectId,
-    rows,
-    onFiltersChange,
-}: {
-    allRows: ProjectAssetReferenceSummary[];
-    filters: ProjectAssetReferenceFilters;
-    projectId: string;
-    rows: ProjectAssetReferenceSummary[];
-    onFiltersChange: (filters: ProjectAssetReferenceFilters) => void;
-}) {
-    const stats = {
-        assets: allRows.length,
-        references: allRows.reduce((sum, row) => sum + row.referenceCount, 0),
-        outdated: allRows.reduce((sum, row) => sum + row.references.filter((reference) => reference.hasOutdatedVersion).length, 0),
-        missing: allRows.filter((row) => row.hasMissingLocalFile).length,
-        shared: allRows.filter((row) => row.inProjectLibrary).length,
-    };
-    const updateFilters = (patch: ProjectAssetReferenceFilters) => onFiltersChange({ ...filters, ...patch });
-    const resetFilters = () => onFiltersChange({ assetKind: "all", fileStatus: "all", projectLibraryStatus: "all", referenceType: "all", versionStatus: "all" });
-    return (
-        <section className="grid gap-4">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-                <div>
-                    <h2 className="text-2xl font-semibold tracking-normal text-[var(--studio-text-primary)]">素材引用</h2>
-                    <p className="mt-1 text-sm text-[var(--studio-text-secondary)]">查看素材被哪些画布、分镜、设定库和生成结果使用，替换或删除前先看影响范围。</p>
-                </div>
-                <Button href={`/assets?projectId=${encodeURIComponent(projectId)}&returnTo=${encodeURIComponent(`/projects/${projectId}`)}&returnLabel=${encodeURIComponent("返回项目")}`}>打开项目素材库</Button>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <AssetReferenceStat label="引用素材" value={stats.assets} />
-                <AssetReferenceStat label="引用次数" value={stats.references} />
-                <AssetReferenceStat label="过期引用" value={stats.outdated} tone={stats.outdated ? "warning" : "default"} />
-                <AssetReferenceStat label="缺本地文件" value={stats.missing} tone={stats.missing ? "danger" : "default"} />
-                <AssetReferenceStat label="项目库素材" value={stats.shared} />
-            </div>
-
-            <div className="grid gap-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4 md:grid-cols-[repeat(5,minmax(0,1fr))_auto]">
-                <AssetReferenceSelect label="素材类型" value={filters.assetKind || "all"} options={assetKindOptions} onChange={(value) => updateFilters({ assetKind: value as AssetKind | "all" })} />
-                <AssetReferenceSelect label="引用位置" value={filters.referenceType || "all"} options={referenceTypeOptions} onChange={(value) => updateFilters({ referenceType: value as ProjectAssetReferenceType | "all" })} />
-                <AssetReferenceSelect label="版本状态" value={filters.versionStatus || "all"} options={versionStatusOptions} onChange={(value) => updateFilters({ versionStatus: value as ProjectAssetReferenceFilters["versionStatus"] })} />
-                <AssetReferenceSelect label="文件状态" value={filters.fileStatus || "all"} options={fileStatusOptions} onChange={(value) => updateFilters({ fileStatus: value as ProjectAssetReferenceFilters["fileStatus"] })} />
-                <AssetReferenceSelect
-                    label="项目库"
-                    value={filters.projectLibraryStatus || "all"}
-                    options={projectLibraryOptions}
-                    onChange={(value) => updateFilters({ projectLibraryStatus: value as ProjectAssetReferenceFilters["projectLibraryStatus"] })}
-                />
-                <div className="flex items-end">
-                    <Button className="w-full md:w-auto" onClick={resetFilters}>
-                        重置
-                    </Button>
-                </div>
-            </div>
-
-            {rows.length ? (
-                <div className="grid gap-3">
-                    {rows.map((row) => (
-                        <ProjectAssetReferenceCard key={row.asset.id} projectId={projectId} row={row} />
-                    ))}
-                </div>
-            ) : (
-                <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={allRows.length ? "没有匹配的素材引用" : "当前项目还没有可追踪的素材引用"}
-                    className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] py-16 text-[var(--studio-text-muted)]"
-                />
-            )}
-        </section>
-    );
-}
-
-function AssetReferenceStat({ label, tone = "default", value }: { label: string; tone?: "default" | "warning" | "danger"; value: number }) {
-    const valueClass = tone === "danger" ? "text-[var(--studio-danger)]" : tone === "warning" ? "text-[var(--studio-warning)]" : "text-[var(--studio-text-primary)]";
-    return (
-        <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-4 py-3">
-            <div className="text-sm text-[var(--studio-text-muted)]">{label}</div>
-            <div className={`mt-2 text-2xl font-semibold ${valueClass}`}>{value}</div>
-        </div>
-    );
-}
-
-function AssetReferenceSelect({ label, onChange, options, value }: { label: string; value: string; options: Array<{ label: string; value: string }>; onChange: (value: string) => void }) {
-    return (
-        <label className="grid gap-1.5">
-            <span className="text-xs font-semibold text-[var(--studio-text-muted)]">{label}</span>
-            <Select value={value} options={options} onChange={onChange} />
-        </label>
-    );
-}
-
-function ProjectAssetReferenceCard({ projectId, row }: { projectId: string; row: ProjectAssetReferenceSummary }) {
-    const assetHref = projectAssetDetailHref(projectId, row.asset.id);
-    return (
-        <article className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Tag className="studio-tag">{assetKindLabel(row.asset.kind)}</Tag>
-                        {row.inProjectLibrary ? <Tag color="success">项目库</Tag> : <Tag>未入项目库</Tag>}
-                        {row.hasOutdatedVersion ? <Tag color="warning">有过期引用</Tag> : <Tag color="success">最新</Tag>}
-                        {row.hasMissingLocalFile ? <Tag color="error">本地文件缺失</Tag> : null}
-                    </div>
-                    <h3 className="mt-3 break-words text-lg font-semibold leading-6 text-[var(--studio-text-primary)]">{row.asset.title}</h3>
-                    <p className="mt-1 text-sm text-[var(--studio-text-muted)]">
-                        {row.referenceCount} 处引用 · 更新于 {formatProjectDate(row.updatedAt)}
-                    </p>
-                </div>
-                <Button size="small" href={assetHref}>
-                    查看素材详情
-                </Button>
-            </div>
-            {row.asset.tags.length ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                    {row.asset.tags.slice(0, 6).map((tag) => (
-                        <Tag key={tag}>{tag}</Tag>
-                    ))}
-                </div>
-            ) : null}
-            <div className="mt-4 grid gap-2">
-                {row.references.map((reference) => {
-                    const action = projectReferenceAction(projectId, reference);
-                    return (
-                        <div key={reference.id} className="flex flex-col gap-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-                            <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                <Tag className="m-0">{referenceTypeLabel(reference.type)}</Tag>
-                                <span className="min-w-0 break-words font-medium text-[var(--studio-text-primary)]">{[reference.contextLabel, reference.label].filter(Boolean).join(" / ")}</span>
-                                {reference.role ? <span className="text-[var(--studio-text-muted)]">用途：{reference.role}</span> : null}
-                                {reference.hasOutdatedVersion ? (
-                                    <Tag className="m-0" color="warning">
-                                        旧版本
-                                    </Tag>
-                                ) : null}
-                            </div>
-                            {action ? (
-                                <Button size="small" type="link" className="h-auto self-start px-0 sm:self-center" href={action.href}>
-                                    {action.label}
-                                </Button>
-                            ) : null}
-                        </div>
-                    );
-                })}
             </div>
         </article>
     );
@@ -1063,59 +898,6 @@ function EpisodeMobileStat({ label, value }: { label: string; value: string }) {
             <div className="mt-1 truncate text-sm font-semibold text-[var(--studio-text-secondary)]">{value}</div>
         </div>
     );
-}
-
-const assetKindOptions: Array<{ label: string; value: AssetKind | "all" }> = [
-    { label: "全部类型", value: "all" },
-    { label: "图片", value: "image" },
-    { label: "视频", value: "video" },
-    { label: "音频", value: "audio" },
-    { label: "文本", value: "text" },
-];
-
-const referenceTypeOptions: Array<{ label: string; value: ProjectAssetReferenceType | "all" }> = [
-    { label: "全部引用", value: "all" },
-    { label: "画布节点", value: "canvas" },
-    { label: "分镜", value: "storyboard" },
-    { label: "设定库", value: "production-bible" },
-    { label: "生成结果", value: "generation-result" },
-];
-
-const versionStatusOptions: Array<{ label: string; value: NonNullable<ProjectAssetReferenceFilters["versionStatus"]> }> = [
-    { label: "全部版本", value: "all" },
-    { label: "有过期引用", value: "outdated" },
-    { label: "最新引用", value: "latest" },
-];
-
-const fileStatusOptions: Array<{ label: string; value: NonNullable<ProjectAssetReferenceFilters["fileStatus"]> }> = [
-    { label: "全部文件", value: "all" },
-    { label: "本地文件缺失", value: "missing" },
-    { label: "本地文件可用", value: "available" },
-];
-
-const projectLibraryOptions: Array<{ label: string; value: NonNullable<ProjectAssetReferenceFilters["projectLibraryStatus"]> }> = [
-    { label: "全部素材", value: "all" },
-    { label: "已在项目库", value: "shared" },
-    { label: "未加入项目库", value: "not_shared" },
-];
-
-function assetKindLabel(kind: AssetKind) {
-    return assetKindOptions.find((option) => option.value === kind)?.label || "素材";
-}
-
-function referenceTypeLabel(type: ProjectAssetReferenceType) {
-    return referenceTypeOptions.find((option) => option.value === type)?.label || "引用";
-}
-
-function projectAssetDetailHref(projectId: string, assetId: string) {
-    const returnTo = `/projects/${projectId}`;
-    return `/assets?projectId=${encodeURIComponent(projectId)}&assetId=${encodeURIComponent(assetId)}&returnTo=${encodeURIComponent(returnTo)}&returnLabel=${encodeURIComponent("返回项目")}`;
-}
-
-function projectReferenceAction(projectId: string, reference: ProjectAssetReferenceItem) {
-    if ((reference.type === "storyboard" || reference.type === "production-bible") && reference.episodeId) return { href: `/projects/${encodeURIComponent(projectId)}/episodes/${encodeURIComponent(reference.episodeId)}/workflow`, label: "打开工作流" };
-    if (reference.canvasId) return { href: `/canvas/${encodeURIComponent(reference.canvasId)}`, label: "打开画布" };
-    return undefined;
 }
 
 function agentTaskStatusLabel(status: "pending" | "applied" | "cancelled") {

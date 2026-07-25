@@ -9,8 +9,7 @@ import type { AgentTask } from "./agent-workbench.ts";
 import type { ProjectAssetReferenceSummary } from "./project-asset-references.ts";
 
 export type ProjectOverviewActionTarget =
-    | { type: "tab"; tab: "episodes" | "canvas" | "asset-references" }
-    | { type: "asset-references"; versionStatus?: "outdated"; missingOnly?: boolean }
+    | { type: "tab"; tab: "episodes" | "canvas" }
     | { type: "assets-page" }
     | { type: "storyboard"; groupId?: string }
     | { type: "production-bible" }
@@ -148,20 +147,20 @@ export function buildProjectOverviewSuggestions(stats: ProjectOverviewDashboard[
         suggestions.push({
             id: "missing-materials",
             title: "补齐缺素材",
-            description: `发现 ${stats.missingMaterialCount} 处素材缺口或本地文件缺失，建议进入素材引用总览定位。`,
+            description: `发现 ${stats.missingMaterialCount} 处素材缺口或本地文件缺失，建议进入项目素材库定位。`,
             actionLabel: "查看缺素材",
             priority: 40,
-            target: { type: "asset-references", missingOnly: true },
+            target: { type: "assets-page" },
         });
     }
     if (stats.outdatedReferenceCount > 0) {
         suggestions.push({
             id: "outdated-references",
             title: "处理过期引用",
-            description: `发现 ${stats.outdatedReferenceCount} 处旧版本引用，建议进入素材引用总览筛选过期引用。`,
+            description: `发现 ${stats.outdatedReferenceCount} 处旧版本引用，建议进入项目素材库处理。`,
             actionLabel: "查看过期引用",
             priority: 50,
-            target: { type: "asset-references", versionStatus: "outdated" },
+            target: { type: "assets-page" },
         });
     }
     if (stats.failedGenerationCount > 0) {
