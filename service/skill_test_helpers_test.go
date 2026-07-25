@@ -1,0 +1,31 @@
+package service
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/basketikun/infinite-canvas/model"
+	"github.com/basketikun/infinite-canvas/repository"
+)
+
+func createSkillTestDraft(t *testing.T, capability, versionName string) model.SkillVersion {
+	t.Helper()
+	packageValue := validSkillTestPackage()
+	packageValue.Manifest.Capabilities = []string{capability}
+	normalized, err := NormalizeSkillPackage(packageValue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestJSON, _ := json.Marshal(normalized.Manifest)
+	filesJSON, _ := json.Marshal(normalized.Files)
+	inputJSON, _ := json.Marshal(normalized.InputContract)
+	outputJSON, _ := json.Marshal(normalized.OutputContract)
+	gatesJSON, _ := json.Marshal(normalized.QualityGateProfile)
+	stamp := now()
+	skill := model.SkillDefinition{ID: newID("skill"), Name: capability + " test", OwnerType: model.SkillOwnerProject, OwnerProjectID: newID("project"), Enabled: true, CreatedAt: stamp, UpdatedAt: stamp}
+	version := model.SkillVersion{ID: newID("skillversion"), SkillID: skill.ID, Version: versionName, Status: model.SkillVersionDraft, ManifestJSON: string(manifestJSON), FilesJSON: string(filesJSON), InputContractJSON: string(inputJSON), OutputContractJSON: string(outputJSON), QualityGateProfileJSON: string(gatesJSON), ContentHash: normalized.ContentHash, CreatedBy: "admin-1", CreatedAt: stamp, UpdatedAt: stamp}
+	if err := repository.CreateSkillAggregate(skill, version); err != nil {
+		t.Fatal(err)
+	}
+	return version
+}

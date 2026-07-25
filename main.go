@@ -28,7 +28,7 @@ func run() error {
 	if err := service.EnsureDefaultAdmin(); err != nil {
 		return err
 	}
-	if err := service.EnsureWorkflowSkillSeeds(); err != nil {
+	if err := service.EnsureSkillSeeds(); err != nil {
 		return err
 	}
 	service.StartPromptSyncScheduler()
