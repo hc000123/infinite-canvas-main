@@ -6,8 +6,6 @@ const (
 	WorkflowSkillVersionDraft     WorkflowSkillVersionStatus = "draft"
 	WorkflowSkillVersionPublished WorkflowSkillVersionStatus = "published"
 	WorkflowSkillVersionArchived  WorkflowSkillVersionStatus = "archived"
-	WorkflowSkillScopeGlobal                                 = "global"
-	WorkflowSkillScopeProject                                = "project"
 )
 
 type WorkflowSkill struct {
@@ -32,16 +30,6 @@ type WorkflowSkillVersion struct {
 	PublishedAt  string                     `json:"publishedAt"`
 	CreatedAt    string                     `json:"createdAt"`
 	UpdatedAt    string                     `json:"updatedAt"`
-}
-
-type WorkflowStageSkillBinding struct {
-	ID             string `json:"id" gorm:"primaryKey"`
-	StageKey       string `json:"stageKey" gorm:"index;uniqueIndex:idx_workflow_skill_binding,priority:1"`
-	Scope          string `json:"scope" gorm:"index;uniqueIndex:idx_workflow_skill_binding,priority:2"`
-	ScopeID        string `json:"scopeId" gorm:"index;uniqueIndex:idx_workflow_skill_binding,priority:3"`
-	SkillVersionID string `json:"skillVersionId" gorm:"index"`
-	CreatedAt      string `json:"createdAt"`
-	UpdatedAt      string `json:"updatedAt"`
 }
 
 type WorkflowSkillEvaluation struct {
