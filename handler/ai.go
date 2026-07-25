@@ -183,7 +183,7 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		Fail(w, "AI 接口请求失败")
 		return
 	}
-	credits, err = multiplyAICredits(credits, readAIRequestCount(body, contentType))
+	credits, err = multiplyAICredits(credits, readAIRequestUsage(path, r.Header.Get("X-Infinite-Canvas-Request-Kind"), body, contentType))
 	if err != nil {
 		Fail(w, "AI 接口请求失败")
 		return
@@ -1144,35 +1144,69 @@ func readMultipartModel(body []byte, contentType string) string {
 	return ""
 }
 
-func readAIRequestCount(body []byte, contentType string) int {
-	count := 1
+func readAIRequestUsage(path string, requestKind string, body []byte, contentType string) int {
+	keys := []string{}
+	switch {
+	case path == "/videos":
+		keys = []string{"duration", "seconds"}
+	case path == "/images/generations" || path == "/images/edits" || ((path == "/chat/completions" || path == "/responses") && strings.TrimSpace(requestKind) == "image"):
+		keys = []string{"n"}
+	default:
+		return 1
+	}
+	usage := readAIRequestInt(body, contentType, keys...)
+	if usage < 1 {
+		return 1
+	}
+	if usage > maxAIRequestCount {
+		return maxAIRequestCount
+	}
+	return usage
+}
+
+func readAIRequestInt(body []byte, contentType string, keys ...string) int {
 	if strings.HasPrefix(contentType, "multipart/form-data") {
 		_, params, err := mime.ParseMediaType(contentType)
 		if err != nil {
-			return count
+			return 0
 		}
 		form, err := multipart.NewReader(bytes.NewReader(body), params["boundary"]).ReadForm(32 << 20)
 		if err != nil {
-			return count
+			return 0
 		}
 		defer form.RemoveAll()
-		if values := form.Value["n"]; len(values) > 0 {
-			_, _ = fmt.Sscan(values[0], &count)
+		for _, key := range keys {
+			if values := form.Value[key]; len(values) > 0 {
+				var value int
+				_, _ = fmt.Sscan(values[0], &value)
+				if value != 0 {
+					return value
+				}
+			}
 		}
-	} else {
-		var payload struct {
-			N int `json:"n"`
+		return 0
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(body, &payload)
+	for _, key := range keys {
+		if value := aiRequestIntValue(payload[key]); value != 0 {
+			return value
 		}
-		_ = json.Unmarshal(body, &payload)
-		count = payload.N
 	}
-	if count < 1 {
-		return 1
+	return 0
+}
+
+func aiRequestIntValue(value any) int {
+	switch typed := value.(type) {
+	case float64:
+		return int(typed)
+	case string:
+		var parsed int
+		_, _ = fmt.Sscan(typed, &parsed)
+		return parsed
+	default:
+		return 0
 	}
-	if count > maxAIRequestCount {
-		return maxAIRequestCount
-	}
-	return count
 }
 
 var errMissingModel = &aiError{"缺少模型名称"}

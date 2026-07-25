@@ -70,7 +70,7 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
     const [expandedEditorOpen, setExpandedEditorOpen] = useState(false);
     const latestNodeRef = useRef(node);
     latestNodeRef.current = node;
-    const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "image" ? config.count : 1 });
+    const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "video" ? config.videoSeconds : mode === "image" ? config.count : 1 });
     const missingReferenceIds = validatePromptDocument(promptDocument, referenceMentionOptions);
     const canSubmit = canSubmitCanvasPrompt(prompt, isRunning, hasConnectedText) && missingReferenceIds.length === 0;
 

@@ -741,17 +741,17 @@ export default function AdminSettingsPage() {
                                             rowKey="model"
                                             pagination={false}
                                             size="small"
-                                            dataSource={publicModels.map((model) => ({ model, credits: modelCostCredits(modelCosts, model) }))}
+                                            dataSource={publicModels.map((model) => ({ model, credits: modelCostCredits(modelCosts, model), unit: modelCreditUnitLabel(model, channels) }))}
                                             columns={[
                                                 { title: "模型", dataIndex: "model" },
                                                 {
-                                                    title: "每次调用扣除",
+                                                    title: "单位算力点",
                                                     dataIndex: "credits",
-                                                    width: 220,
+                                                    width: 260,
                                                     render: (_, item) => (
                                                         <Space.Compact className="w-full">
                                                             <InputNumber min={0} step={1} precision={0} className="!w-full" value={item.credits} onChange={(value) => setModelCost(form, setModelCosts, item.model, Number(value) || 0)} />
-                                                            <Input className="w-12 text-center" value="点" readOnly />
+                                                            <Input className="w-24 text-center" value={`点 / ${item.unit}`} readOnly />
                                                         </Space.Compact>
                                                     ),
                                                 },
@@ -1612,6 +1612,13 @@ function visibleChannelModels(models: string[] = []) {
 
 function modelCostCredits(items: AdminSettings["public"]["modelChannel"]["modelCosts"], model: string) {
     return items.find((item) => item.model === model)?.credits || 0;
+}
+
+function modelCreditUnitLabel(model: string, channels: AdminModelChannel[]) {
+    const capabilities = modelCapabilitiesByChannel(channels).get(model);
+    if (modelMatchesAiCapability(model, capabilities, "video")) return "秒";
+    if (modelMatchesAiCapability(model, capabilities, "image")) return "张";
+    return "次";
 }
 
 function modelTextEndpointType(items: AdminSettings["public"]["modelChannel"]["modelTextEndpoints"], model: string) {

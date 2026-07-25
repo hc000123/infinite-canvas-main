@@ -328,7 +328,7 @@ export function shouldUseGeminiImageChatAdapter(model: string) {
 
 async function postGeminiImageEdit(config: AiConfig, prompt: string, references: ReferenceImage[], options: { n: number; quality?: string; size?: string }, trace?: AiTaskTrace) {
     return axios.post<ImageApiResponse>(aiApiUrl(config, "/chat/completions"), await buildGeminiImageEditPayload(config, prompt, references, options), {
-        headers: { ...aiHeaders(config, "application/json"), ...aiTaskTraceHeaders(config, trace) },
+        headers: { ...aiHeaders(config, "application/json"), ...aiTaskTraceHeaders(config, trace), "X-Infinite-Canvas-Request-Kind": "image" },
         timeout: AI_REQUEST_TIMEOUT_MS,
     });
 }

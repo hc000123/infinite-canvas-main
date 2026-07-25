@@ -15,8 +15,9 @@
 **Files:**
 - Modify: `handler/ai.go:180-190,1147-1176`
 - Test: `handler/ai_test.go:551-557`
+- Modify: `web/src/services/api/image.ts:328-333`
 
-- [ ] **Step 1: Replace the count-only test with request-type billing cases**
+- [x] **Step 1: Replace the count-only test with request-type billing cases**
 
 Add a table-driven test that proves video uses `duration` or `seconds`, images use `n`, text ignores `n`, and invalid values fall back to one:
 
@@ -25,6 +26,7 @@ func TestReadAIRequestUsageUsesRequestBillingUnit(t *testing.T) {
 	tests := []struct {
 		name        string
 		path        string
+		requestKind string
 		body        string
 		contentType string
 		want        int
@@ -33,12 +35,13 @@ func TestReadAIRequestUsageUsesRequestBillingUnit(t *testing.T) {
 		{name: "video seconds", path: "/videos", body: `{"seconds":10}`, contentType: "application/json", want: 10},
 		{name: "image count", path: "/images/generations", body: `{"n":4}`, contentType: "application/json", want: 4},
 		{name: "text call", path: "/chat/completions", body: `{"n":4}`, contentType: "application/json", want: 1},
+		{name: "image chat adapter count", path: "/chat/completions", requestKind: "image", body: `{"n":4}`, contentType: "application/json", want: 4},
 		{name: "invalid video duration", path: "/videos", body: `{"duration":0}`, contentType: "application/json", want: 1},
 		{name: "capped video duration", path: "/videos", body: `{"duration":999}`, contentType: "application/json", want: maxAIRequestCount},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := readAIRequestUsage(tt.path, []byte(tt.body), tt.contentType); got != tt.want {
+			if got := readAIRequestUsage(tt.path, tt.requestKind, []byte(tt.body), tt.contentType); got != tt.want {
 				t.Fatalf("usage = %d, want %d", got, tt.want)
 			}
 		})
@@ -46,25 +49,25 @@ func TestReadAIRequestUsageUsesRequestBillingUnit(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Change the proxy to use request usage instead of image count only**
+- [x] **Step 2: Change the proxy to use request usage instead of image count only**
 
 Replace the multiplier call with:
 
 ```go
-credits, err = multiplyAICredits(credits, readAIRequestUsage(path, body, contentType))
+credits, err = multiplyAICredits(credits, readAIRequestUsage(path, r.Header.Get("X-Infinite-Canvas-Request-Kind"), body, contentType))
 ```
 
-- [ ] **Step 3: Generalize the payload reader by request path**
+- [x] **Step 3: Generalize the payload reader by request path**
 
 Replace `readAIRequestCount` with a request-aware reader. It must support JSON and multipart payloads and keep the existing `1..15` clamp:
 
 ```go
-func readAIRequestUsage(path string, body []byte, contentType string) int {
+func readAIRequestUsage(path string, requestKind string, body []byte, contentType string) int {
 	keys := []string{}
-	switch path {
-	case "/videos":
+	switch {
+	case path == "/videos":
 		keys = []string{"duration", "seconds"}
-	case "/images/generations", "/images/edits":
+	case path == "/images/generations" || path == "/images/edits" || ((path == "/chat/completions" || path == "/responses") && strings.TrimSpace(requestKind) == "image"):
 		keys = []string{"n"}
 	default:
 		return 1
@@ -125,7 +128,15 @@ func aiRequestIntValue(value any) int {
 }
 ```
 
-- [ ] **Step 4: Format the touched Go files**
+- [x] **Step 4: Mark Gemini's chat-based image adapter as an image request**
+
+Add the internal request-kind header so the backend reads `n` for this image generation path while leaving normal language requests at one call:
+
+```ts
+headers: { ...aiHeaders(config, "application/json"), ...aiTaskTraceHeaders(config, trace), "X-Infinite-Canvas-Request-Kind": "image" },
+```
+
+- [x] **Step 5: Format the touched Go files**
 
 Run only the mechanical formatter:
 
@@ -143,7 +154,7 @@ Per project instructions, do not run Go tests unless the user explicitly request
 - Review unchanged: `web/src/app/(user)/canvas/components/canvas-assistant-composer.tsx:72`
 - Review unchanged: `web/src/constant/credits.tsx:28-32`
 
-- [ ] **Step 1: Pass video duration from the normal node prompt panel**
+- [x] **Step 1: Pass video duration from the normal node prompt panel**
 
 Change the estimator call so video uses `videoSeconds`, image uses `count`, and text uses one:
 
@@ -157,7 +168,7 @@ const credits = requestCreditCost({
 });
 ```
 
-- [ ] **Step 2: Pass video duration from the generation config node**
+- [x] **Step 2: Pass video duration from the generation config node**
 
 Apply the same unit choice while preserving its normalized image `count`:
 
@@ -171,7 +182,7 @@ const credits = requestCreditCost({
 });
 ```
 
-- [ ] **Step 3: Confirm existing text and image paths already match the design**
+- [x] **Step 3: Confirm existing text and image paths already match the design**
 
 Keep `CanvasAssistantComposer` unchanged because it supports text and image only, already passing `1` for text and `config.count` for images. Keep `requestCreditCost` unchanged because its normalized multiplier works for both requested seconds and requested image count.
 
@@ -182,7 +193,7 @@ Per project instructions, do not run frontend tests, type checks, or builds unle
 **Files:**
 - Modify: `web/src/app/(admin)/admin/settings/page.tsx:739-759,1613-1620`
 
-- [ ] **Step 1: Add the billing unit to each model row**
+- [x] **Step 1: Add the billing unit to each model row**
 
 Build table rows with a capability-derived unit label:
 
@@ -194,7 +205,7 @@ dataSource={publicModels.map((model) => ({
 }))}
 ```
 
-- [ ] **Step 2: Render the unit-specific column title without adding fields**
+- [x] **Step 2: Render the unit-specific column title without adding fields**
 
 Replace the fixed column title with a neutral title and show the row's billing rule beside the input:
 
@@ -214,7 +225,7 @@ Replace the fixed column title with a neutral title and show the row's billing r
 
 Use natural Chinese in the final rendering, such as `点 / 秒`, `点 / 张`, and `点 / 次`; do not persist the label.
 
-- [ ] **Step 3: Add a small capability helper**
+- [x] **Step 3: Add a small capability helper**
 
 Place the helper beside `modelCostCredits` and reuse the existing capability map:
 
@@ -231,19 +242,20 @@ function modelCreditUnitLabel(model: string, channels: AdminModelChannel[]) {
 
 **Files:**
 - Modify: `docs/system-settings.md:42-58`
+- Modify: `docs/backend-database.md:185-201`
 - Modify: `docs/pending-test.md` under `## 当前版本验收清单`
 - Modify: `CHANGELOG.md:3-6`
 - Review unchanged: `docs/todo.md`
 
-- [ ] **Step 1: Document the unit meaning of `credits`**
+- [x] **Step 1: Document the unit meaning of `credits`**
 
-Update the `modelCosts` description to state:
+Update both settings and database reference descriptions to state:
 
 ```markdown
 `credits` 是模型单位算力点：视频模型按每秒配置，图片模型按每张配置，语言模型按每次调用配置。后端按请求中的视频秒数或图片张数计算实际预扣，语言请求固定计算一次；任务失败时原额返还。
 ```
 
-- [ ] **Step 2: Add a concise pending-test section**
+- [x] **Step 2: Add a concise pending-test section**
 
 Add a section that asks the user to verify one text request, a multi-image request, and videos of two different durations, including both preview and final credit logs:
 
@@ -255,7 +267,7 @@ Add a section that asks the user to verify one text request, a multi-image reque
 - 在画布分别生成多张图片和两个不同时长的视频，确认按钮预估、AI 任务扣费与算力流水一致；失败任务按本次实际预扣数原额返还。
 ```
 
-- [ ] **Step 3: Add one Unreleased summary line**
+- [x] **Step 3: Add one Unreleased summary line**
 
 Add a version-level summary without repeating implementation details:
 
@@ -263,7 +275,7 @@ Add a version-level summary without repeating implementation details:
 + [优化] 模型算力点改为按业务单位计费：语言按调用次数、图片按实际张数、视频按生成秒数，并统一画布预估、后台单位提示和后端扣费口径。
 ```
 
-- [ ] **Step 4: Confirm the roadmap does not change**
+- [x] **Step 4: Confirm the roadmap does not change**
 
 Do not edit `docs/todo.md`: this is a correction to an implemented billing capability, not a new roadmap item.
 
@@ -272,7 +284,7 @@ Do not edit `docs/todo.md`: this is a correction to an implemented billing capab
 **Files:**
 - Review all files changed by Tasks 1-4
 
-- [ ] **Step 1: Inspect scope and whitespace**
+- [x] **Step 1: Inspect scope and whitespace**
 
 Run read-only checks:
 
@@ -284,6 +296,14 @@ git status --short
 
 Expected: only the planned billing, UI, test, and documentation files are changed; the unrelated untracked `docs/superpowers/specs/2026-07-25-admin-credit-transfer-design.md` remains untouched.
 
-- [ ] **Step 2: Report unexecuted validation clearly**
+- [x] **Step 2: Run the authorized validation**
 
-State that automated tests, type checks, and builds were not run because the project instructions require explicit user authorization for those commands. Do not claim runtime verification.
+After the user explicitly authorizes validation, run:
+
+```bash
+go test ./...
+cd web && bun run test
+cd web && bun run typecheck
+```
+
+Expected: Go packages pass, all 740 frontend tests pass, and TypeScript exits without errors. Do not run a production build because the user did not request one.

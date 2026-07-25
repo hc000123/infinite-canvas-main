@@ -282,7 +282,7 @@ func TestJimengVideoProxyRefundsRejectedMultipartTask(t *testing.T) {
 	cliPath := writeFakeJimengCLI(t)
 	saveJimengHandlerSettingsWithCredits(t, cliPath, t.TempDir(), 4)
 	now := time.Now().Format(time.RFC3339)
-	_, err := repository.SaveUser(model.User{ID: "user-jimeng-refund", Username: "jimeng-refund", Role: model.UserRoleUser, Status: model.UserStatusActive, Credits: 10, AffCode: "JMREFUND", CreatedAt: now, UpdatedAt: now})
+	_, err := repository.SaveUser(model.User{ID: "user-jimeng-refund", Username: "jimeng-refund", Role: model.UserRoleUser, Status: model.UserStatusActive, Credits: 24, AffCode: "JMREFUND", CreatedAt: now, UpdatedAt: now})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,8 +296,8 @@ func TestJimengVideoProxyRefundsRejectedMultipartTask(t *testing.T) {
 		t.Fatalf("body = %s", rec.Body.String())
 	}
 	user, ok, err := repository.GetUserByID("user-jimeng-refund")
-	if err != nil || !ok || user.Credits != 10 {
-		t.Fatalf("user = %#v ok=%v err=%v, want refunded balance 10", user, ok, err)
+	if err != nil || !ok || user.Credits != 24 {
+		t.Fatalf("user = %#v ok=%v err=%v, want refunded balance 24", user, ok, err)
 	}
 }
 
@@ -548,10 +548,29 @@ func TestReadLimitedAIRequestBodyRejectsOversizedBody(t *testing.T) {
 	}
 }
 
-func TestReadAIRequestCountCapsJSONCount(t *testing.T) {
-	count := readAIRequestCount([]byte(`{"n":999}`), "application/json")
-	if count != maxAIRequestCount {
-		t.Fatalf("count = %d, want %d", count, maxAIRequestCount)
+func TestReadAIRequestUsageUsesRequestBillingUnit(t *testing.T) {
+	tests := []struct {
+		name        string
+		path        string
+		requestKind string
+		body        string
+		contentType string
+		want        int
+	}{
+		{name: "video duration", path: "/videos", body: `{"duration":6}`, contentType: "application/json", want: 6},
+		{name: "video seconds", path: "/videos", body: `{"seconds":10}`, contentType: "application/json", want: 10},
+		{name: "image count", path: "/images/generations", body: `{"n":4}`, contentType: "application/json", want: 4},
+		{name: "text call", path: "/chat/completions", body: `{"n":4}`, contentType: "application/json", want: 1},
+		{name: "image chat adapter count", path: "/chat/completions", requestKind: "image", body: `{"n":4}`, contentType: "application/json", want: 4},
+		{name: "invalid video duration", path: "/videos", body: `{"duration":0}`, contentType: "application/json", want: 1},
+		{name: "capped video duration", path: "/videos", body: `{"duration":999}`, contentType: "application/json", want: maxAIRequestCount},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := readAIRequestUsage(tt.path, tt.requestKind, []byte(tt.body), tt.contentType); got != tt.want {
+				t.Fatalf("usage = %d, want %d", got, tt.want)
+			}
+		})
 	}
 }
 
