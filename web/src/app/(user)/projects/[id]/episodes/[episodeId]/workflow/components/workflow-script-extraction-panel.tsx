@@ -23,8 +23,10 @@ export function WorkflowScriptExtractionPanel(props: { agentRuns: RemoteWorkflow
                 if (cancelled) return;
                 setAssetOptions(assets);
                 setShotOptions(shots);
-                setAssetSkill(assets.find((item) => item.isDefault)?.skillVersionId || assets[0]?.skillVersionId || "");
-                setShotSkill(shots.find((item) => item.isDefault)?.skillVersionId || shots[0]?.skillVersionId || "");
+                const assetDefault = assets.find((item) => item.isDefault);
+                const shotDefault = shots.find((item) => item.isDefault);
+                setAssetSkill(assetDefault ? assetDefault.skillVersionId : assets[0]?.skillVersionId || "");
+                setShotSkill(shotDefault ? shotDefault.skillVersionId : shots[0]?.skillVersionId || "");
             })
             .catch((reason) => !cancelled && setError(reason instanceof Error ? reason.message : "Skill 列表读取失败"));
         return () => { cancelled = true; };

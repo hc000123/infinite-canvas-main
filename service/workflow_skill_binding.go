@@ -10,6 +10,30 @@ import (
 	"github.com/basketikun/infinite-canvas/repository"
 )
 
+const (
+	WorkflowSkillStageScript     = "script"
+	WorkflowSkillStageArt        = "art"
+	WorkflowSkillStageAssets     = "assets"
+	WorkflowSkillStageStoryboard = "storyboard"
+	WorkflowSkillStageVideo      = "video"
+	WorkflowSkillStageDelivery   = "delivery"
+)
+
+var workflowSkillStages = map[string]bool{
+	WorkflowSkillStageScript: true, WorkflowSkillStageArt: true, WorkflowSkillStageAssets: true,
+	WorkflowSkillStageStoryboard: true, WorkflowSkillStageVideo: true, WorkflowSkillStageDelivery: true,
+}
+
+type WorkflowSkillOption struct {
+	StageID        string `json:"stageId"`
+	SkillID        string `json:"skillId"`
+	SkillName      string `json:"skillName"`
+	Description    string `json:"description"`
+	SkillVersionID string `json:"skillVersionId"`
+	Version        string `json:"version"`
+	IsDefault      bool   `json:"isDefault"`
+}
+
 type WorkflowStageSkillBindingInput struct {
 	Scope          string `json:"scope"`
 	ScopeID        string `json:"scopeId"`
@@ -44,6 +68,23 @@ func ResolveWorkflowStageSkill(stageKey, projectID, exactVersionID string) (Reso
 
 func ResolveWorkflowStageSkillForRun(stageID, projectID, exactVersionID string) (ResolvedSkill, error) {
 	return ResolveWorkflowStageSkill(workflowSkillStageForRun(stageID), projectID, exactVersionID)
+}
+
+func workflowSkillStageForRun(stageID string) string {
+	switch stageID {
+	case WorkflowStageScriptAdaptation:
+		return WorkflowSkillStageScript
+	case WorkflowStageAssetExtraction:
+		return WorkflowSkillStageArt
+	case WorkflowStageAssetImagePrompt:
+		return WorkflowSkillStageAssets
+	case WorkflowStageShotBreakdown:
+		return WorkflowSkillStageStoryboard
+	case WorkflowStageShotPrompt:
+		return WorkflowSkillStageVideo
+	default:
+		return strings.TrimSpace(stageID)
+	}
 }
 
 func ListWorkflowStageSkillOptions(stageID, projectID string) ([]WorkflowSkillOption, error) {
@@ -82,7 +123,7 @@ func UpdateWorkflowStageSkillBinding(adminID, stageKey string, input WorkflowSta
 		return ResolvedSkill{}, err
 	}
 	scope, scopeID := strings.TrimSpace(input.Scope), strings.TrimSpace(input.ScopeID)
-	if scope == model.WorkflowSkillScopeGlobal {
+	if scope == model.WorkflowStageSkillScopeGlobal {
 		scopeID = ""
 		passed, err := repository.HasSkillProjectCanary(resolved.Version.ID, resolved.Version.ContentHash)
 		if err != nil {
@@ -91,7 +132,7 @@ func UpdateWorkflowStageSkillBinding(adminID, stageKey string, input WorkflowSta
 		if !passed {
 			return ResolvedSkill{}, safeMessageError{message: "全局绑定前必须完成项目灰度评测"}
 		}
-	} else if scope != model.WorkflowSkillScopeProject || scopeID == "" {
+	} else if scope != model.WorkflowStageSkillScopeProject || scopeID == "" {
 		return ResolvedSkill{}, safeMessageError{message: "Skill 绑定范围无效"}
 	}
 	stamp := now()

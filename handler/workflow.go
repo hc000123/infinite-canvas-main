@@ -15,19 +15,6 @@ type workflowCommandInput struct {
 	Context        json.RawMessage `json:"context"`
 }
 
-func WorkflowSkillOptions(w http.ResponseWriter, r *http.Request) {
-	if _, ok := service.UserFromContext(r.Context()); !ok {
-		Fail(w, "未登录或权限不足")
-		return
-	}
-	result, err := service.ListWorkflowSkillOptions(r.URL.Query().Get("stageId"), r.URL.Query().Get("projectId"))
-	if err != nil {
-		FailError(w, err)
-		return
-	}
-	OK(w, result)
-}
-
 func EnsureWorkflowRun(w http.ResponseWriter, r *http.Request) {
 	user, ok := service.UserFromContext(r.Context())
 	if !ok {

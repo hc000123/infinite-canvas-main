@@ -25,47 +25,12 @@ func UpsertWorkflowStageSkillBinding(binding model.WorkflowStageSkillBinding) er
 	return upsertWorkflowStageSkillBinding(db, binding)
 }
 
-func UpsertWorkflowStageSkillBindingWithAudit(binding model.WorkflowStageSkillBinding, audit model.WorkflowSkillAuditLog) error {
-	db, err := DB()
-	if err != nil {
-		return err
-	}
-	return db.Transaction(func(tx *gorm.DB) error {
-		if err := upsertWorkflowStageSkillBinding(tx, binding); err != nil {
-			return err
-		}
-		return tx.Create(&audit).Error
-	})
-}
-
 func UpsertWorkflowStageSkillBindingWithSkillAudit(binding model.WorkflowStageSkillBinding, audit model.SkillAuditLog) error {
 	db, err := DB()
 	if err != nil {
 		return err
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
-		if err := upsertWorkflowStageSkillBinding(tx, binding); err != nil {
-			return err
-		}
-		return tx.Create(&audit).Error
-	})
-}
-
-func PublishWorkflowSkillVersionBinding(version model.WorkflowSkillVersion, binding model.WorkflowStageSkillBinding, audit model.WorkflowSkillAuditLog) error {
-	db, err := DB()
-	if err != nil {
-		return err
-	}
-	return db.Transaction(func(tx *gorm.DB) error {
-		result := tx.Model(&model.WorkflowSkillVersion{}).
-			Where("id = ? AND status = ?", version.ID, model.WorkflowSkillVersionDraft).
-			Updates(map[string]any{"status": version.Status, "published_at": version.PublishedAt, "updated_at": version.UpdatedAt})
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected != 1 {
-			return errors.New("Skill 版本状态已变化")
-		}
 		if err := upsertWorkflowStageSkillBinding(tx, binding); err != nil {
 			return err
 		}
@@ -89,7 +54,7 @@ func ResolveWorkflowStageSkillBinding(stageKey string, projectID string) (model.
 	projectID = strings.TrimSpace(projectID)
 	var binding model.WorkflowStageSkillBinding
 	if projectID != "" {
-		err = db.Where("stage_key = ? AND scope = ? AND scope_id = ?", stageKey, model.WorkflowSkillScopeProject, projectID).First(&binding).Error
+		err = db.Where("stage_key = ? AND scope = ? AND scope_id = ?", stageKey, model.WorkflowStageSkillScopeProject, projectID).First(&binding).Error
 		if err == nil {
 			return binding, true, nil
 		}
@@ -97,7 +62,7 @@ func ResolveWorkflowStageSkillBinding(stageKey string, projectID string) (model.
 			return binding, false, err
 		}
 	}
-	err = db.Where("stage_key = ? AND scope = ? AND scope_id = ''", stageKey, model.WorkflowSkillScopeGlobal).First(&binding).Error
+	err = db.Where("stage_key = ? AND scope = ? AND scope_id = ''", stageKey, model.WorkflowStageSkillScopeGlobal).First(&binding).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return model.WorkflowStageSkillBinding{}, false, nil
 	}

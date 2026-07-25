@@ -26,7 +26,7 @@
 | ---- | ---- |
 | `POST /workflow-runs` | 按项目、分集、工作流版本和剧本哈希幂等创建运行记录 |
 | `GET /workflow-runs/:id` | 返回最新阶段、版本化产物、质量门和底层任务摘要 |
-| `GET /workflow-skill-options` | 按 `stageId` 和 `projectId` 返回当前用户可选择的已发布 Skill 版本 |
+| `GET /skill-options` | 按项目、Capability 和输入 / 输出 Artifact 类型返回可见的已发布 Skill 版本 |
 | `POST /workflow-runs/:id/stages/:stageId/start` | 校验依赖并使用 `idempotencyKey` 异步入队，可通过 `skillVersionId` 覆盖本次运行版本 |
 | `POST /workflow-runs/:id/media-batches` | 为美术或分镜阶段创建绑定启动幂等键的一次性参考图批次 |
 | `POST /workflow-media-batches/:id/items` | 以 multipart 上传角色 / 场景 / 道具参考图，最多 9 张 |
@@ -43,4 +43,4 @@
 
 阶段质量门和人工审核分开：确定性质量门未通过时不能批准；审核提交的 hash 与当前产物不一致时返回冲突提示；服务端不会直接写浏览器本地项目、素材、分镜或生产包，只保存用户确认后的 apply receipt。
 
-管理端六阶段 Skill 接口位于 `/api/v1/admin`：`workflow-skills` 管理稳定阶段身份，`workflow-skill-versions` 管理草稿、校验、dry-run / compare 和发布，`workflow-stage-skill-bindings` 管理项目灰度、全局推广与回滚。发布版本不可原地修改，所有绑定变更写入审计记录。
+通用 Skill 管理接口位于 `/api/v1/admin`：`skills` 管理稳定身份和推荐版本，`skill-versions` 管理草稿、校验、试运行和发布，`skill-evaluations` 查询冻结评测，`workflow-stage-skill-bindings` 仅负责工作流消费端的项目 / 全局绑定。发布版本不可原地修改，发布与推荐分离，所有绑定和推荐变更写入审计记录。

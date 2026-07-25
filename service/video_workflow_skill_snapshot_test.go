@@ -54,7 +54,7 @@ func TestWorkflowStageRetryKeepsOriginalSkillSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{
-		ID: "binding-art-project-new", StageKey: WorkflowSkillStageArt, Scope: model.WorkflowSkillScopeProject,
+		ID: "binding-art-project-new", StageKey: WorkflowSkillStageArt, Scope: model.WorkflowStageSkillScopeProject,
 		ScopeID: detail.Run.ProjectID, SkillVersionID: replacement.ID, CreatedAt: now(), UpdatedAt: now(),
 	}); err != nil {
 		t.Fatal(err)

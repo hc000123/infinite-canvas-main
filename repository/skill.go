@@ -219,7 +219,7 @@ func HasSkillProjectCanary(versionID, contentHash string) (bool, error) {
 	}
 	var count int64
 	err = db.Table("skill_evaluations AS evaluations").
-		Joins("JOIN workflow_stage_skill_bindings AS bindings ON bindings.skill_version_id = evaluations.skill_version_id AND bindings.scope = ?", model.WorkflowSkillScopeProject).
+		Joins("JOIN workflow_stage_skill_bindings AS bindings ON bindings.skill_version_id = evaluations.skill_version_id AND bindings.scope = ?", model.WorkflowStageSkillScopeProject).
 		Where("evaluations.skill_version_id = ? AND evaluations.content_hash = ? AND evaluations.project_id <> '' AND evaluations.status = ?", strings.TrimSpace(versionID), strings.TrimSpace(contentHash), "passed").
 		Count(&count).Error
 	return count > 0, err

@@ -60,7 +60,7 @@ func TestEnsureSkillSeedsKeepsCustomWorkflowBinding(t *testing.T) {
 	if err := repository.SaveSkillVersion(custom); err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{ID: "custom", StageKey: "art", Scope: model.WorkflowSkillScopeGlobal, SkillVersionID: custom.ID}); err != nil {
+	if err := repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{ID: "custom", StageKey: "art", Scope: model.WorkflowStageSkillScopeGlobal, SkillVersionID: custom.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if err := EnsureSkillSeeds(); err != nil {

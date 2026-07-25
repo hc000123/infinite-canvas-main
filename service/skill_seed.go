@@ -119,7 +119,7 @@ func ensureSkillSeed(seed skillSeed) error {
 		return nil
 	}
 	return repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{
-		ID: "workflow-skill-binding-global-" + seed.StageKey, StageKey: seed.StageKey, Scope: model.WorkflowSkillScopeGlobal,
+		ID: "workflow-skill-binding-global-" + seed.StageKey, StageKey: seed.StageKey, Scope: model.WorkflowStageSkillScopeGlobal,
 		SkillVersionID: versionID, CreatedAt: stamp, UpdatedAt: stamp,
 	})
 }

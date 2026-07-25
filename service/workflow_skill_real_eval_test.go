@@ -125,23 +125,21 @@ func runWorkflowSkillVideoOnlyEval(t *testing.T, executor AgentRunExecutor, run 
 
 func runRealWorkflowSkill(t *testing.T, executor AgentRunExecutor, stageKey string, systemPrompt string, userPrompt string) []byte {
 	t.Helper()
-	files, err := loadWorkflowSkillSeedFiles(stageKey)
+	files, err := loadSkillSeedFiles(stageKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	contract := workflowSkillSeedContract(stageKey)
-	contract.QualityGateProfile = []string{"schema", workflowSkillRequiredGateByTarget[stageKey]}
-	packageValue, err := NormalizeWorkflowSkillPackage(files, contract)
+	packageValue, err := buildWorkflowSkillSeedPackage(stageKey, files)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resolved := ResolvedWorkflowSkill{
-		Skill:   model.WorkflowSkill{Name: stageKey, StageKey: stageKey},
-		Version: model.WorkflowSkillVersion{Version: workflowSkillSeedVersion, ContentHash: packageValue.ContentHash},
+	resolved := ResolvedSkill{
+		Skill:   model.SkillDefinition{Name: stageKey},
+		Version: model.SkillVersion{Version: skillSeedVersion, ContentHash: packageValue.ContentHash},
 		Package: packageValue,
 	}
 	request, err := buildAgentRunChatRequest(CreateAgentRunInput{
-		SystemPrompt: systemPrompt + workflowSkillInstructions(resolved),
+		SystemPrompt: systemPrompt + skillInstructions(resolved),
 		UserPrompt:   userPrompt,
 	}, "workflow-skill-eval")
 	if err != nil {
@@ -155,7 +153,7 @@ func runRealWorkflowSkill(t *testing.T, executor AgentRunExecutor, stageKey stri
 	}
 	content := workflowAgentRunContent(model.AgentRun{RawOutput: call.rawOutput, StructuredDraftJSON: call.structuredJSON})
 	gate := workflowSkillEvaluationGate(stageKey, content)
-	appendWorkflowSkillSchemaIssues(content, contract, &gate)
+	appendSkillSchemaIssues(content, packageValue.OutputContract, &gate)
 	if !gate.Passed {
 		t.Fatalf("%s quality gate failed: %+v\noutput: %s", stageKey, gate.Issues, content)
 	}

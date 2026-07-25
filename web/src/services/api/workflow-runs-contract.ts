@@ -130,6 +130,10 @@ export type WorkflowSkillOption = {
     isDefault: boolean;
 };
 
+export function workflowStageSkillCapability(stageId: string) {
+    return `workflow.stage.${({ "script-adaptation": "script", "asset-extraction": "art", "asset-image-prompt": "assets", "shot-breakdown": "storyboard", "shot-prompt": "video" } as Record<string, string>)[stageId] || stageId}`;
+}
+
 export type WorkflowReviewRequest = { decision: "approved" | "rejected"; artifactHash: string; comment?: string };
 export type WorkflowStageStartOptions = { mediaBatchId?: string; skillVersionId?: string; context?: unknown };
 export type WorkflowApplyRequest = {
@@ -149,7 +153,7 @@ export const workflowRunRequest = {
     ensure: (body: EnsureWorkflowRunRequest) => ({ path: "/api/v1/workflow-runs", body }),
     detail: (id: string) => ({ path: `/api/v1/workflow-runs/${encode(id)}` }),
     startStage: (id: string, stageId: string, idempotencyKey: string, options: WorkflowStageStartOptions = {}) => ({ path: `/api/v1/workflow-runs/${encode(id)}/stages/${encode(stageId)}/start`, body: { idempotencyKey, ...(options.mediaBatchId ? { mediaBatchId: options.mediaBatchId } : {}), ...(options.skillVersionId ? { skillVersionId: options.skillVersionId } : {}), ...(options.context !== undefined ? { context: options.context } : {}) } }),
-    skillOptions: () => ({ path: "/api/v1/workflow-skill-options" }),
+    skillOptions: () => ({ path: "/api/v1/skill-options" }),
     createMediaBatch: (id: string, stageId: string, idempotencyKey: string) => ({ path: `/api/v1/workflow-runs/${encode(id)}/media-batches`, body: { stageId, idempotencyKey } }),
     mediaBatch: (id: string) => ({ path: `/api/v1/workflow-media-batches/${encode(id)}` }),
     cancelStage: (id: string) => ({ path: `/api/v1/workflow-stage-runs/${encode(id)}/cancel`, body: {} }),

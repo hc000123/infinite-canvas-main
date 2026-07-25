@@ -13,6 +13,7 @@ import {
     type WorkflowSkillOption,
     type WorkflowWorkerHealth,
     type WorkflowMediaBatchDetail,
+    workflowStageSkillCapability,
 } from "./workflow-runs-contract";
 
 export * from "./workflow-runs-contract";
@@ -28,8 +29,12 @@ export function getWorkflowRun(id: string) {
     return apiGet<RemoteWorkflowRunDetail>(workflowRunRequest.detail(id).path, undefined, token());
 }
 
-export function listWorkflowSkillOptions(stageId: string, projectId: string) {
-    return apiGet<WorkflowSkillOption[]>(workflowRunRequest.skillOptions().path, { stageId, projectId }, token());
+export async function listWorkflowSkillOptions(stageId: string, projectId: string) {
+    const items = await apiGet<Array<{ skillId: string; skillName: string; summary: string; skillVersionId: string; version: string }>>(workflowRunRequest.skillOptions().path, { projectId, capability: workflowStageSkillCapability(stageId) }, token());
+    return [
+        { stageId, skillId: "", skillName: "使用阶段绑定", description: "项目绑定优先，全局绑定兜底", skillVersionId: "", version: "自动", isDefault: true },
+        ...items.map((item): WorkflowSkillOption => ({ stageId, skillId: item.skillId, skillName: item.skillName, description: item.summary, skillVersionId: item.skillVersionId, version: item.version, isDefault: false })),
+    ];
 }
 
 export function startWorkflowStage(id: string, stageId: string, idempotencyKey: string, options?: WorkflowStageStartOptions) {

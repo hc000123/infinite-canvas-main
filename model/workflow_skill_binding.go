@@ -1,8 +1,8 @@
 package model
 
 const (
-	WorkflowSkillScopeGlobal  = "global"
-	WorkflowSkillScopeProject = "project"
+	WorkflowStageSkillScopeGlobal  = "global"
+	WorkflowStageSkillScopeProject = "project"
 )
 
 type WorkflowStageSkillBinding struct {

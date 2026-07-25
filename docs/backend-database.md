@@ -27,10 +27,11 @@
 - `workflow_artifacts`
 - `workflow_quality_gate_results`
 - `workflow_events`
-- `workflow_skills`
-- `workflow_skill_versions`
+- `skill_definitions`
+- `skill_versions`
+- `skill_evaluations`
+- `skill_audit_logs`
 - `workflow_stage_skill_bindings`
-- `workflow_skill_evaluations`
 - `workflow_media_batches`
 - `workflow_media_items`
 - `prompts`
@@ -448,25 +449,21 @@ M8 起，前台追溯信息不新增数据库字段，统一放入已脱敏 JSON
 
 工作流增量事件流。自增主键作为游标，按用户和 workflow 查询；只保存状态、进度、重试、取消、审核和写入回执等安全化元数据，不保存密钥、完整请求头或上游凭证。
 
-### workflow_skills
+### skill_definitions
 
-六阶段 Skill 的稳定身份表。`stage_key` 唯一，当前阶段键固定为 `script`、`art`、`assets`、`storyboard`、`video`、`delivery`；这里只保存名称、说明和启用状态，不保存可变版本正文。
+通用 Skill 稳定身份表。记录名称、说明、`system` / `project` 所有者、项目归属、启用状态和当前推荐版本；不保存版本正文。
 
-### workflow_skill_versions
+### skill_versions
 
-Skill 的不可变版本表。`skill_id + version` 唯一；`files_json` 保存以 `SKILL.md` 为入口的逻辑文件，`contract_json` 保存输入、图片策略、输出结构和质量门契约，`content_hash` 对规范化文件与契约计算。状态为 `draft`、`published`、`archived`，发布后不能原地修改。
+Skill 不可变版本表。`skill_id + version` 唯一；分别保存 Manifest、逻辑文件、输入契约、输出契约、质量门、内容哈希和评测摘要。发布后不可原地修改。
 
 ### workflow_stage_skill_bindings
 
-阶段到 Skill 版本的生效指针。`stage_key + scope + scope_id` 唯一；`scope=project` 时优先于 `scope=global`，从而支持项目灰度、全局推广及两级独立回滚。
+生产工作流阶段到通用 Skill Version 的消费端绑定。项目绑定优先于全局绑定；解析时还会验证 `workflow.stage.<stage>` capability。
 
-### workflow_skill_evaluations
+### skill_evaluations / skill_audit_logs
 
-Skill 发布前 dry-run 与同输入版本对比记录。冻结候选版、基线版、候选内容哈希、项目/分集、输入哈希、图片清单、结果、结构化差异和质量门；评测不创建正式工作流阶段、不写业务资产。
-
-### workflow_skill_audit_logs
-
-Skill 发布与回滚审计记录。保存管理员、动作、阶段、作用域、项目、目标版本和创建时间；项目灰度、全局推广及两级回滚与绑定更新在同一事务中完成，便于追溯线上实际生效版本。
+通用 Skill 的冻结试运行、同输入对比、发布、推荐与回滚记录。试运行不写正式工作流阶段或业务资产。
 
 ### workflow_media_batches
 

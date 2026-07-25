@@ -4,6 +4,16 @@
 
 ## 当前版本验收清单
 
+### 通用 Skill Registry Phase 1
+
+- 管理端入口改为 `/admin/skills`：可按名称、Capability、输入 / 输出 Artifact、项目标签和所有者筛选任意 Skill，不再以固定六阶段作为 Skill 身份。
+- 六个 `3.0.1` 生产包已注册为普通系统 Skill 推荐版本；每个版本包含 Manifest、逻辑文件、输入契约、输出 JSON Schema、质量门和稳定内容哈希。
+- 草稿支持校验、同输入试运行、发布与推荐；发布和推荐严格分离，旧发布版可以回滚为推荐版，付费成本级别必须存在同哈希通过评测。
+- 生产工作流按 `exact version > project binding > global binding` 解析通用 Skill，并校验 `workflow.stage.<stage>` capability；启动后冻结 ID、版本、哈希、Manifest、文件和契约，重试继续使用原快照。
+- 旧 `/admin/workflow-skills`、`/workflow-skills` 和 `/workflow-skill-versions` 模型、API 与页面已移除。
+- 自动验收命令：`go test ./...`、`cd web && npm test`、`cd web && npm run typecheck`、`cd web && npm run build`。
+- 人工验收：新建项目 Skill 草稿，完成同输入评测、发布、设为推荐、项目灰度和推荐回滚；再启动一个阶段并确认切换推荐版后原任务快照不变。
+
 ### 项目详情素材引用入口收口
 
 - 项目详情不再显示“素材引用”页签，只保留主要生产入口。
@@ -211,7 +221,7 @@
 
 #### 本地 Codex 多模态验证与六阶段 Skill 版本中心
 
-- 入口：用户端 `/projects/:projectId/episodes/:episodeId/workflow`；管理端 `/admin/workflow-skills`。
+- 入口：用户端 `/projects/:projectId/episodes/:episodeId/workflow`；管理端 `/admin/skills`。
 - 本次实现：
   1. 美术与分镜文本任务支持一次性上传最多 9 张角色 / 场景 / 道具参考图；CLI 使用私有文件路径，企业 API 使用内存 `data:` 内容，服务端路径和 base64 均不写入用户响应或业务产物。
   2. 参考图任务要求模型逐图返回 `referenceEvidence`，包含 `@图N`、可见事实和应用位置；质量门会阻断缺证据、漏图或空证据的产物，审核区以可读卡片展示证据。

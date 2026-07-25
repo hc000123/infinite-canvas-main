@@ -15,7 +15,7 @@ func TestResolveWorkflowStageSkillPrefersExactThenProjectThenGlobal(t *testing.T
 	}
 	project := publishCompatibleSkillTestVersion(t, "workflow.stage.art", "2.0.0")
 	exact := publishCompatibleSkillTestVersion(t, "workflow.stage.art", "3.0.0")
-	if err := repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{ID: "project", StageKey: "art", Scope: model.WorkflowSkillScopeProject, ScopeID: "p1", SkillVersionID: project.ID}); err != nil {
+	if err := repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{ID: "project", StageKey: "art", Scope: model.WorkflowStageSkillScopeProject, ScopeID: "p1", SkillVersionID: project.ID}); err != nil {
 		t.Fatal(err)
 	}
 	resolved, err := ResolveWorkflowStageSkill("art", "p1", exact.ID)
@@ -51,14 +51,14 @@ func TestUpdateWorkflowStageSkillBindingRequiresProjectCanaryBeforeGlobal(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = UpdateWorkflowStageSkillBinding("admin-1", "art", WorkflowStageSkillBindingInput{Scope: model.WorkflowSkillScopeGlobal, SkillVersionID: published.Version.ID})
+	_, err = UpdateWorkflowStageSkillBinding("admin-1", "art", WorkflowStageSkillBindingInput{Scope: model.WorkflowStageSkillScopeGlobal, SkillVersionID: published.Version.ID})
 	if err == nil || !strings.Contains(err.Error(), "项目灰度") {
 		t.Fatalf("err=%v", err)
 	}
-	if _, err := UpdateWorkflowStageSkillBinding("admin-1", "art", WorkflowStageSkillBindingInput{Scope: model.WorkflowSkillScopeProject, ScopeID: "p1", SkillVersionID: published.Version.ID}); err != nil {
+	if _, err := UpdateWorkflowStageSkillBinding("admin-1", "art", WorkflowStageSkillBindingInput{Scope: model.WorkflowStageSkillScopeProject, ScopeID: "p1", SkillVersionID: published.Version.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := UpdateWorkflowStageSkillBinding("admin-1", "art", WorkflowStageSkillBindingInput{Scope: model.WorkflowSkillScopeGlobal, SkillVersionID: published.Version.ID}); err != nil {
+	if _, err := UpdateWorkflowStageSkillBinding("admin-1", "art", WorkflowStageSkillBindingInput{Scope: model.WorkflowStageSkillScopeGlobal, SkillVersionID: published.Version.ID}); err != nil {
 		t.Fatal(err)
 	}
 	resolved, err := ResolveWorkflowStageSkill("art", "p2", "")
