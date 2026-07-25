@@ -10,6 +10,15 @@ import (
 
 var errArtifactSchemaVersionConflict = errors.New("Artifact Schema 版本内容冲突")
 
+type ArtifactQuery struct {
+	ProjectID            string
+	EpisodeID            string
+	ArtifactType         string
+	ProducerInvocationID string
+	Page                 int
+	PageSize             int
+}
+
 func CreateArtifactSchema(schema model.ArtifactSchema) (model.ArtifactSchema, error) {
 	database, err := DB()
 	if err != nil {
@@ -80,4 +89,101 @@ func ListArtifactSchemas(artifactType string) ([]model.ArtifactSchema, error) {
 	var schemas []model.ArtifactSchema
 	err = query.Order("artifact_type asc, version desc").Find(&schemas).Error
 	return schemas, err
+}
+
+// CreateArtifact only inserts a new immutable Artifact row.
+func CreateArtifact(item model.Artifact) (model.Artifact, error) {
+	database, err := DB()
+	if err != nil {
+		return item, err
+	}
+	return item, database.Create(&item).Error
+}
+
+// CreateArtifacts inserts one immutable Artifact set atomically.
+func CreateArtifacts(items []model.Artifact) error {
+	if len(items) == 0 {
+		return nil
+	}
+	database, err := DB()
+	if err != nil {
+		return err
+	}
+	return database.Transaction(func(tx *gorm.DB) error {
+		return tx.Create(&items).Error
+	})
+}
+
+func GetUserArtifact(userID, id string) (model.Artifact, bool, error) {
+	database, err := DB()
+	if err != nil {
+		return model.Artifact{}, false, err
+	}
+	var item model.Artifact
+	result := database.Where("user_id = ? AND id = ?", strings.TrimSpace(userID), strings.TrimSpace(id)).Limit(1).Find(&item)
+	if result.Error != nil {
+		return item, false, result.Error
+	}
+	return item, result.RowsAffected == 1, nil
+}
+
+func GetUserArtifactsByIDs(userID string, ids []string) (map[string]model.Artifact, error) {
+	database, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	unique := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, rawID := range ids {
+		id := strings.TrimSpace(rawID)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	result := make(map[string]model.Artifact, len(unique))
+	if len(unique) == 0 {
+		return result, nil
+	}
+	var items []model.Artifact
+	if err := database.Where("user_id = ? AND id IN ?", strings.TrimSpace(userID), unique).Find(&items).Error; err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		result[item.ID] = item
+	}
+	return result, nil
+}
+
+func ListUserArtifacts(userID string, query ArtifactQuery) ([]model.Artifact, int64, error) {
+	database, err := DB()
+	if err != nil {
+		return nil, 0, err
+	}
+	page := model.Query{Page: query.Page, PageSize: query.PageSize}
+	page.Normalize()
+	tx := database.Model(&model.Artifact{}).Where("user_id = ?", strings.TrimSpace(userID))
+	if value := strings.TrimSpace(query.ProjectID); value != "" {
+		tx = tx.Where("project_id = ?", value)
+	}
+	if value := strings.TrimSpace(query.EpisodeID); value != "" {
+		tx = tx.Where("episode_id = ?", value)
+	}
+	if value := strings.TrimSpace(query.ArtifactType); value != "" {
+		tx = tx.Where("artifact_type = ?", value)
+	}
+	if value := strings.TrimSpace(query.ProducerInvocationID); value != "" {
+		tx = tx.Where("producer_invocation_id = ?", value)
+	}
+	var total int64
+	if err := tx.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var items []model.Artifact
+	err = tx.Order("created_at desc, id desc").Offset(page.Offset()).Limit(page.PageSize).Find(&items).Error
+	return items, total, err
 }
