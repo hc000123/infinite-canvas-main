@@ -183,7 +183,7 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, inp
 	sourceSnapshot := map[string]any{}
 	skillID, skillVersionID, skillVersion, skillContentHash, skillSnapshotJSON := "", "", "", "", ""
 	if frozenRun != nil && strings.TrimSpace(frozenRun.SkillSnapshotJSON) != "" {
-		instructions, err := workflowSkillInstructionsFromSnapshot(frozenRun.SkillSnapshotJSON)
+		instructions, err := skillInstructionsFromSnapshot(frozenRun.SkillSnapshotJSON)
 		if err != nil {
 			return current, err
 		}
@@ -199,20 +199,20 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, inp
 		imageManifestJSON = frozenRun.ImageManifestJSON
 		sourceSnapshot = workflowSourceSnapshotFromRequest(frozenRun.RequestJSON)
 	} else {
-		if err := EnsureWorkflowSkillSeeds(); err != nil {
+		if err := EnsureSkillSeeds(); err != nil {
 			return current, err
 		}
-		resolvedSkill, err := ResolveWorkflowSkillForStage(stageID, detail.Run.ProjectID, input.SkillVersionID)
+		resolvedSkill, err := ResolveWorkflowStageSkillForRun(stageID, detail.Run.ProjectID, input.SkillVersionID)
 		if err != nil {
 			return current, err
 		}
-		if err := validateWorkflowSkillRuntimeInput(userID, detail, stageID, inputArtifact, input, resolvedSkill.Package.Contract); err != nil {
+		if err := validateSkillRuntimeInput(userID, detail, stageID, inputArtifact, input, resolvedSkill.Package.InputContract); err != nil {
 			return current, err
 		}
-		systemPrompt += workflowSkillInstructions(resolvedSkill)
+		systemPrompt += skillInstructions(resolvedSkill)
 		skillID, skillVersionID = resolvedSkill.Skill.ID, resolvedSkill.Version.ID
 		skillVersion, skillContentHash = resolvedSkill.Version.Version, resolvedSkill.Version.ContentHash
-		skillSnapshotJSON = workflowSkillSnapshotJSON(resolvedSkill)
+		skillSnapshotJSON = buildSkillSnapshotJSON(resolvedSkill)
 	}
 	if context != nil {
 		sourceSnapshot = map[string]any{"shotId": context.ShotID, "promptInputHash": context.PromptInputHash}
@@ -314,11 +314,11 @@ func CompleteWorkflowStageAgentRun(run model.AgentRun) error {
 		}
 	}
 	if strings.TrimSpace(run.SkillSnapshotJSON) != "" {
-		contract, err := workflowSkillContractFromSnapshot(run.SkillSnapshotJSON)
+		contract, err := skillOutputContractFromSnapshot(run.SkillSnapshotJSON)
 		if err != nil {
 			report.add("output_schema", err.Error(), "")
 		} else {
-			appendWorkflowSkillSchemaIssues(content, contract, &report)
+			appendSkillSchemaIssues(content, contract, &report)
 		}
 	}
 	gate := workflowGateResult(workflowRun, stage, artifact, report, stamp)

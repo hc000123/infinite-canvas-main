@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -20,8 +19,11 @@ func TestWorkflowStageFreezesPublishedSkillSnapshot(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("run ok=%v err=%v", ok, err)
 	}
-	if run.SkillID != "workflow-skill-art" || run.SkillVersion != workflowSkillSeedVersion || run.SkillContentHash == "" || run.SkillSnapshotJSON == "" {
+	if run.SkillID != "skill-system-workflow-art" || run.SkillVersion != skillSeedVersion || run.SkillContentHash == "" || run.SkillSnapshotJSON == "" {
 		t.Fatalf("run skill snapshot=%+v", run)
+	}
+	if !strings.Contains(run.SkillSnapshotJSON, `"manifest"`) || !strings.Contains(run.SkillSnapshotJSON, `"outputContract"`) {
+		t.Fatalf("snapshot missing generic contracts: %s", run.SkillSnapshotJSON)
 	}
 	if !strings.Contains(run.RequestJSON, "当前阶段 Skill") || !strings.Contains(run.RequestJSON, run.SkillContentHash) {
 		t.Fatalf("request did not freeze skill instructions: %s", run.RequestJSON)
@@ -36,23 +38,19 @@ func TestWorkflowStageRetryKeepsOriginalSkillSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	original, _, _ := repository.GetAgentRun(stage.AgentRunID)
-	baseVersion, packageValue, err := GetWorkflowSkillVersionPackage(original.SkillVersionID)
+	baseVersion, packageValue, err := GetSkillVersionPackage(original.SkillVersionID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	packageValue.Files["SKILL.md"] = "这是替换版本。"
-	packageValue, err = NormalizeWorkflowSkillPackage(packageValue.Files, packageValue.Contract)
+	packageValue, err = NormalizeSkillPackage(packageValue)
 	if err != nil {
 		t.Fatal(err)
 	}
-	filesJSON, _ := json.Marshal(packageValue.Files)
-	contractJSON, _ := json.Marshal(packageValue.Contract)
-	replacement := model.WorkflowSkillVersion{
-		ID: "workflow-skill-version-art-9.0.0", SkillID: baseVersion.SkillID, Version: "9.0.0",
-		Status: model.WorkflowSkillVersionPublished, FilesJSON: string(filesJSON), ContractJSON: string(contractJSON),
-		ContentHash: packageValue.ContentHash, CreatedAt: now(), UpdatedAt: now(), PublishedAt: now(),
-	}
-	if err := repository.CreateWorkflowSkillVersion(replacement); err != nil {
+	replacement := skillVersionFromPackage("skill-version-art-9.0.0", baseVersion.SkillID, "9.0.0", "admin-1", now(), packageValue)
+	replacement.Status = model.SkillVersionPublished
+	replacement.PublishedAt = now()
+	if err := repository.CreateSkillVersion(replacement); err != nil {
 		t.Fatal(err)
 	}
 	if err := repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{

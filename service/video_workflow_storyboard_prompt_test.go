@@ -49,10 +49,10 @@ func TestValidateStoryboardArtifactAcceptsAsciiContractColons(t *testing.T) {
 
 func TestWorkflowStagePromptGetsDomainRulesFromPublishedSkill(t *testing.T) {
 	setupAITaskTestDB(t)
-	if err := EnsureWorkflowSkillSeeds(); err != nil {
+	if err := EnsureSkillSeeds(); err != nil {
 		t.Fatal(err)
 	}
-	resolved, err := ResolvePublishedWorkflowSkill(WorkflowSkillStageVideo, "")
+	resolved, err := ResolveWorkflowStageSkill(WorkflowSkillStageVideo, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestWorkflowStagePromptGetsDomainRulesFromPublishedSkill(t *testing.T) {
 	if strings.Contains(basePrompt, "continuity_reference") {
 		t.Fatal("base transport prompt contains Skill domain rule")
 	}
-	finalPrompt := basePrompt + workflowSkillInstructions(resolved)
+	finalPrompt := basePrompt + skillInstructions(resolved)
 	for _, field := range []string{"场景：", "声音：", "画面内容：", "限制：", "continuity_reference", "不得当作首帧"} {
 		if !strings.Contains(finalPrompt, field) {
 			t.Fatalf("final prompt missing %q", field)

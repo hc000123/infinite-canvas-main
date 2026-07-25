@@ -38,6 +38,19 @@ func UpsertWorkflowStageSkillBindingWithAudit(binding model.WorkflowStageSkillBi
 	})
 }
 
+func UpsertWorkflowStageSkillBindingWithSkillAudit(binding model.WorkflowStageSkillBinding, audit model.SkillAuditLog) error {
+	db, err := DB()
+	if err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := upsertWorkflowStageSkillBinding(tx, binding); err != nil {
+			return err
+		}
+		return tx.Create(&audit).Error
+	})
+}
+
 func PublishWorkflowSkillVersionBinding(version model.WorkflowSkillVersion, binding model.WorkflowStageSkillBinding, audit model.WorkflowSkillAuditLog) error {
 	db, err := DB()
 	if err != nil {
