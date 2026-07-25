@@ -269,10 +269,13 @@ func reserveAgentRunCredits(run *model.AgentRun) error {
 	if reserved > refunded || run.Credits <= 0 {
 		return nil
 	}
-	if err := ConsumeUserCreditsForTask(run.UserID, run.Model, run.Credits, "/agent-runs", run.ID); err != nil {
+	charged, err := ConsumeUserCreditsForTask(run.UserID, run.Model, run.Credits, "/agent-runs", run.ID)
+	if err != nil {
 		return err
 	}
-	run.CreditsReserved += run.Credits
+	if charged {
+		run.CreditsReserved += run.Credits
+	}
 	return nil
 }
 

@@ -234,7 +234,8 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		Fail(w, "AI 接口请求失败")
 		return
 	}
-	if err := service.ConsumeUserCreditsForTask(user.ID, modelName, credits, path, aiTask.ID); err != nil {
+	creditsCharged, err := service.ConsumeUserCreditsForTask(user.ID, modelName, credits, path, aiTask.ID)
+	if err != nil {
 		_ = service.MarkAITaskFailed(aiTask.ID, err.Error(), nil, "")
 		FailError(w, err)
 		return
@@ -245,6 +246,9 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 	}
 	refundAndFailTask := func(message string, payload []byte) {
 		_ = service.MarkAITaskFailed(aiTask.ID, message, payload, "application/json")
+		if !creditsCharged {
+			return
+		}
 		if err := service.RefundUserCreditsForTask(user.ID, modelName, credits, path, aiTask.ID); err != nil {
 			log.Printf("AI proxy refund credits failed: user=%s model=%s credits=%d err=%v", user.ID, modelName, credits, err)
 		}

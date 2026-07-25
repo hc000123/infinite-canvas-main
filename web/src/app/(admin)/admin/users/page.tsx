@@ -8,6 +8,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { AdminUser } from "@/services/api/admin";
+import { useUserStore } from "@/stores/use-user-store";
+import { adminUserCreditConfirm } from "./admin-user-credit-view";
 import { useAdminUsers } from "./use-admin-users";
 
 type UserFormValues = Partial<AdminUser> & { password?: string };
@@ -21,11 +23,13 @@ const statusOptions = [
 
 export default function AdminUsersPage() {
     const router = useRouter();
+    const actorRole = useUserStore((state) => (state.user?.role === "superadmin" ? "superadmin" : "admin"));
     const { users, keyword, page, pageSize, total, isLoading, searchUsers, changePage, changePageSize, resetFilters, refreshUsers, saveUser: saveAdminUser, adjustCredits, deleteUser } = useAdminUsers();
     const [form] = Form.useForm<UserFormValues>();
     const [keywordText, setKeywordText] = useState(keyword);
     const [editingUser, setEditingUser] = useState<Partial<AdminUser> | null>(null);
     const [deletingUser, setDeletingUser] = useState<AdminUser | null>(null);
+    const creditValue = Form.useWatch("credits", form) ?? 0;
 
     useEffect(() => setKeywordText(keyword), [keyword]);
 
@@ -43,7 +47,9 @@ export default function AdminUsersPage() {
 
     const saveCredits = async () => {
         if (!editingUser?.id) return;
-        await adjustCredits(editingUser.id, form.getFieldValue("credits") || 0);
+        const updated = await adjustCredits(editingUser.id, form.getFieldValue("credits") || 0);
+        setEditingUser(updated);
+        form.setFieldValue("credits", updated.credits);
     };
 
     const columns: ProColumns<AdminUser>[] = [
@@ -212,7 +218,7 @@ export default function AdminUsersPage() {
                     {editingUser?.id ? (
                         <>
                             <Divider style={{ margin: "4px 0 16px" }} />
-                            <Typography.Text strong>算力点调整</Typography.Text>
+                            <Typography.Text strong>{actorRole === "admin" ? "额度转移" : "算力点调整"}</Typography.Text>
                             <Row gutter={14}>
                                 <Col span={12}>
                                     <Form.Item label="算力点">
@@ -220,7 +226,14 @@ export default function AdminUsersPage() {
                                             <Form.Item name="credits" noStyle>
                                                 <InputNumber min={0} precision={0} style={{ width: "100%" }} />
                                             </Form.Item>
-                                            <Popconfirm title="调整算力点？" description="确认后会立即更新该用户可用算力点，并记录后台调整流水。" okText="确认调整" cancelText="取消" onConfirm={() => void saveCredits()}>
+                                            <Popconfirm
+                                                title={actorRole === "admin" ? "确认额度转移？" : "调整算力点？"}
+                                                description={adminUserCreditConfirm(actorRole, editingUser.credits || 0, creditValue)}
+                                                okText="确认调整"
+                                                cancelText="取消"
+                                                disabled={creditValue === (editingUser.credits || 0)}
+                                                onConfirm={() => void saveCredits()}
+                                            >
                                                 <Button>调整</Button>
                                             </Popconfirm>
                                         </Space.Compact>

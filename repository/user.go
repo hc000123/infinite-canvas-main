@@ -8,6 +8,17 @@ import (
 	"gorm.io/gorm"
 )
 
+var errCreditBalanceChanged = errors.New("credit balance changed")
+
+type CreditTransferInput struct {
+	Actor         model.User
+	Target        model.User
+	TargetCredits int
+	UpdatedAt     string
+	ActorLog      model.CreditLog
+	TargetLog     model.CreditLog
+}
+
 // ListUsers 分页查询用户。
 func ListUsers(q model.Query) ([]model.User, int64, error) {
 	db, err := DB()
@@ -238,6 +249,73 @@ func RefundUserCredits(id string, credits int, now string) (model.User, bool, er
 	}
 	user, ok, err := GetUserByID(id)
 	return user, ok && tx.RowsAffected > 0, err
+}
+
+func TransferUserCredits(input CreditTransferInput) (model.User, bool, error) {
+	db, err := DB()
+	if err != nil {
+		return model.User{}, false, err
+	}
+	actorCredits := input.Actor.Credits + input.Target.Credits - input.TargetCredits
+	if input.TargetCredits < 0 || actorCredits < 0 {
+		return model.User{}, false, nil
+	}
+	result := model.User{}
+	err = db.Transaction(func(tx *gorm.DB) error {
+		actorUpdate := tx.Model(&model.User{}).
+			Where("id = ? AND role = ? AND credits = ?", input.Actor.ID, model.UserRoleAdmin, input.Actor.Credits).
+			Updates(map[string]any{"credits": actorCredits, "updated_at": input.UpdatedAt})
+		if actorUpdate.Error != nil {
+			return actorUpdate.Error
+		}
+		if actorUpdate.RowsAffected != 1 {
+			return errCreditBalanceChanged
+		}
+		targetUpdate := tx.Model(&model.User{}).
+			Where("id = ? AND role = ? AND credits = ?", input.Target.ID, model.UserRoleUser, input.Target.Credits).
+			Updates(map[string]any{"credits": input.TargetCredits, "updated_at": input.UpdatedAt})
+		if targetUpdate.Error != nil {
+			return targetUpdate.Error
+		}
+		if targetUpdate.RowsAffected != 1 {
+			return errCreditBalanceChanged
+		}
+		if err := tx.Create(&[]model.CreditLog{input.ActorLog, input.TargetLog}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", input.Target.ID).First(&result).Error
+	})
+	if errors.Is(err, errCreditBalanceChanged) {
+		return model.User{}, false, nil
+	}
+	return result, err == nil, err
+}
+
+func SetUserCreditsWithLog(target model.User, credits int, stamp string, log model.CreditLog) (model.User, bool, error) {
+	db, err := DB()
+	if err != nil {
+		return model.User{}, false, err
+	}
+	result := model.User{}
+	err = db.Transaction(func(tx *gorm.DB) error {
+		update := tx.Model(&model.User{}).
+			Where("id = ? AND credits = ?", target.ID, target.Credits).
+			Updates(map[string]any{"credits": credits, "updated_at": stamp})
+		if update.Error != nil {
+			return update.Error
+		}
+		if update.RowsAffected != 1 {
+			return errCreditBalanceChanged
+		}
+		if err := tx.Create(&log).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", target.ID).First(&result).Error
+	})
+	if errors.Is(err, errCreditBalanceChanged) {
+		return model.User{}, false, nil
+	}
+	return result, err == nil, err
 }
 
 // SaveCreditLog 保存算力点变更流水。

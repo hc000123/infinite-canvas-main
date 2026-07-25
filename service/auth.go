@@ -354,30 +354,130 @@ func AdjustAdminUserCredits(actor model.AuthUser, id string, credits int) (model
 	if !model.IsAdminRole(actor.Role) {
 		return model.User{}, safeMessageError{message: "权限不足"}
 	}
-	user, ok, err := repository.GetUserByID(id)
+	if credits < 0 {
+		return model.User{}, safeMessageError{message: "算力点不能小于 0"}
+	}
+	account, ok, err := repository.GetUserByID(actor.ID)
 	if err != nil {
-		return user, err
+		return model.User{}, err
 	}
-	if !ok || user.Role != model.UserRoleUser {
-		return user, safeMessageError{message: "用户不存在或无权修改"}
+	if !ok || account.Role != actor.Role {
+		return model.User{}, safeMessageError{message: "管理员不存在或权限已变化"}
 	}
-	return AdjustUserCredits(id, credits)
+	target, ok, err := repository.GetUserByID(id)
+	if err != nil {
+		return target, err
+	}
+	if !ok {
+		return target, safeMessageError{message: "用户不存在"}
+	}
+	if model.IsSuperAdminRole(target.Role) {
+		return target, safeMessageError{message: "不能调整超级管理员算力点"}
+	}
+	if model.IsSuperAdminRole(account.Role) {
+		return adjustUserCreditsBySuperAdmin(account, target, credits)
+	}
+	if account.Role != model.UserRoleAdmin || target.Role != model.UserRoleUser {
+		return target, safeMessageError{message: "无权调整该账号算力点"}
+	}
+	return transferAdminCreditsToUser(account, target, credits)
 }
 
-func ConsumeUserCredits(userID string, modelName string, credits int, path string) error {
+func adjustUserCreditsBySuperAdmin(actor model.User, target model.User, credits int) (model.User, error) {
+	if target.Credits == credits {
+		target.Password = ""
+		return target, nil
+	}
+	stamp := now()
+	extra, _ := json.Marshal(map[string]string{"actorId": actor.ID, "direction": "direct_adjust"})
+	log := model.CreditLog{
+		ID: newID("credit"), UserID: target.ID, Type: model.CreditLogTypeAdminAdjust,
+		Amount: credits - target.Credits, Balance: credits, Remark: "超级管理员调整", Extra: string(extra), CreatedAt: stamp,
+	}
+	updated, changed, err := repository.SetUserCreditsWithLog(target, credits, stamp, log)
+	if err != nil {
+		return model.User{}, err
+	}
+	if !changed {
+		return model.User{}, safeMessageError{message: "账号余额已变化，请重试"}
+	}
+	updated.Password = ""
+	return updated, nil
+}
+
+func transferAdminCreditsToUser(actor model.User, target model.User, credits int) (model.User, error) {
+	delta := credits - target.Credits
+	if delta == 0 {
+		target.Password = ""
+		return target, nil
+	}
+	if delta > actor.Credits {
+		return model.User{}, safeMessageError{message: "管理员算力点不足"}
+	}
+	stamp := now()
+	relatedID := newID("transfer")
+	direction := "allocate"
+	actorRemark := "向用户转移算力点"
+	targetRemark := "管理员转入算力点"
+	if delta < 0 {
+		direction = "reclaim"
+		actorRemark = "从用户收回算力点"
+		targetRemark = "管理员收回算力点"
+	}
+	actorExtra, _ := json.Marshal(map[string]string{"actorId": actor.ID, "counterpartyId": target.ID, "direction": direction})
+	targetExtra, _ := json.Marshal(map[string]string{"actorId": actor.ID, "counterpartyId": actor.ID, "direction": direction})
+	updated, changed, err := repository.TransferUserCredits(repository.CreditTransferInput{
+		Actor: actor, Target: target, TargetCredits: credits, UpdatedAt: stamp,
+		ActorLog: model.CreditLog{
+			ID: newID("credit"), UserID: actor.ID, Type: model.CreditLogTypeAdminAdjust, Amount: -delta,
+			Balance: actor.Credits - delta, RelatedID: relatedID, Remark: actorRemark, Extra: string(actorExtra), CreatedAt: stamp,
+		},
+		TargetLog: model.CreditLog{
+			ID: newID("credit"), UserID: target.ID, Type: model.CreditLogTypeAdminAdjust, Amount: delta,
+			Balance: credits, RelatedID: relatedID, Remark: targetRemark, Extra: string(targetExtra), CreatedAt: stamp,
+		},
+	})
+	if err != nil {
+		return model.User{}, err
+	}
+	if !changed {
+		latest, ok, readErr := repository.GetUserByID(actor.ID)
+		if readErr != nil {
+			return model.User{}, readErr
+		}
+		if ok && delta > latest.Credits {
+			return model.User{}, safeMessageError{message: "管理员算力点不足"}
+		}
+		return model.User{}, safeMessageError{message: "账号余额已变化，请重试"}
+	}
+	updated.Password = ""
+	return updated, nil
+}
+
+func ConsumeUserCredits(userID string, modelName string, credits int, path string) (bool, error) {
 	return ConsumeUserCreditsForTask(userID, modelName, credits, path, "")
 }
 
-func ConsumeUserCreditsForTask(userID string, modelName string, credits int, path string, relatedID string) error {
+func ConsumeUserCreditsForTask(userID string, modelName string, credits int, path string, relatedID string) (bool, error) {
 	if credits <= 0 {
-		return nil
+		return false, nil
+	}
+	account, ok, err := repository.GetUserByID(userID)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return false, safeMessageError{message: "用户不存在"}
+	}
+	if model.IsSuperAdminRole(account.Role) {
+		return false, nil
 	}
 	user, ok, err := repository.ConsumeUserCredits(userID, credits, now())
 	if err != nil {
-		return err
+		return false, err
 	}
 	if !ok {
-		return safeMessageError{message: "算力点不足"}
+		return false, safeMessageError{message: "算力点不足"}
 	}
 	extra, _ := json.Marshal(map[string]string{"model": modelName, "path": path})
 	_, err = repository.SaveCreditLog(model.CreditLog{
@@ -391,7 +491,7 @@ func ConsumeUserCreditsForTask(userID string, modelName string, credits int, pat
 		Extra:     string(extra),
 		CreatedAt: now(),
 	})
-	return err
+	return true, err
 }
 
 func RefundUserCredits(userID string, modelName string, credits int, path string) error {

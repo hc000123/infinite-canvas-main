@@ -106,7 +106,7 @@ func TestAITaskFailureRefundUsesTaskRelatedID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateAITask returned error: %v", err)
 	}
-	if err := ConsumeUserCreditsForTask("user-task-refund", "chat-model", 4, "/chat/completions", task.ID); err != nil {
+	if _, err := ConsumeUserCreditsForTask("user-task-refund", "chat-model", 4, "/chat/completions", task.ID); err != nil {
 		t.Fatalf("ConsumeUserCreditsForTask returned error: %v", err)
 	}
 	if err := MarkAITaskFailed(task.ID, "upstream failed", []byte(`{"error":{"message":"failed"}}`), "application/json"); err != nil {
@@ -411,7 +411,7 @@ func TestGetAdminAITaskDetailReturnsUserLogsAndSanitizedPayloads(t *testing.T) {
 		RequestJSON:  SanitizeAIJSON([]byte(`{"api_key":"sk-secret","prompt":"保留"}`), "application/json"),
 		ResponseJSON: SanitizeAIJSON([]byte(`{"b64_json":"data:image/png;base64,AAAA"}`), "application/json"),
 	})
-	if err := ConsumeUserCreditsForTask("user-detail", "image-model", 2, "/images/generations", task.ID); err != nil {
+	if _, err := ConsumeUserCreditsForTask("user-detail", "image-model", 2, "/images/generations", task.ID); err != nil {
 		t.Fatalf("ConsumeUserCreditsForTask returned error: %v", err)
 	}
 
@@ -485,6 +485,46 @@ func TestAdminRefundAITaskRefundsFailedTaskAndBlocksRepeatedRefund(t *testing.T)
 	}
 }
 
+func TestAdminRefundAITaskDoesNotCreditExemptSuperAdmin(t *testing.T) {
+	setupAITaskTestDB(t)
+	user, err := repository.SaveUser(model.User{
+		ID: "super-task-refund", Username: "super-task-refund", Role: model.UserRoleSuperAdmin,
+		Status: model.UserStatusActive, Credits: 0, AffCode: "SUPERREFUND", CreatedAt: now(), UpdatedAt: now(),
+	})
+	if err != nil {
+		t.Fatalf("SaveUser returned error: %v", err)
+	}
+	task, err := CreateAITask(CreateAITaskInput{
+		UserID: user.ID, TaskType: "video", Provider: "cloud", Protocol: "ark", Model: "video-model",
+		Path: "/videos", Credits: 300, RequestBody: []byte(`{"model":"video-model"}`), ContentType: "application/json",
+	})
+	if err != nil {
+		t.Fatalf("CreateAITask returned error: %v", err)
+	}
+	if err := MarkAITaskFailed(task.ID, "upstream failed", nil, ""); err != nil {
+		t.Fatalf("MarkAITaskFailed returned error: %v", err)
+	}
+	refunded, err := RefundAdminAITask(task.ID)
+	if err != nil {
+		t.Fatalf("RefundAdminAITask returned error: %v", err)
+	}
+	if refunded.CreditsRefunded != 0 || refunded.RefundedAt == "" {
+		t.Fatalf("refunded task=%#v", refunded)
+	}
+	assertAITaskUserCredits(t, user.ID, 0)
+	if count, err := repository.CountCreditLogsByRelatedIDAndType(task.ID, model.CreditLogTypeAIRefund); err != nil || count != 0 {
+		t.Fatalf("refund logs=%d err=%v", count, err)
+	}
+}
+
+func assertAITaskUserCredits(t *testing.T, id string, want int) {
+	t.Helper()
+	user, ok, err := repository.GetUserByID(id)
+	if err != nil || !ok || user.Credits != want {
+		t.Fatalf("user=%#v ok=%v err=%v want credits=%d", user, ok, err, want)
+	}
+}
+
 func setupVideoAITaskWithConsumedCredits(t *testing.T, upstreamTaskID string, credits int) model.AITask {
 	t.Helper()
 	setupAITaskTestDB(t)
@@ -516,7 +556,7 @@ func setupVideoAITaskWithConsumedCredits(t *testing.T, upstreamTaskID string, cr
 	if err != nil {
 		t.Fatalf("CreateAITask returned error: %v", err)
 	}
-	if err := ConsumeUserCreditsForTask(userID, "ep-test", credits, "/videos", task.ID); err != nil {
+	if _, err := ConsumeUserCreditsForTask(userID, "ep-test", credits, "/videos", task.ID); err != nil {
 		t.Fatalf("ConsumeUserCreditsForTask returned error: %v", err)
 	}
 	if err := MarkAITaskArkCreated(task.ID, []byte(`{"id":"`+upstreamTaskID+`","status":"queued","raw_status":"Queued"}`)); err != nil {

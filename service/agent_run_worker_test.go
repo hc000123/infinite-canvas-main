@@ -66,6 +66,31 @@ func TestAgentRunWorkerSkipsCancelledRunWithoutCharge(t *testing.T) {
 	fixture.assertCreditLogs(t, run.ID, 0, 0)
 }
 
+func TestAgentRunWorkerKeepsSuperAdminUsageWithoutBalanceReservation(t *testing.T) {
+	fixture := newAgentRunWorkerFixture(t, http.StatusOK, `{"choices":[{"message":{"content":"{\"items\":[]}"}}]}`)
+	user, ok, err := repository.GetUserByID("user-1")
+	if err != nil || !ok {
+		t.Fatalf("GetUserByID ok=%v err=%v", ok, err)
+	}
+	user.Role = model.UserRoleSuperAdmin
+	user.Credits = 0
+	if _, err := repository.SaveUser(user); err != nil {
+		t.Fatalf("SaveUser returned error: %v", err)
+	}
+	run := fixture.queueRun(t, "worker-superadmin")
+	if err := fixture.worker.ProcessOne(context.Background()); err != nil {
+		t.Fatalf("ProcessOne returned error: %v", err)
+	}
+	saved := fixture.getRun(t, run.ID)
+	if saved.Status != model.AgentRunStatusNeedsReview || saved.Credits <= 0 || saved.CreditsReserved != 0 || saved.CreditsRefunded != 0 {
+		t.Fatalf("saved=%#v", saved)
+	}
+	if user, ok, err = repository.GetUserByID("user-1"); err != nil || !ok || user.Credits != 0 {
+		t.Fatalf("superadmin after run=%#v ok=%v err=%v", user, ok, err)
+	}
+	fixture.assertCreditLogs(t, run.ID, 0, 0)
+}
+
 func TestAgentRunWorkerCompletesWorkflowStageArtifact(t *testing.T) {
 	fixture := newAgentRunWorkerFixture(t, http.StatusOK, `{"choices":[{"message":{"content":"{\"items\":[{\"logicalAssetId\":\"CHAR-001\",\"kind\":\"character\",\"name\":\"阿宁\",\"scriptEvidence\":\"阿宁进入房间\",\"description\":\"进入房间的年轻角色\"}]}"}}]}`)
 	detail, err := EnsureWorkflowRun("user-1", EnsureWorkflowRunInput{
