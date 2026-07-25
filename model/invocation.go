@@ -102,15 +102,15 @@ type InvocationArtifactRef struct {
 	UserID            string `json:"userId" gorm:"size:128;index"`
 	InvocationID      string `json:"invocationId" gorm:"size:128;index;uniqueIndex:idx_invocation_artifact_ref,priority:1"`
 	Direction         string `json:"direction" gorm:"size:16;index;uniqueIndex:idx_invocation_artifact_ref,priority:2"`
-	BindingName       string `json:"bindingName" gorm:"size:128;uniqueIndex:idx_invocation_artifact_ref,priority:4"`
+	BindingName       string `json:"bindingName" gorm:"size:128;uniqueIndex:idx_invocation_artifact_ref,priority:5"`
 	ArtifactID        string `json:"artifactId" gorm:"size:128;index"`
 	ArtifactHash      string `json:"artifactHash" gorm:"size:80;index"`
 	ArtifactType      string `json:"artifactType" gorm:"size:80;index"`
 	SchemaVersion     string `json:"schemaVersion" gorm:"size:64"`
 	SchemaContentHash string `json:"schemaContentHash" gorm:"size:80;index"`
-	Revision          int    `json:"revision"`
-	Attempt           int    `json:"attempt" gorm:"uniqueIndex:idx_invocation_artifact_ref,priority:3"`
-	Ordinal           int    `json:"ordinal" gorm:"uniqueIndex:idx_invocation_artifact_ref,priority:5"`
+	Revision          int    `json:"revision" gorm:"uniqueIndex:idx_invocation_artifact_ref,priority:3"`
+	Attempt           int    `json:"attempt" gorm:"uniqueIndex:idx_invocation_artifact_ref,priority:4"`
+	Ordinal           int    `json:"ordinal" gorm:"uniqueIndex:idx_invocation_artifact_ref,priority:6"`
 	CreatedAt         string `json:"createdAt"`
 }
 

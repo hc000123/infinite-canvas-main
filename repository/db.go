@@ -94,6 +94,10 @@ func DB() (*gorm.DB, error) {
 		if dbErr != nil {
 			return
 		}
+		dbErr = ensureInvocationArtifactRefIndex(db)
+		if dbErr != nil {
+			return
+		}
 		dbErr = cleanupLegacyBuiltinPrompts(db)
 		if dbErr != nil {
 			return
@@ -101,6 +105,29 @@ func DB() (*gorm.DB, error) {
 		dbErr = seedSystemPrompts(db)
 	})
 	return db, dbErr
+}
+
+func ensureInvocationArtifactRefIndex(database *gorm.DB) error {
+	const indexName = "idx_invocation_artifact_ref"
+	want := []string{"invocation_id", "direction", "revision", "attempt", "binding_name", "ordinal"}
+	indexes, err := database.Migrator().GetIndexes(&model.InvocationArtifactRef{})
+	if err != nil {
+		return err
+	}
+	for _, index := range indexes {
+		if index.Name() != indexName {
+			continue
+		}
+		unique, known := index.Unique()
+		if sameIndexColumns(index.Columns(), want) && known && unique {
+			return nil
+		}
+		if err := database.Migrator().DropIndex(&model.InvocationArtifactRef{}, indexName); err != nil {
+			return err
+		}
+		break
+	}
+	return database.Migrator().CreateIndex(&model.InvocationArtifactRef{}, indexName)
 }
 
 func ensureSkillOwnerNameIndex(database *gorm.DB) error {

@@ -159,8 +159,8 @@ func AppendInvocationPreflightRevision(run model.InvocationRun, revision model.I
 	}
 	return database.Transaction(func(tx *gorm.DB) error {
 		result := tx.Model(&model.InvocationRun{}).
-			Where("id = ? AND user_id = ? AND status IN ? AND latest_revision = ? AND latest_attempt = ?", run.ID, run.UserID, allowedFrom, revision.Revision-1, run.LatestAttempt).
-			Updates(invocationHeaderUpdates(run))
+			Where("id = ? AND user_id = ? AND status IN ? AND latest_revision = ? AND latest_attempt = ? AND (project_id = ? OR project_id = '') AND (episode_id = ? OR episode_id = '')", run.ID, run.UserID, allowedFrom, revision.Revision-1, run.LatestAttempt, run.ProjectID, run.EpisodeID).
+			Updates(invocationPreflightHeaderUpdates(run))
 		if result.Error != nil {
 			return result.Error
 		}
@@ -780,6 +780,12 @@ func isSQLiteContention(database *gorm.DB, err error) bool {
 
 func invocationHeaderUpdates(run model.InvocationRun) map[string]any {
 	return map[string]any{"request_hash": run.RequestHash, "status": run.Status, "latest_revision": run.LatestRevision, "latest_attempt": run.LatestAttempt, "reviewed_attempt": run.ReviewedAttempt, "reviewed_artifact_set_hash": run.ReviewedArtifactSetHash, "aggregate_error_summary": run.AggregateErrorSummary, "updated_at": run.UpdatedAt}
+}
+
+func invocationPreflightHeaderUpdates(run model.InvocationRun) map[string]any {
+	updates := invocationHeaderUpdates(run)
+	updates["project_id"], updates["episode_id"] = run.ProjectID, run.EpisodeID
+	return updates
 }
 
 func validateRevisionEnvelope(run model.InvocationRun, revision model.InvocationPreflightRevision, refs []model.InvocationArtifactRef, event model.InvocationEvent) error {

@@ -3,6 +3,9 @@ package service
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/basketikun/infinite-canvas/model"
+	"github.com/basketikun/infinite-canvas/repository"
 )
 
 func TestInvocationContractsKeepCallerDataSeparateFromTrustedInstructions(t *testing.T) {
@@ -25,4 +28,101 @@ func TestInvocationContractsKeepCallerDataSeparateFromTrustedInstructions(t *tes
 	if trace.FinalSkillVersionID != trace.Candidates[0].SkillVersionID || trace.Candidates[0].Score != 10000 {
 		t.Fatal("invalid route trace contract")
 	}
+}
+
+type invocationSkillSeed struct {
+	ID, VersionID, Version string
+	OwnerType              model.SkillOwnerType
+	Recommended            bool
+	ProjectTags            []string
+	Cost                   string
+	Mutate                 func(*SkillPackage)
+	MutateAfterNormalize   func(*SkillPackage)
+}
+
+func setupInvocationServiceTest(t *testing.T) {
+	t.Helper()
+	setupAITaskTestDB(t)
+	if err := EnsureCoreArtifactSchemas(); err != nil {
+		t.Fatal(err)
+	}
+	_, err := SaveSettings(model.Settings{
+		Public:  model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{AvailableModels: []string{"text-test"}, DefaultTextModel: "text-test"}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{{ID: "text-channel", Protocol: string(model.ModelProtocolOpenAI), Name: "text", BaseURL: "https://example.invalid/v1", APIKey: "test-key", Models: []string{"text-test"}, Capabilities: []string{"text"}, Enabled: true}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustCreateInvocationArtifact(t *testing.T, userID, projectID, episodeID, artifactType, payload string) ArtifactEnvelope {
+	t.Helper()
+	items, envelopes, err := buildProducedArtifacts(userID, []CreateArtifactInput{{
+		ArtifactType: artifactType, SchemaVersion: "1.0.0", ProjectID: projectID, EpisodeID: episodeID,
+		ProducerInvocationID: "fixture-producer", ProducerAttempt: 1, ProducerSkillID: "fixture-skill", Payload: json.RawMessage(payload),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.CreateArtifacts(items); err != nil {
+		t.Fatal(err)
+	}
+	return envelopes[0]
+}
+
+func seedInvocationSkill(t *testing.T, seed invocationSkillSeed) (model.SkillDefinition, model.SkillVersion) {
+	t.Helper()
+	owner := seed.OwnerType
+	if owner == "" {
+		owner = model.SkillOwnerSystem
+	}
+	skill := model.SkillDefinition{ID: seed.ID, Name: seed.ID, OwnerType: owner, Enabled: true, CreatedAt: now(), UpdatedAt: now()}
+	if owner == model.SkillOwnerProject {
+		skill.OwnerUserID, skill.OwnerProjectID = "user-1", "project-1"
+	}
+	skill, version := seedInvocationSkillVersion(t, skill, seed)
+	if seed.Recommended {
+		skill.RecommendedVersionID = version.ID
+	} else if skill.RecommendedVersionID == "" {
+		skill.RecommendedVersionID = version.ID
+	}
+	if err := repository.CreateSkillAggregate(skill, version); err != nil {
+		t.Fatal(err)
+	}
+	return skill, version
+}
+
+func seedInvocationSkillVersion(t *testing.T, skill model.SkillDefinition, seed invocationSkillSeed) (model.SkillDefinition, model.SkillVersion) {
+	t.Helper()
+	pkg := validSkillTestPackage()
+	pkg.Manifest.Capabilities = []string{"script.create"}
+	pkg.Manifest.InputArtifactTypes = []string{"source_text"}
+	pkg.Manifest.OutputArtifactTypes = []string{"production_script"}
+	pkg.Manifest.SchemaCompatibility = map[string]string{"source_text": ">=1.0 <2.0"}
+	pkg.Manifest.ProjectTags = seed.ProjectTags
+	pkg.InputContract.ArtifactInputs = []ArtifactInputSpec{{BindingName: "source", ArtifactType: "source_text", Required: true, Min: 1, Max: 1, SchemaConstraint: ">=1.0 <2.0"}}
+	pkg.OutputContract.ArtifactOutputs = []ArtifactOutputSpec{{BindingName: "script", ArtifactType: "production_script", Min: 1, Max: 1, SchemaVersion: "1.0.0"}}
+	pkg.OutputContract.Schema = map[string]any{"type": "object", "additionalProperties": true}
+	if seed.Cost != "" {
+		pkg.Manifest.EstimatedCostClass = seed.Cost
+	}
+	if seed.Mutate != nil {
+		seed.Mutate(&pkg)
+	}
+	normalized, err := NormalizeSkillPackage(pkg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seed.MutateAfterNormalize != nil {
+		seed.MutateAfterNormalize(&normalized)
+		normalized.ContentHash = skillPackageHash(normalized)
+	}
+	version := skillVersionFromPackage(seed.VersionID, skill.ID, seed.Version, "user-1", now(), normalized)
+	version.Status = model.SkillVersionPublished
+	if _, ok, _ := repository.GetSkillDefinition(skill.ID); ok {
+		if err := repository.CreateSkillVersion(version); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return skill, version
 }

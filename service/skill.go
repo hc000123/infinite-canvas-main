@@ -14,6 +14,16 @@ type ResolvedSkill struct {
 	Package SkillPackage          `json:"package"`
 }
 
+// DecodeSkillManifest validates only the persisted manifest. It intentionally
+// does not decode FilesJSON or materialize absent legacy package fields.
+func DecodeSkillManifest(version model.SkillVersion) (SkillManifest, error) {
+	var manifest SkillManifest
+	if json.Unmarshal([]byte(version.ManifestJSON), &manifest) != nil {
+		return SkillManifest{}, safeMessageError{message: "Skill Manifest 损坏"}
+	}
+	return normalizeSkillManifest(manifest)
+}
+
 type SkillDraftInput struct {
 	Version string       `json:"version"`
 	Package SkillPackage `json:"package"`

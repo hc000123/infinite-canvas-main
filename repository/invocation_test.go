@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/basketikun/infinite-canvas/config"
 	"github.com/basketikun/infinite-canvas/model"
+	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -119,7 +121,7 @@ func TestInvocationTablesMigrateWithAggregateIndexes(t *testing.T) {
 		{&model.InvocationRun{}, "idx_invocation_run_idempotency", []string{"user_id", "idempotency_key"}},
 		{&model.InvocationPreflightRevision{}, "idx_invocation_revision", []string{"invocation_id", "revision"}},
 		{&model.InvocationAttempt{}, "idx_invocation_attempt", []string{"invocation_id", "attempt"}},
-		{&model.InvocationArtifactRef{}, "idx_invocation_artifact_ref", []string{"invocation_id", "direction", "attempt", "binding_name", "ordinal"}},
+		{&model.InvocationArtifactRef{}, "idx_invocation_artifact_ref", []string{"invocation_id", "direction", "revision", "attempt", "binding_name", "ordinal"}},
 		{&model.InvocationGateResult{}, "idx_invocation_gate", []string{"invocation_id", "attempt", "execution_ordinal", "layer", "validator_id", "artifact_hash"}},
 		{&model.InvocationReview{}, "idx_invocation_review", []string{"invocation_id", "attempt", "artifact_set_hash", "decision"}},
 		{&model.InvocationApplyAttempt{}, "idx_invocation_apply", []string{"user_id", "invocation_id", "idempotency_key"}},
@@ -141,6 +143,41 @@ func TestInvocationTablesMigrateWithAggregateIndexes(t *testing.T) {
 			t.Fatalf("missing unique index %s on %v", check.name, check.columns)
 		}
 	}
+}
+
+func TestInvocationArtifactRefIndexMigratesLegacyWithoutRevision(t *testing.T) {
+	setupRepositoryTestDB(t)
+	legacy, err := gorm.Open(sqlite.Open(config.Cfg.DatabaseDSN), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.AutoMigrate(&model.InvocationArtifactRef{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.Migrator().DropIndex(&model.InvocationArtifactRef{}, "idx_invocation_artifact_ref"); err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.Exec(`CREATE UNIQUE INDEX idx_invocation_artifact_ref ON invocation_artifact_refs(invocation_id,direction,attempt,binding_name,ordinal)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if sqlDB, err := legacy.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
+	database, err := DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexes, err := database.Migrator().GetIndexes(&model.InvocationArtifactRef{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"invocation_id", "direction", "revision", "attempt", "binding_name", "ordinal"}
+	for _, index := range indexes {
+		if index.Name() == "idx_invocation_artifact_ref" && sameIndexColumns(index.Columns(), want) {
+			return
+		}
+	}
+	t.Fatal("legacy invocation Artifact ref index was not replaced")
 }
 
 func TestInvocationModelsDeclareOnlyTheSevenPlannedUniqueIndexes(t *testing.T) {
@@ -225,6 +262,35 @@ func TestAppendInvocationPreflightRevisionIsImmutable(t *testing.T) {
 	saved, _, _ := GetUserInvocation(run.UserID, run.ID)
 	if saved.RequestHash != revision.RequestHash {
 		t.Fatalf("header request hash=%s", saved.RequestHash)
+	}
+}
+
+func TestAppendInvocationPreflightRevisionAtomicallyFreezesEmptyCoordinates(t *testing.T) {
+	setupRepositoryTestDB(t)
+	run := createInvocationFixture(t, "invocation-coordinate-freeze", model.InvocationStatusBlocked)
+	database, _ := DB()
+	if err := database.Model(&model.InvocationRun{}).Where("id = ?", run.ID).Updates(map[string]any{"project_id": "", "episode_id": ""}).Error; err != nil {
+		t.Fatal(err)
+	}
+	next := run
+	next.ProjectID, next.EpisodeID = "project-1", "episode-1"
+	next.RequestHash, next.LatestRevision = "coordinate-hash-2", 2
+	revision := model.InvocationPreflightRevision{ID: "coordinate-revision-2", UserID: run.UserID, InvocationID: run.ID, Revision: 2, RequestHash: next.RequestHash, CreatedAt: run.CreatedAt}
+	event := model.InvocationEvent{UserID: run.UserID, InvocationID: run.ID, Type: "preflight.revised", Revision: 2, CreatedAt: run.CreatedAt}
+	if err := AppendInvocationPreflightRevision(next, revision, nil, event, model.InvocationStatusBlocked); err != nil {
+		t.Fatal(err)
+	}
+	saved, _, _ := GetUserInvocation(run.UserID, run.ID)
+	if saved.ProjectID != next.ProjectID || saved.EpisodeID != next.EpisodeID {
+		t.Fatalf("coordinates were not persisted with revision: %+v", saved)
+	}
+
+	changed := next
+	changed.ProjectID, changed.RequestHash, changed.LatestRevision = "project-2", "coordinate-hash-3", 3
+	revision.ID, revision.Revision, revision.RequestHash = "coordinate-revision-3", 3, changed.RequestHash
+	event.Revision = 3
+	if err := AppendInvocationPreflightRevision(changed, revision, nil, event, next.Status); !errors.Is(err, ErrInvocationTransitionConflict) {
+		t.Fatalf("non-empty coordinates changed: %v", err)
 	}
 }
 

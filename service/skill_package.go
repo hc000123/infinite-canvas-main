@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
@@ -131,6 +132,33 @@ func ValidateInvocableSkillPackage(value SkillPackage) (SkillPackage, error) {
 		}
 	}
 	return normalized, nil
+}
+
+// ValidateSkillArtifactContracts validates registry-dependent invocation
+// contracts without requiring a Skill schema to be byte-identical to a core
+// schema. Completion validates output against both frozen schemas.
+func ValidateSkillArtifactContracts(value SkillPackage) error {
+	for _, input := range value.InputContract.ArtifactInputs {
+		if _, err := semver.NewConstraint(strings.TrimSpace(input.SchemaConstraint)); err != nil {
+			return safeMessageError{message: "Artifact 输入 Schema 兼容范围无效"}
+		}
+	}
+	for _, output := range value.OutputContract.ArtifactOutputs {
+		schema, err := ResolveArtifactSchema(output.ArtifactType, output.SchemaVersion)
+		if err != nil {
+			if strings.Contains(err.Error(), "不存在") || strings.Contains(err.Error(), "哈希") || strings.Contains(err.Error(), "损坏") {
+				return safeMessageError{message: "Artifact 输出缺少已注册 Core Schema"}
+			}
+			return err
+		}
+		if !schema.Core {
+			return safeMessageError{message: "Artifact 输出缺少已注册 Core Schema"}
+		}
+	}
+	if _, err := compileSkillOutputSchema(value.OutputContract); err != nil {
+		return safeMessageError{message: "Skill 输出 Schema 无效：" + err.Error()}
+	}
+	return nil
 }
 
 func DecodeSkillPackage(version model.SkillVersion) (SkillPackage, error) {
