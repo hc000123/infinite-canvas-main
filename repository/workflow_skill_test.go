@@ -6,14 +6,14 @@ import (
 	"github.com/basketikun/infinite-canvas/model"
 )
 
-func TestWorkflowSkillVersionAndScopedBinding(t *testing.T) {
+func TestWorkflowStageSkillBindingPrecedence(t *testing.T) {
 	setupRepositoryTestDB(t)
-	skill := model.WorkflowSkill{ID: "skill-art", Name: "美术设计", StageKey: "art", Enabled: true}
-	version := model.WorkflowSkillVersion{
+	skill := model.SkillDefinition{ID: "skill-art", Name: "美术设计", OwnerType: model.SkillOwnerSystem, Enabled: true}
+	version := model.SkillVersion{
 		ID: "skillver-art-1", SkillID: skill.ID, Version: "1.0.0",
-		Status: model.WorkflowSkillVersionPublished, ContentHash: "hash-1",
+		Status: model.SkillVersionPublished, ContentHash: "hash-1",
 	}
-	if err := CreateWorkflowSkillAggregate(skill, version); err != nil {
+	if err := CreateSkillAggregate(skill, version); err != nil {
 		t.Fatal(err)
 	}
 	if err := SaveWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{
