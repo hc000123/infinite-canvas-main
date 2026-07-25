@@ -1,14 +1,14 @@
 "use client";
 
-import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { Avatar, Button, Card, Col, Flex, Form, Input, Modal, Row, Select, Space, Tag, Tooltip, Typography } from "antd";
+import { Avatar, Button, Card, Col, Flex, Form, Input, InputNumber, Modal, Row, Select, Space, Tag, Tooltip, Typography } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 
 import type { AdminAccount, AdminAccountUpdate } from "@/services/api/admin";
 import { useUserStore } from "@/stores/use-user-store";
-import { adminAccountProtection, adminRoleLabels, adminStatusLabels } from "./admin-account-view";
+import { adminAccountProtection, adminCreditDelta, adminCreditView, adminRoleLabels, adminStatusLabels } from "./admin-account-view";
 import { useAdminAccounts } from "./use-admin-accounts";
 
 type AccountForm = AdminAccountUpdate & { password?: string };
@@ -17,11 +17,13 @@ const statusOptions = Object.entries(adminStatusLabels).map(([value, label]) => 
 
 export default function AdminAccountsPage() {
     const actorId = useUserStore((state) => state.user?.id || "");
-    const { accounts, total, filters, isLoading, updateFilters, refresh, createAccount, updateAccount, resetPassword, deleteAccount } = useAdminAccounts();
+    const { accounts, total, filters, isLoading, updateFilters, refresh, createAccount, updateAccount, resetPassword, adjustCredits, deleteAccount } = useAdminAccounts();
     const [keyword, setKeyword] = useState(filters.keyword || "");
     const [editing, setEditing] = useState<AdminAccount | "create" | null>(null);
     const [passwordTarget, setPasswordTarget] = useState<AdminAccount | null>(null);
     const [deleting, setDeleting] = useState<AdminAccount | null>(null);
+    const [creditTarget, setCreditTarget] = useState<AdminAccount | null>(null);
+    const [creditValue, setCreditValue] = useState(0);
     const [form] = Form.useForm<AccountForm>();
     const [passwordForm] = Form.useForm<{ password: string }>();
     const activeSuperAdminCount = accounts.filter((item) => item.role === "superadmin" && item.status === "active").length;
@@ -60,17 +62,39 @@ export default function AdminAccountsPage() {
         },
         { title: "角色", dataIndex: "role", width: 130, render: (_, item) => <Tag color={item.role === "superadmin" ? "gold" : "blue"}>{adminRoleLabels[item.role]}</Tag> },
         { title: "状态", dataIndex: "status", width: 90, render: (_, item) => <Tag color={item.status === "active" ? "green" : "red"}>{adminStatusLabels[item.status]}</Tag> },
+        {
+            title: "算力余额",
+            dataIndex: "credits",
+            width: 120,
+            render: (_, item) => {
+                const view = adminCreditView(item);
+                return item.role === "superadmin" ? <Tag color="gold">{view.label}</Tag> : <Typography.Text>{view.label}</Typography.Text>;
+            },
+        },
         { title: "最近登录", dataIndex: "lastLoginAt", width: 180, render: (_, item) => <Typography.Text type="secondary">{item.lastLoginAt ? dayjs(item.lastLoginAt).format("YYYY-MM-DD HH:mm:ss") : "-"}</Typography.Text> },
         { title: "创建时间", dataIndex: "createdAt", width: 180, render: (_, item) => <Typography.Text type="secondary">{item.createdAt ? dayjs(item.createdAt).format("YYYY-MM-DD HH:mm:ss") : "-"}</Typography.Text> },
         {
             title: "操作",
             key: "actions",
-            width: 132,
+            width: 166,
             align: "right",
             render: (_, item) => {
                 const protection = adminAccountProtection(item, actorId, activeSuperAdminCount);
                 return (
                     <Space size={2}>
+                        {adminCreditView(item).adjustable ? (
+                            <Tooltip title="调整算力">
+                                <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<ThunderboltOutlined />}
+                                    onClick={() => {
+                                        setCreditTarget(item);
+                                        setCreditValue(item.credits);
+                                    }}
+                                />
+                            </Tooltip>
+                        ) : null}
                         <Tooltip title={protection.mutable ? "编辑" : protection.reason}>
                             <span>
                                 <Button type="text" size="small" disabled={!protection.mutable} icon={<EditOutlined />} onClick={() => setEditing(item)} />
@@ -184,6 +208,30 @@ export default function AdminAccountsPage() {
                         </Col>
                     </Row>
                 </Form>
+            </Modal>
+
+            <Modal
+                rootClassName="studio-modal"
+                title="调整管理员算力"
+                open={Boolean(creditTarget)}
+                onCancel={() => setCreditTarget(null)}
+                onOk={async () => {
+                    if (!creditTarget) return;
+                    await adjustCredits(creditTarget.id, creditValue);
+                    setCreditTarget(null);
+                }}
+                okText="确认调整"
+                cancelText="取消"
+            >
+                <Flex vertical gap={14}>
+                    <Typography.Text type="secondary">当前余额：{creditTarget?.credits ?? 0}</Typography.Text>
+                    <InputNumber min={0} precision={0} value={creditValue} onChange={(value) => setCreditValue(value ?? 0)} style={{ width: "100%" }} />
+                    {creditTarget ? (
+                        <Typography.Text>
+                            本次{adminCreditDelta(creditTarget.credits, creditValue).direction} {adminCreditDelta(creditTarget.credits, creditValue).amount} 算力点
+                        </Typography.Text>
+                    ) : null}
+                </Flex>
             </Modal>
 
             <Modal

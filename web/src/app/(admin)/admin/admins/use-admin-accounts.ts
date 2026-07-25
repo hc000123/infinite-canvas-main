@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App } from "antd";
 import { useState } from "react";
 
-import { createAdminAccount, deleteAdminAccount, fetchAdminAccounts, resetAdminAccountPassword, updateAdminAccount, type AdminAccountQuery, type AdminAccountUpdate } from "@/services/api/admin";
+import { adjustAdminUserCredits, createAdminAccount, deleteAdminAccount, fetchAdminAccounts, resetAdminAccountPassword, updateAdminAccount, type AdminAccountQuery, type AdminAccountUpdate } from "@/services/api/admin";
 import { useUserStore } from "@/stores/use-user-store";
 
 const pageSize = 20;
@@ -46,6 +46,14 @@ export function useAdminAccounts() {
         },
         onError: showError(message.error),
     });
+    const creditMutation = useMutation({
+        mutationFn: ({ id, credits }: { id: string; credits: number }) => adjustAdminUserCredits(token, id, credits),
+        onSuccess: async () => {
+            await invalidate();
+            message.success("管理员算力点已调整");
+        },
+        onError: showError(message.error),
+    });
     const updateFilters = (next: Partial<AdminAccountQuery>) =>
         setFilters((current) => ({ ...current, ...next, page: next.page ?? (next.keyword !== undefined || next.role !== undefined || next.status !== undefined || next.pageSize !== undefined ? 1 : current.page) }));
 
@@ -53,12 +61,13 @@ export function useAdminAccounts() {
         accounts: query.data?.items || [],
         total: query.data?.total || 0,
         filters,
-        isLoading: query.isFetching || createMutation.isPending || updateMutation.isPending || passwordMutation.isPending || deleteMutation.isPending,
+        isLoading: query.isFetching || createMutation.isPending || updateMutation.isPending || passwordMutation.isPending || deleteMutation.isPending || creditMutation.isPending,
         updateFilters,
         refresh: query.refetch,
         createAccount: createMutation.mutateAsync,
         updateAccount: (id: string, input: AdminAccountUpdate) => updateMutation.mutateAsync({ id, input }),
         resetPassword: (id: string, password: string) => passwordMutation.mutateAsync({ id, password }),
+        adjustCredits: (id: string, credits: number) => creditMutation.mutateAsync({ id, credits }),
         deleteAccount: deleteMutation.mutateAsync,
     };
 }
