@@ -21,6 +21,7 @@ type skillSeed struct {
 var skillSeedFS embed.FS
 
 const skillSeedVersion = "3.0.1"
+const skillInvocationSeedVersion = "3.1.0"
 
 var systemSkillSeedStageKeys = []string{
 	WorkflowSkillStageScript,
@@ -65,50 +66,77 @@ func ensureSkillSeed(seed skillSeed) error {
 	if err != nil {
 		return err
 	}
-	packageValue, err := buildWorkflowSkillSeedPackage(seed.StageKey, files)
+	legacyPackage, err := buildWorkflowSkillSeedPackage(seed.StageKey, files)
 	if err != nil {
 		return fmt.Errorf("normalize skill %s: %w", seed.StageKey, err)
 	}
-	manifestJSON, _ := json.Marshal(packageValue.Manifest)
-	filesJSON, _ := json.Marshal(packageValue.Files)
-	inputJSON, _ := json.Marshal(packageValue.InputContract)
-	outputJSON, _ := json.Marshal(packageValue.OutputContract)
-	gatesJSON, _ := json.Marshal(packageValue.QualityGateProfile)
+	invocationPackage, err := buildInvocationWorkflowSkillSeedPackage(seed.StageKey, files)
+	if err != nil {
+		return fmt.Errorf("normalize invocation skill %s: %w", seed.StageKey, err)
+	}
+	if err := validateWorkflowSkillSeedExample(invocationPackage); err != nil {
+		return fmt.Errorf("evaluate invocation skill %s: %w", seed.StageKey, err)
+	}
 	stamp := now()
 	skillID := "skill-system-workflow-" + seed.StageKey
-	versionID := "skill-version-system-workflow-" + seed.StageKey + "-" + skillSeedVersion
+	legacyVersionID := "skill-version-system-workflow-" + seed.StageKey + "-" + skillSeedVersion
+	invocationVersionID := "skill-version-system-workflow-" + seed.StageKey + "-" + skillInvocationSeedVersion
 	skill, exists, err := repository.GetSkillDefinition(skillID)
 	if err != nil {
 		return err
 	}
-	version := model.SkillVersion{
-		ID: versionID, SkillID: skillID, Version: skillSeedVersion, Status: model.SkillVersionPublished,
-		ManifestJSON: string(manifestJSON), FilesJSON: string(filesJSON), InputContractJSON: string(inputJSON),
-		OutputContractJSON: string(outputJSON), QualityGateProfileJSON: string(gatesJSON), ContentHash: packageValue.ContentHash,
-		CreatedBy: "system", PublishedAt: stamp, CreatedAt: stamp, UpdatedAt: stamp,
-	}
+	legacyVersion := publishedSeedSkillVersion(legacyVersionID, skillID, skillSeedVersion, stamp, legacyPackage)
+	invocationVersion := publishedSeedSkillVersion(invocationVersionID, skillID, skillInvocationSeedVersion, stamp, invocationPackage)
 	if !exists {
-		skill = model.SkillDefinition{ID: skillID, Name: seed.Name, Summary: seed.Summary, OwnerType: model.SkillOwnerSystem, Enabled: true, RecommendedVersionID: versionID, CreatedAt: stamp, UpdatedAt: stamp}
-		if err := repository.CreateSkillAggregate(skill, version); err != nil {
+		skill = model.SkillDefinition{
+			ID: skillID, Name: seed.Name, Summary: seed.Summary, OwnerType: model.SkillOwnerSystem,
+			Enabled: true, CreatedAt: stamp, UpdatedAt: stamp,
+		}
+		if err := repository.CreateSkillAggregate(skill, legacyVersion); err != nil {
 			return fmt.Errorf("seed skill %s: %w", seed.StageKey, err)
 		}
 	} else {
-		if _, ok, err := repository.GetSkillVersion(versionID); err != nil {
+		if _, ok, err := repository.GetSkillVersion(legacyVersionID); err != nil {
 			return err
 		} else if !ok {
-			if err := repository.CreateSkillVersion(version); err != nil {
+			if err := repository.CreateSkillVersion(legacyVersion); err != nil {
 				return fmt.Errorf("seed skill version %s: %w", seed.StageKey, err)
 			}
 		}
-		if skill.RecommendedVersionID == "" || strings.HasPrefix(skill.RecommendedVersionID, "skill-version-system-workflow-"+seed.StageKey+"-") {
-			skill.Name = seed.Name
-			skill.Summary = seed.Summary
-			skill.Enabled = true
-			skill.RecommendedVersionID = versionID
-			skill.UpdatedAt = stamp
-			if err := repository.SaveSkillDefinition(skill); err != nil {
-				return err
-			}
+	}
+	if _, ok, err := repository.GetSkillVersion(invocationVersionID); err != nil {
+		return err
+	} else if !ok {
+		if err := repository.CreateSkillVersion(invocationVersion); err != nil {
+			return fmt.Errorf("seed invocation skill version %s: %w", seed.StageKey, err)
+		}
+	}
+	evaluationID := "skill-evaluation-system-workflow-" + seed.StageKey + "-" + skillInvocationSeedVersion
+	if _, ok, err := repository.GetSkillEvaluation(evaluationID); err != nil {
+		return err
+	} else if !ok {
+		evaluation := model.SkillEvaluation{
+			ID: evaluationID, SkillVersionID: invocationVersionID, ContentHash: invocationPackage.ContentHash,
+			InputHash: "embedded-good-output", ResultJSON: `{"source":"embedded-good-output"}`,
+			GateJSON: `{"schema":"passed"}`, Status: "passed", CreatedBy: "system", CreatedAt: stamp, UpdatedAt: stamp,
+		}
+		if err := repository.CreateSkillEvaluation(evaluation); err != nil {
+			return fmt.Errorf("seed invocation skill evaluation %s: %w", seed.StageKey, err)
+		}
+	}
+	passed, err := repository.HasPassingSkillEvaluation(invocationVersionID, invocationPackage.ContentHash)
+	if err != nil {
+		return err
+	}
+	if passed && (skill.RecommendedVersionID == "" || strings.HasPrefix(skill.RecommendedVersionID, "skill-version-system-workflow-"+seed.StageKey+"-")) {
+		skill.Name = seed.Name
+		skill.Summary = seed.Summary
+		skill.OwnerUserID = ""
+		skill.Enabled = true
+		skill.RecommendedVersionID = invocationVersionID
+		skill.UpdatedAt = stamp
+		if err := repository.SaveSkillDefinition(skill); err != nil {
+			return err
 		}
 	}
 	binding, bound, err := repository.ResolveWorkflowStageSkillBinding(seed.StageKey, "")
@@ -120,8 +148,31 @@ func ensureSkillSeed(seed skillSeed) error {
 	}
 	return repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{
 		ID: "workflow-skill-binding-global-" + seed.StageKey, StageKey: seed.StageKey, Scope: model.WorkflowStageSkillScopeGlobal,
-		SkillVersionID: versionID, CreatedAt: stamp, UpdatedAt: stamp,
+		SkillVersionID: legacyVersionID, CreatedAt: stamp, UpdatedAt: stamp,
 	})
+}
+
+func publishedSeedSkillVersion(id, skillID, versionName, stamp string, packageValue SkillPackage) model.SkillVersion {
+	version := skillVersionFromPackage(id, skillID, versionName, "system", stamp, packageValue)
+	version.Status = model.SkillVersionPublished
+	version.PublishedAt = stamp
+	return version
+}
+
+func validateWorkflowSkillSeedExample(packageValue SkillPackage) error {
+	example := strings.TrimSpace(packageValue.Files["examples/good-output.json"])
+	if example == "" {
+		return fmt.Errorf("缺少 good-output 示例")
+	}
+	schema, err := compileSkillOutputSchema(packageValue.OutputContract)
+	if err != nil {
+		return err
+	}
+	var value any
+	if err := json.Unmarshal([]byte(example), &value); err != nil {
+		return err
+	}
+	return schema.Validate(value)
 }
 
 func loadSkillSeedFiles(stageKey string) (map[string]string, error) {
@@ -176,4 +227,32 @@ func buildWorkflowSkillSeedPackage(stageKey string, files map[string]string) (Sk
 		OutputContract:     SkillOutputContract{SchemaVersion: legacy.OutputSchemaVersion, Schema: legacy.OutputSchema},
 		QualityGateProfile: []string{"schema", gate},
 	})
+}
+
+func buildInvocationWorkflowSkillSeedPackage(stageKey string, files map[string]string) (SkillPackage, error) {
+	packageValue, err := buildWorkflowSkillSeedPackage(stageKey, files)
+	if err != nil {
+		return SkillPackage{}, err
+	}
+	packageValue.Manifest.ExecutorKind = "text_model"
+	packageValue.Manifest.RequiredTools = []string{}
+	packageValue.InputContract.ArtifactInputs = make([]ArtifactInputSpec, 0, len(packageValue.Manifest.InputArtifactTypes))
+	for _, artifactType := range packageValue.Manifest.InputArtifactTypes {
+		spec := ArtifactInputSpec{
+			BindingName: artifactType, ArtifactType: artifactType, Required: true,
+			Min: 1, Max: 1, SchemaConstraint: packageValue.Manifest.SchemaCompatibility[artifactType],
+		}
+		if stageKey == WorkflowSkillStageVideo && artifactType == "asset_rendition" {
+			spec.Required, spec.Min, spec.Max = false, 0, 9
+		}
+		packageValue.InputContract.ArtifactInputs = append(packageValue.InputContract.ArtifactInputs, spec)
+	}
+	packageValue.OutputContract.ArtifactOutputs = make([]ArtifactOutputSpec, 0, len(packageValue.Manifest.OutputArtifactTypes))
+	for _, artifactType := range packageValue.Manifest.OutputArtifactTypes {
+		packageValue.OutputContract.ArtifactOutputs = append(packageValue.OutputContract.ArtifactOutputs, ArtifactOutputSpec{
+			BindingName: artifactType, ArtifactType: artifactType, Min: 1, Max: 1,
+			SchemaVersion: packageValue.OutputContract.SchemaVersion,
+		})
+	}
+	return ValidateInvocableSkillPackage(packageValue)
 }

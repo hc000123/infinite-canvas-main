@@ -52,13 +52,16 @@ func ListSkillDefinitions() ([]model.SkillDefinition, error) {
 	return items, err
 }
 
-func ListVisibleSkillDefinitions(projectID string) ([]model.SkillDefinition, error) {
+func ListVisibleSkillDefinitions(userID, projectID string) ([]model.SkillDefinition, error) {
 	db, err := DB()
 	if err != nil {
 		return nil, err
 	}
 	var items []model.SkillDefinition
-	err = db.Where("owner_type = ? OR (owner_type = ? AND owner_project_id = ?)", model.SkillOwnerSystem, model.SkillOwnerProject, strings.TrimSpace(projectID)).
+	err = db.Where(
+		"owner_type = ? OR (owner_type = ? AND owner_user_id = ? AND owner_project_id = ?)",
+		model.SkillOwnerSystem, model.SkillOwnerProject, strings.TrimSpace(userID), strings.TrimSpace(projectID),
+	).
 		Order("owner_type desc, name asc").Find(&items).Error
 	return items, err
 }

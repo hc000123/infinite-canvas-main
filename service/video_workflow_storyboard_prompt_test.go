@@ -52,7 +52,7 @@ func TestWorkflowStagePromptGetsDomainRulesFromPublishedSkill(t *testing.T) {
 	if err := EnsureSkillSeeds(); err != nil {
 		t.Fatal(err)
 	}
-	resolved, err := ResolveWorkflowStageSkill(WorkflowSkillStageVideo, "", "")
+	resolved, err := ResolveWorkflowStageSkill("user-1", WorkflowSkillStageVideo, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

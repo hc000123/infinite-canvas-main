@@ -27,14 +27,34 @@ type SkillImagePolicy struct {
 	AllowedTypes      []string `json:"allowedTypes"`
 }
 
+type ArtifactInputSpec struct {
+	BindingName      string `json:"bindingName"`
+	ArtifactType     string `json:"artifactType"`
+	Required         bool   `json:"required"`
+	Min              int    `json:"min"`
+	Max              int    `json:"max"`
+	SchemaConstraint string `json:"schemaConstraint"`
+	RequiresApproval bool   `json:"requiresApproval"`
+}
+
+type ArtifactOutputSpec struct {
+	BindingName   string `json:"bindingName"`
+	ArtifactType  string `json:"artifactType"`
+	Min           int    `json:"min"`
+	Max           int    `json:"max"`
+	SchemaVersion string `json:"schemaVersion"`
+}
+
 type SkillInputContract struct {
-	RequiredInputs []string         `json:"requiredInputs"`
-	ImagePolicy    SkillImagePolicy `json:"imagePolicy"`
+	RequiredInputs []string            `json:"requiredInputs"`
+	ArtifactInputs []ArtifactInputSpec `json:"artifactInputs,omitempty"`
+	ImagePolicy    SkillImagePolicy    `json:"imagePolicy"`
 }
 
 type SkillOutputContract struct {
-	SchemaVersion string         `json:"schemaVersion"`
-	Schema        map[string]any `json:"schema"`
+	SchemaVersion   string               `json:"schemaVersion"`
+	Schema          map[string]any       `json:"schema"`
+	ArtifactOutputs []ArtifactOutputSpec `json:"artifactOutputs,omitempty"`
 }
 
 type SkillPackage struct {
@@ -72,6 +92,44 @@ func NormalizeSkillPackage(value SkillPackage) (SkillPackage, error) {
 	}
 	normalized := SkillPackage{Manifest: manifest, Files: files, InputContract: inputContract, OutputContract: outputContract, QualityGateProfile: gates}
 	normalized.ContentHash = skillPackageHash(normalized)
+	return normalized, nil
+}
+
+func ValidateInvocableSkillPackage(value SkillPackage) (SkillPackage, error) {
+	normalized, err := NormalizeSkillPackage(value)
+	if err != nil {
+		return SkillPackage{}, err
+	}
+	if normalized.Manifest.ExecutorKind != "text_model" {
+		return SkillPackage{}, safeMessageError{message: "Skill 执行器无效"}
+	}
+	if len(normalized.InputContract.ArtifactInputs) == 0 || len(normalized.OutputContract.ArtifactOutputs) == 0 {
+		return SkillPackage{}, safeMessageError{message: "可调用 Skill 必须声明 Artifact 输入和输出绑定"}
+	}
+	boundInputTypes := map[string]bool{}
+	for _, input := range normalized.InputContract.ArtifactInputs {
+		if !containsSkillToken(normalized.Manifest.InputArtifactTypes, input.ArtifactType) {
+			return SkillPackage{}, safeMessageError{message: "Artifact 输入绑定类型必须在 Manifest 中声明"}
+		}
+		boundInputTypes[input.ArtifactType] = true
+	}
+	for _, artifactType := range normalized.Manifest.InputArtifactTypes {
+		if !boundInputTypes[artifactType] {
+			return SkillPackage{}, safeMessageError{message: "Manifest 输入 Artifact 类型缺少绑定"}
+		}
+	}
+	boundOutputTypes := map[string]bool{}
+	for _, output := range normalized.OutputContract.ArtifactOutputs {
+		if !containsSkillToken(normalized.Manifest.OutputArtifactTypes, output.ArtifactType) {
+			return SkillPackage{}, safeMessageError{message: "Artifact 输出绑定类型必须在 Manifest 中声明"}
+		}
+		boundOutputTypes[output.ArtifactType] = true
+	}
+	for _, artifactType := range normalized.Manifest.OutputArtifactTypes {
+		if !boundOutputTypes[artifactType] {
+			return SkillPackage{}, safeMessageError{message: "Manifest 输出 Artifact 类型缺少绑定"}
+		}
+	}
 	return normalized, nil
 }
 
@@ -135,6 +193,13 @@ func normalizeSkillInputContract(value SkillInputContract) (SkillInputContract, 
 	}
 	sort.Strings(types)
 	value.ImagePolicy.AllowedTypes = types
+	if value.ArtifactInputs != nil {
+		artifactInputs, err := normalizeArtifactInputSpecs(value.ArtifactInputs)
+		if err != nil {
+			return value, err
+		}
+		value.ArtifactInputs = artifactInputs
+	}
 	return value, nil
 }
 
@@ -146,7 +211,66 @@ func normalizeSkillOutputContract(value SkillOutputContract) (SkillOutputContrac
 	if _, err := compileSkillOutputSchema(value); err != nil {
 		return value, safeMessageError{message: "输出 Schema 无效：" + err.Error()}
 	}
+	if value.ArtifactOutputs != nil {
+		artifactOutputs, err := normalizeArtifactOutputSpecs(value.ArtifactOutputs)
+		if err != nil {
+			return value, err
+		}
+		value.ArtifactOutputs = artifactOutputs
+	}
 	return value, nil
+}
+
+func normalizeArtifactInputSpecs(values []ArtifactInputSpec) ([]ArtifactInputSpec, error) {
+	seen := map[string]bool{}
+	result := make([]ArtifactInputSpec, 0, len(values))
+	for _, value := range values {
+		value.BindingName = strings.ToLower(strings.TrimSpace(value.BindingName))
+		value.ArtifactType = strings.ToLower(strings.TrimSpace(value.ArtifactType))
+		value.SchemaConstraint = strings.Join(strings.Fields(value.SchemaConstraint), " ")
+		if !skillManifestTokenPattern.MatchString(value.BindingName) || seen[value.BindingName] {
+			return nil, safeMessageError{message: "Artifact 输入绑定名称无效或重复"}
+		}
+		if !skillManifestTokenPattern.MatchString(value.ArtifactType) {
+			return nil, safeMessageError{message: "Artifact 输入类型无效"}
+		}
+		if value.Min < 0 || value.Max < 1 || value.Min > value.Max || (value.Required && value.Min < 1) {
+			return nil, safeMessageError{message: "Artifact 输入基数无效"}
+		}
+		if !skillCompatibilityPattern.MatchString(value.SchemaConstraint) {
+			return nil, safeMessageError{message: "Artifact 输入 Schema 兼容范围无效"}
+		}
+		seen[value.BindingName] = true
+		result = append(result, value)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].BindingName < result[j].BindingName })
+	return result, nil
+}
+
+func normalizeArtifactOutputSpecs(values []ArtifactOutputSpec) ([]ArtifactOutputSpec, error) {
+	seen := map[string]bool{}
+	result := make([]ArtifactOutputSpec, 0, len(values))
+	for _, value := range values {
+		value.BindingName = strings.ToLower(strings.TrimSpace(value.BindingName))
+		value.ArtifactType = strings.ToLower(strings.TrimSpace(value.ArtifactType))
+		value.SchemaVersion = strings.TrimSpace(value.SchemaVersion)
+		if !skillManifestTokenPattern.MatchString(value.BindingName) || seen[value.BindingName] {
+			return nil, safeMessageError{message: "Artifact 输出绑定名称无效或重复"}
+		}
+		if !skillManifestTokenPattern.MatchString(value.ArtifactType) {
+			return nil, safeMessageError{message: "Artifact 输出类型无效"}
+		}
+		if value.Min < 0 || value.Max < 1 || value.Min > value.Max {
+			return nil, safeMessageError{message: "Artifact 输出基数无效"}
+		}
+		if !skillSemanticVersionRegexp.MatchString(value.SchemaVersion) {
+			return nil, safeMessageError{message: "Artifact 输出 Schema 版本无效"}
+		}
+		seen[value.BindingName] = true
+		result = append(result, value)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].BindingName < result[j].BindingName })
+	return result, nil
 }
 
 func compileSkillOutputSchema(contract SkillOutputContract) (*jsonschema.Schema, error) {

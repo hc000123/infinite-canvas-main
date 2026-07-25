@@ -14,6 +14,8 @@ type SkillManifest struct {
 	SchemaCompatibility map[string]string `json:"schemaCompatibility"`
 	SideEffects         []string          `json:"sideEffects"`
 	EstimatedCostClass  string            `json:"estimatedCostClass"`
+	ExecutorKind        string            `json:"executorKind,omitempty"`
+	RequiredTools       []string          `json:"requiredTools,omitempty"`
 }
 
 var (
@@ -60,6 +62,13 @@ func normalizeSkillManifest(value SkillManifest) (SkillManifest, error) {
 	value.EstimatedCostClass = strings.TrimSpace(value.EstimatedCostClass)
 	if !skillCostClasses[value.EstimatedCostClass] {
 		return value, safeMessageError{message: "Skill 成本等级无效"}
+	}
+	value.ExecutorKind = strings.ToLower(strings.TrimSpace(value.ExecutorKind))
+	if value.RequiredTools != nil {
+		value.RequiredTools, err = normalizeSkillTokens(value.RequiredTools, "工具 ID", false)
+		if err != nil {
+			return value, err
+		}
 	}
 	compatibility := make(map[string]string, len(value.SchemaCompatibility))
 	for key, versionRange := range value.SchemaCompatibility {

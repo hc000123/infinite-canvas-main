@@ -28,6 +28,89 @@ func TestNormalizeSkillPackageProducesStableHash(t *testing.T) {
 	}
 }
 
+func TestValidateInvocableSkillPackageRequiresExplicitArtifactBindings(t *testing.T) {
+	pkg := invocableSkillTestPackage()
+	normalized, err := ValidateInvocableSkillPackage(pkg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if normalized.InputContract.ArtifactInputs[0].BindingName != "script" ||
+		normalized.OutputContract.ArtifactOutputs[0].BindingName != "storyboard" {
+		t.Fatal("bindings were not preserved")
+	}
+	pkg.InputContract.ArtifactInputs[0].Min = 2
+	pkg.InputContract.ArtifactInputs[0].Max = 1
+	if _, err := ValidateInvocableSkillPackage(pkg); err == nil {
+		t.Fatal("expected cardinality rejection")
+	}
+}
+
+func TestValidateInvocableSkillPackageSupportsCardinalityAndNormalizesTools(t *testing.T) {
+	pkg := invocableSkillTestPackage()
+	pkg.Manifest.InputArtifactTypes = []string{"asset_record", "asset_rendition"}
+	pkg.Manifest.RequiredTools = []string{" Vision.Inspect ", "asset.lookup"}
+	pkg.Manifest.SchemaCompatibility["asset_rendition"] = ">=1.0 <2.0"
+	pkg.InputContract.ArtifactInputs = []ArtifactInputSpec{
+		{BindingName: "record", ArtifactType: "asset_record", Min: 0, Max: 1, SchemaConstraint: ">=1.0 <2.0"},
+		{BindingName: "images", ArtifactType: "asset_rendition", Min: 0, Max: 9, SchemaConstraint: ">=1.0 <2.0"},
+	}
+	pkg.OutputContract.ArtifactOutputs[0].Min = 1
+	pkg.OutputContract.ArtifactOutputs[0].Max = 4
+	normalized, err := ValidateInvocableSkillPackage(pkg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if normalized.InputContract.ArtifactInputs[0].BindingName != "images" ||
+		normalized.InputContract.ArtifactInputs[1].BindingName != "record" {
+		t.Fatalf("inputs=%+v", normalized.InputContract.ArtifactInputs)
+	}
+	if got := strings.Join(normalized.Manifest.RequiredTools, ","); got != "asset.lookup,vision.inspect" {
+		t.Fatalf("tools=%q", got)
+	}
+}
+
+func TestValidateInvocableSkillPackageRejectsInvalidInvocationContracts(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(*SkillPackage)
+	}{
+		{name: "duplicate input binding", mutate: func(pkg *SkillPackage) {
+			pkg.InputContract.ArtifactInputs = append(pkg.InputContract.ArtifactInputs, pkg.InputContract.ArtifactInputs[0])
+		}},
+		{name: "duplicate output binding", mutate: func(pkg *SkillPackage) {
+			pkg.OutputContract.ArtifactOutputs = append(pkg.OutputContract.ArtifactOutputs, pkg.OutputContract.ArtifactOutputs[0])
+		}},
+		{name: "input type absent from manifest", mutate: func(pkg *SkillPackage) {
+			pkg.InputContract.ArtifactInputs[0].ArtifactType = "source_text"
+		}},
+		{name: "output type absent from manifest", mutate: func(pkg *SkillPackage) {
+			pkg.OutputContract.ArtifactOutputs[0].ArtifactType = "delivery_report"
+		}},
+		{name: "manifest input type lacks binding", mutate: func(pkg *SkillPackage) {
+			pkg.Manifest.InputArtifactTypes = append(pkg.Manifest.InputArtifactTypes, "source_text")
+			pkg.Manifest.SchemaCompatibility["source_text"] = ">=1.0 <2.0"
+		}},
+		{name: "manifest output type lacks binding", mutate: func(pkg *SkillPackage) {
+			pkg.Manifest.OutputArtifactTypes = append(pkg.Manifest.OutputArtifactTypes, "delivery_report")
+		}},
+		{name: "unsupported executor", mutate: func(pkg *SkillPackage) {
+			pkg.Manifest.ExecutorKind = "image_model"
+		}},
+		{name: "malformed tool id", mutate: func(pkg *SkillPackage) {
+			pkg.Manifest.RequiredTools = []string{"vision/inspect"}
+		}},
+	}
+	for _, item := range cases {
+		t.Run(item.name, func(t *testing.T) {
+			pkg := invocableSkillTestPackage()
+			item.mutate(&pkg)
+			if _, err := ValidateInvocableSkillPackage(pkg); err == nil {
+				t.Fatal("expected rejection")
+			}
+		})
+	}
+}
+
 func TestNormalizeSkillPackageRejectsInvalidManifest(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -103,7 +186,7 @@ func TestSkillPackageInstructionsUsesStableFileOrder(t *testing.T) {
 }
 
 func validSkillTestPackage() SkillPackage {
-	return SkillPackage{
+	pkg := SkillPackage{
 		Manifest: SkillManifest{
 			Capabilities:        []string{"asset.character.rendition"},
 			InputArtifactTypes:  []string{"asset_record"},
@@ -124,4 +207,29 @@ func validSkillTestPackage() SkillPackage {
 		},
 		QualityGateProfile: []string{"schema", "asset"},
 	}
+	pkg.Manifest.ExecutorKind = "text_model"
+	pkg.Manifest.RequiredTools = []string{}
+	pkg.InputContract.ArtifactInputs = []ArtifactInputSpec{{
+		BindingName: "script", ArtifactType: "asset_record", Required: true,
+		Min: 1, Max: 1, SchemaConstraint: ">=1.0 <2.0", RequiresApproval: true,
+	}}
+	pkg.OutputContract.ArtifactOutputs = []ArtifactOutputSpec{{
+		BindingName: "storyboard", ArtifactType: "asset_brief", Min: 1, Max: 1, SchemaVersion: "1.0.0",
+	}}
+	return pkg
+}
+
+func invocableSkillTestPackage() SkillPackage {
+	pkg := validSkillTestPackage()
+	return pkg
+}
+
+func legacySkillTestPackage() SkillPackage {
+	pkg := validSkillTestPackage()
+	pkg.Manifest.ExecutorKind = ""
+	pkg.Manifest.RequiredTools = nil
+	pkg.InputContract.ArtifactInputs = nil
+	pkg.OutputContract.ArtifactOutputs = nil
+	pkg.Manifest.EstimatedCostClass = "none"
+	return pkg
 }

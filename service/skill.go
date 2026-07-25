@@ -127,7 +127,14 @@ func CreateSkill(userID string, ownerType model.SkillOwnerType, projectID, name,
 		return ResolvedSkill{}, err
 	}
 	stamp := now()
-	skill := model.SkillDefinition{ID: newID("skill"), Name: name, Summary: strings.TrimSpace(summary), OwnerType: ownerType, OwnerProjectID: projectID, Enabled: true, CreatedAt: stamp, UpdatedAt: stamp}
+	ownerUserID := ""
+	if ownerType == model.SkillOwnerProject {
+		ownerUserID = strings.TrimSpace(userID)
+	}
+	skill := model.SkillDefinition{
+		ID: newID("skill"), Name: name, Summary: strings.TrimSpace(summary), OwnerType: ownerType,
+		OwnerUserID: ownerUserID, OwnerProjectID: projectID, Enabled: true, CreatedAt: stamp, UpdatedAt: stamp,
+	}
 	version := skillVersionFromPackage(newID("skillversion"), skill.ID, versionName, userID, stamp, packageValue)
 	if err := repository.CreateSkillAggregate(skill, version); err != nil {
 		return ResolvedSkill{}, err
@@ -204,9 +211,9 @@ func GetSkillVersionPackage(versionID string) (model.SkillVersion, SkillPackage,
 	return version, packageValue, err
 }
 
-func ResolveRecommendedSkill(skillID string) (ResolvedSkill, error) {
+func ResolveRecommendedSkill(userID, projectID, skillID string) (ResolvedSkill, error) {
 	skill, ok, err := repository.GetSkillDefinition(skillID)
-	if err != nil || !ok {
+	if err != nil || !ok || !skillVisibleTo(skill, userID, projectID) {
 		return ResolvedSkill{}, safeMessageError{message: "Skill 不存在"}
 	}
 	if !skill.Enabled || skill.RecommendedVersionID == "" {
@@ -215,7 +222,15 @@ func ResolveRecommendedSkill(skillID string) (ResolvedSkill, error) {
 	return resolvePublishedSkillVersion(skill, skill.RecommendedVersionID)
 }
 
-func ResolveExactSkillVersion(versionID string) (ResolvedSkill, error) {
+func ResolveExactSkillVersion(userID, projectID, versionID string) (ResolvedSkill, error) {
+	skill, version, ok, err := repository.GetSkillWithVersion(versionID)
+	if err != nil || !ok || !skillVisibleTo(skill, userID, projectID) {
+		return ResolvedSkill{}, safeMessageError{message: "Skill 版本不存在"}
+	}
+	return resolvePublishedSkill(skill, version)
+}
+
+func resolveExactSkillVersionForAdmin(versionID string) (ResolvedSkill, error) {
 	skill, version, ok, err := repository.GetSkillWithVersion(versionID)
 	if err != nil || !ok {
 		return ResolvedSkill{}, safeMessageError{message: "Skill 版本不存在"}
@@ -233,6 +248,9 @@ func PublishSkillVersion(adminID, versionID string) (ResolvedSkill, error) {
 	}
 	packageValue, err := DecodeSkillPackage(version)
 	if err != nil {
+		return ResolvedSkill{}, err
+	}
+	if _, err := ValidateInvocableSkillPackage(packageValue); err != nil {
 		return ResolvedSkill{}, err
 	}
 	if packageValue.Manifest.EstimatedCostClass != "none" {
@@ -279,11 +297,11 @@ func RecommendPublishedSkillVersion(adminID, skillID, versionID string) (Resolve
 	return ResolvedSkill{Skill: skill, Version: version, Package: packageValue}, nil
 }
 
-func ListSkillOptions(projectID string, filter SkillOptionFilter) ([]SkillOption, error) {
+func ListSkillOptions(userID, projectID string, filter SkillOptionFilter) ([]SkillOption, error) {
 	if err := EnsureSkillSeeds(); err != nil {
 		return nil, err
 	}
-	skills, err := repository.ListVisibleSkillDefinitions(projectID)
+	skills, err := repository.ListVisibleSkillDefinitions(userID, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +336,7 @@ func normalizeSkillDraftInput(input SkillDraftInput) (string, SkillPackage, erro
 	if !skillSemanticVersionRegexp.MatchString(versionName) {
 		return "", SkillPackage{}, safeMessageError{message: "Skill 版本号必须使用 x.y.z 语义化版本"}
 	}
-	packageValue, err := NormalizeSkillPackage(input.Package)
+	packageValue, err := ValidateInvocableSkillPackage(input.Package)
 	return versionName, packageValue, err
 }
 
@@ -348,6 +366,13 @@ func resolvePublishedSkill(skill model.SkillDefinition, version model.SkillVersi
 		return ResolvedSkill{}, err
 	}
 	return ResolvedSkill{Skill: skill, Version: version, Package: packageValue}, nil
+}
+
+func skillVisibleTo(skill model.SkillDefinition, userID, projectID string) bool {
+	return skill.OwnerType == model.SkillOwnerSystem ||
+		(skill.OwnerType == model.SkillOwnerProject &&
+			skill.OwnerUserID == strings.TrimSpace(userID) &&
+			skill.OwnerProjectID == strings.TrimSpace(projectID))
 }
 
 func skillManifestMatches(manifest SkillManifest, filter SkillOptionFilter) bool {

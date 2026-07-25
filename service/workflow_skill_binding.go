@@ -40,13 +40,13 @@ type WorkflowStageSkillBindingInput struct {
 	SkillVersionID string `json:"skillVersionId"`
 }
 
-func ResolveWorkflowStageSkill(stageKey, projectID, exactVersionID string) (ResolvedSkill, error) {
+func ResolveWorkflowStageSkill(userID, stageKey, projectID, exactVersionID string) (ResolvedSkill, error) {
 	stageKey = strings.TrimSpace(stageKey)
 	if !workflowSkillStages[stageKey] {
 		return ResolvedSkill{}, safeMessageError{message: "未知工作流阶段"}
 	}
 	if strings.TrimSpace(exactVersionID) != "" {
-		resolved, err := ResolveExactSkillVersion(exactVersionID)
+		resolved, err := ResolveExactSkillVersion(userID, projectID, exactVersionID)
 		if err != nil {
 			return resolved, err
 		}
@@ -59,15 +59,15 @@ func ResolveWorkflowStageSkill(stageKey, projectID, exactVersionID string) (Reso
 	if !ok {
 		return ResolvedSkill{}, safeMessageError{message: "工作流阶段尚未绑定 Skill"}
 	}
-	resolved, err := ResolveExactSkillVersion(binding.SkillVersionID)
+	resolved, err := ResolveExactSkillVersion(userID, projectID, binding.SkillVersionID)
 	if err != nil {
 		return resolved, err
 	}
 	return requireWorkflowStageCapability(resolved, stageKey)
 }
 
-func ResolveWorkflowStageSkillForRun(stageID, projectID, exactVersionID string) (ResolvedSkill, error) {
-	return ResolveWorkflowStageSkill(workflowSkillStageForRun(stageID), projectID, exactVersionID)
+func ResolveWorkflowStageSkillForRun(userID, stageID, projectID, exactVersionID string) (ResolvedSkill, error) {
+	return ResolveWorkflowStageSkill(userID, workflowSkillStageForRun(stageID), projectID, exactVersionID)
 }
 
 func workflowSkillStageForRun(stageID string) string {
@@ -87,13 +87,13 @@ func workflowSkillStageForRun(stageID string) string {
 	}
 }
 
-func ListWorkflowStageSkillOptions(stageID, projectID string) ([]WorkflowSkillOption, error) {
+func ListWorkflowStageSkillOptions(userID, stageID, projectID string) ([]WorkflowSkillOption, error) {
 	stageKey := workflowSkillStageForRun(stageID)
-	resolved, err := ResolveWorkflowStageSkill(stageKey, projectID, "")
+	resolved, err := ResolveWorkflowStageSkill(userID, stageKey, projectID, "")
 	if err != nil {
 		return nil, err
 	}
-	items, err := ListSkillOptions(projectID, SkillOptionFilter{Capability: "workflow.stage." + stageKey})
+	items, err := ListSkillOptions(userID, projectID, SkillOptionFilter{Capability: "workflow.stage." + stageKey})
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func requireWorkflowStageCapability(resolved ResolvedSkill, stageKey string) (Re
 }
 
 func UpdateWorkflowStageSkillBinding(adminID, stageKey string, input WorkflowStageSkillBindingInput) (ResolvedSkill, error) {
-	resolved, err := ResolveExactSkillVersion(input.SkillVersionID)
+	resolved, err := resolveExactSkillVersionForAdmin(input.SkillVersionID)
 	if err != nil {
 		return resolved, err
 	}
@@ -125,6 +125,23 @@ func UpdateWorkflowStageSkillBinding(adminID, stageKey string, input WorkflowSta
 	scope, scopeID := strings.TrimSpace(input.Scope), strings.TrimSpace(input.ScopeID)
 	if scope == model.WorkflowStageSkillScopeGlobal {
 		scopeID = ""
+	} else if scope != model.WorkflowStageSkillScopeProject || scopeID == "" {
+		return ResolvedSkill{}, safeMessageError{message: "Skill 绑定范围无效"}
+	}
+	if resolved.Skill.OwnerType == model.SkillOwnerProject {
+		if scope != model.WorkflowStageSkillScopeProject {
+			return ResolvedSkill{}, safeMessageError{message: "项目 Skill 不能绑定到全局范围"}
+		}
+		if resolved.Skill.OwnerProjectID != scopeID {
+			return ResolvedSkill{}, safeMessageError{message: "项目 Skill 只能绑定到所属项目"}
+		}
+		if resolved.Skill.OwnerUserID == "" || resolved.Skill.OwnerUserID != strings.TrimSpace(adminID) {
+			return ResolvedSkill{}, safeMessageError{message: "项目 Skill 只能由所属用户绑定"}
+		}
+	} else if resolved.Skill.OwnerType != model.SkillOwnerSystem {
+		return ResolvedSkill{}, safeMessageError{message: "Skill 所有者类型无效"}
+	}
+	if scope == model.WorkflowStageSkillScopeGlobal {
 		passed, err := repository.HasSkillProjectCanary(resolved.Version.ID, resolved.Version.ContentHash)
 		if err != nil {
 			return ResolvedSkill{}, err
@@ -132,8 +149,6 @@ func UpdateWorkflowStageSkillBinding(adminID, stageKey string, input WorkflowSta
 		if !passed {
 			return ResolvedSkill{}, safeMessageError{message: "全局绑定前必须完成项目灰度评测"}
 		}
-	} else if scope != model.WorkflowStageSkillScopeProject || scopeID == "" {
-		return ResolvedSkill{}, safeMessageError{message: "Skill 绑定范围无效"}
 	}
 	stamp := now()
 	binding := model.WorkflowStageSkillBinding{ID: newID("skillbinding"), StageKey: stageKey, Scope: scope, ScopeID: scopeID, SkillVersionID: resolved.Version.ID, CreatedAt: stamp, UpdatedAt: stamp}

@@ -3,6 +3,7 @@ package repository
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -79,6 +80,10 @@ func DB() (*gorm.DB, error) {
 		if dbErr != nil {
 			return
 		}
+		dbErr = ensureSkillOwnerNameIndex(db)
+		if dbErr != nil {
+			return
+		}
 		dbErr = cleanupLegacyBuiltinPrompts(db)
 		if dbErr != nil {
 			return
@@ -86,6 +91,39 @@ func DB() (*gorm.DB, error) {
 		dbErr = seedSystemPrompts(db)
 	})
 	return db, dbErr
+}
+
+func ensureSkillOwnerNameIndex(database *gorm.DB) error {
+	const indexName = "idx_skill_owner_name"
+	want := []string{"owner_type", "owner_user_id", "owner_project_id", "name"}
+	indexes, err := database.Migrator().GetIndexes(&model.SkillDefinition{})
+	if err != nil {
+		return err
+	}
+	for _, index := range indexes {
+		if index.Name() != indexName {
+			continue
+		}
+		unique, uniqueKnown := index.Unique()
+		if sameIndexColumns(index.Columns(), want) && uniqueKnown && unique {
+			return nil
+		}
+		if err := database.Migrator().DropIndex(&model.SkillDefinition{}, indexName); err != nil {
+			return err
+		}
+		break
+	}
+	return database.Migrator().CreateIndex(&model.SkillDefinition{}, indexName)
+}
+
+func sameIndexColumns(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	leftCopy, rightCopy := slices.Clone(left), slices.Clone(right)
+	slices.Sort(leftCopy)
+	slices.Sort(rightCopy)
+	return slices.Equal(leftCopy, rightCopy)
 }
 
 // ResetForTest resets the process-wide repository connection for cross-package tests.

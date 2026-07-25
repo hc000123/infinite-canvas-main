@@ -16,7 +16,7 @@ func TestPublishedSkillVersionCannotBePatched(t *testing.T) {
 	if err := service.EnsureSkillSeeds(); err != nil {
 		t.Fatal(err)
 	}
-	resolved, err := service.ResolveWorkflowStageSkill(service.WorkflowSkillStageArt, "", "")
+	resolved, err := service.ResolveWorkflowStageSkill("admin-1", service.WorkflowSkillStageArt, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
