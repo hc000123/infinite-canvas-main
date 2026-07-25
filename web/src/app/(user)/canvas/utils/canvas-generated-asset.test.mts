@@ -121,6 +121,12 @@ test("names generated assets by canvas, stable node number and current media ver
     assert.equal((asset?.metadata?.generation as Record<string, any>).assetNodeNumber, 7);
 });
 
+test("uses a download-safe canvas name without changing the compact format", () => {
+    const asset = buildGeneratedVideoAsset(videoNode({ assetNodeNumber: 7 }), { ...context, canvasTitle: "毕业/典礼:画布" });
+
+    assert.equal(asset?.title, "毕业-典礼-画布-节点007-v1");
+});
+
 test("persists a first archive node number from canvas order and reuses it", () => {
     const first = videoNode();
     const nodes = [{ ...first, id: "text-1", type: "text" as const }, { ...first, id: "image-1", type: "image" as const }, first];

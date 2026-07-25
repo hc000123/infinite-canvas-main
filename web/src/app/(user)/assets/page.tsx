@@ -8,6 +8,7 @@ import { uploadImage } from "@/services/image-storage";
 import type { Asset } from "@/stores/use-asset-store";
 import { useScriptStore } from "../canvas/stores/use-script-store";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible";
+import { normalizeCanvasAssetTitles } from "./asset-canvas-title";
 import { assetEpisodeTitle } from "./asset-episode";
 import type { AssetFormValues } from "./components/asset-editor-modal";
 import { AssetFilterPanel } from "./components/asset-filter-panel";
@@ -54,7 +55,7 @@ function AssetsPageContent() {
         addAsset,
         addAssetOnce,
         addFolder,
-        assets,
+        assets: storedAssets,
         creativeProjects,
         ensureProjectFolder,
         folders,
@@ -77,6 +78,7 @@ function AssetsPageContent() {
         updateStoryboardTableShot,
         volcengineAssetEnabled,
     } = useAssetPageStores();
+    const assets = useMemo(() => normalizeCanvasAssetTitles(storedAssets, projects), [projects, storedAssets]);
     const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
     const [openedRequestedAssetId, setOpenedRequestedAssetId] = useState("");
     const [bulkOutdatedOpen, setBulkOutdatedOpen] = useState(false);

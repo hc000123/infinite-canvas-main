@@ -206,7 +206,7 @@ function InfiniteCanvasPage() {
         viewportRef,
     } = useCanvasPageLocalState();
     const capacity = useCanvasCapacity(nodes, connections);
-    const { downloadNodeMedia, cacheUploadedCanvasMedia } = useCanvasMediaCache({ token, message, setNodes });
+    const { downloadNodeMedia, cacheUploadedCanvasMedia } = useCanvasMediaCache({ token, message, canvasTitle: currentProject?.title || "未命名画布", getNodes: () => nodesRef.current, setNodes });
     const { historyState, resetHistory, undoCanvas, redoCanvas, pauseHistory, resumeHistory, skipNextHistoryCommit, getCleanupHistory } = useCanvasHistory({
         projectId: canvasId,
         projectLoaded,

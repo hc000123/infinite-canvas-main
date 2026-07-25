@@ -15,13 +15,13 @@ type CanvasMessage = {
     error: (content: string) => void;
 };
 
-export function useCanvasMediaCache({ token, message, setNodes }: { token?: string; message: CanvasMessage; setNodes: Dispatch<SetStateAction<CanvasNodeData[]>> }) {
+export function useCanvasMediaCache({ token, message, canvasTitle, getNodes, setNodes }: { token?: string; message: CanvasMessage; canvasTitle: string; getNodes: () => CanvasNodeData[]; setNodes: Dispatch<SetStateAction<CanvasNodeData[]>> }) {
     const downloadNodeMedia = useCallback(
         async (node: CanvasNodeData) => {
             if (node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) return;
             const content = node.metadata?.content || "";
             if (!content && !node.metadata?.storageKey) return;
-            const filename = canvasMediaDownloadFilename(node);
+            const filename = canvasMediaDownloadFilename(node, canvasTitle, getNodes());
 
             if (node.metadata?.cacheUrl) {
                 triggerCanvasDownload(node.metadata.cacheUrl, filename);
@@ -79,7 +79,7 @@ export function useCanvasMediaCache({ token, message, setNodes }: { token?: stri
                 message.error("下载失败，请稍后重试");
             }
         },
-        [message, setNodes, token],
+        [canvasTitle, getNodes, message, setNodes, token],
     );
 
     const cacheUploadedCanvasMedia = useCallback(

@@ -1,10 +1,8 @@
 import type { CanvasNodeData } from "../types.ts";
-import { currentCanvasMediaVersion } from "./canvas-media-versions.ts";
+import { canvasGeneratedAssetTitle } from "./canvas-asset-name.ts";
 
-export function canvasMediaDownloadFilename(node: CanvasNodeData) {
-    const version = currentCanvasMediaVersion(node);
-    const versionSuffix = version ? `-v${version.versionNumber}` : "";
-    return `canvas-${node.type}-${node.id}${versionSuffix}.${canvasMediaExtension(node)}`;
+export function canvasMediaDownloadFilename(node: CanvasNodeData, canvasTitle: string, nodes: CanvasNodeData[]) {
+    return `${canvasGeneratedAssetTitle(node, canvasTitle, nodes)}.${canvasMediaExtension(node)}`;
 }
 
 function canvasMediaExtension(node: CanvasNodeData) {

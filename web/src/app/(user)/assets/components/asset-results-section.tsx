@@ -7,7 +7,7 @@ import { CheckSquare, ChevronDown, ChevronRight, Square, Trash2 } from "lucide-r
 import type { Asset } from "@/stores/use-asset-store";
 import { cn } from "@/lib/utils";
 import { assetEpisodeTitle, primaryAssetEpisodeKey } from "../asset-episode";
-import { isCompactVideoAssetGroup } from "../asset-result-layout";
+import { isCompactMediaAssetGroup } from "../asset-result-layout";
 import { assetTypeGroupDomId, buildAssetTypeGroups, type AssetTypeGroup } from "../asset-type-groups";
 import type { AssetProjectResultGroup } from "../asset-project-groups";
 import type { AssetSortMode } from "../asset-page-filters";
@@ -16,7 +16,7 @@ import { productionBibleKindLabel, type ProductionBibleItem } from "../../canvas
 import { workflowAssetInfo } from "../workflow-asset-image";
 import { AssetRow } from "./asset-card";
 import { AssetListToolbar } from "./asset-list-toolbar";
-import { CompactVideoAssetCard } from "./compact-video-asset-card";
+import { CompactMediaAssetCard } from "./compact-media-asset-card";
 import { OutdatedReferencesPanel } from "./outdated-references-panel";
 
 type BulkReviewAction = "submit" | "refresh" | "";
@@ -162,7 +162,7 @@ export function AssetResultsSection({
                 const typeGroupId = assetTypeGroupDomId(groupId, scopeId ? `${scopeId}-${typeGroup.id}` : typeGroup.id);
                 const collapsed = collapsedAssetTypeGroups[typeGroupId] === true;
                 const stats = workflowAssetTypeStats(typeGroup.assets);
-                const compactVideoAssets = isCompactVideoAssetGroup(typeGroup.assets) ? typeGroup.assets : null;
+                const compactMediaAssets = isCompactMediaAssetGroup(typeGroup.assets) ? typeGroup.assets : null;
                 return (
                     <section key={typeGroup.id} id={typeGroupId} className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]">
                         <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={() => toggleAssetTypeGroup(typeGroupId)} aria-expanded={!collapsed}>
@@ -178,10 +178,10 @@ export function AssetResultsSection({
                             ) : null}
                         </button>
                         {!collapsed ? (
-                            <div className={cn("border-t border-[var(--studio-border-subtle)] p-3", compactVideoAssets ? "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6" : "grid gap-2.5")}>
-                                {compactVideoAssets
-                                    ? compactVideoAssets.map((asset) => (
-                                          <CompactVideoAssetCard
+                            <div className={cn("border-t border-[var(--studio-border-subtle)] p-3", compactMediaAssets ? "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6" : "grid gap-2.5")}>
+                                {compactMediaAssets
+                                    ? compactMediaAssets.map((asset) => (
+                                          <CompactMediaAssetCard
                                               key={asset.id}
                                               asset={asset}
                                               selected={selectedAssetIds.has(asset.id)}

@@ -2,8 +2,11 @@ import type { AiConfig } from "@/stores/use-config-store";
 import type { AssetWriteInput } from "@/stores/use-asset-store";
 
 import type { CanvasNodeData, CanvasNodeMetadata, CanvasVideoActionType } from "../types.ts";
+import { canvasAssetNodeNumber, canvasGeneratedAssetTitle, generatedCanvasAssetVersionNumber } from "./canvas-asset-name.ts";
 import type { CanvasEpisodeContext } from "./canvas-episode-context.ts";
 import { canvasProjectPresetConfig, type CanvasProjectPreset } from "./canvas-project-preset.ts";
+
+export { numberCanvasAssetNode } from "./canvas-asset-name.ts";
 
 type CanvasGeneratedAssetContext = {
     canvasId: string;
@@ -117,6 +120,7 @@ function buildGeneratedAssetMetadata(node: CanvasNodeData, context: CanvasGenera
         canvasId: context.canvasId,
         canvasTitle: context.canvasTitle,
         assetNodeNumber: canvasAssetNodeNumber(node, [node]),
+        assetVersionNumber: context.versionNumber || generatedCanvasAssetVersionNumber(node),
         projectId: context.projectId,
         projectTitle: context.projectTitle,
         episodeId: context.episodeContext?.episodeId || node.metadata?.episodeId,
@@ -166,28 +170,8 @@ function buildGeneratedAssetMetadata(node: CanvasNodeData, context: CanvasGenera
     };
 }
 
-export function numberCanvasAssetNode(node: CanvasNodeData, nodes: CanvasNodeData[]) {
-    const existing = node.metadata?.assetNodeNumber || nodes.find((item) => item.id === node.id)?.metadata?.assetNodeNumber;
-    const nodeNumber = existing || Math.max(1, nodes.findIndex((item) => item.id === node.id) + 1);
-    return { ...node, metadata: { ...node.metadata, assetNodeNumber: nodeNumber } };
-}
-
-export function canvasAssetNodeNumber(node: CanvasNodeData, nodes: CanvasNodeData[]) {
-    return numberCanvasAssetNode(node, nodes).metadata?.assetNodeNumber || 1;
-}
-
-export function generatedCanvasAssetVersionNumber(node: CanvasNodeData) {
-    const versions = node.metadata?.mediaVersions || [];
-    if (node.metadata?.pendingMediaVersion) return versions.length + 1;
-    const current = versions.find((version) => version.id === node.metadata?.currentMediaVersionId) || versions.at(-1);
-    return current?.versionNumber || node.metadata?.productionVideoVersionNumber || 1;
-}
-
 function generatedCanvasAssetTitle(node: CanvasNodeData, context: CanvasGeneratedAssetContext) {
-    const canvasTitle = context.canvasTitle.trim() || "未命名画布";
-    const nodeNumber = String(canvasAssetNodeNumber(node, [node])).padStart(3, "0");
-    const versionNumber = context.versionNumber || generatedCanvasAssetVersionNumber(node);
-    return `${canvasTitle}-节点${nodeNumber}-v${versionNumber}`;
+    return canvasGeneratedAssetTitle(node, context.canvasTitle, [node], context.versionNumber);
 }
 
 function buildAssetGenerationReferences(metadata: CanvasNodeMetadata | undefined) {
