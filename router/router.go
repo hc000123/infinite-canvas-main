@@ -42,7 +42,7 @@ func New() *gin.Engine {
 		handler.ReviewAgentRun(c.Writer, c.Request, c.Param("id"))
 	})
 	v1.POST("/workflow-runs", gin.WrapF(handler.EnsureWorkflowRun))
-	v1.GET("/workflow-skill-options", gin.WrapF(handler.WorkflowSkillOptions))
+	v1.GET("/skill-options", gin.WrapF(handler.SkillOptions))
 	v1.GET("/workflow-runs/:id", func(c *gin.Context) {
 		handler.WorkflowRun(c.Writer, c.Request, c.Param("id"))
 	})
@@ -176,39 +176,40 @@ func New() *gin.Engine {
 		handler.DeleteAdminAccount(c.Writer, c.Request, c.Param("id"))
 	})
 
-	workflowSkillAdmin := api.Group("/v1/admin", middleware.AdminAuth)
-	workflowSkillAdmin.GET("/workflow-skills", gin.WrapF(handler.AdminWorkflowSkills))
-	workflowSkillAdmin.PATCH("/workflow-skills/:id", func(c *gin.Context) {
-		handler.AdminUpdateWorkflowSkill(c.Writer, c.Request, c.Param("id"))
+	skillAdmin := api.Group("/v1/admin", middleware.AdminAuth)
+	skillAdmin.GET("/skills", gin.WrapF(handler.AdminSkills))
+	skillAdmin.POST("/skills", gin.WrapF(handler.AdminCreateSkill))
+	skillAdmin.PATCH("/skills/:id", func(c *gin.Context) {
+		handler.AdminUpdateSkill(c.Writer, c.Request, c.Param("id"))
 	})
-	workflowSkillAdmin.POST("/workflow-skills/:id/versions", func(c *gin.Context) {
-		handler.AdminCreateWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
+	skillAdmin.POST("/skills/:id/versions", func(c *gin.Context) {
+		handler.AdminCreateSkillVersion(c.Writer, c.Request, c.Param("id"))
 	})
-	workflowSkillAdmin.GET("/workflow-skill-versions/:id", func(c *gin.Context) {
-		handler.AdminWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
+	skillAdmin.GET("/skill-versions/:id", func(c *gin.Context) {
+		handler.AdminSkillVersion(c.Writer, c.Request, c.Param("id"))
 	})
-	workflowSkillAdmin.PATCH("/workflow-skill-versions/:id", func(c *gin.Context) {
-		handler.AdminUpdateWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
+	skillAdmin.PATCH("/skill-versions/:id", func(c *gin.Context) {
+		handler.AdminUpdateSkillVersion(c.Writer, c.Request, c.Param("id"))
 	})
-	workflowSkillAdmin.POST("/workflow-skill-versions/:id/validate", func(c *gin.Context) {
-		handler.AdminValidateWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
+	skillAdmin.POST("/skill-versions/:id/validate", func(c *gin.Context) {
+		handler.AdminValidateSkillVersion(c.Writer, c.Request, c.Param("id"))
 	})
-	workflowSkillAdmin.POST("/workflow-skill-versions/:id/evaluations", func(c *gin.Context) {
-		handler.AdminEvaluateWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
+	skillAdmin.POST("/skill-versions/:id/evaluations", func(c *gin.Context) {
+		handler.AdminEvaluateSkillVersion(c.Writer, c.Request, c.Param("id"))
 	})
-	workflowSkillAdmin.POST("/workflow-skill-versions/:id/compare", func(c *gin.Context) {
-		handler.AdminEvaluateWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
+	skillAdmin.GET("/skill-evaluations/:id", func(c *gin.Context) {
+		handler.AdminSkillEvaluation(c.Writer, c.Request, c.Param("id"))
 	})
-	workflowSkillAdmin.GET("/workflow-skill-evaluations/:id", func(c *gin.Context) {
-		handler.AdminWorkflowSkillEvaluation(c.Writer, c.Request, c.Param("id"))
+	skillAdmin.POST("/skill-versions/:id/publish", func(c *gin.Context) {
+		handler.AdminPublishSkillVersion(c.Writer, c.Request, c.Param("id"))
 	})
-	workflowSkillAdmin.POST("/workflow-skill-versions/:id/publish", func(c *gin.Context) {
-		handler.AdminPublishWorkflowSkillVersion(c.Writer, c.Request, c.Param("id"))
+	skillAdmin.PUT("/skills/:id/recommended-version", func(c *gin.Context) {
+		handler.AdminRecommendSkillVersion(c.Writer, c.Request, c.Param("id"))
 	})
-	workflowSkillAdmin.GET("/workflow-stage-skill-bindings/:stageKey", func(c *gin.Context) {
+	skillAdmin.GET("/workflow-stage-skill-bindings/:stageKey", func(c *gin.Context) {
 		handler.AdminWorkflowStageSkillBindings(c.Writer, c.Request, c.Param("stageKey"))
 	})
-	workflowSkillAdmin.PUT("/workflow-stage-skill-bindings/:stageKey", func(c *gin.Context) {
+	skillAdmin.PUT("/workflow-stage-skill-bindings/:stageKey", func(c *gin.Context) {
 		handler.AdminUpdateWorkflowStageSkillBinding(c.Writer, c.Request, c.Param("stageKey"))
 	})
 

@@ -108,9 +108,15 @@ func ListSkillAdminItems() ([]SkillAdminItem, error) {
 }
 
 func CreateProjectSkill(userID, projectID, name, summary string, draft SkillDraftInput) (ResolvedSkill, error) {
+	return CreateSkill(userID, model.SkillOwnerProject, projectID, name, summary, draft)
+}
+
+func CreateSkill(userID string, ownerType model.SkillOwnerType, projectID, name, summary string, draft SkillDraftInput) (ResolvedSkill, error) {
 	projectID = strings.TrimSpace(projectID)
 	name = strings.TrimSpace(name)
-	if projectID == "" {
+	if ownerType == model.SkillOwnerSystem {
+		projectID = ""
+	} else if ownerType != model.SkillOwnerProject || projectID == "" {
 		return ResolvedSkill{}, safeMessageError{message: "项目 Skill 必须指定项目"}
 	}
 	if name == "" {
@@ -121,7 +127,7 @@ func CreateProjectSkill(userID, projectID, name, summary string, draft SkillDraf
 		return ResolvedSkill{}, err
 	}
 	stamp := now()
-	skill := model.SkillDefinition{ID: newID("skill"), Name: name, Summary: strings.TrimSpace(summary), OwnerType: model.SkillOwnerProject, OwnerProjectID: projectID, Enabled: true, CreatedAt: stamp, UpdatedAt: stamp}
+	skill := model.SkillDefinition{ID: newID("skill"), Name: name, Summary: strings.TrimSpace(summary), OwnerType: ownerType, OwnerProjectID: projectID, Enabled: true, CreatedAt: stamp, UpdatedAt: stamp}
 	version := skillVersionFromPackage(newID("skillversion"), skill.ID, versionName, userID, stamp, packageValue)
 	if err := repository.CreateSkillAggregate(skill, version); err != nil {
 		return ResolvedSkill{}, err

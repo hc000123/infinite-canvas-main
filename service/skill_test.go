@@ -59,3 +59,22 @@ func TestListSkillOptionsFiltersManifestWithoutReturningFiles(t *testing.T) {
 		t.Fatalf("items=%+v", items)
 	}
 }
+
+func TestCreateSkillSupportsSystemAndProjectOwners(t *testing.T) {
+	setupAITaskTestDB(t)
+	for _, owner := range []struct {
+		typeValue model.SkillOwnerType
+		projectID string
+	}{
+		{typeValue: model.SkillOwnerSystem},
+		{typeValue: model.SkillOwnerProject, projectID: "project-1"},
+	} {
+		created, err := CreateSkill("admin-1", owner.typeValue, owner.projectID, "可组合 Skill", "说明", SkillDraftInput{Version: "1.0.0", Package: validSkillTestPackage()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if created.Skill.OwnerType != owner.typeValue || created.Skill.OwnerProjectID != owner.projectID || created.Version.Status != model.SkillVersionDraft {
+			t.Fatalf("created=%+v", created)
+		}
+	}
+}

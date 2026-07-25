@@ -67,6 +67,13 @@ func TestUpdateWorkflowStageSkillBindingRequiresProjectCanaryBeforeGlobal(t *tes
 	}
 }
 
+func TestListWorkflowStageSkillBindingsRejectsUnknownStage(t *testing.T) {
+	setupAITaskTestDB(t)
+	if _, err := ListWorkflowStageSkillBindings("unknown"); err == nil || !strings.Contains(err.Error(), "未知") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func publishCompatibleSkillTestVersion(t *testing.T, capability, versionName string) model.SkillVersion {
 	t.Helper()
 	draft := createSkillTestDraft(t, capability, versionName)

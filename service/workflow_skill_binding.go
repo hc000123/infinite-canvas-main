@@ -104,6 +104,14 @@ func UpdateWorkflowStageSkillBinding(adminID, stageKey string, input WorkflowSta
 	return resolved, nil
 }
 
+func ListWorkflowStageSkillBindings(stageKey string) ([]model.WorkflowStageSkillBinding, error) {
+	stageKey = strings.TrimSpace(stageKey)
+	if !workflowSkillStages[stageKey] {
+		return nil, safeMessageError{message: "未知工作流阶段"}
+	}
+	return repository.ListWorkflowStageSkillBindings(stageKey)
+}
+
 func buildSkillSnapshotJSON(resolved ResolvedSkill) string {
 	payload, _ := json.Marshal(map[string]any{
 		"skillId": resolved.Skill.ID, "name": resolved.Skill.Name, "ownerType": resolved.Skill.OwnerType,
