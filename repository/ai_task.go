@@ -92,9 +92,12 @@ func LatestCreditLogByRelatedIDAndType(relatedID string, logType model.CreditLog
 }
 
 func applyAITaskFilters(tx *gorm.DB, q model.AITaskQuery) *gorm.DB {
+	if value := strings.TrimSpace(q.ExactUserID); value != "" {
+		tx = tx.Where("user_id = ?", value)
+	}
 	if value := strings.TrimSpace(q.User); value != "" {
 		like := "%" + value + "%"
-		tx = tx.Where("user_id LIKE ?", like)
+		tx = tx.Where("user_id LIKE ? OR user_id IN (SELECT id FROM users WHERE username LIKE ? OR display_name LIKE ?)", like, like, like)
 	}
 	if value := strings.TrimSpace(q.Status); value != "" {
 		tx = tx.Where("status = ?", value)

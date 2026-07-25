@@ -8,6 +8,7 @@ import { uploadImage } from "@/services/image-storage";
 import type { Asset } from "@/stores/use-asset-store";
 import { useScriptStore } from "../canvas/stores/use-script-store";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible";
+import { normalizeCanvasAssetTitles } from "./asset-canvas-title";
 import { assetEpisodeTitle } from "./asset-episode";
 import type { AssetFormValues } from "./components/asset-editor-modal";
 import { AssetFilterPanel } from "./components/asset-filter-panel";
@@ -54,7 +55,7 @@ function AssetsPageContent() {
         addAsset,
         addAssetOnce,
         addFolder,
-        assets,
+        assets: storedAssets,
         creativeProjects,
         ensureProjectFolder,
         folders,
@@ -77,6 +78,7 @@ function AssetsPageContent() {
         updateStoryboardTableShot,
         volcengineAssetEnabled,
     } = useAssetPageStores();
+    const assets = useMemo(() => normalizeCanvasAssetTitles(storedAssets, projects), [projects, storedAssets]);
     const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
     const [openedRequestedAssetId, setOpenedRequestedAssetId] = useState("");
     const [bulkOutdatedOpen, setBulkOutdatedOpen] = useState(false);
@@ -98,8 +100,9 @@ function AssetsPageContent() {
         activeFolderId,
         activeFolderName,
         assetAliasIdsByCanonicalId,
-        assetPaginationEnabled,
+        canvasLibraryFilter,
         canvasLibraryTitles,
+        canvasProjectOptions,
         episodeFilter,
         episodeOptions,
         episodeTitleMap,
@@ -118,15 +121,16 @@ function AssetsPageContent() {
         keyword,
         outdatedAssetVersionUsages,
         page,
-        pageSize,
+        pageCount,
         previewAssetUsageReferences,
         projectContextFilter,
-        projectFolderRows,
+        projectOptions,
         projectLibraryFilter,
         projectLibraryProjectTitles,
         referenceVersionFilter,
         regularFolders,
         setEpisodeFilter,
+        setCanvasLibraryFilter,
         setFavoriteOnly,
         setFolderFilter,
         setGenerationActionFilter,
@@ -136,13 +140,14 @@ function AssetsPageContent() {
         setKindFilter,
         setKeyword,
         setPage,
-        setPageSize,
         setProjectContextFilter,
         setProjectLibraryFilter,
         setReferenceVersionFilter,
         setSortMode,
+        setSourceScope,
         setStoryboardGroupFilter,
         sortMode,
+        sourceScope,
         storyboardGroupFilter,
         storyboardGroupOptions,
         validAssets,
@@ -208,6 +213,7 @@ function AssetsPageContent() {
         toggleProductionBibleItemSelected,
     } = useAssetSelection({ filteredAssets, outdatedAssetVersionUsages, productionBibleItems, validAssets, visibleProductionBibleItems });
     const assetFilterActions = useAssetFilterActions({
+        setCanvasLibraryFilter,
         setEpisodeFilter,
         setFavoriteOnly,
         setFolderFilter,
@@ -222,6 +228,7 @@ function AssetsPageContent() {
         setProjectLibraryFilter,
         setReferenceVersionFilter,
         setSortMode,
+        setSourceScope,
         setStoryboardGroupFilter,
     });
     const {
@@ -400,6 +407,7 @@ function AssetsPageContent() {
 
                     <AssetFilterPanel
                         actions={{
+                            onCanvasLibraryFilterChange: assetFilterActions.changeCanvasLibraryFilter,
                             onClearSelectedOutdatedUsages: clearSelectedOutdatedUsages,
                             onCreateFolder: openCreateFolder,
                             onDeleteFolder: deleteFolder,
@@ -416,6 +424,7 @@ function AssetsPageContent() {
                             onProjectContextFilterChange: assetFilterActions.changeProjectContextFilter,
                             onProjectLibraryFilterChange: assetFilterActions.changeProjectLibraryFilter,
                             onReferenceVersionFilterChange: assetFilterActions.changeReferenceVersionFilter,
+                            onSourceScopeChange: assetFilterActions.changeSourceScope,
                             onStoryboardGroupFilterChange: assetFilterActions.changeStoryboardGroupFilter,
                         }}
                         counts={{
@@ -424,14 +433,16 @@ function AssetsPageContent() {
                             validAssetCount: validAssets.length,
                         }}
                         options={{
+                            canvasProjectOptions,
                             episodeOptions,
                             generationFilterOptions,
-                            projectFolderRows,
+                            projectOptions,
                             regularFolders,
                             storyboardGroupOptions,
                         }}
                         values={{
                             activeFolderId,
+                            canvasLibraryFilter,
                             episodeFilter,
                             folderFilter,
                             favoriteOnly,
@@ -444,6 +455,7 @@ function AssetsPageContent() {
                             projectContextFilter,
                             projectLibraryFilter,
                             referenceVersionFilter,
+                            sourceScope,
                             storyboardGroupFilter,
                         }}
                     />
@@ -452,12 +464,11 @@ function AssetsPageContent() {
                 <AssetResultsSection
                     allFilteredSelected={allFilteredSelected}
                     allVisibleProductionBibleSelected={allVisibleProductionBibleSelected}
-                    assetPaginationEnabled={assetPaginationEnabled}
                     bulkReviewAction={bulkReviewAction}
                     episodeTitleMap={episodeTitleMap}
                     filteredCount={filteredAssets.length}
                     page={page}
-                    pageSize={pageSize}
+                    pageCount={pageCount}
                     productionBibleCount={visibleProductionBibleItems.length}
                     projectContextFilter={projectContextFilter}
                     referenceVersionFilter={referenceVersionFilter}
@@ -475,7 +486,7 @@ function AssetsPageContent() {
                     selectedProductionBibleSummary={selectedProductionBibleItemSummary}
                     selectedVolcengineRefreshCount={selectedVolcengineRefreshAssets.length}
                     selectedVolcengineSubmitCount={selectedVolcengineSubmitAssets.length}
-                    showEpisodeGroups={Boolean(projectContextFilter)}
+                    showEpisodeGroups={Boolean(projectContextFilter && sourceScope !== "canvas")}
                     sortMode={sortMode}
                     submittingReviewId={submittingReviewId}
                     usages={outdatedAssetVersionUsages}
@@ -496,10 +507,7 @@ function AssetsPageContent() {
                     onExportSelected={() => void exportSelectedAssets()}
                     onOpenAsset={setPreviewAsset}
                     onOpenBulkOutdated={() => setBulkOutdatedOpen(true)}
-                    onPageChange={(nextPage, nextPageSize) => {
-                        setPage(nextPage);
-                        setPageSize(nextPageSize);
-                    }}
+                    onPageChange={setPage}
                     onRefreshAssetReview={(asset) => void refreshImageReview(asset)}
                     onGenerateWorkflowImage={(asset) => void generateWorkflowAssetImage(asset)}
                     onMatchWorkflowImage={openWorkflowImageMatch}

@@ -71,3 +71,40 @@ func TestWorkflowRoutesRequireAuth(t *testing.T) {
 		}
 	}
 }
+
+func TestSuperAdminRoutesRequireSuperAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	recorder := httptest.NewRecorder()
+	app.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/admins", nil))
+	if recorder.Code == http.StatusNotFound {
+		t.Fatal("superadmin administrator route is missing")
+	}
+	if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+		t.Fatalf("administrator route did not reach superadmin auth: %s", recorder.Body.String())
+	}
+}
+
+func TestAdminUserDetailRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	for _, path := range []string{"/api/admin/users/user-1", "/api/admin/users/user-1/ai-tasks", "/api/admin/users/user-1/credit-logs"} {
+		recorder := httptest.NewRecorder()
+		app.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code == http.StatusNotFound {
+			t.Fatalf("admin user detail route missing: %s", path)
+		}
+	}
+}
+
+func TestLoginApprovalRoutesExist(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	for _, item := range []struct{ method, path string }{{http.MethodGet, "/api/auth/login-approval/status"}, {http.MethodPost, "/api/auth/login-approval/exchange"}, {http.MethodGet, "/api/admin/login-approvals"}, {http.MethodGet, "/api/admin/users/user-1/allowed-ips"}} {
+		recorder := httptest.NewRecorder()
+		app.ServeHTTP(recorder, httptest.NewRequest(item.method, item.path, nil))
+		if recorder.Code == http.StatusNotFound {
+			t.Fatalf("login approval route missing: %s", item.path)
+		}
+	}
+}

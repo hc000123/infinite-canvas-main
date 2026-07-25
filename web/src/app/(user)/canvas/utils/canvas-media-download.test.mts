@@ -14,6 +14,7 @@ function versionedNode(type: "image" | "video", currentMediaVersionId: string): 
         width: 420,
         height: 236,
         metadata: {
+            assetNodeNumber: 7,
             content: type === "video" ? "blob:video" : "data:image/png;base64,AA==",
             currentMediaVersionId,
             mediaVersions: [
@@ -26,20 +27,23 @@ function versionedNode(type: "image" | "video", currentMediaVersionId: string): 
 
 test("uses the selected media version number in downloads from the same node", () => {
     assert.equal(typeof mediaDownload.canvasMediaDownloadFilename, "function");
-    const first = mediaDownload.canvasMediaDownloadFilename?.(versionedNode("image", "version-1"));
-    const second = mediaDownload.canvasMediaDownloadFilename?.(versionedNode("image", "version-2"));
+    const firstNode = versionedNode("image", "version-1");
+    const secondNode = versionedNode("image", "version-2");
+    const first = mediaDownload.canvasMediaDownloadFilename?.(firstNode, "毕业/典礼画布", [firstNode]);
+    const second = mediaDownload.canvasMediaDownloadFilename?.(secondNode, "毕业/典礼画布", [secondNode]);
 
-    assert.equal(first, "canvas-image-node-1-v1.png");
-    assert.equal(second, "canvas-image-node-1-v2.png");
+    assert.equal(first, "毕业-典礼画布-节点007-v1.png");
+    assert.equal(second, "毕业-典礼画布-节点007-v2.png");
     assert.notEqual(first, second);
 });
 
-test("keeps the original filename format for nodes without media versions", () => {
+test("uses v1 in the canonical filename when a node has no media versions", () => {
     assert.equal(typeof mediaDownload.canvasMediaDownloadFilename, "function");
-    assert.equal(mediaDownload.canvasMediaDownloadFilename?.({ ...versionedNode("video", "version-1"), metadata: { content: "blob:video" } }), "canvas-video-node-1.mp4");
+    const node = { ...versionedNode("video", "version-1"), metadata: { assetNodeNumber: 7, content: "blob:video" } };
+    assert.equal(mediaDownload.canvasMediaDownloadFilename?.(node, "毕业典礼画布", [node]), "毕业典礼画布-节点007-v1.mp4");
 });
 
 test("the canvas download action uses the version-aware filename", () => {
     const hook = readFileSync(new URL("../hooks/use-canvas-media-cache.ts", import.meta.url), "utf8");
-    assert.match(hook, /canvasMediaDownloadFilename\(node\)/);
+    assert.match(hook, /canvasMediaDownloadFilename\(node, canvasTitle, getNodes\(\)\)/);
 });

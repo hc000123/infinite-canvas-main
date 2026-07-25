@@ -13,7 +13,8 @@ import (
 func New() *gin.Engine {
 	router := gin.Default()
 	router.RedirectTrailingSlash = false
-	_ = router.SetTrustedProxies(nil)
+	_ = router.SetTrustedProxies(config.Cfg.TrustedProxies)
+	router.Use(middleware.RequestMeta)
 	router.Use(uploadedAssetSecurityHeaders)
 	api := router.Group("/api")
 	api.GET("/health", func(c *gin.Context) {
@@ -21,15 +22,17 @@ func New() *gin.Engine {
 	})
 	api.POST("/auth/register", gin.WrapF(handler.Register))
 	api.POST("/auth/login", gin.WrapF(handler.Login))
+	api.GET("/auth/login-approval/status", gin.WrapF(handler.LoginApprovalStatus))
+	api.POST("/auth/login-approval/exchange", gin.WrapF(handler.ExchangeLoginApproval))
 	api.GET("/auth/me", middleware.OptionalAuth, gin.WrapF(handler.CurrentUser))
 	api.GET("/settings", gin.WrapF(handler.Settings))
 	api.Static("/uploaded-assets", config.Cfg.PublicAssetDir)
 	v1 := api.Group("/v1", middleware.UserAuth)
-	v1.POST("/images/generations", gin.WrapF(handler.AIImagesGenerations))
-	v1.POST("/images/edits", gin.WrapF(handler.AIImagesEdits))
-	v1.POST("/chat/completions", gin.WrapF(handler.AIChatCompletions))
-	v1.POST("/responses", gin.WrapF(handler.AIResponses))
-	v1.POST("/videos", gin.WrapF(handler.AIVideos))
+	v1.POST("/images/generations", middleware.AuditAIToolUse, gin.WrapF(handler.AIImagesGenerations))
+	v1.POST("/images/edits", middleware.AuditAIToolUse, gin.WrapF(handler.AIImagesEdits))
+	v1.POST("/chat/completions", middleware.AuditAIToolUse, gin.WrapF(handler.AIChatCompletions))
+	v1.POST("/responses", middleware.AuditAIToolUse, gin.WrapF(handler.AIResponses))
+	v1.POST("/videos", middleware.AuditAIToolUse, gin.WrapF(handler.AIVideos))
 	v1.GET("/videos/preflight", gin.WrapF(handler.AIVideoPreflight))
 	v1.GET("/agent-configs", gin.WrapF(handler.AgentConfigs))
 	v1.POST("/agent-configs", gin.WrapF(handler.SaveAgentConfig))
@@ -92,12 +95,25 @@ func New() *gin.Engine {
 		handler.UserAITaskFrontendArtifact(c.Writer, c.Request, c.Param("id"))
 	})
 	v1.POST("/proxy/video-download", gin.WrapF(handler.AIProxyVideoDownload))
+	v1.POST("/activity-logs", gin.WrapF(handler.UserActivityReport))
 	api.GET("/prompts", middleware.OptionalAuth, gin.WrapF(handler.Prompts))
 	api.GET("/assets", middleware.OptionalAuth, gin.WrapF(handler.Assets))
 	api.POST("/admin/login", gin.WrapF(handler.AdminLogin))
 
 	admin := api.Group("/admin", middleware.AdminAuth)
 	admin.GET("/users", gin.WrapF(handler.AdminUsers))
+	admin.GET("/users/:id", func(c *gin.Context) { handler.AdminUser(c.Writer, c.Request, c.Param("id")) })
+	admin.GET("/users/:id/ai-tasks", func(c *gin.Context) { handler.AdminUserAITasks(c.Writer, c.Request, c.Param("id")) })
+	admin.GET("/users/:id/credit-logs", func(c *gin.Context) { handler.AdminUserCreditLogs(c.Writer, c.Request, c.Param("id")) })
+	admin.GET("/users/:id/activity-logs", func(c *gin.Context) { handler.AdminUserActivities(c.Writer, c.Request, c.Param("id")) })
+	admin.GET("/users/:id/allowed-ips", func(c *gin.Context) { handler.AdminUserAllowedIPs(c.Writer, c.Request, c.Param("id")) })
+	admin.POST("/users/:id/allowed-ips", func(c *gin.Context) { handler.AdminAddUserAllowedIP(c.Writer, c.Request, c.Param("id")) })
+	admin.DELETE("/users/:id/allowed-ips/:ipId", func(c *gin.Context) {
+		handler.AdminDeleteUserAllowedIP(c.Writer, c.Request, c.Param("id"), c.Param("ipId"))
+	})
+	admin.PUT("/users/:id/ip-policy", func(c *gin.Context) { handler.AdminSetUserIPPolicy(c.Writer, c.Request, c.Param("id")) })
+	admin.GET("/login-approvals", gin.WrapF(handler.AdminLoginApprovals))
+	admin.POST("/login-approvals/:id/decision", func(c *gin.Context) { handler.AdminDecideLoginApproval(c.Writer, c.Request, c.Param("id")) })
 	admin.POST("/users", gin.WrapF(handler.AdminSaveUser))
 	admin.POST("/users/:id/credits", func(c *gin.Context) {
 		handler.AdminAdjustUserCredits(c.Writer, c.Request, c.Param("id"))
@@ -145,6 +161,19 @@ func New() *gin.Engine {
 	})
 	admin.DELETE("/assets/:id", func(c *gin.Context) {
 		handler.AdminDeleteAsset(c.Writer, c.Request, c.Param("id"))
+	})
+
+	superAdmin := api.Group("/admin", middleware.SuperAdminAuth)
+	superAdmin.GET("/admins", gin.WrapF(handler.AdminAccounts))
+	superAdmin.POST("/admins", gin.WrapF(handler.CreateAdminAccount))
+	superAdmin.PATCH("/admins/:id", func(c *gin.Context) {
+		handler.UpdateAdminAccount(c.Writer, c.Request, c.Param("id"))
+	})
+	superAdmin.POST("/admins/:id/password", func(c *gin.Context) {
+		handler.ResetAdminAccountPassword(c.Writer, c.Request, c.Param("id"))
+	})
+	superAdmin.DELETE("/admins/:id", func(c *gin.Context) {
+		handler.DeleteAdminAccount(c.Writer, c.Request, c.Param("id"))
 	})
 
 	workflowSkillAdmin := api.Group("/v1/admin", middleware.AdminAuth)

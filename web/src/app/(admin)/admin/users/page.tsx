@@ -1,20 +1,18 @@
 "use client";
 
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
 import { Avatar, Button, Card, Col, Divider, Flex, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Tag, Tooltip, Typography } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import type { AdminUser } from "@/services/api/admin";
 import { useAdminUsers } from "./use-admin-users";
 
 type UserFormValues = Partial<AdminUser> & { password?: string };
 
-const roleOptions = [
-    { label: "普通用户", value: "user" },
-    { label: "管理员", value: "admin" },
-];
+const roleOptions = [{ label: "普通用户", value: "user" }];
 
 const statusOptions = [
     { label: "正常", value: "active" },
@@ -22,6 +20,7 @@ const statusOptions = [
 ];
 
 export default function AdminUsersPage() {
+    const router = useRouter();
     const { users, keyword, page, pageSize, total, isLoading, searchUsers, changePage, changePageSize, resetFilters, refreshUsers, saveUser: saveAdminUser, adjustCredits, deleteUser } = useAdminUsers();
     const [form] = Form.useForm<UserFormValues>();
     const [keywordText, setKeywordText] = useState(keyword);
@@ -93,10 +92,13 @@ export default function AdminUsersPage() {
         {
             title: "操作",
             key: "actions",
-            width: 96,
+            width: 132,
             align: "right",
             render: (_, item) => (
                 <Space size={4}>
+                    <Tooltip title="查看详情">
+                        <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => router.push(`/admin/users/${encodeURIComponent(item.id)}`)} />
+                    </Tooltip>
                     <Tooltip title="编辑">
                         <Button type="text" size="small" icon={<EditOutlined />} onClick={() => setEditingUser(item)} />
                     </Tooltip>
@@ -230,7 +232,8 @@ export default function AdminUsersPage() {
                 </Form>
             </Modal>
 
-            <Modal rootClassName="studio-modal"
+            <Modal
+                rootClassName="studio-modal"
                 title="删除用户"
                 open={Boolean(deletingUser)}
                 onCancel={() => setDeletingUser(null)}

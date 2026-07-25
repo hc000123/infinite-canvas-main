@@ -1,4 +1,5 @@
 import type { Asset } from "@/stores/use-asset-store";
+import { assetGenerationRecords, readString } from "./asset-generation.ts";
 
 export type AssetCanvasLibraryEntry = {
     canvasId: string;
@@ -23,8 +24,12 @@ export function assetCanvasLibraryEntries(asset: Pick<Asset, "metadata"> | null 
     });
 }
 
-export function assetInCanvasLibrary(asset: Pick<Asset, "metadata"> | null | undefined, canvasId: string) {
-    return Boolean(canvasId) && assetCanvasLibraryEntries(asset).some((entry) => entry.canvasId === canvasId);
+export function assetInCanvasLibrary(asset: Asset | null | undefined, canvasId: string) {
+    if (!canvasId) return false;
+    if (assetCanvasLibraryEntries(asset).some((entry) => entry.canvasId === canvasId)) return true;
+    const canvasSource = asset?.metadata?.canvasSource;
+    if (canvasSource && typeof canvasSource === "object" && !Array.isArray(canvasSource) && readString((canvasSource as Record<string, unknown>).canvasId) === canvasId) return true;
+    return assetGenerationRecords(asset).some((generation) => readString(generation.canvasId) === canvasId);
 }
 
 export function buildAddCanvasLibraryAssetPatch(asset: Asset, canvasIds: string[], now: string) {

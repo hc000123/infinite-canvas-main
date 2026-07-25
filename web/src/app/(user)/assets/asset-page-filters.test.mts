@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { Asset } from "../../../stores/use-asset-store.ts";
-import { buildAssetProjectContexts, DEFAULT_ASSET_SORT_MODE, filterAssetList, paginateAssetList, projectReferencedAssetIds, selectedAssetSummary, selectedAssetsFromIds, sortAssetList, storyboardGroupReferencedAssetIds } from "./asset-page-filters.ts";
+import { buildAssetProjectContexts, DEFAULT_ASSET_SORT_MODE, filterAssetList, projectReferencedAssetIds, selectedAssetSummary, selectedAssetsFromIds, sortAssetList, storyboardGroupReferencedAssetIds } from "./asset-page-filters.ts";
 
 const now = "2026-06-05T00:00:00.000Z";
 
@@ -112,11 +112,12 @@ test("filters assets by kind, folder, project references and keyword", () => {
             folderFilter: "all",
             generationTaskFilter: "all",
             projectContextFilter: "project-1",
+            projectAssetIds: new Set(["asset-a", "asset-b"]),
             projectLibraryFilter: "all",
             projectReferencedAssetIds: new Set(["asset-b"]),
             searchText,
         }).map((asset) => asset.id),
-        ["asset-a", "asset-b", "asset-c"],
+        ["asset-a", "asset-b"],
     );
 });
 
@@ -148,6 +149,60 @@ test("filters favorite assets and composes with kind", () => {
         filterAssetList([favoriteText, normalText, favoriteVideo], { ...baseFilters, kindFilter: "video" }).map((asset) => asset.id),
         ["favorite-video"],
     );
+});
+
+test("filters favorite videos by canvas lineage", () => {
+    const video = (id: string, favorite: boolean, metadata: Asset["metadata"]): Asset =>
+        ({
+            ...textAsset(id, id, undefined, metadata),
+            kind: "video",
+            favorite,
+            data: { url: `blob:${id}`, width: 720, height: 1280, bytes: 1, mimeType: "video/mp4" },
+        }) as Asset;
+    const assets = [
+        video("matching", true, { generation: { source: "canvas", canvasId: "canvas-1" } }),
+        video("not-favorite", false, { generation: { source: "canvas", canvasId: "canvas-1" } }),
+        video("other-canvas", true, { generation: { source: "canvas", canvasId: "canvas-2" } }),
+        textAsset("matching-text", "matching-text", undefined, { generation: { source: "canvas", canvasId: "canvas-1" } }),
+    ];
+
+    assert.deepEqual(
+        filterAssetList(assets, {
+            keyword: "",
+            kindFilter: "video",
+            favoriteOnly: true,
+            folderFilter: "all",
+            generationTaskFilter: "all",
+            projectContextFilter: "",
+            projectLibraryFilter: "all",
+            canvasLibraryFilter: "canvas-1",
+            projectReferencedAssetIds: new Set(),
+            searchText: (asset) => asset.title,
+        }).map((asset) => asset.id),
+        ["matching"],
+    );
+});
+
+test("composes project membership with workflow and child canvas source scopes", () => {
+    const workflow = textAsset("workflow", "工作流", undefined, { originalWorkflow: { sourceProjectId: "project-1" } });
+    const canvasA = textAsset("canvas-a", "画布 A", undefined, { generation: { source: "canvas", canvasId: "canvas-a" } });
+    const canvasB = textAsset("canvas-b", "画布 B", undefined, { generation: { source: "canvas", canvasId: "canvas-b" } });
+    const unrelated = textAsset("unrelated", "其他");
+    const baseFilters = {
+        keyword: "",
+        kindFilter: "all" as const,
+        folderFilter: "all" as const,
+        generationTaskFilter: "all" as const,
+        projectContextFilter: "project-1",
+        projectLibraryFilter: "all" as const,
+        projectReferencedAssetIds: new Set<string>(),
+        projectAssetIds: new Set(["workflow", "canvas-a", "canvas-b"]),
+        projectCanvasIds: new Set(["canvas-a", "canvas-b"]),
+        searchText: (asset: Asset) => asset.title,
+    };
+
+    assert.deepEqual(filterAssetList([workflow, canvasA, canvasB, unrelated], { ...baseFilters, sourceScope: "workflow" }).map((asset) => asset.id), ["workflow"]);
+    assert.deepEqual(filterAssetList([workflow, canvasA, canvasB, unrelated], { ...baseFilters, sourceScope: "canvas", canvasLibraryFilter: "canvas-a" }).map((asset) => asset.id), ["canvas-a"]);
 });
 
 test("filters assets by storyboard group references and generation metadata", () => {
@@ -249,12 +304,8 @@ test("uses natural title order as the asset page default", () => {
     );
 });
 
-test("paginates and summarizes selected assets", () => {
+test("summarizes selected assets", () => {
     const assets = [textAsset("a", "素材一"), textAsset("b", "素材二"), textAsset("c", "素材三"), textAsset("d", "素材四")];
-    assert.deepEqual(
-        paginateAssetList(assets, 2, 2).map((asset) => asset.id),
-        ["c", "d"],
-    );
     assert.deepEqual(
         selectedAssetsFromIds(assets, new Set(["b", "d"])).map((asset) => asset.id),
         ["b", "d"],

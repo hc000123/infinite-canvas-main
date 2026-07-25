@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, apiPostForm, compactApiParams } from "@/services/api/request";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm, apiPut, compactApiParams } from "@/services/api/request";
 import type { Prompt, PromptListResponse } from "@/services/api/prompts";
 
 export type AdminPromptCategory = {
@@ -16,7 +16,7 @@ export type AdminUser = {
     email: string;
     displayName: string;
     avatarUrl: string;
-    role: "user" | "admin";
+    role: "user" | "admin" | "superadmin";
     credits: number;
     affCode: string;
     affCount: number;
@@ -26,12 +26,44 @@ export type AdminUser = {
     lastLoginAt: string;
     createdAt: string;
     updatedAt: string;
+    ipApprovalEnabled: boolean;
 };
 
 export type AdminUserListResponse = {
     items: AdminUser[];
     total: number;
 };
+
+export type AdminUserSummary = Pick<AdminUser, "id" | "username" | "displayName">;
+
+export type AdminAccount = Omit<AdminUser, "role"> & { role: "admin" | "superadmin" };
+
+export type AdminAccountQuery = AdminUserQuery & {
+    role?: "admin" | "superadmin";
+    status?: "active" | "ban";
+};
+
+export type AdminAccountUpdate = Pick<AdminAccount, "username" | "displayName" | "email" | "role" | "status">;
+
+export async function fetchAdminAccounts(token: string, query: AdminAccountQuery = {}) {
+    return apiGet<{ items: AdminAccount[]; total: number }>("/api/admin/admins", compactApiParams(query), token);
+}
+
+export async function createAdminAccount(token: string, input: AdminAccountUpdate & { password: string }) {
+    return apiPost<AdminAccount>("/api/admin/admins", input, token);
+}
+
+export async function updateAdminAccount(token: string, id: string, input: AdminAccountUpdate) {
+    return apiPatch<AdminAccount>(`/api/admin/admins/${encodeURIComponent(id)}`, input, token);
+}
+
+export async function resetAdminAccountPassword(token: string, id: string, password: string) {
+    return apiPost<boolean>(`/api/admin/admins/${encodeURIComponent(id)}/password`, { password }, token);
+}
+
+export async function deleteAdminAccount(token: string, id: string) {
+    return apiDelete<boolean>(`/api/admin/admins/${encodeURIComponent(id)}`, token);
+}
 
 export type AdminCreditLog = {
     id: string;
@@ -43,6 +75,7 @@ export type AdminCreditLog = {
     remark: string;
     extra: string;
     createdAt: string;
+    user?: AdminUserSummary;
 };
 
 export type AdminCreditLogListResponse = {
@@ -75,6 +108,7 @@ export type AdminAITask = {
     refundedAt: string;
     createdAt: string;
     updatedAt: string;
+    user?: AdminUserSummary;
     frontendTrace?: AdminAITaskFrontendTrace;
     frontendArtifacts?: AdminAITaskFrontendArtifact[];
 };
@@ -129,6 +163,48 @@ export async function fetchAdminUsers(token: string, query: AdminUserQuery = {})
     return apiGet<AdminUserListResponse>("/api/admin/users", compactApiParams(query), token);
 }
 
+export type AdminUserOverview = {
+    user: AdminUser;
+    aiTaskCount: number;
+    aiCreditsConsumed: number;
+    creditLogCount: number;
+};
+
+export function fetchAdminUser(token: string, id: string) {
+    return apiGet<AdminUserOverview>(`/api/admin/users/${encodeURIComponent(id)}`, undefined, token);
+}
+
+export function fetchAdminUserAITasks(token: string, id: string, query: AdminAITaskQuery) {
+    return apiGet<AdminAITaskListResponse>(`/api/admin/users/${encodeURIComponent(id)}/ai-tasks`, compactApiParams(query), token);
+}
+
+export function fetchAdminUserCreditLogs(token: string, id: string, query: AdminUserQuery) {
+    return apiGet<AdminCreditLogListResponse>(`/api/admin/users/${encodeURIComponent(id)}/credit-logs`, compactApiParams(query), token);
+}
+
+export type AdminUserActivity = {
+    id: string;
+    userId: string;
+    category: string;
+    action: string;
+    result: "success" | "failed" | "rejected";
+    targetType: string;
+    targetId: string;
+    targetName: string;
+    summary: string;
+    ipAddress: string;
+    ipAllowed: boolean;
+    sessionId: string;
+    loginApprovalId: string;
+    userAgent: string;
+    metadata: string;
+    createdAt: string;
+};
+export type AdminUserActivityQuery = AdminUserQuery & { category?: string; action?: string; result?: string; ipAddress?: string; outsideIP?: boolean; startAt?: string; endAt?: string };
+export function fetchAdminUserActivities(token: string, id: string, query: AdminUserActivityQuery) {
+    return apiGet<{ items: AdminUserActivity[]; total: number }>(`/api/admin/users/${encodeURIComponent(id)}/activity-logs`, compactApiParams({ ...query, outsideIP: query.outsideIP ? "true" : undefined }), token);
+}
+
 export async function saveAdminUser(token: string, user: Partial<AdminUser> & { password?: string }) {
     return apiPost<AdminUser>("/api/admin/users", user, token);
 }
@@ -139,6 +215,39 @@ export async function adjustAdminUserCredits(token: string, id: string, credits:
 
 export async function deleteAdminUser(token: string, id: string) {
     return apiDelete<boolean>(`/api/admin/users/${encodeURIComponent(id)}`, token);
+}
+
+export type AdminAllowedIP = { id: string; userId: string; cidr: string; createdBy: string; createdAt: string };
+export type AdminLoginApproval = {
+    id: string;
+    userId: string;
+    user: AdminUserSummary;
+    requestedIp: string;
+    userAgent: string;
+    status: "pending" | "approved" | "rejected" | "consumed" | "expired";
+    scope: "once" | "whitelist" | "";
+    decidedBy: string;
+    decidedAt: string;
+    expiresAt: string;
+    createdAt: string;
+};
+export function fetchAdminLoginApprovals(token: string, query: AdminUserQuery & { status?: string }) {
+    return apiGet<{ items: AdminLoginApproval[]; total: number }>("/api/admin/login-approvals", compactApiParams(query), token);
+}
+export function decideAdminLoginApproval(token: string, id: string, approve: boolean, scope?: "once" | "whitelist") {
+    return apiPost<AdminLoginApproval>(`/api/admin/login-approvals/${encodeURIComponent(id)}/decision`, { approve, scope }, token);
+}
+export function fetchAdminUserAllowedIPs(token: string, userId: string) {
+    return apiGet<AdminAllowedIP[]>(`/api/admin/users/${encodeURIComponent(userId)}/allowed-ips`, undefined, token);
+}
+export function addAdminUserAllowedIP(token: string, userId: string, cidr: string) {
+    return apiPost<AdminAllowedIP>(`/api/admin/users/${encodeURIComponent(userId)}/allowed-ips`, { cidr }, token);
+}
+export function deleteAdminUserAllowedIP(token: string, userId: string, id: string) {
+    return apiDelete<boolean>(`/api/admin/users/${encodeURIComponent(userId)}/allowed-ips/${encodeURIComponent(id)}`, token);
+}
+export function setAdminUserIPPolicy(token: string, userId: string, enabled: boolean) {
+    return apiPut<AdminUser>(`/api/admin/users/${encodeURIComponent(userId)}/ip-policy`, { enabled }, token);
 }
 
 export async function fetchAdminCreditLogs(token: string, query: AdminUserQuery = {}) {

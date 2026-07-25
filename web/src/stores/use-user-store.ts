@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import { AUTH_TOKEN_KEY, fetchCurrentUser, login as requestLogin, register, type AuthPayload, type AuthUser } from "@/services/api/auth";
+import { AUTH_TOKEN_KEY, fetchCurrentUser, login as requestLogin, register, type AuthPayload, type AuthUser, type LoginResult } from "@/services/api/auth";
 import { clearActiveUserStorageScope } from "@/lib/localforage-storage";
 
 type UserStore = {
@@ -14,7 +14,7 @@ type UserStore = {
     setSession: (token: string, user: AuthUser) => void;
     clearSession: () => void;
     hydrateUser: () => Promise<void>;
-    login: (payload: AuthPayload) => Promise<AuthUser>;
+    login: (payload: AuthPayload) => Promise<LoginResult>;
     register: (payload: AuthPayload) => Promise<AuthUser>;
 };
 
@@ -43,7 +43,12 @@ export const useUserStore = create<UserStore>()(
                     if (!payload) return false;
                     set({ isLoading: true });
                     try {
-                        const session = await requestLogin(payload);
+                        const result = await requestLogin(payload);
+                        if (result.status !== "authenticated" || !result.session) {
+                            set({ isLoading: false });
+                            return false;
+                        }
+                        const session = result.session;
                         set({ token: session.token, user: session.user, isReady: true, isLoading: false });
                         return true;
                     } catch {
@@ -74,9 +79,10 @@ export const useUserStore = create<UserStore>()(
             login: async (payload) => {
                 set({ isLoading: true });
                 try {
-                    const session = await requestLogin(payload);
-                    set({ token: session.token, user: session.user, isReady: true, isLoading: false });
-                    return session.user;
+                    const result = await requestLogin(payload);
+                    if (result.status === "authenticated" && result.session) set({ token: result.session.token, user: result.session.user, isReady: true, isLoading: false });
+                    else set({ isLoading: false });
+                    return result;
                 } catch (error) {
                     set({ isLoading: false });
                     throw error;

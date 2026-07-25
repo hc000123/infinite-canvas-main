@@ -338,7 +338,9 @@ func TestAITaskFrontendArtifactsSurviveArkStatusSync(t *testing.T) {
 
 func TestListAdminAITasksFiltersByTaskFields(t *testing.T) {
 	setupAITaskTestDB(t)
-	_, _ = saveAITaskTestUser("user-list-a", 20)
+	userA, _ := saveAITaskTestUser("user-list-a", 20)
+	userA.Username = "user-list-a-name"
+	_, _ = repository.SaveUser(userA)
 	_, _ = saveAITaskTestUser("user-list-b", 20)
 	matching := saveAITaskForAdminTest(t, model.AITask{
 		UserID:         "user-list-a",
@@ -385,6 +387,10 @@ func TestListAdminAITasksFiltersByTaskFields(t *testing.T) {
 	}
 	if result.Total != 1 || len(result.Items) != 1 || result.Items[0].ID != matching.ID {
 		t.Fatalf("list result = total:%d items:%#v", result.Total, result.Items)
+	}
+	byName, err := ListAdminAITasks(model.AITaskQuery{User: "user-list-a-name", Page: 1, PageSize: 10})
+	if err != nil || byName.Total != 1 || len(byName.Items) != 1 || byName.Items[0].User.Username != "user-list-a-name" {
+		t.Fatalf("username list result=%#v err=%v", byName, err)
 	}
 }
 

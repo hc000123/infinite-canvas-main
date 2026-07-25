@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp, FolderPlus, PencilLine, Search, Star, Trash2 } from "lucide-react";
 import { Button, Input, Select, Tag } from "antd";
 
@@ -8,13 +8,14 @@ import { cn } from "@/lib/utils";
 import type { AssetFolder, AssetKind } from "@/stores/use-asset-store";
 import type { AssetEpisodeOption } from "../asset-episode";
 import type { ProjectLibraryFilter } from "../asset-page-filters";
+import type { AssetSourceScope } from "../asset-project-scope";
 import { AssetIconButton } from "./asset-card";
 
 type ReferenceVersionFilter = "all" | "outdated";
 type GenerationTaskFilter = "all" | "with" | "without";
-type FilterProjectRow = { project: { id: string; title?: string }; folder: AssetFolder };
 type FilterOption = { label: string; value: string };
 type AssetFilterPanelActions = {
+    onCanvasLibraryFilterChange: (value: string) => void;
     onClearSelectedOutdatedUsages: () => void;
     onCreateFolder: () => void;
     onDeleteFolder: (folder: AssetFolder) => void;
@@ -31,6 +32,7 @@ type AssetFilterPanelActions = {
     onProjectContextFilterChange: (value: string) => void;
     onProjectLibraryFilterChange: (value: ProjectLibraryFilter) => void;
     onReferenceVersionFilterChange: (value: ReferenceVersionFilter) => void;
+    onSourceScopeChange: (value: AssetSourceScope) => void;
     onStoryboardGroupFilterChange: (value: string) => void;
 };
 type AssetFilterPanelCounts = {
@@ -39,14 +41,16 @@ type AssetFilterPanelCounts = {
     validAssetCount: number;
 };
 type AssetFilterPanelOptions = {
+    canvasProjectOptions: FilterOption[];
     episodeOptions: AssetEpisodeOption[];
     generationFilterOptions: { actions: FilterOption[]; modelProviders: FilterOption[]; sources: FilterOption[] };
-    projectFolderRows: FilterProjectRow[];
+    projectOptions: FilterOption[];
     regularFolders: AssetFolder[];
     storyboardGroupOptions: FilterOption[];
 };
 type AssetFilterPanelValues = {
     activeFolderId?: string;
+    canvasLibraryFilter: string;
     episodeFilter: string;
     folderFilter: string;
     favoriteOnly: boolean;
@@ -59,6 +63,7 @@ type AssetFilterPanelValues = {
     projectContextFilter: string;
     projectLibraryFilter: ProjectLibraryFilter;
     referenceVersionFilter: ReferenceVersionFilter;
+    sourceScope: AssetSourceScope;
     storyboardGroupFilter: string;
 };
 
@@ -69,11 +74,10 @@ const kindOptions = [
     { label: "视频", value: "video" },
     { label: "音频", value: "audio" },
 ];
-const PROJECT_FILTER_COLLAPSED_COUNT = 6;
-
 export function AssetFilterPanel({ actions, counts, options, values }: { actions: AssetFilterPanelActions; counts: AssetFilterPanelCounts; options: AssetFilterPanelOptions; values: AssetFilterPanelValues }) {
     const {
         activeFolderId,
+        canvasLibraryFilter,
         episodeFilter,
         folderFilter,
         favoriteOnly,
@@ -86,11 +90,13 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
         projectContextFilter,
         projectLibraryFilter,
         referenceVersionFilter,
+        sourceScope,
         storyboardGroupFilter,
     } = values;
     const { folderCounts, outdatedUsageCount, validAssetCount } = counts;
-    const { episodeOptions, generationFilterOptions, projectFolderRows, regularFolders, storyboardGroupOptions } = options;
+    const { canvasProjectOptions, episodeOptions, generationFilterOptions, projectOptions, regularFolders, storyboardGroupOptions } = options;
     const {
+        onCanvasLibraryFilterChange,
         onClearSelectedOutdatedUsages,
         onCreateFolder,
         onDeleteFolder,
@@ -107,10 +113,10 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
         onProjectContextFilterChange,
         onProjectLibraryFilterChange,
         onReferenceVersionFilterChange,
+        onSourceScopeChange,
         onStoryboardGroupFilterChange,
     } = actions;
     const activeRegularFolder = activeFolderId ? regularFolders.find((folder) => folder.id === activeFolderId) : undefined;
-    const [projectFiltersExpanded, setProjectFiltersExpanded] = useState(false);
     const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
     const hasActiveAdvancedFilter = Boolean(
         episodeFilter ||
@@ -125,31 +131,23 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
     );
     const showAdvancedFilters = advancedFiltersExpanded;
     const episodeAssetCount = episodeOptions.reduce((sum, option) => sum + option.count, 0);
-    const visibleProjectFolderRows = useMemo(() => {
-        if (projectFiltersExpanded || projectFolderRows.length <= PROJECT_FILTER_COLLAPSED_COUNT) return projectFolderRows;
-        const collapsedRows = projectFolderRows.slice(0, PROJECT_FILTER_COLLAPSED_COUNT);
-        const activeRow = projectFolderRows.find(({ folder, project }) => folder.id === folderFilter || project.id === projectContextFilter);
-        if (!activeRow || collapsedRows.some(({ project }) => project.id === activeRow.project.id)) return collapsedRows;
-        return [...collapsedRows.slice(0, PROJECT_FILTER_COLLAPSED_COUNT - 1), activeRow];
-    }, [folderFilter, projectContextFilter, projectFolderRows, projectFiltersExpanded]);
-    const hiddenProjectCount = Math.max(0, projectFolderRows.length - visibleProjectFolderRows.length);
     const selectAllProjects = () => {
         onProjectContextFilterChange("");
-        onFolderFilterChange("all");
-        onStoryboardGroupFilterChange("");
-        onProjectLibraryFilterChange("all");
-        onReferenceVersionFilterChange("all");
         onClearSelectedOutdatedUsages();
     };
-    const selectProjectFolder = (projectId: string, folderId: string) => {
+    const selectProject = (projectId: string) => {
         onProjectContextFilterChange(projectId);
-        onFolderFilterChange(folderId);
+        onClearSelectedOutdatedUsages();
+    };
+    const selectCanvas = (canvasId: string) => {
+        onCanvasLibraryFilterChange(canvasId);
         onStoryboardGroupFilterChange("");
         onProjectLibraryFilterChange("all");
         onReferenceVersionFilterChange("all");
         onClearSelectedOutdatedUsages();
     };
     const selectRegularFolder = (value: string) => {
+        onCanvasLibraryFilterChange("");
         onProjectContextFilterChange("");
         onFolderFilterChange(value);
     };
@@ -189,30 +187,53 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
                 </FilterBlock>
                 <FilterBlock label="项目">
                     <div className="flex flex-wrap items-center gap-2">
-                        <Tag.CheckableTag checked={!projectContextFilter && folderFilter === "all"} className={cn("prompt-filter-tag", !projectContextFilter && folderFilter === "all" && "is-active")} onChange={selectAllProjects}>
+                        <Tag.CheckableTag checked={!projectContextFilter && !canvasLibraryFilter && folderFilter === "all"} className={cn("prompt-filter-tag", !projectContextFilter && !canvasLibraryFilter && folderFilter === "all" && "is-active")} onChange={selectAllProjects}>
                             全部项目 {validAssetCount}
                         </Tag.CheckableTag>
-                        {visibleProjectFolderRows.map(({ project, folder }) => (
-                            <Tag.CheckableTag key={project.id} checked={folderFilter === folder.id} className={cn("prompt-filter-tag", folderFilter === folder.id && "is-active")} onChange={() => selectProjectFolder(project.id, folder.id)}>
-                                {project.title || folder.name} {folderCounts[folder.id] || 0}
-                            </Tag.CheckableTag>
-                        ))}
-                        {projectFolderRows.length > PROJECT_FILTER_COLLAPSED_COUNT ? (
-                            <Button
-                                size="middle"
-                                type="text"
-                                className="!h-8 !px-2 !text-[var(--studio-text-secondary)] hover:!text-[var(--studio-text-primary)]"
-                                icon={projectFiltersExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-                                onClick={() => setProjectFiltersExpanded((value) => !value)}
-                            >
-                                {projectFiltersExpanded ? "收起项目" : `展开${hiddenProjectCount ? ` ${hiddenProjectCount} 个` : ""}项目`}
-                            </Button>
-                        ) : null}
+                        <Select
+                            allowClear
+                            showSearch
+                            className="min-w-52"
+                            placeholder="选择项目"
+                            value={projectContextFilter || undefined}
+                            options={projectOptions}
+                            optionFilterProp="label"
+                            disabled={!projectOptions.length}
+                            onChange={(value) => (value ? selectProject(value) : selectAllProjects())}
+                        />
                     </div>
                 </FilterBlock>
+                {projectContextFilter ? (
+                    <FilterBlock label="来源">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Tag.CheckableTag checked={sourceScope === "all"} className={cn("prompt-filter-tag", sourceScope === "all" && "is-active")} onChange={() => onSourceScopeChange("all")}>
+                                全部来源
+                            </Tag.CheckableTag>
+                            <Tag.CheckableTag checked={sourceScope === "workflow"} className={cn("prompt-filter-tag", sourceScope === "workflow" && "is-active")} onChange={() => onSourceScopeChange("workflow")}>
+                                工作流
+                            </Tag.CheckableTag>
+                            <Tag.CheckableTag checked={sourceScope === "canvas"} className={cn("prompt-filter-tag", sourceScope === "canvas" && "is-active")} onChange={() => onSourceScopeChange("canvas")}>
+                                画布
+                            </Tag.CheckableTag>
+                            {projectContextFilter && sourceScope === "canvas" ? (
+                                <Select
+                                    allowClear
+                                    showSearch
+                                    className="min-w-52"
+                                    placeholder="选择画布"
+                                    value={canvasLibraryFilter || undefined}
+                                    options={canvasProjectOptions}
+                                    optionFilterProp="label"
+                                    disabled={!canvasProjectOptions.length}
+                                    onChange={(value) => selectCanvas(value || "")}
+                                />
+                            ) : null}
+                        </div>
+                    </FilterBlock>
+                ) : null}
                 {showAdvancedFilters ? (
                     <>
-                        {projectContextFilter ? (
+                        {projectContextFilter && sourceScope !== "canvas" ? (
                             <FilterBlock label="范围">
                                 <div className="flex flex-wrap gap-2">
                                     <Select
@@ -254,7 +275,7 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
                                 </div>
                             </FilterBlock>
                         ) : null}
-                        {projectContextFilter ? (
+                        {projectContextFilter && sourceScope !== "canvas" ? (
                             <FilterBlock label="集数">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <Tag.CheckableTag checked={!episodeFilter} className={cn("prompt-filter-tag", !episodeFilter && "is-active")} onChange={() => onEpisodeFilterChange("")}>

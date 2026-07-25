@@ -7,16 +7,16 @@ import { CheckSquare, ChevronDown, ChevronRight, Square, Trash2 } from "lucide-r
 import type { Asset } from "@/stores/use-asset-store";
 import { cn } from "@/lib/utils";
 import { assetEpisodeTitle, primaryAssetEpisodeKey } from "../asset-episode";
-import { isCompactVideoAssetGroup } from "../asset-result-layout";
+import { isCompactMediaAssetGroup } from "../asset-result-layout";
+import { assetTypeGroupDomId, buildAssetTypeGroups, type AssetTypeGroup } from "../asset-type-groups";
 import type { AssetProjectResultGroup } from "../asset-project-groups";
 import type { AssetSortMode } from "../asset-page-filters";
 import type { OutdatedAssetVersionUsage } from "../asset-version-outdated-references";
 import { productionBibleKindLabel, type ProductionBibleItem } from "../../canvas/utils/production-bible";
-import { assetKindLabel } from "../asset-utils";
 import { workflowAssetInfo } from "../workflow-asset-image";
 import { AssetRow } from "./asset-card";
 import { AssetListToolbar } from "./asset-list-toolbar";
-import { CompactVideoAssetCard } from "./compact-video-asset-card";
+import { CompactMediaAssetCard } from "./compact-media-asset-card";
 import { OutdatedReferencesPanel } from "./outdated-references-panel";
 
 type BulkReviewAction = "submit" | "refresh" | "";
@@ -24,12 +24,11 @@ type BulkReviewAction = "submit" | "refresh" | "";
 type Props = {
     allFilteredSelected: boolean;
     allVisibleProductionBibleSelected: boolean;
-    assetPaginationEnabled: boolean;
     bulkReviewAction: BulkReviewAction;
     episodeTitleMap: Record<string, string>;
     filteredCount: number;
     page: number;
-    pageSize: number;
+    pageCount: number;
     productionBibleCount: number;
     projectContextFilter: string;
     referenceVersionFilter: "all" | "outdated";
@@ -68,7 +67,7 @@ type Props = {
     onExportSelected: () => void;
     onOpenAsset: (asset: Asset) => void;
     onOpenBulkOutdated: () => void;
-    onPageChange: (page: number, pageSize: number) => void;
+    onPageChange: (page: number) => void;
     onRefreshAssetReview: (asset: Asset) => void;
     onGenerateWorkflowImage: (asset: Asset) => void;
     onMatchWorkflowImage: (asset: Asset) => void;
@@ -91,12 +90,11 @@ type Props = {
 export function AssetResultsSection({
     allFilteredSelected,
     allVisibleProductionBibleSelected,
-    assetPaginationEnabled,
     bulkReviewAction,
     episodeTitleMap,
     filteredCount,
     page,
-    pageSize,
+    pageCount,
     productionBibleCount,
     projectContextFilter,
     referenceVersionFilter,
@@ -156,7 +154,7 @@ export function AssetResultsSection({
 }: Props) {
     const [collapsedAssetTypeGroups, setCollapsedAssetTypeGroups] = useState<Record<string, boolean>>({});
     const hasVisibleResults = visibleAssetGroups.some((group) => group.assets.length || group.productionBibleItems.length);
-    const showAssetPagination = assetPaginationEnabled && filteredCount > pageSize;
+    const showAssetPagination = pageCount > 1;
     const toggleAssetTypeGroup = (id: string) => setCollapsedAssetTypeGroups((value) => ({ ...value, [id]: !value[id] }));
     const renderAssetTypeGroups = (groupId: string, typeGroups: AssetTypeGroup[], scopeId = "") => (
         <div className="grid gap-3">
@@ -164,7 +162,7 @@ export function AssetResultsSection({
                 const typeGroupId = assetTypeGroupDomId(groupId, scopeId ? `${scopeId}-${typeGroup.id}` : typeGroup.id);
                 const collapsed = collapsedAssetTypeGroups[typeGroupId] === true;
                 const stats = workflowAssetTypeStats(typeGroup.assets);
-                const compactVideoAssets = isCompactVideoAssetGroup(typeGroup.assets) ? typeGroup.assets : null;
+                const compactMediaAssets = isCompactMediaAssetGroup(typeGroup.assets) ? typeGroup.assets : null;
                 return (
                     <section key={typeGroup.id} id={typeGroupId} className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]">
                         <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={() => toggleAssetTypeGroup(typeGroupId)} aria-expanded={!collapsed}>
@@ -180,10 +178,10 @@ export function AssetResultsSection({
                             ) : null}
                         </button>
                         {!collapsed ? (
-                            <div className={cn("border-t border-[var(--studio-border-subtle)] p-3", compactVideoAssets ? "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6" : "grid gap-2.5")}>
-                                {compactVideoAssets
-                                    ? compactVideoAssets.map((asset) => (
-                                          <CompactVideoAssetCard
+                            <div className={cn("border-t border-[var(--studio-border-subtle)] p-3", compactMediaAssets ? "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6" : "grid gap-2.5")}>
+                                {compactMediaAssets
+                                    ? compactMediaAssets.map((asset) => (
+                                          <CompactMediaAssetCard
                                               key={asset.id}
                                               asset={asset}
                                               selected={selectedAssetIds.has(asset.id)}
@@ -331,7 +329,7 @@ export function AssetResultsSection({
 
                     {showAssetPagination ? (
                         <div className="flex justify-center">
-                            <Pagination current={page} pageSize={pageSize} total={filteredCount} showSizeChanger pageSizeOptions={[30, 60, 100]} onChange={onPageChange} />
+                            <Pagination current={page} pageSize={1} total={pageCount} showSizeChanger={false} onChange={onPageChange} />
                         </div>
                     ) : null}
                 </>
@@ -361,46 +359,6 @@ function buildAssetEpisodeGroups(assets: Asset[], labels: Record<string, string>
 function assetEpisodeSortIndex(title: string) {
     const match = title.match(/第\s*(\d+)\s*集/);
     return match?.[1] ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
-}
-
-type AssetTypeGroup = {
-    id: string;
-    title: string;
-    assets: Asset[];
-};
-
-function buildAssetTypeGroups(assets: Asset[]): AssetTypeGroup[] {
-    const groups = new Map<string, AssetTypeGroup>();
-    assets.forEach((asset) => {
-        const title = assetTypeGroupTitle(asset);
-        const id = normalizeAssetTypeGroupId(title);
-        const group = groups.get(id) || { id, title, assets: [] };
-        group.assets.push(asset);
-        groups.set(id, group);
-    });
-    return Array.from(groups.values()).sort((a, b) => assetTypeSortIndex(a.title) - assetTypeSortIndex(b.title) || a.title.localeCompare(b.title, "zh-Hans-CN"));
-}
-
-function assetTypeGroupTitle(asset: Asset) {
-    const workflowType = workflowAssetInfo(asset)?.type?.trim();
-    if (workflowType) return workflowType;
-    const titleType = asset.title.split("·").pop()?.trim();
-    if (titleType && titleType.length <= 8) return titleType;
-    return assetKindLabel(asset.kind);
-}
-
-function normalizeAssetTypeGroupId(value: string) {
-    return value.replace(/\s+/g, "-").replace(/[^\w\u4e00-\u9fa5-]/g, "") || "asset";
-}
-
-function assetTypeGroupDomId(projectId: string, typeId: string) {
-    return `asset-group-${normalizeAssetTypeGroupId(projectId)}-${normalizeAssetTypeGroupId(typeId)}`;
-}
-
-function assetTypeSortIndex(title: string) {
-    const order = ["角色", "人物", "场景", "环境", "道具", "服装", "妆发", "图片", "视频", "音频", "文本"];
-    const index = order.findIndex((item) => title.includes(item));
-    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
 }
 
 function workflowAssetTypeStats(assets: Asset[]) {

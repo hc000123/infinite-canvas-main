@@ -4,12 +4,12 @@ import { CheckSquare, Download, PencilLine, RefreshCw, ShieldCheck, Square, Star
 
 import { cn } from "@/lib/utils";
 import { canSubmitVolcengineReview, isVolcengineReviewProcessing, shouldShowVolcengineReviewAction } from "@/services/volcengine-asset-metadata";
-import type { VideoAsset } from "@/stores/use-asset-store";
+import type { CompactMediaAsset } from "../asset-result-layout";
 import { assetMediaInfo, videoPreviewUrl, volcengineReviewActionLabel } from "../asset-utils";
 import { AssetIconButton, VolcengineAssetTag } from "./asset-card";
 
-export function CompactVideoAssetCard(props: {
-    asset: VideoAsset;
+export function CompactMediaAssetCard(props: {
+    asset: CompactMediaAsset;
     selected: boolean;
     refreshingReview: boolean;
     submittingReview: boolean;
@@ -23,7 +23,7 @@ export function CompactVideoAssetCard(props: {
     onRefreshReview: () => void;
 }) {
     const { asset } = props;
-    const previewUrl = videoPreviewUrl(asset.data.url);
+    const imageUrl = asset.kind === "image" ? asset.coverUrl || asset.data.dataUrl : asset.coverUrl;
 
     return (
         <article
@@ -59,7 +59,11 @@ export function CompactVideoAssetCard(props: {
                     <Star className={cn("size-4", asset.favorite && "fill-current")} />
                 </button>
                 <button type="button" className="size-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--studio-accent)]" aria-label={`查看素材详情：${asset.title}`} onClick={props.onOpen}>
-                    {asset.coverUrl ? <img src={asset.coverUrl} alt={asset.title} className="size-full object-cover" /> : <video src={previewUrl} muted playsInline preload="metadata" className="size-full object-cover" />}
+                    {imageUrl ? (
+                        <img src={imageUrl} alt={asset.title} className="size-full object-cover" />
+                    ) : asset.kind === "video" ? (
+                        <video src={videoPreviewUrl(asset.data.url)} muted playsInline preload="metadata" className="size-full object-cover" />
+                    ) : null}
                 </button>
                 <div
                     className={cn(
@@ -85,7 +89,7 @@ export function CompactVideoAssetCard(props: {
                 </div>
             </div>
             <button type="button" className="block w-full p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--studio-accent)]" title={asset.title} onClick={props.onOpen}>
-                <span className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-[var(--studio-text-primary)]">{asset.title || "未命名视频"}</span>
+                <span className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-[var(--studio-text-primary)]">{asset.title || (asset.kind === "image" ? "未命名图片" : "未命名视频")}</span>
                 <span className="mt-2 block truncate text-[11px] text-[var(--studio-text-muted)]">{assetMediaInfo(asset)}</span>
                 <span className="mt-1 flex min-w-0 items-center gap-2 text-[11px] text-[var(--studio-text-secondary)]">
                     {asset.source ? <span className="truncate">{asset.source}</span> : null}

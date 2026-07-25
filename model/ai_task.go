@@ -39,6 +39,7 @@ type AITask struct {
 	UpdatedAt         string                   `json:"updatedAt"`
 	FrontendTrace     AITaskFrontendTrace      `json:"frontendTrace" gorm:"-"`
 	FrontendArtifacts []AITaskFrontendArtifact `json:"frontendArtifacts" gorm:"-"`
+	User              UserSummary              `json:"user" gorm:"-"`
 }
 
 type AITaskFrontendTrace struct {
@@ -69,6 +70,7 @@ type AITaskFrontendArtifact struct {
 type AITaskQuery struct {
 	Keyword        string
 	User           string
+	ExactUserID    string
 	Status         string
 	Kind           string
 	ActionType     string

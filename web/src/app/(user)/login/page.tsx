@@ -1,12 +1,12 @@
 "use client";
 
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
-import { App, Button, Form, Input, Segmented } from "antd";
+import { App, Button, Form, Input, Result, Segmented, Tag } from "antd";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 import { activateUserStorageScope } from "@/lib/localforage-storage";
-import { fetchCurrentUser } from "@/services/api/auth";
+import { exchangeLoginApproval, fetchCurrentUser, fetchLoginApprovalStatus, type LoginApprovalClient } from "@/services/api/auth";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { postLoginHref } from "../user-auth-route";
@@ -37,6 +37,7 @@ function LoginContent() {
     const isLoading = useUserStore((state) => state.isLoading);
     const allowRegister = useConfigStore((state) => state.publicSettings?.auth?.allowRegister !== false);
     const [mode, setMode] = useState<"login" | "register">("login");
+    const [pendingApproval, setPendingApproval] = useState<LoginApprovalClient | null>(null);
     const redirect = searchParams.get("redirect") || "/projects";
     const isAdminRedirect = redirect.startsWith("/admin");
 
@@ -69,6 +70,29 @@ function LoginContent() {
         if (!allowRegister && mode === "register") setMode("login");
     }, [allowRegister, mode]);
 
+    useEffect(() => {
+        if (!pendingApproval?.token) return;
+        const timer = window.setInterval(async () => {
+            try {
+                const status = await fetchLoginApprovalStatus(pendingApproval.id, pendingApproval.token || "");
+                if (status.status === "approved") {
+                    const result = await exchangeLoginApproval(pendingApproval.id, pendingApproval.token || "");
+                    if (result.status === "authenticated" && result.session) {
+                        setSession(result.session.token, result.session.user);
+                        await activateUserStorageScope(result.session.user.id);
+                        window.location.replace(postLoginHref(redirect, result.session.user.role));
+                    }
+                } else if (status.status === "rejected" || status.status === "expired") {
+                    setPendingApproval(null);
+                    message.error(status.status === "rejected" ? "管理员已拒绝本次登录" : "登录审批已过期，请重新登录");
+                }
+            } catch {
+                /* polling remains non-blocking */
+            }
+        }, 2000);
+        return () => window.clearInterval(timer);
+    }, [message, pendingApproval, redirect, setSession]);
+
     const submit = async (values: LoginFormValues) => {
         try {
             if (mode === "register" && !allowRegister) {
@@ -79,8 +103,18 @@ function LoginContent() {
                 message.error("两次输入的密码不一致");
                 return;
             }
-            const action = mode === "register" ? register : login;
-            const user = await action({ username: values.username, password: values.password });
+            let user;
+            if (mode === "register") user = await register({ username: values.username, password: values.password });
+            else {
+                const result = await login({ username: values.username, password: values.password });
+                if (result.status === "pending" && result.approval) {
+                    setPendingApproval(result.approval);
+                    message.info("当前 IP 需要管理员审批");
+                    return;
+                }
+                if (!result.session) throw new Error("登录结果无效");
+                user = result.session.user;
+            }
             await activateUserStorageScope(user.id);
             message.success(mode === "register" ? "注册成功" : "登录成功");
             window.location.replace(postLoginHref(redirect, user.role));
@@ -88,6 +122,18 @@ function LoginContent() {
             message.error(error instanceof Error ? error.message : "登录失败");
         }
     };
+
+    if (pendingApproval)
+        return (
+            <main className="studio-workspace studio-shell flex h-full items-center justify-center p-6">
+                <Result
+                    icon={<Tag color="processing">等待审批</Tag>}
+                    title="此 IP 需要管理员同意"
+                    subTitle={`登录 IP：${pendingApproval.ipAddress}。审批有效期 10 分钟，通过后本页面会自动登录。`}
+                    extra={<Button onClick={() => setPendingApproval(null)}>取消并返回</Button>}
+                />
+            </main>
+        );
 
     return (
         <main className="studio-workspace studio-shell flex h-full min-h-0 items-center justify-center overflow-y-auto px-4 py-6 md:px-6">
