@@ -255,10 +255,10 @@ export function useCanvasNodeDerivativeActions({
             }
             const sourceNode = nodesRef.current.find((item) => item.id === node.id);
             if (!sourceNode) return;
-            const nodeSize = getNodeSpec(CanvasNodeType.Config);
-            const configNode = placeCanvasNodeAwayFromNodes(
+            const nodeSize = getNodeSpec(CanvasNodeType.Image);
+            const imageNode = placeCanvasNodeAwayFromNodes(
                 createNode(
-                    CanvasNodeType.Config,
+                    CanvasNodeType.Image,
                     {
                         x: sourceNode.position.x + sourceNode.width + 96 + nodeSize.width / 2,
                         y: sourceNode.position.y + sourceNode.height / 2,
@@ -272,16 +272,16 @@ export function useCanvasNodeDerivativeActions({
                 ),
                 nodesRef.current,
             );
-            const connection = { id: nanoid(), fromNodeId: sourceNode.id, toNodeId: configNode.id };
-            const nextNodes = nodesRef.current.map((item) => (item.id === sourceNode.id ? { ...item, metadata: { ...item.metadata, content: prompt, prompt, status: NODE_STATUS_SUCCESS } } : item)).concat(configNode);
+            const connection = { id: nanoid(), fromNodeId: sourceNode.id, toNodeId: imageNode.id };
+            const nextNodes = nodesRef.current.map((item) => (item.id === sourceNode.id ? { ...item, metadata: { ...item.metadata, content: prompt, prompt, status: NODE_STATUS_SUCCESS } } : item)).concat(imageNode);
             const nextConnections = [...connectionsRef.current, connection];
             nodesRef.current = nextNodes;
             connectionsRef.current = nextConnections;
             setNodes(nextNodes);
             setConnections(nextConnections);
-            setSelectedNodeIds(new Set([configNode.id]));
+            setSelectedNodeIds(new Set([imageNode.id]));
             setSelectedConnectionId(null);
-            setDialogNodeId(configNode.id);
+            setDialogNodeId(imageNode.id);
         },
         [canvasAiConfig.imageModel, canvasAiConfig.model, canvasAiConfig.size, connectionsRef, createNode, message, nodesRef, setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds],
     );

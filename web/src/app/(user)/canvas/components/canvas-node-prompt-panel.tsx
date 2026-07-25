@@ -138,11 +138,16 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
         >
             <CanvasMediaVersionControl node={node} disabled={isRunning} variant="panel" className="mb-3" onSwitch={onSwitchMediaVersion} />
             {onDisconnectConnectedMedia ? <CanvasConnectedMediaStrip items={connectedMedia} onPreview={onPreviewReference} onDisconnect={onDisconnectConnectedMedia} /> : null}
+            {hasConnectedText ? (
+                <div className="mb-2 text-xs" style={{ color: theme.node.muted }}>
+                    {mode === "text" ? "已连接文本将作为待优化原文；可填写优化要求，留空时使用默认优化。" : "已连接文本将作为基础提示词；这里可填写补充要求。"}
+                </div>
+            ) : null}
             <CanvasPromptEditor
                 key={`${node.id}:${editorRevision}`}
                 initialDocument={promptDocument}
                 options={referenceMentionOptions}
-                placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent)}
+                placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent, hasConnectedText)}
                 onChange={updatePromptDocument}
                 onPreviewReference={onPreviewReference}
                 onExpand={openExpandedEditor}
@@ -219,7 +224,7 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
                     key={`${node.id}:expanded:${expandedEditorOpen}`}
                     initialDocument={promptDocument}
                     options={referenceMentionOptions}
-                    placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent)}
+                    placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent, hasConnectedText)}
                     expanded
                     onChange={updatePromptDocument}
                     onPreviewReference={onPreviewReference}
@@ -233,7 +238,8 @@ function defaultMode(type: CanvasNodeData["type"]): CanvasNodeGenerationMode {
     return type === CanvasNodeType.Text ? "text" : type === CanvasNodeType.Video ? "video" : "image";
 }
 
-function promptPlaceholder(mode: CanvasNodeGenerationMode, hasImageContent: boolean, hasTextContent: boolean) {
+function promptPlaceholder(mode: CanvasNodeGenerationMode, hasImageContent: boolean, hasTextContent: boolean, hasConnectedText: boolean) {
+    if (hasConnectedText) return mode === "text" ? "输入优化要求（可选）" : "输入补充要求（可选）";
     const action = mode === "image" ? (hasImageContent ? "描述要如何修改图片" : "描述要生成的图片") : mode === "text" ? (hasTextContent ? "输入文本修改要求" : "输入文本生成要求") : "描述要生成或修改的视频";
     return `${action}，输入 @ 选择已连接的参考素材`;
 }

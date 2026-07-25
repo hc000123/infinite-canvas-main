@@ -8,6 +8,7 @@ import { defaultConfig, type AiConfig } from "@/stores/use-config-store";
 import { buildNodeGenerationContext, hydrateNodeGenerationContext } from "../components/canvas-node-generation";
 import type { CanvasNodeGenerationMode } from "../components/canvas-node-prompt-panel";
 import { buildGenerationConfig } from "../utils/canvas-generation-config";
+import { resolveCanvasEffectivePrompt } from "../utils/canvas-generation-inputs";
 import { directVideoReferenceInputs } from "../utils/canvas-generation-metadata";
 import { syncCanvasVolcengineAssetsFromLibrary } from "../utils/canvas-volcengine-asset-sync";
 import { reviewVideoPromptBeforeGeneration, shouldRunVideoPromptReview, type PromptReviewResult } from "../utils/canvas-prompt-review";
@@ -110,7 +111,7 @@ export function useCanvasGenerationFlowActions({
             const generationContext = await hydrateNodeGenerationContext(
                 buildNodeGenerationContext(nodeId, generationNodes, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${nodePrompt}` : nodePrompt),
             );
-            const effectivePrompt = generationContext.prompt.trim();
+            const effectivePrompt = resolveCanvasEffectivePrompt({ mode, localPrompt: nodePrompt, editingTextNode, context: generationContext });
             const isCompletedVideoSource = sourceNode?.type === CanvasNodeType.Video && Boolean(sourceNode.metadata?.content);
             const markSourceStatus = sourceNode?.type !== CanvasNodeType.Image && !editingTextNode && !isCompletedVideoSource;
             if (!effectivePrompt && mode === "text") {

@@ -60,6 +60,24 @@ export type NodeGenerationInput = {
     audio?: ReferenceAudio;
 };
 
+export const DEFAULT_TEXT_REFINEMENT_INSTRUCTION = "保持原意，优化表达，使内容更清晰、自然、完整。";
+
+export function resolveCanvasEffectivePrompt({
+    mode,
+    localPrompt,
+    editingTextNode,
+    context,
+}: {
+    mode: "text" | "image" | "video";
+    localPrompt: string;
+    editingTextNode: boolean;
+    context: NodeGenerationContext;
+}) {
+    const effectivePrompt = context.prompt.trim();
+    if (mode !== "text" || editingTextNode || localPrompt.trim() || context.textCount === 0) return effectivePrompt;
+    return `${effectivePrompt}\n\n优化要求：${DEFAULT_TEXT_REFINEMENT_INSTRUCTION}`;
+}
+
 export function applyCanvasInputOrder<T extends CanvasGenerationNodeLike>(nodes: T[], targetNodeId: string, sourceNodeIds: string[]): T[] {
     const connectedIds = [...new Set(sourceNodeIds)];
     return nodes.map((node) => {
@@ -92,7 +110,10 @@ export function buildCanvasGenerationContext(nodeId: string, nodes: CanvasGenera
     const referenceInputs = inputs.filter((input) => input.type === "image" || input.type === "video" || input.type === "audio");
 
     return {
-        prompt: upstreamText ? `${prompt}\n\n${upstreamText}` : prompt,
+        prompt: [upstreamText, prompt]
+            .map((item) => item.trim())
+            .filter(Boolean)
+            .join("\n\n"),
         referenceImages,
         referenceVideos,
         referenceAudios,
