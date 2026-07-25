@@ -364,20 +364,30 @@ func AdjustAdminUserCredits(actor model.AuthUser, id string, credits int) (model
 	return AdjustUserCredits(id, credits)
 }
 
-func ConsumeUserCredits(userID string, modelName string, credits int, path string) error {
+func ConsumeUserCredits(userID string, modelName string, credits int, path string) (bool, error) {
 	return ConsumeUserCreditsForTask(userID, modelName, credits, path, "")
 }
 
-func ConsumeUserCreditsForTask(userID string, modelName string, credits int, path string, relatedID string) error {
+func ConsumeUserCreditsForTask(userID string, modelName string, credits int, path string, relatedID string) (bool, error) {
 	if credits <= 0 {
-		return nil
+		return false, nil
+	}
+	account, ok, err := repository.GetUserByID(userID)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return false, safeMessageError{message: "用户不存在"}
+	}
+	if model.IsSuperAdminRole(account.Role) {
+		return false, nil
 	}
 	user, ok, err := repository.ConsumeUserCredits(userID, credits, now())
 	if err != nil {
-		return err
+		return false, err
 	}
 	if !ok {
-		return safeMessageError{message: "算力点不足"}
+		return false, safeMessageError{message: "算力点不足"}
 	}
 	extra, _ := json.Marshal(map[string]string{"model": modelName, "path": path})
 	_, err = repository.SaveCreditLog(model.CreditLog{
@@ -391,7 +401,7 @@ func ConsumeUserCreditsForTask(userID string, modelName string, credits int, pat
 		Extra:     string(extra),
 		CreatedAt: now(),
 	})
-	return err
+	return true, err
 }
 
 func RefundUserCredits(userID string, modelName string, credits int, path string) error {

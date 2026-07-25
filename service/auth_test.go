@@ -83,6 +83,25 @@ func TestAdjustAdminUserCreditsRejectsPrivilegedTarget(t *testing.T) {
 	}
 }
 
+func TestConsumeUserCreditsExemptsOnlySuperAdmin(t *testing.T) {
+	setupAuthTestDB(t)
+	super := saveCreditUser(t, "credit-super", model.UserRoleSuperAdmin, 0)
+	admin := saveCreditUser(t, "credit-admin", model.UserRoleAdmin, 0)
+
+	if charged, err := ConsumeUserCreditsForTask(super.ID, "model", 5, "/images", "task-super"); err != nil || charged {
+		t.Fatalf("superadmin consume returned error: %v", err)
+	}
+	if saved, ok, err := repository.GetUserByID(super.ID); err != nil || !ok || saved.Credits != 0 {
+		t.Fatalf("superadmin after consume=%#v ok=%v err=%v", saved, ok, err)
+	}
+	if count, err := repository.CountCreditLogsByRelatedIDAndType("task-super", model.CreditLogTypeAIConsume); err != nil || count != 0 {
+		t.Fatalf("superadmin consume logs=%d err=%v", count, err)
+	}
+	if charged, err := ConsumeUserCreditsForTask(admin.ID, "model", 5, "/images", "task-admin"); err == nil || charged {
+		t.Fatal("ordinary administrator bypassed insufficient credits")
+	}
+}
+
 func setupAuthTestDB(t *testing.T) {
 	t.Helper()
 	oldDriver := config.Cfg.StorageDriver
@@ -95,4 +114,13 @@ func setupAuthTestDB(t *testing.T) {
 		config.Cfg.DatabaseDSN = oldDSN
 		repository.ResetForTest()
 	})
+}
+
+func saveCreditUser(t *testing.T, id string, role model.UserRole, credits int) model.User {
+	t.Helper()
+	user, err := repository.SaveUser(model.User{ID: id, Username: id, Role: role, Credits: credits, Status: model.UserStatusActive, AffCode: "aff-" + id})
+	if err != nil {
+		t.Fatalf("save credit user: %v", err)
+	}
+	return user
 }
