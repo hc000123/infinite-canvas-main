@@ -46,7 +46,7 @@ test("starts retrying completed media as a fresh pending version", () => {
 test("completes or rolls back a retried media version without losing its draft", () => {
     assert.equal(typeof retryState.completeCanvasNodeRetry, "function");
     assert.equal(typeof retryState.failCanvasNodeRetry, "function");
-    const retrying = retryState.startCanvasNodeRetry?.(failedVideo, "修改后的提示词", startedAt)!;
+    const retrying = retryState.startCanvasNodeRetry(failedVideo, "修改后的提示词", startedAt);
     const completed = { ...retrying, metadata: { ...retrying.metadata, content: "blob:new-video", storageKey: "video:new", status: "success" as const, taskId: "task-new", taskStatus: "succeeded" } };
     const success = retryState.completeCanvasNodeRetry?.(retrying, completed, "2026-07-23T08:03:00.000Z");
     const failed = retryState.failCanvasNodeRetry?.(retrying, "仍然没有加白", startedAt + 10_000);
