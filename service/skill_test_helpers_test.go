@@ -12,6 +12,12 @@ func createSkillTestDraft(t *testing.T, capability, versionName string) model.Sk
 	t.Helper()
 	packageValue := validSkillTestPackage()
 	packageValue.Manifest.Capabilities = []string{capability}
+	if capability == "workflow.stage.art" {
+		packageValue.Manifest.InputArtifactTypes = []string{"production_script"}
+		packageValue.Manifest.OutputArtifactTypes = []string{"asset_catalog"}
+		packageValue.Manifest.SchemaCompatibility = map[string]string{"production_script": ">=1.0 <2.0"}
+		packageValue.OutputContract.Schema = workflowAssetOutputSchema(false)
+	}
 	normalized, err := NormalizeSkillPackage(packageValue)
 	if err != nil {
 		t.Fatal(err)

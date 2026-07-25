@@ -160,6 +160,22 @@ func compileSkillOutputSchema(contract SkillOutputContract) (*jsonschema.Schema,
 	return jsonschema.CompileString("skill-output-schema.json", string(raw))
 }
 
+func appendSkillSchemaIssues(content []byte, contract SkillOutputContract, report *WorkflowGateReport) {
+	schema, err := compileSkillOutputSchema(contract)
+	if err != nil {
+		report.add("output_schema", "输出 Schema 无效："+err.Error(), "")
+		return
+	}
+	var value any
+	if err := json.Unmarshal(content, &value); err != nil {
+		report.add("output_schema", "产物无法按输出 Schema 校验："+err.Error(), "")
+		return
+	}
+	if err := schema.Validate(value); err != nil {
+		report.add("output_schema", "产物不符合输出 Schema："+err.Error(), "")
+	}
+}
+
 func normalizeSkillFiles(files map[string]string) (map[string]string, error) {
 	normalizedFiles := make(map[string]string, len(files))
 	totalBytes := 0
