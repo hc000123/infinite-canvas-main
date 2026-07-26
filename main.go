@@ -31,6 +31,9 @@ func run() error {
 	if err := service.EnsureSkillSeeds(); err != nil {
 		return err
 	}
+	if err := service.EnsureAgentSeeds(); err != nil {
+		return err
+	}
 	if err := service.EnsureCoreArtifactSchemas(); err != nil {
 		return err
 	}
