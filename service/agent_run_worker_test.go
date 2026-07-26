@@ -114,7 +114,7 @@ func TestAgentRunWorkerKeepsSuperAdminUsageWithoutBalanceReservation(t *testing.
 }
 
 func TestAgentRunWorkerCompletesWorkflowStageArtifact(t *testing.T) {
-	fixture := newAgentRunWorkerFixture(t, http.StatusOK, `{"choices":[{"message":{"content":"{\"items\":[{\"logicalAssetId\":\"CHAR-001\",\"kind\":\"character\",\"name\":\"阿宁\",\"scriptEvidence\":\"阿宁进入房间\",\"description\":\"进入房间的年轻角色\"}]}"}}]}`)
+	fixture := newAgentRunWorkerFixture(t, http.StatusOK, `{"choices":[{"message":{"content":"{\"items\":[{\"assetId\":\"character-001\",\"kind\":\"character\",\"name\":\"阿宁\",\"sourceEvidence\":[\"阿宁进入房间。\"],\"coreFacts\":[\"主要角色\"]}]}"}}]}`)
 	detail, err := EnsureWorkflowRun("user-1", EnsureWorkflowRunInput{
 		ProjectID:       "project-worker",
 		EpisodeID:       "episode-worker",
@@ -131,13 +131,16 @@ func TestAgentRunWorkerCompletesWorkflowStageArtifact(t *testing.T) {
 	if err := fixture.worker.ProcessOne(context.Background()); err != nil {
 		t.Fatalf("ProcessOne returned error: %v", err)
 	}
-	saved, ok, err := repository.GetUserWorkflowStageRun("user-1", stage.ID)
-	if err != nil || !ok || saved.Status != model.WorkflowStageRunStatusNeedsReview || saved.OutputArtifactID == "" {
-		t.Fatalf("saved=%#v ok=%v err=%v", saved, ok, err)
+	detail, err = GetWorkflowRunDetail("user-1", detail.Run.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	gate, ok, err := repository.GetWorkflowQualityGateForArtifact("user-1", saved.OutputArtifactID)
-	if err != nil || !ok || !gate.Passed {
-		t.Fatalf("gate=%#v ok=%v err=%v", gate, ok, err)
+	saved := workflowTestStage(detail, WorkflowStageAssetExtraction)
+	if saved.ID != stage.ID || saved.Status != model.WorkflowStageRunStatusNeedsReview || saved.OutputArtifactID == "" {
+		t.Fatalf("saved=%#v", saved)
+	}
+	if len(detail.Gates) != 2 || !detail.Gates[1].Passed || detail.Gates[1].ArtifactID != saved.OutputArtifactID {
+		t.Fatalf("gates=%#v", detail.Gates)
 	}
 }
 

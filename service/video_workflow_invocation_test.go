@@ -185,11 +185,17 @@ func TestProjectWorkflowInvocationUsesAuthoritativeArtifactSet(t *testing.T) {
 
 func seedWorkflowInvocationCredits(t *testing.T) {
 	t.Helper()
-	db, err := repository.DB()
+	user, ok, err := repository.GetUserByID("user-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&model.User{ID: "user-1", Username: "workflow-user", AffCode: "workflow-aff", Role: model.UserRoleUser, Status: model.UserStatusActive, Credits: 100}).Error; err != nil {
+	if !ok {
+		user = model.User{ID: "user-1", Username: "workflow-user", AffCode: "workflow-aff", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	}
+	if user.Credits < 100 {
+		user.Credits = 100
+	}
+	if _, err := repository.SaveUser(user); err != nil {
 		t.Fatal(err)
 	}
 }

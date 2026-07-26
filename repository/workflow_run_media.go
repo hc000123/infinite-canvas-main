@@ -172,6 +172,66 @@ func SaveAgentRunWithWorkflowMedia(run model.AgentRun, batchID string) (model.Ag
 	return run, true, nil
 }
 
+func ClaimWorkflowMediaBatchForInvocation(userID, batchID, workflowRunID, stageID, idempotencyKey, agentRunID, manifestJSON, stamp string) error {
+	db, err := DB()
+	if err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		var batch model.WorkflowMediaBatch
+		if err := tx.Where("id = ? AND user_id = ? AND workflow_run_id = ? AND stage_id = ? AND idempotency_key = ?", strings.TrimSpace(batchID), strings.TrimSpace(userID), strings.TrimSpace(workflowRunID), strings.TrimSpace(stageID), strings.TrimSpace(idempotencyKey)).First(&batch).Error; err != nil {
+			return ErrWorkflowMediaBatchNotFound
+		}
+		if batch.Status == model.WorkflowMediaBatchClaimed {
+			if batch.AgentRunID != strings.TrimSpace(agentRunID) {
+				return ErrWorkflowMediaBatchInvalid
+			}
+			return nil
+		}
+		expiresAt, parseErr := time.Parse(time.RFC3339Nano, batch.ExpiresAt)
+		if batch.Status != model.WorkflowMediaBatchOpen || parseErr != nil || !expiresAt.After(time.Now()) {
+			return ErrWorkflowMediaBatchInvalid
+		}
+		updated := tx.Model(&model.AgentRun{}).Where("id = ? AND user_id = ? AND invocation_id <> '' AND status = ?", strings.TrimSpace(agentRunID), strings.TrimSpace(userID), model.AgentRunStatusQueued).Update("image_manifest_json", strings.TrimSpace(manifestJSON))
+		if updated.Error != nil || updated.RowsAffected != 1 {
+			if updated.Error != nil {
+				return updated.Error
+			}
+			return ErrWorkflowMediaBatchInvalid
+		}
+		updated = tx.Model(&model.WorkflowMediaBatch{}).Where("id = ? AND status = ?", batch.ID, model.WorkflowMediaBatchOpen).Updates(map[string]any{"status": model.WorkflowMediaBatchClaimed, "agent_run_id": strings.TrimSpace(agentRunID), "updated_at": stamp})
+		if updated.Error != nil || updated.RowsAffected != 1 {
+			if updated.Error != nil {
+				return updated.Error
+			}
+			return ErrWorkflowMediaBatchInvalid
+		}
+		return nil
+	})
+}
+
+func CopyAgentRunImageManifest(userID, sourceAgentRunID, targetAgentRunID string) error {
+	db, err := DB()
+	if err != nil {
+		return err
+	}
+	var source model.AgentRun
+	if err := db.Select("image_manifest_json").Where("id = ? AND user_id = ?", strings.TrimSpace(sourceAgentRunID), strings.TrimSpace(userID)).First(&source).Error; err != nil {
+		return err
+	}
+	if strings.TrimSpace(source.ImageManifestJSON) == "" {
+		return nil
+	}
+	result := db.Model(&model.AgentRun{}).Where("id = ? AND user_id = ? AND invocation_id <> '' AND status = ?", strings.TrimSpace(targetAgentRunID), strings.TrimSpace(userID), model.AgentRunStatusQueued).Update("image_manifest_json", source.ImageManifestJSON)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return ErrWorkflowMediaBatchInvalid
+	}
+	return nil
+}
+
 func workflowMediaOrderSQL() string {
-	return "CASE kind WHEN 'character' THEN 1 WHEN 'scene' THEN 2 WHEN 'prop' THEN 3 ELSE 4 END, position ASC, created_at ASC"
+	return "position ASC, CASE kind WHEN 'character' THEN 1 WHEN 'scene' THEN 2 WHEN 'prop' THEN 3 ELSE 4 END, created_at ASC"
 }

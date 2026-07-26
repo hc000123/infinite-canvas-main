@@ -231,26 +231,35 @@ func validateInvocationVideoPromptPackage(payload map[string]any) error {
 }
 
 func validateInvocationVideoPromptRefs(payload map[string]any, bindings []ResolvedArtifactBinding) []error {
-	type coordinate struct{ binding, id, hash string }
+	type coordinate struct{ binding, id, hash, role string }
 	expected := map[string]coordinate{}
 	for _, binding := range bindings {
-		item := coordinate{binding.BindingName, binding.Artifact.Artifact.ID, binding.Artifact.Artifact.ContentHash}
+		role := ""
+		if metadata, ok := binding.Artifact.Extensions["workflow_media_import"].(map[string]any); ok {
+			role = invocationString(metadata, "role")
+		}
+		item := coordinate{binding.BindingName, binding.Artifact.Artifact.ID, binding.Artifact.Artifact.ContentHash, role}
 		expected[item.id] = item
 	}
 	errs := []error{}
 	for _, output := range invocationObjectItems(payload, "items") {
+		usedContinuity := false
 		for _, ref := range invocationObjectItems(output, "inputArtifactRefs") {
 			binding, id, hash := invocationString(ref, "bindingName"), invocationString(ref, "artifactId"), invocationString(ref, "contentHash")
 			want, ok := expected[id]
 			if !ok || want.hash != hash || want.binding != binding {
 				errs = append(errs, fmt.Errorf("提示词 %s 包含非冻结 Artifact 引用", invocationString(output, "shotId")))
 			}
-			if ok && want.binding == "continuity_reference" && binding != "continuity_reference" {
-				errs = append(errs, errors.New("上一镜尾帧 continuity_reference 不得标记为首帧"))
+			if ok && want.role == "continuity_reference" {
+				usedContinuity = true
 			}
-			if binding == "first_frame" && ok && want.binding == "continuity_reference" {
+			if binding == "first_frame" && ok && want.role == "continuity_reference" {
 				errs = append(errs, errors.New("上一镜尾帧不得作为首帧"))
 			}
+		}
+		prompt := invocationString(output, "prompt")
+		if usedContinuity && (strings.Contains(prompt, "首帧") || strings.Contains(prompt, "第一帧复刻")) {
+			errs = append(errs, errors.New("上一镜尾帧 continuity_reference 只能作为普通参考图，不得要求首帧复刻"))
 		}
 	}
 	return errs

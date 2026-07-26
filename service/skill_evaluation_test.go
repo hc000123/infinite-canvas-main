@@ -89,7 +89,7 @@ func skillEvaluationBusinessCounts(t *testing.T) (int64, int64) {
 	if err := db.Model(&model.WorkflowStageRun{}).Count(&stages).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Model(&model.WorkflowArtifact{}).Count(&artifacts).Error; err != nil {
+	if err := db.Model(&model.Artifact{}).Count(&artifacts).Error; err != nil {
 		t.Fatal(err)
 	}
 	return stages, artifacts

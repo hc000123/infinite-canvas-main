@@ -19,14 +19,19 @@ func TestWorkflowStageFreezesPublishedSkillSnapshot(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("run ok=%v err=%v", ok, err)
 	}
-	if run.SkillID != "skill-system-workflow-art" || run.SkillVersion != skillSeedVersion || run.SkillContentHash == "" || run.SkillSnapshotJSON == "" {
+	if run.SkillID != "skill-system-workflow-art" || run.SkillVersion != skillInvocationSeedVersion || run.SkillContentHash == "" || run.SkillSnapshotJSON == "" || run.InvocationRevision != 1 {
 		t.Fatalf("run skill snapshot=%+v", run)
 	}
 	if !strings.Contains(run.SkillSnapshotJSON, `"manifest"`) || !strings.Contains(run.SkillSnapshotJSON, `"outputContract"`) {
 		t.Fatalf("snapshot missing generic contracts: %s", run.SkillSnapshotJSON)
 	}
-	if !strings.Contains(run.RequestJSON, "当前阶段 Skill") || !strings.Contains(run.RequestJSON, run.SkillContentHash) {
-		t.Fatalf("request did not freeze skill instructions: %s", run.RequestJSON)
+	detail, err = GetWorkflowRunDetail("user-1", detail.Run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invocation, err := GetInvocationDetail("user-1", workflowTestStage(detail, WorkflowStageAssetExtraction).InvocationID)
+	if err != nil || len(invocation.Revisions) != 1 || invocation.Revisions[0].SkillVersionID != run.SkillVersionID || invocation.Revisions[0].SkillContentHash != run.SkillContentHash || !strings.Contains(run.RequestJSON, "asset_catalog") {
+		t.Fatalf("revision=%+v run=%+v err=%v", invocation.Revisions, run, err)
 	}
 }
 
@@ -59,12 +64,7 @@ func TestWorkflowStageRetryKeepsOriginalSkillSnapshot(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	original.Status = model.AgentRunStatusFailed
-	original.ErrorMessage = "test failure"
-	if _, err := repository.SaveAgentRun(original); err != nil {
-		t.Fatal(err)
-	}
-	if err := SyncWorkflowStageFromAgentRun(original); err != nil {
+	if _, err := CancelWorkflowStage("user-1", stage.ID); err != nil {
 		t.Fatal(err)
 	}
 	retried, err := RetryWorkflowStage("user-1", stage.ID, "retry-after-binding-change")

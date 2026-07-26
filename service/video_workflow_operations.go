@@ -132,6 +132,9 @@ func RetryWorkflowStage(userID string, stageRunID string, idempotencyKey string)
 		if response.Attempt == nil {
 			return stage, safeMessageError{message: "工作流重试未能创建执行尝试"}
 		}
+		if err := repository.CopyAgentRunImageManifest(userID, stage.AgentRunID, response.Attempt.AgentRunID); err != nil {
+			return stage, err
+		}
 		stamp := now()
 		retry := stage
 		retry.ID, retry.ParentStageRunID = newID("workflowstage"), stage.ID

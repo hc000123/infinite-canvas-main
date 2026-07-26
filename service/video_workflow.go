@@ -206,6 +206,11 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, inp
 	if err != nil {
 		return current, err
 	}
+	media, err := prepareWorkflowMediaInvocationInputs(userID, detail, stageID, input, context)
+	if err != nil {
+		return current, err
+	}
+	refs = append(refs, media.Refs...)
 	request := InvocationRequest{
 		Source: "workflow", ProjectID: detail.Run.ProjectID, EpisodeID: detail.Run.EpisodeID,
 		SkillVersionID: strings.TrimSpace(input.SkillVersionID), InputArtifactRefs: refs,
@@ -238,6 +243,12 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, inp
 	}
 	if response.Attempt == nil {
 		return current, safeMessageError{message: "工作流阶段未能创建执行尝试"}
+	}
+	if strings.TrimSpace(input.MediaBatchID) != "" {
+		if err := repository.ClaimWorkflowMediaBatchForInvocation(userID, input.MediaBatchID, detail.Run.ID, stageID, input.IdempotencyKey, response.Attempt.AgentRunID, media.ManifestJSON, now()); err != nil {
+			_, _ = CancelInvocation(userID, snapshot.Run.ID)
+			return current, safeMessageError{message: "参考图片批次已失效，请重新上传"}
+		}
 	}
 	stamp := now()
 	stage := model.WorkflowStageRun{

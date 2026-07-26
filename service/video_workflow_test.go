@@ -1,12 +1,13 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/basketikun/infinite-canvas/model"
-	"github.com/basketikun/infinite-canvas/repository"
 )
 
 func TestEnsureWorkflowRunIsIdempotent(t *testing.T) {
@@ -62,10 +63,14 @@ func TestWorkflowV2UsesAssetAndShotSubtasks(t *testing.T) {
 	}
 }
 
-func TestWorkflowShotBreakdownStartsFromConfirmedScript(t *testing.T) {
+func TestWorkflowShotBreakdownRequiresApprovedAssetCatalog(t *testing.T) {
 	setupVideoWorkflowTest(t)
-	run := ensureVideoWorkflowTestRun(t)
-	stage, err := StartWorkflowStage("user-1", run.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard")
+	detail := ensureVideoWorkflowTestRun(t)
+	if _, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard-blocked"); err == nil || !strings.Contains(err.Error(), "资产提取") {
+		t.Fatalf("err=%v", err)
+	}
+	detail = approveWorkflowStageForTest(t, detail, WorkflowStageAssetExtraction, `{"items":[{"assetId":"character-001","kind":"character","name":"阿宁","sourceEvidence":["阿宁进入房间。"],"coreFacts":["主要角色"]}]}`)
+	stage, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageShotBreakdown, "idem-storyboard")
 	if err != nil || stage.Status != model.WorkflowStageRunStatusQueued {
 		t.Fatalf("stage=%#v err=%v", stage, err)
 	}
@@ -78,47 +83,29 @@ func TestReviewRejectsArtifactHashMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartWorkflowStage returned error: %v", err)
 	}
-	agentRun, ok, err := repository.GetAgentRun(stage.AgentRunID)
-	if err != nil || !ok {
-		t.Fatalf("GetAgentRun ok=%v err=%v", ok, err)
-	}
-	agentRun.Status = model.AgentRunStatusNeedsReview
-	agentRun.StructuredDraftJSON = `{"items":[{"logicalAssetId":"CHAR-001","kind":"character","name":"阿宁","scriptEvidence":"阿宁进入房间","description":"进入房间的年轻角色"}]}`
-	if _, err := repository.SaveAgentRun(agentRun); err != nil {
-		t.Fatalf("SaveAgentRun returned error: %v", err)
-	}
-	if err := CompleteWorkflowStageAgentRun(agentRun); err != nil {
-		t.Fatalf("CompleteWorkflowStageAgentRun returned error: %v", err)
-	}
-	stage, _, err = repository.GetUserWorkflowStageRun("user-1", stage.ID)
-	if err != nil {
-		t.Fatalf("GetUserWorkflowStageRun returned error: %v", err)
-	}
+	seedWorkflowInvocationCredits(t)
+	runWorkflowInvocationWorkerForTest(t, `{"items":[{"assetId":"character-001","kind":"character","name":"阿宁","sourceEvidence":["阿宁进入房间。"],"coreFacts":["主要角色"]}]}`)
 	_, err = ReviewWorkflowStage("user-1", stage.ID, WorkflowReviewInput{Decision: "approved", ArtifactHash: "old"})
 	if err == nil || !strings.Contains(err.Error(), "已变化") {
 		t.Fatalf("err=%v", err)
 	}
 }
 
-func TestReviewBlocksFailedQualityGate(t *testing.T) {
+func TestInvalidOutputFailsInvocationBeforeReview(t *testing.T) {
 	setupVideoWorkflowTest(t)
 	detail := ensureVideoWorkflowTestRun(t)
 	stage, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageArtDesign, "idem-art-invalid")
 	if err != nil {
 		t.Fatalf("StartWorkflowStage returned error: %v", err)
 	}
-	agentRun, _, _ := repository.GetAgentRun(stage.AgentRunID)
-	agentRun.Status = model.AgentRunStatusNeedsReview
-	agentRun.StructuredDraftJSON = `{"summary":"missing items"}`
-	_, _ = repository.SaveAgentRun(agentRun)
-	if err := CompleteWorkflowStageAgentRun(agentRun); err != nil {
-		t.Fatalf("CompleteWorkflowStageAgentRun returned error: %v", err)
+	seedWorkflowInvocationCredits(t)
+	runWorkflowInvocationWorkerForTest(t, `{"summary":"missing items"}`)
+	invocation, err := GetInvocationDetail("user-1", stage.InvocationID)
+	if err != nil || invocation.Run.Status != model.InvocationStatusFailed || len(invocation.OutputArtifacts) != 0 {
+		t.Fatalf("invocation=%#v err=%v", invocation, err)
 	}
-	stage, _, _ = repository.GetUserWorkflowStageRun("user-1", stage.ID)
-	artifact, _, _ := repository.GetUserWorkflowArtifact("user-1", stage.OutputArtifactID)
-	_, err = ReviewWorkflowStage("user-1", stage.ID, WorkflowReviewInput{Decision: "approved", ArtifactHash: artifact.ContentHash})
-	if err == nil || !strings.Contains(err.Error(), "质量门") {
-		t.Fatalf("err=%v", err)
+	if _, err = ReviewWorkflowStage("user-1", stage.ID, WorkflowReviewInput{Decision: "approved", ArtifactHash: "missing"}); err == nil || !strings.Contains(err.Error(), "待审核产物不存在") {
+		t.Fatalf("review err=%v", err)
 	}
 }
 
@@ -126,10 +113,8 @@ func TestAppliedAssetImagesUnlockStoryboard(t *testing.T) {
 	setupVideoWorkflowTest(t)
 	detail := ensureVideoWorkflowTestRun(t)
 	stage := completeVideoWorkflowArtStage(t, detail, "idem-art-approved")
-	artifact, ok, err := repository.GetUserWorkflowArtifact("user-1", stage.OutputArtifactID)
-	if err != nil || !ok {
-		t.Fatalf("GetUserWorkflowArtifact ok=%v err=%v", ok, err)
-	}
+	detail = mustWorkflowDetailForTest(t, detail.Run.ID)
+	artifact := workflowTestArtifact(detail, stage.ID)
 	approved, err := ReviewWorkflowStage("user-1", stage.ID, WorkflowReviewInput{Decision: "approved", ArtifactHash: artifact.ContentHash})
 	if err != nil || approved.Status != model.WorkflowStageRunStatusApproved {
 		t.Fatalf("approved=%#v err=%v", approved, err)
@@ -148,15 +133,9 @@ func TestAppliedAssetImagesUnlockStoryboard(t *testing.T) {
 	if err != nil || assetStage.Status != model.WorkflowStageRunStatusQueued {
 		t.Fatalf("assets=%#v err=%v", assetStage, err)
 	}
-	assetRun, _, _ := repository.GetAgentRun(assetStage.AgentRunID)
-	assetRun.Status = model.AgentRunStatusNeedsReview
-	assetRun.StructuredDraftJSON = `{"items":[{"logicalAssetId":"CHAR-001","kind":"character","name":"阿宁","scriptEvidence":"阿宁进入房间","description":"进入房间的年轻角色","imagePrompt":"可执行三视图角色设定","status":"ready"}]}`
-	_, _ = repository.SaveAgentRun(assetRun)
-	if err := CompleteWorkflowStageAgentRun(assetRun); err != nil {
-		t.Fatalf("complete assets: %v", err)
-	}
-	assetStage, _, _ = repository.GetUserWorkflowStageRun("user-1", assetStage.ID)
-	assetArtifact, _, _ := repository.GetUserWorkflowArtifact("user-1", assetStage.OutputArtifactID)
+	runWorkflowInvocationWorkerForTest(t, `{"outputs":[{"bindingName":"asset_brief","ordinal":0,"payload":{"assetId":"character-001","brief":"可执行三视图角色设定","format":"character-four-view"}}]}`)
+	detail = mustWorkflowDetailForTest(t, detail.Run.ID)
+	assetArtifact := workflowTestArtifact(detail, assetStage.ID)
 	if _, err := ReviewWorkflowStage("user-1", assetStage.ID, WorkflowReviewInput{Decision: "approved", ArtifactHash: assetArtifact.ContentHash}); err != nil {
 		t.Fatalf("approve assets: %v", err)
 	}
@@ -176,15 +155,19 @@ func TestAppliedAssetImagesUnlockStoryboard(t *testing.T) {
 func TestShotPromptRequiresConfirmedBoundedContext(t *testing.T) {
 	setupVideoWorkflowTest(t)
 	detail := ensureVideoWorkflowTestRun(t)
-	detail = approveWorkflowStageForTest(t, detail, WorkflowStageAssetExtraction, `{"items":[{"logicalAssetId":"CHAR-001","kind":"character","name":"阿宁","scriptEvidence":"阿宁进入房间","description":"年轻角色"}]}`)
-	detail = approveWorkflowStageForTest(t, detail, WorkflowStageAssetImagePrompt, `{"items":[{"logicalAssetId":"CHAR-001","kind":"character","name":"阿宁","scriptEvidence":"阿宁进入房间","description":"年轻角色","imagePrompt":"角色设定图","status":"ready"}]}`)
+	detail = approveWorkflowStageForTest(t, detail, WorkflowStageAssetExtraction, `{"items":[{"assetId":"character-001","kind":"character","name":"阿宁","sourceEvidence":["阿宁进入房间。"],"coreFacts":["主要角色"]}]}`)
+	detail = approveWorkflowStageForTest(t, detail, WorkflowStageAssetImagePrompt, `{"outputs":[{"bindingName":"asset_brief","ordinal":0,"payload":{"assetId":"character-001","brief":"角色设定图","format":"character-four-view"}}]}`)
 	detail = approveWorkflowStageForTest(t, detail, WorkflowStageShotBreakdown, `{"shots":[{"shotId":"shot-001","sceneKey":"scene-001","sourceScript":"阿宁进入房间。","shotDraft":{"shotSize":"中景","camera":"固定机位","movement":"缓慢推近","action":"阿宁进入房间","performance":"克制","dialogue":"","durationSeconds":6,"continuityMode":"continuous"}}]}`)
 
 	_, err := StartWorkflowStageWithInput("user-1", detail.Run.ID, WorkflowStageShotPrompt, WorkflowStageStartInput{IdempotencyKey: "shot-prompt-missing"})
 	if err == nil || !strings.Contains(err.Error(), "镜头上下文") {
 		t.Fatalf("missing context err=%v", err)
 	}
-	context := json.RawMessage(`{"shotId":"shot-001","sourceScript":"阿宁进入房间。","shotDraft":{"shotSize":"中景","camera":"固定机位","movement":"缓慢推近","action":"阿宁进入房间","performance":"克制","dialogue":"","durationSeconds":6,"continuityMode":"continuous"},"promptInputHash":"wf2-test","references":[{"role":"character","label":"阿宁","logicalAssetId":"CHAR-001","libraryAssetId":"asset-1","version":"v1","usage":"角色一致性"}]}`)
+	referencedContext := json.RawMessage(`{"shotId":"shot-001","sourceScript":"阿宁进入房间。","shotDraft":{"shotSize":"中景","camera":"固定机位","movement":"缓慢推近","action":"阿宁进入房间","performance":"克制","dialogue":"","durationSeconds":6,"continuityMode":"continuous"},"promptInputHash":"wf2-reference","references":[{"role":"character","label":"阿宁","logicalAssetId":"character-001","libraryAssetId":"asset-1","version":"v1","usage":"角色一致性"}]}`)
+	if _, err := StartWorkflowStageWithInput("user-1", detail.Run.ID, WorkflowStageShotPrompt, WorkflowStageStartInput{IdempotencyKey: "shot-prompt-reference-missing-media", Context: referencedContext}); err == nil || !strings.Contains(err.Error(), "参考图片") {
+		t.Fatalf("missing media err=%v", err)
+	}
+	context := json.RawMessage(`{"shotId":"shot-001","sourceScript":"阿宁进入房间。","shotDraft":{"shotSize":"中景","camera":"固定机位","movement":"缓慢推近","action":"阿宁进入房间","performance":"克制","dialogue":"","durationSeconds":6,"continuityMode":"continuous"},"promptInputHash":"wf2-test","references":[]}`)
 	stage, err := StartWorkflowStageWithInput("user-1", detail.Run.ID, WorkflowStageShotPrompt, WorkflowStageStartInput{IdempotencyKey: "shot-prompt-valid", Context: context})
 	if err != nil || stage.Status != model.WorkflowStageRunStatusQueued {
 		t.Fatalf("stage=%#v err=%v", stage, err)
@@ -301,23 +284,10 @@ func completeVideoWorkflowArtStage(t *testing.T, detail WorkflowRunDetail, idemp
 	if err != nil {
 		t.Fatalf("StartWorkflowStage returned error: %v", err)
 	}
-	agentRun, ok, err := repository.GetAgentRun(stage.AgentRunID)
-	if err != nil || !ok {
-		t.Fatalf("GetAgentRun ok=%v err=%v", ok, err)
-	}
-	agentRun.Status = model.AgentRunStatusNeedsReview
-	agentRun.StructuredDraftJSON = `{"items":[{"logicalAssetId":"CHAR-001","kind":"character","name":"阿宁","scriptEvidence":"阿宁进入房间","description":"进入房间的年轻角色"}]}`
-	if _, err := repository.SaveAgentRun(agentRun); err != nil {
-		t.Fatalf("SaveAgentRun returned error: %v", err)
-	}
-	if err := CompleteWorkflowStageAgentRun(agentRun); err != nil {
-		t.Fatalf("CompleteWorkflowStageAgentRun returned error: %v", err)
-	}
-	stage, ok, err = repository.GetUserWorkflowStageRun("user-1", stage.ID)
-	if err != nil || !ok {
-		t.Fatalf("GetUserWorkflowStageRun ok=%v err=%v", ok, err)
-	}
-	return stage
+	seedWorkflowInvocationCredits(t)
+	runWorkflowInvocationWorkerForTest(t, `{"items":[{"assetId":"character-001","kind":"character","name":"阿宁","sourceEvidence":["阿宁进入房间。"],"coreFacts":["主要角色"]}]}`)
+	detail = mustWorkflowDetailForTest(t, detail.Run.ID)
+	return workflowTestStage(detail, stage.StageID)
 }
 
 func approveWorkflowStageForTest(t *testing.T, detail WorkflowRunDetail, stageID string, output string) WorkflowRunDetail {
@@ -326,18 +296,10 @@ func approveWorkflowStageForTest(t *testing.T, detail WorkflowRunDetail, stageID
 	if err != nil {
 		t.Fatalf("start %s: %v", stageID, err)
 	}
-	agentRun, ok, err := repository.GetAgentRun(stage.AgentRunID)
-	if err != nil || !ok {
-		t.Fatalf("agent run %s ok=%v err=%v", stageID, ok, err)
-	}
-	agentRun.Status = model.AgentRunStatusNeedsReview
-	agentRun.StructuredDraftJSON = output
-	_, _ = repository.SaveAgentRun(agentRun)
-	if err := CompleteWorkflowStageAgentRun(agentRun); err != nil {
-		t.Fatalf("complete %s: %v", stageID, err)
-	}
-	stage, _, _ = repository.GetUserWorkflowStageRun("user-1", stage.ID)
-	artifact, _, _ := repository.GetUserWorkflowArtifact("user-1", stage.OutputArtifactID)
+	seedWorkflowInvocationCredits(t)
+	runWorkflowInvocationWorkerForTest(t, output)
+	detail = mustWorkflowDetailForTest(t, detail.Run.ID)
+	artifact := workflowTestArtifact(detail, stage.ID)
 	if _, err := ReviewWorkflowStage("user-1", stage.ID, WorkflowReviewInput{Decision: "approved", ArtifactHash: artifact.ContentHash}); err != nil {
 		t.Fatalf("approve %s: %v", stageID, err)
 	}
@@ -347,6 +309,23 @@ func approveWorkflowStageForTest(t *testing.T, detail WorkflowRunDetail, stageID
 		}
 	}
 	return mustWorkflowDetailForTest(t, detail.Run.ID)
+}
+
+func runWorkflowInvocationWorkerForTest(t *testing.T, output string) {
+	t.Helper()
+	worker := NewAgentRunWorker(AgentRunWorkerOptions{ID: newID("workflow-test-worker"), LeaseDuration: time.Minute, Executor: invocationFakeExecutor{result: agentRunCallResult{rawOutput: output, structuredJSON: output}}})
+	if err := worker.ProcessOne(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func workflowTestArtifact(detail WorkflowRunDetail, stageRunID string) model.WorkflowArtifact {
+	for _, artifact := range detail.Artifacts {
+		if artifact.StageRunID == stageRunID {
+			return artifact
+		}
+	}
+	return model.WorkflowArtifact{}
 }
 
 func mustWorkflowDetailForTest(t *testing.T, workflowRunID string) WorkflowRunDetail {

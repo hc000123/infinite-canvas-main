@@ -56,7 +56,10 @@ func TestInvocationVideoPromptValidatorRequiresStructureAndExactRefs(t *testing.
 		"shotId": "shot-001", "prompt": "林秋走向公交车。@图0",
 		"inputArtifactRefs": []any{map[string]any{"bindingName": "first_frame", "artifactId": "tail-frame-1", "contentHash": "sha256:forged"}},
 	}}}
-	bindings := []ResolvedArtifactBinding{{BindingName: "continuity_reference", Artifact: ArtifactEnvelope{Artifact: model.Artifact{ID: "tail-frame-1", ArtifactType: "asset_rendition", ContentHash: "sha256:tail"}}}}
+	bindings := []ResolvedArtifactBinding{{BindingName: "asset_rendition", Artifact: ArtifactEnvelope{
+		Artifact:   model.Artifact{ID: "tail-frame-1", ArtifactType: "asset_rendition", ContentHash: "sha256:tail"},
+		Extensions: map[string]any{"workflow_media_import": map[string]any{"role": "continuity_reference"}},
+	}}}
 	raw, _ := json.Marshal(bindings)
 	err := validateInvocationBusinessPayload(validator, payload, model.InvocationPreflightRevision{InputSnapshotJSON: string(raw)})
 	if err == nil || !strings.Contains(err.Error(), "四段") || !strings.Contains(err.Error(), "引用") || !strings.Contains(err.Error(), "首帧") {
