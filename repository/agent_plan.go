@@ -172,6 +172,75 @@ func ConfirmAgentPlanTx(plan model.AgentPlan, confirmation model.AgentPlanConfir
 	return err
 }
 
+func ApplyAgentPlanPreflight(plan model.AgentPlan, revision model.AgentPlanRevision, steps []model.AgentPlanStep) error {
+	if plan.Status != model.AgentPlanAwaitingConfirmation || revision.AgentPlanID != plan.ID || revision.UserID != plan.UserID ||
+		revision.Revision != plan.CurrentRevision || revision.AgentVersionID != plan.AgentVersionID ||
+		revision.ConfirmationFingerprint == "" || revision.ConfirmationFingerprint != plan.ConfirmationFingerprint ||
+		revision.EstimatedCredits != plan.EstimatedCredits || len(steps) == 0 {
+		return ErrAgentPlanTransitionConflict
+	}
+	database, err := DB()
+	if err != nil {
+		return err
+	}
+	for range 20 {
+		err = database.Transaction(func(tx *gorm.DB) error {
+			planResult := tx.Model(&model.AgentPlan{}).
+				Where("id = ? AND user_id = ? AND current_revision = ? AND agent_version_id = ? AND status = ? AND confirmation_fingerprint = ''",
+					plan.ID, plan.UserID, plan.CurrentRevision, plan.AgentVersionID, model.AgentPlanDraft).
+				Updates(map[string]any{
+					"status": plan.Status, "estimated_credits": plan.EstimatedCredits,
+					"confirmation_fingerprint": plan.ConfirmationFingerprint, "updated_at": plan.UpdatedAt,
+				})
+			if planResult.Error != nil {
+				return planResult.Error
+			}
+			if planResult.RowsAffected != 1 {
+				return ErrAgentPlanTransitionConflict
+			}
+			revisionResult := tx.Model(&model.AgentPlanRevision{}).
+				Where("id = ? AND user_id = ? AND agent_plan_id = ? AND revision = ? AND confirmation_fingerprint = ''",
+					revision.ID, revision.UserID, revision.AgentPlanID, revision.Revision).
+				Updates(map[string]any{
+					"agent_content_hash": revision.AgentContentHash, "source_artifact_refs_json": revision.SourceArtifactRefsJSON,
+					"plan_snapshot_json": revision.PlanSnapshotJSON, "confirmation_fingerprint": revision.ConfirmationFingerprint,
+					"estimated_credits": revision.EstimatedCredits,
+				})
+			if revisionResult.Error != nil {
+				return revisionResult.Error
+			}
+			if revisionResult.RowsAffected != 1 {
+				return ErrAgentPlanTransitionConflict
+			}
+			for index := range steps {
+				step := steps[index]
+				result := tx.Model(&model.AgentPlanStep{}).
+					Where("id = ? AND user_id = ? AND agent_plan_id = ? AND revision = ? AND ordinal = ? AND status = ? AND invocation_id = ''",
+						step.ID, step.UserID, step.AgentPlanID, step.Revision, step.Ordinal, model.AgentPlanStepPending).
+					Updates(map[string]any{
+						"label": step.Label, "capability": step.Capability, "skill_id": step.SkillID,
+						"skill_version_id": step.SkillVersionID, "skill_version": step.SkillVersion,
+						"skill_content_hash": step.SkillContentHash, "input_bindings_json": step.InputBindingsJSON,
+						"parameters_json": step.ParametersJSON, "expected_output_type": step.ExpectedOutputType,
+						"status": step.Status, "updated_at": step.UpdatedAt,
+					})
+				if result.Error != nil {
+					return result.Error
+				}
+				if result.RowsAffected != 1 {
+					return ErrAgentPlanTransitionConflict
+				}
+			}
+			return nil
+		})
+		if !isSQLiteContention(database, err) {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return err
+}
+
 func BindAgentPlanStepInvocation(planID string, revision, ordinal int, invocationID, updatedAt string) error {
 	database, err := DB()
 	if err != nil {
