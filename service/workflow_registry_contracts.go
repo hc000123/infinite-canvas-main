@@ -155,3 +155,29 @@ type WorkflowRoutePreview struct {
 	ConfirmationRequirements []string                   `json:"confirmationRequirements"`
 	Nodes                    []WorkflowNodeRoutePreview `json:"nodes"`
 }
+
+type WorkflowExecutionPreflightInput struct {
+	WorkflowVersionID string             `json:"workflowVersionId"`
+	ProjectID         string             `json:"projectId"`
+	EpisodeID         string             `json:"episodeId"`
+	InputArtifactRefs []ArtifactRefInput `json:"inputArtifactRefs"`
+	ManualSelections  map[string]string  `json:"manualSelections"`
+	ProjectTags       []string           `json:"projectTags"`
+	Parameters        json.RawMessage    `json:"parameters"`
+	IdempotencyKey    string             `json:"idempotencyKey"`
+}
+
+type WorkflowExecutionConfirmationInput struct {
+	Revision         int      `json:"revision"`
+	Fingerprint      string   `json:"fingerprint"`
+	RequirementCodes []string `json:"requirementCodes"`
+}
+
+type WorkflowExecutionDetail struct {
+	Run                      model.WorkflowExecution              `json:"run"`
+	Revision                 model.WorkflowExecutionRevision      `json:"revision"`
+	Nodes                    []model.WorkflowNodeExecution        `json:"nodes"`
+	Preview                  WorkflowRoutePreview                 `json:"preview"`
+	ConfirmationRequirements []string                             `json:"confirmationRequirements"`
+	Confirmation             *model.WorkflowExecutionConfirmation `json:"confirmation,omitempty"`
+}

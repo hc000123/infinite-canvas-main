@@ -90,6 +90,7 @@ type WorkflowExecutionRevision struct {
 	RoutePreviewJSON             string `json:"-" gorm:"type:text"`
 	InputArtifactRefsJSON        string `json:"-" gorm:"type:text"`
 	ManualSelectionsJSON         string `json:"-" gorm:"type:text"`
+	ParametersJSON               string `json:"-" gorm:"type:text"`
 	EstimatedCredits             int64  `json:"estimatedCredits"`
 	ConfirmationRequirementsJSON string `json:"-" gorm:"type:text"`
 	ConfirmationFingerprint      string `json:"confirmationFingerprint" gorm:"index"`
