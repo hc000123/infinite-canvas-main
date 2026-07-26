@@ -24,6 +24,17 @@ func approvedApplyFixture(t *testing.T) (model.InvocationRun, string) {
 	return response.Run, hash
 }
 
+func approvedOutputArtifactID(t *testing.T, refs []model.InvocationArtifactRef) string {
+	t.Helper()
+	for _, ref := range refs {
+		if ref.Direction == "output" {
+			return ref.ArtifactID
+		}
+	}
+	t.Fatal("approved output artifact missing")
+	return ""
+}
+
 type invocationApplyAdapterFunc struct {
 	name string
 	fn   func(*gorm.DB, InvocationApplyContext) (json.RawMessage, error)
@@ -149,5 +160,77 @@ func TestApplyInvocationConcurrentReplayWritesSinkOnce(t *testing.T) {
 	database.Model(&model.InvocationTestSinkReceipt{}).Where("invocation_id = ?", run.ID).Count(&count)
 	if count != 1 {
 		t.Fatalf("receipts=%d", count)
+	}
+}
+
+func TestClientLocalReceiptValidatesConsumerCoordinatesAndApprovedArtifacts(t *testing.T) {
+	run, hash := approvedApplyFixture(t)
+	refs, err := repository.ListInvocationArtifactRefs("user-1", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifactID := approvedOutputArtifactID(t, refs)
+	input := InvocationApplyInput{
+		IdempotencyKey: "client-receipt-valid", Attempt: run.LatestAttempt, ArtifactSetHash: hash,
+		Target: "client_local_receipt", TargetID: "image-workbench",
+		Payload: json.RawMessage(`{"surface":"image","targetKind":"prompt","targetId":"image-workbench","artifactIds":["` + artifactID + `"]}`),
+	}
+	applied, err := ApplyInvocation("user-1", run.ID, input)
+	if err != nil || applied.Status != "applied" {
+		t.Fatalf("applied=%#v err=%v", applied, err)
+	}
+	var receipt struct {
+		Surface     string   `json:"surface"`
+		TargetKind  string   `json:"targetKind"`
+		TargetID    string   `json:"targetId"`
+		ArtifactIDs []string `json:"artifactIds"`
+	}
+	if json.Unmarshal([]byte(applied.ReceiptJSON), &receipt) != nil || receipt.Surface != "image" || receipt.TargetKind != "prompt" || receipt.TargetID != "image-workbench" || len(receipt.ArtifactIDs) != 1 || receipt.ArtifactIDs[0] != artifactID {
+		t.Fatalf("receipt=%s", applied.ReceiptJSON)
+	}
+
+	for _, test := range []struct {
+		name    string
+		payload func(string) json.RawMessage
+	}{
+		{"invalid surface", func(id string) json.RawMessage {
+			return json.RawMessage(`{"surface":"workflow","targetKind":"prompt","targetId":"target-1","artifactIds":["` + id + `"]}`)
+		}},
+		{"invalid target kind", func(id string) json.RawMessage {
+			return json.RawMessage(`{"surface":"image","targetKind":"workflow","targetId":"target-1","artifactIds":["` + id + `"]}`)
+		}},
+		{"target mismatch", func(id string) json.RawMessage {
+			return json.RawMessage(`{"surface":"image","targetKind":"prompt","targetId":"other","artifactIds":["` + id + `"]}`)
+		}},
+		{"foreign artifact", func(string) json.RawMessage {
+			return json.RawMessage(`{"surface":"canvas","targetKind":"node","targetId":"target-1","artifactIds":["artifact-foreign"]}`)
+		}},
+		{"empty artifact set", func(string) json.RawMessage {
+			return json.RawMessage(`{"surface":"canvas","targetKind":"message","targetId":"target-1","artifactIds":[]}`)
+		}},
+		{"too many artifacts", func(id string) json.RawMessage {
+			ids := make([]string, 101)
+			for index := range ids {
+				ids[index] = id
+			}
+			payload, _ := json.Marshal(map[string]any{"surface": "canvas", "targetKind": "asset", "targetId": "target-1", "artifactIds": ids})
+			return payload
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			candidate, candidateHash := approvedApplyFixture(t)
+			candidateRefs, refErr := repository.ListInvocationArtifactRefs("user-1", candidate.ID)
+			if refErr != nil {
+				t.Fatal(refErr)
+			}
+			candidateArtifactID := approvedOutputArtifactID(t, candidateRefs)
+			_, applyErr := ApplyInvocation("user-1", candidate.ID, InvocationApplyInput{
+				IdempotencyKey: "client-receipt-invalid-" + test.name, Attempt: candidate.LatestAttempt, ArtifactSetHash: candidateHash,
+				Target: "client_local_receipt", TargetID: "target-1", Payload: test.payload(candidateArtifactID),
+			})
+			if applyErr == nil {
+				t.Fatal("expected invalid client receipt rejection")
+			}
+		})
 	}
 }

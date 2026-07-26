@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -13,12 +14,20 @@ import (
 var invocationApplyAdapters = map[string]InvocationApplyAdapter{
 	"test_sink":              invocationTestSinkAdapter{},
 	"workflow_local_receipt": workflowLocalReceiptAdapter{},
+	"client_local_receipt":   clientLocalReceiptAdapter{},
 }
 
 type workflowLocalApplyPayload struct {
 	WorkflowRunID string             `json:"workflowRunId"`
 	StageRunID    string             `json:"stageRunId"`
 	Receipt       WorkflowApplyInput `json:"receipt"`
+}
+
+type clientLocalApplyPayload struct {
+	Surface     string   `json:"surface"`
+	TargetKind  string   `json:"targetKind"`
+	TargetID    string   `json:"targetId"`
+	ArtifactIDs []string `json:"artifactIds"`
 }
 
 func ApplyInvocation(userID, invocationID string, input InvocationApplyInput) (model.InvocationApplyAttempt, error) {
@@ -159,4 +168,38 @@ func (workflowLocalReceiptAdapter) ApplyTx(tx *gorm.DB, context InvocationApplyC
 	}
 	encoded, _ := json.Marshal(map[string]string{"receiptId": receipt.ID, "stageRunId": receipt.StageRunID})
 	return encoded, nil
+}
+
+type clientLocalReceiptAdapter struct{}
+
+func (clientLocalReceiptAdapter) TargetName() string { return "client_local_receipt" }
+
+func (clientLocalReceiptAdapter) ApplyTx(_ *gorm.DB, context InvocationApplyContext) (json.RawMessage, error) {
+	var payload clientLocalApplyPayload
+	decoder := json.NewDecoder(bytes.NewReader(context.Payload))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&payload) != nil {
+		return nil, errors.New("客户端 Apply 回执无效")
+	}
+	payload.Surface = strings.ToLower(strings.TrimSpace(payload.Surface))
+	payload.TargetKind = strings.ToLower(strings.TrimSpace(payload.TargetKind))
+	payload.TargetID = strings.TrimSpace(payload.TargetID)
+	if (payload.Surface != "image" && payload.Surface != "canvas") ||
+		(payload.TargetKind != "prompt" && payload.TargetKind != "node" && payload.TargetKind != "message" && payload.TargetKind != "asset") ||
+		payload.TargetID != context.TargetID || len(payload.ArtifactIDs) == 0 || len(payload.ArtifactIDs) > 100 {
+		return nil, errors.New("客户端 Apply 回执范围无效")
+	}
+	approved := make(map[string]bool, len(context.ArtifactRefs))
+	for _, ref := range context.ArtifactRefs {
+		approved[ref.ArtifactID] = true
+	}
+	seen := make(map[string]bool, len(payload.ArtifactIDs))
+	for index, artifactID := range payload.ArtifactIDs {
+		artifactID = strings.TrimSpace(artifactID)
+		if artifactID == "" || !approved[artifactID] || seen[artifactID] {
+			return nil, errors.New("客户端 Apply Artifact 不属于当前 approved Artifact-set")
+		}
+		payload.ArtifactIDs[index], seen[artifactID] = artifactID, true
+	}
+	return marshalInvocationCanonical(payload)
 }
