@@ -72,6 +72,39 @@ func TestWorkflowRoutesRequireAuth(t *testing.T) {
 	}
 }
 
+func TestWorkflowRegistryRoutesRequireAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	routes := []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/workflows?projectId=project-1"},
+		{http.MethodPost, "/api/v1/workflows"},
+		{http.MethodGet, "/api/v1/workflows/workflow-1?projectId=project-1"},
+		{http.MethodPost, "/api/v1/workflows/workflow-1/copy"},
+		{http.MethodPost, "/api/v1/workflows/workflow-1/versions"},
+		{http.MethodGet, "/api/v1/workflow-versions/version-1"},
+		{http.MethodPatch, "/api/v1/workflow-versions/version-1"},
+		{http.MethodPost, "/api/v1/workflow-versions/version-1/validate"},
+		{http.MethodPost, "/api/v1/workflow-versions/version-1/preview"},
+		{http.MethodPost, "/api/v1/workflow-versions/version-1/publish"},
+		{http.MethodPut, "/api/v1/workflows/workflow-1/recommended-version"},
+		{http.MethodPost, "/api/v1/workflow-executions/preflight"},
+		{http.MethodGet, "/api/v1/workflow-executions/execution-1"},
+		{http.MethodPost, "/api/v1/workflow-executions/execution-1/confirm"},
+		{http.MethodPost, "/api/v1/workflow-executions/execution-1/continue"},
+		{http.MethodPost, "/api/v1/workflow-executions/execution-1/cancel"},
+	}
+	for _, route := range routes {
+		recorder := httptest.NewRecorder()
+		app.ServeHTTP(recorder, httptest.NewRequest(route.method, route.path, nil))
+		if recorder.Code == http.StatusNotFound {
+			t.Fatalf("workflow registry route missing: %s %s", route.method, route.path)
+		}
+		if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+			t.Fatalf("workflow registry route did not reach auth: %s %s body=%s", route.method, route.path, recorder.Body.String())
+		}
+	}
+}
+
 func TestSuperAdminRoutesRequireSuperAdmin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	app := New()

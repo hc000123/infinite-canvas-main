@@ -61,6 +61,48 @@ func New() *gin.Engine {
 	v1.PUT("/agents/:id/recommended-version", func(c *gin.Context) {
 		handler.RecommendAgentVersion(c.Writer, c.Request, c.Param("id"))
 	})
+	v1.GET("/workflows", gin.WrapF(handler.Workflows))
+	v1.POST("/workflows", gin.WrapF(handler.CreateWorkflowDefinition))
+	v1.GET("/workflows/:id", func(c *gin.Context) {
+		handler.WorkflowRegistryDetail(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/workflows/:id/copy", func(c *gin.Context) {
+		handler.CopyWorkflow(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/workflows/:id/versions", func(c *gin.Context) {
+		handler.CreateWorkflowVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.GET("/workflow-versions/:id", func(c *gin.Context) {
+		handler.WorkflowVersionDetail(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.PATCH("/workflow-versions/:id", func(c *gin.Context) {
+		handler.UpdateWorkflowVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/workflow-versions/:id/validate", func(c *gin.Context) {
+		handler.ValidateWorkflowVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/workflow-versions/:id/preview", func(c *gin.Context) {
+		handler.PreviewWorkflowVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/workflow-versions/:id/publish", func(c *gin.Context) {
+		handler.PublishWorkflowVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.PUT("/workflows/:id/recommended-version", func(c *gin.Context) {
+		handler.RecommendWorkflowVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/workflow-executions/preflight", gin.WrapF(handler.PreflightWorkflowExecution))
+	v1.GET("/workflow-executions/:id", func(c *gin.Context) {
+		handler.WorkflowExecutionDetail(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/workflow-executions/:id/confirm", func(c *gin.Context) {
+		handler.ConfirmWorkflowExecution(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/workflow-executions/:id/continue", func(c *gin.Context) {
+		handler.ContinueWorkflowExecution(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/workflow-executions/:id/cancel", func(c *gin.Context) {
+		handler.CancelWorkflowExecution(c.Writer, c.Request, c.Param("id"))
+	})
 	v1.POST("/agent-plans", gin.WrapF(handler.CreateAgentPlan))
 	v1.GET("/agent-plans/:id", func(c *gin.Context) {
 		handler.AgentPlan(c.Writer, c.Request, c.Param("id"))
