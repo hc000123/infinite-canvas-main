@@ -28,7 +28,7 @@
 ### 可组合 Agent + Skill Runtime
 
 - Phase 1 通用 Skill Registry：已实现，自动验收与管理端冒烟通过，待用户确认。固定六阶段身份已切换为通用 Definition / Version、Manifest、评测、推荐版和工作流消费端绑定。
-- Phase 2 Artifact + Invocation Runtime：待实现统一 Artifact 外壳、Schema Registry、Resolver、Preflight、Runner、幂等、质量门与 Trace。
+- Phase 2 Artifact + Invocation Runtime：统一 Artifact 外壳、Schema Registry、Resolver、Preflight、Runner、幂等、质量门、Trace 和确认/取消/重试/校正/审核/Apply 核心生命周期已实现；Task 7–9 的接入、查询/管理边界与最终验收尚未完成。
 - Phase 3 正式生产工作流切换：待将生产节点接入 Invocation Runtime，并保留审核、快照和 Apply 语义。
 - Phase 4 Agent Registry + Agent Runtime：待实现 Agent 独立版本、Skill 权限、匹配和 Temporary Plan。
 - Phase 5 Workflow Composer：待实现可组合节点图、路由预览、成本估算、契约预检和发布。

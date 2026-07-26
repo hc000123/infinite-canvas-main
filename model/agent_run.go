@@ -8,6 +8,7 @@ const (
 	AgentRunStatusRunning         AgentRunStatus = "running"
 	AgentRunStatusCancelRequested AgentRunStatus = "cancel_requested"
 	AgentRunStatusNeedsReview     AgentRunStatus = "needs_review"
+	AgentRunStatusPartial         AgentRunStatus = "partial"
 	AgentRunStatusApproved        AgentRunStatus = "approved"
 	AgentRunStatusRejected        AgentRunStatus = "rejected"
 	AgentRunStatusApplied         AgentRunStatus = "applied"

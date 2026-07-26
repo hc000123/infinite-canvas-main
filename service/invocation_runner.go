@@ -25,6 +25,10 @@ type invocationPromptInput struct {
 }
 
 func buildInvocationPrompts(revision model.InvocationPreflightRevision) (string, string, error) {
+	return buildInvocationPromptsWithRetry(revision, InvocationRetryPlan{})
+}
+
+func buildInvocationPromptsWithRetry(revision model.InvocationPreflightRevision, retryPlan InvocationRetryPlan) (string, string, error) {
 	skill, err := frozenInvocationSkill(revision)
 	if err != nil {
 		return "", "", err
@@ -57,7 +61,11 @@ func buildInvocationPrompts(revision model.InvocationPreflightRevision) (string,
 		}
 		return promptInputs[i].Ordinal < promptInputs[j].Ordinal
 	})
-	userJSON, err := json.Marshal(map[string]any{"parameters": parameters, "inputs": promptInputs})
+	userData := map[string]any{"parameters": parameters, "inputs": promptInputs}
+	if len(retryPlan.RequestedOutputs) > 0 || len(retryPlan.PreservedOutputRefs) > 0 || len(retryPlan.RejectedParentArtifactIDs) > 0 {
+		userData["retryContext"] = retryPlan
+	}
+	userJSON, err := json.Marshal(userData)
 	if err != nil {
 		return "", "", err
 	}
@@ -89,14 +97,23 @@ func frozenInvocationSkill(revision model.InvocationPreflightRevision) (invocati
 }
 
 func buildInvocationAttemptQueue(run model.InvocationRun, revision model.InvocationPreflightRevision, frozenRefs []model.InvocationArtifactRef) (model.InvocationRun, model.InvocationAttempt, model.AgentRun, []model.InvocationArtifactRef, model.InvocationEvent, error) {
-	if run.Status != model.InvocationStatusAwaitingConfirmation || run.LatestRevision != revision.Revision || run.ID != revision.InvocationID || run.UserID != revision.UserID {
+	return buildInvocationAttemptQueueWithRetry(run, revision, frozenRefs, InvocationRetryPlan{})
+}
+
+func buildInvocationAttemptQueueWithRetry(run model.InvocationRun, revision model.InvocationPreflightRevision, frozenRefs []model.InvocationArtifactRef, retryPlan InvocationRetryPlan) (model.InvocationRun, model.InvocationAttempt, model.AgentRun, []model.InvocationArtifactRef, model.InvocationEvent, error) {
+	allowed := run.Status == model.InvocationStatusAwaitingConfirmation || (run.LatestAttempt > 0 && (run.Status == model.InvocationStatusFailed || run.Status == model.InvocationStatusCancelled || run.Status == model.InvocationStatusRejected || run.Status == model.InvocationStatusPartial))
+	if !allowed || run.LatestRevision != revision.Revision || run.ID != revision.InvocationID || run.UserID != revision.UserID {
 		return run, model.InvocationAttempt{}, model.AgentRun{}, nil, model.InvocationEvent{}, errors.New("Invocation queue 状态冲突")
 	}
 	var policy InvocationExecutionPolicy
 	if json.Unmarshal([]byte(revision.ExecutionPolicyJSON), &policy) != nil || !validFrozenInvocationExecutionPolicy(policy) {
 		return run, model.InvocationAttempt{}, model.AgentRun{}, nil, model.InvocationEvent{}, errors.New("frozen execution policy 无效")
 	}
-	systemPrompt, userPrompt, err := buildInvocationPrompts(revision)
+	planJSON, err := marshalInvocationCanonical(retryPlan)
+	if err != nil {
+		return run, model.InvocationAttempt{}, model.AgentRun{}, nil, model.InvocationEvent{}, err
+	}
+	systemPrompt, userPrompt, err := buildInvocationPromptsWithRetry(revision, retryPlan)
 	if err != nil {
 		return run, model.InvocationAttempt{}, model.AgentRun{}, nil, model.InvocationEvent{}, err
 	}
@@ -117,6 +134,7 @@ func buildInvocationAttemptQueue(run model.InvocationRun, revision model.Invocat
 		ID: newID("invocationattempt"), UserID: run.UserID, InvocationID: run.ID, AgentRunID: agentRun.ID,
 		Status: string(model.AgentRunStatusQueued), Revision: revision.Revision, Attempt: attemptNumber,
 		Model: agentRun.Model, ChannelID: agentRun.ChannelID, ExecutorKind: agentRun.Executor,
+		RetryPlanJSON:   string(planJSON),
 		CreditsReserved: 0, CreatedAt: stamp, UpdatedAt: stamp,
 	}
 	refs := make([]model.InvocationArtifactRef, 0, len(frozenRefs))
@@ -173,7 +191,11 @@ func validateClaimedInvocationAgentRun(agentRun model.AgentRun) error {
 	if json.Unmarshal([]byte(revision.ExecutionPolicyJSON), &policy) != nil || !validFrozenInvocationExecutionPolicy(policy) {
 		return errors.New("frozen execution policy 无效")
 	}
-	systemPrompt, userPrompt, err := buildInvocationPrompts(revision)
+	retryPlan := InvocationRetryPlan{}
+	if strings.TrimSpace(attempt.RetryPlanJSON) != "" && json.Unmarshal([]byte(attempt.RetryPlanJSON), &retryPlan) != nil {
+		return errors.New("immutable RetryPlan 无效")
+	}
+	systemPrompt, userPrompt, err := buildInvocationPromptsWithRetry(revision, retryPlan)
 	if err != nil {
 		return err
 	}

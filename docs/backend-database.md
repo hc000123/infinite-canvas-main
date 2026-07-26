@@ -32,6 +32,17 @@
 - `skill_evaluations`
 - `skill_audit_logs`
 - `workflow_stage_skill_bindings`
+- `artifact_schemas`
+- `artifacts`
+- `invocation_runs`
+- `invocation_preflight_revisions`
+- `invocation_attempts`
+- `invocation_artifact_refs`
+- `invocation_events`
+- `invocation_gate_results`
+- `invocation_reviews`
+- `invocation_apply_attempts`
+- `invocation_test_sink_receipts`
 - `workflow_media_batches`
 - `workflow_media_items`
 - `prompts`
@@ -39,6 +50,24 @@
 - `settings`
 
 后续新增表时再同步补充本文档，未实际使用的规划表不提前写入。
+
+### Artifact 与 Invocation Runtime
+
+`artifact_schemas` 保存按 Artifact 类型和版本登记的 JSON Schema 及其内容哈希；`artifacts` 保存通用产物外壳、结构化内容、父产物引用与生产 Invocation。
+
+Invocation Runtime 使用下列表保留可变聚合状态和不可变历史：
+
+| 表 | 说明 |
+| ---- | ---- |
+| `invocation_runs` | Invocation 聚合头，记录当前状态、最新 revision / attempt 和已审核 Artifact 集哈希。状态包含 `planned`、`preflight`、`awaiting_confirmation`、`queued`、`running`、`cancel_requested`、`needs_review`、`approved`、`applied`、`blocked`、`failed`、`partial`、`rejected` 和 `cancelled`。 |
+| `invocation_preflight_revisions` | 追加式预检版本，冻结 Skill、Schema、输入、参数、执行策略、路由 Trace 和确认要求。 |
+| `invocation_attempts` | 执行尝试、原始/结构化输出、费用与错误。`retry_plan_json` 冻结重试坐标和保留产物；失败或取消不会把保留产物复制到当前 attempt，后续重试精确继承已有非空计划，修正成功后才重新校验并挂回保留产物。`correction_trace_json` 单独记录人工校正，不改写原始输出或模型 Tool Trace。 |
+| `invocation_artifact_refs` | 按 revision、attempt、binding 和 ordinal 记录输入/输出 Artifact 引用。 |
+| `invocation_events` | 追加式生命周期事件和 Trace。 |
+| `invocation_gate_results` | 按 Artifact、校验层、校验器和执行组保存质量门结果；唯一索引固定覆盖 `invocation_id / attempt / execution_ordinal / layer / validator_id / binding_name / output_ordinal / artifact_hash` 的完整顺序。item gate 显式记录 `binding_name / output_ordinal`，新写入的 global gate 使用空 binding 和 `-1`。 |
+| `invocation_reviews` | 基于有序 Artifact 集哈希的追加式批准/驳回记录。 |
+| `invocation_apply_attempts` | 按 Invocation 和幂等键保存 Apply 预留、请求哈希、目标、回执与失败原因。 |
+| `invocation_test_sink_receipts` | 服务端注册的 `test_sink` Apply 适配器回执，用于验证业务写入与 Apply 状态的同事务语义。 |
 
 ### users
 

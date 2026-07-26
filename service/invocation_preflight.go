@@ -78,7 +78,23 @@ func RepreflightInvocation(userID, invocationID string, raw InvocationRequest) (
 	if !ok {
 		return InvocationPreflightSnapshot{}, repository.ErrInvocationNotFound
 	}
-	if run.Status != model.InvocationStatusBlocked {
+	allowedFrom := model.InvocationStatusBlocked
+	if run.Status == model.InvocationStatusFailed {
+		attempts, listErr := repository.ListInvocationAttempts(run.UserID, run.ID)
+		if listErr != nil {
+			return InvocationPreflightSnapshot{}, listErr
+		}
+		allowed := false
+		for _, attempt := range attempts {
+			if attempt.Attempt == run.LatestAttempt && attempt.ErrorClass == "execution_target_unavailable" {
+				allowed = true
+			}
+		}
+		if !allowed {
+			return InvocationPreflightSnapshot{}, repository.ErrInvocationTransitionConflict
+		}
+		allowedFrom = model.InvocationStatusFailed
+	} else if run.Status != model.InvocationStatusBlocked {
 		return InvocationPreflightSnapshot{}, repository.ErrInvocationTransitionConflict
 	}
 	if strings.TrimSpace(raw.ProjectID) == "" {
@@ -117,7 +133,7 @@ func RepreflightInvocation(userID, invocationID string, raw InvocationRequest) (
 	revision := invocationRevisionFromBuild(run, run.LatestRevision, build, stamp)
 	refs := invocationInputRefs(run, revision.Revision, build.snapshots, stamp)
 	event := invocationPreflightEvent(run, revision.Revision, run.Status, build.blocksJSON, stamp)
-	if err := repository.AppendInvocationPreflightRevision(run, revision, refs, event, model.InvocationStatusBlocked); err != nil {
+	if err := repository.AppendInvocationPreflightRevision(run, revision, refs, event, allowedFrom); err != nil {
 		return InvocationPreflightSnapshot{}, err
 	}
 	return snapshotFromInvocationBuild(run, revision, refs, build), nil
@@ -508,7 +524,14 @@ func invocationArtifactApproved(userID string, artifact model.Artifact) (bool, e
 	if artifact.ArtifactType == "source_text" && artifact.ProducerInvocationID == nil {
 		return true, nil
 	}
-	if artifact.ProducerInvocationID == nil || artifact.ProducerAttempt < 1 {
+	if artifact.ProducerInvocationID == nil {
+		return false, nil
+	}
+	run, found, err := repository.GetUserInvocation(userID, *artifact.ProducerInvocationID)
+	if err != nil {
+		return false, err
+	}
+	if !found || (run.Status != model.InvocationStatusApproved && run.Status != model.InvocationStatusApplied) || run.ReviewedAttempt < 1 || strings.TrimSpace(run.ReviewedArtifactSetHash) == "" {
 		return false, nil
 	}
 	refs, err := repository.ListInvocationArtifactRefs(userID, *artifact.ProducerInvocationID)
@@ -517,7 +540,7 @@ func invocationArtifactApproved(userID string, artifact model.Artifact) (bool, e
 	}
 	authoritative := false
 	for _, ref := range refs {
-		if ref.Direction == "output" && ref.Attempt == artifact.ProducerAttempt && ref.ArtifactID == artifact.ID && ref.ArtifactHash == artifact.ContentHash && ref.ArtifactType == artifact.ArtifactType && ref.SchemaVersion == artifact.SchemaVersion && ref.SchemaContentHash == artifact.SchemaContentHash {
+		if ref.Direction == "output" && ref.Attempt == run.ReviewedAttempt && ref.ArtifactID == artifact.ID && ref.ArtifactHash == artifact.ContentHash && ref.ArtifactType == artifact.ArtifactType && ref.SchemaVersion == artifact.SchemaVersion && ref.SchemaContentHash == artifact.SchemaContentHash {
 			authoritative = true
 			break
 		}
@@ -525,13 +548,16 @@ func invocationArtifactApproved(userID string, artifact model.Artifact) (bool, e
 	if !authoritative {
 		return false, nil
 	}
-	setHash := invocationArtifactSetHash(refs, artifact.ProducerAttempt)
+	setHash := invocationArtifactSetHash(refs, run.ReviewedAttempt)
+	if setHash != run.ReviewedArtifactSetHash {
+		return false, nil
+	}
 	reviews, err := repository.ListInvocationReviews(userID, *artifact.ProducerInvocationID)
 	if err != nil {
 		return false, err
 	}
 	for _, review := range reviews {
-		if review.Decision == "approved" && review.Attempt == artifact.ProducerAttempt && review.ArtifactSetHash == setHash {
+		if review.Decision == "approved" && review.Attempt == run.ReviewedAttempt && review.ArtifactSetHash == setHash {
 			return true, nil
 		}
 	}

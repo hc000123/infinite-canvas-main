@@ -153,37 +153,85 @@ func buildInvocationCompletion(agentRun model.AgentRun, run model.InvocationRun,
 		return fail("input_contract", gates, err)
 	}
 	gates = append(gates, invocationGate(run, attempt, 1, "input_contract", "frozen-input-contract", "1", true, nil, stamp))
-	outputs, coreSchemas, skillSchema, err := validateFrozenInvocationOutputs(revision, result.rawOutput)
+	retryPlan := InvocationRetryPlan{}
+	if strings.TrimSpace(attempt.RetryPlanJSON) != "" && json.Unmarshal([]byte(attempt.RetryPlanJSON), &retryPlan) != nil {
+		return fail("output_schema", append(gates, invocationGate(run, attempt, 2, "output_schema", "immutable-retry-plan", "1", false, errors.New("immutable RetryPlan 无效"), stamp)), errors.New("immutable RetryPlan 无效"))
+	}
+	outputs, coreSchemas, skillSchema, err := validateFrozenInvocationOutputItems(revision, result.rawOutput, retryPlan)
 	if err != nil {
 		gates = append(gates, invocationGate(run, attempt, 2, "output_schema", "frozen-dual-schema", "1", false, err, stamp))
 		return fail("output_schema", gates, err)
 	}
-	artifacts, refs, err := buildFrozenInvocationArtifacts(run, revision, attempt, inputRefs, outputs, coreSchemas, stamp)
+	validOutputs := make([]validatedInvocationOutput, 0, len(outputs))
+	itemFailed := false
+	itemFailureLayer := ""
+	for _, output := range outputs {
+		if output.validationError != nil {
+			itemFailed = true
+			itemFailureLayer = "output_schema"
+			gates = append(gates, invocationCoordinateGate(run, attempt, 2, "output_schema", "frozen-dual-schema", output, output.validationError, stamp))
+			continue
+		}
+		validator, validatorErr := invocationBusinessValidatorFor(coreSchemas[output.bindingName].ArtifactType)
+		if validatorErr == nil {
+			validatorErr = validator.Check(output.payload)
+		}
+		if validatorErr != nil {
+			itemFailed = true
+			if itemFailureLayer == "" {
+				itemFailureLayer = "business_gate"
+			}
+			gates = append(gates, invocationCoordinateGate(run, attempt, 2, "output_schema", "frozen-dual-schema", output, nil, stamp))
+			gates = append(gates, invocationCoordinateGate(run, attempt, 3, "business_gate", validator.ID, output, validatorErr, stamp))
+			continue
+		}
+		validOutputs = append(validOutputs, output)
+	}
+	artifacts, refs, err := buildFrozenInvocationArtifacts(run, revision, attempt, inputRefs, validOutputs, coreSchemas, retryPlan, stamp)
 	if err != nil {
 		gates = append(gates, invocationGate(run, attempt, 2, "output_schema", "frozen-dual-schema", "1", false, err, stamp))
 		return fail("output_schema", gates, err)
 	}
 	_ = skillSchema
-	for _, artifact := range artifacts {
-		gates = append(gates, invocationArtifactGate(run, attempt, artifact, 2, "output_schema", "frozen-dual-schema", "1", true, nil, stamp))
-	}
 	for index, artifact := range artifacts {
-		validator, validatorErr := invocationBusinessValidatorFor(artifact.ArtifactType)
-		if validatorErr == nil {
-			validatorErr = validator.Check(outputs[index].payload)
-		}
-		if validatorErr != nil {
-			gates = append(gates, invocationGate(run, attempt, 3, "business_gate", validator.ID, validator.Version, false, validatorErr, stamp))
-			return fail("business_gate", gates, validatorErr)
-		}
-		gates = append(gates, invocationArtifactGate(run, attempt, artifact, 3, "business_gate", validator.ID, validator.Version, true, nil, stamp))
+		output := validOutputs[index]
+		schemaGate := invocationArtifactGate(run, attempt, artifact, 2, "output_schema", "frozen-dual-schema", "1", true, nil, stamp)
+		validator, _ := invocationBusinessValidatorFor(artifact.ArtifactType)
+		businessGate := invocationArtifactGate(run, attempt, artifact, 3, "business_gate", validator.ID, validator.Version, true, nil, stamp)
+		schemaGate.BindingName, schemaGate.OutputOrdinal = output.bindingName, output.ordinal
+		businessGate.BindingName, businessGate.OutputOrdinal = output.bindingName, output.ordinal
+		gates = append(gates, schemaGate, businessGate)
 	}
+	preservedArtifacts, preservedRefs, preservedGates, preserveErr := loadPreservedInvocationOutputs(run, revision, attempt, retryPlan, stamp)
+	if preserveErr != nil {
+		gates = append(gates, invocationGate(run, attempt, 2, "output_schema", "immutable-retry-plan", "1", false, preserveErr, stamp))
+		return fail("output_schema", gates, preserveErr)
+	}
+	refs = append(preservedRefs, refs...)
+	gates = append(gates, preservedGates...)
 	if err := validateInvocationPolicy(run, revision, attempt, agentRun); err != nil {
 		gates = append(gates, invocationGate(run, attempt, 4, "policy_gate", "frozen-side-effect-policy", "1", false, err, stamp))
 		return fail("policy_gate", gates, err)
 	}
-	for _, artifact := range artifacts {
-		gates = append(gates, invocationArtifactGate(run, attempt, artifact, 4, "policy_gate", "frozen-side-effect-policy", "1", true, nil, stamp))
+	for _, ref := range refs {
+		for _, artifact := range append(preservedArtifacts, artifacts...) {
+			if artifact.ID == ref.ArtifactID {
+				gate := invocationArtifactGate(run, attempt, artifact, 4, "policy_gate", "frozen-side-effect-policy", "1", true, nil, stamp)
+				gate.BindingName, gate.OutputOrdinal = ref.BindingName, ref.Ordinal
+				gates = append(gates, gate)
+			}
+		}
+	}
+	if itemFailed {
+		if len(refs) == 0 {
+			return fail(itemFailureLayer, gates, errors.New("所有输出 ordinal 均未通过验证"))
+		}
+		completion.agentRun.Status, completion.agentRun.ErrorMessage = model.AgentRunStatusPartial, "部分输出未通过验证"
+		completion.attempt.Status, completion.attempt.ErrorClass, completion.attempt.ErrorMessage = string(model.AgentRunStatusPartial), "business_gate", completion.agentRun.ErrorMessage
+		completion.run.Status, completion.run.AggregateErrorSummary = model.InvocationStatusPartial, completion.agentRun.ErrorMessage
+		completion.artifacts, completion.refs, completion.gates = artifacts, refs, gates
+		completion.finish(stamp, "attempt.partial")
+		return completion
 	}
 	completion.agentRun.Status, completion.agentRun.ErrorMessage = model.AgentRunStatusNeedsReview, ""
 	completion.attempt.Status, completion.attempt.ErrorClass, completion.attempt.ErrorMessage = string(model.AgentRunStatusNeedsReview), "", ""
@@ -197,7 +245,7 @@ func globalInvocationFailureGates(run model.InvocationRun, attempt model.Invocat
 	result := make([]model.InvocationGateResult, 0, len(gates))
 	indexes := map[string]int{}
 	for _, gate := range gates {
-		key := fmt.Sprintf("%d\x00%s\x00%s", gate.ExecutionOrdinal, gate.Layer, gate.ValidatorID)
+		key := fmt.Sprintf("%d\x00%s\x00%s\x00%s\x00%d", gate.ExecutionOrdinal, gate.Layer, gate.ValidatorID, gate.BindingName, gate.OutputOrdinal)
 		gate.ID = deterministicInvocationID("invocationgate", run.ID, fmt.Sprint(attempt.Attempt), key)
 		gate.ArtifactID, gate.ArtifactHash = "", ""
 		if index, ok := indexes[key]; ok {
@@ -218,10 +266,11 @@ func (completion *invocationCompletion) finish(stamp, eventType string) {
 }
 
 type validatedInvocationOutput struct {
-	bindingName string
-	ordinal     int
-	payload     map[string]any
-	raw         json.RawMessage
+	bindingName     string
+	ordinal         int
+	payload         map[string]any
+	raw             json.RawMessage
+	validationError error
 }
 
 func validateFrozenInvocationInputs(userID string, revision model.InvocationPreflightRevision, refs []model.InvocationArtifactRef) error {
@@ -319,6 +368,19 @@ func invocationRefIDs(refs []model.InvocationArtifactRef) []string {
 }
 
 func validateFrozenInvocationOutputs(revision model.InvocationPreflightRevision, raw string) ([]validatedInvocationOutput, map[string]ResolvedArtifactSchema, invocationSkillSchemaSnapshot, error) {
+	outputs, schemas, skillSchema, err := validateFrozenInvocationOutputItems(revision, raw, InvocationRetryPlan{})
+	if err != nil {
+		return nil, nil, skillSchema, err
+	}
+	for _, output := range outputs {
+		if output.validationError != nil {
+			return nil, nil, skillSchema, output.validationError
+		}
+	}
+	return outputs, schemas, skillSchema, nil
+}
+
+func validateFrozenInvocationOutputItems(revision model.InvocationPreflightRevision, raw string, retryPlan InvocationRetryPlan) ([]validatedInvocationOutput, map[string]ResolvedArtifactSchema, invocationSkillSchemaSnapshot, error) {
 	var skill invocationSkillSnapshot
 	var core invocationCoreSchemaSnapshot
 	var skillSchema invocationSkillSchemaSnapshot
@@ -334,7 +396,7 @@ func validateFrozenInvocationOutputs(revision model.InvocationPreflightRevision,
 	if err != nil {
 		return nil, nil, skillSchema, err
 	}
-	declared, err := parseInvocationDeclaredOutputs(raw, skill.Package.OutputContract.ArtifactOutputs)
+	declared, err := parseInvocationDeclaredOutputsForRetry(raw, skill.Package.OutputContract.ArtifactOutputs, retryPlan.RequestedOutputs)
 	if err != nil {
 		return nil, nil, skillSchema, err
 	}
@@ -352,13 +414,64 @@ func validateFrozenInvocationOutputs(revision model.InvocationPreflightRevision,
 			return nil, nil, skillSchema, errors.New("输出 binding 缺少 frozen Core schema")
 		}
 		if err := ValidateArtifactPayload(schema, output.raw); err != nil {
-			return nil, nil, skillSchema, err
+			declared[invocationOutputIndex(declared, output.bindingName, output.ordinal)].validationError = err
+			continue
 		}
 		if err := skillCompiled.Validate(output.payload); err != nil {
-			return nil, nil, skillSchema, fmt.Errorf("输出不符合 frozen Skill schema: %w", err)
+			declared[invocationOutputIndex(declared, output.bindingName, output.ordinal)].validationError = fmt.Errorf("输出不符合 frozen Skill schema: %w", err)
 		}
 	}
 	return declared, coreSchemas, skillSchema, nil
+}
+
+func invocationOutputIndex(outputs []validatedInvocationOutput, binding string, ordinal int) int {
+	for index := range outputs {
+		if outputs[index].bindingName == binding && outputs[index].ordinal == ordinal {
+			return index
+		}
+	}
+	return -1
+}
+
+func parseInvocationDeclaredOutputsForRetry(raw string, specs []ArtifactOutputSpec, requested []InvocationOutputCoordinate) ([]validatedInvocationOutput, error) {
+	if len(requested) == 0 {
+		return parseInvocationDeclaredOutputs(raw, specs)
+	}
+	var envelope struct {
+		Outputs []invocationDeclaredOutput `json:"outputs"`
+	}
+	if json.Unmarshal([]byte(raw), &envelope) != nil || len(envelope.Outputs) == 0 {
+		return nil, errors.New("重试输出必须是 declared one-or-many envelope")
+	}
+	wanted := map[string]bool{}
+	for _, coordinate := range requested {
+		wanted[fmt.Sprintf("%s\x00%d", coordinate.BindingName, coordinate.Ordinal)] = true
+	}
+	result := make([]validatedInvocationOutput, 0, len(envelope.Outputs))
+	seen := map[string]bool{}
+	for _, item := range envelope.Outputs {
+		key := fmt.Sprintf("%s\x00%d", item.BindingName, item.Ordinal)
+		if !wanted[key] || seen[key] {
+			return nil, errors.New("重试输出 binding/ordinal 与 immutable RetryPlan 不一致")
+		}
+		payload, err := canonicalRawInvocationPayload(item.Payload)
+		if err != nil {
+			result = append(result, validatedInvocationOutput{bindingName: item.BindingName, ordinal: item.Ordinal, raw: item.Payload, validationError: err})
+		} else {
+			result = append(result, validatedInvocationOutput{bindingName: item.BindingName, ordinal: item.Ordinal, payload: payload.value, raw: payload.raw})
+		}
+		seen[key] = true
+	}
+	if len(seen) != len(wanted) {
+		return nil, errors.New("重试输出缺少 immutable RetryPlan ordinal")
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].bindingName != result[j].bindingName {
+			return result[i].bindingName < result[j].bindingName
+		}
+		return result[i].ordinal < result[j].ordinal
+	})
+	return result, nil
 }
 
 func parseInvocationDeclaredOutputs(raw string, specs []ArtifactOutputSpec) ([]validatedInvocationOutput, error) {
@@ -387,13 +500,14 @@ func parseInvocationDeclaredOutputs(raw string, specs []ArtifactOutputSpec) ([]v
 		}
 		payload, err := canonicalRawInvocationPayload(item.Payload)
 		if err != nil {
-			return nil, err
+			result = append(result, validatedInvocationOutput{bindingName: item.BindingName, ordinal: item.Ordinal, raw: item.Payload, validationError: err})
+		} else {
+			result = append(result, validatedInvocationOutput{bindingName: item.BindingName, ordinal: item.Ordinal, payload: payload.value, raw: payload.raw})
 		}
 		counts[item.BindingName]++
 		if counts[item.BindingName] > spec.Max {
 			return nil, errors.New("输出超过 binding 最大数量")
 		}
-		result = append(result, validatedInvocationOutput{bindingName: item.BindingName, ordinal: item.Ordinal, payload: payload.value, raw: payload.raw})
 	}
 	for _, spec := range specs {
 		if counts[spec.BindingName] < spec.Min || counts[spec.BindingName] > spec.Max {
@@ -419,10 +533,23 @@ func canonicalRawInvocationPayload(raw json.RawMessage) (canonicalInvocationPayl
 	return canonicalInvocationPayload{raw: json.RawMessage(canonical), value: value}, err
 }
 
-func buildFrozenInvocationArtifacts(run model.InvocationRun, revision model.InvocationPreflightRevision, attempt model.InvocationAttempt, inputRefs []model.InvocationArtifactRef, outputs []validatedInvocationOutput, schemas map[string]ResolvedArtifactSchema, stamp string) ([]model.Artifact, []model.InvocationArtifactRef, error) {
+func buildFrozenInvocationArtifacts(run model.InvocationRun, revision model.InvocationPreflightRevision, attempt model.InvocationAttempt, inputRefs []model.InvocationArtifactRef, outputs []validatedInvocationOutput, schemas map[string]ResolvedArtifactSchema, retryPlan InvocationRetryPlan, stamp string) ([]model.Artifact, []model.InvocationArtifactRef, error) {
 	parents := make([]ArtifactRefInput, 0, len(inputRefs))
 	for _, ref := range inputRefs {
 		parents = append(parents, ArtifactRefInput{BindingName: ref.BindingName, ArtifactID: ref.ArtifactID, ContentHash: ref.ArtifactHash})
+	}
+	if len(retryPlan.RejectedParentArtifactIDs) > 0 {
+		rejected, err := repository.GetUserArtifactsByIDs(run.UserID, retryPlan.RejectedParentArtifactIDs)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, artifactID := range retryPlan.RejectedParentArtifactIDs {
+			artifact, ok := rejected[artifactID]
+			if !ok {
+				return nil, nil, errors.New("rejected lineage Artifact 不存在")
+			}
+			parents = append(parents, ArtifactRefInput{BindingName: "rejected_output", ArtifactID: artifact.ID, ContentHash: artifact.ContentHash})
+		}
 	}
 	parentRefs, _, err := validateParentArtifactRefs(run.UserID, run.ProjectID, run.EpisodeID, parents)
 	if err != nil {
@@ -447,6 +574,64 @@ func buildFrozenInvocationArtifacts(run model.InvocationRun, revision model.Invo
 		refs = append(refs, model.InvocationArtifactRef{ID: deterministicInvocationID("invocationref", run.ID, fmt.Sprint(attempt.Attempt), output.bindingName, fmt.Sprint(output.ordinal)), UserID: run.UserID, InvocationID: run.ID, Direction: "output", BindingName: output.bindingName, ArtifactID: artifact.ID, ArtifactHash: artifact.ContentHash, ArtifactType: artifact.ArtifactType, SchemaVersion: artifact.SchemaVersion, SchemaContentHash: artifact.SchemaContentHash, Revision: attempt.Revision, Attempt: attempt.Attempt, Ordinal: output.ordinal, CreatedAt: stamp})
 	}
 	return artifacts, refs, nil
+}
+
+func loadPreservedInvocationOutputs(run model.InvocationRun, revision model.InvocationPreflightRevision, attempt model.InvocationAttempt, plan InvocationRetryPlan, stamp string) ([]model.Artifact, []model.InvocationArtifactRef, []model.InvocationGateResult, error) {
+	if len(plan.PreservedOutputRefs) == 0 {
+		return nil, nil, nil, nil
+	}
+	var core invocationCoreSchemaSnapshot
+	var skillSchema invocationSkillSchemaSnapshot
+	if json.Unmarshal([]byte(revision.CoreSchemaSnapshotJSON), &core) != nil || json.Unmarshal([]byte(revision.SkillSchemaSnapshotJSON), &skillSchema) != nil {
+		return nil, nil, nil, errors.New("frozen output snapshot 无效")
+	}
+	schemas := map[string]ResolvedArtifactSchema{}
+	for _, output := range core.Outputs {
+		schemas[output.Spec.BindingName] = output.Schema
+	}
+	skillRaw, _, err := canonicalJSONObject(skillSchema.Schema)
+	if err != nil || invocationSHA256(skillRaw) != skillSchema.ContentHash {
+		return nil, nil, nil, errors.New("frozen Skill output schema hash 无效")
+	}
+	compiled, err := compileLocalJSONSchema("frozen-skill-output.json", skillRaw)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	ids := make([]string, len(plan.PreservedOutputRefs))
+	for index := range plan.PreservedOutputRefs {
+		ids[index] = plan.PreservedOutputRefs[index].ArtifactID
+	}
+	stored, err := repository.GetUserArtifactsByIDs(run.UserID, ids)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	artifacts := make([]model.Artifact, 0, len(ids))
+	refs := make([]model.InvocationArtifactRef, 0, len(ids))
+	gates := make([]model.InvocationGateResult, 0, len(ids)*2)
+	for _, frozen := range plan.PreservedOutputRefs {
+		artifact, ok := stored[frozen.ArtifactID]
+		schema, schemaOK := schemas[frozen.BindingName]
+		actualHash, hashErr := frozenStoredArtifactHash(artifact)
+		if !ok || !schemaOK || artifact.UserID != run.UserID || artifact.ProjectID != run.ProjectID || artifact.EpisodeID != run.EpisodeID || artifact.ID != frozen.ArtifactID || artifact.ContentHash != frozen.ArtifactHash || artifact.ArtifactType != frozen.ArtifactType || artifact.SchemaVersion != frozen.SchemaVersion || artifact.SchemaContentHash != frozen.SchemaContentHash || schema.ArtifactType != artifact.ArtifactType || schema.Version != artifact.SchemaVersion || schema.ContentHash != artifact.SchemaContentHash || hashErr != nil || actualHash != artifact.ContentHash {
+			return nil, nil, nil, errors.New("preserved output ref/hash/schema 已变化")
+		}
+		payload, err := canonicalRawInvocationPayload(json.RawMessage(artifact.PayloadJSON))
+		if err != nil || ValidateArtifactPayload(schema, payload.raw) != nil || compiled.Validate(payload.value) != nil {
+			return nil, nil, nil, errors.New("preserved output 不再符合 frozen schema")
+		}
+		validator, err := invocationBusinessValidatorFor(artifact.ArtifactType)
+		if err != nil || validator.Check(payload.value) != nil {
+			return nil, nil, nil, errors.New("preserved output 不再符合 frozen business validator")
+		}
+		artifacts = append(artifacts, artifact)
+		refs = append(refs, model.InvocationArtifactRef{ID: deterministicInvocationID("invocationref", run.ID, fmt.Sprint(attempt.Attempt), frozen.BindingName, fmt.Sprint(frozen.Ordinal)), UserID: run.UserID, InvocationID: run.ID, Direction: "output", BindingName: frozen.BindingName, ArtifactID: artifact.ID, ArtifactHash: artifact.ContentHash, ArtifactType: artifact.ArtifactType, SchemaVersion: artifact.SchemaVersion, SchemaContentHash: artifact.SchemaContentHash, Revision: attempt.Revision, Attempt: attempt.Attempt, Ordinal: frozen.Ordinal, CreatedAt: stamp})
+		schemaGate := invocationArtifactGate(run, attempt, artifact, 2, "output_schema", "frozen-dual-schema", "1", true, nil, stamp)
+		businessGate := invocationArtifactGate(run, attempt, artifact, 3, "business_gate", validator.ID, validator.Version, true, nil, stamp)
+		schemaGate.BindingName, schemaGate.OutputOrdinal = frozen.BindingName, frozen.Ordinal
+		businessGate.BindingName, businessGate.OutputOrdinal = frozen.BindingName, frozen.Ordinal
+		gates = append(gates, schemaGate, businessGate)
+	}
+	return artifacts, refs, gates, nil
 }
 
 func validateInvocationPolicy(run model.InvocationRun, revision model.InvocationPreflightRevision, attempt model.InvocationAttempt, agentRun model.AgentRun) error {
@@ -502,13 +687,20 @@ func invocationGate(run model.InvocationRun, attempt model.InvocationAttempt, or
 		issues = append(issues, issue.Error())
 	}
 	issuesJSON, _ := json.Marshal(issues)
-	return model.InvocationGateResult{ID: deterministicInvocationID("invocationgate", run.ID, fmt.Sprint(attempt.Attempt), fmt.Sprint(ordinal), validatorID), UserID: run.UserID, InvocationID: run.ID, Attempt: attempt.Attempt, ExecutionOrdinal: ordinal, Layer: layer, ValidatorID: validatorID, ValidatorVersion: version, IssuesJSON: string(issuesJSON), Passed: passed, CreatedAt: stamp}
+	return model.InvocationGateResult{ID: deterministicInvocationID("invocationgate", run.ID, fmt.Sprint(attempt.Attempt), fmt.Sprint(ordinal), validatorID), UserID: run.UserID, InvocationID: run.ID, Attempt: attempt.Attempt, ExecutionOrdinal: ordinal, OutputOrdinal: -1, Layer: layer, ValidatorID: validatorID, ValidatorVersion: version, IssuesJSON: string(issuesJSON), Passed: passed, CreatedAt: stamp}
 }
 
 func invocationArtifactGate(run model.InvocationRun, attempt model.InvocationAttempt, artifact model.Artifact, ordinal int, layer, validatorID, version string, passed bool, issue error, stamp string) model.InvocationGateResult {
 	gate := invocationGate(run, attempt, ordinal, layer, validatorID, version, passed, issue, stamp)
 	gate.ID = deterministicInvocationID("invocationgate", run.ID, fmt.Sprint(attempt.Attempt), fmt.Sprint(ordinal), validatorID, artifact.ID)
 	gate.ArtifactID, gate.ArtifactHash = artifact.ID, artifact.ContentHash
+	return gate
+}
+
+func invocationCoordinateGate(run model.InvocationRun, attempt model.InvocationAttempt, executionOrdinal int, layer, validatorID string, output validatedInvocationOutput, issue error, stamp string) model.InvocationGateResult {
+	validatorID = fmt.Sprintf("%s:%s:%d", validatorID, output.bindingName, output.ordinal)
+	gate := invocationGate(run, attempt, executionOrdinal, layer, validatorID, "1", issue == nil, issue, stamp)
+	gate.BindingName, gate.OutputOrdinal = output.bindingName, output.ordinal
 	return gate
 }
 

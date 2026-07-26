@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/basketikun/infinite-canvas/model"
+	"github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -168,26 +169,33 @@ func AppendInvocationPreflightRevision(run model.InvocationRun, revision model.I
 	if err != nil {
 		return err
 	}
-	return database.Transaction(func(tx *gorm.DB) error {
-		result := tx.Model(&model.InvocationRun{}).
-			Where("id = ? AND user_id = ? AND status IN ? AND latest_revision = ? AND latest_attempt = ? AND (project_id = ? OR project_id = '') AND (episode_id = ? OR episode_id = '')", run.ID, run.UserID, allowedFrom, revision.Revision-1, run.LatestAttempt, run.ProjectID, run.EpisodeID).
-			Updates(invocationPreflightHeaderUpdates(run))
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected != 1 {
-			return ErrInvocationTransitionConflict
-		}
-		if err := tx.Create(&revision).Error; err != nil {
-			return err
-		}
-		if len(refs) > 0 {
-			if err := tx.Create(&refs).Error; err != nil {
+	for range 20 {
+		err = database.Transaction(func(tx *gorm.DB) error {
+			result := tx.Model(&model.InvocationRun{}).
+				Where("id = ? AND user_id = ? AND status IN ? AND latest_revision = ? AND latest_attempt = ? AND (project_id = ? OR project_id = '') AND (episode_id = ? OR episode_id = '')", run.ID, run.UserID, allowedFrom, revision.Revision-1, run.LatestAttempt, run.ProjectID, run.EpisodeID).
+				Updates(invocationPreflightHeaderUpdates(run))
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return ErrInvocationTransitionConflict
+			}
+			if err := tx.Create(&revision).Error; err != nil {
 				return err
 			}
+			if len(refs) > 0 {
+				if err := tx.Create(&refs).Error; err != nil {
+					return err
+				}
+			}
+			return tx.Create(&event).Error
+		})
+		if !isSQLiteContention(database, err) {
+			break
 		}
-		return tx.Create(&event).Error
-	})
+		time.Sleep(time.Millisecond)
+	}
+	return err
 }
 
 func TransitionInvocation(run model.InvocationRun, event model.InvocationEvent, allowedFrom ...model.InvocationStatus) error {
@@ -212,6 +220,135 @@ func TransitionInvocation(run model.InvocationRun, event model.InvocationEvent, 
 	})
 }
 
+func CancelInvocationTx(userID, invocationID, stamp string) (model.InvocationRun, *model.InvocationAttempt, error) {
+	database, err := DB()
+	if err != nil {
+		return model.InvocationRun{}, nil, err
+	}
+	var run model.InvocationRun
+	var attempt *model.InvocationAttempt
+	for range 20 {
+		run, attempt = model.InvocationRun{}, nil
+		err = database.Transaction(func(tx *gorm.DB) error {
+			query := invocationCreditContextLockQuery(tx, &model.InvocationRun{}).
+				Where("id = ? AND user_id = ?", strings.TrimSpace(invocationID), strings.TrimSpace(userID)).Limit(1).Find(&run)
+			if query.Error != nil {
+				return query.Error
+			}
+			if query.RowsAffected != 1 {
+				return ErrInvocationNotFound
+			}
+			switch run.Status {
+			case model.InvocationStatusCancelled, model.InvocationStatusCancelRequested:
+				return loadLatestInvocationAttemptTx(tx, run, &attempt)
+			case model.InvocationStatusPlanned, model.InvocationStatusPreflight, model.InvocationStatusAwaitingConfirmation, model.InvocationStatusBlocked:
+				run.Status, run.UpdatedAt = model.InvocationStatusCancelled, stamp
+				result := tx.Model(&model.InvocationRun{}).Where("id = ? AND user_id = ? AND status IN ? AND latest_attempt = ?", run.ID, run.UserID,
+					[]model.InvocationStatus{model.InvocationStatusPlanned, model.InvocationStatusPreflight, model.InvocationStatusAwaitingConfirmation, model.InvocationStatusBlocked}, 0).
+					Updates(invocationHeaderUpdates(run))
+				if result.Error != nil {
+					return result.Error
+				}
+				if result.RowsAffected != 1 {
+					return ErrInvocationTransitionConflict
+				}
+				return tx.Create(&model.InvocationEvent{UserID: run.UserID, InvocationID: run.ID, Type: "invocation.cancelled", Level: "info", DataJSON: `{}`, Revision: run.LatestRevision, Attempt: 0, CreatedAt: stamp}).Error
+			case model.InvocationStatusQueued, model.InvocationStatusRunning:
+				return cancelQueuedInvocationAttemptTx(tx, &run, &attempt, stamp)
+			default:
+				return loadLatestInvocationAttemptTx(tx, run, &attempt)
+			}
+		})
+		if !isSQLiteContention(database, err) {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return run, attempt, err
+}
+
+func loadLatestInvocationAttemptTx(tx *gorm.DB, run model.InvocationRun, destination **model.InvocationAttempt) error {
+	if run.LatestAttempt < 1 {
+		return nil
+	}
+	var attempt model.InvocationAttempt
+	query := tx.Where("user_id = ? AND invocation_id = ? AND attempt = ?", run.UserID, run.ID, run.LatestAttempt).Limit(1).Find(&attempt)
+	if query.Error != nil {
+		return query.Error
+	}
+	if query.RowsAffected != 1 {
+		return ErrInvocationTransitionConflict
+	}
+	*destination = &attempt
+	return nil
+}
+
+func cancelQueuedInvocationAttemptTx(tx *gorm.DB, run *model.InvocationRun, destination **model.InvocationAttempt, stamp string) error {
+	var attempt model.InvocationAttempt
+	if err := tx.Where("user_id = ? AND invocation_id = ? AND attempt = ?", run.UserID, run.ID, run.LatestAttempt).First(&attempt).Error; err != nil {
+		return err
+	}
+	var agent model.AgentRun
+	if err := tx.Where("id = ? AND user_id = ?", attempt.AgentRunID, run.UserID).First(&agent).Error; err != nil {
+		return err
+	}
+	sourceRun, sourceAttempt, sourceAgent := run.Status, attempt.Status, agent.Status
+	targetRun, targetAgent := model.InvocationStatusCancelled, model.AgentRunStatusCancelled
+	finishedAt := stamp
+	if run.Status == model.InvocationStatusRunning {
+		targetRun, targetAgent, finishedAt = model.InvocationStatusCancelRequested, model.AgentRunStatusCancelRequested, ""
+	}
+	agentUpdates := map[string]any{"status": targetAgent, "updated_at": stamp}
+	attemptUpdates := map[string]any{"status": string(targetAgent), "updated_at": stamp}
+	if finishedAt != "" {
+		agentUpdates["finished_at"], attemptUpdates["finished_at"] = finishedAt, finishedAt
+	}
+	result := tx.Model(&model.AgentRun{}).Where("id = ? AND user_id = ? AND status = ?", agent.ID, agent.UserID, sourceAgent).Updates(agentUpdates)
+	if result.Error != nil || result.RowsAffected != 1 {
+		if result.Error != nil {
+			return result.Error
+		}
+		return ErrInvocationTransitionConflict
+	}
+	result = tx.Model(&model.InvocationAttempt{}).Where("id = ? AND invocation_id = ? AND status = ? AND finished_at = ''", attempt.ID, attempt.InvocationID, sourceAttempt).Updates(attemptUpdates)
+	if result.Error != nil || result.RowsAffected != 1 {
+		if result.Error != nil {
+			return result.Error
+		}
+		return ErrInvocationTransitionConflict
+	}
+	run.Status, run.UpdatedAt = targetRun, stamp
+	result = tx.Model(&model.InvocationRun{}).Where("id = ? AND user_id = ? AND status = ? AND latest_revision = ? AND latest_attempt = ?", run.ID, run.UserID, sourceRun, run.LatestRevision, run.LatestAttempt).Updates(invocationHeaderUpdates(*run))
+	if result.Error != nil || result.RowsAffected != 1 {
+		if result.Error != nil {
+			return result.Error
+		}
+		return ErrInvocationTransitionConflict
+	}
+	if targetAgent == model.AgentRunStatusCancelled {
+		reserved, refunded, err := settleInvocationCreditsTx(tx, agent, targetAgent, stamp, "")
+		if err != nil {
+			return err
+		}
+		agentUpdates["credits_reserved"], agentUpdates["credits_refunded"] = reserved, refunded
+		attemptUpdates["credits_reserved"], attemptUpdates["credits_refunded"] = reserved, refunded
+		if err := tx.Model(&model.AgentRun{}).Where("id = ? AND status = ?", agent.ID, targetAgent).Updates(map[string]any{"credits_reserved": reserved, "credits_refunded": refunded}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.InvocationAttempt{}).Where("id = ? AND status = ?", attempt.ID, string(targetAgent)).Updates(map[string]any{"credits_reserved": reserved, "credits_refunded": refunded}).Error; err != nil {
+			return err
+		}
+	}
+	agent.Status, agent.UpdatedAt, agent.FinishedAt = targetAgent, stamp, finishedAt
+	attempt.Status, attempt.UpdatedAt, attempt.FinishedAt = string(targetAgent), stamp, finishedAt
+	*destination = &attempt
+	eventType := "attempt.cancel_requested"
+	if targetAgent == model.AgentRunStatusCancelled {
+		eventType = "attempt.cancelled"
+	}
+	return tx.Create(&model.InvocationEvent{UserID: run.UserID, InvocationID: run.ID, Type: eventType, Level: "info", DataJSON: `{}`, Revision: attempt.Revision, Attempt: attempt.Attempt, CreatedAt: stamp}).Error
+}
+
 func QueueInvocationAttemptTx(run model.InvocationRun, attempt model.InvocationAttempt, agentRun model.AgentRun, refs []model.InvocationArtifactRef, event model.InvocationEvent) error {
 	wantKey := fmt.Sprintf("invocation:%s:revision:%d:attempt:%d", run.ID, attempt.Revision, attempt.Attempt)
 	if run.Status != model.InvocationStatusQueued || run.LatestRevision != attempt.Revision || run.LatestAttempt != attempt.Attempt || run.ID != attempt.InvocationID || run.UserID != attempt.UserID || attempt.AgentRunID != agentRun.ID || run.UserID != agentRun.UserID || agentRun.InvocationID != run.ID || agentRun.InvocationRevision != attempt.Revision || agentRun.InvocationAttempt != attempt.Attempt || agentRun.IdempotencyKey == nil || *agentRun.IdempotencyKey != wantKey || agentRun.AllowFallback || agentRun.Model != attempt.Model || agentRun.ChannelID != attempt.ChannelID || agentRun.Executor != attempt.ExecutorKind {
@@ -221,47 +358,291 @@ func QueueInvocationAttemptTx(run model.InvocationRun, attempt model.InvocationA
 	if err != nil {
 		return err
 	}
-	return database.Transaction(func(tx *gorm.DB) error {
-		if err := validateInputRefsTx(tx, run, attempt, agentRun, refs, event); err != nil {
-			return err
+	for range 20 {
+		err = database.Transaction(func(tx *gorm.DB) error {
+			if err := validateInputRefsTx(tx, run, attempt, agentRun, refs, event); err != nil {
+				return err
+			}
+			if err := validateInvocationRetryPlanTx(tx, run, attempt); err != nil {
+				return err
+			}
+			sourceStatuses := []model.InvocationStatus{model.InvocationStatusAwaitingConfirmation}
+			if attempt.Attempt > 1 {
+				sourceStatuses = append(sourceStatuses, model.InvocationStatusFailed, model.InvocationStatusCancelled, model.InvocationStatusRejected, model.InvocationStatusPartial)
+			}
+			result := tx.Model(&model.InvocationRun{}).
+				Where("id = ? AND user_id = ? AND status IN ? AND latest_revision = ? AND latest_attempt = ?", run.ID, run.UserID, sourceStatuses, run.LatestRevision, attempt.Attempt-1).
+				Updates(invocationHeaderUpdates(run))
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return ErrInvocationTransitionConflict
+			}
+			if err := invokeRepositoryHook("queue", "run"); err != nil {
+				return err
+			}
+			if err := tx.Create(&agentRun).Error; err != nil {
+				return err
+			}
+			if err := invokeRepositoryHook("queue", "agent_run"); err != nil {
+				return err
+			}
+			if err := tx.Create(&attempt).Error; err != nil {
+				return err
+			}
+			if err := invokeRepositoryHook("queue", "attempt"); err != nil {
+				return err
+			}
+			for index := range refs {
+				if err := tx.Create(&refs[index]).Error; err != nil {
+					return err
+				}
+				if err := invokeRepositoryHook("queue", fmt.Sprintf("ref:%d", index)); err != nil {
+					return err
+				}
+			}
+			if err := tx.Create(&event).Error; err != nil {
+				return err
+			}
+			return invokeRepositoryHook("queue", "event")
+		})
+		if !isSQLiteContention(database, err) {
+			break
 		}
-		result := tx.Model(&model.InvocationRun{}).
-			Where("id = ? AND user_id = ? AND status = ? AND latest_revision = ? AND latest_attempt = ?", run.ID, run.UserID, model.InvocationStatusAwaitingConfirmation, run.LatestRevision, attempt.Attempt-1).
-			Updates(invocationHeaderUpdates(run))
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected != 1 {
+		time.Sleep(time.Millisecond)
+	}
+	return err
+}
+
+func validateInvocationRetryPlanTx(tx *gorm.DB, run model.InvocationRun, attempt model.InvocationAttempt) error {
+	type retryOutputRef struct {
+		BindingName       string `json:"bindingName"`
+		Ordinal           int    `json:"ordinal"`
+		ArtifactID        string `json:"artifactId"`
+		ArtifactHash      string `json:"artifactHash"`
+		ArtifactType      string `json:"artifactType"`
+		SchemaVersion     string `json:"schemaVersion"`
+		SchemaContentHash string `json:"schemaContentHash"`
+	}
+	type coordinate struct {
+		BindingName string `json:"bindingName"`
+		Ordinal     int    `json:"ordinal"`
+	}
+	var plan struct {
+		PreservedOutputRefs       []retryOutputRef `json:"preservedOutputRefs"`
+		RequestedOutputs          []coordinate     `json:"requestedOutputs"`
+		RejectedParentArtifactIDs []string         `json:"rejectedParentArtifactIds"`
+	}
+	raw := []byte(strings.TrimSpace(attempt.RetryPlanJSON))
+	if len(raw) == 0 && attempt.Attempt == 1 {
+		return nil
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &plan) != nil {
+		return ErrInvocationTransitionConflict
+	}
+	canonical, err := jsoncanonicalizer.Transform(raw)
+	if err != nil || string(canonical) != string(raw) {
+		return ErrInvocationTransitionConflict
+	}
+	if attempt.Attempt == 1 {
+		if len(plan.PreservedOutputRefs) != 0 || len(plan.RequestedOutputs) != 0 || len(plan.RejectedParentArtifactIDs) != 0 {
 			return ErrInvocationTransitionConflict
 		}
-		if err := invokeRepositoryHook("queue", "run"); err != nil {
-			return err
+		return nil
+	}
+	var previous model.InvocationAttempt
+	if result := tx.Where("user_id = ? AND invocation_id = ? AND attempt = ?", run.UserID, run.ID, attempt.Attempt-1).Limit(1).Find(&previous); result.Error != nil || result.RowsAffected != 1 {
+		return ErrInvocationTransitionConflict
+	}
+	if attempt.Revision > previous.Revision {
+		if len(plan.PreservedOutputRefs) != 0 || len(plan.RequestedOutputs) != 0 || len(plan.RejectedParentArtifactIDs) != 0 {
+			return ErrInvocationTransitionConflict
 		}
-		if err := tx.Create(&agentRun).Error; err != nil {
-			return err
+		return nil
+	}
+	previousTerminal := previous.Status == string(model.AgentRunStatusFailed) || previous.Status == string(model.AgentRunStatusCancelled)
+	if previousTerminal {
+		var previousPlan struct {
+			PreservedOutputRefs       []retryOutputRef `json:"preservedOutputRefs"`
+			RequestedOutputs          []coordinate     `json:"requestedOutputs"`
+			RejectedParentArtifactIDs []string         `json:"rejectedParentArtifactIds"`
 		}
-		if err := invokeRepositoryHook("queue", "agent_run"); err != nil {
-			return err
+		previousRaw := []byte(strings.TrimSpace(previous.RetryPlanJSON))
+		if len(previousRaw) > 0 && json.Unmarshal(previousRaw, &previousPlan) != nil {
+			return ErrInvocationTransitionConflict
 		}
-		if err := tx.Create(&attempt).Error; err != nil {
-			return err
-		}
-		if err := invokeRepositoryHook("queue", "attempt"); err != nil {
-			return err
-		}
-		for index := range refs {
-			if err := tx.Create(&refs[index]).Error; err != nil {
-				return err
+		if len(previousPlan.PreservedOutputRefs) > 0 || len(previousPlan.RequestedOutputs) > 0 || len(previousPlan.RejectedParentArtifactIDs) > 0 {
+			previousCanonical, canonicalErr := jsoncanonicalizer.Transform(previousRaw)
+			if canonicalErr != nil || string(previousCanonical) != string(previousRaw) {
+				return ErrInvocationTransitionConflict
 			}
-			if err := invokeRepositoryHook("queue", fmt.Sprintf("ref:%d", index)); err != nil {
-				return err
+			coordinates := map[string]bool{}
+			for _, coordinate := range previousPlan.RequestedOutputs {
+				key := fmt.Sprintf("%s\x00%d", strings.TrimSpace(coordinate.BindingName), coordinate.Ordinal)
+				if strings.TrimSpace(coordinate.BindingName) == "" || coordinate.Ordinal < 0 || coordinates[key] {
+					return ErrInvocationTransitionConflict
+				}
+				coordinates[key] = true
+			}
+			for _, frozen := range previousPlan.PreservedOutputRefs {
+				key := fmt.Sprintf("%s\x00%d", strings.TrimSpace(frozen.BindingName), frozen.Ordinal)
+				if strings.TrimSpace(frozen.BindingName) == "" || frozen.Ordinal < 0 || frozen.ArtifactID == "" || frozen.ArtifactHash == "" || frozen.ArtifactType == "" || frozen.SchemaVersion == "" || frozen.SchemaContentHash == "" || coordinates[key] {
+					return ErrInvocationTransitionConflict
+				}
+				coordinates[key] = true
+			}
+			parents := map[string]bool{}
+			for _, artifactID := range previousPlan.RejectedParentArtifactIDs {
+				if strings.TrimSpace(artifactID) == "" || parents[artifactID] {
+					return ErrInvocationTransitionConflict
+				}
+				parents[artifactID] = true
+			}
+			if len(previousPlan.RequestedOutputs) == 0 || string(raw) != string(previousRaw) {
+				return ErrInvocationTransitionConflict
+			}
+			return nil
+		}
+		if len(plan.PreservedOutputRefs) != 0 || len(plan.RejectedParentArtifactIDs) != 0 {
+			return ErrInvocationTransitionConflict
+		}
+		var revision model.InvocationPreflightRevision
+		result := tx.Where("user_id = ? AND invocation_id = ? AND revision = ?", run.UserID, run.ID, previous.Revision).Limit(1).Find(&revision)
+		if result.Error != nil || result.RowsAffected != 1 {
+			return ErrInvocationTransitionConflict
+		}
+		var snapshot struct {
+			Package struct {
+				OutputContract struct {
+					ArtifactOutputs []struct {
+						BindingName string `json:"bindingName"`
+						Min         int    `json:"min"`
+					} `json:"artifactOutputs"`
+				} `json:"outputContract"`
+			} `json:"package"`
+		}
+		if json.Unmarshal([]byte(revision.SkillSnapshotJSON), &snapshot) != nil {
+			return ErrInvocationTransitionConflict
+		}
+		expected := map[string]bool{}
+		for _, output := range snapshot.Package.OutputContract.ArtifactOutputs {
+			if strings.TrimSpace(output.BindingName) == "" || output.Min < 0 {
+				return ErrInvocationTransitionConflict
+			}
+			for ordinal := 0; ordinal < output.Min; ordinal++ {
+				expected[fmt.Sprintf("%s\x00%d", output.BindingName, ordinal)] = true
 			}
 		}
-		if err := tx.Create(&event).Error; err != nil {
+		if len(plan.RequestedOutputs) != len(expected) {
+			return ErrInvocationTransitionConflict
+		}
+		seen := map[string]bool{}
+		for _, coordinate := range plan.RequestedOutputs {
+			key := fmt.Sprintf("%s\x00%d", coordinate.BindingName, coordinate.Ordinal)
+			if !expected[key] || seen[key] {
+				return ErrInvocationTransitionConflict
+			}
+			seen[key] = true
+		}
+		return nil
+	}
+	if len(plan.RequestedOutputs) == 0 {
+		return ErrInvocationTransitionConflict
+	}
+	var previousRefs []model.InvocationArtifactRef
+	if err := tx.Where("user_id = ? AND invocation_id = ? AND direction = ? AND attempt = ?", run.UserID, run.ID, "output", previous.Attempt).Order("binding_name asc, ordinal asc").Find(&previousRefs).Error; err != nil {
+		return err
+	}
+	coordinates := map[string]bool{}
+	for _, coordinate := range plan.RequestedOutputs {
+		key := fmt.Sprintf("%s\x00%d", strings.TrimSpace(coordinate.BindingName), coordinate.Ordinal)
+		if coordinate.BindingName == "" || coordinate.Ordinal < 0 || coordinates[key] {
+			return ErrInvocationTransitionConflict
+		}
+		coordinates[key] = true
+	}
+	for _, frozen := range plan.PreservedOutputRefs {
+		key := fmt.Sprintf("%s\x00%d", frozen.BindingName, frozen.Ordinal)
+		if coordinates[key] || frozen.Ordinal < 0 {
+			return ErrInvocationTransitionConflict
+		}
+		coordinates[key] = true
+		var ref model.InvocationArtifactRef
+		result := tx.Where("user_id = ? AND invocation_id = ? AND direction = ? AND binding_name = ? AND ordinal = ? AND artifact_id = ? AND artifact_hash = ? AND artifact_type = ? AND schema_version = ? AND schema_content_hash = ? AND attempt < ?", run.UserID, run.ID, "output", frozen.BindingName, frozen.Ordinal, frozen.ArtifactID, frozen.ArtifactHash, frozen.ArtifactType, frozen.SchemaVersion, frozen.SchemaContentHash, attempt.Attempt).Limit(1).Find(&ref)
+		if result.Error != nil || result.RowsAffected != 1 {
+			return ErrInvocationTransitionConflict
+		}
+	}
+	if len(plan.RejectedParentArtifactIDs) > 0 {
+		var reviews int64
+		if err := tx.Model(&model.InvocationReview{}).Where("user_id = ? AND invocation_id = ? AND attempt = ? AND decision = ?", run.UserID, run.ID, attempt.Attempt-1, "rejected").Count(&reviews).Error; err != nil || reviews != 1 {
+			return ErrInvocationTransitionConflict
+		}
+		seen := map[string]bool{}
+		for _, artifactID := range plan.RejectedParentArtifactIDs {
+			if artifactID == "" || seen[artifactID] {
+				return ErrInvocationTransitionConflict
+			}
+			seen[artifactID] = true
+			var count int64
+			if err := tx.Model(&model.InvocationArtifactRef{}).Where("user_id = ? AND invocation_id = ? AND direction = ? AND attempt = ? AND artifact_id = ?", run.UserID, run.ID, "output", attempt.Attempt-1, artifactID).Count(&count).Error; err != nil || count != 1 {
+				return ErrInvocationTransitionConflict
+			}
+		}
+	}
+	if previous.Status == "partial" {
+		if len(plan.PreservedOutputRefs) != len(previousRefs) {
+			return ErrInvocationTransitionConflict
+		}
+		for index, ref := range previousRefs {
+			frozen := plan.PreservedOutputRefs[index]
+			if frozen.BindingName != ref.BindingName || frozen.Ordinal != ref.Ordinal || frozen.ArtifactID != ref.ArtifactID || frozen.ArtifactHash != ref.ArtifactHash || frozen.ArtifactType != ref.ArtifactType || frozen.SchemaVersion != ref.SchemaVersion || frozen.SchemaContentHash != ref.SchemaContentHash {
+				return ErrInvocationTransitionConflict
+			}
+		}
+		var failedGates []model.InvocationGateResult
+		if err := tx.Where("user_id = ? AND invocation_id = ? AND attempt = ? AND passed = ? AND binding_name <> '' AND output_ordinal >= 0", run.UserID, run.ID, previous.Attempt, false).Find(&failedGates).Error; err != nil {
 			return err
 		}
-		return invokeRepositoryHook("queue", "event")
-	})
+		expected := map[string]bool{}
+		for _, gate := range failedGates {
+			expected[fmt.Sprintf("%s\x00%d", gate.BindingName, gate.OutputOrdinal)] = true
+		}
+		if len(expected) != len(plan.RequestedOutputs) {
+			return ErrInvocationTransitionConflict
+		}
+		for _, coordinate := range plan.RequestedOutputs {
+			if !expected[fmt.Sprintf("%s\x00%d", coordinate.BindingName, coordinate.Ordinal)] {
+				return ErrInvocationTransitionConflict
+			}
+		}
+		if len(plan.RejectedParentArtifactIDs) != 0 {
+			return ErrInvocationTransitionConflict
+		}
+	}
+	if previous.Status == string(model.AgentRunStatusRejected) {
+		if len(plan.PreservedOutputRefs) != 0 || len(plan.RequestedOutputs) != len(previousRefs) || len(plan.RejectedParentArtifactIDs) != len(previousRefs) {
+			return ErrInvocationTransitionConflict
+		}
+		parentIDs := map[string]bool{}
+		coordinates := map[string]bool{}
+		for _, ref := range previousRefs {
+			parentIDs[ref.ArtifactID] = true
+			coordinates[fmt.Sprintf("%s\x00%d", ref.BindingName, ref.Ordinal)] = true
+		}
+		for _, id := range plan.RejectedParentArtifactIDs {
+			if !parentIDs[id] {
+				return ErrInvocationTransitionConflict
+			}
+		}
+		for _, coordinate := range plan.RequestedOutputs {
+			if !coordinates[fmt.Sprintf("%s\x00%d", coordinate.BindingName, coordinate.Ordinal)] {
+				return ErrInvocationTransitionConflict
+			}
+		}
+	}
+	return nil
 }
 
 func ClaimNextAgentRunWithInvocationTx(workerID string, leaseDuration time.Duration, maxUserRunning int) (model.AgentRun, bool, error) {
@@ -475,7 +856,7 @@ func FinalizeInvocationAttemptTx(agentRun model.AgentRun, run model.InvocationRu
 			}
 			return ErrInvocationCompletionConflict
 		}
-		if err := validateCompletionEnvelope(run, attempt, artifacts, refs, gates, event); err != nil {
+		if err := validateCompletionEnvelopeTx(tx, run, attempt, artifacts, refs, gates, event); err != nil {
 			return err
 		}
 		agentSourceStatuses := []model.AgentRunStatus{model.AgentRunStatusRunning}
@@ -494,8 +875,12 @@ func FinalizeInvocationAttemptTx(agentRun model.AgentRun, run model.InvocationRu
 		if err := invokeRepositoryHook("finalize", "agent_run"); err != nil {
 			return err
 		}
+		attemptSourceStatuses := []string{string(model.AgentRunStatusRunning)}
+		if attempt.Status == string(model.AgentRunStatusCancelled) {
+			attemptSourceStatuses = append(attemptSourceStatuses, string(model.AgentRunStatusCancelRequested))
+		}
 		attemptUpdate := tx.Model(&model.InvocationAttempt{}).
-			Where("id = ? AND invocation_id = ? AND attempt = ? AND status = ? AND finished_at = ''", attempt.ID, attempt.InvocationID, attempt.Attempt, string(model.AgentRunStatusRunning)).
+			Where("id = ? AND invocation_id = ? AND attempt = ? AND status IN ? AND finished_at = ''", attempt.ID, attempt.InvocationID, attempt.Attempt, attemptSourceStatuses).
 			Select("status", "raw_output", "structured_output_json", "error_class", "error_message", "model", "channel_id", "executor_kind", "tool_trace_json", "credits_reserved", "credits_refunded", "duration_ms", "started_at", "finished_at", "updated_at").Updates(&attempt)
 		if attemptUpdate.Error != nil {
 			return attemptUpdate.Error
@@ -506,8 +891,12 @@ func FinalizeInvocationAttemptTx(agentRun model.AgentRun, run model.InvocationRu
 		if err := invokeRepositoryHook("finalize", "attempt"); err != nil {
 			return err
 		}
+		runSourceStatuses := []model.InvocationStatus{model.InvocationStatusRunning}
+		if run.Status == model.InvocationStatusCancelled {
+			runSourceStatuses = append(runSourceStatuses, model.InvocationStatusCancelRequested)
+		}
 		runUpdate := tx.Model(&model.InvocationRun{}).
-			Where("id = ? AND user_id = ? AND status = ? AND latest_revision = ? AND latest_attempt = ?", run.ID, run.UserID, model.InvocationStatusRunning, run.LatestRevision, attempt.Attempt).
+			Where("id = ? AND user_id = ? AND status IN ? AND latest_revision = ? AND latest_attempt = ?", run.ID, run.UserID, runSourceStatuses, run.LatestRevision, attempt.Attempt).
 			Updates(invocationHeaderUpdates(run))
 		if runUpdate.Error != nil {
 			return runUpdate.Error
@@ -672,51 +1061,82 @@ func sameOrderedSlice[T any](left, right []T) bool {
 }
 
 func RevalidateInvocationAttemptTx(run model.InvocationRun, attempt model.InvocationAttempt, artifacts []model.Artifact, refs []model.InvocationArtifactRef, gates []model.InvocationGateResult, event model.InvocationEvent) error {
-	if run.ID != attempt.InvocationID || run.UserID != attempt.UserID || run.LatestRevision != attempt.Revision || run.LatestAttempt != attempt.Attempt {
+	database, err := DB()
+	if err != nil {
+		return err
+	}
+	var expected model.InvocationAttempt
+	if err := database.Where("id = ? AND user_id = ? AND invocation_id = ?", attempt.ID, attempt.UserID, attempt.InvocationID).First(&expected).Error; err != nil {
 		return ErrInvocationTransitionConflict
 	}
-	if err := validateCompletionEnvelope(run, attempt, artifacts, refs, gates, event); err != nil {
-		return err
+	return RevalidateInvocationAttemptCASTx(run, expected, attempt, artifacts, refs, gates, event)
+}
+
+func RevalidateInvocationAttemptCASTx(run model.InvocationRun, expected, attempt model.InvocationAttempt, artifacts []model.Artifact, refs []model.InvocationArtifactRef, gates []model.InvocationGateResult, event model.InvocationEvent) error {
+	if run.ID != attempt.InvocationID || run.UserID != attempt.UserID || run.LatestRevision != attempt.Revision || run.LatestAttempt != attempt.Attempt || attempt.ID != expected.ID || attempt.AgentRunID != expected.AgentRunID {
+		return ErrInvocationTransitionConflict
 	}
 	database, err := DB()
 	if err != nil {
 		return err
 	}
-	return database.Transaction(func(tx *gorm.DB) error {
-		var stored model.InvocationAttempt
-		if err := tx.Where("id = ? AND invocation_id = ? AND attempt = ?", attempt.ID, run.ID, attempt.Attempt).First(&stored).Error; err != nil {
-			return err
-		}
-		if stored.ID != attempt.ID || stored.UserID != attempt.UserID || stored.InvocationID != attempt.InvocationID || stored.AgentRunID != attempt.AgentRunID || stored.Revision != attempt.Revision || stored.Attempt != attempt.Attempt || stored.CreatedAt != attempt.CreatedAt || stored.StartedAt != attempt.StartedAt {
-			return ErrInvocationTransitionConflict
-		}
-		if stored.FinishedAt == "" {
-			return ErrInvocationTransitionConflict
-		}
-		result := tx.Model(&model.InvocationRun{}).Where("id = ? AND user_id = ? AND status IN ? AND latest_revision = ? AND latest_attempt = ?", run.ID, run.UserID, []model.InvocationStatus{model.InvocationStatusNeedsReview, model.InvocationStatusBlocked, model.InvocationStatusPartial, model.InvocationStatusFailed}, run.LatestRevision, attempt.Attempt).Updates(invocationHeaderUpdates(run))
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected != 1 {
-			return ErrInvocationTransitionConflict
-		}
-		for index := range artifacts {
-			if err := tx.Create(&artifacts[index]).Error; err != nil {
+	for range 20 {
+		err = database.Transaction(func(tx *gorm.DB) error {
+			if err := validateCompletionEnvelopeTx(tx, run, attempt, artifacts, refs, gates, event); err != nil {
 				return err
 			}
-		}
-		for index := range refs {
-			if err := tx.Create(&refs[index]).Error; err != nil {
+			var stored model.InvocationAttempt
+			if err := tx.Where("id = ? AND invocation_id = ? AND attempt = ?", attempt.ID, run.ID, attempt.Attempt).First(&stored).Error; err != nil {
 				return err
 			}
-		}
-		for index := range gates {
-			if err := tx.Create(&gates[index]).Error; err != nil {
-				return err
+			if stored.ID != expected.ID || stored.UserID != expected.UserID || stored.InvocationID != expected.InvocationID || stored.AgentRunID != expected.AgentRunID || stored.Revision != expected.Revision || stored.Attempt != expected.Attempt || stored.CreatedAt != expected.CreatedAt || stored.StartedAt != expected.StartedAt || stored.Status != string(model.AgentRunStatusFailed) || (stored.ErrorClass != "output_schema" && stored.ErrorClass != "business_gate") {
+				return ErrInvocationTransitionConflict
 			}
+			if stored.FinishedAt == "" {
+				return ErrInvocationTransitionConflict
+			}
+			if stored.RawOutput != expected.RawOutput || stored.StructuredOutputJSON != expected.StructuredOutputJSON || stored.CorrectionTraceJSON != expected.CorrectionTraceJSON || stored.ErrorClass != expected.ErrorClass || stored.ErrorMessage != expected.ErrorMessage || attempt.RawOutput != expected.RawOutput {
+				return ErrInvocationTransitionConflict
+			}
+			result := tx.Model(&model.InvocationRun{}).Where("id = ? AND user_id = ? AND status = ? AND latest_revision = ? AND latest_attempt = ?", run.ID, run.UserID, model.InvocationStatusFailed, run.LatestRevision, attempt.Attempt).Updates(invocationHeaderUpdates(run))
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return ErrInvocationTransitionConflict
+			}
+			attemptUpdate := tx.Model(&model.InvocationAttempt{}).
+				Where("id = ? AND user_id = ? AND invocation_id = ? AND attempt = ? AND status = ? AND error_class = ? AND raw_output = ? AND structured_output_json = ? AND correction_trace_json = ? AND finished_at = ?", stored.ID, stored.UserID, stored.InvocationID, stored.Attempt, expected.Status, expected.ErrorClass, expected.RawOutput, expected.StructuredOutputJSON, expected.CorrectionTraceJSON, stored.FinishedAt).
+				Updates(map[string]any{"status": attempt.Status, "structured_output_json": attempt.StructuredOutputJSON, "error_class": attempt.ErrorClass, "error_message": attempt.ErrorMessage, "correction_trace_json": attempt.CorrectionTraceJSON, "updated_at": attempt.UpdatedAt})
+			if attemptUpdate.Error != nil || attemptUpdate.RowsAffected != 1 {
+				if attemptUpdate.Error != nil {
+					return attemptUpdate.Error
+				}
+				return ErrInvocationTransitionConflict
+			}
+			for index := range artifacts {
+				if err := tx.Create(&artifacts[index]).Error; err != nil {
+					return err
+				}
+			}
+			for index := range refs {
+				if err := tx.Create(&refs[index]).Error; err != nil {
+					return err
+				}
+			}
+			for index := range gates {
+				if err := tx.Create(&gates[index]).Error; err != nil {
+					return err
+				}
+			}
+			return tx.Create(&event).Error
+		})
+		if !isSQLiteContention(database, err) {
+			break
 		}
-		return tx.Create(&event).Error
-	})
+		time.Sleep(time.Millisecond)
+	}
+	return err
 }
 
 func SaveInvocationReviewTx(run model.InvocationRun, review model.InvocationReview, event model.InvocationEvent) error {
@@ -727,19 +1147,59 @@ func SaveInvocationReviewTx(run model.InvocationRun, review model.InvocationRevi
 	if err != nil {
 		return err
 	}
-	return database.Transaction(func(tx *gorm.DB) error {
-		result := tx.Model(&model.InvocationRun{}).Where("id = ? AND user_id = ? AND status = ? AND latest_revision = ? AND latest_attempt = ? AND (reviewed_attempt < ? OR (reviewed_attempt = ? AND reviewed_artifact_set_hash <> ?))", run.ID, run.UserID, model.InvocationStatusNeedsReview, run.LatestRevision, review.Attempt, review.Attempt, review.Attempt, review.ArtifactSetHash).Updates(invocationHeaderUpdates(run))
-		if result.Error != nil {
-			return result.Error
+	for range 20 {
+		err = database.Transaction(func(tx *gorm.DB) error {
+			result := tx.Model(&model.InvocationRun{}).Where("id = ? AND user_id = ? AND status = ? AND latest_revision = ? AND latest_attempt = ? AND (reviewed_attempt < ? OR (reviewed_attempt = ? AND reviewed_artifact_set_hash <> ?))", run.ID, run.UserID, model.InvocationStatusNeedsReview, run.LatestRevision, review.Attempt, review.Attempt, review.Attempt, review.ArtifactSetHash).Updates(invocationHeaderUpdates(run))
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return ErrInvocationTransitionConflict
+			}
+			var attempt model.InvocationAttempt
+			attemptQuery := tx.Where("user_id = ? AND invocation_id = ? AND attempt = ?", run.UserID, run.ID, review.Attempt).Limit(1).Find(&attempt)
+			if attemptQuery.Error != nil {
+				return attemptQuery.Error
+			}
+			if attemptQuery.RowsAffected == 1 {
+				target := string(model.AgentRunStatusApproved)
+				if review.Decision == "rejected" {
+					target = string(model.AgentRunStatusRejected)
+				}
+				updated := tx.Model(&model.InvocationAttempt{}).Where("id = ? AND status = ?", attempt.ID, string(model.AgentRunStatusNeedsReview)).Updates(map[string]any{"status": target, "updated_at": review.CreatedAt})
+				if updated.Error != nil || updated.RowsAffected != 1 {
+					if updated.Error != nil {
+						return updated.Error
+					}
+					return ErrInvocationTransitionConflict
+				}
+				var agent model.AgentRun
+				if err := tx.Where("id = ? AND user_id = ?", attempt.AgentRunID, run.UserID).First(&agent).Error; err != nil {
+					return err
+				}
+				if agent.Status == model.AgentRunStatusNeedsReview {
+					updated = tx.Model(&model.AgentRun{}).Where("id = ? AND user_id = ? AND status = ?", attempt.AgentRunID, run.UserID, model.AgentRunStatusNeedsReview).Updates(map[string]any{"status": model.AgentRunStatus(target), "updated_at": review.CreatedAt})
+					if updated.Error != nil || updated.RowsAffected != 1 {
+						if updated.Error != nil {
+							return updated.Error
+						}
+						return ErrInvocationTransitionConflict
+					}
+				} else if agent.Status != model.AgentRunStatusFailed || strings.TrimSpace(attempt.CorrectionTraceJSON) == "" {
+					return ErrInvocationTransitionConflict
+				}
+			}
+			if err := tx.Create(&review).Error; err != nil {
+				return err
+			}
+			return tx.Create(&event).Error
+		})
+		if !isSQLiteContention(database, err) {
+			break
 		}
-		if result.RowsAffected != 1 {
-			return ErrInvocationTransitionConflict
-		}
-		if err := tx.Create(&review).Error; err != nil {
-			return err
-		}
-		return tx.Create(&event).Error
-	})
+		time.Sleep(time.Millisecond)
+	}
+	return err
 }
 
 func ApplyInvocationTx(run model.InvocationRun, attempt model.InvocationApplyAttempt, event model.InvocationEvent, adapter func(*gorm.DB) (json.RawMessage, error)) (model.InvocationApplyAttempt, bool, error) {
@@ -803,6 +1263,7 @@ func ApplyInvocationTx(run model.InvocationRun, attempt model.InvocationApplyAtt
 				if result.RowsAffected != 1 {
 					return ErrInvocationTransitionConflict
 				}
+				event.Type, event.Level = "apply.failed", "warning"
 				return tx.Create(&event).Error
 			}
 			attempt.Status, attempt.ReceiptJSON, attempt.ErrorMessage = "applied", string(receipt), ""
@@ -818,6 +1279,7 @@ func ApplyInvocationTx(run model.InvocationRun, attempt model.InvocationApplyAtt
 			if result.RowsAffected != 1 {
 				return ErrInvocationTransitionConflict
 			}
+			event.Type, event.Level = "apply.applied", "info"
 			return tx.Create(&event).Error
 		})
 		if !isSQLiteContention(database, err) || adapterCalled {
@@ -877,11 +1339,11 @@ func invocationPreflightHeaderUpdates(run model.InvocationRun) map[string]any {
 }
 
 func validateRevisionEnvelope(run model.InvocationRun, revision model.InvocationPreflightRevision, refs []model.InvocationArtifactRef, event model.InvocationEvent) error {
-	if revision.UserID != run.UserID || revision.InvocationID != run.ID || revision.Revision != run.LatestRevision || revision.RequestHash != run.RequestHash || event.UserID != run.UserID || event.InvocationID != run.ID || event.Revision != revision.Revision || event.Attempt != run.LatestAttempt {
+	if revision.UserID != run.UserID || revision.InvocationID != run.ID || revision.Revision != run.LatestRevision || revision.RequestHash != run.RequestHash || event.UserID != run.UserID || event.InvocationID != run.ID || event.Revision != revision.Revision || event.Attempt != 0 {
 		return ErrInvocationTransitionConflict
 	}
 	for _, ref := range refs {
-		if ref.UserID != run.UserID || ref.InvocationID != run.ID || ref.Revision != revision.Revision || ref.Attempt != run.LatestAttempt || ref.Direction != "input" {
+		if ref.UserID != run.UserID || ref.InvocationID != run.ID || ref.Revision != revision.Revision || ref.Attempt != 0 || ref.Direction != "input" {
 			return ErrInvocationTransitionConflict
 		}
 	}
@@ -908,8 +1370,8 @@ func validateInputRefsTx(tx *gorm.DB, run model.InvocationRun, attempt model.Inv
 	return nil
 }
 
-func validateCompletionEnvelope(run model.InvocationRun, attempt model.InvocationAttempt, artifacts []model.Artifact, refs []model.InvocationArtifactRef, gates []model.InvocationGateResult, event model.InvocationEvent) error {
-	if event.UserID != run.UserID || event.InvocationID != run.ID || event.Revision != attempt.Revision || event.Attempt != attempt.Attempt || len(refs) != len(artifacts) {
+func validateCompletionEnvelopeTx(tx *gorm.DB, run model.InvocationRun, attempt model.InvocationAttempt, artifacts []model.Artifact, refs []model.InvocationArtifactRef, gates []model.InvocationGateResult, event model.InvocationEvent) error {
+	if event.UserID != run.UserID || event.InvocationID != run.ID || event.Revision != attempt.Revision || event.Attempt != attempt.Attempt {
 		return ErrInvocationTransitionConflict
 	}
 	byID := make(map[string]model.Artifact, len(artifacts))
@@ -919,13 +1381,63 @@ func validateCompletionEnvelope(run model.InvocationRun, attempt model.Invocatio
 		}
 		byID[artifact.ID] = artifact
 	}
+	type preservedRef struct {
+		BindingName, ArtifactID, ArtifactHash, ArtifactType, SchemaVersion, SchemaContentHash string
+		Ordinal                                                                               int
+	}
+	var plan struct {
+		PreservedOutputRefs []preservedRef `json:"preservedOutputRefs"`
+	}
+	if strings.TrimSpace(attempt.RetryPlanJSON) != "" && json.Unmarshal([]byte(attempt.RetryPlanJSON), &plan) != nil {
+		return ErrInvocationTransitionConflict
+	}
+	terminalWithoutOutputs := run.Status == model.InvocationStatusFailed || run.Status == model.InvocationStatusBlocked || run.Status == model.InvocationStatusCancelled
+	if terminalWithoutOutputs && (len(artifacts) != 0 || len(refs) != 0) {
+		return ErrInvocationTransitionConflict
+	}
+	preserved := map[string]preservedRef{}
+	for _, ref := range plan.PreservedOutputRefs {
+		if terminalWithoutOutputs {
+			break
+		}
+		key := fmt.Sprintf("%s\x00%d", ref.BindingName, ref.Ordinal)
+		if _, duplicate := preserved[key]; duplicate || attempt.Attempt < 2 {
+			return ErrInvocationTransitionConflict
+		}
+		preserved[key] = ref
+		var artifact model.Artifact
+		result := tx.Where("id = ? AND user_id = ?", ref.ArtifactID, run.UserID).Limit(1).Find(&artifact)
+		if result.Error != nil || result.RowsAffected != 1 {
+			return ErrInvocationTransitionConflict
+		}
+		if artifact.ProjectID != run.ProjectID || artifact.EpisodeID != run.EpisodeID || artifact.ContentHash != ref.ArtifactHash || artifact.ArtifactType != ref.ArtifactType || artifact.SchemaVersion != ref.SchemaVersion || artifact.SchemaContentHash != ref.SchemaContentHash {
+			return ErrInvocationTransitionConflict
+		}
+		byID[artifact.ID] = artifact
+	}
+	if len(refs) != len(artifacts)+len(preserved) {
+		return ErrInvocationTransitionConflict
+	}
 	seen := map[string]bool{}
+	seenPreserved := map[string]bool{}
 	for _, ref := range refs {
 		artifact, ok := byID[ref.ArtifactID]
 		if !ok || seen[ref.ArtifactID] || ref.UserID != run.UserID || ref.InvocationID != run.ID || ref.Direction != "output" || ref.Revision != attempt.Revision || ref.Attempt != attempt.Attempt || ref.ArtifactHash != artifact.ContentHash || ref.ArtifactType != artifact.ArtifactType || ref.SchemaVersion != artifact.SchemaVersion || ref.SchemaContentHash != artifact.SchemaContentHash {
 			return ErrInvocationTransitionConflict
 		}
+		key := fmt.Sprintf("%s\x00%d", ref.BindingName, ref.Ordinal)
+		if wanted, isPreserved := preserved[key]; isPreserved {
+			if wanted.ArtifactID != ref.ArtifactID || wanted.ArtifactHash != ref.ArtifactHash || wanted.ArtifactType != ref.ArtifactType || wanted.SchemaVersion != ref.SchemaVersion || wanted.SchemaContentHash != ref.SchemaContentHash {
+				return ErrInvocationTransitionConflict
+			}
+			seenPreserved[key] = true
+		} else if artifact.ProducerAttempt != attempt.Attempt {
+			return ErrInvocationTransitionConflict
+		}
 		seen[ref.ArtifactID] = true
+	}
+	if len(seenPreserved) != len(preserved) {
+		return ErrInvocationTransitionConflict
 	}
 	hasFailedGate := false
 	passedArtifacts := make(map[string]bool, len(artifacts))
@@ -935,7 +1447,7 @@ func validateCompletionEnvelope(run model.InvocationRun, attempt model.Invocatio
 		}
 		artifact, ok := byID[gate.ArtifactID]
 		if gate.ArtifactID == "" {
-			if gate.ArtifactHash != "" || (!gate.Passed && run.Status != model.InvocationStatusFailed && run.Status != model.InvocationStatusBlocked) {
+			if gate.ArtifactHash != "" || (!gate.Passed && run.Status != model.InvocationStatusFailed && run.Status != model.InvocationStatusBlocked && run.Status != model.InvocationStatusPartial) {
 				return ErrInvocationTransitionConflict
 			}
 			hasFailedGate = hasFailedGate || !gate.Passed

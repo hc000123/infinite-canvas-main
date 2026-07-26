@@ -81,6 +81,7 @@ func DB() (*gorm.DB, error) {
 			&model.InvocationGateResult{},
 			&model.InvocationReview{},
 			&model.InvocationApplyAttempt{},
+			&model.InvocationTestSinkReceipt{},
 			&model.WorkflowMediaBatch{},
 			&model.WorkflowMediaItem{},
 			&model.Prompt{},
@@ -95,6 +96,10 @@ func DB() (*gorm.DB, error) {
 			return
 		}
 		dbErr = ensureInvocationArtifactRefIndex(db)
+		if dbErr != nil {
+			return
+		}
+		dbErr = ensureInvocationGateIndex(db)
 		if dbErr != nil {
 			return
 		}
@@ -128,6 +133,29 @@ func ensureInvocationArtifactRefIndex(database *gorm.DB) error {
 		break
 	}
 	return database.Migrator().CreateIndex(&model.InvocationArtifactRef{}, indexName)
+}
+
+func ensureInvocationGateIndex(database *gorm.DB) error {
+	const indexName = "idx_invocation_gate"
+	want := []string{"invocation_id", "attempt", "execution_ordinal", "layer", "validator_id", "binding_name", "output_ordinal", "artifact_hash"}
+	indexes, err := database.Migrator().GetIndexes(&model.InvocationGateResult{})
+	if err != nil {
+		return err
+	}
+	for _, index := range indexes {
+		if index.Name() != indexName {
+			continue
+		}
+		unique, known := index.Unique()
+		if slices.Equal(index.Columns(), want) && known && unique {
+			return nil
+		}
+		if err := database.Migrator().DropIndex(&model.InvocationGateResult{}, indexName); err != nil {
+			return err
+		}
+		break
+	}
+	return database.Migrator().CreateIndex(&model.InvocationGateResult{}, indexName)
 }
 
 func ensureSkillOwnerNameIndex(database *gorm.DB) error {

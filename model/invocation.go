@@ -8,6 +8,7 @@ const (
 	InvocationStatusAwaitingConfirmation InvocationStatus = "awaiting_confirmation"
 	InvocationStatusQueued               InvocationStatus = "queued"
 	InvocationStatusRunning              InvocationStatus = "running"
+	InvocationStatusCancelRequested      InvocationStatus = "cancel_requested"
 	InvocationStatusNeedsReview          InvocationStatus = "needs_review"
 	InvocationStatusApproved             InvocationStatus = "approved"
 	InvocationStatusApplied              InvocationStatus = "applied"
@@ -76,6 +77,8 @@ type InvocationAttempt struct {
 	ChannelID            string `json:"channelId" gorm:"size:128;index"`
 	ExecutorKind         string `json:"executorKind" gorm:"size:64;index"`
 	ToolTraceJSON        string `json:"-" gorm:"type:text"`
+	CorrectionTraceJSON  string `json:"-" gorm:"type:text"`
+	RetryPlanJSON        string `json:"-" gorm:"type:text"`
 	CreditsReserved      int    `json:"creditsReserved"`
 	CreditsRefunded      int    `json:"creditsRefunded"`
 	DurationMs           int64  `json:"durationMs"`
@@ -119,9 +122,11 @@ type InvocationGateResult struct {
 	UserID           string `json:"userId" gorm:"size:128;index"`
 	InvocationID     string `json:"invocationId" gorm:"size:128;index;uniqueIndex:idx_invocation_gate,priority:1"`
 	ArtifactID       string `json:"artifactId" gorm:"size:128;index"`
-	ArtifactHash     string `json:"artifactHash" gorm:"size:80;index;uniqueIndex:idx_invocation_gate,priority:6"`
+	ArtifactHash     string `json:"artifactHash" gorm:"size:80;index;uniqueIndex:idx_invocation_gate,priority:8"`
 	Layer            string `json:"layer" gorm:"size:32;index;uniqueIndex:idx_invocation_gate,priority:4"`
 	ValidatorID      string `json:"validatorId" gorm:"size:128;index;uniqueIndex:idx_invocation_gate,priority:5"`
+	BindingName      string `json:"bindingName" gorm:"size:128;index;uniqueIndex:idx_invocation_gate,priority:6"`
+	OutputOrdinal    int    `json:"outputOrdinal" gorm:"uniqueIndex:idx_invocation_gate,priority:7"`
 	ValidatorVersion string `json:"validatorVersion" gorm:"size:64"`
 	IssuesJSON       string `json:"-" gorm:"type:text"`
 	Attempt          int    `json:"attempt" gorm:"uniqueIndex:idx_invocation_gate,priority:2"`
@@ -157,6 +162,17 @@ type InvocationApplyAttempt struct {
 	Attempt         int    `json:"attempt"`
 	CreatedAt       string `json:"createdAt"`
 	UpdatedAt       string `json:"updatedAt"`
+}
+
+type InvocationTestSinkReceipt struct {
+	ID              string `json:"id" gorm:"size:128;primaryKey"`
+	UserID          string `json:"userId" gorm:"size:128;index"`
+	InvocationID    string `json:"invocationId" gorm:"size:128;index"`
+	ApplyAttemptID  string `json:"applyAttemptId" gorm:"size:128;uniqueIndex"`
+	TargetID        string `json:"targetId" gorm:"size:128;index"`
+	ArtifactSetHash string `json:"artifactSetHash" gorm:"size:80;index"`
+	PayloadJSON     string `json:"-" gorm:"type:text"`
+	CreatedAt       string `json:"createdAt"`
 }
 
 type InvocationQuery struct {

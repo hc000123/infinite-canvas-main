@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -109,7 +110,7 @@ func TestCreateInvocationAggregateIdempotently(t *testing.T) {
 func TestInvocationTablesMigrateWithAggregateIndexes(t *testing.T) {
 	setupRepositoryTestDB(t)
 	database, _ := DB()
-	for _, table := range []string{"artifact_schemas", "artifacts", "invocation_runs", "invocation_preflight_revisions", "invocation_attempts", "invocation_artifact_refs", "invocation_events", "invocation_gate_results", "invocation_reviews", "invocation_apply_attempts"} {
+	for _, table := range []string{"artifact_schemas", "artifacts", "invocation_runs", "invocation_preflight_revisions", "invocation_attempts", "invocation_artifact_refs", "invocation_events", "invocation_gate_results", "invocation_reviews", "invocation_apply_attempts", "invocation_test_sink_receipts"} {
 		if !database.Migrator().HasTable(table) {
 			t.Fatalf("missing table %s", table)
 		}
@@ -123,7 +124,7 @@ func TestInvocationTablesMigrateWithAggregateIndexes(t *testing.T) {
 		{&model.InvocationPreflightRevision{}, "idx_invocation_revision", []string{"invocation_id", "revision"}},
 		{&model.InvocationAttempt{}, "idx_invocation_attempt", []string{"invocation_id", "attempt"}},
 		{&model.InvocationArtifactRef{}, "idx_invocation_artifact_ref", []string{"invocation_id", "direction", "revision", "attempt", "binding_name", "ordinal"}},
-		{&model.InvocationGateResult{}, "idx_invocation_gate", []string{"invocation_id", "attempt", "execution_ordinal", "layer", "validator_id", "artifact_hash"}},
+		{&model.InvocationGateResult{}, "idx_invocation_gate", []string{"invocation_id", "attempt", "execution_ordinal", "layer", "validator_id", "binding_name", "output_ordinal", "artifact_hash"}},
 		{&model.InvocationReview{}, "idx_invocation_review", []string{"invocation_id", "attempt", "artifact_set_hash", "decision"}},
 		{&model.InvocationApplyAttempt{}, "idx_invocation_apply", []string{"user_id", "invocation_id", "idempotency_key"}},
 	}
@@ -179,6 +180,42 @@ func TestInvocationArtifactRefIndexMigratesLegacyWithoutRevision(t *testing.T) {
 		}
 	}
 	t.Fatal("legacy invocation Artifact ref index was not replaced")
+}
+
+func TestInvocationGateIndexMigratesLegacyColumnOrder(t *testing.T) {
+	setupRepositoryTestDB(t)
+	legacy, err := gorm.Open(sqlite.Open(config.Cfg.DatabaseDSN), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.AutoMigrate(&model.InvocationGateResult{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.Migrator().DropIndex(&model.InvocationGateResult{}, "idx_invocation_gate"); err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.Exec(`CREATE UNIQUE INDEX idx_invocation_gate ON invocation_gate_results(invocation_id,attempt,execution_ordinal,layer,validator_id,output_ordinal,binding_name,artifact_hash)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if sqlDB, err := legacy.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
+	database, err := DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexes, err := database.Migrator().GetIndexes(&model.InvocationGateResult{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"invocation_id", "attempt", "execution_ordinal", "layer", "validator_id", "binding_name", "output_ordinal", "artifact_hash"}
+	for _, index := range indexes {
+		unique, known := index.Unique()
+		if index.Name() == "idx_invocation_gate" && slices.Equal(index.Columns(), want) && known && unique {
+			return
+		}
+	}
+	t.Fatal("legacy invocation gate index was not replaced with the exact ordered unique index")
 }
 
 func TestInvocationModelsDeclareOnlyTheSevenPlannedUniqueIndexes(t *testing.T) {

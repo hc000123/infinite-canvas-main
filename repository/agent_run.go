@@ -194,14 +194,20 @@ func RequeueExpiredAgentRuns(now time.Time) (int64, error) {
 						attemptUpdates = map[string]any{"status": attemptStatus, "error_class": "lease_expired", "error_message": message, "finished_at": nowText, "updated_at": nowText}
 						invocationUpdates = map[string]any{"status": invocationStatus, "aggregate_error_summary": message, "updated_at": nowText}
 					}
-					attemptUpdate := tx.Model(&model.InvocationAttempt{}).Where("id = ? AND invocation_id = ? AND status = ?", invocationAttempt.ID, invocationAttempt.InvocationID, string(model.AgentRunStatusRunning)).Updates(attemptUpdates)
+					attemptSources := []string{string(model.AgentRunStatusRunning)}
+					runSources := []model.InvocationStatus{model.InvocationStatusRunning}
+					if run.Status == model.AgentRunStatusCancelRequested {
+						attemptSources = append(attemptSources, string(model.AgentRunStatusCancelRequested))
+						runSources = append(runSources, model.InvocationStatusCancelRequested)
+					}
+					attemptUpdate := tx.Model(&model.InvocationAttempt{}).Where("id = ? AND invocation_id = ? AND status IN ?", invocationAttempt.ID, invocationAttempt.InvocationID, attemptSources).Updates(attemptUpdates)
 					if attemptUpdate.Error != nil {
 						return attemptUpdate.Error
 					}
 					if attemptUpdate.RowsAffected != 1 {
 						return ErrInvocationTransitionConflict
 					}
-					runUpdate := tx.Model(&model.InvocationRun{}).Where("id = ? AND user_id = ? AND status = ? AND latest_revision = ? AND latest_attempt = ?", invocationAttempt.InvocationID, invocationAttempt.UserID, model.InvocationStatusRunning, invocationAttempt.Revision, invocationAttempt.Attempt).Updates(invocationUpdates)
+					runUpdate := tx.Model(&model.InvocationRun{}).Where("id = ? AND user_id = ? AND status IN ? AND latest_revision = ? AND latest_attempt = ?", invocationAttempt.InvocationID, invocationAttempt.UserID, runSources, invocationAttempt.Revision, invocationAttempt.Attempt).Updates(invocationUpdates)
 					if runUpdate.Error != nil {
 						return runUpdate.Error
 					}

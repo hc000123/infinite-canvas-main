@@ -564,6 +564,9 @@ func TestPreflightInvocationRequiresAuthoritativeProducerApproval(t *testing.T) 
 	if err := db.Create(&model.InvocationReview{ID: "producer-review", UserID: "user-1", InvocationID: "fixture-producer", Decision: "approved", ArtifactSetHash: setHash, Attempt: 1, ActorID: "user-1", CreatedAt: now()}).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Create(&model.InvocationRun{ID: "fixture-producer", UserID: "user-1", Source: "direct", ProjectID: "project-1", EpisodeID: "episode-1", RequestHash: "fixture-producer-hash", Status: model.InvocationStatusApproved, LatestRevision: 1, LatestAttempt: 1, ReviewedAttempt: 1, ReviewedArtifactSetHash: setHash, CreatedAt: now(), UpdatedAt: now()}).Error; err != nil {
+		t.Fatal(err)
+	}
 	request.IdempotencyKey = "approval-approved"
 	approved, err := PreflightInvocation("user-1", request)
 	if err != nil {

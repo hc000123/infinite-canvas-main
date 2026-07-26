@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/basketikun/infinite-canvas/model"
+	"gorm.io/gorm"
 )
 
 // InvocationRequest contains caller-controlled business data only. Trusted
@@ -108,6 +109,27 @@ type InvocationConfirmation struct {
 	RequirementCodes []string `json:"requirementCodes"`
 }
 
+type InvocationOutputCoordinate struct {
+	BindingName string `json:"bindingName"`
+	Ordinal     int    `json:"ordinal"`
+}
+
+type InvocationRetryOutputRef struct {
+	BindingName       string `json:"bindingName"`
+	Ordinal           int    `json:"ordinal"`
+	ArtifactID        string `json:"artifactId"`
+	ArtifactHash      string `json:"artifactHash"`
+	ArtifactType      string `json:"artifactType"`
+	SchemaVersion     string `json:"schemaVersion"`
+	SchemaContentHash string `json:"schemaContentHash"`
+}
+
+type InvocationRetryPlan struct {
+	PreservedOutputRefs       []InvocationRetryOutputRef   `json:"preservedOutputRefs"`
+	RequestedOutputs          []InvocationOutputCoordinate `json:"requestedOutputs"`
+	RejectedParentArtifactIDs []string                     `json:"rejectedParentArtifactIds"`
+}
+
 type InvocationCorrectionInput struct {
 	Attempt               int             `json:"attempt"`
 	ExpectedRawOutputHash string          `json:"expectedRawOutputHash"`
@@ -127,6 +149,24 @@ type InvocationApplyInput struct {
 	ArtifactSetHash string `json:"artifactSetHash"`
 	Target          string `json:"target"`
 	TargetID        string `json:"targetId"`
+}
+
+type InvocationApplyContext struct {
+	UserID          string                        `json:"userId"`
+	InvocationID    string                        `json:"invocationId"`
+	ApplyAttemptID  string                        `json:"applyAttemptId"`
+	IdempotencyKey  string                        `json:"idempotencyKey"`
+	Attempt         int                           `json:"attempt"`
+	ArtifactSetHash string                        `json:"artifactSetHash"`
+	TargetID        string                        `json:"targetId"`
+	ArtifactRefs    []model.InvocationArtifactRef `json:"artifactRefs"`
+	Artifacts       []model.Artifact              `json:"artifacts"`
+	CreatedAt       string                        `json:"createdAt"`
+}
+
+type InvocationApplyAdapter interface {
+	TargetName() string
+	ApplyTx(*gorm.DB, InvocationApplyContext) (json.RawMessage, error)
 }
 
 type InvocationAttemptDetail struct {

@@ -14,6 +14,21 @@
 - 自动验收命令：`go test ./...`、`cd web && npm test`、`cd web && npm run typecheck`、`cd web && npm run build`。
 - 人工验收：新建项目 Skill 草稿，完成同输入评测、发布、设为推荐、项目灰度和推荐回滚；再启动一个阶段并确认切换推荐版后原任务快照不变。
 
+### Artifact + Invocation Runtime Phase 2 后端核心
+
+- 已实现 Artifact Schema Registry、通用 Artifact 外壳、输入解析、Preflight 冻结快照、Invocation Runner、幂等队列、质量门和追加式 Trace。
+- 确认要求必须精确匹配冻结集合；确认与取消竞争在同一事务边界内收口，不得留下孤立 attempt 或 AgentRun。运行中取消使 Invocation、attempt 和 AgentRun 一致进入 `cancel_requested`，由完成器或 reaper 收敛为 `cancelled`。
+- 失败、取消、驳回和部分成功可追加重试；多输出逐项通过 Schema 与业务门，部分成功保留已通过 Artifact，下一 attempt 只请求失败 ordinal 并重新校验保留产物。
+- partial 重试的 requested 坐标严格来自上一 attempt 失败 item gate，preserved 严格覆盖全部已通过输出；合法 envelope 内的非 object 或 Schema 失败 item 不会让其他通过 item 丢失。驳回重试必须覆盖全部被驳回坐标和父 Artifact。
+- failed / cancelled 重试若已有非空 immutable RetryPlan，下一 attempt 必须精确继承；首次空计划失败只按 frozen output contract 的 `0..<Min` 请求坐标。失败 attempt 不复制 preserved refs，修正成功时才重新校验并原子挂回 preserved 输出，同时只创建缺失的新 Artifact。
+- `output_schema` 或 `business_gate` 失败可在不调用模型、不新建 attempt / AgentRun 的前提下校正结构化输出；原始输出哈希保持不变，校正 Trace 独立保存，通过后可继续审核。
+- 每次校正使用 CAS 绑定读取到的 run / attempt / raw / structured / correction Trace 快照，并在新执行组内重跑 input、output Schema、business 和 policy 四层；审核只读最新完整校正组，并发校正不得覆盖 Trace 或回退状态。
+- 并发校正中，已被另一请求提交而离开当前 failed attempt 的 stale 请求统一返回 transition conflict；Artifact 审批以生产 Invocation 当前 approved / applied 的 reviewed attempt 完整输出集及审核哈希为权威，因此重试保留的旧 ProducerAttempt Artifact 与新产物可作为同一已批准集合继续进入 Preflight。
+- `execution_target_unavailable` 不允许普通 Retry，必须 Repreflight 追加新 revision 并冻结新执行目标；旧 revision / attempt 保留，重新确认后才追加新 attempt。
+- 审核使用有序 binding / ordinal / Artifact ID / hash 计算产物集哈希；Apply 只允许服务端注册适配器，相同幂等键和请求只写入一次，适配器写入、回执和 Invocation 状态保持同事务，失败后可换新键重试。
+- 自动验收：运行 service / repository 全套测试、repository Invocation 竞争检测，并重复验证 Confirm-vs-Cancel 不产生孤立记录。
+- 边界：本批只实现后端模型、repository 和 service 核心，未接入 HTTP、前端或正式生产工作流；Phase 2 Task 7–9 尚未完成，仍保留在路线图。
+
 ### 项目详情素材引用入口收口
 
 - 项目详情不再显示“素材引用”页签，只保留主要生产入口。
