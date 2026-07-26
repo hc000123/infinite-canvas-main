@@ -1,0 +1,78 @@
+package service
+
+import "encoding/json"
+
+const (
+	WorkflowExecutorSkill = "skill"
+	WorkflowExecutorAgent = "agent"
+
+	WorkflowSkillBindingFixed           = "fixed"
+	WorkflowSkillBindingTagRoute        = "tag_route"
+	WorkflowSkillBindingManualBeforeRun = "manual_before_run"
+
+	WorkflowInputSource = "workflow_input"
+	WorkflowNodeSource  = "node_output"
+)
+
+type WorkflowPackage struct {
+	InputArtifactTypes []string           `json:"inputArtifactTypes"`
+	Nodes              []WorkflowNodeSpec `json:"nodes"`
+	ContentHash        string             `json:"contentHash"`
+}
+
+type WorkflowNodeSpec struct {
+	NodeKey            string                     `json:"nodeKey"`
+	Name               string                     `json:"name"`
+	ExecutorType       string                     `json:"executorType"`
+	AgentRef           *WorkflowAgentRef          `json:"agentRef,omitempty"`
+	SkillBinding       *WorkflowSkillBinding      `json:"skillBinding,omitempty"`
+	InputBindings      []WorkflowNodeInputBinding `json:"inputBindings"`
+	OutputArtifactType string                     `json:"outputArtifactType"`
+	DependsOn          []string                   `json:"dependsOn"`
+	Condition          *WorkflowCondition         `json:"condition,omitempty"`
+	ConfirmationPolicy WorkflowConfirmationPolicy `json:"confirmationPolicy"`
+	RetryPolicy        WorkflowRetryPolicy        `json:"retryPolicy"`
+}
+
+type WorkflowSkillBinding struct {
+	Mode                       string   `json:"mode"`
+	SkillID                    string   `json:"skillId,omitempty"`
+	SkillVersionID             string   `json:"skillVersionId,omitempty"`
+	SkillVersionConstraint     string   `json:"skillVersionConstraint,omitempty"`
+	Capability                 string   `json:"capability,omitempty"`
+	ExpectedOutputArtifactType string   `json:"expectedOutputArtifactType,omitempty"`
+	ProjectTags                []string `json:"projectTags"`
+	CandidateSkillIDs          []string `json:"candidateSkillIds"`
+}
+
+type WorkflowAgentRef struct {
+	AgentID                string `json:"agentId,omitempty"`
+	AgentVersionID         string `json:"agentVersionId,omitempty"`
+	AgentVersionConstraint string `json:"agentVersionConstraint,omitempty"`
+}
+
+type WorkflowNodeInputBinding struct {
+	BindingName       string `json:"bindingName"`
+	ArtifactType      string `json:"artifactType"`
+	Source            string `json:"source"`
+	WorkflowInputName string `json:"workflowInputName,omitempty"`
+	FromNodeKey       string `json:"fromNodeKey,omitempty"`
+	FromOutputBinding string `json:"fromOutputBinding,omitempty"`
+	Required          bool   `json:"required"`
+}
+
+type WorkflowCondition struct {
+	Source   string          `json:"source"`
+	Key      string          `json:"key"`
+	Operator string          `json:"operator"`
+	Value    json.RawMessage `json:"value,omitempty"`
+}
+
+type WorkflowConfirmationPolicy struct {
+	RequireBeforeRun bool `json:"requireBeforeRun"`
+	RequireReview    bool `json:"requireReview"`
+}
+
+type WorkflowRetryPolicy struct {
+	MaxAttempts int `json:"maxAttempts"`
+}
