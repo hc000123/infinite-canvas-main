@@ -86,6 +86,7 @@ func DB() (*gorm.DB, error) {
 			&model.InvocationReview{},
 			&model.InvocationApplyAttempt{},
 			&model.InvocationTestSinkReceipt{},
+			&model.WorkflowLocalApplyReceipt{},
 			&model.WorkflowMediaBatch{},
 			&model.WorkflowMediaItem{},
 			&model.Prompt{},

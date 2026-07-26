@@ -111,3 +111,21 @@ type WorkflowEvent struct {
 	DataJSON      string `json:"dataJson" gorm:"type:text"`
 	CreatedAt     string `json:"createdAt" gorm:"index"`
 }
+
+type WorkflowLocalApplyReceipt struct {
+	ID             string `json:"id" gorm:"size:128;primaryKey"`
+	UserID         string `json:"userId" gorm:"size:128;index"`
+	InvocationID   string `json:"invocationId" gorm:"size:128;index"`
+	ApplyAttemptID string `json:"applyAttemptId" gorm:"size:128;uniqueIndex"`
+	WorkflowRunID  string `json:"workflowRunId" gorm:"size:128;index"`
+	StageRunID     string `json:"stageRunId" gorm:"size:128;index"`
+	Target         string `json:"target" gorm:"size:128;index"`
+	TargetIDsJSON  string `json:"-" gorm:"type:text"`
+	AppliedCount   int    `json:"appliedCount"`
+	SkippedCount   int    `json:"skippedCount"`
+	Version        string `json:"version" gorm:"size:128"`
+	ErrorsJSON     string `json:"-" gorm:"type:text"`
+	MetadataJSON   string `json:"-" gorm:"type:text"`
+	PayloadJSON    string `json:"-" gorm:"type:text"`
+	CreatedAt      string `json:"createdAt"`
+}

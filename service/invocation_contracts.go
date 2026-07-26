@@ -148,11 +148,12 @@ type InvocationReviewInput struct {
 }
 
 type InvocationApplyInput struct {
-	IdempotencyKey  string `json:"idempotencyKey"`
-	Attempt         int    `json:"attempt"`
-	ArtifactSetHash string `json:"artifactSetHash"`
-	Target          string `json:"target"`
-	TargetID        string `json:"targetId"`
+	IdempotencyKey  string          `json:"idempotencyKey"`
+	Attempt         int             `json:"attempt"`
+	ArtifactSetHash string          `json:"artifactSetHash"`
+	Target          string          `json:"target"`
+	TargetID        string          `json:"targetId"`
+	Payload         json.RawMessage `json:"payload,omitempty"`
 }
 
 type InvocationApplyContext struct {
@@ -165,6 +166,7 @@ type InvocationApplyContext struct {
 	TargetID        string                        `json:"targetId"`
 	ArtifactRefs    []model.InvocationArtifactRef `json:"artifactRefs"`
 	Artifacts       []model.Artifact              `json:"artifacts"`
+	Payload         json.RawMessage               `json:"payload"`
 	CreatedAt       string                        `json:"createdAt"`
 }
 

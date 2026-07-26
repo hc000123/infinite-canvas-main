@@ -368,47 +368,32 @@ func ReviewWorkflowStage(userID string, stageRunID string, input WorkflowReviewI
 	if err != nil {
 		return stage, err
 	}
-	if !ok || stage.OutputArtifactID == "" {
+	if !ok || stage.InvocationID == "" {
 		return stage, safeMessageError{message: "待审核阶段不存在"}
 	}
-	artifact, ok, err := repository.GetUserWorkflowArtifact(userID, stage.OutputArtifactID)
-	if err != nil || !ok {
+	projection, err := projectWorkflowInvocation(userID, stage)
+	if err != nil || len(projection.Artifacts) != 1 {
 		return stage, safeMessageError{message: "待审核产物不存在"}
 	}
-	if strings.TrimSpace(input.ArtifactHash) == "" || strings.TrimSpace(input.ArtifactHash) != artifact.ContentHash {
+	artifact := projection.Artifacts[0]
+	if strings.TrimSpace(input.ArtifactHash) == "" || strings.TrimSpace(input.ArtifactHash) != artifact.ArtifactSetHash {
 		return stage, safeMessageError{message: "产物已变化，请重新打开后审核"}
 	}
 	decision := strings.TrimSpace(input.Decision)
 	if decision != "approved" && decision != "rejected" {
 		return stage, safeMessageError{message: "审核决定必须是 approved 或 rejected"}
 	}
-	if decision == "approved" {
-		gate, ok, err := repository.GetWorkflowQualityGateForArtifact(userID, artifact.ID)
-		if err != nil {
-			return stage, err
-		}
-		if !ok || !gate.Passed {
-			return stage, safeMessageError{message: "质量门未通过，不能批准当前产物"}
-		}
-		stage.Status = model.WorkflowStageRunStatusApproved
-	} else {
-		stage.Status = model.WorkflowStageRunStatusRejected
-	}
-	stamp := now()
-	stage.ReviewDecision = decision
-	stage.ReviewedArtifactHash = artifact.ContentHash
-	stage.ReviewComment = strings.TrimSpace(input.Comment)
-	stage.ReviewedAt = stamp
-	stage.UpdatedAt = stamp
-	workflowRun, _, err := repository.GetUserWorkflowRun(userID, stage.WorkflowRunID)
+	detail, err := GetInvocationDetail(userID, stage.InvocationID)
 	if err != nil {
 		return stage, err
 	}
-	event := workflowEvent(workflowRun, stage, "stage."+decision, "info", map[string]any{"artifactHash": artifact.ContentHash}, stamp)
-	if err := repository.SaveWorkflowStageTransition(stage, event); err != nil {
+	if _, err := ReviewInvocation(userID, stage.InvocationID, InvocationReviewInput{Decision: decision, Attempt: detail.Run.LatestAttempt, ArtifactSetHash: artifact.ArtifactSetHash, Comment: input.Comment}); err != nil {
 		return stage, err
 	}
-	return stage, nil
+	workflowRun, _, _ := repository.GetUserWorkflowRun(userID, stage.WorkflowRunID)
+	_, _ = repository.AppendWorkflowEvent(workflowEvent(workflowRun, stage, "stage."+decision, "info", map[string]any{"invocationId": stage.InvocationID, "artifactSetHash": artifact.ArtifactSetHash}, now()))
+	projection, err = projectWorkflowInvocation(userID, stage)
+	return projection.Stage, err
 }
 
 func ApplyWorkflowStage(userID string, stageRunID string, input WorkflowApplyInput) (model.WorkflowStageRun, error) {
@@ -416,34 +401,39 @@ func ApplyWorkflowStage(userID string, stageRunID string, input WorkflowApplyInp
 	if err != nil {
 		return stage, err
 	}
-	if !ok || (stage.Status != model.WorkflowStageRunStatusApproved && stage.Status != model.WorkflowStageRunStatusApplied) {
+	if !ok || stage.InvocationID == "" {
 		return stage, safeMessageError{message: "阶段尚未批准，不能应用到本地数据"}
 	}
-	artifact, ok, err := repository.GetUserWorkflowArtifact(userID, stage.OutputArtifactID)
-	if err != nil || !ok {
+	projection, err := projectWorkflowInvocation(userID, stage)
+	if err != nil || len(projection.Artifacts) != 1 || (projection.Stage.Status != model.WorkflowStageRunStatusApproved && projection.Stage.Status != model.WorkflowStageRunStatusApplied) {
 		return stage, safeMessageError{message: "已批准产物不存在"}
 	}
-	if artifact.ContentHash != strings.TrimSpace(input.ArtifactHash) || stage.ReviewedArtifactHash != artifact.ContentHash {
+	artifact := projection.Artifacts[0]
+	if artifact.ArtifactSetHash != strings.TrimSpace(input.ArtifactHash) || projection.Stage.ReviewedArtifactHash != artifact.ArtifactSetHash {
 		return stage, safeMessageError{message: "产物已变化，请重新审核后应用"}
 	}
 	if len(input.TargetIDs) > 5000 || len(input.Errors) > 100 {
 		return stage, safeMessageError{message: "应用回执内容过多"}
 	}
-	receipt, _ := json.Marshal(input)
-	stamp := now()
-	stage.Status = model.WorkflowStageRunStatusApplied
-	stage.ApplyReceiptJSON = string(receipt)
-	stage.AppliedAt = stamp
-	stage.UpdatedAt = stamp
-	workflowRun, _, err := repository.GetUserWorkflowRun(userID, stage.WorkflowRunID)
+	receipt, err := json.Marshal(workflowLocalApplyPayload{WorkflowRunID: stage.WorkflowRunID, StageRunID: stage.ID, Receipt: input})
 	if err != nil {
 		return stage, err
 	}
-	event := workflowEvent(workflowRun, stage, "stage.applied", "info", map[string]any{"target": input.Target, "appliedCount": input.AppliedCount, "skippedCount": input.SkippedCount}, stamp)
-	if err := repository.SaveWorkflowStageTransition(stage, event); err != nil {
+	detail, err := GetInvocationDetail(userID, stage.InvocationID)
+	if err != nil {
 		return stage, err
 	}
-	return stage, nil
+	_, err = ApplyInvocation(userID, stage.InvocationID, InvocationApplyInput{
+		IdempotencyKey: "workflow:" + stage.ID + ":" + strings.TrimSpace(input.Version), Attempt: detail.Run.LatestAttempt,
+		ArtifactSetHash: artifact.ArtifactSetHash, Target: "workflow_local_receipt", TargetID: stage.ID, Payload: receipt,
+	})
+	if err != nil {
+		return stage, err
+	}
+	workflowRun, _, _ := repository.GetUserWorkflowRun(userID, stage.WorkflowRunID)
+	_, _ = repository.AppendWorkflowEvent(workflowEvent(workflowRun, stage, "stage.applied", "info", map[string]any{"invocationId": stage.InvocationID, "target": input.Target, "appliedCount": input.AppliedCount, "skippedCount": input.SkippedCount}, now()))
+	projection, err = projectWorkflowInvocation(userID, stage)
+	return projection.Stage, err
 }
 
 func workflowInitialStage(run model.WorkflowRun, stageID string, status model.WorkflowStageRunStatus, stamp string) model.WorkflowStageRun {

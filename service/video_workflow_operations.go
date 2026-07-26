@@ -92,18 +92,15 @@ func CancelWorkflowStage(userID string, stageRunID string) (model.WorkflowStageR
 	if !ok {
 		return stage, safeMessageError{message: "工作流阶段不存在"}
 	}
-	if stage.AgentRunID == "" {
+	if stage.InvocationID == "" {
 		return stage, safeMessageError{message: "当前阶段没有可取消任务"}
 	}
-	run, err := repository.RequestAgentRunCancel(userID, stage.AgentRunID)
+	_, err = CancelInvocation(userID, stage.InvocationID)
 	if err != nil {
 		return stage, err
 	}
-	if err := SyncWorkflowStageFromAgentRun(run); err != nil {
-		return stage, err
-	}
-	stage, _, err = repository.GetUserWorkflowStageRun(userID, stageRunID)
-	return stage, err
+	projection, err := projectWorkflowInvocation(userID, stage)
+	return projection.Stage, err
 }
 
 func RetryWorkflowStage(userID string, stageRunID string, idempotencyKey string) (model.WorkflowStageRun, error) {
@@ -114,16 +111,41 @@ func RetryWorkflowStage(userID string, stageRunID string, idempotencyKey string)
 	if !ok {
 		return stage, safeMessageError{message: "工作流阶段不存在"}
 	}
-	switch stage.Status {
+	latest, exists, err := repository.LatestWorkflowStageRun(userID, stage.WorkflowRunID, stage.StageID)
+	if err != nil {
+		return stage, err
+	}
+	if exists && latest.ParentStageRunID == stage.ID && latest.InvocationID == stage.InvocationID && latest.Attempt > stage.Attempt {
+		current, projectErr := projectWorkflowInvocation(userID, latest)
+		return current.Stage, projectErr
+	}
+	projection, err := projectWorkflowInvocation(userID, stage)
+	if err != nil {
+		return stage, err
+	}
+	switch projection.Stage.Status {
 	case model.WorkflowStageRunStatusFailed, model.WorkflowStageRunStatusCancelled, model.WorkflowStageRunStatusRejected:
-		previous, exists, err := repository.GetAgentRun(stage.AgentRunID)
+		response, err := RetryInvocation(userID, stage.InvocationID)
 		if err != nil {
 			return stage, err
 		}
-		if !exists {
-			return stage, safeMessageError{message: "原任务不存在，无法保留 Skill 快照"}
+		if response.Attempt == nil {
+			return stage, safeMessageError{message: "工作流重试未能创建执行尝试"}
 		}
-		return startWorkflowStage(userID, stage.WorkflowRunID, stage.StageID, WorkflowStageStartInput{IdempotencyKey: idempotencyKey}, &previous)
+		stamp := now()
+		retry := stage
+		retry.ID, retry.ParentStageRunID = newID("workflowstage"), stage.ID
+		retry.AgentRunID, retry.Attempt = response.Attempt.AgentRunID, response.Attempt.Attempt
+		retry.Status, retry.OutputArtifactID = model.WorkflowStageRunStatusQueued, ""
+		retry.ErrorMessage, retry.ReviewDecision, retry.ReviewedArtifactHash, retry.ReviewComment = "", "", "", ""
+		retry.ApplyReceiptJSON, retry.StartedAt, retry.FinishedAt, retry.ReviewedAt, retry.AppliedAt = "", "", "", "", ""
+		retry.ProgressCurrent, retry.CreatedAt, retry.UpdatedAt = 0, stamp, stamp
+		workflowRun, _, _ := repository.GetUserWorkflowRun(userID, stage.WorkflowRunID)
+		event := workflowEvent(workflowRun, retry, "stage.queued", "info", map[string]any{"invocationId": retry.InvocationID, "agentRunId": retry.AgentRunID, "attempt": retry.Attempt, "retry": true, "idempotencyKey": strings.TrimSpace(idempotencyKey)}, stamp)
+		if err := repository.CreateWorkflowStageWithEvent(retry, event); err != nil {
+			return retry, err
+		}
+		return retry, nil
 	default:
 		return stage, safeMessageError{message: "当前阶段状态不能重试"}
 	}

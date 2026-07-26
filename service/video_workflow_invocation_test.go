@@ -74,6 +74,62 @@ func TestProjectWorkflowInvocationAggregatesAssetBriefSet(t *testing.T) {
 	}
 }
 
+func TestWorkflowInvocationReviewAndApplyDelegateToRuntime(t *testing.T) {
+	setupVideoWorkflowTest(t)
+	seedWorkflowInvocationCredits(t)
+	detail := ensureVideoWorkflowTestRun(t)
+	stage, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageAssetExtraction, "workflow-review-apply")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := `{"items":[{"assetId":"character-001","kind":"character","name":"阿宁","sourceEvidence":["阿宁进入房间。"],"coreFacts":["主要角色"]}]}`
+	worker := NewAgentRunWorker(AgentRunWorkerOptions{ID: "workflow-review-worker", LeaseDuration: time.Minute, Executor: invocationFakeExecutor{result: agentRunCallResult{rawOutput: raw, structuredJSON: raw}}})
+	if err := worker.ProcessOne(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	detail, _ = GetWorkflowRunDetail("user-1", detail.Run.ID)
+	projected := workflowTestStage(detail, WorkflowStageAssetExtraction)
+	artifact := detail.Artifacts[len(detail.Artifacts)-1]
+	approved, err := ReviewWorkflowStage("user-1", stage.ID, WorkflowReviewInput{Decision: "approved", ArtifactHash: artifact.ContentHash, Comment: "通过"})
+	if err != nil || approved.Status != model.WorkflowStageRunStatusApproved || approved.ReviewedArtifactHash != artifact.ContentHash {
+		t.Fatalf("approved=%#v err=%v", approved, err)
+	}
+	applied, err := ApplyWorkflowStage("user-1", stage.ID, WorkflowApplyInput{ArtifactHash: artifact.ContentHash, Target: "asset_store", TargetIDs: []string{"asset-1"}, AppliedCount: 1, Version: "local-v1"})
+	if err != nil || applied.Status != model.WorkflowStageRunStatusApplied || applied.ApplyReceiptJSON == "" {
+		t.Fatalf("applied=%#v err=%v", applied, err)
+	}
+	receipt, ok, err := repository.GetWorkflowLocalApplyReceiptByInvocation("user-1", projected.InvocationID)
+	if err != nil || !ok || receipt.StageRunID != stage.ID || receipt.AppliedCount != 1 {
+		t.Fatalf("receipt=%#v ok=%v err=%v", receipt, ok, err)
+	}
+	replayed, err := ApplyWorkflowStage("user-1", stage.ID, WorkflowApplyInput{ArtifactHash: artifact.ContentHash, Target: "asset_store", TargetIDs: []string{"asset-1"}, AppliedCount: 1, Version: "local-v1"})
+	if err != nil || replayed.Status != model.WorkflowStageRunStatusApplied {
+		t.Fatalf("replayed=%#v err=%v", replayed, err)
+	}
+}
+
+func TestWorkflowInvocationCancelAndRetryAppendAttempt(t *testing.T) {
+	setupVideoWorkflowTest(t)
+	seedWorkflowInvocationCredits(t)
+	detail := ensureVideoWorkflowTestRun(t)
+	stage, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageAssetExtraction, "workflow-cancel-retry")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancelled, err := CancelWorkflowStage("user-1", stage.ID)
+	if err != nil || cancelled.Status != model.WorkflowStageRunStatusCancelled {
+		t.Fatalf("cancelled=%#v err=%v", cancelled, err)
+	}
+	retried, err := RetryWorkflowStage("user-1", stage.ID, "workflow-retry-2")
+	if err != nil || retried.ID == stage.ID || retried.ParentStageRunID != stage.ID || retried.InvocationID != stage.InvocationID || retried.Attempt != 2 || retried.Status != model.WorkflowStageRunStatusQueued {
+		t.Fatalf("retried=%#v err=%v", retried, err)
+	}
+	replayed, err := RetryWorkflowStage("user-1", stage.ID, "workflow-retry-2")
+	if err != nil || replayed.ID != retried.ID || replayed.Attempt != 2 {
+		t.Fatalf("replayed=%#v err=%v", replayed, err)
+	}
+}
+
 func TestStartWorkflowStageCreatesAndConfirmsInvocation(t *testing.T) {
 	setupVideoWorkflowTest(t)
 	seedWorkflowInvocationCredits(t)

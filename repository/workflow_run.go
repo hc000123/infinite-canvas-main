@@ -273,6 +273,19 @@ func ListWorkflowEvents(userID string, workflowRunID string, after uint64, limit
 	return events, err
 }
 
+func GetWorkflowLocalApplyReceiptByInvocation(userID, invocationID string) (model.WorkflowLocalApplyReceipt, bool, error) {
+	db, err := DB()
+	if err != nil {
+		return model.WorkflowLocalApplyReceipt{}, false, err
+	}
+	var receipt model.WorkflowLocalApplyReceipt
+	err = db.Where("user_id = ? AND invocation_id = ?", strings.TrimSpace(userID), strings.TrimSpace(invocationID)).Order("created_at desc").First(&receipt).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return receipt, false, nil
+	}
+	return receipt, err == nil, err
+}
+
 func CompleteWorkflowStage(stage model.WorkflowStageRun, artifact model.WorkflowArtifact, gate model.WorkflowQualityGateResult, event model.WorkflowEvent) error {
 	db, err := DB()
 	if err != nil {

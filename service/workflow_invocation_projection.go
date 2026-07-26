@@ -78,9 +78,16 @@ func projectWorkflowInvocation(userID string, stage model.WorkflowStageRun) (wor
 	}
 	if len(detail.ApplyAttempts) > 0 {
 		latest := detail.ApplyAttempts[len(detail.ApplyAttempts)-1]
-		receipt, _ := json.Marshal(latest)
-		result.Stage.ApplyReceiptJSON = string(receipt)
-		result.Stage.AppliedAt = latest.UpdatedAt
+		if receipt, ok, receiptErr := repository.GetWorkflowLocalApplyReceiptByInvocation(userID, stage.InvocationID); receiptErr != nil {
+			return result, receiptErr
+		} else if ok {
+			result.Stage.ApplyReceiptJSON = receipt.PayloadJSON
+			result.Stage.AppliedAt = receipt.CreatedAt
+		} else {
+			receipt, _ := json.Marshal(latest)
+			result.Stage.ApplyReceiptJSON = string(receipt)
+			result.Stage.AppliedAt = latest.UpdatedAt
+		}
 	}
 	result.Stage.UpdatedAt = detail.Run.UpdatedAt
 	return result, nil
