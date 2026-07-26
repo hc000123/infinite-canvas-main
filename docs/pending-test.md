@@ -14,7 +14,7 @@
 - 自动验收命令：`go test ./...`、`cd web && npm test`、`cd web && npm run typecheck`、`cd web && npm run build`。
 - 人工验收：新建项目 Skill 草稿，完成同输入评测、发布、设为推荐、项目灰度和推荐回滚；再启动一个阶段并确认切换推荐版后原任务快照不变。
 
-### Artifact + Invocation Runtime Phase 2 后端核心
+### Artifact + Invocation Runtime Phase 2
 
 - 已实现 Artifact Schema Registry、通用 Artifact 外壳、输入解析、Preflight 冻结快照、Invocation Runner、幂等队列、质量门和追加式 Trace。
 - 确认要求必须精确匹配冻结集合；确认与取消竞争在同一事务边界内收口，不得留下孤立 attempt 或 AgentRun。运行中取消使 Invocation、attempt 和 AgentRun 一致进入 `cancel_requested`，由完成器或 reaper 收敛为 `cancelled`。
@@ -26,8 +26,29 @@
 - 并发校正中，已被另一请求提交而离开当前 failed attempt 的 stale 请求统一返回 transition conflict；Artifact 审批以生产 Invocation 当前 approved / applied 的 reviewed attempt 完整输出集及审核哈希为权威，因此重试保留的旧 ProducerAttempt Artifact 与新产物可作为同一已批准集合继续进入 Preflight。
 - `execution_target_unavailable` 不允许普通 Retry，必须 Repreflight 追加新 revision 并冻结新执行目标；旧 revision / attempt 保留，重新确认后才追加新 attempt。
 - 审核使用有序 binding / ordinal / Artifact ID / hash 计算产物集哈希；Apply 只允许服务端注册适配器，相同幂等键和请求只写入一次，适配器写入、回执和 Invocation 状态保持同事务，失败后可换新键重试。
-- 自动验收：运行 service / repository 全套测试、repository Invocation 竞争检测，并重复验证 Confirm-vs-Cancel 不产生孤立记录。
-- 边界：本批只实现后端模型、repository 和 service 核心，未接入 HTTP、前端或正式生产工作流；Phase 2 Task 7–9 尚未完成，仍保留在路线图。
+- 已接入需要登录的通用 Artifact 3 个路由和 Invocation 11 个路由：严格请求体、安全 DTO、用户隔离、列表/详情与事件游标分页均已落地；正式生产 Workflow 切换仍属于 Phase 3。
+
+Direct run 验收清单：
+
+- 用 `source_text` Artifact 和精确已发布 `script.optimize` Skill Version 创建 direct Invocation，预检必须冻结版本/Schema/输入/策略并进入 `awaiting_confirmation`，不提交模型任务。
+- 缺少任一冻结 requirement 的 Confirm 必须拒绝；精确确认后只创建一个 attempt 和 AgentRun，fake executor 完成后产出 `production_script` Artifact，父链指向原 `source_text`。
+- 输出须依次通过 input contract、output schema、business gate 和 policy gate，run 进入 `needs_review`；同一 Artifact-set hash 批准后才可通过 `test_sink` 幂等 Apply。`test_sink` 只是验收基础设施，不是生产消费端。
+- 完整 Trace 至少包含 `preflight.completed`、`attempt.queued`、`attempt.running`、`attempt.needs_review`、`review.approved` 和 `apply.applied`。
+- 重放、变更哈希冲突、推荐版漂移、repreflight、stale parent、schema 失败与无模型校正、驳回/部分重试、多输出 ordinal、credits、Apply 失败/幂等冲突、queue/finalize failpoint 和 confirm/cancel/finalize 竞态都必须保持追加历史、不重复扣费，不留孤立 AgentRun 或部分 Artifact 集。
+- 第二用户不得读取 run、events、输入或输出 Artifact；HTTP 响应不得回显 idempotency 中的敏感文本、渠道 ID/Key、快照、raw output、AgentRun ID 或 Apply receipt。
+
+本轮验证命令（完成前按顺序执行，实际结果以任务交付记录为准）：
+
+```bash
+go test ./service ./handler -run 'TestDirectSkillInvocation|TestInvocationHTTP' -count=1
+go test ./... -count=1
+cd web && npm test
+cd web && npm run typecheck
+cd web && npm run build
+git diff --check
+```
+
+无费用 HTTP smoke 只到预检：使用系统临时目录 SQLite、关闭 Worker、注册/登录临时用户，创建 `source_text`，调用精确内置 `3.1.0` Skill Version，检查 `awaiting_confirmation`、缺 requirement Confirm 拒绝、detail 和 events；不提交正确 Confirm，不会调用外部模型或产生费用。
 
 ### 项目详情素材引用入口收口
 

@@ -18,6 +18,36 @@
 
 接口连接失败、服务不可达、返回体不是约定 JSON 时，前端按网络或接口异常处理。
 
+## Artifact 与 Invocation Runtime 接口
+
+下列 14 个接口均位于 `/api/v1`，必须携带 `Authorization: Bearer <token>`，并且只能读写 JWT 用户自己的 Artifact 和 Invocation。所有 JSON 写入请求都使用严格字段解码和大小上限；未知字段、`null`、追加 JSON 或超限请求会失败。
+
+### Artifact（3 个）
+
+| 接口 | 请求 | 安全响应 |
+| ---- | ---- | ---- |
+| `POST /artifacts` | 创建用户手动导入的 `source_text`：`artifactType`、`schemaVersion`、`projectId`、`episodeId`、`payload`、可选 `parentArtifactRefs`；不允许冒充 producer 或写入 Skill extensions。 | 返回 Artifact envelope：安全化 `artifact`、`parentArtifactIds`、`payload`、`extensions`。 |
+| `GET /artifacts` | 查询参数：`project`、`episode`、`type`、`producerInvocation`、`approvalState`、`page`、`pageSize`。 | 返回所有者范围内的 `{ items, total, page, pageSize }`，列表项为 Artifact envelope。 |
+| `GET /artifacts/:id` | 路径参数是 Artifact ID。 | 返回用户可见的 Artifact envelope；跨用户 ID 按不存在处理。 |
+
+### Invocation（11 个）
+
+| 接口 | 请求 | 安全响应 |
+| ---- | ---- | ---- |
+| `POST /invocations` | 仅接受 `source: "direct"`；可用 `skillVersionId` 准确锁定已发布版本，或用 Skill / Capability 条件解析；同时提交项目/分集、预期输出类型、带内容哈希的 `inputArtifactRefs`、`parameters`、`idempotencyKey` 和可选执行策略覆盖。 | 返回安全 Preflight DTO：`run`、版本摘要、冻结输入引用、执行策略摘要、路由摘要、确认要求和阻断原因；不返回请求哈希、完整 Skill/Schema 快照、渠道 ID/Key、原始输出或内部错误。 |
+| `GET /invocations` | 查询参数：`project`、`episode`、`skillId`、`source`、`status`、`page`、`pageSize`。 | 返回 `{ items, total, page, pageSize }` 和安全的 run 摘要。 |
+| `GET /invocations/:id` | 路径参数是 Invocation ID。 | 返回 run、revision/attempt 安全摘要、权威 Artifact refs/输出 envelope、gates、reviews、Apply 摘要、最新事件页和 `artifactSetHash`；不暴露 AgentRun ID、raw/structured output、内部 Trace 快照、Apply 回执/错误或密钥。 |
+| `POST /invocations/:id/repreflight` | 仅允许 blocked 或执行目标失效的 direct Invocation 追加新预检；不可改变已冻结项目/分集边界。 | 返回新的安全 Preflight DTO，旧 revision/attempt 保留。 |
+| `POST /invocations/:id/confirm` | `{ "requirementCodes": [...] }`，必须与当前 revision 冻结集合精确一致。 | 原子创建一个 attempt 和 AgentRun，返回安全 lifecycle DTO；重放同一确认不会重复入队。 |
+| `POST /invocations/:id/cancel` | **Body 必须是 0 字节**；`{}`、空白或其他内容都会被拒绝。 | 返回取消后的安全 lifecycle DTO；取消和完成竞态在事务内收口。 |
+| `POST /invocations/:id/retry` | **Body 必须是 0 字节**；只能重试 failed/cancelled/rejected/partial attempt。 | 返回追加 attempt 的安全 lifecycle DTO；冻结 revision、保留输出和失败 ordinal 计划不可改写。 |
+| `POST /invocations/:id/revalidate` | `{ attempt, expectedRawOutputHash, output }`，只能校正 output-schema/business-gate 失败的当前 attempt。 | 不再调模型、不新建 AgentRun；保留 immutable raw output，追加校正 Trace 并重跑冻结契约。 |
+| `POST /invocations/:id/review` | `{ decision: "approved" | "rejected", attempt, artifactSetHash, comment? }`，哈希必须对应当前完整有序 Artifact 集。 | 返回安全 lifecycle DTO；审核记录追加保存。 |
+| `POST /invocations/:id/apply` | `{ idempotencyKey, attempt, artifactSetHash, target, targetId }`；仅允许当前 approved Artifact 集和服务端已注册 adapter。 | 返回不含 receipt/error/request hash 的 Apply 摘要；同键同请求只写一次，同键变更 body 冲突，失败保持 approved 并可用新键重试。 |
+| `GET /invocations/:id/events` | 游标分页：`after` 为上次最后一条数字 ID，`limit` 经后端分页上限归一化；初次用 `after=0`。 | 按 ID 升序返回该用户 Invocation 的追加事件数组；跨用户游标查询按不存在处理。detail 内置事件页额外返回 `eventsHasMore / eventsNextAfter / eventsLimit`。 |
+
+客户端不得把 `idempotencyKey`、`parameters`、Artifact payload 或任何业务文本当作服务端凭证；服务端也不会在上述 DTO 中回显 API Key、Authorization 头或完整执行请求。
+
 ## 视频工作流接口
 
 视频工作流用户接口均位于 `/api/v1`，需要登录，并按 `user_id` 校验 workflow、stage、artifact 和 event 所有权：
