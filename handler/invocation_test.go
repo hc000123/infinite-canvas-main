@@ -77,13 +77,21 @@ func TestInvocationCreateReturnsPreflightWithoutStartingAttempt(t *testing.T) {
 	}
 }
 
-func TestInvocationCreateRejectsNonDirectUnknownTrailingAndOversizedBodies(t *testing.T) {
+func TestInvocationCreateAcceptsClientSourcesAndRejectsInternalUnknownTrailingAndOversizedBodies(t *testing.T) {
 	setupWorkflowHandlerTestDB(t)
+	for _, source := range []string{"direct", "image", "canvas_chat"} {
+		request := invocationHandlerRequest(http.MethodPost, "/api/v1/invocations", `{"source":"`+source+`","projectId":"project-1","capability":"missing.capability"}`, "user-1")
+		CreateInvocation(request.recorder, request.request)
+		if !strings.Contains(request.recorder.Body.String(), `"code":0`) || !strings.Contains(request.recorder.Body.String(), `"source":"`+source+`"`) {
+			t.Fatalf("source=%s body=%s", source, request.recorder.Body.String())
+		}
+	}
 	tests := []struct {
 		name string
 		body string
 	}{
-		{"non direct", `{"source":"workflow","projectId":"project-1"}`},
+		{"workflow source", `{"source":"workflow","projectId":"project-1"}`},
+		{"agent plan source", `{"source":"agent_plan","projectId":"project-1"}`},
 		{"unknown status", `{"source":"direct","status":"running"}`},
 		{"trailing json", `{"source":"direct"}{}`},
 		{"oversized", `{"source":"direct","parameters":{"value":"` + strings.Repeat("x", (2<<20)+1) + `"}}`},
@@ -227,7 +235,7 @@ func TestInvocationForeignRetryCannotQueueOwnerRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	preflight, err := service.PreflightDirectInvocation("user-1", service.InvocationRequest{
+	preflight, err := service.PreflightClientInvocation("user-1", service.InvocationRequest{
 		Source: "direct", ProjectID: "project-1", EpisodeID: "episode-1", SkillID: "skill-system-workflow-script",
 		ExpectedOutputArtifactType: "production_script", Parameters: json.RawMessage(`{}`),
 		InputArtifactRefs: []service.ArtifactRefInput{{BindingName: "source_text", ArtifactID: input.Artifact.ID, ContentHash: input.Artifact.ContentHash}},

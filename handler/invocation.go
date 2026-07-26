@@ -21,7 +21,7 @@ func CreateInvocation(w http.ResponseWriter, r *http.Request) {
 	if !decodeStrictBody(w, r, &input, 2<<20) {
 		return
 	}
-	result, err := service.PreflightDirectInvocation(user.ID, input)
+	result, err := service.PreflightClientInvocation(user.ID, input)
 	invocationPreflightResult(w, result, err)
 }
 
@@ -58,7 +58,7 @@ func RepreflightInvocation(w http.ResponseWriter, r *http.Request, id string) {
 	if !decodeStrictBody(w, r, &input, 2<<20) {
 		return
 	}
-	result, err := service.RepreflightDirectInvocation(user.ID, id, input)
+	result, err := service.RepreflightClientInvocation(user.ID, id, input)
 	invocationPreflightResult(w, result, err)
 }
 

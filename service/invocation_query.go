@@ -11,16 +11,29 @@ import (
 
 const invocationDetailEventsLimit = 100
 
-func PreflightDirectInvocation(userID string, input InvocationRequest) (InvocationPreflightSnapshot, error) {
-	if strings.ToLower(strings.TrimSpace(input.Source)) != "direct" {
-		return InvocationPreflightSnapshot{}, errors.New("HTTP Invocation 仅支持 direct source")
+var clientInvocationSources = map[string]bool{"direct": true, "image": true, "canvas_chat": true}
+
+func PreflightClientInvocation(userID string, input InvocationRequest) (InvocationPreflightSnapshot, error) {
+	if !clientInvocationSources[strings.ToLower(strings.TrimSpace(input.Source))] {
+		return InvocationPreflightSnapshot{}, errors.New("HTTP Invocation source 无效")
 	}
 	return PreflightInvocation(userID, input)
 }
 
-func RepreflightDirectInvocation(userID, invocationID string, input InvocationRequest) (InvocationPreflightSnapshot, error) {
-	if strings.ToLower(strings.TrimSpace(input.Source)) != "direct" {
-		return InvocationPreflightSnapshot{}, errors.New("HTTP Invocation 仅支持 direct source")
+func RepreflightClientInvocation(userID, invocationID string, input InvocationRequest) (InvocationPreflightSnapshot, error) {
+	source := strings.ToLower(strings.TrimSpace(input.Source))
+	if !clientInvocationSources[source] {
+		return InvocationPreflightSnapshot{}, errors.New("HTTP Invocation source 无效")
+	}
+	run, found, err := repository.GetUserInvocation(strings.TrimSpace(userID), strings.TrimSpace(invocationID))
+	if err != nil {
+		return InvocationPreflightSnapshot{}, err
+	}
+	if !found {
+		return InvocationPreflightSnapshot{}, repository.ErrInvocationNotFound
+	}
+	if !clientInvocationSources[run.Source] || run.Source != source {
+		return InvocationPreflightSnapshot{}, errors.New("Invocation source 不可变更")
 	}
 	return RepreflightInvocation(userID, invocationID, input)
 }

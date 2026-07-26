@@ -11,6 +11,31 @@ import (
 	"github.com/basketikun/infinite-canvas/repository"
 )
 
+func TestPreflightClientInvocationAdmitsOnlyUserSurfaces(t *testing.T) {
+	setupAITaskTestDB(t)
+	if err := EnsureCoreArtifactSchemas(); err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range []string{"direct", "image", "canvas_chat"} {
+		result, err := PreflightClientInvocation("user-1", InvocationRequest{Source: source, ProjectID: "project-1", Capability: "missing.capability", IdempotencyKey: "client-" + source})
+		if err != nil || result.Run.Source != source || result.Run.Status != model.InvocationStatusBlocked {
+			t.Fatalf("source=%s run=%+v err=%v", source, result.Run, err)
+		}
+	}
+	for _, source := range []string{"workflow", "agent_plan"} {
+		if _, err := PreflightClientInvocation("user-1", InvocationRequest{Source: source, ProjectID: "project-1", Capability: "missing.capability"}); err == nil {
+			t.Fatalf("source=%s should be rejected", source)
+		}
+	}
+	image, err := PreflightClientInvocation("user-1", InvocationRequest{Source: "image", ProjectID: "project-1", Capability: "missing.capability", IdempotencyKey: "client-repreflight"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RepreflightClientInvocation("user-1", image.Run.ID, InvocationRequest{Source: "canvas_chat", ProjectID: "project-1", Capability: "missing.capability"}); err == nil {
+		t.Fatal("repreflight changed the client source")
+	}
+}
+
 func TestInvocationDetailAuthoritativeRefsFollowLatestRevision(t *testing.T) {
 	run := needsReviewLifecycleFixture(t)
 	refs, err := repository.ListInvocationArtifactRefs("user-1", run.ID)
