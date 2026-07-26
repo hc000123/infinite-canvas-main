@@ -67,8 +67,13 @@ export type InvocationExecutionPolicyOverride = {
     maxAttempts?: number;
 };
 
+export type ClientInvocationSource =
+    | "direct"
+    | "image"
+    | "canvas_chat";
+
 export type InvocationRequest = {
-    source: "direct";
+    source: ClientInvocationSource;
     projectId: string;
     episodeId?: string;
     skillId?: string;
@@ -307,6 +312,7 @@ export type InvocationApplyInput = {
     artifactSetHash: string;
     target: string;
     targetId: string;
+    payload?: Record<string, unknown>;
 };
 
 export type InvocationQuery = {

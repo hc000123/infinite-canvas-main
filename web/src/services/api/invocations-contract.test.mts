@@ -42,11 +42,11 @@ test("factory wires all routes to the correct authenticated adapters", async () 
     };
     const client = createInvocationClient({ apiGet, apiPost, apiPostEmpty, token: () => `token-${++tokenReads}` });
     const artifact = { artifactType: "source_text", schemaVersion: "1.0.0", payload: { text: "原文" } };
-    const invocation = { source: "direct" as const, projectId: "project-1", parameters: { language: "zh-CN" } };
+    const invocation = { source: "image" as const, projectId: "project-1", parameters: { language: "zh-CN" } };
     const confirmation = { requirementCodes: ["credits"] };
     const correction = { attempt: 1, expectedRawOutputHash: "hash-1", output: { text: "修正" } };
     const review = { decision: "approved" as const, attempt: 1, artifactSetHash: "set-1", comment: "ok" };
-    const apply = { idempotencyKey: "apply-1", attempt: 1, artifactSetHash: "set-1", target: "test_sink", targetId: "target-1" };
+    const apply = { idempotencyKey: "apply-1", attempt: 1, artifactSetHash: "set-1", target: "client_local_receipt", targetId: "target-1", payload: { surface: "image" } };
 
     await client.createArtifact(artifact);
     await client.listArtifacts({ project: "project-1", episode: "", type: "source_text", page: 2, pageSize: 10 });
@@ -110,4 +110,11 @@ test("frontend response DTOs do not expose backend raw trace fields", async () =
     for (const field of ["rawOutput", "structuredOutputJson", "toolTraceJson", "correctionTraceJson", "retryPlanJson", "receiptJson", "dataJson", "skillSnapshotJson"]) {
         assert.doesNotMatch(source, new RegExp(`\\b${field}\\??:`));
     }
+});
+
+test("client Invocation DTO admits shared surfaces and local apply payloads", async () => {
+    const source = await readFile(new URL("./invocations-contract.ts", import.meta.url), "utf8");
+    assert.match(source, /export type ClientInvocationSource\s*=\s*\| "direct"\s*\| "image"\s*\| "canvas_chat"/s);
+    assert.match(source, /export type InvocationRequest\s*=\s*\{\s*source: ClientInvocationSource;/s);
+    assert.match(source, /export type InvocationApplyInput\s*=\s*\{[^}]*payload\?: Record<string, unknown>;/s);
 });
