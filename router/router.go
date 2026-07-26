@@ -38,6 +38,26 @@ func New() *gin.Engine {
 	v1.POST("/agent-configs", gin.WrapF(handler.SaveAgentConfig))
 	v1.GET("/agent-runs", gin.WrapF(handler.AgentRuns))
 	v1.POST("/agent-runs", gin.WrapF(handler.CreateAgentRun))
+	v1.GET("/agents", gin.WrapF(handler.Agents))
+	v1.POST("/agents", gin.WrapF(handler.CreateAgent))
+	v1.GET("/agents/:id", func(c *gin.Context) {
+		handler.AgentDetail(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/agents/:id/versions", func(c *gin.Context) {
+		handler.CreateAgentVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.PATCH("/agent-versions/:id", func(c *gin.Context) {
+		handler.UpdateAgentVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/agent-versions/:id/validate", func(c *gin.Context) {
+		handler.ValidateAgentVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/agent-versions/:id/publish", func(c *gin.Context) {
+		handler.PublishAgentVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.PUT("/agents/:id/recommended-version", func(c *gin.Context) {
+		handler.RecommendAgentVersion(c.Writer, c.Request, c.Param("id"))
+	})
 	v1.POST("/artifacts", gin.WrapF(handler.CreateArtifact))
 	v1.GET("/artifacts", gin.WrapF(handler.Artifacts))
 	v1.GET("/artifacts/:id", func(c *gin.Context) {
