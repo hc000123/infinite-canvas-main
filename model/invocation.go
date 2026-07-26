@@ -27,6 +27,10 @@ type InvocationRun struct {
 	Source                  string           `json:"source" gorm:"size:32;index"`
 	ProjectID               string           `json:"projectId" gorm:"size:128;index"`
 	EpisodeID               string           `json:"episodeId" gorm:"size:128;index"`
+	AgentPlanID             string           `json:"agentPlanId,omitempty" gorm:"size:128;index"`
+	AgentPlanRevision       int              `json:"agentPlanRevision,omitempty" gorm:"index"`
+	AgentPlanStepKey        string           `json:"agentPlanStepKey,omitempty" gorm:"size:128;index"`
+	ConfirmationSource      string           `json:"confirmationSource,omitempty" gorm:"size:32;index"`
 	IdempotencyKey          *string          `json:"idempotencyKey,omitempty" gorm:"size:256;uniqueIndex:idx_invocation_run_idempotency,priority:2"`
 	RequestHash             string           `json:"requestHash" gorm:"size:80;index"`
 	Status                  InvocationStatus `json:"status" gorm:"index"`

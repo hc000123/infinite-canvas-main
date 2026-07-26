@@ -15,7 +15,7 @@ import (
 	"github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 )
 
-var invocationSources = map[string]bool{"workflow": true, "image": true, "canvas_chat": true, "direct": true}
+var invocationSources = map[string]bool{"workflow": true, "image": true, "canvas_chat": true, "direct": true, "agent_plan": true}
 
 type invocationPreflightBuild struct {
 	request          InvocationRequest
@@ -54,6 +54,8 @@ func PreflightInvocation(userID string, raw InvocationRequest) (InvocationPrefli
 	run := model.InvocationRun{
 		ID: invocationID, UserID: strings.TrimSpace(userID), Source: build.request.Source,
 		ProjectID: build.request.ProjectID, EpisodeID: build.request.EpisodeID, IdempotencyKey: keyPointer,
+		AgentPlanID: build.request.AgentPlanID, AgentPlanRevision: build.request.AgentPlanRevision,
+		AgentPlanStepKey: build.request.AgentPlanStepKey, ConfirmationSource: build.request.ConfirmationSource,
 		RequestHash: build.requestHash, Status: status, LatestRevision: 1, LatestAttempt: 0,
 		CreatedAt: stamp, UpdatedAt: stamp,
 	}
@@ -243,6 +245,9 @@ func normalizeInvocationRequest(raw InvocationRequest) (InvocationRequest, strin
 	request.ProjectTags = normalizedStringSet(request.ProjectTags, true)
 	request.ExecutionPolicyOverride.Model = strings.TrimSpace(request.ExecutionPolicyOverride.Model)
 	request.ExecutionPolicyOverride.ChannelID = strings.TrimSpace(request.ExecutionPolicyOverride.ChannelID)
+	request.AgentPlanID = strings.TrimSpace(request.AgentPlanID)
+	request.AgentPlanStepKey = strings.ToLower(strings.TrimSpace(request.AgentPlanStepKey))
+	request.ConfirmationSource = strings.ToLower(strings.TrimSpace(request.ConfirmationSource))
 	request.InputArtifactRefs = append([]ArtifactRefInput(nil), raw.InputArtifactRefs...)
 	for index := range request.InputArtifactRefs {
 		request.InputArtifactRefs[index] = normalizeArtifactRef(request.InputArtifactRefs[index])

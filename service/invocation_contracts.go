@@ -23,6 +23,10 @@ type InvocationRequest struct {
 	Parameters                 json.RawMessage                   `json:"parameters"`
 	ExecutionPolicyOverride    InvocationExecutionPolicyOverride `json:"executionPolicyOverride"`
 	IdempotencyKey             string                            `json:"idempotencyKey"`
+	AgentPlanID                string                            `json:"-"`
+	AgentPlanRevision          int                               `json:"-"`
+	AgentPlanStepKey           string                            `json:"-"`
+	ConfirmationSource         string                            `json:"-"`
 }
 
 type InvocationExecutionPolicyOverride struct {
@@ -174,6 +178,10 @@ type InvocationRunSummary struct {
 	Source                  string                 `json:"source"`
 	ProjectID               string                 `json:"projectId"`
 	EpisodeID               string                 `json:"episodeId"`
+	AgentPlanID             string                 `json:"agentPlanId,omitempty"`
+	AgentPlanRevision       int                    `json:"agentPlanRevision,omitempty"`
+	AgentPlanStepKey        string                 `json:"agentPlanStepKey,omitempty"`
+	ConfirmationSource      string                 `json:"confirmationSource,omitempty"`
 	Status                  model.InvocationStatus `json:"status"`
 	LatestRevision          int                    `json:"latestRevision"`
 	LatestAttempt           int                    `json:"latestAttempt"`

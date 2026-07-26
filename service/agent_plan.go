@@ -9,8 +9,15 @@ import (
 )
 
 type agentPlanRevisionSnapshot struct {
-	Package          AgentPackage `json:"package"`
-	RequirementCodes []string     `json:"requirementCodes"`
+	Package          AgentPackage                     `json:"package"`
+	RequirementCodes []string                         `json:"requirementCodes"`
+	Steps            []agentPlanStepPreflightSnapshot `json:"steps"`
+}
+
+type agentPlanStepPreflightSnapshot struct {
+	StepKey          string   `json:"stepKey"`
+	EstimatedCredits int      `json:"estimatedCredits"`
+	RequirementCodes []string `json:"requirementCodes"`
 }
 
 func CreateAgentPlan(userID string, input AgentPlanCreateInput) (AgentPlanDetail, error) {
@@ -49,7 +56,7 @@ func CreateAgentPlan(userID string, input AgentPlanCreateInput) (AgentPlanDetail
 		Goal       string                    `json:"goal"`
 		SourceRefs []ArtifactRefInput        `json:"sourceArtifactRefs"`
 		Snapshot   agentPlanRevisionSnapshot `json:"snapshot"`
-	}{userID, plan.ProjectID, plan.EpisodeID, plan.AgentID, plan.AgentVersionID, version.ContentHash, plan.Goal, sourceRefs, agentPlanRevisionSnapshot{Package: packageValue, RequirementCodes: []string{}}})
+	}{userID, plan.ProjectID, plan.EpisodeID, plan.AgentID, plan.AgentVersionID, version.ContentHash, plan.Goal, sourceRefs, agentPlanRevisionSnapshot{Package: packageValue, RequirementCodes: []string{}, Steps: []agentPlanStepPreflightSnapshot{}}})
 	plan.RequestHash = invocationSHA256(hashPayload)
 	stored, _, err := repository.CreateAgentPlanAggregateIdempotently(plan, revision, steps)
 	if err != nil {
@@ -194,7 +201,7 @@ func normalizeAgentPlanInputs(packageValue AgentPackage, overrides []AgentSkillR
 
 func buildAgentPlanRevision(plan model.AgentPlan, version model.AgentVersion, packageValue AgentPackage, sourceRefs []ArtifactRefInput, stamp string) (model.AgentPlanRevision, []model.AgentPlanStep, error) {
 	sourceJSON, _ := json.Marshal(sourceRefs)
-	snapshotJSON, _ := json.Marshal(agentPlanRevisionSnapshot{Package: packageValue, RequirementCodes: []string{}})
+	snapshotJSON, _ := json.Marshal(agentPlanRevisionSnapshot{Package: packageValue, RequirementCodes: []string{}, Steps: []agentPlanStepPreflightSnapshot{}})
 	revision := model.AgentPlanRevision{
 		ID: newID("agentplanrevision"), UserID: plan.UserID, AgentPlanID: plan.ID, Revision: plan.CurrentRevision,
 		AgentVersionID: version.ID, AgentContentHash: version.ContentHash, Goal: plan.Goal,

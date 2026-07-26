@@ -193,6 +193,8 @@ func SafeInvocationApplyAttempt(apply model.InvocationApplyAttempt) InvocationAp
 func invocationRunSummary(run model.InvocationRun) InvocationRunSummary {
 	return InvocationRunSummary{
 		ID: run.ID, Source: run.Source, ProjectID: run.ProjectID, EpisodeID: run.EpisodeID, Status: run.Status,
+		AgentPlanID: run.AgentPlanID, AgentPlanRevision: run.AgentPlanRevision,
+		AgentPlanStepKey: run.AgentPlanStepKey, ConfirmationSource: run.ConfirmationSource,
 		LatestRevision: run.LatestRevision, LatestAttempt: run.LatestAttempt, ReviewedAttempt: run.ReviewedAttempt,
 		ReviewedArtifactSetHash: run.ReviewedArtifactSetHash, CreatedAt: run.CreatedAt, UpdatedAt: run.UpdatedAt,
 	}

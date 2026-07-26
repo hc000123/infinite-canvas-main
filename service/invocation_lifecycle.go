@@ -20,6 +20,13 @@ func ConfirmInvocation(userID, invocationID string, confirmation InvocationConfi
 	if !ok {
 		return InvocationResponse{}, repository.ErrInvocationNotFound
 	}
+	if run.ConfirmationSource == "agent_plan" {
+		return InvocationResponse{}, errors.New("Agent Plan Invocation 只能由已确认 Plan 委托执行")
+	}
+	return confirmInvocationRun(userID, run, confirmation)
+}
+
+func confirmInvocationRun(userID string, run model.InvocationRun, confirmation InvocationConfirmation) (InvocationResponse, error) {
 	provided := normalizedStringSet(confirmation.RequirementCodes, true)
 	if run.Status != model.InvocationStatusAwaitingConfirmation {
 		return confirmedInvocationReplay(run, provided)
@@ -38,7 +45,7 @@ func ConfirmInvocation(userID, invocationID string, confirmation InvocationConfi
 	}
 	if err := repository.QueueInvocationAttemptTx(queued, attempt, agentRun, refs, event); err != nil {
 		if errors.Is(err, repository.ErrInvocationTransitionConflict) {
-			current, found, getErr := repository.GetUserInvocation(userID, invocationID)
+			current, found, getErr := repository.GetUserInvocation(userID, run.ID)
 			if getErr == nil && found {
 				return confirmedInvocationReplay(current, provided)
 			}

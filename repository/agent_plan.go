@@ -266,6 +266,75 @@ func BindAgentPlanStepInvocation(planID string, revision, ordinal int, invocatio
 	return err
 }
 
+func ReadyAgentPlanStep(planID string, revision, ordinal int, inputBindingsJSON, updatedAt string) error {
+	database, err := DB()
+	if err != nil {
+		return err
+	}
+	for range 20 {
+		result := database.Model(&model.AgentPlanStep{}).
+			Where("agent_plan_id = ? AND revision = ? AND ordinal = ? AND status = ? AND invocation_id = '' AND EXISTS (SELECT 1 FROM agent_plans WHERE agent_plans.id = agent_plan_steps.agent_plan_id AND agent_plans.current_revision = ? AND agent_plans.status = ?)",
+				strings.TrimSpace(planID), revision, ordinal, model.AgentPlanStepPending, revision, model.AgentPlanRunning).
+			Updates(map[string]any{"input_bindings_json": inputBindingsJSON, "status": model.AgentPlanStepReady, "updated_at": updatedAt})
+		if result.Error == nil {
+			if result.RowsAffected != 1 {
+				return ErrAgentPlanTransitionConflict
+			}
+			return nil
+		}
+		err = result.Error
+		if !isSQLiteContention(database, err) {
+			return err
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return err
+}
+
+func CancelAgentPlanTx(userID, planID, updatedAt string) (model.AgentPlan, error) {
+	database, err := DB()
+	if err != nil {
+		return model.AgentPlan{}, err
+	}
+	var plan model.AgentPlan
+	for range 20 {
+		err = database.Transaction(func(tx *gorm.DB) error {
+			query := tx.Where("id = ? AND user_id = ?", strings.TrimSpace(planID), strings.TrimSpace(userID)).Limit(1).Find(&plan)
+			if query.Error != nil {
+				return query.Error
+			}
+			if query.RowsAffected != 1 {
+				return ErrAgentPlanTransitionConflict
+			}
+			if plan.Status == model.AgentPlanCancelled {
+				return nil
+			}
+			allowed := []model.AgentPlanStatus{model.AgentPlanDraft, model.AgentPlanPreflight, model.AgentPlanAwaitingConfirmation, model.AgentPlanRunning, model.AgentPlanNeedsReview, model.AgentPlanBlocked}
+			result := tx.Model(&model.AgentPlan{}).Where("id = ? AND user_id = ? AND current_revision = ? AND status IN ?", plan.ID, plan.UserID, plan.CurrentRevision, allowed).
+				Updates(map[string]any{"status": model.AgentPlanCancelled, "updated_at": updatedAt})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return ErrAgentPlanTransitionConflict
+			}
+			if err := tx.Model(&model.AgentPlanStep{}).
+				Where("agent_plan_id = ? AND revision = ? AND status IN ?", plan.ID, plan.CurrentRevision,
+					[]model.AgentPlanStepStatus{model.AgentPlanStepPending, model.AgentPlanStepReady, model.AgentPlanStepQueued, model.AgentPlanStepRunning, model.AgentPlanStepNeedsReview}).
+				Updates(map[string]any{"status": model.AgentPlanStepCancelled, "updated_at": updatedAt}).Error; err != nil {
+				return err
+			}
+			plan.Status, plan.UpdatedAt = model.AgentPlanCancelled, updatedAt
+			return nil
+		})
+		if !isSQLiteContention(database, err) {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return plan, err
+}
+
 func UpdateAgentPlanStepResult(plan model.AgentPlan, step model.AgentPlanStep) error {
 	if step.AgentPlanID != plan.ID || step.UserID != plan.UserID || step.Revision != plan.CurrentRevision || step.InvocationID == "" {
 		return ErrAgentPlanTransitionConflict
@@ -335,7 +404,7 @@ func agentPlanStepPreviousStatuses(target model.AgentPlanStepStatus) []model.Age
 	case model.AgentPlanStepApproved:
 		return []model.AgentPlanStepStatus{model.AgentPlanStepNeedsReview}
 	case model.AgentPlanStepCompleted:
-		return []model.AgentPlanStepStatus{model.AgentPlanStepApproved}
+		return []model.AgentPlanStepStatus{model.AgentPlanStepQueued, model.AgentPlanStepRunning, model.AgentPlanStepNeedsReview, model.AgentPlanStepApproved}
 	case model.AgentPlanStepFailed:
 		return []model.AgentPlanStepStatus{model.AgentPlanStepQueued, model.AgentPlanStepRunning, model.AgentPlanStepNeedsReview}
 	case model.AgentPlanStepCancelled:

@@ -35,6 +35,7 @@ func PreflightAgentPlan(userID, planID string) (AgentPlanPreflightResult, error)
 	resolvedIndexes := map[string]int{}
 	requirementSet := map[string]bool{}
 	estimatedCredits := int64(0)
+	snapshot.Steps = make([]agentPlanStepPreflightSnapshot, 0, len(detail.Steps))
 	stamp := now()
 	for index, ref := range snapshot.Package.DefaultSkillRefs {
 		resolved, err := resolveAgentPlanSkillRef(userID, detail.Plan.ProjectID, snapshot.Package.SkillAccessPolicy, ref)
@@ -72,6 +73,7 @@ func PreflightAgentPlan(userID, planID string) (AgentPlanPreflightResult, error)
 			return AgentPlanPreflightResult{}, err
 		}
 		estimatedCredits += int64(policy.EstimatedCredits)
+		snapshot.Steps = append(snapshot.Steps, agentPlanStepPreflightSnapshot{StepKey: ref.StepKey, EstimatedCredits: policy.EstimatedCredits, RequirementCodes: codes})
 		bindingsJSON, _ := json.Marshal(bindings)
 		step := &detail.Steps[index]
 		step.InputBindings = bindings
