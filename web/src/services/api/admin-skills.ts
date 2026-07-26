@@ -38,6 +38,9 @@ export type SkillManifest = {
     estimatedCostClass: "none" | "text_low" | "text_high" | "image" | "video";
 };
 
+export type SkillArtifactInputSpec = { bindingName: string; artifactType: string; required: boolean; min: number; max: number; schemaConstraint: string; requiresApproval: boolean };
+export type SkillArtifactOutputSpec = { bindingName: string; artifactType: string; min: number; max: number; schemaVersion: string };
+
 export type SkillImagePolicy = {
     required: boolean;
     min: number;
@@ -131,6 +134,8 @@ export type SkillOption = Pick<SkillDefinition, "ownerType" | "ownerProjectId" |
     version: string;
     isRecommended: boolean;
     manifest: SkillManifest;
+    inputBindings: SkillArtifactInputSpec[];
+    outputBindings: SkillArtifactOutputSpec[];
 };
 
 const base = "/api/v1/admin";

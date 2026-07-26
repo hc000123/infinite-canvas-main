@@ -1,106 +1,128 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { App, Button, Empty, Spin, Tabs, Tag } from "antd";
+import { Bot, Boxes, Play, Workflow } from "lucide-react";
 import Link from "next/link";
-import { useMemo } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Button, Empty, Spin, Tag } from "antd";
+import { useParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
-import { useCanvasStore } from "../../../canvas/stores/use-canvas-store";
-import { useScriptStore } from "../../../canvas/stores/use-script-store";
-import { AgentWorkspacePanel } from "../../agent-settings-drawer";
-import type { AgentConfigKind } from "../../agent-settings";
+import { fetchSkillOptions } from "@/services/api/admin-skills";
+import { createAgent, fetchAgents, type AgentRegistryItem } from "@/services/api/agent-registry";
+import { useUserStore } from "@/stores/use-user-store";
 import { useCreativeProjectStore } from "../../use-creative-project-store";
+import { AgentRegistryList } from "./components/agent-registry-list";
+import { AgentRunConsole } from "./components/agent-run-console";
+import { AgentVersionEditor } from "./components/agent-version-editor";
 
-export default function ProjectAgentWorkspacePage() {
+const errorText = (error: unknown) => (error instanceof Error ? error.message : "操作失败");
+
+export default function ProjectAgentCenterPage() {
     const params = useParams<{ id: string }>();
-    const router = useRouter();
-    const searchParams = useSearchParams();
     const projectId = params.id;
+    const { message } = App.useApp();
+    const queryClient = useQueryClient();
+    const token = useUserStore((state) => state.token);
     const hydrated = useCreativeProjectStore((state) => state.hydrated);
     const project = useCreativeProjectStore((state) => state.projects.find((item) => item.id === projectId));
-    const canvases = useCanvasStore((state) => state.projects);
-    const updateCanvas = useCanvasStore((state) => state.updateProject);
-    const episodes = useScriptStore((state) => state.episodes);
-    const requestedCanvasId = searchParams.get("canvasId") || "";
-    const requestedEpisodeId = searchParams.get("episodeId") || "";
-    const requestedAgentKind = parseAgentKind(searchParams.get("agentKind"));
-    const requestedStageId = searchParams.get("stageId") || undefined;
-    const requestedTab = parseAgentTab(searchParams.get("tab"));
-    const canvas = useMemo(() => canvases.find((item) => item.id === requestedCanvasId && item.projectId === projectId), [canvases, projectId, requestedCanvasId]);
-    const episodeId = canvas?.episodeId || requestedEpisodeId || undefined;
-    const episodeTitle = canvas?.episodeTitle || episodes.find((item) => item.id === episodeId)?.title;
+    const [selectedAgentId, setSelectedAgentId] = useState("");
+    const [activeTab, setActiveTab] = useState("definition");
+
+    const agentsQuery = useQuery({
+        queryKey: ["agent-registry", projectId],
+        queryFn: () => fetchAgents(projectId),
+        enabled: hydrated && Boolean(project),
+        retry: false,
+    });
+    const skillOptionsQuery = useQuery({
+        queryKey: ["skill-options", projectId],
+        queryFn: () => fetchSkillOptions(token, { projectId }),
+        enabled: hydrated && Boolean(project) && Boolean(token),
+        retry: false,
+    });
+    const agents = useMemo(() => agentsQuery.data || [], [agentsQuery.data]);
+    const selectedAgent = agents.find((item) => item.agent.id === selectedAgentId);
+
+    useEffect(() => {
+        if (!agents.length) {
+            setSelectedAgentId("");
+            return;
+        }
+        if (!agents.some((item) => item.agent.id === selectedAgentId)) {
+            setSelectedAgentId(agents.find((item) => item.agent.ownerType === "project")?.agent.id || agents[0].agent.id);
+        }
+    }, [agents, selectedAgentId]);
+    useEffect(() => {
+        const error = agentsQuery.error || skillOptionsQuery.error;
+        if (error) message.error(errorText(error));
+    }, [agentsQuery.error, message, skillOptionsQuery.error]);
+
+    const copyMutation = useMutation({
+        mutationFn: async (item: AgentRegistryItem) => {
+            if (!item.recommendedPackage) throw new Error("该系统 Agent 暂无可复制的推荐版本");
+            const name = nextCopyName(item.agent.name, agents);
+            return createAgent({
+                projectId,
+                name,
+                summary: item.agent.summary,
+                tags: item.tags,
+                version: "1.0.0",
+                package: { ...structuredClone(item.recommendedPackage), contentHash: "" },
+            });
+        },
+        onSuccess: async (result) => {
+            await queryClient.invalidateQueries({ queryKey: ["agent-registry", projectId] });
+            setSelectedAgentId(result.agent.id);
+            setActiveTab("definition");
+            message.success("已复制为项目 Agent 草稿，可独立调整 Skill 组合");
+        },
+        onError: (error) => message.error(errorText(error)),
+    });
 
     if (!hydrated) {
-        return (
-            <main className="studio-shell grid h-full place-items-center px-6 py-10 text-[var(--studio-text-primary)]">
-                <Spin description="正在读取本地项目" />
-            </main>
-        );
+        return <main className="studio-shell grid h-full place-items-center px-6 py-10 text-[var(--studio-text-primary)]"><Spin description="正在读取本地项目" /></main>;
     }
-
     if (!project) {
-        return (
-            <main className="studio-shell h-full overflow-auto px-6 py-10 text-[var(--studio-text-primary)]">
-                <div className="mx-auto max-w-3xl">
-                    <Empty description="项目不存在或尚未加载">
-                        <div className="flex flex-wrap justify-center gap-2">
-                            <Button href="/projects">返回项目中心</Button>
-                        </div>
-                    </Empty>
-                </div>
-            </main>
-        );
+        return <main className="studio-shell grid h-full place-items-center px-6 py-10 text-[var(--studio-text-primary)]"><Empty description="项目不存在或尚未加载"><Button href="/projects">返回项目中心</Button></Empty></main>;
     }
 
     return (
         <main className="studio-shell h-full overflow-auto text-[var(--studio-text-primary)]">
-            <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10">
-                <header className="border-b border-[var(--studio-border-subtle)] pb-6">
-                    <Link href={`/projects/${project.id}`} className="text-xs text-[var(--studio-text-muted)] transition hover:text-[var(--studio-accent)]">
-                        {project.title}
-                    </Link>
+            <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-6 px-5 py-7 lg:px-8">
+                <header className="border-b border-[var(--studio-border-subtle)] pb-5">
+                    <Link href={`/projects/${project.id}`} className="text-xs text-[var(--studio-text-muted)] transition hover:text-[var(--studio-accent)]">{project.title}</Link>
                     <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
                         <div>
-                            <h1 className="text-3xl font-semibold">Agent 中心</h1>
-                            <p className="mt-2 text-sm text-[var(--studio-text-muted)]">项目级入口；固定 Agent 岗位，只集中选择各阶段 Skill 和模型配置，流程执行回到本集生产流程中完成。</p>
+                            <div className="flex items-center gap-2"><Bot className="size-6 text-[var(--studio-accent)]" /><h1 className="text-3xl font-semibold">Agent 中心</h1></div>
+                            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--studio-text-secondary)]">Agent 负责规划、权限和 Skill 顺序；Skill 保持独立版本。定义一次后，可由工作流、画布、图片或 API 共用同一套运行时。</p>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                            {canvas ? <Tag className="m-0">{canvas.title}</Tag> : null}
-                            {episodeTitle ? <Tag className="m-0">{episodeTitle}</Tag> : null}
-                            {requestedCanvasId && !canvas ? <Tag className="m-0">未找到画布上下文</Tag> : null}
-                        </div>
+                        <div className="flex flex-wrap gap-2"><Tag icon={<Workflow className="size-3.5" />}>{agents.length} 个 Agent</Tag><Tag icon={<Boxes className="size-3.5" />}>{skillOptionsQuery.data?.length || 0} 个可用 Skill 版本</Tag></div>
                     </div>
                 </header>
 
-                <AgentWorkspacePanel
-                    projectId={project.id}
-                    projectTitle={project.title}
-                    canvasId={canvas?.id}
-                    episodeId={episodeId}
-                    episodeTitle={episodeTitle}
-                    initialAgentKind={requestedAgentKind}
-                    initialStageId={requestedStageId}
-                    initialTab={requestedTab === "workflow" ? "agent-presets" : requestedTab}
-                    settingsOnly
-                    canvasNodes={canvas?.nodes}
-                    onApplyVideoPreviewNodes={
-                        canvas
-                            ? ({ nodes, focusNodeIds }) => {
-                                  updateCanvas(canvas.id, { nodes });
-                                  if (focusNodeIds[0]) router.push(`/canvas/${canvas.id}?focusNodeId=${focusNodeIds[0]}`);
-                              }
-                            : undefined
-                    }
-                />
+                <div className="grid min-w-0 gap-5 xl:grid-cols-[310px_minmax(0,1fr)]">
+                    <AgentRegistryList items={agents} loading={agentsQuery.isLoading} selectedAgentId={selectedAgentId} copying={copyMutation.isPending} onCopy={(item) => copyMutation.mutate(item)} onSelect={setSelectedAgentId} />
+                    <div className="min-w-0">
+                        <Tabs
+                            activeKey={activeTab}
+                            onChange={setActiveTab}
+                            items={[
+                                { key: "definition", label: <span className="inline-flex items-center gap-2"><Boxes className="size-4" />定义与版本</span>, children: <AgentVersionEditor item={selectedAgent} projectId={projectId} skillOptions={skillOptionsQuery.data || []} /> },
+                                { key: "run", label: <span className="inline-flex items-center gap-2"><Play className="size-4" />运行与产物</span>, children: <AgentRunConsole item={selectedAgent} projectId={projectId} skillOptions={skillOptionsQuery.data || []} /> },
+                            ]}
+                        />
+                    </div>
+                </div>
             </div>
         </main>
     );
 }
 
-function parseAgentKind(value: string | null): AgentConfigKind | undefined {
-    return ["script_optimizer", "script_analyzer", "asset_extractor", "storyboard_director", "image_brief_builder", "video_prompt_builder", "prompt_reviewer"].includes(value || "") ? (value as AgentConfigKind) : undefined;
-}
-
-function parseAgentTab(value: string | null): "agent-presets" | "workflow" | undefined {
-    return value === "agent-presets" || value === "workflow" ? value : undefined;
+function nextCopyName(sourceName: string, items: AgentRegistryItem[]) {
+    const used = new Set(items.filter((item) => item.agent.ownerType === "project").map((item) => item.agent.name));
+    const base = `${sourceName}（项目版）`;
+    if (!used.has(base)) return base;
+    let suffix = 2;
+    while (used.has(`${base} ${suffix}`)) suffix += 1;
+    return `${base} ${suffix}`;
 }

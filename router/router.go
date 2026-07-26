@@ -46,6 +46,9 @@ func New() *gin.Engine {
 	v1.POST("/agents/:id/versions", func(c *gin.Context) {
 		handler.CreateAgentVersion(c.Writer, c.Request, c.Param("id"))
 	})
+	v1.GET("/agent-versions/:id", func(c *gin.Context) {
+		handler.AgentVersionDetail(c.Writer, c.Request, c.Param("id"))
+	})
 	v1.PATCH("/agent-versions/:id", func(c *gin.Context) {
 		handler.UpdateAgentVersion(c.Writer, c.Request, c.Param("id"))
 	})

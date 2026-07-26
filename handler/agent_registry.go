@@ -52,6 +52,20 @@ func AgentDetail(w http.ResponseWriter, r *http.Request, id string) {
 	OK(w, result)
 }
 
+func AgentVersionDetail(w http.ResponseWriter, r *http.Request, id string) {
+	user, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	result, err := service.GetVisibleAgentVersion(user.ID, id)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
 func CreateAgentVersion(w http.ResponseWriter, r *http.Request, agentID string) {
 	user, ok := service.UserFromContext(r.Context())
 	if !ok {

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -90,8 +91,12 @@ func TestListSkillOptionsFiltersManifestWithoutReturningFiles(t *testing.T) {
 		recommended = items[1]
 	}
 	if recommended.SkillName != "分镜拆解" || recommended.Version != "3.1.0" ||
-		recommended.SkillVersionID == "" || !recommended.IsRecommended {
+		recommended.SkillVersionID == "" || !recommended.IsRecommended || len(recommended.InputBindings) == 0 || len(recommended.OutputBindings) == 0 {
 		t.Fatalf("recommended=%+v", recommended)
+	}
+	raw, _ := json.Marshal(recommended)
+	if strings.Contains(string(raw), "SKILL.md") || strings.Contains(string(raw), "qualityGateProfile") {
+		t.Fatalf("option exposed Skill implementation: %s", raw)
 	}
 }
 

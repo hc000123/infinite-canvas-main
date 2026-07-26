@@ -122,6 +122,10 @@ export function createAgentVersion(agentId: string, input: AgentDraftInput) {
     return apiPost<AgentVersion>(`/api/v1/agents/${encodeURIComponent(agentId)}/versions`, input, token());
 }
 
+export function fetchAgentVersion(id: string) {
+    return apiGet<AgentVersionDetail>(`/api/v1/agent-versions/${encodeURIComponent(id)}`, undefined, token());
+}
+
 export function updateAgentVersion(id: string, input: AgentDraftInput) {
     return apiPatch<AgentVersion>(`/api/v1/agent-versions/${encodeURIComponent(id)}`, input, token());
 }

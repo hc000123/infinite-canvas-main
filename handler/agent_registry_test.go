@@ -24,6 +24,10 @@ func TestAgentRegistryHTTPIsolatesProjectOwners(t *testing.T) {
 	if created.Agent.OwnerType != model.AgentOwnerProject || created.Agent.OwnerProjectID != "project-http" || created.Version.Status != model.AgentVersionDraft {
 		t.Fatalf("created=%#v", created)
 	}
+	versionDetail := invocationHTTPCall(t, app, http.MethodGet, "/api/v1/agent-versions/"+created.Version.ID, ownerToken, nil)
+	if versionDetail.Code != 0 || !strings.Contains(versionDetail.Raw, "负责按顺序调度已发布 Skill") {
+		t.Fatalf("version detail response=%s", versionDetail.Raw)
+	}
 	for _, forbidden := range []string{"defaultSkillRefsJSON", "skillAccessPolicyJSON", "modelPolicyJSON", "toolPolicyJSON", "executionPolicyJSON"} {
 		if strings.Contains(createdResponse.Raw, forbidden) {
 			t.Fatalf("create exposed persistence field %q: %s", forbidden, createdResponse.Raw)
@@ -45,6 +49,7 @@ func TestAgentRegistryHTTPIsolatesProjectOwners(t *testing.T) {
 		body   any
 	}{
 		{http.MethodGet, "/api/v1/agents/" + created.Agent.ID + "?projectId=project-http", nil},
+		{http.MethodGet, "/api/v1/agent-versions/" + created.Version.ID, nil},
 		{http.MethodPatch, "/api/v1/agent-versions/" + created.Version.ID, map[string]any{"version": "1.0.0", "package": body["package"]}},
 		{http.MethodPost, "/api/v1/agent-versions/" + created.Version.ID + "/validate", map[string]any{}},
 		{http.MethodPost, "/api/v1/agent-versions/" + created.Version.ID + "/publish", map[string]any{}},

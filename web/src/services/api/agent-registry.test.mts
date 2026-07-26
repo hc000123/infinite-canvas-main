@@ -10,6 +10,7 @@ test("uses authenticated /api/v1 Agent Registry routes", () => {
         'apiPost<AgentVersionDetail>("/api/v1/agents"',
         '`/api/v1/agents/${encodeURIComponent(id)}`',
         '`/api/v1/agents/${encodeURIComponent(agentId)}/versions`',
+        'apiGet<AgentVersionDetail>(`/api/v1/agent-versions/${encodeURIComponent(id)}`',
         '`/api/v1/agent-versions/${encodeURIComponent(id)}`',
         '`/api/v1/agent-versions/${encodeURIComponent(id)}/validate`',
         '`/api/v1/agent-versions/${encodeURIComponent(id)}/publish`',

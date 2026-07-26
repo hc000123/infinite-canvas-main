@@ -191,6 +191,28 @@ func GetVisibleAgent(userID, projectID, agentID string) (AgentRegistryItem, erro
 	return item, nil
 }
 
+func GetVisibleAgentVersion(userID, versionID string) (AgentVersionDetail, error) {
+	version, ok, err := repository.GetAgentVersion(strings.TrimSpace(versionID))
+	if err != nil {
+		return AgentVersionDetail{}, err
+	}
+	if !ok {
+		return AgentVersionDetail{}, safeMessageError{message: "Agent 版本不存在"}
+	}
+	agent, ok, err := repository.GetAgentDefinition(version.AgentID)
+	if err != nil {
+		return AgentVersionDetail{}, err
+	}
+	if !ok || !agentVisibleTo(agent, strings.TrimSpace(userID), agent.OwnerProjectID) {
+		return AgentVersionDetail{}, safeMessageError{message: "Agent 版本不存在"}
+	}
+	packageValue, err := DecodeAgentPackage(version)
+	if err != nil {
+		return AgentVersionDetail{}, err
+	}
+	return AgentVersionDetail{Agent: agent, Version: version, Package: packageValue, Tags: decodeAgentTags(agent.TagsJSON)}, nil
+}
+
 func CreateAgentDraft(userID, agentID string, input AgentDraftInput) (model.AgentVersion, error) {
 	agent, err := editableAgent(userID, agentID)
 	if err != nil {

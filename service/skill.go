@@ -54,6 +54,8 @@ type SkillOption struct {
 	Version        string               `json:"version"`
 	IsRecommended  bool                 `json:"isRecommended"`
 	Manifest       SkillManifest        `json:"manifest"`
+	InputBindings  []ArtifactInputSpec  `json:"inputBindings"`
+	OutputBindings []ArtifactOutputSpec `json:"outputBindings"`
 }
 
 func ListSkillAdminItems() ([]SkillAdminItem, error) {
@@ -335,7 +337,11 @@ func ListSkillOptions(userID, projectID string, filter SkillOptionFilter) ([]Ski
 			if !skillManifestMatches(packageValue.Manifest, filter) {
 				continue
 			}
-			items = append(items, SkillOption{SkillID: skill.ID, SkillName: skill.Name, Summary: skill.Summary, OwnerType: skill.OwnerType, OwnerProjectID: skill.OwnerProjectID, SkillVersionID: version.ID, Version: version.Version, IsRecommended: version.ID == skill.RecommendedVersionID, Manifest: packageValue.Manifest})
+			items = append(items, SkillOption{
+				SkillID: skill.ID, SkillName: skill.Name, Summary: skill.Summary, OwnerType: skill.OwnerType, OwnerProjectID: skill.OwnerProjectID,
+				SkillVersionID: version.ID, Version: version.Version, IsRecommended: version.ID == skill.RecommendedVersionID, Manifest: packageValue.Manifest,
+				InputBindings: packageValue.InputContract.ArtifactInputs, OutputBindings: packageValue.OutputContract.ArtifactOutputs,
+			})
 		}
 	}
 	return items, nil
