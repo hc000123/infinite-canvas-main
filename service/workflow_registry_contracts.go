@@ -1,6 +1,10 @@
 package service
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/basketikun/infinite-canvas/model"
+)
 
 const (
 	WorkflowExecutorSkill = "skill"
@@ -75,4 +79,47 @@ type WorkflowConfirmationPolicy struct {
 
 type WorkflowRetryPolicy struct {
 	MaxAttempts int `json:"maxAttempts"`
+}
+
+type WorkflowCreateInput struct {
+	ProjectID string          `json:"projectId"`
+	Name      string          `json:"name"`
+	Summary   string          `json:"summary"`
+	Tags      []string        `json:"tags"`
+	Version   string          `json:"version"`
+	Package   WorkflowPackage `json:"package"`
+}
+
+type WorkflowDraftInput struct {
+	Version string          `json:"version"`
+	Package WorkflowPackage `json:"package"`
+}
+
+type WorkflowVersionDetail struct {
+	Workflow model.WorkflowDefinition `json:"workflow"`
+	Version  model.WorkflowVersion    `json:"version"`
+	Package  WorkflowPackage          `json:"package"`
+	Tags     []string                 `json:"tags"`
+}
+
+type WorkflowRegistryItem struct {
+	Workflow           model.WorkflowDefinition `json:"workflow"`
+	Tags               []string                 `json:"tags"`
+	Versions           []model.WorkflowVersion  `json:"versions"`
+	RecommendedPackage *WorkflowPackage         `json:"recommendedPackage"`
+}
+
+type ResolvedWorkflowNode struct {
+	NodeKey          string `json:"nodeKey"`
+	ExecutorType     string `json:"executorType"`
+	AgentID          string `json:"agentId,omitempty"`
+	AgentVersionID   string `json:"agentVersionId,omitempty"`
+	SkillID          string `json:"skillId,omitempty"`
+	SkillVersionID   string `json:"skillVersionId,omitempty"`
+	SkillContentHash string `json:"skillContentHash,omitempty"`
+}
+
+type WorkflowValidationResult struct {
+	ContentHash   string                 `json:"contentHash"`
+	ResolvedNodes []ResolvedWorkflowNode `json:"resolvedNodes"`
 }
