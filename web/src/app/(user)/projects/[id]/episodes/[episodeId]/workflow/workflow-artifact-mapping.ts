@@ -48,15 +48,15 @@ function parseAssetItems(contentJson: string): WorkflowArtItem[] {
         if (!Array.isArray(parsed.items)) return [];
         return parsed.items.map((item) => {
             const row = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
-            const logicalAssetId = readString(row.logicalAssetId) || readString(row.id);
-            const imagePrompt = readString(row.imagePrompt) || readString(row.prompt);
+            const logicalAssetId = readString(row.logicalAssetId) || readString(row.assetId) || readString(row.id);
+            const imagePrompt = readString(row.imagePrompt) || readString(row.brief) || readString(row.prompt);
             return {
                 logicalAssetId,
                 id: logicalAssetId,
                 kind: readString(row.kind),
                 name: readString(row.name),
-                scriptEvidence: readString(row.scriptEvidence) || readString(row.sourceText),
-                description: readString(row.description),
+                scriptEvidence: readString(row.scriptEvidence) || readStringArray(row.sourceEvidence).join("\n") || readString(row.sourceText),
+                description: readString(row.description) || readStringArray(row.coreFacts).join("；"),
                 imagePrompt,
                 prompt: imagePrompt,
                 status: readString(row.status) || "ready",
@@ -99,3 +99,4 @@ function matchesScopedWorkflowName(asset: WorkflowArtifactAsset, name: string, s
 function normalizeName(value: string) { return value.trim().replace(/\s+/g, " ").toLowerCase(); }
 
 function readString(value: unknown) { return typeof value === "string" ? value.trim() : ""; }
+function readStringArray(value: unknown) { return Array.isArray(value) ? value.map(readString).filter(Boolean) : []; }

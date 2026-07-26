@@ -3,6 +3,16 @@ import test from "node:test";
 
 import { mapAssetDesignArtifactToAssets, mapArtArtifactToAssets } from "./workflow-artifact-mapping.ts";
 
+test("maps standard asset catalog and brief projection fields without losing stable ids", () => {
+    const artifact = JSON.stringify({ items: [{ assetId: "character-001", kind: "character", name: "林秋", sourceEvidence: ["林秋站在站牌下。", "林秋低声说"], coreFacts: ["主要角色", "手持车票"], brief: "角色四视图，保持车票", format: "character-four-view" }] });
+    const result = mapAssetDesignArtifactToAssets(artifact, [], { episodeId: "e1", projectId: "p1" });
+
+    assert.equal(result.items[0].logicalAssetId, "character-001");
+    assert.equal(result.items[0].scriptEvidence, "林秋站在站牌下。\n林秋低声说");
+    assert.equal(result.items[0].description, "主要角色；手持车票");
+    assert.equal(result.items[0].imagePrompt, "角色四视图，保持车票");
+});
+
 test("keeps one library record for every logical asset across prompt and image updates", () => {
     const artifact = JSON.stringify({ items: [{ logicalAssetId: "CHAR-001", kind: "character", name: "林夏", scriptEvidence: "林夏穿黄色雨衣", description: "年轻女性，黄色雨衣", imagePrompt: "真实影视角色设定板", status: "ready" }] });
     const existing = [{ id: "library-char-1", kind: "image", title: "林夏", metadata: { originalWorkflow: { importKey: "p1:e1:CHAR-001", logicalAssetId: "CHAR-001", version: "v2" } } }];

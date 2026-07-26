@@ -19,8 +19,8 @@ export function summarizeWorkflowStages(input: WorkflowStageSummaryInput): Workf
     const status = (id: string) => latest.get(id)?.status;
     const extraction = remoteStatus(status("asset-extraction"), input.workerReady, input.scriptReady);
     const imagePrompt = remoteStatus(status("asset-image-prompt"), input.workerReady, done(extraction));
-    const assetsReady = imagePrompt === "applied";
-    const breakdown = remoteStatus(status("shot-breakdown"), input.workerReady, assetsReady);
+    const assetCatalogReady = done(extraction);
+    const breakdown = remoteStatus(status("shot-breakdown"), input.workerReady, assetCatalogReady);
     const shotPrompt = status("shot-prompt");
     const packages = input.packageCount || 0;
     const generated = input.generatedCount || 0;
@@ -33,7 +33,7 @@ export function summarizeWorkflowStages(input: WorkflowStageSummaryInput): Workf
         }
         if (stage.key === "video") {
             const active = !done(breakdown) ? breakdown : shotPrompt && ["queued", "running", "cancel_requested", "needs_review", "failed", "rejected"].includes(shotPrompt) ? shotPrompt : packages ? (generated === packages ? "complete" : "ready") : breakdown;
-            return { ...stage, status: active, count: packages ? `${generated}/${packages}` : undefined, blockingReason: active === "blocked" ? !assetsReady ? "请先生成并绑定全部资产草图" : workerReason(input.workerReady, true) : undefined };
+            return { ...stage, status: active, count: packages ? `${generated}/${packages}` : undefined, blockingReason: active === "blocked" ? !input.workerReady ? workerReason(false, true) : !assetCatalogReady ? "请先完成并批准资产提取" : undefined : undefined };
         }
         return { ...stage, status: packages && generated === packages ? "complete" : packages ? "ready" : "idle", count: packages ? `${generated}/${packages}` : undefined };
     });

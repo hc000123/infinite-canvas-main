@@ -22,6 +22,7 @@ export type RemoteWorkflowStageRun = {
     workflowRunId: string;
     stageId: string;
     parentStageRunId: string;
+    invocationId: string;
     agentRunId: string;
     attempt: number;
     status: RemoteWorkflowStageStatus;
@@ -55,6 +56,8 @@ export type RemoteWorkflowArtifact = {
     templateVersion: string;
     contentJson: string;
     contentHash: string;
+    artifactSetHash: string;
+    artifactIds: string[];
     createdAt: string;
 };
 

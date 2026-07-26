@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { workflowRunRequest, workflowStageSkillCapability } from "./workflow-runs-contract.ts";
+
+test("exposes invocation and artifact-set coordinates on workflow projections", () => {
+    const source = readFileSync(new URL("./workflow-runs-contract.ts", import.meta.url), "utf8");
+    assert.match(source, /invocationId:\s*string/);
+    assert.match(source, /artifactSetHash:\s*string/);
+    assert.match(source, /artifactIds:\s*string\[\]/);
+});
 
 test("starts a shot prompt stage with media and confirmed-shot context", () => {
     const context = {
