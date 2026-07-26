@@ -33,6 +33,9 @@ type AgentRun struct {
 	ProjectID           string         `json:"projectId" gorm:"index"`
 	EpisodeID           string         `json:"episodeId" gorm:"index"`
 	WorkflowRunID       string         `json:"workflowRunId" gorm:"index"`
+	InvocationID        string         `json:"invocationId" gorm:"index"`
+	InvocationRevision  int            `json:"invocationRevision"`
+	InvocationAttempt   int            `json:"invocationAttempt"`
 	StageID             string         `json:"stageId" gorm:"index"`
 	AgentKind           string         `json:"agentKind" gorm:"index"`
 	Executor            string         `json:"executor" gorm:"index"`

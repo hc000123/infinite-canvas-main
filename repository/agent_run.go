@@ -152,9 +152,11 @@ func RequeueExpiredAgentRuns(now time.Time) (int64, error) {
 				"updated_at":       nowText,
 			}
 			if run.Status == model.AgentRunStatusCancelRequested {
+				status = model.AgentRunStatusCancelled
 				updates["status"] = model.AgentRunStatusCancelled
 				updates["finished_at"] = nowText
 			} else if run.MaxAttempts > 0 && run.Attempt >= run.MaxAttempts {
+				status = model.AgentRunStatusFailed
 				updates["status"] = model.AgentRunStatusFailed
 				updates["finished_at"] = nowText
 				updates["error_message"] = "Worker 租约过期且已达到最大重试次数"
@@ -206,6 +208,20 @@ func RequeueExpiredAgentRuns(now time.Time) (int64, error) {
 					if runUpdate.RowsAffected != 1 {
 						return ErrInvocationTransitionConflict
 					}
+					if status == model.AgentRunStatusCancelled || status == model.AgentRunStatusFailed {
+						reserved, refunded, settleErr := settleInvocationCreditsTx(tx, run, status, nowText, "")
+						if settleErr != nil {
+							return settleErr
+						}
+						if err := tx.Model(&model.AgentRun{}).Where("id = ? AND status = ?", run.ID, status).
+							Updates(map[string]any{"credits_reserved": reserved, "credits_refunded": refunded}).Error; err != nil {
+							return err
+						}
+						if err := tx.Model(&model.InvocationAttempt{}).Where("id = ? AND status = ?", invocationAttempt.ID, attemptStatus).
+							Updates(map[string]any{"credits_reserved": reserved, "credits_refunded": refunded}).Error; err != nil {
+							return err
+						}
+					}
 					if err := tx.Create(&model.InvocationEvent{UserID: invocationAttempt.UserID, InvocationID: invocationAttempt.InvocationID, Type: eventType, Level: "warning", DataJSON: `{}`, Revision: invocationAttempt.Revision, Attempt: invocationAttempt.Attempt, CreatedAt: nowText}).Error; err != nil {
 						return err
 					}
@@ -223,25 +239,43 @@ func RequestAgentRunCancel(userID string, id string) (model.AgentRun, error) {
 	if err != nil {
 		return model.AgentRun{}, err
 	}
-	var run model.AgentRun
-	if err := db.Where("id = ? AND user_id = ?", strings.TrimSpace(id), strings.TrimSpace(userID)).First(&run).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return model.AgentRun{}, ErrAgentRunNotFound
+	id, userID = strings.TrimSpace(id), strings.TrimSpace(userID)
+	for range 8 {
+		var run model.AgentRun
+		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&run).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return model.AgentRun{}, ErrAgentRunNotFound
+			}
+			return model.AgentRun{}, err
 		}
-		return model.AgentRun{}, err
-	}
-	nowText := time.Now().UTC().Format(time.RFC3339Nano)
-	switch run.Status {
-	case model.AgentRunStatusCreated, model.AgentRunStatusQueued:
-		run.Status = model.AgentRunStatusCancelled
-		run.FinishedAt = nowText
-	case model.AgentRunStatusRunning:
-		run.Status = model.AgentRunStatusCancelRequested
-	default:
+		nowText := time.Now().UTC().Format(time.RFC3339Nano)
+		targetStatus := run.Status
+		updates := map[string]any{"updated_at": nowText}
+		switch run.Status {
+		case model.AgentRunStatusCreated, model.AgentRunStatusQueued:
+			targetStatus = model.AgentRunStatusCancelled
+			updates["status"] = targetStatus
+			updates["finished_at"] = nowText
+		case model.AgentRunStatusRunning:
+			targetStatus = model.AgentRunStatusCancelRequested
+			updates["status"] = targetStatus
+		default:
+			return run, nil
+		}
+		result := db.Model(&model.AgentRun{}).Where("id = ? AND user_id = ? AND status = ?", run.ID, run.UserID, run.Status).Updates(updates)
+		if result.Error != nil {
+			return run, result.Error
+		}
+		if result.RowsAffected == 0 {
+			continue
+		}
+		run.Status, run.UpdatedAt = targetStatus, nowText
+		if targetStatus == model.AgentRunStatusCancelled {
+			run.FinishedAt = nowText
+		}
 		return run, nil
 	}
-	run.UpdatedAt = nowText
-	return run, db.Save(&run).Error
+	return model.AgentRun{}, ErrInvocationTransitionConflict
 }
 
 func GetAgentRunQueueStats(now time.Time) (AgentRunQueueStats, error) {

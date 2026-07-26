@@ -37,9 +37,9 @@ func queuedInvocationFixture(id string) (model.InvocationRun, model.InvocationAt
 	run.Status = model.InvocationStatusQueued
 	run.LatestAttempt = 1
 	run.UpdatedAt = invocationTestTime.Add(time.Minute).Format(time.RFC3339Nano)
-	attempt := model.InvocationAttempt{ID: id + "-attempt-1", UserID: run.UserID, InvocationID: id, AgentRunID: id + "-agent", Status: string(model.AgentRunStatusQueued), Revision: 1, Attempt: 1, CreatedAt: run.UpdatedAt, UpdatedAt: run.UpdatedAt}
-	key := id + "-agent-key"
-	agentRun := model.AgentRun{ID: attempt.AgentRunID, UserID: run.UserID, ProjectID: run.ProjectID, EpisodeID: run.EpisodeID, Status: model.AgentRunStatusQueued, IdempotencyKey: &key, AvailableAt: run.UpdatedAt, MaxAttempts: 3, CreatedAt: run.UpdatedAt, UpdatedAt: run.UpdatedAt}
+	attempt := model.InvocationAttempt{ID: id + "-attempt-1", UserID: run.UserID, InvocationID: id, AgentRunID: id + "-agent", Status: string(model.AgentRunStatusQueued), Revision: 1, Attempt: 1, Model: "text-test", ChannelID: "text-channel", ExecutorKind: "api", CreatedAt: run.UpdatedAt, UpdatedAt: run.UpdatedAt}
+	key := "invocation:" + id + ":revision:1:attempt:1"
+	agentRun := model.AgentRun{ID: attempt.AgentRunID, UserID: run.UserID, ProjectID: run.ProjectID, EpisodeID: run.EpisodeID, InvocationID: run.ID, InvocationRevision: 1, InvocationAttempt: 1, Executor: attempt.ExecutorKind, Model: attempt.Model, ChannelID: attempt.ChannelID, Status: model.AgentRunStatusQueued, IdempotencyKey: &key, AvailableAt: run.UpdatedAt, MaxAttempts: 1, CreatedAt: run.UpdatedAt, UpdatedAt: run.UpdatedAt}
 	agentRun.AvailableAt = ""
 	refs := []model.InvocationArtifactRef{{ID: id + "-queued-input", UserID: run.UserID, InvocationID: id, Direction: "input", BindingName: "source", ArtifactID: id + "-artifact-input", ArtifactHash: "input-hash", ArtifactType: "source_text", SchemaVersion: "1.0.0", SchemaContentHash: "schema-hash", Revision: 1, Attempt: 1, Ordinal: 0, CreatedAt: run.UpdatedAt}}
 	event := model.InvocationEvent{UserID: run.UserID, InvocationID: id, Type: "invocation.queued", Level: "info", Revision: 1, Attempt: 1, DataJSON: `{}`, CreatedAt: run.UpdatedAt}

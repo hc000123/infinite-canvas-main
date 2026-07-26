@@ -33,13 +33,19 @@ type InvocationExecutionPolicyOverride struct {
 
 type InvocationExecutionPolicy struct {
 	ExecutorKind         string `json:"executorKind"`
+	AgentExecutor        string `json:"agentExecutor"`
 	Model                string `json:"model"`
 	ChannelID            string `json:"channelId"`
 	FallbackAllowed      bool   `json:"fallbackAllowed"`
 	RequiresConfirmation bool   `json:"requiresConfirmation"`
+	Credits              int    `json:"credits"`
 	EstimatedCredits     int    `json:"estimatedCredits"`
 	TimeoutSeconds       int    `json:"timeoutSeconds"`
+	ConcurrencyLimit     int    `json:"concurrencyLimit"`
+	AllowBatch           bool   `json:"allowBatch"`
 	MaxAttempts          int    `json:"maxAttempts"`
+	WritePolicy          string `json:"writePolicy"`
+	RequiresConfirm      bool   `json:"requiresConfirm"`
 }
 
 type InvocationRouteTrace struct {

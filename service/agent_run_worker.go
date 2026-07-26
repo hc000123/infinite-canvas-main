@@ -38,7 +38,9 @@ type AgentRunWorker struct {
 type agentRunCallResult struct {
 	rawOutput      string
 	structuredJSON string
+	toolTraceJSON  string
 	message        string
+	errorClass     string
 	retryable      bool
 }
 
@@ -121,7 +123,7 @@ func (w *AgentRunWorker) ProcessOne(ctx context.Context) error {
 	if _, err := repository.RequeueExpiredAgentRuns(currentTime); err != nil {
 		return err
 	}
-	run, ok, err := repository.ClaimNextAgentRunWithUserLimit(w.id, currentTime, w.leaseDuration, w.userConcurrency)
+	run, ok, err := repository.ClaimNextAgentRunWithInvocationTx(w.id, w.leaseDuration, w.userConcurrency)
 	if err != nil || !ok {
 		return err
 	}
@@ -129,6 +131,9 @@ func (w *AgentRunWorker) ProcessOne(ctx context.Context) error {
 }
 
 func (w *AgentRunWorker) execute(ctx context.Context, run model.AgentRun) error {
+	if run.InvocationID != "" {
+		return w.executeInvocation(ctx, run)
+	}
 	leaseOwner := run.LeaseOwner
 	if err := SyncWorkflowStageFromAgentRun(run); err != nil {
 		return err
@@ -188,6 +193,72 @@ func (w *AgentRunWorker) execute(ctx context.Context, run model.AgentRun) error 
 		return errors.New("Agent Run 完成时租约已失效")
 	}
 	return CompleteWorkflowStageAgentRun(run)
+}
+
+func (w *AgentRunWorker) executeInvocation(ctx context.Context, run model.AgentRun) error {
+	if err := validateClaimedInvocationAgentRun(run); err != nil {
+		return w.finishInvocationFailure(&run, "execution_target_unavailable", err.Error())
+	}
+	frozenExecutor := strings.TrimSpace(run.Executor)
+	if frozenExecutor == "" || frozenExecutor != w.executor.Kind() {
+		return w.finishInvocationFailure(&run, "execution_target_unavailable", "任务执行器与当前 Worker 不匹配")
+	}
+	if err := w.executor.Available(ctx); err != nil {
+		return w.finishInvocationFailure(&run, "execution_target_unavailable", err.Error())
+	}
+	if cancelled, err := agentRunCancellationRequested(run.ID); err != nil {
+		return err
+	} else if cancelled {
+		return w.finishInvocationCancelled(&run)
+	}
+	reservedRun, err := repository.ReserveInvocationAttemptCreditsTx(run, workerTime(w.now()))
+	if err != nil {
+		return w.finishInvocationFailure(&run, "execution_target_unavailable", err.Error())
+	}
+	run = reservedRun
+	if err := validateClaimedInvocationAgentRun(run); err != nil {
+		return w.finishInvocationFailure(&run, "execution_target_unavailable", err.Error())
+	}
+	callCtx, cancel := context.WithCancel(ctx)
+	monitorDone := make(chan struct{})
+	go w.maintainLease(callCtx, run.ID, cancel, monitorDone)
+	startedAt := time.Now()
+	result := w.executor.Call(callCtx, run)
+	cancel()
+	<-monitorDone
+	run.DurationMs = time.Since(startedAt).Milliseconds()
+	if cancelled, err := agentRunCancellationRequested(run.ID); err != nil {
+		return err
+	} else if cancelled {
+		return w.finishInvocationCancelled(&run)
+	}
+	if result.message != "" {
+		errorClass := result.errorClass
+		if errorClass == "" {
+			errorClass = "execution_failure"
+		}
+		return w.finishInvocationFailure(&run, errorClass, result.message)
+	}
+	err = finalizeInvocationAgentRun(run, result, workerTime(w.now()))
+	if !errors.Is(err, repository.ErrInvocationTransitionConflict) {
+		return err
+	}
+	current, ok, readErr := repository.GetAgentRun(run.ID)
+	if readErr != nil {
+		return readErr
+	}
+	if !ok || current.Status != model.AgentRunStatusCancelRequested {
+		return err
+	}
+	return w.finishInvocationCancelled(&current)
+}
+
+func (w *AgentRunWorker) finishInvocationFailure(run *model.AgentRun, errorClass, message string) error {
+	return finalizeInvocationTerminal(*run, model.AgentRunStatusFailed, model.InvocationStatusFailed, errorClass, strings.TrimSpace(message), workerTime(w.now()))
+}
+
+func (w *AgentRunWorker) finishInvocationCancelled(run *model.AgentRun) error {
+	return finalizeInvocationTerminal(*run, model.AgentRunStatusCancelled, model.InvocationStatusCancelled, "cancelled", "", workerTime(w.now()))
 }
 
 func (w *AgentRunWorker) maintainLease(ctx context.Context, id string, cancel context.CancelFunc, done chan<- struct{}) {

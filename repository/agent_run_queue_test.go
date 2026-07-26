@@ -2,10 +2,12 @@ package repository
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/basketikun/infinite-canvas/model"
+	"gorm.io/gorm"
 )
 
 func TestClaimAgentRunOnlyOnce(t *testing.T) {
@@ -152,6 +154,106 @@ func TestRequestAgentRunCancelPreventsClaim(t *testing.T) {
 	}
 	if claimed, ok, err := ClaimNextAgentRun("worker-a", now, time.Minute); err != nil || ok {
 		t.Fatalf("claimed=%#v ok=%v err=%v", claimed, ok, err)
+	}
+}
+
+func TestRequestAgentRunCancelRetriesQueuedToRunningClaimRace(t *testing.T) {
+	setupRepositoryTestDB(t)
+	now := time.Date(2026, 7, 21, 10, 0, 0, 0, time.UTC)
+	run := queueTestAgentRun("run-cancel-claim-race", "idem-cancel-claim-race", now)
+	if _, err := SaveAgentRun(run); err != nil {
+		t.Fatal(err)
+	}
+	read, resume := pauseFirstAgentRunRead(t, run.ID)
+	result := make(chan struct {
+		run model.AgentRun
+		err error
+	}, 1)
+	go func() {
+		cancelled, err := RequestAgentRunCancel(run.UserID, run.ID)
+		result <- struct {
+			run model.AgentRun
+			err error
+		}{run: cancelled, err: err}
+	}()
+	waitAgentRunRead(t, read)
+	claimed, ok, err := ClaimNextAgentRun("worker-a", now, time.Minute)
+	if err != nil || !ok || claimed.ID != run.ID || claimed.Status != model.AgentRunStatusRunning {
+		t.Fatalf("claimed=%#v ok=%v err=%v", claimed, ok, err)
+	}
+	close(resume)
+	cancelled := <-result
+	if cancelled.err != nil || cancelled.run.Status != model.AgentRunStatusCancelRequested {
+		t.Fatalf("cancelled=%#v err=%v", cancelled.run, cancelled.err)
+	}
+	saved, ok, err := GetAgentRun(run.ID)
+	if err != nil || !ok || saved.Status != model.AgentRunStatusCancelRequested {
+		t.Fatalf("saved=%#v ok=%v err=%v", saved, ok, err)
+	}
+}
+
+func TestRequestAgentRunCancelRetriesRunningToRequeuedRace(t *testing.T) {
+	setupRepositoryTestDB(t)
+	now := time.Date(2026, 7, 21, 10, 0, 0, 0, time.UTC)
+	run := queueTestAgentRun("run-cancel-requeue-race", "idem-cancel-requeue-race", now)
+	run.Status, run.Attempt, run.LeaseOwner = model.AgentRunStatusRunning, 1, "dead-worker"
+	run.LeaseExpiresAt = now.Add(-time.Minute).Format(time.RFC3339Nano)
+	if _, err := SaveAgentRun(run); err != nil {
+		t.Fatal(err)
+	}
+	read, resume := pauseFirstAgentRunRead(t, run.ID)
+	result := make(chan struct {
+		run model.AgentRun
+		err error
+	}, 1)
+	go func() {
+		cancelled, err := RequestAgentRunCancel(run.UserID, run.ID)
+		result <- struct {
+			run model.AgentRun
+			err error
+		}{run: cancelled, err: err}
+	}()
+	waitAgentRunRead(t, read)
+	if count, err := RequeueExpiredAgentRuns(now); err != nil || count != 1 {
+		t.Fatalf("requeued=%d err=%v", count, err)
+	}
+	close(resume)
+	cancelled := <-result
+	if cancelled.err != nil || cancelled.run.Status != model.AgentRunStatusCancelled {
+		t.Fatalf("cancelled=%#v err=%v", cancelled.run, cancelled.err)
+	}
+	saved, ok, err := GetAgentRun(run.ID)
+	if err != nil || !ok || saved.Status != model.AgentRunStatusCancelled {
+		t.Fatalf("saved=%#v ok=%v err=%v", saved, ok, err)
+	}
+}
+
+func pauseFirstAgentRunRead(t *testing.T, id string) (<-chan struct{}, chan struct{}) {
+	t.Helper()
+	database, _ := DB()
+	read, resume := make(chan struct{}), make(chan struct{})
+	var paused atomic.Bool
+	callback := "test:pause_agent_run_cancel_read:" + id
+	if err := database.Callback().Query().After("gorm:query").Register(callback, func(tx *gorm.DB) {
+		run, ok := tx.Statement.Dest.(*model.AgentRun)
+		if !ok || run.ID != id || !paused.CompareAndSwap(false, true) {
+			return
+		}
+		close(read)
+		<-resume
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { database.Callback().Query().Remove(callback) })
+	return read, resume
+}
+
+func waitAgentRunRead(t *testing.T, read <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-read:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for AgentRun cancellation read")
 	}
 }
 

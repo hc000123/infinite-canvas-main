@@ -29,6 +29,9 @@ type AgentRunMessage struct {
 
 type CreateAgentRunInput struct {
 	IdempotencyKey     string            `json:"idempotencyKey"`
+	InvocationID       string            `json:"-"`
+	InvocationRevision int               `json:"-"`
+	InvocationAttempt  int               `json:"-"`
 	ProjectID          string            `json:"projectId"`
 	EpisodeID          string            `json:"episodeId"`
 	WorkflowRunID      string            `json:"workflowRunId"`
@@ -46,10 +49,12 @@ type CreateAgentRunInput struct {
 	ModelPreference    string            `json:"modelPreference"`
 	AllowFallback      bool              `json:"allowFallback"`
 	FallbackChannelIDs []string          `json:"fallbackChannelIds"`
+	FrozenCredits      *int              `json:"-"`
 	EstimatedCredits   int               `json:"estimatedCredits"`
 	AllowBatch         bool              `json:"allowBatch"`
 	TimeoutSeconds     int               `json:"timeoutSeconds"`
 	ConcurrencyLimit   int               `json:"concurrencyLimit"`
+	MaxAttempts        int               `json:"-"`
 	WritePolicy        string            `json:"writePolicy"`
 	SystemPrompt       string            `json:"systemPrompt"`
 	UserPrompt         string            `json:"userPrompt"`
@@ -110,6 +115,19 @@ func ListUserAgentConfigs(userID string, projectID string, episodeID string) ([]
 }
 
 func CreateUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRun, error) {
+	run, err := BuildUserAgentRun(userID, input)
+	if err != nil {
+		return model.AgentRun{}, err
+	}
+	if strings.TrimSpace(input.MediaBatchID) != "" {
+		run, _, err = repository.SaveAgentRunWithWorkflowMedia(run, input.MediaBatchID)
+	} else {
+		run, _, err = repository.SaveAgentRunIdempotently(run)
+	}
+	return run, err
+}
+
+func BuildUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRun, error) {
 	executorKind := strings.TrimSpace(input.Executor)
 	if executorKind == "" {
 		executorKind = currentAgentRunExecutorKind()
@@ -121,7 +139,15 @@ func CreateUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRu
 	credits := 0
 	var err error
 	if executorKind == AgentRunExecutorAPI {
-		resolved, credits, err = apiAgentRunExecution(input)
+		if input.FrozenCredits == nil {
+			resolved, credits, err = apiAgentRunExecution(input)
+		} else {
+			resolved, err = resolveAgentRunChannel(input)
+			credits = *input.FrozenCredits
+			if credits < 0 {
+				err = safeMessageError{message: "冻结算力点无效"}
+			}
+		}
 		if err != nil {
 			return model.AgentRun{}, err
 		}
@@ -132,13 +158,23 @@ func CreateUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRu
 	estimatedCredits := input.EstimatedCredits
 	if executorKind == AgentRunExecutorCodexCLI {
 		estimatedCredits = 0
-	} else if estimatedCredits <= 0 {
+	} else if input.FrozenCredits == nil && estimatedCredits <= 0 {
 		estimatedCredits = credits
 	}
 	timeoutSeconds := normalizeAgentRunTimeout(input.TimeoutSeconds)
 	concurrencyLimit := normalizeAgentRunConcurrency(input.ConcurrencyLimit)
 	stamp := now()
 	idempotencyKey := strings.TrimSpace(input.IdempotencyKey)
+	invocationID := strings.TrimSpace(input.InvocationID)
+	if invocationID != "" {
+		if input.InvocationRevision < 1 || input.InvocationAttempt < 1 {
+			return model.AgentRun{}, safeMessageError{message: "Invocation Agent Run 缺少 revision 或 attempt"}
+		}
+		if input.AllowFallback {
+			return model.AgentRun{}, safeMessageError{message: "Invocation Agent Run 禁止 fallback"}
+		}
+		idempotencyKey = fmt.Sprintf("invocation:%s:revision:%d:attempt:%d", invocationID, input.InvocationRevision, input.InvocationAttempt)
+	}
 	var idempotencyKeyPointer *string
 	if idempotencyKey != "" {
 		idempotencyKeyPointer = &idempotencyKey
@@ -149,6 +185,9 @@ func CreateUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRu
 		ProjectID:          strings.TrimSpace(input.ProjectID),
 		EpisodeID:          strings.TrimSpace(input.EpisodeID),
 		WorkflowRunID:      strings.TrimSpace(input.WorkflowRunID),
+		InvocationID:       invocationID,
+		InvocationRevision: input.InvocationRevision,
+		InvocationAttempt:  input.InvocationAttempt,
 		StageID:            strings.TrimSpace(input.StageID),
 		AgentKind:          strings.TrimSpace(input.AgentKind),
 		Executor:           executorKind,
@@ -176,7 +215,7 @@ func CreateUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRu
 		RequiresConfirm:    true,
 		Credits:            credits,
 		IdempotencyKey:     idempotencyKeyPointer,
-		MaxAttempts:        3,
+		MaxAttempts:        normalizeAgentRunMaxAttempts(input.MaxAttempts),
 		AvailableAt:        time.Now().UTC().Format(time.RFC3339Nano),
 		ReviewJSON:         string(input.ReviewJSON),
 		MappingPreviewJSON: string(input.MappingPreviewJSON),
@@ -188,12 +227,7 @@ func CreateUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRu
 		return model.AgentRun{}, err
 	}
 	run.RequestJSON = string(requestBody)
-	if strings.TrimSpace(input.MediaBatchID) != "" {
-		run, _, err = repository.SaveAgentRunWithWorkflowMedia(run, input.MediaBatchID)
-	} else {
-		run, _, err = repository.SaveAgentRunIdempotently(run)
-	}
-	return run, err
+	return run, nil
 }
 
 func ListUserAgentRuns(userID string, q model.AgentRunQuery) (model.AgentRunList, error) {
@@ -377,6 +411,13 @@ func normalizeAgentRunConcurrency(value int) int {
 	}
 	if value > 10 {
 		return 10
+	}
+	return value
+}
+
+func normalizeAgentRunMaxAttempts(value int) int {
+	if value <= 0 {
+		return 3
 	}
 	return value
 }

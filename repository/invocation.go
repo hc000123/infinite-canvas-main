@@ -27,8 +27,15 @@ var (
 // Test-only hooks. They stay nil in production and deliberately remain package-private.
 var invocationHooks struct {
 	sync.RWMutex
-	queue, finalize       func(string) error
-	claim, apply, requeue func(string)
+	queue, finalize, credit func(string) error
+	claim, apply, requeue   func(string)
+}
+
+func setInvocationCreditFailpoint(hook func(string) error) func() {
+	invocationHooks.Lock()
+	invocationHooks.credit = hook
+	invocationHooks.Unlock()
+	return func() { invocationHooks.Lock(); invocationHooks.credit = nil; invocationHooks.Unlock() }
 }
 
 func setInvocationQueueFailpoint(hook func(string) error) func() {
@@ -63,7 +70,7 @@ func setInvocationRequeueBarrier(hook func(string)) func() {
 }
 func invokeRepositoryHook(kind, step string) error {
 	invocationHooks.RLock()
-	queue, finalize, claim, apply, requeue := invocationHooks.queue, invocationHooks.finalize, invocationHooks.claim, invocationHooks.apply, invocationHooks.requeue
+	queue, finalize, credit, claim, apply, requeue := invocationHooks.queue, invocationHooks.finalize, invocationHooks.credit, invocationHooks.claim, invocationHooks.apply, invocationHooks.requeue
 	invocationHooks.RUnlock()
 	switch kind {
 	case "queue":
@@ -73,6 +80,10 @@ func invokeRepositoryHook(kind, step string) error {
 	case "finalize":
 		if finalize != nil {
 			return finalize(step)
+		}
+	case "credit":
+		if credit != nil {
+			return credit(step)
 		}
 	case "claim":
 		if claim != nil {
@@ -202,7 +213,8 @@ func TransitionInvocation(run model.InvocationRun, event model.InvocationEvent, 
 }
 
 func QueueInvocationAttemptTx(run model.InvocationRun, attempt model.InvocationAttempt, agentRun model.AgentRun, refs []model.InvocationArtifactRef, event model.InvocationEvent) error {
-	if run.Status != model.InvocationStatusQueued || run.LatestRevision != attempt.Revision || run.LatestAttempt != attempt.Attempt || run.ID != attempt.InvocationID || run.UserID != attempt.UserID || attempt.AgentRunID != agentRun.ID || run.UserID != agentRun.UserID {
+	wantKey := fmt.Sprintf("invocation:%s:revision:%d:attempt:%d", run.ID, attempt.Revision, attempt.Attempt)
+	if run.Status != model.InvocationStatusQueued || run.LatestRevision != attempt.Revision || run.LatestAttempt != attempt.Attempt || run.ID != attempt.InvocationID || run.UserID != attempt.UserID || attempt.AgentRunID != agentRun.ID || run.UserID != agentRun.UserID || agentRun.InvocationID != run.ID || agentRun.InvocationRevision != attempt.Revision || agentRun.InvocationAttempt != attempt.Attempt || agentRun.IdempotencyKey == nil || *agentRun.IdempotencyKey != wantKey || agentRun.AllowFallback || agentRun.Model != attempt.Model || agentRun.ChannelID != attempt.ChannelID || agentRun.Executor != attempt.ExecutorKind {
 		return ErrInvocationTransitionConflict
 	}
 	database, err := DB()
@@ -404,7 +416,7 @@ func updateClaimedAgentRun(tx *gorm.DB, candidate model.AgentRun, workerID, nowT
 }
 
 func FinalizeInvocationAttemptTx(agentRun model.AgentRun, run model.InvocationRun, attempt model.InvocationAttempt, artifacts []model.Artifact, refs []model.InvocationArtifactRef, gates []model.InvocationGateResult, event model.InvocationEvent) error {
-	if run.ID != attempt.InvocationID || run.UserID != attempt.UserID || run.LatestRevision != attempt.Revision || run.LatestAttempt != attempt.Attempt || attempt.AgentRunID != agentRun.ID || run.UserID != agentRun.UserID {
+	if run.ID != attempt.InvocationID || run.UserID != attempt.UserID || run.LatestRevision != attempt.Revision || run.LatestAttempt != attempt.Attempt || attempt.AgentRunID != agentRun.ID || run.UserID != agentRun.UserID || agentRun.InvocationID != run.ID || agentRun.InvocationRevision != attempt.Revision || agentRun.InvocationAttempt != attempt.Attempt {
 		return ErrInvocationTransitionConflict
 	}
 	database, err := DB()
@@ -414,11 +426,46 @@ func FinalizeInvocationAttemptTx(agentRun model.AgentRun, run model.InvocationRu
 	leaseOwner := agentRun.LeaseOwner
 	agentRun.LeaseOwner, agentRun.LeaseExpiresAt, agentRun.HeartbeatAt = "", "", ""
 	return database.Transaction(func(tx *gorm.DB) error {
+		var currentAgent model.AgentRun
+		agentQuery := invocationCreditContextLockQuery(tx, &model.AgentRun{}).
+			Where("id = ? AND user_id = ? AND invocation_id = ? AND invocation_revision = ? AND invocation_attempt = ?", agentRun.ID, agentRun.UserID, run.ID, attempt.Revision, attempt.Attempt).
+			Limit(1).Find(&currentAgent)
+		if agentQuery.Error != nil {
+			return agentQuery.Error
+		}
+		if agentQuery.RowsAffected != 1 {
+			return ErrInvocationTransitionConflict
+		}
 		var current model.InvocationAttempt
-		if err := tx.Where("id = ? AND invocation_id = ? AND attempt = ?", attempt.ID, attempt.InvocationID, attempt.Attempt).First(&current).Error; err != nil {
-			return err
+		attemptQuery := invocationCreditContextLockQuery(tx, &model.InvocationAttempt{}).
+			Where("id = ? AND invocation_id = ? AND attempt = ?", attempt.ID, attempt.InvocationID, attempt.Attempt).
+			Limit(1).Find(&current)
+		if attemptQuery.Error != nil {
+			return attemptQuery.Error
+		}
+		if attemptQuery.RowsAffected != 1 {
+			return ErrInvocationTransitionConflict
+		}
+		if current.UserID != attempt.UserID || current.InvocationID != attempt.InvocationID || current.AgentRunID != attempt.AgentRunID || current.Revision != attempt.Revision || current.Attempt != attempt.Attempt {
+			return ErrInvocationTransitionConflict
+		}
+		var currentRun model.InvocationRun
+		runQuery := invocationCreditContextLockQuery(tx, &model.InvocationRun{}).
+			Where("id = ? AND user_id = ? AND latest_revision = ? AND latest_attempt = ?", run.ID, run.UserID, run.LatestRevision, run.LatestAttempt).
+			Limit(1).Find(&currentRun)
+		if runQuery.Error != nil {
+			return runQuery.Error
+		}
+		if runQuery.RowsAffected != 1 {
+			return ErrInvocationTransitionConflict
 		}
 		if current.FinishedAt != "" {
+			reserved, refunded, creditErr := invocationCreditTotalsTx(tx, agentRun)
+			if creditErr != nil {
+				return creditErr
+			}
+			agentRun.CreditsReserved, agentRun.CreditsRefunded = reserved, refunded
+			attempt.CreditsReserved, attempt.CreditsRefunded = reserved, refunded
 			same, compareErr := sameInvocationCompletion(tx, current, attempt, agentRun, run, artifacts, refs, gates, event)
 			if compareErr != nil {
 				return compareErr
@@ -431,8 +478,12 @@ func FinalizeInvocationAttemptTx(agentRun model.AgentRun, run model.InvocationRu
 		if err := validateCompletionEnvelope(run, attempt, artifacts, refs, gates, event); err != nil {
 			return err
 		}
+		agentSourceStatuses := []model.AgentRunStatus{model.AgentRunStatusRunning}
+		if agentRun.Status == model.AgentRunStatusCancelled {
+			agentSourceStatuses = append(agentSourceStatuses, model.AgentRunStatusCancelRequested)
+		}
 		agentUpdate := tx.Model(&model.AgentRun{}).
-			Where("id = ? AND lease_owner = ? AND status IN ?", agentRun.ID, leaseOwner, []model.AgentRunStatus{model.AgentRunStatusRunning, model.AgentRunStatusCancelRequested}).
+			Where("id = ? AND user_id = ? AND invocation_id = ? AND invocation_revision = ? AND invocation_attempt = ? AND lease_owner = ? AND status IN ?", agentRun.ID, agentRun.UserID, run.ID, attempt.Revision, attempt.Attempt, leaseOwner, agentSourceStatuses).
 			Select("status", "raw_output", "structured_draft_json", "error_message", "credits_reserved", "credits_refunded", "duration_ms", "finished_at", "updated_at", "lease_owner", "lease_expires_at", "heartbeat_at").Updates(&agentRun)
 		if agentUpdate.Error != nil {
 			return agentUpdate.Error
@@ -465,6 +516,20 @@ func FinalizeInvocationAttemptTx(agentRun model.AgentRun, run model.InvocationRu
 			return ErrInvocationTransitionConflict
 		}
 		if err := invokeRepositoryHook("finalize", "run"); err != nil {
+			return err
+		}
+		reserved, refunded, err := settleInvocationCreditsTx(tx, agentRun, agentRun.Status, attempt.FinishedAt, "finalize")
+		if err != nil {
+			return err
+		}
+		agentRun.CreditsReserved, agentRun.CreditsRefunded = reserved, refunded
+		attempt.CreditsReserved, attempt.CreditsRefunded = reserved, refunded
+		if err := tx.Model(&model.AgentRun{}).Where("id = ? AND status = ?", agentRun.ID, agentRun.Status).
+			Updates(map[string]any{"credits_reserved": reserved, "credits_refunded": refunded}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.InvocationAttempt{}).Where("id = ? AND status = ?", attempt.ID, attempt.Status).
+			Updates(map[string]any{"credits_reserved": reserved, "credits_refunded": refunded}).Error; err != nil {
 			return err
 		}
 		for index := range artifacts {
@@ -502,6 +567,8 @@ func sameInvocationCompletion(tx *gorm.DB, current, wanted model.InvocationAttem
 	invocationID, attemptNumber := wanted.InvocationID, wanted.Attempt
 	current.ID, current.UserID, current.InvocationID, current.AgentRunID, current.Revision, current.Attempt, current.CreatedAt = "", "", "", "", 0, 0, ""
 	wanted.ID, wanted.UserID, wanted.InvocationID, wanted.AgentRunID, wanted.Revision, wanted.Attempt, wanted.CreatedAt = "", "", "", "", 0, 0, ""
+	current.DurationMs, current.StartedAt, current.FinishedAt, current.UpdatedAt = 0, "", "", ""
+	wanted.DurationMs, wanted.StartedAt, wanted.FinishedAt, wanted.UpdatedAt = 0, "", "", ""
 	if !reflect.DeepEqual(current, wanted) {
 		return false, nil
 	}
@@ -509,6 +576,8 @@ func sameInvocationCompletion(tx *gorm.DB, current, wanted model.InvocationAttem
 	if err := tx.Where("id = ?", wantedAgent.ID).First(&storedAgent).Error; err != nil {
 		return false, err
 	}
+	storedAgent.DurationMs, storedAgent.StartedAt, storedAgent.FinishedAt, storedAgent.UpdatedAt = 0, "", "", ""
+	wantedAgent.DurationMs, wantedAgent.StartedAt, wantedAgent.FinishedAt, wantedAgent.UpdatedAt = 0, "", "", ""
 	if !reflect.DeepEqual(storedAgent, wantedAgent) {
 		return false, nil
 	}
@@ -516,17 +585,18 @@ func sameInvocationCompletion(tx *gorm.DB, current, wanted model.InvocationAttem
 	if err := tx.Where("id = ? AND user_id = ?", wantedRun.ID, wantedRun.UserID).First(&storedRun).Error; err != nil {
 		return false, err
 	}
+	storedRun.UpdatedAt, wantedRun.UpdatedAt = "", ""
 	if !reflect.DeepEqual(storedRun, wantedRun) {
 		return false, nil
 	}
 	var storedEvents []model.InvocationEvent
-	if err := tx.Where("user_id = ? AND invocation_id = ? AND revision = ? AND attempt = ? AND created_at = ?", wantedEvent.UserID, wantedEvent.InvocationID, wantedEvent.Revision, wantedEvent.Attempt, wantedEvent.CreatedAt).Find(&storedEvents).Error; err != nil {
+	if err := tx.Where("user_id = ? AND invocation_id = ? AND revision = ? AND attempt = ?", wantedEvent.UserID, wantedEvent.InvocationID, wantedEvent.Revision, wantedEvent.Attempt).Find(&storedEvents).Error; err != nil {
 		return false, err
 	}
-	wantedEvent.ID = 0
+	wantedEvent.ID, wantedEvent.CreatedAt = 0, ""
 	matches := 0
 	for _, storedEvent := range storedEvents {
-		storedEvent.ID = 0
+		storedEvent.ID, storedEvent.CreatedAt = 0, ""
 		if reflect.DeepEqual(storedEvent, wantedEvent) {
 			matches++
 		}
@@ -549,6 +619,24 @@ func sameInvocationCompletion(tx *gorm.DB, current, wanted model.InvocationAttem
 	refsCopy := append([]model.InvocationArtifactRef(nil), refs...)
 	gatesCopy := append([]model.InvocationGateResult(nil), gates...)
 	artifactsCopy := append([]model.Artifact(nil), artifacts...)
+	for index := range storedRefs {
+		storedRefs[index].CreatedAt = ""
+	}
+	for index := range refsCopy {
+		refsCopy[index].CreatedAt = ""
+	}
+	for index := range storedGates {
+		storedGates[index].CreatedAt = ""
+	}
+	for index := range gatesCopy {
+		gatesCopy[index].CreatedAt = ""
+	}
+	for index := range storedArtifacts {
+		storedArtifacts[index].CreatedAt = ""
+	}
+	for index := range artifactsCopy {
+		artifactsCopy[index].CreatedAt = ""
+	}
 	sort.Slice(refsCopy, func(i, j int) bool {
 		if refsCopy[i].BindingName != refsCopy[j].BindingName {
 			return refsCopy[i].BindingName < refsCopy[j].BindingName
@@ -846,6 +934,13 @@ func validateCompletionEnvelope(run model.InvocationRun, attempt model.Invocatio
 			return ErrInvocationTransitionConflict
 		}
 		artifact, ok := byID[gate.ArtifactID]
+		if gate.ArtifactID == "" {
+			if gate.ArtifactHash != "" || (!gate.Passed && run.Status != model.InvocationStatusFailed && run.Status != model.InvocationStatusBlocked) {
+				return ErrInvocationTransitionConflict
+			}
+			hasFailedGate = hasFailedGate || !gate.Passed
+			continue
+		}
 		if ok && (gate.ArtifactHash != artifact.ContentHash || !gate.Passed) {
 			return ErrInvocationTransitionConflict
 		}

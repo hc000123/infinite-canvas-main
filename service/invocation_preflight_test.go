@@ -216,14 +216,10 @@ func TestRepreflightInvocationFreezesFirstArtifactCoordinatesIntoPersistedRun(t 
 	if len(refs) != 1 || refs[0].Revision != 2 || refs[0].ArtifactID != input.Artifact.ID || !strings.Contains(recovered.Revision.InputSnapshotJSON, `"projectId":"project-1"`) || !strings.Contains(recovered.Revision.InputSnapshotJSON, `"episodeId":"episode-1"`) {
 		t.Fatalf("rev2 input snapshot/refs do not match frozen coordinates: refs=%+v snapshot=%s", refs, recovered.Revision.InputSnapshotJSON)
 	}
-	queued := persisted
-	queued.Status, queued.LatestAttempt = model.InvocationStatusQueued, 1
-	attempt := model.InvocationAttempt{ID: "late-coordinate-attempt", UserID: queued.UserID, InvocationID: queued.ID, AgentRunID: "late-coordinate-agent", Status: string(model.AgentRunStatusQueued), Revision: 2, Attempt: 1, CreatedAt: now(), UpdatedAt: now()}
-	key := "late-coordinate-agent-key"
-	agentRun := model.AgentRun{ID: attempt.AgentRunID, UserID: queued.UserID, ProjectID: queued.ProjectID, EpisodeID: queued.EpisodeID, Status: model.AgentRunStatusQueued, IdempotencyKey: &key, MaxAttempts: 1, CreatedAt: now(), UpdatedAt: now()}
-	queueRefs := append([]model.InvocationArtifactRef(nil), refs...)
-	queueRefs[0].ID, queueRefs[0].Attempt, queueRefs[0].CreatedAt = "late-coordinate-queue-ref", 1, now()
-	event := model.InvocationEvent{UserID: queued.UserID, InvocationID: queued.ID, Type: "invocation.queued", Revision: 2, Attempt: 1, CreatedAt: now()}
+	queued, attempt, agentRun, queueRefs, event, err := buildInvocationAttemptQueue(persisted, recovered.Revision, refs)
+	if err != nil {
+		t.Fatalf("build queue invariant: %v", err)
+	}
 	if err := repository.QueueInvocationAttemptTx(queued, attempt, agentRun, queueRefs, event); err != nil {
 		t.Fatalf("rev2 coordinates still violate queue invariant: %v", err)
 	}

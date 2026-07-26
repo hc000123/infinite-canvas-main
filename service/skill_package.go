@@ -104,6 +104,9 @@ func ValidateInvocableSkillPackage(value SkillPackage) (SkillPackage, error) {
 	if normalized.Manifest.ExecutorKind != "text_model" {
 		return SkillPackage{}, safeMessageError{message: "Skill 执行器无效"}
 	}
+	if err := validateInvocationSkillGateProfile(normalized.QualityGateProfile); err != nil {
+		return SkillPackage{}, safeMessageError{message: err.Error()}
+	}
 	if len(normalized.InputContract.ArtifactInputs) == 0 || len(normalized.OutputContract.ArtifactOutputs) == 0 {
 		return SkillPackage{}, safeMessageError{message: "可调用 Skill 必须声明 Artifact 输入和输出绑定"}
 	}

@@ -61,7 +61,7 @@ func (executor *APIAgentRunExecutor) RefundCredits(run *model.AgentRun) error {
 func (executor *APIAgentRunExecutor) Call(ctx context.Context, run model.AgentRun) agentRunCallResult {
 	channel, err := SelectModelChannelWithOptions(run.Model, run.ChannelID, nil, "text")
 	if err != nil {
-		return agentRunCallResult{message: err.Error()}
+		return agentRunCallResult{message: err.Error(), errorClass: "execution_target_unavailable"}
 	}
 	timeout := time.Duration(normalizeAgentRunTimeout(run.TimeoutSeconds)) * time.Second
 	callCtx, cancel := context.WithTimeout(ctx, timeout)

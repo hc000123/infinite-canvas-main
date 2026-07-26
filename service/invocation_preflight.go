@@ -483,6 +483,7 @@ func resolveInvocationExecutionPolicy(request InvocationRequest, pkg SkillPackag
 	if timeout <= 0 {
 		timeout = 120
 	}
+	timeout = normalizeAgentRunTimeout(timeout)
 	if attempts <= 0 {
 		attempts = 1
 	}
@@ -492,7 +493,15 @@ func resolveInvocationExecutionPolicy(request InvocationRequest, pkg SkillPackag
 			credits = cost.Credits
 		}
 	}
-	return InvocationExecutionPolicy{ExecutorKind: pkg.Manifest.ExecutorKind, Model: modelName, ChannelID: channel.ID, FallbackAllowed: false, RequiresConfirmation: requiresConfirmation, EstimatedCredits: credits, TimeoutSeconds: timeout, MaxAttempts: attempts}, nil
+	if credits < 0 {
+		credits = 0
+	}
+	return InvocationExecutionPolicy{
+		ExecutorKind: pkg.Manifest.ExecutorKind, AgentExecutor: AgentRunExecutorAPI, Model: modelName, ChannelID: channel.ID,
+		FallbackAllowed: false, RequiresConfirmation: requiresConfirmation,
+		Credits: credits, EstimatedCredits: credits, TimeoutSeconds: timeout, ConcurrencyLimit: normalizeAgentRunConcurrency(0), AllowBatch: false,
+		MaxAttempts: attempts, WritePolicy: "preview_only", RequiresConfirm: true,
+	}, nil
 }
 
 func invocationArtifactApproved(userID string, artifact model.Artifact) (bool, error) {

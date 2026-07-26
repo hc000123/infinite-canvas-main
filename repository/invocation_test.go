@@ -3,6 +3,7 @@ package repository
 import (
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -426,6 +427,31 @@ func TestFinalizeInvocationAttemptDuplicateComparesWholeCompletion(t *testing.T)
 				t.Fatalf("err=%v", err)
 			}
 		})
+	}
+}
+
+func TestFinalizeInvocationAttemptDuplicateIgnoresReplayClocks(t *testing.T) {
+	setupRepositoryTestDB(t)
+	agent, run, attempt, artifacts, refs, gates, event := claimedInvocationFixture(t, "duplicate-replay-clocks")
+	if err := FinalizeInvocationAttemptTx(agent, run, attempt, artifacts, refs, gates, event); err != nil {
+		t.Fatal(err)
+	}
+	replayStamp := invocationTestTime.Add(3 * time.Minute).Format(time.RFC3339Nano)
+	agent.FinishedAt, agent.UpdatedAt, agent.DurationMs = replayStamp, replayStamp, agent.DurationMs+101
+	attempt.FinishedAt, attempt.UpdatedAt, attempt.DurationMs = replayStamp, replayStamp, attempt.DurationMs+101
+	run.UpdatedAt = replayStamp
+	for index := range artifacts {
+		artifacts[index].CreatedAt = replayStamp
+	}
+	for index := range refs {
+		refs[index].CreatedAt = replayStamp
+	}
+	for index := range gates {
+		gates[index].CreatedAt = replayStamp
+	}
+	event.CreatedAt = replayStamp
+	if err := FinalizeInvocationAttemptTx(agent, run, attempt, artifacts, refs, gates, event); !errors.Is(err, ErrInvocationAttemptFinalized) {
+		t.Fatalf("replay err=%v", err)
 	}
 }
 
@@ -1031,6 +1057,31 @@ func TestFinalizeInvocationAttemptRejectsInvalidFailedGateArtifactCombinations(t
 	}
 }
 
+func TestFinalizeInvocationAttemptRejectsInvalidGlobalGate(t *testing.T) {
+	tests := []struct {
+		name         string
+		passed       bool
+		artifactHash string
+	}{
+		{name: "failed_gate_for_needs_review", passed: false},
+		{name: "hash_without_artifact_id", passed: true, artifactHash: "forged-hash"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			setupRepositoryTestDB(t)
+			agent, run, attempt, artifacts, refs, gates, event := claimedInvocationFixture(t, "invalid-global-gate-"+test.name)
+			gates = append(gates, model.InvocationGateResult{
+				ID: "global-" + test.name, UserID: run.UserID, InvocationID: run.ID,
+				ArtifactHash: test.artifactHash, Attempt: attempt.Attempt, ExecutionOrdinal: 2,
+				Layer: "input_contract", ValidatorID: "frozen-input", Passed: test.passed, CreatedAt: event.CreatedAt,
+			})
+			if err := FinalizeInvocationAttemptTx(agent, run, attempt, artifacts, refs, gates, event); !errors.Is(err, ErrInvocationTransitionConflict) {
+				t.Fatalf("err=%v", err)
+			}
+		})
+	}
+}
+
 func TestRevalidateInvocationAttemptFromFailedPreservesRawOutput(t *testing.T) {
 	setupRepositoryTestDB(t)
 	agent, run, attempt, _, _, _, event := claimedInvocationFixture(t, "revalidate-failed")
@@ -1253,6 +1304,49 @@ func TestInvocationTransitionRaceFinalizeCancel(t *testing.T) {
 	}
 }
 
+func TestFinalizeInvocationAttemptRejectsCompletionAfterCancelRequested(t *testing.T) {
+	for _, terminal := range []model.AgentRunStatus{model.AgentRunStatusNeedsReview, model.AgentRunStatusFailed} {
+		t.Run(string(terminal), func(t *testing.T) {
+			setupRepositoryTestDB(t)
+			agent, run, attempt, artifacts, refs, gates, event := claimedInvocationFixture(t, "cancel-race-"+string(terminal))
+			database, _ := DB()
+			if err := database.Model(&model.AgentRun{}).Where("id = ?", agent.ID).Update("status", model.AgentRunStatusCancelRequested).Error; err != nil {
+				t.Fatal(err)
+			}
+			if terminal == model.AgentRunStatusFailed {
+				agent.Status, run.Status, attempt.Status = terminal, model.InvocationStatusFailed, string(terminal)
+				attempt.ErrorClass, event.Type = "execution_failure", "attempt.failed"
+				artifacts, refs, gates = nil, nil, nil
+			}
+			if err := FinalizeInvocationAttemptTx(agent, run, attempt, artifacts, refs, gates, event); !errors.Is(err, ErrInvocationTransitionConflict) {
+				t.Fatalf("err=%v", err)
+			}
+			savedAgent, _, _ := GetAgentRun(agent.ID)
+			savedRun, _, _ := GetUserInvocation(run.UserID, run.ID)
+			attempts, _ := ListInvocationAttempts(run.UserID, run.ID)
+			var outputs int64
+			database.Model(&model.Artifact{}).Where("producer_invocation_id = ?", run.ID).Count(&outputs)
+			if savedAgent.Status != model.AgentRunStatusCancelRequested || savedRun.Status != model.InvocationStatusRunning || len(attempts) != 1 || attempts[0].Status != string(model.AgentRunStatusRunning) || outputs != 0 {
+				t.Fatalf("agent=%s run=%s attempts=%#v outputs=%d", savedAgent.Status, savedRun.Status, attempts, outputs)
+			}
+		})
+	}
+}
+
+func TestFinalizeInvocationAttemptAllowsCancelledAfterCancelRequested(t *testing.T) {
+	setupRepositoryTestDB(t)
+	agent, run, attempt, _, _, _, event := claimedInvocationFixture(t, "cancel-race-cancelled")
+	database, _ := DB()
+	if err := database.Model(&model.AgentRun{}).Where("id = ?", agent.ID).Update("status", model.AgentRunStatusCancelRequested).Error; err != nil {
+		t.Fatal(err)
+	}
+	agent.Status, run.Status, attempt.Status = model.AgentRunStatusCancelled, model.InvocationStatusCancelled, string(model.AgentRunStatusCancelled)
+	attempt.ErrorClass, event.Type = "cancelled", "attempt.cancelled"
+	if err := FinalizeInvocationAttemptTx(agent, run, attempt, nil, nil, nil, event); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestInvocationApplyAttemptIsIdempotentAndRejectsChangedTarget(t *testing.T) {
 	setupRepositoryTestDB(t)
 	run := createInvocationFixture(t, "apply-success", model.InvocationStatusApproved)
@@ -1275,6 +1369,432 @@ func TestInvocationApplyAttemptIsIdempotentAndRejectsChangedTarget(t *testing.T)
 	changed.TargetID = "two"
 	if _, _, err := ApplyInvocationTx(run, changed, event, adapter); !errors.Is(err, ErrInvocationApplyConflict) {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestInvocationCreditReservationConcurrentReplayConsumesOnce(t *testing.T) {
+	setupRepositoryTestDB(t)
+	agent, _, _, _, _, _, _ := claimedInvocationFixture(t, "credit-reserve-concurrent")
+	seedInvocationCreditAccount(t, agent.ID, 5)
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			_, err := ReserveInvocationAttemptCreditsTx(agent, invocationTestTime.Add(2*time.Minute).Format(time.RFC3339Nano))
+			results <- err
+		}()
+	}
+	close(start)
+	if first, second := <-results, <-results; first != nil || second != nil {
+		t.Fatalf("reservation errors=%v, %v", first, second)
+	}
+	assertInvocationCreditState(t, agent.ID, 95, 1, 0, 5, 0)
+}
+
+func TestInvocationCreditReservationAcceptsNoopRowsAfterExactReread(t *testing.T) {
+	setupRepositoryTestDB(t)
+	agent, _, _, _, _, _, _ := claimedInvocationFixture(t, "credit-reserve-noop-rows")
+	seedInvocationCreditAccount(t, agent.ID, 5)
+	reserved, err := ReserveInvocationAttemptCreditsTx(agent, agent.StartedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempts, err := ListInvocationAttempts(agent.UserID, agent.InvocationID)
+	if err != nil || len(attempts) != 1 {
+		t.Fatalf("attempts=%#v err=%v", attempts, err)
+	}
+	database, _ := DB()
+	noRowsChanged := &gorm.DB{RowsAffected: 0}
+	if err := verifyInvocationAgentCreditUpdateTx(database, noRowsChanged, reserved, 5, 0); err != nil {
+		t.Fatalf("AgentRun no-op reread: %v", err)
+	}
+	if err := verifyInvocationAttemptCreditUpdateTx(database, noRowsChanged, attempts[0], 5, 0); err != nil {
+		t.Fatalf("attempt no-op reread: %v", err)
+	}
+	if err := database.Model(&model.AgentRun{}).Where("id = ?", reserved.ID).Update("lease_owner", "other-worker").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyInvocationAgentCreditUpdateTx(database, noRowsChanged, reserved, 5, 0); !errors.Is(err, ErrInvocationTransitionConflict) {
+		t.Fatalf("forged AgentRun reread err=%v", err)
+	}
+	if err := database.Model(&model.InvocationAttempt{}).Where("id = ?", attempts[0].ID).Update("agent_run_id", "other-agent").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyInvocationAttemptCreditUpdateTx(database, noRowsChanged, attempts[0], 5, 0); !errors.Is(err, ErrInvocationTransitionConflict) {
+		t.Fatalf("forged attempt reread err=%v", err)
+	}
+}
+
+func TestInvocationCreditReservationMySQLLocksContextForUpdate(t *testing.T) {
+	database, err := gorm.Open(mysql.New(mysql.Config{DSN: "user:pass@tcp(localhost:3306)/db", SkipInitializeWithVersion: true}), &gorm.Config{DryRun: true, DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name, table string
+		model       any
+	}{
+		{name: "agent_run", table: "AGENT_RUNS", model: &model.AgentRun{}},
+		{name: "attempt", table: "INVOCATION_ATTEMPTS", model: &model.InvocationAttempt{}},
+		{name: "run", table: "INVOCATION_RUNS", model: &model.InvocationRun{}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			query := invocationCreditContextLockQuery(database, test.model).Where("id = ?", "row-1").Find(test.model)
+			sql := strings.ToUpper(query.Statement.SQL.String())
+			t.Logf("lock sql=%s", sql)
+			if !strings.Contains(sql, test.table) || !strings.Contains(sql, "FOR UPDATE") {
+				t.Fatalf("lock sql=%s", sql)
+			}
+		})
+	}
+}
+
+func TestFinalizeInvocationLocksSettlementContextInCreditOrder(t *testing.T) {
+	setupRepositoryTestDB(t)
+	agent, run, attempt, artifacts, refs, gates, event := claimedInvocationFixture(t, "finalize-credit-lock-order")
+	seedInvocationCreditAccount(t, agent.ID, 5)
+	reserved, err := ReserveInvocationAttemptCreditsTx(agent, agent.StartedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent.CreditsReserved = reserved.CreditsReserved
+	database, _ := DB()
+	order := []string{}
+	seen := map[string]bool{}
+	record := func(tx *gorm.DB) {
+		table := tx.Statement.Table
+		if (table == "agent_runs" || table == "invocation_attempts" || table == "invocation_runs") && !seen[table] {
+			seen[table] = true
+			order = append(order, table)
+		}
+	}
+	queryCallback, updateCallback := "test:finalize_credit_query_order", "test:finalize_credit_update_order"
+	database.Callback().Query().Before("gorm:query").Register(queryCallback, record)
+	database.Callback().Update().Before("gorm:update").Register(updateCallback, record)
+	defer database.Callback().Query().Remove(queryCallback)
+	defer database.Callback().Update().Remove(updateCallback)
+	if err := FinalizeInvocationAttemptTx(agent, run, attempt, artifacts, refs, gates, event); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"agent_runs", "invocation_attempts", "invocation_runs"}
+	if !reflect.DeepEqual(order, want) {
+		t.Fatalf("settlement lock order=%v want=%v", order, want)
+	}
+}
+
+func TestFinalizeInvocationGateFailureConcurrentReplayRefundsOnce(t *testing.T) {
+	setupRepositoryTestDB(t)
+	agent, run, attempt, _, _, _, event := claimedInvocationFixture(t, "credit-failed-concurrent")
+	seedInvocationCreditAccount(t, agent.ID, 5)
+	reserved, err := ReserveInvocationAttemptCreditsTx(agent, agent.StartedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent.Credits, agent.CreditsReserved = reserved.Credits, reserved.CreditsReserved
+	agent.Status = model.AgentRunStatusFailed
+	run.Status = model.InvocationStatusFailed
+	attempt.Status, attempt.ErrorClass = string(model.AgentRunStatusFailed), "output_schema"
+	failedGate := model.InvocationGateResult{ID: "credit-failed-gate", UserID: run.UserID, InvocationID: run.ID, Attempt: attempt.Attempt, ExecutionOrdinal: 2, Layer: "output_schema", ValidatorID: "core", Passed: false, CreatedAt: event.CreatedAt}
+	event.Type = "attempt.failed"
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			results <- FinalizeInvocationAttemptTx(agent, run, attempt, nil, nil, []model.InvocationGateResult{failedGate}, event)
+		}()
+	}
+	close(start)
+	first, second := <-results, <-results
+	if (first == nil) == (second == nil) {
+		t.Fatalf("finalize errors=%v, %v", first, second)
+	}
+	assertInvocationCreditState(t, agent.ID, 100, 1, 1, 5, 5)
+}
+
+func TestFinalizeInvocationRejectsStoredAttemptAgentRunRebinding(t *testing.T) {
+	setupRepositoryTestDB(t)
+	agentA, runA, attemptA, _, _, _, eventA := claimedInvocationFixture(t, "binding-cas-a")
+	runBBase := createInvocationFixture(t, "binding-cas-b", model.InvocationStatusAwaitingConfirmation)
+	queuedB, attemptB, queuedAgentB, inputRefsB, queueEventB := queuedInvocationFixture(runBBase.ID)
+	if err := QueueInvocationAttemptTx(queuedB, attemptB, queuedAgentB, inputRefsB, queueEventB); err != nil {
+		t.Fatal(err)
+	}
+	agentB, ok, err := ClaimNextAgentRunWithInvocationTx("worker-1", time.Minute, 2)
+	if err != nil || !ok || agentB.ID != queuedAgentB.ID {
+		t.Fatalf("AgentRun B=%#v ok=%v err=%v", agentB, ok, err)
+	}
+	seedInvocationCreditAccount(t, agentA.ID, 5)
+	database, _ := DB()
+	if err := database.Model(&model.AgentRun{}).Where("id = ?", agentB.ID).Update("credits", 5).Error; err != nil {
+		t.Fatal(err)
+	}
+	reservedA, err := ReserveInvocationAttemptCreditsTx(agentA, agentA.StartedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reservedB, err := ReserveInvocationAttemptCreditsTx(agentB, agentB.StartedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forgedAgent := reservedB
+	forgedAgent.Status, forgedAgent.FinishedAt = model.AgentRunStatusFailed, eventA.CreatedAt
+	forgedRun := runA
+	forgedRun.Status = model.InvocationStatusFailed
+	forgedAttempt := attemptA
+	forgedAttempt.AgentRunID, forgedAttempt.Status, forgedAttempt.ErrorClass = reservedB.ID, string(model.AgentRunStatusFailed), "output_schema"
+	forgedEvent := eventA
+	forgedEvent.Type = "attempt.failed"
+	if err := FinalizeInvocationAttemptTx(forgedAgent, forgedRun, forgedAttempt, nil, nil, nil, forgedEvent); !errors.Is(err, ErrInvocationTransitionConflict) {
+		t.Fatalf("err=%v", err)
+	}
+	assertInvocationCreditState(t, reservedA.ID, 90, 1, 0, 5, 0)
+	assertInvocationCreditState(t, reservedB.ID, 90, 1, 0, 5, 0)
+	for _, item := range []struct {
+		runID, agentID string
+	}{
+		{runID: runA.ID, agentID: reservedA.ID},
+		{runID: runBBase.ID, agentID: reservedB.ID},
+	} {
+		savedRun, _, _ := GetUserInvocation("user-1", item.runID)
+		savedAgent, _, _ := GetAgentRun(item.agentID)
+		attempts, _ := ListInvocationAttempts("user-1", item.runID)
+		if savedRun.Status != model.InvocationStatusRunning || savedAgent.Status != model.AgentRunStatusRunning || len(attempts) != 1 || attempts[0].Status != string(model.AgentRunStatusRunning) {
+			t.Fatalf("run=%#v AgentRun=%#v attempts=%#v", savedRun, savedAgent, attempts)
+		}
+	}
+}
+
+func TestFinalizeInvocationSuccessRacesGateFailureWithConsistentSettlement(t *testing.T) {
+	setupRepositoryTestDB(t)
+	agent, run, attempt, artifacts, refs, gates, event := claimedInvocationFixture(t, "credit-success-failure-race")
+	seedInvocationCreditAccount(t, agent.ID, 5)
+	reserved, err := ReserveInvocationAttemptCreditsTx(agent, agent.StartedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent.Credits, agent.CreditsReserved = reserved.Credits, reserved.CreditsReserved
+	failedAgent, failedRun, failedAttempt, failedEvent := agent, run, attempt, event
+	failedAgent.Status = model.AgentRunStatusFailed
+	failedRun.Status = model.InvocationStatusFailed
+	failedAttempt.Status, failedAttempt.ErrorClass = string(model.AgentRunStatusFailed), "output_schema"
+	failedEvent.Type = "attempt.failed"
+	failedGate := model.InvocationGateResult{ID: "credit-race-failed-gate", UserID: run.UserID, InvocationID: run.ID, Attempt: attempt.Attempt, ExecutionOrdinal: 2, Layer: "output_schema", ValidatorID: "core", Passed: false, CreatedAt: event.CreatedAt}
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	go func() {
+		<-start
+		results <- FinalizeInvocationAttemptTx(agent, run, attempt, artifacts, refs, gates, event)
+	}()
+	go func() {
+		<-start
+		results <- FinalizeInvocationAttemptTx(failedAgent, failedRun, failedAttempt, nil, nil, []model.InvocationGateResult{failedGate}, failedEvent)
+	}()
+	close(start)
+	first, second := <-results, <-results
+	if (first == nil) == (second == nil) {
+		t.Fatalf("finalize errors=%v, %v", first, second)
+	}
+	saved, _, _ := GetUserInvocation(run.UserID, run.ID)
+	outputs, _, _ := ListUserArtifacts(run.UserID, ArtifactQuery{ProducerInvocationID: run.ID, Page: 1, PageSize: 10})
+	if saved.Status == model.InvocationStatusNeedsReview {
+		if len(outputs) != len(artifacts) {
+			t.Fatalf("success outputs=%d", len(outputs))
+		}
+		assertInvocationCreditState(t, agent.ID, 95, 1, 0, 5, 0)
+	} else if saved.Status == model.InvocationStatusFailed {
+		if len(outputs) != 0 {
+			t.Fatalf("failed outputs=%d", len(outputs))
+		}
+		assertInvocationCreditState(t, agent.ID, 100, 1, 1, 5, 5)
+	} else {
+		t.Fatalf("status=%s", saved.Status)
+	}
+}
+
+func TestInvocationCreditReservationFailpointsRollbackAndReplay(t *testing.T) {
+	for _, step := range []string{"consume:log", "consume:balance", "agent_run", "attempt"} {
+		t.Run(step, func(t *testing.T) {
+			setupRepositoryTestDB(t)
+			agent, _, _, _, _, _, _ := claimedInvocationFixture(t, "credit-reserve-crash-"+strings.ReplaceAll(step, ":", "-"))
+			seedInvocationCreditAccount(t, agent.ID, 5)
+			cleanup := setInvocationCreditFailpoint(func(current string) error {
+				if current == step {
+					return errors.New("crash")
+				}
+				return nil
+			})
+			_, err := ReserveInvocationAttemptCreditsTx(agent, agent.StartedAt)
+			cleanup()
+			if err == nil {
+				t.Fatal("expected failpoint error")
+			}
+			ResetForTest()
+			assertInvocationCreditState(t, agent.ID, 100, 0, 0, 0, 0)
+			if _, err := ReserveInvocationAttemptCreditsTx(agent, agent.StartedAt); err != nil {
+				t.Fatal(err)
+			}
+			assertInvocationCreditState(t, agent.ID, 95, 1, 0, 5, 0)
+		})
+	}
+}
+
+func TestInvocationFinalizerSettlementFailpointsRollbackAndReplay(t *testing.T) {
+	for _, step := range []string{"refund:balance", "refund:log", "artifact:0", "gate:0", "event"} {
+		t.Run(step, func(t *testing.T) {
+			setupRepositoryTestDB(t)
+			agent, run, attempt, artifacts, refs, gates, event := claimedInvocationFixture(t, "credit-finalize-crash-"+strings.ReplaceAll(step, ":", "-"))
+			seedInvocationCreditAccount(t, agent.ID, 5)
+			reserved, err := ReserveInvocationAttemptCreditsTx(agent, agent.StartedAt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			agent.Credits, agent.CreditsReserved = reserved.Credits, reserved.CreditsReserved
+			if step != "artifact:0" {
+				agent.Status, run.Status, attempt.Status = model.AgentRunStatusFailed, model.InvocationStatusFailed, string(model.AgentRunStatusFailed)
+				attempt.ErrorClass, event.Type = "output_schema", "attempt.failed"
+				artifacts, refs = nil, nil
+				gates = []model.InvocationGateResult{{ID: "credit-crash-gate-" + step, UserID: run.UserID, InvocationID: run.ID, Attempt: attempt.Attempt, ExecutionOrdinal: 2, Layer: "output_schema", ValidatorID: "core", Passed: false, CreatedAt: event.CreatedAt}}
+			}
+			cleanup := setInvocationFinalizeFailpoint(func(current string) error {
+				if current == step {
+					return errors.New("crash")
+				}
+				return nil
+			})
+			err = FinalizeInvocationAttemptTx(agent, run, attempt, artifacts, refs, gates, event)
+			cleanup()
+			if err == nil {
+				t.Fatal("expected failpoint error")
+			}
+			ResetForTest()
+			saved, _, _ := GetUserInvocation(run.UserID, run.ID)
+			if saved.Status != model.InvocationStatusRunning {
+				t.Fatalf("status=%s", saved.Status)
+			}
+			assertInvocationCreditState(t, agent.ID, 95, 1, 0, 5, 0)
+			if err := FinalizeInvocationAttemptTx(agent, run, attempt, artifacts, refs, gates, event); err != nil {
+				t.Fatal(err)
+			}
+			if run.Status == model.InvocationStatusFailed {
+				assertInvocationCreditState(t, agent.ID, 100, 1, 1, 5, 5)
+			} else {
+				assertInvocationCreditState(t, agent.ID, 95, 1, 0, 5, 0)
+			}
+		})
+	}
+}
+
+func TestRequeueExpiredCancelledInvocationRefundsReservation(t *testing.T) {
+	setupRepositoryTestDB(t)
+	agent, _, _, _, _, _, _ := claimedInvocationFixture(t, "credit-reaper-cancel")
+	seedInvocationCreditAccount(t, agent.ID, 5)
+	if _, err := ReserveInvocationAttemptCreditsTx(agent, agent.StartedAt); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	database, _ := DB()
+	if err := database.Model(&model.AgentRun{}).Where("id = ?", agent.ID).Updates(map[string]any{"status": model.AgentRunStatusCancelRequested, "lease_expires_at": now.Add(-time.Minute).Format(time.RFC3339Nano)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count, err := RequeueExpiredAgentRuns(now); err != nil || count != 1 {
+		t.Fatalf("count=%d err=%v", count, err)
+	}
+	assertInvocationCreditState(t, agent.ID, 100, 1, 1, 5, 5)
+}
+
+func TestInvocationCancelSuccessReaperRaceKeepsSettlementConsistent(t *testing.T) {
+	setupRepositoryTestDB(t)
+	agent, run, attempt, artifacts, refs, gates, event := claimedInvocationFixture(t, "credit-cancel-success-reaper")
+	seedInvocationCreditAccount(t, agent.ID, 5)
+	reserved, err := ReserveInvocationAttemptCreditsTx(agent, agent.StartedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent.Credits, agent.CreditsReserved = reserved.Credits, reserved.CreditsReserved
+	now := time.Now().UTC()
+	database, _ := DB()
+	database.Exec("PRAGMA busy_timeout = 5000")
+	if err := database.Model(&model.AgentRun{}).Where("id = ?", agent.ID).Update("lease_expires_at", now.Add(-time.Minute).Format(time.RFC3339Nano)).Error; err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	done := make(chan struct{}, 3)
+	go func() {
+		<-start
+		_ = FinalizeInvocationAttemptTx(agent, run, attempt, artifacts, refs, gates, event)
+		done <- struct{}{}
+	}()
+	go func() {
+		<-start
+		_, _ = RequestAgentRunCancel(agent.UserID, agent.ID)
+		done <- struct{}{}
+	}()
+	go func() {
+		<-start
+		_, _ = RequeueExpiredAgentRuns(now)
+		done <- struct{}{}
+	}()
+	close(start)
+	for range 3 {
+		<-done
+	}
+	_, _ = RequeueExpiredAgentRuns(now.Add(time.Second))
+	saved, _, _ := GetUserInvocation(run.UserID, run.ID)
+	outputs, _, _ := ListUserArtifacts(run.UserID, ArtifactQuery{ProducerInvocationID: run.ID, Page: 1, PageSize: 10})
+	switch saved.Status {
+	case model.InvocationStatusNeedsReview:
+		if len(outputs) != len(artifacts) {
+			t.Fatalf("success outputs=%d", len(outputs))
+		}
+		assertInvocationCreditState(t, agent.ID, 95, 1, 0, 5, 0)
+	case model.InvocationStatusCancelled, model.InvocationStatusFailed:
+		if len(outputs) != 0 {
+			t.Fatalf("terminal outputs=%d status=%s", len(outputs), saved.Status)
+		}
+		assertInvocationCreditState(t, agent.ID, 100, 1, 1, 5, 5)
+	default:
+		t.Fatalf("non-terminal status=%s", saved.Status)
+	}
+}
+
+func seedInvocationCreditAccount(t *testing.T, agentRunID string, credits int) {
+	t.Helper()
+	stamp := invocationTestTime.Format(time.RFC3339Nano)
+	if _, err := SaveUser(model.User{ID: "user-1", Username: "invocation-credit-user", Credits: 100, Status: model.UserStatusActive, CreatedAt: stamp, UpdatedAt: stamp}); err != nil {
+		t.Fatal(err)
+	}
+	database, _ := DB()
+	if err := database.Model(&model.AgentRun{}).Where("id = ?", agentRunID).Update("credits", credits).Error; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertInvocationCreditState(t *testing.T, agentRunID string, balance int, consumeLogs, refundLogs int64, reserved, refunded int) {
+	t.Helper()
+	user, ok, err := GetUserByID("user-1")
+	if err != nil || !ok || user.Credits != balance {
+		t.Fatalf("user=%#v ok=%v err=%v", user, ok, err)
+	}
+	consume, _ := CountCreditLogsByRelatedIDAndType(agentRunID, model.CreditLogTypeAIConsume)
+	refund, _ := CountCreditLogsByRelatedIDAndType(agentRunID, model.CreditLogTypeAIRefund)
+	logs, _ := ListCreditLogsByRelatedID(agentRunID)
+	for _, log := range logs {
+		if log.Type == model.CreditLogTypeAIConsume && (log.ID != invocationCreditLogID(agentRunID, "consume") || log.Amount != -reserved) {
+			t.Fatalf("consume log=%#v", log)
+		}
+		if log.Type == model.CreditLogTypeAIRefund && (log.ID != invocationCreditLogID(agentRunID, "refund") || log.Amount != refunded || log.Balance != balance) {
+			t.Fatalf("refund log=%#v", log)
+		}
+	}
+	agent, ok, err := GetAgentRun(agentRunID)
+	if err != nil || !ok {
+		t.Fatalf("AgentRun=%#v ok=%v err=%v", agent, ok, err)
+	}
+	attempts, err := ListInvocationAttempts(agent.UserID, agent.InvocationID)
+	if err != nil || len(attempts) != 1 || consume != consumeLogs || refund != refundLogs || agent.CreditsReserved != reserved || agent.CreditsRefunded != refunded || attempts[0].CreditsReserved != reserved || attempts[0].CreditsRefunded != refunded {
+		t.Fatalf("consume=%d refund=%d AgentRun=%#v attempts=%#v err=%v", consume, refund, agent, attempts, err)
 	}
 }
 

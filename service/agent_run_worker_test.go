@@ -66,6 +66,28 @@ func TestAgentRunWorkerSkipsCancelledRunWithoutCharge(t *testing.T) {
 	fixture.assertCreditLogs(t, run.ID, 0, 0)
 }
 
+func TestAgentRunWorkerSeesCancellationRequestedAfterClaimWithoutModelCall(t *testing.T) {
+	fixture := newAgentRunWorkerFixture(t, http.StatusOK, `{"choices":[{"message":{"content":"不应调用"}}]}`)
+	run := fixture.queueRun(t, "worker-cancelled-after-claim")
+	claimed, ok, err := repository.ClaimNextAgentRun("worker-test", fixture.now, time.Minute)
+	if err != nil || !ok || claimed.ID != run.ID {
+		t.Fatalf("claimed=%#v ok=%v err=%v", claimed, ok, err)
+	}
+	if cancelled, err := repository.RequestAgentRunCancel(run.UserID, run.ID); err != nil || cancelled.Status != model.AgentRunStatusCancelRequested {
+		t.Fatalf("cancelled=%#v err=%v", cancelled, err)
+	}
+	if err := fixture.worker.execute(context.Background(), claimed); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.calls.Load() != 0 {
+		t.Fatalf("upstream calls=%d, want 0", fixture.calls.Load())
+	}
+	if saved := fixture.getRun(t, run.ID); saved.Status != model.AgentRunStatusCancelled {
+		t.Fatalf("saved=%#v", saved)
+	}
+	fixture.assertCreditLogs(t, run.ID, 0, 0)
+}
+
 func TestAgentRunWorkerKeepsSuperAdminUsageWithoutBalanceReservation(t *testing.T) {
 	fixture := newAgentRunWorkerFixture(t, http.StatusOK, `{"choices":[{"message":{"content":"{\"items\":[]}"}}]}`)
 	user, ok, err := repository.GetUserByID("user-1")
