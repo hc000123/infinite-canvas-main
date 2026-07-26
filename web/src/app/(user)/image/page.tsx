@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { App, Button, Checkbox, Drawer, Dropdown, Empty, Image, Input, Modal, Tag, Typography } from "antd";
 import type { TextAreaRef } from "antd/es/input/TextArea";
 import { saveAs } from "file-saver";
+import dynamic from "next/dynamic";
 
 import { ImageSettingsPanel } from "@/components/image-settings-panel";
 import { ModelPicker } from "@/components/model-picker";
@@ -25,6 +26,11 @@ import { buildAssetVersionReference } from "../assets/asset-version-references";
 import { buildWorkflowGeneratedImagePatch, workflowAssetInfo } from "../assets/workflow-asset-image";
 import { useImageBriefStore } from "../canvas/stores/use-image-brief-store";
 import { useProductionBibleStore } from "../canvas/stores/use-production-bible-store";
+import type { ArtifactEnvelope } from "@/services/api/invocations";
+import type { CapabilityConsumeTrace } from "@/components/capability-runtime/use-capability-run";
+import { buildImageCapabilityTrace, imagePromptFromArtifacts, type ImageCapabilityTrace } from "./image-capability-context";
+
+const CapabilityRunDrawer = dynamic(() => import("@/components/capability-runtime/capability-run-drawer").then((module) => module.CapabilityRunDrawer), { ssr: false });
 
 type GeneratedImage = {
     id: string;
@@ -62,6 +68,7 @@ type GenerationLog = {
     status: "成功" | "失败";
     images: GeneratedImage[];
     thumbnails: string[];
+    capabilityTrace?: ImageCapabilityTrace;
 };
 
 type GenerationLogConfig = Pick<AiConfig, "model" | "imageModel" | "quality" | "size" | "count">;
@@ -79,8 +86,10 @@ type ImageWorkbenchSourceContext = {
     source: string;
     title: string;
 };
+type ImageCapabilityState = { prompt: string; trace: ImageCapabilityTrace; updatedAt: string };
 
 const logStore = createUserScopedLocalForage("image_generation_logs");
+const capabilityStateStore = createUserScopedLocalForage("image_capability_state");
 const emptyImageWorkbenchSourceContext: ImageWorkbenchSourceContext = {
     assetId: "",
     briefId: "",
@@ -152,6 +161,8 @@ export default function ImagePage() {
     const [previewLog, setPreviewLog] = useState<GenerationLog | null>(null);
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [sourceContext, setSourceContext] = useState<ImageWorkbenchSourceContext>(emptyImageWorkbenchSourceContext);
+    const [capabilityOpen, setCapabilityOpen] = useState(false);
+    const [capabilityTrace, setCapabilityTrace] = useState<ImageCapabilityTrace>();
 
     const model = effectiveConfig.imageModel || effectiveConfig.model;
     const canGenerate = Boolean(prompt.trim());
@@ -185,12 +196,26 @@ export default function ImagePage() {
         const nextContext = parseImageWorkbenchSourceContext();
         const nextKey = [nextContext.projectId, nextContext.episodeId, nextContext.assetId, nextContext.briefId, nextContext.prompt].join("|");
         setSourceContext(nextContext);
-        if (!nextContext.prompt || importedContextRef.current === nextKey) return;
-        importedContextRef.current = nextKey;
-        setPrompt(nextContext.prompt);
-        setPreviewLog(null);
-        setResults([]);
-        message.success("已带入单集生图需求提示词");
+        let active = true;
+        void capabilityStateStore.getItem<ImageCapabilityState>(imageCapabilityStorageKey(nextContext)).then((stored) => {
+            if (!active) return;
+            if (stored?.prompt.trim() && stored.trace?.invocationId) {
+                importedContextRef.current = nextKey;
+                setPrompt(stored.prompt);
+                setCapabilityTrace(stored.trace);
+                setPreviewLog(null);
+                setResults([]);
+                return;
+            }
+            setCapabilityTrace(undefined);
+            if (!nextContext.prompt || importedContextRef.current === nextKey) return;
+            importedContextRef.current = nextKey;
+            setPrompt(nextContext.prompt);
+            setPreviewLog(null);
+            setResults([]);
+            message.success("已带入单集生图需求提示词");
+        }).catch(() => undefined);
+        return () => { active = false; };
     }, [message]);
 
     const addReferences = async (files?: FileList | null) => {
@@ -223,6 +248,17 @@ export default function ImagePage() {
         } catch {
             message.error("剪切板里没有可读取的图片");
         }
+    };
+
+    const consumeCapabilityArtifacts = async (artifacts: ArtifactEnvelope[], trace: CapabilityConsumeTrace) => {
+        const nextPrompt = imagePromptFromArtifacts(artifacts, { approved: true, assetId: sourceContext.assetId });
+        if (!nextPrompt) throw new Error("已批准 Artifact-set 中没有可用的图片提示词");
+        const nextTrace = buildImageCapabilityTrace(trace);
+        setPrompt(nextPrompt);
+        setCapabilityTrace(nextTrace);
+        setPreviewLog(null);
+        setResults([]);
+        await capabilityStateStore.setItem<ImageCapabilityState>(imageCapabilityStorageKey(sourceContext), { prompt: nextPrompt, trace: nextTrace, updatedAt: nextTrace.appliedAt });
     };
 
     const generate = async () => {
@@ -273,6 +309,7 @@ export default function ImagePage() {
                     failCount,
                     status: successCount ? "成功" : "失败",
                     images: logImages,
+                    capabilityTrace,
                 }),
             );
             if (successCount) message.success("图片已生成");
@@ -300,9 +337,10 @@ export default function ImagePage() {
         if (sourceAsset && workflowAssetInfo(sourceAsset)) {
             const now = new Date().toISOString();
             const patch = buildWorkflowGeneratedImagePatch(sourceAsset, stored, { config: { ...effectiveConfig, model, count: "1" }, model });
-            updateAsset(sourceAsset.id, patch);
+            const tracedPatch = capabilityTrace ? { ...patch, metadata: { ...patch.metadata, capabilityTrace } } : patch;
+            updateAsset(sourceAsset.id, tracedPatch);
             assetId = sourceAsset.id;
-            savedAsset = { id: sourceAsset.id, metadata: { ...sourceAsset.metadata, ...patch.metadata }, updatedAt: now };
+            savedAsset = { id: sourceAsset.id, metadata: { ...sourceAsset.metadata, ...tracedPatch.metadata }, updatedAt: now };
         } else {
             assetId = await addAssetOnce({
                 kind: "image",
@@ -319,6 +357,7 @@ export default function ImagePage() {
                     imageBriefId: sourceContext.briefId,
                     assetBreakdownItemId: sourceContext.assetId,
                     productionBibleItemId: sourceContext.assetId,
+                    ...(capabilityTrace ? { capabilityTrace } : {}),
                 },
             });
             savedAsset = useAssetStore.getState().assets.find((asset) => asset.id === assetId);
@@ -353,7 +392,9 @@ export default function ImagePage() {
     };
 
     const createSession = () => {
+        void capabilityStateStore.removeItem(imageCapabilityStorageKey(sourceContext));
         setPrompt("");
+        setCapabilityTrace(undefined);
         setReferences([]);
         setResults([]);
         setElapsedMs(0);
@@ -384,6 +425,7 @@ export default function ImagePage() {
         setPreviewLog(hydratedLog);
         setLogsOpen(false);
         setPrompt(hydratedLog.prompt);
+        setCapabilityTrace(hydratedLog.capabilityTrace);
         setReferences(hydratedLog.references || []);
         if (hydratedLog.config.imageModel || hydratedLog.model) updateConfig("imageModel", hydratedLog.config.imageModel || hydratedLog.model);
         if (hydratedLog.config.quality) updateConfig("quality", hydratedLog.config.quality);
@@ -485,6 +527,9 @@ export default function ImagePage() {
                                     <div className="flex gap-2">
                                         <Button size="middle" icon={<BookOpen className="size-3.5" />} onClick={() => setPromptDialogOpen(true)}>
                                             提示词库
+                                        </Button>
+                                        <Button size="middle" icon={<Sparkles className="size-3.5" />} onClick={() => setCapabilityOpen(true)}>
+                                            Skill 能力
                                         </Button>
                                     </div>
                                 </div>
@@ -628,7 +673,18 @@ export default function ImagePage() {
                     <GenerationSettings config={effectiveConfig} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} allowCustomModel={allowCustomModel} />
                 </div>
             </Drawer>
-            <PromptSelectDialog open={promptDialogOpen} nodeGroup="image" onOpenChange={setPromptDialogOpen} onSelect={setPrompt} />
+            <CapabilityRunDrawer
+                open={capabilityOpen}
+                onClose={() => setCapabilityOpen(false)}
+                source="image"
+                projectId={sourceContext.projectId || "local-image-workbench"}
+                episodeId={sourceContext.episodeId}
+                sourceText={prompt}
+                targetKind="prompt"
+                targetId={imageCapabilityTargetId(sourceContext)}
+                onConsume={consumeCapabilityArtifacts}
+            />
+            <PromptSelectDialog open={promptDialogOpen} nodeGroup="image" onOpenChange={setPromptDialogOpen} onSelect={(value) => { setPrompt(value); setCapabilityTrace(undefined); void capabilityStateStore.removeItem(imageCapabilityStorageKey(sourceContext)); }} />
             <AssetPickerModal open={assetPickerOpen} title="选择参考图素材" defaultTab="library" defaultKind="image" allowedKinds={["image"]} onInsert={(payload) => void insertPickedAsset(payload)} onClose={() => setAssetPickerOpen(false)} />
             <Modal rootClassName="studio-modal" title="删除生成记录" open={deleteConfirmOpen} onCancel={() => setDeleteConfirmOpen(false)} onOk={deleteSelectedLogs} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
                 确定删除选中的 {selectedLogIds.length} 条生成记录吗？
@@ -918,6 +974,7 @@ async function normalizeLog(log: Partial<GenerationLog>, resolveMedia = true): P
         status: log.status || "成功",
         images,
         thumbnails: images.map((image) => image.dataUrl).filter((image) => image.trim()),
+        capabilityTrace: log.capabilityTrace,
     };
 }
 
@@ -957,6 +1014,14 @@ function parseImageWorkbenchSourceContext(): ImageWorkbenchSourceContext {
     };
 }
 
+function imageCapabilityTargetId(context: ImageWorkbenchSourceContext) {
+    return (context.assetId || context.briefId || context.libraryAssetId || "image-workbench").slice(0, 128);
+}
+
+function imageCapabilityStorageKey(context: ImageWorkbenchSourceContext) {
+    return [context.projectId || "local-image-workbench", context.episodeId || "project", imageCapabilityTargetId(context)].map(encodeURIComponent).join(":");
+}
+
 function buildLog({
     prompt,
     model,
@@ -967,6 +1032,7 @@ function buildLog({
     failCount,
     status,
     images,
+    capabilityTrace,
 }: {
     prompt: string;
     model: string;
@@ -977,6 +1043,7 @@ function buildLog({
     failCount: number;
     status: GenerationLog["status"];
     images: GeneratedImage[];
+    capabilityTrace?: ImageCapabilityTrace;
 }): GenerationLog {
     const logConfig = {
         model: config.model,
@@ -1003,5 +1070,6 @@ function buildLog({
         status,
         images,
         thumbnails: images.map((image) => image.dataUrl),
+        capabilityTrace,
     };
 }
