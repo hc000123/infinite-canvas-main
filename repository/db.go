@@ -69,8 +69,6 @@ func DB() (*gorm.DB, error) {
 			&model.AgentPlanConfirmation{},
 			&model.WorkflowRun{},
 			&model.WorkflowStageRun{},
-			&model.WorkflowArtifact{},
-			&model.WorkflowQualityGateResult{},
 			&model.WorkflowEvent{},
 			&model.SkillDefinition{},
 			&model.SkillVersion{},

@@ -138,6 +138,23 @@ func GetWorkflowStageRunByAgentRunID(agentRunID string) (model.WorkflowStageRun,
 	return stage, err == nil, err
 }
 
+func GetWorkflowStageRunByInvocationID(invocationID string) (model.WorkflowStageRun, bool, error) {
+	db, err := DB()
+	if err != nil {
+		return model.WorkflowStageRun{}, false, err
+	}
+	invocationID = strings.TrimSpace(invocationID)
+	if invocationID == "" {
+		return model.WorkflowStageRun{}, false, nil
+	}
+	var stage model.WorkflowStageRun
+	err = db.Where("invocation_id = ?", invocationID).Order("attempt desc, created_at desc").First(&stage).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return model.WorkflowStageRun{}, false, nil
+	}
+	return stage, err == nil, err
+}
+
 func ListWorkflowStageRuns(userID string, workflowRunID string) ([]model.WorkflowStageRun, error) {
 	db, err := DB()
 	if err != nil {
