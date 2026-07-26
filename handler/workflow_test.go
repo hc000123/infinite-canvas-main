@@ -34,6 +34,22 @@ func TestEnsureWorkflowRunReturnsStandardResponse(t *testing.T) {
 	if payload.Code != 0 || payload.Msg != "ok" || len(payload.Data) == 0 {
 		t.Fatalf("payload=%#v", payload)
 	}
+	var detail struct {
+		Stages []struct {
+			InvocationID string `json:"invocationId"`
+		} `json:"stages"`
+		Artifacts []struct {
+			ID              string   `json:"id"`
+			ArtifactSetHash string   `json:"artifactSetHash"`
+			ArtifactIDs     []string `json:"artifactIds"`
+		} `json:"artifacts"`
+	}
+	if err := json.Unmarshal(payload.Data, &detail); err != nil || len(detail.Stages) == 0 || len(detail.Artifacts) != 1 {
+		t.Fatalf("workflow detail=%#v err=%v", detail, err)
+	}
+	if !strings.Contains(string(payload.Data), `"invocationId":`) || detail.Artifacts[0].ArtifactSetHash == "" || len(detail.Artifacts[0].ArtifactIDs) != 1 || detail.Artifacts[0].ArtifactIDs[0] != detail.Artifacts[0].ID {
+		t.Fatalf("missing Invocation projection coordinates: %s", payload.Data)
+	}
 }
 
 func TestWorkflowRunDoesNotExposeAnotherUserRecord(t *testing.T) {

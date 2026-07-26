@@ -30,8 +30,7 @@
 - `agent_plan_confirmations`
 - `workflow_runs`
 - `workflow_stage_runs`
-- `workflow_artifacts`
-- `workflow_quality_gate_results`
+- `workflow_local_apply_receipts`
 - `workflow_events`
 - `skill_definitions`
 - `skill_versions`
@@ -488,15 +487,19 @@ M8 起，前台追溯信息不新增数据库字段，统一放入已脱敏 JSON
 
 ### workflow_stage_runs
 
-工作流阶段及其重试记录。每次尝试关联一个底层 `agent_run`，保存输入/输出产物、进度、审核哈希和浏览器本地写入回执。状态包括 `blocked`、`ready`、`queued`、`running`、`cancel_requested`、`needs_review`、`approved`、`rejected`、`applied`、`failed`、`cancelled`。
+工作流阶段及其重试投影。每个可执行阶段通过 `invocation_id` 关联唯一 Invocation；`agent_run_id`、输入/输出 ID、状态、进度、审核哈希和回执字段只为现有工作台提供投影，不是第二份执行真相。重试追加阶段记录但保持同一冻结 Invocation revision，状态由最新 Invocation attempt 映射。
 
 ### workflow_artifacts
 
-阶段产生的版本化结构化产物。`stage_run_id + version` 唯一；`content_hash` 用于确定性质量门、审核冲突和幂等写入检查。内容保存在 `content_json`，同时记录 schema 和模板版本。
+旧版阶段产物表。新数据库不再自动迁移，新 Workflow 不再写入；现有接口中的同名结构只是把权威 Invocation Artifact-set 临时投影为兼容 DTO。`content_hash / artifactSetHash` 等于完整有序 Artifact-set 哈希，`artifactIds` 保存该集合内的标准 Artifact ID。
 
 ### workflow_quality_gate_results
 
-确定性质量门结果。记录所校验产物及哈希、校验器版本、是否通过和结构化问题列表；模型自评不能覆盖本表的阻断结果。
+旧版工作流质量门表。新数据库不再自动迁移，新 Workflow 不再写入；工作台质量门响应来自 `invocation_gate_results` 的权威投影，模型自评不能覆盖系统业务门。
+
+### workflow_local_apply_receipts
+
+Workflow 对浏览器本地素材、分镜或生产包完成受控 Apply 后的服务端回执。记录用户、Invocation、Apply attempt、Workflow / Stage、目标、目标 ID、应用/跳过数量、版本、错误和安全元数据；与 `invocation_apply_attempts` 在同一事务内幂等写入，不复制 Artifact 内容。
 
 ### workflow_events
 

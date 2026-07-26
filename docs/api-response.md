@@ -55,22 +55,22 @@
 | 接口 | 说明 |
 | ---- | ---- |
 | `POST /workflow-runs` | 按项目、分集、工作流版本和剧本哈希幂等创建运行记录 |
-| `GET /workflow-runs/:id` | 返回最新阶段、版本化产物、质量门和底层任务摘要 |
+| `GET /workflow-runs/:id` | 返回最新阶段、Invocation Artifact-set 投影、质量门和底层任务摘要；阶段包含 `invocationId`，产物包含 `artifactSetHash` 与 `artifactIds` |
 | `GET /skill-options` | 按项目、Capability 和输入 / 输出 Artifact 类型返回可见的已发布 Skill 版本 |
-| `POST /workflow-runs/:id/stages/:stageId/start` | 校验依赖并使用 `idempotencyKey` 异步入队，可通过 `skillVersionId` 覆盖本次运行版本 |
+| `POST /workflow-runs/:id/stages/:stageId/start` | 校验标准 Artifact 依赖，通过统一 Preflight / Confirm 创建 `source=workflow` Invocation 并异步入队；可用 `skillVersionId` 精确冻结本次版本 |
 | `POST /workflow-runs/:id/media-batches` | 为美术或分镜阶段创建绑定启动幂等键的一次性参考图批次 |
 | `POST /workflow-media-batches/:id/items` | 以 multipart 上传角色 / 场景 / 道具参考图，最多 9 张 |
 | `GET /workflow-media-batches/:id` | 返回批次状态与安全化图片元数据，不返回服务端路径 |
 | `DELETE /workflow-media-batches/:id` | 删除尚未被任务占用的图片批次和临时文件 |
-| `POST /workflow-stage-runs/:id/cancel` | 取消排队任务或请求取消运行中任务 |
-| `POST /workflow-stage-runs/:id/retry` | 对失败、取消或驳回阶段创建新尝试 |
-| `POST /workflow-stage-runs/:id/review` | 使用当前 artifact hash 批准或驳回产物 |
-| `POST /workflow-stage-runs/:id/apply` | 记录前端已写入浏览器本地业务数据的回执 |
+| `POST /workflow-stage-runs/:id/cancel` | 委托统一 Invocation 取消排队任务或请求取消运行中任务 |
+| `POST /workflow-stage-runs/:id/retry` | 在同一冻结 Invocation revision 上追加 attempt，并创建新的阶段投影 |
+| `POST /workflow-stage-runs/:id/review` | 使用当前完整 Artifact-set hash 委托 Invocation 批准或驳回产物 |
+| `POST /workflow-stage-runs/:id/apply` | 通过 `workflow_local_receipt` adapter 幂等记录浏览器本地业务写入回执 |
 | `GET /workflow-runs/:id/events` | 使用 `after` 游标增量读取安全化事件 |
 | `GET /workflow-worker/health` | 返回 Worker 心跳、文本渠道可用性、积压和过期租约数量 |
 
-底层 Agent Run 状态包括 `queued`、`running`、`cancel_requested`、`needs_review`、`approved`、`rejected`、`applied`、`failed` 和 `cancelled`。创建只入队，不在 HTTP 请求中等待模型；Worker 领取后才预扣算力点。429、5xx 和网络失败按次数重试，没有可审核产物时返还本次预扣。重复幂等请求返回原任务，不重复扣费。
+Workflow 的执行真相是 Invocation、attempt、标准 Artifact、质量门、审核和 Apply；阶段与 Agent Run 仅作为工作台投影。创建只入队，不在 HTTP 请求中等待模型；Worker 领取后才预扣算力点。非法输出或余额不足不会创建可批准 Artifact，重复幂等请求返回原 Invocation，不重复扣费。
 
-阶段质量门和人工审核分开：确定性质量门未通过时不能批准；审核提交的 hash 与当前产物不一致时返回冲突提示；服务端不会直接写浏览器本地项目、素材、分镜或生产包，只保存用户确认后的 apply receipt。
+阶段质量门和人工审核分开：确定性质量门未通过时不能批准；审核提交的 Artifact-set hash 与当前完整有序产物集合不一致时返回冲突提示。新 Workflow 不再写 `workflow_artifacts` 或 `workflow_quality_gate_results`；服务端不会直接写浏览器本地项目、素材、分镜或生产包，只保存用户确认后的 Apply receipt。
 
 通用 Skill 管理接口位于 `/api/v1/admin`：`skills` 管理稳定身份和推荐版本，`skill-versions` 管理草稿、校验、试运行和发布，`skill-evaluations` 查询冻结评测，`workflow-stage-skill-bindings` 仅负责工作流消费端的项目 / 全局绑定。发布版本不可原地修改，发布与推荐分离，所有绑定和推荐变更写入审计记录。

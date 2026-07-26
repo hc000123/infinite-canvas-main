@@ -26,7 +26,7 @@
 - 并发校正中，已被另一请求提交而离开当前 failed attempt 的 stale 请求统一返回 transition conflict；Artifact 审批以生产 Invocation 当前 approved / applied 的 reviewed attempt 完整输出集及审核哈希为权威，因此重试保留的旧 ProducerAttempt Artifact 与新产物可作为同一已批准集合继续进入 Preflight。
 - `execution_target_unavailable` 不允许普通 Retry，必须 Repreflight 追加新 revision 并冻结新执行目标；旧 revision / attempt 保留，重新确认后才追加新 attempt。
 - 审核使用有序 binding / ordinal / Artifact ID / hash 计算产物集哈希；Apply 只允许服务端注册适配器，相同幂等键和请求只写入一次，适配器写入、回执和 Invocation 状态保持同事务，失败后可换新键重试。
-- 已接入需要登录的通用 Artifact 3 个路由和 Invocation 11 个路由：严格请求体、安全 DTO、用户隔离、列表/详情与事件游标分页均已落地；正式生产 Workflow 切换仍属于 Phase 3。
+- 已接入需要登录的通用 Artifact 3 个路由和 Invocation 11 个路由：严格请求体、安全 DTO、用户隔离、列表/详情与事件游标分页均已落地。
 
 Direct run 验收清单：
 
@@ -49,6 +49,28 @@ git diff --check
 ```
 
 无费用 HTTP smoke 只到预检：使用系统临时目录 SQLite、关闭 Worker、注册/登录临时用户，创建 `source_text`，调用精确内置 `3.1.0` Skill Version，检查 `awaiting_confirmation`、缺 requirement Confirm 拒绝、detail 和 events；不提交正确 Confirm，不会调用外部模型或产生费用。
+
+### Production Workflow Invocation Migration Phase 3
+
+- 视频 Workflow 的资产提取、资产 Brief、分镜和单镜提示词全部通过统一 Invocation Runtime 执行；`workflow_stage_runs.invocation_id` 连接工作台投影，底层 attempt、Artifact、质量门、审核与 Apply 是唯一执行真相。
+- 已停止新写入旧 `workflow_artifacts` / `workflow_quality_gate_results`；Workflow detail 从权威 Artifact-set 投影兼容结构，并新增 `invocationId`、`artifactSetHash` 与 `artifactIds`。控制台同时显示阶段、Invocation 和 AgentRun 坐标。
+- 上传参考图转换为不可变 `asset_rendition` Artifact，冻结素材/变体 ID、版本、SHA-256、MIME、顺序和 `@图N`。服务端路径只留在 Worker 私有 manifest；上一镜尾帧只能标记为普通 `continuity_reference`，业务门拒绝首帧复刻。
+- Review、Cancel、Retry 和 Apply 委托统一 Invocation 生命周期；Retry 保持同一 Skill revision / 内容哈希，`workflow_local_apply_receipts` 与 Invocation Apply attempt 同事务幂等写入。
+- 固定公交站剧本已覆盖完整确定性 E2E：生产剧本保留林秋、旧公交站、折起车票和原对白；资产证据必须是原文子串；Brief、分镜和提示词精确引用已批准父 Artifact；刷新后 Workflow / Invocation / Artifact-set 坐标不变；非法输出和余额不足均不生成可批准 Artifact。
+- 前端分镜依赖已改为“资产目录获批”，无需等待资产图片 Apply；标准 `assetId / sourceEvidence / coreFacts / brief` 可直接映射到现有素材写入结构。
+
+本阶段自动验收命令：
+
+```bash
+go test ./service ./handler -run 'TestProductionWorkflowInvocationE2E|TestEnsureWorkflowRunReturnsStandardResponse' -count=1
+go test ./... -count=1
+cd web && npm test
+cd web && npm run typecheck
+cd web && npm run build
+git diff --check
+```
+
+人工页面验收：使用固定公交站剧本从生产 Workflow 执行资产提取、资产 Brief、分镜和单镜提示词，完成审核与 Apply 后刷新页面；核对同一 Invocation / Artifact-set 恢复，并复测余额不足、非法输出和页面崩溃场景。
 
 ### 可组合 Agent Registry + Agent Plan Runtime Phase 4
 
