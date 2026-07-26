@@ -462,6 +462,7 @@ export default function CreativeProjectDetailPage() {
                 onEditCanvasPreset={setEditingCanvasPresetId}
                 onEditEpisodeTitle={openEpisodeTitleEdit}
                 onOpenAgentSettings={() => router.push(`/projects/${project.id}/agents`)}
+                onOpenWorkflowCenter={() => router.push(`/projects/${project.id}/workflows`)}
                 onEditProject={() => setProjectEditOpen(true)}
                 onFilterChange={setEpisodeFilter}
                 onImportEpisode={() => setEpisodeImportOpen(true)}

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Button, Empty, Input, Select, Tag } from "antd";
-import { Archive, ArrowRight, BarChart3, Bot, Clapperboard, Edit3, FileText, Image, Library, ListChecks, Maximize2, Plus, Sparkles, Trash2, TriangleAlert, Video, Wand2, type LucideIcon } from "lucide-react";
+import { Archive, ArrowRight, BarChart3, Bot, Clapperboard, Edit3, FileText, Image, Library, ListChecks, Maximize2, Plus, Sparkles, Trash2, TriangleAlert, Video, Wand2, Workflow, type LucideIcon } from "lucide-react";
 
 import { canvasEpisodeLabel } from "../../../canvas/utils/canvas-episode-context";
 import { canvasProjectPresetSummary } from "../../../canvas/utils/canvas-project-preset";
@@ -55,6 +55,7 @@ type ProjectEpisodeBoardProps = {
     onEditCanvasPreset: (canvasId: string) => void;
     onEditEpisodeTitle: (row: ProjectEpisodeBoardRow) => void;
     onOpenAgentSettings: () => void;
+    onOpenWorkflowCenter: () => void;
     onEditProject: () => void;
     onFilterChange: (filter: EpisodeFilter) => void;
     onImportEpisode: () => void;
@@ -90,6 +91,7 @@ export function ProjectEpisodeBoard({
     onEditCanvasPreset,
     onEditEpisodeTitle,
     onOpenAgentSettings,
+    onOpenWorkflowCenter,
     onEditProject,
     onFilterChange,
     onImportEpisode,
@@ -113,6 +115,14 @@ export function ProjectEpisodeBoard({
                     >
                         <Bot className="size-4" />
                         Agent 中心
+                    </button>
+                    <button
+                        type="button"
+                        className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"
+                        onClick={onOpenWorkflowCenter}
+                    >
+                        <Workflow className="size-4" />
+                        Workflow 中心
                     </button>
                 </nav>
 
