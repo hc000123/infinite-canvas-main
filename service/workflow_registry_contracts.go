@@ -123,3 +123,35 @@ type WorkflowValidationResult struct {
 	ContentHash   string                 `json:"contentHash"`
 	ResolvedNodes []ResolvedWorkflowNode `json:"resolvedNodes"`
 }
+
+type WorkflowPreviewInput struct {
+	ProjectID         string             `json:"projectId"`
+	EpisodeID         string             `json:"episodeId"`
+	InputArtifactRefs []ArtifactRefInput `json:"inputArtifactRefs"`
+	ManualSelections  map[string]string  `json:"manualSelections"`
+	ProjectTags       []string           `json:"projectTags"`
+	Parameters        json.RawMessage    `json:"parameters"`
+}
+
+type WorkflowNodeRoutePreview struct {
+	NodeKey           string               `json:"nodeKey"`
+	Name              string               `json:"name"`
+	ExecutorType      string               `json:"executorType"`
+	AgentVersionID    string               `json:"agentVersionId,omitempty"`
+	SkillVersionID    string               `json:"skillVersionId,omitempty"`
+	SkillContentHash  string               `json:"skillContentHash,omitempty"`
+	RouteTrace        InvocationRouteTrace `json:"routeTrace"`
+	EstimatedCredits  int                  `json:"estimatedCredits"`
+	ConfirmationCodes []string             `json:"confirmationCodes"`
+	BlockCode         string               `json:"blockCode,omitempty"`
+	BlockMessage      string               `json:"blockMessage,omitempty"`
+}
+
+type WorkflowRoutePreview struct {
+	WorkflowVersionID        string                     `json:"workflowVersionId"`
+	ContentHash              string                     `json:"contentHash"`
+	Executable               bool                       `json:"executable"`
+	EstimatedCredits         int64                      `json:"estimatedCredits"`
+	ConfirmationRequirements []string                   `json:"confirmationRequirements"`
+	Nodes                    []WorkflowNodeRoutePreview `json:"nodes"`
+}
