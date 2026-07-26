@@ -79,8 +79,8 @@ export function CapabilityRunDrawer({ open, onClose, title = "Skill 能力", ...
                 </header>
 
                 <div className="space-y-4 p-5">
-                    {run.error ? <Alert type="error" showIcon message={run.error} /> : null}
-                    {!run.fingerprintMatches && run.frozenLocalFingerprint ? <Alert type="warning" showIcon message="当前文本或 Skill 已与预检快照不同" description="确认已锁定；请重新预检生成新的 Invocation。" /> : null}
+                    {run.error ? <Alert type="error" showIcon title={run.error} /> : null}
+                    {!run.fingerprintMatches && run.frozenLocalFingerprint ? <Alert type="warning" showIcon title="当前文本或 Skill 已与预检快照不同" description="确认已锁定；请重新预检生成新的 Invocation。" /> : null}
 
                     <section className="rounded-lg border p-4" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
                         <div className="mb-2 flex items-center justify-between gap-3"><div className="text-sm font-semibold">Skill 版本</div><Tag>{run.skillOptions.length} 个可见版本</Tag></div>

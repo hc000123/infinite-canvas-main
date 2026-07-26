@@ -2,13 +2,16 @@ package handler_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/basketikun/infinite-canvas/config"
 	"github.com/basketikun/infinite-canvas/model"
@@ -99,6 +102,193 @@ func TestInvocationHTTPDirectPreflightThroughRealRouter(t *testing.T) {
 			t.Fatalf("non-zero-byte %s accepted: %s", suffix, response.Raw)
 		}
 	}
+}
+
+const imageCapabilityFixedScript = `场次 1，清晨，旧公交站。
+林秋站在站牌下，手里捏着一张折起的车票。公交车由远及近。
+林秋低声说：“这次不等了。”
+她把车票收进口袋，向车门走去。`
+
+func TestInvocationHTTPImageCapabilityProducesApprovedAssetBriefAndClientReceipt(t *testing.T) {
+	app := setupInvocationHTTPRouter(t)
+	fixture := createImageCapabilityFixtureSkill(t)
+	ownerToken := registerAndLoginInvocationHTTPUser(t, app, "image-capability-owner")
+	foreignToken := registerAndLoginInvocationHTTPUser(t, app, "image-capability-foreign")
+
+	createdResponse := invocationHTTPCall(t, app, http.MethodPost, "/api/v1/artifacts", ownerToken, map[string]any{
+		"artifactType": "source_text", "schemaVersion": "1.0.0", "projectId": "project-image", "episodeId": "episode-image",
+		"payload": map[string]any{"text": imageCapabilityFixedScript},
+	})
+	if createdResponse.Code != 0 {
+		t.Fatalf("create source response=%s", createdResponse.Raw)
+	}
+	var source service.ArtifactEnvelope
+	decodeInvocationHTTPData(t, createdResponse, &source)
+
+	preflightResponse := invocationHTTPCall(t, app, http.MethodPost, "/api/v1/invocations", ownerToken, map[string]any{
+		"source": "image", "projectId": "project-image", "episodeId": "episode-image",
+		"skillVersionId": fixture.Version.ID, "expectedOutputArtifactType": "asset_brief",
+		"inputArtifactRefs": []map[string]any{{"bindingName": "source", "artifactId": source.Artifact.ID, "contentHash": source.Artifact.ContentHash}},
+		"parameters":        map[string]any{"consumerSurface": "image"}, "idempotencyKey": "image-capability-fixed-preflight",
+	})
+	if preflightResponse.Code != 0 {
+		t.Fatalf("preflight response=%s", preflightResponse.Raw)
+	}
+	var preflight service.InvocationPreflightResponse
+	decodeInvocationHTTPData(t, preflightResponse, &preflight)
+	if preflight.Run.Source != "image" || preflight.Run.Status != model.InvocationStatusAwaitingConfirmation || preflight.Revision.SkillVersionID != fixture.Version.ID || preflight.Revision.SkillContentHash != fixture.Version.ContentHash {
+		t.Fatalf("preflight=%#v fixture=%#v", preflight, fixture.Version)
+	}
+	if len(preflight.InputArtifactRefs) != 1 || preflight.InputArtifactRefs[0].ArtifactID != source.Artifact.ID || preflight.InputArtifactRefs[0].ArtifactHash != source.Artifact.ContentHash {
+		t.Fatalf("input refs=%#v source=%#v", preflight.InputArtifactRefs, source.Artifact)
+	}
+	if foreign := invocationHTTPCall(t, app, http.MethodGet, "/api/v1/invocations/"+preflight.Run.ID, foreignToken, nil); foreign.Code == 0 {
+		t.Fatalf("foreign detail accepted: %s", foreign.Raw)
+	}
+
+	confirmedResponse := invocationHTTPCall(t, app, http.MethodPost, "/api/v1/invocations/"+preflight.Run.ID+"/confirm", ownerToken, map[string]any{"requirementCodes": preflight.ConfirmationRequirements})
+	if confirmedResponse.Code != 0 {
+		t.Fatalf("confirm response=%s", confirmedResponse.Raw)
+	}
+	var confirmed service.InvocationLifecycleResponse
+	decodeInvocationHTTPData(t, confirmedResponse, &confirmed)
+	if confirmed.Run.Status != model.InvocationStatusQueued || confirmed.Attempt == nil || confirmed.Attempt.Attempt != 1 {
+		t.Fatalf("confirmed=%#v", confirmed)
+	}
+
+	wantBrief := "林秋站在清晨的旧公交站，手持折起的车票，公交车由远及近。保留原对白：“这次不等了。”"
+	rawOutput, _ := json.Marshal(map[string]any{"assetId": "lin-qiu", "brief": wantBrief, "format": "image_prompt"})
+	upstreamResponse, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": string(rawOutput)}}}})
+	client := &http.Client{Transport: invocationRoundTripper(func(request *http.Request) (*http.Response, error) {
+		body, _ := io.ReadAll(request.Body)
+		if !bytes.Contains(body, []byte("林秋")) || !bytes.Contains(body, []byte("折起的车票")) || !bytes.Contains(body, []byte("这次不等了")) {
+			t.Fatalf("worker request lost fixed script details: %s", body)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(bytes.NewReader(upstreamResponse)), Request: request}, nil
+	})}
+	worker := service.NewAgentRunWorker(service.AgentRunWorkerOptions{ID: "image-capability-e2e", LeaseDuration: time.Minute, HTTPClient: client})
+	if err := worker.ProcessOne(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	detailResponse := invocationHTTPCall(t, app, http.MethodGet, "/api/v1/invocations/"+preflight.Run.ID, ownerToken, nil)
+	if detailResponse.Code != 0 {
+		t.Fatalf("detail response=%s", detailResponse.Raw)
+	}
+	var detail service.InvocationDetail
+	decodeInvocationHTTPData(t, detailResponse, &detail)
+	if detail.Run.Status != model.InvocationStatusNeedsReview || detail.ArtifactSetHash == "" || len(detail.OutputArtifacts) != 1 {
+		t.Fatalf("detail=%#v", detail)
+	}
+	output := detail.OutputArtifacts[0]
+	if output.Artifact.ArtifactType != "asset_brief" || output.Artifact.ProducerInvocationID == nil || *output.Artifact.ProducerInvocationID != preflight.Run.ID || len(output.ParentArtifactIds) != 1 || output.ParentArtifactIds[0] != source.Artifact.ID {
+		t.Fatalf("output lineage=%#v", output)
+	}
+	if output.Payload["assetId"] != "lin-qiu" || output.Payload["brief"] != wantBrief || output.Payload["format"] != "image_prompt" {
+		t.Fatalf("output payload=%#v", output.Payload)
+	}
+	if !strings.Contains(output.Payload["brief"].(string), "林秋") || !strings.Contains(output.Payload["brief"].(string), "旧公交站") || !strings.Contains(output.Payload["brief"].(string), "折起的车票") || !strings.Contains(output.Payload["brief"].(string), "“这次不等了。”") {
+		t.Fatalf("fixed details missing from brief: %s", output.Payload["brief"])
+	}
+
+	reviewResponse := invocationHTTPCall(t, app, http.MethodPost, "/api/v1/invocations/"+preflight.Run.ID+"/review", ownerToken, map[string]any{
+		"decision": "approved", "attempt": detail.Run.LatestAttempt, "artifactSetHash": detail.ArtifactSetHash, "comment": "固定剧本效果验收通过",
+	})
+	if reviewResponse.Code != 0 {
+		t.Fatalf("review response=%s", reviewResponse.Raw)
+	}
+	var reviewed service.InvocationLifecycleResponse
+	decodeInvocationHTTPData(t, reviewResponse, &reviewed)
+	if reviewed.Run.Status != model.InvocationStatusApproved || reviewed.Run.ReviewedArtifactSetHash != detail.ArtifactSetHash {
+		t.Fatalf("reviewed=%#v", reviewed)
+	}
+
+	applyInput := map[string]any{
+		"idempotencyKey": "image-capability-apply", "attempt": detail.Run.LatestAttempt, "artifactSetHash": detail.ArtifactSetHash,
+		"target": "client_local_receipt", "targetId": "image-workbench",
+		"payload": map[string]any{"surface": "image", "targetKind": "prompt", "targetId": "image-workbench", "artifactIds": []string{output.Artifact.ID}},
+	}
+	applyResponse := invocationHTTPCall(t, app, http.MethodPost, "/api/v1/invocations/"+preflight.Run.ID+"/apply", ownerToken, applyInput)
+	if applyResponse.Code != 0 {
+		t.Fatalf("apply response=%s", applyResponse.Raw)
+	}
+	var applied service.InvocationApplyAttemptSummary
+	decodeInvocationHTTPData(t, applyResponse, &applied)
+	if applied.Status != "applied" || applied.Target != "client_local_receipt" || applied.TargetID != "image-workbench" || applied.ArtifactSetHash != detail.ArtifactSetHash {
+		t.Fatalf("applied=%#v", applied)
+	}
+	replayResponse := invocationHTTPCall(t, app, http.MethodPost, "/api/v1/invocations/"+preflight.Run.ID+"/apply", ownerToken, applyInput)
+	var replayed service.InvocationApplyAttemptSummary
+	decodeInvocationHTTPData(t, replayResponse, &replayed)
+	if replayResponse.Code != 0 || replayed.ID != applied.ID {
+		t.Fatalf("replay=%#v raw=%s", replayed, replayResponse.Raw)
+	}
+	if foreign := invocationHTTPCall(t, app, http.MethodPost, "/api/v1/invocations/"+preflight.Run.ID+"/apply", foreignToken, applyInput); foreign.Code == 0 {
+		t.Fatalf("foreign apply accepted: %s", foreign.Raw)
+	}
+	claims, err := service.ParseToken(ownerToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applies, err := repository.ListInvocationApplyAttempts(claims.UserID, preflight.Run.ID)
+	if err != nil || len(applies) != 1 {
+		t.Fatalf("apply attempts=%#v err=%v", applies, err)
+	}
+	var receipt map[string]any
+	if json.Unmarshal([]byte(applies[0].ReceiptJSON), &receipt) != nil || receipt["surface"] != "image" || receipt["targetKind"] != "prompt" || receipt["targetId"] != "image-workbench" {
+		t.Fatalf("receipt=%s", applies[0].ReceiptJSON)
+	}
+	receiptArtifactIDs, _ := receipt["artifactIds"].([]any)
+	if len(receiptArtifactIDs) != 1 || receiptArtifactIDs[0] != output.Artifact.ID {
+		t.Fatalf("receipt artifactIds=%#v", receiptArtifactIDs)
+	}
+}
+
+type invocationRoundTripper func(*http.Request) (*http.Response, error)
+
+func (transport invocationRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	return transport(request)
+}
+
+func createImageCapabilityFixtureSkill(t *testing.T) service.ResolvedSkill {
+	t.Helper()
+	packageValue := service.SkillPackage{
+		Manifest: service.SkillManifest{
+			Capabilities: []string{"image.prompt.prepare"}, InputArtifactTypes: []string{"source_text"}, OutputArtifactTypes: []string{"asset_brief"},
+			SchemaCompatibility: map[string]string{"source_text": ">=1.0 <2.0"}, SideEffects: []string{"none"}, EstimatedCostClass: "none", ExecutorKind: "text_model", RequiredTools: []string{},
+		},
+		Files: map[string]string{"SKILL.md": "将输入剧本编写为可直接生图的资产提示词；必须保留角色、场景、道具和原对白。"},
+		InputContract: service.SkillInputContract{
+			RequiredInputs: []string{"script"}, ImagePolicy: service.SkillImagePolicy{Required: false, Min: 0, Max: 0, AllowTextFallback: true, AllowedTypes: []string{}},
+			ArtifactInputs: []service.ArtifactInputSpec{{BindingName: "source", ArtifactType: "source_text", Required: true, Min: 1, Max: 1, SchemaConstraint: ">=1.0 <2.0"}},
+		},
+		OutputContract: service.SkillOutputContract{
+			SchemaVersion: "1.0.0",
+			Schema: map[string]any{
+				"type": "object", "additionalProperties": false, "required": []string{"assetId", "brief", "format"},
+				"properties": map[string]any{
+					"assetId": map[string]any{"type": "string", "minLength": 1},
+					"brief":   map[string]any{"type": "string", "minLength": 1},
+					"format":  map[string]any{"type": "string", "minLength": 1},
+				},
+			},
+			ArtifactOutputs: []service.ArtifactOutputSpec{{BindingName: "brief", ArtifactType: "asset_brief", Min: 1, Max: 1, SchemaVersion: "1.0.0"}},
+		},
+		QualityGateProfile: []string{"schema", "asset"},
+	}
+	created, err := service.CreateSkill("fixture-admin", model.SkillOwnerSystem, "", "图片资产提示词", "固定剧本 HTTP E2E", service.SkillDraftInput{Version: "1.0.0", Package: packageValue})
+	if err != nil {
+		t.Fatal(err)
+	}
+	published, err := service.PublishSkillVersion("fixture-admin", created.Version.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recommended, err := service.RecommendPublishedSkillVersion("fixture-admin", published.Skill.ID, published.Version.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return recommended
 }
 
 type invocationHTTPResponse struct {

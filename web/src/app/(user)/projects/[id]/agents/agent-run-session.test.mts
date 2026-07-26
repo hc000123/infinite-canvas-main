@@ -6,8 +6,8 @@ import { agentRunSessionKey, loadAgentRunSession, saveAgentRunSession } from "./
 test("stores the latest Agent Plan per project and Agent", async () => {
     const values = new Map<string, unknown>();
     const storage = {
-        getItem: async <T>(key: string) => (values.get(key) as T | undefined) ?? null,
-        setItem: async <T>(key: string, value: T) => { values.set(key, value); return value; },
+        getItem: async <T,>(key: string) => (values.get(key) as T | undefined) ?? null,
+        setItem: async <T,>(key: string, value: T) => { values.set(key, value); return value; },
     };
     const session = { planId: "plan-1", sourceText: "原始剧本", episodeId: "episode-1", goal: "完成前期制作" };
 

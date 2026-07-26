@@ -6,8 +6,8 @@ import { agentCenterSessionKey, loadAgentCenterSession, saveAgentCenterSession }
 test("restores the selected Agent and tab per project", async () => {
     const values = new Map<string, unknown>();
     const storage = {
-        getItem: async <T>(key: string) => (values.get(key) as T | undefined) ?? null,
-        setItem: async <T>(key: string, value: T) => { values.set(key, value); return value; },
+        getItem: async <T,>(key: string) => (values.get(key) as T | undefined) ?? null,
+        setItem: async <T,>(key: string, value: T) => { values.set(key, value); return value; },
     };
     const session = { selectedAgentId: "agent-2", activeTab: "run" as const };
 

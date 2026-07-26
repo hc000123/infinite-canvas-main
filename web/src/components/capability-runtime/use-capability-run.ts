@@ -186,6 +186,7 @@ export function useCapabilityRun(options: UseCapabilityRunOptions) {
     const mutationError = mutations.find((mutation) => mutation.error)?.error;
     const reset = () => {
         if (invocationId) queryClient.removeQueries({ queryKey: ["capability-invocation", invocationId] });
+        mutations.forEach((mutation) => mutation.reset());
         setPreflight(undefined);
         setSourceArtifact(undefined);
         setFrozenLocalFingerprint("");

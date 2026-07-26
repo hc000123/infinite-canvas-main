@@ -28,15 +28,15 @@ test("factory wires all routes to the correct authenticated adapters", async () 
     type Call = { helper: "GET" | "POST" | "POST_EMPTY"; path: string; params?: InvocationApiParams; body?: unknown; token?: string };
     const calls: Call[] = [];
     let tokenReads = 0;
-    const apiGet: InvocationApiGet = async <T>(path: string, params?: InvocationApiParams, token?: string) => {
+    const apiGet: InvocationApiGet = async <T,>(path: string, params?: InvocationApiParams, token?: string) => {
         calls.push({ helper: "GET", path, params, token });
         return undefined as T;
     };
-    const apiPost: InvocationApiPost = async <T>(path: string, body?: unknown, token?: string) => {
+    const apiPost: InvocationApiPost = async <T,>(path: string, body?: unknown, token?: string) => {
         calls.push({ helper: "POST", path, body, token });
         return undefined as T;
     };
-    const apiPostEmpty: InvocationApiPostEmpty = async <T>(path: string, token?: string) => {
+    const apiPostEmpty: InvocationApiPostEmpty = async <T,>(path: string, token?: string) => {
         calls.push({ helper: "POST_EMPTY", path, token });
         return undefined as T;
     };

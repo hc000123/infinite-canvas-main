@@ -5,6 +5,7 @@
 + [新增] 新增统一 Artifact 与 Invocation Runtime，独立 Skill 调用可冻结版本、预检契约、追踪质量门并在审核后幂等 Apply。
 + [新增] 新增可版本化 Agent Registry 与顺序 Agent Plan Runtime，支持项目自由组合独立 Skill、冻结版本和额度，并通过统一 Invocation / Artifact 链逐步审核交接。
 + [新增] 项目新增 Workflow 中心，可自由组合 Skill / Agent DAG，支持固定、标签和运行前手选路由、契约校验、版本发布、成本预览、审批、重试、取消及 Artifact 轨迹恢复。
++ [新增] 生图工作台可直接调用已发布 Skill，统一完成 Artifact 输入匹配、版本/额度冻结、人工审核、提示词回写与本地消费回执，并保留轻量 Invocation 追溯坐标。
 + [优化] 正式视频 Workflow 已迁入统一 Invocation / Artifact Runtime，阶段支持精确 Skill 冻结、标准资产与媒体引用、完整产物集审核、幂等 Apply 和失败安全门，并保持现有工作台接口与刷新恢复体验。
 + [优化] 将固定六阶段 Workflow Skill 中心泛化为可搜索、可版本化、可评测和可独立管理的 Skill Registry。
 + [修复] 修复 Workflow 新建时空 Skill 契约导致页面崩溃、默认选中不兼容 Skill、未保存草稿可误校验和编辑器弃用警告。

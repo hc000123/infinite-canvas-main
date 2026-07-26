@@ -32,7 +32,7 @@
 - Phase 3 正式视频 Workflow 迁移：已实现，待用户确认。视频工作流阶段已改为统一 Invocation / Artifact 执行真相，旧阶段表只保留工作台投影。
 - Phase 4 Agent Registry + Agent Plan Runtime：已实现，自动验收和固定剧本浏览器验收通过，待用户确认。Agent 可独立版本化并顺序组合 Skill，不复制 Skill 正文或契约。
 - Phase 5 Workflow Composer：已实现，待用户确认。项目 Workflow 中心支持 Skill / Agent DAG、固定 / 标签 / 运行前手选路由、条件、重试、审批、契约校验、路由预览、版本发布和执行控制台。
-- Phase 6 画布和图片入口：待接入统一能力选择器、对话 Agent 调度和 Artifact 引用回写。
+- Phase 6 画布和图片入口：生图工作台的统一 Skill 能力选择器、Artifact 预览/审核、提示词回写和 `client_local_receipt` 已实现，待用户页面确认。剩余画布节点直接调用 Skill、画布对话 Agent Temporary Plan、旧硬编码 Prompt Agent Skill Pack 等价替换与真实文本模型固定剧本效果验收继续待做。
 
 ### A. 当前能力收口
 

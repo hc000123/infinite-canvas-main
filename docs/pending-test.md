@@ -96,6 +96,18 @@ git diff --check
 - 本阶段自动门禁：`go test ./... -count=1`、前端 757 项测试、`npm run typecheck`、`npm run build`、Workflow Registry / 编辑器专项测试和 `git diff --check`。
 - 当前边界：图片页统一能力选择器、画布节点直接调用 Skill、画布对话 Agent Temporary Plan、Artifact 引用回写和真实模型固定剧本效果验收继续进入 Phase 6。
 
+### 生图工作台统一 Skill 能力入口 Phase 6A
+
+- 生图工作台的“提示词库”旁新增“Skill 能力”；抽屉只读取当前用户可见的已发布 Skill 和项目已批准 Artifact，按每个 Binding 精确匹配类型，不隐式复用同一 Artifact 填充两个输入。
+- 当前文本只在所选 Skill 需要 `source_text` 时创建不可变 Artifact；预检冻结精确 Skill Version、内容哈希、输入引用、执行模型和额度。预检后文本或 Skill 变化会锁定确认，不会使用过期快照。
+- 运行不自动审核、不自动写回；`needs_review` 必须人工批准完整 Artifact-set，然后点击“使用此产物”才替换提示词。写入成功后通过 `client_local_receipt` 幂等记录 `surface / targetKind / targetId / artifactIds`。
+- 提示词优先使用与当前资产 ID 匹配的 `asset_brief.brief`，其次是稳定顺序的第一个 `asset_brief`，并可消费 `production_script.productionScript` 和 `video_prompt_package.items[0].prompt`。空集合、未批准集合或空文本不会覆盖编辑器。
+- 当前已使用的提示词与轻量追溯坐标用用户隔离 `localforage` 恢复；生成记录和保存素材只记录 `invocationId / artifactIds / skillVersionId / appliedAt`，不复制 Artifact payload。
+- 固定公交站剧本 HTTP E2E 已覆盖 `image source → source_text → 精确 Skill Version/Hash → asset_brief → review → client_local_receipt`，产物保留“林秋 / 旧公交站 / 折起的车票 / 原对白”，并验证父 Artifact、Apply 重放幂等和跨用户隔离。
+- 当前本地账号仍没有可用真实文本模型通道；浏览器已用固定公交站剧本验证预检会立即进入“已阻断”，明确显示“执行通道不可用（execution_target_unavailable）”，不会无限等待。确定性成功链由 HTTP E2E 验证；配置真实文本模型后，仍需补一次同剧本的真实效果验收。
+- 自动门禁已覆盖 `go test ./... -count=1`、前端 767 项测试、`npm run typecheck`、`npm run lint:fast`、`npm run build` 和 `git diff --check`；浏览器另验收页面无崩溃、入口可打开、不兼容 Skill 显示缺失 Binding、固定版本/哈希/模型/额度冻结及无新增控制台错误。
+- 本页验收：打开 `/image`，确认不兼容 Skill 显示缺失 Binding；预检后检查冻结版本/哈希/模型/额度；取消一次确认无提示词回写；批准并使用一次产物，刷新后确认提示词与坐标恢复。
+
 ### 项目详情素材引用入口收口
 
 - 项目详情不再显示“素材引用”页签，只保留主要生产入口。
