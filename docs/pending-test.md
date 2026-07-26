@@ -82,7 +82,19 @@ git diff --check
 - 独立进程零费用冒烟会编译并启动真实 Go 后端，使用临时 SQLite、关闭 Worker，完成注册 / 登录、Artifact、Plan 和预检，再提交错误确认指纹；数据库必须保持 0 个 Invocation、0 个 AgentRun 和 0 条算力流水。
 - 真实浏览器验收已通过：在独立 Next / Go / SQLite / Mock 模型进程中注册并登录普通用户，复制“前期制作 Agent”、校验、发布并设为推荐；固定剧本完成 Artifact → 预检 → 确认 → 剧本整理审核 → 资产提取审核 → Plan 完成。`production_script` 保留“林秋 / 旧公交站 / 折起的车票”，`asset_catalog` 提取同名角色、场景和道具并保留逐条原文证据，第二步父 Artifact 精确指向第一步已批准产物。
 - 浏览器验收同时覆盖真实失败呈现：0 算力点在执行时进入 `failed`，错误为“算力点不足”；错误类型的第二步 JSON 被第一步质量门拒绝且不产生 Artifact。完成态 Plan ID、来源文本、Episode、当前 Agent / 页签和 Artifact Trace 使用用户隔离的 `localforage` 恢复；即使项目已有多个项目 Agent，整页刷新后仍直接显示同一条已完成 Plan。无推荐版本的项目 Agent 显示“草稿待发布”，不再误报“0 个 Skill”。
-- 当前边界：正式生产 Workflow 切换、Workflow Composer、画布 / 图片入口的统一能力选择器和真实模型固定剧本效果验收仍记录在 `docs/todo.md`，本项不提前宣称完成。
+- 当前边界：画布 / 图片入口的统一能力选择器和真实模型固定剧本效果验收仍记录在 `docs/todo.md`，本项不提前宣称完成。
+
+### 可组合 Workflow Composer Runtime Phase 5
+
+- 项目详情新增 `Workflow 中心`，Registry 与编辑器只保存 DAG 和独立 Skill / Agent 版本引用；支持新建、复制、草稿版本、校验、发布、推荐版本及发布后不可变。
+- 节点支持 Skill / Agent 执行器、依赖、输入 Artifact 映射、输出类型、确定性条件、运行前确认、产物审核和最大尝试次数。Skill 路由支持 `fixed`、`tag_route` 和 `manual_before_run`，可查看候选分数与逐项 rejection reason。
+- 保存 / 校验会拒绝循环 DAG、重复 Key、无效依赖、错误输入映射和不兼容契约；草稿存在未保存改动或 Mutation 进行中时禁止校验、发布和交叉动作，避免以旧 Package 产生成功提示。
+- Execution Console 先把文本登记为不可变 `source_text` Artifact，再完成路由预览、冻结 revision、精确确认、DAG 推进、审核等待、重试 / 失败坐标同步和取消；刷新后使用用户隔离的 `localforage` 恢复同一 execution ID，不创建重复运行。
+- Skill 空输入 / 输出契约统一序列化为数组，避免新建 Workflow 对 `null.map()` 崩溃；默认 Skill 优先选择推荐且接收 `source_text` 的版本，当前默认是“剧本整理 v3.1.0”。页面已移除 `Input addonBefore` 弃用写法。
+- 确定性服务端 E2E 使用固定公交站剧本覆盖 Skill 节点、Agent 节点、审批、失败、重试、取消和 Artifact 血缘；浏览器已验证项目入口、创建、发布不可变、循环保存拒绝、手选缺失 / 不兼容阻断、候选解释、source_text 创建、无模型通道错误和刷新恢复。
+- 当前本地账号没有可用文本模型通道，浏览器真实执行准确阻断为 `execution_target_unavailable`；完整成功执行、计费、审批和刷新坐标由确定性后端 E2E 覆盖。配置可用文本模型后仍需用固定公交站剧本补一次真实模型效果验收。
+- 本阶段自动门禁：`go test ./... -count=1`、前端 757 项测试、`npm run typecheck`、`npm run build`、Workflow Registry / 编辑器专项测试和 `git diff --check`。
+- 当前边界：图片页统一能力选择器、画布节点直接调用 Skill、画布对话 Agent Temporary Plan、Artifact 引用回写和真实模型固定剧本效果验收继续进入 Phase 6。
 
 ### 项目详情素材引用入口收口
 

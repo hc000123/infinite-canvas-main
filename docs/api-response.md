@@ -48,6 +48,31 @@
 
 客户端不得把 `idempotencyKey`、`parameters`、Artifact payload 或任何业务文本当作服务端凭证；服务端也不会在上述 DTO 中回显 API Key、Authorization 头或完整执行请求。
 
+## Workflow Registry 与 Composer Runtime 接口
+
+下列接口均位于 `/api/v1`，需要登录。系统 Workflow 对用户只读可见；项目 Workflow、版本和 Execution 按 JWT 用户及项目隔离。所有写入请求使用严格字段解码，标记为 0 字节的生命周期接口不接受 `{}` 或空白正文。
+
+| 接口 | 说明 |
+| ---- | ---- |
+| `GET /workflows?projectId=:id` | 返回用户可见的系统 / 项目 Workflow、版本摘要和推荐版本 Package。 |
+| `POST /workflows` | 创建项目 Workflow 与首个草稿版本；Package 只保存 DAG、输入类型、Skill / Agent 引用、路由、条件、确认和重试策略。 |
+| `GET /workflows/:id?projectId=:id` | 返回 Workflow、标签、版本和推荐 Package；跨用户项目 Workflow 按不存在处理。 |
+| `POST /workflows/:id/copy` | 将可见系统 / 项目 Workflow 复制为指定项目的新 Workflow 草稿。 |
+| `POST /workflows/:id/versions` | 为项目 Workflow 创建新的可编辑草稿版本。 |
+| `GET /workflow-versions/:id` | 返回可见版本及完整 DAG Package。 |
+| `PATCH /workflow-versions/:id` | 只允许修改项目 Workflow 的草稿；发布版本不可原地修改。 |
+| `POST /workflow-versions/:id/validate` | **Body 必须是 0 字节**；校验节点 Key、依赖 DAG、输入映射、条件、路由和 Skill / Agent 契约，返回内容哈希与解析版本。 |
+| `POST /workflow-versions/:id/preview` | 使用输入 Artifact、项目标签和手选版本预览每个节点的路由候选、分数、拒绝原因、阻断码、确认项和预计额度，不创建 Execution。 |
+| `POST /workflow-versions/:id/publish` | **Body 必须是 0 字节**；校验通过后发布不可变版本。 |
+| `PUT /workflows/:id/recommended-version` | `{ workflowVersionId }`；推荐版本必须属于同一 Workflow 且已经发布。 |
+| `POST /workflow-executions/preflight` | 用精确发布版本、输入 Artifact、手选版本、项目标签、参数和幂等键冻结 Execution revision；不可执行的路由保留稳定阻断码。 |
+| `GET /workflow-executions/:id` | 返回安全化 run、revision、节点坐标、路由预览、确认项和确认凭证，不暴露请求哈希或内部快照。 |
+| `POST /workflow-executions/:id/confirm` | `{ revision, fingerprint, requirementCodes }` 必须精确匹配冻结 revision，确认后按 DAG 推进可运行节点。 |
+| `POST /workflow-executions/:id/continue` | **Body 必须是 0 字节**；同步子 Invocation / Agent Plan 状态，并启动依赖已满足的后续节点。 |
+| `POST /workflow-executions/:id/cancel` | **Body 必须是 0 字节**；停止继续调度，并向当前活动的 Invocation / Agent Plan 传播取消。 |
+
+Skill 路由支持 `fixed`、`tag_route` 和 `manual_before_run`；候选不兼容时返回可展示的稳定错误码与 rejection reasons。节点输出始终引用统一 Artifact，不在 Workflow 表内复制业务产物。
+
 ## 视频工作流接口
 
 视频工作流用户接口均位于 `/api/v1`，需要登录，并按 `user_id` 校验 workflow、stage、artifact 和 event 所有权：

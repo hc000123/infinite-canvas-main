@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { SkillOption } from "../../../../../../../services/api/admin-skills.ts";
 import type { WorkflowPackage, WorkflowNodeSpec } from "../../../../../../../services/api/workflow-registry.ts";
-import { addWorkflowNode, createWorkflowNode, removeWorkflowNode, setWorkflowSkillBindingMode, topologicalWorkflowLanes, workflowRouteIssueLabel, workflowSourceInputNames } from "./workflow-editor-model.ts";
+import { addWorkflowNode, createWorkflowNode, removeWorkflowNode, selectWorkflowStarterSkill, setWorkflowSkillBindingMode, topologicalWorkflowLanes, workflowRouteIssueLabel, workflowSourceInputNames } from "./workflow-editor-model.ts";
 
 const skillNode = (nodeKey: string, outputArtifactType: string, dependsOn: string[] = []): WorkflowNodeSpec => ({
     nodeKey,
@@ -54,4 +55,16 @@ test("source text artifact is bound once to every distinct workflow input name",
     const second = skillNode("classify", "content_profile");
     second.inputBindings = [{ bindingName: "source", artifactType: "source_text", source: "workflow_input", workflowInputName: "classification_source", required: true }];
     assert.deepEqual(workflowSourceInputNames({ inputArtifactTypes: ["source_text"], contentHash: "", nodes: [first, second] }), ["script", "classification_source"]);
+});
+
+test("new workflow prefers a recommended source-text skill over registry order", () => {
+    const option = (skillId: string, isRecommended: boolean, inputArtifactTypes: string[]): SkillOption => ({
+        skillId, skillName: skillId, skillVersionId: `${skillId}-v1`, version: "1.0.0", isRecommended, ownerType: "system", ownerProjectId: "", summary: "",
+        manifest: { capabilities: [], inputArtifactTypes, outputArtifactTypes: ["result"], projectTags: [], schemaCompatibility: {}, sideEffects: [], estimatedCostClass: "text_low" },
+        inputBindings: inputArtifactTypes.map((artifactType) => ({ bindingName: "source", artifactType, required: true, min: 1, max: 1, schemaConstraint: ">=1.0 <2.0", requiresApproval: false })),
+        outputBindings: [],
+    });
+    const storyboard = option("storyboard", false, ["production_script"]);
+    const script = option("script", true, ["source_text"]);
+    assert.equal(selectWorkflowStarterSkill([storyboard, script]), script);
 });

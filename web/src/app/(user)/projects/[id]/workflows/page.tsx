@@ -16,7 +16,7 @@ import { WorkflowExecutionConsole } from "./components/workflow-execution-consol
 import { WorkflowRegistryList } from "./components/workflow-registry-list";
 import { WorkflowRoutePreviewPanel, type WorkflowPreparedRun } from "./components/workflow-route-preview";
 import { WorkflowVersionEditor } from "./components/workflow-version-editor";
-import { workflowPackageFromSkillOption } from "./workflow-editor-model";
+import { selectWorkflowStarterSkill, workflowPackageFromSkillOption } from "./workflow-editor-model";
 
 const errorText = (error: unknown) => error instanceof Error ? error.message : "操作失败";
 
@@ -64,7 +64,7 @@ export default function ProjectWorkflowCenterPage() {
     const onPrepared = useCallback((value?: WorkflowPreparedRun) => setPrepared(value), []);
     const createMutation = useMutation({
         mutationFn: async () => {
-            const option = skillsQuery.data?.[0];
+            const option = selectWorkflowStarterSkill(skillsQuery.data || []);
             if (!option) throw new Error("当前没有可用的已发布 Skill，无法创建首个节点");
             return createWorkflow({ projectId, name: nextWorkflowName(workflows), summary: "按项目需要自由组合独立 Skill 与 Agent。", tags: [], version: "1.0.0", package: workflowPackageFromSkillOption(option) });
         },

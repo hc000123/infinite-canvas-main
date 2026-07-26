@@ -124,6 +124,13 @@ export function workflowPackageFromSkillOption(option: SkillOption): WorkflowPac
     return { inputArtifactTypes: [...new Set(option.manifest.inputArtifactTypes)], nodes: [node], contentHash: "" };
 }
 
+export function selectWorkflowStarterSkill(options: readonly SkillOption[]) {
+    return options.find((option) => option.isRecommended && option.inputBindings.some((binding) => binding.artifactType === "source_text"))
+        || options.find((option) => option.inputBindings.some((binding) => binding.artifactType === "source_text"))
+        || options.find((option) => option.isRecommended)
+        || options[0];
+}
+
 export function applySkillOptionToWorkflowNode(node: WorkflowNodeSpec, option: SkillOption): WorkflowNodeSpec {
     return {
         ...cloneNode(node),

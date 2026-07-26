@@ -100,6 +100,22 @@ func TestListSkillOptionsFiltersManifestWithoutReturningFiles(t *testing.T) {
 	}
 }
 
+func TestListSkillOptionsSerializesEmptyContractsAsArrays(t *testing.T) {
+	setupAITaskTestDB(t)
+	if err := EnsureSkillSeeds(); err != nil {
+		t.Fatal(err)
+	}
+	items, err := ListSkillOptions("", "", SkillOptionFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range items {
+		if item.InputBindings == nil || item.OutputBindings == nil {
+			t.Fatalf("skill option contracts must be arrays: %+v", item)
+		}
+	}
+}
+
 func TestListSkillOptionsRequiresProjectOwnerUser(t *testing.T) {
 	setupAITaskTestDB(t)
 	created, err := CreateProjectSkill(

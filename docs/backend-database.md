@@ -28,6 +28,12 @@
 - `agent_plan_revisions`
 - `agent_plan_steps`
 - `agent_plan_confirmations`
+- `workflow_definitions`
+- `workflow_versions`
+- `workflow_executions`
+- `workflow_execution_revisions`
+- `workflow_node_executions`
+- `workflow_execution_confirmations`
 - `workflow_runs`
 - `workflow_stage_runs`
 - `workflow_local_apply_receipts`
@@ -91,6 +97,21 @@ Agent 只保存岗位职责、可调用 Skill 范围、顺序编排和执行策�
 Plan 状态包括 `draft`、`preflight`、`awaiting_confirmation`、`running`、`needs_review`、`completed`、`blocked`、`failed` 和 `cancelled`。预检解析并冻结精确 Agent / Skill / Artifact 哈希；确认必须完整匹配 revision、指纹和 requirement code 集合。执行时只为当前 Step 创建一个 Invocation，审核批准的输出 Artifact 通过符号 Binding 成为下一步输入；取消和失败不会创建下游任务。
 
 `invocation_runs` 通过 `agent_plan_id / agent_plan_revision / agent_plan_step_key / confirmation_source` 记录委托来源。外部调用方不能伪造 Plan 确认；只有冻结的 Agent、Skill、Artifact、参数、额度和确认项全部匹配时，内部委托确认才可进入队列。
+
+### Workflow Registry 与 Composer Runtime
+
+Workflow 只保存 DAG、路由、条件、审批和重试策略，引用独立发布的 Skill / Agent 版本，不复制其正文、Schema 或质量门。发布版本不可修改；每次执行预检都会冻结 Workflow 内容哈希、节点解析结果、输入 Artifact、手选版本、参数、额度和确认指纹。
+
+| 表 | 说明 | 关键索引 / 约束 |
+| ---- | ---- | ---- |
+| `workflow_definitions` | Workflow 稳定身份、系统 / 项目所有权、标签、启用状态和推荐版本。系统 Workflow 可见但只读，项目 Workflow 按用户与项目隔离。 | 所有者类型、用户、项目和名称组成唯一索引；推荐版本、项目和启用状态有查询索引。 |
+| `workflow_versions` | 可编辑草稿或不可变发布版本，保存完整 DAG Package 与规范内容哈希。 | `workflow_id + version` 唯一；状态和内容哈希有索引；只有 `draft` 可更新。 |
+| `workflow_executions` | 一次 Workflow 运行的聚合头，保存精确版本、项目 / 分集、当前 revision、状态、预计额度、幂等键和确认指纹。 | `user_id + idempotency_key` 唯一；Workflow、版本、项目、分集和状态有查询索引。 |
+| `workflow_execution_revisions` | 追加式执行 Revision，冻结路由预览、输入 Artifact、手选版本、参数、确认项和额度。 | `workflow_execution_id + revision` 唯一；用户、版本、内容哈希和指纹有索引。 |
+| `workflow_node_executions` | 每个 DAG 节点的运行投影，记录拓扑序、Skill / Agent 执行器、Invocation / Agent Plan 坐标、状态、输出 Artifact 和稳定错误码。 | `workflow_execution_id + revision + node_key` 唯一；Invocation、Agent Plan、节点和状态有索引。 |
+| `workflow_execution_confirmations` | 对精确 revision、指纹、额度和 requirement code 集合的确认凭证。 | `workflow_execution_id + revision` 唯一；用户和指纹有索引。 |
+
+Workflow 状态包括 `preflight`、`awaiting_confirmation`、`running`、`needs_review`、`completed`、`blocked`、`partial`、`failed` 和 `cancelled`。节点只有在依赖 Artifact 已批准且确定性条件通过后才会启动；Skill 节点委托统一 Invocation Runtime，Agent 节点委托 Agent Plan Runtime。刷新页面只读取已有 execution / revision / node 坐标，不创建新的运行记录。
 
 ### users
 

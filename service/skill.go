@@ -337,10 +337,18 @@ func ListSkillOptions(userID, projectID string, filter SkillOptionFilter) ([]Ski
 			if !skillManifestMatches(packageValue.Manifest, filter) {
 				continue
 			}
+			inputBindings := packageValue.InputContract.ArtifactInputs
+			if inputBindings == nil {
+				inputBindings = []ArtifactInputSpec{}
+			}
+			outputBindings := packageValue.OutputContract.ArtifactOutputs
+			if outputBindings == nil {
+				outputBindings = []ArtifactOutputSpec{}
+			}
 			items = append(items, SkillOption{
 				SkillID: skill.ID, SkillName: skill.Name, Summary: skill.Summary, OwnerType: skill.OwnerType, OwnerProjectID: skill.OwnerProjectID,
 				SkillVersionID: version.ID, Version: version.Version, IsRecommended: version.ID == skill.RecommendedVersionID, Manifest: packageValue.Manifest,
-				InputBindings: packageValue.InputContract.ArtifactInputs, OutputBindings: packageValue.OutputContract.ArtifactOutputs,
+				InputBindings: inputBindings, OutputBindings: outputBindings,
 			})
 		}
 	}
