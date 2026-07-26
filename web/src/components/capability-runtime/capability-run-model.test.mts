@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildCapabilityInputRefs, capabilityRouteIssueLabel, capabilitySkillCompatibility, preferredCapabilityOutputText } from "./capability-run-model.ts";
+import { buildCapabilityInputRefs, capabilityRouteIssueLabel, capabilityRunActions, capabilitySkillCompatibility, preferredCapabilityOutputText } from "./capability-run-model.ts";
 import type { ArtifactEnvelope } from "../../services/api/invocations-contract.ts";
 import type { SkillOption } from "../../services/api/admin-skills.ts";
 
@@ -89,4 +89,22 @@ test("output projection prefers known Artifact payload fields then stable JSON",
 test("route issue labels retain the stable raw code", () => {
     assert.equal(capabilityRouteIssueLabel("execution_target_unavailable"), "执行通道不可用（execution_target_unavailable）");
     assert.equal(capabilityRouteIssueLabel("future_reason"), "未知路由原因（future_reason）");
+});
+
+test("capability run actions expose only valid explicit lifecycle transitions", () => {
+    assert.deepEqual(capabilityRunActions("draft"), { canPreflight: true, canConfirm: false, canRefresh: false, canCancel: false, canApprove: false, canReject: false, canRetry: false, canApply: false });
+    assert.equal(capabilityRunActions("awaiting_confirmation", { fingerprintMatches: false }).canConfirm, false);
+    assert.equal(capabilityRunActions("awaiting_confirmation", { fingerprintMatches: true }).canConfirm, true);
+    for (const status of ["queued", "running"] as const) {
+        assert.equal(capabilityRunActions(status).canRefresh, true);
+        assert.equal(capabilityRunActions(status).canCancel, true);
+    }
+    assert.equal(capabilityRunActions("cancel_requested").canRefresh, true);
+    assert.equal(capabilityRunActions("needs_review").canApprove, true);
+    assert.equal(capabilityRunActions("needs_review").canReject, true);
+    assert.equal(capabilityRunActions("approved").canApply, true);
+    assert.equal(capabilityRunActions("applied").canApply, false);
+    for (const status of ["failed", "rejected", "cancelled", "partial"] as const) {
+        assert.equal(capabilityRunActions(status).canRetry, true);
+    }
 });

@@ -1,5 +1,6 @@
 import type { SkillArtifactInputSpec, SkillOption } from "../../services/api/admin-skills";
 import type { ArtifactEnvelope, ArtifactRefInput } from "../../services/api/invocations-contract";
+import type { InvocationStatus } from "../../services/api/invocations-contract";
 
 export type CapabilityCompatibilityOptions = {
     pendingSourceText?: boolean;
@@ -104,4 +105,29 @@ const routeIssueLabels: Record<string, string> = {
 export function capabilityRouteIssueLabel(code: string): string {
     const stableCode = code.trim() || "unknown";
     return `${routeIssueLabels[stableCode] ?? "未知路由原因"}（${stableCode}）`;
+}
+
+export type CapabilityRunActions = {
+    canPreflight: boolean;
+    canConfirm: boolean;
+    canRefresh: boolean;
+    canCancel: boolean;
+    canApprove: boolean;
+    canReject: boolean;
+    canRetry: boolean;
+    canApply: boolean;
+};
+
+export function capabilityRunActions(status: "draft" | InvocationStatus, options: { fingerprintMatches?: boolean } = {}): CapabilityRunActions {
+    const active = status === "queued" || status === "running";
+    return {
+        canPreflight: status === "draft" || status === "blocked",
+        canConfirm: status === "awaiting_confirmation" && options.fingerprintMatches === true,
+        canRefresh: active || status === "cancel_requested",
+        canCancel: active,
+        canApprove: status === "needs_review",
+        canReject: status === "needs_review",
+        canRetry: status === "failed" || status === "rejected" || status === "cancelled" || status === "partial",
+        canApply: status === "approved",
+    };
 }
