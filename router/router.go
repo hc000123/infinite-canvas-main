@@ -58,6 +58,25 @@ func New() *gin.Engine {
 	v1.PUT("/agents/:id/recommended-version", func(c *gin.Context) {
 		handler.RecommendAgentVersion(c.Writer, c.Request, c.Param("id"))
 	})
+	v1.POST("/agent-plans", gin.WrapF(handler.CreateAgentPlan))
+	v1.GET("/agent-plans/:id", func(c *gin.Context) {
+		handler.AgentPlan(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/agent-plans/:id/revisions", func(c *gin.Context) {
+		handler.CreateAgentPlanRevision(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/agent-plans/:id/preflight", func(c *gin.Context) {
+		handler.PreflightAgentPlan(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/agent-plans/:id/confirm", func(c *gin.Context) {
+		handler.ConfirmAgentPlan(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/agent-plans/:id/continue", func(c *gin.Context) {
+		handler.ContinueAgentPlan(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/agent-plans/:id/cancel", func(c *gin.Context) {
+		handler.CancelAgentPlan(c.Writer, c.Request, c.Param("id"))
+	})
 	v1.POST("/artifacts", gin.WrapF(handler.CreateArtifact))
 	v1.GET("/artifacts", gin.WrapF(handler.Artifacts))
 	v1.GET("/artifacts/:id", func(c *gin.Context) {
