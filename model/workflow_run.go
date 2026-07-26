@@ -71,18 +71,20 @@ type WorkflowStageRun struct {
 }
 
 type WorkflowArtifact struct {
-	ID              string `json:"id" gorm:"primaryKey"`
-	UserID          string `json:"userId" gorm:"index"`
-	WorkflowRunID   string `json:"workflowRunId" gorm:"index"`
-	StageRunID      string `json:"stageRunId" gorm:"index;uniqueIndex:idx_stage_artifact_version,priority:1"`
-	AgentRunID      string `json:"agentRunId" gorm:"index"`
-	Kind            string `json:"kind" gorm:"index"`
-	Version         int    `json:"version" gorm:"uniqueIndex:idx_stage_artifact_version,priority:2"`
-	SchemaVersion   string `json:"schemaVersion"`
-	TemplateVersion string `json:"templateVersion"`
-	ContentJSON     string `json:"contentJson" gorm:"type:text"`
-	ContentHash     string `json:"contentHash" gorm:"index"`
-	CreatedAt       string `json:"createdAt"`
+	ID              string   `json:"id" gorm:"primaryKey"`
+	UserID          string   `json:"userId" gorm:"index"`
+	WorkflowRunID   string   `json:"workflowRunId" gorm:"index"`
+	StageRunID      string   `json:"stageRunId" gorm:"index;uniqueIndex:idx_stage_artifact_version,priority:1"`
+	AgentRunID      string   `json:"agentRunId" gorm:"index"`
+	Kind            string   `json:"kind" gorm:"index"`
+	Version         int      `json:"version" gorm:"uniqueIndex:idx_stage_artifact_version,priority:2"`
+	SchemaVersion   string   `json:"schemaVersion"`
+	TemplateVersion string   `json:"templateVersion"`
+	ContentJSON     string   `json:"contentJson" gorm:"type:text"`
+	ContentHash     string   `json:"contentHash" gorm:"index"`
+	ArtifactSetHash string   `json:"artifactSetHash" gorm:"-"`
+	ArtifactIDs     []string `json:"artifactIds" gorm:"-"`
+	CreatedAt       string   `json:"createdAt"`
 }
 
 type WorkflowQualityGateResult struct {

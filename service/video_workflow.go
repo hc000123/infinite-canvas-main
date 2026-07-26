@@ -38,6 +38,9 @@ func EnsureWorkflowRun(userID string, input EnsureWorkflowRunInput) (WorkflowRun
 	} else if ok {
 		return GetWorkflowRunDetail(userID, existing.ID)
 	}
+	if err := EnsureCoreArtifactSchemas(); err != nil {
+		return WorkflowRunDetail{}, err
+	}
 
 	stamp := now()
 	run := model.WorkflowRun{
@@ -71,23 +74,22 @@ func EnsureWorkflowRun(userID string, input EnsureWorkflowRunInput) (WorkflowRun
 		workflowInitialStage(run, WorkflowStageShotBreakdown, shotBreakdownStatus, stamp),
 		workflowInitialStage(run, WorkflowStageShotPrompt, model.WorkflowStageRunStatusBlocked, stamp),
 	}
-	artifacts := []model.WorkflowArtifact{}
-	gates := []model.WorkflowQualityGateResult{}
+	rootArtifacts := []model.Artifact{}
 	events := []model.WorkflowEvent{workflowEvent(run, model.WorkflowStageRun{}, "workflow.created", "info", map[string]any{"scriptConfirmed": confirmed}, stamp)}
 	if confirmed {
 		content, _ := json.Marshal(map[string]any{"productionScript": input.ScriptSnapshot})
-		artifact := workflowArtifact(run, stages[0], model.AgentRun{}, "script", 1, content, stamp)
-		report := ValidateScriptArtifact(content)
-		gate := workflowGateResult(run, stages[0], artifact, report, stamp)
-		stages[0].OutputArtifactID = artifact.ID
+		items, _, err := buildArtifacts(userID, []CreateArtifactInput{{ArtifactType: "production_script", SchemaVersion: "1.0.0", ProjectID: run.ProjectID, EpisodeID: run.EpisodeID, Payload: content}}, false)
+		if err != nil {
+			return WorkflowRunDetail{}, err
+		}
+		rootArtifacts = items
+		stages[0].OutputArtifactID = items[0].ID
 		stages[0].ReviewDecision = "approved"
-		stages[0].ReviewedArtifactHash = artifact.ContentHash
+		stages[0].ReviewedArtifactHash = items[0].ContentHash
 		stages[0].ReviewedAt = stamp
-		artifacts = append(artifacts, artifact)
-		gates = append(gates, gate)
-		events = append(events, workflowEvent(run, stages[0], "stage.approved", "info", map[string]any{"artifactHash": artifact.ContentHash, "system": true}, stamp))
+		events = append(events, workflowEvent(run, stages[0], "stage.approved", "info", map[string]any{"artifactHash": items[0].ContentHash, "system": true}, stamp))
 	}
-	if err := repository.CreateWorkflowRunAggregate(run, stages, artifacts, gates, events); err != nil {
+	if err := repository.CreateWorkflowRunAggregate(run, stages, rootArtifacts, events); err != nil {
 		if existing, ok, lookupErr := repository.FindWorkflowRunByScope(userID, input.ProjectID, input.EpisodeID, workflowID, workflowVersion, scriptHash); lookupErr == nil && ok {
 			return GetWorkflowRunDetail(userID, existing.ID)
 		}
@@ -120,16 +122,43 @@ func GetWorkflowRunDetail(userID string, id string) (WorkflowRunDetail, error) {
 			stages = append(stages, stage)
 		}
 	}
-	artifacts, err := repository.ListWorkflowArtifacts(userID, run.ID)
-	if err != nil {
-		return WorkflowRunDetail{}, err
+	artifacts := []model.WorkflowArtifact{}
+	gates := []model.WorkflowQualityGateResult{}
+	agentRuns := []model.AgentRun{}
+	for index := range stages {
+		stage := stages[index]
+		if stage.InvocationID != "" {
+			projection, err := projectWorkflowInvocation(userID, stage)
+			if err != nil {
+				return WorkflowRunDetail{}, err
+			}
+			stages[index] = projection.Stage
+			artifacts = append(artifacts, projection.Artifacts...)
+			gates = append(gates, projection.Gates...)
+			agentRuns = append(agentRuns, projection.AgentRuns...)
+			continue
+		}
+		if stage.OutputArtifactID == "" {
+			continue
+		}
+		artifact, err := GetArtifact(userID, stage.OutputArtifactID)
+		if err != nil {
+			return WorkflowRunDetail{}, err
+		}
+		content, _ := json.Marshal(artifact.Payload)
+		artifacts = append(artifacts, model.WorkflowArtifact{
+			ID: artifact.Artifact.ID, UserID: userID, WorkflowRunID: run.ID, StageRunID: stage.ID,
+			Kind: stage.StageID, Version: 1, SchemaVersion: artifact.Artifact.SchemaVersion,
+			TemplateVersion: run.WorkflowVersion, ContentJSON: string(content), ContentHash: artifact.Artifact.ContentHash,
+			ArtifactSetHash: artifact.Artifact.ContentHash, ArtifactIDs: []string{artifact.Artifact.ID}, CreatedAt: artifact.Artifact.CreatedAt,
+		})
+		gates = append(gates, model.WorkflowQualityGateResult{
+			ID: deterministicInvocationID("workflowrootgate", artifact.Artifact.ID), UserID: userID, WorkflowRunID: run.ID,
+			StageRunID: stage.ID, ArtifactID: artifact.Artifact.ID, ArtifactHash: artifact.Artifact.ContentHash,
+			ValidatorVersion: "confirmed-root-v1", Passed: true, IssuesJSON: "[]", CreatedAt: artifact.Artifact.CreatedAt,
+		})
 	}
-	gates, err := repository.ListWorkflowQualityGateResults(userID, run.ID)
-	if err != nil {
-		return WorkflowRunDetail{}, err
-	}
-	agentRuns, _, err := repository.ListAgentRuns(userID, model.AgentRunQuery{WorkflowRunID: run.ID, Page: 1, PageSize: model.MaxPageSize})
-	return WorkflowRunDetail{Run: run, Stages: stages, Artifacts: artifacts, Gates: gates, AgentRuns: agentRuns}, err
+	return WorkflowRunDetail{Run: run, Stages: stages, Artifacts: artifacts, Gates: gates, AgentRuns: agentRuns}, nil
 }
 
 func StartWorkflowStage(userID string, workflowRunID string, stageID string, idempotencyKey string) (model.WorkflowStageRun, error) {
@@ -166,84 +195,46 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, inp
 	if workflowStageBusyOrReviewable(current.Status) && !(stageID == WorkflowStageShotPrompt && (current.Status == model.WorkflowStageRunStatusApproved || current.Status == model.WorkflowStageRunStatusApplied)) {
 		return current, nil
 	}
-	var context *WorkflowShotPromptContext
-	if frozenRun == nil || len(input.Context) > 0 {
-		context, err = validateWorkflowStageContext(stageID, input.Context)
-		if err != nil {
-			return current, err
-		}
-	}
-	inputArtifact, err := workflowStageInputArtifact(detail, stageID)
+	context, err := validateWorkflowStageContext(stageID, input.Context)
 	if err != nil {
 		return current, err
 	}
-	systemPrompt, userPrompt := workflowStagePrompts(detail.Run, stageID, inputArtifact, context)
-	executorKind := ""
-	imageManifestJSON := `{"items":[],"degraded":true,"reason":"text-only"}`
-	sourceSnapshot := map[string]any{}
-	skillID, skillVersionID, skillVersion, skillContentHash, skillSnapshotJSON := "", "", "", "", ""
-	if frozenRun != nil && strings.TrimSpace(frozenRun.SkillSnapshotJSON) != "" {
-		instructions, err := skillInstructionsFromSnapshot(frozenRun.SkillSnapshotJSON)
-		if err != nil {
-			return current, err
-		}
-		if frozenSystemPrompt, frozenUserPrompt, ok := workflowPromptsFromFrozenRun(*frozenRun); ok {
-			systemPrompt, userPrompt = frozenSystemPrompt, frozenUserPrompt
-		} else {
-			systemPrompt += instructions
-		}
-		skillID, skillVersionID = frozenRun.SkillID, frozenRun.SkillVersionID
-		skillVersion, skillContentHash = frozenRun.SkillVersion, frozenRun.SkillContentHash
-		skillSnapshotJSON = frozenRun.SkillSnapshotJSON
-		executorKind = frozenRun.Executor
-		imageManifestJSON = frozenRun.ImageManifestJSON
-		sourceSnapshot = workflowSourceSnapshotFromRequest(frozenRun.RequestJSON)
-	} else {
-		if err := EnsureSkillSeeds(); err != nil {
-			return current, err
-		}
-		resolvedSkill, err := ResolveWorkflowStageSkillForRun(userID, stageID, detail.Run.ProjectID, input.SkillVersionID)
-		if err != nil {
-			return current, err
-		}
-		if err := validateSkillRuntimeInput(userID, detail, stageID, inputArtifact, input, resolvedSkill.Package.InputContract); err != nil {
-			return current, err
-		}
-		systemPrompt += skillInstructions(resolvedSkill)
-		skillID, skillVersionID = resolvedSkill.Skill.ID, resolvedSkill.Version.ID
-		skillVersion, skillContentHash = resolvedSkill.Version.Version, resolvedSkill.Version.ContentHash
-		skillSnapshotJSON = buildSkillSnapshotJSON(resolvedSkill)
+	if err := EnsureSkillSeeds(); err != nil {
+		return current, err
 	}
-	if context != nil {
-		sourceSnapshot = map[string]any{"shotId": context.ShotID, "promptInputHash": context.PromptInputHash}
-	}
-	agentRun, err := CreateUserAgentRun(userID, CreateAgentRunInput{
-		Executor:          executorKind,
-		IdempotencyKey:    strings.TrimSpace(input.IdempotencyKey),
-		ProjectID:         detail.Run.ProjectID,
-		EpisodeID:         detail.Run.EpisodeID,
-		WorkflowRunID:     detail.Run.ID,
-		StageID:           stageID,
-		AgentKind:         workflowStageAgentKind(stageID),
-		SkillID:           skillID,
-		SkillVersionID:    skillVersionID,
-		SkillVersion:      skillVersion,
-		SkillContentHash:  skillContentHash,
-		SkillSnapshotJSON: skillSnapshotJSON,
-		ImageManifestJSON: imageManifestJSON,
-		MediaBatchID:      strings.TrimSpace(input.MediaBatchID),
-		WritePolicy:       "confirm_before_write",
-		SystemPrompt:      systemPrompt,
-		UserPrompt:        userPrompt,
-		SourceSnapshot:    sourceSnapshot,
-	})
+	refs, parameters, err := workflowInvocationInputs(userID, detail, stageID, context)
 	if err != nil {
 		return current, err
 	}
-	if existing, ok, err := repository.GetWorkflowStageRunByAgentRunID(agentRun.ID); err != nil {
+	request := InvocationRequest{
+		Source: "workflow", ProjectID: detail.Run.ProjectID, EpisodeID: detail.Run.EpisodeID,
+		SkillVersionID: strings.TrimSpace(input.SkillVersionID), Capability: "workflow.stage." + workflowSkillStageForRun(stageID),
+		ExpectedOutputArtifactType: workflowInvocationOutputType(stageID), InputArtifactRefs: refs,
+		Parameters: parameters, IdempotencyKey: strings.TrimSpace(input.IdempotencyKey),
+	}
+	snapshot, err := PreflightInvocation(userID, request)
+	if err != nil {
+		return current, err
+	}
+	if existing, ok, err := repository.GetWorkflowStageRunByInvocationID(snapshot.Run.ID); err != nil {
 		return current, err
 	} else if ok {
-		return existing, nil
+		projection, err := projectWorkflowInvocation(userID, existing)
+		return projection.Stage, err
+	}
+	if snapshot.Run.Status == model.InvocationStatusBlocked {
+		messages := make([]string, 0, len(snapshot.BlockReasons))
+		for _, reason := range snapshot.BlockReasons {
+			messages = append(messages, reason.Message)
+		}
+		return current, safeMessageError{message: strings.Join(messages, "；")}
+	}
+	response, err := confirmInvocationRun(userID, snapshot.Run, InvocationConfirmation{RequirementCodes: snapshot.ConfirmationRequirements})
+	if err != nil {
+		return current, err
+	}
+	if response.Attempt == nil {
+		return current, safeMessageError{message: "工作流阶段未能创建执行尝试"}
 	}
 	stamp := now()
 	stage := model.WorkflowStageRun{
@@ -251,18 +242,19 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, inp
 		UserID:           detail.Run.UserID,
 		WorkflowRunID:    detail.Run.ID,
 		StageID:          stageID,
-		AgentRunID:       agentRun.ID,
-		Attempt:          current.Attempt + 1,
+		InvocationID:     snapshot.Run.ID,
+		AgentRunID:       response.Attempt.AgentRunID,
+		Attempt:          response.Attempt.Attempt,
 		Status:           model.WorkflowStageRunStatusQueued,
-		InputArtifactID:  inputArtifact.ID,
-		EstimatedCredits: agentRun.EstimatedCredits,
+		InputArtifactID:  refs[0].ArtifactID,
+		EstimatedCredits: snapshot.ExecutionPolicy.EstimatedCredits,
 		ProgressTotal:    1,
 		CreatedAt:        stamp,
 		UpdatedAt:        stamp,
 	}
 	event := workflowEvent(detail.Run, stage, "stage.queued", "info", map[string]any{
-		"agentRunId": agentRun.ID, "attempt": stage.Attempt,
-		"skillId": agentRun.SkillID, "skillVersion": agentRun.SkillVersion, "skillContentHash": agentRun.SkillContentHash,
+		"invocationId": snapshot.Run.ID, "agentRunId": stage.AgentRunID, "attempt": stage.Attempt,
+		"skillVersionId": snapshot.Revision.SkillVersionID, "skillVersion": snapshot.Revision.SkillVersion, "skillContentHash": snapshot.Revision.SkillContentHash,
 	}, stamp)
 	if err := repository.CreateWorkflowStageWithEvent(stage, event); err != nil {
 		return stage, err

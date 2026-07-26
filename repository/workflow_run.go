@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func CreateWorkflowRunAggregate(run model.WorkflowRun, stages []model.WorkflowStageRun, artifacts []model.WorkflowArtifact, gates []model.WorkflowQualityGateResult, events []model.WorkflowEvent) error {
+func CreateWorkflowRunAggregate(run model.WorkflowRun, stages []model.WorkflowStageRun, rootArtifacts []model.Artifact, events []model.WorkflowEvent) error {
 	db, err := DB()
 	if err != nil {
 		return err
@@ -22,13 +22,8 @@ func CreateWorkflowRunAggregate(run model.WorkflowRun, stages []model.WorkflowSt
 				return err
 			}
 		}
-		if len(artifacts) > 0 {
-			if err := tx.Create(&artifacts).Error; err != nil {
-				return err
-			}
-		}
-		if len(gates) > 0 {
-			if err := tx.Create(&gates).Error; err != nil {
+		if len(rootArtifacts) > 0 {
+			if err := tx.Create(&rootArtifacts).Error; err != nil {
 				return err
 			}
 		}
