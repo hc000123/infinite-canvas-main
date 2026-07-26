@@ -169,21 +169,131 @@ type InvocationApplyAdapter interface {
 	ApplyTx(*gorm.DB, InvocationApplyContext) (json.RawMessage, error)
 }
 
+type InvocationRunSummary struct {
+	ID                      string                 `json:"id"`
+	Source                  string                 `json:"source"`
+	ProjectID               string                 `json:"projectId"`
+	EpisodeID               string                 `json:"episodeId"`
+	Status                  model.InvocationStatus `json:"status"`
+	LatestRevision          int                    `json:"latestRevision"`
+	LatestAttempt           int                    `json:"latestAttempt"`
+	ReviewedAttempt         int                    `json:"reviewedAttempt"`
+	ReviewedArtifactSetHash string                 `json:"reviewedArtifactSetHash"`
+	CreatedAt               string                 `json:"createdAt"`
+	UpdatedAt               string                 `json:"updatedAt"`
+}
+
+type InvocationAttemptSummary struct {
+	ID              string `json:"id"`
+	Status          string `json:"status"`
+	Revision        int    `json:"revision"`
+	Attempt         int    `json:"attempt"`
+	ErrorClass      string `json:"errorClass"`
+	Model           string `json:"model"`
+	CreditsReserved int    `json:"creditsReserved"`
+	CreditsRefunded int    `json:"creditsRefunded"`
+	DurationMs      int64  `json:"durationMs"`
+	StartedAt       string `json:"startedAt"`
+	FinishedAt      string `json:"finishedAt"`
+	CreatedAt       string `json:"createdAt"`
+	UpdatedAt       string `json:"updatedAt"`
+}
+
 type InvocationAttemptDetail struct {
-	model.InvocationAttempt
-	ArtifactRefs    []model.InvocationArtifactRef `json:"artifactRefs"`
-	OutputArtifacts []ArtifactEnvelope            `json:"outputArtifacts"`
-	Gates           []model.InvocationGateResult  `json:"gates"`
+	InvocationAttemptSummary
+	Gates []model.InvocationGateResult `json:"gates"`
+}
+
+type InvocationExecutionPolicySummary struct {
+	ExecutorKind         string `json:"executorKind"`
+	Model                string `json:"model"`
+	FallbackAllowed      bool   `json:"fallbackAllowed"`
+	RequiresConfirmation bool   `json:"requiresConfirmation"`
+	EstimatedCredits     int    `json:"estimatedCredits"`
+	TimeoutSeconds       int    `json:"timeoutSeconds"`
+	MaxAttempts          int    `json:"maxAttempts"`
+	WritePolicy          string `json:"writePolicy"`
+	RequiresConfirm      bool   `json:"requiresConfirm"`
+}
+
+type InvocationRouteCandidateSummary struct {
+	SkillID        string   `json:"skillId"`
+	SkillVersionID string   `json:"skillVersionId"`
+	Accepted       bool     `json:"accepted"`
+	Reasons        []string `json:"reasons"`
+}
+
+type InvocationRouteTraceSummary struct {
+	Capability          string                            `json:"capability"`
+	Candidates          []InvocationRouteCandidateSummary `json:"candidates"`
+	FinalSkillVersionID string                            `json:"finalSkillVersionId"`
+	SelectedModel       string                            `json:"selectedModel"`
+}
+
+type InvocationRevisionSummary struct {
+	ID               string `json:"id"`
+	Revision         int    `json:"revision"`
+	SkillID          string `json:"skillId"`
+	SkillVersionID   string `json:"skillVersionId"`
+	SkillVersion     string `json:"skillVersion"`
+	SkillContentHash string `json:"skillContentHash"`
+	CreatedAt        string `json:"createdAt"`
+}
+
+type InvocationRevisionDetail struct {
+	InvocationRevisionSummary
+	ExecutionPolicy          InvocationExecutionPolicySummary `json:"executionPolicy"`
+	RouteTrace               InvocationRouteTraceSummary      `json:"routeTrace"`
+	ConfirmationRequirements []string                         `json:"confirmationRequirements"`
+	BlockReasons             []InvocationBlockReason          `json:"blockReasons"`
+}
+
+type InvocationPreflightResponse struct {
+	Run                      InvocationRunSummary             `json:"run"`
+	Revision                 InvocationRevisionSummary        `json:"revision"`
+	InputArtifactRefs        []model.InvocationArtifactRef    `json:"inputArtifactRefs"`
+	ExecutionPolicy          InvocationExecutionPolicySummary `json:"executionPolicy"`
+	RouteTrace               InvocationRouteTraceSummary      `json:"routeTrace"`
+	ConfirmationRequirements []string                         `json:"confirmationRequirements"`
+	BlockReasons             []InvocationBlockReason          `json:"blockReasons"`
+}
+
+type InvocationLifecycleResponse struct {
+	Run      InvocationRunSummary      `json:"run"`
+	Revision int                       `json:"revision"`
+	Attempt  *InvocationAttemptSummary `json:"attempt,omitempty"`
+}
+
+type InvocationApplyAttemptSummary struct {
+	ID              string `json:"id"`
+	ArtifactSetHash string `json:"artifactSetHash"`
+	Target          string `json:"target"`
+	TargetID        string `json:"targetId"`
+	Status          string `json:"status"`
+	Attempt         int    `json:"attempt"`
+	CreatedAt       string `json:"createdAt"`
+	UpdatedAt       string `json:"updatedAt"`
 }
 
 type InvocationDetail struct {
-	Run             model.InvocationRun                 `json:"run"`
-	Revisions       []model.InvocationPreflightRevision `json:"revisions"`
-	Attempts        []InvocationAttemptDetail           `json:"attempts"`
-	ArtifactRefs    []model.InvocationArtifactRef       `json:"artifactRefs"`
-	OutputArtifacts []ArtifactEnvelope                  `json:"outputArtifacts"`
-	Reviews         []model.InvocationReview            `json:"reviews"`
-	ApplyAttempts   []model.InvocationApplyAttempt      `json:"applyAttempts"`
-	Events          []model.InvocationEvent             `json:"events"`
-	ArtifactSetHash string                              `json:"artifactSetHash"`
+	Run                       InvocationRunSummary            `json:"run"`
+	Revisions                 []InvocationRevisionDetail      `json:"revisions"`
+	Attempts                  []InvocationAttemptDetail       `json:"attempts"`
+	ArtifactRefs              []model.InvocationArtifactRef   `json:"artifactRefs"`
+	AuthoritativeArtifactRefs []model.InvocationArtifactRef   `json:"authoritativeArtifactRefs"`
+	OutputArtifacts           []ArtifactEnvelope              `json:"outputArtifacts"`
+	Reviews                   []model.InvocationReview        `json:"reviews"`
+	ApplyAttempts             []InvocationApplyAttemptSummary `json:"applyAttempts"`
+	Events                    []model.InvocationEvent         `json:"events"`
+	EventsHasMore             bool                            `json:"eventsHasMore"`
+	EventsNextAfter           uint64                          `json:"eventsNextAfter"`
+	EventsLimit               int                             `json:"eventsLimit"`
+	ArtifactSetHash           string                          `json:"artifactSetHash"`
+}
+
+type InvocationList struct {
+	Items    []InvocationRunSummary `json:"items"`
+	Total    int64                  `json:"total"`
+	Page     int                    `json:"page"`
+	PageSize int                    `json:"pageSize"`
 }

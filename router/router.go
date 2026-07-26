@@ -38,6 +38,40 @@ func New() *gin.Engine {
 	v1.POST("/agent-configs", gin.WrapF(handler.SaveAgentConfig))
 	v1.GET("/agent-runs", gin.WrapF(handler.AgentRuns))
 	v1.POST("/agent-runs", gin.WrapF(handler.CreateAgentRun))
+	v1.POST("/artifacts", gin.WrapF(handler.CreateArtifact))
+	v1.GET("/artifacts", gin.WrapF(handler.Artifacts))
+	v1.GET("/artifacts/:id", func(c *gin.Context) {
+		handler.Artifact(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/invocations", gin.WrapF(handler.CreateInvocation))
+	v1.GET("/invocations", gin.WrapF(handler.Invocations))
+	v1.GET("/invocations/:id", func(c *gin.Context) {
+		handler.Invocation(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/invocations/:id/repreflight", func(c *gin.Context) {
+		handler.RepreflightInvocation(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/invocations/:id/confirm", func(c *gin.Context) {
+		handler.ConfirmInvocation(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/invocations/:id/cancel", func(c *gin.Context) {
+		handler.CancelInvocation(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/invocations/:id/retry", func(c *gin.Context) {
+		handler.RetryInvocation(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/invocations/:id/revalidate", func(c *gin.Context) {
+		handler.RevalidateInvocation(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/invocations/:id/review", func(c *gin.Context) {
+		handler.ReviewInvocation(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.POST("/invocations/:id/apply", func(c *gin.Context) {
+		handler.ApplyInvocation(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.GET("/invocations/:id/events", func(c *gin.Context) {
+		handler.InvocationEvents(c.Writer, c.Request, c.Param("id"))
+	})
 	v1.POST("/agent-runs/:id/review", func(c *gin.Context) {
 		handler.ReviewAgentRun(c.Writer, c.Request, c.Param("id"))
 	})

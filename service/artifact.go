@@ -60,6 +60,7 @@ type ArtifactQuery struct {
 	EpisodeID            string `json:"episodeId"`
 	ArtifactType         string `json:"artifactType"`
 	ProducerInvocationID string `json:"producerInvocationId"`
+	ApprovalState        string `json:"approvalState"`
 	Page                 int    `json:"page"`
 	PageSize             int    `json:"pageSize"`
 }
@@ -110,11 +111,15 @@ func GetArtifact(userID, artifactID string) (ArtifactEnvelope, error) {
 }
 
 func ListArtifacts(userID string, query ArtifactQuery) (ArtifactList, error) {
+	query.ApprovalState = strings.ToLower(strings.TrimSpace(query.ApprovalState))
+	if query.ApprovalState != "" && query.ApprovalState != "approved" && query.ApprovalState != "unapproved" && query.ApprovalState != "pending" && query.ApprovalState != "rejected" {
+		return ArtifactList{}, errors.New("Artifact approvalState 无效")
+	}
 	page := model.Query{Page: query.Page, PageSize: query.PageSize}
 	page.Normalize()
 	items, total, err := repository.ListUserArtifacts(strings.TrimSpace(userID), repository.ArtifactQuery{
 		ProjectID: query.ProjectID, EpisodeID: query.EpisodeID, ArtifactType: query.ArtifactType,
-		ProducerInvocationID: query.ProducerInvocationID, Page: page.Page, PageSize: page.PageSize,
+		ProducerInvocationID: query.ProducerInvocationID, ApprovalState: query.ApprovalState, Page: page.Page, PageSize: page.PageSize,
 	})
 	if err != nil {
 		return ArtifactList{}, err

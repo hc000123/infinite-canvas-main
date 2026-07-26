@@ -15,6 +15,7 @@ type ArtifactQuery struct {
 	EpisodeID            string
 	ArtifactType         string
 	ProducerInvocationID string
+	ApprovalState        string
 	Page                 int
 	PageSize             int
 }
@@ -178,6 +179,43 @@ func ListUserArtifacts(userID string, query ArtifactQuery) ([]model.Artifact, in
 	}
 	if value := strings.TrimSpace(query.ProducerInvocationID); value != "" {
 		tx = tx.Where("producer_invocation_id = ?", value)
+	}
+	approved := `(artifacts.artifact_type = 'source_text' AND artifacts.producer_invocation_id IS NULL) OR EXISTS (
+		SELECT 1 FROM invocation_runs runs
+		JOIN invocation_artifact_refs refs ON refs.user_id = artifacts.user_id
+			AND refs.invocation_id = runs.id AND refs.direction = 'output'
+			AND refs.attempt = runs.reviewed_attempt AND refs.artifact_id = artifacts.id
+			AND refs.artifact_hash = artifacts.content_hash AND refs.artifact_type = artifacts.artifact_type
+			AND refs.schema_version = artifacts.schema_version AND refs.schema_content_hash = artifacts.schema_content_hash
+		JOIN invocation_reviews reviews ON reviews.user_id = runs.user_id
+			AND reviews.invocation_id = runs.id AND reviews.attempt = runs.reviewed_attempt
+			AND reviews.artifact_set_hash = runs.reviewed_artifact_set_hash AND reviews.decision = 'approved'
+		WHERE runs.user_id = artifacts.user_id AND runs.id = artifacts.producer_invocation_id
+			AND runs.status IN ('approved', 'applied') AND runs.reviewed_attempt > 0
+			AND runs.reviewed_artifact_set_hash <> ''
+	)`
+	rejected := `EXISTS (
+		SELECT 1 FROM invocation_runs runs
+		JOIN invocation_artifact_refs refs ON refs.user_id = artifacts.user_id
+			AND refs.invocation_id = runs.id AND refs.direction = 'output'
+			AND refs.attempt = runs.reviewed_attempt AND refs.artifact_id = artifacts.id
+			AND refs.artifact_hash = artifacts.content_hash AND refs.artifact_type = artifacts.artifact_type
+			AND refs.schema_version = artifacts.schema_version AND refs.schema_content_hash = artifacts.schema_content_hash
+		JOIN invocation_reviews reviews ON reviews.user_id = runs.user_id
+			AND reviews.invocation_id = runs.id AND reviews.attempt = runs.reviewed_attempt
+			AND reviews.artifact_set_hash = runs.reviewed_artifact_set_hash AND reviews.decision = 'rejected'
+		WHERE runs.user_id = artifacts.user_id AND runs.id = artifacts.producer_invocation_id
+			AND runs.status = 'rejected'
+	)`
+	switch strings.ToLower(strings.TrimSpace(query.ApprovalState)) {
+	case "approved":
+		tx = tx.Where(approved)
+	case "rejected":
+		tx = tx.Where(rejected)
+	case "pending":
+		tx = tx.Where("NOT (" + approved + ") AND NOT (" + rejected + ")")
+	case "unapproved":
+		tx = tx.Where("NOT (" + approved + ")")
 	}
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
