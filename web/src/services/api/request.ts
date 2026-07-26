@@ -43,6 +43,14 @@ export async function apiPost<T>(url: string, body?: unknown, token?: string) {
     });
 }
 
+export async function apiPostEmpty<T>(url: string, token?: string) {
+    return apiRequest<T>({
+        url,
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+}
+
 export async function apiPatch<T>(url: string, body?: unknown, token?: string) {
     return apiRequest<T>({
         url,
