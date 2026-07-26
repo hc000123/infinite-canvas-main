@@ -169,24 +169,24 @@ Agent Plan 是编排和追踪层，不直接调用模型，不直接扣费，不
 
 ### Registry
 
-- `GET /api/agents?projectId=`：列出系统与当前项目可见 Agent。
-- `POST /api/agents`：创建项目 Agent 与首个草稿版本。
-- `GET /api/agents/:id`：读取 Definition、版本轨道和推荐版。
-- `POST /api/agents/:id/versions`：从指定版本创建草稿。
-- `PATCH /api/agent-versions/:id`：仅更新草稿。
-- `POST /api/agent-versions/:id/validate`：解析 Skill 引用并返回问题。
-- `POST /api/agent-versions/:id/publish`：发布不可变版本。
-- `PUT /api/agents/:id/recommended-version`：切换推荐版。
+- `GET /api/v1/agents?projectId=`：列出系统与当前项目可见 Agent。
+- `POST /api/v1/agents`：创建项目 Agent 与首个草稿版本。
+- `GET /api/v1/agents/:id`：读取 Definition、版本轨道和推荐版。
+- `POST /api/v1/agents/:id/versions`：从指定版本创建草稿。
+- `PATCH /api/v1/agent-versions/:id`：仅更新草稿。
+- `POST /api/v1/agent-versions/:id/validate`：解析 Skill 引用并返回问题。
+- `POST /api/v1/agent-versions/:id/publish`：发布不可变版本。
+- `PUT /api/v1/agents/:id/recommended-version`：切换推荐版。
 
 ### Plan Runtime
 
-- `POST /api/agent-plans`：从 Agent Version、目标和源 Artifact 创建 Draft。
-- `GET /api/agent-plans/:id`：读取 Revision、Steps、Invocation 与 Artifact 摘要。
-- `POST /api/agent-plans/:id/revisions`：修改 Skill 链或绑定并创建新 Revision。
-- `POST /api/agent-plans/:id/preflight`：解析和冻结精确版本。
-- `POST /api/agent-plans/:id/confirm`：确认当前 Revision。
-- `POST /api/agent-plans/:id/continue`：在前一步批准后物化下一步 Invocation。
-- `POST /api/agent-plans/:id/cancel`：取消未完成 Plan，并请求取消当前 Invocation。
+- `POST /api/v1/agent-plans`：从 Agent Version、目标和源 Artifact 创建 Draft。
+- `GET /api/v1/agent-plans/:id`：读取 Revision、Steps、Invocation 与 Artifact 摘要。
+- `POST /api/v1/agent-plans/:id/revisions`：修改 Skill 链或绑定并创建新 Revision。
+- `POST /api/v1/agent-plans/:id/preflight`：解析和冻结精确版本。
+- `POST /api/v1/agent-plans/:id/confirm`：确认当前 Revision。
+- `POST /api/v1/agent-plans/:id/continue`：在前一步批准后物化下一步 Invocation。
+- `POST /api/v1/agent-plans/:id/cancel`：取消未完成 Plan，并请求取消当前 Invocation。
 
 所有响应使用 `{ code, data, msg }`，所有读取和操作都按当前用户、项目权限和 Artifact 所有权隔离。
 
