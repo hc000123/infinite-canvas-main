@@ -90,3 +90,7 @@ const statusLabels: Record<AgentPlanStatus, string> = {
 export function agentPlanStatusLabel(status: AgentPlanStatus) {
     return statusLabels[status];
 }
+
+export function agentRegistrySkillLabel(pkg?: { defaultSkillRefs: unknown[] }) {
+    return pkg ? `${pkg.defaultSkillRefs.length} 个 Skill` : "草稿待发布";
+}

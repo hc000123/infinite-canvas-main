@@ -3,6 +3,7 @@
 ## Unreleased
 
 + [新增] 新增统一 Artifact 与 Invocation Runtime，独立 Skill 调用可冻结版本、预检契约、追踪质量门并在审核后幂等 Apply。
++ [新增] 新增可版本化 Agent Registry 与顺序 Agent Plan Runtime，支持项目自由组合独立 Skill、冻结版本和额度，并通过统一 Invocation / Artifact 链逐步审核交接。
 + [优化] 将固定六阶段 Workflow Skill 中心泛化为可搜索、可版本化、可评测和可独立管理的 Skill Registry。
 + [调整] 移除项目详情低频“素材引用”页签，素材缺口与旧版本提醒统一进入项目素材库，底层引用和生成链路保持不变。
 + [优化] 模型算力点改为按业务单位计费：语言按调用次数、图片按实际张数、视频按生成秒数，并统一画布预估、后台单位提示和后端扣费口径。

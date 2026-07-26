@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { agentPlanStatusLabel, buildAgentPlanRequest, buildSourceArtifactInput, canConfirmAgentPlan, canContinueAgentPlan, canPreflightAgentPlan, rebindAgentSkillRefs, reorderAgentSkillRefs } from "./agent-center-utils.ts";
+import { agentPlanStatusLabel, agentRegistrySkillLabel, buildAgentPlanRequest, buildSourceArtifactInput, canConfirmAgentPlan, canContinueAgentPlan, canPreflightAgentPlan, rebindAgentSkillRefs, reorderAgentSkillRefs } from "./agent-center-utils.ts";
 
 const first = {
     stepKey: "optimize", label: "剧本优化", capability: "script.create", skillId: "skill-1", skillVersionId: "skill-v1", skillVersionConstraint: "", required: true,
@@ -48,4 +48,9 @@ test("rebuilds symbolic handoff bindings from selected Skill contracts", () => {
     assert.deepEqual(rebound[0].inputBindings, []);
     assert.deepEqual(rebound[1].inputBindings, [{ bindingName: "script", fromStepKey: "optimize", fromOutputBinding: "script" }]);
     assert.equal(rebound[1].expectedOutputType, "content_profile");
+});
+
+test("does not present an unpublished Agent draft as zero Skills", () => {
+    assert.equal(agentRegistrySkillLabel(undefined), "草稿待发布");
+    assert.equal(agentRegistrySkillLabel({ defaultSkillRefs: [first, second] }), "2 个 Skill");
 });

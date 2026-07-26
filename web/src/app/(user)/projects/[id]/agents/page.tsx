@@ -11,6 +11,8 @@ import { fetchSkillOptions } from "@/services/api/admin-skills";
 import { createAgent, fetchAgents, type AgentRegistryItem } from "@/services/api/agent-registry";
 import { useUserStore } from "@/stores/use-user-store";
 import { useCreativeProjectStore } from "../../use-creative-project-store";
+import { loadAgentCenterSession, saveAgentCenterSession } from "./agent-center-session";
+import { agentCenterSessionStorage } from "./agent-center-session-storage";
 import { AgentRegistryList } from "./components/agent-registry-list";
 import { AgentRunConsole } from "./components/agent-run-console";
 import { AgentVersionEditor } from "./components/agent-version-editor";
@@ -26,7 +28,8 @@ export default function ProjectAgentCenterPage() {
     const hydrated = useCreativeProjectStore((state) => state.hydrated);
     const project = useCreativeProjectStore((state) => state.projects.find((item) => item.id === projectId));
     const [selectedAgentId, setSelectedAgentId] = useState("");
-    const [activeTab, setActiveTab] = useState("definition");
+    const [activeTab, setActiveTab] = useState<"definition" | "run">("definition");
+    const [sessionLoaded, setSessionLoaded] = useState(false);
 
     const agentsQuery = useQuery({
         queryKey: ["agent-registry", projectId],
@@ -44,6 +47,20 @@ export default function ProjectAgentCenterPage() {
     const selectedAgent = agents.find((item) => item.agent.id === selectedAgentId);
 
     useEffect(() => {
+        let active = true;
+        setSessionLoaded(false);
+        void loadAgentCenterSession(agentCenterSessionStorage, projectId).then((session) => {
+            if (!active) return;
+            if (session) {
+                setSelectedAgentId(session.selectedAgentId);
+                setActiveTab(session.activeTab);
+            }
+            setSessionLoaded(true);
+        }).catch(() => { if (active) setSessionLoaded(true); });
+        return () => { active = false; };
+    }, [projectId]);
+    useEffect(() => {
+        if (!sessionLoaded) return;
         if (!agents.length) {
             setSelectedAgentId("");
             return;
@@ -51,7 +68,11 @@ export default function ProjectAgentCenterPage() {
         if (!agents.some((item) => item.agent.id === selectedAgentId)) {
             setSelectedAgentId(agents.find((item) => item.agent.ownerType === "project")?.agent.id || agents[0].agent.id);
         }
-    }, [agents, selectedAgentId]);
+    }, [agents, selectedAgentId, sessionLoaded]);
+    useEffect(() => {
+        if (!sessionLoaded || !selectedAgentId) return;
+        void saveAgentCenterSession(agentCenterSessionStorage, projectId, { selectedAgentId, activeTab }).catch(() => undefined);
+    }, [activeTab, projectId, selectedAgentId, sessionLoaded]);
     useEffect(() => {
         const error = agentsQuery.error || skillOptionsQuery.error;
         if (error) message.error(errorText(error));
@@ -105,7 +126,7 @@ export default function ProjectAgentCenterPage() {
                     <div className="min-w-0">
                         <Tabs
                             activeKey={activeTab}
-                            onChange={setActiveTab}
+                            onChange={(key) => setActiveTab(key as "definition" | "run")}
                             items={[
                                 { key: "definition", label: <span className="inline-flex items-center gap-2"><Boxes className="size-4" />定义与版本</span>, children: <AgentVersionEditor item={selectedAgent} projectId={projectId} skillOptions={skillOptionsQuery.data || []} /> },
                                 { key: "run", label: <span className="inline-flex items-center gap-2"><Play className="size-4" />运行与产物</span>, children: <AgentRunConsole item={selectedAgent} projectId={projectId} skillOptions={skillOptionsQuery.data || []} /> },

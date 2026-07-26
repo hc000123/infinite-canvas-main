@@ -29,7 +29,6 @@
 
 - Phase 1 通用 Skill Registry：已实现，自动验收与管理端冒烟通过，待用户确认。固定六阶段身份已切换为通用 Definition / Version、Manifest、评测、推荐版和工作流消费端绑定。
 - Phase 3 正式生产工作流切换：待将生产节点接入 Invocation Runtime，并保留审核、快照和 Apply 语义。
-- Phase 4 Agent Registry + Agent Runtime：待实现 Agent 独立版本、Skill 权限、匹配和 Temporary Plan。
 - Phase 5 Workflow Composer：待实现可组合节点图、路由预览、成本估算、契约预检和发布。
 - Phase 6 画布和图片入口：待接入统一能力选择器、对话 Agent 调度和 Artifact 引用回写。
 

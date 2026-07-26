@@ -50,6 +50,18 @@ git diff --check
 
 无费用 HTTP smoke 只到预检：使用系统临时目录 SQLite、关闭 Worker、注册/登录临时用户，创建 `source_text`，调用精确内置 `3.1.0` Skill Version，检查 `awaiting_confirmation`、缺 requirement Confirm 拒绝、detail 和 events；不提交正确 Confirm，不会调用外部模型或产生费用。
 
+### 可组合 Agent Registry + Agent Plan Runtime Phase 4
+
+- 项目 Agent 中心已从旧固定岗位设置页替换为独立 Agent Registry：系统 Agent 只读且可复制为项目 Agent；项目 Agent 草稿可组合、排序和替换任意已发布 Skill，发布版本不可变，推荐版本与发布动作分离。
+- Agent 只持有 Role、Skill 引用和访问 / 模型 / 工具 / 执行策略，不复制 Skill 正文、Schema 或质量门。Skill 选项返回最小 Manifest 与输入 / 输出 Binding，编辑器可据此重建相邻步骤的符号 Artifact 交接。
+- 运行台支持粘贴或导入文本、显式创建不可变 `source_text` Artifact、建立 revisioned Agent Plan、预检版本 / Binding / 额度、精确确认、逐步推进、人工审核、查看 Artifact 和取消。
+- Agent Plan 每一步通过统一 Invocation Runtime 执行；预检冻结 Agent、Skill、Artifact、参数、Schema 和额度哈希，已批准上游 Artifact 才能成为下游真实输入。并发或重复推进只创建一个 Invocation / AgentRun，切换推荐版本不影响已冻结 Plan。
+- 自动证据覆盖两步真实 Skill 链：来源 Artifact 未改变，两个 Step 的版本 / 哈希与质量闸门可追溯，第一步批准产物是第二步输入，两次成功调用各扣费一次；同时覆盖过期确认、重复推进、驳回重试、取消传播、跨用户隔离和安全 DTO。
+- 独立进程零费用冒烟会编译并启动真实 Go 后端，使用临时 SQLite、关闭 Worker，完成注册 / 登录、Artifact、Plan 和预检，再提交错误确认指纹；数据库必须保持 0 个 Invocation、0 个 AgentRun 和 0 条算力流水。
+- 真实浏览器验收已通过：在独立 Next / Go / SQLite / Mock 模型进程中注册并登录普通用户，复制“前期制作 Agent”、校验、发布并设为推荐；固定剧本完成 Artifact → 预检 → 确认 → 剧本整理审核 → 资产提取审核 → Plan 完成。`production_script` 保留“林秋 / 旧公交站 / 折起的车票”，`asset_catalog` 提取同名角色、场景和道具并保留逐条原文证据，第二步父 Artifact 精确指向第一步已批准产物。
+- 浏览器验收同时覆盖真实失败呈现：0 算力点在执行时进入 `failed`，错误为“算力点不足”；错误类型的第二步 JSON 被第一步质量门拒绝且不产生 Artifact。完成态 Plan ID、来源文本、Episode、当前 Agent / 页签和 Artifact Trace 使用用户隔离的 `localforage` 恢复；即使项目已有多个项目 Agent，整页刷新后仍直接显示同一条已完成 Plan。无推荐版本的项目 Agent 显示“草稿待发布”，不再误报“0 个 Skill”。
+- 当前边界：正式生产 Workflow 切换、Workflow Composer、画布 / 图片入口的统一能力选择器和真实模型固定剧本效果验收仍记录在 `docs/todo.md`，本项不提前宣称完成。
+
 ### 项目详情素材引用入口收口
 
 - 项目详情不再显示“素材引用”页签，只保留主要生产入口。

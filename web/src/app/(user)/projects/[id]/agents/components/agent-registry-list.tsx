@@ -5,6 +5,7 @@ import { Button, Empty, Input, Skeleton, Tag } from "antd";
 import { useMemo, useState } from "react";
 
 import type { AgentRegistryItem } from "@/services/api/agent-registry";
+import { agentRegistrySkillLabel } from "../agent-center-utils";
 
 export function AgentRegistryList({ items, loading, selectedAgentId, copying, onCopy, onSelect }: { items: AgentRegistryItem[]; loading: boolean; selectedAgentId: string; copying: boolean; onCopy: (item: AgentRegistryItem) => void; onSelect: (id: string) => void }) {
     const [keyword, setKeyword] = useState("");
@@ -39,7 +40,7 @@ export function AgentRegistryList({ items, loading, selectedAgentId, copying, on
                                     <Tag color={item.agent.ownerType === "system" ? "blue" : "gold"} className="m-0 shrink-0">{item.agent.ownerType === "system" ? "系统" : "项目"}</Tag>
                                 </div>
                                 <div className="mt-3 flex items-center justify-between text-[11px] text-[var(--studio-text-muted)]">
-                                    <span className="inline-flex items-center gap-1"><GitBranch className="size-3.5" />{item.recommendedPackage?.defaultSkillRefs.length || 0} 个 Skill</span>
+                                    <span className="inline-flex items-center gap-1"><GitBranch className="size-3.5" />{agentRegistrySkillLabel(item.recommendedPackage)}</span>
                                     <span>{recommended ? `v${recommended.version}` : `${item.versions.length} 个版本`}</span>
                                 </div>
                             </button>

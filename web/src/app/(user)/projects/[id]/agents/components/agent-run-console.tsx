@@ -10,6 +10,8 @@ import type { AgentRegistryItem, AgentSkillRef } from "@/services/api/agent-regi
 import { cancelAgentPlan, confirmAgentPlan, continueAgentPlan, createAgentPlan, fetchAgentPlan, preflightAgentPlan, type AgentPlanContinueResult, type AgentPlanDetail, type AgentPlanPreflightResult, type AgentPlanStepDetail } from "@/services/api/agent-plans";
 import { createArtifact, getArtifact, getInvocation, reviewInvocation, type ArtifactEnvelope } from "@/services/api/invocations";
 import { agentPlanStatusLabel, buildAgentPlanRequest, buildSourceArtifactInput, canConfirmAgentPlan, canContinueAgentPlan, canPreflightAgentPlan, rebindAgentSkillRefs } from "../agent-center-utils";
+import { loadAgentRunSession, saveAgentRunSession } from "../agent-run-session";
+import { agentRunSessionStorage } from "../agent-run-session-storage";
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : "操作失败");
 
@@ -30,10 +32,23 @@ export function AgentRunConsole({ item, projectId, initialEpisodeId, skillOption
     useEffect(() => {
         setSkillRefs(item?.recommendedPackage?.defaultSkillRefs.map((ref) => ({ ...ref, inputBindings: ref.inputBindings.map((binding) => ({ ...binding })), parameters: { ...ref.parameters } })) || []);
         setPlanId("");
+        setSourceText("");
+        setEpisodeId(initialEpisodeId || "");
+        setGoal("按当前 Agent 的 Skill 顺序完成内容生产");
         setPreflight(undefined);
         setLastContinue(undefined);
         setSourceArtifact(undefined);
-    }, [item]);
+        if (!item) return;
+        let active = true;
+        void loadAgentRunSession(agentRunSessionStorage, projectId, item.agent.id).then((session) => {
+            if (!active || !session) return;
+            setPlanId(session.planId);
+            setSourceText(session.sourceText);
+            setEpisodeId(session.episodeId);
+            setGoal(session.goal);
+        }).catch(() => undefined);
+        return () => { active = false; };
+    }, [initialEpisodeId, item, projectId]);
 
     const planQuery = useQuery({ queryKey: ["agent-plan", planId], queryFn: () => fetchAgentPlan(planId), enabled: Boolean(planId), retry: false });
     const plan = planQuery.data;
@@ -71,6 +86,7 @@ export function AgentRunConsole({ item, projectId, initialEpisodeId, skillOption
         onSuccess: ({ artifact, detail }) => {
             setSourceArtifact(artifact);
             setPlanId(detail.plan.id);
+            void saveAgentRunSession(agentRunSessionStorage, projectId, item!.agent.id, { planId: detail.plan.id, sourceText, episodeId, goal }).catch(() => undefined);
             setPlanData(detail.plan.id, detail);
             setPreflight(undefined);
             setLastContinue(undefined);
@@ -165,7 +181,7 @@ export function AgentRunConsole({ item, projectId, initialEpisodeId, skillOption
 }
 
 function PlanSteps({ steps, onArtifact }: { steps: AgentPlanStepDetail[]; onArtifact: (id: string) => void }) {
-    return <div><div className="mb-3 text-sm font-semibold">执行轨迹</div><Steps orientation="vertical" size="small" items={steps.map((detail) => ({ title: <div className="flex flex-wrap items-center gap-2"><span>{detail.step.label}</span><Tag>{detail.step.status}</Tag><span className="text-xs font-normal text-[var(--studio-text-muted)]">{detail.step.skillVersion ? `v${detail.step.skillVersion}` : detail.step.skillVersionId}</span></div>, description: <div className="space-y-2 pb-3 text-xs text-[var(--studio-text-secondary)]"><div>{detail.inputBindings.length ? detail.inputBindings.map((binding) => binding.fromStepKey ? `${binding.fromStepKey}.${binding.fromOutputBinding} → ${binding.bindingName}` : `${binding.artifactId} → ${binding.bindingName}`).join("；") : "等待外部来源或上游 Artifact"}</div>{detail.outputArtifactRefs.length ? <Space wrap>{detail.outputArtifactRefs.map((artifact) => <Button key={artifact.artifactId} type="link" size="small" className="!h-auto !p-0" onClick={() => onArtifact(artifact.artifactId)}>查看产物 {artifact.bindingName}</Button>)}</Space> : null}{detail.step.errorMessage ? <div className="text-red-500">{detail.step.errorMessage}</div> : null}</div>, status: stepStatus(detail.step.status) }))} /></div>;
+    return <div><div className="mb-3 text-sm font-semibold">执行轨迹</div><Steps orientation="vertical" size="small" items={steps.map((detail) => ({ title: <div className="flex flex-wrap items-center gap-2"><span>{detail.step.label}</span><Tag>{detail.step.status}</Tag><span className="text-xs font-normal text-[var(--studio-text-muted)]">{detail.step.skillVersion ? `v${detail.step.skillVersion}` : detail.step.skillVersionId}</span></div>, content: <div className="space-y-2 pb-3 text-xs text-[var(--studio-text-secondary)]"><div>{detail.inputBindings.length ? detail.inputBindings.map((binding) => binding.fromStepKey ? `${binding.fromStepKey}.${binding.fromOutputBinding} → ${binding.bindingName}` : `${binding.artifactId} → ${binding.bindingName}`).join("；") : "等待外部来源或上游 Artifact"}</div>{detail.outputArtifactRefs.length ? <Space wrap>{detail.outputArtifactRefs.map((artifact) => <Button key={artifact.artifactId} type="link" size="small" className="!h-auto !p-0" onClick={() => onArtifact(artifact.artifactId)}>查看产物 {artifact.bindingName}</Button>)}</Space> : null}{detail.step.errorMessage ? <div className="text-red-500">{detail.step.errorMessage}</div> : null}</div>, status: stepStatus(detail.step.status) }))} /></div>;
 }
 
 function stepStatus(status: AgentPlanStepDetail["step"]["status"]): "wait" | "process" | "finish" | "error" {
