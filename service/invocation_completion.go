@@ -174,7 +174,7 @@ func buildInvocationCompletion(agentRun model.AgentRun, run model.InvocationRun,
 		}
 		validator, validatorErr := invocationBusinessValidatorFor(coreSchemas[output.bindingName].ArtifactType)
 		if validatorErr == nil {
-			validatorErr = validator.Check(output.payload)
+			validatorErr = validateInvocationBusinessPayload(validator, output.payload, revision)
 		}
 		if validatorErr != nil {
 			itemFailed = true
@@ -620,7 +620,7 @@ func loadPreservedInvocationOutputs(run model.InvocationRun, revision model.Invo
 			return nil, nil, nil, errors.New("preserved output 不再符合 frozen schema")
 		}
 		validator, err := invocationBusinessValidatorFor(artifact.ArtifactType)
-		if err != nil || validator.Check(payload.value) != nil {
+		if err != nil || validateInvocationBusinessPayload(validator, payload.value, revision) != nil {
 			return nil, nil, nil, errors.New("preserved output 不再符合 frozen business validator")
 		}
 		artifacts = append(artifacts, artifact)
