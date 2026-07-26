@@ -208,9 +208,12 @@ func startWorkflowStage(userID string, workflowRunID string, stageID string, inp
 	}
 	request := InvocationRequest{
 		Source: "workflow", ProjectID: detail.Run.ProjectID, EpisodeID: detail.Run.EpisodeID,
-		SkillVersionID: strings.TrimSpace(input.SkillVersionID), Capability: "workflow.stage." + workflowSkillStageForRun(stageID),
-		ExpectedOutputArtifactType: workflowInvocationOutputType(stageID), InputArtifactRefs: refs,
+		SkillVersionID: strings.TrimSpace(input.SkillVersionID), InputArtifactRefs: refs,
 		Parameters: parameters, IdempotencyKey: strings.TrimSpace(input.IdempotencyKey),
+	}
+	if request.SkillVersionID == "" {
+		request.Capability = "workflow.stage." + workflowSkillStageForRun(stageID)
+		request.ExpectedOutputArtifactType = workflowInvocationOutputType(stageID)
 	}
 	snapshot, err := PreflightInvocation(userID, request)
 	if err != nil {
