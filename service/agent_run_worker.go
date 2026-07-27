@@ -22,6 +22,7 @@ type AgentRunWorkerOptions struct {
 	Now               func() time.Time
 	HTTPClient        *http.Client
 	Executor          AgentRunExecutor
+	Executors         []AgentRunExecutor
 }
 
 type AgentRunWorker struct {
@@ -32,7 +33,7 @@ type AgentRunWorker struct {
 	maxConcurrency    int
 	userConcurrency   int
 	now               func() time.Time
-	executor          AgentRunExecutor
+	executors         map[string]AgentRunExecutor
 }
 
 type agentRunCallResult struct {
@@ -66,8 +67,18 @@ func NewAgentRunWorker(options AgentRunWorkerOptions) *AgentRunWorker {
 	if options.Now == nil {
 		options.Now = time.Now
 	}
-	if options.Executor == nil {
-		options.Executor = NewAPIAgentRunExecutor(options.HTTPClient)
+	executors := map[string]AgentRunExecutor{}
+	for _, executor := range options.Executors {
+		if executor != nil && strings.TrimSpace(executor.Kind()) != "" {
+			executors[executor.Kind()] = executor
+		}
+	}
+	if options.Executor != nil {
+		executors[options.Executor.Kind()] = options.Executor
+	}
+	if len(executors) == 0 {
+		executor := NewAPIAgentRunExecutor(options.HTTPClient)
+		executors[executor.Kind()] = executor
 	}
 	return &AgentRunWorker{
 		id:                strings.TrimSpace(options.ID),
@@ -77,8 +88,17 @@ func NewAgentRunWorker(options AgentRunWorkerOptions) *AgentRunWorker {
 		maxConcurrency:    options.MaxConcurrency,
 		userConcurrency:   options.UserConcurrency,
 		now:               options.Now,
-		executor:          options.Executor,
+		executors:         executors,
 	}
+}
+
+func (w *AgentRunWorker) executorFor(kind string) (AgentRunExecutor, bool) {
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		kind = AgentRunExecutorAPI
+	}
+	executor, ok := w.executors[kind]
+	return executor, ok
 }
 
 func (w *AgentRunWorker) Run(ctx context.Context) {
@@ -142,16 +162,17 @@ func (w *AgentRunWorker) execute(ctx context.Context, run model.AgentRun) error 
 	if frozenExecutor == "" {
 		frozenExecutor = AgentRunExecutorAPI
 	}
-	if frozenExecutor != w.executor.Kind() {
-		return w.finishFailure(&run, leaseOwner, "任务执行器与当前 Worker 不匹配", false)
+	executor, ok := w.executorFor(frozenExecutor)
+	if !ok {
+		return w.finishFailure(&run, leaseOwner, nil, "任务执行器与当前 Worker 不匹配", false)
 	}
 	if cancelled, err := agentRunCancellationRequested(run.ID); err != nil {
 		return err
 	} else if cancelled {
-		return w.finishCancelled(&run, leaseOwner)
+		return w.finishCancelled(&run, leaseOwner, executor)
 	}
-	if err := w.executor.ReserveCredits(&run); err != nil {
-		return w.finishFailure(&run, leaseOwner, err.Error(), false)
+	if err := executor.ReserveCredits(&run); err != nil {
+		return w.finishFailure(&run, leaseOwner, executor, err.Error(), false)
 	}
 	if _, saved, err := repository.SaveLeasedAgentRun(run, leaseOwner); err != nil {
 		return err
@@ -163,7 +184,7 @@ func (w *AgentRunWorker) execute(ctx context.Context, run model.AgentRun) error 
 	monitorDone := make(chan struct{})
 	go w.maintainLease(callCtx, run.ID, cancel, monitorDone)
 	startedAt := time.Now()
-	result := w.executor.Call(callCtx, run)
+	result := executor.Call(callCtx, run)
 	cancel()
 	<-monitorDone
 	run.DurationMs = time.Since(startedAt).Milliseconds()
@@ -173,10 +194,10 @@ func (w *AgentRunWorker) execute(ctx context.Context, run model.AgentRun) error 
 		return cancelErr
 	}
 	if cancelled {
-		return w.finishCancelled(&run, leaseOwner)
+		return w.finishCancelled(&run, leaseOwner, executor)
 	}
 	if result.message != "" {
-		return w.finishFailure(&run, leaseOwner, result.message, result.retryable)
+		return w.finishFailure(&run, leaseOwner, executor, result.message, result.retryable)
 	}
 	run.RawOutput = result.rawOutput
 	run.StructuredDraftJSON = result.structuredJSON
@@ -200,10 +221,11 @@ func (w *AgentRunWorker) executeInvocation(ctx context.Context, run model.AgentR
 		return w.finishInvocationFailure(&run, "execution_target_unavailable", err.Error())
 	}
 	frozenExecutor := strings.TrimSpace(run.Executor)
-	if frozenExecutor == "" || frozenExecutor != w.executor.Kind() {
+	executor, ok := w.executorFor(frozenExecutor)
+	if frozenExecutor == "" || !ok {
 		return w.finishInvocationFailure(&run, "execution_target_unavailable", "任务执行器与当前 Worker 不匹配")
 	}
-	if err := w.executor.Available(ctx); err != nil {
+	if err := executor.Available(ctx); err != nil {
 		return w.finishInvocationFailure(&run, "execution_target_unavailable", err.Error())
 	}
 	if cancelled, err := agentRunCancellationRequested(run.ID); err != nil {
@@ -223,7 +245,7 @@ func (w *AgentRunWorker) executeInvocation(ctx context.Context, run model.AgentR
 	monitorDone := make(chan struct{})
 	go w.maintainLease(callCtx, run.ID, cancel, monitorDone)
 	startedAt := time.Now()
-	result := w.executor.Call(callCtx, run)
+	result := executor.Call(callCtx, run)
 	cancel()
 	<-monitorDone
 	run.DurationMs = time.Since(startedAt).Milliseconds()
@@ -284,9 +306,11 @@ func (w *AgentRunWorker) maintainLease(ctx context.Context, id string, cancel co
 	}
 }
 
-func (w *AgentRunWorker) finishFailure(run *model.AgentRun, leaseOwner string, message string, retryable bool) error {
-	if err := w.executor.RefundCredits(run); err != nil {
-		return err
+func (w *AgentRunWorker) finishFailure(run *model.AgentRun, leaseOwner string, executor AgentRunExecutor, message string, retryable bool) error {
+	if executor != nil {
+		if err := executor.RefundCredits(run); err != nil {
+			return err
+		}
 	}
 	stamp := workerTime(w.now())
 	run.ErrorMessage = strings.TrimSpace(message)
@@ -310,9 +334,11 @@ func (w *AgentRunWorker) finishFailure(run *model.AgentRun, leaseOwner string, m
 	return SyncWorkflowStageFromAgentRun(*run)
 }
 
-func (w *AgentRunWorker) finishCancelled(run *model.AgentRun, leaseOwner string) error {
-	if err := w.executor.RefundCredits(run); err != nil {
-		return err
+func (w *AgentRunWorker) finishCancelled(run *model.AgentRun, leaseOwner string, executor AgentRunExecutor) error {
+	if executor != nil {
+		if err := executor.RefundCredits(run); err != nil {
+			return err
+		}
 	}
 	stamp := workerTime(w.now())
 	run.Status = model.AgentRunStatusCancelled

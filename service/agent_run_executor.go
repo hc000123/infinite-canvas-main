@@ -286,6 +286,17 @@ func NewAgentRunExecutorFromConfig() (AgentRunExecutor, error) {
 	return NewAPIAgentRunExecutor(nil), nil
 }
 
+func NewAgentRunExecutorsFromConfig() ([]AgentRunExecutor, error) {
+	textExecutor, err := NewAgentRunExecutorFromConfig()
+	if err != nil {
+		return nil, err
+	}
+	if textExecutor.Kind() == AgentRunExecutorAPI {
+		return []AgentRunExecutor{textExecutor}, nil
+	}
+	return []AgentRunExecutor{textExecutor, NewAPIAgentRunExecutor(nil)}, nil
+}
+
 func currentAgentRunExecutorKind() string {
 	if strings.EqualFold(strings.TrimSpace(config.Cfg.WorkflowTextExecutor), AgentRunExecutorCodexCLI) && config.Cfg.WorkflowLocalCodexEnabled {
 		return AgentRunExecutorCodexCLI

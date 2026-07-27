@@ -63,6 +63,32 @@ func TestCodexTextModeKeepsImageRunsOnAPI(t *testing.T) {
 	}
 }
 
+func TestAgentRunExecutorsFromConfigIncludesAPIAlongsideCodex(t *testing.T) {
+	previousExecutor := config.Cfg.WorkflowTextExecutor
+	previousEnabled := config.Cfg.WorkflowLocalCodexEnabled
+	previousWorkdir := config.Cfg.WorkflowCodexWorkdir
+	t.Cleanup(func() {
+		config.Cfg.WorkflowTextExecutor = previousExecutor
+		config.Cfg.WorkflowLocalCodexEnabled = previousEnabled
+		config.Cfg.WorkflowCodexWorkdir = previousWorkdir
+	})
+	config.Cfg.WorkflowTextExecutor = AgentRunExecutorCodexCLI
+	config.Cfg.WorkflowLocalCodexEnabled = true
+	config.Cfg.WorkflowCodexWorkdir = t.TempDir()
+
+	executors, err := NewAgentRunExecutorsFromConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]bool{}
+	for _, executor := range executors {
+		kinds[executor.Kind()] = true
+	}
+	if !kinds[AgentRunExecutorCodexCLI] || !kinds[AgentRunExecutorAPI] || len(kinds) != 2 {
+		t.Fatalf("kinds=%v", kinds)
+	}
+}
+
 func TestCodexPromptPreservesSystemAndUserMessages(t *testing.T) {
 	prompt, err := buildCodexPromptFromRequest(`{"model":"codex","messages":[{"role":"system","content":"系统规则"},{"role":"user","content":"用户输入"}]}`)
 	if err != nil || prompt != "[SYSTEM]\n系统规则\n\n[USER]\n用户输入" {

@@ -25,6 +25,32 @@ func TestAgentRunWorkerExecutesQueuedRun(t *testing.T) {
 	fixture.assertCreditLogs(t, run.ID, 1, 0)
 }
 
+func TestAgentRunWorkerResolvesEachFrozenExecutor(t *testing.T) {
+	api := workerRecordingExecutor{kind: AgentRunExecutorAPI}
+	codex := workerRecordingExecutor{kind: AgentRunExecutorCodexCLI}
+	worker := NewAgentRunWorker(AgentRunWorkerOptions{Executors: []AgentRunExecutor{api, codex}})
+
+	if resolved, ok := worker.executorFor(AgentRunExecutorAPI); !ok || resolved.Kind() != AgentRunExecutorAPI {
+		t.Fatalf("api resolved=%T ok=%v", resolved, ok)
+	}
+	if resolved, ok := worker.executorFor(AgentRunExecutorCodexCLI); !ok || resolved.Kind() != AgentRunExecutorCodexCLI {
+		t.Fatalf("codex resolved=%T ok=%v", resolved, ok)
+	}
+	if _, ok := worker.executorFor("unknown"); ok {
+		t.Fatal("unknown executor must not resolve")
+	}
+}
+
+type workerRecordingExecutor struct{ kind string }
+
+func (executor workerRecordingExecutor) Kind() string           { return executor.kind }
+func (workerRecordingExecutor) Available(context.Context) error { return nil }
+func (workerRecordingExecutor) Call(context.Context, model.AgentRun) agentRunCallResult {
+	return agentRunCallResult{}
+}
+func (workerRecordingExecutor) ReserveCredits(*model.AgentRun) error { return nil }
+func (workerRecordingExecutor) RefundCredits(*model.AgentRun) error  { return nil }
+
 func TestAgentRunWorkerRetriesRateLimitAndRefunds(t *testing.T) {
 	fixture := newAgentRunWorkerFixture(t, http.StatusTooManyRequests, `{"error":{"message":"slow down"}}`)
 	run := fixture.queueRun(t, "worker-rate-limit")
