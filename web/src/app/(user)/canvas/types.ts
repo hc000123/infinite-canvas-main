@@ -169,6 +169,17 @@ export type CanvasNodeMetadata = {
         qualityGateIds: string[];
         createdFromText: string;
     };
+    capabilityArtifact?: {
+        source: "canvas_chat";
+        sourceNodeId: string;
+        invocationId: string;
+        artifactId: string;
+        artifactType: string;
+        artifactHash: string;
+        artifactIds: string[];
+        skillVersionId: string;
+        appliedAt: string;
+    };
     referenceAssets?: Array<Record<string, unknown>>;
     sourceAssetId?: string;
     assetVersion?: AssetVersionReference;

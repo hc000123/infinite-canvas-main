@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useParams, useSearchParams } from "next/navigation";
 import { defaultConfig } from "@/stores/use-config-store";
 import { canvasEpisodeLabel } from "../utils/canvas-episode-context";
@@ -10,6 +11,7 @@ import { useCanvasConnections } from "../hooks/use-canvas-connections";
 import { useCanvasClipboardActions } from "../hooks/use-canvas-clipboard-actions";
 import { useCanvasConfigNodeActions } from "../hooks/use-canvas-config-node-actions";
 import { useCanvasCapacity } from "../hooks/use-canvas-capacity";
+import { useCanvasCapabilityActions } from "../hooks/use-canvas-capability-actions";
 import { useCanvasDerivedState } from "../hooks/use-canvas-derived-state";
 import { useCanvasDeleteActions } from "../hooks/use-canvas-delete-actions";
 import { useCanvasGlobalPointerEvents } from "../hooks/use-canvas-global-pointer-events";
@@ -56,6 +58,8 @@ import { CanvasNodesLayer } from "../components/canvas-nodes-layer";
 import { CanvasFloatingControls } from "../components/canvas-floating-controls";
 import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
 import { CanvasNodeType, type CanvasNodeData } from "../types";
+
+const CapabilityRunDrawer = dynamic(() => import("@/components/capability-runtime/capability-run-drawer").then((module) => module.CapabilityRunDrawer), { ssr: false });
 
 export default function CanvasPage() {
     const mounted = useCanvasMounted();
@@ -630,6 +634,7 @@ function InfiniteCanvasPage() {
 
     const { deleteConnection, deleteSelection } = useCanvasDeleteActions({ deleteNodes, selectedConnectionId, selectedNodeIdsRef, setConnections, setSelectedConnectionId });
     const { switchMediaVersion } = useCanvasMediaVersionActions({ modal, setNodes });
+    const canvasCapability = useCanvasCapabilityActions({ nodes, nodesRef, connectionsRef, setNodes, setConnections, setSelectedNodeIds, setSelectedConnectionId });
 
     const toolbarActions = useCanvasToolbarActions({
         createNode,
@@ -795,6 +800,7 @@ function InfiniteCanvasPage() {
             downloadNodeMedia,
             handleFontSizeChange,
             handleUploadRequest,
+            openNodeCapability: canvasCapability.openNodeCapability,
             openTextEditor,
             refreshNodeVolcengineReview,
             saveNodeAsset,
@@ -1050,6 +1056,18 @@ function InfiniteCanvasPage() {
                     onImageInputChange={handleImageInputChange}
                     onOpenStoryboardGroup={renderActions.openStoryboardGroup}
                     onSaveTextNode={handleNodeContentChange}
+                />
+                <CapabilityRunDrawer
+                    open={Boolean(canvasCapability.activeNode)}
+                    onClose={canvasCapability.close}
+                    title="节点 Skill 能力"
+                    source="canvas_chat"
+                    projectId={workspaceProjectId || canvasId}
+                    episodeId={currentProject?.episodeId}
+                    sourceText={canvasCapability.sourceText}
+                    targetKind="node"
+                    targetId={canvasCapability.activeNode?.id || canvasId}
+                    onConsume={canvasCapability.consume}
                 />
             </section>
             <CanvasSideInspector

@@ -18,6 +18,7 @@ export function NodeInspector({
     inputs,
     theme,
     onInfo,
+    onRunSkill,
     onEditText,
     onToggleDialog,
     onGenerateImage,
@@ -36,6 +37,7 @@ export function NodeInspector({
     inputs: NodeGenerationInput[];
     theme: CanvasTheme;
     onInfo: (node: CanvasNodeData) => void;
+    onRunSkill: (node: CanvasNodeData) => void;
     onEditText: (node: CanvasNodeData) => void;
     onToggleDialog: (node: CanvasNodeData) => void;
     onGenerateImage: (node: CanvasNodeData) => void;
@@ -86,6 +88,7 @@ export function NodeInspector({
 
             <div className="mt-3 grid grid-cols-2 gap-2">
                 <InspectorAction icon={<Info className="size-4" />} label="节点信息" onClick={() => onInfo(node)} theme={theme} />
+                <InspectorAction icon={<Sparkles className="size-4" />} label="运行 Skill" onClick={() => onRunSkill(node)} theme={theme} />
                 {node.type === CanvasNodeType.Text ? <InspectorAction icon={<FileText className="size-4" />} label="编辑文字" onClick={() => onEditText(node)} theme={theme} /> : null}
                 {node.type === CanvasNodeType.Text ? <InspectorAction icon={<ImageIcon className="size-4" />} label="用文本生图" onClick={() => onGenerateImage(node)} theme={theme} /> : null}
                 {canOpenGenerateSettings ? <InspectorAction icon={<MessageSquare className="size-4" />} label="生成设置" onClick={() => onToggleDialog(node)} theme={theme} /> : null}

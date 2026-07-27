@@ -50,6 +50,8 @@
 
 生图工作台的 `Skill 能力` 选择器使用同一组 Artifact / Invocation 接口：仅列出已发布 Skill，按 Artifact Binding 精确匹配已批准项目产物或当前文本，预检后冻结 Skill 版本、输入哈希、模型和额度。输出不会自动审核或写入；只有人工批准并点击“使用此产物”后才替换提示词，并用 `client_local_receipt` 记录本地消费坐标。
 
+画布节点的 `运行 Skill` 同样使用 `source: "canvas_chat"` 和上述接口。当前节点语义文本按需登记为 `source_text`；人工批准并使用完整 Artifact-set 后，浏览器为每个产物创建可追溯的下游文本节点和来源连线，再以 `target: "client_local_receipt"`、`surface: "canvas"`、`targetKind: "node"` 记录一次幂等消费回执。服务端不直接修改浏览器本地画布，也不在 Apply 响应中回传画布节点数据。
+
 ## Workflow Registry 与 Composer Runtime 接口
 
 下列接口均位于 `/api/v1`，需要登录。系统 Workflow 对用户只读可见；项目 Workflow、版本和 Execution 按 JWT 用户及项目隔离。所有写入请求使用严格字段解码，标记为 0 字节的生命周期接口不接受 `{}` 或空白正文。

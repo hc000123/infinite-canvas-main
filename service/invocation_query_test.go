@@ -148,6 +148,19 @@ func TestInvocationHTTPSummariesRedactInternalFields(t *testing.T) {
 	}
 }
 
+func TestSafeInvocationPreflightSerializesEmptyCollectionsAsArrays(t *testing.T) {
+	value := SafeInvocationPreflight(InvocationPreflightSnapshot{})
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{`"inputArtifactRefs":[]`, `"confirmationRequirements":[]`, `"blockReasons":[]`} {
+		if !strings.Contains(string(raw), field) {
+			t.Fatalf("missing empty array %s in %s", field, raw)
+		}
+	}
+}
+
 func assertInvocationDetailRefs(t *testing.T, detail InvocationDetail, revision, inputAttempt int, forbiddenOutputID string) {
 	t.Helper()
 	if detail.EventsHasMore || detail.EventsNextAfter != 0 || detail.EventsLimit != invocationDetailEventsLimit {

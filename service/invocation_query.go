@@ -180,10 +180,10 @@ func GetInvocationDetail(userID, invocationID string) (InvocationDetail, error) 
 func SafeInvocationPreflight(snapshot InvocationPreflightSnapshot) InvocationPreflightResponse {
 	return InvocationPreflightResponse{
 		Run: invocationRunSummary(snapshot.Run), Revision: invocationRevisionSummary(snapshot.Revision),
-		InputArtifactRefs: append([]model.InvocationArtifactRef(nil), snapshot.InputArtifactRefs...),
+		InputArtifactRefs: append(make([]model.InvocationArtifactRef, 0, len(snapshot.InputArtifactRefs)), snapshot.InputArtifactRefs...),
 		ExecutionPolicy:   invocationExecutionPolicySummary(snapshot.ExecutionPolicy), RouteTrace: invocationRouteTraceSummary(snapshot.RouteTrace),
-		ConfirmationRequirements: append([]string(nil), snapshot.ConfirmationRequirements...),
-		BlockReasons:             append([]InvocationBlockReason(nil), snapshot.BlockReasons...),
+		ConfirmationRequirements: append(make([]string, 0, len(snapshot.ConfirmationRequirements)), snapshot.ConfirmationRequirements...),
+		BlockReasons:             append(make([]InvocationBlockReason, 0, len(snapshot.BlockReasons)), snapshot.BlockReasons...),
 	}
 }
 

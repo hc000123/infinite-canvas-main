@@ -12,6 +12,7 @@ export function useCanvasNodeToolActions({
     handleFontSizeChange,
     handleRetryNode,
     handleUploadRequest,
+    openNodeCapability,
     openTextEditor,
     refreshNodeVolcengineReview,
     saveNodeAsset,
@@ -32,6 +33,7 @@ export function useCanvasNodeToolActions({
     handleFontSizeChange: (nodeId: string, fontSize: number) => void;
     handleRetryNode: (node: CanvasNodeData) => Promise<void> | void;
     handleUploadRequest: (nodeId?: string) => void;
+    openNodeCapability: (node: CanvasNodeData) => void;
     openTextEditor: (node: CanvasNodeData) => void;
     refreshNodeVolcengineReview: (node: CanvasNodeData) => Promise<void> | void;
     saveNodeAsset: (node: CanvasNodeData) => Promise<void> | void;
@@ -47,6 +49,7 @@ export function useCanvasNodeToolActions({
     return useMemo<CanvasNodeHoverToolbarActions>(
         () => ({
             onInfo: (node) => setInfoNodeId(node.id),
+            onRunSkill: openNodeCapability,
             onEditText: openTextEditor,
             onDecreaseFont: (node) => handleFontSizeChange(node.id, Math.max(10, (node.metadata?.fontSize || 14) - 2)),
             onIncreaseFont: (node) => handleFontSizeChange(node.id, Math.min(32, (node.metadata?.fontSize || 14) + 2)),
@@ -77,6 +80,7 @@ export function useCanvasNodeToolActions({
             handleRetryNode,
             handleUploadRequest,
             openTextEditor,
+            openNodeCapability,
             refreshNodeVolcengineReview,
             saveNodeAsset,
             setAngleNodeId,

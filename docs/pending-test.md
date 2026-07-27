@@ -108,6 +108,17 @@ git diff --check
 - 自动门禁已覆盖 `go test ./... -count=1`、前端 767 项测试、`npm run typecheck`、`npm run lint:fast`、`npm run build` 和 `git diff --check`；浏览器另验收页面无崩溃、入口可打开、不兼容 Skill 显示缺失 Binding、固定版本/哈希/模型/额度冻结及无新增控制台错误。
 - 本页验收：打开 `/image`，确认不兼容 Skill 显示缺失 Binding；预检后检查冻结版本/哈希/模型/额度；取消一次确认无提示词回写；批准并使用一次产物，刷新后确认提示词与坐标恢复。
 
+### 画布节点统一 Skill 能力入口 Phase 6B
+
+- 文本、配置和媒体节点的悬浮工具栏与右侧检查器新增“Skill / 运行 Skill”入口，复用生图工作台同一套已发布 Skill 选择、Artifact Binding、预检、确认、审核和 Apply Runtime，不新增画布专用执行协议。
+- 当前节点只提供可解释的语义文本：优先使用最终提示词、草稿提示词和节点提示词，其次使用文本 / 配置节点正文；图片、视频和音频 URL 不会冒充 `source_text`。
+- 人工批准并点击“使用此产物”后，每个 Artifact 创建一个下游文本节点并连接来源节点；节点保存 `sourceNodeId / invocationId / artifactId / artifactType / artifactHash / artifactIds / skillVersionId / appliedAt`，同一 Invocation Artifact 重放不重复创建。
+- Preflight 空集合固定序列化为 `[]`，前端也防御旧响应中的 `null`，修复成功预检后对 `blockReasons.map` 调用导致的真实页面崩溃。
+- 固定公交站剧本浏览器验收已完成：12 个已发布 Skill 可见，不兼容分镜 Skill 明确提示缺少 `asset_catalog / production_script`；无文本通道约 0.5 秒返回 `execution_target_unavailable`；临时确定性 OpenAI-compatible 执行器完成“剧本整理 v3.1.0”，产物保留林秋、旧公交站、折起车票和原对白，并整理为可制作的场次 / 场记格式。
+- 产物批准并使用后，真实页面从 1 节点 / 0 连线变为 2 节点 / 1 连线；刷新后节点、连线、正文和完整溯源 metadata 均保留。数据库只有 1 条 applied 回执，浏览器控制台新增错误为 0；临时模型设置和执行器已清理，开发服务已关闭。
+- 自动门禁已通过：`go test ./...`、前端 771 项测试、`npm run typecheck`、`npm run lint:fast`、`npm run build` 和专项幂等 / 接线测试。
+- 本页验收：打开任意画布并选择一个文本节点，从右侧“运行 Skill”完成预检、确认、审核和使用；核对下游节点、连线、节点信息 JSON 与刷新恢复。不会自动运行 Skill，也不会绕过人工审核写回画布。
+
 ### 项目详情素材引用入口收口
 
 - 项目详情不再显示“素材引用”页签，只保留主要生产入口。

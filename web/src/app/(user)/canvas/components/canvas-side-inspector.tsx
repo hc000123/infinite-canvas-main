@@ -178,6 +178,7 @@ export function CanvasSideInspector({
             onBindSelectedVideoToProductionPackage={onBindSelectedVideoToProductionPackage}
             onInsertProductionPackageConfigNode={onInsertProductionPackageConfigNode}
             onInfo={nodeToolActions.onInfo}
+            onRunSkill={nodeToolActions.onRunSkill}
             onEditText={nodeToolActions.onEditText}
             onToggleDialog={nodeToolActions.onToggleDialog}
             onGenerateImage={nodeToolActions.onGenerateImage}

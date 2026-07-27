@@ -54,6 +54,7 @@ type CanvasContextInspectorProps = {
     onBindSelectedVideoToProductionPackage: (packageId: string, nodeId: string) => void;
     onInsertProductionPackageConfigNode: (packageId: string) => void;
     onInfo: (node: CanvasNodeData) => void;
+    onRunSkill: (node: CanvasNodeData) => void;
     onEditText: (node: CanvasNodeData) => void;
     onToggleDialog: (node: CanvasNodeData) => void;
     onGenerateImage: (node: CanvasNodeData) => void;
@@ -103,6 +104,7 @@ export function CanvasContextInspector({
     onBindSelectedVideoToProductionPackage,
     onInsertProductionPackageConfigNode,
     onInfo,
+    onRunSkill,
     onEditText,
     onToggleDialog,
     onGenerateImage,
@@ -213,6 +215,7 @@ export function CanvasContextInspector({
                     inputs={configInputs}
                     theme={theme}
                     onInfo={onInfo}
+                    onRunSkill={onRunSkill}
                     onEditText={onEditText}
                     onToggleDialog={onToggleDialog}
                     onGenerateImage={onGenerateImage}

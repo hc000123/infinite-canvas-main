@@ -46,7 +46,7 @@ export function CapabilityRunDrawer({ open, onClose, title = "Skill 能力", ...
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const run = useCapabilityRun({ ...options, enabled: open });
     const candidate = run.preflight?.routeTrace.candidates.find((item) => item.skillVersionId === run.selectedSkill?.skillVersionId);
-    const routeIssues = [...(candidate?.reasons || []), ...(run.preflight?.blockReasons.map((item) => item.code) || [])].filter((code, index, values) => values.indexOf(code) === index);
+    const routeIssues = [...(candidate?.reasons || []), ...(run.preflight?.blockReasons || []).map((item) => item.code)].filter((code, index, values) => values.indexOf(code) === index);
 
     const execute = async (action: () => Promise<unknown>, success: string) => {
         try {

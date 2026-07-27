@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode } from "react";
-import { AudioLines, Camera, Download, FolderPlus, Image as ImageIcon, Info, Lock, LockOpen, Maximize2, Minus, Pencil, Plus, RefreshCw, Scissors, Settings2, ShieldCheck, Trash2, Upload, Video } from "lucide-react";
+import { AudioLines, Camera, Download, FolderPlus, Image as ImageIcon, Info, Lock, LockOpen, Maximize2, Minus, Pencil, Plus, RefreshCw, Scissors, Settings2, ShieldCheck, Sparkles, Trash2, Upload, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { canSubmitVolcengineReview } from "@/services/volcengine-asset-metadata";
@@ -20,6 +20,7 @@ type CanvasNodeHoverToolbarProps = {
 
 export type CanvasNodeHoverToolbarActions = {
     onInfo: (node: CanvasNodeData) => void;
+    onRunSkill: (node: CanvasNodeData) => void;
     onEditText: (node: CanvasNodeData) => void;
     onDecreaseFont: (node: CanvasNodeData) => void;
     onIncreaseFont: (node: CanvasNodeData) => void;
@@ -145,7 +146,10 @@ function buildNodeToolbarActions({ node, actions, state }: { node: CanvasNodeDat
         review,
         reviewProcessing,
     };
-    const items: NodeToolbarAction[] = [{ type: "button", key: "info", title: "查看节点信息", label: "信息", icon: <Info className="size-4" />, onClick: () => actions.onInfo(node) }];
+    const items: NodeToolbarAction[] = [
+        { type: "button", key: "info", title: "查看节点信息", label: "信息", icon: <Info className="size-4" />, onClick: () => actions.onInfo(node) },
+        { type: "button", key: "run-skill", title: "用 Skill 处理当前节点", label: "Skill", icon: <Sparkles className="size-4" />, onClick: () => actions.onRunSkill(node) },
+    ];
 
     if (hasSpecificTools) items.push({ type: "divider", key: "primary-divider" });
     appendAssetActions(items, context);
