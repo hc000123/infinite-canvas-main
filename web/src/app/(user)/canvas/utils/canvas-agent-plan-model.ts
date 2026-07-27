@@ -1,4 +1,4 @@
-import type { AgentPlanCreateInput, AgentPlanDetail } from "../../../../services/api/agent-plans.ts";
+import type { AgentPlanCreateInput, AgentPlanDetail, AgentPlanStatus } from "../../../../services/api/agent-plans.ts";
 import type { AgentRegistryItem, AgentSkillRef } from "../../../../services/api/agent-registry.ts";
 import type { ArtifactRefInput } from "../../../../services/api/invocations-contract.ts";
 import type { CanvasAssistantReference } from "../types.ts";
@@ -58,4 +58,17 @@ export function finalAgentPlanOutputRefs(detail?: AgentPlanDetail) {
         .sort((left, right) => right.step.ordinal - left.step.ordinal)
         .find((item) => item.outputArtifactRefs.length);
     return last?.outputArtifactRefs.map((ref) => ({ ...ref })) || [];
+}
+
+export function canvasAgentPlanActions(status: AgentPlanStatus, options: { hasFinalOutputs: boolean; applied: boolean }) {
+    const terminalFailure = status === "blocked" || status === "failed" || status === "cancelled";
+    return {
+        canEdit: status === "draft",
+        canPreflight: status === "draft",
+        canConfirm: status === "awaiting_confirmation",
+        canContinue: status === "running",
+        canReview: status === "needs_review",
+        canCancel: !terminalFailure && status !== "completed",
+        canApply: status === "completed" && options.hasFinalOutputs && !options.applied,
+    };
 }

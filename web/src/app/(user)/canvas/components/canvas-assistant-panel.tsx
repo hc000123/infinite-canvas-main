@@ -492,6 +492,7 @@ export function CanvasAssistantPanel({
                 ) : messages.length ? (
                     <AssistantMessages
                         messages={messages}
+                        projectId={projectId}
                         nodes={nodes}
                         connections={connections}
                         onRetry={retryMessage}
@@ -518,6 +519,10 @@ export function CanvasAssistantPanel({
                         }
                         onGeneratePromptImage={(message, output) => {
                             void generatePromptAgentImage(message, output);
+                        }}
+                        onAgentPlanRunPatch={(message, patch) => {
+                            if (!message.agentPlanRun) return;
+                            updateMessage(activeSession?.id || "", message.id, { agentPlanRun: { ...message.agentPlanRun, ...patch } });
                         }}
                     />
                 ) : (

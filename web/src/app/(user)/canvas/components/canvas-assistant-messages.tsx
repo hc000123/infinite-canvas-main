@@ -8,14 +8,16 @@ import { useCopyText } from "@/hooks/use-copy-text";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { cn } from "@/lib/utils";
 import { useThemeStore } from "@/stores/use-theme-store";
-import type { CanvasAssistantImage, CanvasAssistantMessage, CanvasAssistantReference, CanvasConnection, CanvasNodeData } from "../types";
+import type { CanvasAgentPlanRun, CanvasAssistantImage, CanvasAssistantMessage, CanvasAssistantReference, CanvasConnection, CanvasNodeData } from "../types";
 import { validateAssistantCanvasActions } from "../utils/canvas-assistant-actions";
 import { formatPromptAgentOutputText, promptAgentOutputLabel } from "../utils/canvas-prompt-agent-render";
 import { buildPromptAgentExecutionPlan } from "../utils/canvas-prompt-agent-tools";
 import type { PromptAgentExecutionStepStatus, PromptAgentOutput } from "../utils/canvas-prompt-agent-types";
+import { CanvasAgentPlanCard } from "./canvas-agent-plan-card";
 
 export function AssistantMessages({
     messages,
+    projectId,
     nodes,
     connections,
     onRetry,
@@ -24,8 +26,10 @@ export function AssistantMessages({
     onApplyAssistantActions,
     onCancelAssistantActions,
     onGeneratePromptImage,
+    onAgentPlanRunPatch,
 }: {
     messages: CanvasAssistantMessage[];
+    projectId: string;
     nodes: CanvasNodeData[];
     connections: CanvasConnection[];
     onRetry: (message: CanvasAssistantMessage) => void;
@@ -34,6 +38,7 @@ export function AssistantMessages({
     onApplyAssistantActions: (message: CanvasAssistantMessage) => void;
     onCancelAssistantActions: (message: CanvasAssistantMessage) => void;
     onGeneratePromptImage?: (message: CanvasAssistantMessage, output: PromptAgentOutput) => void;
+    onAgentPlanRunPatch: (message: CanvasAssistantMessage, patch: Partial<CanvasAgentPlanRun>) => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
 
@@ -54,6 +59,7 @@ export function AssistantMessages({
                         {message.text}
                     </div>
                     {message.references?.length ? <MessageReferences message={message} /> : null}
+                    {message.agentPlanRun ? <CanvasAgentPlanCard run={message.agentPlanRun} projectId={projectId} onRunPatch={(patch) => onAgentPlanRunPatch(message, patch)} /> : null}
                     {message.promptAgentPlan?.outputs.length ? <PromptAgentCards message={message} onInsertText={onInsertText} onGeneratePromptImage={onGeneratePromptImage} /> : null}
                     {message.promptAgentPlan?.actions.length ? <PromptAgentExecutionPlanCard message={message} /> : null}
                     {message.assistantActions?.length ? <AssistantActionPreviewCard message={message} nodes={nodes} connections={connections} onApply={() => onApplyAssistantActions(message)} onCancel={() => onCancelAssistantActions(message)} /> : null}
