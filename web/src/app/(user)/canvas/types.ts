@@ -3,7 +3,6 @@ import type { AgentSkillRef } from "@/services/api/agent-registry";
 import type { ArtifactRefInput } from "@/services/api/invocations-contract";
 import type { AssetVersionReference } from "../assets/asset-version-references";
 import type { AssistantCanvasAction } from "./utils/canvas-assistant-actions";
-import type { PromptAgentExecutionState, PromptAgentIntent, PromptAgentPlan, PromptAgentRunMode, PromptAgentSkillPackId } from "./utils/canvas-prompt-agent-types";
 import type { CanvasPromptDocument } from "./utils/canvas-prompt-document";
 
 export type Position = {
@@ -315,11 +314,6 @@ export type CanvasAssistantMessage = {
     assistantActions?: AssistantCanvasAction[];
     assistantActionStatus?: "pending" | "applied" | "cancelled";
     assistantActionAppliedAt?: string;
-    promptAgentIntent?: PromptAgentIntent;
-    promptAgentMode?: PromptAgentRunMode;
-    promptAgentSkillPackId?: PromptAgentSkillPackId;
-    promptAgentPlan?: PromptAgentPlan;
-    promptAgentExecutionState?: PromptAgentExecutionState;
     agentPlanRun?: CanvasAgentPlanRun;
 };
 

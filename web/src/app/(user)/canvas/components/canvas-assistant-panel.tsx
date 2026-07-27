@@ -24,16 +24,11 @@ import { buildCanvasAgentPlanRequest, buildCanvasAgentSourceText, canvasAgentCan
 import { buildAssistantReferences } from "../utils/canvas-assistant-references";
 import { buildCanvasAssistantWorkflowContext } from "../utils/canvas-assistant-workflow-context";
 import { buildWorkflowAssistantActionSuggestion } from "../utils/canvas-assistant-workflow-actions";
-import { buildPromptAgentCanvasActions } from "../utils/canvas-prompt-agent-actions";
-import { buildPromptAgentSystemContext, isPromptAgentRequest, parsePromptAgentPlan } from "../utils/canvas-prompt-agent";
-import type { PromptAgentComposerIntent, PromptAgentExecutionState, PromptAgentExecutionStepStatus, PromptAgentOutput, PromptAgentRunMode, PromptAgentSkillPackId } from "../utils/canvas-prompt-agent-types";
-import { updatePromptAgentExecutionState } from "../utils/canvas-prompt-agent-tools";
 import { useCanvasAssistantSessions } from "../hooks/use-canvas-assistant-sessions";
 import { AssistantMessages } from "./canvas-assistant-messages";
 import { CanvasAssistantComposer, type AssistantMode } from "./canvas-assistant-composer";
 import { CanvasAssistantHistory } from "./canvas-assistant-history";
 import { CanvasAssistantDeleteModal, CanvasAssistantEmptyState, CanvasAssistantHeader } from "./canvas-assistant-panel-chrome";
-import { CanvasAssistantToolboxCard } from "./canvas-assistant-toolbox-card";
 
 const PANEL_MOTION_MS = 500;
 const PANEL_MOTION_SECONDS = PANEL_MOTION_MS / 1000;
@@ -61,19 +56,6 @@ type CanvasAssistantPanelProps = {
     onCollapseStart: () => void;
     onCollapse: () => void;
 };
-
-const promptAgentCanvasWriteActionTypes = ["node.create_image_config", "node.create_video_config", "node.create_storyboard_group"];
-
-function nextPromptAgentExecutionState(message: CanvasAssistantMessage, state: PromptAgentExecutionState | undefined, actionTypes: string[], status: PromptAgentExecutionStepStatus, note: string, summary: string) {
-    const updates = (message.promptAgentPlan?.actions || [])
-        .filter((action) => actionTypes.includes(action.type))
-        .map((action) => ({
-            actionId: action.id,
-            status,
-            note,
-        }));
-    return updatePromptAgentExecutionState(state, updates, summary);
-}
 
 export function CanvasAssistantPanel({
     embedded = false,
@@ -111,9 +93,6 @@ export function CanvasAssistantPanel({
     const workflowAppliedPreviewItemIds = useAgentRunnerStore((state) => state.workflowAppliedPreviewItemIds);
     const [width, setWidth] = useState(390);
     const [mode, setMode] = useState<AssistantMode>("ask");
-    const [agentMode, setAgentMode] = useState<PromptAgentRunMode>("ask");
-    const [promptIntent, setPromptIntent] = useState<PromptAgentComposerIntent>("auto");
-    const [promptSkillPackId, setPromptSkillPackId] = useState<PromptAgentSkillPackId>("auto");
     const [selectedAgentId, setSelectedAgentId] = useState("");
     const [prompt, setPrompt] = useState("");
     const [isRunning, setIsRunning] = useState(false);
@@ -260,10 +239,6 @@ export function CanvasAssistantPanel({
             await sendCanvasAgentPlanMessage(text, selectedAgent);
             return;
         }
-        if (mode === "ask" && (agentMode !== "ask" || isPromptAgentRequest(text, promptIntent))) {
-            await sendPromptAgentMessage(text, messages);
-            return;
-        }
         await sendMessage(text, mode, messages);
     };
 
@@ -317,99 +292,11 @@ export function CanvasAssistantPanel({
         }
     }
 
-    const sendPromptAgentMessage = async (text: string, history: CanvasAssistantMessage[], options?: { agentMode?: PromptAgentRunMode; references?: CanvasAssistantReference[]; skillPackId?: PromptAgentSkillPackId }) => {
-        const nextAgentMode = options?.agentMode || agentMode;
-        const nextSkillPackId = options?.skillPackId || promptSkillPackId;
-        const requestConfig = { ...effectiveConfig, model: effectiveConfig.textModel || effectiveConfig.model };
-        if (!isAiConfigReady(requestConfig, requestConfig.model)) {
-            openConfigDialog(true);
-            return;
-        }
-
-        const session = ensureActiveSession();
-        const refs = options?.references || selectedReferences;
-        const userMessage: CanvasAssistantMessage = { id: nanoid(), role: "user", mode: "ask", text, references: refs, promptAgentMode: nextAgentMode, promptAgentSkillPackId: nextSkillPackId };
-        const assistantId = nanoid();
-        appendMessage(session.id, userMessage);
-        appendMessage(session.id, { id: assistantId, role: "assistant", mode: "ask", text: "正在整理提示词", isLoading: true });
-        setPrompt("");
-        setIsRunning(true);
-
-        try {
-            const systemContext = buildPromptAgentSystemContext({ agentMode: nextAgentMode, intent: promptIntent, skillPackId: nextSkillPackId, selectedReferences: refs, workflowContext: workflowContext.text });
-            const answer = await requestImageQuestion(requestConfig, await buildChatMessages([...history, userMessage], systemContext));
-            const parsed = parsePromptAgentPlan(answer);
-            if (!parsed.ok) {
-                updateMessage(session.id, assistantId, { text: parsed.text, isLoading: false });
-                return;
-            }
-
-            const suggestion = buildPromptAgentCanvasActions({
-                connections,
-                agentMode: nextAgentMode,
-                nodes,
-                plan: parsed.plan,
-                selectedNodeIds: Array.from(selectedNodeIds),
-            });
-            updateMessage(session.id, assistantId, {
-                text: parsed.plan.reply,
-                isLoading: false,
-                promptAgentIntent: parsed.plan.intent,
-                promptAgentMode: nextAgentMode,
-                promptAgentSkillPackId: nextSkillPackId,
-                promptAgentPlan: parsed.plan,
-                assistantActions: suggestion?.actions,
-                assistantActionStatus: suggestion?.actions.length ? "pending" : undefined,
-            });
-        } catch (error) {
-            updateMessage(session.id, assistantId, { text: error instanceof Error ? error.message : "提示词 Agent 处理失败", isLoading: false });
-        } finally {
-            setIsRunning(false);
-        }
-    };
-
-    const generatePromptAgentImage = async (message: CanvasAssistantMessage, output: PromptAgentOutput) => {
-        if (output.kind !== "image_prompt") return;
-        const sessionId = activeSession?.id || "";
-        let executionState = message.promptAgentExecutionState;
-        const updateExecution = (actionTypes: string[], status: PromptAgentExecutionStepStatus, note: string, summary: string) => {
-            if (!sessionId || !message.promptAgentPlan) return;
-            executionState = nextPromptAgentExecutionState(message, executionState, actionTypes, status, note, summary);
-            updateMessage(sessionId, message.id, { promptAgentExecutionState: executionState });
-        };
-
-        if (message.assistantActionStatus === "pending" && message.assistantActions?.length) {
-            const applied = onApplyAssistantActions(message.assistantActions);
-            if (!applied) {
-                updateExecution(promptAgentCanvasWriteActionTypes, "failed", "画布写入失败，已停止生图", "画布写入失败");
-                return;
-            }
-            executionState = nextPromptAgentExecutionState(message, executionState, promptAgentCanvasWriteActionTypes, "succeeded", "已写入画布", "画布写入完成");
-            updateMessage(sessionId, message.id, {
-                assistantActionStatus: "applied",
-                assistantActionAppliedAt: new Date().toISOString(),
-                promptAgentExecutionState: executionState,
-            });
-        }
-
-        updateExecution(["image.generate"], "running", "正在调用生图", "正在生图");
-        const result = await sendMessage(output.finalPrompt, "image", messages, selectedReferences);
-        if (result.ok) {
-            updateExecution(["image.generate"], "succeeded", `生成了 ${result.imageCount || 0} 张图片`, `生图完成：${result.imageCount || 0} 张`);
-            return;
-        }
-        updateExecution(["image.generate"], "failed", result.error, `生图失败：${result.error}`);
-    };
-
     const retryMessage = (message: CanvasAssistantMessage) => {
         const index = messages.findIndex((item) => item.id === message.id);
         const userIndex = messages.slice(0, index).findLastIndex((item) => item.role === "user");
         const user = messages[userIndex];
         if (!user) return;
-        if (message.promptAgentPlan || message.promptAgentIntent || user.promptAgentMode) {
-            void sendPromptAgentMessage(user.text, messages.slice(0, userIndex), { agentMode: message.promptAgentMode || user.promptAgentMode || agentMode, references: user.references, skillPackId: message.promptAgentSkillPackId || user.promptAgentSkillPackId || promptSkillPackId });
-            return;
-        }
         void sendMessage(user.text, user.mode, messages.slice(0, userIndex), user.references);
     };
 
@@ -479,7 +366,6 @@ export function CanvasAssistantPanel({
                     </span>
                     <span className="ml-2">{workflowContext.summary}</span>
                 </div>
-                {view === "chat" ? <CanvasAssistantToolboxCard agentMode={agentMode} /> : null}
                 {view === "history" ? (
                     <CanvasAssistantHistory
                         sessions={historySessions}
@@ -509,20 +395,13 @@ export function CanvasAssistantPanel({
                             updateMessage(sessionId, message.id, {
                                 assistantActionStatus: applied ? "applied" : "pending",
                                 assistantActionAppliedAt: applied ? new Date().toISOString() : undefined,
-                                promptAgentExecutionState: message.promptAgentPlan
-                                    ? nextPromptAgentExecutionState(message, message.promptAgentExecutionState, promptAgentCanvasWriteActionTypes, applied ? "succeeded" : "failed", applied ? "已写入画布" : "画布写入失败", applied ? "画布写入完成" : "画布写入失败")
-                                    : message.promptAgentExecutionState,
                             });
                         }}
                         onCancelAssistantActions={(message) =>
                             updateMessage(activeSession?.id || "", message.id, {
                                 assistantActionStatus: "cancelled",
-                                promptAgentExecutionState: message.promptAgentPlan ? nextPromptAgentExecutionState(message, message.promptAgentExecutionState, promptAgentCanvasWriteActionTypes, "skipped", "用户取消写入画布", "已取消画布写入") : message.promptAgentExecutionState,
                             })
                         }
-                        onGeneratePromptImage={(message, output) => {
-                            void generatePromptAgentImage(message, output);
-                        }}
                         onAgentPlanRunPatch={(message, patch) => {
                             if (!message.agentPlanRun) return;
                             updateMessage(activeSession?.id || "", message.id, { agentPlanRun: { ...message.agentPlanRun, ...patch } });
@@ -540,18 +419,12 @@ export function CanvasAssistantPanel({
                     agentId={selectedAgentId}
                     agentOptions={agentCandidates.map((item) => ({ value: item.agent.id, label: `${item.agent.name} · ${item.recommendedPackage?.defaultSkillRefs.length || 0} 步` }))}
                     agentLoading={agentsQuery.isLoading}
-                    agentMode={agentMode}
-                    intent={promptIntent}
-                    skillPackId={promptSkillPackId}
                     prompt={prompt}
                     isRunning={isRunning}
                     references={selectedReferences}
                     config={effectiveConfig}
                     onModeChange={setMode}
                     onAgentChange={setSelectedAgentId}
-                    onAgentModeChange={setAgentMode}
-                    onIntentChange={setPromptIntent}
-                    onSkillPackChange={setPromptSkillPackId}
                     onPromptChange={setPrompt}
                     onSubmit={submit}
                     onConfigChange={updateConfig}

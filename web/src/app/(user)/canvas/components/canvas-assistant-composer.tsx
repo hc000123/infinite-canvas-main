@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, Bot, Clapperboard, FileText, ImageIcon, Layers3, LoaderCircle, MessageSquare, Network, ShieldCheck, Sparkles, Video, Zap } from "lucide-react";
+import { ArrowUp, Bot, FileText, ImageIcon, LoaderCircle, MessageSquare, Network, Sparkles } from "lucide-react";
 import { Button, Select, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -13,8 +13,6 @@ import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { AssistantReferenceChip } from "./canvas-assistant-messages";
 import type { CanvasAssistantReference } from "../types";
-import { promptAgentSkillPacks } from "../utils/canvas-prompt-agent-skills";
-import type { PromptAgentComposerIntent, PromptAgentRunMode, PromptAgentSkillPackId } from "../utils/canvas-prompt-agent-types";
 
 export type AssistantMode = "ask" | "image";
 export type CanvasAssistantAgentOption = { value: string; label: string };
@@ -24,18 +22,12 @@ type CanvasAssistantComposerProps = {
     agentId: string;
     agentOptions: CanvasAssistantAgentOption[];
     agentLoading: boolean;
-    agentMode: PromptAgentRunMode;
-    intent: PromptAgentComposerIntent;
-    skillPackId: PromptAgentSkillPackId;
     prompt: string;
     isRunning: boolean;
     references: CanvasAssistantReference[];
     config: AiConfig;
     onModeChange: (mode: AssistantMode) => void;
     onAgentChange: (agentId: string) => void;
-    onAgentModeChange: (mode: PromptAgentRunMode) => void;
-    onIntentChange: (intent: PromptAgentComposerIntent) => void;
-    onSkillPackChange: (skillPackId: PromptAgentSkillPackId) => void;
     onPromptChange: (prompt: string) => void;
     onSubmit: () => void;
     onConfigChange: (key: keyof AiConfig, value: string) => void;
@@ -53,18 +45,12 @@ export function CanvasAssistantComposer({
     agentId,
     agentOptions,
     agentLoading,
-    agentMode,
-    intent,
-    skillPackId,
     prompt,
     isRunning,
     references,
     config,
     onModeChange,
     onAgentChange,
-    onAgentModeChange,
-    onIntentChange,
-    onSkillPackChange,
     onPromptChange,
     onSubmit,
     onConfigChange,
@@ -121,12 +107,7 @@ export function CanvasAssistantComposer({
                             <Button type="text" shape="circle" className="canvas-composer-icon !h-8 !min-w-8 !rounded-full !px-2" icon={<Sparkles className="size-4" />} onClick={onCreateDebugActionPreview} />
                         </Tooltip>
                         {mode === "ask" ? (
-                            <>
-                                <PublishedAgentSelect value={agentId} options={agentOptions} loading={agentLoading} theme={theme} onChange={onAgentChange} />
-                                <PromptAgentIntentSwitch intent={intent} theme={theme} onChange={onIntentChange} />
-                                <PromptAgentRunModeSwitch mode={agentMode} theme={theme} onChange={onAgentModeChange} />
-                                <PromptAgentSkillPackSelect value={skillPackId} theme={theme} onChange={onSkillPackChange} />
-                            </>
+                            <PublishedAgentSelect value={agentId} options={agentOptions} loading={agentLoading} theme={theme} onChange={onAgentChange} />
                         ) : null}
                         <AssistantModeSwitch mode={mode} theme={theme} onChange={onModeChange} />
                         {mode === "image" ? (
@@ -176,77 +157,6 @@ function PublishedAgentSelect({ value, options, loading, theme, onChange }: { va
                 />
             </div>
         </Tooltip>
-    );
-}
-
-function PromptAgentSkillPackSelect({ value, theme, onChange }: { value: PromptAgentSkillPackId; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onChange: (skillPackId: PromptAgentSkillPackId) => void }) {
-    return (
-        <Tooltip title="Skill Pack">
-            <div className="flex h-8 shrink-0 items-center gap-1 rounded-full px-2" style={{ background: theme.node.fill, color: theme.node.text }}>
-                <Layers3 className="size-3.5 opacity-70" />
-                <Select
-                    size="small"
-                    variant="borderless"
-                    value={value}
-                    className="w-[108px]"
-                    popupMatchSelectWidth={160}
-                    getPopupContainer={() => document.body}
-                    options={promptAgentSkillPacks.map((pack) => ({ value: pack.id, label: pack.label }))}
-                    onChange={(next) => onChange(next as PromptAgentSkillPackId)}
-                />
-            </div>
-        </Tooltip>
-    );
-}
-
-function PromptAgentRunModeSwitch({ mode, theme, onChange }: { mode: PromptAgentRunMode; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onChange: (mode: PromptAgentRunMode) => void }) {
-    return (
-        <div className="canvas-composer-mode-switch flex h-8 shrink-0 items-center rounded-full p-0.5" style={{ background: theme.node.fill }}>
-            {[
-                { value: "ask" as const, title: "问答", icon: <Bot className="size-3.5" /> },
-                { value: "auto" as const, title: "自动", icon: <Zap className="size-3.5" /> },
-                { value: "review" as const, title: "审核", icon: <ShieldCheck className="size-3.5" /> },
-            ].map((item) => (
-                <Tooltip key={item.value} title={`Agent ${item.title}模式`}>
-                    <button
-                        type="button"
-                        className="canvas-composer-mode-button flex h-7 cursor-pointer items-center justify-center gap-1 rounded-full border-0 bg-transparent px-2 text-xs transition"
-                        style={{ background: mode === item.value ? theme.node.activeStroke : "transparent", color: mode === item.value ? theme.node.panel : theme.node.text }}
-                        onClick={() => onChange(item.value)}
-                        aria-label={`Agent ${item.title}模式`}
-                    >
-                        {item.icon}
-                        <span>{item.title}</span>
-                    </button>
-                </Tooltip>
-            ))}
-        </div>
-    );
-}
-
-function PromptAgentIntentSwitch({ intent, theme, onChange }: { intent: PromptAgentComposerIntent; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onChange: (intent: PromptAgentComposerIntent) => void }) {
-    return (
-        <div className="canvas-composer-mode-switch flex h-8 shrink-0 items-center rounded-full p-0.5" style={{ background: theme.node.fill }}>
-            {[
-                { value: "auto" as const, title: "自动", icon: <Sparkles className="size-3.5" /> },
-                { value: "image_prompt" as const, title: "图片", icon: <ImageIcon className="size-3.5" /> },
-                { value: "video_prompt" as const, title: "视频", icon: <Video className="size-3.5" /> },
-                { value: "storyboard_prompt" as const, title: "分镜", icon: <Clapperboard className="size-3.5" /> },
-            ].map((item) => (
-                <Tooltip key={item.value} title={`${item.title}提示词`}>
-                    <button
-                        type="button"
-                        className="canvas-composer-mode-button flex h-7 cursor-pointer items-center justify-center gap-1 rounded-full border-0 bg-transparent px-2 text-xs transition"
-                        style={{ background: intent === item.value ? theme.node.activeStroke : "transparent", color: intent === item.value ? theme.node.panel : theme.node.text }}
-                        onClick={() => onChange(item.value)}
-                        aria-label={`${item.title}提示词`}
-                    >
-                        {item.icon}
-                        <span>{item.title}</span>
-                    </button>
-                </Tooltip>
-            ))}
-        </div>
     );
 }
 
