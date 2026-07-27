@@ -13,3 +13,10 @@ test("project detail omits the project-level asset reference tab", () => {
     assert.doesNotMatch(board, /ProjectAssetReferencePanel/);
     assert.doesNotMatch(page, /assetReferenceFilters|filteredAssetReferenceRows/);
 });
+
+test("project script entry names the registry Agent instead of a local AI preset", () => {
+    const page = readProjectFile("./[id]/page.tsx");
+
+    assert.match(page, /\n\s+运行系统剧本制作 Agent\n/);
+    assert.doesNotMatch(page, /\n\s+AI 适配剧本\n/);
+});

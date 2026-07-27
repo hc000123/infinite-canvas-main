@@ -96,6 +96,16 @@ git diff --check
 - 本阶段自动门禁：`go test ./... -count=1`、前端 757 项测试、`npm run typecheck`、`npm run build`、Workflow Registry / 编辑器专项测试和 `git diff --check`。
 - 当前边界：图片页统一能力选择器、画布节点直接调用 Skill、画布对话 Agent Temporary Plan、Artifact 引用回写和真实模型固定剧本效果验收继续进入 Phase 6。
 
+### 项目剧本入口统一 Runtime Phase 7
+
+- 项目分集导入和已有分集的剧本优化不再读取本地 Workflow preset 或浏览器 Agent 配置，而是从 Agent Registry 解析“系统剧本制作 Agent”的推荐发布版本。
+- 每次运行先创建不可变 `source_text` Artifact，再建立 Agent Plan 并完成预检；确认时展示冻结的 Agent / Skill 精确版本、预计 Credits 和服务端确认要求。执行产物以待审核 `production_script` Artifact 返回，未批准前不会写入本地分集。
+- 导入页明确显示“运行系统剧本制作 Agent”；已有分集显示同一系统 Agent 标签，不再提供项目级 Skill preset 选择器。旧 Agent 设置抽屉、快速 Agent、Workflow 执行面板、脚本直调 Runner 和 `projectWorkflowSelections` 持久化状态已移除。
+- 待审文本如果被手工修改，将拒绝继续批准原 Artifact 哈希，必须重新运行，避免把修改稿伪装成原 Agent 产物；批准后才完成 Plan 并同步本地分集与视频工作流剧本。
+- 隔离浏览器验收已确认：系统“标准 AIGC 生产 Workflow”默认可见且包含 6 节点，可复制为项目可编辑草稿；项目剧本入口成功创建 `source_text` 与 Agent Plan；页面没有新增 console error，也未发生崩溃或无限轮询。
+- 当前隔离环境没有可用文本模型，Agent Plan 预检按设计立即返回“没有可用文本模型”，因此本轮不宣称真实模型生产稿效果通过。确定性单元测试已覆盖冻结坐标、确认、轮询到待审、人工审核完成和篡改阻断；配置生产文本模型后仍需用固定剧本复测实际文稿质量。
+- 本阶段自动门禁已通过：`go test ./... -count=1`、前端 773 项测试、`npm run typecheck`、`npm run build` 和 `git diff --check`。
+
 ### 生图工作台统一 Skill 能力入口 Phase 6A
 
 - 生图工作台的“提示词库”旁新增“Skill 能力”；抽屉只读取当前用户可见的已发布 Skill 和项目已批准 Artifact，按每个 Binding 精确匹配类型，不隐式复用同一 Artifact 填充两个输入。

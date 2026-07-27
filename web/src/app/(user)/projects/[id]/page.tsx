@@ -5,7 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { App, Button, Empty, Form, Input, Modal, Spin } from "antd";
 import { Wand2 } from "lucide-react";
 
-import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { confirmAgentPlan, continueAgentPlan, createAgentPlan, preflightAgentPlan } from "@/services/api/agent-plans";
+import { fetchAgents } from "@/services/api/agent-registry";
+import { createArtifact, getInvocation, reviewInvocation } from "@/services/api/invocations";
+import { useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasCreateProjectModal } from "../../canvas/components/canvas-create-project-modal";
 import { useCanvasStore } from "../../canvas/stores/use-canvas-store";
 import { useScriptStore } from "../../canvas/stores/use-script-store";
@@ -17,12 +20,7 @@ import { useOriginalWorkflowStore } from "../../original-workflow/use-original-w
 import { videoWorkflowEpisodeKey, videoWorkflowHref, videoWorkflowProjectSlug } from "../../original-workflow/video-workflow-routing";
 import { canvasIdsForCreativeProject, unfiledCanvasProjects } from "../creative-projects";
 import { editableCanvasPreset } from "../project-canvas-preset";
-import { defaultAgentConfigs, mergeAgentConfigs } from "../agent-settings";
-import { builtInAgentWorkflowPresets, resolveWorkflowPreset } from "../agent-workflow-presets";
-import type { ChatCompletionMessage } from "../agent-runner-types";
-import { buildProjectScriptOptimizerMessages, runProjectScriptOptimizer } from "../script-optimizer-runner";
-import { useAgentSettingsStore } from "../use-agent-settings-store";
-import { useAgentRunnerStore } from "../use-agent-runner-store";
+import { approveScriptAgentResult, assertScriptReviewMatches, executeScriptAgentToReview, preflightScriptAgent, resolveSystemScriptAgent, type ScriptAgentReviewResult } from "../script-agent-runtime";
 import { useCreativeProjectStore } from "../use-creative-project-store";
 import { ProjectEpisodeBoard, type ProjectDetailTab, type ProjectEpisodeBoardRow } from "./components/project-episode-board";
 import { buildOriginalScriptEditPatch } from "./project-episode-script-edit";
@@ -35,24 +33,15 @@ type EpisodeImportFormValues = {
 type OptimizedImportDraft = {
     sourceScript: string;
     structuredScript?: StructuredEpisodeScript;
+    review?: ScriptAgentReviewResult;
 };
-
-function normalizeRunnerPromptMessages(messages: ReturnType<typeof buildProjectScriptOptimizerMessages>): ChatCompletionMessage[] {
-    return messages.map(
-        (item): ChatCompletionMessage => ({
-            role: item.role as ChatCompletionMessage["role"],
-            content: typeof item.content === "string" ? item.content : JSON.stringify(item.content),
-        }),
-    );
-}
 
 export default function CreativeProjectDetailPage() {
     const params = useParams<{ id: string }>();
     const router = useRouter();
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const [episodeImportForm] = Form.useForm<EpisodeImportFormValues>();
     const effectiveConfig = useEffectiveConfig();
-    const checkAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const projectId = params.id;
     const hydrated = useCreativeProjectStore((state) => state.hydrated);
     const project = useCreativeProjectStore((state) => state.projects.find((item) => item.id === projectId));
@@ -61,10 +50,6 @@ export default function CreativeProjectDetailPage() {
     const canvases = useCanvasStore((state) => state.projects);
     const createCanvas = useCanvasStore((state) => state.createProject);
     const updateCanvas = useCanvasStore((state) => state.updateProject);
-    const globalAgentConfigs = useAgentSettingsStore((state) => state.globalConfigs);
-    const projectAgentConfigs = useAgentSettingsStore((state) => state.projectConfigs);
-    const projectWorkflowSelections = useAgentSettingsStore((state) => state.projectWorkflowSelections);
-    const saveProjectWorkflowSelection = useAgentSettingsStore((state) => state.saveProjectWorkflowSelection);
     const episodes = useScriptStore((state) => state.episodes);
     const scenes = useScriptStore((state) => state.scenes);
     const scriptsHydrated = useScriptStore((state) => state.hydrated);
@@ -89,15 +74,8 @@ export default function CreativeProjectDetailPage() {
     const [bindingCanvasId, setBindingCanvasId] = useState("");
     const storyboardTableShots = useStoryboardStore((state) => state.tableShots);
     const shotGroups = useStoryboardStore((state) => state.shotGroups);
-    const startWorkflowTextRun = useAgentRunnerStore((state) => state.startWorkflowTextRun);
-    const completeWorkflowTextRun = useAgentRunnerStore((state) => state.completeWorkflowTextRun);
-    const failWorkflowTextRun = useAgentRunnerStore((state) => state.failWorkflowTextRun);
-    const ensureWorkflowRun = useAgentRunnerStore((state) => state.ensureWorkflowRun);
     const workflowExecutionMode = useOriginalWorkflowStore((state) => state.executionMode);
     const workflowRootPath = useOriginalWorkflowStore((state) => state.rootPath);
-    const codexApiBaseUrl = useOriginalWorkflowStore((state) => state.codexApiBaseUrl);
-    const codexApiKey = useOriginalWorkflowStore((state) => state.codexApiKey);
-    const codexModel = useOriginalWorkflowStore((state) => state.codexModel);
     const canvasIds = useMemo(() => (project ? canvasIdsForCreativeProject(project, canvases) : []), [canvases, project]);
     const projectCanvases = useMemo(() => canvases.filter((canvas) => canvasIds.includes(canvas.id)), [canvasIds, canvases]);
     const projectEpisodes = useMemo(() => episodes.filter((episode) => episode.projectId === projectId).sort((a, b) => a.order - b.order), [episodes, projectId]);
@@ -153,22 +131,6 @@ export default function CreativeProjectDetailPage() {
         [episodeRows],
     );
     const currentEpisode = useMemo(() => episodeRows.find((row) => row.filterStatus === "running") || episodeRows.find((row) => row.filterStatus === "draft") || episodeRows[episodeRows.length - 1], [episodeRows]);
-    const scriptOptimizerConfig = useMemo(() => mergeAgentConfigs(defaultAgentConfigs(), globalAgentConfigs, projectAgentConfigs[projectId] || []).find((config) => config.kind === "script_optimizer"), [globalAgentConfigs, projectAgentConfigs, projectId]);
-    const workflowPresets = useMemo(() => builtInAgentWorkflowPresets(), []);
-    const scriptSkillPresets = useMemo(() => {
-        const whitePaperPreset = workflowPresets.find((preset) => preset.version.startsWith("5.2") && preset.stages.some((stage) => stage.stageId === "script-adaptation"));
-        return whitePaperPreset ? [whitePaperPreset] : [];
-    }, [workflowPresets]);
-    const scriptSkillOptions = useMemo(() => scriptSkillPresets.map((preset) => ({ label: "白皮书 AI 剧本母版适配包 v1.1", value: preset.workflowId })), [scriptSkillPresets]);
-    const projectWorkflowSelectionList = useMemo(() => projectWorkflowSelections[projectId] || [], [projectId, projectWorkflowSelections]);
-    const selectedWorkflowPreset = useMemo(() => {
-        const selectedWorkflowId = projectWorkflowSelectionList.find((selection) => selection.selected)?.workflowId || workflowPresets[0].workflowId;
-        return resolveWorkflowPreset(selectedWorkflowId, projectWorkflowSelectionList) || workflowPresets[0];
-    }, [projectWorkflowSelectionList, workflowPresets]);
-    const selectedScriptWorkflowPreset = useMemo(() => {
-        const selectedScriptPreset = scriptSkillPresets.find((preset) => preset.workflowId === selectedWorkflowPreset.workflowId);
-        return selectedScriptPreset || scriptSkillPresets[0] || selectedWorkflowPreset;
-    }, [scriptSkillPresets, selectedWorkflowPreset]);
     const projectProgress = useMemo(() => {
         if (!episodeRows.length) return 0;
         return Math.round(episodeRows.reduce((total, row) => total + row.progress, 0) / episodeRows.length);
@@ -227,54 +189,57 @@ export default function CreativeProjectDetailPage() {
         setEpisodeTitleDraft("");
     };
 
-    const startScriptOptimizerRunner = (input: { episodeId?: string; episodeTitle: string; source: "episode_import" | "project_detail"; sourceScript: string }) => {
-        if (!scriptOptimizerConfig) throw new Error("未找到剧本优化 Agent 设定");
-        const preferredModel = scriptOptimizerConfig.modelPreference.trim();
-        const textModel = preferredModel && preferredModel !== "default" ? preferredModel : effectiveConfig.textModel || effectiveConfig.model;
-        const runnerModel = workflowExecutionMode === "local-runner" ? codexModel || "当前 Codex 登录态" : textModel;
-        const runnerProvider = workflowExecutionMode === "local-runner" ? "local-codex-cli" : effectiveConfig.channelMode;
-        const promptMessages = buildProjectScriptOptimizerMessages({
-            agentConfig: scriptOptimizerConfig,
-            episodeTitle: input.episodeTitle,
-            projectTitle: project.title,
-            scriptSnapshot: input.sourceScript,
-        });
-        const scriptStage = selectedScriptWorkflowPreset.stages.find((stage) => stage.stageId === "script-adaptation");
-        const workflowRunId = input.episodeId && scriptStage ? ensureWorkflowRun({ projectId: project.id, episodeId: input.episodeId, preset: selectedScriptWorkflowPreset }) : undefined;
-        return startWorkflowTextRun({
-            projectId: project.id,
-            episodeId: input.episodeId,
-            episodeTitle: input.episodeTitle,
-            scriptSnapshot: input.sourceScript,
-            sourceType: "workflow_text_stage",
-            sourceId: input.source === "episode_import" ? "project-episode-import-script-optimizer" : "project-detail-script-optimizer",
-            variables: { source: input.source, stageId: "script-adaptation" },
-            workflowRunId,
-            workflowId: selectedScriptWorkflowPreset.workflowId,
-            workflowVersion: selectedScriptWorkflowPreset.version,
-            stageId: "script-adaptation",
-            agentId: "script-optimizer",
-            agentName: scriptOptimizerConfig.name,
-            sourcePresetId: selectedScriptWorkflowPreset.workflowId,
-            presetId: selectedScriptWorkflowPreset.workflowId,
-            inputSnapshot: {
-                episodeTitle: input.episodeTitle,
-                projectTitle: project.title,
-                scriptLength: input.sourceScript.length,
+    const runScriptAgentToReview = async (input: { episodeId?: string; episodeTitle: string; sourceScript: string }) => {
+        const agent = resolveSystemScriptAgent(await fetchAgents(project.id));
+        const prepared = await preflightScriptAgent(
+            {
+                createArtifact: (artifactInput) => createArtifact(artifactInput as Parameters<typeof createArtifact>[0]),
+                createAgentPlan: (planInput) => createAgentPlan(planInput as Parameters<typeof createAgentPlan>[0]),
+                preflightAgentPlan,
             },
-            promptMessages: normalizeRunnerPromptMessages(promptMessages),
-            model: runnerModel,
-            provider: runnerProvider,
-            configSummary: JSON.stringify({ executionMode: workflowExecutionMode, model: runnerModel, channelMode: runnerProvider, source: input.source }, null, 2),
-            sourceFiles: ["web/src/app/(user)/projects/agent-settings.ts", "web/src/app/(user)/projects/script-optimizer-agent.ts"],
-            qualityGateIds: scriptStage?.qualityGateIds || ["script-production-draft-check"],
+            { projectId: project.id, episodeId: input.episodeId, episodeTitle: input.episodeTitle, sourceText: input.sourceScript, agent, idempotencyKey: globalThis.crypto.randomUUID() },
+        );
+        const confirmed = await new Promise<boolean>((resolve) => {
+            modal.confirm({
+                title: "确认运行剧本制作 Agent？",
+                content: (
+                    <div className="space-y-2 text-sm">
+                        <div>
+                            将冻结 <code>{prepared.preflight.plan.id}</code> 的 Agent / Skill 精确版本，预计上限 {prepared.preflight.plan.estimatedCredits} Credits。
+                        </div>
+                        <div>{prepared.preflight.confirmationRequirements.map((item) => item.message).join("；") || "本次无额外确认项"}</div>
+                        <div className="text-[var(--studio-text-muted)]">执行完成后只生成待审核 Artifact，不会自动写入分集。</div>
+                    </div>
+                ),
+                okText: "确认执行",
+                cancelText: "取消",
+                onOk: () => resolve(true),
+                onCancel: () => resolve(false),
+            });
         });
+        if (!confirmed) return undefined;
+        return executeScriptAgentToReview({ confirmAgentPlan, continueAgentPlan, getInvocation }, prepared.preflight);
     };
 
-    const selectScriptSkill = (workflowId: string) => {
-        if (!scriptSkillPresets.some((preset) => preset.workflowId === workflowId)) return;
-        saveProjectWorkflowSelection(project.id, { workflowId, projectId: project.id, enabled: true, selected: true, updatedAt: new Date().toISOString() });
-        message.success("已切换剧本优化 Skill");
+    const approveScriptResult = (review: ScriptAgentReviewResult) => approveScriptAgentResult({ reviewInvocation, continueAgentPlan }, review);
+
+    const confirmExistingEpisodeResult = (productionScript: string) =>
+        new Promise<boolean>((resolve) => {
+            modal.confirm({
+                title: "批准并写入这版生产剧本？",
+                content: <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded bg-[var(--studio-panel-muted-bg)] p-3 text-xs leading-6">{productionScript}</pre>,
+                width: 760,
+                okText: "批准并写入",
+                cancelText: "保留待审核",
+                onOk: () => resolve(true),
+                onCancel: () => resolve(false),
+            });
+        });
+
+    const approveImportDraft = async (scriptText: string) => {
+        if (!optimizedImportDraft?.review) return;
+        assertScriptReviewMatches(scriptText, optimizedImportDraft.review);
+        await approveScriptResult(optimizedImportDraft.review);
     };
 
     const importEpisode = async () => {
@@ -284,6 +249,7 @@ export default function CreativeProjectDetailPage() {
         if (!scriptText) return message.warning("请粘贴本集剧本");
         setEpisodeImporting(true);
         try {
+            await approveImportDraft(scriptText);
             upsertScriptProject(project.id, scriptText);
             const order = projectEpisodes.length + 1;
             const sourceSummary = optimizedImportDraft?.sourceScript && optimizedImportDraft.sourceScript.trim() !== scriptText ? optimizedImportDraft.sourceScript : undefined;
@@ -306,28 +272,15 @@ export default function CreativeProjectDetailPage() {
         const sourceScript = values.scriptText?.trim() || "";
         const title = values.title?.trim() || "未命名集数";
         if (!sourceScript) return message.warning("请先粘贴本集剧本");
-        if (!scriptOptimizerConfig) return message.warning("未找到剧本优化 Agent 设定");
-        const runnerRunId = startScriptOptimizerRunner({ episodeTitle: title, source: "episode_import", sourceScript });
         setScriptOptimizing(true);
         try {
-            const result = await runProjectScriptOptimizer({
-                agentConfig: scriptOptimizerConfig,
-                checkAiConfigReady,
-                codexAgent: { apiBaseUrl: codexApiBaseUrl, apiKey: codexApiKey, model: codexModel },
-                effectiveConfig,
-                episodeTitle: title,
-                executionMode: workflowExecutionMode,
-                projectTitle: project.title,
-                rootPath: workflowRootPath,
-                scriptSnapshot: sourceScript,
-            });
-            completeWorkflowTextRun(runnerRunId, result.rawText);
+            const result = await runScriptAgentToReview({ episodeTitle: title, sourceScript });
+            if (!result) return;
             episodeImportForm.setFieldValue("scriptText", result.productionScript);
-            setOptimizedImportDraft({ sourceScript, structuredScript: result.structuredScript });
-            message.success("已生成 AI 适配稿，请检查后导入。");
+            setOptimizedImportDraft({ sourceScript, review: result });
+            message.success("已生成待审核的 production_script Artifact，请检查后导入。");
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "剧本 AI 适配失败";
-            failWorkflowTextRun(runnerRunId, errorMessage);
             message.warning(errorMessage);
         } finally {
             setScriptOptimizing(false);
@@ -349,31 +302,18 @@ export default function CreativeProjectDetailPage() {
         if (!episode) return;
         const sourceScript = episode.sourceSummary?.trim() || episode.summary.trim();
         if (!sourceScript) return message.warning("当前分集还没有剧本");
-        if (!scriptOptimizerConfig) return message.warning("未找到剧本优化 Agent 设定");
-        updateEpisode(episode.id, { summary: "", sourceSummary: episode.sourceSummary || sourceScript, structuredScript: undefined });
-        const runnerRunId = startScriptOptimizerRunner({ episodeId: episode.id, episodeTitle: episode.title, source: "project_detail", sourceScript });
         setOptimizingEpisodeId(episode.id);
         setScriptOptimizeErrors((state) => ({ ...state, [episode.id]: "" }));
         try {
-            const result = await runProjectScriptOptimizer({
-                agentConfig: scriptOptimizerConfig,
-                checkAiConfigReady,
-                codexAgent: { apiBaseUrl: codexApiBaseUrl, apiKey: codexApiKey, model: codexModel },
-                effectiveConfig,
-                episodeTitle: episode.title,
-                executionMode: workflowExecutionMode,
-                projectTitle: project.title,
-                rootPath: workflowRootPath,
-                scriptSnapshot: sourceScript,
-            });
+            const result = await runScriptAgentToReview({ episodeId: episode.id, episodeTitle: episode.title, sourceScript });
+            if (!result || !(await confirmExistingEpisodeResult(result.productionScript))) return;
+            await approveScriptResult(result);
             await syncVideoWorkflowScript(episode.order, result.productionScript);
-            completeWorkflowTextRun(runnerRunId, result.rawText);
-            updateEpisode(episode.id, { summary: result.productionScript, sourceSummary: episode.sourceSummary || sourceScript, structuredScript: result.structuredScript });
+            updateEpisode(episode.id, { summary: result.productionScript, sourceSummary: episode.sourceSummary || sourceScript, structuredScript: undefined });
             setScriptOptimizeErrors((state) => ({ ...state, [episode.id]: "" }));
-            message.success("已优化本集剧本，可继续进入视频工作流。");
+            message.success("已批准并写入本集生产剧本。");
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "剧本优化失败";
-            failWorkflowTextRun(runnerRunId, errorMessage);
             setScriptOptimizeErrors((state) => ({ ...state, [episode.id]: errorMessage }));
             message.warning(errorMessage);
         } finally {
@@ -470,12 +410,9 @@ export default function CreativeProjectDetailPage() {
                 onOptimizeEpisodeScript={(episodeId) => void optimizeExistingEpisodeScript(episodeId)}
                 onOpenEpisode={openEpisodeWorkflow}
                 onSaveEpisodeScript={saveEpisodeScript}
-                onScriptSkillChange={selectScriptSkill}
                 onTabChange={setActiveTab}
                 optimizingEpisodeId={optimizingEpisodeId}
                 scriptOptimizeErrors={scriptOptimizeErrors}
-                scriptSkillOptions={scriptSkillOptions}
-                selectedScriptSkillId={selectedScriptWorkflowPreset.workflowId}
             />
 
             <Modal rootClassName="studio-modal" title="编辑项目" open={projectEditOpen} onCancel={() => setProjectEditOpen(false)} onOk={saveProjectEdit} okText="保存" cancelText="取消" destroyOnHidden>
@@ -514,7 +451,7 @@ export default function CreativeProjectDetailPage() {
                     <div className="mb-2 flex items-center justify-between gap-3">
                         <span className="text-sm text-[var(--studio-text-secondary)]">本集剧本</span>
                         <Button size="small" icon={<Wand2 className="size-3.5" />} loading={scriptOptimizing} onClick={() => void optimizeEpisodeImportScript()}>
-                            AI 适配剧本
+                            运行系统剧本制作 Agent
                         </Button>
                     </div>
                     <Form.Item name="scriptText" rules={[{ required: true, message: "请粘贴本集剧本" }]}>

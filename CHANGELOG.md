@@ -11,6 +11,7 @@
 + [优化] 正式视频 Workflow 已迁入统一 Invocation / Artifact Runtime，阶段支持精确 Skill 冻结、标准资产与媒体引用、完整产物集审核、幂等 Apply 和失败安全门，并保持现有工作台接口与刷新恢复体验。
 + [优化] 将固定六阶段 Workflow Skill 中心泛化为可搜索、可版本化、可评测和可独立管理的 Skill Registry。
 + [优化] 移除画布助手旧硬编码 Prompt Agent Skill Pack、工具注册表和独立执行状态；生产 Agent 统一来自 Agent Registry，同时保留普通对话和直接生图。
++ [优化] 项目分集剧本优化改用 Registry 推荐版系统 Agent，通过统一 Artifact / Agent Plan / Invocation 审核链运行，并移除旧项目 Workflow preset 选择状态、脚本直调 Runner 与重复 Agent 设置面板。
 + [修复] 修复 Workflow 新建时空 Skill 契约导致页面崩溃、默认选中不兼容 Skill、未保存草稿可误校验和编辑器弃用警告。
 + [修复] 修复 Invocation 成功预检返回空集合时画布 Skill 抽屉读取 `null` 导致页面崩溃的问题，并统一空集合安全响应。
 + [调整] 移除项目详情低频“素材引用”页签，素材缺口与旧版本提醒统一进入项目素材库，底层引用和生成链路保持不变。

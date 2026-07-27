@@ -33,6 +33,9 @@
 - Phase 4 Agent Registry + Agent Plan Runtime：已实现，自动验收和固定剧本浏览器验收通过，待用户确认。Agent 可独立版本化并顺序组合 Skill，不复制 Skill 正文或契约。
 - Phase 5 Workflow Composer：已实现，待用户确认。项目 Workflow 中心支持 Skill / Agent DAG、固定 / 标签 / 运行前手选路由、条件、重试、审批、契约校验、路由预览、版本发布和执行控制台。
 - Phase 6 画布和图片入口：生图工作台与画布节点的统一 Skill 能力选择器，以及画布对话的已发布 Agent 选择、可编辑 Temporary Plan、逐步审核执行和最终 Artifact 幂等回写均已实现；旧硬编码 Prompt Agent Skill Pack / 工具注册表已移除，普通对话与直接生图保留。自动验收与确定性固定剧本浏览器验收已通过，生产文本模型固定剧本效果验收仍待可用通道。
+- Phase 7 项目剧本入口迁移：已实现，待用户确认。项目分集导入和已有剧本优化统一调用 Registry 推荐版“系统剧本制作 Agent”，通过 `source_text → Agent Plan → Invocation → production_script → 人工审核` 链执行；旧项目级 Workflow preset 选择状态、旧脚本直调 Runner 和旧 Agent 设置抽屉已退出生产路径。
+
+下一阶段继续补齐内容分类标准 Skill、角色 / 场景 / 道具多种资产 rendition Skill、横竖屏与长短剧分镜路由、`asset_rendition` 生产链，并在可用生产文本模型通道下复测固定剧本的完整真实效果；同时继续审计图片页和旧 workbench 中残留的硬编码 preset / prompt 职责。
 
 ### A. 当前能力收口
 

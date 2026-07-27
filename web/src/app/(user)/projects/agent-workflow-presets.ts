@@ -72,14 +72,6 @@ export type AgentWorkflowPreset = {
     selected: boolean;
 };
 
-export type AgentWorkflowPresetSelection = {
-    workflowId: string;
-    projectId?: string;
-    enabled: boolean;
-    selected: boolean;
-    updatedAt: string;
-};
-
 export const SEEDANCE_WORKFLOW_PRESET_ID = "seedance-2-multi-agent-storyboard-team";
 export const SEEDANCE_ORIGINAL_FORMAT_DIRECTOR_METHOD_V5_PRESET_ID = "seedance-original-format-director-method-v5";
 export const SEEDANCE_MX_SHELL_STORYBOARD_V15_PRESET_ID = "seedance-mx-shell-storyboard-v1-5";
@@ -590,35 +582,6 @@ function withEmotionDirectorStoryboardPreset(base: AgentWorkflowPreset, options:
         qualityGates: appendWorkflowQualityGate(base.qualityGates, emotionDirectorGate),
         sourceFiles: uniqueSourceFiles([...base.sourceFiles, sourceFile(EMOTION_DIRECTOR_SKILL_SOURCE_FILE, "skill", "情绪导演 Skill v2.1。")]),
         importedAt: "2026-06-16T00:00:00.000Z",
-    };
-}
-
-export function resolveWorkflowPreset(workflowId: string, selections: AgentWorkflowPresetSelection[] = []) {
-    const preset = builtInAgentWorkflowPresets().find((item) => item.workflowId === workflowId);
-    if (!preset) return undefined;
-    return applyWorkflowPresetSelection(
-        preset,
-        selections.find((item) => item.workflowId === workflowId),
-    );
-}
-
-export function applyWorkflowPresetSelection(preset: AgentWorkflowPreset, selection?: AgentWorkflowPresetSelection): AgentWorkflowPreset {
-    if (!selection) return preset;
-    return {
-        ...preset,
-        enabled: selection.enabled,
-        selected: selection.selected,
-    };
-}
-
-export function normalizeWorkflowPresetSelection(selection: AgentWorkflowPresetSelection): AgentWorkflowPresetSelection {
-    const fallback = builtInAgentWorkflowPresets().find((preset) => preset.workflowId === selection.workflowId) || buildSeedanceWorkflowPreset();
-    return {
-        workflowId: selection.workflowId || fallback.workflowId,
-        projectId: selection.projectId,
-        enabled: Boolean(selection.enabled),
-        selected: Boolean(selection.selected),
-        updatedAt: selection.updatedAt || new Date().toISOString(),
     };
 }
 

@@ -1,14 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { defaultAgentConfig, defaultAgentConfigs, mergeAgentConfigs } from "./agent-settings.ts";
 import {
     SEEDANCE_MX_SHELL_EMOTION_DIRECTOR_V21_PRESET_ID,
     SEEDANCE_MX_SHELL_STORYBOARD_V15_PRESET_ID,
     SEEDANCE_ORIGINAL_FORMAT_DIRECTOR_METHOD_V5_PRESET_ID,
     SEEDANCE_ORIGINAL_FORMAT_EMOTION_DIRECTOR_V21_PRESET_ID,
     SEEDANCE_WORKFLOW_PRESET_ID,
-    applyWorkflowPresetSelection,
     buildSeedanceMxShellEmotionDirectorV21Preset,
     buildSeedanceMxShellStoryboardV15Preset,
     buildSeedanceOriginalFormatEmotionDirectorV21Preset,
@@ -90,22 +88,6 @@ test("moves director skills into art-design and storyboard stages", () => {
         assert.ok(skillIds.includes("director-skill"));
         assert.ok(skillIds.includes("script-analysis-review-skill"));
     }
-});
-
-test("project workflow selection does not change single-agent config overrides", () => {
-    const selected = applyWorkflowPresetSelection(buildSeedanceWorkflowPreset(), {
-        workflowId: SEEDANCE_WORKFLOW_PRESET_ID,
-        projectId: "project-1",
-        enabled: true,
-        selected: true,
-        updatedAt: "2026-06-06T00:00:00.000Z",
-    });
-    const merged = mergeAgentConfigs(defaultAgentConfigs(), [], [{ ...defaultAgentConfig("asset_extractor"), projectId: "project-1", enabled: false, systemPrompt: "项目资产提取" }]);
-    const assetExtractor = merged.find((config) => config.kind === "asset_extractor");
-    assert.equal(selected.selected, true);
-    assert.equal(selected.enabled, true);
-    assert.equal(assetExtractor?.enabled, false);
-    assert.equal(assetExtractor?.systemPrompt, "项目资产提取");
 });
 
 test("does not include M6.10.1 runner execution fields or behavior", () => {

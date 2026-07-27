@@ -46,8 +46,6 @@ type ProjectEpisodeBoardProps = {
     presetSummary: string;
     rows: ProjectEpisodeBoardRow[];
     scriptOptimizeErrors: Record<string, string>;
-    scriptSkillOptions: Array<{ label: string; value: string }>;
-    selectedScriptSkillId: string;
     onBindCanvas: () => void;
     onBindingCanvasChange: (canvasId: string) => void;
     onClearOptimizedScript: (episodeId: string) => void;
@@ -62,7 +60,6 @@ type ProjectEpisodeBoardProps = {
     onOptimizeEpisodeScript: (episodeId: string) => void;
     onOpenEpisode: (episodeId: string) => void;
     onSaveEpisodeScript: (episodeId: string, script: string) => void;
-    onScriptSkillChange: (workflowId: string) => void;
     onTabChange: (tab: ProjectDetailTab) => void;
 };
 
@@ -82,8 +79,6 @@ export function ProjectEpisodeBoard({
     presetSummary,
     rows,
     scriptOptimizeErrors,
-    scriptSkillOptions,
-    selectedScriptSkillId,
     onBindCanvas,
     onBindingCanvasChange,
     onClearOptimizedScript,
@@ -98,7 +93,6 @@ export function ProjectEpisodeBoard({
     onOptimizeEpisodeScript,
     onOpenEpisode,
     onSaveEpisodeScript,
-    onScriptSkillChange,
     onTabChange,
 }: ProjectEpisodeBoardProps) {
     const currentText = currentEpisode ? `${episodeDisplayTitle(currentEpisode)} · ${currentEpisodeStatusText(currentEpisode)}` : "暂无分集";
@@ -165,14 +159,11 @@ export function ProjectEpisodeBoard({
                         onOptimizeEpisodeScript={onOptimizeEpisodeScript}
                         onOpenEpisode={onOpenEpisode}
                         onSaveEpisodeScript={onSaveEpisodeScript}
-                        onScriptSkillChange={onScriptSkillChange}
                         optimizingEpisodeId={optimizingEpisodeId}
                         progress={progress}
                         projectTitle={projectTitle}
                         rows={rows}
                         scriptOptimizeErrors={scriptOptimizeErrors}
-                        scriptSkillOptions={scriptSkillOptions}
-                        selectedScriptSkillId={selectedScriptSkillId}
                         total={rows.length}
                     />
                 )}
@@ -194,14 +185,11 @@ function ProjectEpisodeProductionPanel({
     onOptimizeEpisodeScript,
     onOpenEpisode,
     onSaveEpisodeScript,
-    onScriptSkillChange,
     optimizingEpisodeId,
     progress,
     projectTitle,
     rows,
     scriptOptimizeErrors,
-    scriptSkillOptions,
-    selectedScriptSkillId,
     total,
 }: {
     counts: { all: number; done: number; draft: number; running: number };
@@ -216,14 +204,11 @@ function ProjectEpisodeProductionPanel({
     onOptimizeEpisodeScript: (episodeId: string) => void;
     onOpenEpisode: (episodeId: string) => void;
     onSaveEpisodeScript: (episodeId: string, script: string) => void;
-    onScriptSkillChange: (workflowId: string) => void;
     optimizingEpisodeId: string;
     progress: number;
     projectTitle: string;
     rows: ProjectEpisodeBoardRow[];
     scriptOptimizeErrors: Record<string, string>;
-    scriptSkillOptions: Array<{ label: string; value: string }>;
-    selectedScriptSkillId: string;
     total: number;
 }) {
     const defaultSelectedId = currentEpisode?.id || rows[0]?.id || "";
@@ -325,21 +310,13 @@ function ProjectEpisodeProductionPanel({
                                     原剧本
                                     {selectedScript ? <span className="font-normal text-[var(--studio-text-muted)]">{selectedScript.length} 字</span> : null}
                                 </div>
-                                <h2 className="mt-1 break-words text-lg font-semibold leading-tight text-[var(--studio-text-primary)]">
-                                    {selectedEpisode ? episodeDisplayTitle(selectedEpisode) : "还没有分集剧本"}
-                                </h2>
+                                <h2 className="mt-1 break-words text-lg font-semibold leading-tight text-[var(--studio-text-primary)]">{selectedEpisode ? episodeDisplayTitle(selectedEpisode) : "还没有分集剧本"}</h2>
                             </div>
                             {selectedEpisode ? (
                                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                                    <Select
-                                        size="small"
-                                        className="min-w-[220px]"
-                                        popupMatchSelectWidth={false}
-                                        value={selectedScriptSkillId || scriptSkillOptions[0]?.value}
-                                        options={scriptSkillOptions}
-                                        disabled={!scriptSkillOptions.length || selectedOptimizing}
-                                        onChange={onScriptSkillChange}
-                                    />
+                                    <Tag className="m-0" icon={<Bot className="size-3.5" />}>
+                                        系统剧本制作 Agent
+                                    </Tag>
                                     <Button size="small" icon={<Wand2 className="size-3.5" />} loading={selectedOptimizing} disabled={!selectedScript} onClick={() => onOptimizeEpisodeScript(selectedEpisode.id)}>
                                         剧本优化
                                     </Button>
@@ -364,8 +341,23 @@ function ProjectEpisodeProductionPanel({
                                     <div className="flex h-full min-h-[520px] flex-col gap-3">
                                         <Input.TextArea className="min-h-0 flex-1" value={scriptDraft} autoSize={false} onChange={(event) => setScriptDraft(event.target.value)} />
                                         <div className="flex justify-end gap-2">
-                                            <Button onClick={() => { setEditingScript(false); setScriptDraft(selectedScript); }}>取消</Button>
-                                            <Button type="primary" onClick={() => { onSaveEpisodeScript(selectedEpisode.id, scriptDraft); setEditingScript(false); }}>保存原剧本</Button>
+                                            <Button
+                                                onClick={() => {
+                                                    setEditingScript(false);
+                                                    setScriptDraft(selectedScript);
+                                                }}
+                                            >
+                                                取消
+                                            </Button>
+                                            <Button
+                                                type="primary"
+                                                onClick={() => {
+                                                    onSaveEpisodeScript(selectedEpisode.id, scriptDraft);
+                                                    setEditingScript(false);
+                                                }}
+                                            >
+                                                保存原剧本
+                                            </Button>
                                         </div>
                                     </div>
                                 ) : (
