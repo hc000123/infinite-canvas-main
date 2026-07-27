@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/basketikun/infinite-canvas/config"
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/repository"
 )
@@ -380,6 +381,50 @@ func TestPreflightInvocationFreezesImageModelPolicyAndPerOutputCredits(t *testin
 		if !containsInvocationString(result.ConfirmationRequirements, code) {
 			t.Fatalf("missing %s in %v", code, result.ConfirmationRequirements)
 		}
+	}
+}
+
+func TestPreflightInvocationRoutesCodexTextAndAPIImageIndependently(t *testing.T) {
+	setupInvocationServiceTest(t)
+	setupImageInvocationSettings(t, true)
+	previousExecutor := config.Cfg.WorkflowTextExecutor
+	previousEnabled := config.Cfg.WorkflowLocalCodexEnabled
+	previousModel := config.Cfg.WorkflowCodexModel
+	t.Cleanup(func() {
+		config.Cfg.WorkflowTextExecutor = previousExecutor
+		config.Cfg.WorkflowLocalCodexEnabled = previousEnabled
+		config.Cfg.WorkflowCodexModel = previousModel
+	})
+	config.Cfg.WorkflowTextExecutor = AgentRunExecutorCodexCLI
+	config.Cfg.WorkflowLocalCodexEnabled = true
+	config.Cfg.WorkflowCodexModel = "gpt-5.6-sol"
+
+	source := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"场次 1，清晨，旧公交站。林秋攥着折起的车票。"}`)
+	_, textVersion := seedInvocationSkill(t, invocationSkillSeed{ID: "codex-text-policy", VersionID: "codex-text-policy-v1", Version: "1.0.0"})
+	textResult, err := PreflightInvocation("user-1", InvocationRequest{
+		Source: "direct", ProjectID: "project-1", EpisodeID: "episode-1", SkillVersionID: textVersion.ID,
+		ExpectedOutputArtifactType: "production_script",
+		InputArtifactRefs:          []ArtifactRefInput{{BindingName: "source", ArtifactID: source.Artifact.ID, ContentHash: source.Artifact.ContentHash}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if textResult.Run.Status == model.InvocationStatusBlocked || textResult.ExecutionPolicy.AgentExecutor != AgentRunExecutorCodexCLI || textResult.ExecutionPolicy.Model != "gpt-5.6-sol" || textResult.ExecutionPolicy.ChannelID != "" || textResult.ExecutionPolicy.Credits != 0 {
+		t.Fatalf("text=%+v blocks=%+v", textResult.ExecutionPolicy, textResult.BlockReasons)
+	}
+
+	brief := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "asset_brief", `{"assetId":"character-001","brief":"同一成年女性角色四视图，锁定面部身份和深色通勤套装","format":"character-four-view"}`)
+	imageVersion := seedImageInvocationSkill(t, "codex-mode-image-policy")
+	imageResult, err := PreflightInvocation("user-1", InvocationRequest{
+		Source: "image", ProjectID: "project-1", EpisodeID: "episode-1", SkillVersionID: imageVersion.ID,
+		ExpectedOutputArtifactType: "asset_rendition",
+		InputArtifactRefs:          []ArtifactRefInput{{BindingName: "asset_brief", ArtifactID: brief.Artifact.ID, ContentHash: brief.Artifact.ContentHash}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if imageResult.Run.Status == model.InvocationStatusBlocked || imageResult.ExecutionPolicy.AgentExecutor != AgentRunExecutorAPI || imageResult.ExecutionPolicy.ChannelID != "image-channel" || imageResult.ExecutionPolicy.Model != "image-test" {
+		t.Fatalf("image=%+v blocks=%+v", imageResult.ExecutionPolicy, imageResult.BlockReasons)
 	}
 }
 

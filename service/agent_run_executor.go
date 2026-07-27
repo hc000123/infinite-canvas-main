@@ -293,6 +293,13 @@ func currentAgentRunExecutorKind() string {
 	return AgentRunExecutorAPI
 }
 
+func agentRunExecutorKind(executionKind string) string {
+	if strings.EqualFold(strings.TrimSpace(executionKind), "image_model") {
+		return AgentRunExecutorAPI
+	}
+	return currentAgentRunExecutorKind()
+}
+
 func workflowExecutorAvailable() bool {
 	executor, err := NewAgentRunExecutorFromConfig()
 	if err != nil {

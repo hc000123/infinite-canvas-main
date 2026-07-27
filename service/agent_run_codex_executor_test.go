@@ -39,6 +39,30 @@ func TestCodexAgentRunQueuesWithoutAPIChannelOrCredits(t *testing.T) {
 	}
 }
 
+func TestCodexTextModeKeepsImageRunsOnAPI(t *testing.T) {
+	setupAITaskTestDB(t)
+	setupImageInvocationSettings(t, true)
+	previousExecutor := config.Cfg.WorkflowTextExecutor
+	previousEnabled := config.Cfg.WorkflowLocalCodexEnabled
+	t.Cleanup(func() {
+		config.Cfg.WorkflowTextExecutor = previousExecutor
+		config.Cfg.WorkflowLocalCodexEnabled = previousEnabled
+	})
+	config.Cfg.WorkflowTextExecutor = AgentRunExecutorCodexCLI
+	config.Cfg.WorkflowLocalCodexEnabled = true
+
+	run, err := BuildUserAgentRun("user-codex", CreateAgentRunInput{
+		AgentKind: "asset_rendition", Executor: AgentRunExecutorAPI, ExecutionKind: "image_model", ModelPreference: "image-test",
+		FrozenRequestJSON: `{"model":"image-test","prompt":"角色设定图","n":1}`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Executor != AgentRunExecutorAPI || run.ExecutionKind != "image_model" || run.ChannelID != "image-channel" {
+		t.Fatalf("run=%+v", run)
+	}
+}
+
 func TestCodexPromptPreservesSystemAndUserMessages(t *testing.T) {
 	prompt, err := buildCodexPromptFromRequest(`{"model":"codex","messages":[{"role":"system","content":"系统规则"},{"role":"user","content":"用户输入"}]}`)
 	if err != nil || prompt != "[SYSTEM]\n系统规则\n\n[USER]\n用户输入" {

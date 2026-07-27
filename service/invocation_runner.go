@@ -230,9 +230,11 @@ func validateClaimedInvocationAgentRun(agentRun model.AgentRun) error {
 		agentRun.AllowFallback || agentRun.FallbackUsed || agentRun.WritePolicy != policy.WritePolicy || agentRun.RequiresConfirm != policy.RequiresConfirm || !keyMatches || agentRun.RequestJSON != string(requestJSON) || agentRun.ImageManifestJSON != imageManifestJSON {
 		return errors.New("Agent Run 与 frozen execution snapshot 不一致")
 	}
-	channel, err := SelectModelChannelWithOptions(policy.Model, policy.ChannelID, nil, agentRunModelCapability(policy.ExecutorKind))
-	if err != nil || channel.ID != policy.ChannelID {
-		return errors.New("frozen execution target 不可用")
+	if policy.AgentExecutor == AgentRunExecutorAPI {
+		channel, err := SelectModelChannelWithOptions(policy.Model, policy.ChannelID, nil, agentRunModelCapability(policy.ExecutorKind))
+		if err != nil || channel.ID != policy.ChannelID {
+			return errors.New("frozen execution target 不可用")
+		}
 	}
 	return nil
 }
@@ -244,7 +246,11 @@ func validFrozenInvocationExecutionPolicy(policy InvocationExecutionPolicy) bool
 		var request map[string]any
 		validOutput = policy.OutputCount > 0 && json.Unmarshal([]byte(policy.ImageRequestJSON), &request) == nil && request["model"] == policy.Model && request["n"] == float64(policy.OutputCount)
 	}
-	return validKind && validOutput && policy.AgentExecutor != "" && policy.Model != "" && policy.ChannelID != "" && !policy.FallbackAllowed &&
+	validExecutor := policy.AgentExecutor == AgentRunExecutorAPI && policy.ChannelID != ""
+	if policy.AgentExecutor == AgentRunExecutorCodexCLI {
+		validExecutor = policy.ExecutorKind == "text_model" && policy.ChannelID == ""
+	}
+	return validKind && validOutput && validExecutor && policy.Model != "" && !policy.FallbackAllowed &&
 		policy.Credits >= 0 && policy.EstimatedCredits >= 0 && policy.TimeoutSeconds == normalizeAgentRunTimeout(policy.TimeoutSeconds) &&
 		policy.ConcurrencyLimit == normalizeAgentRunConcurrency(policy.ConcurrencyLimit) && !policy.AllowBatch && policy.MaxAttempts > 0 &&
 		policy.WritePolicy == "preview_only" && policy.RequiresConfirm

@@ -130,16 +130,16 @@ func CreateUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRu
 }
 
 func BuildUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRun, error) {
-	executorKind := strings.TrimSpace(input.Executor)
-	if executorKind == "" {
-		executorKind = currentAgentRunExecutorKind()
-	}
-	if executorKind != currentAgentRunExecutorKind() {
-		return model.AgentRun{}, safeMessageError{message: "任务执行器与当前运行模式不匹配"}
-	}
 	executionKind := strings.ToLower(strings.TrimSpace(input.ExecutionKind))
 	if executionKind == "" {
 		executionKind = "text_model"
+	}
+	executorKind := strings.TrimSpace(input.Executor)
+	if executorKind == "" {
+		executorKind = agentRunExecutorKind(executionKind)
+	}
+	if executorKind != agentRunExecutorKind(executionKind) {
+		return model.AgentRun{}, safeMessageError{message: "任务执行器与当前运行模式不匹配"}
 	}
 	if !map[string]bool{"text_model": true, "image_model": executorKind == AgentRunExecutorAPI}[executionKind] {
 		return model.AgentRun{}, safeMessageError{message: "任务模型执行器无效"}
