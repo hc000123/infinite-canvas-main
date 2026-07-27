@@ -128,7 +128,9 @@ git diff --check
 - 同一最终 Artifact-set 重放不会重复创建节点、连线或 Apply 回执；浏览器本地写入通过稳定 `client_local_receipt` 记录，服务端不直接修改本地画布。
 - 旧硬编码 Prompt Agent Skill Pack、意图 / 自动 / 审核模式、工具箱和独立执行状态已移除；普通问答、直接生图、助手动作预览继续保留，所有生产 Agent 统一来自 Agent Registry。
 - 专项自动检查已覆盖 Temporary Plan 数据模型、消息坐标、选择与创建接线、生命周期卡、最终 Artifact 回写、幂等重放和统一 Runtime 边界；TypeScript 类型检查通过。
-- 本页验收：打开固定公交站剧本画布，选择一个已发布多步 Agent，创建并编辑一次 Plan revision，完成预检、精确确认、逐步审核和最终使用；确认结果保留“林秋 / 旧公交站 / 折起的车票 / 这次不等了”，检查下游节点、来源连线、完整 metadata、单条 Apply 回执和刷新恢复，并确认浏览器控制台无新增错误。
+- 固定公交站剧本浏览器验收已完成：先将剧本 Skill 切到旧版 `3.0.1`，Revision 2 在预检时立即以“Skill 执行器无效”阻断，未创建 Invocation / AgentRun；改回两步 `3.1.0` 后 Revision 3 冻结为 2 Credits、`api_cost` 确认要求和精确指纹 `sha256:e60b2ecde3ba63ba0e33078a397f960adef5468c38cb541b4495e5c0d2a2decf`。
+- Revision 3 真实执行两个 Invocation，剧本产物保留“林秋 / 旧公交站 / 折起的车票 / 这次不等了”；资产目录正确提取角色、场景、道具并保留逐条原文证据，两步 Artifact-set 均经人工批准。
+- 最终 Artifact 使用后，页面从 1 节点 / 0 连线变为 2 节点 / 1 连线；重放相同 Apply 返回原回执 ID，数据库回执数仍为 1，画布仍为 2 节点 / 1 连线。整页刷新后 Plan、消息、产物正文、节点和连线均恢复，应用页面 console error 为 0。
 
 ### 项目详情素材引用入口收口
 
