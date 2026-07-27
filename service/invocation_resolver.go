@@ -268,7 +268,7 @@ func evaluateInvocationCandidate(userID string, input InvocationResolutionInput,
 	}
 	allowedEffects := input.AllowedSideEffects
 	if len(allowedEffects) == 0 {
-		allowedEffects = []string{"none", "read"}
+		allowedEffects = []string{"none", "read", "image_generation"}
 	}
 	for _, effect := range candidate.manifest.SideEffects {
 		add(!containsInvocationString(allowedEffects, effect), "unsupported_side_effect")

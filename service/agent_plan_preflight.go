@@ -68,7 +68,7 @@ func PreflightAgentPlan(userID, planID string) (AgentPlanPreflightResult, error)
 		policy, err := resolveInvocationExecutionPolicy(InvocationRequest{
 			ProjectID: detail.Plan.ProjectID, EpisodeID: detail.Plan.EpisodeID,
 			ExecutionPolicyOverride: InvocationExecutionPolicyOverride{Model: snapshot.Package.ModelPolicy.PreferredModel},
-		}, packageValue, len(codes) > 0)
+		}, packageValue, nil, len(codes) > 0)
 		if err != nil {
 			return AgentPlanPreflightResult{}, err
 		}

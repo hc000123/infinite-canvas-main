@@ -332,7 +332,6 @@ func TestPreflightInvocationBlocksUnsupportedExecutorToolSideEffectAndConfirmsEf
 		name, wantBlock string
 		mutate          func(*SkillPackage)
 	}{
-		{name: "executor", wantBlock: "executor_unavailable", mutate: func(pkg *SkillPackage) { pkg.Manifest.ExecutorKind = "image_model" }},
 		{name: "tool", wantBlock: "tool_unavailable", mutate: func(pkg *SkillPackage) { pkg.Manifest.RequiredTools = []string{"asset.lookup"} }},
 		{name: "side effect", wantBlock: "side_effect_unavailable", mutate: func(pkg *SkillPackage) { pkg.Manifest.SideEffects = []string{"write"} }},
 	} {
@@ -348,6 +347,56 @@ func TestPreflightInvocationBlocksUnsupportedExecutorToolSideEffectAndConfirmsEf
 				t.Fatalf("result=%+v", result)
 			}
 		})
+	}
+}
+
+func TestPreflightInvocationFreezesImageModelPolicyAndPerOutputCredits(t *testing.T) {
+	setupInvocationServiceTest(t)
+	setupImageInvocationSettings(t, true)
+	brief := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "asset_brief", `{"assetId":"character-001","brief":"同一成年女性角色四视图，锁定面部身份和深色通勤套装","format":"character-four-view"}`)
+	version := seedImageInvocationSkill(t, "image-policy-freeze")
+	result, err := PreflightInvocation("user-1", InvocationRequest{
+		Source: "image", ProjectID: "project-1", EpisodeID: "episode-1", SkillVersionID: version.ID,
+		ExpectedOutputArtifactType: "asset_rendition", Parameters: json.RawMessage(`{"n":2,"size":"1024x1024","ignored":"drop-me"}`),
+		InputArtifactRefs: []ArtifactRefInput{{BindingName: "asset_brief", ArtifactID: brief.Artifact.ID, ContentHash: brief.Artifact.ContentHash}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Run.Status != model.InvocationStatusAwaitingConfirmation || result.ExecutionPolicy.ExecutorKind != "image_model" || result.ExecutionPolicy.Model != "image-test" || result.ExecutionPolicy.ChannelID != "image-channel" {
+		t.Fatalf("image policy=%+v blocks=%+v", result.ExecutionPolicy, result.BlockReasons)
+	}
+	if result.ExecutionPolicy.OutputCount != 2 || result.ExecutionPolicy.Credits != 6 || result.ExecutionPolicy.EstimatedCredits != 6 {
+		t.Fatalf("image cardinality/cost=%+v", result.ExecutionPolicy)
+	}
+	var body map[string]any
+	if json.Unmarshal([]byte(result.ExecutionPolicy.ImageRequestJSON), &body) != nil || body["model"] != "image-test" || body["n"] != float64(2) || body["size"] != "1024x1024" || !strings.Contains(body["prompt"].(string), "character-001") {
+		t.Fatalf("frozen image body=%s", result.ExecutionPolicy.ImageRequestJSON)
+	}
+	if _, ok := body["ignored"]; ok {
+		t.Fatalf("unapproved image option leaked: %s", result.ExecutionPolicy.ImageRequestJSON)
+	}
+	for _, code := range []string{"api_cost", "image_generation", "batch"} {
+		if !containsInvocationString(result.ConfirmationRequirements, code) {
+			t.Fatalf("missing %s in %v", code, result.ConfirmationRequirements)
+		}
+	}
+}
+
+func TestPreflightInvocationBlocksImageSkillWithoutImageChannel(t *testing.T) {
+	setupInvocationServiceTest(t)
+	setupImageInvocationSettings(t, false)
+	brief := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "asset_brief", `{"assetId":"character-001","brief":"角色设定图","format":"character-four-view"}`)
+	version := seedImageInvocationSkill(t, "image-policy-no-channel")
+	result, err := PreflightInvocation("user-1", InvocationRequest{
+		Source: "image", ProjectID: "project-1", EpisodeID: "episode-1", SkillVersionID: version.ID,
+		ExpectedOutputArtifactType: "asset_rendition", InputArtifactRefs: []ArtifactRefInput{{BindingName: "asset_brief", ArtifactID: brief.Artifact.ID, ContentHash: brief.Artifact.ContentHash}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Run.Status != model.InvocationStatusBlocked || !strings.Contains(result.Revision.BlockReasonsJSON, "execution_target_unavailable") || result.ExecutionPolicy.ChannelID != "" {
+		t.Fatalf("missing image channel was not blocked: %+v", result)
 	}
 }
 

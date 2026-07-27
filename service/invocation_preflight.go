@@ -180,7 +180,7 @@ func buildInvocationPreflight(userID string, raw InvocationRequest) (invocationP
 	if resolved.Trace.FinalSkillVersionID != "" {
 		build.blocks = append(build.blocks, invocationPackageBlocks(resolved.Resolved.Package, bindings)...)
 		build.confirmations = invocationConfirmationCodes(resolved.Resolved.Package.Manifest, resolved.Resolved.Package.OutputContract.ArtifactOutputs, bindings)
-		build.policy, err = resolveInvocationExecutionPolicy(request, resolved.Resolved.Package, len(build.confirmations) > 0)
+		build.policy, err = resolveInvocationExecutionPolicy(request, resolved.Resolved.Package, bindings, len(build.confirmations) > 0)
 		if err != nil {
 			build.blocks = appendInvocationBlock(build.blocks, "execution_target_unavailable", err.Error())
 		}
@@ -359,14 +359,14 @@ func invocationResolutionBlocks(trace InvocationRouteTrace) []InvocationBlockRea
 
 func invocationPackageBlocks(pkg SkillPackage, bindings []ResolvedArtifactBinding) []InvocationBlockReason {
 	result := []InvocationBlockReason{}
-	if pkg.Manifest.ExecutorKind != "text_model" {
-		result = appendInvocationBlock(result, "executor_unavailable", "Phase 2 仅支持 text_model")
+	if pkg.Manifest.ExecutorKind != "text_model" && pkg.Manifest.ExecutorKind != "image_model" {
+		result = appendInvocationBlock(result, "executor_unavailable", "执行器不可用")
 	}
 	if len(pkg.Manifest.RequiredTools) > 0 {
 		result = appendInvocationBlock(result, "tool_unavailable", "Phase 2 不支持外部工具")
 	}
 	for _, effect := range pkg.Manifest.SideEffects {
-		if effect != "none" && effect != "read" {
+		if effect != "none" && effect != "read" && !(pkg.Manifest.ExecutorKind == "image_model" && effect == "image_generation") {
 			result = appendInvocationBlock(result, "side_effect_unavailable", "Phase 2 不支持该副作用")
 		}
 	}
@@ -419,7 +419,7 @@ func invocationImageMIME(raw any) string {
 
 func invocationConfirmationCodes(manifest SkillManifest, outputs []ArtifactOutputSpec, bindings []ResolvedArtifactBinding) []string {
 	_ = bindings // Input media never implies generation.
-	set := map[string]bool{"api_cost": manifest.ExecutorKind == "text_model"}
+	set := map[string]bool{"api_cost": manifest.ExecutorKind == "text_model" || manifest.ExecutorKind == "image_model"}
 	switch manifest.ExecutorKind {
 	case "image_model":
 		set["image_generation"] = true
@@ -460,30 +460,32 @@ func invocationConfirmationCodes(manifest SkillManifest, outputs []ArtifactOutpu
 	return result
 }
 
-func resolveInvocationExecutionPolicy(request InvocationRequest, pkg SkillPackage, requiresConfirmation bool) (InvocationExecutionPolicy, error) {
+func resolveInvocationExecutionPolicy(request InvocationRequest, pkg SkillPackage, bindings []ResolvedArtifactBinding, requiresConfirmation bool) (InvocationExecutionPolicy, error) {
 	settings, err := repository.GetSettings()
 	if err != nil {
 		return InvocationExecutionPolicy{}, err
 	}
 	settings = normalizeSettings(settings)
-	modelName := request.ExecutionPolicyOverride.Model
-	if modelName == "" {
-		modelName = settings.Public.ModelChannel.DefaultTextModel
+	capability, modelName := "text", settings.Public.ModelChannel.DefaultTextModel
+	if pkg.Manifest.ExecutorKind == "image_model" {
+		capability, modelName = "image", settings.Public.ModelChannel.DefaultImageModel
 	}
-	if modelName == "" {
+	if override := strings.TrimSpace(request.ExecutionPolicyOverride.Model); override != "" {
+		modelName = override
+	} else if modelName == "" {
 		modelName = settings.Public.ModelChannel.DefaultModel
 	}
 	if modelName == "" {
-		return InvocationExecutionPolicy{ExecutorKind: pkg.Manifest.ExecutorKind, FallbackAllowed: false}, errors.New("没有可用文本模型")
+		return InvocationExecutionPolicy{ExecutorKind: pkg.Manifest.ExecutorKind, FallbackAllowed: false}, errors.New("没有可用" + map[string]string{"text": "文本", "image": "图片"}[capability] + "模型")
 	}
 	channels := modelChannelsForModel(settings.Private.Channels, modelName)
-	textChannels := channels[:0]
+	compatibleChannels := channels[:0]
 	for _, channel := range channels {
-		if modelChannelSupportsCapability(channel, "text") {
-			textChannels = append(textChannels, channel)
+		if modelChannelSupportsCapability(channel, capability) {
+			compatibleChannels = append(compatibleChannels, channel)
 		}
 	}
-	channels = textChannels
+	channels = compatibleChannels
 	if channelID := request.ExecutionPolicyOverride.ChannelID; channelID != "" {
 		filtered := channels[:0]
 		for _, channel := range channels {
@@ -517,12 +519,64 @@ func resolveInvocationExecutionPolicy(request InvocationRequest, pkg SkillPackag
 	if credits < 0 {
 		credits = 0
 	}
+	outputCount, imageRequestJSON := 1, ""
+	if pkg.Manifest.ExecutorKind == "image_model" {
+		outputCount, imageRequestJSON, err = freezeInvocationImageRequest(request.Parameters, pkg, bindings, modelName)
+		if err != nil {
+			return InvocationExecutionPolicy{ExecutorKind: pkg.Manifest.ExecutorKind, Model: modelName, ChannelID: channel.ID, FallbackAllowed: false}, err
+		}
+		credits *= outputCount
+	}
 	return InvocationExecutionPolicy{
 		ExecutorKind: pkg.Manifest.ExecutorKind, AgentExecutor: AgentRunExecutorAPI, Model: modelName, ChannelID: channel.ID,
 		FallbackAllowed: false, RequiresConfirmation: requiresConfirmation,
-		Credits: credits, EstimatedCredits: credits, TimeoutSeconds: timeout, ConcurrencyLimit: normalizeAgentRunConcurrency(0), AllowBatch: false,
+		Credits: credits, EstimatedCredits: credits, OutputCount: outputCount, ImageRequestJSON: imageRequestJSON,
+		TimeoutSeconds: timeout, ConcurrencyLimit: normalizeAgentRunConcurrency(0), AllowBatch: false,
 		MaxAttempts: attempts, WritePolicy: "preview_only", RequiresConfirm: true,
 	}, nil
+}
+
+func freezeInvocationImageRequest(raw json.RawMessage, pkg SkillPackage, bindings []ResolvedArtifactBinding, modelName string) (int, string, error) {
+	if len(pkg.OutputContract.ArtifactOutputs) != 1 {
+		return 0, "", errors.New("图片 Skill 必须声明一个输出 binding")
+	}
+	spec := pkg.OutputContract.ArtifactOutputs[0]
+	count := spec.Min
+	if count < 1 {
+		count = 1
+	}
+	parameters := map[string]any{}
+	if len(raw) > 0 && string(raw) != "null" {
+		if err := json.Unmarshal(raw, &parameters); err != nil {
+			return 0, "", errors.New("图片参数无效")
+		}
+	}
+	if value, ok := parameters["n"].(float64); ok && value == float64(int(value)) {
+		count = int(value)
+	}
+	if count < spec.Min {
+		count = spec.Min
+	}
+	if count > spec.Max {
+		count = spec.Max
+	}
+	if count < 1 {
+		return 0, "", errors.New("图片输出数量无效")
+	}
+	inputValues := make([]map[string]any, 0, len(bindings))
+	for _, binding := range bindings {
+		inputValues = append(inputValues, map[string]any{"bindingName": binding.BindingName, "artifactId": binding.Artifact.Artifact.ID, "payload": binding.Artifact.Payload})
+	}
+	inputJSON, _ := marshalInvocationCanonical(inputValues)
+	prompt := strings.TrimSpace(SkillPackageInstructions(pkg.Files)) + "\n\n" + invocationUntrustedDataLabel + "\n" + string(inputJSON)
+	body := map[string]any{"model": modelName, "n": count, "prompt": prompt}
+	for _, key := range []string{"size", "quality", "background", "output_format"} {
+		if value, ok := parameters[key].(string); ok && strings.TrimSpace(value) != "" {
+			body[key] = strings.TrimSpace(value)
+		}
+	}
+	encoded, err := marshalInvocationCanonical(body)
+	return count, string(encoded), err
 }
 
 func invocationArtifactApproved(userID string, artifact model.Artifact) (bool, error) {

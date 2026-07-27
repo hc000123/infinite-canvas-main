@@ -233,6 +233,7 @@ func invocationExecutionPolicySummary(policy InvocationExecutionPolicy) Invocati
 	return InvocationExecutionPolicySummary{
 		ExecutorKind: policy.ExecutorKind, Model: policy.Model, FallbackAllowed: policy.FallbackAllowed,
 		RequiresConfirmation: policy.RequiresConfirmation, EstimatedCredits: policy.EstimatedCredits,
+		OutputCount:    policy.OutputCount,
 		TimeoutSeconds: policy.TimeoutSeconds, MaxAttempts: policy.MaxAttempts, WritePolicy: policy.WritePolicy,
 		RequiresConfirm: policy.RequiresConfirm,
 	}

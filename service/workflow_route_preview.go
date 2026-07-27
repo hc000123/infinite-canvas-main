@@ -142,7 +142,7 @@ func previewWorkflowSkillNode(userID string, input WorkflowPreviewInput, node Wo
 	}
 	result.SkillVersionID, result.SkillContentHash = resolved.Resolved.Version.ID, resolved.Resolved.Version.ContentHash
 	result.ConfirmationCodes = invocationConfirmationCodes(resolved.Resolved.Package.Manifest, resolved.Resolved.Package.OutputContract.ArtifactOutputs, bindings)
-	policy, err := resolveInvocationExecutionPolicy(InvocationRequest{ProjectID: input.ProjectID, EpisodeID: input.EpisodeID}, resolved.Resolved.Package, len(result.ConfirmationCodes) > 0)
+	policy, err := resolveInvocationExecutionPolicy(InvocationRequest{ProjectID: input.ProjectID, EpisodeID: input.EpisodeID, Parameters: input.Parameters}, resolved.Resolved.Package, bindings, len(result.ConfirmationCodes) > 0)
 	if err != nil {
 		result.BlockCode, result.BlockMessage = "execution_target_unavailable", err.Error()
 		return result
@@ -197,7 +197,7 @@ func previewWorkflowAgentNode(userID, projectID string, node WorkflowNodeSpec, r
 			return result
 		}
 		codes := invocationConfirmationCodes(resolved.Package.Manifest, resolved.Package.OutputContract.ArtifactOutputs, nil)
-		policy, err := resolveInvocationExecutionPolicy(InvocationRequest{ProjectID: projectID, ExecutionPolicyOverride: InvocationExecutionPolicyOverride{Model: pkg.ModelPolicy.PreferredModel}}, resolved.Package, len(codes) > 0)
+		policy, err := resolveInvocationExecutionPolicy(InvocationRequest{ProjectID: projectID, ExecutionPolicyOverride: InvocationExecutionPolicyOverride{Model: pkg.ModelPolicy.PreferredModel}}, resolved.Package, nil, len(codes) > 0)
 		if err != nil {
 			result.BlockCode, result.BlockMessage = "execution_target_unavailable", err.Error()
 			return result

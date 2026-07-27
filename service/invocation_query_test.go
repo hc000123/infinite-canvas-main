@@ -125,7 +125,7 @@ func TestInvocationHTTPSummariesRedactInternalFields(t *testing.T) {
 	}
 	values := []any{
 		SafeInvocationPreflight(InvocationPreflightSnapshot{
-			Run: run, Revision: revision, ExecutionPolicy: InvocationExecutionPolicy{Model: "text-test", ChannelID: secret},
+			Run: run, Revision: revision, ExecutionPolicy: InvocationExecutionPolicy{Model: "text-test", ChannelID: secret, OutputCount: 2, ImageRequestJSON: secret},
 			RouteTrace: InvocationRouteTrace{FinalSkillVersionID: "version-1", SelectedChannelID: secret}, ConfirmationRequirements: []string{"api_cost"},
 		}),
 		SafeInvocationLifecycle(InvocationResponse{Run: run, Revision: 1, Attempt: &attempt}),
@@ -145,6 +145,9 @@ func TestInvocationHTTPSummariesRedactInternalFields(t *testing.T) {
 	applyJSON, _ := json.Marshal(values[2])
 	if !strings.Contains(string(preflightJSON), "api_cost") || !strings.Contains(string(lifecycleJSON), `"errorClass":"provider"`) || !strings.Contains(string(applyJSON), `"targetId":"target-1"`) {
 		t.Fatalf("safe responses lost business fields: preflight=%s lifecycle=%s apply=%s", preflightJSON, lifecycleJSON, applyJSON)
+	}
+	if !strings.Contains(string(preflightJSON), `"outputCount":2`) || strings.Contains(string(preflightJSON), "imageRequestJson") {
+		t.Fatalf("safe policy count/redaction mismatch: %s", preflightJSON)
 	}
 }
 

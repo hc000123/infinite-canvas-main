@@ -45,6 +45,8 @@ type InvocationExecutionPolicy struct {
 	RequiresConfirmation bool   `json:"requiresConfirmation"`
 	Credits              int    `json:"credits"`
 	EstimatedCredits     int    `json:"estimatedCredits"`
+	OutputCount          int    `json:"outputCount"`
+	ImageRequestJSON     string `json:"imageRequestJson,omitempty"`
 	TimeoutSeconds       int    `json:"timeoutSeconds"`
 	ConcurrencyLimit     int    `json:"concurrencyLimit"`
 	AllowBatch           bool   `json:"allowBatch"`
@@ -220,6 +222,7 @@ type InvocationExecutionPolicySummary struct {
 	FallbackAllowed      bool   `json:"fallbackAllowed"`
 	RequiresConfirmation bool   `json:"requiresConfirmation"`
 	EstimatedCredits     int    `json:"estimatedCredits"`
+	OutputCount          int    `json:"outputCount"`
 	TimeoutSeconds       int    `json:"timeoutSeconds"`
 	MaxAttempts          int    `json:"maxAttempts"`
 	WritePolicy          string `json:"writePolicy"`
