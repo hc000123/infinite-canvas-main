@@ -118,9 +118,11 @@ func TestListSkillOptionsSerializesEmptyContractsAsArrays(t *testing.T) {
 
 func TestListSkillOptionsRequiresProjectOwnerUser(t *testing.T) {
 	setupAITaskTestDB(t)
+	pkg := invocableSkillTestPackage()
+	pkg.Manifest.Capabilities = []string{"test.project.owner"}
 	created, err := CreateProjectSkill(
 		"user-1", "project-1", "项目私有 Skill", "",
-		SkillDraftInput{Version: "1.0.0", Package: invocableSkillTestPackage()},
+		SkillDraftInput{Version: "1.0.0", Package: pkg},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -129,7 +131,7 @@ func TestListSkillOptionsRequiresProjectOwnerUser(t *testing.T) {
 	if err := repository.SaveSkillVersion(created.Version); err != nil {
 		t.Fatal(err)
 	}
-	filter := SkillOptionFilter{Capability: "asset.character.rendition"}
+	filter := SkillOptionFilter{Capability: "test.project.owner"}
 	items, err := ListSkillOptions("user-1", "project-1", filter)
 	if err != nil || len(items) != 1 || items[0].SkillID != created.Skill.ID {
 		t.Fatalf("same owner items=%+v err=%v", items, err)
