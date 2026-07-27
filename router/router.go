@@ -126,6 +126,7 @@ func New() *gin.Engine {
 	admin.DELETE("/credit-logs/:id", func(c *gin.Context) {
 		handler.AdminDeleteCreditLog(c.Writer, c.Request, c.Param("id"))
 	})
+	admin.GET("/ai-usage-summary", gin.WrapF(handler.AdminAIUsageSummary))
 	admin.GET("/ai-tasks", gin.WrapF(handler.AdminAITasks))
 	admin.GET("/ai-tasks/:id", func(c *gin.Context) {
 		handler.AdminAITask(c.Writer, c.Request, c.Param("id"))
