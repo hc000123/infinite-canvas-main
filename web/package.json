@@ -87,5 +87,8 @@
         "postcss": "$postcss",
         "qs": "6.15.3",
         "sharp": "0.35.3"
+    },
+    "patchedDependencies": {
+        "minimatch@3.1.5": "patches/minimatch@3.1.5.patch"
     }
 }
