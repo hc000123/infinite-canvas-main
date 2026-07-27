@@ -9,8 +9,8 @@ import (
 
 const (
 	systemProductionWorkflowID        = "workflow-system-standard-production"
-	systemProductionWorkflowVersionID = "workflow-version-system-standard-production-2.0.0"
-	systemProductionWorkflowVersion   = "2.0.0"
+	systemProductionWorkflowVersionID = "workflow-version-system-standard-production-2.1.0"
+	systemProductionWorkflowVersion   = "2.1.0"
 )
 
 func EnsureWorkflowSeeds() error {
@@ -31,7 +31,7 @@ func EnsureWorkflowSeeds() error {
 	if !exists {
 		workflow = model.WorkflowDefinition{
 			ID: systemProductionWorkflowID, Name: "标准 AIGC 生产 Workflow",
-			Summary:   "从原始文本到剧本、内容分类、分类资产 Brief、路由分镜、视频提示词和交付审计的标准可组合流程。",
+			Summary:   "从原始文本到剧本、内容分类、资产 Brief 与成图、路由分镜、视频提示词和交付审计的标准可组合流程。",
 			TagsJSON:  encodeWorkflowTags([]string{"aigc", "production", "seedance"}),
 			OwnerType: model.WorkflowOwnerSystem, Enabled: true, RecommendedVersionID: version.ID,
 			CreatedAt: stamp, UpdatedAt: stamp,
@@ -76,9 +76,19 @@ func systemProductionWorkflowPackage() WorkflowPackage {
 			workflowOutputBinding("asset_catalog", "asset_catalog", "art"),
 			workflowOutputBinding("content_profile", "content_profile", "classify"),
 		}),
+		exactSkillWorkflowNode("character_rendition", "角色资产成图", "asset-rendition-character", "asset_rendition", []WorkflowNodeInputBinding{
+			workflowOutputBinding("asset_brief", "asset_brief", "character_brief"),
+		}),
+		exactSkillWorkflowNode("scene_rendition", "场景资产成图", "asset-rendition-scene", "asset_rendition", []WorkflowNodeInputBinding{
+			workflowOutputBinding("asset_brief", "asset_brief", "scene_brief"),
+		}),
+		exactSkillWorkflowNode("prop_rendition", "道具资产成图", "asset-rendition-prop", "asset_rendition", []WorkflowNodeInputBinding{
+			workflowOutputBinding("asset_brief", "asset_brief", "prop_brief"),
+		}),
 		skillWorkflowNode("video", "视频提示词", WorkflowSkillStageVideo, "video_prompt_package", []WorkflowNodeInputBinding{
 			workflowOutputBinding("storyboard_package", "storyboard_package", "storyboard"),
 			workflowOutputBinding("asset_catalog", "asset_catalog", "art"),
+			workflowMultiOutputBinding("asset_rendition", "asset_rendition", []string{"character_rendition", "prop_rendition", "scene_rendition"}),
 		}),
 		skillWorkflowNode("delivery", "交付审计", WorkflowSkillStageDelivery, "delivery_report", []WorkflowNodeInputBinding{
 			workflowOutputBinding("video_prompt_package", "video_prompt_package", "video"),
@@ -133,4 +143,8 @@ func workflowRootBinding(name, artifactType string) WorkflowNodeInputBinding {
 
 func workflowOutputBinding(name, artifactType, nodeKey string) WorkflowNodeInputBinding {
 	return WorkflowNodeInputBinding{BindingName: name, ArtifactType: artifactType, Source: WorkflowNodeSource, FromNodeKey: nodeKey, FromOutputBinding: artifactType, Required: true}
+}
+
+func workflowMultiOutputBinding(name, artifactType string, nodeKeys []string) WorkflowNodeInputBinding {
+	return WorkflowNodeInputBinding{BindingName: name, ArtifactType: artifactType, Source: WorkflowNodeSource, FromNodeKeys: nodeKeys, FromOutputBinding: artifactType, Required: true}
 }

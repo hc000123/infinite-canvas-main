@@ -10,16 +10,9 @@ import (
 	"github.com/basketikun/infinite-canvas/repository"
 )
 
-func TestSystemProductionWorkflowExecutesRoutedNineNodeProductionChain(t *testing.T) {
+func TestSystemProductionWorkflowExecutesRoutedTwelveNodeProductionChain(t *testing.T) {
 	setupInvocationServiceTest(t)
-	settings, err := repository.GetSettings()
-	if err != nil {
-		t.Fatal(err)
-	}
-	settings.Public.ModelChannel.ModelCosts = []model.ModelCost{{Model: "text-test", Credits: 1}}
-	if _, err := SaveSettings(settings); err != nil {
-		t.Fatal(err)
-	}
+	setupSystemProductionWorkflowModels(t)
 	stamp := now()
 	if _, err := repository.SaveUser(model.User{ID: "user-1", Username: "system-workflow-e2e", Credits: 100, Status: model.UserStatusActive, CreatedAt: stamp, UpdatedAt: stamp}); err != nil {
 		t.Fatal(err)
@@ -44,7 +37,7 @@ func TestSystemProductionWorkflowExecutesRoutedNineNodeProductionChain(t *testin
 	if err != nil || duplicate.Run.ID != preflight.Run.ID || duplicate.Revision.ID != preflight.Revision.ID {
 		t.Fatalf("idempotent preflight=%#v duplicate=%#v err=%v", preflight.Run, duplicate.Run, err)
 	}
-	if !preflight.Preview.Executable || preflight.Run.EstimatedCredits != 9 || len(preflight.Nodes) != 9 {
+	if !preflight.Preview.Executable || preflight.Run.EstimatedCredits != 18 || len(preflight.Nodes) != 12 {
 		t.Fatalf("preflight=%#v", preflight)
 	}
 	confirmed, err := ConfirmWorkflowExecution("user-1", preflight.Run.ID, WorkflowExecutionConfirmationInput{Revision: 1, Fingerprint: preflight.Run.ConfirmationFingerprint, RequirementCodes: preflight.ConfirmationRequirements})
@@ -59,6 +52,9 @@ func TestSystemProductionWorkflowExecutesRoutedNineNodeProductionChain(t *testin
 		"skill-system-asset-brief-character":     `{"outputs":[{"bindingName":"asset_brief","ordinal":0,"payload":{"assetId":"character-001","brief":"同一位成年女性角色的全身四视图，锁定同一面部身份、齐肩黑发和深色通勤套装，中性站姿，均匀影棚光。","format":"character-four-view"}}]}`,
 		"skill-system-asset-brief-scene":         `{"outputs":[{"bindingName":"asset_brief","ordinal":0,"payload":{"assetId":"scene-001","brief":"清晨旧公交站无人物主参考图，左侧旧站牌，中部候车区，右侧公路延伸至远景，冷色自然光。","format":"scene-master"}}]}`,
 		"skill-system-asset-brief-prop":          `{"outputs":[{"bindingName":"asset_brief","ordinal":0,"payload":{"assetId":"prop-001","brief":"折起的纸质公交车票结构参考图，展示折痕、纸张厚度和轻微使用磨损，不虚构票面信息。","format":"prop-structure"}}]}`,
+		"skill-system-asset-rendition-character": `{"outputs":[{"bindingName":"asset_rendition","ordinal":0,"payload":{"assetId":"character-001","renditionId":"rendition-character-001","mediaType":"image","mediaRef":"/api/uploaded-assets/runtime/image/sha256-character.png","generationMetadata":{"provider":"test","model":"image-test","requestId":"character-request"}}}]}`,
+		"skill-system-asset-rendition-scene":     `{"outputs":[{"bindingName":"asset_rendition","ordinal":0,"payload":{"assetId":"scene-001","renditionId":"rendition-scene-001","mediaType":"image","mediaRef":"/api/uploaded-assets/runtime/image/sha256-scene.png","generationMetadata":{"provider":"test","model":"image-test","requestId":"scene-request"}}}]}`,
+		"skill-system-asset-rendition-prop":      `{"outputs":[{"bindingName":"asset_rendition","ordinal":0,"payload":{"assetId":"prop-001","renditionId":"rendition-prop-001","mediaType":"image","mediaRef":"/api/uploaded-assets/runtime/image/sha256-prop.png","generationMetadata":{"provider":"test","model":"image-test","requestId":"prop-request"}}}]}`,
 		"skill-system-storyboard-vertical-short": `{"shots":[{"shotId":"shot-001","sceneKey":"scene-001","sourceScript":"林秋低声说：“这次不等了。”","shotDraft":{"shotSize":"近景","camera":"9:16 竖屏，机位与林秋眼睛等高，面部和捏紧车票的手保持在中央安全区","movement":"从胸像极缓慢推到面部近景，在台词结束时停稳","action":"林秋捏紧折起的车票，说完后把视线从公路移向车门","performance":"开口前短促吸气，声音压低，最后一个字落下时下颌放松","dialogue":"这次不等了。","durationSeconds":6,"continuityMode":"continuous"}}]}`,
 		"skill-system-workflow-video":            `{"items":[{"shotId":"shot-001","prompt":"场景：清晨的旧公交站，站牌在画面左侧，冷色自然光。\n声音：远处公交车引擎声逐渐靠近，无旁白。\n画面内容：0-2秒，中远景保持站牌、林秋和道路的空间关系；2-6秒，镜头稳定缓慢推近，公交车从背景驶入并减速。\n限制：保持角色、车票和光线连续，不切镜，无字幕。","inputArtifactRefs":[]}]}`,
 		"skill-system-workflow-delivery":         `{"summary":"已审计 1 个镜头，可交付 1 个。","succeeded":[{"shotId":"shot-001","output":"outputs/shot-001.mp4"}],"failed":[],"retrySuggestions":[],"exportManifest":[{"shotId":"shot-001","file":"outputs/shot-001.mp4","status":"ready"}]}`,
@@ -76,7 +72,10 @@ func TestSystemProductionWorkflowExecutesRoutedNineNodeProductionChain(t *testin
 		{"scene_brief", WorkflowExecutorSkill, "", "skill-version-system-asset-brief-scene-1.0.0", "asset_brief", []string{"art"}},
 		{"prop_brief", WorkflowExecutorSkill, "", "skill-version-system-asset-brief-prop-1.0.0", "asset_brief", []string{"art"}},
 		{"storyboard", WorkflowExecutorSkill, "", "skill-version-system-storyboard-vertical-short-1.0.0", "storyboard_package", []string{"script", "art", "classify"}},
-		{"video", WorkflowExecutorSkill, "", "skill-version-system-workflow-video-3.1.0", "video_prompt_package", []string{"storyboard", "art"}},
+		{"character_rendition", WorkflowExecutorSkill, "", "skill-version-system-asset-rendition-character-1.0.0", "asset_rendition", []string{"character_brief"}},
+		{"scene_rendition", WorkflowExecutorSkill, "", "skill-version-system-asset-rendition-scene-1.0.0", "asset_rendition", []string{"scene_brief"}},
+		{"prop_rendition", WorkflowExecutorSkill, "", "skill-version-system-asset-rendition-prop-1.0.0", "asset_rendition", []string{"prop_brief"}},
+		{"video", WorkflowExecutorSkill, "", "skill-version-system-workflow-video-3.1.0", "video_prompt_package", []string{"storyboard", "art", "character_rendition", "prop_rendition", "scene_rendition"}},
 		{"delivery", WorkflowExecutorSkill, "", "skill-version-system-workflow-delivery-3.1.0", "delivery_report", []string{"video"}},
 	}
 	outputs := map[string]ArtifactEnvelope{"source": source}
@@ -124,7 +123,11 @@ func TestSystemProductionWorkflowExecutesRoutedNineNodeProductionChain(t *testin
 		if invocation.OutputArtifacts[0].Artifact.ArtifactType != want.outputType || invocation.OutputArtifacts[0].Artifact.ProducerInvocationID == nil || *invocation.OutputArtifacts[0].Artifact.ProducerInvocationID != invocationID {
 			t.Fatalf("node=%s output=%#v", want.key, invocation.OutputArtifacts[0])
 		}
-		if len(invocation.Attempts) != 1 || invocation.Attempts[0].CreditsReserved != 1 || invocation.Attempts[0].CreditsRefunded != 0 {
+		wantCredits := 1
+		if want.outputType == "asset_rendition" {
+			wantCredits = 3
+		}
+		if len(invocation.Attempts) != 1 || invocation.Attempts[0].CreditsReserved != wantCredits || invocation.Attempts[0].CreditsRefunded != 0 {
 			t.Fatalf("node=%s attempts=%#v", want.key, invocation.Attempts)
 		}
 		for _, gate := range invocation.Attempts[0].Gates {
@@ -154,7 +157,7 @@ func TestSystemProductionWorkflowExecutesRoutedNineNodeProductionChain(t *testin
 		}
 	}
 	user, ok, err := repository.GetUserByID("user-1")
-	if err != nil || !ok || user.Credits != 91 || executor.calls.Load() != 9 || len(invocationIDs) != 9 {
+	if err != nil || !ok || user.Credits != 82 || executor.calls.Load() != 12 || len(invocationIDs) != 12 {
 		t.Fatalf("user=%#v calls=%d invocations=%#v ok=%v err=%v", user, executor.calls.Load(), invocationIDs, ok, err)
 	}
 }
@@ -186,7 +189,7 @@ func TestEnsureWorkflowSeedsPublishesComposableProductionTemplate(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version.Version != "2.0.0" || len(packageValue.Nodes) != 9 || len(packageValue.InputArtifactTypes) != 1 || packageValue.InputArtifactTypes[0] != "source_text" {
+	if version.Version != "2.1.0" || len(packageValue.Nodes) != 12 || len(packageValue.InputArtifactTypes) != 1 || packageValue.InputArtifactTypes[0] != "source_text" {
 		t.Fatalf("package=%+v", packageValue)
 	}
 	if packageValue.Nodes[0].ExecutorType != WorkflowExecutorAgent || packageValue.Nodes[1].ExecutorType != WorkflowExecutorSkill || packageValue.Nodes[2].ExecutorType != WorkflowExecutorAgent {
@@ -194,6 +197,16 @@ func TestEnsureWorkflowSeedsPublishesComposableProductionTemplate(t *testing.T) 
 	}
 	if packageValue.Nodes[0].AgentRef.AgentVersionID != "agent-version-system-script-1.0.0" || packageValue.Nodes[1].SkillBinding.SkillVersionID != "skill-version-system-content-classifier-1.0.0" || packageValue.Nodes[6].SkillBinding.Mode != WorkflowSkillBindingTagRoute {
 		t.Fatalf("template refs are not frozen: %+v", packageValue.Nodes)
+	}
+	video := packageValue.Nodes[10]
+	foundRenditions := false
+	for _, binding := range video.InputBindings {
+		if binding.BindingName == "asset_rendition" && binding.ArtifactType == "asset_rendition" && len(binding.FromNodeKeys) == 3 {
+			foundRenditions = true
+		}
+	}
+	if !foundRenditions {
+		t.Fatalf("video node does not aggregate asset renditions: %+v", video)
 	}
 	versions, err := repository.ListWorkflowVersions(workflow.ID)
 	if err != nil || len(versions) != 1 {
@@ -215,21 +228,14 @@ func TestSystemProductionWorkflowIsVisibleAndCopyable(t *testing.T) {
 		t.Fatalf("items=%+v err=%v", items, err)
 	}
 	copied, err := CopyWorkflowToProject("user-1", systemProductionWorkflowID, "project-1", "标准生产流（项目版）")
-	if err != nil || copied.Workflow.OwnerType != model.WorkflowOwnerProject || copied.Version.Status != model.WorkflowVersionDraft || len(copied.Package.Nodes) != 9 {
+	if err != nil || copied.Workflow.OwnerType != model.WorkflowOwnerProject || copied.Version.Status != model.WorkflowVersionDraft || len(copied.Package.Nodes) != 12 {
 		t.Fatalf("copied=%+v err=%v", copied, err)
 	}
 }
 
 func TestSystemProductionWorkflowPreflightFreezesEveryNode(t *testing.T) {
 	setupInvocationServiceTest(t)
-	settings, err := repository.GetSettings()
-	if err != nil {
-		t.Fatal(err)
-	}
-	settings.Public.ModelChannel.ModelCosts = []model.ModelCost{{Model: "text-test", Credits: 1}}
-	if _, err := SaveSettings(settings); err != nil {
-		t.Fatal(err)
-	}
+	setupSystemProductionWorkflowModels(t)
 	if err := EnsureWorkflowSeeds(); err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +251,7 @@ func TestSystemProductionWorkflowPreflightFreezesEveryNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if detail.Run.Status != model.WorkflowExecutionAwaitingConfirmation || !detail.Preview.Executable || len(detail.Nodes) != 9 || len(detail.Preview.Nodes) != 9 {
+	if detail.Run.Status != model.WorkflowExecutionAwaitingConfirmation || !detail.Preview.Executable || len(detail.Nodes) != 12 || len(detail.Preview.Nodes) != 12 || detail.Run.EstimatedCredits != 18 {
 		t.Fatalf("detail=%+v", detail)
 	}
 	for _, node := range detail.Preview.Nodes {
@@ -260,14 +266,7 @@ func TestSystemProductionWorkflowPreflightFreezesEveryNode(t *testing.T) {
 
 func TestSystemProductionWorkflowRoutesHorizontalLongFormStoryboard(t *testing.T) {
 	setupInvocationServiceTest(t)
-	settings, err := repository.GetSettings()
-	if err != nil {
-		t.Fatal(err)
-	}
-	settings.Public.ModelChannel.ModelCosts = []model.ModelCost{{Model: "text-test", Credits: 1}}
-	if _, err := SaveSettings(settings); err != nil {
-		t.Fatal(err)
-	}
+	setupSystemProductionWorkflowModels(t)
 	if err := EnsureWorkflowSeeds(); err != nil {
 		t.Fatal(err)
 	}
@@ -292,4 +291,22 @@ func TestSystemProductionWorkflowRoutesHorizontalLongFormStoryboard(t *testing.T
 		}
 	}
 	t.Fatal("storyboard route is missing")
+}
+
+func setupSystemProductionWorkflowModels(t *testing.T) {
+	t.Helper()
+	if _, err := SaveSettings(model.Settings{
+		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{
+			AvailableModels:   []string{"text-test", "image-test"},
+			DefaultTextModel:  "text-test",
+			DefaultImageModel: "image-test",
+			ModelCosts:        []model.ModelCost{{Model: "text-test", Credits: 1}, {Model: "image-test", Credits: 3}},
+		}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{
+			{ID: "text-channel", Protocol: string(model.ModelProtocolOpenAI), Name: "text", BaseURL: "https://example.invalid/v1", APIKey: "text-key", Models: []string{"text-test"}, Capabilities: []string{"text"}, Enabled: true},
+			{ID: "image-channel", Protocol: string(model.ModelProtocolOpenAI), Name: "image", BaseURL: "https://example.invalid/v1", APIKey: "image-key", Models: []string{"image-test"}, Capabilities: []string{"image"}, Enabled: true},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
