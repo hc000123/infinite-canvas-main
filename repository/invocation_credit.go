@@ -206,6 +206,7 @@ func reserveInvocationCreditsTx(tx *gorm.DB, agentRun model.AgentRun, stamp stri
 }
 
 func settleInvocationCreditsTx(tx *gorm.DB, agentRun model.AgentRun, status model.AgentRunStatus, stamp, hookKind string) (int, int, error) {
+	requestedRefund := agentRun.CreditsRefunded
 	reserved, refunded, err := invocationCreditTotalsTx(tx, agentRun)
 	if err != nil {
 		return 0, 0, err
@@ -213,16 +214,27 @@ func settleInvocationCreditsTx(tx *gorm.DB, agentRun model.AgentRun, status mode
 	if reserved > 0 && agentRun.Credits > 0 && reserved != agentRun.Credits {
 		return 0, 0, ErrInvocationCompletionConflict
 	}
-	refundRequired := status == model.AgentRunStatusFailed || status == model.AgentRunStatusCancelled
-	if !refundRequired {
+	targetRefund := 0
+	if status == model.AgentRunStatusFailed || status == model.AgentRunStatusCancelled {
+		targetRefund = reserved
+	} else if status == model.AgentRunStatusPartial {
+		targetRefund = requestedRefund
+		if targetRefund < 0 || targetRefund > reserved {
+			return 0, 0, ErrInvocationCompletionConflict
+		}
+	}
+	if targetRefund == 0 {
 		if refunded != 0 {
 			return 0, 0, ErrInvocationCompletionConflict
 		}
 		return reserved, refunded, nil
 	}
-	amount := reserved - refunded
+	amount := targetRefund - refunded
 	if amount <= 0 {
-		return reserved, refunded, nil
+		if amount == 0 {
+			return reserved, refunded, nil
+		}
+		return 0, 0, ErrInvocationCompletionConflict
 	}
 	var user model.User
 	if err := tx.Where("id = ?", agentRun.UserID).First(&user).Error; err != nil {
@@ -232,7 +244,7 @@ func settleInvocationCreditsTx(tx *gorm.DB, agentRun model.AgentRun, status mode
 	log := model.CreditLog{
 		ID: invocationCreditLogID(agentRun.ID, "refund"), UserID: agentRun.UserID, Type: model.CreditLogTypeAIRefund,
 		Amount: amount, Balance: user.Credits + amount, RelatedID: agentRun.ID,
-		Remark: "模型调用失败返还 " + agentRun.Model, Extra: string(extra), CreatedAt: stamp,
+		Remark: "模型未完成输出返还 " + agentRun.Model, Extra: string(extra), CreatedAt: stamp,
 	}
 	created := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&log)
 	if created.Error != nil {
@@ -240,7 +252,7 @@ func settleInvocationCreditsTx(tx *gorm.DB, agentRun model.AgentRun, status mode
 	}
 	if created.RowsAffected == 0 {
 		reserved, refunded, err = invocationCreditTotalsTx(tx, agentRun)
-		if err != nil || refunded != reserved {
+		if err != nil || refunded != targetRefund {
 			return 0, 0, ErrInvocationCompletionConflict
 		}
 		return reserved, refunded, nil

@@ -2,14 +2,149 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/basketikun/infinite-canvas/config"
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/repository"
 )
+
+func TestInvocationCompletionArchivesImageRenditionWithBriefParent(t *testing.T) {
+	setupInvocationServiceTest(t)
+	png := testRuntimePNG(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"request-e2e","data":[{"b64_json":"` + base64.StdEncoding.EncodeToString(png) + `"}]}`))
+	}))
+	defer server.Close()
+	originalAssets := config.Cfg.PublicAssetDir
+	config.Cfg.PublicAssetDir = t.TempDir()
+	t.Cleanup(func() { config.Cfg.PublicAssetDir = originalAssets })
+	if _, err := SaveSettings(model.Settings{
+		Public:  model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{AvailableModels: []string{"image-test"}, DefaultImageModel: "image-test", ModelCosts: []model.ModelCost{{Model: "image-test", Credits: 3}}}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{{ID: "image-channel", Protocol: string(model.ModelProtocolOpenAI), Name: "openai", BaseURL: server.URL, APIKey: "image-key", Models: []string{"image-test"}, Capabilities: []string{"image"}, Enabled: true}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	stamp := now()
+	if _, err := repository.SaveUser(model.User{ID: "user-1", Username: "image-user", AffCode: "image-user-aff", Status: model.UserStatusActive, Credits: 100, CreatedAt: stamp, UpdatedAt: stamp}); err != nil {
+		t.Fatal(err)
+	}
+	brief := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "asset_brief", `{"assetId":"character-001","brief":"角色四视图","format":"character-four-view"}`)
+	version := seedImageInvocationSkill(t, "image-completion")
+	preflight, err := PreflightInvocation("user-1", InvocationRequest{
+		Source: "image", ProjectID: "project-1", EpisodeID: "episode-1", SkillVersionID: version.ID, ExpectedOutputArtifactType: "asset_rendition",
+		InputArtifactRefs: []ArtifactRefInput{{BindingName: "asset_brief", ArtifactID: brief.Artifact.ID, ContentHash: brief.Artifact.ContentHash}}, Parameters: json.RawMessage(`{"n":1}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ConfirmInvocation("user-1", preflight.Run.ID, InvocationConfirmation{RequirementCodes: preflight.ConfirmationRequirements}); err != nil {
+		t.Fatal(err)
+	}
+	worker := NewAgentRunWorker(AgentRunWorkerOptions{ID: "image-e2e-worker", LeaseDuration: time.Minute, HeartbeatInterval: time.Hour, Executor: NewAPIAgentRunExecutor(server.Client())})
+	if err := worker.ProcessOne(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	run, ok, err := repository.GetUserInvocation("user-1", preflight.Run.ID)
+	if err != nil || !ok || run.Status != model.InvocationStatusNeedsReview {
+		t.Fatalf("run=%+v ok=%v err=%v", run, ok, err)
+	}
+	outputs, err := ListArtifacts("user-1", ArtifactQuery{ProducerInvocationID: run.ID})
+	if err != nil || len(outputs.Items) != 1 {
+		t.Fatalf("outputs=%+v err=%v", outputs, err)
+	}
+	output := outputs.Items[0]
+	if output.Artifact.ArtifactType != "asset_rendition" || output.Payload["assetId"] != "character-001" || output.Payload["mediaType"] != "image" || !strings.HasPrefix(output.Payload["mediaRef"].(string), "/api/uploaded-assets/runtime/image/") {
+		t.Fatalf("output=%+v", output)
+	}
+	if len(output.ParentArtifactIds) != 1 || output.ParentArtifactIds[0] != brief.Artifact.ID {
+		t.Fatalf("parents=%v brief=%s", output.ParentArtifactIds, brief.Artifact.ID)
+	}
+}
+
+func TestInvocationImagePartialRetryPreservesOrdinalAndSettlesPerImage(t *testing.T) {
+	setupInvocationServiceTest(t)
+	png := base64.StdEncoding.EncodeToString(testRuntimePNG(t))
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		_, _ = w.Write([]byte(`{"id":"request-partial","data":[{"b64_json":"` + png + `"}]}`))
+	}))
+	defer server.Close()
+	originalAssets := config.Cfg.PublicAssetDir
+	config.Cfg.PublicAssetDir = t.TempDir()
+	t.Cleanup(func() { config.Cfg.PublicAssetDir = originalAssets })
+	if _, err := SaveSettings(model.Settings{
+		Public:  model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{AvailableModels: []string{"image-test"}, DefaultImageModel: "image-test", ModelCosts: []model.ModelCost{{Model: "image-test", Credits: 3}}}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{{ID: "image-channel", Protocol: string(model.ModelProtocolOpenAI), Name: "openai", BaseURL: server.URL, APIKey: "image-key", Models: []string{"image-test"}, Capabilities: []string{"image"}, Enabled: true}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	stamp := now()
+	if _, err := repository.SaveUser(model.User{ID: "user-1", Username: "partial-image-user", AffCode: "partial-image-aff", Status: model.UserStatusActive, Credits: 100, CreatedAt: stamp, UpdatedAt: stamp}); err != nil {
+		t.Fatal(err)
+	}
+	brief := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "asset_brief", `{"assetId":"character-001","brief":"角色四视图","format":"character-four-view"}`)
+	version := seedImageInvocationSkill(t, "image-partial")
+	preflight, err := PreflightInvocation("user-1", InvocationRequest{
+		Source: "image", ProjectID: "project-1", EpisodeID: "episode-1", SkillVersionID: version.ID, ExpectedOutputArtifactType: "asset_rendition",
+		InputArtifactRefs: []ArtifactRefInput{{BindingName: "asset_brief", ArtifactID: brief.Artifact.ID, ContentHash: brief.Artifact.ContentHash}}, Parameters: json.RawMessage(`{"n":2}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ConfirmInvocation("user-1", preflight.Run.ID, InvocationConfirmation{RequirementCodes: preflight.ConfirmationRequirements}); err != nil {
+		t.Fatal(err)
+	}
+	worker := NewAgentRunWorker(AgentRunWorkerOptions{ID: "image-partial-worker-1", LeaseDuration: time.Minute, HeartbeatInterval: time.Hour, Executor: NewAPIAgentRunExecutor(server.Client())})
+	if err := worker.ProcessOne(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	run, _, _ := repository.GetUserInvocation("user-1", preflight.Run.ID)
+	user, _, _ := repository.GetUserByID("user-1")
+	attempts, _ := repository.ListInvocationAttempts("user-1", run.ID)
+	if run.Status != model.InvocationStatusPartial || user.Credits != 97 || len(attempts) != 1 || attempts[0].CreditsReserved != 6 || attempts[0].CreditsRefunded != 3 {
+		t.Fatalf("partial run=%+v user=%+v attempts=%+v", run, user, attempts)
+	}
+	refs, _ := repository.ListInvocationArtifactRefs("user-1", run.ID)
+	if countInvocationOutputOrdinal(refs, 1, 0) != 1 || countInvocationOutputOrdinal(refs, 1, 1) != 0 {
+		t.Fatalf("partial refs=%+v", refs)
+	}
+	if _, err := RetryInvocation("user-1", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	worker = NewAgentRunWorker(AgentRunWorkerOptions{ID: "image-partial-worker-2", LeaseDuration: time.Minute, HeartbeatInterval: time.Hour, Executor: NewAPIAgentRunExecutor(server.Client())})
+	if err := worker.ProcessOne(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	run, _, _ = repository.GetUserInvocation("user-1", run.ID)
+	user, _, _ = repository.GetUserByID("user-1")
+	attempts, _ = repository.ListInvocationAttempts("user-1", run.ID)
+	refs, _ = repository.ListInvocationArtifactRefs("user-1", run.ID)
+	if run.Status != model.InvocationStatusNeedsReview || user.Credits != 94 || calls.Load() != 2 || len(attempts) != 2 || attempts[1].CreditsReserved != 3 || attempts[1].CreditsRefunded != 0 {
+		t.Fatalf("retry run=%+v user=%+v attempts=%+v calls=%d", run, user, attempts, calls.Load())
+	}
+	if countInvocationOutputOrdinal(refs, 2, 0) != 1 || countInvocationOutputOrdinal(refs, 2, 1) != 1 {
+		t.Fatalf("retry refs=%+v", refs)
+	}
+}
+
+func countInvocationOutputOrdinal(refs []model.InvocationArtifactRef, attempt, ordinal int) int {
+	count := 0
+	for _, ref := range refs {
+		if ref.Direction == "output" && ref.Attempt == attempt && ref.Ordinal == ordinal {
+			count++
+		}
+	}
+	return count
+}
 
 func TestInvocationAgentRunWorkerCompletesFourGatesAndImmutableOutput(t *testing.T) {
 	snapshot, source := queueInvocationWorkerTest(t, nil)

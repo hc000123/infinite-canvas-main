@@ -162,6 +162,11 @@ func buildInvocationCompletion(agentRun model.AgentRun, run model.InvocationRun,
 		gates = append(gates, invocationGate(run, attempt, 2, "output_schema", "frozen-dual-schema", "1", false, err, stamp))
 		return fail("output_schema", gates, err)
 	}
+	outputs, err = appendMissingInvocationImageOutputs(revision, retryPlan, outputs)
+	if err != nil {
+		gates = append(gates, invocationGate(run, attempt, 2, "output_schema", "frozen-image-cardinality", "1", false, err, stamp))
+		return fail("output_schema", gates, err)
+	}
 	validOutputs := make([]validatedInvocationOutput, 0, len(outputs))
 	itemFailed := false
 	itemFailureLayer := ""
@@ -229,6 +234,8 @@ func buildInvocationCompletion(agentRun model.AgentRun, run model.InvocationRun,
 		completion.agentRun.Status, completion.agentRun.ErrorMessage = model.AgentRunStatusPartial, "部分输出未通过验证"
 		completion.attempt.Status, completion.attempt.ErrorClass, completion.attempt.ErrorMessage = string(model.AgentRunStatusPartial), "business_gate", completion.agentRun.ErrorMessage
 		completion.run.Status, completion.run.AggregateErrorSummary = model.InvocationStatusPartial, completion.agentRun.ErrorMessage
+		completion.agentRun.CreditsRefunded = invocationImagePartialRefund(agentRun, outputs)
+		completion.attempt.CreditsRefunded = completion.agentRun.CreditsRefunded
 		completion.artifacts, completion.refs, completion.gates = artifacts, refs, gates
 		completion.finish(stamp, "attempt.partial")
 		return completion
@@ -396,7 +403,14 @@ func validateFrozenInvocationOutputItems(revision model.InvocationPreflightRevis
 	if err != nil {
 		return nil, nil, skillSchema, err
 	}
-	declared, err := parseInvocationDeclaredOutputsForRetry(raw, skill.Package.OutputContract.ArtifactOutputs, retryPlan.RequestedOutputs)
+	var policy InvocationExecutionPolicy
+	_ = json.Unmarshal([]byte(revision.ExecutionPolicyJSON), &policy)
+	var declared []validatedInvocationOutput
+	if policy.ExecutorKind == "image_model" && len(retryPlan.RequestedOutputs) > 0 {
+		declared, err = parseInvocationDeclaredImageOutputsForRetry(raw, retryPlan.RequestedOutputs)
+	} else {
+		declared, err = parseInvocationDeclaredOutputsForRetry(raw, skill.Package.OutputContract.ArtifactOutputs, retryPlan.RequestedOutputs)
+	}
 	if err != nil {
 		return nil, nil, skillSchema, err
 	}
@@ -422,6 +436,83 @@ func validateFrozenInvocationOutputItems(revision model.InvocationPreflightRevis
 		}
 	}
 	return declared, coreSchemas, skillSchema, nil
+}
+
+func parseInvocationDeclaredImageOutputsForRetry(raw string, requested []InvocationOutputCoordinate) ([]validatedInvocationOutput, error) {
+	var envelope struct {
+		Outputs []invocationDeclaredOutput `json:"outputs"`
+	}
+	if json.Unmarshal([]byte(raw), &envelope) != nil || len(envelope.Outputs) == 0 {
+		return nil, errors.New("图片重试输出必须是 declared one-or-many envelope")
+	}
+	wanted, seen := map[string]bool{}, map[string]bool{}
+	for _, coordinate := range requested {
+		wanted[fmt.Sprintf("%s\x00%d", coordinate.BindingName, coordinate.Ordinal)] = true
+	}
+	result := make([]validatedInvocationOutput, 0, len(envelope.Outputs))
+	for _, item := range envelope.Outputs {
+		key := fmt.Sprintf("%s\x00%d", item.BindingName, item.Ordinal)
+		if !wanted[key] || seen[key] {
+			return nil, errors.New("图片重试输出 binding/ordinal 与 immutable RetryPlan 不一致")
+		}
+		payload, err := canonicalRawInvocationPayload(item.Payload)
+		output := validatedInvocationOutput{bindingName: item.BindingName, ordinal: item.Ordinal, raw: item.Payload}
+		if err != nil {
+			output.validationError = err
+		} else {
+			output.payload, output.raw = payload.value, payload.raw
+		}
+		result, seen[key] = append(result, output), true
+	}
+	return result, nil
+}
+
+func appendMissingInvocationImageOutputs(revision model.InvocationPreflightRevision, retryPlan InvocationRetryPlan, outputs []validatedInvocationOutput) ([]validatedInvocationOutput, error) {
+	var policy InvocationExecutionPolicy
+	if json.Unmarshal([]byte(revision.ExecutionPolicyJSON), &policy) != nil || policy.ExecutorKind != "image_model" {
+		return outputs, nil
+	}
+	skill, err := frozenInvocationSkill(revision)
+	if err != nil || len(skill.Package.OutputContract.ArtifactOutputs) != 1 {
+		return nil, errors.New("冻结图片输出合同无效")
+	}
+	expected := retryPlan.RequestedOutputs
+	if len(expected) == 0 {
+		expected = make([]InvocationOutputCoordinate, policy.OutputCount)
+		for ordinal := 0; ordinal < policy.OutputCount; ordinal++ {
+			expected[ordinal] = InvocationOutputCoordinate{BindingName: skill.Package.OutputContract.ArtifactOutputs[0].BindingName, Ordinal: ordinal}
+		}
+	}
+	seen := map[string]bool{}
+	for _, output := range outputs {
+		seen[fmt.Sprintf("%s\x00%d", output.bindingName, output.ordinal)] = true
+	}
+	for _, coordinate := range expected {
+		key := fmt.Sprintf("%s\x00%d", coordinate.BindingName, coordinate.Ordinal)
+		if !seen[key] {
+			outputs = append(outputs, validatedInvocationOutput{bindingName: coordinate.BindingName, ordinal: coordinate.Ordinal, validationError: errors.New("图片输出 ordinal 缺失")})
+		}
+	}
+	sort.Slice(outputs, func(i, j int) bool {
+		if outputs[i].bindingName != outputs[j].bindingName {
+			return outputs[i].bindingName < outputs[j].bindingName
+		}
+		return outputs[i].ordinal < outputs[j].ordinal
+	})
+	return outputs, nil
+}
+
+func invocationImagePartialRefund(agentRun model.AgentRun, outputs []validatedInvocationOutput) int {
+	if agentRun.ExecutionKind != "image_model" || len(outputs) == 0 || agentRun.Credits <= 0 {
+		return 0
+	}
+	failed := 0
+	for _, output := range outputs {
+		if output.validationError != nil {
+			failed++
+		}
+	}
+	return agentRun.Credits / len(outputs) * failed
 }
 
 func invocationOutputIndex(outputs []validatedInvocationOutput, binding string, ordinal int) int {
@@ -643,7 +734,7 @@ func validateInvocationPolicy(run model.InvocationRun, revision model.Invocation
 		return errors.New("存在未声明可执行工具")
 	}
 	for _, effect := range skill.Package.Manifest.SideEffects {
-		if effect != "none" && effect != "read" {
+		if effect != "none" && effect != "read" && !(agentRun.ExecutionKind == "image_model" && effect == "image_generation") {
 			return errors.New("存在未声明副作用或写入")
 		}
 	}

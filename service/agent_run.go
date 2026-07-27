@@ -38,6 +38,8 @@ type CreateAgentRunInput struct {
 	StageID            string            `json:"stageId"`
 	AgentKind          string            `json:"agentKind"`
 	Executor           string            `json:"-"`
+	ExecutionKind      string            `json:"-"`
+	FrozenRequestJSON  string            `json:"-"`
 	SkillID            string            `json:"-"`
 	SkillVersionID     string            `json:"-"`
 	SkillVersion       string            `json:"-"`
@@ -135,14 +137,21 @@ func BuildUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRun
 	if executorKind != currentAgentRunExecutorKind() {
 		return model.AgentRun{}, safeMessageError{message: "任务执行器与当前运行模式不匹配"}
 	}
+	executionKind := strings.ToLower(strings.TrimSpace(input.ExecutionKind))
+	if executionKind == "" {
+		executionKind = "text_model"
+	}
+	if !map[string]bool{"text_model": true, "image_model": executorKind == AgentRunExecutorAPI}[executionKind] {
+		return model.AgentRun{}, safeMessageError{message: "任务模型执行器无效"}
+	}
 	resolved := resolvedAgentRunChannel{}
 	credits := 0
 	var err error
 	if executorKind == AgentRunExecutorAPI {
 		if input.FrozenCredits == nil {
-			resolved, credits, err = apiAgentRunExecution(input)
+			resolved, credits, err = apiAgentRunExecutionForCapability(input, agentRunModelCapability(executionKind))
 		} else {
-			resolved, err = resolveAgentRunChannel(input)
+			resolved, err = resolveAgentRunChannelForCapability(input, agentRunModelCapability(executionKind))
 			credits = *input.FrozenCredits
 			if credits < 0 {
 				err = safeMessageError{message: "冻结算力点无效"}
@@ -191,6 +200,7 @@ func BuildUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRun
 		StageID:            strings.TrimSpace(input.StageID),
 		AgentKind:          strings.TrimSpace(input.AgentKind),
 		Executor:           executorKind,
+		ExecutionKind:      executionKind,
 		SkillID:            strings.TrimSpace(input.SkillID),
 		SkillVersionID:     strings.TrimSpace(input.SkillVersionID),
 		SkillVersion:       strings.TrimSpace(input.SkillVersion),
@@ -222,11 +232,19 @@ func BuildUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRun
 		CreatedAt:          stamp,
 		UpdatedAt:          stamp,
 	}
-	requestBody, err := buildAgentRunChatRequest(input, resolved.ModelName)
-	if err != nil {
-		return model.AgentRun{}, err
+	if strings.TrimSpace(input.FrozenRequestJSON) != "" {
+		requestBody, err := marshalInvocationCanonical(json.RawMessage(input.FrozenRequestJSON))
+		if err != nil {
+			return model.AgentRun{}, safeMessageError{message: "冻结模型请求无效"}
+		}
+		run.RequestJSON = string(requestBody)
+	} else {
+		requestBody, err := buildAgentRunChatRequest(input, resolved.ModelName)
+		if err != nil {
+			return model.AgentRun{}, err
+		}
+		run.RequestJSON = string(requestBody)
 	}
-	run.RequestJSON = string(requestBody)
 	return run, nil
 }
 
@@ -271,6 +289,10 @@ func ReviewUserAgentRun(userID string, id string, input AgentRunReviewInput) (mo
 }
 
 func resolveAgentRunChannel(input CreateAgentRunInput) (resolvedAgentRunChannel, error) {
+	return resolveAgentRunChannelForCapability(input, "text")
+}
+
+func resolveAgentRunChannelForCapability(input CreateAgentRunInput, capability string) (resolvedAgentRunChannel, error) {
 	targetModel := strings.TrimSpace(input.ModelPreference)
 	modelName := targetModel
 	if modelName == "" || modelName == "default" {
@@ -289,7 +311,7 @@ func resolveAgentRunChannel(input CreateAgentRunInput) (resolvedAgentRunChannel,
 	if input.AllowFallback {
 		fallbackIDs = normalizeAgentRunFallbackChannelIDs(input.FallbackChannelIDs)
 	}
-	channel, err := SelectModelChannelWithOptions(modelName, channelID, fallbackIDs, "text")
+	channel, err := SelectModelChannelWithOptions(modelName, channelID, fallbackIDs, capability)
 	if err != nil {
 		return resolvedAgentRunChannel{}, err
 	}
@@ -304,6 +326,13 @@ func resolveAgentRunChannel(input CreateAgentRunInput) (resolvedAgentRunChannel,
 		result.FallbackReason = "指定渠道不可用，按 Agent 设置使用 fallback 渠道"
 	}
 	return result, nil
+}
+
+func agentRunModelCapability(executionKind string) string {
+	if executionKind == "image_model" {
+		return "image"
+	}
+	return "text"
 }
 
 func buildAgentRunChatRequest(input CreateAgentRunInput, modelName string) ([]byte, error) {

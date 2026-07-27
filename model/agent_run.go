@@ -40,6 +40,7 @@ type AgentRun struct {
 	StageID             string         `json:"stageId" gorm:"index"`
 	AgentKind           string         `json:"agentKind" gorm:"index"`
 	Executor            string         `json:"executor" gorm:"index"`
+	ExecutionKind       string         `json:"executionKind" gorm:"index"`
 	SkillID             string         `json:"skillId" gorm:"index"`
 	SkillVersionID      string         `json:"skillVersionId" gorm:"index"`
 	SkillVersion        string         `json:"skillVersion"`

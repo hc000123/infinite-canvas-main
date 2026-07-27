@@ -113,7 +113,15 @@ func buildInvocationAttemptQueueWithRetry(run model.InvocationRun, revision mode
 	if err != nil {
 		return run, model.InvocationAttempt{}, model.AgentRun{}, nil, model.InvocationEvent{}, err
 	}
-	systemPrompt, userPrompt, err := buildInvocationPromptsWithRetry(revision, retryPlan)
+	systemPrompt, userPrompt, frozenRequestJSON, imageManifestJSON := "", "", "", ""
+	credits := policy.Credits
+	estimatedCredits := policy.EstimatedCredits
+	if policy.ExecutorKind == "image_model" {
+		frozenRequestJSON, imageManifestJSON, credits, err = buildInvocationImageAttemptRequest(revision, policy, retryPlan)
+		estimatedCredits = credits
+	} else {
+		systemPrompt, userPrompt, err = buildInvocationPromptsWithRetry(revision, retryPlan)
+	}
 	if err != nil {
 		return run, model.InvocationAttempt{}, model.AgentRun{}, nil, model.InvocationEvent{}, err
 	}
@@ -123,7 +131,8 @@ func buildInvocationAttemptQueueWithRetry(run model.InvocationRun, revision mode
 		ProjectID: run.ProjectID, EpisodeID: run.EpisodeID, AgentKind: "skill_runner", Executor: policy.AgentExecutor,
 		SkillID: revision.SkillID, SkillVersionID: revision.SkillVersionID, SkillVersion: revision.SkillVersion,
 		SkillContentHash: revision.SkillContentHash, SkillSnapshotJSON: revision.SkillSnapshotJSON,
-		ModelPreference: policy.Model, ChannelID: policy.ChannelID, AllowFallback: false, FrozenCredits: &policy.Credits, EstimatedCredits: policy.EstimatedCredits,
+		ExecutionKind: policy.ExecutorKind, FrozenRequestJSON: frozenRequestJSON, ImageManifestJSON: imageManifestJSON,
+		ModelPreference: policy.Model, ChannelID: policy.ChannelID, AllowFallback: false, FrozenCredits: &credits, EstimatedCredits: estimatedCredits,
 		TimeoutSeconds: policy.TimeoutSeconds, ConcurrencyLimit: policy.ConcurrencyLimit, AllowBatch: policy.AllowBatch, MaxAttempts: policy.MaxAttempts, WritePolicy: policy.WritePolicy, SystemPrompt: systemPrompt, UserPrompt: userPrompt,
 	})
 	if err != nil {
@@ -195,11 +204,20 @@ func validateClaimedInvocationAgentRun(agentRun model.AgentRun) error {
 	if strings.TrimSpace(attempt.RetryPlanJSON) != "" && json.Unmarshal([]byte(attempt.RetryPlanJSON), &retryPlan) != nil {
 		return errors.New("immutable RetryPlan 无效")
 	}
-	systemPrompt, userPrompt, err := buildInvocationPromptsWithRetry(revision, retryPlan)
-	if err != nil {
-		return err
+	requestJSON, imageManifestJSON, expectedCredits := []byte{}, "", policy.Credits
+	expectedEstimatedCredits := policy.EstimatedCredits
+	if policy.ExecutorKind == "image_model" {
+		var frozenRequest string
+		frozenRequest, imageManifestJSON, expectedCredits, err = buildInvocationImageAttemptRequest(revision, policy, retryPlan)
+		requestJSON = []byte(frozenRequest)
+		expectedEstimatedCredits = expectedCredits
+	} else {
+		var systemPrompt, userPrompt string
+		systemPrompt, userPrompt, err = buildInvocationPromptsWithRetry(revision, retryPlan)
+		if err == nil {
+			requestJSON, err = buildAgentRunChatRequest(CreateAgentRunInput{SystemPrompt: systemPrompt, UserPrompt: userPrompt}, policy.Model)
+		}
 	}
-	requestJSON, err := buildAgentRunChatRequest(CreateAgentRunInput{SystemPrompt: systemPrompt, UserPrompt: userPrompt}, policy.Model)
 	if err != nil {
 		return err
 	}
@@ -207,12 +225,12 @@ func validateClaimedInvocationAgentRun(agentRun model.AgentRun) error {
 	keyMatches := agentRun.IdempotencyKey != nil && *agentRun.IdempotencyKey == wantKey
 	if agentRun.InvocationID != run.ID || agentRun.InvocationRevision != revision.Revision || agentRun.InvocationAttempt != attempt.Attempt ||
 		agentRun.SkillID != revision.SkillID || agentRun.SkillVersionID != revision.SkillVersionID || agentRun.SkillVersion != revision.SkillVersion || agentRun.SkillContentHash != revision.SkillContentHash || agentRun.SkillSnapshotJSON != revision.SkillSnapshotJSON ||
-		agentRun.Executor != policy.AgentExecutor || agentRun.Model != policy.Model || agentRun.TargetModel != policy.Model || agentRun.ChannelID != policy.ChannelID || agentRun.TargetChannelID != policy.ChannelID || attempt.ExecutorKind != policy.AgentExecutor || attempt.Model != policy.Model || attempt.ChannelID != policy.ChannelID ||
-		agentRun.Credits != policy.Credits || agentRun.EstimatedCredits != policy.EstimatedCredits || agentRun.TimeoutSeconds != policy.TimeoutSeconds || agentRun.ConcurrencyLimit != policy.ConcurrencyLimit || agentRun.AllowBatch != policy.AllowBatch || agentRun.MaxAttempts != policy.MaxAttempts ||
-		agentRun.AllowFallback || agentRun.FallbackUsed || agentRun.WritePolicy != policy.WritePolicy || agentRun.RequiresConfirm != policy.RequiresConfirm || !keyMatches || agentRun.RequestJSON != string(requestJSON) {
+		agentRun.Executor != policy.AgentExecutor || agentRun.ExecutionKind != policy.ExecutorKind || agentRun.Model != policy.Model || agentRun.TargetModel != policy.Model || agentRun.ChannelID != policy.ChannelID || agentRun.TargetChannelID != policy.ChannelID || attempt.ExecutorKind != policy.AgentExecutor || attempt.Model != policy.Model || attempt.ChannelID != policy.ChannelID ||
+		agentRun.Credits != expectedCredits || agentRun.EstimatedCredits != expectedEstimatedCredits || agentRun.TimeoutSeconds != policy.TimeoutSeconds || agentRun.ConcurrencyLimit != policy.ConcurrencyLimit || agentRun.AllowBatch != policy.AllowBatch || agentRun.MaxAttempts != policy.MaxAttempts ||
+		agentRun.AllowFallback || agentRun.FallbackUsed || agentRun.WritePolicy != policy.WritePolicy || agentRun.RequiresConfirm != policy.RequiresConfirm || !keyMatches || agentRun.RequestJSON != string(requestJSON) || agentRun.ImageManifestJSON != imageManifestJSON {
 		return errors.New("Agent Run 与 frozen execution snapshot 不一致")
 	}
-	channel, err := SelectModelChannelWithOptions(policy.Model, policy.ChannelID, nil, "text")
+	channel, err := SelectModelChannelWithOptions(policy.Model, policy.ChannelID, nil, agentRunModelCapability(policy.ExecutorKind))
 	if err != nil || channel.ID != policy.ChannelID {
 		return errors.New("frozen execution target 不可用")
 	}
@@ -220,8 +238,73 @@ func validateClaimedInvocationAgentRun(agentRun model.AgentRun) error {
 }
 
 func validFrozenInvocationExecutionPolicy(policy InvocationExecutionPolicy) bool {
-	return policy.AgentExecutor != "" && policy.Model != "" && policy.ChannelID != "" && !policy.FallbackAllowed &&
+	validKind := policy.ExecutorKind == "text_model" || policy.ExecutorKind == "image_model"
+	validOutput := policy.ExecutorKind == "text_model" && (policy.OutputCount == 0 || policy.OutputCount == 1) && policy.ImageRequestJSON == ""
+	if policy.ExecutorKind == "image_model" {
+		var request map[string]any
+		validOutput = policy.OutputCount > 0 && json.Unmarshal([]byte(policy.ImageRequestJSON), &request) == nil && request["model"] == policy.Model && request["n"] == float64(policy.OutputCount)
+	}
+	return validKind && validOutput && policy.AgentExecutor != "" && policy.Model != "" && policy.ChannelID != "" && !policy.FallbackAllowed &&
 		policy.Credits >= 0 && policy.EstimatedCredits >= 0 && policy.TimeoutSeconds == normalizeAgentRunTimeout(policy.TimeoutSeconds) &&
 		policy.ConcurrencyLimit == normalizeAgentRunConcurrency(policy.ConcurrencyLimit) && !policy.AllowBatch && policy.MaxAttempts > 0 &&
 		policy.WritePolicy == "preview_only" && policy.RequiresConfirm
+}
+
+func buildInvocationImageAttemptRequest(revision model.InvocationPreflightRevision, policy InvocationExecutionPolicy, retryPlan InvocationRetryPlan) (string, string, int, error) {
+	if policy.ExecutorKind != "image_model" || policy.OutputCount < 1 {
+		return "", "", 0, errors.New("冻结图片执行策略无效")
+	}
+	skill, err := frozenInvocationSkill(revision)
+	if err != nil || len(skill.Package.OutputContract.ArtifactOutputs) != 1 {
+		return "", "", 0, errors.New("冻结图片 Skill 输出无效")
+	}
+	output := skill.Package.OutputContract.ArtifactOutputs[0]
+	ordinals := make([]int, 0, policy.OutputCount)
+	if len(retryPlan.RequestedOutputs) > 0 {
+		for _, coordinate := range retryPlan.RequestedOutputs {
+			if coordinate.BindingName != output.BindingName || coordinate.Ordinal < 0 || coordinate.Ordinal >= policy.OutputCount {
+				return "", "", 0, errors.New("图片重试输出坐标无效")
+			}
+			ordinals = append(ordinals, coordinate.Ordinal)
+		}
+	} else {
+		for ordinal := 0; ordinal < policy.OutputCount; ordinal++ {
+			ordinals = append(ordinals, ordinal)
+		}
+	}
+	if len(ordinals) == 0 {
+		return "", "", 0, errors.New("图片执行缺少输出坐标")
+	}
+	var bindings []ResolvedArtifactBinding
+	if json.Unmarshal([]byte(revision.InputSnapshotJSON), &bindings) != nil {
+		return "", "", 0, errors.New("冻结图片输入无效")
+	}
+	assetID := ""
+	for _, binding := range bindings {
+		if binding.Artifact.Artifact.ArtifactType == "asset_brief" {
+			assetID, _ = binding.Artifact.Payload["assetId"].(string)
+			break
+		}
+	}
+	if strings.TrimSpace(assetID) == "" {
+		return "", "", 0, errors.New("图片输入缺少 assetId")
+	}
+	var request map[string]any
+	if json.Unmarshal([]byte(policy.ImageRequestJSON), &request) != nil {
+		return "", "", 0, errors.New("冻结图片请求无效")
+	}
+	request["n"] = len(ordinals)
+	requestJSON, err := marshalInvocationCanonical(request)
+	if err != nil {
+		return "", "", 0, err
+	}
+	manifestJSON, err := marshalInvocationCanonical(map[string]any{"assetId": assetID, "bindingName": output.BindingName, "ordinals": ordinals})
+	if err != nil {
+		return "", "", 0, err
+	}
+	unitCredits := 0
+	if policy.OutputCount > 0 {
+		unitCredits = policy.Credits / policy.OutputCount
+	}
+	return string(requestJSON), string(manifestJSON), unitCredits * len(ordinals), nil
 }

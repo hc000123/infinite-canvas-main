@@ -106,6 +106,35 @@ func TestBuildUserAgentRunIsPureAndFreezesInvocationExecution(t *testing.T) {
 	}
 }
 
+func TestConfirmImageInvocationQueuesFrozenImageAgentRun(t *testing.T) {
+	setupInvocationServiceTest(t)
+	setupImageInvocationSettings(t, true)
+	brief := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "asset_brief", `{"assetId":"character-001","brief":"角色四视图","format":"character-four-view"}`)
+	version := seedImageInvocationSkill(t, "image-queue")
+	preflight, err := PreflightInvocation("user-1", InvocationRequest{
+		Source: "image", ProjectID: "project-1", EpisodeID: "episode-1", SkillVersionID: version.ID,
+		ExpectedOutputArtifactType: "asset_rendition", Parameters: json.RawMessage(`{"n":2,"size":"1024x1024"}`),
+		InputArtifactRefs: []ArtifactRefInput{{BindingName: "asset_brief", ArtifactID: brief.Artifact.ID, ContentHash: brief.Artifact.ContentHash}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	queued, err := ConfirmInvocation("user-1", preflight.Run.ID, InvocationConfirmation{RequirementCodes: preflight.ConfirmationRequirements})
+	if err != nil || queued.Attempt == nil {
+		t.Fatalf("queued=%+v err=%v", queued, err)
+	}
+	agentRun, ok, err := repository.GetAgentRun(queued.Attempt.AgentRunID)
+	if err != nil || !ok {
+		t.Fatalf("agent run ok=%v err=%v", ok, err)
+	}
+	if agentRun.ExecutionKind != "image_model" || agentRun.Model != "image-test" || agentRun.ChannelID != "image-channel" || agentRun.RequestJSON != preflight.ExecutionPolicy.ImageRequestJSON {
+		t.Fatalf("agent run did not freeze image target/request: %+v policy=%+v", agentRun, preflight.ExecutionPolicy)
+	}
+	if !strings.Contains(agentRun.ImageManifestJSON, `"assetId":"character-001"`) || !strings.Contains(agentRun.ImageManifestJSON, `"ordinals":[0,1]`) {
+		t.Fatalf("image output mapping=%s", agentRun.ImageManifestJSON)
+	}
+}
+
 func TestBuildInvocationPromptsRejectsTamperedFrozenSkillHash(t *testing.T) {
 	pkg, err := NormalizeSkillPackage(validSkillTestPackage())
 	if err != nil {
