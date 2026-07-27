@@ -34,8 +34,12 @@ export function useAdminAITasks() {
     const refreshMutation = useMutation({
         mutationFn: (id: string) => refreshAdminAITask(token, id),
         onSuccess: async (_, id) => {
-            await queryClient.invalidateQueries({ queryKey: ["admin", "ai-tasks"] });
-            await queryClient.invalidateQueries({ queryKey: ["admin", "ai-task", token, id] });
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ["admin", "ai-tasks"] }),
+                queryClient.invalidateQueries({ queryKey: ["admin", "ai-task", token, id] }),
+                queryClient.invalidateQueries({ queryKey: ["admin", "credit-logs"] }),
+                queryClient.invalidateQueries({ queryKey: ["admin", "ai-usage-summary"] }),
+            ]);
             message.success("任务状态已刷新");
         },
         onError: (error) => message.error(error instanceof Error ? error.message : "刷新失败"),
@@ -44,8 +48,12 @@ export function useAdminAITasks() {
     const refundMutation = useMutation({
         mutationFn: (id: string) => refundAdminAITask(token, id),
         onSuccess: async (_, id) => {
-            await queryClient.invalidateQueries({ queryKey: ["admin", "ai-tasks"] });
-            await queryClient.invalidateQueries({ queryKey: ["admin", "ai-task", token, id] });
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ["admin", "ai-tasks"] }),
+                queryClient.invalidateQueries({ queryKey: ["admin", "ai-task", token, id] }),
+                queryClient.invalidateQueries({ queryKey: ["admin", "credit-logs"] }),
+                queryClient.invalidateQueries({ queryKey: ["admin", "ai-usage-summary"] }),
+            ]);
             message.success("任务已返还");
         },
         onError: (error) => message.error(error instanceof Error ? error.message : "返还失败"),
