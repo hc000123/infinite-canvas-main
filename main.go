@@ -34,6 +34,9 @@ func run() error {
 	if err := service.EnsureAgentSeeds(); err != nil {
 		return err
 	}
+	if err := service.EnsureWorkflowSeeds(); err != nil {
+		return err
+	}
 	if err := service.EnsureCoreArtifactSchemas(); err != nil {
 		return err
 	}

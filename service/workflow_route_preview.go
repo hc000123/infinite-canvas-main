@@ -51,8 +51,14 @@ func PreviewWorkflowVersion(userID, versionID string, input WorkflowPreviewInput
 		}
 		if nodePreview.BlockCode != "" {
 			preview.Executable = false
-		} else if node.ExecutorType == WorkflowExecutorSkill {
-			resolved, err := resolvePreviewOutput(userID, input, node, bindings, nodePreview.SkillVersionID)
+		} else {
+			var resolved workflowPreviewArtifact
+			var err error
+			if node.ExecutorType == WorkflowExecutorAgent {
+				resolved, err = resolvePreviewAgentOutput(userID, input, node)
+			} else {
+				resolved, err = resolvePreviewOutput(userID, input, node, bindings, nodePreview.SkillVersionID)
+			}
 			if err != nil {
 				nodePreview.BlockCode, nodePreview.BlockMessage, preview.Executable = "output_contract_unavailable", err.Error(), false
 			} else {
@@ -70,6 +76,27 @@ func PreviewWorkflowVersion(userID, versionID string, input WorkflowPreviewInput
 	}
 	sort.Strings(preview.ConfirmationRequirements)
 	return preview, nil
+}
+
+func resolvePreviewAgentOutput(userID string, input WorkflowPreviewInput, node WorkflowNodeSpec) (workflowPreviewArtifact, error) {
+	definition, version, err := resolveWorkflowAgentReference(userID, input.ProjectID, *node.AgentRef)
+	if err != nil {
+		return workflowPreviewArtifact{}, err
+	}
+	packageValue, err := DecodeAgentPackage(version)
+	if err != nil || len(packageValue.DefaultSkillRefs) == 0 {
+		return workflowPreviewArtifact{}, safeMessageError{message: "Agent 没有可用的最终输出"}
+	}
+	finalSkill, err := resolveAgentSkillReference(userID, definition.OwnerProjectID, packageValue.DefaultSkillRefs[len(packageValue.DefaultSkillRefs)-1])
+	if err != nil {
+		return workflowPreviewArtifact{}, err
+	}
+	for _, spec := range finalSkill.Package.OutputContract.ArtifactOutputs {
+		if spec.ArtifactType == node.OutputArtifactType {
+			return previewOutputArtifact(userID, input, node, spec)
+		}
+	}
+	return workflowPreviewArtifact{}, safeMessageError{message: "Agent 最终输出与 Workflow 节点不兼容"}
 }
 
 func previewWorkflowSkillNode(userID string, input WorkflowPreviewInput, node WorkflowNodeSpec, bindings []ResolvedArtifactBinding, result WorkflowNodeRoutePreview) WorkflowNodeRoutePreview {
@@ -185,15 +212,19 @@ func resolvePreviewOutput(userID string, input WorkflowPreviewInput, node Workfl
 		if spec.ArtifactType != node.OutputArtifactType {
 			continue
 		}
-		schema, err := ResolveArtifactSchema(spec.ArtifactType, spec.SchemaVersion)
-		if err != nil {
-			return workflowPreviewArtifact{}, err
-		}
-		artifact := model.Artifact{ID: "preview:" + node.NodeKey, UserID: userID, ArtifactType: spec.ArtifactType, SchemaID: schema.ID, SchemaVersion: schema.Version, SchemaContentHash: schema.ContentHash, ProjectID: input.ProjectID, EpisodeID: input.EpisodeID, ContentHash: "preview:" + node.NodeKey}
-		snapshot := ArtifactRefSnapshot{BindingName: spec.BindingName, ArtifactID: artifact.ID, ArtifactHash: artifact.ContentHash, ArtifactType: artifact.ArtifactType, SchemaID: schema.ID, SchemaVersion: schema.Version, SchemaContentHash: schema.ContentHash, Schema: schema.Schema, ProjectID: input.ProjectID, EpisodeID: input.EpisodeID}
-		return workflowPreviewArtifact{binding: ResolvedArtifactBinding{BindingName: spec.BindingName, Artifact: ArtifactEnvelope{Artifact: artifact}, Snapshot: snapshot, Approved: true}}, nil
+		return previewOutputArtifact(userID, input, node, spec)
 	}
 	return workflowPreviewArtifact{}, safeMessageError{message: "节点没有声明输出 Artifact"}
+}
+
+func previewOutputArtifact(userID string, input WorkflowPreviewInput, node WorkflowNodeSpec, spec ArtifactOutputSpec) (workflowPreviewArtifact, error) {
+	schema, err := ResolveArtifactSchema(spec.ArtifactType, spec.SchemaVersion)
+	if err != nil {
+		return workflowPreviewArtifact{}, err
+	}
+	artifact := model.Artifact{ID: "preview:" + node.NodeKey, UserID: userID, ArtifactType: spec.ArtifactType, SchemaID: schema.ID, SchemaVersion: schema.Version, SchemaContentHash: schema.ContentHash, ProjectID: input.ProjectID, EpisodeID: input.EpisodeID, ContentHash: "preview:" + node.NodeKey}
+	snapshot := ArtifactRefSnapshot{BindingName: spec.BindingName, ArtifactID: artifact.ID, ArtifactHash: artifact.ContentHash, ArtifactType: artifact.ArtifactType, SchemaID: schema.ID, SchemaVersion: schema.Version, SchemaContentHash: schema.ContentHash, Schema: schema.Schema, ProjectID: input.ProjectID, EpisodeID: input.EpisodeID}
+	return workflowPreviewArtifact{binding: ResolvedArtifactBinding{BindingName: spec.BindingName, Artifact: ArtifactEnvelope{Artifact: artifact}, Snapshot: snapshot, Approved: true}}, nil
 }
 
 func workflowTopologicalOrder(nodes []WorkflowNodeSpec) []WorkflowNodeSpec {
