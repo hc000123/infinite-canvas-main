@@ -1,4 +1,6 @@
 import type { SeedanceImageRoleMode, VideoReferenceMode } from "@/services/api/video-reference";
+import type { AgentSkillRef } from "@/services/api/agent-registry";
+import type { ArtifactRefInput } from "@/services/api/invocations-contract";
 import type { AssetVersionReference } from "../assets/asset-version-references";
 import type { AssistantCanvasAction } from "./utils/canvas-assistant-actions";
 import type { PromptAgentExecutionState, PromptAgentIntent, PromptAgentPlan, PromptAgentRunMode, PromptAgentSkillPackId } from "./utils/canvas-prompt-agent-types";
@@ -277,6 +279,18 @@ export type CanvasAssistantImage = {
     volcengineAsset?: CanvasNodeMetadata["volcengineAsset"];
 };
 
+export type CanvasAgentPlanRun = {
+    planId: string;
+    agentId: string;
+    agentVersionId: string;
+    agentName: string;
+    sourceArtifactRef: ArtifactRefInput;
+    sourceNodeIds: string[];
+    skillRefs: AgentSkillRef[];
+    confirmationRequirementCodes?: string[];
+    appliedAt?: string;
+};
+
 export type CanvasAssistantMessage = {
     id: string;
     role: "user" | "assistant";
@@ -293,6 +307,7 @@ export type CanvasAssistantMessage = {
     promptAgentSkillPackId?: PromptAgentSkillPackId;
     promptAgentPlan?: PromptAgentPlan;
     promptAgentExecutionState?: PromptAgentExecutionState;
+    agentPlanRun?: CanvasAgentPlanRun;
 };
 
 export type CanvasAssistantSession = {
