@@ -1,0 +1,19 @@
+{
+  "shots": [
+    {
+      "shotId": "shot-001",
+      "sceneKey": "scene-001",
+      "sourceScript": "林秋站在站牌下，手里捏着一张折起的车票。公交车由远及近。",
+      "shotDraft": {
+        "shotSize": "中远景",
+        "camera": "16:9 横屏，林秋与站牌位于左侧中景，公路从右侧前景延伸到背景，保留公交车入画路径",
+        "movement": "固定建立空间，公交车进入远景后缓慢向左横移，维持人物与车辆方向关系",
+        "action": "林秋在站牌下捏着折起的车票，公交车从公路远端驶近",
+        "performance": "她身体保持静止，手指逐渐收紧，目光沿公路追随车辆",
+        "dialogue": "",
+        "durationSeconds": 8,
+        "continuityMode": "continuous"
+      }
+    }
+  ]
+}

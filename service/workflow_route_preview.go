@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"sort"
 	"strings"
 
@@ -101,7 +102,8 @@ func resolvePreviewAgentOutput(userID string, input WorkflowPreviewInput, node W
 
 func previewWorkflowSkillNode(userID string, input WorkflowPreviewInput, node WorkflowNodeSpec, bindings []ResolvedArtifactBinding, result WorkflowNodeRoutePreview) WorkflowNodeRoutePreview {
 	ref := *node.SkillBinding
-	resolutionInput := InvocationResolutionInput{ProjectID: input.ProjectID, EpisodeID: input.EpisodeID, Inputs: bindings, ProjectTags: normalizedStringSet(append(input.ProjectTags, ref.ProjectTags...), true), ExpectedOutputArtifactType: node.OutputArtifactType}
+	routingTags := workflowRoutingTags(input.ProjectTags, input.Parameters)
+	resolutionInput := InvocationResolutionInput{ProjectID: input.ProjectID, EpisodeID: input.EpisodeID, Inputs: bindings, ProjectTags: normalizedStringSet(append(routingTags, ref.ProjectTags...), true), ExpectedOutputArtifactType: node.OutputArtifactType}
 	switch ref.Mode {
 	case WorkflowSkillBindingFixed:
 		resolutionInput.SkillVersionID = ref.SkillVersionID
@@ -147,6 +149,32 @@ func previewWorkflowSkillNode(userID string, input WorkflowPreviewInput, node Wo
 	}
 	result.EstimatedCredits = policy.EstimatedCredits
 	return result
+}
+
+func workflowRoutingTags(projectTags []string, parameters json.RawMessage) []string {
+	tags := append([]string(nil), projectTags...)
+	var values map[string]any
+	if len(parameters) == 0 || json.Unmarshal(parameters, &values) != nil {
+		return normalizedStringSet(tags, true)
+	}
+	format := strings.ToLower(strings.TrimSpace(invocationString(values, "format")))
+	switch format {
+	case "9:16", "3:4", "4:5", "vertical", "portrait":
+		tags = append(tags, "vertical")
+	case "16:9", "21:9", "4:3", "horizontal", "landscape":
+		tags = append(tags, "horizontal")
+	}
+	if seriesType := strings.ToLower(strings.TrimSpace(invocationString(values, "seriesType"))); skillManifestTokenPattern.MatchString(seriesType) {
+		tags = append(tags, seriesType)
+	}
+	if values, ok := values["routingTags"].([]any); ok {
+		for _, value := range values {
+			if tag, ok := value.(string); ok {
+				tags = append(tags, tag)
+			}
+		}
+	}
+	return normalizedStringSet(tags, true)
 }
 
 func previewWorkflowAgentNode(userID, projectID string, node WorkflowNodeSpec, result WorkflowNodeRoutePreview) WorkflowNodeRoutePreview {

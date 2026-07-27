@@ -1,0 +1,19 @@
+{
+  "shots": [
+    {
+      "shotId": "shot-001",
+      "sceneKey": "scene-001",
+      "sourceScript": "林秋低声说：“这次不等了。”",
+      "shotDraft": {
+        "shotSize": "近景",
+        "camera": "9:16 竖屏，机位与林秋眼睛等高，面部和捏紧车票的手保持在中央安全区",
+        "movement": "从胸像极缓慢推到面部近景，在台词结束时停稳",
+        "action": "林秋捏紧折起的车票，说完后把视线从公路移向车门",
+        "performance": "开口前短促吸气，声音压低，最后一个字落下时下颌放松",
+        "dialogue": "这次不等了。",
+        "durationSeconds": 6,
+        "continuityMode": "continuous"
+      }
+    }
+  ]
+}

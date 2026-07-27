@@ -1,0 +1,14 @@
+{
+  "routingTags": [
+    {
+      "tag": "rebirth",
+      "evidence": ["林晚从车祸现场醒来，发现自己回到订婚宴前一小时。"],
+      "confidence": 0.98
+    },
+    {
+      "tag": "revenge",
+      "evidence": ["林晚压下惊惧，打开手机录音，转身走向宴会厅。"],
+      "confidence": 0.82
+    }
+  ]
+}

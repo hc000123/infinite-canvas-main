@@ -34,8 +34,9 @@
 - Phase 5 Workflow Composer：已实现，待用户确认。项目 Workflow 中心支持 Skill / Agent DAG、固定 / 标签 / 运行前手选路由、条件、重试、审批、契约校验、路由预览、版本发布和执行控制台。
 - Phase 6 画布和图片入口：生图工作台与画布节点的统一 Skill 能力选择器，以及画布对话的已发布 Agent 选择、可编辑 Temporary Plan、逐步审核执行和最终 Artifact 幂等回写均已实现；旧硬编码 Prompt Agent Skill Pack / 工具注册表已移除，普通对话与直接生图保留。自动验收与确定性固定剧本浏览器验收已通过，生产文本模型固定剧本效果验收仍待可用通道。
 - Phase 7 项目剧本入口迁移：已实现，待用户确认。项目分集导入和已有剧本优化统一调用 Registry 推荐版“系统剧本制作 Agent”，通过 `source_text → Agent Plan → Invocation → production_script → 人工审核` 链执行；旧项目级 Workflow preset 选择状态、旧脚本直调 Runner 和旧 Agent 设置抽屉已退出生产路径。
+- Phase 8 内容分类、资产 Brief 变体与分镜路由：已实现，自动验收和隔离浏览器验收通过，待用户确认。新增内容标签分类、角色 / 场景 / 道具独立 Brief、竖屏短剧 / 横屏中长剧分镜 6 个可独立发布 Skill；系统生产 Workflow 升级为 9 节点 `2.0.0`，按画幅和长短剧参数自动冻结分镜 Skill。
 
-下一阶段继续补齐内容分类标准 Skill、角色 / 场景 / 道具多种资产 rendition Skill、横竖屏与长短剧分镜路由、`asset_rendition` 生产链，并在可用生产文本模型通道下复测固定剧本的完整真实效果；同时继续审计图片页和旧 workbench 中残留的硬编码 preset / prompt 职责。
+下一阶段继续补齐角色 / 场景 / 道具的图片执行器与多种 `asset_rendition` Skill，把当前可执行的 `asset_brief` 真正生成并归档为图片 Artifact；同时增加分类结果参与二次路由的 deferred preflight，并在可用生产文本模型通道下复测固定剧本的完整真实效果。继续审计图片页和旧 workbench 中残留的硬编码 preset / prompt 职责。
 
 ### A. 当前能力收口
 

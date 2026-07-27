@@ -102,9 +102,20 @@ git diff --check
 - 每次运行先创建不可变 `source_text` Artifact，再建立 Agent Plan 并完成预检；确认时展示冻结的 Agent / Skill 精确版本、预计 Credits 和服务端确认要求。执行产物以待审核 `production_script` Artifact 返回，未批准前不会写入本地分集。
 - 导入页明确显示“运行系统剧本制作 Agent”；已有分集显示同一系统 Agent 标签，不再提供项目级 Skill preset 选择器。旧 Agent 设置抽屉、快速 Agent、Workflow 执行面板、脚本直调 Runner 和 `projectWorkflowSelections` 持久化状态已移除。
 - 待审文本如果被手工修改，将拒绝继续批准原 Artifact 哈希，必须重新运行，避免把修改稿伪装成原 Agent 产物；批准后才完成 Plan 并同步本地分集与视频工作流剧本。
-- 隔离浏览器验收已确认：系统“标准 AIGC 生产 Workflow”默认可见且包含 6 节点，可复制为项目可编辑草稿；项目剧本入口成功创建 `source_text` 与 Agent Plan；页面没有新增 console error，也未发生崩溃或无限轮询。
+- 隔离浏览器验收已确认：系统“标准 AIGC 生产 Workflow”默认可见并可复制为项目可编辑草稿；项目剧本入口成功创建 `source_text` 与 Agent Plan；页面没有新增 console error，也未发生崩溃或无限轮询。该系统 Workflow 后续已由 Phase 8 升级为 9 节点 `2.0.0`。
 - 当前隔离环境没有可用文本模型，Agent Plan 预检按设计立即返回“没有可用文本模型”，因此本轮不宣称真实模型生产稿效果通过。确定性单元测试已覆盖冻结坐标、确认、轮询到待审、人工审核完成和篡改阻断；配置生产文本模型后仍需用固定剧本复测实际文稿质量。
 - 本阶段自动门禁已通过：`go test ./... -count=1`、前端 773 项测试、`npm run typecheck`、`npm run build` 和 `git diff --check`。
+
+### 内容分类、资产 Brief 变体与分镜路由 Phase 8
+
+- 新增 6 个系统 Skill 推荐发布版：内容标签分类、角色资产设定图 Brief、场景资产主参考图 Brief、道具资产结构图 Brief、竖屏短剧分镜和横屏中长剧分镜。每个包均包含 `SKILL.md`、领域规则、输出模板、通过 Core Artifact Schema 的示例、独立 Manifest、输入 / 输出契约、质量门和系统评测。
+- 内容分类从已批准 `production_script` 产出带原文证据和置信度的 `content_profile`；三类资产 Brief 共用 `asset_catalog` 事实但以独立 Skill 生成不同图片格式，不声称图片已经生成；两类分镜共同消费剧本、资产目录和内容标签。
+- 系统“标准 AIGC 生产 Workflow”升级为不可变 `2.0.0`：`剧本整理 → 内容分类 / 资产提取 → 角色 / 场景 / 道具 Brief / 分镜路由 → 视频提示词 → 交付审计`，共 9 节点。角色、场景、道具 Brief 可并行；分镜节点使用 `tag_route`，`9:16 + short_drama` 冻结竖屏短剧 Skill，`16:9 + long_form` 冻结横屏中长剧 Skill。
+- 确定性端到端测试已实际完成 9 个 Invocation：逐节点冻结 Skill / Agent 版本、父 Artifact ID / hash、Schema 与业务质量门、人工审核、积分扣费、刷新坐标和最终 `delivery_report`；100 Credits 完成后余额为 91。
+- 隔离浏览器验收已确认 Skill 中心显示 12 个系统 Skill，其中 6 个新能力包均有推荐发布版和同哈希评测；项目 Workflow 中心显示 v2.0.0、9 节点和 5 条拓扑泳道，分镜节点明确显示“标签自动路由”及两个候选 Skill。系统 Workflow 可复制为项目草稿，页面 console error 为 0，无崩溃和无限轮询。临时 Go / Next / SQLite 服务及测试数据已关闭并清理。
+- 完整自动门禁已通过：Go 全包测试、前端 773 项测试、TypeScript 类型检查、Next.js 生产构建、能力种子 / 路由 / 9 节点专项测试和 `git diff --check`。
+- 当前边界：本阶段产出的是 `asset_brief`，图片模型执行器与 `asset_rendition` 生成 / 归档仍在 `docs/todo.md`；内容分类结果会进入分镜 Skill 输入，但当前分镜版本选择在预检时根据制作参数冻结，不会在同一次预检中读取尚未生成的分类结果重新路由。
+- 人工验收：在 Skill 中心逐一查看 6 个新包的文件、契约和评测；复制 v2.0.0 Workflow，分别以 `9:16 + short_drama`、`16:9 + long_form` 预检，确认分镜冻结版本不同；配置真实文本模型后，用同一固定剧本完成一次真实输出质量复测。
 
 ### 生图工作台统一 Skill 能力入口 Phase 6A
 

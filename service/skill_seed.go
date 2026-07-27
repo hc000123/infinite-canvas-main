@@ -17,7 +17,7 @@ type skillSeed struct {
 	Summary  string
 }
 
-//go:embed skill_seeds/* skill_invocation_seed_overlays/*
+//go:embed skill_seeds/* skill_invocation_seed_overlays/* capability_skill_seeds/*
 var skillSeedFS embed.FS
 
 const skillSeedVersion = "3.0.1"
@@ -58,7 +58,7 @@ func EnsureSkillSeeds() error {
 			return err
 		}
 	}
-	return nil
+	return ensureCapabilitySkillSeeds()
 }
 
 func ensureSkillSeed(seed skillSeed) error {
