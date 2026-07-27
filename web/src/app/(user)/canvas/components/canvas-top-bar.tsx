@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, FolderOpen, Home, ImagePlus, Keyboard, LayoutGrid, Menu, Plus, Redo2, Save, Settings, Trash2, Undo2, Upload } from "lucide-react";
-import { Button, Dropdown, Modal } from "antd";
+import { ArrowLeft, FolderOpen, Home, Keyboard, Layers3, LayoutGrid, Menu, Plus, Redo2, Save, Trash2, Undo2, Upload } from "lucide-react";
+import { Button, Dropdown, Modal, type MenuProps } from "antd";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -9,7 +9,6 @@ import { CanvasCapacityIndicator } from "./canvas-capacity-indicator";
 
 export function CanvasTopBar({
     title,
-    episodeLabel,
     episodeProductionLabel,
     hasEpisode,
     titleDraft,
@@ -25,19 +24,18 @@ export function CanvasTopBar({
     onReturnParent,
     onHome,
     onCreateProject,
+    canCreateChildCanvas,
+    childCanvases,
+    onOpenChildCanvas,
     onDeleteProject,
     onSaveProject,
     onImportImage,
-    onOpenEpisodeScript,
-    onGenerateImage,
     onOpenAssets,
     onOrganizeCanvas,
-    onOpenSettings,
     onUndo,
     onRedo,
 }: {
     title: string;
-    episodeLabel: string;
     episodeProductionLabel: string;
     hasEpisode: boolean;
     titleDraft: string;
@@ -53,21 +51,26 @@ export function CanvasTopBar({
     onReturnParent: () => void;
     onHome: () => void;
     onCreateProject: () => void;
+    canCreateChildCanvas: boolean;
+    childCanvases: Array<{ id: string; title: string }>;
+    onOpenChildCanvas: (canvasId: string) => void;
     onDeleteProject: () => void;
     onSaveProject: () => void;
     onImportImage: () => void;
-    onOpenEpisodeScript: () => void;
-    onGenerateImage: () => void;
     onOpenAssets: () => void;
     onOrganizeCanvas: () => void;
-    onOpenSettings: () => void;
     onUndo: () => void;
     onRedo: () => void;
 }) {
     const colorTheme = useThemeStore((state) => state.theme);
     const theme = canvasThemes[colorTheme];
     const titleRef = useRef<HTMLDivElement>(null);
+    const menuTriggerRef = useRef<HTMLDivElement>(null);
+    const [menuOpen, setMenuOpen] = useState(false);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
+    const childMenuItems: MenuProps["items"] = childCanvases.length
+        ? [{ key: "children", icon: <Layers3 className="size-4" />, label: "切换子画布", children: childCanvases.map((canvas) => ({ key: `child-${canvas.id}`, label: canvas.title, onClick: () => onOpenChildCanvas(canvas.id) })) }]
+        : [];
 
     useEffect(() => {
         if (!isTitleEditing) return;
@@ -78,26 +81,40 @@ export function CanvasTopBar({
         return () => document.removeEventListener("pointerdown", close, true);
     }, [isTitleEditing, onFinishTitleEditing]);
 
+    useEffect(() => {
+        if (!menuOpen) return;
+        const closeMenuOutside = (event: PointerEvent) => {
+            const target = event.target as Node;
+            if (menuTriggerRef.current?.contains(target)) return;
+            if (target instanceof Element && target.closest(".ant-dropdown")) return;
+            setMenuOpen(false);
+        };
+        document.addEventListener("pointerdown", closeMenuOutside, true);
+        return () => document.removeEventListener("pointerdown", closeMenuOutside, true);
+    }, [menuOpen]);
+
     return (
         <>
             <div className="pointer-events-none absolute left-0 right-0 top-0 z-50 grid h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3">
                 <div className="pointer-events-auto flex min-w-0 items-center gap-2 overflow-hidden">
                     <Dropdown
                         trigger={["click"]}
+                        open={menuOpen}
+                        onOpenChange={setMenuOpen}
+                        overlayClassName="canvas-main-menu"
                         menu={{
                             items: [
                                 { key: "parent", icon: <ArrowLeft className="size-4" />, label: returnLabel, onClick: onReturnParent },
                                 { key: "projects", icon: <Home className="size-4" />, label: "项目中心", onClick: onHome },
                                 { type: "divider" },
-                                { key: "new", icon: <Plus className="size-4" />, label: "新建画布", onClick: onCreateProject },
+                                { key: "new", disabled: hasEpisode && !canCreateChildCanvas, icon: <Plus className="size-4" />, label: hasEpisode ? (canCreateChildCanvas ? "新建子画布" : "子画布不可继续嵌套") : "新建画布", onClick: onCreateProject },
+                                ...(childMenuItems || []),
                                 { key: "save", icon: <Save className="size-4" />, label: "保存画布", onClick: onSaveProject },
                                 { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
                                 { type: "divider" },
-                                { key: "generate-image", icon: <ImagePlus className="size-4" />, label: "生成图片", onClick: onGenerateImage },
                                 { key: "import", icon: <Upload className="size-4" />, label: "导入图片", onClick: onImportImage },
                                 { key: "assets", icon: <FolderOpen className="size-4" />, label: "打开素材", onClick: onOpenAssets },
                                 { key: "organize", icon: <LayoutGrid className="size-4" />, label: "整理画布", onClick: onOrganizeCanvas },
-                                { key: "settings", icon: <Settings className="size-4" />, label: "设置", onClick: onOpenSettings },
                                 { type: "divider" },
                                 { key: "undo", disabled: !canUndo, icon: <Undo2 className="size-4" />, label: <MenuLabel text="撤销" shortcut="⌘ Z" />, onClick: onUndo },
                                 { key: "redo", disabled: !canRedo, icon: <Redo2 className="size-4" />, label: <MenuLabel text="重做" shortcut="⌘ ⇧ Z / ⌘ Y" />, onClick: onRedo },
@@ -105,14 +122,16 @@ export function CanvasTopBar({
                             ],
                         }}
                     >
-                        <button
-                            type="button"
-                            className="grid size-9 place-items-center rounded-full transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
-                            style={{ color: theme.node.text }}
-                            aria-label="打开画布菜单"
-                        >
-                            <Menu className="size-5" />
-                        </button>
+                        <div ref={menuTriggerRef}>
+                            <button
+                                type="button"
+                                className="grid size-9 place-items-center rounded-full transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
+                                style={{ color: theme.node.text }}
+                                aria-label="打开画布菜单"
+                            >
+                                <Menu className="size-5" />
+                            </button>
+                        </div>
                     </Dropdown>
 
                     <div ref={titleRef} className="flex min-w-0 items-center gap-1.5 overflow-hidden">
@@ -150,15 +169,6 @@ export function CanvasTopBar({
                                 {title}
                             </button>
                         )}
-                        <button
-                            type="button"
-                            className="max-w-[96px] truncate rounded-md px-2 py-1 text-xs transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)] sm:max-w-[150px]"
-                            style={{ color: hasEpisode ? theme.node.text : theme.node.muted, background: hasEpisode ? theme.toolbar.panel : "transparent" }}
-                            onClick={onOpenEpisodeScript}
-                            title={hasEpisode ? "打开本集剧本" : "打开剧本工作台"}
-                        >
-                            {episodeLabel}
-                        </button>
                         <span className="hidden max-w-[120px] truncate rounded-md px-2 py-1 text-xs sm:inline-block" style={{ color: theme.node.muted, background: theme.toolbar.panel }}>
                             {episodeProductionLabel}
                         </span>
@@ -168,18 +178,18 @@ export function CanvasTopBar({
                 <div className="pointer-events-auto flex shrink-0 items-center gap-1">
                     <CanvasCapacityIndicator capacity={capacity} />
                     <div className="hidden items-center gap-1 md:flex">
-                        <TopAction icon={<ImagePlus className="size-4" />} label="生成图片" onClick={onGenerateImage} />
                         <TopAction icon={<Upload className="size-4" />} label="导入" onClick={onImportImage} />
                         <TopAction icon={<FolderOpen className="size-4" />} label="素材" onClick={onOpenAssets} />
                         <TopAction icon={<LayoutGrid className="size-4" />} label="整理画布" onClick={onOrganizeCanvas} />
-                        <TopAction icon={<Settings className="size-4" />} label="设置" onClick={onOpenSettings} />
                     </div>
                 </div>
             </div>
             <Modal rootClassName="studio-modal" title="快捷键" open={shortcutsOpen} onCancel={() => setShortcutsOpen(false)} footer={null} centered>
                 <div className="space-y-2 border-t pt-4 text-sm" style={{ borderColor: theme.node.stroke }}>
-                    <Shortcut keys={["拖动画布"]} value="平移视图" />
-                    <Shortcut keys={["滚轮"]} value="缩放画布" />
+                    <Shortcut keys={["单指拖动空白处"]} value="平移画布" />
+                    <Shortcut keys={["双指滑动"]} value="平移画布" />
+                    <Shortcut keys={["双指捏合"]} value="缩放画布" />
+                    <Shortcut keys={["鼠标滚轮"]} value="缩放画布" />
                     <Shortcut keys={["缩放滑杆"]} value="精确调整缩放" />
                     <Shortcut keys={["Ctrl / Cmd", "拖动"]} value="框选多个节点" />
                     <Shortcut keys={["Shift / Ctrl / Cmd", "点击"]} value="追加选择节点" />

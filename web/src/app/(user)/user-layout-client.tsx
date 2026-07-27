@@ -6,12 +6,13 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { AppTopNav } from "@/components/layout/app-top-nav";
+import { useProjectCacheQueueRunner } from "@/hooks/use-project-cache-queue-runner";
 import { activateUserStorageScope } from "@/lib/localforage-storage";
 import { useUserStore } from "@/stores/use-user-store";
 import { ProjectWorkspaceShell } from "./projects/project-workspace-shell";
 import { protectedUserRouteState, userLoginHref } from "./user-auth-route";
 
-const workspaceShellPaths = ["/canvas", "/image", "/video", "/prompts", "/assets"];
+const workspaceShellPaths = ["/canvas", "/image", "/video", "/prompts", "/assets", "/cache"];
 
 export function UserLayoutClient({ children }: { children: ReactNode }) {
     const pathname = usePathname();
@@ -21,6 +22,7 @@ export function UserLayoutClient({ children }: { children: ReactNode }) {
     const isReady = useUserStore((state) => state.isReady);
     const authState = protectedUserRouteState(pathname, isReady, token, Boolean(user));
     const [storageReady, setStorageReady] = useState(false);
+    useProjectCacheQueueRunner(storageReady ? token : undefined);
     const useWorkspaceShell = workspaceShellPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 
     useEffect(() => {

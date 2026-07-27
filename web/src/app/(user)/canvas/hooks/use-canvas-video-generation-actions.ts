@@ -30,7 +30,7 @@ type UseCanvasVideoGenerationActionsOptions = {
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setConnections: Dispatch<SetStateAction<CanvasConnection[]>>;
     getNodes: () => CanvasNodeData[];
-    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string) => Promise<Partial<CanvasNodeMetadata>>;
+    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string, node?: CanvasNodeData) => Promise<Partial<CanvasNodeMetadata>>;
     showWarning: (message: string) => void;
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
     projectId: string;
@@ -160,7 +160,7 @@ export function useCanvasVideoGenerationActions({
                     },
                     trace,
                 );
-                const cachedVideo = await cacheUploadedCanvasMedia(video, `${videoId}.mp4`);
+                const cachedVideo = await cacheUploadedCanvasMedia(video, `${videoId}.mp4`, getNodes().find((item) => item.id === videoId) || videoNode);
                 const videoSize = fitNodeSize(video.width || resultSpec.width, video.height || resultSpec.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
                 const finalVideoNode = buildCompletedVideoNode({
                     videoNode,

@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import type { AssetPickerTab } from "../components/asset-picker-modal";
-import type { CanvasInspectorView } from "../components/canvas-side-inspector";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ContextMenuState, Position, ViewportTransform } from "../types";
 
 export function useCanvasPageLocalState() {
@@ -55,10 +54,8 @@ export function useCanvasPageLocalState() {
     const [angleNodeId, setAngleNodeId] = useState<string | null>(null);
     const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
     const [expandedTextNodeId, setExpandedTextNodeId] = useState<string | null>(null);
-    const [, setAssistantCollapsed] = useState(true);
     const [assistantMounted, setAssistantMounted] = useState(false);
-    const [inspectorView, setInspectorView] = useState<CanvasInspectorView>("context");
-    const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
+    const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(true);
     const [activeTimelineShotId, setActiveTimelineShotId] = useState("");
     const [activeProductionPackageId, setActiveProductionPackageId] = useState("");
     const [lastSelectedVideoNodeId, setLastSelectedVideoNodeId] = useState("");
@@ -97,7 +94,6 @@ export function useCanvasPageLocalState() {
         imageBriefOpenRequestId,
         imageInputRef,
         infoNodeId,
-        inspectorView,
         isInspectorCollapsed,
         isMiniMapOpen,
         lastSelectedVideoNodeId,
@@ -120,7 +116,6 @@ export function useCanvasPageLocalState() {
         setAngleNodeId,
         setAssetPickerOpen,
         setAssetPickerTab,
-        setAssistantCollapsed,
         setAssistantMounted,
         setBackgroundMode,
         setChatSessions,
@@ -135,7 +130,6 @@ export function useCanvasPageLocalState() {
         setHoveredNodeId,
         setImageBriefOpen,
         setInfoNodeId,
-        setInspectorView,
         setIsInspectorCollapsed,
         setIsMiniMapOpen,
         setLastSelectedVideoNodeId,

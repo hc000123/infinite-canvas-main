@@ -21,7 +21,7 @@ type UseCanvasVideoTaskRecoveryOptions = {
     nodesRef: RefObject<CanvasNodeData[]>;
     recoveringVideoTaskIdsRef: RefObject<Set<string>>;
     canvasAiConfig: AiConfig;
-    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string) => Promise<Partial<CanvasNodeMetadata>>;
+    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string, node?: CanvasNodeData) => Promise<Partial<CanvasNodeMetadata>>;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
     archiveRecoveredVideoNode: (node: CanvasNodeData, generationConfig: AiConfig, prompt?: string) => Promise<string | void | undefined>;
@@ -76,7 +76,7 @@ async function recoverVideoTaskNode({
 }: {
     node: CanvasNodeData;
     canvasAiConfig: AiConfig;
-    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string) => Promise<Partial<CanvasNodeMetadata>>;
+    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string, node?: CanvasNodeData) => Promise<Partial<CanvasNodeMetadata>>;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
     archiveRecoveredVideoNode: (node: CanvasNodeData, generationConfig: AiConfig, prompt?: string) => Promise<string | void | undefined>;
@@ -107,7 +107,7 @@ async function recoverVideoTaskNode({
         }
 
         const video = await uploadMediaFile(await fetchVideoTaskContent(generationConfig, task), "video");
-        const cachedVideo = await cacheUploadedCanvasMedia(video, `${node.id}.mp4`);
+        const cachedVideo = await cacheUploadedCanvasMedia(video, `${node.id}.mp4`, node);
         const videoSize = fitNodeSize(video.width || node.width || NODE_DEFAULT_SIZE[CanvasNodeType.Video].width, video.height || node.height || NODE_DEFAULT_SIZE[CanvasNodeType.Video].height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
         const completedVideoNode: CanvasNodeData = {
             ...node,

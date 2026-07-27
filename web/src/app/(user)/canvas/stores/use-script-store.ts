@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 
 import { localForageStorage } from "@/lib/localforage-storage";
 import {
+    defaultEpisodeCode,
     normalizeScriptEpisode,
     normalizeScriptScene,
     orderedScriptScenes,
@@ -24,7 +25,7 @@ type ScriptStore = {
     episodes: ScriptEpisode[];
     scenes: ScriptScene[];
     upsertProject: (projectId: string, outline: string) => void;
-    addEpisode: (input: Omit<ScriptEpisodeWriteInput, "order"> & { order?: number }) => string;
+    addEpisode: (input: Omit<ScriptEpisodeWriteInput, "code" | "order"> & { code?: string; order?: number }) => string;
     updateEpisode: (id: string, patch: Partial<ScriptEpisodeWriteInput>) => void;
     removeEpisode: (id: string) => void;
     moveEpisode: (id: string, direction: "up" | "down") => void;
@@ -71,14 +72,19 @@ export const useScriptStore = create<ScriptStore>()(
                 const now = new Date().toISOString();
                 const id = nanoid();
                 const order = input.order ?? nextOrder(get().episodes.filter((episode) => episode.projectId === input.projectId));
-                const episode = normalizeScriptEpisode({ ...input, order });
+                const episode = normalizeScriptEpisode({ ...input, code: input.code || defaultEpisodeCode(order), order });
+                if (get().episodes.some((item) => item.projectId === episode.projectId && item.code === episode.code)) throw new Error(`${episode.code} 已存在`);
                 set((state) => ({ episodes: [...state.episodes, { ...episode, id, sceneIds: [], createdAt: now, updatedAt: now }] }));
                 return id;
             },
             updateEpisode: (id, patch) =>
-                set((state) => ({
-                    episodes: state.episodes.map((episode) => (episode.id === id ? { ...episode, ...normalizeScriptEpisode({ ...episode, ...patch }), sceneIds: episode.sceneIds, updatedAt: new Date().toISOString() } : episode)),
-                })),
+                set((state) => {
+                    const current = state.episodes.find((episode) => episode.id === id);
+                    if (!current) return {};
+                    const next = normalizeScriptEpisode({ ...current, code: patch.code || current.code || defaultEpisodeCode(current.order), ...patch });
+                    if (state.episodes.some((episode) => episode.id !== id && episode.projectId === next.projectId && episode.code === next.code)) throw new Error(`${next.code} 已存在`);
+                    return { episodes: state.episodes.map((episode) => (episode.id === id ? { ...episode, ...next, sceneIds: episode.sceneIds, updatedAt: new Date().toISOString() } : episode)) };
+                }),
             removeEpisode: (id) =>
                 set((state) => ({
                     episodes: state.episodes.filter((episode) => episode.id !== id),

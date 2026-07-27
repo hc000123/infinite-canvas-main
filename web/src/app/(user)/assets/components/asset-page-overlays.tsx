@@ -3,7 +3,9 @@
 import type { RefObject } from "react";
 import type { FormInstance } from "antd";
 
-import type { Asset, AssetFolder, AssetKind } from "@/stores/use-asset-store";
+import type { Asset, AssetFolder, AssetKind, AssetSubject } from "@/stores/use-asset-store";
+import type { ScriptEpisode } from "../../canvas/utils/script-management";
+import type { CreativeProject } from "../../projects/creative-projects";
 import type { ProductionBibleItem } from "../../canvas/utils/production-bible";
 import type { AssetVersionUsageReference } from "../asset-version-references";
 import { AssetDrawer } from "./asset-drawer";
@@ -38,6 +40,9 @@ export function AssetPageOverlays({
     folderDialogOpen,
     folderName,
     folderOptions,
+    episodes,
+    projects,
+    subjects,
     form,
     formKind,
     imageDraft,
@@ -112,6 +117,9 @@ export function AssetPageOverlays({
     folderDialogOpen: boolean;
     folderName: string;
     folderOptions: FolderOption[];
+    episodes: ScriptEpisode[];
+    projects: CreativeProject[];
+    subjects: AssetSubject[];
     form: FormInstance<AssetFormValues>;
     formKind: AssetKind;
     imageDraft: ImageDraft;
@@ -175,6 +183,9 @@ export function AssetPageOverlays({
                 form={form}
                 formKind={formKind}
                 folderOptions={folderOptions}
+                episodes={episodes}
+                projects={projects}
+                subjects={subjects}
                 coverUrl={coverUrl}
                 title={title}
                 tags={tags}

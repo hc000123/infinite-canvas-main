@@ -12,29 +12,30 @@ import (
 )
 
 type Config struct {
-	Port                          string `env:"PORT" envDefault:"8080"`
-	AdminUsername                 string `env:"ADMIN_USERNAME" envDefault:"admin"`
-	AdminPassword                 string `env:"ADMIN_PASSWORD" envDefault:"infinite-canvas"`
-	JWTSecret                     string `env:"JWT_SECRET" envDefault:"infinite-canvas"`
-	JWTExpireHours                int    `env:"JWT_EXPIRE_HOURS" envDefault:"168"`
+	Port                          string   `env:"PORT" envDefault:"8080"`
+	AdminUsername                 string   `env:"ADMIN_USERNAME" envDefault:"admin"`
+	AdminPassword                 string   `env:"ADMIN_PASSWORD" envDefault:"infinite-canvas"`
+	JWTSecret                     string   `env:"JWT_SECRET" envDefault:"infinite-canvas"`
+	JWTExpireHours                int      `env:"JWT_EXPIRE_HOURS" envDefault:"168"`
 	TrustedProxies                []string `env:"TRUSTED_PROXIES" envSeparator:","`
-	StorageDriver                 string `env:"STORAGE_DRIVER" envDefault:"sqlite"`
-	DatabaseDSN                   string `env:"DATABASE_DSN" envDefault:"data/infinite-canvas.db"`
-	PublicAssetDir                string `env:"PUBLIC_ASSET_DIR" envDefault:"data/public-assets"`
-	WorkflowWorkerEnabled         bool   `env:"WORKFLOW_WORKER_ENABLED" envDefault:"true"`
-	WorkflowWorkerConcurrency     int    `env:"WORKFLOW_WORKER_CONCURRENCY" envDefault:"2"`
-	WorkflowWorkerUserConcurrency int    `env:"WORKFLOW_WORKER_USER_CONCURRENCY" envDefault:"1"`
-	WorkflowWorkerPollMS          int    `env:"WORKFLOW_WORKER_POLL_MS" envDefault:"2000"`
-	WorkflowWorkerLeaseSeconds    int    `env:"WORKFLOW_WORKER_LEASE_SECONDS" envDefault:"60"`
-	WorkflowTextExecutor          string `env:"WORKFLOW_TEXT_EXECUTOR" envDefault:"api"`
-	WorkflowLocalCodexEnabled     bool   `env:"WORKFLOW_LOCAL_CODEX_ENABLED" envDefault:"false"`
-	WorkflowCodexBin              string `env:"WORKFLOW_CODEX_BIN" envDefault:"codex"`
-	WorkflowCodexWorkdir          string `env:"WORKFLOW_CODEX_WORKDIR" envDefault:"."`
-	WorkflowCodexModel            string `env:"WORKFLOW_CODEX_MODEL"`
-	WorkflowLocalMediaDir         string `env:"WORKFLOW_LOCAL_MEDIA_DIR" envDefault:"data/workflow-media"`
-	LinuxDoAuthorizeURL           string `env:"LINUX_DO_AUTHORIZE_URL" envDefault:"https://connect.linux.do/oauth2/authorize"`
-	LinuxDoTokenURL               string `env:"LINUX_DO_TOKEN_URL" envDefault:"https://connect.linux.do/oauth2/token"`
-	LinuxDoUserInfoURL            string `env:"LINUX_DO_USERINFO_URL" envDefault:"https://connect.linux.do/api/user"`
+	StorageDriver                 string   `env:"STORAGE_DRIVER" envDefault:"sqlite"`
+	DatabaseDSN                   string   `env:"DATABASE_DSN" envDefault:"data/infinite-canvas.db"`
+	PublicAssetDir                string   `env:"PUBLIC_ASSET_DIR" envDefault:"data/public-assets"`
+	ProjectCacheDir               string   `env:"PROJECT_CACHE_DIR" envDefault:"data/project-cache"`
+	WorkflowWorkerEnabled         bool     `env:"WORKFLOW_WORKER_ENABLED" envDefault:"true"`
+	WorkflowWorkerConcurrency     int      `env:"WORKFLOW_WORKER_CONCURRENCY" envDefault:"2"`
+	WorkflowWorkerUserConcurrency int      `env:"WORKFLOW_WORKER_USER_CONCURRENCY" envDefault:"1"`
+	WorkflowWorkerPollMS          int      `env:"WORKFLOW_WORKER_POLL_MS" envDefault:"2000"`
+	WorkflowWorkerLeaseSeconds    int      `env:"WORKFLOW_WORKER_LEASE_SECONDS" envDefault:"60"`
+	WorkflowTextExecutor          string   `env:"WORKFLOW_TEXT_EXECUTOR" envDefault:"api"`
+	WorkflowLocalCodexEnabled     bool     `env:"WORKFLOW_LOCAL_CODEX_ENABLED" envDefault:"false"`
+	WorkflowCodexBin              string   `env:"WORKFLOW_CODEX_BIN" envDefault:"codex"`
+	WorkflowCodexWorkdir          string   `env:"WORKFLOW_CODEX_WORKDIR" envDefault:"."`
+	WorkflowCodexModel            string   `env:"WORKFLOW_CODEX_MODEL"`
+	WorkflowLocalMediaDir         string   `env:"WORKFLOW_LOCAL_MEDIA_DIR" envDefault:"data/workflow-media"`
+	LinuxDoAuthorizeURL           string   `env:"LINUX_DO_AUTHORIZE_URL" envDefault:"https://connect.linux.do/oauth2/authorize"`
+	LinuxDoTokenURL               string   `env:"LINUX_DO_TOKEN_URL" envDefault:"https://connect.linux.do/oauth2/token"`
+	LinuxDoUserInfoURL            string   `env:"LINUX_DO_USERINFO_URL" envDefault:"https://connect.linux.do/api/user"`
 }
 
 var Cfg Config
@@ -45,9 +46,15 @@ func Load() error {
 		return err
 	}
 	Cfg.PublicAssetDir = strings.TrimSpace(Cfg.PublicAssetDir)
-	for i := range Cfg.TrustedProxies { Cfg.TrustedProxies[i] = strings.TrimSpace(Cfg.TrustedProxies[i]) }
+	Cfg.ProjectCacheDir = strings.TrimSpace(Cfg.ProjectCacheDir)
+	for i := range Cfg.TrustedProxies {
+		Cfg.TrustedProxies[i] = strings.TrimSpace(Cfg.TrustedProxies[i])
+	}
 	if Cfg.PublicAssetDir == "" {
 		Cfg.PublicAssetDir = "data/public-assets"
+	}
+	if Cfg.ProjectCacheDir == "" {
+		Cfg.ProjectCacheDir = "data/project-cache"
 	}
 	if strings.TrimSpace(Cfg.AdminPassword) == "change-me-admin-password" {
 		return errors.New("ADMIN_PASSWORD is still an example placeholder")

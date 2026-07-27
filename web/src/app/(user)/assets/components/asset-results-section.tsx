@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button, Empty, Pagination, Tooltip } from "antd";
 import { CheckSquare, ChevronDown, ChevronRight, Square, Trash2 } from "lucide-react";
 
-import type { Asset } from "@/stores/use-asset-store";
+import type { Asset, AssetSubject } from "@/stores/use-asset-store";
 import { cn } from "@/lib/utils";
 import { assetEpisodeTitle, primaryAssetEpisodeKey } from "../asset-episode";
 import { isCompactMediaAssetGroup } from "../asset-result-layout";
@@ -14,10 +14,12 @@ import type { AssetSortMode } from "../asset-page-filters";
 import type { OutdatedAssetVersionUsage } from "../asset-version-outdated-references";
 import { productionBibleKindLabel, type ProductionBibleItem } from "../../canvas/utils/production-bible";
 import { workflowAssetInfo } from "../workflow-asset-image";
+import { subjectAssetGroups } from "../asset-subjects";
 import { AssetRow } from "./asset-card";
 import { AssetListToolbar } from "./asset-list-toolbar";
 import { CompactMediaAssetCard } from "./compact-media-asset-card";
 import { OutdatedReferencesPanel } from "./outdated-references-panel";
+import { AssetSubjectSection } from "./asset-subject-section";
 
 type BulkReviewAction = "submit" | "refresh" | "";
 
@@ -48,6 +50,7 @@ type Props = {
     selectedVolcengineSubmitCount: number;
     showEpisodeGroups: boolean;
     sortMode: AssetSortMode;
+    subjects: AssetSubject[];
     submittingReviewId: string | null;
     usages: OutdatedAssetVersionUsage[];
     visibleAssetGroups: AssetProjectResultGroup[];
@@ -114,6 +117,7 @@ export function AssetResultsSection({
     selectedVolcengineSubmitCount,
     showEpisodeGroups,
     sortMode,
+    subjects,
     submittingReviewId,
     usages,
     visibleAssetGroups,
@@ -278,8 +282,11 @@ export function AssetResultsSection({
                 <>
                     <div className="grid gap-8">
                         {visibleAssetGroups.map((group) => {
-                            const episodeGroups = showEpisodeGroups ? buildAssetEpisodeGroups(group.assets, episodeTitleMap) : [];
-                            const projectTypeGroups = showEpisodeGroups ? [] : buildAssetTypeGroups(group.assets);
+                            const subjectGroups = group.isUnfiled ? [] : subjectAssetGroups(subjects, group.assets, group.id);
+                            const structuredIds = new Set(subjectGroups.flatMap((item) => item.assets.map((asset) => asset.id)));
+                            const ordinaryAssets = group.assets.filter((asset) => !structuredIds.has(asset.id));
+                            const episodeGroups = showEpisodeGroups ? buildAssetEpisodeGroups(ordinaryAssets, episodeTitleMap) : [];
+                            const projectTypeGroups = showEpisodeGroups ? [] : buildAssetTypeGroups(ordinaryAssets);
                             return (
                                 <section key={group.id} className="grid gap-4 border-t border-[var(--studio-border-subtle)] pt-6 first:border-t-0 first:pt-0">
                                     <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
@@ -299,6 +306,10 @@ export function AssetResultsSection({
                                             ))}
                                         </div>
                                     ) : null}
+
+                                    <AssetSubjectSection groups={subjectGroups} episodeTitleMap={episodeTitleMap} selectedAssetIds={selectedAssetIds} onEditAsset={onEditAsset} onOpenAsset={onOpenAsset} onToggleAsset={onToggleAsset} />
+
+                                    {subjectGroups.length && ordinaryAssets.length ? <div className="text-xs font-semibold text-[var(--studio-text-muted)]">待分类 / 其他素材</div> : null}
 
                                     {showEpisodeGroups && episodeGroups.length ? (
                                         <div className="grid gap-5">

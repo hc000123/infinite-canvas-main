@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { ViewportTransform } from "../types";
-import { shouldHandleCanvasWheel } from "../utils/canvas-wheel";
+import { resolveCanvasWheelAction } from "../utils/canvas-wheel";
 
 const CANVAS_WHEEL_EXCLUDED_SELECTOR = "[data-canvas-no-zoom],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown";
 
@@ -71,14 +71,20 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
 
     const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
         const target = event.target instanceof Element ? event.target : null;
-        if (
-            !shouldHandleCanvasWheel({
-                ctrlKey: event.ctrlKey,
-                metaKey: event.metaKey,
-                excludedTarget: Boolean(target?.closest(CANVAS_WHEEL_EXCLUDED_SELECTOR)),
-            })
-        )
+        const action = resolveCanvasWheelAction({
+            ctrlKey: event.ctrlKey,
+            metaKey: event.metaKey,
+            deltaMode: event.deltaMode,
+            deltaX: event.deltaX,
+            deltaY: event.deltaY,
+            excludedTarget: Boolean(target?.closest(CANVAS_WHEEL_EXCLUDED_SELECTOR)),
+        });
+        if (action === "ignore") return;
+
+        if (action === "pan") {
+            onViewportChange({ x: viewport.x - event.deltaX, y: viewport.y - event.deltaY, k: viewport.k });
             return;
+        }
 
         const delta = -event.deltaY;
         const factor = Math.pow(1.1, delta / 100);
@@ -191,14 +197,15 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
 
         const preventWheelScroll = (event: WheelEvent) => {
             const target = event.target instanceof Element ? event.target : null;
-            if (
-                shouldHandleCanvasWheel({
-                    ctrlKey: event.ctrlKey,
-                    metaKey: event.metaKey,
-                    excludedTarget: Boolean(target?.closest(CANVAS_WHEEL_EXCLUDED_SELECTOR)),
-                })
-            )
-                event.preventDefault();
+            const action = resolveCanvasWheelAction({
+                ctrlKey: event.ctrlKey,
+                metaKey: event.metaKey,
+                deltaMode: event.deltaMode,
+                deltaX: event.deltaX,
+                deltaY: event.deltaY,
+                excludedTarget: Boolean(target?.closest(CANVAS_WHEEL_EXCLUDED_SELECTOR)),
+            });
+            if (action !== "ignore") event.preventDefault();
         };
         container.addEventListener("wheel", preventWheelScroll, { passive: false });
         return () => container.removeEventListener("wheel", preventWheelScroll);

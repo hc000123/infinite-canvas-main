@@ -88,6 +88,18 @@ test("script snapshot prefers the editable original script", () => {
     assert.doesNotMatch(snapshot, /旧优化稿/);
 });
 
+test("canvas episode context prefers the confirmed optimized script", () => {
+    const optimizedEpisode = { ...episode("episode-1", "第一集"), sourceSummary: "原剧本", summary: "优化后剧本" };
+    const context = canvasEpisodeContextFromEpisode("project-1", optimizedEpisode);
+    assert.equal(context.scriptSnapshot, "优化后剧本");
+});
+
+test("canvas episode context falls back to the original script", () => {
+    const sourceEpisode = { ...episode("episode-1", "第一集"), sourceSummary: "完整原剧本", summary: "" };
+    const context = canvasEpisodeContextFromEpisode("project-1", sourceEpisode);
+    assert.match(context.scriptSnapshot, /完整原剧本/);
+});
+
 function episode(id: string, title: string): ScriptEpisode {
     return {
         id,

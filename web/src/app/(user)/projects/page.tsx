@@ -7,6 +7,8 @@ import { Archive, ArrowRight, Edit3, Folder, Grid2X2, LayoutList, Plus, RotateCc
 
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { useAssetStore } from "@/stores/use-asset-store";
+import { updateProjectCacheStatus } from "@/services/api/project-cache";
+import { useUserStore } from "@/stores/use-user-store";
 import { CanvasCreateProjectModal } from "../canvas/components/canvas-create-project-modal";
 import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../canvas/utils/canvas-project-preset";
@@ -47,6 +49,7 @@ export default function ProjectsPage() {
     const router = useRouter();
     const { modal } = App.useApp();
     const effectiveConfig = useEffectiveConfig();
+    const token = useUserStore((state) => state.token);
     const [createOpen, setCreateOpen] = useState(false);
     const [editingId, setEditingId] = useState("");
     const [editingTitle, setEditingTitle] = useState("");
@@ -62,7 +65,6 @@ export default function ProjectsPage() {
     const deleteProject = useCreativeProjectStore((state) => state.deleteProject);
     const ensureProjectFolder = useAssetStore((state) => state.ensureProjectFolder);
     const canvases = useCanvasStore((state) => state.projects);
-    const updateCanvasProject = useCanvasStore((state) => state.updateProject);
     const sortedProjects = useMemo(() => [...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)), [projects]);
     const projectCards = useMemo<ProjectCardView[]>(
         () =>
@@ -92,13 +94,13 @@ export default function ProjectsPage() {
     const removeProject = (project: CreativeProject) => {
         modal.confirm({
             title: "删除项目？",
-            content: "只会删除项目入口和关联关系，不会删除已有画布、素材、剧本或分镜数据。",
+            content: "只会删除项目入口，不会删除已有画布、素材、剧本、分镜或磁盘缓存。",
             okText: "删除",
             okButtonProps: { danger: true },
             cancelText: "取消",
             onOk: () => {
-                canvases.filter((canvas) => canvas.projectId === project.id).forEach((canvas) => updateCanvasProject(canvas.id, { projectId: undefined }));
                 deleteProject(project.id);
+                if (token) void updateProjectCacheStatus(project.id, "deleted", token).catch(() => undefined);
             },
         });
     };

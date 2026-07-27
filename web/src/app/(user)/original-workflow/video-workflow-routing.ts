@@ -1,4 +1,5 @@
-export function displayEpisodeKey(order: number) {
+export function displayEpisodeKey(order: number | string) {
+    if (typeof order === "string" && /^EP\d{2,}$/i.test(order.trim())) return order.trim().toLowerCase();
     return `ep${String(order || 1).padStart(2, "0")}`;
 }
 
@@ -7,7 +8,7 @@ export function videoWorkflowProjectSlug(projectId?: string) {
     return safeId ? `project-${safeId}` : "demo-project";
 }
 
-export function videoWorkflowEpisodeKey(order: number, projectId?: string) {
+export function videoWorkflowEpisodeKey(order: number | string, projectId?: string) {
     const episode = displayEpisodeKey(order);
     return projectId ? `${episode}-${videoWorkflowProjectSlug(projectId)}` : episode;
 }
@@ -24,5 +25,8 @@ export function videoWorkflowHref(order: number, sourceProjectId?: string, sourc
 }
 
 function sanitizeWorkflowKey(value: string) {
-    return value.trim().replace(/[^\w-]+/g, "-").replace(/^-+|-+$/g, "");
+    return value
+        .trim()
+        .replace(/[^\w-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
 }

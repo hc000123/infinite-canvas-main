@@ -60,6 +60,7 @@ export function buildAssetProjectResultGroups({
 }
 
 export function resolveAssetProjectId(asset: Asset, folderMap: Map<string, AssetFolder>, projectReferencedAssetIdsByProject: Map<string, Set<string>>) {
+    if (asset.assetBinding?.projectId) return asset.assetBinding.projectId;
     const folderProjectId = asset.folderId ? folderMap.get(asset.folderId)?.projectId || "" : "";
     if (folderProjectId) return folderProjectId;
 

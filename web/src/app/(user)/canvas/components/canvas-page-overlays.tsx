@@ -31,6 +31,7 @@ type Props = {
     previewNode: CanvasNodeData | null;
     projectId: string;
     projectTitle: string;
+    episodeId?: string;
     scriptInitialEpisodeId?: string;
     scriptManagerOpen: boolean;
     storyboardInitialGroupId: string;
@@ -38,7 +39,7 @@ type Props = {
     nodes: CanvasNodeData[];
     onAddStoryboardGroupToCanvas: (groupId: string) => void;
     onAddShotGroupToCanvas: (groupId: string) => void;
-    onAssetInsert: (payload: InsertAssetPayload) => void;
+    onAssetInsert: (payload: InsertAssetPayload) => void | Promise<void>;
     onClearCanvas: () => void;
     onCloseAngle: () => void;
     onCloseAssetPicker: () => void;
@@ -74,6 +75,7 @@ export function CanvasPageOverlays({
     previewNode,
     projectId,
     projectTitle,
+    episodeId,
     scriptInitialEpisodeId,
     scriptManagerOpen,
     storyboardInitialGroupId,
@@ -109,7 +111,13 @@ export function CanvasPageOverlays({
             <CanvasTextEditorModal node={expandedTextNode} onClose={onCloseTextEditor} onSave={onSaveTextNode} />
 
             {cropNode?.metadata?.content ? (
-                <CanvasNodeCropDialog dataUrl={cropNode.metadata.content} open={Boolean(cropNode)} onClose={onCloseCrop} onConfirm={(crop) => onCropImageNode(cropNode, crop)} onConfirmGrid={() => onCropImageNode(cropNode, { x: 0, y: 0, width: 1, height: 1 }, "grid")} />
+                <CanvasNodeCropDialog
+                    dataUrl={cropNode.metadata.content}
+                    open={Boolean(cropNode)}
+                    onClose={onCloseCrop}
+                    onConfirm={(crop) => onCropImageNode(cropNode, crop)}
+                    onConfirmGrid={() => onCropImageNode(cropNode, { x: 0, y: 0, width: 1, height: 1 }, "grid")}
+                />
             ) : null}
 
             {angleNode?.metadata?.content ? <CanvasNodeAngleDialog dataUrl={angleNode.metadata.content} open={Boolean(angleNode)} onClose={onCloseAngle} onConfirm={(params) => onGenerateAngleNode(angleNode, params)} /> : null}
@@ -118,7 +126,7 @@ export function CanvasPageOverlays({
 
             <ClearCanvasConfirmModal open={clearConfirmOpen} onCancel={onCloseClearConfirm} onConfirm={onClearCanvas} />
 
-            <AssetPickerModal open={assetPickerOpen} defaultTab={assetPickerTab} onInsert={onAssetInsert} onClose={onCloseAssetPicker} />
+            <AssetPickerModal open={assetPickerOpen} defaultTab={assetPickerTab} projectId={projectId} episodeId={episodeId} onInsert={onAssetInsert} onClose={onCloseAssetPicker} />
 
             <ScriptManagerDrawer open={scriptManagerOpen} projectId={projectId} projectTitle={projectTitle} initialEpisodeId={scriptInitialEpisodeId} onClose={onCloseScriptManager} onOpenStoryboardGroup={onOpenStoryboardGroup} />
 

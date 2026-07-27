@@ -23,12 +23,12 @@ export function useCanvasNodeInsertionActions({
     canvasTitle,
     connectionsRef,
     containerRef,
+    ensureProjectFolder,
     getCanvasCenter,
     imageInputRef,
     message,
     nodesRef,
     screenToCanvas,
-    setAssetPickerOpen,
     setConnections,
     setDialogNodeId,
     setNodes,
@@ -46,8 +46,11 @@ export function useCanvasNodeInsertionActions({
     const { addCanvasNodeToAssets, saveNodeAsset, updateCanvasNodeAssetReference } = useCanvasNodeAssetActions({
         addAssetOnce,
         assetById,
+        ensureProjectFolder,
         message,
         setNodes,
+        workspaceProjectId,
+        workspaceProjectTitle,
     });
     const fileNodeActions = useCanvasFileNodeActions({
         canvasId,
@@ -77,7 +80,6 @@ export function useCanvasNodeInsertionActions({
         message,
         nodesRef,
         setConnections,
-        setAssetPickerOpen,
         setDialogNodeId,
         setNodes,
         setSelectedConnectionId,

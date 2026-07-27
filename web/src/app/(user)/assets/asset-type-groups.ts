@@ -1,4 +1,5 @@
 import type { Asset } from "@/stores/use-asset-store";
+import { assetCategoryLabel } from "./asset-subjects.ts";
 
 export type AssetTypeGroup = {
     id: string;
@@ -9,7 +10,7 @@ export type AssetTypeGroup = {
 export function buildAssetTypeGroups(assets: Asset[]): AssetTypeGroup[] {
     const groups = new Map<string, AssetTypeGroup>();
     assets.forEach((asset) => {
-        const title = workflowAssetType(asset) || assetKindLabel(asset.kind);
+        const title = (asset.assetBinding ? assetCategoryLabel(asset.assetBinding.category) : "") || workflowAssetType(asset) || assetKindLabel(asset.kind);
         const id = normalizeAssetTypeGroupId(title);
         const group = groups.get(id) || { id, title, assets: [] };
         group.assets.push(asset);

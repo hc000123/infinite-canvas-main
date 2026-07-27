@@ -16,19 +16,26 @@ type CanvasNodeAssetMessage = {
 export function useCanvasNodeAssetActions({
     addAssetOnce,
     assetById,
+    ensureProjectFolder,
     message,
     setNodes,
+    workspaceProjectId,
+    workspaceProjectTitle,
 }: {
     addAssetOnce: (asset: AssetWriteInput, options?: { blob?: Blob }) => Promise<string>;
     assetById: Map<string, Asset>;
+    ensureProjectFolder: (projectId: string, name: string) => string;
     message: CanvasNodeAssetMessage;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
+    workspaceProjectId: string;
+    workspaceProjectTitle: string;
 }) {
     const addCanvasNodeToAssets = useCallback(
         async (node: CanvasNodeData) => {
             const asset = canvasNodeToAsset(node);
             if (!asset) return false;
-            const assetId = await addAssetOnce(asset);
+            const folderId = ensureProjectFolder(workspaceProjectId, workspaceProjectTitle);
+            const assetId = await addAssetOnce({ ...asset, folderId: asset.folderId || folderId } as AssetWriteInput);
             if (assetId) {
                 const storedAsset = assetById.get(assetId);
                 const volcengineAsset = storedAsset?.kind === node.type ? storedAsset.metadata?.volcengineAsset : undefined;
@@ -38,7 +45,7 @@ export function useCanvasNodeAssetActions({
             }
             return assetId;
         },
-        [addAssetOnce, assetById, setNodes],
+        [addAssetOnce, assetById, ensureProjectFolder, setNodes, workspaceProjectId, workspaceProjectTitle],
     );
 
     const saveNodeAsset = useCallback(

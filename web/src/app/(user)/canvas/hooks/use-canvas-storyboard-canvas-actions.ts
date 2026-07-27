@@ -7,7 +7,6 @@ import type { AiConfig } from "@/stores/use-config-store";
 import type { Asset } from "@/stores/use-asset-store";
 import { useStoryboardStore } from "../stores/use-storyboard-store";
 import { planShotGroupCanvasInsert, planStoryboardGroupCanvasInsert, type StoryboardAssetRef, type StoryboardNodeRef, type StoryboardTableShot } from "../utils/storyboard-management";
-import type { CanvasInspectorView } from "../components/canvas-context-inspector";
 import type { CanvasProject } from "../stores/use-canvas-store";
 import type { CanvasConnection, CanvasNodeData, Position, ViewportTransform } from "../types";
 
@@ -34,7 +33,6 @@ type UseCanvasStoryboardCanvasActionsOptions = {
     setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
     setActiveTimelineShotId: Dispatch<SetStateAction<string>>;
     setActiveProductionPackageId: Dispatch<SetStateAction<string>>;
-    setInspectorView: Dispatch<SetStateAction<CanvasInspectorView>>;
     setViewport: Dispatch<SetStateAction<ViewportTransform>>;
 };
 
@@ -56,14 +54,12 @@ export function useCanvasStoryboardCanvasActions({
     setSelectedConnectionId,
     setActiveTimelineShotId,
     setActiveProductionPackageId,
-    setInspectorView,
     setViewport,
 }: UseCanvasStoryboardCanvasActionsOptions) {
     const handleTimelineShotSelect = useCallback(
         (shot: StoryboardTableShot, nodeId?: string) => {
             setActiveTimelineShotId(shot.id);
             setActiveProductionPackageId("");
-            setInspectorView("context");
             setSelectedConnectionId(null);
             if (!nodeId) {
                 setSelectedNodeIds(new Set());
@@ -79,7 +75,7 @@ export function useCanvasStoryboardCanvasActions({
                 k,
             });
         },
-        [nodesRef, setActiveProductionPackageId, setActiveTimelineShotId, setInspectorView, setSelectedConnectionId, setSelectedNodeIds, setViewport, size.height, size.width, viewportRef],
+        [nodesRef, setActiveProductionPackageId, setActiveTimelineShotId, setSelectedConnectionId, setSelectedNodeIds, setViewport, size.height, size.width, viewportRef],
     );
 
     const addStoryboardGroupToCanvas = useCallback(

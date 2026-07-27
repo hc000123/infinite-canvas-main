@@ -10,6 +10,7 @@ import { cleanupUnusedMedia, getMediaBlob, resolveMediaUrl } from "@/services/fi
 import type { VolcengineReviewMetadata } from "@/services/volcengine-asset-metadata";
 import { assetFingerprintCandidates, buildBlobFingerprint, fallbackAssetFingerprint, findWorkflowAssetDuplicate, mergeAssetMetadata, mergeDuplicateAsset } from "./asset-dedupe";
 import { createAssetStoreHydrationGate, mergeHydratedAssetCollections } from "./asset-store-hydration";
+import { nextAssetSubjectCode } from "@/app/(user)/assets/asset-subjects";
 
 export type AssetKind = "text" | "image" | "video" | "audio";
 export type VolcengineAssetMetadata = VolcengineReviewMetadata;
@@ -19,6 +20,27 @@ export type VideoAsset = AssetBase<"video"> & { data: { url: string; storageKey?
 export type AudioAsset = AssetBase<"audio"> & { data: { url: string; storageKey?: string; bytes: number; mimeType: string } };
 export type Asset = TextAsset | ImageAsset | VideoAsset | AudioAsset;
 export type AssetWriteInput = Asset extends infer T ? (T extends Asset ? Omit<T, "id" | "createdAt" | "updatedAt"> : never) : never;
+export type AssetCategory = "character" | "scene" | "prop" | "other";
+export type AssetBinding = {
+    projectId: string;
+    subjectId: string;
+    category: AssetCategory;
+    variantName: string;
+    allEpisodes: boolean;
+    episodeIds: string[];
+};
+export type AssetSubject = {
+    id: string;
+    projectId: string;
+    category: AssetCategory;
+    code: string;
+    sourceKey?: string;
+    name: string;
+    tags: string[];
+    note?: string;
+    createdAt: string;
+    updatedAt: string;
+};
 export type AssetFolder = {
     id: string;
     name: string;
@@ -34,6 +56,7 @@ type AssetBase<T extends AssetKind> = {
     coverUrl: string;
     favorite?: boolean;
     folderId?: string;
+    assetBinding?: AssetBinding;
     tags: string[];
     source?: string;
     note?: string;
@@ -45,6 +68,7 @@ type AssetBase<T extends AssetKind> = {
 type AssetStore = {
     assets: Asset[];
     folders: AssetFolder[];
+    subjects: AssetSubject[];
     addAsset: (asset: AssetWriteInput) => string;
     addAssetOnce: (asset: AssetWriteInput, options?: { blob?: Blob }) => Promise<string>;
     updateAsset: (id: string, patch: Partial<Omit<Asset, "id" | "createdAt">>) => void;
@@ -53,6 +77,10 @@ type AssetStore = {
     ensureProjectFolder: (projectId: string, name: string) => string;
     updateFolder: (id: string, name: string) => void;
     removeFolder: (id: string) => void;
+    ensureSubject: (input: Omit<AssetSubject, "code" | "createdAt" | "id" | "updatedAt"> & { code?: string }) => string;
+    updateSubject: (id: string, patch: Partial<Pick<AssetSubject, "name" | "tags" | "note">>) => void;
+    removeSubject: (id: string) => void;
+    bindAsset: (id: string, binding?: AssetBinding) => void;
     cleanupImages: (extra?: unknown) => void;
 };
 
@@ -65,6 +93,7 @@ const assetStorage: PersistStorage<AssetStore> = {
         if (!value) return null;
         const parsed = JSON.parse(value) as StorageValue<AssetStore>;
         parsed.state.folders = parsed.state.folders || [];
+        parsed.state.subjects = parsed.state.subjects || [];
         parsed.state.assets = await Promise.all(
             parsed.state.assets.map(async (asset) => {
                 if (asset.kind === "video" && asset.data.storageKey) return { ...asset, data: { ...asset.data, url: await resolveMediaUrl(asset.data.storageKey, asset.data.url) } };
@@ -92,6 +121,7 @@ export const useAssetStore = create<AssetStore>()(
         (set, get) => ({
             assets: [],
             folders: [],
+            subjects: [],
             addAsset: (asset) => {
                 const now = new Date().toISOString();
                 const id = nanoid();
@@ -165,6 +195,32 @@ export const useAssetStore = create<AssetStore>()(
                     folders: state.folders.filter((folder) => folder.id !== id),
                     assets: state.assets.map((asset) => (asset.folderId === id ? ({ ...asset, folderId: undefined, updatedAt: new Date().toISOString() } as Asset) : asset)),
                 })),
+            ensureSubject: (input) => {
+                const name = input.name.trim();
+                const existing = get().subjects.find(
+                    (subject) => subject.projectId === input.projectId && subject.category === input.category && ((input.sourceKey && subject.sourceKey === input.sourceKey) || (input.code && subject.code === input.code) || subject.name === name),
+                );
+                if (existing) return existing.id;
+                const now = new Date().toISOString();
+                const id = nanoid();
+                const code = input.code?.trim().toUpperCase() || nextAssetSubjectCode(get().subjects, input.projectId, input.category);
+                set((state) => ({ subjects: [...state.subjects, { ...input, id, code, name, tags: Array.from(new Set(input.tags.map((tag) => tag.trim()).filter(Boolean))), createdAt: now, updatedAt: now }] }));
+                return id;
+            },
+            updateSubject: (id, patch) =>
+                set((state) => ({
+                    subjects: state.subjects.map((subject) =>
+                        subject.id === id
+                            ? { ...subject, ...patch, name: patch.name?.trim() || subject.name, tags: patch.tags ? Array.from(new Set(patch.tags.map((tag) => tag.trim()).filter(Boolean))) : subject.tags, updatedAt: new Date().toISOString() }
+                            : subject,
+                    ),
+                })),
+            removeSubject: (id) =>
+                set((state) => ({
+                    subjects: state.subjects.filter((subject) => subject.id !== id),
+                    assets: state.assets.map((asset) => (asset.assetBinding?.subjectId === id ? ({ ...asset, assetBinding: undefined, updatedAt: new Date().toISOString() } as Asset) : asset)),
+                })),
+            bindAsset: (id, assetBinding) => set((state) => ({ assets: state.assets.map((asset) => (asset.id === id ? ({ ...asset, assetBinding, updatedAt: new Date().toISOString() } as Asset) : asset)) })),
             cleanupImages: (extra) => {
                 window.setTimeout(async () => {
                     const { useCanvasStore } = await import("@/app/(user)/canvas/stores/use-canvas-store");
@@ -176,7 +232,7 @@ export const useAssetStore = create<AssetStore>()(
         {
             name: ASSET_STORE_KEY,
             storage: assetStorage,
-            partialize: (state) => ({ assets: state.assets, folders: state.folders }) as StorageValue<AssetStore>["state"],
+            partialize: (state) => ({ assets: state.assets, folders: state.folders, subjects: state.subjects }) as StorageValue<AssetStore>["state"],
             merge: (persisted, current) => {
                 const saved = (persisted || {}) as Partial<AssetStore>;
                 return { ...current, ...saved, ...mergeHydratedAssetCollections(saved, current) };

@@ -5,7 +5,10 @@ import type { RefObject } from "react";
 import { Button, Form, Input, Modal, Select, Space, Tag, Typography, type FormInstance } from "antd";
 
 import { formatBytes } from "@/lib/image-utils";
-import type { Asset, AssetKind, AudioAsset, ImageAsset, VideoAsset } from "@/stores/use-asset-store";
+import type { Asset, AssetCategory, AssetKind, AssetSubject, AudioAsset, ImageAsset, VideoAsset } from "@/stores/use-asset-store";
+import type { ScriptEpisode } from "../../canvas/utils/script-management";
+import type { CreativeProject } from "../../projects/creative-projects";
+import { AssetBindingFields } from "./asset-binding-fields";
 
 export type AssetFormValues = {
     kind: AssetKind;
@@ -13,6 +16,13 @@ export type AssetFormValues = {
     coverUrl: string;
     folderId?: string;
     tags: string[];
+    projectId?: string;
+    category?: AssetCategory;
+    subjectId?: string;
+    subjectName?: string;
+    variantName?: string;
+    allEpisodes?: boolean;
+    episodeIds?: string[];
     source?: string;
     note?: string;
     content?: string;
@@ -27,6 +37,9 @@ type AssetEditorModalProps = {
     form: FormInstance<AssetFormValues>;
     formKind: AssetKind;
     folderOptions: Array<{ label: string; value: string }>;
+    episodes: ScriptEpisode[];
+    projects: CreativeProject[];
+    subjects: AssetSubject[];
     coverUrl: string;
     title: string;
     tags: string[];
@@ -50,6 +63,9 @@ export function AssetEditorModal({
     form,
     formKind,
     folderOptions,
+    episodes,
+    projects,
+    subjects,
     coverUrl,
     title,
     tags,
@@ -98,6 +114,7 @@ export function AssetEditorModal({
                     <Form.Item name="tags" label="标签">
                         <Select mode="tags" tokenSeparators={[",", "，"]} placeholder="输入标签后回车" />
                     </Form.Item>
+                    {formKind === "image" ? <AssetBindingFields episodes={episodes} projects={projects} subjects={subjects} /> : null}
                     <div className="grid gap-4 sm:grid-cols-2">
                         <Form.Item name="source" label="来源">
                             <Input placeholder="手动添加 / 画布 / 提示词库" />

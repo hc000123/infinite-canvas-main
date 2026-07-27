@@ -12,10 +12,14 @@ export function createAssetStoreHydrationGate() {
     return { wait: () => ready, release };
 }
 
-export function mergeHydratedAssetCollections<TAsset extends { id: string }, TFolder extends { id: string }>(persisted: { assets?: TAsset[]; folders?: TFolder[] } | undefined, current: { assets: TAsset[]; folders: TFolder[] }) {
+export function mergeHydratedAssetCollections<TAsset extends { id: string }, TFolder extends { id: string }, TSubject extends { id: string }>(
+    persisted: { assets?: TAsset[]; folders?: TFolder[]; subjects?: TSubject[] } | undefined,
+    current: { assets: TAsset[]; folders: TFolder[]; subjects: TSubject[] },
+) {
     return {
         assets: mergeById(current.assets, persisted?.assets || []),
         folders: mergeById(current.folders, persisted?.folders || []),
+        subjects: mergeById(current.subjects, persisted?.subjects || []),
     };
 }
 

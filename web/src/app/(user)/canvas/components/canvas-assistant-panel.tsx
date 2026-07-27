@@ -51,7 +51,6 @@ type CanvasAssistantPanelProps = {
     onPasteImage: (file: File) => void;
     onApplyAssistantActions: (actions: AssistantCanvasAction[]) => boolean;
     onOpenWorkflowAssistant?: () => void;
-    onCollapseStart: () => void;
     onCollapse: () => void;
 };
 
@@ -86,7 +85,6 @@ export function CanvasAssistantPanel({
     onPasteImage,
     onApplyAssistantActions,
     onOpenWorkflowAssistant,
-    onCollapseStart,
     onCollapse,
 }: CanvasAssistantPanelProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -341,7 +339,11 @@ export function CanvasAssistantPanel({
         const user = messages[userIndex];
         if (!user) return;
         if (message.promptAgentPlan || message.promptAgentIntent || user.promptAgentMode) {
-            void sendPromptAgentMessage(user.text, messages.slice(0, userIndex), { agentMode: message.promptAgentMode || user.promptAgentMode || agentMode, references: user.references, skillPackId: message.promptAgentSkillPackId || user.promptAgentSkillPackId || promptSkillPackId });
+            void sendPromptAgentMessage(user.text, messages.slice(0, userIndex), {
+                agentMode: message.promptAgentMode || user.promptAgentMode || agentMode,
+                references: user.references,
+                skillPackId: message.promptAgentSkillPackId || user.promptAgentSkillPackId || promptSkillPackId,
+            });
             return;
         }
         void sendMessage(user.text, user.mode, messages.slice(0, userIndex), user.references);
@@ -382,7 +384,6 @@ export function CanvasAssistantPanel({
 
     const collapse = () => {
         setClosing(true);
-        onCollapseStart();
         window.setTimeout(onCollapse, PANEL_MOTION_MS);
     };
 
@@ -401,8 +402,6 @@ export function CanvasAssistantPanel({
                     startChatSession();
                     setView("chat");
                 }}
-                onOpenWorkflowAssistant={onOpenWorkflowAssistant}
-                onOpenConfig={() => openConfigDialog(false)}
                 onCollapse={collapse}
             />
 
@@ -443,14 +442,23 @@ export function CanvasAssistantPanel({
                                 assistantActionStatus: applied ? "applied" : "pending",
                                 assistantActionAppliedAt: applied ? new Date().toISOString() : undefined,
                                 promptAgentExecutionState: message.promptAgentPlan
-                                    ? nextPromptAgentExecutionState(message, message.promptAgentExecutionState, promptAgentCanvasWriteActionTypes, applied ? "succeeded" : "failed", applied ? "已写入画布" : "画布写入失败", applied ? "画布写入完成" : "画布写入失败")
+                                    ? nextPromptAgentExecutionState(
+                                          message,
+                                          message.promptAgentExecutionState,
+                                          promptAgentCanvasWriteActionTypes,
+                                          applied ? "succeeded" : "failed",
+                                          applied ? "已写入画布" : "画布写入失败",
+                                          applied ? "画布写入完成" : "画布写入失败",
+                                      )
                                     : message.promptAgentExecutionState,
                             });
                         }}
                         onCancelAssistantActions={(message) =>
                             updateMessage(activeSession?.id || "", message.id, {
                                 assistantActionStatus: "cancelled",
-                                promptAgentExecutionState: message.promptAgentPlan ? nextPromptAgentExecutionState(message, message.promptAgentExecutionState, promptAgentCanvasWriteActionTypes, "skipped", "用户取消写入画布", "已取消画布写入") : message.promptAgentExecutionState,
+                                promptAgentExecutionState: message.promptAgentPlan
+                                    ? nextPromptAgentExecutionState(message, message.promptAgentExecutionState, promptAgentCanvasWriteActionTypes, "skipped", "用户取消写入画布", "已取消画布写入")
+                                    : message.promptAgentExecutionState,
                             })
                         }
                         onGeneratePromptImage={(message, output) => {

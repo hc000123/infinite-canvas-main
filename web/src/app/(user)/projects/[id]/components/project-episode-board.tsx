@@ -2,16 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Button, Empty, Input, Select, Tag } from "antd";
-import { Archive, ArrowRight, BarChart3, Bot, Clapperboard, Edit3, FileText, Image, Library, ListChecks, Maximize2, Plus, Sparkles, Trash2, TriangleAlert, Video, Wand2, type LucideIcon } from "lucide-react";
+import { Archive, ArrowRight, BarChart3, Bot, Clapperboard, Database, Edit3, FileText, Image, Library, ListChecks, Maximize2, Plus, Sparkles, Trash2, TriangleAlert, Video, Wand2, type LucideIcon } from "lucide-react";
 
 import { canvasEpisodeLabel } from "../../../canvas/utils/canvas-episode-context";
 import { canvasProjectPresetSummary } from "../../../canvas/utils/canvas-project-preset";
 import type { CanvasProject } from "../../../canvas/stores/use-canvas-store";
+import { episodeProductionName } from "../../../canvas/utils/script-management";
 import { agentKindLabel } from "../../agent-workbench";
 import type { ProjectOverviewActionTarget, ProjectOverviewDashboard, ProjectOverviewSuggestion } from "../../project-overview-dashboard";
 
 export type ProjectEpisodeBoardRow = {
     canvasCount: number;
+    code: string;
     filterStatus: "done" | "draft" | "running";
     id: string;
     optimizedScriptPreview: string;
@@ -55,11 +57,13 @@ type ProjectEpisodeBoardProps = {
     onEditCanvasPreset: (canvasId: string) => void;
     onEditEpisodeTitle: (row: ProjectEpisodeBoardRow) => void;
     onOpenAgentSettings: () => void;
+    onOpenProjectCache: () => void;
     onEditProject: () => void;
     onFilterChange: (filter: EpisodeFilter) => void;
     onImportEpisode: () => void;
     onOptimizeEpisodeScript: (episodeId: string) => void;
     onOpenEpisode: (episodeId: string) => void;
+    onOpenEpisodeCanvas: (episodeId: string) => void;
     onSaveEpisodeScript: (episodeId: string, script: string) => void;
     onScriptSkillChange: (workflowId: string) => void;
     onTabChange: (tab: ProjectDetailTab) => void;
@@ -90,11 +94,13 @@ export function ProjectEpisodeBoard({
     onEditCanvasPreset,
     onEditEpisodeTitle,
     onOpenAgentSettings,
+    onOpenProjectCache,
     onEditProject,
     onFilterChange,
     onImportEpisode,
     onOptimizeEpisodeScript,
     onOpenEpisode,
+    onOpenEpisodeCanvas,
     onSaveEpisodeScript,
     onScriptSkillChange,
     onTabChange,
@@ -105,7 +111,6 @@ export function ProjectEpisodeBoard({
             <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--studio-border-subtle)] px-4 py-4 sm:px-8">
                 <nav aria-label="项目详情视图" className="order-1 flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-4">
                     <ProjectDetailNavButton active={activeTab === "episodes"} icon={ListChecks} label="分集" onClick={() => onTabChange("episodes")} />
-                    <ProjectDetailNavButton active={activeTab === "canvas"} icon={Maximize2} label="画布" onClick={() => onTabChange("canvas")} />
                     <button
                         type="button"
                         className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"
@@ -113,6 +118,14 @@ export function ProjectEpisodeBoard({
                     >
                         <Bot className="size-4" />
                         Agent 中心
+                    </button>
+                    <button
+                        type="button"
+                        className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"
+                        onClick={onOpenProjectCache}
+                    >
+                        <Database className="size-4" />
+                        管理缓存
                     </button>
                 </nav>
 
@@ -154,6 +167,7 @@ export function ProjectEpisodeBoard({
                         onFilterChange={onFilterChange}
                         onOptimizeEpisodeScript={onOptimizeEpisodeScript}
                         onOpenEpisode={onOpenEpisode}
+                        onOpenEpisodeCanvas={onOpenEpisodeCanvas}
                         onSaveEpisodeScript={onSaveEpisodeScript}
                         onScriptSkillChange={onScriptSkillChange}
                         optimizingEpisodeId={optimizingEpisodeId}
@@ -183,6 +197,7 @@ function ProjectEpisodeProductionPanel({
     onFilterChange,
     onOptimizeEpisodeScript,
     onOpenEpisode,
+    onOpenEpisodeCanvas,
     onSaveEpisodeScript,
     onScriptSkillChange,
     optimizingEpisodeId,
@@ -205,6 +220,7 @@ function ProjectEpisodeProductionPanel({
     onFilterChange: (filter: EpisodeFilter) => void;
     onOptimizeEpisodeScript: (episodeId: string) => void;
     onOpenEpisode: (episodeId: string) => void;
+    onOpenEpisodeCanvas: (episodeId: string) => void;
     onSaveEpisodeScript: (episodeId: string, script: string) => void;
     onScriptSkillChange: (workflowId: string) => void;
     optimizingEpisodeId: string;
@@ -284,20 +300,21 @@ function ProjectEpisodeProductionPanel({
                             filteredRows.map((row) => {
                                 const selected = row.id === selectedEpisode?.id;
                                 return (
-                                    <div
+                                    <button
                                         key={row.id}
-                                        className={`rounded-md border p-2.5 transition ${selected ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]"}`}
+                                        type="button"
+                                        aria-pressed={selected}
+                                        className={`w-full cursor-pointer rounded-md border p-2.5 text-left transition-colors ${selected ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]"}`}
+                                        onClick={() => setSelectedId(row.id)}
                                     >
                                         <div className="flex items-start justify-between gap-2">
-                                            <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setSelectedId(row.id)}>
-                                                <span className="block line-clamp-2 text-sm font-semibold leading-5 text-[var(--studio-text-primary)]">{episodeDisplayTitle(row)}</span>
-                                            </button>
+                                            <span className="block min-w-0 flex-1 line-clamp-2 text-sm font-semibold leading-5 text-[var(--studio-text-primary)]">{episodeDisplayTitle(row)}</span>
                                         </div>
                                         <div className="mt-2 flex items-center justify-between gap-2">
                                             <span className="truncate text-xs text-[var(--studio-text-muted)]">{row.scriptPreview.trim() ? `${row.scriptPreview.trim().length} 字` : "暂无剧本"}</span>
                                             <EpisodeStatusBadge status={row.status} />
                                         </div>
-                                    </div>
+                                    </button>
                                 );
                             })
                         ) : (
@@ -315,9 +332,7 @@ function ProjectEpisodeProductionPanel({
                                     原剧本
                                     {selectedScript ? <span className="font-normal text-[var(--studio-text-muted)]">{selectedScript.length} 字</span> : null}
                                 </div>
-                                <h2 className="mt-1 break-words text-lg font-semibold leading-tight text-[var(--studio-text-primary)]">
-                                    {selectedEpisode ? episodeDisplayTitle(selectedEpisode) : "还没有分集剧本"}
-                                </h2>
+                                <h2 className="mt-1 break-words text-lg font-semibold leading-tight text-[var(--studio-text-primary)]">{selectedEpisode ? episodeDisplayTitle(selectedEpisode) : "还没有分集剧本"}</h2>
                             </div>
                             {selectedEpisode ? (
                                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -354,8 +369,23 @@ function ProjectEpisodeProductionPanel({
                                     <div className="flex h-full min-h-[520px] flex-col gap-3">
                                         <Input.TextArea className="min-h-0 flex-1" value={scriptDraft} autoSize={false} onChange={(event) => setScriptDraft(event.target.value)} />
                                         <div className="flex justify-end gap-2">
-                                            <Button onClick={() => { setEditingScript(false); setScriptDraft(selectedScript); }}>取消</Button>
-                                            <Button type="primary" onClick={() => { onSaveEpisodeScript(selectedEpisode.id, scriptDraft); setEditingScript(false); }}>保存原剧本</Button>
+                                            <Button
+                                                onClick={() => {
+                                                    setEditingScript(false);
+                                                    setScriptDraft(selectedScript);
+                                                }}
+                                            >
+                                                取消
+                                            </Button>
+                                            <Button
+                                                type="primary"
+                                                onClick={() => {
+                                                    onSaveEpisodeScript(selectedEpisode.id, scriptDraft);
+                                                    setEditingScript(false);
+                                                }}
+                                            >
+                                                保存原剧本
+                                            </Button>
                                         </div>
                                     </div>
                                 ) : (
@@ -385,9 +415,14 @@ function ProjectEpisodeProductionPanel({
                                 <div className="flex shrink-0 items-center gap-2">
                                     {selectedOptimizedScript ? <Tag className="m-0">{selectedOptimizedScript.length} 字</Tag> : null}
                                     {selectedEpisode ? (
-                                        <Button size="small" icon={<ArrowRight className="size-3.5" />} disabled={selectedOptimizing} onClick={() => onOpenEpisode(selectedEpisode.id)}>
-                                            进入工作流
-                                        </Button>
+                                        <>
+                                            <Button size="small" icon={<Maximize2 className="size-3.5" />} disabled={selectedOptimizing} onClick={() => onOpenEpisodeCanvas(selectedEpisode.id)}>
+                                                {selectedEpisode.primaryCanvasId ? "进入画布" : "创建画布"}
+                                            </Button>
+                                            <Button size="small" type="primary" icon={<ArrowRight className="size-3.5" />} disabled={selectedOptimizing} onClick={() => onOpenEpisode(selectedEpisode.id)}>
+                                                进入工作流
+                                            </Button>
+                                        </>
                                     ) : null}
                                     {selectedEpisode && (selectedOptimizedScript || selectedOptimizeError) ? (
                                         <Button size="small" icon={<Trash2 className="size-3.5" />} disabled={selectedOptimizing} onClick={() => onClearOptimizedScript(selectedEpisode.id)}>
@@ -934,8 +969,8 @@ function ProjectEpisodeEmpty({ onCreate, onCreateCanvas }: { onCreate: () => voi
     );
 }
 
-function episodeDisplayTitle(row: Pick<ProjectEpisodeBoardRow, "title">) {
-    return row.title.trim() || "未命名集数";
+function episodeDisplayTitle(row: Pick<ProjectEpisodeBoardRow, "code" | "title">) {
+    return episodeProductionName(row.code, row.title);
 }
 
 function currentEpisodeStatusText(row: ProjectEpisodeBoardRow) {
