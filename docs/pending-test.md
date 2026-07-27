@@ -119,6 +119,17 @@ git diff --check
 - 自动门禁已通过：`go test ./...`、前端 771 项测试、`npm run typecheck`、`npm run lint:fast`、`npm run build` 和专项幂等 / 接线测试。
 - 本页验收：打开任意画布并选择一个文本节点，从右侧“运行 Skill”完成预检、确认、审核和使用；核对下游节点、连线、节点信息 JSON 与刷新恢复。不会自动运行 Skill，也不会绕过人工审核写回画布。
 
+### 画布对话 Agent Temporary Plan Phase 6C
+
+- 画布助手可选择当前项目可见且已有推荐发布版本的 Agent，也可保留“普通对话”；Agent 是组合 Skill 的编排单元，Skill 仍可被图片、节点、Workflow 或 API 独立调用。
+- 提交 Agent 目标时，只把用户目标和选中节点的语义文本登记为不可变 `source_text`；图片、视频 URL 和 base64 不会写入 Agent Plan 输入。对话消息只保存 Plan、Agent、Artifact、Invocation、Skill 和哈希坐标，不复制 Artifact payload。
+- Temporary Plan 草稿支持替换、排序、删除 Skill 并保存新 revision；预检冻结版本、输入、执行目标、额度和确认指纹，确认必须精确匹配服务端要求。每一步继续委托 Agent Plan → Invocation → Artifact Runtime，并对当前完整 Artifact-set 人工审核。
+- 终态 Plan 不继续轮询。完成后的 Artifact 必须由用户点击使用才写回画布：有来源节点时创建下游文本节点和连线，无来源节点时放在画布最右侧；节点保留 Agent Plan / 消息 / Invocation / Skill / Artifact 哈希 metadata。
+- 同一最终 Artifact-set 重放不会重复创建节点、连线或 Apply 回执；浏览器本地写入通过稳定 `client_local_receipt` 记录，服务端不直接修改本地画布。
+- 旧硬编码 Prompt Agent Skill Pack、意图 / 自动 / 审核模式、工具箱和独立执行状态已移除；普通问答、直接生图、助手动作预览继续保留，所有生产 Agent 统一来自 Agent Registry。
+- 专项自动检查已覆盖 Temporary Plan 数据模型、消息坐标、选择与创建接线、生命周期卡、最终 Artifact 回写、幂等重放和统一 Runtime 边界；TypeScript 类型检查通过。
+- 本页验收：打开固定公交站剧本画布，选择一个已发布多步 Agent，创建并编辑一次 Plan revision，完成预检、精确确认、逐步审核和最终使用；确认结果保留“林秋 / 旧公交站 / 折起的车票 / 这次不等了”，检查下游节点、来源连线、完整 metadata、单条 Apply 回执和刷新恢复，并确认浏览器控制台无新增错误。
+
 ### 项目详情素材引用入口收口
 
 - 项目详情不再显示“素材引用”页签，只保留主要生产入口。

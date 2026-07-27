@@ -52,6 +52,31 @@
 
 画布节点的 `运行 Skill` 同样使用 `source: "canvas_chat"` 和上述接口。当前节点语义文本按需登记为 `source_text`；人工批准并使用完整 Artifact-set 后，浏览器为每个产物创建可追溯的下游文本节点和来源连线，再以 `target: "client_local_receipt"`、`surface: "canvas"`、`targetKind: "node"` 记录一次幂等消费回执。服务端不直接修改浏览器本地画布，也不在 Apply 响应中回传画布节点数据。
 
+## Agent Registry 与 Agent Plan Runtime 接口
+
+下列接口均位于 `/api/v1`，需要登录。系统 Agent 对用户只读可见；项目 Agent、版本和 Plan 按 JWT 用户及项目隔离。Agent 只保存 Role、Skill 版本引用和执行策略，不复制 Skill 正文、Schema、质量门或 Artifact payload。
+
+| 接口 | 说明 |
+| ---- | ---- |
+| `GET /agents?projectId=:id` | 返回当前项目可见的系统 / 项目 Agent、版本摘要和推荐 Package；画布只展示已启用且有推荐发布版本的候选。 |
+| `POST /agents` | 创建项目 Agent 与首个草稿版本，Package 保存顺序 Skill 引用、输入 Binding、参数和访问 / 模型 / 工具 / 执行策略。 |
+| `GET /agents/:id?projectId=:id` | 返回可见 Agent、标签、版本和推荐 Package；跨用户项目 Agent 按不存在处理。 |
+| `POST /agents/:id/versions` | 为项目 Agent 创建新的可编辑草稿版本。 |
+| `GET /agent-versions/:id` | 返回 Agent Version 与完整 Package。 |
+| `PATCH /agent-versions/:id` | 只允许修改项目 Agent 草稿；发布版本不可原地修改。 |
+| `POST /agent-versions/:id/validate` | 校验 Skill 访问策略、版本、Binding、相邻 Artifact 契约和执行策略，返回冻结内容哈希与解析 Skill 摘要。 |
+| `POST /agent-versions/:id/publish` | 校验通过后发布不可变 Agent Version。 |
+| `PUT /agents/:id/recommended-version` | `{ agentVersionId }`；推荐版本必须属于同一 Agent 且已经发布。 |
+| `POST /agent-plans` | 用精确 Agent / Version、目标、不可变来源 Artifact、可选 Skill overrides 和幂等键创建 draft；不执行模型。 |
+| `GET /agent-plans/:id` | 返回安全化 Plan、revision、顺序 Step、Binding、参数、Invocation / 输出 Artifact 引用和确认摘要，不复制产物正文。 |
+| `POST /agent-plans/:id/revisions` | 在 draft 阶段用新的目标、来源 Artifact 和 Skill overrides 追加不可变 revision，支持画布 Temporary Plan 替换、排序和删除步骤。 |
+| `POST /agent-plans/:id/preflight` | 冻结 Agent、Skill、Binding、来源 Artifact、执行目标和额度，返回精确确认要求与指纹；不创建子 Invocation。 |
+| `POST /agent-plans/:id/confirm` | `{ revision, fingerprint, requirementCodes }` 必须精确匹配当前冻结 revision，确认后才允许推进。 |
+| `POST /agent-plans/:id/continue` | 同步当前子 Invocation，并且只在上一步完整 Artifact-set 已批准后启动下一步；重复或并发推进保持幂等。 |
+| `POST /agent-plans/:id/cancel` | 停止继续调度，并向当前活动 Invocation 传播取消。 |
+
+画布对话先通过 Artifact 接口创建一个只含目标和语义节点引用的 `source_text`，再创建 Temporary Plan。草稿编辑、预检、确认、逐步审核和最终产物读取全部复用上述 Agent Plan / Invocation 接口；浏览器消息只持久化 ID、版本、哈希和 Apply 坐标。最终 Artifact 只有在用户显式点击使用后才写入画布并登记 `client_local_receipt`。
+
 ## Workflow Registry 与 Composer Runtime 接口
 
 下列接口均位于 `/api/v1`，需要登录。系统 Workflow 对用户只读可见；项目 Workflow、版本和 Execution 按 JWT 用户及项目隔离。所有写入请求使用严格字段解码，标记为 0 字节的生命周期接口不接受 `{}` 或空白正文。

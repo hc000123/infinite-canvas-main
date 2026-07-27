@@ -7,8 +7,10 @@
 + [新增] 项目新增 Workflow 中心，可自由组合 Skill / Agent DAG，支持固定、标签和运行前手选路由、契约校验、版本发布、成本预览、审批、重试、取消及 Artifact 轨迹恢复。
 + [新增] 生图工作台可直接调用已发布 Skill，统一完成 Artifact 输入匹配、版本/额度冻结、人工审核、提示词回写与本地消费回执，并保留轻量 Invocation 追溯坐标。
 + [新增] 画布节点可从悬浮工具栏或检查器直接调用已发布 Skill，批准后的 Artifact 会作为带完整 Invocation 溯源的下游文本节点写回并建立连线，重放和刷新不会重复产物。
++ [新增] 画布对话可选择已发布 Agent，将目标和节点语义引用创建为可编辑 Temporary Plan，并通过统一 Agent Plan / Invocation / Artifact Runtime 逐步确认、审核和幂等写回最终产物。
 + [优化] 正式视频 Workflow 已迁入统一 Invocation / Artifact Runtime，阶段支持精确 Skill 冻结、标准资产与媒体引用、完整产物集审核、幂等 Apply 和失败安全门，并保持现有工作台接口与刷新恢复体验。
 + [优化] 将固定六阶段 Workflow Skill 中心泛化为可搜索、可版本化、可评测和可独立管理的 Skill Registry。
++ [优化] 移除画布助手旧硬编码 Prompt Agent Skill Pack、工具注册表和独立执行状态；生产 Agent 统一来自 Agent Registry，同时保留普通对话和直接生图。
 + [修复] 修复 Workflow 新建时空 Skill 契约导致页面崩溃、默认选中不兼容 Skill、未保存草稿可误校验和编辑器弃用警告。
 + [修复] 修复 Invocation 成功预检返回空集合时画布 Skill 抽屉读取 `null` 导致页面崩溃的问题，并统一空集合安全响应。
 + [调整] 移除项目详情低频“素材引用”页签，素材缺口与旧版本提醒统一进入项目素材库，底层引用和生成链路保持不变。
