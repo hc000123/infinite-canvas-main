@@ -121,6 +121,28 @@ test("replaying the same Invocation Artifact set does not duplicate canvas nodes
     assert.deepEqual(replay.createdNodeIds, []);
 });
 
+test("writes asset renditions as image nodes with stable Runtime media and trace metadata", () => {
+    const output = artifact("artifact-image", "asset_rendition", {
+        assetId: "character-1",
+        renditionId: "front",
+        mediaType: "image",
+        mediaRef: "/api/uploaded-assets/runtime/image/front.png",
+        generationMetadata: { model: "image-model" },
+    });
+    const result = planCanvasCapabilityOutput({
+        nodes: [sourceNode],
+        connections: [],
+        sourceNode,
+        artifacts: [output],
+        trace: { invocationId: "invocation-image", artifactIds: ["artifact-image"], skillVersionId: "skill-version-image", appliedAt: "2026-07-27T03:00:00Z" },
+    });
+
+    assert.equal(result.nodes[1].type, "image");
+    assert.equal(result.nodes[1].metadata?.content, "/api/uploaded-assets/runtime/image/front.png");
+    assert.equal(result.nodes[1].metadata?.status, "success");
+    assert.equal(result.nodes[1].metadata?.capabilityArtifact?.artifactId, "artifact-image");
+});
+
 test("uses semantic node text without treating media URLs as Skill input", () => {
     assert.equal(canvasCapabilitySourceText(sourceNode), "公交站剧本");
     assert.equal(canvasCapabilitySourceText({ ...sourceNode, type: "config" as CanvasNodeData["type"], metadata: { content: "旧值", prompt: "镜头提示词" } }), "镜头提示词");
@@ -157,6 +179,29 @@ test("writes final Agent Plan Artifacts beside the first surviving source node w
         skillVersionId: "skill-version-final",
         appliedAt: "2026-07-27T03:00:00Z",
     });
+});
+
+test("writes final Agent Plan asset renditions as image nodes", () => {
+    const output = artifact("artifact-image", "asset_rendition", {
+        assetId: "character-1",
+        renditionId: "front",
+        mediaType: "image",
+        mediaRef: "/api/uploaded-assets/runtime/image/front.png",
+    });
+    const result = planCanvasAgentOutput({
+        nodes: [sourceNode],
+        connections: [],
+        sourceNodeIds: [sourceNode.id],
+        sourceMessageId: "message-image",
+        agentPlanId: "agent-plan-image",
+        artifacts: [output],
+        trace: { invocationId: "invocation-image", artifactIds: ["artifact-image"], skillVersionId: "skill-version-image", appliedAt: "2026-07-27T03:00:00Z" },
+    });
+
+    assert.equal(result.nodes[1].type, "image");
+    assert.equal(result.nodes[1].height, 340);
+    assert.equal(result.nodes[1].metadata?.content, "/api/uploaded-assets/runtime/image/front.png");
+    assert.equal(result.nodes[1].metadata?.agentArtifact?.artifactType, "asset_rendition");
 });
 
 test("places Agent Plan output after the rightmost node and replays idempotently without a source", () => {

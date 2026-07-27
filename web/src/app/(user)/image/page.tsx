@@ -28,7 +28,7 @@ import { useImageBriefStore } from "../canvas/stores/use-image-brief-store";
 import { useProductionBibleStore } from "../canvas/stores/use-production-bible-store";
 import type { ArtifactEnvelope } from "@/services/api/invocations";
 import type { CapabilityConsumeTrace } from "@/components/capability-runtime/use-capability-run";
-import { buildImageCapabilityTrace, imagePromptFromArtifacts, type ImageCapabilityTrace } from "./image-capability-context";
+import { buildImageCapabilityTrace, imagePromptFromArtifacts, imageRenditionsFromArtifacts, type ImageCapabilityTrace } from "./image-capability-context";
 
 const CapabilityRunDrawer = dynamic(() => import("@/components/capability-runtime/capability-run-drawer").then((module) => module.CapabilityRunDrawer), { ssr: false });
 
@@ -41,6 +41,7 @@ type GeneratedImage = {
     height: number;
     bytes: number;
     mimeType?: string;
+    capabilityTrace?: ImageCapabilityTrace;
 };
 
 type GenerationResult = {
@@ -251,6 +252,43 @@ export default function ImagePage() {
     };
 
     const consumeCapabilityArtifacts = async (artifacts: ArtifactEnvelope[], trace: CapabilityConsumeTrace) => {
+        const runtimeRenditions = imageRenditionsFromArtifacts(artifacts, trace);
+        if (runtimeRenditions.length) {
+            const images = await Promise.all(runtimeRenditions.map(async (rendition) => {
+                const stored = await uploadImage(rendition.mediaRef);
+                return {
+                    id: rendition.renditionId,
+                    dataUrl: stored.url,
+                    storageKey: stored.storageKey,
+                    durationMs: 0,
+                    width: stored.width,
+                    height: stored.height,
+                    bytes: stored.bytes,
+                    mimeType: stored.mimeType,
+                    capabilityTrace: rendition.trace,
+                } satisfies GeneratedImage;
+            }));
+            const nextTrace = buildImageCapabilityTrace(trace);
+            const logPrompt = prompt.trim() || `${runtimeRenditions[0].assetId} · Skill 资产成图`;
+            const runtimeModel = runtimeRenditions.find((item) => item.model)?.model || "Invocation Runtime";
+            setCapabilityTrace(nextTrace);
+            setPreviewLog(null);
+            setResults(images.map((image) => ({ id: image.id, status: "success", image })));
+            saveLog(buildLog({
+                prompt: logPrompt,
+                model: runtimeModel,
+                config: { model: runtimeModel, imageModel: runtimeModel, quality: "", size: `${images[0].width}x${images[0].height}`, count: String(images.length) },
+                references: [],
+                durationMs: 0,
+                successCount: images.length,
+                failCount: 0,
+                status: "成功",
+                images,
+                capabilityTrace: nextTrace,
+            }));
+            await capabilityStateStore.setItem<ImageCapabilityState>(imageCapabilityStorageKey(sourceContext), { prompt: logPrompt, trace: nextTrace, updatedAt: nextTrace.appliedAt });
+            return;
+        }
         const nextPrompt = imagePromptFromArtifacts(artifacts, { approved: true, assetId: sourceContext.assetId });
         if (!nextPrompt) throw new Error("已批准 Artifact-set 中没有可用的图片提示词");
         const nextTrace = buildImageCapabilityTrace(trace);
@@ -331,13 +369,14 @@ export default function ImagePage() {
 
     const saveResultToAssets = async (image: GeneratedImage, index: number) => {
         const stored = await uploadImage(image.dataUrl);
+        const resultTrace = image.capabilityTrace || capabilityTrace;
         const sourceAsset = sourceContext.libraryAssetId ? useAssetStore.getState().assets.find((asset) => asset.id === sourceContext.libraryAssetId) : undefined;
         let assetId = "";
         let savedAsset: Pick<Asset, "id" | "metadata" | "updatedAt"> | undefined;
         if (sourceAsset && workflowAssetInfo(sourceAsset)) {
             const now = new Date().toISOString();
             const patch = buildWorkflowGeneratedImagePatch(sourceAsset, stored, { config: { ...effectiveConfig, model, count: "1" }, model });
-            const tracedPatch = capabilityTrace ? { ...patch, metadata: { ...patch.metadata, capabilityTrace } } : patch;
+            const tracedPatch = resultTrace ? { ...patch, metadata: { ...patch.metadata, capabilityTrace: resultTrace } } : patch;
             updateAsset(sourceAsset.id, tracedPatch);
             assetId = sourceAsset.id;
             savedAsset = { id: sourceAsset.id, metadata: { ...sourceAsset.metadata, ...tracedPatch.metadata }, updatedAt: now };
@@ -357,7 +396,7 @@ export default function ImagePage() {
                     imageBriefId: sourceContext.briefId,
                     assetBreakdownItemId: sourceContext.assetId,
                     productionBibleItemId: sourceContext.assetId,
-                    ...(capabilityTrace ? { capabilityTrace } : {}),
+                    ...(resultTrace ? { capabilityTrace: resultTrace } : {}),
                 },
             });
             savedAsset = useAssetStore.getState().assets.find((asset) => asset.id === assetId);

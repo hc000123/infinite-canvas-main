@@ -5,16 +5,18 @@
 + [新增] 新增统一 Artifact 与 Invocation Runtime，独立 Skill 调用可冻结版本、预检契约、追踪质量门并在审核后幂等 Apply。
 + [新增] 新增可版本化 Agent Registry 与顺序 Agent Plan Runtime，支持项目自由组合独立 Skill、冻结版本和额度，并通过统一 Invocation / Artifact 链逐步审核交接。
 + [新增] 项目新增 Workflow 中心，可自由组合 Skill / Agent DAG，支持固定、标签和运行前手选路由、契约校验、版本发布、成本预览、审批、重试、取消及 Artifact 轨迹恢复。
-+ [新增] 新增内容标签分类、角色 / 场景 / 道具独立资产 Brief、竖屏短剧与横屏中长剧分镜 6 个可独立发布 Skill；标准生产 Workflow 升级为 9 节点 `2.0.0`，按画幅和长短剧参数自动路由分镜版本。
-+ [新增] 生图工作台可直接调用已发布 Skill，统一完成 Artifact 输入匹配、版本/额度冻结、人工审核、提示词回写与本地消费回执，并保留轻量 Invocation 追溯坐标。
-+ [新增] 画布节点可从悬浮工具栏或检查器直接调用已发布 Skill，批准后的 Artifact 会作为带完整 Invocation 溯源的下游文本节点写回并建立连线，重放和刷新不会重复产物。
++ [新增] 新增内容标签分类、角色 / 场景 / 道具独立资产 Brief、三类资产成图、竖屏短剧与横屏中长剧分镜 9 个可独立发布 Skill；标准生产 Workflow 升级为 12 节点 `2.1.0`，并行生成三类资产图片并按制作参数路由分镜版本。
++ [新增] 生图工作台可直接调用已发布 Skill，统一完成 Artifact 输入匹配、版本/额度冻结、人工审核、提示词或 `asset_rendition` 图片写回、本地消费回执与素材保存，并保留精确 Invocation 追溯坐标。
++ [新增] 画布节点可从悬浮工具栏或检查器直接调用已发布 Skill，批准后的文本 Artifact 与图片型 `asset_rendition` 会按类型创建带完整 Invocation 溯源的下游节点并建立连线，重放和刷新不会重复产物。
 + [新增] 画布对话可选择已发布 Agent，将目标和节点语义引用创建为可编辑 Temporary Plan，并通过统一 Agent Plan / Invocation / Artifact Runtime 逐步确认、审核和幂等写回最终产物。
 + [优化] 正式视频 Workflow 已迁入统一 Invocation / Artifact Runtime，阶段支持精确 Skill 冻结、标准资产与媒体引用、完整产物集审核、幂等 Apply 和失败安全门，并保持现有工作台接口与刷新恢复体验。
++ [优化] Invocation Worker 新增图片模型执行与内容哈希媒体归档，支持角色 / 场景 / 道具资产成图、失败重试和 Workflow 多上游 Artifact 聚合。
 + [优化] 将固定六阶段 Workflow Skill 中心泛化为可搜索、可版本化、可评测和可独立管理的 Skill Registry。
 + [优化] 移除画布助手旧硬编码 Prompt Agent Skill Pack、工具注册表和独立执行状态；生产 Agent 统一来自 Agent Registry，同时保留普通对话和直接生图。
 + [优化] 项目分集剧本优化改用 Registry 推荐版系统 Agent，通过统一 Artifact / Agent Plan / Invocation 审核链运行，并移除旧项目 Workflow preset 选择状态、脚本直调 Runner 与重复 Agent 设置面板。
 + [修复] 修复 Workflow 新建时空 Skill 契约导致页面崩溃、默认选中不兼容 Skill、未保存草稿可误校验和编辑器弃用警告。
 + [修复] 修复 Invocation 成功预检返回空集合时画布 Skill 抽屉读取 `null` 导致页面崩溃的问题，并统一空集合安全响应。
++ [验证] Go 全包、前端 777 项测试、TypeScript 与 Next.js 生产构建通过；隔离浏览器完成资产成图、审核、Apply、生图工作台展示 / 保存和画布图片节点写回，测试图片仅用于协议验收，正式视觉质量待真实图片模型复测。
 + [调整] 移除项目详情低频“素材引用”页签，素材缺口与旧版本提醒统一进入项目素材库，底层引用和生成链路保持不变。
 + [优化] 模型算力点改为按业务单位计费：语言按调用次数、图片按实际张数、视频按生成秒数，并统一画布预估、后台单位提示和后端扣费口径。
 + [优化] 六阶段 Workflow Skill 升级为 `3.0.1` 生产多文件包，完整加载领域规则、输出模板与示例，并在冻结任务中强制必需输入、参考图策略和 JSON Schema 质量门；已有官方内置绑定会新增并切换版本，自定义全局绑定保持不变。

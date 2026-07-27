@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildImageCapabilityTrace, imagePromptFromArtifacts, selectImagePromptArtifact } from "./image-capability-context.ts";
+import { buildImageCapabilityTrace, imagePromptFromArtifacts, imageRenditionsFromArtifacts, selectImagePromptArtifact } from "./image-capability-context.ts";
 import type { ArtifactEnvelope } from "../../../services/api/invocations-contract.ts";
 
 const artifact = (id: string, artifactType: string, payload: Record<string, unknown>): ArtifactEnvelope => ({
@@ -45,4 +45,37 @@ test("image capability trace contains coordinates without Artifact payloads", ()
     const trace = buildImageCapabilityTrace({ invocationId: "inv-1", artifactIds: ["artifact-1"], skillVersionId: "skill-version-1", appliedAt: "2026-07-26T00:00:00Z" });
     assert.deepEqual(trace, { invocationId: "inv-1", artifactIds: ["artifact-1"], skillVersionId: "skill-version-1", appliedAt: "2026-07-26T00:00:00Z" });
     assert.doesNotMatch(JSON.stringify(trace), /payload|productionScript|brief/);
+});
+
+test("image capability consumes every valid asset rendition with exact Artifact coordinates", () => {
+    const trace = { invocationId: "inv-1", artifactIds: ["rendition-1", "rendition-2"], skillVersionId: "skill-version-1", appliedAt: "2026-07-26T00:00:00Z" };
+    const result = imageRenditionsFromArtifacts([
+        artifact("rendition-1", "asset_rendition", { assetId: "character-1", renditionId: "front", mediaType: "image", mediaRef: "/api/uploaded-assets/runtime/image/front.png", generationMetadata: { model: "image-model" } }),
+        artifact("other", "asset_brief", { assetId: "character-1", brief: "角色设定" }),
+        artifact("rendition-2", "asset_rendition", { assetId: "character-1", renditionId: "side", mediaType: "image", mediaRef: "/api/uploaded-assets/runtime/image/side.webp", generationMetadata: { model: "image-model" } }),
+        artifact("invalid", "asset_rendition", { assetId: "character-1", renditionId: "bad", mediaType: "video", mediaRef: "/runtime/bad.mp4" }),
+    ], trace);
+
+    assert.deepEqual(result, [
+        {
+            artifactId: "rendition-1",
+            artifactHash: "hash-rendition-1",
+            assetId: "character-1",
+            renditionId: "front",
+            mediaRef: "/api/uploaded-assets/runtime/image/front.png",
+            mediaType: "image",
+            model: "image-model",
+            trace: { ...trace, artifactIds: ["rendition-1"] },
+        },
+        {
+            artifactId: "rendition-2",
+            artifactHash: "hash-rendition-2",
+            assetId: "character-1",
+            renditionId: "side",
+            mediaRef: "/api/uploaded-assets/runtime/image/side.webp",
+            mediaType: "image",
+            model: "image-model",
+            trace: { ...trace, artifactIds: ["rendition-2"] },
+        },
+    ]);
 });

@@ -27,7 +27,11 @@ type PlanCanvasAgentOutputInput = {
 
 const outputWidth = 340;
 const outputHeight = 180;
+const imageOutputHeight = 340;
 const cleanText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+const renditionMediaRef = (artifact: ArtifactEnvelope) => artifact.artifact.artifactType === "asset_rendition" && artifact.payload.mediaType === "image" ? cleanText(artifact.payload.mediaRef) : "";
+const capabilityOutputHeight = (artifact: ArtifactEnvelope) => renditionMediaRef(artifact) ? imageOutputHeight : outputHeight;
+const capabilityOutputOffset = (artifacts: ArtifactEnvelope[], index: number) => artifacts.slice(0, index).reduce((offset, artifact) => offset + capabilityOutputHeight(artifact) + 24, 0);
 
 export function canvasCapabilitySourceText(node: CanvasNodeData) {
     const semanticText = cleanText(node.metadata?.finalPrompt) || cleanText(node.metadata?.promptDraft) || cleanText(node.metadata?.prompt);
@@ -39,30 +43,33 @@ export function planCanvasCapabilityOutput({ nodes, connections, sourceNode, art
     const pending = artifacts.flatMap((artifact, index) =>
         nodes.some((node) => node.metadata?.capabilityArtifact?.invocationId === trace.invocationId && node.metadata.capabilityArtifact.artifactId === artifact.artifact.id) ? [] : [{ artifact, index }],
     );
-    const createdNodes = pending.map(({ artifact, index }): CanvasNodeData => ({
-        id: nodeId(artifact, index),
-        type: "text" as CanvasNodeData["type"],
-        title: `Skill · ${artifact.artifact.artifactType}`,
-        position: { x: sourceNode.position.x + sourceNode.width + 80, y: sourceNode.position.y + index * (outputHeight + 24) },
-        width: outputWidth,
-        height: outputHeight,
-        metadata: {
-            content: preferredCapabilityOutputText(artifact),
-            status: "success",
-            fontSize: 14,
-            capabilityArtifact: {
-                source: "canvas_chat",
-                sourceNodeId: sourceNode.id,
-                invocationId: trace.invocationId,
-                artifactId: artifact.artifact.id,
-                artifactType: artifact.artifact.artifactType,
-                artifactHash: artifact.artifact.contentHash,
-                artifactIds: trace.artifactIds,
-                skillVersionId: trace.skillVersionId,
-                appliedAt: trace.appliedAt,
+    const createdNodes = pending.map(({ artifact, index }): CanvasNodeData => {
+        const mediaRef = renditionMediaRef(artifact);
+        return {
+            id: nodeId(artifact, index),
+            type: (mediaRef ? "image" : "text") as CanvasNodeData["type"],
+            title: `Skill · ${artifact.artifact.artifactType}`,
+            position: { x: sourceNode.position.x + sourceNode.width + 80, y: sourceNode.position.y + capabilityOutputOffset(artifacts, index) },
+            width: outputWidth,
+            height: capabilityOutputHeight(artifact),
+            metadata: {
+                content: mediaRef || preferredCapabilityOutputText(artifact),
+                status: "success",
+                ...(mediaRef ? {} : { fontSize: 14 }),
+                capabilityArtifact: {
+                    source: "canvas_chat",
+                    sourceNodeId: sourceNode.id,
+                    invocationId: trace.invocationId,
+                    artifactId: artifact.artifact.id,
+                    artifactType: artifact.artifact.artifactType,
+                    artifactHash: artifact.artifact.contentHash,
+                    artifactIds: trace.artifactIds,
+                    skillVersionId: trace.skillVersionId,
+                    appliedAt: trace.appliedAt,
+                },
             },
-        },
-    }));
+        };
+    });
     const createdConnections = pending.map(({ artifact, index }, createdIndex): CanvasConnection => ({ id: connectionId(artifact, index), fromNodeId: sourceNode.id, toNodeId: createdNodes[createdIndex].id }));
     return { nodes: [...nodes, ...createdNodes], connections: [...connections, ...createdConnections], createdNodeIds: createdNodes.map((node) => node.id) };
 }
@@ -75,32 +82,35 @@ export function planCanvasAgentOutput({ nodes, connections, sourceNodeIds, sourc
     const pending = artifacts.flatMap((artifact, index) =>
         nodes.some((node) => node.metadata?.agentArtifact?.agentPlanId === agentPlanId && node.metadata.agentArtifact.invocationId === trace.invocationId && node.metadata.agentArtifact.artifactId === artifact.artifact.id) ? [] : [{ artifact, index }],
     );
-    const createdNodes = pending.map(({ artifact, index }): CanvasNodeData => ({
-        id: nodeId(artifact, index),
-        type: "text" as CanvasNodeData["type"],
-        title: `Agent · ${artifact.artifact.artifactType}`,
-        position: { x: anchor.x, y: anchor.y + index * (outputHeight + 24) },
-        width: outputWidth,
-        height: outputHeight,
-        metadata: {
-            content: preferredCapabilityOutputText(artifact),
-            status: "success",
-            fontSize: 14,
-            agentArtifact: {
-                source: "canvas_chat",
-                agentPlanId,
-                sourceMessageId,
-                sourceNodeIds,
-                invocationId: trace.invocationId,
-                artifactId: artifact.artifact.id,
-                artifactType: artifact.artifact.artifactType,
-                artifactHash: artifact.artifact.contentHash,
-                artifactIds: trace.artifactIds,
-                skillVersionId: trace.skillVersionId,
-                appliedAt: trace.appliedAt,
+    const createdNodes = pending.map(({ artifact, index }): CanvasNodeData => {
+        const mediaRef = renditionMediaRef(artifact);
+        return {
+            id: nodeId(artifact, index),
+            type: (mediaRef ? "image" : "text") as CanvasNodeData["type"],
+            title: `Agent · ${artifact.artifact.artifactType}`,
+            position: { x: anchor.x, y: anchor.y + capabilityOutputOffset(artifacts, index) },
+            width: outputWidth,
+            height: capabilityOutputHeight(artifact),
+            metadata: {
+                content: mediaRef || preferredCapabilityOutputText(artifact),
+                status: "success",
+                ...(mediaRef ? {} : { fontSize: 14 }),
+                agentArtifact: {
+                    source: "canvas_chat",
+                    agentPlanId,
+                    sourceMessageId,
+                    sourceNodeIds,
+                    invocationId: trace.invocationId,
+                    artifactId: artifact.artifact.id,
+                    artifactType: artifact.artifact.artifactType,
+                    artifactHash: artifact.artifact.contentHash,
+                    artifactIds: trace.artifactIds,
+                    skillVersionId: trace.skillVersionId,
+                    appliedAt: trace.appliedAt,
+                },
             },
-        },
-    }));
+        };
+    });
     const createdConnections = sourceNode
         ? pending.map(({ artifact, index }, createdIndex): CanvasConnection => ({ id: connectionId(artifact, index), fromNodeId: sourceNode.id, toNodeId: createdNodes[createdIndex].id }))
         : [];

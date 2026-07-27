@@ -102,7 +102,7 @@ git diff --check
 - 每次运行先创建不可变 `source_text` Artifact，再建立 Agent Plan 并完成预检；确认时展示冻结的 Agent / Skill 精确版本、预计 Credits 和服务端确认要求。执行产物以待审核 `production_script` Artifact 返回，未批准前不会写入本地分集。
 - 导入页明确显示“运行系统剧本制作 Agent”；已有分集显示同一系统 Agent 标签，不再提供项目级 Skill preset 选择器。旧 Agent 设置抽屉、快速 Agent、Workflow 执行面板、脚本直调 Runner 和 `projectWorkflowSelections` 持久化状态已移除。
 - 待审文本如果被手工修改，将拒绝继续批准原 Artifact 哈希，必须重新运行，避免把修改稿伪装成原 Agent 产物；批准后才完成 Plan 并同步本地分集与视频工作流剧本。
-- 隔离浏览器验收已确认：系统“标准 AIGC 生产 Workflow”默认可见并可复制为项目可编辑草稿；项目剧本入口成功创建 `source_text` 与 Agent Plan；页面没有新增 console error，也未发生崩溃或无限轮询。该系统 Workflow 后续已由 Phase 8 升级为 9 节点 `2.0.0`。
+- 隔离浏览器验收已确认：系统“标准 AIGC 生产 Workflow”默认可见并可复制为项目可编辑草稿；项目剧本入口成功创建 `source_text` 与 Agent Plan；页面没有新增 console error，也未发生崩溃或无限轮询。该系统 Workflow 后续已升级为 12 节点 `2.1.0`。
 - 当前隔离环境没有可用文本模型，Agent Plan 预检按设计立即返回“没有可用文本模型”，因此本轮不宣称真实模型生产稿效果通过。确定性单元测试已覆盖冻结坐标、确认、轮询到待审、人工审核完成和篡改阻断；配置生产文本模型后仍需用固定剧本复测实际文稿质量。
 - 本阶段自动门禁已通过：`go test ./... -count=1`、前端 773 项测试、`npm run typecheck`、`npm run build` 和 `git diff --check`。
 
@@ -110,20 +110,31 @@ git diff --check
 
 - 新增 6 个系统 Skill 推荐发布版：内容标签分类、角色资产设定图 Brief、场景资产主参考图 Brief、道具资产结构图 Brief、竖屏短剧分镜和横屏中长剧分镜。每个包均包含 `SKILL.md`、领域规则、输出模板、通过 Core Artifact Schema 的示例、独立 Manifest、输入 / 输出契约、质量门和系统评测。
 - 内容分类从已批准 `production_script` 产出带原文证据和置信度的 `content_profile`；三类资产 Brief 共用 `asset_catalog` 事实但以独立 Skill 生成不同图片格式，不声称图片已经生成；两类分镜共同消费剧本、资产目录和内容标签。
-- 系统“标准 AIGC 生产 Workflow”升级为不可变 `2.0.0`：`剧本整理 → 内容分类 / 资产提取 → 角色 / 场景 / 道具 Brief / 分镜路由 → 视频提示词 → 交付审计`，共 9 节点。角色、场景、道具 Brief 可并行；分镜节点使用 `tag_route`，`9:16 + short_drama` 冻结竖屏短剧 Skill，`16:9 + long_form` 冻结横屏中长剧 Skill。
+- 系统“标准 AIGC 生产 Workflow”当前为不可变 `2.1.0`：`剧本整理 → 内容分类 / 资产提取 → 角色 / 场景 / 道具 Brief → 角色 / 场景 / 道具成图 / 分镜路由 → 视频提示词 → 交付审计`，共 12 节点。三类 Brief 与三类资产成图分别可并行；分镜节点继续使用 `tag_route`，`9:16 + short_drama` 冻结竖屏短剧 Skill，`16:9 + long_form` 冻结横屏中长剧 Skill。
 - 确定性端到端测试已实际完成 9 个 Invocation：逐节点冻结 Skill / Agent 版本、父 Artifact ID / hash、Schema 与业务质量门、人工审核、积分扣费、刷新坐标和最终 `delivery_report`；100 Credits 完成后余额为 91。
-- 隔离浏览器验收已确认 Skill 中心显示 12 个系统 Skill，其中 6 个新能力包均有推荐发布版和同哈希评测；项目 Workflow 中心显示 v2.0.0、9 节点和 5 条拓扑泳道，分镜节点明确显示“标签自动路由”及两个候选 Skill。系统 Workflow 可复制为项目草稿，页面 console error 为 0，无崩溃和无限轮询。临时 Go / Next / SQLite 服务及测试数据已关闭并清理。
-- 完整自动门禁已通过：Go 全包测试、前端 773 项测试、TypeScript 类型检查、Next.js 生产构建、能力种子 / 路由 / 9 节点专项测试和 `git diff --check`。
-- 当前边界：本阶段产出的是 `asset_brief`，图片模型执行器与 `asset_rendition` 生成 / 归档仍在 `docs/todo.md`；内容分类结果会进入分镜 Skill 输入，但当前分镜版本选择在预检时根据制作参数冻结，不会在同一次预检中读取尚未生成的分类结果重新路由。
-- 人工验收：在 Skill 中心逐一查看 6 个新包的文件、契约和评测；复制 v2.0.0 Workflow，分别以 `9:16 + short_drama`、`16:9 + long_form` 预检，确认分镜冻结版本不同；配置真实文本模型后，用同一固定剧本完成一次真实输出质量复测。
+- 隔离浏览器验收已确认内容分类、三类 Brief、两类分镜和三类资产成图能力均有推荐发布版；项目 Workflow 中心显示 v2.1.0 与 12 节点，分镜节点明确显示“标签自动路由”及两个候选 Skill。系统 Workflow 可复制为项目草稿，页面 console error 为 0，无崩溃和无限轮询。
+- 完整自动门禁已通过：Go 全包测试、前端 777 项测试、TypeScript 类型检查、Next.js 生产构建、能力种子 / 路由 / 12 节点专项测试和 `git diff --check`。
+- 当前边界：内容分类结果会进入分镜 Skill 输入，但当前分镜版本选择仍在预检时根据制作参数冻结，不会在同一次预检中读取尚未生成的分类结果重新路由；需要 deferred preflight 才能完成二次路由。
+- 人工验收：在 Skill 中心逐一查看新增能力包的文件、契约和评测；复制 v2.1.0 Workflow，分别以 `9:16 + short_drama`、`16:9 + long_form` 预检，确认分镜冻结版本不同；配置真实文本和图片模型后，用同一固定剧本完成一次内容与视觉效果复测。
+
+### 图片执行器与资产成图 Runtime Phase 9
+
+- 角色、场景、道具各新增一个独立发布的 `asset_rendition` Skill；执行策略只允许图片模型，预检冻结模型、费用、输入 Artifact、输出契约和 Skill 内容哈希。
+- Worker 将已批准 `asset_brief` 交给统一图片渠道，下载并按内容 SHA-256 归档媒体，产出稳定 `mediaRef`、`renditionId` 和生成模型坐标；失败、部分成功和重试继续使用 Invocation Runtime 的不可变 attempt 与 Artifact 血缘。
+- Workflow 节点支持从多个上游聚合相同类型 Artifact；视频提示词节点会同时接收角色、场景和道具的成图结果，不复制 Skill 正文或图片数据。
+- 隔离协议级 E2E 已真实执行 `source_text → production_script → asset_catalog → asset_brief → asset_rendition`，完成预检、精确确认、Worker 调用、媒体归档、人工批准与 Apply。测试图片为 1×1 PNG，仅证明协议、归档和消费链，不代表生产视觉质量。
+- 生图工作台已直接消费 `asset_rendition`：Runtime 图片显示在结果区并写入生成历史，保存后“我的素材”显示 1 条图片；单张素材使用自己的 Invocation / Artifact trace，不会把同批其他 Artifact 坐标写入。
+- 画布真实 UI 已从已保存图片节点运行同一角色成图 Skill；批准并使用后从 1 节点 / 0 连线变为 2 节点 / 1 连线。新节点类型为图片，内容使用稳定 Runtime `mediaRef`，节点 JSON 保留 Invocation ID、Artifact ID / Hash、Skill Version 和 Apply 时间。
+- 浏览器控制台警告与错误为 0；临时 Next、Go、假模型、SQLite 和浏览器标签已停止或清理。完整门禁为 Go 全包、前端 777 项、TypeScript 和 Next.js 生产构建。
+- 待真实效果确认：配置正式图片模型，分别生成角色设定图、场景主参考图和道具结构图，核对身份 / 服装 / 场景 / 道具一致性、格式适配和后续视频提示词引用质量。
 
 ### 生图工作台统一 Skill 能力入口 Phase 6A
 
 - 生图工作台的“提示词库”旁新增“Skill 能力”；抽屉只读取当前用户可见的已发布 Skill 和项目已批准 Artifact，按每个 Binding 精确匹配类型，不隐式复用同一 Artifact 填充两个输入。
 - 当前文本只在所选 Skill 需要 `source_text` 时创建不可变 Artifact；预检冻结精确 Skill Version、内容哈希、输入引用、执行模型和额度。预检后文本或 Skill 变化会锁定确认，不会使用过期快照。
-- 运行不自动审核、不自动写回；`needs_review` 必须人工批准完整 Artifact-set，然后点击“使用此产物”才替换提示词。写入成功后通过 `client_local_receipt` 幂等记录 `surface / targetKind / targetId / artifactIds`。
+- 运行不自动审核、不自动写回；`needs_review` 必须人工批准完整 Artifact-set，然后点击“使用此产物”才消费。文本 Artifact 替换提示词，`asset_rendition` 直接进入结果区并写入生成历史；写入成功后通过 `client_local_receipt` 幂等记录 `surface / targetKind / targetId / artifactIds`。
 - 提示词优先使用与当前资产 ID 匹配的 `asset_brief.brief`，其次是稳定顺序的第一个 `asset_brief`，并可消费 `production_script.productionScript` 和 `video_prompt_package.items[0].prompt`。空集合、未批准集合或空文本不会覆盖编辑器。
-- 当前已使用的提示词与轻量追溯坐标用用户隔离 `localforage` 恢复；生成记录和保存素材只记录 `invocationId / artifactIds / skillVersionId / appliedAt`，不复制 Artifact payload。
+- 当前已使用的提示词与轻量追溯坐标用用户隔离 `localforage` 恢复；每张 Runtime 图片保存精确的单 Artifact `invocationId / artifactIds / skillVersionId / appliedAt`，生成记录和素材不复制 Artifact payload。
 - 固定公交站剧本 HTTP E2E 已覆盖 `image source → source_text → 精确 Skill Version/Hash → asset_brief → review → client_local_receipt`，产物保留“林秋 / 旧公交站 / 折起的车票 / 原对白”，并验证父 Artifact、Apply 重放幂等和跨用户隔离。
 - 当前本地账号仍没有可用真实文本模型通道；浏览器已用固定公交站剧本验证预检会立即进入“已阻断”，明确显示“执行通道不可用（execution_target_unavailable）”，不会无限等待。确定性成功链由 HTTP E2E 验证；配置真实文本模型后，仍需补一次同剧本的真实效果验收。
 - 自动门禁已覆盖 `go test ./... -count=1`、前端 767 项测试、`npm run typecheck`、`npm run lint:fast`、`npm run build` 和 `git diff --check`；浏览器另验收页面无崩溃、入口可打开、不兼容 Skill 显示缺失 Binding、固定版本/哈希/模型/额度冻结及无新增控制台错误。
@@ -133,7 +144,7 @@ git diff --check
 
 - 文本、配置和媒体节点的悬浮工具栏与右侧检查器新增“Skill / 运行 Skill”入口，复用生图工作台同一套已发布 Skill 选择、Artifact Binding、预检、确认、审核和 Apply Runtime，不新增画布专用执行协议。
 - 当前节点只提供可解释的语义文本：优先使用最终提示词、草稿提示词和节点提示词，其次使用文本 / 配置节点正文；图片、视频和音频 URL 不会冒充 `source_text`。
-- 人工批准并点击“使用此产物”后，每个 Artifact 创建一个下游文本节点并连接来源节点；节点保存 `sourceNodeId / invocationId / artifactId / artifactType / artifactHash / artifactIds / skillVersionId / appliedAt`，同一 Invocation Artifact 重放不重复创建。
+- 人工批准并点击“使用此产物”后，每个 Artifact 创建一个下游节点并连接来源节点：文本类创建文本节点，图片型 `asset_rendition` 创建图片节点并使用稳定 Runtime `mediaRef`。节点保存 `sourceNodeId / invocationId / artifactId / artifactType / artifactHash / artifactIds / skillVersionId / appliedAt`，同一 Invocation Artifact 重放不重复创建。
 - Preflight 空集合固定序列化为 `[]`，前端也防御旧响应中的 `null`，修复成功预检后对 `blockReasons.map` 调用导致的真实页面崩溃。
 - 固定公交站剧本浏览器验收已完成：12 个已发布 Skill 可见，不兼容分镜 Skill 明确提示缺少 `asset_catalog / production_script`；无文本通道约 0.5 秒返回 `execution_target_unavailable`；临时确定性 OpenAI-compatible 执行器完成“剧本整理 v3.1.0”，产物保留林秋、旧公交站、折起车票和原对白，并整理为可制作的场次 / 场记格式。
 - 产物批准并使用后，真实页面从 1 节点 / 0 连线变为 2 节点 / 1 连线；刷新后节点、连线、正文和完整溯源 metadata 均保留。数据库只有 1 条 applied 回执，浏览器控制台新增错误为 0；临时模型设置和执行器已清理，开发服务已关闭。
@@ -145,7 +156,7 @@ git diff --check
 - 画布助手可选择当前项目可见且已有推荐发布版本的 Agent，也可保留“普通对话”；Agent 是组合 Skill 的编排单元，Skill 仍可被图片、节点、Workflow 或 API 独立调用。
 - 提交 Agent 目标时，只把用户目标和选中节点的语义文本登记为不可变 `source_text`；图片、视频 URL 和 base64 不会写入 Agent Plan 输入。对话消息只保存 Plan、Agent、Artifact、Invocation、Skill 和哈希坐标，不复制 Artifact payload。
 - Temporary Plan 草稿支持替换、排序、删除 Skill 并保存新 revision；预检冻结版本、输入、执行目标、额度和确认指纹，确认必须精确匹配服务端要求。每一步继续委托 Agent Plan → Invocation → Artifact Runtime，并对当前完整 Artifact-set 人工审核。
-- 终态 Plan 不继续轮询。完成后的 Artifact 必须由用户点击使用才写回画布：有来源节点时创建下游文本节点和连线，无来源节点时放在画布最右侧；节点保留 Agent Plan / 消息 / Invocation / Skill / Artifact 哈希 metadata。
+- 终态 Plan 不继续轮询。完成后的 Artifact 必须由用户点击使用才写回画布：有来源节点时创建下游节点和连线，无来源节点时放在画布最右侧；文本 Artifact 创建文本节点，图片型 `asset_rendition` 创建图片节点，节点保留 Agent Plan / 消息 / Invocation / Skill / Artifact 哈希 metadata。
 - 同一最终 Artifact-set 重放不会重复创建节点、连线或 Apply 回执；浏览器本地写入通过稳定 `client_local_receipt` 记录，服务端不直接修改本地画布。
 - 旧硬编码 Prompt Agent Skill Pack、意图 / 自动 / 审核模式、工具箱和独立执行状态已移除；普通问答、直接生图、助手动作预览继续保留，所有生产 Agent 统一来自 Agent Registry。
 - 专项自动检查已覆盖 Temporary Plan 数据模型、消息坐标、选择与创建接线、生命周期卡、最终 Artifact 回写、幂等重放和统一 Runtime 边界；TypeScript 类型检查通过。

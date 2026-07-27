@@ -4,6 +4,17 @@ import type { ArtifactEnvelope } from "../../../services/api/invocations-contrac
 
 export type ImageCapabilityTrace = CapabilityConsumeTrace;
 
+export type ImageCapabilityRendition = {
+    artifactId: string;
+    artifactHash: string;
+    assetId: string;
+    renditionId: string;
+    mediaRef: string;
+    mediaType: "image";
+    model: string;
+    trace: ImageCapabilityTrace;
+};
+
 export function selectImagePromptArtifact(artifacts: ArtifactEnvelope[], assetId = ""): ArtifactEnvelope | undefined {
     const briefs = artifacts.filter((item) => item.artifact.artifactType === "asset_brief");
     const matching = assetId ? briefs.find((item) => item.payload.assetId === assetId) : undefined;
@@ -30,4 +41,25 @@ export function buildImageCapabilityTrace(trace: CapabilityConsumeTrace): ImageC
         skillVersionId: trace.skillVersionId,
         appliedAt: trace.appliedAt,
     };
+}
+
+export function imageRenditionsFromArtifacts(artifacts: ArtifactEnvelope[], trace: CapabilityConsumeTrace): ImageCapabilityRendition[] {
+    return artifacts.flatMap((item) => {
+        if (item.artifact.artifactType !== "asset_rendition" || item.payload.mediaType !== "image") return [];
+        const assetId = typeof item.payload.assetId === "string" ? item.payload.assetId.trim() : "";
+        const renditionId = typeof item.payload.renditionId === "string" ? item.payload.renditionId.trim() : "";
+        const mediaRef = typeof item.payload.mediaRef === "string" ? item.payload.mediaRef.trim() : "";
+        if (!assetId || !renditionId || !mediaRef) return [];
+        const metadata = item.payload.generationMetadata && typeof item.payload.generationMetadata === "object" ? item.payload.generationMetadata as Record<string, unknown> : {};
+        return [{
+            artifactId: item.artifact.id,
+            artifactHash: item.artifact.contentHash,
+            assetId,
+            renditionId,
+            mediaRef,
+            mediaType: "image" as const,
+            model: typeof metadata.model === "string" ? metadata.model : "",
+            trace: buildImageCapabilityTrace({ ...trace, artifactIds: [item.artifact.id] }),
+        }];
+    });
 }
