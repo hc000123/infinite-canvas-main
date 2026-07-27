@@ -17,9 +17,13 @@ import { promptAgentSkillPacks } from "../utils/canvas-prompt-agent-skills";
 import type { PromptAgentComposerIntent, PromptAgentRunMode, PromptAgentSkillPackId } from "../utils/canvas-prompt-agent-types";
 
 export type AssistantMode = "ask" | "image";
+export type CanvasAssistantAgentOption = { value: string; label: string };
 
 type CanvasAssistantComposerProps = {
     mode: AssistantMode;
+    agentId: string;
+    agentOptions: CanvasAssistantAgentOption[];
+    agentLoading: boolean;
     agentMode: PromptAgentRunMode;
     intent: PromptAgentComposerIntent;
     skillPackId: PromptAgentSkillPackId;
@@ -28,6 +32,7 @@ type CanvasAssistantComposerProps = {
     references: CanvasAssistantReference[];
     config: AiConfig;
     onModeChange: (mode: AssistantMode) => void;
+    onAgentChange: (agentId: string) => void;
     onAgentModeChange: (mode: PromptAgentRunMode) => void;
     onIntentChange: (intent: PromptAgentComposerIntent) => void;
     onSkillPackChange: (skillPackId: PromptAgentSkillPackId) => void;
@@ -45,6 +50,9 @@ type CanvasAssistantComposerProps = {
 
 export function CanvasAssistantComposer({
     mode,
+    agentId,
+    agentOptions,
+    agentLoading,
     agentMode,
     intent,
     skillPackId,
@@ -53,6 +61,7 @@ export function CanvasAssistantComposer({
     references,
     config,
     onModeChange,
+    onAgentChange,
     onAgentModeChange,
     onIntentChange,
     onSkillPackChange,
@@ -113,6 +122,7 @@ export function CanvasAssistantComposer({
                         </Tooltip>
                         {mode === "ask" ? (
                             <>
+                                <PublishedAgentSelect value={agentId} options={agentOptions} loading={agentLoading} theme={theme} onChange={onAgentChange} />
                                 <PromptAgentIntentSwitch intent={intent} theme={theme} onChange={onIntentChange} />
                                 <PromptAgentRunModeSwitch mode={agentMode} theme={theme} onChange={onAgentModeChange} />
                                 <PromptAgentSkillPackSelect value={skillPackId} theme={theme} onChange={onSkillPackChange} />
@@ -138,16 +148,34 @@ export function CanvasAssistantComposer({
                     </div>
                     <Button type="primary" className="!h-10 !min-w-16 shrink-0 !rounded-full !px-3" disabled={isRunning || !prompt.trim()} onClick={() => void onSubmit()} aria-label="发送">
                         <span className="flex items-center gap-1.5">
-                            <span className="inline-flex items-center gap-1 text-xs font-medium tabular-nums">
-                                <CreditSymbol />
-                                {credits.toLocaleString()}
-                            </span>
+                            <span className="inline-flex items-center gap-1 text-xs font-medium tabular-nums">{agentId ? "Plan" : <><CreditSymbol />{credits.toLocaleString()}</>}</span>
                             {isRunning ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
                         </span>
                     </Button>
                 </div>
             </div>
         </div>
+    );
+}
+
+function PublishedAgentSelect({ value, options, loading, theme, onChange }: { value: string; options: CanvasAssistantAgentOption[]; loading: boolean; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onChange: (agentId: string) => void }) {
+    return (
+        <Tooltip title="选择已发布 Agent；普通对话不会创建 Plan">
+            <div className="flex h-8 shrink-0 items-center gap-1 rounded-full px-2" style={{ background: theme.node.fill, color: theme.node.text }}>
+                <Bot className="size-3.5 opacity-70" />
+                <Select
+                    size="small"
+                    variant="borderless"
+                    value={value}
+                    loading={loading}
+                    className="w-[128px]"
+                    popupMatchSelectWidth={220}
+                    getPopupContainer={() => document.body}
+                    options={[{ value: "", label: "普通对话" }, ...options]}
+                    onChange={onChange}
+                />
+            </div>
+        </Tooltip>
     );
 }
 

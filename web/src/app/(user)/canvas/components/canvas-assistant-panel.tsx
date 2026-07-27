@@ -2,11 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
+import { useQuery } from "@tanstack/react-query";
 
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { nanoid } from "nanoid";
 import { requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
+import { fetchAgents } from "@/services/api/agent-registry";
+import { createAgentPlan } from "@/services/api/agent-plans";
+import { createArtifact } from "@/services/api/invocations";
 import { uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -15,6 +19,7 @@ import { useCreativeProjectStore } from "../../projects/use-creative-project-sto
 import { type CanvasAssistantImage, type CanvasAssistantMessage, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData } from "../types";
 import { executeAssistantCanvasReadAction, parseAssistantCanvasActionSuggestion, type AssistantCanvasAction, type AssistantCanvasReadAction } from "../utils/canvas-assistant-actions";
 import { buildAssistantReferenceImages, buildChatMessages, buildDebugAssistantActions, summarizeLocalImageInput, updateLocalImageResultSize } from "../utils/canvas-assistant-panel-utils";
+import { buildCanvasAgentPlanRequest, buildCanvasAgentSourceText, canvasAgentCandidates, cloneCanvasAgentSkillRefs } from "../utils/canvas-agent-plan-model";
 import { buildAssistantReferences } from "../utils/canvas-assistant-references";
 import { buildCanvasAssistantWorkflowContext } from "../utils/canvas-assistant-workflow-context";
 import { buildWorkflowAssistantActionSuggestion } from "../utils/canvas-assistant-workflow-actions";
@@ -106,6 +111,7 @@ export function CanvasAssistantPanel({
     const [agentMode, setAgentMode] = useState<PromptAgentRunMode>("ask");
     const [promptIntent, setPromptIntent] = useState<PromptAgentComposerIntent>("auto");
     const [promptSkillPackId, setPromptSkillPackId] = useState<PromptAgentSkillPackId>("auto");
+    const [selectedAgentId, setSelectedAgentId] = useState("");
     const [prompt, setPrompt] = useState("");
     const [isRunning, setIsRunning] = useState(false);
     const [closing, setClosing] = useState(false);
@@ -134,6 +140,9 @@ export function CanvasAssistantPanel({
     const selectedNodeKey = useMemo(() => Array.from(selectedNodeIds).sort().join(","), [selectedNodeIds]);
     const allSelectedReferences = useMemo(() => buildAssistantReferences(nodes, selectedNodeIds, connections), [connections, nodes, selectedNodeIds]);
     const selectedReferences = useMemo(() => allSelectedReferences.filter((item) => !removedReferenceIds.has(item.id)), [allSelectedReferences, removedReferenceIds]);
+    const agentsQuery = useQuery({ queryKey: ["canvas-agent-options", projectId], queryFn: () => fetchAgents(projectId), enabled: Boolean(projectId), retry: false, staleTime: 30_000 });
+    const agentCandidates = useMemo(() => canvasAgentCandidates(agentsQuery.data || []), [agentsQuery.data]);
+    const selectedAgent = agentCandidates.find((item) => item.agent.id === selectedAgentId);
     const workflowContext = useMemo(
         () =>
             buildCanvasAssistantWorkflowContext({
@@ -244,12 +253,66 @@ export function CanvasAssistantPanel({
             });
             return;
         }
+        if (mode === "ask" && selectedAgent) {
+            await sendCanvasAgentPlanMessage(text, selectedAgent);
+            return;
+        }
         if (mode === "ask" && (agentMode !== "ask" || isPromptAgentRequest(text, promptIntent))) {
             await sendPromptAgentMessage(text, messages);
             return;
         }
         await sendMessage(text, mode, messages);
     };
+
+    async function sendCanvasAgentPlanMessage(text: string, agent: (typeof agentCandidates)[number]) {
+        const packageValue = agent.recommendedPackage;
+        if (!packageValue) return;
+        const session = ensureActiveSession();
+        const refs = selectedReferences;
+        const userMessage: CanvasAssistantMessage = { id: nanoid(), role: "user", mode: "ask", text, references: refs };
+        const assistantId = nanoid();
+        appendMessage(session.id, userMessage);
+        appendMessage(session.id, { id: assistantId, role: "assistant", mode: "ask", text: "正在创建 Temporary Plan", isLoading: true });
+        setPrompt("");
+        setIsRunning(true);
+        try {
+            const skillRefs = cloneCanvasAgentSkillRefs(packageValue.defaultSkillRefs);
+            if (!skillRefs.length) throw new Error("当前 Agent 没有可运行的 Skill");
+            const sourceBindingName = skillRefs[0].inputBindings.find((binding) => !binding.fromStepKey)?.bindingName || "source_text";
+            const sourceText = buildCanvasAgentSourceText(text, refs);
+            const sourceArtifact = await createArtifact({ artifactType: "source_text", schemaVersion: "1.0.0", projectId, episodeId, payload: { text: sourceText } });
+            const detail = await createAgentPlan(
+                buildCanvasAgentPlanRequest({
+                    projectId,
+                    episodeId,
+                    agentId: agent.agent.id,
+                    agentVersionId: agent.agent.recommendedVersionId,
+                    goal: text,
+                    sourceArtifact: { artifactId: sourceArtifact.artifact.id, contentHash: sourceArtifact.artifact.contentHash },
+                    sourceBindingName,
+                    skillRefs,
+                    idempotencyKey: globalThis.crypto.randomUUID(),
+                }),
+            );
+            updateMessage(session.id, assistantId, {
+                text: `已创建 ${agent.agent.name} 的可编辑 Temporary Plan，确认前不会执行 Skill。`,
+                isLoading: false,
+                agentPlanRun: {
+                    planId: detail.plan.id,
+                    agentId: agent.agent.id,
+                    agentVersionId: agent.agent.recommendedVersionId,
+                    agentName: agent.agent.name,
+                    sourceArtifactRef: { bindingName: sourceBindingName, artifactId: sourceArtifact.artifact.id, contentHash: sourceArtifact.artifact.contentHash },
+                    sourceNodeIds: refs.map((reference) => reference.id).filter((id) => nodes.some((node) => node.id === id)),
+                    skillRefs,
+                },
+            });
+        } catch (error) {
+            updateMessage(session.id, assistantId, { text: error instanceof Error ? error.message : "Temporary Plan 创建失败", isLoading: false });
+        } finally {
+            setIsRunning(false);
+        }
+    }
 
     const sendPromptAgentMessage = async (text: string, history: CanvasAssistantMessage[], options?: { agentMode?: PromptAgentRunMode; references?: CanvasAssistantReference[]; skillPackId?: PromptAgentSkillPackId }) => {
         const nextAgentMode = options?.agentMode || agentMode;
@@ -465,6 +528,9 @@ export function CanvasAssistantPanel({
             {view === "chat" ? (
                 <CanvasAssistantComposer
                     mode={mode}
+                    agentId={selectedAgentId}
+                    agentOptions={agentCandidates.map((item) => ({ value: item.agent.id, label: `${item.agent.name} · ${item.recommendedPackage?.defaultSkillRefs.length || 0} 步` }))}
+                    agentLoading={agentsQuery.isLoading}
                     agentMode={agentMode}
                     intent={promptIntent}
                     skillPackId={promptSkillPackId}
@@ -473,6 +539,7 @@ export function CanvasAssistantPanel({
                     references={selectedReferences}
                     config={effectiveConfig}
                     onModeChange={setMode}
+                    onAgentChange={setSelectedAgentId}
                     onAgentModeChange={setAgentMode}
                     onIntentChange={setPromptIntent}
                     onSkillPackChange={setPromptSkillPackId}
