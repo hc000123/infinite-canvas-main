@@ -2,7 +2,12 @@ package service
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/basketikun/infinite-canvas/model"
 )
 
 func TestXinglianVideoEndpointsNormalizeConfiguredV1URL(t *testing.T) {
@@ -94,5 +99,24 @@ func TestNormalizeXinglianVideoTaskResponseMapsTokenTaskWrapper(t *testing.T) {
 	}
 	if payload["id"] != "task-1" || payload["status"] != "completed" || payload["video_url"] != "http://cdn.example.com/video.mp4" {
 		t.Fatalf("payload = %#v", payload)
+	}
+}
+
+func TestXinglianModelPreflightRejectsUnavailableModel(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/models":
+			_, _ = w.Write([]byte(`{"data":[{"id":"sd2-720p-fast"}]}`))
+		case "/api/user/balance":
+			_, _ = w.Write([]byte(`{"success":true}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	_, err := testAdminChannelModel(model.ModelChannel{Protocol: string(model.ModelProtocolXinglianCloud), BaseURL: upstream.URL + "/v1", APIKey: "test-key"}, "sd2-720p-mini")
+	if err == nil || !strings.Contains(err.Error(), "当前账户不可用") {
+		t.Fatalf("error = %v, want unavailable model message", err)
 	}
 }

@@ -26,7 +26,7 @@ export function useCanvasVideoTaskRefresh({
     toVideoMetadata,
 }: {
     archiveGeneratedVideoNode: (node: CanvasNodeData, generationConfig: AiConfig, prompt?: string) => Promise<string | void | undefined>;
-    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string, node?: CanvasNodeData) => Promise<Partial<CanvasNodeMetadata>>;
+    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string, node: CanvasNodeData) => Promise<Partial<CanvasNodeMetadata>>;
     canvasAiConfig: AiConfig;
     message: CanvasVideoTaskRefreshMessage;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;

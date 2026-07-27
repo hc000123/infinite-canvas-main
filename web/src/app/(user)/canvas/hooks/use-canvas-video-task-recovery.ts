@@ -21,7 +21,7 @@ type UseCanvasVideoTaskRecoveryOptions = {
     nodesRef: RefObject<CanvasNodeData[]>;
     recoveringVideoTaskIdsRef: RefObject<Set<string>>;
     canvasAiConfig: AiConfig;
-    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string, node?: CanvasNodeData) => Promise<Partial<CanvasNodeMetadata>>;
+    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string, node: CanvasNodeData) => Promise<Partial<CanvasNodeMetadata>>;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
     archiveRecoveredVideoNode: (node: CanvasNodeData, generationConfig: AiConfig, prompt?: string) => Promise<string | void | undefined>;
@@ -76,7 +76,7 @@ async function recoverVideoTaskNode({
 }: {
     node: CanvasNodeData;
     canvasAiConfig: AiConfig;
-    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string, node?: CanvasNodeData) => Promise<Partial<CanvasNodeMetadata>>;
+    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string, node: CanvasNodeData) => Promise<Partial<CanvasNodeMetadata>>;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
     archiveRecoveredVideoNode: (node: CanvasNodeData, generationConfig: AiConfig, prompt?: string) => Promise<string | void | undefined>;

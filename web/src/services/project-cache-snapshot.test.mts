@@ -32,6 +32,9 @@ test("builds a package snapshot with only the selected project", () => {
             { id: "a1", metadata: { projectId: "p1" } },
             { id: "a2", metadata: { projectId: "p2" } },
             { id: "a3", folderId: "f1" },
+            { id: "a4", metadata: { originalWorkflow: { projectId: "p1" } } },
+            { id: "a5", metadata: { projectLibraries: [{ projectId: "p1" }] } },
+            { id: "a6", metadata: { generations: [{ projectId: "p1" }] } },
         ],
     });
     assert.equal(snapshot.project?.id, "p1");
@@ -53,6 +56,6 @@ test("builds a package snapshot with only the selected project", () => {
     );
     assert.deepEqual(
         snapshot.assets.map((item) => item.id),
-        ["a1", "a3"],
+        ["a1", "a3", "a4", "a5", "a6"],
     );
 });

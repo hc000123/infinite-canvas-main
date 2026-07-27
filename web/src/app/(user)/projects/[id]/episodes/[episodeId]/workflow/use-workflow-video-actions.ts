@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { App } from "antd";
 
 import { runCanvasVideoGeneration } from "@/app/(user)/canvas/utils/canvas-generation-runner";
@@ -10,8 +10,12 @@ import { aiTaskLedgerFromVideoTask, buildPackageAssetGeneration, buildPackageVid
 import { useVideoPackageStore, type PackageGeneration, type ProductionPackage, type ProductionPackageConfig } from "@/app/(user)/video/use-video-package-store";
 import { fetchVideoTaskContent, preflightVideoGeneration, RecoverableVideoTaskError, refreshVideoTask, type NormalizedVideoTask } from "@/services/api/video";
 import { uploadMediaFile } from "@/services/file-storage";
+import { archiveLocalMediaToProjectCache } from "@/services/project-cache-archive";
+import { projectCacheContextFromGeneration, type ProjectCacheMediaKind } from "@/services/project-cache-context";
 import { useAssetStore, type AssetWriteInput } from "@/stores/use-asset-store";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { useUserStore } from "@/stores/use-user-store";
+import { useCreativeProjectStore } from "../../../../use-creative-project-store";
 
 import { eligibleBatchPackages } from "./workflow-batch-eligibility";
 import { buildContinuityReference, updateContinuityReference } from "./workflow-production-state";
@@ -25,9 +29,13 @@ export function useWorkflowVideoActions(packages: ProductionPackage[]) {
     const isPublicSettingsLoading = useConfigStore((state) => state.isPublicSettingsLoading);
     const loadPublicSettings = useConfigStore((state) => state.loadPublicSettings);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
+    const token = useUserStore((state) => state.token);
+    const creativeProjects = useCreativeProjectStore((state) => state.projects);
     const assets = useAssetStore((state) => state.assets);
     const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
+    const updateAsset = useAssetStore((state) => state.updateAsset);
     const updatePackage = useVideoPackageStore((state) => state.updateImportedPackage);
+    const cachingAssetIdsRef = useRef(new Set<string>());
     const [generating, setGenerating] = useState<Record<string, boolean>>({});
     const [preflighting, setPreflighting] = useState<Record<string, boolean>>({});
     const [channelPreflighting, setChannelPreflighting] = useState(false);
@@ -103,11 +111,62 @@ export function useWorkflowVideoActions(packages: ProductionPackage[]) {
         }
     };
 
+    const cacheWorkflowAsset = useCallback(
+        async (item: ProductionPackage, assetId: string, kind: ProjectCacheMediaKind, storageKey: string | undefined, filename: string, versionId: string) => {
+            if (!token || !storageKey || !item.projectId || item.projectId === "unscoped-project" || cachingAssetIdsRef.current.has(assetId)) return;
+            cachingAssetIdsRef.current.add(assetId);
+            const asset = useAssetStore.getState().assets.find((entry) => entry.id === assetId);
+            const metadata = asset?.metadata || {};
+            const config = buildPackageVideoConfig(effectiveConfig, item);
+            const context = projectCacheContextFromGeneration({
+                assetId,
+                category: "storyboard",
+                episodeId: item.episodeId,
+                episodeName: item.sourceEpisode,
+                kind,
+                metadata,
+                model: resolvePackageVideoModel(config),
+                nodeId: item.id,
+                projectId: item.projectId,
+                projectName: creativeProjects.find((project) => project.id === item.projectId)?.title || item.sourceProjectSlug || item.projectId,
+                prompt: item.prompt,
+                provider: config.videoProtocol,
+                source: "episode-workflow",
+                versionId,
+            });
+            try {
+                const cached = await archiveLocalMediaToProjectCache({ id: `workflow:${assetId}`, storageKey, kind, filename, context, token });
+                const current = useAssetStore.getState().assets.find((entry) => entry.id === assetId);
+                updateAsset(assetId, { metadata: { ...current?.metadata, projectCache: { fileId: cached.file.id, relativePath: cached.file.relativePath, status: "ready" } } });
+            } catch (error) {
+                const current = useAssetStore.getState().assets.find((entry) => entry.id === assetId);
+                updateAsset(assetId, { metadata: { ...current?.metadata, projectCache: { status: "pending", error: error instanceof Error ? error.message : "缓存失败" } } });
+            }
+        },
+        [creativeProjects, effectiveConfig, token, updateAsset],
+    );
+
+    useEffect(() => {
+        packages.forEach((item) => {
+            const candidates = [
+                { assetId: item.generation?.assetId, kind: "video" as const, versionId: item.generation?.taskId || item.generation?.updatedAt || "" },
+                { assetId: item.lastFrameAssetId, kind: "image" as const, versionId: item.lastFrameVersion || "" },
+            ];
+            candidates.forEach(({ assetId, kind, versionId }) => {
+                const asset = assets.find((entry) => entry.id === assetId && entry.kind === kind);
+                if (!asset || (asset.kind !== "image" && asset.kind !== "video") || !asset.data.storageKey || projectCacheStatus(asset.metadata?.projectCache)) return;
+                const filename = workflowCacheFilename(item.id, kind, asset.data.mimeType);
+                void cacheWorkflowAsset(item, asset.id, kind, asset.data.storageKey, filename, versionId);
+            });
+        });
+    }, [assets, cacheWorkflowAsset, packages]);
+
     const bindTailFrame = async (item: ProductionPackage, input: { lastFrameUrl?: string; videoUrl?: string }, sourceVideoVersion: string) => {
         const tail = await archiveVideoLastFrame(input);
         if (!tail) throw new Error("没有可提取的尾帧来源");
         const savedAt = new Date().toISOString();
         const tailAssetId = await addAssetOnce({ coverUrl: tail.url, data: { bytes: tail.bytes, dataUrl: tail.url, height: tail.height, mimeType: tail.mimeType, storageKey: tail.storageKey, width: tail.width }, kind: "image", metadata: { originalWorkflow: { episode: item.episodeId, kind: "scene", name: `${item.id} 尾帧连续性参考`, projectId: item.projectId, role: "continuity_reference", sourceShotId: item.id, sourceVideoVersion, version: savedAt } }, note: "上一视频的尾帧参考图；供下一连续镜头理解剧情延续，不作为首帧。", source: "workflow-video-tail-frame", tags: ["视频工作流", "尾帧连续性参考", item.episodeId, item.id], title: `${item.id} 尾帧连续性参考` });
+        await cacheWorkflowAsset(item, tailAssetId, "image", tail.storageKey, workflowCacheFilename(item.id, "image", tail.mimeType), sourceVideoVersion);
         const completed = { ...item, lastFrameAssetId: tailAssetId, lastFrameVersion: savedAt };
         updatePackage(item, { lastFrameAssetId: tailAssetId, lastFrameVersion: savedAt });
         const ordered = [...packages].sort((left, right) => left.order - right.order);
@@ -134,6 +193,7 @@ export function useWorkflowVideoActions(packages: ProductionPackage[]) {
             title: `${item.id} ${item.segment}`.trim(),
         } satisfies AssetWriteInput;
         const assetId = await addAssetOnce(input);
+        await cacheWorkflowAsset(item, assetId, "video", video.storageKey, workflowCacheFilename(item.id, "video", input.data.mimeType), task?.id || savedAt);
         const next: PackageGeneration = { aiTaskCredits: video.aiTask?.aiTaskCredits, aiTaskId: video.aiTask?.aiTaskId, assetId, status: "succeeded", taskId: task?.id, taskStatus: task?.rawStatus || task?.status || "succeeded", updatedAt: savedAt, video: input.data };
         const completed = { ...item, canvasStatus: "已生成" as const, generation: next, generationVersions: [...(item.generationVersions || []), next], promptStatus: "已确认" as const };
         updatePackage(item, completed);
@@ -251,4 +311,15 @@ export function useWorkflowVideoActions(packages: ProductionPackage[]) {
     };
 
     return { batch, channelPreflight, channelPreflighting, configSummary, eligibility: eligibleBatchPackages(packages), generate, generating, preflight, preflightChannel, preflighting, retryTailFrame, scopeKey, sync, updateConfig };
+}
+
+function projectCacheStatus(value: unknown) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+    const status = (value as Record<string, unknown>).status;
+    return status === "ready" || status === "pending" ? status : "";
+}
+
+function workflowCacheFilename(shotId: string, kind: "image" | "video", mimeType: string) {
+    const extension = kind === "video" ? (mimeType.includes("webm") ? "webm" : "mp4") : mimeType.includes("png") ? "png" : "jpg";
+    return `${shotId}-${kind === "video" ? "video" : "tail-frame"}.${extension}`;
 }

@@ -74,6 +74,7 @@ const legacyWorkflowVideo: Asset = {
         },
         originalWorkflow: {
             packageId: "ep05-P01",
+            projectId: "project-1",
             sourceEpisode: "ep05",
         },
         videoGeneration: {
@@ -99,11 +100,24 @@ test("infers generation records from legacy video workflow asset metadata", () =
     assert.equal(records[0]?.source, "video-page");
     assert.equal(records[0]?.prompt, "minimal test shot white mug");
     assert.equal(records[0]?.productionPackageId, "ep05-P01");
+    assert.equal(records[0]?.projectId, "project-1");
     assert.equal(records[0]?.sourceEpisode, "ep05");
     assert.equal(records[0]?.aiTaskId, "aitask-1");
     assert.equal(records[0]?.upstreamTaskId, "cgt-1");
     assert.equal(records[0]?.model, "doubao-seedance-2-0");
     assert.equal(records[0]?.provider, "volcengine-ark");
+});
+
+test("fills missing generation project context from workflow metadata", () => {
+    const asset = {
+        ...legacyWorkflowVideo,
+        metadata: {
+            ...legacyWorkflowVideo.metadata,
+            generation: { source: "video-page", productionPackageId: "ep05-P01" },
+        },
+    } as Asset;
+
+    assert.equal(assetGenerationRecords(asset)[0]?.projectId, "project-1");
 });
 
 test("labels video generation actions in Chinese", () => {

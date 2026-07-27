@@ -108,7 +108,7 @@ export function AssetPickerModal({ open, title = "选择素材", defaultTab = "m
             width={980}
             closable={!importing}
             keyboard={!importing}
-            maskClosable={!importing}
+            mask={{ closable: !importing }}
             destroyOnHidden
             styles={{ body: { padding: "0 24px 20px", minHeight: 560 } }}
         >

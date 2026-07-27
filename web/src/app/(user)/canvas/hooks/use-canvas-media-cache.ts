@@ -121,23 +121,10 @@ export function useCanvasMediaCache({
     );
 
     const cacheUploadedCanvasMedia = useCallback(
-        async (file: UploadedFile, filename: string, node?: CanvasNodeData): Promise<Partial<CanvasNodeMetadata>> => {
+        async (file: UploadedFile, filename: string, node: CanvasNodeData): Promise<Partial<CanvasNodeMetadata>> => {
             if (!token) return {};
             const kind = file.mimeType.startsWith("audio/") ? "audio" : "video";
-            const context = node
-                ? nodeProjectCacheContext(node, { canvasId, canvasTitle, projectId, projectTitle, episodeContext })
-                : projectCacheContextFromGeneration({
-                      canvasId,
-                      canvasName: canvasTitle,
-                      episodeId: episodeContext?.episodeId,
-                      episodeName: episodeContext?.episodeTitle,
-                      freeCanvas: !episodeContext?.episodeId,
-                      kind,
-                      metadata: {},
-                      projectId,
-                      projectName: projectTitle,
-                      source: "canvas",
-                  });
+            const context = nodeProjectCacheContext(node, { canvasId, canvasTitle, projectId, projectTitle, episodeContext });
             try {
                 const cached = await archiveLocalMediaToProjectCache({ id: `canvas:${file.storageKey}`, storageKey: file.storageKey, kind, filename, context, token });
                 return { cachePath: `${cached.projectPath}/${cached.file.relativePath}`, cacheFilename: filename, projectCache: { fileId: cached.file.id, relativePath: cached.file.relativePath, status: "ready" as const } };

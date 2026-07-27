@@ -30,7 +30,7 @@ type UseCanvasVideoGenerationActionsOptions = {
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setConnections: Dispatch<SetStateAction<CanvasConnection[]>>;
     getNodes: () => CanvasNodeData[];
-    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string, node?: CanvasNodeData) => Promise<Partial<CanvasNodeMetadata>>;
+    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string, node: CanvasNodeData) => Promise<Partial<CanvasNodeMetadata>>;
     showWarning: (message: string) => void;
     toVideoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
     projectId: string;

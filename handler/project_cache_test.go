@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -87,5 +88,30 @@ func TestProjectCachePackageReturnsZipHeaders(t *testing.T) {
 	DownloadProjectCachePackage(response, request, "p1")
 	if response.Header().Get("Content-Type") != "application/zip" || !strings.Contains(response.Header().Get("Content-Disposition"), "attachment") {
 		t.Fatalf("headers=%v body=%s", response.Header(), response.Body.String())
+	}
+}
+
+func TestProjectCachePackageDoesNotReturnPartialZipWhenMediaReadFails(t *testing.T) {
+	oldRoot := config.Cfg.ProjectCacheDir
+	config.Cfg.ProjectCacheDir = t.TempDir()
+	t.Cleanup(func() { config.Cfg.ProjectCacheDir = oldRoot })
+	archived, err := service.ArchiveProjectCacheFile(config.Cfg.ProjectCacheDir, "u1", service.ProjectCacheArchiveInput{Context: service.ProjectCacheContext{ProjectID: "p1", ProjectName: "A"}, Filename: "a.png", MIMEType: "image/png", Reader: strings.NewReader("a")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mediaPath := filepath.Join(archived.ProjectPath, archived.File.RelativePath)
+	if err := os.Remove(mediaPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(mediaPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/project-cache/projects/p1/package", strings.NewReader(`{"snapshot":{"project":{},"canvases":[],"scripts":{},"storyboards":{},"assets":[]}}`))
+	request.Header.Set("Content-Type", "application/json")
+	request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: "u1"}))
+	response := httptest.NewRecorder()
+	DownloadProjectCachePackage(response, request, "p1")
+	if response.Header().Get("Content-Type") == "application/zip" || !bytes.Contains(response.Body.Bytes(), []byte(`"code":1`)) {
+		t.Fatalf("headers=%v body=%q", response.Header(), response.Body.String())
 	}
 }

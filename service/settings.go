@@ -168,7 +168,7 @@ func PreflightModelChannel(modelName string) (ModelChannelPreflightResult, error
 		result.LoginReady = jimengResult.LoginReady
 	}
 	if IsXinglianCloudProtocol(channel.Protocol) {
-		if err := PreflightXinglianChannel(channel); err != nil {
+		if err := PreflightXinglianChannel(channel, modelName); err != nil {
 			if safe, ok := err.(interface{ SafeMessage() string }); ok {
 				return ModelChannelPreflightResult{}, safeMessageError{message: decoratePreflightChannelMessage(safe.SafeMessage(), result)}
 			}
@@ -1079,7 +1079,7 @@ func testAdminChannelModel(channel model.ModelChannel, modelName string) (string
 		return fmt.Sprintf("即梦 CLI 预检通过；模型 %s 可用", modelName), nil
 	}
 	if IsXinglianCloudProtocol(channel.Protocol) {
-		if err := PreflightXinglianChannel(channel); err != nil {
+		if err := PreflightXinglianChannel(channel, modelName); err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("星链云余额预检通过；模型 %s 可用", modelName), nil

@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"mime"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/basketikun/infinite-canvas/config"
 	"github.com/basketikun/infinite-canvas/service"
@@ -190,11 +192,25 @@ func DownloadProjectCachePackage(w http.ResponseWriter, r *http.Request, project
 		Fail(w, "项目缓存存在缺失文件，请确认后继续打包")
 		return
 	}
-	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", `attachment; filename="project-cache.zip"`)
-	if _, err := service.WriteProjectCachePackage(w, config.Cfg.ProjectCacheDir, user.ID, input); err != nil {
+	temporary, err := os.CreateTemp("", "infinite-canvas-project-cache-*.zip")
+	if err != nil {
+		FailError(w, err)
 		return
 	}
+	defer os.Remove(temporary.Name())
+	defer temporary.Close()
+	result, err := service.WriteProjectCachePackage(temporary, config.Cfg.ProjectCacheDir, user.ID, input)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	if _, err := temporary.Seek(0, 0); err != nil {
+		FailError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": result.Filename}))
+	http.ServeContent(w, r, result.Filename, time.Now(), temporary)
 }
 
 func decodeProjectCacheJSON(w http.ResponseWriter, r *http.Request, value any) bool {

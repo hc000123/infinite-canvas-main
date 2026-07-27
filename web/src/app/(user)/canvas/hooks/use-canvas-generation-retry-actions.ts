@@ -47,7 +47,7 @@ type UseCanvasGenerationRetryActionsOptions = {
     openConfigDialog: (open: boolean) => void;
     message: CanvasActionMessage;
     retryTextNode: (input: { node: CanvasNodeData; prompt: string; generationConfig: AiConfig; generationContext: NodeGenerationContext }) => Promise<void>;
-    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string, node?: CanvasNodeData) => Promise<Partial<CanvasNodeMetadata>>;
+    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string, node: CanvasNodeData) => Promise<Partial<CanvasNodeMetadata>>;
     videoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
     imageMetadata: (image: UploadedImage) => CanvasNodeMetadata;
     workspaceProjectId: string;

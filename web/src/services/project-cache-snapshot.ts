@@ -14,16 +14,19 @@ export function buildProjectCacheSnapshot(input: { projectId: string; projects: 
             shots: input.storyboardShots.filter((item) => item.projectId === input.projectId).map(sanitizeSnapshotValue),
             groups: input.storyboardGroups.filter((item) => item.projectId === input.projectId).map(sanitizeSnapshotValue),
         },
-        assets: input.assets.filter((item) => assetProjectId(item) === input.projectId || folderIds.has(String(item.folderId || ""))).map(sanitizeSnapshotValue),
+        assets: input.assets.filter((item) => assetBelongsToProject(item, input.projectId) || folderIds.has(String(item.folderId || ""))).map(sanitizeSnapshotValue),
     };
 }
 
-function assetProjectId(item: Item) {
+function assetBelongsToProject(item: Item, projectId: string) {
     const metadata = recordValue(item.metadata);
-    const generation = recordValue(metadata.generation);
     const canvasSource = recordValue(metadata.canvasSource);
     const binding = recordValue(item.assetBinding);
-    return String(metadata.projectId || generation.projectId || canvasSource.projectId || binding.projectId || "");
+    const workflow = recordValue(metadata.originalWorkflow);
+    const ids = [metadata.projectId, canvasSource.projectId, binding.projectId, workflow.projectId, workflow.sourceProjectId];
+    ids.push(...recordList(metadata.generation).map((generation) => generation.projectId), ...recordList(metadata.generations).map((generation) => generation.projectId));
+    ids.push(...arrayValue(metadata.projectLibraries).map((entry) => recordValue(entry).projectId));
+    return ids.some((value) => String(value || "") === projectId);
 }
 
 function sanitizeSnapshotValue<T>(value: T): T {
@@ -41,4 +44,14 @@ function sanitizeSnapshotValue<T>(value: T): T {
 
 function recordValue(value: unknown): Record<string, unknown> {
     return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function recordList(value: unknown) {
+    if (Array.isArray(value)) return value.map(recordValue);
+    const record = recordValue(value);
+    return Object.keys(record).length ? [record] : [];
+}
+
+function arrayValue(value: unknown) {
+    return Array.isArray(value) ? value : [];
 }

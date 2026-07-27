@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/basketikun/infinite-canvas/model"
@@ -169,7 +170,15 @@ func XinglianTaskVideoURL(body []byte) string {
 	return payload.VideoURL
 }
 
-func PreflightXinglianChannel(channel model.ModelChannel) error {
+func PreflightXinglianChannel(channel model.ModelChannel, modelName string) error {
+	models, err := fetchAdminChannelModels(channel)
+	if err != nil {
+		return err
+	}
+	modelName = strings.TrimSpace(modelName)
+	if !slices.Contains(models, modelName) {
+		return safeMessageError{message: fmt.Sprintf("星链云模型 %s 在当前账户不可用，请刷新渠道模型列表后重新选择", modelName)}
+	}
 	endpoints, err := ResolveXinglianVideoEndpoints(channel.BaseURL)
 	if err != nil {
 		return err

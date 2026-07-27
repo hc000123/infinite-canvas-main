@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, FolderOpen, Home, Keyboard, Layers3, LayoutGrid, Menu, Plus, Redo2, Save, Trash2, Undo2, Upload } from "lucide-react";
-import { Button, Dropdown, Modal, type MenuProps } from "antd";
+import { ArrowLeft, FolderOpen, Home, Keyboard, Layers3, LayoutGrid, Menu as MenuIcon, Plus, Redo2, Save, Trash2, Undo2, Upload } from "lucide-react";
+import { Button, Menu as AntMenu, Modal, type MenuProps } from "antd";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -86,7 +86,7 @@ export function CanvasTopBar({
         const closeMenuOutside = (event: PointerEvent) => {
             const target = event.target as Node;
             if (menuTriggerRef.current?.contains(target)) return;
-            if (target instanceof Element && target.closest(".ant-dropdown")) return;
+            if (target instanceof Element && target.closest(".ant-menu-submenu-popup")) return;
             setMenuOpen(false);
         };
         document.addEventListener("pointerdown", closeMenuOutside, true);
@@ -97,42 +97,50 @@ export function CanvasTopBar({
         <>
             <div className="pointer-events-none absolute left-0 right-0 top-0 z-50 grid h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3">
                 <div className="pointer-events-auto flex min-w-0 items-center gap-2 overflow-hidden">
-                    <Dropdown
-                        trigger={["click"]}
-                        open={menuOpen}
-                        onOpenChange={setMenuOpen}
-                        overlayClassName="canvas-main-menu"
-                        menu={{
-                            items: [
-                                { key: "parent", icon: <ArrowLeft className="size-4" />, label: returnLabel, onClick: onReturnParent },
-                                { key: "projects", icon: <Home className="size-4" />, label: "项目中心", onClick: onHome },
-                                { type: "divider" },
-                                { key: "new", disabled: hasEpisode && !canCreateChildCanvas, icon: <Plus className="size-4" />, label: hasEpisode ? (canCreateChildCanvas ? "新建子画布" : "子画布不可继续嵌套") : "新建画布", onClick: onCreateProject },
-                                ...(childMenuItems || []),
-                                { key: "save", icon: <Save className="size-4" />, label: "保存画布", onClick: onSaveProject },
-                                { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
-                                { type: "divider" },
-                                { key: "import", icon: <Upload className="size-4" />, label: "导入图片", onClick: onImportImage },
-                                { key: "assets", icon: <FolderOpen className="size-4" />, label: "打开素材", onClick: onOpenAssets },
-                                { key: "organize", icon: <LayoutGrid className="size-4" />, label: "整理画布", onClick: onOrganizeCanvas },
-                                { type: "divider" },
-                                { key: "undo", disabled: !canUndo, icon: <Undo2 className="size-4" />, label: <MenuLabel text="撤销" shortcut="⌘ Z" />, onClick: onUndo },
-                                { key: "redo", disabled: !canRedo, icon: <Redo2 className="size-4" />, label: <MenuLabel text="重做" shortcut="⌘ ⇧ Z / ⌘ Y" />, onClick: onRedo },
-                                { key: "shortcuts", icon: <Keyboard className="size-4" />, label: "快捷键", onClick: () => setShortcutsOpen(true) },
-                            ],
-                        }}
-                    >
-                        <div ref={menuTriggerRef}>
-                            <button
-                                type="button"
-                                className="grid size-9 place-items-center rounded-full transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
-                                style={{ color: theme.node.text }}
-                                aria-label="打开画布菜单"
-                            >
-                                <Menu className="size-5" />
-                            </button>
-                        </div>
-                    </Dropdown>
+                    <div ref={menuTriggerRef} className="relative">
+                        <button
+                            type="button"
+                            className="grid size-9 place-items-center rounded-full transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
+                            style={{ color: theme.node.text }}
+                            onClick={() => setMenuOpen((open) => !open)}
+                            aria-label="打开画布菜单"
+                            aria-expanded={menuOpen}
+                            aria-haspopup="menu"
+                        >
+                            <MenuIcon className="size-5" />
+                        </button>
+                        {menuOpen ? (
+                            <div className="absolute left-0 top-full z-[70] mt-1 min-w-64 overflow-visible rounded-xl border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-1 shadow-lg">
+                                <AntMenu
+                                    selectable={false}
+                                    onClick={() => setMenuOpen(false)}
+                                    items={[
+                                        { key: "parent", icon: <ArrowLeft className="size-4" />, label: returnLabel, onClick: onReturnParent },
+                                        { key: "projects", icon: <Home className="size-4" />, label: "项目中心", onClick: onHome },
+                                        { type: "divider" },
+                                        {
+                                            key: "new",
+                                            disabled: hasEpisode && !canCreateChildCanvas,
+                                            icon: <Plus className="size-4" />,
+                                            label: hasEpisode ? (canCreateChildCanvas ? "新建子画布" : "子画布不可继续嵌套") : "新建画布",
+                                            onClick: onCreateProject,
+                                        },
+                                        ...(childMenuItems || []),
+                                        { key: "save", icon: <Save className="size-4" />, label: "保存画布", onClick: onSaveProject },
+                                        { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
+                                        { type: "divider" },
+                                        { key: "import", icon: <Upload className="size-4" />, label: "导入图片", onClick: onImportImage },
+                                        { key: "assets", icon: <FolderOpen className="size-4" />, label: "打开素材", onClick: onOpenAssets },
+                                        { key: "organize", icon: <LayoutGrid className="size-4" />, label: "整理画布", onClick: onOrganizeCanvas },
+                                        { type: "divider" },
+                                        { key: "undo", disabled: !canUndo, icon: <Undo2 className="size-4" />, label: <MenuLabel text="撤销" shortcut="⌘ Z" />, onClick: onUndo },
+                                        { key: "redo", disabled: !canRedo, icon: <Redo2 className="size-4" />, label: <MenuLabel text="重做" shortcut="⌘ ⇧ Z / ⌘ Y" />, onClick: onRedo },
+                                        { key: "shortcuts", icon: <Keyboard className="size-4" />, label: "快捷键", onClick: () => setShortcutsOpen(true) },
+                                    ]}
+                                />
+                            </div>
+                        ) : null}
+                    </div>
 
                     <div ref={titleRef} className="flex min-w-0 items-center gap-1.5 overflow-hidden">
                         <button
