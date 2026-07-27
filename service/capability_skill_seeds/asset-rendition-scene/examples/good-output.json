@@ -1,0 +1,11 @@
+{
+  "assetId": "scene-001",
+  "renditionId": "rendition-scene-001",
+  "mediaType": "image",
+  "mediaRef": "/api/uploaded-assets/runtime/image/sha256-scene-example.png",
+  "generationMetadata": {
+    "provider": "openai",
+    "model": "image-test",
+    "requestId": "request-scene-001"
+  }
+}

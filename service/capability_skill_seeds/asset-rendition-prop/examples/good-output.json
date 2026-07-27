@@ -1,0 +1,11 @@
+{
+  "assetId": "prop-001",
+  "renditionId": "rendition-prop-001",
+  "mediaType": "image",
+  "mediaRef": "/api/uploaded-assets/runtime/image/sha256-prop-example.png",
+  "generationMetadata": {
+    "provider": "openai",
+    "model": "image-test",
+    "requestId": "request-prop-001"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "assetId": "character-001",
+  "renditionId": "rendition-character-001",
+  "mediaType": "image",
+  "mediaRef": "/api/uploaded-assets/runtime/image/sha256-character-example.png",
+  "generationMetadata": {
+    "provider": "openai",
+    "model": "image-test",
+    "requestId": "request-character-001"
+  }
+}

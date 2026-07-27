@@ -12,13 +12,16 @@ import (
 const capabilitySkillSeedVersion = "1.0.0"
 
 type capabilitySkillSeed struct {
-	Key          string
-	Name         string
-	Summary      string
-	Capabilities []string
-	ProjectTags  []string
-	Inputs       []ArtifactInputSpec
-	Output       ArtifactOutputSpec
+	Key                string
+	Name               string
+	Summary            string
+	Capabilities       []string
+	ProjectTags        []string
+	Inputs             []ArtifactInputSpec
+	Output             ArtifactOutputSpec
+	ExecutorKind       string
+	SideEffects        []string
+	EstimatedCostClass string
 }
 
 func ensureCapabilitySkillSeeds() error {
@@ -38,6 +41,21 @@ func ensureCapabilitySkillSeeds() error {
 		{
 			Key: "asset-brief-prop", Name: "道具资产结构图 Brief", Summary: "把道具事实编译为结构、材质与尺度明确的道具制作 Brief。",
 			Capabilities: []string{"asset.brief.compose", "asset.prop.brief"}, ProjectTags: []string{"prop"}, Inputs: []ArtifactInputSpec{capabilitySeedInput("asset_catalog")}, Output: capabilitySeedOutput("asset_brief", 300),
+		},
+		{
+			Key: "asset-rendition-character", Name: "角色资产成图", Summary: "把已批准的角色资产 Brief 生成为可复用的角色设定图资产。",
+			Capabilities: []string{"asset.rendition.generate", "asset.character.rendition"}, ProjectTags: []string{"character"}, Inputs: []ArtifactInputSpec{capabilitySeedInput("asset_brief")}, Output: capabilitySeedOutput("asset_rendition", 4),
+			ExecutorKind: "image_model", SideEffects: []string{"image_generation"}, EstimatedCostClass: "image",
+		},
+		{
+			Key: "asset-rendition-scene", Name: "场景资产成图", Summary: "把已批准的场景资产 Brief 生成为空间稳定的场景主参考图资产。",
+			Capabilities: []string{"asset.rendition.generate", "asset.scene.rendition"}, ProjectTags: []string{"scene"}, Inputs: []ArtifactInputSpec{capabilitySeedInput("asset_brief")}, Output: capabilitySeedOutput("asset_rendition", 4),
+			ExecutorKind: "image_model", SideEffects: []string{"image_generation"}, EstimatedCostClass: "image",
+		},
+		{
+			Key: "asset-rendition-prop", Name: "道具资产成图", Summary: "把已批准的道具资产 Brief 生成为结构和材质明确的道具参考图资产。",
+			Capabilities: []string{"asset.rendition.generate", "asset.prop.rendition"}, ProjectTags: []string{"prop"}, Inputs: []ArtifactInputSpec{capabilitySeedInput("asset_brief")}, Output: capabilitySeedOutput("asset_rendition", 4),
+			ExecutorKind: "image_model", SideEffects: []string{"image_generation"}, EstimatedCostClass: "image",
 		},
 		{
 			Key: "storyboard-vertical-short", Name: "竖屏短剧分镜", Summary: "面向 9:16 短剧节奏、近景表演和移动端信息密度制作分镜。",
@@ -69,6 +87,15 @@ func capabilityStoryboardInputs() []ArtifactInputSpec {
 }
 
 func ensureCapabilitySkillSeed(seed capabilitySkillSeed) error {
+	if seed.ExecutorKind == "" {
+		seed.ExecutorKind = "text_model"
+	}
+	if len(seed.SideEffects) == 0 {
+		seed.SideEffects = []string{"none"}
+	}
+	if seed.EstimatedCostClass == "" {
+		seed.EstimatedCostClass = "text_high"
+	}
 	files, err := loadCapabilitySkillSeedFiles(seed.Key)
 	if err != nil {
 		return err
@@ -85,7 +112,7 @@ func ensureCapabilitySkillSeed(seed capabilitySkillSeed) error {
 	packageValue, err := ValidateInvocableSkillPackage(SkillPackage{
 		Manifest: SkillManifest{
 			Capabilities: seed.Capabilities, InputArtifactTypes: inputTypes, OutputArtifactTypes: []string{seed.Output.ArtifactType}, ProjectTags: seed.ProjectTags,
-			SchemaCompatibility: compatibility, SideEffects: []string{"none"}, EstimatedCostClass: "text_high", ExecutorKind: "text_model", RequiredTools: []string{},
+			SchemaCompatibility: compatibility, SideEffects: seed.SideEffects, EstimatedCostClass: seed.EstimatedCostClass, ExecutorKind: seed.ExecutorKind, RequiredTools: []string{},
 		},
 		Files:              files,
 		InputContract:      SkillInputContract{RequiredInputs: []string{"artifacts"}, ArtifactInputs: seed.Inputs, ImagePolicy: SkillImagePolicy{AllowTextFallback: true}},
@@ -136,7 +163,7 @@ func ensureCapabilitySkillSeed(seed capabilitySkillSeed) error {
 
 func capabilitySeedGates(artifactType string) []string {
 	switch artifactType {
-	case "asset_brief":
+	case "asset_brief", "asset_rendition":
 		return []string{"schema", "asset"}
 	case "storyboard_package":
 		return []string{"schema", "storyboard"}
