@@ -69,6 +69,16 @@ func TestValidateInvocableSkillPackageSupportsCardinalityAndNormalizesTools(t *t
 	}
 }
 
+func TestValidateInvocableSkillPackageSupportsImageModelExecutor(t *testing.T) {
+	pkg := invocableSkillTestPackage()
+	pkg.Manifest.ExecutorKind = "image_model"
+	pkg.Manifest.EstimatedCostClass = "image"
+	pkg.Manifest.SideEffects = []string{"image_generation"}
+	if _, err := ValidateInvocableSkillPackage(pkg); err != nil {
+		t.Fatalf("image_model package rejected: %v", err)
+	}
+}
+
 func TestValidateInvocableSkillPackageRejectsInvalidInvocationContracts(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -94,7 +104,7 @@ func TestValidateInvocableSkillPackageRejectsInvalidInvocationContracts(t *testi
 			pkg.Manifest.OutputArtifactTypes = append(pkg.Manifest.OutputArtifactTypes, "delivery_report")
 		}},
 		{name: "unsupported executor", mutate: func(pkg *SkillPackage) {
-			pkg.Manifest.ExecutorKind = "image_model"
+			pkg.Manifest.ExecutorKind = "shell"
 		}},
 		{name: "malformed tool id", mutate: func(pkg *SkillPackage) {
 			pkg.Manifest.RequiredTools = []string{"vision/inspect"}

@@ -275,7 +275,7 @@ func evaluateInvocationCandidate(userID string, input InvocationResolutionInput,
 	}
 	allowedExecutors := input.AllowedExecutors
 	if len(allowedExecutors) == 0 {
-		allowedExecutors = []string{"text_model"}
+		allowedExecutors = []string{"text_model", "image_model"}
 	}
 	add(!containsInvocationString(allowedExecutors, candidate.manifest.ExecutorKind), "unsupported_executor")
 	add(len(candidate.manifest.RequiredTools) > 0, "tool_unavailable")

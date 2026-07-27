@@ -282,6 +282,31 @@ func TestResolveInvocationSkillFiltersRequiredToolsBeforeRanking(t *testing.T) {
 	}
 }
 
+func TestResolveInvocationSkillRoutesImageModelExecutorByPolicy(t *testing.T) {
+	setupInvocationServiceTest(t)
+	input := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"test"}`)
+	_, version := seedInvocationSkill(t, invocationSkillSeed{ID: "image-executor", VersionID: "image-executor-v1", Version: "1.0.0", Mutate: func(pkg *SkillPackage) {
+		pkg.Manifest.ExecutorKind = "image_model"
+	}})
+
+	base := InvocationResolutionInput{
+		ProjectID: "project-1", SkillVersionID: version.ID, ExpectedOutputArtifactType: "production_script",
+		Inputs: []ResolvedArtifactBinding{{BindingName: "source", Artifact: input}},
+	}
+	allowed := base
+	allowed.AllowedExecutors = []string{"image_model"}
+	result, err := ResolveInvocationSkill("user-1", allowed)
+	if err != nil || result.Resolved.Version.ID != version.ID {
+		t.Fatalf("image executor was not selected: result=%+v err=%v", result, err)
+	}
+	rejected := base
+	rejected.AllowedExecutors = []string{"text_model"}
+	result, err = ResolveInvocationSkill("user-1", rejected)
+	if err != nil || !invocationTraceHasReason(result.Trace, "unsupported_executor") {
+		t.Fatalf("image executor policy was not enforced: trace=%+v err=%v", result.Trace, err)
+	}
+}
+
 func invocationTraceCandidate(trace InvocationRouteTrace, versionID string) *InvocationRouteCandidate {
 	for index := range trace.Candidates {
 		if trace.Candidates[index].SkillVersionID == versionID {

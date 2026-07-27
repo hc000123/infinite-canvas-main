@@ -101,7 +101,7 @@ func ValidateInvocableSkillPackage(value SkillPackage) (SkillPackage, error) {
 	if err != nil {
 		return SkillPackage{}, err
 	}
-	if normalized.Manifest.ExecutorKind != "text_model" {
+	if !map[string]bool{"text_model": true, "image_model": true}[normalized.Manifest.ExecutorKind] {
 		return SkillPackage{}, safeMessageError{message: "Skill 执行器无效"}
 	}
 	if err := validateInvocationSkillGateProfile(normalized.QualityGateProfile); err != nil {
