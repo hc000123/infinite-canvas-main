@@ -4,6 +4,7 @@ import test from "node:test";
 import type { AgentRegistryItem, AgentSkillRef } from "../../../../services/api/agent-registry.ts";
 import {
     activeAgentPlanInvocationId,
+    buildCanvasAgentApplyInput,
     buildCanvasAgentPlanRequest,
     buildCanvasAgentSourceText,
     canvasAgentCandidates,
@@ -33,6 +34,20 @@ test("builds one source_text from the user goal and semantic selected-node conte
             { id: "image-1", type: "image" as never, title: "角色图", dataUrl: "data:image/png;base64,secret" },
         ]),
         "用户目标：整理成生产稿\n\n画布引用：\n[原始剧本]\n公交站剧本",
+    );
+});
+
+test("builds a stable canvas message Apply receipt for the final Invocation", () => {
+    assert.deepEqual(
+        buildCanvasAgentApplyInput({ invocationId: "invocation-final", attempt: 2, artifactSetHash: "set-hash", sourceMessageId: "message-1", artifactIds: ["artifact-1", "artifact-2"] }),
+        {
+            idempotencyKey: "client-local-agent-invocation-final-2",
+            attempt: 2,
+            artifactSetHash: "set-hash",
+            target: "client_local_receipt",
+            targetId: "message-1",
+            payload: { surface: "canvas", targetKind: "message", targetId: "message-1", artifactIds: ["artifact-1", "artifact-2"] },
+        },
     );
 });
 

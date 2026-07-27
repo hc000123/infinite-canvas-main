@@ -4,10 +4,12 @@ import { Button } from "antd";
 import { CheckCircle2, CircleSlash, Clock3, Copy, ImageIcon, ListChecks, LoaderCircle, MessageSquare, Plus, RotateCcw, ShieldAlert, Sparkles, X, XCircle } from "lucide-react";
 
 import { ImageGenerationPending } from "@/components/image-generation-pending";
+import type { CapabilityConsumeTrace } from "@/components/capability-runtime/use-capability-run";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { cn } from "@/lib/utils";
 import { useThemeStore } from "@/stores/use-theme-store";
+import type { ArtifactEnvelope } from "@/services/api/invocations";
 import type { CanvasAgentPlanRun, CanvasAssistantImage, CanvasAssistantMessage, CanvasAssistantReference, CanvasConnection, CanvasNodeData } from "../types";
 import { validateAssistantCanvasActions } from "../utils/canvas-assistant-actions";
 import { formatPromptAgentOutputText, promptAgentOutputLabel } from "../utils/canvas-prompt-agent-render";
@@ -27,6 +29,7 @@ export function AssistantMessages({
     onCancelAssistantActions,
     onGeneratePromptImage,
     onAgentPlanRunPatch,
+    onConsumeAgentOutput,
 }: {
     messages: CanvasAssistantMessage[];
     projectId: string;
@@ -39,6 +42,7 @@ export function AssistantMessages({
     onCancelAssistantActions: (message: CanvasAssistantMessage) => void;
     onGeneratePromptImage?: (message: CanvasAssistantMessage, output: PromptAgentOutput) => void;
     onAgentPlanRunPatch: (message: CanvasAssistantMessage, patch: Partial<CanvasAgentPlanRun>) => void;
+    onConsumeAgentOutput: (input: { artifacts: ArtifactEnvelope[]; trace: CapabilityConsumeTrace; sourceNodeIds: string[]; sourceMessageId: string; agentPlanId: string }) => Promise<void>;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
 
@@ -59,7 +63,7 @@ export function AssistantMessages({
                         {message.text}
                     </div>
                     {message.references?.length ? <MessageReferences message={message} /> : null}
-                    {message.agentPlanRun ? <CanvasAgentPlanCard run={message.agentPlanRun} projectId={projectId} onRunPatch={(patch) => onAgentPlanRunPatch(message, patch)} /> : null}
+                    {message.agentPlanRun ? <CanvasAgentPlanCard run={message.agentPlanRun} projectId={projectId} sourceMessageId={message.id} onRunPatch={(patch) => onAgentPlanRunPatch(message, patch)} onConsume={onConsumeAgentOutput} /> : null}
                     {message.promptAgentPlan?.outputs.length ? <PromptAgentCards message={message} onInsertText={onInsertText} onGeneratePromptImage={onGeneratePromptImage} /> : null}
                     {message.promptAgentPlan?.actions.length ? <PromptAgentExecutionPlanCard message={message} /> : null}
                     {message.assistantActions?.length ? <AssistantActionPreviewCard message={message} nodes={nodes} connections={connections} onApply={() => onApplyAssistantActions(message)} onCancel={() => onCancelAssistantActions(message)} /> : null}

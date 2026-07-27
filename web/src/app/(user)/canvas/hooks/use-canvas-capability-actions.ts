@@ -5,7 +5,7 @@ import { useCallback, useState, type Dispatch, type MutableRefObject, type SetSt
 import type { ArtifactEnvelope } from "@/services/api/invocations";
 import type { CapabilityConsumeTrace } from "@/components/capability-runtime/use-capability-run";
 import type { CanvasConnection, CanvasNodeData } from "../types";
-import { canvasCapabilitySourceText, planCanvasCapabilityOutput } from "../utils/canvas-capability-output";
+import { canvasCapabilitySourceText, planCanvasAgentOutput, planCanvasCapabilityOutput } from "../utils/canvas-capability-output";
 
 export function useCanvasCapabilityActions({ nodes, nodesRef, connectionsRef, setNodes, setConnections, setSelectedNodeIds, setSelectedConnectionId }: {
     nodes: CanvasNodeData[];
@@ -30,6 +30,16 @@ export function useCanvasCapabilityActions({ nodes, nodesRef, connectionsRef, se
         setSelectedNodeIds(new Set(result.createdNodeIds));
         setSelectedConnectionId(null);
     }, [activeNodeId, connectionsRef, nodesRef, setConnections, setNodes, setSelectedConnectionId, setSelectedNodeIds]);
+    const consumeAgentOutput = useCallback(async ({ artifacts, trace, sourceNodeIds, sourceMessageId, agentPlanId }: { artifacts: ArtifactEnvelope[]; trace: CapabilityConsumeTrace; sourceNodeIds: string[]; sourceMessageId: string; agentPlanId: string }) => {
+        const result = planCanvasAgentOutput({ nodes: nodesRef.current, connections: connectionsRef.current, sourceNodeIds, sourceMessageId, agentPlanId, artifacts, trace });
+        if (!result.createdNodeIds.length) return;
+        nodesRef.current = result.nodes;
+        connectionsRef.current = result.connections;
+        setNodes(result.nodes);
+        setConnections(result.connections);
+        setSelectedNodeIds(new Set(result.createdNodeIds));
+        setSelectedConnectionId(null);
+    }, [connectionsRef, nodesRef, setConnections, setNodes, setSelectedConnectionId, setSelectedNodeIds]);
 
     return {
         activeNode,
@@ -37,5 +47,6 @@ export function useCanvasCapabilityActions({ nodes, nodesRef, connectionsRef, se
         openNodeCapability: (node: CanvasNodeData) => setActiveNodeId(node.id),
         close: () => setActiveNodeId(""),
         consume,
+        consumeAgentOutput,
     };
 }

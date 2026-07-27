@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { ArtifactEnvelope } from "../../../../services/api/invocations-contract.ts";
 import type { CanvasNodeData } from "../types.ts";
-import { canvasCapabilitySourceText, planCanvasCapabilityOutput } from "./canvas-capability-output.ts";
+import { canvasCapabilitySourceText, planCanvasAgentOutput, planCanvasCapabilityOutput } from "./canvas-capability-output.ts";
 
 const sourceNode: CanvasNodeData = {
     id: "source-node",
@@ -126,4 +126,58 @@ test("uses semantic node text without treating media URLs as Skill input", () =>
     assert.equal(canvasCapabilitySourceText({ ...sourceNode, type: "config" as CanvasNodeData["type"], metadata: { content: "旧值", prompt: "镜头提示词" } }), "镜头提示词");
     assert.equal(canvasCapabilitySourceText({ ...sourceNode, type: "image" as CanvasNodeData["type"], metadata: { content: "blob:image", prompt: "角色参考图" } }), "角色参考图");
     assert.equal(canvasCapabilitySourceText({ ...sourceNode, type: "video" as CanvasNodeData["type"], metadata: { content: "https://example.invalid/video.mp4" } }), "");
+});
+
+test("writes final Agent Plan Artifacts beside the first surviving source node with trace metadata", () => {
+    const output = artifact("artifact-script", "production_script", { productionScript: "优化后的生产剧本" });
+    const result = planCanvasAgentOutput({
+        nodes: [sourceNode],
+        connections: [],
+        sourceNodeIds: ["missing", sourceNode.id],
+        sourceMessageId: "message-1",
+        agentPlanId: "agent-plan-1",
+        artifacts: [output],
+        trace: { invocationId: "invocation-final", artifactIds: ["artifact-script"], skillVersionId: "skill-version-final", appliedAt: "2026-07-27T03:00:00Z" },
+        nodeId: () => "agent-output-node",
+        connectionId: () => "agent-output-connection",
+    });
+
+    assert.equal(result.nodes.length, 2);
+    assert.deepEqual(result.connections, [{ id: "agent-output-connection", fromNodeId: sourceNode.id, toNodeId: "agent-output-node" }]);
+    assert.deepEqual(result.nodes[1].metadata?.agentArtifact, {
+        source: "canvas_chat",
+        agentPlanId: "agent-plan-1",
+        sourceMessageId: "message-1",
+        sourceNodeIds: ["missing", sourceNode.id],
+        invocationId: "invocation-final",
+        artifactId: "artifact-script",
+        artifactType: "production_script",
+        artifactHash: "hash-artifact-script",
+        artifactIds: ["artifact-script"],
+        skillVersionId: "skill-version-final",
+        appliedAt: "2026-07-27T03:00:00Z",
+    });
+});
+
+test("places Agent Plan output after the rightmost node and replays idempotently without a source", () => {
+    const output = artifact("artifact-script", "production_script", { productionScript: "优化后的生产剧本" });
+    const input = {
+        nodes: [sourceNode],
+        connections: [],
+        sourceNodeIds: [],
+        sourceMessageId: "message-1",
+        agentPlanId: "agent-plan-1",
+        artifacts: [output],
+        trace: { invocationId: "invocation-final", artifactIds: ["artifact-script"], skillVersionId: "skill-version-final", appliedAt: "2026-07-27T03:00:00Z" },
+        nodeId: () => "agent-output-node",
+        connectionId: () => "agent-output-connection",
+    };
+    const first = planCanvasAgentOutput(input);
+    const replay = planCanvasAgentOutput({ ...input, nodes: first.nodes, connections: first.connections });
+
+    assert.equal(first.nodes[1].position.x, sourceNode.position.x + sourceNode.width + 80);
+    assert.deepEqual(first.connections, []);
+    assert.deepEqual(replay.createdNodeIds, []);
+    assert.equal(replay.nodes.length, first.nodes.length);
+    assert.equal(replay.connections.length, first.connections.length);
 });

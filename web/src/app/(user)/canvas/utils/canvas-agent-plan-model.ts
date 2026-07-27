@@ -1,6 +1,6 @@
 import type { AgentPlanCreateInput, AgentPlanDetail, AgentPlanStatus } from "../../../../services/api/agent-plans.ts";
 import type { AgentRegistryItem, AgentSkillRef } from "../../../../services/api/agent-registry.ts";
-import type { ArtifactRefInput } from "../../../../services/api/invocations-contract.ts";
+import type { ArtifactRefInput, InvocationApplyInput } from "../../../../services/api/invocations-contract.ts";
 import type { CanvasAssistantReference } from "../types.ts";
 
 export type CanvasAgentPlanRequestInput = {
@@ -70,5 +70,16 @@ export function canvasAgentPlanActions(status: AgentPlanStatus, options: { hasFi
         canReview: status === "needs_review",
         canCancel: !terminalFailure && status !== "completed",
         canApply: status === "completed" && options.hasFinalOutputs && !options.applied,
+    };
+}
+
+export function buildCanvasAgentApplyInput(input: { invocationId: string; attempt: number; artifactSetHash: string; sourceMessageId: string; artifactIds: string[] }): InvocationApplyInput {
+    return {
+        idempotencyKey: `client-local-agent-${input.invocationId}-${input.attempt}`,
+        attempt: input.attempt,
+        artifactSetHash: input.artifactSetHash,
+        target: "client_local_receipt",
+        targetId: input.sourceMessageId,
+        payload: { surface: "canvas", targetKind: "message", targetId: input.sourceMessageId, artifactIds: input.artifactIds },
     };
 }

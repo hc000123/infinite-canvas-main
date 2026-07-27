@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Check, CircleStop, Play, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, CircleStop, Play, Plus, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { App, Button, Select, Spin, Tag } from "antd";
 
 import { preferredCapabilityOutputText } from "@/components/capability-runtime/capability-run-model";
@@ -8,11 +8,13 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasAgentPlanRun } from "../types";
 import { useCanvasAgentPlan } from "../hooks/use-canvas-agent-plan";
+import type { ArtifactEnvelope } from "@/services/api/invocations";
+import type { CapabilityConsumeTrace } from "@/components/capability-runtime/use-capability-run";
 
-export function CanvasAgentPlanCard({ run, projectId, onRunPatch }: { run: CanvasAgentPlanRun; projectId: string; onRunPatch: (patch: Partial<CanvasAgentPlanRun>) => void }) {
+export function CanvasAgentPlanCard({ run, projectId, sourceMessageId, onRunPatch, onConsume }: { run: CanvasAgentPlanRun; projectId: string; sourceMessageId: string; onRunPatch: (patch: Partial<CanvasAgentPlanRun>) => void; onConsume: (input: { artifacts: ArtifactEnvelope[]; trace: CapabilityConsumeTrace; sourceNodeIds: string[]; sourceMessageId: string; agentPlanId: string }) => Promise<void> }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const { message } = App.useApp();
-    const runtime = useCanvasAgentPlan({ run, projectId, enabled: true, onRunPatch });
+    const runtime = useCanvasAgentPlan({ run, projectId, sourceMessageId, enabled: true, onRunPatch, onConsume });
     const status = runtime.plan?.plan.status || "draft";
     const execute = async (action: () => Promise<unknown>, success: string) => {
         try {
@@ -81,10 +83,11 @@ export function CanvasAgentPlanCard({ run, projectId, onRunPatch }: { run: Canva
                 {runtime.actions.canConfirm ? <Button size="small" type="primary" icon={<Check className="size-3.5" />} loading={runtime.busy} onClick={() => void execute(runtime.confirm, "版本与额度已确认")}>确认版本与额度</Button> : null}
                 {runtime.actions.canContinue ? <Button size="small" type="primary" icon={<Play className="size-3.5" />} loading={runtime.busy} onClick={() => void execute(runtime.continuePlan, "Plan 已推进")}>推进 / 同步</Button> : null}
                 {runtime.actions.canReview ? <Button size="small" type="primary" icon={<Check className="size-3.5" />} loading={runtime.busy} disabled={!runtime.invocation?.artifactSetHash} onClick={() => void execute(runtime.review, "批准当前产物并完成交接")}>批准当前产物</Button> : null}
+                {runtime.actions.canApply ? <Button size="small" type="primary" icon={<Plus className="size-3.5" />} loading={runtime.busy} disabled={runtime.artifacts.length === 0} onClick={() => void execute(runtime.apply, "最终产物已写入画布")}>使用最终产物</Button> : null}
                 <Button size="small" icon={<RefreshCw className="size-3.5" />} disabled={runtime.busy} onClick={() => void execute(runtime.refresh, "状态已刷新")}>刷新</Button>
                 {runtime.actions.canCancel ? <Button size="small" danger icon={<CircleStop className="size-3.5" />} loading={runtime.busy} onClick={() => void execute(runtime.cancel, "Plan 已取消")}>取消</Button> : null}
             </div>
-            {runtime.actions.canApply ? <div className="mt-3 text-xs" style={{ color: theme.node.muted }}>最终 Artifact 已就绪，可选择写入对话或画布。</div> : null}
+            {run.appliedAt ? <div className="mt-3 text-xs" style={{ color: theme.node.muted }}>最终 Artifact 已写入画布并记录消费回执。</div> : null}
         </div>
     );
 }

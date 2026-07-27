@@ -182,6 +182,19 @@ export type CanvasNodeMetadata = {
         skillVersionId: string;
         appliedAt: string;
     };
+    agentArtifact?: {
+        source: "canvas_chat";
+        agentPlanId: string;
+        sourceMessageId: string;
+        sourceNodeIds: string[];
+        invocationId: string;
+        artifactId: string;
+        artifactType: string;
+        artifactHash: string;
+        artifactIds: string[];
+        skillVersionId: string;
+        appliedAt: string;
+    };
     referenceAssets?: Array<Record<string, unknown>>;
     sourceAssetId?: string;
     assetVersion?: AssetVersionReference;

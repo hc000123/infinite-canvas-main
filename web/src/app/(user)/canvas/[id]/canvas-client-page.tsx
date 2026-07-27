@@ -1102,6 +1102,7 @@ function InfiniteCanvasPage() {
                 title={currentProject?.title || "未命名画布"}
                 view={inspectorView}
                 onApplyAssistantActions={applyAssistantActions}
+                onConsumeAgentOutput={canvasCapability.consumeAgentOutput}
                 onAssistantCollapse={inspectorPanelActions.collapseAssistant}
                 onAssistantCollapseStart={() => setAssistantCollapsed(true)}
                 onBindSelectedVideoToProductionPackage={() => undefined}

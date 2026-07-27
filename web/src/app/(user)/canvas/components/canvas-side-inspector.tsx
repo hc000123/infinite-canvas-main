@@ -6,6 +6,8 @@ import { CanvasAssistantPanel } from "./canvas-assistant-panel";
 import { CanvasContextInspector, type CanvasInspectorView } from "./canvas-context-inspector";
 import type { CanvasAssistantImage, CanvasAssistantSession, CanvasConnection, CanvasNodeData } from "../types";
 import type { AssistantCanvasAction } from "../utils/canvas-assistant-actions";
+import type { ArtifactEnvelope } from "@/services/api/invocations";
+import type { CapabilityConsumeTrace } from "@/components/capability-runtime/use-capability-run";
 import type { CanvasProductionPackageSummary, CanvasProductionVideoVersion } from "../utils/canvas-production-packages";
 import type { EpisodeWorkbenchStats } from "../utils/episode-workbench";
 import type { ShotGroup, StoryboardTableShot } from "../utils/storyboard-management";
@@ -28,6 +30,7 @@ type Props = {
     nodes: CanvasNodeData[];
     nodeToolActions: CanvasNodeHoverToolbarActions;
     onApplyAssistantActions: (actions: AssistantCanvasAction[]) => boolean;
+    onConsumeAgentOutput: (input: { artifacts: ArtifactEnvelope[]; trace: CapabilityConsumeTrace; sourceNodeIds: string[]; sourceMessageId: string; agentPlanId: string }) => Promise<void>;
     onBindSelectedVideoToProductionPackage: (packageId: string, nodeId: string) => void;
     onCollapsedChange: (collapsed: boolean) => void;
     onDownloadProductionVideoVersion: (version: CanvasProductionVideoVersion) => void;
@@ -82,6 +85,7 @@ export function CanvasSideInspector({
     nodes,
     nodeToolActions,
     onApplyAssistantActions,
+    onConsumeAgentOutput,
     onAssistantCollapse,
     onAssistantCollapseStart,
     onBindSelectedVideoToProductionPackage,
@@ -161,6 +165,7 @@ export function CanvasSideInspector({
                         onInsertText={onInsertText}
                         onPasteImage={onPasteImage}
                         onApplyAssistantActions={onApplyAssistantActions}
+                        onConsumeAgentOutput={onConsumeAgentOutput}
                         onOpenWorkflowAssistant={onOpenWorkflowAssistant}
                         onCollapseStart={onAssistantCollapseStart}
                         onCollapse={onAssistantCollapse}

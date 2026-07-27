@@ -10,7 +10,8 @@ import { nanoid } from "nanoid";
 import { requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
 import { fetchAgents } from "@/services/api/agent-registry";
 import { createAgentPlan } from "@/services/api/agent-plans";
-import { createArtifact } from "@/services/api/invocations";
+import { createArtifact, type ArtifactEnvelope } from "@/services/api/invocations";
+import type { CapabilityConsumeTrace } from "@/components/capability-runtime/use-capability-run";
 import { uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -55,6 +56,7 @@ type CanvasAssistantPanelProps = {
     onInsertText: (text: string) => void;
     onPasteImage: (file: File) => void;
     onApplyAssistantActions: (actions: AssistantCanvasAction[]) => boolean;
+    onConsumeAgentOutput: (input: { artifacts: ArtifactEnvelope[]; trace: CapabilityConsumeTrace; sourceNodeIds: string[]; sourceMessageId: string; agentPlanId: string }) => Promise<void>;
     onOpenWorkflowAssistant?: () => void;
     onCollapseStart: () => void;
     onCollapse: () => void;
@@ -90,6 +92,7 @@ export function CanvasAssistantPanel({
     onInsertText,
     onPasteImage,
     onApplyAssistantActions,
+    onConsumeAgentOutput,
     onOpenWorkflowAssistant,
     onCollapseStart,
     onCollapse,
@@ -524,6 +527,7 @@ export function CanvasAssistantPanel({
                             if (!message.agentPlanRun) return;
                             updateMessage(activeSession?.id || "", message.id, { agentPlanRun: { ...message.agentPlanRun, ...patch } });
                         }}
+                        onConsumeAgentOutput={onConsumeAgentOutput}
                     />
                 ) : (
                     <CanvasAssistantEmptyState onOpenWorkflowAssistant={onOpenWorkflowAssistant} />

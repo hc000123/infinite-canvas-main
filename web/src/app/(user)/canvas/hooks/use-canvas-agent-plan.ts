@@ -6,15 +6,16 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchSkillOptions, type SkillOption } from "@/services/api/admin-skills";
 import { fetchAgents } from "@/services/api/agent-registry";
 import { cancelAgentPlan, confirmAgentPlan, continueAgentPlan, createAgentPlanRevision, fetchAgentPlan, preflightAgentPlan, type AgentPlanDetail } from "@/services/api/agent-plans";
-import { getArtifact, getInvocation, reviewInvocation, type InvocationDetail } from "@/services/api/invocations";
+import { applyInvocation, getArtifact, getInvocation, reviewInvocation, type ArtifactEnvelope, type InvocationDetail } from "@/services/api/invocations";
+import type { CapabilityConsumeTrace } from "@/components/capability-runtime/use-capability-run";
 import { useUserStore } from "@/stores/use-user-store";
 import type { CanvasAgentPlanRun } from "../types";
-import { activeAgentPlanInvocationId, canvasAgentPlanActions, cloneCanvasAgentSkillRefs, finalAgentPlanOutputRefs } from "../utils/canvas-agent-plan-model";
+import { activeAgentPlanInvocationId, buildCanvasAgentApplyInput, canvasAgentPlanActions, cloneCanvasAgentSkillRefs, finalAgentPlanOutputRefs } from "../utils/canvas-agent-plan-model";
 
 const activeInvocationStatuses = new Set(["queued", "running", "cancel_requested"]);
 const errorText = (error: unknown) => (error instanceof Error ? error.message : error ? String(error) : "");
 
-export function useCanvasAgentPlan({ run, projectId, enabled, onRunPatch }: { run: CanvasAgentPlanRun; projectId: string; enabled: boolean; onRunPatch: (patch: Partial<CanvasAgentPlanRun>) => void }) {
+export function useCanvasAgentPlan({ run, projectId, sourceMessageId, enabled, onRunPatch, onConsume }: { run: CanvasAgentPlanRun; projectId: string; sourceMessageId: string; enabled: boolean; onRunPatch: (patch: Partial<CanvasAgentPlanRun>) => void; onConsume: (input: { artifacts: ArtifactEnvelope[]; trace: CapabilityConsumeTrace; sourceNodeIds: string[]; sourceMessageId: string; agentPlanId: string }) => Promise<void> }) {
     const token = useUserStore((state) => state.token);
     const queryClient = useQueryClient();
     const [draftSkillRefs, setDraftSkillRefs] = useState(() => cloneCanvasAgentSkillRefs(run.skillRefs));
@@ -29,7 +30,8 @@ export function useCanvasAgentPlan({ run, projectId, enabled, onRunPatch }: { ru
     const allowedSkillOptions = useMemo(() => filterAllowedSkillOptions(skillsQuery.data || [], agent?.recommendedPackage?.skillAccessPolicy), [agent?.recommendedPackage?.skillAccessPolicy, skillsQuery.data]);
 
     const plan = planQuery.data;
-    const activeInvocationId = activeAgentPlanInvocationId(plan);
+    const finalStep = [...(plan?.steps || [])].sort((left, right) => right.step.ordinal - left.step.ordinal).find((item) => item.outputArtifactRefs.length);
+    const activeInvocationId = activeAgentPlanInvocationId(plan) || (plan?.plan.status === "completed" ? finalStep?.step.invocationId || "" : "");
     const invocationQuery = useQuery({
         queryKey: ["canvas-agent-invocation", activeInvocationId],
         queryFn: () => getInvocation(activeInvocationId),
@@ -82,8 +84,22 @@ export function useCanvasAgentPlan({ run, projectId, enabled, onRunPatch }: { ru
             void invocationQuery.refetch();
         },
     });
+    const applyMutation = useMutation({
+        mutationFn: async () => {
+            if (!plan || plan.plan.status !== "completed" || !finalStep?.step.invocationId || artifacts.length !== finalOutputRefs.length) throw new Error("最终 Artifact 尚未准备完成");
+            const detail = invocationQuery.data || await getInvocation(finalStep.step.invocationId);
+            if (!["approved", "applied"].includes(detail.run.status) || !detail.artifactSetHash || detail.run.latestAttempt < 1) throw new Error("最终 Invocation 尚未批准");
+            const appliedAt = new Date().toISOString();
+            const trace: CapabilityConsumeTrace = { invocationId: detail.run.id, artifactIds: artifacts.map((artifact) => artifact.artifact.id), skillVersionId: finalStep.step.skillVersionId, appliedAt };
+            await onConsume({ artifacts, trace, sourceNodeIds: run.sourceNodeIds, sourceMessageId, agentPlanId: run.planId });
+            await applyInvocation(detail.run.id, buildCanvasAgentApplyInput({ invocationId: detail.run.id, attempt: detail.run.latestAttempt, artifactSetHash: detail.artifactSetHash, sourceMessageId, artifactIds: trace.artifactIds }));
+            onRunPatch({ appliedAt });
+            return appliedAt;
+        },
+        onSuccess: () => void invocationQuery.refetch(),
+    });
 
-    const mutations = [revisionMutation, preflightMutation, confirmMutation, continueMutation, cancelMutation, reviewMutation];
+    const mutations = [revisionMutation, preflightMutation, confirmMutation, continueMutation, cancelMutation, reviewMutation, applyMutation];
     const mutationError = mutations.find((mutation) => mutation.error)?.error;
     const actions = canvasAgentPlanActions(plan?.plan.status || "draft", { hasFinalOutputs: finalOutputRefs.length > 0, applied: Boolean(run.appliedAt) });
     const replaceSkill = (index: number, skillVersionId: string) => {
@@ -114,6 +130,7 @@ export function useCanvasAgentPlan({ run, projectId, enabled, onRunPatch }: { ru
         continuePlan: () => continueMutation.mutateAsync(),
         review: () => reviewMutation.mutateAsync(),
         cancel: () => cancelMutation.mutateAsync(),
+        apply: () => applyMutation.mutateAsync(),
         refresh: () => Promise.all([planQuery.refetch(), invocationQuery.refetch()]),
     };
 }
