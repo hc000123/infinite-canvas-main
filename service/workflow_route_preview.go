@@ -217,16 +217,25 @@ func previewWorkflowAgentNode(userID, projectID string, node WorkflowNodeSpec, r
 func workflowPreviewBindings(node WorkflowNodeSpec, roots, produced map[string]workflowPreviewArtifact) ([]ResolvedArtifactBinding, error) {
 	result := make([]ResolvedArtifactBinding, 0, len(node.InputBindings))
 	for _, spec := range node.InputBindings {
-		item, ok := roots[spec.WorkflowInputName]
-		if spec.Source == WorkflowNodeSource {
-			item, ok = produced[spec.FromNodeKey]
+		if spec.Source == WorkflowInputSource {
+			item, ok := roots[spec.WorkflowInputName]
+			if !ok {
+				return nil, safeMessageError{message: "Workflow 节点缺少输入 " + spec.BindingName}
+			}
+			binding := item.binding
+			binding.BindingName, binding.Snapshot.BindingName = spec.BindingName, spec.BindingName
+			result = append(result, binding)
+			continue
 		}
-		if !ok {
-			return nil, safeMessageError{message: "Workflow 节点缺少输入 " + spec.BindingName}
+		for _, sourceKey := range workflowBindingSourceKeys(spec) {
+			item, ok := produced[sourceKey]
+			if !ok {
+				return nil, safeMessageError{message: "Workflow 节点缺少输入 " + spec.BindingName}
+			}
+			binding := item.binding
+			binding.BindingName, binding.Snapshot.BindingName = spec.BindingName, spec.BindingName
+			result = append(result, binding)
 		}
-		binding := item.binding
-		binding.BindingName, binding.Snapshot.BindingName = spec.BindingName, spec.BindingName
-		result = append(result, binding)
 	}
 	return result, nil
 }

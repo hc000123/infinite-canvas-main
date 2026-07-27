@@ -364,7 +364,7 @@ func unlockWorkflowNodes(detail *WorkflowExecutionDetail) error {
 			dependencyStatus := states[dependency]
 			if dependencyStatus == model.WorkflowNodeExecutionSkipped {
 				for _, binding := range spec.InputBindings {
-					if binding.Source == WorkflowNodeSource && binding.FromNodeKey == dependency && binding.Required {
+					if binding.Source == WorkflowNodeSource && containsInvocationString(workflowBindingSourceKeys(binding), dependency) && binding.Required {
 						skip = true
 					}
 				}
@@ -401,18 +401,23 @@ func workflowExecutionNodeInputs(spec WorkflowNodeSpec, roots []ArtifactRefInput
 			result = append(result, ref)
 			continue
 		}
-		parent := nodeByKey[binding.FromNodeKey]
-		var refs []ArtifactRefInput
-		if json.Unmarshal([]byte(parent.OutputArtifactRefsJSON), &refs) != nil || len(refs) == 0 {
-			return nil, safeMessageError{message: "Workflow 上游 Artifact 尚未批准"}
-		}
 		matched := false
-		for _, ref := range refs {
-			if binding.FromOutputBinding != "" && ref.BindingName != binding.FromOutputBinding && len(refs) > 1 {
-				continue
+		for _, sourceKey := range workflowBindingSourceKeys(binding) {
+			parent, ok := nodeByKey[sourceKey]
+			if !ok {
+				return nil, safeMessageError{message: "Workflow 上游节点不存在"}
 			}
-			ref.BindingName = binding.BindingName
-			result, matched = append(result, ref), true
+			var refs []ArtifactRefInput
+			if json.Unmarshal([]byte(parent.OutputArtifactRefsJSON), &refs) != nil || len(refs) == 0 {
+				return nil, safeMessageError{message: "Workflow 上游 Artifact 尚未批准"}
+			}
+			for _, ref := range refs {
+				if binding.FromOutputBinding != "" && ref.BindingName != binding.FromOutputBinding && len(refs) > 1 {
+					continue
+				}
+				ref.BindingName = binding.BindingName
+				result, matched = append(result, ref), true
+			}
 		}
 		if !matched {
 			return nil, safeMessageError{message: "Workflow 上游输出 binding 不存在"}

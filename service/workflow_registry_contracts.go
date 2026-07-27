@@ -56,13 +56,14 @@ type WorkflowAgentRef struct {
 }
 
 type WorkflowNodeInputBinding struct {
-	BindingName       string `json:"bindingName"`
-	ArtifactType      string `json:"artifactType"`
-	Source            string `json:"source"`
-	WorkflowInputName string `json:"workflowInputName,omitempty"`
-	FromNodeKey       string `json:"fromNodeKey,omitempty"`
-	FromOutputBinding string `json:"fromOutputBinding,omitempty"`
-	Required          bool   `json:"required"`
+	BindingName       string   `json:"bindingName"`
+	ArtifactType      string   `json:"artifactType"`
+	Source            string   `json:"source"`
+	WorkflowInputName string   `json:"workflowInputName,omitempty"`
+	FromNodeKey       string   `json:"fromNodeKey,omitempty"`
+	FromNodeKeys      []string `json:"fromNodeKeys,omitempty"`
+	FromOutputBinding string   `json:"fromOutputBinding,omitempty"`
+	Required          bool     `json:"required"`
 }
 
 type WorkflowCondition struct {

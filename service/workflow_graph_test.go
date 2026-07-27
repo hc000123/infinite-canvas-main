@@ -66,6 +66,33 @@ func TestNormalizeWorkflowPackageEnforcesExecutorReferences(t *testing.T) {
 	}
 }
 
+func TestNormalizeWorkflowPackageSupportsMultiSourceBinding(t *testing.T) {
+	character := workflowGraphSkillNode("character", "asset_rendition", "")
+	scene := workflowGraphSkillNode("scene", "asset_rendition", "")
+	video := workflowGraphSkillNode("video", "video_prompt_package", "")
+	video.InputBindings = []WorkflowNodeInputBinding{{
+		BindingName: "asset_rendition", ArtifactType: "asset_rendition", Source: WorkflowNodeSource,
+		FromNodeKeys: []string{"scene", "character", "scene"}, FromOutputBinding: "asset_rendition", Required: true,
+	}}
+	normalized, err := NormalizeWorkflowPackage(WorkflowPackage{Nodes: []WorkflowNodeSpec{character, scene, video}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := normalized.Nodes[2].InputBindings[0]
+	if strings.Join(binding.FromNodeKeys, ",") != "character,scene" || strings.Join(normalized.Nodes[2].DependsOn, ",") != "character,scene" {
+		t.Fatalf("binding=%+v dependencies=%v", binding, normalized.Nodes[2].DependsOn)
+	}
+	video.InputBindings[0].FromNodeKey = "scene"
+	if _, err := NormalizeWorkflowPackage(WorkflowPackage{Nodes: []WorkflowNodeSpec{character, scene, video}}); err == nil || !strings.Contains(err.Error(), "二选一") {
+		t.Fatalf("single+multi source accepted: %v", err)
+	}
+	video.InputBindings[0].FromNodeKey = ""
+	scene.OutputArtifactType = "asset_brief"
+	if _, err := NormalizeWorkflowPackage(WorkflowPackage{Nodes: []WorkflowNodeSpec{character, scene, video}}); err == nil || !strings.Contains(err.Error(), "类型") {
+		t.Fatalf("multi-source type mismatch accepted: %v", err)
+	}
+}
+
 func workflowGraphSkillNode(key, output, dependency string) WorkflowNodeSpec {
 	node := WorkflowNodeSpec{
 		NodeKey: key, Name: key, ExecutorType: WorkflowExecutorSkill,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -52,6 +53,39 @@ func TestWorkflowExecutionNodeIdempotencyKeySupportsMultiDigitRevision(t *testin
 	got := workflowExecutionNodeIdempotencyKey("execution-1", 12, "assets")
 	if got != "workflow-execution:execution-1:revision:12:node:assets" {
 		t.Fatalf("key=%q", got)
+	}
+}
+
+func TestWorkflowExecutionNodeInputsAggregatesMultipleSourcesInStableOrder(t *testing.T) {
+	spec := WorkflowNodeSpec{InputBindings: []WorkflowNodeInputBinding{{
+		BindingName: "asset_rendition", ArtifactType: "asset_rendition", Source: WorkflowNodeSource,
+		FromNodeKeys: []string{"character", "prop", "scene"}, FromOutputBinding: "asset_rendition", Required: true,
+	}}}
+	encode := func(refs ...ArtifactRefInput) string {
+		raw, _ := json.Marshal(refs)
+		return string(raw)
+	}
+	nodes := []model.WorkflowNodeExecution{
+		{NodeKey: "scene", OutputArtifactRefsJSON: encode(ArtifactRefInput{BindingName: "asset_rendition", ArtifactID: "scene-0"})},
+		{NodeKey: "character", OutputArtifactRefsJSON: encode(ArtifactRefInput{BindingName: "asset_rendition", ArtifactID: "character-0"}, ArtifactRefInput{BindingName: "asset_rendition", ArtifactID: "character-1"})},
+		{NodeKey: "prop", OutputArtifactRefsJSON: encode(ArtifactRefInput{BindingName: "asset_rendition", ArtifactID: "prop-0"})},
+	}
+	refs, err := workflowExecutionNodeInputs(spec, nil, nodes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"character-0", "character-1", "prop-0", "scene-0"}
+	if len(refs) != len(want) {
+		t.Fatalf("refs=%+v", refs)
+	}
+	for index, ref := range refs {
+		if ref.BindingName != "asset_rendition" || ref.ArtifactID != want[index] {
+			t.Fatalf("refs=%+v", refs)
+		}
+	}
+	nodes[1].OutputArtifactRefsJSON = `[]`
+	if _, err := workflowExecutionNodeInputs(spec, nil, nodes); err == nil || !strings.Contains(err.Error(), "尚未批准") {
+		t.Fatalf("missing approved parent accepted: %v", err)
 	}
 }
 

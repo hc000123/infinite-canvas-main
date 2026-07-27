@@ -34,13 +34,15 @@ func NormalizeWorkflowPackage(value WorkflowPackage) (WorkflowPackage, error) {
 		dependencies := append([]string(nil), node.DependsOn...)
 		for _, binding := range node.InputBindings {
 			if binding.Source == WorkflowNodeSource {
-				dependencies = append(dependencies, binding.FromNodeKey)
-				parent, ok := byKey[binding.FromNodeKey]
-				if !ok {
-					return value, errors.New("Workflow 节点依赖不存在")
-				}
-				if parent.OutputArtifactType != binding.ArtifactType {
-					return value, errors.New("Workflow 上游输出与输入 Artifact 类型不一致")
+				for _, sourceKey := range workflowBindingSourceKeys(binding) {
+					dependencies = append(dependencies, sourceKey)
+					parent, ok := byKey[sourceKey]
+					if !ok {
+						return value, errors.New("Workflow 节点依赖不存在")
+					}
+					if parent.OutputArtifactType != binding.ArtifactType {
+						return value, errors.New("Workflow 上游输出与输入 Artifact 类型不一致")
+					}
 				}
 			}
 		}
@@ -84,6 +86,7 @@ func normalizeWorkflowNode(node WorkflowNodeSpec) (WorkflowNodeSpec, error) {
 		binding.Source = strings.ToLower(strings.TrimSpace(binding.Source))
 		binding.WorkflowInputName = strings.ToLower(strings.TrimSpace(binding.WorkflowInputName))
 		binding.FromNodeKey = strings.ToLower(strings.TrimSpace(binding.FromNodeKey))
+		binding.FromNodeKeys = normalizedStringSet(binding.FromNodeKeys, true)
 		binding.FromOutputBinding = strings.ToLower(strings.TrimSpace(binding.FromOutputBinding))
 		if !skillManifestTokenPattern.MatchString(binding.BindingName) || !skillManifestTokenPattern.MatchString(binding.ArtifactType) || bindings[binding.BindingName] {
 			return node, errors.New("Workflow 输入 binding 无效或重复")
@@ -91,12 +94,20 @@ func normalizeWorkflowNode(node WorkflowNodeSpec) (WorkflowNodeSpec, error) {
 		bindings[binding.BindingName] = true
 		switch binding.Source {
 		case WorkflowInputSource:
-			if !skillManifestTokenPattern.MatchString(binding.WorkflowInputName) || binding.FromNodeKey != "" {
+			if !skillManifestTokenPattern.MatchString(binding.WorkflowInputName) || binding.FromNodeKey != "" || len(binding.FromNodeKeys) > 0 {
 				return node, errors.New("Workflow 根输入 binding 无效")
 			}
 		case WorkflowNodeSource:
-			if !skillManifestTokenPattern.MatchString(binding.FromNodeKey) || binding.WorkflowInputName != "" {
+			if binding.WorkflowInputName != "" || (binding.FromNodeKey == "") == (len(binding.FromNodeKeys) == 0) {
+				return node, errors.New("Workflow 节点输入来源必须在 fromNodeKey 与 fromNodeKeys 中二选一")
+			}
+			if binding.FromNodeKey != "" && !skillManifestTokenPattern.MatchString(binding.FromNodeKey) {
 				return node, errors.New("Workflow 节点输入 binding 无效")
+			}
+			for _, sourceKey := range binding.FromNodeKeys {
+				if !skillManifestTokenPattern.MatchString(sourceKey) {
+					return node, errors.New("Workflow 节点输入 binding 无效")
+				}
 			}
 			if binding.FromOutputBinding == "" {
 				binding.FromOutputBinding = "output"
@@ -133,6 +144,16 @@ func normalizeWorkflowNode(node WorkflowNodeSpec) (WorkflowNodeSpec, error) {
 		node.RetryPolicy.MaxAttempts = 1
 	}
 	return node, normalizeWorkflowCondition(node.Condition)
+}
+
+func workflowBindingSourceKeys(binding WorkflowNodeInputBinding) []string {
+	if len(binding.FromNodeKeys) > 0 {
+		return binding.FromNodeKeys
+	}
+	if binding.FromNodeKey != "" {
+		return []string{binding.FromNodeKey}
+	}
+	return nil
 }
 
 func normalizeWorkflowSkillBinding(binding *WorkflowSkillBinding, outputType string) error {
