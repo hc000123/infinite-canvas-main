@@ -404,7 +404,7 @@ git commit -m "feat: manage project skill lifecycle"
 - Create: `web/src/app/(user)/projects/[id]/skills/components/project-skill-editor.tsx`
 - Modify: `web/src/app/(user)/projects/[id]/workflows/page.tsx`
 
-- [ ] **Step 1: 写 API 合约失败测试**
+- [x] **Step 1: 写 API 合约失败测试**
 
 使用依赖注入 client，验证项目列表、复制系统 Skill、创建版本、发布、推荐、归档和删除路径：
 
@@ -416,19 +416,19 @@ assert.deepEqual(calls, [
 ]);
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `cd web && node --experimental-strip-types --test src/services/api/project-skills.test.mts`
 
 Expected: FAIL，client 文件不存在。
 
-- [ ] **Step 3: 实现 API client 和项目页**
+- [x] **Step 3: 实现 API client 和项目页**
 
 API 类型复用 `admin-skills.ts` 的 `SkillPackage`、`SkillVersion`、`SkillAdminItem`。页面从路由读取 `projectId`，用 TanStack Query 加载 `/api/v1/skills`；System Skill 卡片只展示版本并提供“复制为项目 Skill”，Project Skill 提供新增版本、编辑草稿、校验/评测、发布、推荐、归档、停用和符合条件时删除。
 
 编辑器只提交 Registry 的 `SkillDraftInput`，不得把 Skill 正文存到浏览器本地。所有危险删除使用 Ant Design `Popconfirm`，后端拒绝时直接展示服务端原因。
 
-- [ ] **Step 4: 增加可发现入口**
+- [x] **Step 4: 增加可发现入口**
 
 在项目 Workflow 页面头部加入低视觉重量链接按钮：
 
@@ -438,7 +438,7 @@ API 类型复用 `admin-skills.ts` 的 `SkillPackage`、`SkillVersion`、`SkillA
 
 遵循画布主题 token，不添加页面私有全局 CSS。
 
-- [ ] **Step 5: 运行测试并提交**
+- [x] **Step 5: 运行测试并提交**
 
 Run: `cd web && node --experimental-strip-types --test src/services/api/project-skills.test.mts 'src/app/(user)/projects/[id]/workflows/workflow-skill-options.test.mts'`
 

@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Button, Empty, Spin, Tag } from "antd";
-import { Boxes, Workflow } from "lucide-react";
+import { Boxes, Library, Workflow } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -83,7 +83,7 @@ export default function ProjectWorkflowCenterPage() {
             <div className="mx-auto flex w-full max-w-[1900px] flex-col gap-6 px-5 py-7 lg:px-8">
                 <header className="border-b border-[var(--studio-border-subtle)] pb-5">
                     <Link href={`/projects/${project.id}`} className="text-xs text-[var(--studio-text-muted)] transition hover:text-[var(--studio-accent)]">{project.title}</Link>
-                    <div className="mt-3 flex flex-wrap items-end justify-between gap-4"><div><div className="flex items-center gap-2"><Workflow className="size-6 text-[var(--studio-accent)]" /><h1 className="text-3xl font-semibold">Workflow 中心</h1></div><p className="mt-2 max-w-4xl text-sm leading-6 text-[var(--studio-text-secondary)]">Workflow 只编排依赖、路由、条件和审批；每个生产节点由独立 Skill 执行，并通过统一 Invocation / Artifact Runtime 留痕和恢复。</p></div><div className="flex flex-wrap gap-2"><Tag icon={<Workflow className="size-3.5" />}>{workflows.length} 个 Workflow</Tag><Tag icon={<Boxes className="size-3.5" />}>{skillsQuery.data?.length || 0} 个 Skill 版本</Tag></div></div>
+                    <div className="mt-3 flex flex-wrap items-end justify-between gap-4"><div><div className="flex items-center gap-2"><Workflow className="size-6 text-[var(--studio-accent)]" /><h1 className="text-3xl font-semibold">Workflow 中心</h1></div><p className="mt-2 max-w-4xl text-sm leading-6 text-[var(--studio-text-secondary)]">Workflow 只编排依赖、路由、条件和审批；每个生产节点由独立 Skill 执行，并通过统一 Invocation / Artifact Runtime 留痕和恢复。</p></div><div className="flex flex-wrap items-center gap-2"><Button type="text" icon={<Library className="size-4" />} href={`/projects/${projectId}/skills`}>管理 Skill</Button><Tag icon={<Workflow className="size-3.5" />}>{workflows.length} 个 Workflow</Tag><Tag icon={<Boxes className="size-3.5" />}>{skillsQuery.data?.length || 0} 个 Skill 版本</Tag></div></div>
                 </header>
                 <div className="grid min-w-0 items-start gap-5 2xl:grid-cols-[290px_minmax(600px,1fr)_minmax(420px,0.72fr)]">
                     <WorkflowRegistryList items={workflows} loading={workflowsQuery.isLoading} selectedWorkflowId={selectedWorkflowId} busy={createMutation.isPending || copyMutation.isPending} onCreate={() => createMutation.mutate()} onCopy={(item) => copyMutation.mutate(item)} onSelect={setSelectedWorkflowId} />
