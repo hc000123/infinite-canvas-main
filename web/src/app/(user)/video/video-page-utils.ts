@@ -279,6 +279,7 @@ export function buildPackageAssetGeneration(item: ProductionPackage, config: AiC
         productionPackageTitle: item.segment,
         prompt: item.prompt,
         provider: config.videoProtocol,
+        projectId: item.projectId,
         refundedAt: aiTask?.refundedAt,
         source: "video-page",
         sourceEpisode: item.sourceEpisode,

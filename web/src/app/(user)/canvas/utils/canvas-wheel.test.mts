@@ -1,17 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { shouldHandleCanvasWheel } from "./canvas-wheel.ts";
+import { resolveCanvasWheelAction } from "./canvas-wheel.ts";
 
-test("plain wheel is handled by the canvas", () => {
-    assert.equal(shouldHandleCanvasWheel({ ctrlKey: false, metaKey: false, excludedTarget: false }), true);
+test("touchpad two-finger scrolling pans the canvas", () => {
+    assert.equal(resolveCanvasWheelAction({ ctrlKey: false, metaKey: false, deltaMode: 0, deltaX: 18, deltaY: 26, excludedTarget: false }), "pan");
+    assert.equal(resolveCanvasWheelAction({ ctrlKey: false, metaKey: false, deltaMode: 0, deltaX: 0, deltaY: 12.5, excludedTarget: false }), "pan");
 });
 
-test("browser zoom wheel shortcuts are not handled by the canvas", () => {
-    assert.equal(shouldHandleCanvasWheel({ ctrlKey: true, metaKey: false, excludedTarget: false }), false);
-    assert.equal(shouldHandleCanvasWheel({ ctrlKey: false, metaKey: true, excludedTarget: false }), false);
+test("touchpad pinch and modified wheel zoom the canvas", () => {
+    assert.equal(resolveCanvasWheelAction({ ctrlKey: true, metaKey: false, deltaMode: 0, deltaX: 0, deltaY: 8, excludedTarget: false }), "zoom");
+    assert.equal(resolveCanvasWheelAction({ ctrlKey: false, metaKey: true, deltaMode: 0, deltaX: 0, deltaY: 8, excludedTarget: false }), "zoom");
+});
+
+test("coarse mouse wheels continue to zoom the canvas", () => {
+    assert.equal(resolveCanvasWheelAction({ ctrlKey: false, metaKey: false, deltaMode: 1, deltaX: 0, deltaY: 3, excludedTarget: false }), "zoom");
+    assert.equal(resolveCanvasWheelAction({ ctrlKey: false, metaKey: false, deltaMode: 0, deltaX: 0, deltaY: 100, excludedTarget: false }), "zoom");
 });
 
 test("wheel inside an excluded editor is not handled by the canvas", () => {
-    assert.equal(shouldHandleCanvasWheel({ ctrlKey: false, metaKey: false, excludedTarget: true }), false);
+    assert.equal(resolveCanvasWheelAction({ ctrlKey: false, metaKey: false, deltaMode: 0, deltaX: 8, deltaY: 8, excludedTarget: true }), "ignore");
 });

@@ -47,7 +47,7 @@ type UseCanvasGenerationRetryActionsOptions = {
     openConfigDialog: (open: boolean) => void;
     message: CanvasActionMessage;
     retryTextNode: (input: { node: CanvasNodeData; prompt: string; generationConfig: AiConfig; generationContext: NodeGenerationContext }) => Promise<void>;
-    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string) => Promise<Partial<CanvasNodeMetadata>>;
+    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string, node: CanvasNodeData) => Promise<Partial<CanvasNodeMetadata>>;
     videoMetadata: (video: UploadedFile) => CanvasNodeMetadata;
     imageMetadata: (image: UploadedImage) => CanvasNodeMetadata;
     workspaceProjectId: string;
@@ -180,9 +180,9 @@ export function useCanvasGenerationRetryActions({
                         },
                         trace,
                     );
-                    const cachedVideo = await cacheUploadedCanvasMedia(video, `${node.id}.mp4`);
-                    const videoSize = fitNodeSize(video.width || node.width, video.height || node.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
                     const latestVideoNode = nodesRef.current.find((item) => item.id === node.id) || node;
+                    const cachedVideo = await cacheUploadedCanvasMedia(video, `${node.id}.mp4`, latestVideoNode);
+                    const videoSize = fitNodeSize(video.width || node.width, video.height || node.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
                     const finalVideoNode = buildCompletedVideoNode({
                         videoNode: latestVideoNode,
                         videoSize,

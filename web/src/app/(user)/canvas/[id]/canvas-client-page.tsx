@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import dynamic from "next/dynamic";
 import { useParams, useSearchParams } from "next/navigation";
 import { defaultConfig } from "@/stores/use-config-store";
@@ -56,6 +56,8 @@ import { CanvasPageOverlays } from "../components/canvas-page-overlays";
 import { InfiniteCanvas } from "../components/infinite-canvas";
 import { CanvasNodesLayer } from "../components/canvas-nodes-layer";
 import { CanvasFloatingControls } from "../components/canvas-floating-controls";
+import { CanvasAssetBindingModal } from "../components/canvas-asset-binding-modal";
+import { useAssetStore } from "@/stores/use-asset-store";
 import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
 import { CanvasNodeType, type CanvasNodeData } from "../types";
 
@@ -74,7 +76,7 @@ function InfiniteCanvasPage() {
     const focusNodeId = searchParams.get("focusNodeId") || "";
 
     const {
-        addAssetOnce,
+        addAssetOnce: storeAddAssetOnce,
         assetBreakdownItems,
         assets,
         attachCanvasToCreativeProject,
@@ -82,7 +84,9 @@ function InfiniteCanvasPage() {
         attachStoryboardShotCanvasNodes,
         cleanupAssetImages,
         createProject,
+        createEpisodeChildCanvas,
         creativeProject,
+        canvasProjects,
         currentProject,
         deleteProjects,
         effectiveConfig,
@@ -110,6 +114,16 @@ function InfiniteCanvasPage() {
         workspaceProjectId,
         workspaceProjectTitle,
     } = useCanvasWorkspaceStores(canvasId);
+    const [classificationAssetIds, setClassificationAssetIds] = useState<string[]>([]);
+    const addAssetOnce = useCallback(
+        async (...args: Parameters<typeof storeAddAssetOnce>) => {
+            const id = await storeAddAssetOnce(...args);
+            const stored = useAssetStore.getState().assets.find((asset) => asset.id === id);
+            if (currentProject?.projectId && currentProject.episodeId && stored?.kind === "image" && !stored.assetBinding) setClassificationAssetIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
+            return id;
+        },
+        [currentProject, storeAddAssetOnce],
+    );
     const { canvasAiConfig, canvasEpisodeContext } = useCanvasRuntimeConfig(currentProject, effectiveConfig);
     const {
         activeChatId,
@@ -210,7 +224,17 @@ function InfiniteCanvasPage() {
         viewportRef,
     } = useCanvasPageLocalState();
     const capacity = useCanvasCapacity(nodes, connections);
-    const { downloadNodeMedia, cacheUploadedCanvasMedia } = useCanvasMediaCache({ token, message, canvasTitle: currentProject?.title || "未命名画布", getNodes: () => nodesRef.current, setNodes });
+    const { downloadNodeMedia, cacheUploadedCanvasMedia } = useCanvasMediaCache({
+        token,
+        message,
+        canvasId,
+        canvasTitle: currentProject?.title || "未命名画布",
+        projectId: workspaceProjectId,
+        projectTitle: workspaceProjectTitle,
+        episodeContext: canvasEpisodeContext,
+        getNodes: () => nodesRef.current,
+        setNodes,
+    });
     const { historyState, resetHistory, undoCanvas, redoCanvas, pauseHistory, resumeHistory, skipNextHistoryCommit, getCleanupHistory } = useCanvasHistory({
         projectId: canvasId,
         projectLoaded,
@@ -249,6 +273,7 @@ function InfiniteCanvasPage() {
         setNodes,
         workspaceProjectId,
         workspaceProjectTitle,
+        token,
     });
     const { generateImageNode, generateTextNode, generateVideoNode, retryTextNode } = useCanvasGenerationNodeActions({
         archiveGeneratedAsset,
@@ -412,23 +437,22 @@ function InfiniteCanvasPage() {
         previewNodeId,
     });
     const expandedTextNode = expandedTextNodeId ? nodeById.get(expandedTextNodeId) || null : null;
-    const { episodeWorkbenchStats, episodeProductionLabel, timelineShots, timelineShotGroups, activeTimelineShot, activeTimelineShotGroups, activeTimelineNodeIds, activeTimelineNodes, productionPackages, productionPackageLabelMap, relatedHighlight } =
-        useCanvasProductionWorkbenchState({
-            canvasId,
-            currentProject,
-            creativeProject,
-            productionPackagesEnabled: false,
-            storyboardTableShots,
-            storyboardShotGroups,
-            assetBreakdownItems,
-            nodes,
-            connections,
-            selectedInspectorNode,
-            activeNodeId,
-            activeTimelineShotId,
-            activeProductionPackageId,
-            setActiveProductionPackageId,
-        });
+    const { episodeWorkbenchStats, episodeProductionLabel, timelineShots, timelineShotGroups, activeTimelineShot, activeTimelineShotGroups, activeTimelineNodeIds, activeTimelineNodes, productionPackages, productionPackageLabelMap, relatedHighlight } = useCanvasProductionWorkbenchState({
+        canvasId,
+        currentProject,
+        creativeProject,
+        productionPackagesEnabled: false,
+        storyboardTableShots,
+        storyboardShotGroups,
+        assetBreakdownItems,
+        nodes,
+        connections,
+        selectedInspectorNode,
+        activeNodeId,
+        activeTimelineShotId,
+        activeProductionPackageId,
+        setActiveProductionPackageId,
+    });
 
     const { handleTimelineShotSelect, addStoryboardGroupToCanvas, addShotGroupToCanvas } = useCanvasStoryboardCanvasActions({
         assets,
@@ -448,7 +472,6 @@ function InfiniteCanvasPage() {
         setSelectedConnectionId,
         setActiveTimelineShotId,
         setActiveProductionPackageId,
-        setInspectorView,
         setViewport,
     });
     const { configInputsById, handleConfigNodeChange } = useCanvasConfigNodeActions({
@@ -552,32 +575,54 @@ function InfiniteCanvasPage() {
         [canvasId, currentProject?.title, message, setConnections, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, workspaceProjectId, workspaceProjectTitle],
     );
 
-    const { createAndOpenProject, deleteCurrentProject, finishTitleEditing, openEpisodeWorkbench, openWorkflowAssistant, resetViewport, returnTarget, returnToParent, saveCurrentProject, setZoomScale, startTitleEditing } = useCanvasPageActions({
-        activeChatId,
-        attachCanvasToCreativeProject,
-        backgroundMode,
-        canvasId,
-        chatSessions,
-        cleanupAssetImages,
-        connections,
-        createProject,
-        currentProject,
-        deleteProjects,
-        flushProjects,
-        message,
-        navigate: navigateCanvasPage,
-        nodes,
-        renameProject,
-        setContextMenu,
-        setTitleDraft,
-        setTitleEditing,
-        setViewport,
-        showImageInfo,
-        size,
-        titleDraft,
-        updateProject,
-        viewport,
-    });
+    const { createAndOpenProject, deleteCurrentProject, finishTitleEditing, openEpisodeWorkbench, openWorkflowAssistant, organizeCanvas, resetViewport, returnTarget, returnToParent, saveCurrentProject, setZoomScale, startTitleEditing } =
+        useCanvasPageActions({
+            activeChatId,
+            attachCanvasToCreativeProject,
+            backgroundMode,
+            canvasId,
+            chatSessions,
+            cleanupAssetImages,
+            connections,
+            createProject,
+            currentProject,
+            deleteProjects,
+            flushProjects,
+            message,
+            navigate: navigateCanvasPage,
+            nodes,
+            renameProject,
+            setContextMenu,
+            setNodes,
+            setTitleDraft,
+            setTitleEditing,
+            setViewport,
+            showImageInfo,
+            size,
+            titleDraft,
+            updateProject,
+            viewport,
+        });
+    const createAndOpenCanvas = useCallback(() => {
+        if (currentProject?.canvasRole === "main") {
+            try {
+                const childId = createEpisodeChildCanvas(currentProject.id, "");
+                if (currentProject.projectId) attachCanvasToCreativeProject(currentProject.projectId, childId);
+                navigateCanvasPage(`/canvas/${childId}`);
+            } catch (error) {
+                message.warning(error instanceof Error ? error.message : "子画布创建失败");
+            }
+            return;
+        }
+        if (currentProject?.canvasRole === "child") return message.warning("子画布不能继续创建下一级画布");
+        createAndOpenProject();
+    }, [attachCanvasToCreativeProject, createAndOpenProject, createEpisodeChildCanvas, currentProject, message, navigateCanvasPage]);
+    const returnFromCanvas = useCallback(() => {
+        if (currentProject?.parentCanvasId) return navigateCanvasPage(`/canvas/${currentProject.parentCanvasId}`);
+        returnToParent();
+    }, [currentProject, navigateCanvasPage, returnToParent]);
+    const mainCanvasId = currentProject?.canvasRole === "main" ? currentProject.id : currentProject?.parentCanvasId || "";
+    const childCanvases = canvasProjects.filter((canvas) => canvas.parentCanvasId === mainCanvasId).map((canvas) => ({ id: canvas.id, title: canvas.title }));
 
     useCanvasGlobalPointerEvents({
         clearSelectionBox,
@@ -611,6 +656,7 @@ function InfiniteCanvasPage() {
         canvasTitle: currentProject?.title || "未命名画布",
         connectionsRef,
         containerRef,
+        ensureProjectFolder,
         getCanvasCenter,
         imageInputRef,
         message,
@@ -623,7 +669,6 @@ function InfiniteCanvasPage() {
         setSelectedConnectionId,
         setDialogNodeId,
         setConnections,
-        setAssetPickerOpen,
         showUploadSuccess: showCanvasSuccess,
         toImageMetadata: imageMetadata,
         toVideoMetadata: videoMetadata,
@@ -816,12 +861,9 @@ function InfiniteCanvasPage() {
     });
 
     const inspectorPanelActions = useCanvasInspectorPanelActions({
-        focusProductionPackage: () => undefined,
         setAssetPickerOpen,
         setAssetPickerTab,
-        setAssistantCollapsed,
         setAssistantMounted,
-        setInspectorView,
         setIsInspectorCollapsed,
     });
     const renderActions = useCanvasRenderActions({
@@ -850,9 +892,10 @@ function InfiniteCanvasPage() {
             <section className="relative min-w-0 flex-1 overflow-hidden">
                 <CanvasTopBar
                     title={currentProject?.title || "未命名画布"}
-                    episodeLabel={canvasEpisodeLabel(currentProject)}
-                    episodeProductionLabel={episodeProductionLabel}
+                    episodeProductionLabel={currentProject?.canvasRole === "child" ? "子画布" : currentProject?.canvasRole === "main" ? `主画布 · ${episodeProductionLabel}` : episodeProductionLabel}
                     hasEpisode={Boolean(currentProject?.episodeId)}
+                    canCreateChildCanvas={currentProject?.canvasRole === "main"}
+                    childCanvases={childCanvases}
                     titleDraft={titleDraft}
                     isTitleEditing={titleEditing}
                     onTitleDraftChange={setTitleDraft}
@@ -862,18 +905,16 @@ function InfiniteCanvasPage() {
                     canUndo={historyState.canUndo}
                     canRedo={historyState.canRedo}
                     capacity={capacity}
-                    returnLabel={returnTarget.label}
-                    onReturnParent={returnToParent}
+                    returnLabel={currentProject?.parentCanvasId ? "返回主画布" : returnTarget.label}
+                    onReturnParent={returnFromCanvas}
                     onHome={openProjectsHome}
-                    onCreateProject={createAndOpenProject}
+                    onCreateProject={createAndOpenCanvas}
+                    onOpenChildCanvas={(id) => navigateCanvasPage(`/canvas/${id}`)}
                     onDeleteProject={deleteCurrentProject}
                     onSaveProject={saveCurrentProject}
                     onImportImage={() => handleUploadRequest()}
-                    onOpenEpisodeScript={openEpisodeWorkbench}
-                    onGenerateImage={() => createNode(CanvasNodeType.Config)}
                     onOpenAssets={inspectorPanelActions.openAssetPicker}
-                    onOrganizeCanvas={resetViewport}
-                    onOpenSettings={() => openConfigDialog(true)}
+                    onOrganizeCanvas={organizeCanvas}
                     onUndo={undoCanvas}
                     onRedo={redoCanvas}
                 />
@@ -1032,6 +1073,7 @@ function InfiniteCanvasPage() {
                     previewNode={previewNode}
                     projectId={workspaceProjectId}
                     projectTitle={workspaceProjectTitle}
+                    episodeId={currentProject?.episodeId}
                     scriptInitialEpisodeId={currentProject?.episodeId}
                     scriptManagerOpen={scriptManagerOpen}
                     storyboardInitialGroupId={storyboardInitialGroupId}
@@ -1069,6 +1111,9 @@ function InfiniteCanvasPage() {
                     targetId={canvasCapability.activeNode?.id || canvasId}
                     onConsume={canvasCapability.consume}
                 />
+                {currentProject?.projectId && currentProject.episodeId ? (
+                    <CanvasAssetBindingModal assetId={classificationAssetIds[0]} projectId={currentProject.projectId} episodeId={currentProject.episodeId} onClose={() => setClassificationAssetIds((ids) => ids.slice(1))} />
+                ) : null}
             </section>
             <CanvasSideInspector
                 activeChatId={activeChatId}

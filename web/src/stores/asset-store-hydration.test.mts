@@ -27,6 +27,7 @@ test("keeps synchronous additions made while persisted assets are hydrating", ()
                 { id: "persisted", title: "已保存素材" },
             ],
             folders: [{ id: "persisted-folder", name: "已保存文件夹" }],
+            subjects: [{ id: "persisted-subject", name: "已保存主体" }],
         },
         {
             assets: [
@@ -34,6 +35,7 @@ test("keeps synchronous additions made while persisted assets are hydrating", ()
                 { id: "existing", title: "当前内存版本" },
             ],
             folders: [{ id: "new-folder", name: "恢复期间新增文件夹" }],
+            subjects: [{ id: "new-subject", name: "恢复期间新增主体" }],
         },
     );
 
@@ -45,5 +47,9 @@ test("keeps synchronous additions made while persisted assets are hydrating", ()
     assert.deepEqual(merged.folders, [
         { id: "new-folder", name: "恢复期间新增文件夹" },
         { id: "persisted-folder", name: "已保存文件夹" },
+    ]);
+    assert.deepEqual(merged.subjects, [
+        { id: "new-subject", name: "恢复期间新增主体" },
+        { id: "persisted-subject", name: "已保存主体" },
     ]);
 });

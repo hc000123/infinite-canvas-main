@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normalizeStructuredEpisodeScript, normalizeScriptScene, orderedScriptEpisodes, orderedScriptScenes, parseScriptScenesFromText, reorderScriptItems, structuredEpisodeScriptToText, type ScriptEpisode, type ScriptScene } from "./script-management.ts";
+import {
+    normalizeStructuredEpisodeScript,
+    normalizeScriptScene,
+    orderedScriptEpisodes,
+    orderedScriptScenes,
+    parseScriptScenesFromText,
+    reorderScriptItems,
+    structuredEpisodeScriptToText,
+    type ScriptEpisode,
+    type ScriptScene,
+} from "./script-management.ts";
 
 test("orders episodes and scenes by order", () => {
     const episodes: ScriptEpisode[] = [episode("ep-2", "project-1", 2), episode("ep-other", "project-2", 1), episode("ep-1", "project-1", 1)];
@@ -83,7 +93,7 @@ test("normalizes structured script and renders scene text", () => {
 });
 
 function episode(id: string, projectId: string, order: number): ScriptEpisode {
-    return { id, projectId, order, title: id, summary: "", hook: "", turningPoint: "", cliffhanger: "", sceneIds: [], createdAt: "", updatedAt: "" };
+    return { id, projectId, code: `EP${String(order).padStart(2, "0")}`, order, title: id, summary: "", hook: "", turningPoint: "", cliffhanger: "", sceneIds: [], createdAt: "", updatedAt: "" };
 }
 
 function scene(id: string, episodeId: string, order: number): ScriptScene {

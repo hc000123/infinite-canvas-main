@@ -47,3 +47,9 @@ test("the canvas download action uses the version-aware filename", () => {
     const hook = readFileSync(new URL("../hooks/use-canvas-media-cache.ts", import.meta.url), "utf8");
     assert.match(hook, /canvasMediaDownloadFilename\(node, canvasTitle, getNodes\(\)\)/);
 });
+
+test("generated canvas media always requires its source node for cache classification", () => {
+    const hook = readFileSync(new URL("../hooks/use-canvas-media-cache.ts", import.meta.url), "utf8");
+    assert.doesNotMatch(hook, /node\?: CanvasNodeData/);
+    assert.match(hook, /const context = nodeProjectCacheContext\(node,/);
+});

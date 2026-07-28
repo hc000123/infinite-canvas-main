@@ -8,6 +8,7 @@ export type ScriptProject = {
 export type ScriptEpisode = {
     id: string;
     projectId: string;
+    code: string;
     order: number;
     title: string;
     summary: string;
@@ -74,8 +75,11 @@ export type ScriptEpisodeWriteInput = Omit<ScriptEpisode, "id" | "sceneIds" | "c
 export type ScriptSceneWriteInput = Omit<ScriptScene, "id" | "createdAt" | "updatedAt">;
 
 export function normalizeScriptEpisode(input: ScriptEpisodeWriteInput): ScriptEpisodeWriteInput {
+    const code = normalizeEpisodeCode(input.code);
+    if (!isValidEpisodeCode(code)) throw new Error("请输入 EP01 这类标准集号");
     return {
         ...input,
+        code,
         title: input.title.trim() || "未命名集数",
         summary: input.summary.trim(),
         sourceSummary: input.sourceSummary?.trim() || undefined,
@@ -84,6 +88,34 @@ export function normalizeScriptEpisode(input: ScriptEpisodeWriteInput): ScriptEp
         turningPoint: input.turningPoint.trim(),
         cliffhanger: input.cliffhanger.trim(),
     };
+}
+
+export function normalizeEpisodeCode(value: string) {
+    return value.trim().toUpperCase();
+}
+
+export function isValidEpisodeCode(value: string) {
+    return /^EP\d{2,}$/.test(normalizeEpisodeCode(value));
+}
+
+export function defaultEpisodeCode(order: number) {
+    return `EP${String(Math.max(1, order || 1)).padStart(2, "0")}`;
+}
+
+export function episodeProductionName(code: string, title: string) {
+    const safeCode =
+        normalizeEpisodeCode(code)
+            .normalize("NFKC")
+            .replace(/[^\p{L}\p{N}_-]+/gu, "-")
+            .replace(/^[-_]+|[-_]+$/g, "") || "EP00";
+    const safeTitle =
+        title
+            .normalize("NFKC")
+            .trim()
+            .replace(/[^\p{L}\p{N}_-]+/gu, "-")
+            .replace(/-+/g, "-")
+            .replace(/^[-_]+|[-_]+$/g, "") || "未命名集数";
+    return `${safeCode}-${safeTitle}`;
 }
 
 export function normalizeScriptScene(input: ScriptSceneWriteInput): ScriptSceneWriteInput {

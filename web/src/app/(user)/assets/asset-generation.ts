@@ -31,7 +31,10 @@ export function assetGenerationRecords(asset: Asset | null | undefined): AssetGe
         const legacyVideoWorkflowGeneration = buildLegacyVideoWorkflowGeneration(asset);
         if (legacyVideoWorkflowGeneration) records.push(legacyVideoWorkflowGeneration);
     }
-    return records.filter((record, index) => records.findIndex((item) => JSON.stringify(item) === JSON.stringify(record)) === index);
+    const workflow = readRecord(metadata.originalWorkflow);
+    const workflowProjectId = readString(workflow?.projectId) || readString(workflow?.sourceProjectId);
+    const normalized = records.map((record) => (workflowProjectId && !readString(record.projectId) ? { ...record, projectId: workflowProjectId } : record));
+    return normalized.filter((record, index) => normalized.findIndex((item) => JSON.stringify(item) === JSON.stringify(record)) === index);
 }
 
 export function latestAssetGeneration(asset: Asset | null | undefined) {
@@ -226,6 +229,7 @@ function buildLegacyVideoWorkflowGeneration(asset: Asset): AssetGenerationRecord
         finishedAt: readString(aiTask?.finishedAt),
         refundedAt: readString(aiTask?.refundedAt),
         sourceEpisode: readString(originalWorkflow?.sourceEpisode),
+        projectId: readString(originalWorkflow?.projectId) || readString(originalWorkflow?.sourceProjectId),
         productionPackageId: readString(originalWorkflow?.packageId),
         config: videoGeneration || {},
         createdAt: asset.createdAt || asset.updatedAt,

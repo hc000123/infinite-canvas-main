@@ -23,7 +23,6 @@ export function useCanvasAssistantWriteActions({
     nodesRef,
     setConnections,
     setDialogNodeId,
-    setAssetPickerOpen,
     setNodes,
     setSelectedConnectionId,
     setSelectedNodeIds,
@@ -33,7 +32,6 @@ export function useCanvasAssistantWriteActions({
     message: CanvasAssistantWriteMessage;
     nodesRef: MutableRefObject<CanvasNodeData[]>;
     setConnections: Dispatch<SetStateAction<CanvasConnection[]>>;
-    setAssetPickerOpen: Dispatch<SetStateAction<boolean>>;
     setDialogNodeId: Dispatch<SetStateAction<string | null>>;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
@@ -46,25 +44,27 @@ export function useCanvasAssistantWriteActions({
             const config = fitNodeSize(meta.width, meta.height);
             const center = getCanvasCenter();
             const id = `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            const node: CanvasNodeData = placeCanvasNodeAwayFromNodes(
-                {
-                    id,
-                    type: CanvasNodeType.Image,
-                    title: "助手图片",
-                    position: { x: center.x - config.width / 2, y: center.y - config.height / 2 },
-                    width: config.width,
-                    height: config.height,
-                    metadata: {
-                        ...imageMetadata({ ...storedImage, width: meta.width, height: meta.height }),
-                        prompt: image.prompt,
-                        ...canvasAssetReferenceMetadata(image),
-                        volcengineAsset: image.volcengineAsset,
+            setNodes((prev) => {
+                const node: CanvasNodeData = placeCanvasNodeAwayFromNodes(
+                    {
+                        id,
+                        type: CanvasNodeType.Image,
+                        title: "助手图片",
+                        position: { x: center.x - config.width / 2, y: center.y - config.height / 2 },
+                        width: config.width,
+                        height: config.height,
+                        metadata: {
+                            ...imageMetadata({ ...storedImage, width: meta.width, height: meta.height }),
+                            prompt: image.prompt,
+                            ...canvasAssetReferenceMetadata(image),
+                            volcengineAsset: image.volcengineAsset,
+                        },
                     },
-                },
-                nodesRef.current,
-            );
-
-            setNodes((prev) => [...prev, node]);
+                    prev,
+                );
+                nodesRef.current = [...prev, node];
+                return nodesRef.current;
+            });
             setSelectedNodeIds(new Set([id]));
             setSelectedConnectionId(null);
             setDialogNodeId(id);
@@ -75,16 +75,16 @@ export function useCanvasAssistantWriteActions({
     const insertAssistantText = useCallback(
         (text: string, metadata: Partial<CanvasNodeMetadata> = {}) => {
             const center = getCanvasCenter();
-            const node = placeCanvasNodeAwayFromNodes(
-                {
-                    ...createCanvasNode(CanvasNodeType.Text, center, { content: text, status: NODE_STATUS_SUCCESS, ...metadata }),
-                    title: text.slice(0, 32) || "Assistant Text",
-                },
-                nodesRef.current,
-            );
-
-            setNodes((prev) => [...prev, node]);
-            setSelectedNodeIds(new Set([node.id]));
+            const baseNode = {
+                ...createCanvasNode(CanvasNodeType.Text, center, { content: text, status: NODE_STATUS_SUCCESS, ...metadata }),
+                title: text.slice(0, 32) || "Assistant Text",
+            };
+            setNodes((prev) => {
+                const node = placeCanvasNodeAwayFromNodes(baseNode, prev);
+                nodesRef.current = [...prev, node];
+                return nodesRef.current;
+            });
+            setSelectedNodeIds(new Set([baseNode.id]));
             setSelectedConnectionId(null);
         },
         [getCanvasCenter, nodesRef, setNodes, setSelectedConnectionId, setSelectedNodeIds],
@@ -112,7 +112,7 @@ export function useCanvasAssistantWriteActions({
     );
 
     const handleAssetInsert = useCallback(
-        (payload: InsertAssetPayload) => {
+        async (payload: InsertAssetPayload) => {
             if (payload.kind === "text") {
                 insertAssistantText(payload.content, canvasAssetReferenceMetadata(payload));
             } else if (payload.kind === "video" || payload.kind === "audio") {
@@ -121,8 +121,8 @@ export function useCanvasAssistantWriteActions({
                 setNodes((prev) => [...prev, placeCanvasNodeAwayFromNodes(buildInsertedMediaAssetNode(payload, id, center), prev)]);
                 setSelectedNodeIds(new Set([id]));
             } else {
-                void insertAssistantImage({
-                    id: `asset-${Date.now()}`,
+                await insertAssistantImage({
+                    id: `asset-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
                     prompt: payload.title,
                     dataUrl: payload.dataUrl,
                     storageKey: payload.storageKey,
@@ -131,9 +131,8 @@ export function useCanvasAssistantWriteActions({
                     volcengineAsset: payload.volcengineAsset,
                 });
             }
-            setAssetPickerOpen(false);
         },
-        [getCanvasCenter, insertAssistantImage, insertAssistantText, setAssetPickerOpen, setNodes, setSelectedNodeIds],
+        [getCanvasCenter, insertAssistantImage, insertAssistantText, setNodes, setSelectedNodeIds],
     );
 
     return { applyAssistantActions, handleAssetInsert, insertAssistantImage, insertAssistantText };

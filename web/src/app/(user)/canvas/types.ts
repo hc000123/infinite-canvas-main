@@ -220,6 +220,12 @@ export type CanvasNodeMetadata = {
     cacheUrl?: string;
     cachePath?: string;
     cacheFilename?: string;
+    projectCache?: {
+        fileId?: string;
+        relativePath?: string;
+        status: "ready" | "pending" | "error";
+        error?: string;
+    };
     lastFrameUrl?: string;
     lastFrameStorageKey?: string;
     taskCreatedAt?: number;

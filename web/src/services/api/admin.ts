@@ -141,6 +141,34 @@ export type AdminAITaskDetailResponse = {
     creditLogs: AdminCreditLog[];
 };
 
+export type AdminAIUsagePeriod = "day" | "week" | "month";
+
+export type AdminAIUsagePeriodSummary = {
+    key: AdminAIUsagePeriod;
+    startAt: string;
+    endAt: string;
+    netCredits: number;
+    usageCount: number;
+    userCount: number;
+};
+
+export type AdminAIUsageUser = {
+    userId: string;
+    user?: AdminUserSummary;
+    netCredits: number;
+    usageCount: number;
+    ratio: number;
+};
+
+export type AdminAIUsageSummaryResponse = {
+    periods: AdminAIUsagePeriodSummary[];
+    selectedPeriod: AdminAIUsagePeriod;
+    users: AdminAIUsageUser[];
+    userTotal: number;
+    page: number;
+    pageSize: number;
+};
+
 export type AdminUserQuery = {
     keyword?: string;
     page?: number;
@@ -264,6 +292,10 @@ export async function deleteAdminCreditLog(token: string, id: string) {
 
 export async function fetchAdminAITasks(token: string, query: AdminAITaskQuery = {}) {
     return apiGet<AdminAITaskListResponse>("/api/admin/ai-tasks", compactApiParams(query), token);
+}
+
+export async function fetchAdminAIUsageSummary(token: string, query: { period: AdminAIUsagePeriod; page: number; pageSize: number }) {
+    return apiGet<AdminAIUsageSummaryResponse>("/api/admin/ai-usage-summary", compactApiParams(query), token);
 }
 
 export async function fetchAdminAITask(token: string, id: string) {

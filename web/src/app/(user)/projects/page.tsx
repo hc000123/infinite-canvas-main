@@ -1,17 +1,18 @@
 "use client";
 
-import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { App, Button, Input, Tooltip } from "antd";
 import { Archive, ArrowRight, Edit3, Folder, Grid2X2, LayoutList, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { useAssetStore } from "@/stores/use-asset-store";
+import { updateProjectCacheStatus } from "@/services/api/project-cache";
+import { useUserStore } from "@/stores/use-user-store";
 import { CanvasCreateProjectModal } from "../canvas/components/canvas-create-project-modal";
 import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../canvas/utils/canvas-project-preset";
 import { canvasIdsForCreativeProject, type CreativeProject } from "./creative-projects";
-import { shouldOpenProjectCardFromTarget } from "./project-card-navigation";
 import { useCreativeProjectStore } from "./use-creative-project-store";
 
 type ProjectCardView = {
@@ -47,6 +48,7 @@ export default function ProjectsPage() {
     const router = useRouter();
     const { modal } = App.useApp();
     const effectiveConfig = useEffectiveConfig();
+    const token = useUserStore((state) => state.token);
     const [createOpen, setCreateOpen] = useState(false);
     const [editingId, setEditingId] = useState("");
     const [editingTitle, setEditingTitle] = useState("");
@@ -62,7 +64,6 @@ export default function ProjectsPage() {
     const deleteProject = useCreativeProjectStore((state) => state.deleteProject);
     const ensureProjectFolder = useAssetStore((state) => state.ensureProjectFolder);
     const canvases = useCanvasStore((state) => state.projects);
-    const updateCanvasProject = useCanvasStore((state) => state.updateProject);
     const sortedProjects = useMemo(() => [...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)), [projects]);
     const projectCards = useMemo<ProjectCardView[]>(
         () =>
@@ -92,13 +93,13 @@ export default function ProjectsPage() {
     const removeProject = (project: CreativeProject) => {
         modal.confirm({
             title: "删除项目？",
-            content: "只会删除项目入口和关联关系，不会删除已有画布、素材、剧本或分镜数据。",
+            content: "只会删除项目入口，不会删除已有画布、素材、剧本、分镜或磁盘缓存。",
             okText: "删除",
             okButtonProps: { danger: true },
             cancelText: "取消",
             onOk: () => {
-                canvases.filter((canvas) => canvas.projectId === project.id).forEach((canvas) => updateCanvasProject(canvas.id, { projectId: undefined }));
                 deleteProject(project.id);
+                if (token) void updateProjectCacheStatus(project.id, "deleted", token).catch(() => undefined);
             },
         });
     };
@@ -179,7 +180,6 @@ export default function ProjectsPage() {
                                     onArchive={() => archiveProjectWithConfirm(card.project)}
                                     onRestore={() => restoreProject(card.project.id)}
                                     onDelete={() => removeProject(card.project)}
-                                    onOpen={() => router.push(`/projects/${card.project.id}`)}
                                 />
                             ))}
                         </div>
@@ -244,7 +244,6 @@ function ProjectCard({
     onArchive,
     onRestore,
     onDelete,
-    onOpen,
 }: {
     card: ProjectCardView;
     editing: boolean;
@@ -257,29 +256,13 @@ function ProjectCard({
     onArchive: () => void;
     onRestore: () => void;
     onDelete: () => void;
-    onOpen: () => void;
 }) {
     const { project, canvasCount, meta } = card;
     const projectHref = `/projects/${project.id}`;
-    const openable = !editing;
-    const handleCardClick = (event: ReactMouseEvent<HTMLElement>) => {
-        if (openable && shouldOpenProjectCardFromTarget(event.target)) onOpen();
-    };
-    const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
-        if (!openable || !shouldOpenProjectCardFromTarget(event.target)) return;
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        onOpen();
-    };
 
     return (
         <article
-            className={`group overflow-hidden rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] shadow-[var(--studio-shadow)] transition hover:-translate-y-0.5 hover:border-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--studio-shell-bg)] ${openable ? "cursor-pointer" : ""} ${listMode ? "grid md:grid-cols-[320px_minmax(0,1fr)]" : ""}`}
-            role={openable ? "link" : undefined}
-            tabIndex={openable ? 0 : undefined}
-            aria-label={openable ? `打开项目 ${project.title}` : undefined}
-            onClick={handleCardClick}
-            onKeyDown={handleCardKeyDown}
+            className={`group overflow-hidden rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] shadow-[var(--studio-shadow)] transition hover:-translate-y-0.5 hover:border-[var(--studio-accent)] ${listMode ? "grid md:grid-cols-[320px_minmax(0,1fr)]" : ""}`}
         >
             <div className={`relative ${listMode ? "min-h-full" : "h-36"}`}>
                 <div
@@ -312,7 +295,7 @@ function ProjectCard({
 
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--studio-border-subtle)] pt-3">
                     <span className="text-xs text-[var(--studio-text-muted)]">更新时间：{formatProjectDate(project.updatedAt)}</span>
-                    <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
+                    <div className="flex items-center gap-1">
                         {editing ? (
                             <>
                                 <Button size="small" type="primary" onClick={onSave}>

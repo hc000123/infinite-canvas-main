@@ -1,11 +1,12 @@
 "use client";
 
-import { History, PanelRightClose, Plus, Settings2, Sparkles, Trash2, Workflow, X } from "lucide-react";
+import { History, PanelRightClose, Plus, Sparkles, Trash2, Workflow, X } from "lucide-react";
 import { Button, Modal, Tooltip } from "antd";
 
 import { DiaTextReveal } from "@/components/ui/dia-text-reveal";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { resolveCanvasAssistantHeaderActions } from "../utils/canvas-assistant-header";
 
 type CanvasAssistantHeaderProps = {
     view: "chat" | "history";
@@ -16,14 +17,13 @@ type CanvasAssistantHeaderProps = {
     onDeleteAll: () => void;
     onToggleView: () => void;
     onStartChat: () => void;
-    onOpenWorkflowAssistant?: () => void;
-    onOpenConfig: () => void;
     onCollapse: () => void;
 };
 
-export function CanvasAssistantHeader({ view, checkedCount, historyCount, canStartChat, onDeleteSelected, onDeleteAll, onToggleView, onStartChat, onOpenWorkflowAssistant, onOpenConfig, onCollapse }: CanvasAssistantHeaderProps) {
+export function CanvasAssistantHeader({ view, checkedCount, historyCount, canStartChat, onDeleteSelected, onDeleteAll, onToggleView, onStartChat, onCollapse }: CanvasAssistantHeaderProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const iconButtonStyle = { color: theme.node.muted };
+    const actions = resolveCanvasAssistantHeaderActions({ view, historyCount, canStartChat });
 
     return (
         <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
@@ -42,20 +42,16 @@ export function CanvasAssistantHeader({ view, checkedCount, historyCount, canSta
                         </Tooltip>
                     </>
                 ) : null}
-                {onOpenWorkflowAssistant ? (
-                    <Tooltip title="工作流助手">
-                        <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Workflow className="size-4" />} onClick={onOpenWorkflowAssistant} />
+                {actions.showHistory ? (
+                    <Tooltip title={view === "history" ? "返回对话" : "历史记录"}>
+                        <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<History className="size-4" />} onClick={onToggleView} />
                     </Tooltip>
                 ) : null}
-                <Tooltip title={view === "history" ? "返回对话" : "历史记录"}>
-                    <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<History className="size-4" />} onClick={onToggleView} />
-                </Tooltip>
-                <Tooltip title="新对话">
-                    <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Plus className="size-4" />} disabled={!canStartChat} onClick={onStartChat} />
-                </Tooltip>
-                <Tooltip title="配置">
-                    <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Settings2 className="size-4" />} onClick={onOpenConfig} />
-                </Tooltip>
+                {actions.showNewChat ? (
+                    <Tooltip title="新对话">
+                        <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<Plus className="size-4" />} onClick={onStartChat} />
+                    </Tooltip>
+                ) : null}
                 <Tooltip title="收起对话">
                     <Button type="text" shape="circle" className="!h-8 !w-8 !min-w-8" style={iconButtonStyle} icon={<PanelRightClose className="size-4" />} onClick={onCollapse} />
                 </Tooltip>

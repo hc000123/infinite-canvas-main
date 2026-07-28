@@ -28,7 +28,10 @@ export function useAdminCreditLogs() {
     const saveMutation = useMutation({
         mutationFn: (log: Partial<AdminCreditLog>) => saveAdminCreditLog(token, log),
         onSuccess: async (_, log) => {
-            await queryClient.invalidateQueries({ queryKey: ["admin", "credit-logs"] });
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ["admin", "credit-logs"] }),
+                queryClient.invalidateQueries({ queryKey: ["admin", "ai-usage-summary"] }),
+            ]);
             message.success(log.id ? "日志已保存" : "日志已新增");
         },
         onError: (error) => message.error(error instanceof Error ? error.message : "保存失败"),
@@ -37,7 +40,10 @@ export function useAdminCreditLogs() {
     const deleteMutation = useMutation({
         mutationFn: (id: string) => deleteAdminCreditLog(token, id),
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["admin", "credit-logs"] });
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ["admin", "credit-logs"] }),
+                queryClient.invalidateQueries({ queryKey: ["admin", "ai-usage-summary"] }),
+            ]);
             message.success("日志已删除");
         },
         onError: (error) => message.error(error instanceof Error ? error.message : "删除失败"),
@@ -45,7 +51,7 @@ export function useAdminCreditLogs() {
 
     useEffect(() => {
         if (query.isError) {
-            const errorMessage = query.error instanceof Error ? query.error.message : "读取日志失败";
+            const errorMessage = query.error instanceof Error ? query.error.message : "读取算力流水失败";
             message.error(errorMessage);
             if (errorMessage.includes("未登录") || errorMessage.includes("权限不足") || errorMessage.includes("登录状态无效")) clearSession();
         }

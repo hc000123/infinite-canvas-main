@@ -13,7 +13,6 @@ import {
     RobotOutlined,
     SafetyCertificateOutlined,
     SettingOutlined,
-    TransactionOutlined,
     UserOutlined,
 } from "@ant-design/icons";
 import { Button, Drawer, Flex, Grid, Layout, Menu, Spin, Typography, theme } from "antd";
@@ -27,8 +26,7 @@ import { useUserStore } from "@/stores/use-user-store";
 
 const baseAdminMenus = [
     { key: "/admin/login-approvals", icon: <AuditOutlined />, label: "登录审批" },
-    { key: "/admin/credit-logs", icon: <TransactionOutlined />, label: "算力点日志" },
-    { key: "/admin/ai-tasks", icon: <RobotOutlined />, label: "AI 任务日志" },
+    { key: "/admin/ai-tasks", icon: <RobotOutlined />, label: "AI 使用" },
     { key: "/admin/prompts", icon: <FileTextOutlined />, label: "提示词管理" },
     { key: "/admin/assets", icon: <PictureOutlined />, label: "素材管理" },
     { key: "/admin/skills", icon: <ApartmentOutlined />, label: "Skill 中心" },
@@ -71,11 +69,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                   ? "/admin/prompts"
                   : pathname.startsWith("/admin/ai-tasks")
                     ? "/admin/ai-tasks"
-                    : pathname.startsWith("/admin/credit-logs")
-                      ? "/admin/credit-logs"
-                      : pathname.startsWith("/admin/users")
-                        ? "/admin/users"
-                        : "";
+                    : pathname.startsWith("/admin/users")
+                      ? "/admin/users"
+                      : "";
     const pageTitle = pathname.startsWith("/admin/login-approvals")
         ? "登录审批"
         : pathname.startsWith("/admin/admins")
@@ -91,10 +87,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 : pathname.startsWith("/admin/prompts")
                   ? "提示词管理"
                   : pathname.startsWith("/admin/ai-tasks")
-                    ? "AI 任务日志"
-                    : pathname.startsWith("/admin/credit-logs")
-                      ? "算力点日志"
-                      : "用户管理";
+                    ? "AI 使用"
+                    : "用户管理";
 
     useEffect(() => {
         if (!isReady) return;

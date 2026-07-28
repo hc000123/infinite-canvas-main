@@ -3,6 +3,8 @@ import { useCallback, useMemo, type Dispatch, type SetStateAction } from "react"
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { useCanvasStore, type CanvasProject } from "../stores/use-canvas-store";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "../types";
+import { organizeCanvasNodes } from "../utils/canvas-auto-layout";
+import { isHiddenBatchChild } from "../utils/canvas-batch-nodes";
 import { fitCanvasViewport } from "../utils/canvas-viewport";
 import { canvasPageReturnTargetForProject, canvasVideoWorkflowHref, originalWorkflowHref, videoWorkflowEpisodeFromCanvasProject } from "./canvas-page-action-targets";
 
@@ -27,6 +29,7 @@ export function useCanvasPageActions({
     nodes,
     renameProject,
     setContextMenu,
+    setNodes,
     setTitleDraft,
     setTitleEditing,
     setViewport,
@@ -52,22 +55,33 @@ export function useCanvasPageActions({
     nodes: CanvasNodeData[];
     renameProject: (id: string, title: string) => void;
     setContextMenu: (value: null) => void;
+    setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setTitleDraft: Dispatch<SetStateAction<string>>;
     setTitleEditing: Dispatch<SetStateAction<boolean>>;
     setViewport: Dispatch<SetStateAction<ViewportTransform>>;
     showImageInfo: boolean;
     size: { width: number; height: number };
     titleDraft: string;
-    updateProject: (
-        id: string,
-        patch: Partial<Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport">>,
-    ) => void;
+    updateProject: (id: string, patch: Partial<Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport">>) => void;
     viewport: ViewportTransform;
 }) {
     const resetViewport = useCallback(() => {
         setViewport(fitCanvasViewport(nodes, size));
         setContextMenu(null);
     }, [nodes, setContextMenu, setViewport, size]);
+
+    const organizeCanvas = useCallback(() => {
+        const organized = organizeCanvasNodes(nodes, connections);
+        setNodes(organized);
+        setViewport(
+            fitCanvasViewport(
+                organized.filter((node) => !isHiddenBatchChild(node, organized)),
+                size,
+            ),
+        );
+        setContextMenu(null);
+        message.success("画布节点已按生产流程整理");
+    }, [connections, message, nodes, setContextMenu, setNodes, setViewport, size]);
 
     const setZoomScale = useCallback(
         (scale: number) => {
@@ -161,6 +175,7 @@ export function useCanvasPageActions({
         finishTitleEditing,
         openEpisodeWorkbench,
         openWorkflowAssistant,
+        organizeCanvas,
         resetViewport,
         returnTarget,
         returnToParent,

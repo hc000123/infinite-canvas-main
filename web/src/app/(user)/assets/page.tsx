@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { App, Empty, Form, Input, Modal } from "antd";
 
 import { uploadImage } from "@/services/image-storage";
-import type { Asset } from "@/stores/use-asset-store";
+import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { useScriptStore } from "../canvas/stores/use-script-store";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible";
 import { normalizeCanvasAssetTitles } from "./asset-canvas-title";
@@ -58,6 +58,7 @@ function AssetsPageContent() {
         assets: storedAssets,
         creativeProjects,
         ensureProjectFolder,
+        ensureSubject,
         folders,
         productionBibleItems,
         projects,
@@ -68,6 +69,7 @@ function AssetsPageContent() {
         storyboardGroups,
         storyboardShots,
         storyboardTableShots,
+        subjects,
         token,
         updateAsset,
         updateCanvasProject,
@@ -87,6 +89,7 @@ function AssetsPageContent() {
     const [uploadingWorkflowAssetId, setUploadingWorkflowAssetId] = useState<string | null>(null);
     const [matchingWorkflowAsset, setMatchingWorkflowAsset] = useState<Asset | null>(null);
     const [matchKeyword, setMatchKeyword] = useState("");
+    const [pendingClassificationIds, setPendingClassificationIds] = useState<string[]>([]);
 
     useEffect(() => {
         if (!requestedAssetId || openedRequestedAssetId === requestedAssetId) return;
@@ -179,12 +182,20 @@ function AssetsPageContent() {
     });
     const { content, coverUrl, editingAsset, formKind, imageDraft, isAssetOpen, mediaDraft, tags, title, openCreate, openEdit, readCoverFile, readImageFile, readMediaFile, saveAsset, setIsAssetOpen, updateFormKind } = useAssetEditorActions({
         activeFolderId: activeFolderId || undefined,
+        activeProjectId: projectContextFilter || undefined,
         addAsset,
         addAssetOnce,
+        ensureSubject,
         form,
         message,
         updateAsset,
     });
+    useEffect(() => {
+        if (isAssetOpen || !pendingClassificationIds.length) return;
+        const asset = useAssetStore.getState().assets.find((item) => item.id === pendingClassificationIds[0]);
+        setPendingClassificationIds((ids) => ids.slice(1));
+        if (asset?.kind === "image" && !asset.assetBinding) openEdit(asset);
+    }, [isAssetOpen, openEdit, pendingClassificationIds]);
     const {
         allFilteredSelected,
         allVisibleProductionBibleSelected,
@@ -276,6 +287,7 @@ function AssetsPageContent() {
         addAssetOnce,
         assetInputRef,
         message,
+        onImported: (assetIds) => setPendingClassificationIds(assetIds),
         setPage,
     });
     const { applySelectedOutdatedUsages, updateOutdatedUsageToLatest } = useAssetOutdatedReferenceActions({
@@ -488,6 +500,7 @@ function AssetsPageContent() {
                     selectedVolcengineSubmitCount={selectedVolcengineSubmitAssets.length}
                     showEpisodeGroups={Boolean(projectContextFilter && sourceScope !== "canvas")}
                     sortMode={sortMode}
+                    subjects={subjects}
                     submittingReviewId={submittingReviewId}
                     usages={outdatedAssetVersionUsages}
                     visibleAssetGroups={visibleAssetGroups}
@@ -548,6 +561,9 @@ function AssetsPageContent() {
                 folderDialogOpen={folderDialogOpen}
                 folderName={folderName}
                 folderOptions={folderOptions}
+                episodes={scriptEpisodes}
+                projects={creativeProjects}
+                subjects={subjects}
                 form={form}
                 formKind={formKind}
                 imageDraft={imageDraft}

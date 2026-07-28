@@ -8,7 +8,6 @@ import { buildProductionPackagePrompt } from "../utils/canvas-production-package
 import { bindVideoNodeToProductionPackage, hideProductionVideoVersion, markCurrentProductionVideoVersion, type CanvasProductionPackageSummary, type CanvasProductionVideoVersion } from "../utils/canvas-production-packages";
 import { placeCanvasNodeAwayFromNodes, resolveRightwardNodePosition } from "../utils/canvas-node-placement";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type Position, type ViewportTransform } from "../types";
-import type { CanvasInspectorView } from "../components/canvas-context-inspector";
 
 type CanvasActionMessage = {
     success: (content: string) => void;
@@ -28,7 +27,6 @@ type UseCanvasProductionPackageActionsOptions = {
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setActiveTimelineShotId: Dispatch<SetStateAction<string>>;
     setActiveProductionPackageId: Dispatch<SetStateAction<string>>;
-    setInspectorView: Dispatch<SetStateAction<CanvasInspectorView>>;
     setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
     setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
     setDialogNodeId: Dispatch<SetStateAction<string | null>>;
@@ -48,7 +46,6 @@ export function useCanvasProductionPackageActions({
     setNodes,
     setActiveTimelineShotId,
     setActiveProductionPackageId,
-    setInspectorView,
     setSelectedNodeIds,
     setSelectedConnectionId,
     setDialogNodeId,
@@ -58,7 +55,6 @@ export function useCanvasProductionPackageActions({
         (node: CanvasNodeData) => {
             setSelectedNodeIds(new Set([node.id]));
             setSelectedConnectionId(null);
-            setInspectorView("context");
             const k = Math.max(0.45, Math.min(viewportRef.current.k, 1.15));
             setViewport({
                 x: size.width / 2 - (node.position.x + node.width / 2) * k,
@@ -66,7 +62,7 @@ export function useCanvasProductionPackageActions({
                 k,
             });
         },
-        [setInspectorView, setSelectedConnectionId, setSelectedNodeIds, setViewport, size.height, size.width, viewportRef],
+        [setSelectedConnectionId, setSelectedNodeIds, setViewport, size.height, size.width, viewportRef],
     );
 
     const focusProductionPackage = useCallback(
@@ -206,10 +202,9 @@ export function useCanvasProductionPackageActions({
             setActiveProductionPackageId(packageId);
             setSelectedNodeIds(new Set([nodeId]));
             setSelectedConnectionId(null);
-            setInspectorView("context");
             message.success(`已将视频绑定到 ${targetPackage.label}`);
         },
-        [message, nodesRef, productionPackages, setActiveProductionPackageId, setInspectorView, setNodes, setSelectedConnectionId, setSelectedNodeIds],
+        [message, nodesRef, productionPackages, setActiveProductionPackageId, setNodes, setSelectedConnectionId, setSelectedNodeIds],
     );
 
     return {

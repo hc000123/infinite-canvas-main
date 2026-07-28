@@ -6,9 +6,11 @@ import { Form, type FormInstance } from "antd";
 import { readFileAsDataUrl } from "@/lib/image-utils";
 import { uploadMediaFile } from "@/services/file-storage";
 import { uploadImage } from "@/services/image-storage";
-import type { Asset, AssetKind, AssetWriteInput } from "@/stores/use-asset-store";
+import type { Asset, AssetCategory, AssetKind, AssetSubject, AssetWriteInput } from "@/stores/use-asset-store";
 import { buildAssetVersionedUpdatePatch } from "./asset-version-history";
 import type { AssetFormValues, ImageDraft, MediaDraft } from "./components/asset-editor-modal";
+import { NEW_ASSET_SUBJECT } from "./components/asset-binding-fields";
+import { defaultAssetVariantName } from "./asset-subjects";
 
 type MessageApi = {
     error: (content: string) => unknown;
@@ -17,14 +19,16 @@ type MessageApi = {
 
 type Props = {
     activeFolderId?: string;
+    activeProjectId?: string;
     addAsset: (asset: AssetWriteInput) => string;
     addAssetOnce: (asset: AssetWriteInput) => Promise<string>;
     form: FormInstance<AssetFormValues>;
+    ensureSubject: (input: Omit<AssetSubject, "code" | "createdAt" | "id" | "updatedAt"> & { code?: string }) => string;
     message: MessageApi;
     updateAsset: (id: string, patch: Partial<Omit<Asset, "id" | "createdAt">>) => void;
 };
 
-export function useAssetEditorActions({ activeFolderId, addAsset, addAssetOnce, form, message, updateAsset }: Props) {
+export function useAssetEditorActions({ activeFolderId, activeProjectId, addAsset, addAssetOnce, ensureSubject, form, message, updateAsset }: Props) {
     const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
     const [isAssetOpen, setIsAssetOpen] = useState(false);
     const [formKind, setFormKind] = useState<AssetKind>("text");
@@ -40,7 +44,7 @@ export function useAssetEditorActions({ activeFolderId, addAsset, addAssetOnce, 
         setImageDraft(null);
         setMediaDraft(null);
         setFormKind("text");
-        form.setFieldsValue({ kind: "text", title: "", coverUrl: "", folderId: activeFolderId || "", tags: [], source: "手动添加", note: "", content: "" });
+        form.setFieldsValue({ kind: "text", title: "", coverUrl: "", folderId: activeFolderId || "", tags: [], source: "手动添加", note: "", content: "", projectId: activeProjectId || "", allEpisodes: true, episodeIds: [] });
         setIsAssetOpen(true);
     };
 
@@ -58,6 +62,13 @@ export function useAssetEditorActions({ activeFolderId, addAsset, addAssetOnce, 
             source: asset.source,
             note: asset.note,
             content: asset.kind === "text" ? asset.data.content : "",
+            projectId: asset.assetBinding?.projectId || activeProjectId || "",
+            category: asset.assetBinding?.category,
+            subjectId: asset.assetBinding?.subjectId,
+            subjectName: "",
+            variantName: asset.assetBinding?.variantName,
+            allEpisodes: asset.assetBinding?.allEpisodes ?? true,
+            episodeIds: asset.assetBinding?.episodeIds || [],
         });
         setIsAssetOpen(true);
     };
@@ -87,7 +98,22 @@ export function useAssetEditorActions({ activeFolderId, addAsset, addAssetOnce, 
                 message.error("请选择图片文件");
                 return;
             }
-            const asset = { ...base, kind: "image" as const, data: imageDraft };
+            const projectId = values.projectId || "";
+            const category = values.category as AssetCategory;
+            const subjectId = values.subjectId === NEW_ASSET_SUBJECT ? ensureSubject({ projectId, category, name: values.subjectName || "", tags: values.tags || [] }) : values.subjectId || "";
+            const asset = {
+                ...base,
+                kind: "image" as const,
+                data: imageDraft,
+                assetBinding: {
+                    projectId,
+                    subjectId,
+                    category,
+                    variantName: values.variantName?.trim() || defaultAssetVariantName(category),
+                    allEpisodes: values.allEpisodes !== false,
+                    episodeIds: values.allEpisodes === false ? values.episodeIds || [] : [],
+                },
+            };
             if (editingAsset) updateEditedAsset(editingAsset, asset);
             else await addAssetOnce(asset);
         } else {
@@ -111,6 +137,7 @@ export function useAssetEditorActions({ activeFolderId, addAsset, addAssetOnce, 
             setMediaDraft(null);
         }
         if (value === "image") setMediaDraft(null);
+        if (value === "image" && !form.getFieldValue("variantName")) form.setFieldsValue({ projectId: activeProjectId || "", variantName: "基础形象", allEpisodes: true, episodeIds: [] });
         if (value === "video" || value === "audio") {
             setImageDraft(null);
             setMediaDraft(null);

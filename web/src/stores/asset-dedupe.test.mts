@@ -63,6 +63,7 @@ test("merges duplicate asset metadata without changing original asset identity",
     } as Asset;
     const incoming = imageAsset({
         title: "新图",
+        folderId: "project-folder",
         tags: ["人物", "操场"],
         metadata: { sourceRefs: ["node-b"], generation: { prompt: "新提示词" }, source: "canvas" },
     });
@@ -70,6 +71,7 @@ test("merges duplicate asset metadata without changing original asset identity",
     const merged = mergeDuplicateAsset(existing, incoming, "sha256:duplicate", "2026-01-02T00:00:00.000Z");
 
     assert.equal(merged.id, "asset-1");
+    assert.equal(merged.folderId, "project-folder");
     assert.deepEqual(merged.tags, ["毕业", "人物", "操场"]);
     assert.equal(merged.updatedAt, "2026-01-02T00:00:00.000Z");
     assert.equal(merged.metadata?.fingerprint, "sha256:duplicate");

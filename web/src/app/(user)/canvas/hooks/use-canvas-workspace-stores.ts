@@ -36,12 +36,14 @@ export function useCanvasWorkspaceStores(canvasId: string) {
     const markQueueItemFailed = useGenerationQueueStore((state) => state.markFailed);
     const hydrated = useCanvasStore((state) => state.hydrated);
     const createProject = useCanvasStore((state) => state.createProject);
+    const createEpisodeChildCanvas = useCanvasStore((state) => state.createEpisodeChildCanvas);
     const openProject = useCanvasStore((state) => state.openProject);
     const updateProject = useCanvasStore((state) => state.updateProject);
     const flushProjects = useCanvasStore((state) => state.flushProjects);
     const renameProject = useCanvasStore((state) => state.renameProject);
     const deleteProjects = useCanvasStore((state) => state.deleteProjects);
     const currentProject = useCanvasStore((state) => state.projects.find((project) => project.id === canvasId));
+    const canvasProjects = useCanvasStore((state) => state.projects);
     const creativeProject = useCreativeProjectStore((state) => state.projects.find((project) => project.id === currentProject?.projectId));
     const attachCanvasToCreativeProject = useCreativeProjectStore((state) => state.attachCanvas);
     const ensureUnfiledProject = useCreativeProjectStore((state) => state.ensureUnfiledProject);
@@ -56,8 +58,10 @@ export function useCanvasWorkspaceStores(canvasId: string) {
         attachStoryboardShotCanvasNodes,
         cleanupAssetImages,
         createProject,
+        createEpisodeChildCanvas,
         creativeProject,
         currentProject,
+        canvasProjects,
         deleteProjects,
         effectiveConfig,
         ensureProjectFolder,

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyCanvasInputOrder, buildCanvasGenerationContext, buildCanvasGenerationInputIndex, buildCanvasGenerationInputs, buildCanvasGenerationInputsFromIndex } from "../utils/canvas-generation-inputs.ts";
+import { applyCanvasInputOrder, buildCanvasGenerationContext, buildCanvasGenerationInputIndex, buildCanvasGenerationInputs, buildCanvasGenerationInputsFromIndex, resolveCanvasEffectivePrompt } from "../utils/canvas-generation-inputs.ts";
 
 test("builds generation context with upstream video references", () => {
     const context = buildCanvasGenerationContext(
@@ -22,7 +22,24 @@ test("builds generation context with upstream video references", () => {
 
     assert.equal(context.videoCount, 1);
     assert.deepEqual(context.referenceVideos, [{ id: "video", name: "Video.mp4", url: "video-url", storageKey: "video:key", type: "video/mp4" }]);
-    assert.equal(context.prompt, "生成一个广告片\n\n雨夜街道");
+    assert.equal(context.prompt, "雨夜街道\n\n生成一个广告片");
+});
+
+test("uses a default refinement request for an empty text target with connected text", () => {
+    const context = buildCanvasGenerationContext(
+        "target",
+        [
+            { id: "source", type: "text", title: "原文", metadata: { content: "这是一段需要优化的文本。" } },
+            { id: "target", type: "text", title: "优化结果", metadata: {} },
+        ],
+        [{ fromNodeId: "source", toNodeId: "target" }],
+        "",
+    );
+
+    assert.equal(
+        resolveCanvasEffectivePrompt({ mode: "text", localPrompt: "", editingTextNode: false, context }),
+        "这是一段需要优化的文本。\n\n优化要求：保持原意，优化表达，使内容更清晰、自然、完整。",
+    );
 });
 
 test("uses upstream Ark video URL for generated video references", () => {

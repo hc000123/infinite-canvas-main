@@ -9,7 +9,7 @@ export type CanvasEpisodeContext = {
 };
 
 export type CanvasCreateScriptBinding = { mode: "none" } | { mode: "existing"; episodeId: string; context: CanvasEpisodeContext } | { mode: "import"; title: string; scriptText: string };
-export type CanvasImportedEpisodeWriteInput = Omit<ScriptEpisodeWriteInput, "order"> & { order?: number };
+export type CanvasImportedEpisodeWriteInput = Omit<ScriptEpisodeWriteInput, "code" | "order"> & { code?: string; order?: number };
 
 export function canvasEpisodeContextFromCanvas(canvas?: Pick<CanvasProject, "episodeId" | "episodeTitle" | "scriptId" | "scriptSnapshot"> | null): CanvasEpisodeContext | undefined {
     if (!canvas?.episodeId || !canvas.episodeTitle) return undefined;
@@ -26,7 +26,7 @@ export function canvasEpisodeContextFromEpisode(projectId: string, episode: Scri
         episodeId: episode.id,
         episodeTitle: episode.title,
         scriptId: projectId,
-        scriptSnapshot: buildEpisodeScriptSnapshot(episode, scenes),
+        scriptSnapshot: buildEpisodeCanvasScriptText(episode, scenes),
     };
 }
 
@@ -56,6 +56,11 @@ export function canvasEpisodeContextFromCreateBinding(projectId: string, scriptB
     if (scriptBinding.mode === "existing") return scriptBinding.context;
     if (!importedEpisodeId) return undefined;
     return canvasEpisodeContextFromImportedScript(projectId, importedEpisodeId, scriptBinding.title, scriptBinding.scriptText);
+}
+
+export function buildEpisodeCanvasScriptText(episode: ScriptEpisode, scenes: ScriptScene[] = []) {
+    const optimizedScript = episode.sourceSummary?.trim() ? episode.summary.trim() : "";
+    return optimizedScript || buildEpisodeScriptSnapshot(episode, scenes);
 }
 
 export function buildEpisodeScriptSnapshot(episode: ScriptEpisode, scenes: ScriptScene[] = []) {

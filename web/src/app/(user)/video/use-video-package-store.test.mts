@@ -413,6 +413,13 @@ test("enterprise video channel readiness accepts Ark protocol", () => {
     assert.match(readiness.message, /Seedance/);
 });
 
+test("enterprise video channel readiness accepts Xinglian Cloud protocol", () => {
+    const readiness = enterpriseVideoChannelReadiness({ videoProtocol: "xinglian-cloud" });
+
+    assert.equal(readiness.status, "ready");
+    assert.match(readiness.message, /星链云/);
+});
+
 function workflowImageAsset(id: string, title: string, volcengineAsset: NonNullable<Asset["metadata"]>["volcengineAsset"]): Asset {
     return {
         coverUrl: "blob:image",

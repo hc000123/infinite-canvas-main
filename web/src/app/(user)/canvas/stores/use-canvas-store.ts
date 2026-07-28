@@ -7,6 +7,7 @@ import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "../types";
 import type { CanvasEpisodeContext } from "../utils/canvas-episode-context";
 import type { CanvasProjectPreset } from "../utils/canvas-project-preset";
+import { createEpisodeMainCanvasScriptNode } from "../utils/episode-main-canvas-script-node.ts";
 
 export type CanvasProject = {
     id: string;
@@ -14,6 +15,8 @@ export type CanvasProject = {
     title: string;
     episodeId?: string;
     episodeTitle?: string;
+    canvasRole?: "main" | "child";
+    parentCanvasId?: string;
     scriptId?: string;
     scriptSnapshot?: string;
     createdAt: string;
@@ -32,6 +35,8 @@ type CanvasStore = {
     hydrated: boolean;
     projects: CanvasProject[];
     createProject: (title?: string, preset?: CanvasProjectPreset, options?: { projectId?: string; episodeContext?: CanvasEpisodeContext }) => string;
+    ensureEpisodeMainCanvas: (input: { projectId: string; title: string; preset?: CanvasProjectPreset; episodeContext: CanvasEpisodeContext }) => string;
+    createEpisodeChildCanvas: (mainCanvasId: string, title: string) => string;
     importProject: (project: Partial<CanvasProject>) => string;
     openProject: (id: string) => CanvasProject | null;
     renameProject: (id: string, title: string) => void;
@@ -39,7 +44,12 @@ type CanvasStore = {
     flushProjects: () => Promise<void>;
     updateProject: (
         id: string,
-        patch: Partial<Pick<CanvasProject, "projectId" | "episodeId" | "episodeTitle" | "scriptId" | "scriptSnapshot" | "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport" | "preset">>,
+        patch: Partial<
+            Pick<
+                CanvasProject,
+                "projectId" | "episodeId" | "episodeTitle" | "scriptId" | "scriptSnapshot" | "canvasRole" | "parentCanvasId" | "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport" | "preset"
+            >
+        >,
     ) => void;
 };
 
@@ -112,6 +122,75 @@ export const useCanvasStore = create<CanvasStore>()(
                 set((state) => ({ projects: [project, ...state.projects] }));
                 return id;
             },
+            ensureEpisodeMainCanvas: ({ projectId, title, preset, episodeContext }) => {
+                const existing = get().projects.find((canvas) => canvas.projectId === projectId && canvas.episodeId === episodeContext.episodeId && canvas.canvasRole === "main");
+                if (existing) {
+                    set((state) => ({
+                        projects: state.projects.map((canvas) =>
+                            canvas.id === existing.id
+                                ? { ...canvas, title, preset, episodeTitle: episodeContext.episodeTitle, scriptId: episodeContext.scriptId, scriptSnapshot: episodeContext.scriptSnapshot, updatedAt: new Date().toISOString() }
+                                : canvas,
+                        ),
+                    }));
+                    return existing.id;
+                }
+                const now = new Date().toISOString();
+                const id = nanoid();
+                const scriptNode = createEpisodeMainCanvasScriptNode(episodeContext);
+                set((state) => ({
+                    projects: [
+                        {
+                            id,
+                            projectId,
+                            title,
+                            episodeId: episodeContext.episodeId,
+                            episodeTitle: episodeContext.episodeTitle,
+                            scriptId: episodeContext.scriptId,
+                            scriptSnapshot: episodeContext.scriptSnapshot,
+                            canvasRole: "main",
+                            createdAt: now,
+                            updatedAt: now,
+                            nodes: scriptNode ? [scriptNode] : [],
+                            connections: [],
+                            chatSessions: [],
+                            activeChatId: null,
+                            backgroundMode: "lines",
+                            showImageInfo: false,
+                            viewport: initialViewport,
+                            preset,
+                        },
+                        ...state.projects,
+                    ],
+                }));
+                return id;
+            },
+            createEpisodeChildCanvas: (mainCanvasId, title) => {
+                const parent = get().projects.find((canvas) => canvas.id === mainCanvasId && canvas.canvasRole === "main" && canvas.projectId && canvas.episodeId);
+                if (!parent) throw new Error("只有分集主画布可以新建子画布");
+                const now = new Date().toISOString();
+                const id = nanoid();
+                const childCount = get().projects.filter((canvas) => canvas.parentCanvasId === parent.id).length;
+                set((state) => ({
+                    projects: [
+                        {
+                            ...parent,
+                            id,
+                            title: title.trim() || `${parent.title}-子画布-${childCount + 1}`,
+                            canvasRole: "child",
+                            parentCanvasId: parent.id,
+                            createdAt: now,
+                            updatedAt: now,
+                            nodes: [],
+                            connections: [],
+                            chatSessions: [],
+                            activeChatId: null,
+                            viewport: initialViewport,
+                        },
+                        ...state.projects,
+                    ],
+                }));
+                return id;
+            },
             importProject: (source) => {
                 const now = new Date().toISOString();
                 const project: CanvasProject = {
@@ -120,6 +199,8 @@ export const useCanvasStore = create<CanvasStore>()(
                     title: source.title || "导入画布",
                     episodeId: source.episodeId,
                     episodeTitle: source.episodeTitle,
+                    canvasRole: source.canvasRole,
+                    parentCanvasId: source.parentCanvasId,
                     scriptId: source.scriptId,
                     scriptSnapshot: source.scriptSnapshot,
                     createdAt: source.createdAt || now,
@@ -145,7 +226,11 @@ export const useCanvasStore = create<CanvasStore>()(
                 })),
             deleteProjects: (ids) =>
                 set((state) => {
-                    const projects = state.projects.filter((project) => !ids.includes(project.id));
+                    const deletedIds = new Set(ids);
+                    state.projects.forEach((project) => {
+                        if (project.parentCanvasId && deletedIds.has(project.parentCanvasId)) deletedIds.add(project.id);
+                    });
+                    const projects = state.projects.filter((project) => !deletedIds.has(project.id));
                     return { projects };
                 }),
             flushProjects: flushQueuedCanvasStore,

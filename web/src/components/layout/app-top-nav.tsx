@@ -27,7 +27,7 @@ export function AppTopNav() {
     const isReady = useUserStore((state) => state.isReady);
     const hideHeader =
         /^\/canvas\/[^/]+/.test(pathname) ||
-        ["/image", "/video", "/prompts", "/assets"].some((path) => pathname === path || pathname.startsWith(`${path}/`)) ||
+        ["/image", "/video", "/prompts", "/assets", "/cache"].some((path) => pathname === path || pathname.startsWith(`${path}/`)) ||
         pathname === "/projects" ||
         pathname.startsWith("/projects/") ||
         pathname.startsWith("/login");
@@ -119,7 +119,10 @@ export function AppTopNav() {
                                         title={themeToggleLabel}
                                     />
                                     <VersionReleaseModal />
-                                    <Link href="/login" className="rounded-md px-2 py-1 text-sm font-medium text-[var(--studio-text-secondary)] underline-offset-4 transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] hover:no-underline">
+                                    <Link
+                                        href="/login"
+                                        className="rounded-md px-2 py-1 text-sm font-medium text-[var(--studio-text-secondary)] underline-offset-4 transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] hover:no-underline"
+                                    >
                                         登录
                                     </Link>
                                 </>

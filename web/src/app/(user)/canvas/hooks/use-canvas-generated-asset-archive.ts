@@ -1,6 +1,8 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 
 import { recordAiTaskFrontendArtifact } from "@/services/api/ai-task-trace";
+import { archiveLocalMediaToProjectCache } from "@/services/project-cache-archive";
+import { projectCacheContextFromGeneration } from "@/services/project-cache-context";
 import type { AiConfig } from "@/stores/use-config-store";
 import { useAssetStore, type AssetWriteInput } from "@/stores/use-asset-store";
 import { preserveOrCreateAssetVersionReferences } from "../../assets/asset-version-references";
@@ -25,6 +27,7 @@ export function useCanvasGeneratedAssetArchive({
     setNodes,
     workspaceProjectId,
     workspaceProjectTitle,
+    token,
 }: {
     addAssetOnce: (asset: AssetWriteInput, options?: { blob?: Blob }) => Promise<string>;
     canvasEpisodeContext?: CanvasEpisodeContext;
@@ -36,6 +39,7 @@ export function useCanvasGeneratedAssetArchive({
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     workspaceProjectId: string;
     workspaceProjectTitle: string;
+    token?: string;
 }) {
     const prepareGeneratedAssetNode = useCallback(
         (node: CanvasNodeData) => {
@@ -52,6 +56,24 @@ export function useCanvasGeneratedAssetArchive({
             const archivedAsset = asset.kind === "video" ? { ...asset, folderId: asset.folderId || ensureProjectFolder(workspaceProjectId, workspaceProjectTitle) } : asset;
             const assetId = await addAssetOnce(archivedAsset);
             const generation = asset.metadata?.generation as Record<string, unknown> | undefined;
+            if (token && asset.kind === "image" && asset.data.storageKey) {
+                const context = projectCacheContextFromGeneration({
+                    assetId,
+                    canvasId,
+                    canvasName: String(generation?.canvasTitle || canvasTitle),
+                    episodeId: String(generation?.episodeId || ""),
+                    episodeName: String(generation?.episodeTitle || ""),
+                    freeCanvas: !generation?.episodeId,
+                    kind: "image",
+                    metadata: { ...asset.metadata, assetBinding: asset.assetBinding },
+                    nodeId: String(asset.metadata?.nodeId || generation?.nodeId || ""),
+                    projectId: String(generation?.projectId || workspaceProjectId),
+                    projectName: String(generation?.projectTitle || workspaceProjectTitle),
+                    source: "canvas",
+                    versionId: String(generation?.assetVersionNumber || ""),
+                });
+                void archiveLocalMediaToProjectCache({ id: `asset:${assetId}:${context.versionId}`, storageKey: asset.data.storageKey, kind: "image", filename: `${asset.title || assetId}.png`, context, token }).catch(() => undefined);
+            }
             const aiTaskId = aiTaskIdFromGeneration(generation);
             if (aiTaskId) {
                 const artifact = buildFrontendArtifactTrace({
@@ -83,7 +105,7 @@ export function useCanvasGeneratedAssetArchive({
             }
             return assetId;
         },
-        [addAssetOnce, canvasId, ensureProjectFolder, workspaceProjectId, workspaceProjectTitle],
+        [addAssetOnce, canvasId, canvasTitle, ensureProjectFolder, token, workspaceProjectId, workspaceProjectTitle],
     );
 
     const archiveGeneratedVideoNode = useCallback(

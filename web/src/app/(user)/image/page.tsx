@@ -18,9 +18,12 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import { nanoid } from "nanoid";
 import { formatBytes, formatDuration, getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
 import { requestEdit, requestGeneration } from "@/services/api/image";
+import { archiveLocalMediaToProjectCache } from "@/services/project-cache-archive";
+import { projectCacheContextFromGeneration } from "@/services/project-cache-context";
 import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { useLocalAiTaskLogStore } from "@/stores/use-local-ai-task-log-store";
+import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
 import { buildAssetVersionReference } from "../assets/asset-version-references";
 import { buildWorkflowGeneratedImagePatch, workflowAssetInfo } from "../assets/workflow-asset-image";
@@ -143,6 +146,7 @@ export default function ImagePage() {
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const allowCustomModel = useConfigStore((state) => state.publicSettings?.modelChannel.allowCustomChannel !== false);
     const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
+    const token = useUserStore((state) => state.token);
     const updateAsset = useAssetStore((state) => state.updateAsset);
     const addBriefResultAsset = useImageBriefStore((state) => state.addResultAsset);
     const productionBibleItems = useProductionBibleStore((state) => state.items);
@@ -336,6 +340,23 @@ export default function ImagePage() {
                     return { ...image, dataUrl: stored.url, storageKey: stored.storageKey, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType };
                 }),
             );
+            if (token) {
+                logImages.forEach((image, index) => {
+                    if (!image.storageKey) return;
+                    const context = projectCacheContextFromGeneration({
+                        assetId: sourceContext.assetId,
+                        episodeId: sourceContext.episodeId,
+                        episodeName: sourceContext.episodeTitle,
+                        kind: "image",
+                        projectId: sourceContext.projectId,
+                        projectName: sourceContext.projectTitle,
+                        prompt: text,
+                        source: "image-page",
+                        metadata: {},
+                    });
+                    void archiveLocalMediaToProjectCache({ id: `image-page:${image.id}`, storageKey: image.storageKey, kind: "image", filename: `image-${index + 1}.png`, context, token }).catch(() => undefined);
+                });
+            }
             saveLog(
                 buildLog({
                     prompt: text,
@@ -732,7 +753,21 @@ export default function ImagePage() {
     );
 }
 
-function GenerationSettings({ allowCustomModel, config, model, updateConfig, openConfigDialog, compact = false }: { allowCustomModel: boolean; config: AiConfig; model: string; updateConfig: UpdateAiConfig; openConfigDialog: (shouldPromptContinue?: boolean) => void; compact?: boolean }) {
+function GenerationSettings({
+    allowCustomModel,
+    config,
+    model,
+    updateConfig,
+    openConfigDialog,
+    compact = false,
+}: {
+    allowCustomModel: boolean;
+    config: AiConfig;
+    model: string;
+    updateConfig: UpdateAiConfig;
+    openConfigDialog: (shouldPromptContinue?: boolean) => void;
+    compact?: boolean;
+}) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
 
     return (

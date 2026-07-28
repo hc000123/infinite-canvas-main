@@ -17,6 +17,7 @@ export function useAssetImportDropzone({
     addAssetOnce,
     assetInputRef,
     message,
+    onImported,
     setPage,
 }: {
     activeFolderId?: string;
@@ -24,6 +25,7 @@ export function useAssetImportDropzone({
     addAssetOnce: (asset: AssetWriteInput, options?: { blob?: Blob }) => Promise<string>;
     assetInputRef: RefObject<HTMLInputElement | null>;
     message: AssetImportMessage;
+    onImported?: (assetIds: string[]) => void;
     setPage: (page: number) => void;
 }) {
     const dragDepthRef = useRef(0);
@@ -38,6 +40,7 @@ export function useAssetImportDropzone({
         try {
             const result = await importAssetFileList(fileList, { folderId: activeFolderId, addAssetOnce });
             setPage(1);
+            onImported?.(result.assetIds);
             message.success(assetImportSuccessMessage(result.count, activeFolderName));
         } catch (error) {
             message.error(error instanceof Error ? error.message : "导入失败，请选择有效的素材压缩包或媒体文件");

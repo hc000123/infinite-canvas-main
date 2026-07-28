@@ -76,5 +76,17 @@ test("the connection hook freezes selected sources and the page supplies the sel
     assert.match(hook, /planCanvasBatchConnections\(/);
     assert.match(hook, /applyCanvasInputOrder/);
     assert.match(hook, /nextInputSourceIds/);
+    assert.match(hook, /setSelectedNodeIds\(new Set\(\[toNodeId\]\)\)/);
+    assert.match(hook, /openConnectedTargetPanel\(toNodeId, nodesRef\.current, setDialogNodeId\)/);
+    assert.match(hook, /type !== CanvasNodeType\.Audio/);
     assert.match(page, /useCanvasConnections\([\s\S]*?selectedNodeIdsRef,/);
+});
+
+test("the text image shortcut creates an image target without starting generation", () => {
+    const derivatives = readFileSync(new URL("../hooks/use-canvas-node-derivative-actions.ts", import.meta.url), "utf8");
+    const shortcut = derivatives.slice(derivatives.indexOf("const generateImageFromTextNode"), derivatives.indexOf("return {", derivatives.indexOf("const generateImageFromTextNode")));
+
+    assert.match(shortcut, /const nodeSize = getNodeSpec\(CanvasNodeType\.Image\)/);
+    assert.match(shortcut, /createNode\(\s*CanvasNodeType\.Image,/);
+    assert.doesNotMatch(shortcut, /handleGenerateNode|requestImage|requestEdit/);
 });

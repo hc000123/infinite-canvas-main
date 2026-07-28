@@ -90,6 +90,9 @@ export function useCanvasConnections({
                         nextInputSourceIds(targetNodeId, connectionsRef.current, plan.connections),
                     ),
                 );
+                setSelectedNodeIds(new Set([targetNodeId]));
+                setSelectedConnectionId(null);
+                openConnectedTargetPanel(targetNodeId, nodesRef.current, setDialogNodeId);
                 setContextMenu(null);
                 return;
             }
@@ -114,9 +117,12 @@ export function useCanvasConnections({
                     ),
                 );
             }
+            setSelectedNodeIds(new Set([toNodeId]));
+            setSelectedConnectionId(null);
+            openConnectedTargetPanel(toNodeId, nodesRef.current, setDialogNodeId);
             setContextMenu(null);
         },
-        [connectionsRef, normalizeConnection, nodesRef, setConnections, setContextMenu, setNodes, showWarning],
+        [connectionsRef, normalizeConnection, nodesRef, setConnections, setContextMenu, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, showWarning],
     );
 
     const createConnectedNode = useCallback(
@@ -144,7 +150,7 @@ export function useCanvasConnections({
             setConnections((prev) => [...prev, ...plan.connections.map((connection) => ({ id: nanoid(), ...connection }))]);
             setSelectedNodeIds(new Set([newNode.id]));
             setSelectedConnectionId(null);
-            if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Audio) setDialogNodeId(newNode.id);
+            openConnectedTargetPanel(newNode.id, nextNodes, setDialogNodeId);
             pendingConnectionCreateRef.current = null;
             setPendingConnectionCreate(null);
             setConnecting(null);
@@ -236,6 +242,10 @@ export function useCanvasConnections({
         handleConnectStart,
         moveConnectionTarget,
     };
+}
+
+function openConnectedTargetPanel(nodeId: string, nodes: CanvasNodeData[], setDialogNodeId: Dispatch<SetStateAction<string | null>>) {
+    if (nodes.find((node) => node.id === nodeId)?.type !== CanvasNodeType.Audio) setDialogNodeId(nodeId);
 }
 
 function nextInputSourceIds(targetNodeId: string, currentConnections: CanvasConnection[], additions: CanvasConnectionDraft[]) {

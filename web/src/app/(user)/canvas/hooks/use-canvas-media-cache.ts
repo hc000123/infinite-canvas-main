@@ -4,10 +4,13 @@ import { useCallback, type Dispatch, type SetStateAction } from "react";
 import axios from "axios";
 import { saveAs } from "file-saver";
 
-import { cacheCanvasMedia } from "@/services/api/media-cache";
+import { uploadProjectCacheFile } from "@/services/api/project-cache";
 import { getMediaBlob, resolveMediaUrl, type UploadedFile } from "@/services/file-storage";
+import { archiveLocalMediaToProjectCache } from "@/services/project-cache-archive";
+import { projectCacheContextFromGeneration } from "@/services/project-cache-context";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata } from "../types";
 import { canvasMediaDownloadFilename } from "../utils/canvas-media-download";
+import type { CanvasEpisodeContext } from "../utils/canvas-episode-context";
 
 type CanvasMessage = {
     info: (content: string) => void;
@@ -15,7 +18,27 @@ type CanvasMessage = {
     error: (content: string) => void;
 };
 
-export function useCanvasMediaCache({ token, message, canvasTitle, getNodes, setNodes }: { token?: string; message: CanvasMessage; canvasTitle: string; getNodes: () => CanvasNodeData[]; setNodes: Dispatch<SetStateAction<CanvasNodeData[]>> }) {
+export function useCanvasMediaCache({
+    token,
+    message,
+    canvasId,
+    canvasTitle,
+    projectId,
+    projectTitle,
+    episodeContext,
+    getNodes,
+    setNodes,
+}: {
+    token?: string;
+    message: CanvasMessage;
+    canvasId: string;
+    canvasTitle: string;
+    projectId: string;
+    projectTitle: string;
+    episodeContext?: CanvasEpisodeContext;
+    getNodes: () => CanvasNodeData[];
+    setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
+}) {
     const downloadNodeMedia = useCallback(
         async (node: CanvasNodeData) => {
             if (node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) return;
@@ -38,10 +61,25 @@ export function useCanvasMediaCache({ token, message, canvasTitle, getNodes, set
                 try {
                     const blob = await resolveCanvasMediaBlob(node, token);
                     if (blob) {
-                        const cached = await cacheCanvasMedia(blob, filename, token);
-                        setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, cacheUrl: cached.url, cachePath: cached.path, cacheFilename: cached.filename || filename } } : item)));
-                        triggerCanvasDownload(cached.url, filename);
-                        message.success(`已缓存到本地：${cached.path}`);
+                        const context = nodeProjectCacheContext(node, { canvasId, canvasTitle, projectId, projectTitle, episodeContext });
+                        const cached = await uploadProjectCacheFile(blob, filename, context, token);
+                        setNodes((prev) =>
+                            prev.map((item) =>
+                                item.id === node.id
+                                    ? {
+                                          ...item,
+                                          metadata: {
+                                              ...item.metadata,
+                                              cachePath: `${cached.projectPath}/${cached.file.relativePath}`,
+                                              cacheFilename: filename,
+                                              projectCache: { fileId: cached.file.id, relativePath: cached.file.relativePath, status: "ready" },
+                                          },
+                                      }
+                                    : item,
+                            ),
+                        );
+                        saveAs(blob, filename);
+                        message.success(`已缓存到本地：${cached.projectPath}`);
                         return;
                     }
                 } catch (error) {
@@ -79,22 +117,42 @@ export function useCanvasMediaCache({ token, message, canvasTitle, getNodes, set
                 message.error("下载失败，请稍后重试");
             }
         },
-        [canvasTitle, getNodes, message, setNodes, token],
+        [canvasId, canvasTitle, episodeContext, getNodes, message, projectId, projectTitle, setNodes, token],
     );
 
     const cacheUploadedCanvasMedia = useCallback(
-        async (file: UploadedFile, filename: string): Promise<Partial<CanvasNodeMetadata>> => {
+        async (file: UploadedFile, filename: string, node: CanvasNodeData): Promise<Partial<CanvasNodeMetadata>> => {
             if (!token) return {};
-            let blob = await getMediaBlob(file.storageKey);
-            if (!blob) blob = await fetch(file.url).then((response) => response.blob());
-            if (!blob) throw new Error("读取本地媒体失败");
-            const cached = await cacheCanvasMedia(blob, filename, token);
-            return { cacheUrl: cached.url, cachePath: cached.path, cacheFilename: cached.filename || filename };
+            const kind = file.mimeType.startsWith("audio/") ? "audio" : "video";
+            const context = nodeProjectCacheContext(node, { canvasId, canvasTitle, projectId, projectTitle, episodeContext });
+            try {
+                const cached = await archiveLocalMediaToProjectCache({ id: `canvas:${file.storageKey}`, storageKey: file.storageKey, kind, filename, context, token });
+                return { cachePath: `${cached.projectPath}/${cached.file.relativePath}`, cacheFilename: filename, projectCache: { fileId: cached.file.id, relativePath: cached.file.relativePath, status: "ready" as const } };
+            } catch (error) {
+                return { cacheFilename: filename, projectCache: { status: "pending" as const, error: error instanceof Error ? error.message : "缓存失败" } };
+            }
         },
-        [token],
+        [canvasId, canvasTitle, episodeContext, projectId, projectTitle, token],
     );
 
     return { downloadNodeMedia, cacheUploadedCanvasMedia };
+}
+
+function nodeProjectCacheContext(node: CanvasNodeData, scope: { canvasId: string; canvasTitle: string; projectId: string; projectTitle: string; episodeContext?: CanvasEpisodeContext }) {
+    const kind = node.type === CanvasNodeType.Audio ? "audio" : node.type === CanvasNodeType.Video ? "video" : "image";
+    return projectCacheContextFromGeneration({
+        canvasId: scope.canvasId || String(node.metadata?.canvasSource?.canvasId || ""),
+        canvasName: scope.canvasTitle,
+        episodeId: node.metadata?.episodeId || scope.episodeContext?.episodeId,
+        episodeName: node.metadata?.episodeTitle || scope.episodeContext?.episodeTitle,
+        freeCanvas: !scope.episodeContext?.episodeId,
+        kind,
+        metadata: node.metadata || {},
+        nodeId: node.id,
+        projectId: scope.projectId,
+        projectName: scope.projectTitle,
+        source: "canvas",
+    });
 }
 
 function triggerCanvasDownload(url: string, filename: string) {

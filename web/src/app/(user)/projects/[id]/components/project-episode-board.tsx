@@ -2,16 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Button, Empty, Input, Select, Tag } from "antd";
-import { Archive, ArrowRight, BarChart3, Bot, Clapperboard, Edit3, FileText, Image, Library, ListChecks, Maximize2, Plus, Sparkles, Trash2, TriangleAlert, Video, Wand2, Workflow, type LucideIcon } from "lucide-react";
+import { Archive, ArrowRight, BarChart3, Bot, Clapperboard, Database, Edit3, FileText, Image, Library, ListChecks, Maximize2, Plus, Sparkles, Trash2, TriangleAlert, Video, Wand2, Workflow, type LucideIcon } from "lucide-react";
 
 import { canvasEpisodeLabel } from "../../../canvas/utils/canvas-episode-context";
 import { canvasProjectPresetSummary } from "../../../canvas/utils/canvas-project-preset";
 import type { CanvasProject } from "../../../canvas/stores/use-canvas-store";
+import { episodeProductionName } from "../../../canvas/utils/script-management";
 import { agentKindLabel } from "../../agent-workbench";
 import type { ProjectOverviewActionTarget, ProjectOverviewDashboard, ProjectOverviewSuggestion } from "../../project-overview-dashboard";
 
 export type ProjectEpisodeBoardRow = {
     canvasCount: number;
+    code: string;
     filterStatus: "done" | "draft" | "running";
     id: string;
     optimizedScriptPreview: string;
@@ -57,12 +59,14 @@ type ProjectEpisodeBoardProps = {
     onEditEpisodeTitle: (row: ProjectEpisodeBoardRow) => void;
     onOpenAgentSettings: () => void;
     onOpenWorkflowCenter: () => void;
+    onOpenProjectCache: () => void;
     onEditProject: () => void;
     onFilterChange: (filter: EpisodeFilter) => void;
     onImportEpisode: () => void;
     onOptimizeEpisodeScript: (episodeId: string, skillVersionId: string) => void;
     onScriptSkillChange: (episodeId: string, skillVersionId: string) => void;
     onOpenEpisode: (episodeId: string) => void;
+    onOpenEpisodeCanvas: (episodeId: string) => void;
     onSaveEpisodeScript: (episodeId: string, script: string) => void;
     onTabChange: (tab: ProjectDetailTab) => void;
 };
@@ -94,12 +98,14 @@ export function ProjectEpisodeBoard({
     onEditEpisodeTitle,
     onOpenAgentSettings,
     onOpenWorkflowCenter,
+    onOpenProjectCache,
     onEditProject,
     onFilterChange,
     onImportEpisode,
     onOptimizeEpisodeScript,
     onScriptSkillChange,
     onOpenEpisode,
+    onOpenEpisodeCanvas,
     onSaveEpisodeScript,
     onTabChange,
 }: ProjectEpisodeBoardProps) {
@@ -109,7 +115,6 @@ export function ProjectEpisodeBoard({
             <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--studio-border-subtle)] px-4 py-4 sm:px-8">
                 <nav aria-label="项目详情视图" className="order-1 flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-4">
                     <ProjectDetailNavButton active={activeTab === "episodes"} icon={ListChecks} label="分集" onClick={() => onTabChange("episodes")} />
-                    <ProjectDetailNavButton active={activeTab === "canvas"} icon={Maximize2} label="画布" onClick={() => onTabChange("canvas")} />
                     <button
                         type="button"
                         className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"
@@ -125,6 +130,14 @@ export function ProjectEpisodeBoard({
                     >
                         <Workflow className="size-4" />
                         Workflow 中心
+                    </button>
+                    <button
+                        type="button"
+                        className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"
+                        onClick={onOpenProjectCache}
+                    >
+                        <Database className="size-4" />
+                        管理缓存
                     </button>
                 </nav>
 
@@ -167,6 +180,7 @@ export function ProjectEpisodeBoard({
                         onOptimizeEpisodeScript={onOptimizeEpisodeScript}
                         onScriptSkillChange={onScriptSkillChange}
                         onOpenEpisode={onOpenEpisode}
+                        onOpenEpisodeCanvas={onOpenEpisodeCanvas}
                         onSaveEpisodeScript={onSaveEpisodeScript}
                         optimizingEpisodeId={optimizingEpisodeId}
                         progress={progress}
@@ -197,6 +211,7 @@ function ProjectEpisodeProductionPanel({
     onOptimizeEpisodeScript,
     onScriptSkillChange,
     onOpenEpisode,
+    onOpenEpisodeCanvas,
     onSaveEpisodeScript,
     optimizingEpisodeId,
     progress,
@@ -220,6 +235,7 @@ function ProjectEpisodeProductionPanel({
     onOptimizeEpisodeScript: (episodeId: string, skillVersionId: string) => void;
     onScriptSkillChange: (episodeId: string, skillVersionId: string) => void;
     onOpenEpisode: (episodeId: string) => void;
+    onOpenEpisodeCanvas: (episodeId: string) => void;
     onSaveEpisodeScript: (episodeId: string, script: string) => void;
     optimizingEpisodeId: string;
     progress: number;
@@ -300,20 +316,21 @@ function ProjectEpisodeProductionPanel({
                             filteredRows.map((row) => {
                                 const selected = row.id === selectedEpisode?.id;
                                 return (
-                                    <div
+                                    <button
                                         key={row.id}
-                                        className={`rounded-md border p-2.5 transition ${selected ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]"}`}
+                                        type="button"
+                                        aria-pressed={selected}
+                                        className={`w-full cursor-pointer rounded-md border p-2.5 text-left transition-colors ${selected ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]"}`}
+                                        onClick={() => setSelectedId(row.id)}
                                     >
                                         <div className="flex items-start justify-between gap-2">
-                                            <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setSelectedId(row.id)}>
-                                                <span className="block line-clamp-2 text-sm font-semibold leading-5 text-[var(--studio-text-primary)]">{episodeDisplayTitle(row)}</span>
-                                            </button>
+                                            <span className="block min-w-0 flex-1 line-clamp-2 text-sm font-semibold leading-5 text-[var(--studio-text-primary)]">{episodeDisplayTitle(row)}</span>
                                         </div>
                                         <div className="mt-2 flex items-center justify-between gap-2">
                                             <span className="truncate text-xs text-[var(--studio-text-muted)]">{row.scriptPreview.trim() ? `${row.scriptPreview.trim().length} 字` : "暂无剧本"}</span>
                                             <EpisodeStatusBadge status={row.status} />
                                         </div>
-                                    </div>
+                                    </button>
                                 );
                             })
                         ) : (
@@ -409,9 +426,14 @@ function ProjectEpisodeProductionPanel({
                                 <div className="flex shrink-0 items-center gap-2">
                                     {selectedOptimizedScript ? <Tag className="m-0">{selectedOptimizedScript.length} 字</Tag> : null}
                                     {selectedEpisode ? (
-                                        <Button size="small" icon={<ArrowRight className="size-3.5" />} disabled={selectedOptimizing} onClick={() => onOpenEpisode(selectedEpisode.id)}>
-                                            进入工作流
-                                        </Button>
+                                        <>
+                                            <Button size="small" icon={<Maximize2 className="size-3.5" />} disabled={selectedOptimizing} onClick={() => onOpenEpisodeCanvas(selectedEpisode.id)}>
+                                                {selectedEpisode.primaryCanvasId ? "进入画布" : "创建画布"}
+                                            </Button>
+                                            <Button size="small" type="primary" icon={<ArrowRight className="size-3.5" />} disabled={selectedOptimizing} onClick={() => onOpenEpisode(selectedEpisode.id)}>
+                                                进入工作流
+                                            </Button>
+                                        </>
                                     ) : null}
                                     {selectedEpisode && (selectedOptimizedScript || selectedOptimizeError) ? (
                                         <Button size="small" icon={<Trash2 className="size-3.5" />} disabled={selectedOptimizing} onClick={() => onClearOptimizedScript(selectedEpisode.id)}>
@@ -958,8 +980,8 @@ function ProjectEpisodeEmpty({ onCreate, onCreateCanvas }: { onCreate: () => voi
     );
 }
 
-function episodeDisplayTitle(row: Pick<ProjectEpisodeBoardRow, "title">) {
-    return row.title.trim() || "未命名集数";
+function episodeDisplayTitle(row: Pick<ProjectEpisodeBoardRow, "code" | "title">) {
+    return episodeProductionName(row.code, row.title);
 }
 
 function currentEpisodeStatusText(row: ProjectEpisodeBoardRow) {

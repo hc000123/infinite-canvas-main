@@ -58,7 +58,7 @@ export function useCanvasPageLocalState() {
     const [, setAssistantCollapsed] = useState(true);
     const [assistantMounted, setAssistantMounted] = useState(false);
     const [inspectorView, setInspectorView] = useState<CanvasInspectorView>("context");
-    const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
+    const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(true);
     const [activeTimelineShotId, setActiveTimelineShotId] = useState("");
     const [activeProductionPackageId, setActiveProductionPackageId] = useState("");
     const [lastSelectedVideoNodeId, setLastSelectedVideoNodeId] = useState("");

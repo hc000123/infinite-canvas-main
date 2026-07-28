@@ -82,6 +82,20 @@ func AdminAITasks(w http.ResponseWriter, r *http.Request) {
 	OK(w, result)
 }
 
+func AdminAIUsageSummary(w http.ResponseWriter, r *http.Request) {
+	q := parseQuery(r)
+	result, err := service.GetAdminAIUsageSummary(model.AIUsageQuery{
+		Period:   model.AIUsagePeriod(r.URL.Query().Get("period")),
+		Page:     q.Page,
+		PageSize: q.PageSize,
+	})
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
 func AdminAITask(w http.ResponseWriter, r *http.Request, id string) {
 	result, err := service.GetAdminAITaskDetail(id)
 	if err != nil {

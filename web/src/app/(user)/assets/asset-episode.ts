@@ -1,5 +1,5 @@
 import type { Asset } from "@/stores/use-asset-store";
-import type { ScriptEpisode } from "../canvas/utils/script-management";
+import { episodeProductionName, type ScriptEpisode } from "../canvas/utils/script-management";
 import { assetGenerationRecords, readString } from "./asset-generation";
 import { workflowAssetInfo } from "./workflow-asset-image";
 
@@ -15,12 +15,7 @@ export function assetEpisodeKeys(asset: Asset | null | undefined) {
     if (!asset) return [];
     const metadata = asset.metadata || {};
     const info = workflowAssetInfo(asset);
-    const keys = [
-        readString(metadata.episodeId),
-        info?.sourceEpisodeId || "",
-        info?.episode || "",
-        ...assetGenerationRecords(asset).map((generation) => readString(generation.sourceEpisode)),
-    ];
+    const keys = [...(asset.assetBinding?.episodeIds || []), readString(metadata.episodeId), info?.sourceEpisodeId || "", info?.episode || "", ...assetGenerationRecords(asset).map((generation) => readString(generation.sourceEpisode))];
     return uniqueStrings(keys.map(normalizeEpisodeKey).filter(Boolean));
 }
 
@@ -42,12 +37,15 @@ export function buildAssetEpisodeOptions(assets: Asset[], episodes: ScriptEpisod
     });
 
     assets.forEach((asset) => {
+        if (asset.assetBinding?.allEpisodes) {
+            options.forEach((option, value) => options.set(value, { ...option, count: option.count + 1 }));
+            return;
+        }
         const keys = assetEpisodeKeys(asset);
         if (!keys.length) return;
         const matched = Array.from(options.values()).find((option) => keys.some((key) => option.value === key || option.aliases.includes(key)));
         const value = matched?.value || keys[0];
-        const option =
-            matched ||
+        const option = matched ||
             options.get(value) || {
                 aliases: keys,
                 count: 0,
@@ -65,6 +63,7 @@ export function buildAssetEpisodeOptions(assets: Asset[], episodes: ScriptEpisod
 
 export function assetMatchesEpisodeOption(asset: Asset, option: AssetEpisodeOption | undefined) {
     if (!option) return true;
+    if (asset.assetBinding?.allEpisodes) return true;
     const keys = assetEpisodeKeys(asset);
     return keys.some((key) => key === option.value || option.aliases.includes(key));
 }
@@ -88,11 +87,11 @@ export function assetEpisodeLabels(options: AssetEpisodeOption[]) {
 
 function episodeAliases(episode: ScriptEpisode) {
     const padded = String(episode.order || 1).padStart(2, "0");
-    return uniqueStrings([episode.id, `ep${padded}`, `ep${episode.order}`].map(normalizeEpisodeKey));
+    return uniqueStrings([episode.id, episode.code || `EP${padded}`, `ep${padded}`, `ep${episode.order}`].map(normalizeEpisodeKey));
 }
 
 function episodeLabel(episode: ScriptEpisode, projectTitle?: string) {
-    const label = `第 ${String(episode.order || 1).padStart(2, "0")} 集 · ${episode.title || "未命名集数"}`;
+    const label = episodeProductionName(episode.code || `EP${String(episode.order || 1).padStart(2, "0")}`, episode.title);
     return projectTitle ? `${projectTitle} · ${label}` : label;
 }
 

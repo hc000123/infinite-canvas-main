@@ -1,0 +1,25 @@
+import type { ProjectCacheSummary } from "@/services/api/project-cache";
+
+export type ProjectCacheDisplayStatus = "active" | "deleted" | "orphaned" | "unassigned";
+
+export function mergeProjectCacheState<T extends ProjectCacheSummary>(diskProjects: T[], localProjects: Array<{ id: string }>) {
+    const localIds = new Set(localProjects.map((item) => item.id));
+    return diskProjects.map((item) => ({
+        ...item,
+        displayStatus: (!item.projectId ? "unassigned" : item.status === "deleted" ? "deleted" : localIds.has(item.projectId) ? "active" : "orphaned") as ProjectCacheDisplayStatus,
+    }));
+}
+
+export function filterProjectCacheFiles<T extends { category: string; context: { episodeId?: string }; kind: string; originalName: string; id: string }>(files: T[], filters: { episodeId?: string; category?: string; kind?: string; keyword?: string }) {
+    const keyword = filters.keyword?.trim().toLowerCase() || "";
+    return files.filter((item) => {
+        if (filters.episodeId && item.context.episodeId !== filters.episodeId) return false;
+        if (filters.category && item.category !== filters.category) return false;
+        if (filters.kind && item.kind !== filters.kind) return false;
+        return !keyword || `${item.originalName} ${item.id}`.toLowerCase().includes(keyword);
+    });
+}
+
+export function projectCacheStatusLabel(status: ProjectCacheDisplayStatus) {
+    return status === "deleted" ? "项目已删除" : status === "orphaned" ? "本地项目不存在" : status === "unassigned" ? "未归属" : "正常";
+}

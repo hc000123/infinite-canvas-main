@@ -156,7 +156,7 @@ function scriptProject(): ScriptProject {
 }
 
 function episode(id: string): ScriptEpisode {
-    return { id, projectId: "project-1", order: 1, title: "第一集", summary: "", hook: "", turningPoint: "", cliffhanger: "", sceneIds: [], createdAt: "now", updatedAt: "now" };
+    return { id, projectId: "project-1", code: "EP01", order: 1, title: "第一集", summary: "", hook: "", turningPoint: "", cliffhanger: "", sceneIds: [], createdAt: "now", updatedAt: "now" };
 }
 
 function scene(id: string, episodeId: string): ScriptScene {

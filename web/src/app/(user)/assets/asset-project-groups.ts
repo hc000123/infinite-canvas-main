@@ -1,6 +1,6 @@
 import type { Asset, AssetFolder } from "@/stores/use-asset-store";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible";
-import { assetGenerationProjectId, assetGenerationRecords } from "./asset-generation.ts";
+import { assetGenerationProjectId, assetGenerationRecords, readRecord, readString } from "./asset-generation.ts";
 import { assetProjectLibraryEntries } from "./asset-project-library.ts";
 
 const UNFILED_GROUP_ID = "__unfiled_project_assets__";
@@ -60,6 +60,7 @@ export function buildAssetProjectResultGroups({
 }
 
 export function resolveAssetProjectId(asset: Asset, folderMap: Map<string, AssetFolder>, projectReferencedAssetIdsByProject: Map<string, Set<string>>) {
+    if (asset.assetBinding?.projectId) return asset.assetBinding.projectId;
     const folderProjectId = asset.folderId ? folderMap.get(asset.folderId)?.projectId || "" : "";
     if (folderProjectId) return folderProjectId;
 
@@ -75,6 +76,10 @@ export function resolveAssetProjectId(asset: Asset, folderMap: Map<string, Asset
         const projectId = assetGenerationProjectId(records[index]);
         if (projectId) return projectId;
     }
+
+    const workflow = readRecord(asset.metadata?.originalWorkflow);
+    const workflowProjectId = readString(workflow?.projectId) || readString(workflow?.sourceProjectId);
+    if (workflowProjectId) return workflowProjectId;
 
     return "";
 }

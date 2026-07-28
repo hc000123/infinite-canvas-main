@@ -12,9 +12,9 @@ import { CanvasCreateProjectModal } from "../../canvas/components/canvas-create-
 import { useCanvasStore } from "../../canvas/stores/use-canvas-store";
 import { useScriptStore } from "../../canvas/stores/use-script-store";
 import { useStoryboardStore } from "../../canvas/stores/use-storyboard-store";
-import { buildImportedEpisodeWriteInput, canvasEpisodeContextFromCreateBinding, type CanvasCreateScriptBinding } from "../../canvas/utils/canvas-episode-context";
+import { buildImportedEpisodeWriteInput, canvasEpisodeContextFromCreateBinding, canvasEpisodeContextFromEpisode, type CanvasCreateScriptBinding } from "../../canvas/utils/canvas-episode-context";
 import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../../canvas/utils/canvas-project-preset";
-import type { StructuredEpisodeScript } from "../../canvas/utils/script-management";
+import { episodeProductionName, type StructuredEpisodeScript } from "../../canvas/utils/script-management";
 import { useOriginalWorkflowStore } from "../../original-workflow/use-original-workflow-store";
 import { videoWorkflowEpisodeKey, videoWorkflowHref, videoWorkflowProjectSlug } from "../../original-workflow/video-workflow-routing";
 import { canvasIdsForCreativeProject, unfiledCanvasProjects } from "../creative-projects";
@@ -27,6 +27,7 @@ import { buildOriginalScriptEditPatch } from "./project-episode-script-edit";
 import { useScriptSkillSelection } from "./use-script-skill-selection";
 
 type EpisodeImportFormValues = {
+    code: string;
     title: string;
     scriptText: string;
 };
@@ -50,6 +51,8 @@ export default function CreativeProjectDetailPage() {
     const attachCanvas = useCreativeProjectStore((state) => state.attachCanvas);
     const canvases = useCanvasStore((state) => state.projects);
     const createCanvas = useCanvasStore((state) => state.createProject);
+    const ensureEpisodeMainCanvas = useCanvasStore((state) => state.ensureEpisodeMainCanvas);
+    const renameCanvas = useCanvasStore((state) => state.renameProject);
     const updateCanvas = useCanvasStore((state) => state.updateProject);
     const episodes = useScriptStore((state) => state.episodes);
     const scenes = useScriptStore((state) => state.scenes);
@@ -101,6 +104,7 @@ export default function CreativeProjectDetailPage() {
         () =>
             projectEpisodes.map((episode): ProjectEpisodeBoardRow => {
                 const episodeCanvases = projectCanvases.filter((canvas) => canvas.episodeId === episode.id);
+                const mainCanvas = episodeCanvases.find((canvas) => canvas.canvasRole === "main");
                 const episodeTableShots = storyboardTableShots.filter((shot) => shot.projectId === projectId && shot.episodeId === episode.id);
                 const episodeShotGroups = shotGroups.filter((group) => group.projectId === projectId && group.episodeId === episode.id);
                 const finishedGroups = episodeShotGroups.filter((group) => group.status === "done" || group.resultAssetIds.length);
@@ -114,6 +118,7 @@ export default function CreativeProjectDetailPage() {
                 return {
                     id: episode.id,
                     canvasCount: episodeCanvases.length,
+                    code: episode.code || `EP${String(episode.order).padStart(2, "0")}`,
                     filterStatus: status === "已完成" ? "done" : status === "进行中" ? "running" : "draft",
                     order: episode.order,
                     progress,
@@ -125,7 +130,7 @@ export default function CreativeProjectDetailPage() {
                     title: episode.title,
                     updatedAt: episode.updatedAt,
                     videoCount,
-                    primaryCanvasId: episodeCanvases[0]?.id,
+                    primaryCanvasId: mainCanvas?.id,
                 };
             }),
         [projectCanvases, projectEpisodes, projectId, shotGroups, storyboardTableShots],
@@ -150,8 +155,8 @@ export default function CreativeProjectDetailPage() {
             setOptimizedImportDraft(undefined);
             return;
         }
-        episodeImportForm.setFieldsValue({ title: "", scriptText: "" });
-    }, [episodeImportForm, episodeImportOpen]);
+        episodeImportForm.setFieldsValue({ code: `EP${String(projectEpisodes.length + 1).padStart(2, "0")}`, title: "", scriptText: "" });
+    }, [episodeImportForm, episodeImportOpen, projectEpisodes.length]);
 
     if (!hydrated || !scriptsHydrated) {
         return (
@@ -189,6 +194,8 @@ export default function CreativeProjectDetailPage() {
         if (!editingEpisodeTitle) return;
         if (!title) return message.warning("请填写分集标题");
         updateEpisode(editingEpisodeTitle.id, { title });
+        const mainCanvas = projectCanvases.find((canvas) => canvas.episodeId === editingEpisodeTitle.id && canvas.canvasRole === "main");
+        if (mainCanvas) renameCanvas(mainCanvas.id, episodeProductionName(editingEpisodeTitle.code, title));
         setEditingEpisodeTitleId("");
         setEpisodeTitleDraft("");
         message.success("分集标题已保存");
@@ -264,8 +271,8 @@ export default function CreativeProjectDetailPage() {
             upsertScriptProject(project.id, scriptText);
             const order = projectEpisodes.length + 1;
             const sourceSummary = optimizedImportDraft?.sourceScript && optimizedImportDraft.sourceScript.trim() !== scriptText ? optimizedImportDraft.sourceScript : undefined;
-            addEpisode({ projectId: project.id, order, title, summary: scriptText, sourceSummary, structuredScript: optimizedImportDraft?.structuredScript, hook: "", turningPoint: "", cliffhanger: "" });
-            await syncVideoWorkflowScript(order, scriptText);
+            addEpisode({ projectId: project.id, code: values.code, order, title, summary: scriptText, sourceSummary, structuredScript: optimizedImportDraft?.structuredScript, hook: "", turningPoint: "", cliffhanger: "" });
+            await syncVideoWorkflowScript(values.code, scriptText);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "同步视频工作流剧本失败");
             return;
@@ -319,7 +326,7 @@ export default function CreativeProjectDetailPage() {
             const result = await runScriptAgentToReview({ episodeId: episode.id, episodeTitle: episode.title, sourceScript, skillVersionId });
             if (!result || !(await confirmExistingEpisodeResult(result.productionScript))) return;
             await approveScriptResult(result);
-            await syncVideoWorkflowScript(episode.order, result.productionScript);
+            await syncVideoWorkflowScript(episode.code || `EP${String(episode.order).padStart(2, "0")}`, result.productionScript);
             updateEpisode(episode.id, { summary: result.productionScript, sourceSummary: episode.sourceSummary || sourceScript, structuredScript: undefined });
             setScriptOptimizeErrors((state) => ({ ...state, [episode.id]: "" }));
             message.success("已批准并写入本集生产剧本。");
@@ -368,6 +375,14 @@ export default function CreativeProjectDetailPage() {
         window.location.assign(videoWorkflowHref(episode.order, project.id, episode.id));
     };
 
+    const openEpisodeCanvas = (episodeId: string) => {
+        const episode = projectEpisodes.find((item) => item.id === episodeId);
+        if (!episode) return;
+        const canvasId = ensureEpisodeMainCanvas({ projectId: project.id, title: episodeProductionName(episode.code, episode.title), preset: project.preset, episodeContext: canvasEpisodeContextFromEpisode(project.id, episode, scenes) });
+        attachCanvas(project.id, canvasId);
+        router.push(`/canvas/${canvasId}`);
+    };
+
     const saveEpisodeScript = (episodeId: string, script: string) => {
         try {
             updateEpisode(episodeId, buildOriginalScriptEditPatch(script));
@@ -377,8 +392,8 @@ export default function CreativeProjectDetailPage() {
         }
     };
 
-    const syncVideoWorkflowScript = async (order: number, content: string) => {
-        const episode = videoWorkflowEpisodeKey(order, project.id);
+    const syncVideoWorkflowScript = async (code: string, content: string) => {
+        const episode = videoWorkflowEpisodeKey(code, project.id);
         try {
             const response = await fetch("/api/original-workflow", {
                 body: JSON.stringify({ action: "save-script", content, episode, executionMode: workflowExecutionMode, projectSlug: videoWorkflowProjectSlug(project.id), rootPath: workflowRootPath }),
@@ -417,6 +432,7 @@ export default function CreativeProjectDetailPage() {
                 onEditEpisodeTitle={openEpisodeTitleEdit}
                 onOpenAgentSettings={() => router.push(`/projects/${project.id}/agents`)}
                 onOpenWorkflowCenter={() => router.push(`/projects/${project.id}/workflows`)}
+                onOpenProjectCache={() => router.push(`/cache?projectId=${encodeURIComponent(project.id)}`)}
                 onEditProject={() => setProjectEditOpen(true)}
                 onFilterChange={setEpisodeFilter}
                 onImportEpisode={() => setEpisodeImportOpen(true)}
@@ -424,6 +440,7 @@ export default function CreativeProjectDetailPage() {
                 onOptimizeEpisodeScript={(episodeId, skillVersionId) => void optimizeExistingEpisodeScript(episodeId, skillVersionId)}
                 onScriptSkillChange={scriptSkills.setEpisodeVersionId}
                 onOpenEpisode={openEpisodeWorkflow}
+                onOpenEpisodeCanvas={openEpisodeCanvas}
                 onSaveEpisodeScript={saveEpisodeScript}
                 onTabChange={setActiveTab}
                 optimizingEpisodeId={optimizingEpisodeId}
@@ -459,7 +476,19 @@ export default function CreativeProjectDetailPage() {
                 confirmLoading={scriptOptimizing || episodeImporting}
                 destroyOnHidden
             >
-                <Form form={episodeImportForm} layout="vertical" initialValues={{ title: "", scriptText: "" }} requiredMark={false}>
+                <Form form={episodeImportForm} layout="vertical" initialValues={{ code: "EP01", title: "", scriptText: "" }} requiredMark={false}>
+                    <Form.Item
+                        name="code"
+                        label="分集编号"
+                        normalize={(value) => String(value || "").toUpperCase()}
+                        rules={[
+                            { required: true, message: "请输入分集编号" },
+                            { pattern: /^EP\d{2,}$/, message: "请输入 EP01 这类标准集号" },
+                            { validator: (_, value) => (projectEpisodes.some((episode) => episode.code === value) ? Promise.reject(new Error(`${value} 已存在`)) : Promise.resolve()) },
+                        ]}
+                    >
+                        <Input placeholder="例如：EP01" maxLength={12} />
+                    </Form.Item>
                     <Form.Item name="title" label="本集标题" rules={[{ required: true, message: "请填写本集标题" }]}>
                         <Input placeholder="例如：毕业典礼" />
                     </Form.Item>

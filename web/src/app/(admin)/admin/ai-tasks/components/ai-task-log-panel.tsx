@@ -1,0 +1,441 @@
+"use client";
+
+import { EyeOutlined, ReloadOutlined, RollbackOutlined, SearchOutlined } from "@ant-design/icons";
+import { ProTable, type ProColumns } from "@ant-design/pro-components";
+import { App, Button, Card, Col, DatePicker, Descriptions, Drawer, Flex, Form, Input, Row, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
+import dayjs from "dayjs";
+import { useEffect, useState } from "react";
+
+import type { AdminAITask, AdminAITaskFrontendArtifact, AdminAITaskQuery, AdminCreditLog } from "@/services/api/admin";
+import { adminUsageUserDisplay } from "../../users/admin-user-display";
+import { useAdminAITasks } from "../use-admin-ai-tasks";
+
+const statusLabels: Record<string, string> = {
+    created: "已创建",
+    queued: "排队中",
+    running: "运行中",
+    succeeded: "成功",
+    failed: "失败",
+    cancelled: "已取消",
+};
+
+const kindLabels: Record<string, string> = {
+    image: "图片",
+    chat: "聊天",
+    video: "视频",
+};
+
+const actionLabels: Record<string, string> = {
+    generate: "生成",
+    edit: "编辑",
+    extend: "延长",
+    chat: "聊天",
+};
+
+export function AITaskLogPanel() {
+    const { modal } = App.useApp();
+    const { tasks, total, filters, page, pageSize, detail, detailId, isLoading, isDetailLoading, searchTasks, changePage, changePageSize, resetFilters, refreshTasks, openDetail, closeDetail, refreshTask, refundTask } = useAdminAITasks();
+    const [draft, setDraft] = useState<AdminAITaskQuery>(filters);
+
+    useEffect(() => setDraft(filters), [filters]);
+
+    const columns: ProColumns<AdminAITask>[] = [
+        {
+            title: "时间",
+            dataIndex: "createdAt",
+            width: 170,
+            render: (_, item) => <Typography.Text type="secondary">{formatTime(item.createdAt)}</Typography.Text>,
+        },
+        {
+            title: "用户",
+            dataIndex: "userId",
+            width: 180,
+            render: (_, item) => {
+                const display = adminUsageUserDisplay(item);
+                return (
+                    <Flex vertical style={{ minWidth: 0 }}>
+                        <Typography.Text strong={!display.deleted} type={display.deleted ? "secondary" : undefined} ellipsis>
+                            {display.primary}
+                        </Typography.Text>
+                        <Typography.Text type="secondary" copyable={{ text: item.userId }} ellipsis>
+                            {display.secondary}
+                        </Typography.Text>
+                    </Flex>
+                );
+            },
+        },
+        {
+            title: "类型",
+            dataIndex: "kind",
+            width: 88,
+            render: (_, item) => <Tag>{kindLabels[item.kind] || item.kind || item.taskType || "-"}</Tag>,
+        },
+        {
+            title: "动作",
+            dataIndex: "actionType",
+            width: 88,
+            render: (_, item) => <Tag>{actionLabels[item.actionType] || item.actionType || "-"}</Tag>,
+        },
+        {
+            title: "模型",
+            dataIndex: "model",
+            width: 180,
+            ellipsis: true,
+        },
+        {
+            title: "渠道",
+            dataIndex: "provider",
+            width: 140,
+            ellipsis: true,
+        },
+        {
+            title: "状态",
+            dataIndex: "status",
+            width: 100,
+            render: (_, item) => <Tag color={statusColor(item.status)}>{statusLabels[item.status] || item.status || "-"}</Tag>,
+        },
+        {
+            title: "消耗",
+            dataIndex: "credits",
+            width: 78,
+        },
+        {
+            title: "返还",
+            dataIndex: "creditsRefunded",
+            width: 78,
+            render: (_, item) => <Typography.Text type={item.creditsRefunded > 0 ? "success" : "secondary"}>{item.creditsRefunded || 0}</Typography.Text>,
+        },
+        {
+            title: "上游 taskId",
+            dataIndex: "upstreamTaskId",
+            width: 190,
+            ellipsis: true,
+            render: (_, item) => (item.upstreamTaskId ? <Typography.Text copyable>{item.upstreamTaskId}</Typography.Text> : "-"),
+        },
+        {
+            title: "前台产物",
+            key: "frontend",
+            width: 180,
+            ellipsis: true,
+            render: (_, item) => <Typography.Text type="secondary">{frontendTaskSummary(item) || "-"}</Typography.Text>,
+        },
+        {
+            title: "错误摘要",
+            dataIndex: "errorMessage",
+            ellipsis: true,
+            render: (_, item) => <Typography.Text type="danger">{item.errorCode || item.errorMessage ? `${item.errorCode ? `${item.errorCode}：` : ""}${item.errorMessage || ""}` : "-"}</Typography.Text>,
+        },
+        {
+            title: "操作",
+            key: "actions",
+            width: 128,
+            align: "right",
+            render: (_, item) => (
+                <Space size={4}>
+                    <Tooltip title="查看详情">
+                        <Button aria-label="查看详情" type="text" size="small" icon={<EyeOutlined />} onClick={() => openDetail(item.id)} />
+                    </Tooltip>
+                    <Tooltip title="刷新状态">
+                        <Button aria-label="刷新状态" type="text" size="small" icon={<ReloadOutlined />} disabled={!canRefresh(item)} onClick={() => confirmRefresh(item)} />
+                    </Tooltip>
+                    <Tooltip title="手动返还">
+                        <Button aria-label="手动返还" type="text" size="small" danger icon={<RollbackOutlined />} disabled={!canRefund(item)} onClick={() => confirmRefund(item)} />
+                    </Tooltip>
+                </Space>
+            ),
+        },
+    ];
+
+    const creditColumns = [
+        { title: "类型", dataIndex: "type", width: 120 },
+        { title: "变动", dataIndex: "amount", width: 90 },
+        { title: "余额", dataIndex: "balance", width: 90 },
+        { title: "备注", dataIndex: "remark", ellipsis: true },
+        { title: "时间", dataIndex: "createdAt", width: 170, render: (value: string) => formatTime(value) },
+    ];
+
+    function confirmRefund(task: AdminAITask) {
+        modal.confirm({
+            title: "手动返还任务点数",
+            content: `确认给任务 ${task.id} 返还 ${task.credits} 点？`,
+            okText: "返还",
+            cancelText: "取消",
+            onOk: () => refundTask(task.id),
+        });
+    }
+
+    function confirmRefresh(task: AdminAITask) {
+        modal.confirm({
+            title: "刷新任务状态？",
+            content: `将向上游同步任务 ${task.id} 的最新状态；如果上游已失败或取消，可能同步失败原因并触发失败返还。不会创建新的生成任务。`,
+            okText: "确认刷新",
+            cancelText: "取消",
+            onOk: () => refreshTask(task.id),
+        });
+    }
+
+    return (
+        <>
+            <Space orientation="vertical" size={16} style={{ width: "100%" }}>
+                <Card variant="borderless">
+                    <Form layout="vertical">
+                        <Row gutter={16} align="bottom">
+                            <Col flex="260px">
+                                <Form.Item label="关键词">
+                                    <Input value={draft.keyword || ""} placeholder="任务 ID、模型、错误、上游 taskId" onChange={(event) => setDraft({ ...draft, keyword: event.target.value })} />
+                                </Form.Item>
+                            </Col>
+                            <Col flex="180px">
+                                <Form.Item label="用户">
+                                    <Input value={draft.user || ""} placeholder="用户名、昵称或用户 ID" onChange={(event) => setDraft({ ...draft, user: event.target.value })} />
+                                </Form.Item>
+                            </Col>
+                            <Col flex="150px">
+                                <Form.Item label="状态">
+                                    <Select allowClear value={draft.status || undefined} onChange={(value) => setDraft({ ...draft, status: value })} options={Object.entries(statusLabels).map(([value, label]) => ({ value, label }))} />
+                                </Form.Item>
+                            </Col>
+                            <Col flex="130px">
+                                <Form.Item label="类型">
+                                    <Select allowClear value={draft.kind || undefined} onChange={(value) => setDraft({ ...draft, kind: value })} options={Object.entries(kindLabels).map(([value, label]) => ({ value, label }))} />
+                                </Form.Item>
+                            </Col>
+                            <Col flex="130px">
+                                <Form.Item label="动作">
+                                    <Select allowClear value={draft.actionType || undefined} onChange={(value) => setDraft({ ...draft, actionType: value })} options={Object.entries(actionLabels).map(([value, label]) => ({ value, label }))} />
+                                </Form.Item>
+                            </Col>
+                            <Col flex="180px">
+                                <Form.Item label="模型">
+                                    <Input value={draft.model || ""} onChange={(event) => setDraft({ ...draft, model: event.target.value })} />
+                                </Form.Item>
+                            </Col>
+                            <Col flex="160px">
+                                <Form.Item label="渠道">
+                                    <Input value={draft.provider || ""} onChange={(event) => setDraft({ ...draft, provider: event.target.value })} />
+                                </Form.Item>
+                            </Col>
+                            <Col flex="220px">
+                                <Form.Item label="上游 taskId">
+                                    <Input value={draft.upstreamTaskId || ""} onChange={(event) => setDraft({ ...draft, upstreamTaskId: event.target.value })} />
+                                </Form.Item>
+                            </Col>
+                            <Col flex="280px">
+                                <Form.Item label="时间范围">
+                                    <DatePicker.RangePicker
+                                        style={{ width: "100%" }}
+                                        value={draft.startAt && draft.endAt ? [dayjs(draft.startAt), dayjs(draft.endAt)] : null}
+                                        showTime
+                                        onChange={(_, values) => setDraft({ ...draft, startAt: values[0] || undefined, endAt: values[1] || undefined })}
+                                    />
+                                </Form.Item>
+                            </Col>
+                            <Col flex="none">
+                                <Form.Item>
+                                    <Space>
+                                        <Button
+                                            onClick={() => {
+                                                setDraft({});
+                                                resetFilters();
+                                            }}
+                                        >
+                                            重置
+                                        </Button>
+                                        <Button type="primary" icon={<SearchOutlined />} onClick={() => searchTasks(draft)}>
+                                            查询
+                                        </Button>
+                                    </Space>
+                                </Form.Item>
+                            </Col>
+                        </Row>
+                    </Form>
+                </Card>
+                <ProTable<AdminAITask>
+                    rowKey="id"
+                    columns={columns}
+                    dataSource={tasks}
+                    loading={isLoading}
+                    search={false}
+                    defaultSize="middle"
+                    tableLayout="fixed"
+                    cardProps={{ variant: "borderless" }}
+                    headerTitle={
+                        <Space>
+                            <Typography.Text strong>任务明细</Typography.Text>
+                            <Tag>{total} 条</Tag>
+                        </Space>
+                    }
+                    options={{ density: true, setting: true, reload: () => void refreshTasks() }}
+                    pagination={{
+                        current: page,
+                        pageSize,
+                        total,
+                        showSizeChanger: true,
+                        pageSizeOptions: [10, 20, 50, 100],
+                        showTotal: (value) => `共 ${value} 条`,
+                        onChange: (nextPage, nextPageSize) => (nextPageSize !== pageSize ? changePageSize(nextPageSize) : changePage(nextPage)),
+                    }}
+                />
+            </Space>
+
+            <Drawer rootClassName="studio-modal" title="AI 任务详情" open={Boolean(detailId)} size={820} onClose={closeDetail} loading={isDetailLoading}>
+                {detail ? (
+                    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
+                        <Descriptions bordered size="small" column={2}>
+                            <Descriptions.Item label="任务 ID" span={2}>
+                                <Typography.Text copyable>{detail.task.id}</Typography.Text>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="用户">{detail.user?.username || detail.task.userId}</Descriptions.Item>
+                            <Descriptions.Item label="状态">
+                                <Tag color={statusColor(detail.task.status)}>{statusLabels[detail.task.status] || detail.task.status}</Tag>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="类型">{kindLabels[detail.task.kind] || detail.task.kind || detail.task.taskType}</Descriptions.Item>
+                            <Descriptions.Item label="动作">{actionLabels[detail.task.actionType] || detail.task.actionType || "-"}</Descriptions.Item>
+                            <Descriptions.Item label="模型">{detail.task.model}</Descriptions.Item>
+                            <Descriptions.Item label="渠道">{detail.task.provider || "-"}</Descriptions.Item>
+                            <Descriptions.Item label="消耗点数">{detail.task.credits}</Descriptions.Item>
+                            <Descriptions.Item label="返还点数">{detail.task.creditsRefunded || 0}</Descriptions.Item>
+                            <Descriptions.Item label="上游 taskId" span={2}>
+                                {detail.task.upstreamTaskId ? <Typography.Text copyable>{detail.task.upstreamTaskId}</Typography.Text> : "-"}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="画布 / 节点" span={2}>
+                                {frontendTraceLine(detail.task, "canvas") || "-"}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="素材 / 分镜" span={2}>
+                                {frontendTraceLine(detail.task, "asset") || "-"}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="生成镜头组" span={2}>
+                                {frontendTraceLine(detail.task, "shotGroup") || "-"}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="视频地址过期">{detail.task.videoUrlExpiresAt ? String(detail.task.videoUrlExpiresAt) : "-"}</Descriptions.Item>
+                            <Descriptions.Item label="返还时间">{formatTime(detail.task.refundedAt)}</Descriptions.Item>
+                            <Descriptions.Item label="完成时间">{formatTime(detail.task.finishedAt)}</Descriptions.Item>
+                            <Descriptions.Item label="更新时间">{formatTime(detail.task.updatedAt)}</Descriptions.Item>
+                            <Descriptions.Item label="错误" span={2}>
+                                {detail.task.errorCode || detail.task.errorMessage ? `${detail.task.errorCode ? `${detail.task.errorCode}：` : ""}${detail.task.errorMessage || ""}` : "-"}
+                            </Descriptions.Item>
+                        </Descriptions>
+                        <Space>
+                            <Button icon={<ReloadOutlined />} disabled={!canRefresh(detail.task)} onClick={() => confirmRefresh(detail.task)}>
+                                刷新状态
+                            </Button>
+                            <Button danger icon={<RollbackOutlined />} disabled={!canRefund(detail.task)} onClick={() => confirmRefund(detail.task)}>
+                                手动返还
+                            </Button>
+                        </Space>
+                        <Typography.Title level={5} style={{ margin: 0 }}>
+                            额度流水
+                        </Typography.Title>
+                        <Table<AdminCreditLog> size="small" rowKey="id" columns={creditColumns} dataSource={detail.creditLogs || []} pagination={false} />
+                        <Typography.Title level={5} style={{ margin: 0 }}>
+                            前台产物反查
+                        </Typography.Title>
+                        <Table<AdminAITaskFrontendArtifact>
+                            size="small"
+                            rowKey={(item) => [item.assetId, item.nodeId, item.createdAt].filter(Boolean).join(":") || "artifact"}
+                            columns={[
+                                { title: "素材", dataIndex: "assetId", render: (value: string) => value || "-" },
+                                { title: "画布", dataIndex: "canvasId", render: (value: string) => value || "-" },
+                                { title: "节点", dataIndex: "nodeId", render: (value: string) => value || "-" },
+                                { title: "分镜", dataIndex: "storyboardShotId", render: (value: string, item: AdminAITaskFrontendArtifact) => [item.storyboardGroupId, value].filter(Boolean).join(" / ") || "-" },
+                                { title: "镜头组", dataIndex: "shotGroupId", render: (value: string, item: AdminAITaskFrontendArtifact) => [value, Array.isArray(item.shotIds) ? item.shotIds.join(",") : ""].filter(Boolean).join(" · ") || "-" },
+                                { title: "类型", dataIndex: "kind", render: (value: string) => value || "-" },
+                            ]}
+                            dataSource={detail.task.frontendArtifacts || []}
+                            pagination={false}
+                        />
+                        <Typography.Title level={5} style={{ margin: 0 }}>
+                            请求 JSON
+                        </Typography.Title>
+                        <pre style={jsonBlockStyle}>{safePayloadText(detail.task.requestJson)}</pre>
+                        <Typography.Title level={5} style={{ margin: 0 }}>
+                            响应 JSON
+                        </Typography.Title>
+                        <pre style={jsonBlockStyle}>{safePayloadText(detail.task.responseJson)}</pre>
+                    </Space>
+                ) : null}
+            </Drawer>
+        </>
+    );
+}
+
+const jsonBlockStyle = {
+    maxHeight: 260,
+    overflow: "auto",
+    padding: 12,
+    borderRadius: 6,
+    background: "var(--studio-panel-muted-bg)",
+    whiteSpace: "pre-wrap" as const,
+    wordBreak: "break-word" as const,
+};
+
+function canRefresh(task: AdminAITask) {
+    return task.kind === "video" && Boolean(task.upstreamTaskId);
+}
+
+function canRefund(task: AdminAITask) {
+    return (task.status === "failed" || task.status === "cancelled") && !task.refundedAt && !task.creditsRefunded;
+}
+
+function statusColor(status: string) {
+    if (status === "succeeded") return "green";
+    if (status === "failed" || status === "cancelled") return "red";
+    if (status === "running") return "blue";
+    if (status === "queued") return "gold";
+    return "default";
+}
+
+function frontendTaskSummary(task: AdminAITask) {
+    const trace = task.frontendTrace;
+    const artifact = task.frontendArtifacts?.[0];
+    return [
+        artifact?.assetId ? `素材 ${shortId(artifact.assetId)}` : "",
+        artifact?.nodeId || trace?.nodeId ? `节点 ${shortId(artifact?.nodeId || trace?.nodeId || "")}` : "",
+        artifact?.canvasId || trace?.canvasId ? `画布 ${shortId(artifact?.canvasId || trace?.canvasId || "")}` : "",
+    ]
+        .filter(Boolean)
+        .join(" · ");
+}
+
+function frontendTraceLine(task: AdminAITask, kind: "canvas" | "asset" | "shotGroup") {
+    const trace = task.frontendTrace || {};
+    const artifact = task.frontendArtifacts?.[0] || {};
+    if (kind === "canvas") {
+        return [
+            artifact.projectId || trace.projectId ? `项目 ${artifact.projectId || trace.projectId}` : "",
+            artifact.canvasId || trace.canvasId ? `画布 ${artifact.canvasId || trace.canvasId}` : "",
+            artifact.nodeId || trace.nodeId ? `节点 ${artifact.nodeId || trace.nodeId}` : "",
+        ]
+            .filter(Boolean)
+            .join(" · ");
+    }
+    if (kind === "asset") {
+        return [
+            artifact.assetId || trace.assetId ? `素材 ${artifact.assetId || trace.assetId}` : "",
+            artifact.storyboardGroupId || trace.storyboardGroupId ? `分镜组 ${artifact.storyboardGroupId || trace.storyboardGroupId}` : "",
+            artifact.storyboardShotId || trace.storyboardShotId ? `分镜 ${artifact.storyboardShotId || trace.storyboardShotId}` : "",
+        ]
+            .filter(Boolean)
+            .join(" · ");
+    }
+    return [artifact.shotGroupId || trace.shotGroupId ? `生成镜头组 ${artifact.shotGroupId || trace.shotGroupId}` : "", (artifact.shotIds || trace.shotIds || []).length ? `分镜头 ${(artifact.shotIds || trace.shotIds || []).join(", ")}` : ""]
+        .filter(Boolean)
+        .join(" · ");
+}
+
+function shortId(value: string) {
+    return value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value;
+}
+
+function formatTime(value?: string) {
+    return value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss") : "-";
+}
+
+function safePayloadText(value: string) {
+    return (value || "-")
+        .replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]")
+        .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [redacted]")
+        .replace(/data:[^"'\\\s]+/gi, "[media redacted]")
+        .replace(/blob:[^"'\\\s]+/gi, "[media redacted]")
+        .replace(/[A-Za-z0-9+/]{512,}={0,2}/g, "[base64 redacted]");
+}

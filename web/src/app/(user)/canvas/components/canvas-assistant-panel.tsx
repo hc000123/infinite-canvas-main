@@ -334,8 +334,8 @@ export function CanvasAssistantPanel({
     };
 
     const collapse = () => {
-        setClosing(true);
         onCollapseStart();
+        setClosing(true);
         window.setTimeout(onCollapse, PANEL_MOTION_MS);
     };
 
@@ -354,8 +354,6 @@ export function CanvasAssistantPanel({
                     startChatSession();
                     setView("chat");
                 }}
-                onOpenWorkflowAssistant={onOpenWorkflowAssistant}
-                onOpenConfig={() => openConfigDialog(false)}
                 onCollapse={collapse}
             />
 

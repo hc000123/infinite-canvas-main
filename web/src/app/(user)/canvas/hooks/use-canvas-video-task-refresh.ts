@@ -26,7 +26,7 @@ export function useCanvasVideoTaskRefresh({
     toVideoMetadata,
 }: {
     archiveGeneratedVideoNode: (node: CanvasNodeData, generationConfig: AiConfig, prompt?: string) => Promise<string | void | undefined>;
-    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string) => Promise<Partial<CanvasNodeMetadata>>;
+    cacheUploadedCanvasMedia: (file: UploadedFile, filename: string, node: CanvasNodeData) => Promise<Partial<CanvasNodeMetadata>>;
     canvasAiConfig: AiConfig;
     message: CanvasVideoTaskRefreshMessage;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
@@ -43,7 +43,7 @@ export function useCanvasVideoTaskRefresh({
                 const task = await refreshVideoTask(generationConfig, node.metadata.taskId);
                 if (task.status === "succeeded") {
                     const video = await uploadMediaFile(await fetchVideoTaskContent(generationConfig, task), "video");
-                    const cachedVideo = await cacheUploadedCanvasMedia(video, `${node.id}.mp4`);
+                    const cachedVideo = await cacheUploadedCanvasMedia(video, `${node.id}.mp4`, node);
                     const videoSize = fitNodeSize(video.width || node.width || NODE_DEFAULT_SIZE[CanvasNodeType.Video].width, video.height || node.height || NODE_DEFAULT_SIZE[CanvasNodeType.Video].height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
                     const completedVideoNode: CanvasNodeData = {
                         ...node,
