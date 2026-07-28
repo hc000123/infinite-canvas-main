@@ -299,9 +299,7 @@ export type CanvasAssistantImage = {
 
 export type CanvasAgentPlanRun = {
     planId: string;
-    agentId: string;
     agentVersionId: string;
-    agentName: string;
     sourceArtifactRef: ArtifactRefInput;
     sourceNodeIds: string[];
     skillRefs: AgentSkillRef[];

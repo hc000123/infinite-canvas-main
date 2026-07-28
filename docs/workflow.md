@@ -94,7 +94,7 @@
 
 - 输出必须可读，不能只保存原始 JSON。
 - 具体步骤、顺序和 Skill 版本以已发布 Workflow 为准；页面只提供运行本集流程和必要的阶段状态。
-- 需要保留规范读取记录、输入剧本快照和 Agent 配置版本。
+- 需要保留规范读取记录、输入剧本快照和 Workflow / Skill 配置版本。
 - 通过人工确认后，才允许下游资产拆解和分镜生产读取。
 
 ### 4. 资产拆解
@@ -238,5 +238,5 @@
 - `docs/pending-test.md` 记录已实现但仍需真实页面确认的事项。
 - `docs/features.md` 只记录已稳定确认的功能。
 - `docs/tool-entry-governance.md` 记录入口显隐和上下文动作治理。
-- `docs/api-channel-workflow.md` 记录 API 渠道、Agent 绑定、预检、费用和执行优先级。
+- `docs/api-channel-workflow.md` 记录 API 渠道、Skill 绑定、预检、费用和执行优先级。
 - 本文档记录制作链路和新工具设计边界。

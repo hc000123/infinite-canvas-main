@@ -277,7 +277,6 @@ export function CanvasAssistantPanel({
                 buildCanvasAgentPlanRequest({
                     projectId,
                     episodeId,
-                    agentId: CANVAS_ORCHESTRATOR_AGENT_ID,
                     agentVersionId: agent.agent.recommendedVersionId,
                     goal: text,
                     sourceArtifact: { artifactId: sourceArtifact.artifact.id, contentHash: sourceArtifact.artifact.contentHash },
@@ -291,9 +290,7 @@ export function CanvasAssistantPanel({
                 isLoading: false,
                 agentPlanRun: {
                     planId: detail.plan.id,
-                    agentId: CANVAS_ORCHESTRATOR_AGENT_ID,
                     agentVersionId: agent.agent.recommendedVersionId,
-                    agentName: "画布总控",
                     sourceArtifactRef: { bindingName: decision.sourceBindingName, artifactId: sourceArtifact.artifact.id, contentHash: sourceArtifact.artifact.contentHash },
                     sourceNodeIds: refs.map((reference) => reference.id).filter((id) => nodes.some((node) => node.id === id)),
                     skillRefs: decision.skillRefs,

@@ -55,7 +55,6 @@ test("builds a mutation-safe Agent Plan request", () => {
     const request = buildCanvasAgentPlanRequest({
         projectId: "project-1",
         episodeId: "episode-1",
-        agentId: "agent-1",
         agentVersionId: "agent-version-1",
         goal: " 整理剧本 ",
         sourceArtifact: { artifactId: "artifact-source", contentHash: "source-hash" },
@@ -67,6 +66,7 @@ test("builds a mutation-safe Agent Plan request", () => {
     refs[0].inputBindings[0].bindingName = "changed";
 
     assert.equal(request.goal, "整理剧本");
+    assert.equal(request.agentId, "agent-system-canvas-orchestrator");
     assert.equal(request.skillOverrides?.[0].parameters.temperature, 0.2);
     assert.equal(request.skillOverrides?.[0].inputBindings[0].bindingName, "source_text");
     assert.deepEqual(request.sourceArtifactRefs, [{ bindingName: "source_text", artifactId: "artifact-source", contentHash: "source-hash" }]);

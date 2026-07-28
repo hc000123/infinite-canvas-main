@@ -11,6 +11,7 @@ import type { CapabilityConsumeTrace } from "@/components/capability-runtime/use
 import { useUserStore } from "@/stores/use-user-store";
 import type { CanvasAgentPlanRun } from "../types";
 import { activeAgentPlanInvocationId, buildCanvasAgentApplyInput, canvasAgentPlanActions, cloneCanvasAgentSkillRefs, finalAgentPlanOutputRefs } from "../utils/canvas-agent-plan-model";
+import { CANVAS_ORCHESTRATOR_AGENT_ID } from "../utils/canvas-orchestrator-plan";
 
 const activeInvocationStatuses = new Set(["queued", "running", "cancel_requested"]);
 const errorText = (error: unknown) => (error instanceof Error ? error.message : error ? String(error) : "");
@@ -24,7 +25,7 @@ export function useCanvasAgentPlan({ run, projectId, sourceMessageId, enabled, o
 
     const planKey = ["canvas-agent-plan", run.planId];
     const planQuery = useQuery({ queryKey: planKey, queryFn: () => fetchAgentPlan(run.planId), enabled: enabled && Boolean(run.planId), retry: false });
-    const agentQuery = useQuery({ queryKey: ["canvas-agent", run.agentId, projectId], queryFn: () => fetchAgent(run.agentId, projectId), enabled: enabled && Boolean(projectId && run.agentId), retry: false, staleTime: 30_000 });
+    const agentQuery = useQuery({ queryKey: ["canvas-agent", CANVAS_ORCHESTRATOR_AGENT_ID, projectId], queryFn: () => fetchAgent(CANVAS_ORCHESTRATOR_AGENT_ID, projectId), enabled: enabled && Boolean(projectId), retry: false, staleTime: 30_000 });
     const skillsQuery = useQuery({ queryKey: ["canvas-agent-skill-options", projectId], queryFn: () => fetchSkillOptions(token, { projectId }), enabled: enabled && Boolean(token), retry: false, staleTime: 30_000 });
     const agent = agentQuery.data;
     const allowedSkillOptions = useMemo(() => filterAllowedSkillOptions(skillsQuery.data || [], agent?.recommendedPackage?.skillAccessPolicy), [agent?.recommendedPackage?.skillAccessPolicy, skillsQuery.data]);

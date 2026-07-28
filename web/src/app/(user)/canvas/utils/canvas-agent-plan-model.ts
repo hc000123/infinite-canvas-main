@@ -2,11 +2,11 @@ import type { AgentPlanCreateInput, AgentPlanDetail, AgentPlanStatus } from "../
 import type { AgentSkillRef } from "../../../../services/api/agent-registry.ts";
 import type { ArtifactRefInput, InvocationApplyInput } from "../../../../services/api/invocations-contract.ts";
 import type { CanvasAssistantReference } from "../types.ts";
+import { CANVAS_ORCHESTRATOR_AGENT_ID } from "./canvas-orchestrator-plan.ts";
 
 export type CanvasAgentPlanRequestInput = {
     projectId: string;
     episodeId?: string;
-    agentId: string;
     agentVersionId: string;
     goal: string;
     sourceArtifact: Pick<ArtifactRefInput, "artifactId" | "contentHash">;
@@ -31,7 +31,7 @@ export function buildCanvasAgentPlanRequest(input: CanvasAgentPlanRequestInput):
     return {
         projectId: input.projectId,
         episodeId: input.episodeId,
-        agentId: input.agentId,
+        agentId: CANVAS_ORCHESTRATOR_AGENT_ID,
         agentVersionId: input.agentVersionId,
         goal: input.goal.trim(),
         sourceArtifactRefs: [{ bindingName: input.sourceBindingName, artifactId: input.sourceArtifact.artifactId, contentHash: input.sourceArtifact.contentHash }],

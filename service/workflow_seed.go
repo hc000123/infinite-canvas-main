@@ -7,7 +7,7 @@ import (
 	"github.com/basketikun/infinite-canvas/repository"
 )
 
-	const (
+const (
 	systemProductionWorkflowID        = "workflow-system-standard-production"
 	systemProductionWorkflowVersionID = "workflow-version-system-standard-production-2.2.0"
 	systemProductionWorkflowVersion   = "2.2.0"

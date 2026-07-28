@@ -30,7 +30,7 @@ export function CanvasAgentPlanCard({ run, projectId, sourceMessageId, onRunPatc
             <div className="flex items-start justify-between gap-2">
                 <div>
                     <div className="text-xs font-medium opacity-60">画布总控临时计划</div>
-                    <div className="mt-1 font-medium">{run.agentName}</div>
+                    <div className="mt-1 font-medium">画布总控</div>
                 </div>
                 <Tag>{statusLabel(status)}</Tag>
             </div>
