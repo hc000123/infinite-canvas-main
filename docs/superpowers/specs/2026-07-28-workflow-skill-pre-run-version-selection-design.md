@@ -16,6 +16,8 @@
 - 不兼容版本不得进入可执行选择列表。
 - 不同 Skill 通过稳定 Artifact 契约组合，不通过互相改写业务指令适配。
 - 上下游结构不一致时由独立、确定性 Adapter 转换，保留 Skill 的完整原生产物。
+- 系统 Skill 和项目 Skill 使用同一 Registry，按 Owner 和项目边界隔离管理权限与可见范围。
+- Workflow 和画布 Agent 只消费已发布 Skill，不在各自界面维护独立 Skill 副本。
 
 ## 3. 非目标
 
@@ -26,6 +28,8 @@
 - 不在本阶段引入 Skill 自动升级、自动回滚或运行中热更新。
 - 不为了满足某个下游 Skill，删减上游 Skill 的专业步骤、输出信息或质量标准。
 - 不使用 Adapter 重写、摘要、推断或创作业务内容。
+- 不允许 Workflow 编辑器、运行面板或画布 Agent 直接编辑已发布 Skill 内容。
+- 不物理删除已发布、已引用或已产生历史运行快照的 Skill 和 Skill Version。
 
 ## 4. 核心边界
 
@@ -197,6 +201,44 @@ Skill 专业质量门先于 Adapter 执行；Adapter 完成后再执行 Schema�
 
 归档版本不再提供给新任务选择，但不删除版本数据和历史快照。已启动任务可以继续执行和重试。
 
+### 8.5 统一管理入口
+
+Skill 内容的新增、编辑、评测、发布、推荐、归档和停用都通过统一 Skill Registry 服务完成。不同界面只是同一 Registry 的不同权限视图：
+
+- `/admin/skills`：系统 Skill 管理与全局审计入口。
+- `/projects/:id/skills`：当前项目的项目 Skill 管理入口。
+- Workflow 编辑器：只管理节点允许使用哪些 Skill 或 capability，不编辑 Skill 正文。
+- Workflow 运行面板：只在运行前选择已发布兼容版本。
+- 画布 Agent：只搜索和调用当前用户可见的已发布版本。
+
+系统内置 Skill 的仓库文件只作为受版本控制的种子源和恢复源。它们被幂等导入后，Workflow、画布 Agent 和 API 运行时统一从数据库 Registry 解析精确已发布版本，不直接读取仓库中的 `SKILL.md`。
+
+### 8.6 Owner 与权限
+
+Skill Definition 保留两种 Owner：
+
+1. **System Skill**
+   - 只有管理员可以创建、编辑草稿、评测、发布、推荐、归档和停用。
+   - 对所有有权限的项目可见，但项目用户只读。
+   - 可作为 Workflow 和画布 Agent 的通用能力。
+2. **Project Skill**
+   - 项目负责人和管理员可以在指定项目内创建和维护。
+   - 只在 Owner Project 中可见、可选和可调用。
+   - 不能设为全局推荐版本或绑定到其他项目。
+   - 如果项目需要修改 System Skill，应使用“复制为项目 Skill”创建新 Definition 和草稿，不直接修改系统版本。
+
+所有写操作都必须在 service 层校验 Owner、项目权限和版本状态，不依赖前端隐藏按钮实现授权。管理员的全局审计视图可以查看 System Skill 和 Project Skill，但常规项目用户不能查看其他项目的 Skill 或草稿。
+
+### 8.7 减少与删除规则
+
+- **归档 Skill Version**：从新运行的选择列表移除，保留历史快照、Artifact 和重试能力。
+- **停用 Skill Definition**：阻止所有新调用，但不修改已启动运行和历史数据。
+- **删除 Skill Version 草稿**：只允许删除从未发布且没有评测、绑定或引用的草稿。
+- **删除 Skill Definition**：只允许删除从未发布、不存在非草稿版本、没有 Workflow / Agent / Invocation 引用的非种子 Definition。
+- **移出 Workflow**：只修改 Workflow 节点的候选范围或删除对应节点，不删除 Registry 中的 Skill。
+
+归档、停用、删除草稿、复制为项目 Skill 和删除未发布 Definition 都写入 Skill Audit Log。
+
 ## 9. 前端交互
 
 Workflow 运行面板按节点展示 Skill 选择器，每个选项至少显示：
@@ -251,6 +293,11 @@ Workflow 运行面板按节点展示 Skill 选择器，每个选项至少显示�
 10. Adapter 不调用模型；相同 Adapter Version 对相同输入必须产生相同内容哈希。
 11. Adapter 派生 Artifact 记录全部父 Artifact 引用、Adapter Version 和转换规则快照。
 12. 更换下游 Skill 时，只允许调整该节点的版本选择、连接契约或 Adapter，不修改上游 Skill 的原生指令和质量门。
+13. 管理员可在 `/admin/skills` 管理 System Skill 并审计全部 Skill，项目负责人只能在所属项目管理 Project Skill。
+14. Project Skill 不会出现在其他项目的 Workflow 选择器、画布 Agent 搜索和 API 解析结果中。
+15. 项目用户修改 System Skill 时必须创建项目副本，原 System Skill 的 Definition、Version 和推荐状态不变。
+16. 已发布、已绑定或已产生历史快照的 Skill 不能物理删除，只能归档版本或停用 Definition。
+17. Workflow 和画布 Agent 查询到的同一 Skill Version 具有相同的 Version ID、内容哈希和契约，不存在入口私有副本。
 
 ## 13. 实施边界
 
@@ -273,5 +320,9 @@ Workflow 运行面板按节点展示 Skill 选择器，每个选项至少显示�
 - 在 Workflow 预览时同时校验 Skill 契约和 Adapter 映射契约。
 - 在 Execution Revision 中冻结 Adapter ID、版本、哈希与规则快照。
 - 将 Adapter 结果保存为带完整父引用的新 Artifact，不改写原 Artifact。
+- 保留 `/admin/skills` 作为 System Skill 和全局审计入口，新增项目 Skill 的用户端管理入口。
+- 为所有 Skill 写操作增加 System / Project Owner、所属项目和当前用户权限校验。
+- 增加归档 Version、停用 Definition、安全删除未发布草稿与复制 System Skill 为 Project Skill 的操作。
+- 将 Workflow、画布 Agent 和独立 API 的 Skill 列表统一到同一个按用户、项目、capability 和 Artifact 契约过滤的查询服务。
 
 不为本功能新增第二套 Skill Registry、第二套 Workflow 预览协议或前端本地 Skill 版本库。Adapter Registry 只注册安全的确定性转换，不存储 Skill 文本，也不承担 Agent 或 Skill 的业务创作职责。
