@@ -28,7 +28,7 @@
 - Modify: `service/skill_seed.go`
 - Modify: `service/skill_seed_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `service/skill_seed_test.go` 新增测试，先执行 `EnsureSkillSeeds()`，再断言两个版本均已发布、属于同一 Definition、契约一致，而且推荐版本仍为 3.1.0：
 
@@ -50,13 +50,13 @@ func TestEnsureSkillSeedsPublishesDynamicScriptAsOptionalVersion(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `go test ./service -run TestEnsureSkillSeedsPublishesDynamicScriptAsOptionalVersion -count=1`
 
 Expected: FAIL，提示 `skill-version-system-workflow-script-3.2.0` 不存在。
 
-- [ ] **Step 3: 嵌入并幂等创建 3.2.0**
+- [x] **Step 3: 嵌入并幂等创建 3.2.0**
 
 将 `workflow-skills/script/01-seedance2-dynamic-script/SKILL.md` 的完整内容复制到嵌入目录 `service/skill_seeds/script/dynamic-script-3.2.0.md`。在 `ensureSkillSeed` 中仅对 `script` 构建额外包：以 3.1.0 invocation 包为基底，只替换 `Files["SKILL.md"]` 后重新调用 `ValidateInvocableSkillPackage`，再创建固定 ID 的已发布版本与通过的嵌入评测：
 
@@ -81,7 +81,7 @@ func ensureDynamicScriptSkillVersion(skillID string, base SkillPackage, stamp st
 
 抽出 `ensureSeedSkillEvaluation` 复用现有 3.1.0 逻辑。不得改写 `skill.RecommendedVersionID` 为 3.2.0。
 
-- [ ] **Step 4: 运行测试并提交**
+- [x] **Step 4: 运行测试并提交**
 
 Run: `go test ./service -run 'TestEnsureSkillSeedsPublishesDynamicScriptAsOptionalVersion|TestEnsureSkillSeeds' -count=1`
 

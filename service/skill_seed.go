@@ -22,6 +22,7 @@ var skillSeedFS embed.FS
 
 const skillSeedVersion = "3.0.1"
 const skillInvocationSeedVersion = "3.1.0"
+const dynamicScriptSkillVersion = "3.2.0"
 
 var systemSkillSeedStageKeys = []string{
 	WorkflowSkillStageScript,
@@ -111,17 +112,12 @@ func ensureSkillSeed(seed skillSeed) error {
 			return fmt.Errorf("seed invocation skill version %s: %w", seed.StageKey, err)
 		}
 	}
-	evaluationID := "skill-evaluation-system-workflow-" + seed.StageKey + "-" + skillInvocationSeedVersion
-	if _, ok, err := repository.GetSkillEvaluation(evaluationID); err != nil {
-		return err
-	} else if !ok {
-		evaluation := model.SkillEvaluation{
-			ID: evaluationID, SkillVersionID: invocationVersionID, ContentHash: invocationPackage.ContentHash,
-			InputHash: "embedded-good-output", ResultJSON: `{"source":"embedded-good-output"}`,
-			GateJSON: `{"schema":"passed"}`, Status: "passed", CreatedBy: "system", CreatedAt: stamp, UpdatedAt: stamp,
-		}
-		if err := repository.CreateSkillEvaluation(evaluation); err != nil {
-			return fmt.Errorf("seed invocation skill evaluation %s: %w", seed.StageKey, err)
+	if err := ensureSeedSkillEvaluation("skill-evaluation-system-workflow-"+seed.StageKey+"-"+skillInvocationSeedVersion, invocationVersionID, invocationPackage.ContentHash, stamp); err != nil {
+		return fmt.Errorf("seed invocation skill evaluation %s: %w", seed.StageKey, err)
+	}
+	if seed.StageKey == WorkflowSkillStageScript {
+		if err := ensureDynamicScriptSkillVersion(skillID, invocationPackage, stamp); err != nil {
+			return fmt.Errorf("seed dynamic script skill: %w", err)
 		}
 	}
 	passed, err := repository.HasPassingSkillEvaluation(invocationVersionID, invocationPackage.ContentHash)
@@ -149,6 +145,45 @@ func ensureSkillSeed(seed skillSeed) error {
 	return repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{
 		ID: "workflow-skill-binding-global-" + seed.StageKey, StageKey: seed.StageKey, Scope: model.WorkflowStageSkillScopeGlobal,
 		SkillVersionID: legacyVersionID, CreatedAt: stamp, UpdatedAt: stamp,
+	})
+}
+
+func ensureDynamicScriptSkillVersion(skillID string, base SkillPackage, stamp string) error {
+	content, err := skillSeedFS.ReadFile("skill_seeds/script/dynamic-script-3.2.0.md")
+	if err != nil {
+		return err
+	}
+	files := make(map[string]string, len(base.Files))
+	for path, value := range base.Files {
+		files[path] = value
+	}
+	files["SKILL.md"] = string(content)
+	base.Files = files
+	packageValue, err := ValidateInvocableSkillPackage(base)
+	if err != nil {
+		return err
+	}
+	versionID := "skill-version-system-workflow-script-" + dynamicScriptSkillVersion
+	if _, exists, err := repository.GetSkillVersion(versionID); err != nil {
+		return err
+	} else if !exists {
+		if err := repository.CreateSkillVersion(publishedSeedSkillVersion(versionID, skillID, dynamicScriptSkillVersion, stamp, packageValue)); err != nil {
+			return err
+		}
+	}
+	return ensureSeedSkillEvaluation("skill-evaluation-system-workflow-script-"+dynamicScriptSkillVersion, versionID, packageValue.ContentHash, stamp)
+}
+
+func ensureSeedSkillEvaluation(evaluationID, versionID, contentHash, stamp string) error {
+	if _, ok, err := repository.GetSkillEvaluation(evaluationID); err != nil {
+		return err
+	} else if ok {
+		return nil
+	}
+	return repository.CreateSkillEvaluation(model.SkillEvaluation{
+		ID: evaluationID, SkillVersionID: versionID, ContentHash: contentHash,
+		InputHash: "embedded-good-output", ResultJSON: `{"source":"embedded-good-output"}`,
+		GateJSON: `{"schema":"passed"}`, Status: "passed", CreatedBy: "system", CreatedAt: stamp, UpdatedAt: stamp,
 	})
 }
 

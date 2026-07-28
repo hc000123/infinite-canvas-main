@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -9,6 +10,50 @@ import (
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/repository"
 )
+
+func TestEnsureSkillSeedsPublishesDynamicScriptAsOptionalVersion(t *testing.T) {
+	setupAITaskTestDB(t)
+	if err := EnsureSkillSeeds(); err != nil {
+		t.Fatal(err)
+	}
+	skill, ok, err := repository.GetSkillDefinition("skill-system-workflow-script")
+	if err != nil || !ok {
+		t.Fatalf("script skill missing: %v", err)
+	}
+	oldVersion, oldOK, err := repository.GetSkillVersion("skill-version-system-workflow-script-3.1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dynamic, newOK, err := repository.GetSkillVersion("skill-version-system-workflow-script-3.2.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !oldOK || !newOK || oldVersion.Status != model.SkillVersionPublished || dynamic.Status != model.SkillVersionPublished {
+		t.Fatal("both script versions must remain published")
+	}
+	if oldVersion.SkillID != skill.ID || dynamic.SkillID != skill.ID {
+		t.Fatal("script versions must share one definition")
+	}
+	if skill.RecommendedVersionID != oldVersion.ID {
+		t.Fatalf("publishing an option must not change recommendation: %s", skill.RecommendedVersionID)
+	}
+	oldPackage, err := DecodeSkillPackage(oldVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dynamicPackage, err := DecodeSkillPackage(dynamic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(oldPackage.Manifest.Capabilities, dynamicPackage.Manifest.Capabilities) ||
+		!reflect.DeepEqual(oldPackage.InputContract.ArtifactInputs, dynamicPackage.InputContract.ArtifactInputs) ||
+		!reflect.DeepEqual(oldPackage.OutputContract.ArtifactOutputs, dynamicPackage.OutputContract.ArtifactOutputs) {
+		t.Fatal("3.2.0 changed the stable invocation contract")
+	}
+	if !strings.Contains(dynamicPackage.Files["SKILL.md"], "Seedance 2.0 短剧动态剧本转写") {
+		t.Fatal("dynamic instructions were not imported")
+	}
+}
 
 func TestEnsureSkillSeedsRegistersPublishedSystemSkills(t *testing.T) {
 	setupAITaskTestDB(t)
