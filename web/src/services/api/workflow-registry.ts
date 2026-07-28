@@ -5,7 +5,7 @@ import type { ArtifactRefInput } from "./invocations-contract";
 
 export type WorkflowOwnerType = "system" | "project";
 export type WorkflowVersionStatus = "draft" | "published" | "retired";
-export type WorkflowExecutorType = "skill" | "agent";
+export type WorkflowExecutorType = "skill" | "agent" | "adapter";
 export type WorkflowSkillBindingMode = "fixed" | "tag_route" | "manual_before_run";
 export type WorkflowExecutionStatus = "preflight" | "awaiting_confirmation" | "running" | "needs_review" | "completed" | "blocked" | "partial" | "failed" | "cancelled";
 export type WorkflowNodeExecutionStatus = "blocked" | "ready" | "queued" | "running" | "needs_review" | "approved" | "completed" | "skipped" | "failed" | "cancelled";
@@ -47,6 +47,7 @@ export type WorkflowSkillBinding = {
 };
 
 export type WorkflowAgentRef = { agentId: string; agentVersionId: string; agentVersionConstraint: string };
+export type WorkflowAdapterRef = { adapterId: string; adapterVersion: string };
 export type WorkflowNodeInputBinding = {
     bindingName: string;
     artifactType: string;
@@ -63,6 +64,7 @@ export type WorkflowNodeSpec = {
     executorType: WorkflowExecutorType;
     agentRef?: WorkflowAgentRef;
     skillBinding?: WorkflowSkillBinding;
+    adapterRef?: WorkflowAdapterRef;
     inputBindings: WorkflowNodeInputBinding[];
     outputArtifactType: string;
     dependsOn: string[];
@@ -75,7 +77,7 @@ export type WorkflowVersionDetail = { workflow: WorkflowDefinition; version: Wor
 export type WorkflowRegistryItem = { workflow: WorkflowDefinition; tags: string[]; versions: WorkflowVersion[]; recommendedPackage?: WorkflowPackage };
 export type WorkflowCreateInput = { projectId: string; name: string; summary: string; tags: string[]; version: string; package: WorkflowPackage };
 export type WorkflowDraftInput = Pick<WorkflowCreateInput, "version" | "package">;
-export type WorkflowValidationResult = { contentHash: string; resolvedNodes: Array<{ nodeKey: string; executorType: WorkflowExecutorType; agentId?: string; agentVersionId?: string; skillId?: string; skillVersionId?: string; skillContentHash?: string }> };
+export type WorkflowValidationResult = { contentHash: string; resolvedNodes: Array<{ nodeKey: string; executorType: WorkflowExecutorType; agentId?: string; agentVersionId?: string; skillId?: string; skillVersionId?: string; skillContentHash?: string; adapterId?: string; adapterVersion?: string; adapterContentHash?: string }> };
 
 export type WorkflowRouteCandidate = { skillId: string; skillVersionId: string; accepted: boolean; score: number; reasons: string[] };
 export type WorkflowRouteTrace = { capability: string; candidates: WorkflowRouteCandidate[]; finalSkillVersionId: string; selectedModel: string };
@@ -86,6 +88,10 @@ export type WorkflowNodeRoutePreview = {
     agentVersionId?: string;
     skillVersionId?: string;
     skillContentHash?: string;
+    adapterId?: string;
+    adapterVersion?: string;
+    adapterContentHash?: string;
+    adapterSnapshot?: unknown;
     routeTrace: WorkflowRouteTrace;
     estimatedCredits: number;
     confirmationCodes: string[];

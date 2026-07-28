@@ -230,6 +230,21 @@ func startReadyWorkflowNodes(detail *WorkflowExecutionDetail) error {
 		if err != nil {
 			return err
 		}
+		if node.ExecutorType == WorkflowExecutorAdapter {
+			adapter, err := resolveFrozenWorkflowAdapter(preview)
+			if err != nil {
+				return err
+			}
+			output, err := ExecuteWorkflowAdapter(detail.Run.UserID, detail.Run.ProjectID, detail.Run.EpisodeID, adapter, refs)
+			if err != nil {
+				node.Status, node.ErrorCode, node.ErrorMessage = model.WorkflowNodeExecutionFailed, "adapter_execution_failed", err.Error()
+			} else {
+				raw, _ := json.Marshal([]ArtifactRefInput{{BindingName: adapter.Output.BindingName, ArtifactID: output.Artifact.ID, ContentHash: output.Artifact.ContentHash}})
+				node.OutputArtifactRefsJSON, node.Status = string(raw), model.WorkflowNodeExecutionCompleted
+			}
+			node.UpdatedAt = now()
+			continue
+		}
 		if node.ExecutorType == WorkflowExecutorAgent {
 			plan, err := CreateAgentPlan(detail.Run.UserID, AgentPlanCreateInput{ProjectID: detail.Run.ProjectID, EpisodeID: detail.Run.EpisodeID, AgentVersionID: preview.AgentVersionID, Goal: spec.Name, SourceArtifactRefs: refs, IdempotencyKey: workflowExecutionNodeIdempotencyKey(detail.Run.ID, detail.Run.Revision, node.NodeKey)})
 			if err != nil {

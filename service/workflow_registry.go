@@ -248,7 +248,16 @@ func resolveWorkflowPublication(userID, projectID string, pkg WorkflowPackage) (
 	for index := range pkg.Nodes {
 		node := &pkg.Nodes[index]
 		row := ResolvedWorkflowNode{NodeKey: node.NodeKey, ExecutorType: node.ExecutorType}
-		if node.ExecutorType == WorkflowExecutorAgent {
+		if node.ExecutorType == WorkflowExecutorAdapter {
+			adapter, err := ResolveWorkflowAdapter(*node.AdapterRef)
+			if err != nil {
+				return pkg, nil, err
+			}
+			if err := validateWorkflowAdapterNodeContracts(adapter, *node); err != nil {
+				return pkg, nil, err
+			}
+			row.AdapterID, row.AdapterVersion, row.AdapterContentHash = adapter.ID, adapter.Version, adapter.ContentHash
+		} else if node.ExecutorType == WorkflowExecutorAgent {
 			definition, version, err := resolveWorkflowAgentReference(userID, projectID, *node.AgentRef)
 			if err != nil {
 				return pkg, nil, err

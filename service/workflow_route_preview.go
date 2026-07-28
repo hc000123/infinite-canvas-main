@@ -45,6 +45,8 @@ func PreviewWorkflowVersion(userID, versionID string, input WorkflowPreviewInput
 		nodePreview := WorkflowNodeRoutePreview{NodeKey: node.NodeKey, Name: node.Name, ExecutorType: node.ExecutorType, RouteTrace: InvocationRouteTrace{Candidates: []InvocationRouteCandidate{}}}
 		if bindingErr != nil {
 			nodePreview.BlockCode, nodePreview.BlockMessage = "input_binding_unavailable", bindingErr.Error()
+		} else if node.ExecutorType == WorkflowExecutorAdapter {
+			nodePreview = previewWorkflowAdapterNode(node, bindings, nodePreview)
 		} else if node.ExecutorType == WorkflowExecutorAgent {
 			nodePreview = previewWorkflowAgentNode(userID, input.ProjectID, node, nodePreview)
 		} else {
@@ -55,7 +57,14 @@ func PreviewWorkflowVersion(userID, versionID string, input WorkflowPreviewInput
 		} else {
 			var resolved workflowPreviewArtifact
 			var err error
-			if node.ExecutorType == WorkflowExecutorAgent {
+			if node.ExecutorType == WorkflowExecutorAdapter {
+				adapter, adapterErr := ResolveWorkflowAdapter(*node.AdapterRef)
+				if adapterErr != nil {
+					err = adapterErr
+				} else {
+					resolved, err = previewOutputArtifact(userID, input, node, adapter.Output)
+				}
+			} else if node.ExecutorType == WorkflowExecutorAgent {
 				resolved, err = resolvePreviewAgentOutput(userID, input, node)
 			} else {
 				resolved, err = resolvePreviewOutput(userID, input, node, bindings, nodePreview.SkillVersionID)
@@ -77,6 +86,30 @@ func PreviewWorkflowVersion(userID, versionID string, input WorkflowPreviewInput
 	}
 	sort.Strings(preview.ConfirmationRequirements)
 	return preview, nil
+}
+
+func previewWorkflowAdapterNode(node WorkflowNodeSpec, bindings []ResolvedArtifactBinding, result WorkflowNodeRoutePreview) WorkflowNodeRoutePreview {
+	adapter, err := ResolveWorkflowAdapter(*node.AdapterRef)
+	if err != nil {
+		result.BlockCode, result.BlockMessage = "adapter_unavailable", err.Error()
+		return result
+	}
+	if err := validateWorkflowAdapterNodeContracts(adapter, node); err != nil {
+		result.BlockCode, result.BlockMessage = "adapter_contract_incompatible", err.Error()
+		return result
+	}
+	if err := validateWorkflowAdapterBindings(adapter, bindings); err != nil {
+		result.BlockCode, result.BlockMessage = "adapter_input_incompatible", err.Error()
+		return result
+	}
+	snapshot, err := workflowAdapterSnapshotJSON(adapter)
+	if err != nil {
+		result.BlockCode, result.BlockMessage = "adapter_snapshot_invalid", err.Error()
+		return result
+	}
+	result.AdapterID, result.AdapterVersion = adapter.ID, adapter.Version
+	result.AdapterContentHash, result.AdapterSnapshot = adapter.ContentHash, snapshot
+	return result
 }
 
 func resolvePreviewAgentOutput(userID string, input WorkflowPreviewInput, node WorkflowNodeSpec) (workflowPreviewArtifact, error) {

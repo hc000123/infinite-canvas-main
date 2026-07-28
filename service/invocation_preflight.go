@@ -607,6 +607,9 @@ func invocationArtifactApproved(userID string, artifact model.Artifact) (bool, e
 		return true, nil
 	}
 	if artifact.ProducerInvocationID == nil {
+		if strings.Contains(artifact.ExtensionsJSON, `"`+workflowAdapterExtensionKey+`"`) {
+			return workflowAdapterArtifactApproved(userID, artifact.ID, artifact.ExtensionsJSON)
+		}
 		return false, nil
 	}
 	run, found, err := repository.GetUserInvocation(userID, *artifact.ProducerInvocationID)

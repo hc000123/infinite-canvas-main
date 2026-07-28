@@ -118,14 +118,14 @@ func normalizeWorkflowNode(node WorkflowNodeSpec) (WorkflowNodeSpec, error) {
 	}
 	switch node.ExecutorType {
 	case WorkflowExecutorSkill:
-		if node.SkillBinding == nil || node.AgentRef != nil {
+		if node.SkillBinding == nil || node.AgentRef != nil || node.AdapterRef != nil {
 			return node, errors.New("Skill 节点必须且只能声明 Skill binding")
 		}
 		if err := normalizeWorkflowSkillBinding(node.SkillBinding, node.OutputArtifactType); err != nil {
 			return node, err
 		}
 	case WorkflowExecutorAgent:
-		if node.AgentRef == nil || node.SkillBinding != nil {
+		if node.AgentRef == nil || node.SkillBinding != nil || node.AdapterRef != nil {
 			return node, errors.New("Agent 节点必须且只能声明 Agent 引用")
 		}
 		node.AgentRef.AgentID = strings.TrimSpace(node.AgentRef.AgentID)
@@ -133,6 +133,15 @@ func normalizeWorkflowNode(node WorkflowNodeSpec) (WorkflowNodeSpec, error) {
 		node.AgentRef.AgentVersionConstraint = strings.Join(strings.Fields(node.AgentRef.AgentVersionConstraint), " ")
 		if node.AgentRef.AgentID == "" && node.AgentRef.AgentVersionID == "" {
 			return node, errors.New("Agent 节点缺少 Agent 引用")
+		}
+	case WorkflowExecutorAdapter:
+		if node.AdapterRef == nil || node.SkillBinding != nil || node.AgentRef != nil {
+			return node, errors.New("Adapter 节点必须且只能声明 Adapter 引用")
+		}
+		node.AdapterRef.AdapterID = strings.ToLower(strings.TrimSpace(node.AdapterRef.AdapterID))
+		node.AdapterRef.AdapterVersion = strings.TrimSpace(node.AdapterRef.AdapterVersion)
+		if !skillManifestTokenPattern.MatchString(node.AdapterRef.AdapterID) || !skillSemanticVersionRegexp.MatchString(node.AdapterRef.AdapterVersion) {
+			return node, errors.New("Adapter 节点引用无效")
 		}
 	default:
 		return node, errors.New("Workflow 节点 executorType 无效")

@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	WorkflowExecutorSkill = "skill"
-	WorkflowExecutorAgent = "agent"
+	WorkflowExecutorSkill   = "skill"
+	WorkflowExecutorAgent   = "agent"
+	WorkflowExecutorAdapter = "adapter"
 
 	WorkflowSkillBindingFixed           = "fixed"
 	WorkflowSkillBindingTagRoute        = "tag_route"
@@ -30,12 +31,18 @@ type WorkflowNodeSpec struct {
 	ExecutorType       string                     `json:"executorType"`
 	AgentRef           *WorkflowAgentRef          `json:"agentRef,omitempty"`
 	SkillBinding       *WorkflowSkillBinding      `json:"skillBinding,omitempty"`
+	AdapterRef         *WorkflowAdapterRef        `json:"adapterRef,omitempty"`
 	InputBindings      []WorkflowNodeInputBinding `json:"inputBindings"`
 	OutputArtifactType string                     `json:"outputArtifactType"`
 	DependsOn          []string                   `json:"dependsOn"`
 	Condition          *WorkflowCondition         `json:"condition,omitempty"`
 	ConfirmationPolicy WorkflowConfirmationPolicy `json:"confirmationPolicy"`
 	RetryPolicy        WorkflowRetryPolicy        `json:"retryPolicy"`
+}
+
+type WorkflowAdapterRef struct {
+	AdapterID      string `json:"adapterId"`
+	AdapterVersion string `json:"adapterVersion"`
 }
 
 type WorkflowSkillBinding struct {
@@ -111,13 +118,16 @@ type WorkflowRegistryItem struct {
 }
 
 type ResolvedWorkflowNode struct {
-	NodeKey          string `json:"nodeKey"`
-	ExecutorType     string `json:"executorType"`
-	AgentID          string `json:"agentId,omitempty"`
-	AgentVersionID   string `json:"agentVersionId,omitempty"`
-	SkillID          string `json:"skillId,omitempty"`
-	SkillVersionID   string `json:"skillVersionId,omitempty"`
-	SkillContentHash string `json:"skillContentHash,omitempty"`
+	NodeKey            string `json:"nodeKey"`
+	ExecutorType       string `json:"executorType"`
+	AgentID            string `json:"agentId,omitempty"`
+	AgentVersionID     string `json:"agentVersionId,omitempty"`
+	SkillID            string `json:"skillId,omitempty"`
+	SkillVersionID     string `json:"skillVersionId,omitempty"`
+	SkillContentHash   string `json:"skillContentHash,omitempty"`
+	AdapterID          string `json:"adapterId,omitempty"`
+	AdapterVersion     string `json:"adapterVersion,omitempty"`
+	AdapterContentHash string `json:"adapterContentHash,omitempty"`
 }
 
 type WorkflowValidationResult struct {
@@ -135,17 +145,21 @@ type WorkflowPreviewInput struct {
 }
 
 type WorkflowNodeRoutePreview struct {
-	NodeKey           string               `json:"nodeKey"`
-	Name              string               `json:"name"`
-	ExecutorType      string               `json:"executorType"`
-	AgentVersionID    string               `json:"agentVersionId,omitempty"`
-	SkillVersionID    string               `json:"skillVersionId,omitempty"`
-	SkillContentHash  string               `json:"skillContentHash,omitempty"`
-	RouteTrace        InvocationRouteTrace `json:"routeTrace"`
-	EstimatedCredits  int                  `json:"estimatedCredits"`
-	ConfirmationCodes []string             `json:"confirmationCodes"`
-	BlockCode         string               `json:"blockCode,omitempty"`
-	BlockMessage      string               `json:"blockMessage,omitempty"`
+	NodeKey            string               `json:"nodeKey"`
+	Name               string               `json:"name"`
+	ExecutorType       string               `json:"executorType"`
+	AgentVersionID     string               `json:"agentVersionId,omitempty"`
+	SkillVersionID     string               `json:"skillVersionId,omitempty"`
+	SkillContentHash   string               `json:"skillContentHash,omitempty"`
+	AdapterID          string               `json:"adapterId,omitempty"`
+	AdapterVersion     string               `json:"adapterVersion,omitempty"`
+	AdapterContentHash string               `json:"adapterContentHash,omitempty"`
+	AdapterSnapshot    json.RawMessage      `json:"adapterSnapshot,omitempty"`
+	RouteTrace         InvocationRouteTrace `json:"routeTrace"`
+	EstimatedCredits   int                  `json:"estimatedCredits"`
+	ConfirmationCodes  []string             `json:"confirmationCodes"`
+	BlockCode          string               `json:"blockCode,omitempty"`
+	BlockMessage       string               `json:"blockMessage,omitempty"`
 }
 
 type WorkflowRoutePreview struct {

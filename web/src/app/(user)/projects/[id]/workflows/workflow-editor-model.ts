@@ -91,6 +91,10 @@ export function workflowRouteIssueLabel(code: string) {
         execution_target_unavailable: "当前没有可用的模型执行通道",
         agent_unavailable: "Agent 版本不可用",
         agent_skill_unavailable: "Agent 内部 Skill 版本不可用",
+        adapter_unavailable: "Adapter 精确版本不可用",
+        adapter_contract_incompatible: "Adapter 节点契约不兼容",
+        adapter_input_incompatible: "Adapter 输入 Artifact 不兼容",
+        adapter_snapshot_invalid: "Adapter 冻结快照无效",
     };
     return `${labels[code] || "工作流节点被阻断"}（${code}）`;
 }

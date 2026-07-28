@@ -196,7 +196,7 @@ git commit -m "feat: select compatible workflow skill versions"
 - Modify: `service/workflow_registry_test.go`
 - Modify: `web/src/services/api/workflow-registry.ts`
 
-- [ ] **Step 1: 写 Adapter Registry 与执行失败测试**
+- [x] **Step 1: 写 Adapter Registry 与执行失败测试**
 
 测试注册一个 `production-script-envelope@1.0.0`，输入完整 `production_script`，输出相同 Schema 的派生副本，用它验证精确版本、哈希、父引用、规则扩展和相同输入内容哈希稳定：
 
@@ -219,13 +219,13 @@ func TestWorkflowAdapterCreatesDeterministicDerivedArtifact(t *testing.T) {
 
 另写三项测试：未注册精确版本阻断 Workflow 校验；输入 Schema 不接受时阻断预览；转换结果不符合输出 Schema 时节点失败且原 Artifact 未变化。
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `go test ./service -run 'TestWorkflowAdapter|TestNormalizeWorkflowAdapterNode' -count=1`
 
 Expected: FAIL，Adapter 类型和 Registry 尚不存在。
 
-- [ ] **Step 3: 定义独立 Adapter 契约和代码 Registry**
+- [x] **Step 3: 定义独立 Adapter 契约和代码 Registry**
 
 在 contracts 中加入：
 
@@ -255,7 +255,7 @@ func ExecuteWorkflowAdapter(userID, projectID, episodeID string, adapter Workflo
 
 `ContentHash` 必须由规范化的 ID、version、输入输出契约与 `Rules` 计算，不能包含函数地址。唯一内置示例只做 `productionScript` 字段的恒等结构映射，不调用模型、不摘要、不改写。
 
-- [ ] **Step 4: 创建内部派生 Artifact**
+- [x] **Step 4: 创建内部派生 Artifact**
 
 在 `workflow_adapter.go` 调用 `buildArtifacts(..., false)` 构造 Artifact，extensions 仅允许固定命名空间：
 
@@ -269,7 +269,7 @@ return envelopes[0], err
 
 相同重试可以产生不同 Artifact ID，但必须产生相同 payload、metadata、父引用和 `ContentHash`；Workflow 节点已有输出时不得再次执行。
 
-- [ ] **Step 5: 接入 Workflow 规范化、预览与执行**
+- [x] **Step 5: 接入 Workflow 规范化、预览与执行**
 
 `normalizeWorkflowNode` 增加 adapter 分支，要求只能声明 `AdapterRef`，且输出类型等于 Registry 输出类型。Workflow 发布校验和预览精确解析 Adapter，并把完整序列化快照放入 `WorkflowNodeRoutePreview.AdapterSnapshot`；Revision 已冻结 `RoutePreviewJSON`，无需新增数据库字段。
 
@@ -292,7 +292,7 @@ if node.ExecutorType == WorkflowExecutorAdapter {
 
 `unlockWorkflowNodes` 已将 `Completed` 视为完成，保持原逻辑。前端类型增加 `"adapter"` 和只读 adapter 字段，不在编辑器提供任意代码配置入口。
 
-- [ ] **Step 6: 运行测试并提交**
+- [x] **Step 6: 运行测试并提交**
 
 Run: `go test ./service -run 'TestWorkflowAdapter|TestNormalizeWorkflowAdapterNode|TestWorkflowExecution.*Adapter' -count=1`
 
