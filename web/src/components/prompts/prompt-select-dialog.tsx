@@ -318,13 +318,23 @@ export function PromptSelectDialog({
             <PromptDetailDialog
                 prompt={selectedPrompt}
                 projectId={projectId}
-                onClose={closeDialog}
+                onClose={() => setSelectedPrompt(null)}
                 onCopy={(text) => selectPrompt(text)}
                 onUse={selectPrompt}
                 onUseTemplate={recipeSupported ? selectPrompt : undefined}
                 buildRecipe={recipeSupported ? (template) => recipeContext.compose("", template) : undefined}
             />
-            <PromptCreateDialog form={createForm} open={createOpen} categories={promptCategories} saving={isSavingPrompt} onCancel={closeDialog} onSave={saveCreatedPrompt} />
+            <PromptCreateDialog
+                form={createForm}
+                open={createOpen}
+                categories={promptCategories}
+                saving={isSavingPrompt}
+                onCancel={() => {
+                    setCreateOpen(false);
+                    createForm.resetFields();
+                }}
+                onSave={saveCreatedPrompt}
+            />
         </Modal>
     );
 }
