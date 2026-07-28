@@ -4,6 +4,7 @@ import {
     ApartmentOutlined,
     ArrowLeftOutlined,
     AuditOutlined,
+    DeploymentUnitOutlined,
     FileTextOutlined,
     HomeOutlined,
     LogoutOutlined,
@@ -31,6 +32,7 @@ const baseAdminMenus = [
     { key: "/admin/prompts", icon: <FileTextOutlined />, label: "提示词管理" },
     { key: "/admin/assets", icon: <PictureOutlined />, label: "素材管理" },
     { key: "/admin/skills", icon: <ApartmentOutlined />, label: "Skill 中心" },
+    { key: "/admin/agents", icon: <DeploymentUnitOutlined />, label: "Agent 中心" },
     { key: "/admin/settings", icon: <SettingOutlined />, label: "系统设置" },
 ];
 
@@ -57,6 +59,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         ? "/admin/login-approvals"
         : pathname.startsWith("/admin/admins")
           ? "/admin/admins"
+          : pathname.startsWith("/admin/agents")
+            ? "/admin/agents"
           : pathname.startsWith("/admin/skills")
             ? "/admin/skills"
             : pathname.startsWith("/admin/settings")
@@ -76,6 +80,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         ? "登录审批"
         : pathname.startsWith("/admin/admins")
           ? "管理员管理"
+          : pathname.startsWith("/admin/agents")
+            ? "Agent 中心"
           : pathname.startsWith("/admin/skills")
             ? "Skill 中心"
             : pathname.startsWith("/admin/settings")

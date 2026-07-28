@@ -6,12 +6,13 @@ import { App, Button, Checkbox, Empty, Input, InputNumber, Select, Skeleton, Spa
 import { useEffect, useState } from "react";
 
 import type { SkillOption } from "@/services/api/admin-skills";
+import { createAdminAgentVersion, fetchAdminAgentVersion, publishAdminAgentVersion, recommendAdminAgentVersion, updateAdminAgentVersion, validateAdminAgentVersion } from "@/services/api/admin-agents";
 import { createAgentVersion, fetchAgentVersion, publishAgentVersion, recommendAgentVersion, updateAgentVersion, validateAgentVersion, type AgentPackage, type AgentRegistryItem, type AgentSkillRef } from "@/services/api/agent-registry";
-import { rebindAgentSkillRefs, reorderAgentSkillRefs } from "../agent-center-utils";
+import { canManageAgentVersion, rebindAgentSkillRefs, reorderAgentSkillRefs } from "../agent-center-utils";
 
 const mutationMessage = (error: unknown) => (error instanceof Error ? error.message : "操作失败");
 
-export function AgentVersionEditor({ item, projectId, skillOptions }: { item?: AgentRegistryItem; projectId: string; skillOptions: SkillOption[] }) {
+export function AgentVersionEditor({ item, projectId, skillOptions, mode = "project", adminToken = "" }: { item?: AgentRegistryItem; projectId: string; skillOptions: SkillOption[]; mode?: "project" | "system-admin"; adminToken?: string }) {
     const { message } = App.useApp();
     const queryClient = useQueryClient();
     const [activeVersionId, setActiveVersionId] = useState("");
@@ -23,7 +24,7 @@ export function AgentVersionEditor({ item, projectId, skillOptions }: { item?: A
         setActiveVersionId(draft?.id || item.agent.recommendedVersionId || item.versions[0]?.id || "");
     }, [item]);
 
-    const detailQuery = useQuery({ queryKey: ["agent-version", activeVersionId], queryFn: () => fetchAgentVersion(activeVersionId), enabled: Boolean(activeVersionId), retry: false });
+    const detailQuery = useQuery({ queryKey: [mode === "system-admin" ? "admin-agent-version" : "agent-version", activeVersionId], queryFn: () => mode === "system-admin" ? fetchAdminAgentVersion(adminToken, activeVersionId) : fetchAgentVersion(activeVersionId), enabled: Boolean(activeVersionId && (mode !== "system-admin" || adminToken)), retry: false });
     useEffect(() => {
         if (detailQuery.data) setEditor(structuredClone(detailQuery.data.package));
     }, [detailQuery.data]);
@@ -32,31 +33,36 @@ export function AgentVersionEditor({ item, projectId, skillOptions }: { item?: A
     }, [detailQuery.error, message]);
 
     const refresh = async () => {
-        await Promise.all([queryClient.invalidateQueries({ queryKey: ["agent-registry", projectId] }), queryClient.invalidateQueries({ queryKey: ["agent-version"] })]);
+        const registryKey = mode === "system-admin" ? ["admin", "agents"] : ["agent-registry", projectId];
+        const versionKey = mode === "system-admin" ? ["admin-agent-version"] : ["agent-version"];
+        await Promise.all([queryClient.invalidateQueries({ queryKey: registryKey }), queryClient.invalidateQueries({ queryKey: versionKey })]);
     };
     const draftMutation = useMutation({
-        mutationFn: () => createAgentVersion(item!.agent.id, { version: nextPatchVersion(detailQuery.data?.version.version || "1.0.0"), package: { ...detailQuery.data!.package, contentHash: "" } }),
+        mutationFn: () => {
+            const input = { version: nextPatchVersion(detailQuery.data?.version.version || "1.0.0"), package: { ...detailQuery.data!.package, contentHash: "" } };
+            return mode === "system-admin" ? createAdminAgentVersion(adminToken, item!.agent.id, input) : createAgentVersion(item!.agent.id, input);
+        },
         onSuccess: async (version) => { await refresh(); setActiveVersionId(version.id); message.success(`已创建草稿 v${version.version}`); },
         onError: (error) => message.error(mutationMessage(error)),
     });
     const saveMutation = useMutation({
-        mutationFn: () => updateAgentVersion(activeVersionId, { version: detailQuery.data!.version.version, package: editor! }),
+        mutationFn: () => mode === "system-admin" ? updateAdminAgentVersion(adminToken, activeVersionId, { version: detailQuery.data!.version.version, package: editor! }) : updateAgentVersion(activeVersionId, { version: detailQuery.data!.version.version, package: editor! }),
         onSuccess: async () => { await refresh(); message.success("Agent 草稿已保存"); },
         onError: (error) => message.error(mutationMessage(error)),
     });
     const validateMutation = useMutation({
-        mutationFn: () => validateAgentVersion(activeVersionId),
+        mutationFn: () => mode === "system-admin" ? validateAdminAgentVersion(adminToken, activeVersionId) : validateAgentVersion(activeVersionId),
         onSuccess: (result) => message.success(`契约校验通过：${shortHash(result.contentHash)}`),
         onError: (error) => message.error(mutationMessage(error)),
     });
     const publishMutation = useMutation({
-        mutationFn: () => publishAgentVersion(activeVersionId),
+        mutationFn: () => mode === "system-admin" ? publishAdminAgentVersion(adminToken, activeVersionId) : publishAgentVersion(activeVersionId),
         onSuccess: async () => { await refresh(); message.success("Agent 版本已发布"); },
         onError: (error) => message.error(mutationMessage(error)),
     });
     const recommendMutation = useMutation({
-        mutationFn: () => recommendAgentVersion(item!.agent.id, activeVersionId),
-        onSuccess: async () => { await refresh(); message.success("已设为项目推荐版本"); },
+        mutationFn: () => mode === "system-admin" ? recommendAdminAgentVersion(adminToken, item!.agent.id, activeVersionId) : recommendAgentVersion(item!.agent.id, activeVersionId),
+        onSuccess: async () => { await refresh(); message.success(mode === "system-admin" ? "已设为系统推荐版本" : "已设为项目推荐版本"); },
         onError: (error) => message.error(mutationMessage(error)),
     });
 
@@ -64,8 +70,10 @@ export function AgentVersionEditor({ item, projectId, skillOptions }: { item?: A
     if (!detailQuery.data || !editor) return <section className="studio-panel p-5"><Skeleton active paragraph={{ rows: 12 }} /></section>;
 
     const version = detailQuery.data.version;
-    const readOnly = version.status !== "draft";
     const isSystem = item.agent.ownerType === "system";
+    const canManage = canManageAgentVersion({ mode, ownerType: item.agent.ownerType });
+    const immutable = version.status !== "draft";
+    const readOnly = immutable || !canManage;
     const isDirty = JSON.stringify(editor) !== JSON.stringify(detailQuery.data.package);
     const busy = draftMutation.isPending || saveMutation.isPending || validateMutation.isPending || publishMutation.isPending || recommendMutation.isPending;
     const updateRefs = (refs: AgentSkillRef[]) => setEditor((value) => value ? { ...value, defaultSkillRefs: rebindAgentSkillRefs(refs, skillOptions), executionPolicy: { ...value.executionPolicy, maxSteps: Math.max(refs.length, value.executionPolicy.maxSteps) }, contentHash: "" } : value);
@@ -85,13 +93,13 @@ export function AgentVersionEditor({ item, projectId, skillOptions }: { item?: A
                     </div>
                     <Space wrap>
                         <Select aria-label="Agent 版本" value={activeVersionId} onChange={setActiveVersionId} options={item.versions.map((candidate) => ({ value: candidate.id, label: `v${candidate.version} · ${candidate.status === "draft" ? "草稿" : candidate.status === "published" ? "已发布" : "已退役"}` }))} style={{ minWidth: 180 }} />
-                        <Tag color={readOnly ? "green" : "gold"}>{readOnly ? "不可变版本" : "可编辑草稿"}</Tag>
+                        <Tag color={immutable ? "green" : readOnly ? "default" : "gold"}>{immutable ? "不可变版本" : readOnly ? "只读草稿" : "可编辑草稿"}</Tag>
                     </Space>
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
-                    {!isSystem && readOnly ? <Button icon={<Plus className="size-4" />} loading={draftMutation.isPending} onClick={() => draftMutation.mutate()}>基于此版新建草稿</Button> : null}
-                    {!readOnly ? <><Button type="primary" icon={<Save className="size-4" />} disabled={!isDirty} loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>保存草稿</Button><Button icon={<CheckCircle2 className="size-4" />} loading={validateMutation.isPending} onClick={() => validateMutation.mutate()}>校验契约</Button><Button icon={<Send className="size-4" />} loading={publishMutation.isPending} onClick={() => publishMutation.mutate()}>发布版本</Button></> : null}
-                    {!isSystem && version.status === "published" && item.agent.recommendedVersionId !== version.id ? <Button loading={recommendMutation.isPending} onClick={() => recommendMutation.mutate()}>设为推荐版</Button> : null}
+                    {canManage && immutable ? <Button icon={<Plus className="size-4" />} loading={draftMutation.isPending} onClick={() => draftMutation.mutate()}>基于此版新建草稿</Button> : null}
+                    {canManage && !immutable ? <><Button type="primary" icon={<Save className="size-4" />} disabled={!isDirty} loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>保存草稿</Button><Button icon={<CheckCircle2 className="size-4" />} loading={validateMutation.isPending} onClick={() => validateMutation.mutate()}>校验契约</Button><Button icon={<Send className="size-4" />} loading={publishMutation.isPending} onClick={() => publishMutation.mutate()}>发布版本</Button></> : null}
+                    {canManage && version.status === "published" && item.agent.recommendedVersionId !== version.id ? <Button loading={recommendMutation.isPending} onClick={() => recommendMutation.mutate()}>设为推荐版</Button> : null}
                     <span className="ml-auto text-xs text-[var(--studio-text-muted)]">内容哈希 {shortHash(version.contentHash)}</span>
                 </div>
             </header>
@@ -139,7 +147,7 @@ export function AgentVersionEditor({ item, projectId, skillOptions }: { item?: A
                     <label><span className="mb-2 block text-xs font-medium text-[var(--studio-text-muted)]">最大步骤数</span><InputNumber min={editor.defaultSkillRefs.length} max={32} className="w-full" value={editor.executionPolicy.maxSteps} disabled={readOnly} onChange={(value) => setEditor({ ...editor, executionPolicy: { ...editor.executionPolicy, maxSteps: value || editor.defaultSkillRefs.length }, contentHash: "" })} /></label>
                 </div>
                 <div className="flex flex-wrap gap-5 rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3 text-sm"><Checkbox checked={editor.executionPolicy.allowRuntimeSkillOverride} disabled={readOnly} onChange={(event) => setEditor({ ...editor, executionPolicy: { ...editor.executionPolicy, allowRuntimeSkillOverride: event.target.checked }, contentHash: "" })}>运行时允许替换 Skill</Checkbox><Checkbox checked={editor.executionPolicy.allowBatch} disabled={readOnly} onChange={(event) => setEditor({ ...editor, executionPolicy: { ...editor.executionPolicy, allowBatch: event.target.checked }, contentHash: "" })}>允许批处理</Checkbox></div>
-                {isSystem ? <div className="rounded-lg border border-dashed border-[var(--studio-border-strong)] p-4 text-sm text-[var(--studio-text-secondary)]">系统 Agent 只读。需要定制时请从左侧“复制到本项目”，生成独立项目 Agent 与草稿版本。</div> : null}
+                {isSystem && !canManage ? <div className="rounded-lg border border-dashed border-[var(--studio-border-strong)] p-4 text-sm text-[var(--studio-text-secondary)]">系统 Agent 只读。系统版本由管理员在后台 Agent 中心统一维护。</div> : null}
                 {busy ? <div className="text-xs text-[var(--studio-text-muted)]">正在同步 Agent Registry…</div> : null}
             </div>
         </section>

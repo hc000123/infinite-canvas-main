@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 import type { AgentRegistryItem } from "@/services/api/agent-registry";
 import { agentRegistrySkillLabel } from "../agent-center-utils";
 
-export function AgentRegistryList({ items, loading, selectedAgentId, copying, onCopy, onSelect }: { items: AgentRegistryItem[]; loading: boolean; selectedAgentId: string; copying: boolean; onCopy: (item: AgentRegistryItem) => void; onSelect: (id: string) => void }) {
+export function AgentRegistryList({ items, loading, selectedAgentId, copying, onCopy, onSelect, showSystemCopy = true }: { items: AgentRegistryItem[]; loading: boolean; selectedAgentId: string; copying: boolean; onCopy: (item: AgentRegistryItem) => void; onSelect: (id: string) => void; showSystemCopy?: boolean }) {
     const [keyword, setKeyword] = useState("");
     const visibleItems = useMemo(() => {
         const value = keyword.trim().toLowerCase();
@@ -44,7 +44,7 @@ export function AgentRegistryList({ items, loading, selectedAgentId, copying, on
                                     <span>{recommended ? `v${recommended.version}` : `${item.versions.length} 个版本`}</span>
                                 </div>
                             </button>
-                            {item.agent.ownerType === "system" ? <div className="border-t border-[var(--studio-border-subtle)] px-3 py-2"><Button type="text" size="small" icon={<Copy className="size-3.5" />} loading={copying} onClick={() => onCopy(item)}>复制到本项目</Button></div> : null}
+                            {showSystemCopy && item.agent.ownerType === "system" ? <div className="border-t border-[var(--studio-border-subtle)] px-3 py-2"><Button type="text" size="small" icon={<Copy className="size-3.5" />} loading={copying} onClick={() => onCopy(item)}>复制到本项目</Button></div> : null}
                         </div>
                     );
                 })}

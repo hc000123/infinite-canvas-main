@@ -3,6 +3,10 @@ import type { SkillOption } from "@/services/api/admin-skills";
 import type { AgentPlanCreateInput, AgentPlanStatus } from "@/services/api/agent-plans";
 import type { CreateArtifactInput } from "@/services/api/invocations-contract";
 
+export function canManageAgentVersion(input: { mode: "project" | "system-admin"; ownerType: "system" | "project" }) {
+    return input.mode === "system-admin" ? input.ownerType === "system" : input.ownerType === "project";
+}
+
 export function buildSourceArtifactInput(input: { projectId: string; episodeId?: string; text: string }): CreateArtifactInput {
     return {
         artifactType: "source_text",

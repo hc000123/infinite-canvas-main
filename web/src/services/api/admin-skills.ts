@@ -36,6 +36,8 @@ export type SkillManifest = {
     schemaCompatibility: Record<string, string>;
     sideEffects: string[];
     estimatedCostClass: "none" | "text_low" | "text_high" | "image" | "video";
+    executorKind?: string;
+    requiredTools?: string[];
 };
 
 export type SkillArtifactInputSpec = { bindingName: string; artifactType: string; required: boolean; min: number; max: number; schemaConstraint: string; requiresApproval: boolean };
