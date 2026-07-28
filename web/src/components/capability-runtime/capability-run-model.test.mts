@@ -31,6 +31,7 @@ const skill = (bindings: SkillOption["inputBindings"]): SkillOption => ({
     skillName: "能力测试",
     skillVersionId: "skill-version-1",
     version: "1.0.0",
+    contentHash: "sha256:skill-version-1",
     isRecommended: true,
     manifest: {
         capabilities: ["asset.prepare"],

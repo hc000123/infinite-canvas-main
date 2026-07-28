@@ -62,7 +62,7 @@ test("source text artifact is bound once to every distinct workflow input name",
 
 test("new workflow prefers a recommended source-text skill over registry order", () => {
     const option = (skillId: string, isRecommended: boolean, inputArtifactTypes: string[]): SkillOption => ({
-        skillId, skillName: skillId, skillVersionId: `${skillId}-v1`, version: "1.0.0", isRecommended, ownerType: "system", ownerProjectId: "", summary: "",
+        skillId, skillName: skillId, skillVersionId: `${skillId}-v1`, version: "1.0.0", contentHash: `sha256:${skillId}`, isRecommended, ownerType: "system", ownerProjectId: "", summary: "",
         manifest: { capabilities: [], inputArtifactTypes, outputArtifactTypes: ["result"], projectTags: [], schemaCompatibility: {}, sideEffects: [], estimatedCostClass: "text_low" },
         inputBindings: inputArtifactTypes.map((artifactType) => ({ bindingName: "source", artifactType, required: true, min: 1, max: 1, schemaConstraint: ">=1.0 <2.0", requiresApproval: false })),
         outputBindings: [],

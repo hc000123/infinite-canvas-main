@@ -5,7 +5,7 @@ import type { SkillOption } from "../../../../services/api/admin-skills.ts";
 import { buildCanvasOrchestratorSystemPrompt, resolveCanvasOrchestratorDecision } from "./canvas-orchestrator-plan.ts";
 
 const option = (skillVersionId: string, input: string, output: string): SkillOption => ({
-    skillId: skillVersionId.replace("version", "skill"), skillName: skillVersionId, skillVersionId, version: "1.0.0", summary: "", ownerType: "system", ownerProjectId: "", isRecommended: true,
+    skillId: skillVersionId.replace("version", "skill"), skillName: skillVersionId, skillVersionId, version: "1.0.0", contentHash: `sha256:${skillVersionId}`, summary: "", ownerType: "system", ownerProjectId: "", isRecommended: true,
     manifest: { capabilities: [`capability.${skillVersionId}`], inputArtifactTypes: [input], outputArtifactTypes: [output], projectTags: [], schemaCompatibility: {}, sideEffects: [], estimatedCostClass: "text_low" },
     inputBindings: [{ bindingName: input, artifactType: input, required: true, min: 1, max: 1, schemaConstraint: ">=1.0 <2.0", requiresApproval: false }],
     outputBindings: [{ bindingName: output, artifactType: output, min: 1, max: 1, schemaVersion: "1.0.0" }],

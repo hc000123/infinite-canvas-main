@@ -52,6 +52,7 @@ type SkillOption struct {
 	OwnerProjectID string               `json:"ownerProjectId"`
 	SkillVersionID string               `json:"skillVersionId"`
 	Version        string               `json:"version"`
+	ContentHash    string               `json:"contentHash"`
 	IsRecommended  bool                 `json:"isRecommended"`
 	Manifest       SkillManifest        `json:"manifest"`
 	InputBindings  []ArtifactInputSpec  `json:"inputBindings"`
@@ -347,7 +348,7 @@ func ListSkillOptions(userID, projectID string, filter SkillOptionFilter) ([]Ski
 			}
 			items = append(items, SkillOption{
 				SkillID: skill.ID, SkillName: skill.Name, Summary: skill.Summary, OwnerType: skill.OwnerType, OwnerProjectID: skill.OwnerProjectID,
-				SkillVersionID: version.ID, Version: version.Version, IsRecommended: version.ID == skill.RecommendedVersionID, Manifest: packageValue.Manifest,
+				SkillVersionID: version.ID, Version: version.Version, ContentHash: version.ContentHash, IsRecommended: version.ID == skill.RecommendedVersionID, Manifest: packageValue.Manifest,
 				InputBindings: inputBindings, OutputBindings: outputBindings,
 			})
 		}

@@ -102,7 +102,7 @@ git commit -m "feat: publish dynamic script skill 3.2.0"
 - Create: `web/src/app/(user)/projects/[id]/workflows/workflow-skill-options.test.mts`
 - Modify: `web/src/app/(user)/projects/[id]/workflows/components/workflow-route-preview.tsx`
 
-- [ ] **Step 1: 写标准 Workflow 与候选过滤失败测试**
+- [x] **Step 1: 写标准 Workflow 与候选过滤失败测试**
 
 Go 测试要求新标准 Workflow 是 `2.3.0`，`script` 节点不保存精确版本而保存稳定 Definition/capability：
 
@@ -120,13 +120,13 @@ assert.equal(defaultWorkflowSkillVersionId(node, options, {}), "script-3.1");
 assert.equal(defaultWorkflowSkillVersionId(node, options, { script: "script-3.2" }), "script-3.2");
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `go test ./service -run 'TestEnsureWorkflowSeedsPublishesComposableProductionTemplate|TestManualWorkflowSelection' -count=1 && cd web && node --experimental-strip-types --test 'src/app/(user)/projects/[id]/workflows/workflow-skill-options.test.mts'`
 
 Expected: FAIL，标准 Workflow 仍为 2.2.0 且过滤模块不存在。
 
-- [ ] **Step 3: 发布不可变 Workflow 2.3.0**
+- [x] **Step 3: 发布不可变 Workflow 2.3.0**
 
 更新系统种子常量为新版本 ID，不修改已存在的 2.2.0。只把剧本节点改为：
 
@@ -143,7 +143,7 @@ func manualSkillWorkflowNode(key, name, stageKey, outputType string, inputs []Wo
 
 3.1.0 与 3.2.0 都通过同一 `ListSkillOptions` 查询出现；其他节点的绑定与版本保持不变。
 
-- [ ] **Step 4: 实现节点级候选过滤与默认值**
+- [x] **Step 4: 实现节点级候选过滤与默认值**
 
 `workflow-skill-options.ts` 导出：
 
@@ -169,7 +169,7 @@ export function defaultWorkflowSkillVersionId(node: WorkflowNodeSpec, options: S
 
 在运行面板中每个节点只映射 `compatibleWorkflowSkillOptions(node, skillOptions)`；选择器标签增加摘要与 `contentHash` 短值（为此在 `SkillOption` 响应补充 `contentHash` 字段）。初始化时只填充空节点的推荐值，不覆盖用户现有选择。
 
-- [ ] **Step 5: 验证冻结不随推荐变化**
+- [x] **Step 5: 验证冻结不随推荐变化**
 
 在 `service/workflow_route_preview_test.go` 预检选择 3.2.0 后，把 Definition 推荐改成 3.1.0，再确认执行；断言 `detail.Preview.Nodes[0].SkillVersionID` 和创建的 Invocation Revision 仍为 3.2.0。
 
@@ -177,7 +177,7 @@ Run: `go test ./service -run 'TestEnsureWorkflowSeeds|TestManualWorkflowSelectio
 
 Expected: PASS。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add service/workflow_seed.go service/workflow_seed_test.go service/workflow_route_preview_test.go service/skill.go web/src/services/api/admin-skills.ts 'web/src/app/(user)/projects/[id]/workflows/workflow-skill-options.ts' 'web/src/app/(user)/projects/[id]/workflows/workflow-skill-options.test.mts' 'web/src/app/(user)/projects/[id]/workflows/components/workflow-route-preview.tsx'

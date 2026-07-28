@@ -49,6 +49,7 @@ func runSystemProductionWorkflowE2E(t *testing.T, mixed bool) {
 		ProjectID:         "project-1",
 		EpisodeID:         "episode-1",
 		InputArtifactRefs: []ArtifactRefInput{{BindingName: "source_text", ArtifactID: source.Artifact.ID, ContentHash: source.Artifact.ContentHash}},
+		ManualSelections:  map[string]string{"script": "skill-version-system-workflow-script-3.1.0"},
 		Parameters:        json.RawMessage(`{"format":"9:16","seriesType":"short_drama"}`),
 		IdempotencyKey:    "system-production-execution-e2e",
 	}
@@ -227,7 +228,7 @@ func TestEnsureWorkflowSeedsPublishesComposableProductionTemplate(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version.Version != "2.2.0" || len(packageValue.Nodes) != 12 || len(packageValue.InputArtifactTypes) != 1 || packageValue.InputArtifactTypes[0] != "source_text" {
+	if version.Version != "2.3.0" || len(packageValue.Nodes) != 12 || len(packageValue.InputArtifactTypes) != 1 || packageValue.InputArtifactTypes[0] != "source_text" {
 		t.Fatalf("package=%+v", packageValue)
 	}
 	for _, node := range packageValue.Nodes {
@@ -235,7 +236,8 @@ func TestEnsureWorkflowSeedsPublishesComposableProductionTemplate(t *testing.T) 
 			t.Fatalf("system production node must be Skill-only: %+v", node)
 		}
 	}
-	if packageValue.Nodes[0].SkillBinding.SkillVersionID != "skill-version-system-workflow-script-3.1.0" || packageValue.Nodes[1].SkillBinding.SkillVersionID != "skill-version-system-content-classifier-1.0.0" || packageValue.Nodes[6].SkillBinding.Mode != WorkflowSkillBindingTagRoute {
+	script := packageValue.Nodes[0].SkillBinding
+	if script.Mode != WorkflowSkillBindingManualBeforeRun || script.SkillID != "skill-system-workflow-script" || script.Capability != "workflow.stage.script" || script.SkillVersionID != "" || packageValue.Nodes[1].SkillBinding.SkillVersionID != "skill-version-system-content-classifier-1.0.0" || packageValue.Nodes[6].SkillBinding.Mode != WorkflowSkillBindingTagRoute {
 		t.Fatalf("template refs are not frozen: %+v", packageValue.Nodes)
 	}
 	video := packageValue.Nodes[10]
@@ -285,6 +287,7 @@ func TestSystemProductionWorkflowPreflightFreezesEveryNode(t *testing.T) {
 		ProjectID:         "project-1",
 		EpisodeID:         "episode-1",
 		InputArtifactRefs: []ArtifactRefInput{{BindingName: "source_text", ArtifactID: source.Artifact.ID, ContentHash: source.Artifact.ContentHash}},
+		ManualSelections:  map[string]string{"script": "skill-version-system-workflow-script-3.1.0"},
 		Parameters:        json.RawMessage(`{"format":"9:16","seriesType":"short_drama"}`),
 		IdempotencyKey:    "system-production-preflight",
 	})
@@ -316,6 +319,7 @@ func TestSystemProductionWorkflowRoutesHorizontalLongFormStoryboard(t *testing.T
 		ProjectID:         "project-1",
 		EpisodeID:         "episode-1",
 		InputArtifactRefs: []ArtifactRefInput{{BindingName: "source_text", ArtifactID: source.Artifact.ID, ContentHash: source.Artifact.ContentHash}},
+		ManualSelections:  map[string]string{"script": "skill-version-system-workflow-script-3.1.0"},
 		Parameters:        json.RawMessage(`{"format":"16:9","seriesType":"long_form"}`),
 		IdempotencyKey:    "system-production-horizontal-long",
 	})

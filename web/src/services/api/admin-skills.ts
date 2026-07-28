@@ -134,6 +134,7 @@ export type SkillOption = Pick<SkillDefinition, "ownerType" | "ownerProjectId" |
     skillName: string;
     skillVersionId: string;
     version: string;
+    contentHash: string;
     isRecommended: boolean;
     manifest: SkillManifest;
     inputBindings: SkillArtifactInputSpec[];

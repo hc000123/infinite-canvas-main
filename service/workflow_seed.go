@@ -9,8 +9,8 @@ import (
 
 const (
 	systemProductionWorkflowID        = "workflow-system-standard-production"
-	systemProductionWorkflowVersionID = "workflow-version-system-standard-production-2.2.0"
-	systemProductionWorkflowVersion   = "2.2.0"
+	systemProductionWorkflowVersionID = "workflow-version-system-standard-production-2.3.0"
+	systemProductionWorkflowVersion   = "2.3.0"
 )
 
 func EnsureWorkflowSeeds() error {
@@ -53,7 +53,7 @@ func EnsureWorkflowSeeds() error {
 
 func systemProductionWorkflowPackage() WorkflowPackage {
 	return WorkflowPackage{InputArtifactTypes: []string{"source_text"}, Nodes: []WorkflowNodeSpec{
-		skillWorkflowNode("script", "剧本整理", WorkflowSkillStageScript, "production_script", []WorkflowNodeInputBinding{
+		manualSkillWorkflowNode("script", "剧本整理", WorkflowSkillStageScript, "production_script", []WorkflowNodeInputBinding{
 			workflowRootBinding("source_text", "source_text"),
 		}),
 		exactSkillWorkflowNode("classify", "内容分类", "content-classifier", "content_profile", []WorkflowNodeInputBinding{
@@ -94,6 +94,20 @@ func systemProductionWorkflowPackage() WorkflowPackage {
 			workflowOutputBinding("video_prompt_package", "video_prompt_package", "video"),
 		}),
 	}}
+}
+
+func manualSkillWorkflowNode(key, name, stageKey, outputType string, inputs []WorkflowNodeInputBinding) WorkflowNodeSpec {
+	skillID := "skill-system-workflow-" + stageKey
+	return WorkflowNodeSpec{
+		NodeKey: key, Name: name, ExecutorType: WorkflowExecutorSkill,
+		SkillBinding: &WorkflowSkillBinding{
+			Mode: WorkflowSkillBindingManualBeforeRun, SkillID: skillID, Capability: "workflow.stage." + stageKey,
+			ExpectedOutputArtifactType: outputType, CandidateSkillIDs: []string{skillID},
+		},
+		InputBindings: inputs, OutputArtifactType: outputType,
+		ConfirmationPolicy: WorkflowConfirmationPolicy{RequireBeforeRun: true, RequireReview: true},
+		RetryPolicy:        WorkflowRetryPolicy{MaxAttempts: 2},
+	}
 }
 
 func exactSkillWorkflowNode(key, name, skillKey, outputType string, inputs []WorkflowNodeInputBinding) WorkflowNodeSpec {

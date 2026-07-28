@@ -9,6 +9,7 @@ import type { SkillOption } from "@/services/api/admin-skills";
 import { createArtifact, type ArtifactEnvelope } from "@/services/api/invocations";
 import { previewWorkflowVersion, type WorkflowPackage, type WorkflowPreviewInput, type WorkflowRoutePreview } from "@/services/api/workflow-registry";
 import { workflowRouteIssueLabel, workflowSourceInputNames } from "../workflow-editor-model";
+import { compatibleWorkflowSkillOptions, defaultWorkflowSkillVersionId } from "../workflow-skill-options";
 
 export type WorkflowPreparedRun = {
     artifact: ArtifactEnvelope;
@@ -36,6 +37,20 @@ export function WorkflowRoutePreviewPanel({ versionId, packageValue, projectId, 
     }, [onPrepared, packageFingerprint, versionId]);
 
     const manualNodes = useMemo(() => packageValue?.nodes.filter((node) => node.executorType === "skill" && node.skillBinding?.mode === "manual_before_run") || [], [packageValue]);
+    useEffect(() => {
+        setManualSelections((current) => {
+            const next = { ...current };
+            let changed = false;
+            for (const node of manualNodes) {
+                const value = defaultWorkflowSkillVersionId(node, skillOptions, current);
+                if (value && value !== current[node.nodeKey]) {
+                    next[node.nodeKey] = value;
+                    changed = true;
+                }
+            }
+            return changed ? next : current;
+        });
+    }, [manualNodes, skillOptions]);
     const mutation = useMutation({
         mutationFn: async () => {
             if (!versionId || !packageValue) throw new Error("请先选择 Workflow 版本");
@@ -80,7 +95,7 @@ export function WorkflowRoutePreviewPanel({ versionId, packageValue, projectId, 
                 <label><span className="mb-1 block text-xs text-[var(--studio-text-muted)]">内容文本</span><Input.TextArea value={sourceText} rows={7} placeholder="粘贴剧本、场景说明或其他来源文本" onChange={(event) => { setSourceText(event.target.value); invalidate(); }} /></label>
                 <div className="grid gap-3 md:grid-cols-2"><label><span className="mb-1 block text-xs text-[var(--studio-text-muted)]">分集 ID（可选）</span><Input value={episodeId} onChange={(event) => { setEpisodeId(event.target.value); invalidate(); }} /></label><label><span className="mb-1 block text-xs text-[var(--studio-text-muted)]">项目路由标签</span><Select mode="tags" className="w-full" value={projectTags} tokenSeparators={[",", "，"]} placeholder="如 short_drama、vertical" onChange={(value) => { setProjectTags(value); invalidate(); }} /></label></div>
                 <label><span className="mb-1 block text-xs text-[var(--studio-text-muted)]">运行参数 JSON</span><Input.TextArea value={parametersText} autoSize={{ minRows: 2, maxRows: 6 }} onChange={(event) => { setParametersText(event.target.value); invalidate(); }} /></label>
-                {manualNodes.length ? <div className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3"><div className="mb-3 text-sm font-semibold">运行前手动选择</div><div className="space-y-3">{manualNodes.map((node) => <label key={node.nodeKey} className="block"><span className="mb-1 block text-xs text-[var(--studio-text-muted)]">{node.name} · {node.outputArtifactType}</span><Select showSearch optionFilterProp="label" allowClear className="w-full" value={manualSelections[node.nodeKey]} options={skillOptions.map((option) => ({ value: option.skillVersionId, label: `${option.skillName} v${option.version} · ${option.manifest.capabilities.join("+")} · ${option.manifest.outputArtifactTypes.join("+")}` }))} onChange={(skillVersionId) => { setManualSelections((current) => ({ ...current, [node.nodeKey]: skillVersionId || "" })); invalidate(); }} /></label>)}</div></div> : null}
+                {manualNodes.length ? <div className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3"><div className="mb-3 text-sm font-semibold">运行前手动选择</div><div className="space-y-3">{manualNodes.map((node) => <label key={node.nodeKey} className="block"><span className="mb-1 block text-xs text-[var(--studio-text-muted)]">{node.name} · {node.outputArtifactType}</span><Select showSearch optionFilterProp="label" allowClear className="w-full" value={manualSelections[node.nodeKey]} options={compatibleWorkflowSkillOptions(node, skillOptions).map((option) => ({ value: option.skillVersionId, label: `${option.skillName} v${option.version}${option.isRecommended ? "（推荐）" : ""} · ${option.summary || "无摘要"} · ${option.contentHash.slice(0, 14)}…` }))} onChange={(skillVersionId) => { setManualSelections((current) => ({ ...current, [node.nodeKey]: skillVersionId || "" })); invalidate(); }} /></label>)}</div></div> : null}
                 <Button type="primary" icon={<FileSearch className="size-4" />} loading={mutation.isPending} disabled={!sourceText.trim()} onClick={() => mutation.mutate()}>创建 Artifact 并预览路由</Button>
                 {preview ? <PreviewResult preview={preview} /> : null}
             </div>

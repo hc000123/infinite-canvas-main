@@ -2,7 +2,47 @@ package service
 
 import (
 	"testing"
+
+	"github.com/basketikun/infinite-canvas/model"
+	"github.com/basketikun/infinite-canvas/repository"
 )
+
+func TestWorkflowExecutionKeepsManualSkillVersionAfterRecommendationChanges(t *testing.T) {
+	setupInvocationServiceTest(t)
+	setupSystemProductionWorkflowModels(t)
+	stamp := now()
+	if _, err := repository.SaveUser(model.User{ID: "user-1", Username: "manual-freeze", Credits: 100, Status: model.UserStatusActive, CreatedAt: stamp, UpdatedAt: stamp}); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureWorkflowSeeds(); err != nil {
+		t.Fatal(err)
+	}
+	source := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"公交站"}`)
+	preflight, err := PreflightWorkflowExecution("user-1", WorkflowExecutionPreflightInput{
+		WorkflowVersionID: systemProductionWorkflowVersionID, ProjectID: "project-1", EpisodeID: "episode-1",
+		InputArtifactRefs: []ArtifactRefInput{{BindingName: "source_text", ArtifactID: source.Artifact.ID, ContentHash: source.Artifact.ContentHash}},
+		ManualSelections:  map[string]string{"script": "skill-version-system-workflow-script-3.2.0"}, IdempotencyKey: "manual-script-freeze",
+	})
+	if err != nil || !preflight.Preview.Executable || preflight.Preview.Nodes[0].SkillVersionID != "skill-version-system-workflow-script-3.2.0" {
+		t.Fatalf("preflight=%+v err=%v", preflight, err)
+	}
+	skill, ok, err := repository.GetSkillDefinition("skill-system-workflow-script")
+	if err != nil || !ok {
+		t.Fatalf("skill=%+v ok=%v err=%v", skill, ok, err)
+	}
+	skill.RecommendedVersionID = "skill-version-system-workflow-script-3.1.0"
+	if err := repository.SaveSkillDefinition(skill); err != nil {
+		t.Fatal(err)
+	}
+	confirmed, err := ConfirmWorkflowExecution("user-1", preflight.Run.ID, WorkflowExecutionConfirmationInput{Revision: 1, Fingerprint: preflight.Run.ConfirmationFingerprint, RequirementCodes: preflight.ConfirmationRequirements})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invocation, err := GetInvocationDetail("user-1", confirmed.Nodes[0].InvocationID)
+	if err != nil || len(invocation.Revisions) != 1 || invocation.Revisions[0].SkillVersionID != "skill-version-system-workflow-script-3.2.0" || invocation.Revisions[0].SkillContentHash != preflight.Preview.Nodes[0].SkillContentHash {
+		t.Fatalf("invocation=%+v err=%v", invocation, err)
+	}
+}
 
 func TestPreviewWorkflowRouteRequiresManualSelection(t *testing.T) {
 	fixture := workflowPreviewFixture(t)
