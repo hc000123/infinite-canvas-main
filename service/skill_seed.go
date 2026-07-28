@@ -221,6 +221,9 @@ func loadSkillSeedFiles(stageKey string) (map[string]string, error) {
 		if err != nil || entry.IsDir() {
 			return err
 		}
+		if stageKey == WorkflowSkillStageScript && path == prefix+"/dynamic-script-3.2.0.md" {
+			return nil
+		}
 		content, err := skillSeedFS.ReadFile(path)
 		if err != nil {
 			return err

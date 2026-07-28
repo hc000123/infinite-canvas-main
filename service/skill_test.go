@@ -2,12 +2,46 @@ package service
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/repository"
 )
+
+func TestSkillRegistryKeepsOptionsAndExactResolutionIdenticalAndIsolated(t *testing.T) {
+	setupInvocationServiceTest(t)
+	skill, version := seedInvocationSkill(t, invocationSkillSeed{
+		ID: "cross-entry-project-skill", VersionID: "cross-entry-project-skill-v1", Version: "1.0.0", OwnerType: model.SkillOwnerProject, Recommended: true,
+		Mutate: func(pkg *SkillPackage) { pkg.Manifest.Capabilities = []string{"workflow.stage.cross_entry"} },
+	})
+	filter := SkillOptionFilter{Capability: "workflow.stage.cross_entry", InputArtifactType: "source_text", OutputArtifactType: "production_script"}
+	options, err := ListSkillOptions("user-1", "project-1", filter)
+	if err != nil || len(options) != 1 {
+		t.Fatalf("options=%+v err=%v", options, err)
+	}
+	option := options[0]
+	resolved, err := ResolveExactSkillVersion("user-1", "project-1", version.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if option.SkillID != skill.ID || option.SkillVersionID != version.ID || option.ContentHash != resolved.Version.ContentHash ||
+		!reflect.DeepEqual(option.Manifest, resolved.Package.Manifest) ||
+		!reflect.DeepEqual(option.InputBindings, resolved.Package.InputContract.ArtifactInputs) ||
+		!reflect.DeepEqual(option.OutputBindings, resolved.Package.OutputContract.ArtifactOutputs) {
+		t.Fatalf("registry drift option=%+v resolved=%+v", option, resolved)
+	}
+	for _, foreign := range []struct{ userID, projectID string }{{"user-2", "project-1"}, {"user-1", "project-2"}} {
+		items, listErr := ListSkillOptions(foreign.userID, foreign.projectID, filter)
+		if listErr != nil || len(items) != 0 {
+			t.Fatalf("foreign catalog leaked for %+v: items=%+v err=%v", foreign, items, listErr)
+		}
+		if _, resolveErr := ResolveExactSkillVersion(foreign.userID, foreign.projectID, version.ID); resolveErr == nil {
+			t.Fatalf("foreign exact resolution leaked for %+v", foreign)
+		}
+	}
+}
 
 func TestPublishSkillVersionRequiresMatchingPassingEvaluation(t *testing.T) {
 	setupAITaskTestDB(t)

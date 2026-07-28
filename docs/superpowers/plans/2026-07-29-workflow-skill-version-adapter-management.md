@@ -460,7 +460,7 @@ git commit -m "feat: add project skill management"
 - Modify: `docs/pending-test.md`
 - Modify: `CHANGELOG.md`
 
-- [ ] **Step 1: 写跨入口一致性回归测试**
+- [x] **Step 1: 写跨入口一致性回归测试**
 
 同一项目中用 `ListSkillOptions`、`ResolveExactSkillVersion`、Workflow preview 和画布总控 Catalog 解析同一个已发布版本，断言 Version ID、ContentHash、capability 和输入输出契约一致；另建其他用户/项目的 Project Skill，断言不出现在当前项目查询、Workflow 手选和直接 Invocation 解析中。
 
@@ -469,7 +469,7 @@ if workflowNode.SkillVersionID != option.SkillVersionID || workflowNode.SkillCon
 if _, err := ResolveExactSkillVersion("user-other", "project-other", projectVersion.ID); err == nil { t.Fatal("project skill leaked") }
 ```
 
-- [ ] **Step 2: 运行服务端和前端定向验证**
+- [x] **Step 2: 运行服务端和前端定向验证**
 
 Run: `go test ./service ./handler ./router -run 'Skill|WorkflowAdapter|WorkflowExecution|WorkflowRoute|CanvasOrchestrator' -count=1`
 
@@ -479,17 +479,17 @@ Run: `cd web && node --experimental-strip-types --test src/services/api/project-
 
 Expected: PASS。
 
-- [ ] **Step 3: 更新文档且保留用户现有修改**
+- [x] **Step 3: 更新文档且保留用户现有修改**
 
 `docs/backend-database.md` 说明不新增 Adapter 表：Adapter 快照冻结在 `workflow_execution_revisions.route_preview_json`，派生来源在 Artifact 父引用和 `workflow.adapter` extension。将已完成事项从 `docs/todo.md` 移入 `docs/pending-test.md`，只追加本版本可测试行为，不覆盖当前未提交内容；`CHANGELOG.md` 的 `Unreleased` 只做版本级归纳。
 
-- [ ] **Step 4: 检查不可变性与工作区边界**
+- [x] **Step 4: 检查不可变性与工作区边界**
 
 Run: `git diff --check && git status --short`
 
 Expected: 无空白错误；原有用户修改 `docs/superpowers/specs/2026-07-28-seedance-prompt-workflow-skill-package-design.md` 与 `skills/` 保持未暂存且内容未被改写。
 
-- [ ] **Step 5: 提交文档与回归测试**
+- [x] **Step 5: 提交文档与回归测试**
 
 ```bash
 git add service/skill_test.go service/workflow_route_preview_test.go service/canvas_orchestrator_seed_test.go docs/backend-database.md docs/todo.md docs/pending-test.md CHANGELOG.md

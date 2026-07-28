@@ -44,6 +44,47 @@ func TestWorkflowExecutionKeepsManualSkillVersionAfterRecommendationChanges(t *t
 	}
 }
 
+func TestWorkflowPreviewUsesTheExactRegistryOptionSnapshot(t *testing.T) {
+	setupInvocationServiceTest(t)
+	skill, version := seedInvocationSkill(t, invocationSkillSeed{
+		ID: "workflow-cross-entry-skill", VersionID: "workflow-cross-entry-skill-v1", Version: "1.0.0", OwnerType: model.SkillOwnerProject, Recommended: true,
+		Mutate: func(pkg *SkillPackage) { pkg.Manifest.Capabilities = []string{"workflow.stage.cross_entry"} },
+	})
+	options, err := ListSkillOptions("user-1", "project-1", SkillOptionFilter{Capability: "workflow.stage.cross_entry"})
+	if err != nil || len(options) != 1 {
+		t.Fatalf("options=%+v err=%v", options, err)
+	}
+	root := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"公交站"}`)
+	created, err := CreateProjectWorkflow("user-1", WorkflowCreateInput{ProjectID: "project-1", Name: "跨入口一致性", Version: "1.0.0", Package: WorkflowPackage{
+		InputArtifactTypes: []string{"source_text"}, Nodes: []WorkflowNodeSpec{{
+			NodeKey: "script", Name: "剧本", ExecutorType: WorkflowExecutorSkill,
+			SkillBinding:       &WorkflowSkillBinding{Mode: WorkflowSkillBindingManualBeforeRun, Capability: "workflow.stage.cross_entry", CandidateSkillIDs: []string{skill.ID}},
+			InputBindings:      []WorkflowNodeInputBinding{{BindingName: "source", ArtifactType: "source_text", Source: WorkflowInputSource, WorkflowInputName: "source", Required: true}},
+			OutputArtifactType: "production_script",
+		}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	published, err := PublishWorkflowVersion("user-1", created.Version.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := PreviewWorkflowVersion("user-1", published.Version.ID, WorkflowPreviewInput{
+		ProjectID: "project-1", EpisodeID: "episode-1",
+		InputArtifactRefs: []ArtifactRefInput{{BindingName: "source", ArtifactID: root.Artifact.ID, ContentHash: root.Artifact.ContentHash}},
+		ManualSelections:  map[string]string{"script": version.ID},
+	})
+	if err != nil || !preview.Executable || len(preview.Nodes) != 1 {
+		t.Fatalf("preview=%+v err=%v", preview, err)
+	}
+	option, node := options[0], preview.Nodes[0]
+	resolved, err := ResolveExactSkillVersion("user-1", "project-1", node.SkillVersionID)
+	if err != nil || node.SkillVersionID != option.SkillVersionID || node.SkillContentHash != option.ContentHash || resolved.Version.ContentHash != option.ContentHash {
+		t.Fatalf("workflow registry drift option=%+v node=%+v resolved=%+v err=%v", option, node, resolved, err)
+	}
+}
+
 func TestPreviewWorkflowRouteRequiresManualSelection(t *testing.T) {
 	fixture := workflowPreviewFixture(t)
 	preview, err := PreviewWorkflowVersion(fixture.userID, fixture.versionID, WorkflowPreviewInput{

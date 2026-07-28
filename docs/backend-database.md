@@ -102,18 +102,20 @@ Plan 状态包括 `draft`、`preflight`、`awaiting_confirmation`、`running`、
 
 ### Workflow Registry 与 Composer Runtime
 
-Workflow 只保存 DAG、路由、条件、审批和重试策略。正式生产版本与新建节点只引用独立发布的 Skill，不复制其正文、Schema 或质量门；历史 Agent 节点仍可读取，但项目编辑器不再新增或修改。发布版本不可修改；每次执行预检都会冻结 Workflow 内容哈希、节点解析结果、输入 Artifact、手选版本、参数、额度和确认指纹。
+Workflow 只保存 DAG、路由、条件、审批、确定性 Adapter 引用和重试策略。正式生产版本与新建节点只引用独立发布的 Skill，不复制其正文、Schema 或质量门；历史 Agent 节点仍可读取，但项目编辑器不再新增或修改。发布版本不可修改；运行前先解析用户手选的精确 Skill Version，再由预检冻结 Workflow 内容哈希、节点解析结果、输入 Artifact、手选版本、Adapter 快照、参数、额度和确认指纹。
 
 | 表 | 说明 | 关键索引 / 约束 |
 | ---- | ---- | ---- |
 | `workflow_definitions` | Workflow 稳定身份、系统 / 项目所有权、标签、启用状态和推荐版本。系统 Workflow 可见但只读，项目 Workflow 按用户与项目隔离。 | 所有者类型、用户、项目和名称组成唯一索引；推荐版本、项目和启用状态有查询索引。 |
 | `workflow_versions` | 可编辑草稿或不可变发布版本，保存完整 DAG Package 与规范内容哈希。 | `workflow_id + version` 唯一；状态和内容哈希有索引；只有 `draft` 可更新。 |
 | `workflow_executions` | 一次 Workflow 运行的聚合头，保存精确版本、项目 / 分集、当前 revision、状态、预计额度、幂等键和确认指纹。 | `user_id + idempotency_key` 唯一；Workflow、版本、项目、分集和状态有查询索引。 |
-| `workflow_execution_revisions` | 追加式执行 Revision，冻结路由预览、输入 Artifact、手选版本、参数、确认项和额度。 | `workflow_execution_id + revision` 唯一；用户、版本、内容哈希和指纹有索引。 |
+| `workflow_execution_revisions` | 追加式执行 Revision，冻结路由预览、输入 Artifact、手选 Skill 版本、Adapter ID / 版本 / 内容哈希 / 规则快照、参数、确认项和额度。 | `workflow_execution_id + revision` 唯一；用户、版本、内容哈希和指纹有索引。 |
 | `workflow_node_executions` | 每个 DAG 节点的运行投影，记录拓扑序、Skill 执行器、Invocation、状态、输出 Artifact 和稳定错误码；Agent Plan 坐标仅为历史兼容字段。 | `workflow_execution_id + revision + node_key` 唯一；Invocation、Agent Plan、节点和状态有索引。 |
 | `workflow_execution_confirmations` | 对精确 revision、指纹、额度和 requirement code 集合的确认凭证。 | `workflow_execution_id + revision` 唯一；用户和指纹有索引。 |
 
 Workflow 状态包括 `preflight`、`awaiting_confirmation`、`running`、`needs_review`、`completed`、`blocked`、`partial`、`failed` 和 `cancelled`。节点只有在依赖 Artifact 已批准且确定性条件通过后才会启动；正式节点统一委托 Invocation Runtime。刷新页面只读取已有 execution / revision / node 坐标，不创建新的运行记录。
+
+Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保存在服务端版本化代码 Registry 中，预检把精确规则快照冻结进 `workflow_execution_revisions.route_preview_json`；执行产出的派生 Artifact 保留全部父引用，并在 `artifacts.extensions_json` 的 `workflow.adapter` 下记录 Adapter ID、版本、内容哈希、输入 / 输出契约和规则。相同快照与相同父 Artifact 重试得到相同内容哈希，Schema 失败不会修改原 Artifact。
 
 ### users
 
@@ -536,11 +538,11 @@ Workflow 对浏览器本地素材、分镜或生产包完成受控 Apply 后的�
 
 ### skill_definitions
 
-通用 Skill 稳定身份表。记录名称、说明、`system` / `project` 所有者、项目归属、启用状态和当前推荐版本；不保存版本正文。
+通用 Skill 稳定身份表。记录名称、说明、`system` / `project` 所有者、创建用户、项目归属、启用状态和当前推荐版本；不保存版本正文。System Skill 只允许管理员写，Project Skill 按创建用户与项目隔离；复制 System Skill 会创建新的 Project Definition 和 Draft，不改变源记录。
 
 ### skill_versions
 
-Skill 不可变版本表。`skill_id + version` 唯一；分别保存 Manifest、逻辑文件、输入契约、输出契约、质量门、内容哈希和评测摘要。发布后不可原地修改。
+Skill 不可变版本表。`skill_id + version` 唯一；分别保存 Manifest、逻辑文件、输入契约、输出契约、质量门、内容哈希和评测摘要。只有 Draft 可原地编辑；发布、推荐、归档和停用相互独立，运行只冻结精确 Version ID 与内容哈希。未引用 Draft 和从未发布的 Definition 可安全删除，已发布、已归档、已评测、已绑定或被 Workflow / Agent / Invocation 引用的记录禁止物理删除。
 
 ### workflow_stage_skill_bindings
 
@@ -548,7 +550,7 @@ Skill 不可变版本表。`skill_id + version` 唯一；分别保存 Manifest�
 
 ### skill_evaluations / skill_audit_logs
 
-通用 Skill 的冻结试运行、同输入对比、发布、推荐与回滚记录。试运行不写正式工作流阶段或业务资产。
+通用 Skill 的冻结试运行、同输入对比，以及创建、复制、编辑、发布、推荐、回滚、归档、停用和安全删除审计。试运行不写正式工作流阶段或业务资产。
 
 ### workflow_media_batches
 

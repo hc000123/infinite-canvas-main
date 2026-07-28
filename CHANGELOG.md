@@ -5,7 +5,9 @@
 + [新增] 新增统一 Artifact 与 Invocation Runtime，独立 Skill 调用可冻结版本、预检契约、追踪质量门并在审核后幂等 Apply。
 + [新增] 新增可版本化 Agent Registry 与顺序 Agent Plan Runtime，作为唯一画布总控的临时计划和历史兼容底座；继续冻结版本和额度，并通过统一 Invocation / Artifact 链逐步审核交接。
 + [新增] 项目新增 Skill-only Workflow 中心，支持固定、标签和运行前手选路由、契约校验、版本发布、成本预览、审批、重试、取消及 Artifact 轨迹恢复；历史 Agent 节点只读。
-+ [新增] 新增内容标签分类、角色 / 场景 / 道具独立资产 Brief、三类资产成图、竖屏短剧与横屏中长剧分镜 9 个可独立发布 Skill；标准生产 Workflow 升级为 12 个 Skill 节点的 `2.2.0`，并行生成三类资产图片并按制作参数路由分镜版本。
++ [新增] 新增内容标签分类、角色 / 场景 / 道具独立资产 Brief、三类资产成图、竖屏短剧与横屏中长剧分镜 9 个可独立发布 Skill；标准生产 Workflow 当前为 12 个 Skill 节点的 `2.3.0`，并行生成三类资产图片、按制作参数路由分镜版本，并在运行前选择剧本 Skill 精确版本。
++ [新增] 新增项目 Skill 管理入口和 System → Project Draft 复制，支持创建者权限隔离、校验评测、发布与推荐分离、归档、停用及引用安全删除；Workflow、画布 Agent 与 API 共用同一 Skill Registry。
++ [新增] 新增动态剧本 Skill `3.2.0` 可选版本与确定性 Workflow Adapter；运行预检冻结 Skill / Adapter 精确版本、内容哈希和规则快照，派生 Artifact 保留完整父引用且不改写上下游 Skill 能力。
 + [新增] 生图工作台可直接调用已发布 Skill，统一完成 Artifact 输入匹配、版本/额度冻结、人工审核、提示词或 `asset_rendition` 图片写回、本地消费回执与素材保存，并保留精确 Invocation 追溯坐标。
 + [新增] 画布节点可从悬浮工具栏或检查器直接调用已发布 Skill，批准后的文本 Artifact 与图片型 `asset_rendition` 会按类型创建带完整 Invocation 溯源的下游节点并建立连线，重放和刷新不会重复产物。
 + [新增] 画布对话固定使用唯一“画布总控”，可基于受限 Skill Catalog 直接回答或生成经版本、步数和 Artifact 契约校验的 Temporary Plan，并通过统一 Agent Plan / Invocation / Artifact Runtime 逐步确认、审核和幂等写回最终产物。
