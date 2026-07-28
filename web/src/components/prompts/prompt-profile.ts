@@ -1,5 +1,5 @@
 import type { Prompt, PromptNodeGroup, PromptSlot } from "@/services/api/prompts";
-import { normalizePromptMetadata, promptSlotLabel } from "./prompt-template";
+import { normalizePromptMetadata, promptSlotLabel } from "./prompt-template.ts";
 
 export type PromptProfileScope = "personal" | "project";
 export type PromptRecipeNodeGroup = Extract<PromptNodeGroup, "image" | "video">;
