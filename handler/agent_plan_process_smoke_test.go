@@ -113,8 +113,13 @@ func TestAgentPlanProcessSmokeRejectsBadConfirmationWithoutCost(t *testing.T) {
 	var artifact service.ArtifactEnvelope
 	decodeAgentPlanProcessData(t, artifactResponse, &artifact)
 	planResponse := agentPlanProcessCall(t, baseURL, http.MethodPost, "/api/v1/agent-plans", userToken, map[string]any{
-		"projectId": "process-project", "episodeId": "process-episode", "agentId": "agent-system-preproduction", "agentVersionId": "agent-version-system-preproduction-1.0.0",
-		"goal": "优化剧本并提取资产", "idempotencyKey": "process-smoke-plan", "sourceArtifactRefs": []map[string]any{{"bindingName": "source_text", "artifactId": artifact.Artifact.ID, "contentHash": artifact.Artifact.ContentHash}},
+		"projectId": "process-project", "episodeId": "process-episode", "agentId": "agent-system-canvas-orchestrator", "agentVersionId": "agent-version-system-canvas-orchestrator-1.0.0",
+		"goal": "优化剧本", "idempotencyKey": "process-smoke-plan", "sourceArtifactRefs": []map[string]any{{"bindingName": "source_text", "artifactId": artifact.Artifact.ID, "contentHash": artifact.Artifact.ContentHash}},
+		"skillOverrides": []map[string]any{{
+			"stepKey": "script", "label": "剧本整理", "capability": "workflow.stage.script",
+			"skillId": "skill-system-workflow-script", "skillVersionId": "skill-version-system-workflow-script-3.1.0",
+			"required": true, "parameters": map[string]any{}, "expectedOutputType": "production_script",
+		}},
 	})
 	if planResponse.Code != 0 {
 		t.Fatalf("create Plan=%s", planResponse.Raw)

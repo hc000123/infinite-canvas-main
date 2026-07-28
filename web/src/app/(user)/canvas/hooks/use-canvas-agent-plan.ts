@@ -4,13 +4,14 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { useEffect, useMemo, useState } from "react";
 
 import { fetchSkillOptions, type SkillOption } from "@/services/api/admin-skills";
-import { fetchAgents } from "@/services/api/agent-registry";
+import { fetchAgent } from "@/services/api/agent-registry";
 import { cancelAgentPlan, confirmAgentPlan, continueAgentPlan, createAgentPlanRevision, fetchAgentPlan, preflightAgentPlan, type AgentPlanDetail } from "@/services/api/agent-plans";
 import { applyInvocation, getArtifact, getInvocation, reviewInvocation, type ArtifactEnvelope, type InvocationDetail } from "@/services/api/invocations";
 import type { CapabilityConsumeTrace } from "@/components/capability-runtime/use-capability-run";
 import { useUserStore } from "@/stores/use-user-store";
 import type { CanvasAgentPlanRun } from "../types";
 import { activeAgentPlanInvocationId, buildCanvasAgentApplyInput, canvasAgentPlanActions, cloneCanvasAgentSkillRefs, finalAgentPlanOutputRefs } from "../utils/canvas-agent-plan-model";
+import { CANVAS_ORCHESTRATOR_AGENT_ID } from "../utils/canvas-orchestrator-plan";
 
 const activeInvocationStatuses = new Set(["queued", "running", "cancel_requested"]);
 const errorText = (error: unknown) => (error instanceof Error ? error.message : error ? String(error) : "");
@@ -24,9 +25,9 @@ export function useCanvasAgentPlan({ run, projectId, sourceMessageId, enabled, o
 
     const planKey = ["canvas-agent-plan", run.planId];
     const planQuery = useQuery({ queryKey: planKey, queryFn: () => fetchAgentPlan(run.planId), enabled: enabled && Boolean(run.planId), retry: false });
-    const agentsQuery = useQuery({ queryKey: ["canvas-agent-options", projectId], queryFn: () => fetchAgents(projectId), enabled: enabled && Boolean(projectId), retry: false, staleTime: 30_000 });
+    const agentQuery = useQuery({ queryKey: ["canvas-agent", CANVAS_ORCHESTRATOR_AGENT_ID, projectId], queryFn: () => fetchAgent(CANVAS_ORCHESTRATOR_AGENT_ID, projectId), enabled: enabled && Boolean(projectId), retry: false, staleTime: 30_000 });
     const skillsQuery = useQuery({ queryKey: ["canvas-agent-skill-options", projectId], queryFn: () => fetchSkillOptions(token, { projectId }), enabled: enabled && Boolean(token), retry: false, staleTime: 30_000 });
-    const agent = agentsQuery.data?.find((item) => item.agent.id === run.agentId);
+    const agent = agentQuery.data;
     const allowedSkillOptions = useMemo(() => filterAllowedSkillOptions(skillsQuery.data || [], agent?.recommendedPackage?.skillAccessPolicy), [agent?.recommendedPackage?.skillAccessPolicy, skillsQuery.data]);
 
     const plan = planQuery.data;
@@ -76,7 +77,7 @@ export function useCanvasAgentPlan({ run, projectId, sourceMessageId, enabled, o
         mutationFn: async () => {
             const detail = invocationQuery.data || (activeInvocationId ? await getInvocation(activeInvocationId) : undefined);
             if (!detail?.artifactSetHash || detail.run.latestAttempt < 1) throw new Error("当前 Invocation 尚无可审核产物");
-            await reviewInvocation(detail.run.id, { decision: "approved", attempt: detail.run.latestAttempt, artifactSetHash: detail.artifactSetHash, comment: "画布对话 Agent 人工批准" });
+            await reviewInvocation(detail.run.id, { decision: "approved", attempt: detail.run.latestAttempt, artifactSetHash: detail.artifactSetHash, comment: "画布总控人工批准" });
             return continueAgentPlan(run.planId);
         },
         onSuccess: (detail) => {
@@ -119,8 +120,8 @@ export function useCanvasAgentPlan({ run, projectId, sourceMessageId, enabled, o
         allowRuntimeSkillOverride: Boolean(agent?.recommendedPackage?.executionPolicy.allowRuntimeSkillOverride),
         actions,
         busy: mutations.some((mutation) => mutation.isPending),
-        loading: planQuery.isLoading || agentsQuery.isLoading || skillsQuery.isLoading,
-        error: errorText(planQuery.error || agentsQuery.error || skillsQuery.error || invocationQuery.error || artifactQueries.find((query) => query.error)?.error || mutationError),
+        loading: planQuery.isLoading || agentQuery.isLoading || skillsQuery.isLoading,
+        error: errorText(planQuery.error || agentQuery.error || skillsQuery.error || invocationQuery.error || artifactQueries.find((query) => query.error)?.error || mutationError),
         replaceSkill,
         moveSkill,
         removeSkill,

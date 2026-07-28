@@ -6,7 +6,10 @@ import (
 	"github.com/basketikun/infinite-canvas/model"
 )
 
-const AgentPlannerConfiguredChain = "configured_chain"
+const (
+	AgentPlannerConfiguredChain = "configured_chain"
+	AgentPlannerCatalog         = "catalog_plan"
+)
 
 type AgentStepInputBinding struct {
 	BindingName       string `json:"bindingName"`

@@ -31,7 +31,7 @@ func run() error {
 	if err := service.EnsureSkillSeeds(); err != nil {
 		return err
 	}
-	if err := service.EnsureAgentSeeds(); err != nil {
+	if err := service.EnsureCanvasOrchestratorSeed(); err != nil {
 		return err
 	}
 	if err := service.EnsureWorkflowSeeds(); err != nil {

@@ -57,7 +57,6 @@ type ProjectEpisodeBoardProps = {
     onCreateCanvas: () => void;
     onEditCanvasPreset: (canvasId: string) => void;
     onEditEpisodeTitle: (row: ProjectEpisodeBoardRow) => void;
-    onOpenAgentSettings: () => void;
     onOpenWorkflowCenter: () => void;
     onOpenProjectCache: () => void;
     onEditProject: () => void;
@@ -96,7 +95,6 @@ export function ProjectEpisodeBoard({
     onCreateCanvas,
     onEditCanvasPreset,
     onEditEpisodeTitle,
-    onOpenAgentSettings,
     onOpenWorkflowCenter,
     onOpenProjectCache,
     onEditProject,
@@ -115,14 +113,6 @@ export function ProjectEpisodeBoard({
             <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--studio-border-subtle)] px-4 py-4 sm:px-8">
                 <nav aria-label="项目详情视图" className="order-1 flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-4">
                     <ProjectDetailNavButton active={activeTab === "episodes"} icon={ListChecks} label="分集" onClick={() => onTabChange("episodes")} />
-                    <button
-                        type="button"
-                        className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"
-                        onClick={onOpenAgentSettings}
-                    >
-                        <Bot className="size-4" />
-                        Agent 中心
-                    </button>
                     <button
                         type="button"
                         className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"
@@ -350,10 +340,10 @@ function ProjectEpisodeProductionPanel({
                                 </div>
                                 <h2 className="mt-1 break-words text-lg font-semibold leading-tight text-[var(--studio-text-primary)]">{selectedEpisode ? episodeDisplayTitle(selectedEpisode) : "还没有分集剧本"}</h2>
                             </div>
-                            {selectedEpisode ? (
+                                    {selectedEpisode ? (
                                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                                    <Tag className="m-0" icon={<Bot className="size-3.5" />}>
-                                        系统剧本制作 Agent
+                                    <Tag className="m-0" icon={<Wand2 className="size-3.5" />}>
+                                        剧本 Skill
                                     </Tag>
                                     <Select aria-label="剧本优化 Skill" size="small" loading={scriptSkillsLoading} value={selectedSkillVersionId || undefined} options={scriptSkillOptions} placeholder="选择 Skill 版本" className="min-w-44" onChange={(value) => onScriptSkillChange(selectedEpisode.id, value)} />
                                     <Button size="small" icon={<Wand2 className="size-3.5" />} loading={selectedOptimizing} disabled={!selectedScript || !selectedSkillVersionId} onClick={() => onOptimizeEpisodeScript(selectedEpisode.id, selectedSkillVersionId)}>

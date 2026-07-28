@@ -8,19 +8,22 @@ import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { nanoid } from "nanoid";
 import { requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
-import { fetchAgents } from "@/services/api/agent-registry";
+import { fetchAgent } from "@/services/api/agent-registry";
+import { fetchSkillOptions } from "@/services/api/admin-skills";
 import { createAgentPlan } from "@/services/api/agent-plans";
 import { createArtifact, type ArtifactEnvelope } from "@/services/api/invocations";
 import type { CapabilityConsumeTrace } from "@/components/capability-runtime/use-capability-run";
 import { uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { useUserStore } from "@/stores/use-user-store";
 import { useAgentRunnerStore } from "../../projects/use-agent-runner-store";
 import { useCreativeProjectStore } from "../../projects/use-creative-project-store";
 import { type CanvasAssistantImage, type CanvasAssistantMessage, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasConnection, type CanvasNodeData } from "../types";
 import { executeAssistantCanvasReadAction, parseAssistantCanvasActionSuggestion, type AssistantCanvasAction, type AssistantCanvasReadAction } from "../utils/canvas-assistant-actions";
 import { buildAssistantReferenceImages, buildChatMessages, buildDebugAssistantActions, summarizeLocalImageInput, updateLocalImageResultSize } from "../utils/canvas-assistant-panel-utils";
-import { buildCanvasAgentPlanRequest, buildCanvasAgentSourceText, canvasAgentCandidates, cloneCanvasAgentSkillRefs } from "../utils/canvas-agent-plan-model";
+import { buildCanvasAgentPlanRequest, buildCanvasAgentSourceText } from "../utils/canvas-agent-plan-model";
+import { buildCanvasOrchestratorSystemPrompt, CANVAS_ORCHESTRATOR_AGENT_ID, filterCanvasOrchestratorSkillCatalog, resolveCanvasOrchestratorDecision } from "../utils/canvas-orchestrator-plan";
 import { buildAssistantReferences } from "../utils/canvas-assistant-references";
 import { buildCanvasAssistantWorkflowContext } from "../utils/canvas-assistant-workflow-context";
 import { buildWorkflowAssistantActionSuggestion } from "../utils/canvas-assistant-workflow-actions";
@@ -91,9 +94,9 @@ export function CanvasAssistantPanel({
     const workflowOutputs = useAgentRunnerStore((state) => state.workflowOutputs);
     const workflowMappingPreviews = useAgentRunnerStore((state) => state.workflowMappingPreviews);
     const workflowAppliedPreviewItemIds = useAgentRunnerStore((state) => state.workflowAppliedPreviewItemIds);
+    const token = useUserStore((state) => state.token);
     const [width, setWidth] = useState(390);
     const [mode, setMode] = useState<AssistantMode>("ask");
-    const [selectedAgentId, setSelectedAgentId] = useState("");
     const [prompt, setPrompt] = useState("");
     const [isRunning, setIsRunning] = useState(false);
     const [closing, setClosing] = useState(false);
@@ -122,9 +125,9 @@ export function CanvasAssistantPanel({
     const selectedNodeKey = useMemo(() => Array.from(selectedNodeIds).sort().join(","), [selectedNodeIds]);
     const allSelectedReferences = useMemo(() => buildAssistantReferences(nodes, selectedNodeIds, connections), [connections, nodes, selectedNodeIds]);
     const selectedReferences = useMemo(() => allSelectedReferences.filter((item) => !removedReferenceIds.has(item.id)), [allSelectedReferences, removedReferenceIds]);
-    const agentsQuery = useQuery({ queryKey: ["canvas-agent-options", projectId], queryFn: () => fetchAgents(projectId), enabled: Boolean(projectId), retry: false, staleTime: 30_000 });
-    const agentCandidates = useMemo(() => canvasAgentCandidates(agentsQuery.data || []), [agentsQuery.data]);
-    const selectedAgent = agentCandidates.find((item) => item.agent.id === selectedAgentId);
+    const orchestratorQuery = useQuery({ queryKey: ["canvas-orchestrator", projectId], queryFn: () => fetchAgent(CANVAS_ORCHESTRATOR_AGENT_ID, projectId), enabled: Boolean(projectId), retry: false, staleTime: 30_000 });
+    const skillsQuery = useQuery({ queryKey: ["canvas-orchestrator-skills", projectId], queryFn: () => fetchSkillOptions(token, { projectId }), enabled: Boolean(projectId && token), retry: false, staleTime: 30_000 });
+    const orchestratorCatalog = useMemo(() => filterCanvasOrchestratorSkillCatalog(skillsQuery.data || [], orchestratorQuery.data?.recommendedPackage?.skillAccessPolicy), [orchestratorQuery.data?.recommendedPackage?.skillAccessPolicy, skillsQuery.data]);
     const workflowContext = useMemo(
         () =>
             buildCanvasAssistantWorkflowContext({
@@ -235,58 +238,66 @@ export function CanvasAssistantPanel({
             });
             return;
         }
-        if (mode === "ask" && selectedAgent) {
-            await sendCanvasAgentPlanMessage(text, selectedAgent);
+        if (mode === "ask") {
+            await sendCanvasOrchestratorMessage(text);
             return;
         }
         await sendMessage(text, mode, messages);
     };
 
-    async function sendCanvasAgentPlanMessage(text: string, agent: (typeof agentCandidates)[number]) {
-        const packageValue = agent.recommendedPackage;
-        if (!packageValue) return;
+    async function sendCanvasOrchestratorMessage(text: string, history = messages, savedReferences?: CanvasAssistantReference[]) {
+        const requestConfig = { ...effectiveConfig, model: effectiveConfig.textModel || effectiveConfig.model };
+        if (!isAiConfigReady(requestConfig, requestConfig.model)) {
+            openConfigDialog(true);
+            return;
+        }
         const session = ensureActiveSession();
-        const refs = selectedReferences;
+        const refs = savedReferences || selectedReferences;
         const userMessage: CanvasAssistantMessage = { id: nanoid(), role: "user", mode: "ask", text, references: refs };
         const assistantId = nanoid();
         appendMessage(session.id, userMessage);
-        appendMessage(session.id, { id: assistantId, role: "assistant", mode: "ask", text: "正在创建 Temporary Plan", isLoading: true });
+        appendMessage(session.id, { id: assistantId, role: "assistant", mode: "ask", text: "画布总控正在判断", isLoading: true });
         setPrompt("");
         setIsRunning(true);
         try {
-            const skillRefs = cloneCanvasAgentSkillRefs(packageValue.defaultSkillRefs);
-            if (!skillRefs.length) throw new Error("当前 Agent 没有可运行的 Skill");
-            const sourceBindingName = skillRefs[0].inputBindings.find((binding) => !binding.fromStepKey)?.bindingName || "source_text";
+            const agent = orchestratorQuery.data;
+            const packageValue = agent?.recommendedPackage;
+            if (!agent || !packageValue || packageValue.plannerMode !== "catalog_plan" || !agent.agent.recommendedVersionId) throw new Error("画布总控尚未准备完成");
+            if (!orchestratorCatalog.length) throw new Error("当前没有可供画布总控使用的已发布 Skill");
+            const systemPrompt = buildCanvasOrchestratorSystemPrompt(packageValue.rolePrompt, orchestratorCatalog, packageValue.executionPolicy.maxSteps);
+            const rawDecision = await requestImageQuestion(requestConfig, await buildChatMessages([...history, userMessage], `${systemPrompt}\n\n${workflowContext.text}`));
+            const decision = resolveCanvasOrchestratorDecision(rawDecision, orchestratorCatalog, packageValue.executionPolicy.maxSteps);
+            if (decision.kind === "answer") {
+                updateMessage(session.id, assistantId, { text: decision.answer, isLoading: false });
+                return;
+            }
             const sourceText = buildCanvasAgentSourceText(text, refs);
             const sourceArtifact = await createArtifact({ artifactType: "source_text", schemaVersion: "1.0.0", projectId, episodeId, payload: { text: sourceText } });
             const detail = await createAgentPlan(
                 buildCanvasAgentPlanRequest({
                     projectId,
                     episodeId,
-                    agentId: agent.agent.id,
                     agentVersionId: agent.agent.recommendedVersionId,
                     goal: text,
                     sourceArtifact: { artifactId: sourceArtifact.artifact.id, contentHash: sourceArtifact.artifact.contentHash },
-                    sourceBindingName,
-                    skillRefs,
+                    sourceBindingName: decision.sourceBindingName,
+                    skillRefs: decision.skillRefs,
                     idempotencyKey: globalThis.crypto.randomUUID(),
                 }),
             );
             updateMessage(session.id, assistantId, {
-                text: `已创建 ${agent.agent.name} 的可编辑 Temporary Plan，确认前不会执行 Skill。`,
+                text: `${decision.summary}。已生成可编辑的临时计划，确认前不会执行 Skill。`,
                 isLoading: false,
                 agentPlanRun: {
                     planId: detail.plan.id,
-                    agentId: agent.agent.id,
                     agentVersionId: agent.agent.recommendedVersionId,
-                    agentName: agent.agent.name,
-                    sourceArtifactRef: { bindingName: sourceBindingName, artifactId: sourceArtifact.artifact.id, contentHash: sourceArtifact.artifact.contentHash },
+                    sourceArtifactRef: { bindingName: decision.sourceBindingName, artifactId: sourceArtifact.artifact.id, contentHash: sourceArtifact.artifact.contentHash },
                     sourceNodeIds: refs.map((reference) => reference.id).filter((id) => nodes.some((node) => node.id === id)),
-                    skillRefs,
+                    skillRefs: decision.skillRefs,
                 },
             });
         } catch (error) {
-            updateMessage(session.id, assistantId, { text: error instanceof Error ? error.message : "Temporary Plan 创建失败", isLoading: false });
+            updateMessage(session.id, assistantId, { text: error instanceof Error ? error.message : "画布总控处理失败", isLoading: false });
         } finally {
             setIsRunning(false);
         }
@@ -297,7 +308,8 @@ export function CanvasAssistantPanel({
         const userIndex = messages.slice(0, index).findLastIndex((item) => item.role === "user");
         const user = messages[userIndex];
         if (!user) return;
-        void sendMessage(user.text, user.mode, messages.slice(0, userIndex), user.references);
+        if (user.mode === "ask") void sendCanvasOrchestratorMessage(user.text, messages.slice(0, userIndex), user.references);
+        else void sendMessage(user.text, user.mode, messages.slice(0, userIndex), user.references);
     };
 
     const createDebugActionPreview = () => {
@@ -414,15 +426,11 @@ export function CanvasAssistantPanel({
             {view === "chat" ? (
                 <CanvasAssistantComposer
                     mode={mode}
-                    agentId={selectedAgentId}
-                    agentOptions={agentCandidates.map((item) => ({ value: item.agent.id, label: `${item.agent.name} · ${item.recommendedPackage?.defaultSkillRefs.length || 0} 步` }))}
-                    agentLoading={agentsQuery.isLoading}
                     prompt={prompt}
                     isRunning={isRunning}
                     references={selectedReferences}
                     config={effectiveConfig}
                     onModeChange={setMode}
-                    onAgentChange={setSelectedAgentId}
                     onPromptChange={setPrompt}
                     onSubmit={submit}
                     onConfigChange={updateConfig}

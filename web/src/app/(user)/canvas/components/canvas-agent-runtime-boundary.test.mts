@@ -4,16 +4,28 @@ import test from "node:test";
 
 const read = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("published Agent Runtime replaces the hardcoded Prompt Agent production path", async () => {
-    const [composer, panel, types] = await Promise.all([read("./canvas-assistant-composer.tsx"), read("./canvas-assistant-panel.tsx"), read("../types.ts")]);
+test("the unique canvas orchestrator replaces selectable production Agents", async () => {
+    const [composer, panel, types, planHook, planCard] = await Promise.all([
+        read("./canvas-assistant-composer.tsx"),
+        read("./canvas-assistant-panel.tsx"),
+        read("../types.ts"),
+        read("../hooks/use-canvas-agent-plan.ts"),
+        read("./canvas-agent-plan-card.tsx"),
+    ]);
+    const planRunType = types.match(/export type CanvasAgentPlanRun = \{[\s\S]*?\n\};/)?.[0] || "";
 
-    assert.match(composer, /PublishedAgentSelect/);
-    assert.match(composer, /label: "普通对话"/);
+    assert.match(composer, /画布总控/);
+    assert.doesNotMatch(composer, /PublishedAgentSelect|agentOptions|onAgentChange/);
     assert.doesNotMatch(composer, /PromptAgentSkillPackSelect|promptAgentSkillPacks/);
     assert.doesNotMatch(panel, /sendPromptAgentMessage|buildPromptAgentSystemContext|parsePromptAgentPlan|CanvasAssistantToolboxCard/);
-    assert.match(panel, /await sendMessage\(text, mode, messages\)/);
+    assert.match(panel, /sendCanvasOrchestratorMessage/);
     assert.match(panel, /if \(nextMode === "image"\)/);
     assert.doesNotMatch(types, /promptAgentPlan|promptAgentSkillPackId|promptAgentExecutionState/);
+    assert.doesNotMatch(planRunType, /agentId|agentName/);
+    assert.match(planHook, /fetchAgent\(CANVAS_ORCHESTRATOR_AGENT_ID/);
+    assert.doesNotMatch(planHook, /fetchAgent\(run\.agentId/);
+    assert.match(planCard, />画布总控</);
+    assert.doesNotMatch(planCard, /run\.agentName/);
 });
 
 test("hardcoded Prompt Agent Skill Pack and tool registry files are removed", async () => {

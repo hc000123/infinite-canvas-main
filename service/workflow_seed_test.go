@@ -100,9 +100,9 @@ func runSystemProductionWorkflowE2E(t *testing.T, mixed bool) {
 		parents                                                       []string
 	}
 	expected := []expectedNode{
-		{"script", WorkflowExecutorAgent, "agent-version-system-script-1.0.0", "skill-version-system-workflow-script-3.1.0", "production_script", []string{"source"}},
+		{"script", WorkflowExecutorSkill, "", "skill-version-system-workflow-script-3.1.0", "production_script", []string{"source"}},
 		{"classify", WorkflowExecutorSkill, "", "skill-version-system-content-classifier-1.0.0", "content_profile", []string{"script"}},
-		{"art", WorkflowExecutorAgent, "agent-version-system-art-1.0.0", "skill-version-system-workflow-art-3.1.0", "asset_catalog", []string{"script"}},
+		{"art", WorkflowExecutorSkill, "", "skill-version-system-workflow-art-3.1.0", "asset_catalog", []string{"script"}},
 		{"character_brief", WorkflowExecutorSkill, "", "skill-version-system-asset-brief-character-1.0.0", "asset_brief", []string{"art"}},
 		{"scene_brief", WorkflowExecutorSkill, "", "skill-version-system-asset-brief-scene-1.0.0", "asset_brief", []string{"art"}},
 		{"prop_brief", WorkflowExecutorSkill, "", "skill-version-system-asset-brief-prop-1.0.0", "asset_brief", []string{"art"}},
@@ -118,17 +118,10 @@ func runSystemProductionWorkflowE2E(t *testing.T, mixed bool) {
 	detail := confirmed
 	for index, want := range expected {
 		node := detail.Nodes[index]
-		if node.NodeKey != want.key || node.ExecutorType != want.executorType {
+		if node.NodeKey != want.key || node.ExecutorType != want.executorType || node.AgentPlanID != "" {
 			t.Fatalf("node[%d]=%#v want=%#v", index, node, want)
 		}
 		invocationID := node.InvocationID
-		if want.executorType == WorkflowExecutorAgent {
-			plan, err := GetAgentPlanDetail("user-1", node.AgentPlanID)
-			if err != nil || plan.Plan.AgentVersionID != want.agentVersionID || len(plan.Steps) != 1 {
-				t.Fatalf("node=%s plan=%#v err=%v", want.key, plan, err)
-			}
-			invocationID = plan.Steps[0].Step.InvocationID
-		}
 		if invocationID == "" {
 			t.Fatalf("node=%s did not start an invocation: %#v", want.key, node)
 		}
@@ -234,13 +227,15 @@ func TestEnsureWorkflowSeedsPublishesComposableProductionTemplate(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version.Version != "2.1.0" || len(packageValue.Nodes) != 12 || len(packageValue.InputArtifactTypes) != 1 || packageValue.InputArtifactTypes[0] != "source_text" {
+	if version.Version != "2.2.0" || len(packageValue.Nodes) != 12 || len(packageValue.InputArtifactTypes) != 1 || packageValue.InputArtifactTypes[0] != "source_text" {
 		t.Fatalf("package=%+v", packageValue)
 	}
-	if packageValue.Nodes[0].ExecutorType != WorkflowExecutorAgent || packageValue.Nodes[1].ExecutorType != WorkflowExecutorSkill || packageValue.Nodes[2].ExecutorType != WorkflowExecutorAgent {
-		t.Fatalf("template must combine Agent and Skill nodes: %+v", packageValue.Nodes)
+	for _, node := range packageValue.Nodes {
+		if node.ExecutorType != WorkflowExecutorSkill || node.AgentRef != nil || node.SkillBinding == nil {
+			t.Fatalf("system production node must be Skill-only: %+v", node)
+		}
 	}
-	if packageValue.Nodes[0].AgentRef.AgentVersionID != "agent-version-system-script-1.0.0" || packageValue.Nodes[1].SkillBinding.SkillVersionID != "skill-version-system-content-classifier-1.0.0" || packageValue.Nodes[6].SkillBinding.Mode != WorkflowSkillBindingTagRoute {
+	if packageValue.Nodes[0].SkillBinding.SkillVersionID != "skill-version-system-workflow-script-3.1.0" || packageValue.Nodes[1].SkillBinding.SkillVersionID != "skill-version-system-content-classifier-1.0.0" || packageValue.Nodes[6].SkillBinding.Mode != WorkflowSkillBindingTagRoute {
 		t.Fatalf("template refs are not frozen: %+v", packageValue.Nodes)
 	}
 	video := packageValue.Nodes[10]

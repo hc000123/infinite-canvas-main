@@ -5,8 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { App, Button, Empty, Form, Input, Modal, Select, Spin } from "antd";
 import { Wand2 } from "lucide-react";
 
-import { confirmAgentPlan, continueAgentPlan, createAgentPlan, preflightAgentPlan } from "@/services/api/agent-plans";
-import { createArtifact, getInvocation, reviewInvocation } from "@/services/api/invocations";
+import { confirmInvocation, createArtifact, createInvocation, getInvocation, reviewInvocation } from "@/services/api/invocations";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasCreateProjectModal } from "../../canvas/components/canvas-create-project-modal";
 import { useCanvasStore } from "../../canvas/stores/use-canvas-store";
@@ -19,8 +18,7 @@ import { useOriginalWorkflowStore } from "../../original-workflow/use-original-w
 import { videoWorkflowEpisodeKey, videoWorkflowHref, videoWorkflowProjectSlug } from "../../original-workflow/video-workflow-routing";
 import { canvasIdsForCreativeProject, unfiledCanvasProjects } from "../creative-projects";
 import { editableCanvasPreset } from "../project-canvas-preset";
-import { approveScriptAgentResult, assertScriptReviewMatches, executeScriptAgentToReview, preflightScriptAgent, type ScriptAgentReviewResult } from "../script-agent-runtime";
-import { buildScriptSkillOverride } from "../script-skill-selection";
+import { approveScriptInvocationResult, assertScriptReviewMatches, executeScriptInvocationToReview, preflightScriptInvocation, type ScriptInvocationReviewResult } from "../script-invocation-runtime";
 import { useCreativeProjectStore } from "../use-creative-project-store";
 import { ProjectEpisodeBoard, type ProjectDetailTab, type ProjectEpisodeBoardRow } from "./components/project-episode-board";
 import { buildOriginalScriptEditPatch } from "./project-episode-script-edit";
@@ -35,7 +33,7 @@ type EpisodeImportFormValues = {
 type OptimizedImportDraft = {
     sourceScript: string;
     structuredScript?: StructuredEpisodeScript;
-    review?: ScriptAgentReviewResult;
+    review?: ScriptInvocationReviewResult;
 };
 
 export default function CreativeProjectDetailPage() {
@@ -206,26 +204,21 @@ export default function CreativeProjectDetailPage() {
         setEpisodeTitleDraft("");
     };
 
-    const runScriptAgentToReview = async (input: { episodeId?: string; episodeTitle: string; sourceScript: string; skillVersionId: string }) => {
-        if (!scriptSkills.agent || !scriptSkills.agentPackage) throw new Error("系统剧本制作 Agent 尚未准备完成");
-        const skillOverrides = buildScriptSkillOverride(scriptSkills.agentPackage, scriptSkills.options, input.skillVersionId);
-        const prepared = await preflightScriptAgent(
-            {
-                createArtifact: (artifactInput) => createArtifact(artifactInput as Parameters<typeof createArtifact>[0]),
-                createAgentPlan: (planInput) => createAgentPlan(planInput as Parameters<typeof createAgentPlan>[0]),
-                preflightAgentPlan,
-            },
-            { projectId: project.id, episodeId: input.episodeId, episodeTitle: input.episodeTitle, sourceText: input.sourceScript, agent: scriptSkills.agent, skillOverrides, idempotencyKey: globalThis.crypto.randomUUID() },
+    const runScriptSkillToReview = async (input: { episodeId?: string; sourceScript: string; skillVersionId: string }) => {
+        if (!scriptSkills.options.some((option) => option.skillVersionId === input.skillVersionId)) throw new Error("所选剧本 Skill 已失效");
+        const prepared = await preflightScriptInvocation(
+            { createArtifact, createInvocation },
+            { projectId: project.id, episodeId: input.episodeId, sourceText: input.sourceScript, skillVersionId: input.skillVersionId, idempotencyKey: globalThis.crypto.randomUUID() },
         );
         const confirmed = await new Promise<boolean>((resolve) => {
             modal.confirm({
-                title: "确认运行剧本制作 Agent？",
+                title: "确认运行剧本 Skill？",
                 content: (
                     <div className="space-y-2 text-sm">
                         <div>
-                            将冻结 <code>{prepared.preflight.plan.id}</code> 的 Agent / Skill 精确版本，预计上限 {prepared.preflight.plan.estimatedCredits} Credits。
+                            将冻结 Invocation <code>{prepared.preflight.run.id}</code> 和 Skill <code>{prepared.preflight.revision.skillVersion}</code>，预计上限 {prepared.preflight.executionPolicy.estimatedCredits} Credits。
                         </div>
-                        <div>{prepared.preflight.confirmationRequirements.map((item) => item.message).join("；") || "本次无额外确认项"}</div>
+                        <div>{prepared.preflight.confirmationRequirements.join("；") || "本次无额外确认项"}</div>
                         <div className="text-[var(--studio-text-muted)]">执行完成后只生成待审核 Artifact，不会自动写入分集。</div>
                     </div>
                 ),
@@ -236,10 +229,10 @@ export default function CreativeProjectDetailPage() {
             });
         });
         if (!confirmed) return undefined;
-        return executeScriptAgentToReview({ confirmAgentPlan, continueAgentPlan, getInvocation }, prepared.preflight);
+        return executeScriptInvocationToReview({ confirmInvocation, getInvocation }, prepared.preflight);
     };
 
-    const approveScriptResult = (review: ScriptAgentReviewResult) => approveScriptAgentResult({ reviewInvocation, continueAgentPlan }, review);
+    const approveScriptResult = (review: ScriptInvocationReviewResult) => approveScriptInvocationResult({ reviewInvocation }, review);
 
     const confirmExistingEpisodeResult = (productionScript: string) =>
         new Promise<boolean>((resolve) => {
@@ -292,7 +285,7 @@ export default function CreativeProjectDetailPage() {
         if (!sourceScript) return message.warning("请先粘贴本集剧本");
         setScriptOptimizing(true);
         try {
-            const result = await runScriptAgentToReview({ episodeTitle: title, sourceScript, skillVersionId: scriptSkills.importVersionId });
+            const result = await runScriptSkillToReview({ sourceScript, skillVersionId: scriptSkills.importVersionId });
             if (!result) return;
             episodeImportForm.setFieldValue("scriptText", result.productionScript);
             setOptimizedImportDraft({ sourceScript, review: result });
@@ -323,7 +316,7 @@ export default function CreativeProjectDetailPage() {
         setOptimizingEpisodeId(episode.id);
         setScriptOptimizeErrors((state) => ({ ...state, [episode.id]: "" }));
         try {
-            const result = await runScriptAgentToReview({ episodeId: episode.id, episodeTitle: episode.title, sourceScript, skillVersionId });
+            const result = await runScriptSkillToReview({ episodeId: episode.id, sourceScript, skillVersionId });
             if (!result || !(await confirmExistingEpisodeResult(result.productionScript))) return;
             await approveScriptResult(result);
             await syncVideoWorkflowScript(episode.code || `EP${String(episode.order).padStart(2, "0")}`, result.productionScript);
@@ -430,7 +423,6 @@ export default function CreativeProjectDetailPage() {
                 onCreateCanvas={() => setCanvasCreateOpen(true)}
                 onEditCanvasPreset={setEditingCanvasPresetId}
                 onEditEpisodeTitle={openEpisodeTitleEdit}
-                onOpenAgentSettings={() => router.push(`/projects/${project.id}/agents`)}
                 onOpenWorkflowCenter={() => router.push(`/projects/${project.id}/workflows`)}
                 onOpenProjectCache={() => router.push(`/cache?projectId=${encodeURIComponent(project.id)}`)}
                 onEditProject={() => setProjectEditOpen(true)}
@@ -497,7 +489,7 @@ export default function CreativeProjectDetailPage() {
                         <div className="flex flex-wrap items-center justify-end gap-2">
                             <Select aria-label="导入剧本优化 Skill" size="small" loading={scriptSkills.loading} value={scriptSkills.importVersionId || undefined} options={scriptSkills.options.map((option) => ({ value: option.skillVersionId, label: `${option.skillName} · v${option.version}` }))} placeholder="选择 Skill 版本" className="min-w-44" onChange={scriptSkills.setImportVersionId} />
                             <Button size="small" icon={<Wand2 className="size-3.5" />} loading={scriptOptimizing} disabled={!scriptSkills.importVersionId} onClick={() => void optimizeEpisodeImportScript()}>
-                                运行系统剧本制作 Agent
+                                运行剧本 Skill
                             </Button>
                         </div>
                     </div>

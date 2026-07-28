@@ -1,12 +1,12 @@
 import type { AgentPlanCreateInput, AgentPlanDetail, AgentPlanStatus } from "../../../../services/api/agent-plans.ts";
-import type { AgentRegistryItem, AgentSkillRef } from "../../../../services/api/agent-registry.ts";
+import type { AgentSkillRef } from "../../../../services/api/agent-registry.ts";
 import type { ArtifactRefInput, InvocationApplyInput } from "../../../../services/api/invocations-contract.ts";
 import type { CanvasAssistantReference } from "../types.ts";
+import { CANVAS_ORCHESTRATOR_AGENT_ID } from "./canvas-orchestrator-plan.ts";
 
 export type CanvasAgentPlanRequestInput = {
     projectId: string;
     episodeId?: string;
-    agentId: string;
     agentVersionId: string;
     goal: string;
     sourceArtifact: Pick<ArtifactRefInput, "artifactId" | "contentHash">;
@@ -23,10 +23,6 @@ export function buildCanvasAgentSourceText(goal: string, references: CanvasAssis
     return [`用户目标：${goal.trim()}`, sections.length ? `画布引用：\n${sections.join("\n\n")}` : ""].filter(Boolean).join("\n\n");
 }
 
-export function canvasAgentCandidates(items: AgentRegistryItem[]) {
-    return items.filter((item) => item.agent.enabled && item.agent.recommendedVersionId && item.recommendedPackage && item.versions.some((version) => version.id === item.agent.recommendedVersionId && version.status === "published"));
-}
-
 export function cloneCanvasAgentSkillRefs(refs: AgentSkillRef[]) {
     return refs.map((ref) => ({ ...ref, inputBindings: ref.inputBindings.map((binding) => ({ ...binding })), parameters: { ...ref.parameters } }));
 }
@@ -35,7 +31,7 @@ export function buildCanvasAgentPlanRequest(input: CanvasAgentPlanRequestInput):
     return {
         projectId: input.projectId,
         episodeId: input.episodeId,
-        agentId: input.agentId,
+        agentId: CANVAS_ORCHESTRATOR_AGENT_ID,
         agentVersionId: input.agentVersionId,
         goal: input.goal.trim(),
         sourceArtifactRefs: [{ bindingName: input.sourceBindingName, artifactId: input.sourceArtifact.artifactId, contentHash: input.sourceArtifact.contentHash }],

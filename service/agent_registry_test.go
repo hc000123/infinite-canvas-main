@@ -93,6 +93,33 @@ func TestNormalizeAgentPackageRejectsDuplicateStepKeys(t *testing.T) {
 	}
 }
 
+func TestNormalizeAgentPackageAllowsCatalogPlannerWithoutDefaultSteps(t *testing.T) {
+	packageValue, err := NormalizeAgentPackage(AgentPackage{
+		RolePrompt:  "根据画布目标从已授权 Skill Catalog 形成临时计划。",
+		PlannerMode: AgentPlannerCatalog,
+		SkillAccessPolicy: AgentSkillAccessPolicy{
+			AllowedOwnerTypes: []model.SkillOwnerType{model.SkillOwnerSystem, model.SkillOwnerProject},
+		},
+		ExecutionPolicy: AgentExecutionPolicy{MaxSteps: 8, AllowRuntimeSkillOverride: true},
+	})
+	if err != nil || len(packageValue.DefaultSkillRefs) != 0 || packageValue.ExecutionPolicy.MaxSteps != 8 {
+		t.Fatalf("package=%#v err=%v", packageValue, err)
+	}
+}
+
+func TestNormalizeAgentPackageRejectsInvalidPlannerContracts(t *testing.T) {
+	tests := []AgentPackage{
+		{RolePrompt: "configured", PlannerMode: AgentPlannerConfiguredChain},
+		{RolePrompt: "catalog", PlannerMode: AgentPlannerCatalog, ExecutionPolicy: AgentExecutionPolicy{MaxSteps: 8}},
+		{RolePrompt: "catalog", PlannerMode: AgentPlannerCatalog, ExecutionPolicy: AgentExecutionPolicy{MaxSteps: 33, AllowRuntimeSkillOverride: true}},
+	}
+	for index, packageValue := range tests {
+		if _, err := NormalizeAgentPackage(packageValue); err == nil {
+			t.Fatalf("case %d unexpectedly accepted", index)
+		}
+	}
+}
+
 func TestAgentRegistryDraftLifecycleAndVisibility(t *testing.T) {
 	setupInvocationServiceTest(t)
 	skill, skillVersion := seedInvocationSkill(t, invocationSkillSeed{
