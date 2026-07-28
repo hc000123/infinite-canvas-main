@@ -1,5 +1,5 @@
 import type { AgentPlanCreateInput, AgentPlanDetail, AgentPlanStatus } from "../../../../services/api/agent-plans.ts";
-import type { AgentRegistryItem, AgentSkillRef } from "../../../../services/api/agent-registry.ts";
+import type { AgentSkillRef } from "../../../../services/api/agent-registry.ts";
 import type { ArtifactRefInput, InvocationApplyInput } from "../../../../services/api/invocations-contract.ts";
 import type { CanvasAssistantReference } from "../types.ts";
 
@@ -21,10 +21,6 @@ export function buildCanvasAgentSourceText(goal: string, references: CanvasAssis
         return text ? [`[${reference.title.trim() || reference.id}]\n${text}`] : [];
     });
     return [`用户目标：${goal.trim()}`, sections.length ? `画布引用：\n${sections.join("\n\n")}` : ""].filter(Boolean).join("\n\n");
-}
-
-export function canvasAgentCandidates(items: AgentRegistryItem[]) {
-    return items.filter((item) => item.agent.enabled && item.agent.recommendedVersionId && item.recommendedPackage && item.versions.some((version) => version.id === item.agent.recommendedVersionId && version.status === "published"));
 }
 
 export function cloneCanvasAgentSkillRefs(refs: AgentSkillRef[]) {

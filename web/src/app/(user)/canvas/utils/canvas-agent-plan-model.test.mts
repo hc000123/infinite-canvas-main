@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { AgentRegistryItem, AgentSkillRef } from "../../../../services/api/agent-registry.ts";
+import type { AgentSkillRef } from "../../../../services/api/agent-registry.ts";
 import {
     activeAgentPlanInvocationId,
     buildCanvasAgentApplyInput,
     buildCanvasAgentPlanRequest,
     buildCanvasAgentSourceText,
-    canvasAgentCandidates,
     cloneCanvasAgentSkillRefs,
     finalAgentPlanOutputRefs,
 } from "./canvas-agent-plan-model.ts";
@@ -48,31 +47,6 @@ test("builds a stable canvas message Apply receipt for the final Invocation", ()
             targetId: "message-1",
             payload: { surface: "canvas", targetKind: "message", targetId: "message-1", artifactIds: ["artifact-1", "artifact-2"] },
         },
-    );
-});
-
-test("exposes only enabled Agents with a published recommended package", () => {
-    const item = (id: string, enabled: boolean, recommendedVersionId: string, hasPackage: boolean): AgentRegistryItem => ({
-        agent: { id, name: id, summary: "", ownerType: "system", ownerUserId: "", ownerProjectId: "", enabled, recommendedVersionId, createdAt: "", updatedAt: "" },
-        tags: [],
-        versions: [{ id: recommendedVersionId || `${id}-draft`, agentId: id, version: "1.0.0", status: recommendedVersionId ? "published" : "draft", plannerMode: "configured_chain", contentHash: "hash", createdBy: "user", publishedAt: "", createdAt: "", updatedAt: "" }],
-        recommendedPackage: hasPackage
-            ? {
-                  rolePrompt: "",
-                  plannerMode: "configured_chain",
-                  defaultSkillRefs: skillRefs,
-                  skillAccessPolicy: { allowedSkillIds: [], allowedCapabilities: [], allowedOwnerTypes: [] },
-                  modelPolicy: { preferredModel: "", allowedModels: [], reasoningLevel: "", temperature: 0, maxOutputTokens: 0 },
-                  toolPolicy: { allowedTools: [] },
-                  executionPolicy: { maxSteps: 4, allowRuntimeSkillOverride: true, allowBatch: false },
-                  contentHash: "package-hash",
-              }
-            : undefined,
-    });
-
-    assert.deepEqual(
-        canvasAgentCandidates([item("agent-ready", true, "version-ready", true), item("agent-disabled", false, "version-disabled", true), item("agent-draft", true, "", false)]).map((entry) => entry.agent.id),
-        ["agent-ready"],
     );
 });
 
