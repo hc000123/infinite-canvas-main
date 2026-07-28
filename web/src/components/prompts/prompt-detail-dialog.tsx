@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Copy, FolderPlus } from "lucide-react";
-import { Button, Divider, Input, Modal, Select, Space, Tag } from "antd";
+import { Copy, FolderPlus, LockKeyhole } from "lucide-react";
+import { Alert, Button, Divider, Input, Modal, Select, Space, Tag } from "antd";
 
 import { formatPromptDate, type Prompt } from "@/services/api/prompts";
 import { useProductionBibleStore } from "@/app/(user)/canvas/stores/use-production-bible-store";
 import { itemsForProductionBibleProject, productionBibleKindLabel } from "@/app/(user)/canvas/utils/production-bible";
+import type { PromptRecipe } from "./prompt-profile";
 import { inputOutputKindLabel, productionBibleValueForVariable, promptNodeGroupLabel, promptTypeLabel, promptVariablesFromTemplate, renderPromptTemplate } from "./prompt-template";
 
 export function PromptDetailDialog({
@@ -16,6 +17,8 @@ export function PromptDetailDialog({
     onCopy,
     onSaveAsset,
     onUse,
+    onUseTemplate,
+    buildRecipe,
 }: {
     prompt: Prompt | null;
     projectId?: string;
@@ -23,12 +26,17 @@ export function PromptDetailDialog({
     onCopy: (prompt: string) => void;
     onSaveAsset?: (prompt: Prompt) => void;
     onUse?: (prompt: string) => void;
+    onUseTemplate?: (prompt: string) => void;
+    buildRecipe?: (template: string) => PromptRecipe;
 }) {
     const productionBibleItems = useProductionBibleStore((state) => state.items);
     const projectBibleItems = useMemo(() => (projectId ? itemsForProductionBibleProject(productionBibleItems, projectId) : []), [productionBibleItems, projectId]);
     const variables = useMemo(() => (prompt ? promptVariablesFromTemplate(prompt.prompt, prompt.metadata) : []), [prompt]);
     const [values, setValues] = useState<Record<string, string>>({});
     const finalPrompt = prompt ? renderPromptTemplate(prompt.prompt, values) : "";
+    const recipe = buildRecipe?.(finalPrompt);
+    const hasUnresolvedVariables = recipe?.warnings.some((warning) => warning.includes("变量未填写")) === true;
+    const recipeLoading = recipe?.warnings.some((warning) => warning.includes("正在读取")) === true;
     const coverUrl = prompt?.coverUrl.trim() || "";
     const hasPreviewPanel = Boolean(coverUrl || prompt?.preview);
 
@@ -106,6 +114,24 @@ export function PromptDetailDialog({
                                         </div>
                                     </>
                                 ) : null}
+                                {recipe ? (
+                                    <>
+                                        <Divider className="!my-4" />
+                                        <div className="text-sm font-semibold text-[var(--studio-text-primary)]">完整配方预览</div>
+                                        {recipe.warnings.map((warning) => <Alert key={warning} className="mt-3" type={warning.includes("失败") ? "warning" : "info"} showIcon message={warning} />)}
+                                        <div className="mt-3 space-y-2">
+                                            {recipe.sections.map((section) => (
+                                                <div key={section.id} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
+                                                    <div className="mb-1 flex items-center justify-between gap-2 text-xs font-medium text-[var(--studio-text-primary)]">
+                                                        <span>{promptRecipeSourceLabel(section.source)} · {section.title}</span>
+                                                        {section.locked ? <span className="flex items-center gap-1 text-[var(--studio-text-muted)]"><LockKeyhole className="size-3" />锁定</span> : null}
+                                                    </div>
+                                                    <div className="whitespace-pre-wrap text-xs leading-5 text-[var(--studio-text-secondary)]">{section.content}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
+                                ) : null}
                                 <div className="mt-4 text-xs text-[var(--studio-text-muted)]">
                                     创建：{formatPromptDate(prompt.createdAt)} · 更新：{formatPromptDate(prompt.updatedAt)}
                                 </div>
@@ -114,10 +140,11 @@ export function PromptDetailDialog({
                                         复制提示词
                                     </Button>
                                     {onUse ? (
-                                        <Button type="primary" onClick={() => onUse(finalPrompt)}>
-                                            插入提示词
+                                        <Button type="primary" disabled={hasUnresolvedVariables || recipeLoading} onClick={() => onUse(recipe?.text || finalPrompt)}>
+                                            {recipe ? "应用完整配方" : "插入提示词"}
                                         </Button>
                                     ) : null}
+                                    {onUseTemplate ? <Button onClick={() => onUseTemplate(finalPrompt)}>仅插入模板</Button> : null}
                                     {onSaveAsset ? (
                                         <Button icon={<FolderPlus className="size-4" />} onClick={() => onSaveAsset(prompt)}>
                                             加入我的素材
@@ -131,4 +158,12 @@ export function PromptDetailDialog({
             </Modal>
         </>
     );
+}
+
+function promptRecipeSourceLabel(source: PromptRecipe["sections"][number]["source"]) {
+    if (source === "company") return "公司标准";
+    if (source === "project") return "项目风格";
+    if (source === "personal") return "个人习惯";
+    if (source === "template") return "选用模板";
+    return "本次任务";
 }

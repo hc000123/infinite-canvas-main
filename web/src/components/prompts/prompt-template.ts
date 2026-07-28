@@ -1,4 +1,4 @@
-import type { Prompt, PromptMetadata, PromptNodeGroup, PromptTemplateType, PromptVariable } from "../../services/api/prompts";
+import type { Prompt, PromptKind, PromptMetadata, PromptNodeGroup, PromptPolicy, PromptSlot, PromptTemplateType, PromptVariable } from "../../services/api/prompts";
 import type { ProductionBibleItem } from "../../app/(user)/canvas/utils/production-bible";
 
 export const promptNodeGroupOptions: Array<{ label: string; value: PromptNodeGroup }> = [
@@ -17,6 +17,27 @@ export const promptTypeOptions: Array<{ label: string; value: PromptTemplateType
     { label: "工作流", value: "workflow" },
 ];
 
+export const promptKindOptions: Array<{ label: string; value: PromptKind }> = [
+    { label: "普通模板", value: "template" },
+    { label: "公司标准", value: "standard" },
+];
+
+export const promptPolicyOptions: Array<{ label: string; value: PromptPolicy }> = [
+    { label: "必选", value: "required" },
+    { label: "默认推荐", value: "recommended" },
+    { label: "手动使用", value: "optional" },
+];
+
+export const promptSlotOptions: Array<{ label: string; value: PromptSlot }> = [
+    { label: "视觉风格", value: "style" },
+    { label: "镜头", value: "camera" },
+    { label: "光线", value: "lighting" },
+    { label: "质量", value: "quality" },
+    { label: "负面约束", value: "negative" },
+    { label: "输出格式", value: "format" },
+    { label: "其他约束", value: "constraint" },
+];
+
 export const promptInputKindOptions = ["text", "image", "video", "audio", "multimodal"].map((value) => ({ label: inputOutputKindLabel(value), value }));
 export const promptOutputKindOptions = ["text", "image", "video", "asset", "workflow"].map((value) => ({ label: inputOutputKindLabel(value), value }));
 
@@ -26,6 +47,18 @@ export function promptTypeLabel(type?: string) {
 
 export function promptNodeGroupLabel(nodeGroup?: string) {
     return promptNodeGroupOptions.find((item) => item.value === nodeGroup)?.label || nodeGroup || "未分组";
+}
+
+export function promptKindLabel(kind?: string) {
+    return promptKindOptions.find((item) => item.value === kind)?.label || kind || "普通模板";
+}
+
+export function promptPolicyLabel(policy?: string) {
+    return promptPolicyOptions.find((item) => item.value === policy)?.label || policy || "手动使用";
+}
+
+export function promptSlotLabel(slot?: string) {
+    return promptSlotOptions.find((item) => item.value === slot)?.label || slot || "其他约束";
 }
 
 export function promptTypesForNodeGroup(nodeGroup?: string) {
@@ -63,6 +96,10 @@ export function normalizePromptMetadata(metadata?: PromptMetadata): PromptMetada
         outputKind: metadata?.outputKind || "",
         variables: normalizePromptVariables(metadata?.variables || []),
         favorite: metadata?.favorite === true,
+        kind: metadata?.kind || "template",
+        policy: metadata?.policy || "optional",
+        slot: metadata?.slot || "",
+        enabled: metadata?.enabled !== false,
     };
 }
 

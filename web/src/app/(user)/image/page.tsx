@@ -744,7 +744,17 @@ export default function ImagePage() {
                 targetId={imageCapabilityTargetId(sourceContext)}
                 onConsume={consumeCapabilityArtifacts}
             />
-            <PromptSelectDialog open={promptDialogOpen} nodeGroup="image" onOpenChange={setPromptDialogOpen} onSelect={(value) => { setPrompt(value); setCapabilityTrace(undefined); void capabilityStateStore.removeItem(imageCapabilityStorageKey(sourceContext)); }} />
+            <PromptSelectDialog
+                open={promptDialogOpen}
+                projectId={sourceContext.projectId || undefined}
+                nodeGroup="image"
+                onOpenChange={setPromptDialogOpen}
+                onSelect={(value) => {
+                    setPrompt(value);
+                    setCapabilityTrace(undefined);
+                    void capabilityStateStore.removeItem(imageCapabilityStorageKey(sourceContext));
+                }}
+            />
             <AssetPickerModal open={assetPickerOpen} title="选择参考图素材" defaultTab="library" defaultKind="image" allowedKinds={["image"]} onInsert={(payload) => void insertPickedAsset(payload)} onClose={() => setAssetPickerOpen(false)} />
             <Modal rootClassName="studio-modal" title="删除生成记录" open={deleteConfirmOpen} onCancel={() => setDeleteConfirmOpen(false)} onOk={deleteSelectedLogs} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
                 确定删除选中的 {selectedLogIds.length} 条生成记录吗？
