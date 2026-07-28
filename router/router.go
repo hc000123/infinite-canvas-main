@@ -295,6 +295,25 @@ func New() *gin.Engine {
 	})
 
 	skillAdmin := api.Group("/v1/admin", middleware.AdminAuth)
+	skillAdmin.GET("/agents", gin.WrapF(handler.AdminAgents))
+	skillAdmin.POST("/agents/:id/versions", func(c *gin.Context) {
+		handler.AdminCreateAgentVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	skillAdmin.GET("/agent-versions/:id", func(c *gin.Context) {
+		handler.AdminAgentVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	skillAdmin.PATCH("/agent-versions/:id", func(c *gin.Context) {
+		handler.AdminUpdateAgentVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	skillAdmin.POST("/agent-versions/:id/validate", func(c *gin.Context) {
+		handler.AdminValidateAgentVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	skillAdmin.POST("/agent-versions/:id/publish", func(c *gin.Context) {
+		handler.AdminPublishAgentVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	skillAdmin.PUT("/agents/:id/recommended-version", func(c *gin.Context) {
+		handler.AdminRecommendAgentVersion(c.Writer, c.Request, c.Param("id"))
+	})
 	skillAdmin.GET("/skills", gin.WrapF(handler.AdminSkills))
 	skillAdmin.POST("/skills", gin.WrapF(handler.AdminCreateSkill))
 	skillAdmin.PATCH("/skills/:id", func(c *gin.Context) {
