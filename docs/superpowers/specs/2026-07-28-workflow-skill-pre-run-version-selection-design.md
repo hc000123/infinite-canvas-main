@@ -1,4 +1,4 @@
-# Workflow Skill 运行前版本选择设计
+# Workflow Skill 运行前版本选择与组合适配设计
 
 ## 1. 背景
 
@@ -14,6 +14,8 @@
 - Workflow 启动后冻结每个节点的 Skill Version ID、内容哈希和快照。
 - 重试、恢复和刷新页面不改变已冻结的 Skill 版本。
 - 不兼容版本不得进入可执行选择列表。
+- 不同 Skill 通过稳定 Artifact 契约组合，不通过互相改写业务指令适配。
+- 上下游结构不一致时由独立、确定性 Adapter 转换，保留 Skill 的完整原生产物。
 
 ## 3. 非目标
 
@@ -22,6 +24,8 @@
 - 不让推荐版本自动覆盖用户本次已确认的选择。
 - 不为变更单个 Skill 重新发布整个 Workflow。
 - 不在本阶段引入 Skill 自动升级、自动回滚或运行中热更新。
+- 不为了满足某个下游 Skill，删减上游 Skill 的专业步骤、输出信息或质量标准。
+- 不使用 Adapter 重写、摘要、推断或创作业务内容。
 
 ## 4. 核心边界
 
@@ -45,6 +49,91 @@ Skill Definition 的 ID 在能力语义不变时保持稳定。例如“剧本�
 - 节点的输入绑定和下游依赖。
 
 Workflow Version 不保存用户本次手动选择的精确 Skill Version ID。
+
+### 4.4 Skill 保持原生能力
+
+Skill 只由自身的专业目标、输入契约和输出契约约束。下游 Skill 不得通过 Workflow 把自己的提示词格式、字段排列或专业规则反向注入上游 Skill。
+
+每次 Skill 调用必须先产出一份完整原生 Artifact，并保留：
+
+- Skill Version ID 和内容哈希。
+- 原生 payload 和 Artifact Schema 版本。
+- 输入 Artifact 父引用。
+- Skill 自身质量门结果。
+- 产生该 Artifact 的 Invocation 与 Attempt。
+
+标准 Artifact Schema 不应是所有下游需求的“最小公共字段”，而应承载该业务产物可长期复用的完整语义。下游只需其中一部分时，由 Adapter 生成派生 Artifact，不覆盖或裁剪原 Artifact。
+
+### 4.5 Workflow Adapter
+
+当上游 Artifact 已直接满足下游 Skill 的输入契约时，Workflow 直接连接，不增加 Adapter。只有上游 Artifact 结构与下游输入绑定不匹配时，才在两个 Skill 节点之间插入独立 Adapter 节点。Adapter 是已注册、可版本化、确定性的数据转换，不是另一个创作 Agent。
+
+Adapter 可以执行：
+
+- 按明确 JSON Path 选取和重命名字段。
+- 按明确规则拆分列表为多个 Artifact。
+- 合并多个 Artifact，同时保留每个父 Artifact 引用。
+- 映射稳定 ID、枚举值和引用关系。
+- 对空白、顺序、数组包装等非语义结构做规范化。
+
+Adapter 禁止执行：
+
+- 调用语言模型或图像模型。
+- 改写、缩写、摘要或美化业务内容。
+- 推断原 Artifact 中没有的事实。
+- 为下游需求删除或覆盖原 Artifact。
+- 绕过上游 Skill 的专业质量门。
+
+Adapter 输出是新的派生 Artifact。它必须记录 Adapter ID、Adapter Version、内容哈希、所有父 Artifact 引用和转换规则快照。Workflow Execution Revision 与 Skill Version 一样冻结 Adapter Version，保证恢复和重试可复现。
+
+Workflow 中的 Adapter 节点使用独立 `executorType: "adapter"`，并至少声明：
+
+```json
+{
+  "nodeKey": "script_for_storyboard",
+  "executorType": "adapter",
+  "adapterRef": {
+    "adapterId": "production-script-to-storyboard-input",
+    "adapterVersion": "1.0.0"
+  },
+  "inputBindings": [
+    {
+      "bindingName": "script",
+      "artifactType": "production_script",
+      "source": "node_output",
+      "fromNodeKey": "script",
+      "fromOutputBinding": "production_script",
+      "required": true
+    }
+  ],
+  "outputArtifactType": "storyboard_input"
+}
+```
+
+Adapter Registry 中的每个版本必须声明可接受的 Artifact 类型与 Schema 范围、输出 Artifact 类型与 Schema 版本、确定性转换函数和规则内容哈希。Workflow 发布时解析精确 Adapter Version，运行时不使用“最新版”漂移。
+
+典型组合为：
+
+```text
+剧本 Skill → production_script 原生 Artifact
+             ├─→ 资产提取 Adapter → asset_extraction_input → 资产 Skill
+             ├─→ 分镜输入 Adapter → storyboard_input → 分镜 Skill
+             └─→ 分类输入 Adapter → classification_input → 分类 Skill
+```
+
+三个下游分支都复用同一份完整剧本 Artifact，不要求剧本 Skill 为任何一个分支特制或削弱输出。
+
+### 4.6 三层契约
+
+不同 Skill 的组合使用三层契约，避免下游要求渗透进上游业务规则：
+
+1. **Skill 原生契约**：定义 Skill 要做什么、完整产物是什么、专业质量门是什么。
+2. **Workflow 连接契约**：定义节点之间传递的 Artifact 类型、Schema 范围、数量和是否必需。
+3. **Adapter 映射契约**：定义从哪些父 Artifact 读取哪些路径，如何生成派生 Artifact，以及如何验证没有丢失必需信息。
+
+Skill 专业质量门先于 Adapter 执行；Adapter 完成后再执行 Schema、父引用、映射覆盖率和信息丢失检查。两类质量门独立记录，不互相替代。
+
+下游 Skill 需要额外背景时，应通过新增必需或可选 Artifact 输入绑定传递，而不是让上游 Skill 把下游专用背景写进自己的原生产物。
 
 ## 5. 运行前选择流程
 
@@ -129,6 +218,9 @@ Workflow 运行面板按节点展示 Skill 选择器，每个选项至少显示�
 - 选中版本与上下游契约不兼容：预览和启动均阻断，返回具体节点、Artifact 类型和 Schema 原因。
 - 启动后发布新版本：当前 Run 继续使用快照，无需报错。
 - 已冻结版本后来被归档：当前 Run 仍可恢复和重试。
+- Workflow 引用的 Adapter Version 未注册或哈希不一致：阻断预览与启动。
+- Adapter 输出不符合目标 Schema：保留原 Artifact，将 Adapter 节点标记为失败，不启动下游 Skill。
+- Adapter 缺失必需父引用或映射覆盖不完整：在 Workflow 发布或运行预览阶段阻断。
 
 ## 11. 当前剧本 Skill 接入规则
 
@@ -155,6 +247,10 @@ Workflow 运行面板按节点展示 Skill 选择器，每个选项至少显示�
 6. 输出 Artifact 类型错误、Schema 不兼容、未发布或已归档的版本不能启动。
 7. 归档旧版本后，新任务不再显示该版本，历史运行仍可审计和重试。
 8. 本功能不修改其他 Skill 内容、版本、推荐状态或 Workflow 节点契约。
+9. 上游 Skill 产物在 Adapter 执行后仍作为独立原生 Artifact 保留，派生 Artifact 不覆盖原 payload。
+10. Adapter 不调用模型；相同 Adapter Version 对相同输入必须产生相同内容哈希。
+11. Adapter 派生 Artifact 记录全部父 Artifact 引用、Adapter Version 和转换规则快照。
+12. 更换下游 Skill 时，只允许调整该节点的版本选择、连接契约或 Adapter，不修改上游 Skill 的原生指令和质量门。
 
 ## 13. 实施边界
 
@@ -173,5 +269,9 @@ Workflow 运行面板按节点展示 Skill 选择器，每个选项至少显示�
 - 在 Workflow 运行面板展示选择器并把 `manualSelections` 传给预览和启动。
 - 在启动边界对选择做最终复核并冻结。
 - 将动态剧本 Skill 作为 `skill-system-workflow-script@3.2.0` 发布。
+- 为 Workflow 增加独立 Adapter 节点类型和可版本化的服务端 Adapter Registry。
+- 在 Workflow 预览时同时校验 Skill 契约和 Adapter 映射契约。
+- 在 Execution Revision 中冻结 Adapter ID、版本、哈希与规则快照。
+- 将 Adapter 结果保存为带完整父引用的新 Artifact，不改写原 Artifact。
 
-不为本功能新增第二套 Skill Registry、第二套 Workflow 预览协议或前端本地 Skill 版本库。
+不为本功能新增第二套 Skill Registry、第二套 Workflow 预览协议或前端本地 Skill 版本库。Adapter Registry 只注册安全的确定性转换，不存储 Skill 文本，也不承担 Agent 或 Skill 的业务创作职责。
