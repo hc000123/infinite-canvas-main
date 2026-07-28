@@ -105,6 +105,34 @@ func TestWorkflowRegistryRoutesRequireAuth(t *testing.T) {
 	}
 }
 
+func TestProjectSkillRoutesRequireAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	routes := []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/skills?projectId=project-1"},
+		{http.MethodPost, "/api/v1/skills"},
+		{http.MethodPatch, "/api/v1/skills/skill-1"},
+		{http.MethodDelete, "/api/v1/skills/skill-1"},
+		{http.MethodPost, "/api/v1/skills/skill-1/copy"},
+		{http.MethodPost, "/api/v1/skills/skill-1/versions"},
+		{http.MethodGet, "/api/v1/skill-versions/version-1"},
+		{http.MethodPatch, "/api/v1/skill-versions/version-1"},
+		{http.MethodDelete, "/api/v1/skill-versions/version-1"},
+		{http.MethodPost, "/api/v1/skill-versions/version-1/validate"},
+		{http.MethodPost, "/api/v1/skill-versions/version-1/evaluations"},
+		{http.MethodPost, "/api/v1/skill-versions/version-1/publish"},
+		{http.MethodPost, "/api/v1/skill-versions/version-1/archive"},
+		{http.MethodPut, "/api/v1/skills/skill-1/recommended-version"},
+	}
+	for _, route := range routes {
+		recorder := httptest.NewRecorder()
+		app.ServeHTTP(recorder, httptest.NewRequest(route.method, route.path, nil))
+		if recorder.Code == http.StatusNotFound || !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+			t.Fatalf("project Skill route did not reach auth: %s %s body=%s", route.method, route.path, recorder.Body.String())
+		}
+	}
+}
+
 func TestSuperAdminRoutesRequireSuperAdmin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	app := New()

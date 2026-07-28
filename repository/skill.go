@@ -248,3 +248,128 @@ func ListSkillAuditLogs(skillVersionIDs []string) ([]model.SkillAuditLog, error)
 	err = db.Where("skill_version_id IN ?", skillVersionIDs).Order("created_at desc").Limit(100).Find(&items).Error
 	return items, err
 }
+
+func ArchiveSkillVersionWithAudit(versionID, skillID, updatedAt string, audit model.SkillAuditLog) error {
+	database, err := DB()
+	if err != nil {
+		return err
+	}
+	return database.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.SkillVersion{}).Where("id = ? AND skill_id = ? AND status = ?", strings.TrimSpace(versionID), strings.TrimSpace(skillID), model.SkillVersionPublished).
+			Updates(map[string]any{"status": model.SkillVersionArchived, "updated_at": updatedAt})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return errors.New("只能归档已发布 Skill 版本")
+		}
+		if err := tx.Model(&model.SkillDefinition{}).Where("id = ? AND recommended_version_id = ?", skillID, versionID).
+			Updates(map[string]any{"recommended_version_id": "", "updated_at": updatedAt}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&audit).Error
+	})
+}
+
+func DeleteUnreferencedSkillDraftWithAudit(versionID string, audit model.SkillAuditLog) error {
+	database, err := DB()
+	if err != nil {
+		return err
+	}
+	return database.Transaction(func(tx *gorm.DB) error {
+		var version model.SkillVersion
+		if err := tx.First(&version, "id = ?", strings.TrimSpace(versionID)).Error; err != nil {
+			return err
+		}
+		if version.Status != model.SkillVersionDraft {
+			return errors.New("只能删除未发布草稿版本")
+		}
+		referenced, err := skillVersionReferenced(tx, version.ID)
+		if err != nil {
+			return err
+		}
+		if referenced {
+			return errors.New("Skill 草稿已有评测、绑定或引用，不能删除")
+		}
+		if err := tx.Create(&audit).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&model.SkillVersion{}, "id = ?", version.ID).Error
+	})
+}
+
+func DeleteUnpublishedSkillDefinitionWithAudit(skillID string, audit model.SkillAuditLog) error {
+	database, err := DB()
+	if err != nil {
+		return err
+	}
+	return database.Transaction(func(tx *gorm.DB) error {
+		var skill model.SkillDefinition
+		if err := tx.First(&skill, "id = ?", strings.TrimSpace(skillID)).Error; err != nil {
+			return err
+		}
+		if strings.HasPrefix(skill.ID, "skill-system-") {
+			return errors.New("系统种子 Skill 不能删除")
+		}
+		var versions []model.SkillVersion
+		if err := tx.Where("skill_id = ?", skill.ID).Find(&versions).Error; err != nil {
+			return err
+		}
+		for _, version := range versions {
+			if version.Status != model.SkillVersionDraft {
+				return errors.New("已发布或已归档 Skill 不能删除")
+			}
+			referenced, err := skillVersionReferenced(tx, version.ID)
+			if err != nil {
+				return err
+			}
+			if referenced {
+				return errors.New("Skill 已有评测、绑定或引用，不能删除")
+			}
+		}
+		var definitionRefs int64
+		pattern := "%" + skill.ID + "%"
+		if err := tx.Model(&model.WorkflowVersion{}).Where("package_json LIKE ?", pattern).Count(&definitionRefs).Error; err != nil {
+			return err
+		}
+		if definitionRefs == 0 {
+			if err := tx.Model(&model.AgentVersion{}).Where("default_skill_refs_json LIKE ? OR skill_access_policy_json LIKE ?", pattern, pattern).Count(&definitionRefs).Error; err != nil {
+				return err
+			}
+		}
+		if definitionRefs > 0 {
+			return errors.New("Skill Definition 已被 Workflow 或 Agent 引用，不能删除")
+		}
+		if err := tx.Create(&audit).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(&model.SkillVersion{}, "skill_id = ?", skill.ID).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&model.SkillDefinition{}, "id = ?", skill.ID).Error
+	})
+}
+
+func skillVersionReferenced(tx *gorm.DB, versionID string) (bool, error) {
+	checks := []struct {
+		model any
+		query string
+		args  []any
+	}{
+		{&model.SkillEvaluation{}, "skill_version_id = ?", []any{versionID}},
+		{&model.WorkflowStageSkillBinding{}, "skill_version_id = ?", []any{versionID}},
+		{&model.InvocationPreflightRevision{}, "skill_version_id = ?", []any{versionID}},
+		{&model.WorkflowVersion{}, "package_json LIKE ?", []any{"%" + versionID + "%"}},
+		{&model.AgentVersion{}, "default_skill_refs_json LIKE ?", []any{"%" + versionID + "%"}},
+	}
+	for _, check := range checks {
+		var count int64
+		if err := tx.Model(check.model).Where(check.query, check.args...).Count(&count).Error; err != nil {
+			return false, err
+		}
+		if count > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}

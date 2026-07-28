@@ -315,7 +315,7 @@ git commit -m "feat: add deterministic workflow adapters"
 - Modify: `router/router.go`
 - Modify: `router/router_test.go`
 
-- [ ] **Step 1: 写越权、复制、归档与删除失败测试**
+- [x] **Step 1: 写越权、复制、归档与删除失败测试**
 
 覆盖以下断言：项目创建者可以创建/更新草稿/发布/推荐/归档；其他用户得到“Skill 不存在或无权操作”；普通用户不能修改 System Skill；管理员可以管理全部 Skill；复制 System Skill 只创建 Project Definition + Draft，不改变源 Definition、Version、推荐状态；已发布或被引用记录无法物理删除。
 
@@ -326,13 +326,13 @@ if err != nil || copied.Skill.OwnerType != model.SkillOwnerProject || copied.Ski
 if _, err := DeleteOwnedSkillVersion("user-owner", false, published.ID); err == nil { t.Fatal("published version was deleted") }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `go test ./service ./handler ./router -run 'TestProjectSkill|TestSkillLifecycle' -count=1`
 
 Expected: FAIL，项目写接口和生命周期函数不存在。
 
-- [ ] **Step 3: 把权限校验放在 service 层**
+- [x] **Step 3: 把权限校验放在 service 层**
 
 新增统一守卫，管理员由 handler 传入 `isAdmin`，普通用户必须匹配 OwnerUserID：
 
@@ -347,7 +347,7 @@ func editableSkill(userID string, isAdmin bool, skillID string) (model.SkillDefi
 
 所有用户端写函数必须先调用该守卫；现有 admin handler 继续用管理员权限。项目用户不能把 OwnerProjectID 改为其他项目，Definition 的 Owner 在创建后不可改。
 
-- [ ] **Step 4: 实现归档、停用、复制与安全删除**
+- [x] **Step 4: 实现归档、停用、复制与安全删除**
 
 新增接口：
 
@@ -361,7 +361,7 @@ func DeleteOwnedSkillDefinition(userID string, isAdmin bool, skillID string) err
 
 归档只允许 Published → Archived，并清除指向该版本的推荐值；停用通过 `UpdateOwnedSkillDefinition`；安全删除在 repository 事务中检查 evaluation、workflow stage binding，以及 Workflow/Agent package JSON 和 Invocation Revision 对 Version ID 的引用。System seed ID（`skill-system-` 前缀）禁止删除 Definition。每个操作写 `SkillAuditLog`，项目操作的 `AdminID` 字段记录当前 actor ID。
 
-- [ ] **Step 5: 添加用户端 REST 路由**
+- [x] **Step 5: 添加用户端 REST 路由**
 
 新增：
 
@@ -384,7 +384,7 @@ PUT    /api/v1/skills/:id/recommended-version
 
 handler 只解析认证用户、`model.IsAdminRole(user.Role)`、输入并调用 service。读取 System Skill 允许但其写操作只允许 admin。
 
-- [ ] **Step 6: 运行定向测试并提交**
+- [x] **Step 6: 运行定向测试并提交**
 
 Run: `go test ./service ./handler ./router -run 'TestProjectSkill|TestSkillLifecycle|TestRouterExposes.*Skill' -count=1`
 

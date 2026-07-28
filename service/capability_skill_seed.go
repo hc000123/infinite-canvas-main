@@ -133,6 +133,7 @@ func ensureCapabilitySkillSeed(seed capabilitySkillSeed) error {
 	if err != nil {
 		return err
 	}
+	createdDefinition := !exists
 	if !exists {
 		skill = model.SkillDefinition{ID: skillID, Name: seed.Name, Summary: seed.Summary, OwnerType: model.SkillOwnerSystem, Enabled: true, CreatedAt: stamp, UpdatedAt: stamp}
 		if err := repository.CreateSkillAggregate(skill, version); err != nil {
@@ -154,7 +155,7 @@ func ensureCapabilitySkillSeed(seed capabilitySkillSeed) error {
 			return err
 		}
 	}
-	if skill.RecommendedVersionID == "" || strings.HasPrefix(skill.RecommendedVersionID, "skill-version-system-"+seed.Key+"-") {
+	if createdDefinition {
 		skill.Name, skill.Summary, skill.OwnerUserID, skill.Enabled, skill.RecommendedVersionID, skill.UpdatedAt = seed.Name, seed.Summary, "", true, versionID, stamp
 		return repository.SaveSkillDefinition(skill)
 	}

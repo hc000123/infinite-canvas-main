@@ -88,6 +88,7 @@ func ensureSkillSeed(seed skillSeed) error {
 	}
 	legacyVersion := publishedSeedSkillVersion(legacyVersionID, skillID, skillSeedVersion, stamp, legacyPackage)
 	invocationVersion := publishedSeedSkillVersion(invocationVersionID, skillID, skillInvocationSeedVersion, stamp, invocationPackage)
+	createdDefinition := !exists
 	if !exists {
 		skill = model.SkillDefinition{
 			ID: skillID, Name: seed.Name, Summary: seed.Summary, OwnerType: model.SkillOwnerSystem,
@@ -124,7 +125,7 @@ func ensureSkillSeed(seed skillSeed) error {
 	if err != nil {
 		return err
 	}
-	if passed && (skill.RecommendedVersionID == "" || strings.HasPrefix(skill.RecommendedVersionID, "skill-version-system-workflow-"+seed.StageKey+"-")) {
+	if passed && createdDefinition {
 		skill.Name = seed.Name
 		skill.Summary = seed.Summary
 		skill.OwnerUserID = ""
