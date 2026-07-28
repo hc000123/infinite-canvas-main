@@ -171,6 +171,9 @@ func resolveAgentPlanVersion(userID, projectID, agentID, versionID string) (mode
 }
 
 func normalizeAgentPlanInputs(packageValue AgentPackage, overrides []AgentSkillRef, sourceRefs []ArtifactRefInput) (AgentPackage, []ArtifactRefInput, error) {
+	if packageValue.PlannerMode == AgentPlannerCatalog && len(overrides) == 0 {
+		return packageValue, nil, safeMessageError{message: "catalog_plan Agent 必须提供运行时 Skill 计划"}
+	}
 	if len(overrides) > 0 {
 		if !packageValue.ExecutionPolicy.AllowRuntimeSkillOverride {
 			return packageValue, nil, safeMessageError{message: "该 Agent 不允许运行时替换 Skill"}
@@ -181,6 +184,9 @@ func normalizeAgentPlanInputs(packageValue AgentPackage, overrides []AgentSkillR
 		if err != nil {
 			return packageValue, nil, err
 		}
+	}
+	if len(packageValue.DefaultSkillRefs) == 0 {
+		return packageValue, nil, safeMessageError{message: "Agent Plan 必须至少包含一个 Skill Step"}
 	}
 	seen := map[string]bool{}
 	result := make([]ArtifactRefInput, 0, len(sourceRefs))

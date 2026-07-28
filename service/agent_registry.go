@@ -16,11 +16,17 @@ func NormalizeAgentPackage(value AgentPackage) (AgentPackage, error) {
 		return value, safeMessageError{message: "Agent 必须填写职位设定"}
 	}
 	value.PlannerMode = strings.ToLower(strings.TrimSpace(value.PlannerMode))
-	if value.PlannerMode != AgentPlannerConfiguredChain {
-		return value, safeMessageError{message: "Agent plannerMode 仅支持 configured_chain"}
-	}
-	if len(value.DefaultSkillRefs) == 0 || len(value.DefaultSkillRefs) > 32 {
-		return value, safeMessageError{message: "Agent 必须配置 1–32 个默认 Skill"}
+	switch value.PlannerMode {
+	case AgentPlannerConfiguredChain:
+		if len(value.DefaultSkillRefs) == 0 || len(value.DefaultSkillRefs) > 32 {
+			return value, safeMessageError{message: "configured_chain Agent 必须配置 1–32 个默认 Skill"}
+		}
+	case AgentPlannerCatalog:
+		if len(value.DefaultSkillRefs) > 32 || !value.ExecutionPolicy.AllowRuntimeSkillOverride {
+			return value, safeMessageError{message: "catalog_plan Agent 必须允许运行时提供 Skill 计划"}
+		}
+	default:
+		return value, safeMessageError{message: "Agent plannerMode 仅支持 configured_chain 或 catalog_plan"}
 	}
 	seenSteps := map[string]bool{}
 	refs := make([]AgentSkillRef, 0, len(value.DefaultSkillRefs))
@@ -76,10 +82,10 @@ func NormalizeAgentPackage(value AgentPackage) (AgentPackage, error) {
 	value.SkillAccessPolicy = policy
 	value.ModelPolicy = normalizeAgentModelPolicy(value.ModelPolicy)
 	value.ToolPolicy.AllowedTools = normalizedStringSet(value.ToolPolicy.AllowedTools, true)
-	if value.ExecutionPolicy.MaxSteps == 0 {
+	if value.ExecutionPolicy.MaxSteps == 0 && value.PlannerMode == AgentPlannerConfiguredChain {
 		value.ExecutionPolicy.MaxSteps = len(value.DefaultSkillRefs)
 	}
-	if value.ExecutionPolicy.MaxSteps < len(value.DefaultSkillRefs) || value.ExecutionPolicy.MaxSteps > 32 {
+	if value.ExecutionPolicy.MaxSteps < 1 || value.ExecutionPolicy.MaxSteps < len(value.DefaultSkillRefs) || value.ExecutionPolicy.MaxSteps > 32 {
 		return value, safeMessageError{message: "Agent 最大步骤数必须覆盖默认 Skill 且不超过 32"}
 	}
 	value.ContentHash = agentPackageHash(value)

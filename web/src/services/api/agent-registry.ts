@@ -24,7 +24,7 @@ export type AgentVersion = {
     agentId: string;
     version: string;
     status: AgentVersionStatus;
-    plannerMode: "configured_chain";
+    plannerMode: "configured_chain" | "catalog_plan";
     contentHash: string;
     createdBy: string;
     publishedAt: string;
@@ -61,7 +61,7 @@ export type AgentSkillAccessPolicy = {
 
 export type AgentPackage = {
     rolePrompt: string;
-    plannerMode: "configured_chain";
+    plannerMode: "configured_chain" | "catalog_plan";
     defaultSkillRefs: AgentSkillRef[];
     skillAccessPolicy: AgentSkillAccessPolicy;
     modelPolicy: {
