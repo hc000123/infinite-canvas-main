@@ -87,7 +87,7 @@ Agent 只保存岗位职责、可调用 Skill 范围、顺序编排和执行策�
 
 | 表 | 说明 | 关键索引 / 约束 |
 | ---- | ---- | ---- |
-| `agent_definitions` | Agent 身份、系统 / 项目所有权、标签、启用状态和推荐版本。系统 Agent 对所有用户只读可见；项目 Agent 按用户与项目隔离。 | 所有者类型、用户、项目和名称组成唯一索引；推荐版本 ID、项目 ID、启用状态有查询索引。 |
+| `agent_definitions` | Agent 身份、系统 / 项目所有权、标签、启用状态和推荐版本。系统 Agent 对制作端只读，由管理员后台维护；项目 Agent 按用户与项目隔离。 | 所有者类型、用户、项目和名称组成唯一索引；推荐版本 ID、项目 ID、启用状态有查询索引。 |
 | `agent_versions` | Agent 不可变发布版本或可编辑草稿，保存 Role Prompt、顺序 Skill 引用、Skill 访问策略、模型 / 工具 / 执行策略和内容哈希。 | `agent_id + version` 唯一；状态和内容哈希有索引；只有 `draft` 可原位更新。 |
 | `agent_plans` | 一次 Agent 运行的聚合头，保存项目 / 分集、精确 Agent 版本、当前 revision、状态、额度上限和确认指纹。 | `user_id + idempotency_key` 唯一；用户、项目、状态、Agent / 版本和确认指纹有索引。 |
 | `agent_plan_revisions` | 追加式 Plan Revision，冻结 Agent 内容哈希、来源 Artifact 引用、顺序 Step 快照、确认指纹与预计额度。 | `agent_plan_id + revision` 唯一；用户、Agent 版本和内容哈希有索引。 |
@@ -95,6 +95,8 @@ Agent 只保存岗位职责、可调用 Skill 范围、顺序编排和执行策�
 | `agent_plan_confirmations` | 对精确 Plan revision、指纹、额度和 requirement code 集合的追加式确认凭证。 | `agent_plan_id + revision` 唯一；用户和指纹有索引。 |
 
 Plan 状态包括 `draft`、`preflight`、`awaiting_confirmation`、`running`、`needs_review`、`completed`、`blocked`、`failed` 和 `cancelled`。预检解析并冻结精确 Agent / Skill / Artifact 哈希；确认必须完整匹配 revision、指纹和 requirement code 集合。执行时只为当前 Step 创建一个 Invocation，审核批准的输出 Artifact 通过符号 Binding 成为下一步输入；取消和失败不会创建下游任务。
+
+管理员通过 `/api/v1/admin/agents` 为系统 Agent 创建草稿、校验、发布和切换推荐版本；普通项目 API 仍禁止修改系统 Agent。管理员版本沿用现有两张 Registry 表，无新增表或迁移。启动种子只补齐初始版本，不覆盖管理员已选的非种子推荐版本。
 
 `invocation_runs` 通过 `agent_plan_id / agent_plan_revision / agent_plan_step_key / confirmation_source` 记录委托来源。外部调用方不能伪造 Plan 确认；只有冻结的 Agent、Skill、Artifact、参数、额度和确认项全部匹配时，内部委托确认才可进入队列。
 

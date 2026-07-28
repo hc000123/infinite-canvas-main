@@ -99,8 +99,10 @@ git diff --check
 ### 项目剧本入口统一 Runtime Phase 7
 
 - 项目分集导入和已有分集的剧本优化不再读取本地 Workflow preset 或浏览器 Agent 配置，而是从 Agent Registry 解析“系统剧本制作 Agent”的推荐发布版本。
+- 管理后台新增系统 Agent 中心：管理员可基于不可变发布版创建草稿，修改职责、Skill 链与运行策略，完成校验、发布并切换推荐版；服务重启不会把管理员推荐版恢复成初始种子版。
+- 制作端继续固定使用系统剧本制作 Agent，但可从该 Agent 授权且满足 `source_text → production_script` 契约的已发布 Skill 版本中选择；选择按项目和分集保存到用户隔离的 `localforage`，失效版本会回退到 Agent 默认版。
 - 每次运行先创建不可变 `source_text` Artifact，再建立 Agent Plan 并完成预检；确认时展示冻结的 Agent / Skill 精确版本、预计 Credits 和服务端确认要求。执行产物以待审核 `production_script` Artifact 返回，未批准前不会写入本地分集。
-- 导入页明确显示“运行系统剧本制作 Agent”；已有分集显示同一系统 Agent 标签，不再提供项目级 Skill preset 选择器。旧 Agent 设置抽屉、快速 Agent、Workflow 执行面板、脚本直调 Runner 和 `projectWorkflowSelections` 持久化状态已移除。
+- 导入页和已有分集都显示固定 Agent 与 Skill 版本选择器；Agent 中心新增“返回项目”按钮。旧 Agent 设置抽屉、快速 Agent、Workflow 执行面板、脚本直调 Runner 和 `projectWorkflowSelections` 持久化状态已移除。
 - 待审文本如果被手工修改，将拒绝继续批准原 Artifact 哈希，必须重新运行，避免把修改稿伪装成原 Agent 产物；批准后才完成 Plan 并同步本地分集与视频工作流剧本。
 - 隔离浏览器验收已确认：系统“标准 AIGC 生产 Workflow”默认可见并可复制为项目可编辑草稿；项目剧本入口成功创建 `source_text` 与 Agent Plan；页面没有新增 console error，也未发生崩溃或无限轮询。该系统 Workflow 后续已升级为 12 节点 `2.1.0`。
 - 当前隔离环境没有可用文本模型，Agent Plan 预检按设计立即返回“没有可用文本模型”，因此本轮不宣称真实模型生产稿效果通过。确定性单元测试已覆盖冻结坐标、确认、轮询到待审、人工审核完成和篡改阻断；配置生产文本模型后仍需用固定剧本复测实际文稿质量。
