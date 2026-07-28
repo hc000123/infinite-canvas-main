@@ -2,11 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { App, Button, Empty, Form, Input, Modal, Spin } from "antd";
+import { App, Button, Empty, Form, Input, Modal, Select, Spin } from "antd";
 import { Wand2 } from "lucide-react";
 
 import { confirmAgentPlan, continueAgentPlan, createAgentPlan, preflightAgentPlan } from "@/services/api/agent-plans";
-import { fetchAgents } from "@/services/api/agent-registry";
 import { createArtifact, getInvocation, reviewInvocation } from "@/services/api/invocations";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasCreateProjectModal } from "../../canvas/components/canvas-create-project-modal";
@@ -20,10 +19,12 @@ import { useOriginalWorkflowStore } from "../../original-workflow/use-original-w
 import { videoWorkflowEpisodeKey, videoWorkflowHref, videoWorkflowProjectSlug } from "../../original-workflow/video-workflow-routing";
 import { canvasIdsForCreativeProject, unfiledCanvasProjects } from "../creative-projects";
 import { editableCanvasPreset } from "../project-canvas-preset";
-import { approveScriptAgentResult, assertScriptReviewMatches, executeScriptAgentToReview, preflightScriptAgent, resolveSystemScriptAgent, type ScriptAgentReviewResult } from "../script-agent-runtime";
+import { approveScriptAgentResult, assertScriptReviewMatches, executeScriptAgentToReview, preflightScriptAgent, type ScriptAgentReviewResult } from "../script-agent-runtime";
+import { buildScriptSkillOverride } from "../script-skill-selection";
 import { useCreativeProjectStore } from "../use-creative-project-store";
 import { ProjectEpisodeBoard, type ProjectDetailTab, type ProjectEpisodeBoardRow } from "./components/project-episode-board";
 import { buildOriginalScriptEditPatch } from "./project-episode-script-edit";
+import { useScriptSkillSelection } from "./use-script-skill-selection";
 
 type EpisodeImportFormValues = {
     title: string;
@@ -79,6 +80,7 @@ export default function CreativeProjectDetailPage() {
     const canvasIds = useMemo(() => (project ? canvasIdsForCreativeProject(project, canvases) : []), [canvases, project]);
     const projectCanvases = useMemo(() => canvases.filter((canvas) => canvasIds.includes(canvas.id)), [canvasIds, canvases]);
     const projectEpisodes = useMemo(() => episodes.filter((episode) => episode.projectId === projectId).sort((a, b) => a.order - b.order), [episodes, projectId]);
+    const scriptSkills = useScriptSkillSelection(projectId, projectEpisodes.map((episode) => episode.id));
     const editingEpisodeTitle = useMemo(() => projectEpisodes.find((episode) => episode.id === editingEpisodeTitleId), [editingEpisodeTitleId, projectEpisodes]);
     const editingCanvasPreset = useMemo(() => projectCanvases.find((canvas) => canvas.id === editingCanvasPresetId), [editingCanvasPresetId, projectCanvases]);
     const unboundCanvases = useMemo(() => unfiledCanvasProjects(canvases, project ? [project] : []), [canvases, project]);
@@ -86,6 +88,14 @@ export default function CreativeProjectDetailPage() {
         setDescriptionDraft(project?.description || "");
         setTitleDraft(project?.title || "");
     }, [project?.description, project?.title]);
+    useEffect(() => {
+        if (scriptSkills.error) message.error(scriptSkills.error.message);
+    }, [message, scriptSkills.error]);
+    useEffect(() => {
+        if (!scriptSkills.selectionNotice) return;
+        message.warning(scriptSkills.selectionNotice);
+        scriptSkills.clearSelectionNotice();
+    }, [message, scriptSkills]);
 
     const episodeRows = useMemo(
         () =>
@@ -189,15 +199,16 @@ export default function CreativeProjectDetailPage() {
         setEpisodeTitleDraft("");
     };
 
-    const runScriptAgentToReview = async (input: { episodeId?: string; episodeTitle: string; sourceScript: string }) => {
-        const agent = resolveSystemScriptAgent(await fetchAgents(project.id));
+    const runScriptAgentToReview = async (input: { episodeId?: string; episodeTitle: string; sourceScript: string; skillVersionId: string }) => {
+        if (!scriptSkills.agent || !scriptSkills.agentPackage) throw new Error("系统剧本制作 Agent 尚未准备完成");
+        const skillOverrides = buildScriptSkillOverride(scriptSkills.agentPackage, scriptSkills.options, input.skillVersionId);
         const prepared = await preflightScriptAgent(
             {
                 createArtifact: (artifactInput) => createArtifact(artifactInput as Parameters<typeof createArtifact>[0]),
                 createAgentPlan: (planInput) => createAgentPlan(planInput as Parameters<typeof createAgentPlan>[0]),
                 preflightAgentPlan,
             },
-            { projectId: project.id, episodeId: input.episodeId, episodeTitle: input.episodeTitle, sourceText: input.sourceScript, agent, idempotencyKey: globalThis.crypto.randomUUID() },
+            { projectId: project.id, episodeId: input.episodeId, episodeTitle: input.episodeTitle, sourceText: input.sourceScript, agent: scriptSkills.agent, skillOverrides, idempotencyKey: globalThis.crypto.randomUUID() },
         );
         const confirmed = await new Promise<boolean>((resolve) => {
             modal.confirm({
@@ -274,7 +285,7 @@ export default function CreativeProjectDetailPage() {
         if (!sourceScript) return message.warning("请先粘贴本集剧本");
         setScriptOptimizing(true);
         try {
-            const result = await runScriptAgentToReview({ episodeTitle: title, sourceScript });
+            const result = await runScriptAgentToReview({ episodeTitle: title, sourceScript, skillVersionId: scriptSkills.importVersionId });
             if (!result) return;
             episodeImportForm.setFieldValue("scriptText", result.productionScript);
             setOptimizedImportDraft({ sourceScript, review: result });
@@ -297,7 +308,7 @@ export default function CreativeProjectDetailPage() {
         message.success("已清除上一版优化稿");
     };
 
-    const optimizeExistingEpisodeScript = async (episodeId: string) => {
+    const optimizeExistingEpisodeScript = async (episodeId: string, skillVersionId: string) => {
         const episode = projectEpisodes.find((item) => item.id === episodeId);
         if (!episode) return;
         const sourceScript = episode.sourceSummary?.trim() || episode.summary.trim();
@@ -305,7 +316,7 @@ export default function CreativeProjectDetailPage() {
         setOptimizingEpisodeId(episode.id);
         setScriptOptimizeErrors((state) => ({ ...state, [episode.id]: "" }));
         try {
-            const result = await runScriptAgentToReview({ episodeId: episode.id, episodeTitle: episode.title, sourceScript });
+            const result = await runScriptAgentToReview({ episodeId: episode.id, episodeTitle: episode.title, sourceScript, skillVersionId });
             if (!result || !(await confirmExistingEpisodeResult(result.productionScript))) return;
             await approveScriptResult(result);
             await syncVideoWorkflowScript(episode.order, result.productionScript);
@@ -396,6 +407,9 @@ export default function CreativeProjectDetailPage() {
                 projectTitle={project.title}
                 presetSummary={canvasProjectPresetSummary(project.preset)}
                 rows={episodeRows}
+                scriptSkillOptions={scriptSkills.options.map((option) => ({ value: option.skillVersionId, label: `${option.skillName} · v${option.version}` }))}
+                scriptSkillVersionIds={scriptSkills.episodeVersionIds}
+                scriptSkillsLoading={scriptSkills.loading}
                 onBindCanvas={bindCanvas}
                 onBindingCanvasChange={setBindingCanvasId}
                 onCreateCanvas={() => setCanvasCreateOpen(true)}
@@ -407,7 +421,8 @@ export default function CreativeProjectDetailPage() {
                 onFilterChange={setEpisodeFilter}
                 onImportEpisode={() => setEpisodeImportOpen(true)}
                 onClearOptimizedScript={clearEpisodeOptimizedScript}
-                onOptimizeEpisodeScript={(episodeId) => void optimizeExistingEpisodeScript(episodeId)}
+                onOptimizeEpisodeScript={(episodeId, skillVersionId) => void optimizeExistingEpisodeScript(episodeId, skillVersionId)}
+                onScriptSkillChange={scriptSkills.setEpisodeVersionId}
                 onOpenEpisode={openEpisodeWorkflow}
                 onSaveEpisodeScript={saveEpisodeScript}
                 onTabChange={setActiveTab}
@@ -450,9 +465,12 @@ export default function CreativeProjectDetailPage() {
                     </Form.Item>
                     <div className="mb-2 flex items-center justify-between gap-3">
                         <span className="text-sm text-[var(--studio-text-secondary)]">本集剧本</span>
-                        <Button size="small" icon={<Wand2 className="size-3.5" />} loading={scriptOptimizing} onClick={() => void optimizeEpisodeImportScript()}>
-                            运行系统剧本制作 Agent
-                        </Button>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                            <Select aria-label="导入剧本优化 Skill" size="small" loading={scriptSkills.loading} value={scriptSkills.importVersionId || undefined} options={scriptSkills.options.map((option) => ({ value: option.skillVersionId, label: `${option.skillName} · v${option.version}` }))} placeholder="选择 Skill 版本" className="min-w-44" onChange={scriptSkills.setImportVersionId} />
+                            <Button size="small" icon={<Wand2 className="size-3.5" />} loading={scriptOptimizing} disabled={!scriptSkills.importVersionId} onClick={() => void optimizeEpisodeImportScript()}>
+                                运行系统剧本制作 Agent
+                            </Button>
+                        </div>
                     </div>
                     <Form.Item name="scriptText" rules={[{ required: true, message: "请粘贴本集剧本" }]}>
                         <Input.TextArea rows={10} placeholder="导入后会留在当前项目分集页；需要继续生产时再手动进入视频工作流。" />

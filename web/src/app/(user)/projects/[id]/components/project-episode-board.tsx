@@ -45,6 +45,9 @@ type ProjectEpisodeBoardProps = {
     projectTitle: string;
     presetSummary: string;
     rows: ProjectEpisodeBoardRow[];
+    scriptSkillOptions: Array<{ label: string; value: string }>;
+    scriptSkillVersionIds: Record<string, string>;
+    scriptSkillsLoading: boolean;
     scriptOptimizeErrors: Record<string, string>;
     onBindCanvas: () => void;
     onBindingCanvasChange: (canvasId: string) => void;
@@ -57,7 +60,8 @@ type ProjectEpisodeBoardProps = {
     onEditProject: () => void;
     onFilterChange: (filter: EpisodeFilter) => void;
     onImportEpisode: () => void;
-    onOptimizeEpisodeScript: (episodeId: string) => void;
+    onOptimizeEpisodeScript: (episodeId: string, skillVersionId: string) => void;
+    onScriptSkillChange: (episodeId: string, skillVersionId: string) => void;
     onOpenEpisode: (episodeId: string) => void;
     onSaveEpisodeScript: (episodeId: string, script: string) => void;
     onTabChange: (tab: ProjectDetailTab) => void;
@@ -78,6 +82,9 @@ export function ProjectEpisodeBoard({
     projectTitle,
     presetSummary,
     rows,
+    scriptSkillOptions,
+    scriptSkillVersionIds,
+    scriptSkillsLoading,
     scriptOptimizeErrors,
     onBindCanvas,
     onBindingCanvasChange,
@@ -91,6 +98,7 @@ export function ProjectEpisodeBoard({
     onFilterChange,
     onImportEpisode,
     onOptimizeEpisodeScript,
+    onScriptSkillChange,
     onOpenEpisode,
     onSaveEpisodeScript,
     onTabChange,
@@ -157,12 +165,16 @@ export function ProjectEpisodeBoard({
                         onEditTitle={onEditEpisodeTitle}
                         onFilterChange={onFilterChange}
                         onOptimizeEpisodeScript={onOptimizeEpisodeScript}
+                        onScriptSkillChange={onScriptSkillChange}
                         onOpenEpisode={onOpenEpisode}
                         onSaveEpisodeScript={onSaveEpisodeScript}
                         optimizingEpisodeId={optimizingEpisodeId}
                         progress={progress}
                         projectTitle={projectTitle}
                         rows={rows}
+                        scriptSkillOptions={scriptSkillOptions}
+                        scriptSkillVersionIds={scriptSkillVersionIds}
+                        scriptSkillsLoading={scriptSkillsLoading}
                         scriptOptimizeErrors={scriptOptimizeErrors}
                         total={rows.length}
                     />
@@ -183,12 +195,16 @@ function ProjectEpisodeProductionPanel({
     onEditTitle,
     onFilterChange,
     onOptimizeEpisodeScript,
+    onScriptSkillChange,
     onOpenEpisode,
     onSaveEpisodeScript,
     optimizingEpisodeId,
     progress,
     projectTitle,
     rows,
+    scriptSkillOptions,
+    scriptSkillVersionIds,
+    scriptSkillsLoading,
     scriptOptimizeErrors,
     total,
 }: {
@@ -201,13 +217,17 @@ function ProjectEpisodeProductionPanel({
     onClearOptimizedScript: (episodeId: string) => void;
     onEditTitle: (row: ProjectEpisodeBoardRow) => void;
     onFilterChange: (filter: EpisodeFilter) => void;
-    onOptimizeEpisodeScript: (episodeId: string) => void;
+    onOptimizeEpisodeScript: (episodeId: string, skillVersionId: string) => void;
+    onScriptSkillChange: (episodeId: string, skillVersionId: string) => void;
     onOpenEpisode: (episodeId: string) => void;
     onSaveEpisodeScript: (episodeId: string, script: string) => void;
     optimizingEpisodeId: string;
     progress: number;
     projectTitle: string;
     rows: ProjectEpisodeBoardRow[];
+    scriptSkillOptions: Array<{ label: string; value: string }>;
+    scriptSkillVersionIds: Record<string, string>;
+    scriptSkillsLoading: boolean;
     scriptOptimizeErrors: Record<string, string>;
     total: number;
 }) {
@@ -225,6 +245,7 @@ function ProjectEpisodeProductionPanel({
     const selectedOptimizedScript = selectedEpisode?.optimizedScriptPreview.trim() || "";
     const selectedOptimizeError = selectedEpisode ? scriptOptimizeErrors[selectedEpisode.id] || "" : "";
     const selectedOptimizing = Boolean(selectedEpisode && optimizingEpisodeId === selectedEpisode.id);
+    const selectedSkillVersionId = selectedEpisode ? scriptSkillVersionIds[selectedEpisode.id] || "" : "";
 
     useEffect(() => {
         setEditingScript(false);
@@ -317,7 +338,8 @@ function ProjectEpisodeProductionPanel({
                                     <Tag className="m-0" icon={<Bot className="size-3.5" />}>
                                         系统剧本制作 Agent
                                     </Tag>
-                                    <Button size="small" icon={<Wand2 className="size-3.5" />} loading={selectedOptimizing} disabled={!selectedScript} onClick={() => onOptimizeEpisodeScript(selectedEpisode.id)}>
+                                    <Select aria-label="剧本优化 Skill" size="small" loading={scriptSkillsLoading} value={selectedSkillVersionId || undefined} options={scriptSkillOptions} placeholder="选择 Skill 版本" className="min-w-44" onChange={(value) => onScriptSkillChange(selectedEpisode.id, value)} />
+                                    <Button size="small" icon={<Wand2 className="size-3.5" />} loading={selectedOptimizing} disabled={!selectedScript || !selectedSkillVersionId} onClick={() => onOptimizeEpisodeScript(selectedEpisode.id, selectedSkillVersionId)}>
                                         剧本优化
                                     </Button>
                                     <Button size="small" icon={<Edit3 className="size-3.5" />} disabled={selectedOptimizing} onClick={() => setEditingScript(true)}>

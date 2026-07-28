@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Button, Empty, Spin, Tabs, Tag } from "antd";
-import { Bot, Boxes, Play, Workflow } from "lucide-react";
+import { ArrowLeft, Bot, Boxes, Play, Workflow } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -111,7 +111,7 @@ export default function ProjectAgentCenterPage() {
         <main className="studio-shell h-full overflow-auto text-[var(--studio-text-primary)]">
             <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-6 px-5 py-7 lg:px-8">
                 <header className="border-b border-[var(--studio-border-subtle)] pb-5">
-                    <Link href={`/projects/${project.id}`} className="text-xs text-[var(--studio-text-muted)] transition hover:text-[var(--studio-accent)]">{project.title}</Link>
+                    <div className="flex items-center gap-3"><Link href={`/projects/${project.id}`} className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--studio-text-secondary)] transition hover:text-[var(--studio-accent)]"><ArrowLeft className="size-4" />返回项目</Link><span className="text-xs text-[var(--studio-text-muted)]">{project.title}</span></div>
                     <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
                         <div>
                             <div className="flex items-center gap-2"><Bot className="size-6 text-[var(--studio-accent)]" /><h1 className="text-3xl font-semibold">Agent 中心</h1></div>
