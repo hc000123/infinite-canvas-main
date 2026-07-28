@@ -125,6 +125,8 @@ git diff --check
 - 隔离协议级 E2E 已真实执行 `source_text → production_script → asset_catalog → asset_brief → asset_rendition`，完成预检、精确确认、Worker 调用、媒体归档、人工批准与 Apply。测试图片为 1×1 PNG，仅证明协议、归档和消费链，不代表生产视觉质量。
 - 生图工作台已直接消费 `asset_rendition`：Runtime 图片显示在结果区并写入生成历史，保存后“我的素材”显示 1 条图片；单张素材使用自己的 Invocation / Artifact trace，不会把同批其他 Artifact 坐标写入。
 - 画布真实 UI 已从已保存图片节点运行同一角色成图 Skill；批准并使用后从 1 节点 / 0 连线变为 2 节点 / 1 连线。新节点类型为图片，内容使用稳定 Runtime `mediaRef`，节点 JSON 保留 Invocation ID、Artifact ID / Hash、Skill Version 和 Apply 时间。
+- 固定公交站剧本新增 12 节点混合执行 E2E：API-only 基线由模拟 API 执行 12 次，预估 / 实扣 18 Credits，余额从 100 变为 82；混合模式由模拟 Codex 执行 9 个文本节点、模拟图片 API 执行 3 个成图节点，预估 / 实扣 9 Credits，余额为 91。两条链均完成精确版本冻结、父 Artifact ID / Hash、Schema 与业务门、人工审核、最终 `delivery_report` 和刷新坐标恢复。
+- 上述混合 E2E 不调用真实 Codex CLI 或正式图片模型，只证明执行器分流、契约、血缘、审核、计费和完成状态。角色、场景、道具的视觉质量继续由用户在新版页面手动验收，本轮不宣称视觉效果已自动通过。
 - 浏览器控制台警告与错误为 0；临时 Next、Go、假模型、SQLite 和浏览器标签已停止或清理。完整门禁为 Go 全包、前端 777 项、TypeScript、快速代码检查、全量 ESLint 和 Next.js 生产构建。
 - 依赖兼容门禁已复验：全新 `bun install --frozen-lockfile --force` 能稳定应用 `minimatch@3.1.5` 补丁；全量 ESLint 为 0 error、91 个仓库既有 warning，`bun audit` 为 `No vulnerabilities found`。既有 warning 不在本次 Runtime 范围内顺手清理。
 - 待真实效果确认：配置正式图片模型，分别生成角色设定图、场景主参考图和道具结构图，核对身份 / 服装 / 场景 / 道具一致性、格式适配和后续视频提示词引用质量。

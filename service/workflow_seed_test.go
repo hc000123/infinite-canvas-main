@@ -6,13 +6,36 @@ import (
 	"testing"
 	"time"
 
+	"github.com/basketikun/infinite-canvas/config"
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/repository"
 )
 
 func TestSystemProductionWorkflowExecutesRoutedTwelveNodeProductionChain(t *testing.T) {
+	runSystemProductionWorkflowE2E(t, false)
+}
+
+func TestSystemProductionWorkflowExecutesMixedCodexTextAndAPIImageChain(t *testing.T) {
+	runSystemProductionWorkflowE2E(t, true)
+}
+
+func runSystemProductionWorkflowE2E(t *testing.T, mixed bool) {
+	t.Helper()
 	setupInvocationServiceTest(t)
 	setupSystemProductionWorkflowModels(t)
+	previousExecutor := config.Cfg.WorkflowTextExecutor
+	previousEnabled := config.Cfg.WorkflowLocalCodexEnabled
+	previousModel := config.Cfg.WorkflowCodexModel
+	t.Cleanup(func() {
+		config.Cfg.WorkflowTextExecutor = previousExecutor
+		config.Cfg.WorkflowLocalCodexEnabled = previousEnabled
+		config.Cfg.WorkflowCodexModel = previousModel
+	})
+	if mixed {
+		config.Cfg.WorkflowTextExecutor = AgentRunExecutorCodexCLI
+		config.Cfg.WorkflowLocalCodexEnabled = true
+		config.Cfg.WorkflowCodexModel = "codex-simulated"
+	}
 	stamp := now()
 	if _, err := repository.SaveUser(model.User{ID: "user-1", Username: "system-workflow-e2e", Credits: 100, Status: model.UserStatusActive, CreatedAt: stamp, UpdatedAt: stamp}); err != nil {
 		t.Fatal(err)
@@ -37,7 +60,11 @@ func TestSystemProductionWorkflowExecutesRoutedTwelveNodeProductionChain(t *test
 	if err != nil || duplicate.Run.ID != preflight.Run.ID || duplicate.Revision.ID != preflight.Revision.ID {
 		t.Fatalf("idempotent preflight=%#v duplicate=%#v err=%v", preflight.Run, duplicate.Run, err)
 	}
-	if !preflight.Preview.Executable || preflight.Run.EstimatedCredits != 18 || len(preflight.Nodes) != 12 {
+	wantEstimatedCredits := int64(18)
+	if mixed {
+		wantEstimatedCredits = 9
+	}
+	if !preflight.Preview.Executable || preflight.Run.EstimatedCredits != wantEstimatedCredits || len(preflight.Nodes) != 12 {
 		t.Fatalf("preflight=%#v", preflight)
 	}
 	confirmed, err := ConfirmWorkflowExecution("user-1", preflight.Run.ID, WorkflowExecutionConfirmationInput{Revision: 1, Fingerprint: preflight.Run.ConfirmationFingerprint, RequirementCodes: preflight.ConfirmationRequirements})
@@ -45,7 +72,7 @@ func TestSystemProductionWorkflowExecutesRoutedTwelveNodeProductionChain(t *test
 		t.Fatal(err)
 	}
 
-	executor := &workflowExecutionE2EExecutor{outputs: map[string]string{
+	outputsBySkill := map[string]string{
 		"skill-system-workflow-script":           `{"productionScript":"场次 1，清晨，旧公交站。\n林秋站在站牌下，手里捏着一张折起的车票。公交车由远及近。\n林秋低声说：“这次不等了。”\n她把车票收进口袋，向车门走去。"}`,
 		"skill-system-content-classifier":        `{"routingTags":[{"tag":"female_audience","evidence":["林秋低声说：“这次不等了。”"],"confidence":0.88},{"tag":"urban_emotion","evidence":["林秋站在站牌下，手里捏着一张折起的车票。"],"confidence":0.91}]}`,
 		"skill-system-workflow-art":              `{"items":[{"assetId":"character-001","kind":"character","name":"林秋","sourceEvidence":["林秋站在站牌下，手里捏着一张折起的车票。"],"coreFacts":["主要角色","在旧公交站等车","手持折起的车票"]},{"assetId":"scene-001","kind":"scene","name":"旧公交站","sourceEvidence":["场次 1，清晨，旧公交站。"],"coreFacts":["清晨","有站牌"]},{"assetId":"prop-001","kind":"prop","name":"折起的车票","sourceEvidence":["手里捏着一张折起的车票"],"coreFacts":["纸质车票","折起","可放进口袋"]}]}`,
@@ -58,8 +85,16 @@ func TestSystemProductionWorkflowExecutesRoutedTwelveNodeProductionChain(t *test
 		"skill-system-storyboard-vertical-short": `{"shots":[{"shotId":"shot-001","sceneKey":"scene-001","sourceScript":"林秋低声说：“这次不等了。”","shotDraft":{"shotSize":"近景","camera":"9:16 竖屏，机位与林秋眼睛等高，面部和捏紧车票的手保持在中央安全区","movement":"从胸像极缓慢推到面部近景，在台词结束时停稳","action":"林秋捏紧折起的车票，说完后把视线从公路移向车门","performance":"开口前短促吸气，声音压低，最后一个字落下时下颌放松","dialogue":"这次不等了。","durationSeconds":6,"continuityMode":"continuous"}}]}`,
 		"skill-system-workflow-video":            `{"items":[{"shotId":"shot-001","prompt":"场景：清晨的旧公交站，站牌在画面左侧，冷色自然光。\n声音：远处公交车引擎声逐渐靠近，无旁白。\n画面内容：0-2秒，中远景保持站牌、林秋和道路的空间关系；2-6秒，镜头稳定缓慢推近，公交车从背景驶入并减速。\n限制：保持角色、车票和光线连续，不切镜，无字幕。","inputArtifactRefs":[]}]}`,
 		"skill-system-workflow-delivery":         `{"summary":"已审计 1 个镜头，可交付 1 个。","succeeded":[{"shotId":"shot-001","output":"outputs/shot-001.mp4"}],"failed":[],"retrySuggestions":[],"exportManifest":[{"shotId":"shot-001","file":"outputs/shot-001.mp4","status":"ready"}]}`,
-	}}
-	worker := NewAgentRunWorker(AgentRunWorkerOptions{ID: "system-workflow-e2e", LeaseDuration: time.Minute, Executor: executor})
+	}
+	apiExecutor := &workflowExecutionE2EExecutor{kind: AgentRunExecutorAPI, outputs: outputsBySkill}
+	workerOptions := AgentRunWorkerOptions{ID: "system-workflow-e2e", LeaseDuration: time.Minute, Executor: apiExecutor}
+	var codexExecutor *workflowExecutionE2EExecutor
+	if mixed {
+		codexExecutor = &workflowExecutionE2EExecutor{kind: AgentRunExecutorCodexCLI, outputs: outputsBySkill}
+		workerOptions.Executor = nil
+		workerOptions.Executors = []AgentRunExecutor{codexExecutor, apiExecutor}
+	}
+	worker := NewAgentRunWorker(workerOptions)
 	type expectedNode struct {
 		key, executorType, agentVersionID, skillVersionID, outputType string
 		parents                                                       []string
@@ -126,6 +161,8 @@ func TestSystemProductionWorkflowExecutesRoutedTwelveNodeProductionChain(t *test
 		wantCredits := 1
 		if want.outputType == "asset_rendition" {
 			wantCredits = 3
+		} else if mixed {
+			wantCredits = 0
 		}
 		if len(invocation.Attempts) != 1 || invocation.Attempts[0].CreditsReserved != wantCredits || invocation.Attempts[0].CreditsRefunded != 0 {
 			t.Fatalf("node=%s attempts=%#v", want.key, invocation.Attempts)
@@ -157,8 +194,16 @@ func TestSystemProductionWorkflowExecutesRoutedTwelveNodeProductionChain(t *test
 		}
 	}
 	user, ok, err := repository.GetUserByID("user-1")
-	if err != nil || !ok || user.Credits != 82 || executor.calls.Load() != 12 || len(invocationIDs) != 12 {
-		t.Fatalf("user=%#v calls=%d invocations=%#v ok=%v err=%v", user, executor.calls.Load(), invocationIDs, ok, err)
+	wantBalance, wantAPICalls, wantCodexCalls := 82, int32(12), int32(0)
+	if mixed {
+		wantBalance, wantAPICalls, wantCodexCalls = 91, 3, 9
+	}
+	actualCodexCalls := int32(0)
+	if codexExecutor != nil {
+		actualCodexCalls = codexExecutor.calls.Load()
+	}
+	if err != nil || !ok || user.Credits != wantBalance || apiExecutor.calls.Load() != wantAPICalls || actualCodexCalls != wantCodexCalls || len(invocationIDs) != 12 {
+		t.Fatalf("user=%#v apiCalls=%d codexCalls=%d invocations=%#v ok=%v err=%v", user, apiExecutor.calls.Load(), actualCodexCalls, invocationIDs, ok, err)
 	}
 }
 

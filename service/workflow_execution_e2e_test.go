@@ -235,10 +235,16 @@ func mustJSONTestString(value string) string {
 
 type workflowExecutionE2EExecutor struct {
 	calls   atomic.Int32
+	kind    string
 	outputs map[string]string
 }
 
-func (*workflowExecutionE2EExecutor) Kind() string                    { return AgentRunExecutorAPI }
+func (executor *workflowExecutionE2EExecutor) Kind() string {
+	if executor.kind == "" {
+		return AgentRunExecutorAPI
+	}
+	return executor.kind
+}
 func (*workflowExecutionE2EExecutor) Available(context.Context) error { return nil }
 func (executor *workflowExecutionE2EExecutor) Call(_ context.Context, run model.AgentRun) agentRunCallResult {
 	executor.calls.Add(1)
