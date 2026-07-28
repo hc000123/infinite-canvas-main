@@ -17,6 +17,19 @@ const preflight = {
     confirmationRequirements: [{ code: "api_cost", message: "将消耗 2 Credits" }],
 };
 
+const skillOverrides = [{
+    stepKey: "script",
+    label: "短剧剧本优化",
+    capability: "workflow.stage.script",
+    skillId: "skill-system-workflow-script",
+    skillVersionId: "skill-version-system-workflow-script-3.2.0",
+    skillVersionConstraint: "",
+    required: true,
+    inputBindings: [],
+    parameters: {},
+    expectedOutputType: "production_script",
+}];
+
 test("resolveSystemScriptAgent uses the registry recommended version", () => {
     assert.deepEqual(resolveSystemScriptAgent([{ agent: { id: "agent-system-art", recommendedVersionId: "agent-version-system-art-1.0.0" } }, { agent: { id: "agent-system-script", recommendedVersionId: "agent-version-system-script-1.1.0" } }]), {
         agentId: "agent-system-script",
@@ -53,6 +66,7 @@ test("preflightScriptAgent freezes the registry recommended Agent version and so
             episodeTitle: "第 1 集",
             sourceText: "原始剧本",
             agent: { agentId: "agent-system-script", agentVersionId: "agent-version-system-script-1.0.0" },
+            skillOverrides,
             idempotencyKey: "script-plan-1",
         },
     );
@@ -70,6 +84,7 @@ test("preflightScriptAgent freezes the registry recommended Agent version and so
                 agentVersionId: "agent-version-system-script-1.0.0",
                 goal: "将《第 1 集》整理为下游可直接使用的生产剧本",
                 sourceArtifactRefs: [{ bindingName: "source_text", artifactId: "source-1", contentHash: "sha256:source" }],
+                skillOverrides,
                 idempotencyKey: "script-plan-1",
             },
         ],

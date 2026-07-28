@@ -1,3 +1,5 @@
+import type { AgentSkillRef } from "@/services/api/agent-registry";
+
 export type ScriptAgentRef = { agentId: string; agentVersionId: string };
 
 export function resolveSystemScriptAgent(items: Array<{ agent: { id: string; recommendedVersionId: string } }>): ScriptAgentRef {
@@ -61,7 +63,7 @@ export async function preflightScriptAgent(
         createAgentPlan: (input: Record<string, unknown>) => Promise<{ plan: { id: string } }>;
         preflightAgentPlan: (id: string) => Promise<ScriptAgentPreflight>;
     },
-    input: { projectId: string; episodeId?: string; episodeTitle: string; sourceText: string; agent: ScriptAgentRef; idempotencyKey: string },
+    input: { projectId: string; episodeId?: string; episodeTitle: string; sourceText: string; agent: ScriptAgentRef; skillOverrides?: AgentSkillRef[]; idempotencyKey: string },
 ): Promise<PreparedScriptAgentRun> {
     const sourceArtifact = await deps.createArtifact({
         artifactType: "source_text",
@@ -77,6 +79,7 @@ export async function preflightScriptAgent(
         agentVersionId: input.agent.agentVersionId,
         goal: `将《${input.episodeTitle}》整理为下游可直接使用的生产剧本`,
         sourceArtifactRefs: [{ bindingName: "source_text", artifactId: sourceArtifact.artifact.id, contentHash: sourceArtifact.artifact.contentHash }],
+        ...(input.skillOverrides?.length ? { skillOverrides: input.skillOverrides } : {}),
         idempotencyKey: input.idempotencyKey,
     });
     return { sourceArtifact, preflight: await deps.preflightAgentPlan(detail.plan.id) };
