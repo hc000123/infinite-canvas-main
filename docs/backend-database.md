@@ -83,12 +83,12 @@ Artifact 与 Invocation Runtime 使用以下 10 张正式业务表：
 
 ### Agent Registry 与 Agent Plan Runtime
 
-Agent 只保存岗位职责、可调用 Skill 范围、顺序编排和执行策略，不复制 Skill 正文、Schema 或质量门。已确认 Agent Plan 通过现有 Invocation / Artifact Runtime 逐步执行。
+Agent Registry 当前主要承载唯一“画布总控”和历史兼容数据。画布总控只保存职责、可访问 Skill Catalog 范围和执行策略，不复制 Skill 正文、Schema 或质量门；它使用 `catalog_plan`，发布版本可以没有默认 Step，但运行时必须提交 1–32 个真实 Skill Step。已确认 Agent Plan 通过现有 Invocation / Artifact Runtime 逐步执行。
 
 | 表 | 说明 | 关键索引 / 约束 |
 | ---- | ---- | ---- |
-| `agent_definitions` | Agent 身份、系统 / 项目所有权、标签、启用状态和推荐版本。系统 Agent 对制作端只读，由管理员后台维护；项目 Agent 按用户与项目隔离。 | 所有者类型、用户、项目和名称组成唯一索引；推荐版本 ID、项目 ID、启用状态有查询索引。 |
-| `agent_versions` | Agent 不可变发布版本或可编辑草稿，保存 Role Prompt、顺序 Skill 引用、Skill 访问策略、模型 / 工具 / 执行策略和内容哈希。 | `agent_id + version` 唯一；状态和内容哈希有索引；只有 `draft` 可原位更新。 |
+| `agent_definitions` | Agent 身份、系统 / 项目所有权、标签、启用状态和推荐版本。正式入口只使用系统“画布总控”；其他系统 / 项目 Agent 作为兼容或管理数据保留。 | 所有者类型、用户、项目和名称组成唯一索引；推荐版本 ID、项目 ID、启用状态有查询索引。 |
+| `agent_versions` | Agent 不可变发布版本或可编辑草稿，保存 Role Prompt、`configured_chain` / `catalog_plan`、默认 Skill 引用、Skill 访问策略、模型 / 工具 / 执行策略和内容哈希。 | `agent_id + version` 唯一；状态和内容哈希有索引；只有 `draft` 可原位更新。 |
 | `agent_plans` | 一次 Agent 运行的聚合头，保存项目 / 分集、精确 Agent 版本、当前 revision、状态、额度上限和确认指纹。 | `user_id + idempotency_key` 唯一；用户、项目、状态、Agent / 版本和确认指纹有索引。 |
 | `agent_plan_revisions` | 追加式 Plan Revision，冻结 Agent 内容哈希、来源 Artifact 引用、顺序 Step 快照、确认指纹与预计额度。 | `agent_plan_id + revision` 唯一；用户、Agent 版本和内容哈希有索引。 |
 | `agent_plan_steps` | 冻结每一步 Skill ID / 版本 / 哈希、符号输入 Binding、参数、预期输出、Invocation ID、状态和输出 Artifact 引用。 | `agent_plan_id + revision + ordinal` 和 `agent_plan_id + revision + step_key` 唯一；Invocation、Skill 版本和状态有索引。 |
@@ -96,13 +96,13 @@ Agent 只保存岗位职责、可调用 Skill 范围、顺序编排和执行策�
 
 Plan 状态包括 `draft`、`preflight`、`awaiting_confirmation`、`running`、`needs_review`、`completed`、`blocked`、`failed` 和 `cancelled`。预检解析并冻结精确 Agent / Skill / Artifact 哈希；确认必须完整匹配 revision、指纹和 requirement code 集合。执行时只为当前 Step 创建一个 Invocation，审核批准的输出 Artifact 通过符号 Binding 成为下一步输入；取消和失败不会创建下游任务。
 
-管理员通过 `/api/v1/admin/agents` 为系统 Agent 创建草稿、校验、发布和切换推荐版本；普通项目 API 仍禁止修改系统 Agent。管理员版本沿用现有两张 Registry 表，无新增表或迁移。启动种子只补齐初始版本，不覆盖管理员已选的非种子推荐版本。
+管理员通过 `/api/v1/admin/agents` 管理兼容 Agent 版本；普通项目 API 仍禁止修改系统 Agent。服务启动只确保 `agent-system-canvas-orchestrator` / `agent-version-system-canvas-orchestrator-1.0.0` 存在并被推荐，不再加载固定剧本、资产、分镜等岗位 Agent 种子。
 
 `invocation_runs` 通过 `agent_plan_id / agent_plan_revision / agent_plan_step_key / confirmation_source` 记录委托来源。外部调用方不能伪造 Plan 确认；只有冻结的 Agent、Skill、Artifact、参数、额度和确认项全部匹配时，内部委托确认才可进入队列。
 
 ### Workflow Registry 与 Composer Runtime
 
-Workflow 只保存 DAG、路由、条件、审批和重试策略，引用独立发布的 Skill / Agent 版本，不复制其正文、Schema 或质量门。发布版本不可修改；每次执行预检都会冻结 Workflow 内容哈希、节点解析结果、输入 Artifact、手选版本、参数、额度和确认指纹。
+Workflow 只保存 DAG、路由、条件、审批和重试策略。正式生产版本与新建节点只引用独立发布的 Skill，不复制其正文、Schema 或质量门；历史 Agent 节点仍可读取，但项目编辑器不再新增或修改。发布版本不可修改；每次执行预检都会冻结 Workflow 内容哈希、节点解析结果、输入 Artifact、手选版本、参数、额度和确认指纹。
 
 | 表 | 说明 | 关键索引 / 约束 |
 | ---- | ---- | ---- |
@@ -110,10 +110,10 @@ Workflow 只保存 DAG、路由、条件、审批和重试策略，引用独立�
 | `workflow_versions` | 可编辑草稿或不可变发布版本，保存完整 DAG Package 与规范内容哈希。 | `workflow_id + version` 唯一；状态和内容哈希有索引；只有 `draft` 可更新。 |
 | `workflow_executions` | 一次 Workflow 运行的聚合头，保存精确版本、项目 / 分集、当前 revision、状态、预计额度、幂等键和确认指纹。 | `user_id + idempotency_key` 唯一；Workflow、版本、项目、分集和状态有查询索引。 |
 | `workflow_execution_revisions` | 追加式执行 Revision，冻结路由预览、输入 Artifact、手选版本、参数、确认项和额度。 | `workflow_execution_id + revision` 唯一；用户、版本、内容哈希和指纹有索引。 |
-| `workflow_node_executions` | 每个 DAG 节点的运行投影，记录拓扑序、Skill / Agent 执行器、Invocation / Agent Plan 坐标、状态、输出 Artifact 和稳定错误码。 | `workflow_execution_id + revision + node_key` 唯一；Invocation、Agent Plan、节点和状态有索引。 |
+| `workflow_node_executions` | 每个 DAG 节点的运行投影，记录拓扑序、Skill 执行器、Invocation、状态、输出 Artifact 和稳定错误码；Agent Plan 坐标仅为历史兼容字段。 | `workflow_execution_id + revision + node_key` 唯一；Invocation、Agent Plan、节点和状态有索引。 |
 | `workflow_execution_confirmations` | 对精确 revision、指纹、额度和 requirement code 集合的确认凭证。 | `workflow_execution_id + revision` 唯一；用户和指纹有索引。 |
 
-Workflow 状态包括 `preflight`、`awaiting_confirmation`、`running`、`needs_review`、`completed`、`blocked`、`partial`、`failed` 和 `cancelled`。节点只有在依赖 Artifact 已批准且确定性条件通过后才会启动；Skill 节点委托统一 Invocation Runtime，Agent 节点委托 Agent Plan Runtime。刷新页面只读取已有 execution / revision / node 坐标，不创建新的运行记录。
+Workflow 状态包括 `preflight`、`awaiting_confirmation`、`running`、`needs_review`、`completed`、`blocked`、`partial`、`failed` 和 `cancelled`。节点只有在依赖 Artifact 已批准且确定性条件通过后才会启动；正式节点统一委托 Invocation Runtime。刷新页面只读取已有 execution / revision / node 坐标，不创建新的运行记录。
 
 ### users
 
@@ -412,7 +412,7 @@ M8 起，前台追溯信息不新增数据库字段，统一放入已脱敏 JSON
 
 ### agent_config_records
 
-后端 Agent 配置表。用于把 Agent 中心的全局 / 项目 / 集数配置从浏览器本地存储逐步迁移到后端持久化。
+后端旧 Agent 配置表。用于兼容早期 Agent 中心的全局 / 项目 / 集数配置；当前 Workflow + Skill 正式生产链和画布总控不读取该表。
 
 | 字段          | 类型   | 说明                                |
 | ------------- | ------ | ----------------------------------- |
@@ -435,7 +435,7 @@ M8 起，前台追溯信息不新增数据库字段，统一放入已脱敏 JSON
 
 ### agent_runs
 
-后端 Agent Run 表。用于保存视频工作流文本 Agent 的运行记录、阶段状态、审核结果和映射预览，替代云端主链路对浏览器 localforage、本机目录和 `.workflow-cache` 的依赖。
+后端执行任务表。表名沿用历史 `agent_runs`，当前由 Invocation Worker 记录具体模型执行、阶段状态、审核结果和映射预览；它不是岗位 Agent 编排入口。
 
 | 字段                    | 类型   | 说明                                                          |
 | ----------------------- | ------ | ------------------------------------------------------------- |

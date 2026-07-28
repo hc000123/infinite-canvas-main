@@ -423,7 +423,6 @@ export default function CreativeProjectDetailPage() {
                 onCreateCanvas={() => setCanvasCreateOpen(true)}
                 onEditCanvasPreset={setEditingCanvasPresetId}
                 onEditEpisodeTitle={openEpisodeTitleEdit}
-                onOpenAgentSettings={() => router.push(`/projects/${project.id}/agents`)}
                 onOpenWorkflowCenter={() => router.push(`/projects/${project.id}/workflows`)}
                 onOpenProjectCache={() => router.push(`/cache?projectId=${encodeURIComponent(project.id)}`)}
                 onEditProject={() => setProjectEditOpen(true)}

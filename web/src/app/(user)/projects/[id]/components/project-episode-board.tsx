@@ -57,7 +57,6 @@ type ProjectEpisodeBoardProps = {
     onCreateCanvas: () => void;
     onEditCanvasPreset: (canvasId: string) => void;
     onEditEpisodeTitle: (row: ProjectEpisodeBoardRow) => void;
-    onOpenAgentSettings: () => void;
     onOpenWorkflowCenter: () => void;
     onOpenProjectCache: () => void;
     onEditProject: () => void;
@@ -96,7 +95,6 @@ export function ProjectEpisodeBoard({
     onCreateCanvas,
     onEditCanvasPreset,
     onEditEpisodeTitle,
-    onOpenAgentSettings,
     onOpenWorkflowCenter,
     onOpenProjectCache,
     onEditProject,
@@ -115,14 +113,6 @@ export function ProjectEpisodeBoard({
             <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--studio-border-subtle)] px-4 py-4 sm:px-8">
                 <nav aria-label="项目详情视图" className="order-1 flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-4">
                     <ProjectDetailNavButton active={activeTab === "episodes"} icon={ListChecks} label="分集" onClick={() => onTabChange("episodes")} />
-                    <button
-                        type="button"
-                        className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"
-                        onClick={onOpenAgentSettings}
-                    >
-                        <Bot className="size-4" />
-                        Agent 中心
-                    </button>
                     <button
                         type="button"
                         className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"

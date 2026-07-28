@@ -31,3 +31,11 @@ test("project Agent center has an explicit return-to-project action", () => {
     assert.match(page, /返回项目/);
     assert.match(page, /`\/projects\/\$\{project\.id\}`/);
 });
+
+test("project production navigation exposes Workflow but not the compatibility Agent center", () => {
+    const board = readProjectFile("./[id]/components/project-episode-board.tsx");
+    const page = readProjectFile("./[id]/page.tsx");
+    assert.match(board, /Workflow 中心/);
+    assert.doesNotMatch(board, /Agent 中心/);
+    assert.doesNotMatch(page, /onOpenAgentSettings|\/agents`/);
+});
