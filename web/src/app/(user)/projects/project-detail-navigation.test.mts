@@ -14,16 +14,16 @@ test("project detail omits the project-level asset reference tab", () => {
     assert.doesNotMatch(page, /assetReferenceFilters|filteredAssetReferenceRows/);
 });
 
-test("project script entry names the registry Agent instead of a local AI preset", () => {
+test("project script entry invokes the selected Skill without an Agent Plan", () => {
     const page = readProjectFile("./[id]/page.tsx");
     const board = readProjectFile("./[id]/components/project-episode-board.tsx");
 
-    assert.match(page, /\n\s+运行系统剧本制作 Agent\n/);
-    assert.match(page, /buildScriptSkillOverride/);
-    assert.match(page, /skillOverrides/);
+    assert.match(page, /\n\s+运行剧本 Skill\n/);
+    assert.match(page, /preflightScriptInvocation/);
+    assert.match(page, /createInvocation/);
     assert.match(board, /aria-label="剧本优化 Skill"/);
-    assert.match(board, /系统剧本制作 Agent/);
-    assert.doesNotMatch(page, /\n\s+AI 适配剧本\n/);
+    assert.match(board, /剧本 Skill/);
+    assert.doesNotMatch(page, /createAgentPlan|Agent Plan|buildScriptSkillOverride/);
 });
 
 test("project Agent center has an explicit return-to-project action", () => {

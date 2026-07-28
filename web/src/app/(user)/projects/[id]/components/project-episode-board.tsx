@@ -350,10 +350,10 @@ function ProjectEpisodeProductionPanel({
                                 </div>
                                 <h2 className="mt-1 break-words text-lg font-semibold leading-tight text-[var(--studio-text-primary)]">{selectedEpisode ? episodeDisplayTitle(selectedEpisode) : "还没有分集剧本"}</h2>
                             </div>
-                            {selectedEpisode ? (
+                                    {selectedEpisode ? (
                                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                                    <Tag className="m-0" icon={<Bot className="size-3.5" />}>
-                                        系统剧本制作 Agent
+                                    <Tag className="m-0" icon={<Wand2 className="size-3.5" />}>
+                                        剧本 Skill
                                     </Tag>
                                     <Select aria-label="剧本优化 Skill" size="small" loading={scriptSkillsLoading} value={selectedSkillVersionId || undefined} options={scriptSkillOptions} placeholder="选择 Skill 版本" className="min-w-44" onChange={(value) => onScriptSkillChange(selectedEpisode.id, value)} />
                                     <Button size="small" icon={<Wand2 className="size-3.5" />} loading={selectedOptimizing} disabled={!selectedScript || !selectedSkillVersionId} onClick={() => onOptimizeEpisodeScript(selectedEpisode.id, selectedSkillVersionId)}>
