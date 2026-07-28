@@ -75,6 +75,16 @@ func ListVisibleAgentDefinitions(userID, projectID string) ([]model.AgentDefinit
 	return items, err
 }
 
+func ListSystemAgentDefinitions() ([]model.AgentDefinition, error) {
+	database, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	var items []model.AgentDefinition
+	err = database.Where("owner_type = ?", model.AgentOwnerSystem).Order("name asc").Find(&items).Error
+	return items, err
+}
+
 func CreateAgentVersion(version model.AgentVersion) error {
 	database, err := DB()
 	if err != nil {
