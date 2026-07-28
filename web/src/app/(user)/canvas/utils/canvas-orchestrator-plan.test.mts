@@ -50,5 +50,7 @@ test("planner prompt exposes only catalog facts and strict decision fields", () 
     assert.match(prompt, /version-script/);
     assert.match(prompt, /kind/);
     assert.match(prompt, /skillVersionId/);
+    assert.match(prompt, /estimatedCostClass/);
+    assert.match(prompt, /requiredTools/);
     assert.doesNotMatch(prompt, /files|qualityGateProfile/);
 });

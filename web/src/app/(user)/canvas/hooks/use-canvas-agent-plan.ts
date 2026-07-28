@@ -76,7 +76,7 @@ export function useCanvasAgentPlan({ run, projectId, sourceMessageId, enabled, o
         mutationFn: async () => {
             const detail = invocationQuery.data || (activeInvocationId ? await getInvocation(activeInvocationId) : undefined);
             if (!detail?.artifactSetHash || detail.run.latestAttempt < 1) throw new Error("当前 Invocation 尚无可审核产物");
-            await reviewInvocation(detail.run.id, { decision: "approved", attempt: detail.run.latestAttempt, artifactSetHash: detail.artifactSetHash, comment: "画布对话 Agent 人工批准" });
+            await reviewInvocation(detail.run.id, { decision: "approved", attempt: detail.run.latestAttempt, artifactSetHash: detail.artifactSetHash, comment: "画布总控人工批准" });
             return continueAgentPlan(run.planId);
         },
         onSuccess: (detail) => {

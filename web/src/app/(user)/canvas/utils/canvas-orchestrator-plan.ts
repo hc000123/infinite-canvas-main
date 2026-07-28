@@ -29,6 +29,8 @@ export function buildCanvasOrchestratorSystemPrompt(rolePrompt: string, catalog:
         name: option.skillName,
         summary: option.summary,
         capabilities: option.manifest.capabilities,
+        estimatedCostClass: option.manifest.estimatedCostClass,
+        requiredTools: option.manifest.requiredTools || [],
         inputs: option.inputBindings.map((input) => ({ bindingName: input.bindingName, artifactType: input.artifactType })),
         outputs: option.outputBindings.map((output) => ({ bindingName: output.bindingName, artifactType: output.artifactType })),
     }));

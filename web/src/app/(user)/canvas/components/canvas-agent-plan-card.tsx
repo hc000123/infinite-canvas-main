@@ -29,7 +29,7 @@ export function CanvasAgentPlanCard({ run, projectId, sourceMessageId, onRunPatc
         <div className="w-[310px] rounded-lg border p-3 text-sm" style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}>
             <div className="flex items-start justify-between gap-2">
                 <div>
-                    <div className="text-xs font-medium opacity-60">AGENT TEMPORARY PLAN</div>
+                    <div className="text-xs font-medium opacity-60">画布总控临时计划</div>
                     <div className="mt-1 font-medium">{run.agentName}</div>
                 </div>
                 <Tag>{statusLabel(status)}</Tag>

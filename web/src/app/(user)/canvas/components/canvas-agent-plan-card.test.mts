@@ -26,12 +26,13 @@ test("Agent Plan hook delegates lifecycle to shared backend APIs", async () => {
     }
     assert.match(hook, /confirmationRequirementCodes/);
     assert.match(hook, /artifactSetHash/);
-    assert.match(hook, /comment: "画布对话 Agent 人工批准"/);
+    assert.match(hook, /comment: "画布总控人工批准"/);
 });
 
 test("assistant messages render an editable Temporary Plan card", async () => {
     const [card, messages] = await Promise.all([read("./canvas-agent-plan-card.tsx"), read("./canvas-assistant-messages.tsx")]);
     assert.match(card, /保存计划修订/);
+    assert.match(card, /画布总控临时计划/);
     assert.match(card, /预检并冻结/);
     assert.match(card, /确认版本与额度/);
     assert.match(card, /批准当前产物/);
