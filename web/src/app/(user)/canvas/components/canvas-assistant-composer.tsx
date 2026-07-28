@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowUp, Bot, FileText, ImageIcon, LoaderCircle, MessageSquare, Network, Sparkles } from "lucide-react";
-import { Button, Select, Tooltip } from "antd";
+import { Button, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
 import { ModelThinkingSettings } from "@/components/image-settings-panel";
@@ -15,19 +15,14 @@ import { AssistantReferenceChip } from "./canvas-assistant-messages";
 import type { CanvasAssistantReference } from "../types";
 
 export type AssistantMode = "ask" | "image";
-export type CanvasAssistantAgentOption = { value: string; label: string };
 
 type CanvasAssistantComposerProps = {
     mode: AssistantMode;
-    agentId: string;
-    agentOptions: CanvasAssistantAgentOption[];
-    agentLoading: boolean;
     prompt: string;
     isRunning: boolean;
     references: CanvasAssistantReference[];
     config: AiConfig;
     onModeChange: (mode: AssistantMode) => void;
-    onAgentChange: (agentId: string) => void;
     onPromptChange: (prompt: string) => void;
     onSubmit: () => void;
     onConfigChange: (key: keyof AiConfig, value: string) => void;
@@ -42,15 +37,11 @@ type CanvasAssistantComposerProps = {
 
 export function CanvasAssistantComposer({
     mode,
-    agentId,
-    agentOptions,
-    agentLoading,
     prompt,
     isRunning,
     references,
     config,
     onModeChange,
-    onAgentChange,
     onPromptChange,
     onSubmit,
     onConfigChange,
@@ -106,9 +97,7 @@ export function CanvasAssistantComposer({
                         <Tooltip title="开发调试：生成动作预览">
                             <Button type="text" shape="circle" className="canvas-composer-icon !h-8 !min-w-8 !rounded-full !px-2" icon={<Sparkles className="size-4" />} onClick={onCreateDebugActionPreview} />
                         </Tooltip>
-                        {mode === "ask" ? (
-                            <PublishedAgentSelect value={agentId} options={agentOptions} loading={agentLoading} theme={theme} onChange={onAgentChange} />
-                        ) : null}
+                        {mode === "ask" ? <Tooltip title="普通回答不建计划；需要执行时才由总控生成临时 Skill 计划"><div className="flex h-8 shrink-0 items-center gap-1 px-2 text-xs font-medium" style={{ color: theme.node.text }}><Bot className="size-3.5 opacity-70" />画布总控</div></Tooltip> : null}
                         <AssistantModeSwitch mode={mode} theme={theme} onChange={onModeChange} />
                         {mode === "image" ? (
                             <>
@@ -129,34 +118,13 @@ export function CanvasAssistantComposer({
                     </div>
                     <Button type="primary" className="!h-10 !min-w-16 shrink-0 !rounded-full !px-3" disabled={isRunning || !prompt.trim()} onClick={() => void onSubmit()} aria-label="发送">
                         <span className="flex items-center gap-1.5">
-                            <span className="inline-flex items-center gap-1 text-xs font-medium tabular-nums">{agentId ? "Plan" : <><CreditSymbol />{credits.toLocaleString()}</>}</span>
+                            <span className="inline-flex items-center gap-1 text-xs font-medium tabular-nums"><CreditSymbol />{credits.toLocaleString()}</span>
                             {isRunning ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
                         </span>
                     </Button>
                 </div>
             </div>
         </div>
-    );
-}
-
-function PublishedAgentSelect({ value, options, loading, theme, onChange }: { value: string; options: CanvasAssistantAgentOption[]; loading: boolean; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onChange: (agentId: string) => void }) {
-    return (
-        <Tooltip title="选择已发布 Agent；普通对话不会创建 Plan">
-            <div className="flex h-8 shrink-0 items-center gap-1 rounded-full px-2" style={{ background: theme.node.fill, color: theme.node.text }}>
-                <Bot className="size-3.5 opacity-70" />
-                <Select
-                    size="small"
-                    variant="borderless"
-                    value={value}
-                    loading={loading}
-                    className="w-[128px]"
-                    popupMatchSelectWidth={220}
-                    getPopupContainer={() => document.body}
-                    options={[{ value: "", label: "普通对话" }, ...options]}
-                    onChange={onChange}
-                />
-            </div>
-        </Tooltip>
     );
 }
 

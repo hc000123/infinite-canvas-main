@@ -4,14 +4,14 @@ import test from "node:test";
 
 const read = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("published Agent Runtime replaces the hardcoded Prompt Agent production path", async () => {
+test("the unique canvas orchestrator replaces selectable production Agents", async () => {
     const [composer, panel, types] = await Promise.all([read("./canvas-assistant-composer.tsx"), read("./canvas-assistant-panel.tsx"), read("../types.ts")]);
 
-    assert.match(composer, /PublishedAgentSelect/);
-    assert.match(composer, /label: "普通对话"/);
+    assert.match(composer, /画布总控/);
+    assert.doesNotMatch(composer, /PublishedAgentSelect|agentOptions|onAgentChange/);
     assert.doesNotMatch(composer, /PromptAgentSkillPackSelect|promptAgentSkillPacks/);
     assert.doesNotMatch(panel, /sendPromptAgentMessage|buildPromptAgentSystemContext|parsePromptAgentPlan|CanvasAssistantToolboxCard/);
-    assert.match(panel, /await sendMessage\(text, mode, messages\)/);
+    assert.match(panel, /sendCanvasOrchestratorMessage/);
     assert.match(panel, /if \(nextMode === "image"\)/);
     assert.doesNotMatch(types, /promptAgentPlan|promptAgentSkillPackId|promptAgentExecutionState/);
 });
