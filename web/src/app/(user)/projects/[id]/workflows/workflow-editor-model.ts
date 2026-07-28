@@ -1,24 +1,22 @@
 import type { WorkflowNodeSpec, WorkflowPackage, WorkflowSkillBindingMode } from "@/services/api/workflow-registry";
 import type { SkillOption } from "@/services/api/admin-skills";
 
-export function createWorkflowNode(pkg: WorkflowPackage, executorType: "skill" | "agent"): WorkflowNodeSpec {
-    const prefix = executorType === "skill" ? "skill" : "agent";
+export function createWorkflowNode(pkg: WorkflowPackage): WorkflowNodeSpec {
+    const prefix = "skill";
     let index = 1;
     const used = new Set(pkg.nodes.map((node) => node.nodeKey));
     while (used.has(`${prefix}_${index}`)) index += 1;
     const base: Omit<WorkflowNodeSpec, "skillBinding" | "agentRef"> = {
         nodeKey: `${prefix}_${index}`,
-        name: executorType === "skill" ? "新 Skill 节点" : "新 Agent 节点",
-        executorType,
+        name: "新 Skill 节点",
+        executorType: "skill",
         inputBindings: [],
         outputArtifactType: "production_script",
         dependsOn: [],
         confirmationPolicy: { requireBeforeRun: false, requireReview: true },
         retryPolicy: { maxAttempts: 2 },
     };
-    return executorType === "skill"
-        ? { ...base, skillBinding: emptySkillBinding("fixed") }
-        : { ...base, agentRef: { agentId: "", agentVersionId: "", agentVersionConstraint: "" } };
+    return { ...base, skillBinding: emptySkillBinding("fixed") };
 }
 
 export function addWorkflowNode(pkg: WorkflowPackage, node: WorkflowNodeSpec): WorkflowPackage {
@@ -118,7 +116,7 @@ export function nextWorkflowPatchVersion(version: string) {
 }
 
 export function workflowPackageFromSkillOption(option: SkillOption): WorkflowPackage {
-    const node = applySkillOptionToWorkflowNode(createWorkflowNode({ inputArtifactTypes: [], nodes: [], contentHash: "" }, "skill"), option);
+    const node = applySkillOptionToWorkflowNode(createWorkflowNode({ inputArtifactTypes: [], nodes: [], contentHash: "" }), option);
     node.nodeKey = "script";
     node.name = option.skillName;
     return { inputArtifactTypes: [...new Set(option.manifest.inputArtifactTypes)], nodes: [node], contentHash: "" };

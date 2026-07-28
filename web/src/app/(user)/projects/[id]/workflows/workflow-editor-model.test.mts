@@ -32,8 +32,11 @@ test("removing a node cleans dependency and node-output bindings", () => {
 
 test("new nodes get stable unique keys and binding modes serialize explicitly", () => {
     const pkg: WorkflowPackage = { inputArtifactTypes: ["source_text"], contentHash: "", nodes: [skillNode("skill_1", "production_script")] };
-    const node = createWorkflowNode(pkg, "skill");
+    const node = createWorkflowNode(pkg);
     assert.equal(node.nodeKey, "skill_2");
+    assert.equal(node.executorType, "skill");
+    assert.equal(node.agentRef, undefined);
+    assert.ok(node.skillBinding);
     const added = addWorkflowNode(pkg, node);
     const routed = setWorkflowSkillBindingMode(added.nodes[1]!, "manual_before_run");
     assert.equal(routed.skillBinding?.mode, "manual_before_run");
