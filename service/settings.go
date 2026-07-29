@@ -97,28 +97,6 @@ func AdminTestChannelModel(index *int, channel model.ModelChannel, modelName str
 	return testAdminChannelModel(resolved, modelName)
 }
 
-func AdminStartJimengLogin(index *int, channel model.ModelChannel) (JimengLoginStartResult, error) {
-	resolved, err := resolveAdminChannel(index, channel)
-	if err != nil {
-		return JimengLoginStartResult{}, err
-	}
-	if !IsJimengCLIProtocol(resolved.Protocol) {
-		return JimengLoginStartResult{}, errors.New("当前渠道不是即梦 CLI")
-	}
-	return StartJimengLogin(context.Background(), resolved)
-}
-
-func AdminCheckJimengLogin(index *int, channel model.ModelChannel, deviceCode string) (JimengLoginCheckResult, error) {
-	resolved, err := resolveAdminChannel(index, channel)
-	if err != nil {
-		return JimengLoginCheckResult{}, err
-	}
-	if !IsJimengCLIProtocol(resolved.Protocol) {
-		return JimengLoginCheckResult{}, errors.New("当前渠道不是即梦 CLI")
-	}
-	return CheckJimengLogin(context.Background(), resolved, deviceCode)
-}
-
 type ModelChannelPreflightResult struct {
 	ChannelName      string `json:"channelName"`
 	Model            string `json:"model"`
@@ -134,6 +112,17 @@ type ModelChannelPreflightResult struct {
 }
 
 func PreflightModelChannel(modelName string) (ModelChannelPreflightResult, error) {
+	return preflightModelChannel(context.Background(), model.AuthUser{}, modelName, false)
+}
+
+func PreflightModelChannelForUser(ctx context.Context, user model.AuthUser, modelName string) (ModelChannelPreflightResult, error) {
+	return preflightModelChannel(ctx, user, modelName, true)
+}
+
+func preflightModelChannel(ctx context.Context, user model.AuthUser, modelName string, useUserJimengHome bool) (ModelChannelPreflightResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	modelName = strings.TrimSpace(modelName)
 	if modelName == "" {
 		return ModelChannelPreflightResult{}, safeMessageError{message: "缺少视频模型"}
@@ -155,7 +144,15 @@ func PreflightModelChannel(modelName string) (ModelChannelPreflightResult, error
 		}
 	}
 	if IsJimengCLIProtocol(channel.Protocol) {
-		jimengResult, err := PreflightJimengCLI(channel, modelName)
+		preflightCtx := ctx
+		if useUserJimengHome {
+			userID := strings.TrimSpace(user.ID)
+			if userID == "" {
+				return ModelChannelPreflightResult{}, safeMessageError{message: "缺少用户身份"}
+			}
+			preflightCtx = WithJimengCLIHome(preflightCtx, JimengUserHomeDir(channel, userID))
+		}
+		jimengResult, err := PreflightJimengCLI(preflightCtx, channel, modelName)
 		if err != nil {
 			if safe, ok := err.(interface{ SafeMessage() string }); ok {
 				return ModelChannelPreflightResult{}, safeMessageError{message: decoratePreflightChannelMessage(safe.SafeMessage(), result)}
@@ -1069,14 +1066,14 @@ func testAdminChannelModel(channel model.ModelChannel, modelName string) (string
 		return fmt.Sprintf("企业 API 鉴权通过；本地模型 %s 将使用火山 EP %s，EP 实际绑定模型以火山后台为准", modelName, endpointID), nil
 	}
 	if IsJimengCLIProtocol(channel.Protocol) {
-		result, err := PreflightJimengCLI(channel, modelName)
+		result, err := PreflightJimengCLIInstallation(channel, modelName)
 		if err != nil {
 			return "", err
 		}
 		if result.Version != "" {
-			return fmt.Sprintf("即梦 CLI 预检通过；模型 %s 可用；CLI 版本 %s", modelName, result.Version), nil
+			return fmt.Sprintf("即梦 CLI 可用；模型 %s 可用；CLI 版本 %s。用户需在个人配置中自行完成网页登录", modelName, result.Version), nil
 		}
-		return fmt.Sprintf("即梦 CLI 预检通过；模型 %s 可用", modelName), nil
+		return fmt.Sprintf("即梦 CLI 可用；模型 %s 可用。用户需在个人配置中自行完成网页登录", modelName), nil
 	}
 	if IsXinglianCloudProtocol(channel.Protocol) {
 		if err := PreflightXinglianChannel(channel, modelName); err != nil {

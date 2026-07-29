@@ -28,6 +28,28 @@ func TestVolcengineVideoReviewRouteExists(t *testing.T) {
 	}
 }
 
+func TestUserJimengLoginRoutesRequireAuthAndAdminRoutesAreRemoved(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	for _, path := range []string{"/api/v1/jimeng-login/start", "/api/v1/jimeng-login/check"} {
+		recorder := httptest.NewRecorder()
+		app.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, path, nil))
+		if recorder.Code == http.StatusNotFound {
+			t.Fatalf("user jimeng login route missing: %s", path)
+		}
+		if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+			t.Fatalf("user jimeng login route did not reach auth: path=%s body=%s", path, recorder.Body.String())
+		}
+	}
+	for _, path := range []string{"/api/admin/settings/jimeng-login/start", "/api/admin/settings/jimeng-login/check"} {
+		recorder := httptest.NewRecorder()
+		app.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, path, nil))
+		if recorder.Code != http.StatusNotFound {
+			t.Fatalf("admin jimeng login route still exists: path=%s status=%d body=%s", path, recorder.Code, recorder.Body.String())
+		}
+	}
+}
+
 func TestUploadedAssetsUseNoSniffHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	oldPublicAssetDir := config.Cfg.PublicAssetDir

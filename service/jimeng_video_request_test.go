@@ -117,6 +117,23 @@ func TestRunJimengCLIUsesDreaminaHome(t *testing.T) {
 	}
 }
 
+func TestRunJimengCLIUsesContextDreaminaHome(t *testing.T) {
+	globalHome := filepath.Join(t.TempDir(), "global-home")
+	userHome := filepath.Join(t.TempDir(), "user-home")
+	t.Setenv("DREAMINA_HOME", globalHome)
+	cli := filepath.Join(t.TempDir(), "dreamina")
+	if err := os.WriteFile(cli, []byte("#!/bin/sh\nprintf '%s' \"$HOME\"\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	output, err := runJimengCLI(WithJimengCLIHome(context.Background(), userHome), model.ModelChannel{CLIPath: cli}, "version")
+	if err != nil {
+		t.Fatalf("runJimengCLI: %v", err)
+	}
+	if string(output) != userHome {
+		t.Fatalf("HOME = %q, want per-user home %q", output, userHome)
+	}
+}
+
 func buildJimengMultipart(t *testing.T, mode string, uploads []jimengUpload) ([]byte, string) {
 	t.Helper()
 	var body bytes.Buffer

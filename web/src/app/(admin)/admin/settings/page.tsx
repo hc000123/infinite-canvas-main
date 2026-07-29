@@ -12,14 +12,10 @@ import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind"
 import { ProviderPresetModal } from "./components/provider-preset-modal";
 import type { ModelChannelPresetResult } from "./model-channel-presets";
 import {
-    checkJimengLogin,
     fetchAdminSettings,
     fetchChannelModels,
     saveAdminSettings,
-    startJimengLogin,
     testChannelModel,
-    type AdminChannelActionRequest,
-    type AdminJimengLoginStartResult,
     type AdminModelChannel,
     type AdminModelCost,
     type AdminSettings,
@@ -86,7 +82,6 @@ const emptyChannel: AdminModelChannel = {
     remark: "",
 };
 const savedSecretExtra = "已保存的密钥不会在刷新后回显明文；留空保存会继续使用后台已保存的密钥，只在输入新值时替换。";
-const jimengPendingLoginStorageKey = "infinite-canvas:pending-jimeng-login";
 const xinglianVideoModels = ["sd2-720p-fast", "sd2-720p", "sd2-720p-sh", "sd2-720p-mini", "sd2-1080p-mini", "sd2-1080p-fast", "sd2-1080p", "sd2-720p-ax-fast", "sd2-720p-ax"];
 
 type SettingsTabKey = "public" | "private";
@@ -95,7 +90,6 @@ type ModelSelectTabKey = "new" | "current";
 type AutoSaveStatus = "idle" | "saving" | "saved" | "error";
 type ChannelFormValues = AdminModelChannel & { endpointId?: string };
 type ChannelTableItem = AdminModelChannel & { _index: number; _rowKey: string };
-type PendingJimengLogin = { payload: AdminChannelActionRequest; result: AdminJimengLoginStartResult; createdAt: number; channelName: string };
 
 export default function AdminSettingsPage() {
     const token = useUserStore((state) => state.token);
@@ -121,10 +115,6 @@ export default function AdminSettingsPage() {
     const [selectedTestModels, setSelectedTestModels] = useState<string[]>([]);
     const [testingModels, setTestingModels] = useState<string[]>([]);
     const [testResults, setTestResults] = useState<Record<string, { status: "success" | "error"; duration?: string; message: string }>>({});
-    const [jimengLoginResult, setJimengLoginResult] = useState<AdminJimengLoginStartResult | null>(null);
-    const [pendingJimengLogin, setPendingJimengLogin] = useState<PendingJimengLogin | null>(null);
-    const [isStartingJimengLogin, setIsStartingJimengLogin] = useState(false);
-    const [isCheckingJimengLogin, setIsCheckingJimengLogin] = useState(false);
     const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
     const [modelSelectSource, setModelSelectSource] = useState<string[]>([]);
     const [modelSelectExisting, setModelSelectExisting] = useState<string[]>([]);
@@ -189,14 +179,6 @@ export default function AdminSettingsPage() {
     useEffect(() => {
         void loadSettings();
     }, [loadSettings]);
-
-    useEffect(() => {
-        const pending = readPendingJimengLogin();
-        if (!pending) return;
-        setPendingJimengLogin(pending);
-        setActiveTab("private");
-        setEditorMode((current) => ({ ...current, private: "visual" }));
-    }, []);
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -301,7 +283,6 @@ export default function AdminSettingsPage() {
     const openChannelDrawer = (index: number | null) => {
         setEditingChannelIndex(index);
         setIsChannelDrawerOpen(true);
-        setJimengLoginResult(null);
         const channel = index === null ? emptyChannel : normalizeChannel(channels[index]);
         channelForm.setFieldsValue({ ...channel, apiKey: "", endpointId: channel.endpointId || arkEndpointFromModels(channel.models), models: visibleChannelModels(channel.models), endpointMappings: channelEndpointMappingFields(channel) });
         rememberModels(channel.models);
@@ -333,7 +314,6 @@ export default function AdminSettingsPage() {
         setIsChannelDrawerOpen(false);
         setEditingChannelIndex(null);
         setChannelAutoSaveStatus("idle");
-        setJimengLoginResult(null);
         channelForm.resetFields();
     };
 
@@ -509,59 +489,6 @@ export default function AdminSettingsPage() {
         }
     };
 
-    const channelLoginPayload = () => ({
-        index: editingChannelIndex === null ? undefined : editingChannelIndex,
-        channel: normalizeChannel(channelForm.getFieldsValue(true) as ChannelFormValues),
-    });
-
-    const startJimengWebLogin = async () => {
-        if (!token) return;
-        const payload = channelLoginPayload();
-        if (payload.channel.protocol !== "jimeng-cli") {
-            message.warning("请先把渠道协议切到即梦 CLI");
-            return;
-        }
-        setIsStartingJimengLogin(true);
-        try {
-            const result = await startJimengLogin(token, payload);
-            setJimengLoginResult(result);
-            if (result.loginReady) {
-                clearPendingJimengLogin();
-                setPendingJimengLogin(null);
-            } else {
-                const pending = { payload, result, createdAt: Date.now(), channelName: payload.channel.name || "即梦 CLI" };
-                savePendingJimengLogin(pending);
-                setPendingJimengLogin(pending);
-            }
-            message.success(result.loginReady ? result.message || "即梦 CLI 已登录" : "已获取即梦网页登录验证码");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "获取即梦网页登录验证码失败");
-        } finally {
-            setIsStartingJimengLogin(false);
-        }
-    };
-
-    const checkJimengWebLogin = async (pending?: PendingJimengLogin) => {
-        const loginResult = pending?.result || jimengLoginResult;
-        if (!token || !loginResult) return;
-        setIsCheckingJimengLogin(true);
-        try {
-            const result = await checkJimengLogin(token, { ...(pending?.payload || channelLoginPayload()), deviceCode: loginResult.deviceCode });
-            if (result.loginReady) {
-                clearPendingJimengLogin();
-                setPendingJimengLogin(null);
-                setJimengLoginResult({ ...loginResult, loginReady: true, message: result.message });
-                message.success(result.message || "即梦网页登录验证已完成");
-            } else {
-                message.warning(result.message || "即梦登录尚未完成");
-            }
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "即梦网页登录验证未完成");
-        } finally {
-            setIsCheckingJimengLogin(false);
-        }
-    };
-
     const batchTestModels = async () => {
         for (const model of selectedTestModels) {
             await testModelOnline(model);
@@ -573,14 +500,6 @@ export default function AdminSettingsPage() {
     const isTestingArkChannel = testChannel?.protocol === "volcengine-ark";
     const isTestingJimengChannel = testChannel?.protocol === "jimeng-cli";
     const isTestingXinglianChannel = testChannel?.protocol === "xinglian-cloud";
-    const jimengLoginURL = jimengLoginURLFromResult(jimengLoginResult);
-    const pendingJimengLoginURL = jimengLoginURLFromResult(pendingJimengLogin?.result);
-
-    const openJimengVerificationURL = (url: string) => {
-        if (!url || typeof window === "undefined") return;
-        const opened = window.open(url, "_blank", "noopener,noreferrer");
-        if (!opened) message.warning("验证网页被浏览器拦截，可复制验证码或验证链接后手动打开。");
-    };
 
     async function persistChannels(nextChannels: AdminModelChannel[], options: { silent?: boolean } = {}) {
         if (!token) return;
@@ -866,46 +785,6 @@ export default function AdminSettingsPage() {
                                         />
                                     ) : null}
                                 </div>
-                                {pendingJimengLogin ? (
-                                    <Alert
-                                        showIcon
-                                        type="info"
-                                        title="即梦验证待完成"
-                                        description={
-                                            <Flex vertical gap={8}>
-                                                <Typography.Text type="secondary">如果即梦网页已经提示登录成功，回到这里点击“完成验证”写入 CLI 登录态。即梦授权页不会自动跳回本后台。</Typography.Text>
-                                                {pendingJimengLogin.result.userCode ? (
-                                                    <Space size={12} wrap>
-                                                        <Typography.Text>渠道：{pendingJimengLogin.channelName}</Typography.Text>
-                                                        <Typography.Text>
-                                                            验证码：
-                                                            <Typography.Text code copyable>
-                                                                {pendingJimengLogin.result.userCode}
-                                                            </Typography.Text>
-                                                        </Typography.Text>
-                                                        {pendingJimengLoginURL ? <Typography.Text copyable={{ text: pendingJimengLoginURL }}>复制验证链接</Typography.Text> : null}
-                                                    </Space>
-                                                ) : null}
-                                                <Space wrap>
-                                                    <Button type="primary" loading={isCheckingJimengLogin} onClick={() => void checkJimengWebLogin(pendingJimengLogin)}>
-                                                        完成验证
-                                                    </Button>
-                                                    <Button disabled={!pendingJimengLoginURL} onClick={() => openJimengVerificationURL(pendingJimengLoginURL)}>
-                                                        重新打开验证网页
-                                                    </Button>
-                                                    <Button
-                                                        onClick={() => {
-                                                            clearPendingJimengLogin();
-                                                            setPendingJimengLogin(null);
-                                                        }}
-                                                    >
-                                                        清除
-                                                    </Button>
-                                                </Space>
-                                            </Flex>
-                                        }
-                                    />
-                                ) : null}
                                 <Space wrap>
                                     <Button type="primary" icon={<FormatPainterOutlined />} onClick={() => setIsProviderPresetOpen(true)}>
                                         一键配置厂商
@@ -1213,38 +1092,12 @@ export default function AdminSettingsPage() {
                                             <Alert
                                                 type="info"
                                                 showIcon
-                                                title="即梦网页登录验证"
+                                                title="即梦用户登录"
                                                 description={
-                                                    <Flex vertical gap={8}>
-                                                        {jimengLoginResult?.loginReady ? (
-                                                            <Typography.Text type="success">{jimengLoginResult.message || "即梦 CLI 已登录，可以直接预检视频模型。"}</Typography.Text>
-                                                        ) : (
-                                                            <Typography.Text type="secondary">点击获取验证码后，在新打开的即梦网页里输入验证码并确认，再回到这里点击完成验证。</Typography.Text>
-                                                        )}
-                                                        {jimengLoginResult?.userCode ? (
-                                                            <Space size={12} wrap>
-                                                                <Typography.Text>
-                                                                    验证码：
-                                                                    <Typography.Text code copyable>
-                                                                        {jimengLoginResult.userCode}
-                                                                    </Typography.Text>
-                                                                </Typography.Text>
-                                                                {jimengLoginResult.expiresIn ? <Typography.Text type="secondary">{Math.floor(jimengLoginResult.expiresIn / 60)} 分钟内有效</Typography.Text> : null}
-                                                            </Space>
-                                                        ) : null}
-                                                        <Space wrap>
-                                                            <Button loading={isStartingJimengLogin} onClick={() => void startJimengWebLogin()}>
-                                                                获取验证码
-                                                            </Button>
-                                                            <Button type="primary" disabled={!jimengLoginURL} onClick={() => openJimengVerificationURL(jimengLoginURL)}>
-                                                                打开验证网页
-                                                            </Button>
-                                                            <Button loading={isCheckingJimengLogin} disabled={!jimengLoginResult || jimengLoginResult.loginReady} onClick={() => void checkJimengWebLogin()}>
-                                                                完成验证
-                                                            </Button>
-                                                            {jimengLoginURL ? <Typography.Text copyable={{ text: jimengLoginURL }}>复制验证链接</Typography.Text> : null}
-                                                        </Space>
-                                                    </Flex>
+                                                    <Typography.Text type="secondary">
+                                                        管理员只配置 CLI 路径、输出目录、模型和算力成本；用户在个人配置中自行完成即梦网页登录。生成请求仍经过后台任务系统，管理员可在用量统计和 AI
+                                                        任务里查看用户、模型、状态和算力流水。
+                                                    </Typography.Text>
                                                 }
                                             />
                                         </Col>
@@ -1769,46 +1622,6 @@ function channelMissingReasons(channel: AdminModelChannel) {
         reasons.push("模型");
     }
     return reasons;
-}
-
-function jimengLoginURLFromResult(result?: AdminJimengLoginStartResult | null) {
-    return result?.verificationUriComplete || result?.verificationUri || "";
-}
-
-function readPendingJimengLogin(): PendingJimengLogin | null {
-    if (typeof window === "undefined") return null;
-    try {
-        const raw = window.localStorage.getItem(jimengPendingLoginStorageKey);
-        if (!raw) return null;
-        const pending = JSON.parse(raw) as PendingJimengLogin;
-        if (!isPendingJimengLogin(pending)) {
-            clearPendingJimengLogin();
-            return null;
-        }
-        const ttl = Math.max(10 * 60, pending.result.expiresIn || 30 * 60) * 1000;
-        if (Date.now() - pending.createdAt > ttl) {
-            clearPendingJimengLogin();
-            return null;
-        }
-        return pending;
-    } catch {
-        clearPendingJimengLogin();
-        return null;
-    }
-}
-
-function savePendingJimengLogin(pending: PendingJimengLogin) {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(jimengPendingLoginStorageKey, JSON.stringify(pending));
-}
-
-function clearPendingJimengLogin() {
-    if (typeof window === "undefined") return;
-    window.localStorage.removeItem(jimengPendingLoginStorageKey);
-}
-
-function isPendingJimengLogin(value: PendingJimengLogin | null | undefined): value is PendingJimengLogin {
-    return Boolean(value?.result?.deviceCode && value?.result?.userCode && jimengLoginURLFromResult(value.result) && value?.payload?.channel?.protocol === "jimeng-cli");
 }
 
 function parseTabJson(tab: "public", value: string): AdminSettings["public"] | null;

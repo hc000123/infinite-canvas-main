@@ -3,6 +3,8 @@ package service
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -527,6 +529,34 @@ func TestAdminTestArkChannelModelReportsEnterpriseAPIAuthFailure(t *testing.T) {
 	}
 	if strings.Contains(message, "bad-key") {
 		t.Fatalf("error leaked full api key: %q", message)
+	}
+}
+
+func TestAdminTestJimengChannelModelDoesNotRequireUserLogin(t *testing.T) {
+	cli := filepath.Join(t.TempDir(), "dreamina")
+	script := `#!/bin/sh
+case "$1" in
+  version) printf '{"version":"test-jimeng"}\n' ;;
+  user_credit) echo "not logged in" >&2; exit 2 ;;
+  *) echo "unexpected command: $*" >&2; exit 2 ;;
+esac
+`
+	if err := os.WriteFile(cli, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := AdminTestChannelModel(nil, model.ModelChannel{
+		Protocol: string(model.ModelProtocolJimengCLI),
+		Name:     "即梦本机 CLI",
+		CLIPath:  cli,
+		Models:   []string{"seedance2.0fast"},
+		Enabled:  true,
+	}, "seedance2.0fast")
+	if err != nil {
+		t.Fatalf("AdminTestChannelModel returned error: %v", err)
+	}
+	if !strings.Contains(result, "CLI 可用") {
+		t.Fatalf("result = %q, want CLI-only success", result)
 	}
 }
 

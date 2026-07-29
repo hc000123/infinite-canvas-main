@@ -9,10 +9,14 @@ import (
 )
 
 type adminChannelActionRequest struct {
-	Index      *int               `json:"index"`
-	Channel    model.ModelChannel `json:"channel"`
-	Model      string             `json:"model"`
-	DeviceCode string             `json:"deviceCode"`
+	Index   *int               `json:"index"`
+	Channel model.ModelChannel `json:"channel"`
+	Model   string             `json:"model"`
+}
+
+type userJimengLoginRequest struct {
+	Model      string `json:"model"`
+	DeviceCode string `json:"deviceCode"`
 }
 
 func Settings(w http.ResponseWriter, r *http.Request) {
@@ -66,10 +70,15 @@ func AdminTestChannelModel(w http.ResponseWriter, r *http.Request) {
 	OK(w, result)
 }
 
-func AdminStartJimengLogin(w http.ResponseWriter, r *http.Request) {
-	var request adminChannelActionRequest
+func UserStartJimengLogin(w http.ResponseWriter, r *http.Request) {
+	user, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	var request userJimengLoginRequest
 	_ = json.NewDecoder(r.Body).Decode(&request)
-	result, err := service.AdminStartJimengLogin(request.Index, request.Channel)
+	result, err := service.StartUserJimengLogin(r.Context(), user, request.Model)
 	if err != nil {
 		FailError(w, err)
 		return
@@ -77,10 +86,15 @@ func AdminStartJimengLogin(w http.ResponseWriter, r *http.Request) {
 	OK(w, result)
 }
 
-func AdminCheckJimengLogin(w http.ResponseWriter, r *http.Request) {
-	var request adminChannelActionRequest
+func UserCheckJimengLogin(w http.ResponseWriter, r *http.Request) {
+	user, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	var request userJimengLoginRequest
 	_ = json.NewDecoder(r.Body).Decode(&request)
-	result, err := service.AdminCheckJimengLogin(request.Index, request.Channel, request.DeviceCode)
+	result, err := service.CheckUserJimengLogin(r.Context(), user, request.Model, request.DeviceCode)
 	if err != nil {
 		FailError(w, err)
 		return

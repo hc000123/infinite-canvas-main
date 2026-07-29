@@ -1,10 +1,12 @@
 "use client";
 
-import { App, Button, Form, Modal, Segmented } from "antd";
+import { CheckCircle2, ExternalLink, KeyRound } from "lucide-react";
+import { Alert, App, Button, Form, Modal, Segmented, Space, Typography } from "antd";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { ModelPicker } from "@/components/model-picker";
+import { checkUserJimengLogin, startUserJimengLogin, type JimengLoginStartResult } from "@/services/api/jimeng-login";
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
@@ -25,9 +27,13 @@ export function AppConfigModal() {
     const modelChannel = publicSettings?.modelChannel;
     const modelConfig = effectiveConfig;
     const videoModel = modelConfig.videoModel;
+    const isJimengVideoModel = modelConfig.videoProtocol === "jimeng-cli";
     const isAdmin = user?.role === "admin" || user?.role === "superadmin";
     const showAdminSettingsEntry = isAdmin;
     const allowCustomModel = modelChannel?.allowCustomChannel !== false;
+    const [jimengLogin, setJimengLogin] = useState<JimengLoginStartResult | null>(null);
+    const [isStartingJimengLogin, setIsStartingJimengLogin] = useState(false);
+    const [isCheckingJimengLogin, setIsCheckingJimengLogin] = useState(false);
 
     useEffect(() => {
         if (isConfigOpen && showAdminSettingsEntry) router.prefetch("/admin/settings");
@@ -52,6 +58,49 @@ export function AppConfigModal() {
     const openAdminSettings = () => {
         setConfigDialogOpen(false);
         router.push("/admin/settings");
+    };
+
+    const jimengLoginURL = jimengLogin?.verificationUriComplete || jimengLogin?.verificationUri || "";
+
+    const startJimengLogin = async () => {
+        if (!videoModel.trim()) {
+            message.warning("请先选择即梦视频模型");
+            return;
+        }
+        setIsStartingJimengLogin(true);
+        try {
+            const result = await startUserJimengLogin(videoModel);
+            setJimengLogin(result);
+            message.success(result.loginReady ? result.message || "即梦 CLI 已登录" : "已获取即梦网页登录验证码");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "获取即梦验证码失败");
+        } finally {
+            setIsStartingJimengLogin(false);
+        }
+    };
+
+    const checkJimengLogin = async () => {
+        if (!jimengLogin?.deviceCode) return;
+        setIsCheckingJimengLogin(true);
+        try {
+            const result = await checkUserJimengLogin({ model: videoModel, deviceCode: jimengLogin.deviceCode });
+            if (result.loginReady) {
+                setJimengLogin({ ...jimengLogin, loginReady: true, message: result.message });
+                message.success(result.message || "即梦网页登录验证已完成");
+            } else {
+                message.warning(result.message || "即梦登录尚未完成");
+            }
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "即梦网页登录验证未完成");
+        } finally {
+            setIsCheckingJimengLogin(false);
+        }
+    };
+
+    const openJimengLoginURL = () => {
+        if (!jimengLoginURL || typeof window === "undefined") return;
+        const opened = window.open(jimengLoginURL, "_blank", "noopener,noreferrer");
+        if (!opened) message.warning("验证网页被浏览器拦截，可复制链接后手动打开。");
     };
 
     return (
@@ -98,6 +147,43 @@ export function AppConfigModal() {
                             <ModelPicker config={modelConfig} modelType="text" value={modelConfig.textModel} onChange={(value) => updateConfig("textModel", value)} fullWidth allowCustomModel={allowCustomModel} />
                         </Form.Item>
                     </div>
+                    {isJimengVideoModel ? (
+                        <Alert
+                            className="mb-4"
+                            showIcon
+                            type={jimengLogin?.loginReady ? "success" : "info"}
+                            title="即梦网页登录"
+                            description={
+                                <div className="space-y-3">
+                                    <Typography.Text type="secondary">当前视频模型使用即梦 CLI。每个用户使用自己的即梦账号登录，后台仍会记录任务和用量。</Typography.Text>
+                                    {jimengLogin?.userCode ? (
+                                        <Space size={12} wrap>
+                                            <Typography.Text>
+                                                验证码：
+                                                <Typography.Text code copyable>
+                                                    {jimengLogin.userCode}
+                                                </Typography.Text>
+                                            </Typography.Text>
+                                            {jimengLogin.expiresIn ? <Typography.Text type="secondary">{Math.floor(jimengLogin.expiresIn / 60)} 分钟内有效</Typography.Text> : null}
+                                            {jimengLoginURL ? <Typography.Text copyable={{ text: jimengLoginURL }}>复制验证链接</Typography.Text> : null}
+                                        </Space>
+                                    ) : null}
+                                    {jimengLogin?.loginReady ? <Typography.Text type="success">{jimengLogin.message || "即梦 CLI 已登录"}</Typography.Text> : null}
+                                    <Space wrap>
+                                        <Button icon={<KeyRound size={16} />} loading={isStartingJimengLogin} onClick={() => void startJimengLogin()}>
+                                            获取验证码
+                                        </Button>
+                                        <Button icon={<ExternalLink size={16} />} type="primary" disabled={!jimengLoginURL} onClick={openJimengLoginURL}>
+                                            打开验证网页
+                                        </Button>
+                                        <Button icon={<CheckCircle2 size={16} />} loading={isCheckingJimengLogin} disabled={!jimengLogin?.deviceCode || jimengLogin.loginReady} onClick={() => void checkJimengLogin()}>
+                                            完成验证
+                                        </Button>
+                                    </Space>
+                                </div>
+                            }
+                        />
+                    ) : null}
                     <div className="mb-0 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
                         <div className="mb-3 flex items-center justify-between gap-3">
                             <div>

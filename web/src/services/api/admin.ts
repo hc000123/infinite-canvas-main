@@ -535,24 +535,6 @@ export type AdminChannelActionRequest = {
     index?: number;
     channel: AdminModelChannel;
     model?: string;
-    deviceCode?: string;
-};
-
-export type AdminJimengLoginStartResult = {
-    cliPath: string;
-    verificationUri: string;
-    verificationUriComplete?: string;
-    userCode: string;
-    deviceCode: string;
-    expiresIn?: number;
-    interval?: number;
-    loginReady?: boolean;
-    message?: string;
-};
-
-export type AdminJimengLoginCheckResult = {
-    loginReady: boolean;
-    message: string;
 };
 
 export async function fetchChannelModels(token: string, payload: AdminChannelActionRequest) {
@@ -561,12 +543,4 @@ export async function fetchChannelModels(token: string, payload: AdminChannelAct
 
 export async function testChannelModel(token: string, payload: AdminChannelActionRequest) {
     return apiPost<string>("/api/admin/settings/channel-test", payload, token);
-}
-
-export async function startJimengLogin(token: string, payload: AdminChannelActionRequest) {
-    return apiPost<AdminJimengLoginStartResult>("/api/admin/settings/jimeng-login/start", payload, token);
-}
-
-export async function checkJimengLogin(token: string, payload: AdminChannelActionRequest) {
-    return apiPost<AdminJimengLoginCheckResult>("/api/admin/settings/jimeng-login/check", payload, token);
 }

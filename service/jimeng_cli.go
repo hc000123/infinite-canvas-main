@@ -23,6 +23,8 @@ const defaultJimengCLIName = "dreamina"
 var jimengCommandMutex sync.Mutex
 var jimengPreflightTimeout = 15 * time.Second
 
+type jimengCLIHomeContextKey struct{}
+
 type JimengCLIPreflightResult struct {
 	CLIPath    string
 	OutputDir  string
@@ -51,7 +53,27 @@ func SupportedJimengModelVersions() []string {
 	return []string{"seedance2.0fast", "seedance2.0", "seedance2.0_vip", "seedance2.0fast_vip", "seedance2.0mini"}
 }
 
-func PreflightJimengCLI(channel model.ModelChannel, modelName string) (JimengCLIPreflightResult, error) {
+func WithJimengCLIHome(ctx context.Context, home string) context.Context {
+	home = strings.TrimSpace(home)
+	if home == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, jimengCLIHomeContextKey{}, home)
+}
+
+func JimengUserHomeDir(_ model.ModelChannel, userID string) string {
+	base := strings.TrimSpace(os.Getenv("DREAMINA_HOME"))
+	if base == "" {
+		base = filepath.Join("data", "dreamina-home")
+	}
+	safeID := stableModelChannelID(model.ModelChannel{Name: userID})
+	if safeID == "model-channel" {
+		safeID = "user"
+	}
+	return filepath.Join(base, "users", safeID)
+}
+
+func PreflightJimengCLIInstallation(channel model.ModelChannel, modelName string) (JimengCLIPreflightResult, error) {
 	channel = normalizeModelChannel(channel)
 	if !modelChannelSupportsModel(channel, modelName) {
 		return JimengCLIPreflightResult{}, safeMessageError{message: "即梦 CLI 渠道不支持该模型"}
@@ -72,15 +94,28 @@ func PreflightJimengCLI(channel model.ModelChannel, modelName string) (JimengCLI
 	if err != nil {
 		return JimengCLIPreflightResult{}, safeMessageError{message: "即梦 CLI 版本检查失败"}
 	}
-	if _, err := runJimengCLIUnlocked(ctx, channel, "user_credit"); err != nil {
-		return JimengCLIPreflightResult{}, safeMessageError{message: "即梦 CLI 未登录或登录态无效，请先在服务器执行 dreamina login"}
-	}
 	return JimengCLIPreflightResult{
-		CLIPath:    cliPath,
-		OutputDir:  outputDir,
-		Version:    parseJimengVersion(versionOutput),
-		LoginReady: true,
+		CLIPath:   cliPath,
+		OutputDir: outputDir,
+		Version:   parseJimengVersion(versionOutput),
 	}, nil
+}
+
+func PreflightJimengCLI(ctx context.Context, channel model.ModelChannel, modelName string) (JimengCLIPreflightResult, error) {
+	result, err := PreflightJimengCLIInstallation(channel, modelName)
+	if err != nil {
+		return JimengCLIPreflightResult{}, err
+	}
+	channel = normalizeModelChannel(channel)
+	jimengCommandMutex.Lock()
+	defer jimengCommandMutex.Unlock()
+	commandCtx, cancel := context.WithTimeout(ctx, jimengPreflightTimeout)
+	defer cancel()
+	if _, err := runJimengCLIUnlocked(commandCtx, channel, "user_credit"); err != nil {
+		return JimengCLIPreflightResult{}, safeMessageError{message: "即梦 CLI 未登录或登录态无效，请先在个人配置中完成即梦网页登录"}
+	}
+	result.LoginReady = true
+	return result, nil
 }
 
 func SubmitJimengVideoTask(ctx context.Context, channel model.ModelChannel, body []byte, contentType string, modelName string) ([]byte, error) {
@@ -134,6 +169,22 @@ func CheckJimengLogin(ctx context.Context, channel model.ModelChannel, deviceCod
 	return JimengLoginCheckResult{LoginReady: true, Message: jimengLoginCheckMessage(output)}, nil
 }
 
+func StartUserJimengLogin(ctx context.Context, user model.AuthUser, modelName string) (JimengLoginStartResult, error) {
+	loginCtx, channel, err := userJimengLoginContext(ctx, user, modelName)
+	if err != nil {
+		return JimengLoginStartResult{}, err
+	}
+	return StartJimengLogin(loginCtx, channel)
+}
+
+func CheckUserJimengLogin(ctx context.Context, user model.AuthUser, modelName string, deviceCode string) (JimengLoginCheckResult, error) {
+	loginCtx, channel, err := userJimengLoginContext(ctx, user, modelName)
+	if err != nil {
+		return JimengLoginCheckResult{}, err
+	}
+	return CheckJimengLogin(loginCtx, channel, deviceCode)
+}
+
 func QueryJimengVideoTask(ctx context.Context, channel model.ModelChannel, submitID string) ([]byte, error) {
 	submitID = strings.TrimSpace(submitID)
 	if submitID == "" {
@@ -146,6 +197,35 @@ func QueryJimengVideoTask(ctx context.Context, channel model.ModelChannel, submi
 		return nil, err
 	}
 	return NormalizeJimengVideoTaskResponse(output)
+}
+
+func userJimengLoginContext(ctx context.Context, user model.AuthUser, modelName string) (context.Context, model.ModelChannel, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	userID := strings.TrimSpace(user.ID)
+	if userID == "" {
+		return ctx, model.ModelChannel{}, safeMessageError{message: "缺少用户身份"}
+	}
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" {
+		settings, err := PublicSettings()
+		if err != nil {
+			return ctx, model.ModelChannel{}, err
+		}
+		modelName = strings.TrimSpace(settings.ModelChannel.DefaultVideoModel)
+	}
+	if modelName == "" {
+		return ctx, model.ModelChannel{}, safeMessageError{message: "缺少视频模型"}
+	}
+	channel, err := SelectModelChannel(modelName)
+	if err != nil {
+		return ctx, model.ModelChannel{}, err
+	}
+	if !IsJimengCLIProtocol(channel.Protocol) {
+		return ctx, model.ModelChannel{}, safeMessageError{message: "当前视频模型不是即梦 CLI"}
+	}
+	return WithJimengCLIHome(ctx, JimengUserHomeDir(channel, userID)), channel, nil
 }
 
 func parseJimengLoginStartResult(body []byte) (JimengLoginStartResult, error) {
@@ -417,7 +497,7 @@ func runJimengCLIUnlocked(ctx context.Context, channel model.ModelChannel, args 
 	if strings.TrimSpace(channel.WorkDir) != "" {
 		command.Dir = strings.TrimSpace(channel.WorkDir)
 	}
-	if home := strings.TrimSpace(os.Getenv("DREAMINA_HOME")); home != "" {
+	if home := jimengCLIHome(ctx); home != "" {
 		if err := os.MkdirAll(home, 0700); err != nil {
 			return nil, safeMessageError{message: "即梦 CLI 登录态目录不可写"}
 		}
@@ -437,6 +517,15 @@ func runJimengCLIUnlocked(ctx context.Context, channel model.ModelChannel, args 
 		return output, safeMessageError{message: message}
 	}
 	return output, nil
+}
+
+func jimengCLIHome(ctx context.Context) string {
+	if value, ok := ctx.Value(jimengCLIHomeContextKey{}).(string); ok {
+		if home := strings.TrimSpace(value); home != "" {
+			return home
+		}
+	}
+	return strings.TrimSpace(os.Getenv("DREAMINA_HOME"))
 }
 
 func jimengEnvironmentWithHome(environment []string, home string) []string {

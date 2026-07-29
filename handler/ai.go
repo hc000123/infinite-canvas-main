@@ -51,12 +51,13 @@ func AIVideos(w http.ResponseWriter, r *http.Request) {
 }
 
 func AIVideoPreflight(w http.ResponseWriter, r *http.Request) {
-	if _, ok := service.UserFromContext(r.Context()); !ok {
+	user, ok := service.UserFromContext(r.Context())
+	if !ok {
 		Fail(w, "未登录或权限不足")
 		return
 	}
 	modelName := r.URL.Query().Get("model")
-	result, err := service.PreflightModelChannel(modelName)
+	result, err := service.PreflightModelChannelForUser(r.Context(), user, modelName)
 	if err != nil {
 		FailError(w, err)
 		return
@@ -113,7 +114,12 @@ func proxyAIGetRequest(w http.ResponseWriter, r *http.Request, path string) {
 		return
 	}
 	if service.IsJimengCLIProtocol(channel.Protocol) && strings.HasPrefix(path, "/videos/") {
-		proxyJimengVideoGetRequest(w, r.Context(), channel, path)
+		user, ok := service.UserFromContext(r.Context())
+		if !ok {
+			Fail(w, "未登录或权限不足")
+			return
+		}
+		proxyJimengVideoGetRequest(w, service.WithJimengCLIHome(r.Context(), service.JimengUserHomeDir(channel, user.ID)), channel, path)
 		return
 	}
 	if service.IsXinglianCloudProtocol(channel.Protocol) && strings.HasPrefix(path, "/videos/") {
@@ -254,7 +260,7 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		}
 	}
 	if isJimengVideoTask {
-		normalized, err := service.SubmitJimengVideoTask(r.Context(), channel, body, contentType, modelName)
+		normalized, err := service.SubmitJimengVideoTask(service.WithJimengCLIHome(r.Context(), service.JimengUserHomeDir(channel, user.ID)), channel, body, contentType, modelName)
 		if err != nil {
 			log.Printf("Jimeng video task request failed: model=%s err=%v", modelName, err)
 			refundAndFailTask(err.Error(), nil)
