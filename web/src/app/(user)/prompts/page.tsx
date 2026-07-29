@@ -51,7 +51,8 @@ export default function PromptsPage() {
     const [tagFiltersExpanded, setTagFiltersExpanded] = useState(false);
     const [workspaceMode, setWorkspaceMode] = useState<"active" | "library">("active");
     const [profileProjectId, setProfileProjectId] = useState(searchParams.get("projectId") || "");
-    const projects = useCreativeProjectStore((state) => state.projects.filter((project) => project.status === "active"));
+    const allProjects = useCreativeProjectStore((state) => state.projects);
+    const projects = useMemo(() => allProjects.filter((project) => project.status === "active"), [allProjects]);
     const addAsset = useAssetStore((state) => state.addAsset);
     const copyText = useCopyText();
     const {

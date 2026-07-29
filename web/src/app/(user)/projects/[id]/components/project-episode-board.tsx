@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Empty, Input, Select, Tag } from "antd";
 import { Archive, ArrowRight, BarChart3, Bot, Clapperboard, Database, Edit3, FileText, Image, Library, ListChecks, Maximize2, Plus, Sparkles, Trash2, TriangleAlert, Video, Wand2, Workflow, type LucideIcon } from "lucide-react";
 
+import { useUserStore } from "@/stores/use-user-store";
 import { canvasEpisodeLabel } from "../../../canvas/utils/canvas-episode-context";
 import { canvasProjectPresetSummary } from "../../../canvas/utils/canvas-project-preset";
 import type { CanvasProject } from "../../../canvas/stores/use-canvas-store";
@@ -107,20 +108,24 @@ export function ProjectEpisodeBoard({
     onSaveEpisodeScript,
     onTabChange,
 }: ProjectEpisodeBoardProps) {
+    const role = useUserStore((state) => state.user?.role);
+    const isAdmin = role === "admin" || role === "superadmin";
     const currentText = currentEpisode ? `${episodeDisplayTitle(currentEpisode)} · ${currentEpisodeStatusText(currentEpisode)}` : "暂无分集";
     return (
         <div className="mx-auto min-h-full max-w-[1680px] rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] shadow-[var(--studio-shadow)]">
             <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--studio-border-subtle)] px-4 py-4 sm:px-8">
                 <nav aria-label="项目详情视图" className="order-1 flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-4">
                     <ProjectDetailNavButton active={activeTab === "episodes"} icon={ListChecks} label="分集" onClick={() => onTabChange("episodes")} />
-                    <button
-                        type="button"
-                        className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"
-                        onClick={onOpenWorkflowCenter}
-                    >
-                        <Workflow className="size-4" />
-                        Workflow 中心
-                    </button>
+                    {isAdmin && (
+                        <button
+                            type="button"
+                            className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"
+                            onClick={onOpenWorkflowCenter}
+                        >
+                            <Workflow className="size-4" />
+                            Workflow 中心
+                        </button>
+                    )}
                     <button
                         type="button"
                         className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"

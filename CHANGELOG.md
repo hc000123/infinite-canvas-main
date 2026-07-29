@@ -2,6 +2,11 @@
 
 ## Unreleased
 
++ [优化] 项目 Workflow 中心改为管理员专用，普通用户隐藏入口并拦截直接页面访问。
++ [优化] 项目剧本 Skill 结果改为自动批准并写入，移除二次审核弹窗，并允许用户在自动优化后继续手动修改剧本。
++ [优化] Invocation 默认执行超时由 120 秒提高到 360 秒，减少长文本模型请求被过早终止。
++ [修复] 修复提示词页在 Zustand selector 中返回新数组导致 React 无限更新和整页崩溃的问题，并补齐 Docker 构建安装依赖前缺失的 Bun 补丁目录。
++ [验证] 完成提交前前后端上线冒烟：Go 全包、前端 839 项测试、TypeScript、ESLint、Next.js 与 Docker 生产镜像构建通过；独立容器健康检查、API 代理、数据卷重启持久化、公开素材路径及 12 项浏览器核心链路通过。
 + [新增] 新增统一 Artifact 与 Invocation Runtime，独立 Skill 调用可冻结版本、预检契约、追踪质量门并在审核后幂等 Apply。
 + [新增] 新增可版本化 Agent Registry 与顺序 Agent Plan Runtime，作为唯一画布总控的临时计划和历史兼容底座；继续冻结版本和额度，并通过统一 Invocation / Artifact 链逐步审核交接。
 + [新增] 项目新增 Skill-only Workflow 中心，支持固定、标签和运行前手选路由、契约校验、版本发布、成本预览、审批、重试、取消及 Artifact 轨迹恢复；历史 Agent 节点只读。

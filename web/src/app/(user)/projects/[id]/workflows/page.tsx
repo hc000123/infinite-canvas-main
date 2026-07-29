@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Button, Empty, Spin, Tag } from "antd";
 import { Boxes, Library, Workflow } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { fetchSkillOptions } from "@/services/api/admin-skills";
@@ -21,10 +21,14 @@ const errorText = (error: unknown) => error instanceof Error ? error.message : "
 
 export default function ProjectWorkflowCenterPage() {
     const params = useParams<{ id: string }>();
+    const router = useRouter();
     const projectId = params.id;
     const { message } = App.useApp();
     const queryClient = useQueryClient();
     const token = useUserStore((state) => state.token);
+    const user = useUserStore((state) => state.user);
+    const isReady = useUserStore((state) => state.isReady);
+    const isAdmin = user?.role === "admin" || user?.role === "superadmin";
     const hydrated = useCreativeProjectStore((state) => state.hydrated);
     const project = useCreativeProjectStore((state) => state.projects.find((item) => item.id === projectId));
     const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
@@ -32,11 +36,14 @@ export default function ProjectWorkflowCenterPage() {
     const [activePackage, setActivePackage] = useState<WorkflowPackage>();
     const [prepared, setPrepared] = useState<WorkflowPreparedRun>();
 
-    const workflowsQuery = useQuery({ queryKey: ["workflow-registry", projectId], queryFn: () => fetchWorkflows(projectId), enabled: hydrated && Boolean(project), retry: false });
-    const skillsQuery = useQuery({ queryKey: ["skill-options", projectId], queryFn: () => fetchSkillOptions(token, { projectId }), enabled: hydrated && Boolean(project) && Boolean(token), retry: false });
+    const workflowsQuery = useQuery({ queryKey: ["workflow-registry", projectId], queryFn: () => fetchWorkflows(projectId), enabled: isAdmin && hydrated && Boolean(project), retry: false });
+    const skillsQuery = useQuery({ queryKey: ["skill-options", projectId], queryFn: () => fetchSkillOptions(token, { projectId }), enabled: isAdmin && hydrated && Boolean(project) && Boolean(token), retry: false });
     const workflows = useMemo(() => workflowsQuery.data || [], [workflowsQuery.data]);
     const selectedWorkflow = workflows.find((item) => item.workflow.id === selectedWorkflowId);
 
+    useEffect(() => {
+        if (isReady && !isAdmin) router.replace(`/projects/${projectId}`);
+    }, [isAdmin, isReady, projectId, router]);
     useEffect(() => {
         if (!workflows.length) {
             setSelectedWorkflowId("");
@@ -75,6 +82,7 @@ export default function ProjectWorkflowCenterPage() {
         onError: (error) => message.error(errorText(error)),
     });
 
+    if (!isReady || !isAdmin) return <main className="studio-shell grid h-full place-items-center px-6 py-10 text-[var(--studio-text-primary)]"><Spin description={isReady ? "正在返回项目" : "正在验证管理员权限"} /></main>;
     if (!hydrated) return <main className="studio-shell grid h-full place-items-center px-6 py-10 text-[var(--studio-text-primary)]"><Spin description="正在读取本地项目" /></main>;
     if (!project) return <main className="studio-shell grid h-full place-items-center px-6 py-10 text-[var(--studio-text-primary)]"><Empty description="项目不存在或尚未加载"><Button href="/projects">返回项目中心</Button></Empty></main>;
 

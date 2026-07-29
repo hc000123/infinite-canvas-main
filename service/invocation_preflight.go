@@ -17,6 +17,8 @@ import (
 
 var invocationSources = map[string]bool{"workflow": true, "image": true, "canvas_chat": true, "direct": true, "agent_plan": true}
 
+const defaultInvocationTimeoutSeconds = 360
+
 type invocationPreflightBuild struct {
 	request          InvocationRequest
 	requestHash      string
@@ -471,7 +473,7 @@ func resolveInvocationExecutionPolicy(request InvocationRequest, pkg SkillPackag
 		}
 		timeout, attempts := request.ExecutionPolicyOverride.TimeoutSeconds, request.ExecutionPolicyOverride.MaxAttempts
 		if timeout <= 0 {
-			timeout = 120
+			timeout = defaultInvocationTimeoutSeconds
 		}
 		if attempts <= 0 {
 			attempts = 1
@@ -527,7 +529,7 @@ func resolveInvocationExecutionPolicy(request InvocationRequest, pkg SkillPackag
 	channel := normalizeModelChannel(channels[0])
 	timeout, attempts := request.ExecutionPolicyOverride.TimeoutSeconds, request.ExecutionPolicyOverride.MaxAttempts
 	if timeout <= 0 {
-		timeout = 120
+		timeout = defaultInvocationTimeoutSeconds
 	}
 	timeout = normalizeAgentRunTimeout(timeout)
 	if attempts <= 0 {

@@ -51,6 +51,23 @@ func TestPreflightInvocationFreezesExactVersionSchemasInputsPolicyAndUntrustedPa
 	}
 }
 
+func TestPreflightInvocationUsesSixMinuteDefaultTimeout(t *testing.T) {
+	setupInvocationServiceTest(t)
+	input := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"test"}`)
+	_, version := seedInvocationSkill(t, invocationSkillSeed{ID: "default-timeout", VersionID: "default-timeout-v1", Version: "1.0.0"})
+
+	result, err := PreflightInvocation("user-1", InvocationRequest{
+		Source: "direct", ProjectID: "project-1", EpisodeID: "episode-1", SkillVersionID: version.ID,
+		ExpectedOutputArtifactType: "production_script", InputArtifactRefs: []ArtifactRefInput{{BindingName: "source", ArtifactID: input.Artifact.ID, ContentHash: input.Artifact.ContentHash}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ExecutionPolicy.TimeoutSeconds != 360 {
+		t.Fatalf("default timeout=%d, want 360", result.ExecutionPolicy.TimeoutSeconds)
+	}
+}
+
 func TestPreflightInvocationCanonicalIdempotencyAndRecommendationFreeze(t *testing.T) {
 	setupInvocationServiceTest(t)
 	input := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"test"}`)

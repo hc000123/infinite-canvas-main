@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { approveScriptInvocationResult, assertScriptReviewMatches, executeScriptInvocationToReview, preflightScriptInvocation } from "./script-invocation-runtime.ts";
+import { approveScriptInvocationResult, executeScriptInvocationToReview, preflightScriptInvocation } from "./script-invocation-runtime.ts";
 
 const sourceArtifact = {
     artifact: { id: "source-1", contentHash: "sha256:source" },
@@ -57,7 +57,7 @@ test("preflightScriptInvocation freezes only the selected Skill and source Artif
     assert.equal(JSON.stringify(calls).includes("agent"), false);
 });
 
-test("executeScriptInvocationToReview confirms requirements and returns an unapproved production Artifact", async () => {
+test("executeScriptInvocationToReview confirms and immediately approves the production Artifact", async () => {
     let polls = 0;
     const calls: Array<[string, unknown]> = [];
     const result = await executeScriptInvocationToReview(
@@ -73,6 +73,10 @@ test("executeScriptInvocationToReview confirms requirements and returns an unapp
                     ? ({ run: { id, status: "running", latestAttempt: 1 }, artifactSetHash: "", outputArtifacts: [] } as never)
                     : ({ run: { id, status: "needs_review", latestAttempt: 1 }, artifactSetHash: "sha256:set", outputArtifacts: [{ artifact: { id: "production-1", artifactType: "production_script" }, payload: { productionScript: "生产剧本" } }] } as never);
             },
+            reviewInvocation: async (id, input) => {
+                calls.push(["review", { id, input }]);
+                return {} as never;
+            },
             wait: async () => undefined,
         },
         preflight as never,
@@ -84,6 +88,7 @@ test("executeScriptInvocationToReview confirms requirements and returns an unapp
     assert.equal(result.artifactId, "production-1");
     assert.equal(result.artifactSetHash, "sha256:set");
     assert.equal(result.productionScript, "生产剧本");
+    assert.deepEqual(calls.at(-1), ["review", { id: "invocation-1", input: { decision: "approved", attempt: 1, artifactSetHash: "sha256:set", comment: "项目分集剧本自动批准" } }]);
 });
 
 test("approveScriptInvocationResult records review without continuing an Agent Plan", async () => {
@@ -98,9 +103,4 @@ test("approveScriptInvocationResult records review without continuing an Agent P
         { invocationId: "invocation-1", attempt: 1, artifactSetHash: "sha256:set", artifactId: "production-1", productionScript: "生产剧本" },
     );
     assert.deepEqual(calls, [["review", { id: "invocation-1", input: { decision: "approved", attempt: 1, artifactSetHash: "sha256:set", comment: "项目分集剧本人工批准" } }]]);
-});
-
-test("assertScriptReviewMatches rejects text changed after Artifact generation", () => {
-    assert.doesNotThrow(() => assertScriptReviewMatches("生产剧本\n", { productionScript: "生产剧本" }));
-    assert.throws(() => assertScriptReviewMatches("手动改写", { productionScript: "生产剧本" }), /已变更/);
 });

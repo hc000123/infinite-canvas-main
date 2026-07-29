@@ -15,10 +15,6 @@ export type ScriptInvocationReviewResult = {
     productionScript: string;
 };
 
-export function assertScriptReviewMatches(value: string, review: Pick<ScriptInvocationReviewResult, "productionScript">) {
-    if (value.trim() !== review.productionScript.trim()) throw new Error("待审剧本内容已变更，不能继续使用原 Artifact 的审核坐标；请重新运行剧本 Skill");
-}
-
 export async function preflightScriptInvocation(
     deps: {
         createArtifact: (input: CreateArtifactInput) => Promise<ArtifactEnvelope>;
@@ -50,6 +46,7 @@ export async function executeScriptInvocationToReview(
     deps: {
         confirmInvocation: (id: string, input: { requirementCodes: string[] }) => Promise<unknown>;
         getInvocation: (id: string) => Promise<InvocationDetail>;
+        reviewInvocation: (id: string, input: InvocationReviewInput) => Promise<unknown>;
         wait?: (milliseconds: number) => Promise<void>;
     },
     preflight: InvocationPreflightResponse,
@@ -67,13 +64,15 @@ export async function executeScriptInvocationToReview(
             const output = detail.outputArtifacts.find((artifact) => artifact.artifact.artifactType === "production_script");
             const productionScript = typeof output?.payload.productionScript === "string" ? output.payload.productionScript.trim() : "";
             if (!detail.artifactSetHash || !productionScript || !output) throw new Error("剧本 Skill 没有返回可审核的 production_script Artifact");
-            return {
+            const result = {
                 invocationId: detail.run.id,
                 attempt: detail.run.latestAttempt,
                 artifactSetHash: detail.artifactSetHash,
                 artifactId: output.artifact.id,
                 productionScript,
             };
+            await approveScriptInvocationResult({ reviewInvocation: deps.reviewInvocation }, result, "项目分集剧本自动批准");
+            return result;
         }
         if (index + 1 < maxPolls) await wait(pollIntervalMs);
     }
@@ -83,11 +82,12 @@ export async function executeScriptInvocationToReview(
 export function approveScriptInvocationResult(
     deps: { reviewInvocation: (id: string, input: InvocationReviewInput) => Promise<unknown> },
     input: ScriptInvocationReviewResult,
+    comment = "项目分集剧本人工批准",
 ) {
     return deps.reviewInvocation(input.invocationId, {
         decision: "approved",
         attempt: input.attempt,
         artifactSetHash: input.artifactSetHash,
-        comment: "项目分集剧本人工批准",
+        comment,
     });
 }

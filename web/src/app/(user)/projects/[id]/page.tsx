@@ -18,7 +18,7 @@ import { useOriginalWorkflowStore } from "../../original-workflow/use-original-w
 import { videoWorkflowEpisodeKey, videoWorkflowHref, videoWorkflowProjectSlug } from "../../original-workflow/video-workflow-routing";
 import { canvasIdsForCreativeProject, unfiledCanvasProjects } from "../creative-projects";
 import { editableCanvasPreset } from "../project-canvas-preset";
-import { approveScriptInvocationResult, assertScriptReviewMatches, executeScriptInvocationToReview, preflightScriptInvocation, type ScriptInvocationReviewResult } from "../script-invocation-runtime";
+import { executeScriptInvocationToReview, preflightScriptInvocation } from "../script-invocation-runtime";
 import { useCreativeProjectStore } from "../use-creative-project-store";
 import { ProjectEpisodeBoard, type ProjectDetailTab, type ProjectEpisodeBoardRow } from "./components/project-episode-board";
 import { buildOriginalScriptEditPatch } from "./project-episode-script-edit";
@@ -33,7 +33,6 @@ type EpisodeImportFormValues = {
 type OptimizedImportDraft = {
     sourceScript: string;
     structuredScript?: StructuredEpisodeScript;
-    review?: ScriptInvocationReviewResult;
 };
 
 export default function CreativeProjectDetailPage() {
@@ -219,7 +218,7 @@ export default function CreativeProjectDetailPage() {
                             将冻结 Invocation <code>{prepared.preflight.run.id}</code> 和 Skill <code>{prepared.preflight.revision.skillVersion}</code>，预计上限 {prepared.preflight.executionPolicy.estimatedCredits} Credits。
                         </div>
                         <div>{prepared.preflight.confirmationRequirements.join("；") || "本次无额外确认项"}</div>
-                        <div className="text-[var(--studio-text-muted)]">执行完成后只生成待审核 Artifact，不会自动写入分集。</div>
+                        <div className="text-[var(--studio-text-muted)]">执行完成后自动批准结果；已有分集会直接写入，新导入剧本会填入表单。</div>
                     </div>
                 ),
                 okText: "确认执行",
@@ -229,28 +228,7 @@ export default function CreativeProjectDetailPage() {
             });
         });
         if (!confirmed) return undefined;
-        return executeScriptInvocationToReview({ confirmInvocation, getInvocation }, prepared.preflight);
-    };
-
-    const approveScriptResult = (review: ScriptInvocationReviewResult) => approveScriptInvocationResult({ reviewInvocation }, review);
-
-    const confirmExistingEpisodeResult = (productionScript: string) =>
-        new Promise<boolean>((resolve) => {
-            modal.confirm({
-                title: "批准并写入这版生产剧本？",
-                content: <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded bg-[var(--studio-panel-muted-bg)] p-3 text-xs leading-6">{productionScript}</pre>,
-                width: 760,
-                okText: "批准并写入",
-                cancelText: "保留待审核",
-                onOk: () => resolve(true),
-                onCancel: () => resolve(false),
-            });
-        });
-
-    const approveImportDraft = async (scriptText: string) => {
-        if (!optimizedImportDraft?.review) return;
-        assertScriptReviewMatches(scriptText, optimizedImportDraft.review);
-        await approveScriptResult(optimizedImportDraft.review);
+        return executeScriptInvocationToReview({ confirmInvocation, getInvocation, reviewInvocation }, prepared.preflight);
     };
 
     const importEpisode = async () => {
@@ -260,7 +238,6 @@ export default function CreativeProjectDetailPage() {
         if (!scriptText) return message.warning("请粘贴本集剧本");
         setEpisodeImporting(true);
         try {
-            await approveImportDraft(scriptText);
             upsertScriptProject(project.id, scriptText);
             const order = projectEpisodes.length + 1;
             const sourceSummary = optimizedImportDraft?.sourceScript && optimizedImportDraft.sourceScript.trim() !== scriptText ? optimizedImportDraft.sourceScript : undefined;
@@ -288,8 +265,8 @@ export default function CreativeProjectDetailPage() {
             const result = await runScriptSkillToReview({ sourceScript, skillVersionId: scriptSkills.importVersionId });
             if (!result) return;
             episodeImportForm.setFieldValue("scriptText", result.productionScript);
-            setOptimizedImportDraft({ sourceScript, review: result });
-            message.success("已生成待审核的 production_script Artifact，请检查后导入。");
+            setOptimizedImportDraft({ sourceScript });
+            message.success("已自动写入优化剧本，可继续手动修改后导入。");
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "剧本 AI 适配失败";
             message.warning(errorMessage);
@@ -317,12 +294,15 @@ export default function CreativeProjectDetailPage() {
         setScriptOptimizeErrors((state) => ({ ...state, [episode.id]: "" }));
         try {
             const result = await runScriptSkillToReview({ episodeId: episode.id, sourceScript, skillVersionId });
-            if (!result || !(await confirmExistingEpisodeResult(result.productionScript))) return;
-            await approveScriptResult(result);
-            await syncVideoWorkflowScript(episode.code || `EP${String(episode.order).padStart(2, "0")}`, result.productionScript);
+            if (!result) return;
             updateEpisode(episode.id, { summary: result.productionScript, sourceSummary: episode.sourceSummary || sourceScript, structuredScript: undefined });
             setScriptOptimizeErrors((state) => ({ ...state, [episode.id]: "" }));
-            message.success("已批准并写入本集生产剧本。");
+            try {
+                await syncVideoWorkflowScript(episode.code || `EP${String(episode.order).padStart(2, "0")}`, result.productionScript);
+            } catch (error) {
+                message.warning(`优化剧本已写入，但同步视频工作流失败：${error instanceof Error ? error.message : "未知错误"}`);
+            }
+            message.success("已自动写入本集优化剧本，可继续手动调整。");
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "剧本优化失败";
             setScriptOptimizeErrors((state) => ({ ...state, [episode.id]: errorMessage }));

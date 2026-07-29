@@ -26,6 +26,17 @@ test("project script entry invokes the selected Skill without an Agent Plan", ()
     assert.doesNotMatch(page, /createAgentPlan|Agent Plan|buildScriptSkillOverride/);
 });
 
+test("project script optimization writes automatically without a review UI", () => {
+    const page = readProjectFile("./[id]/page.tsx");
+    const optimizeFlow = page.slice(page.indexOf("const optimizeExistingEpisodeScript"), page.indexOf("const createCanvasAndOpen"));
+
+    assert.match(page, /executeScriptInvocationToReview\(\{ confirmInvocation, getInvocation, reviewInvocation \}/);
+    assert.doesNotMatch(page, /confirmExistingEpisodeResult|assertScriptReviewMatches|approveImportDraft/);
+    assert.doesNotMatch(page, /批准并写入这版生产剧本/);
+    assert.match(optimizeFlow, /updateEpisode\(episode\.id, \{ summary: result\.productionScript/);
+    assert.ok(optimizeFlow.indexOf("updateEpisode(episode.id") < optimizeFlow.indexOf("syncVideoWorkflowScript("), "optimized script must be stored before workflow sync");
+});
+
 test("project Agent center has an explicit return-to-project action", () => {
     const page = readProjectFile("./[id]/agents/page.tsx");
     assert.match(page, /返回项目/);
@@ -38,4 +49,15 @@ test("project production navigation exposes Workflow but not the compatibility A
     assert.match(board, /Workflow 中心/);
     assert.doesNotMatch(board, /Agent 中心/);
     assert.doesNotMatch(page, /onOpenAgentSettings|\/agents`/);
+});
+
+test("project Workflow center is restricted to administrators", () => {
+    const board = readProjectFile("./[id]/components/project-episode-board.tsx");
+    const workflowPage = readProjectFile("./[id]/workflows/page.tsx");
+
+    assert.match(board, /const isAdmin = role === "admin" \|\| role === "superadmin"/);
+    assert.match(board, /\{isAdmin && \(\s*<button[\s\S]*?Workflow 中心[\s\S]*?<\/button>\s*\)\}/);
+    assert.match(workflowPage, /const isAdmin = user\?\.role === "admin" \|\| user\?\.role === "superadmin"/);
+    assert.match(workflowPage, /if \(isReady && !isAdmin\) router\.replace\(`\/projects\/\$\{projectId\}`\)/);
+    assert.match(workflowPage, /enabled: isAdmin && hydrated && Boolean\(project\)/);
 });
