@@ -47,15 +47,14 @@ Docker 部署会在同一个容器里启动 Go 后端和 Next 服务，因此默
 
 ## 云端视频工作流主链路
 
-视频工作流的云端主链路应使用后端 Agent Run API 和受控 Worker：
+视频工作流当前统一使用 Workflow + Skill + Invocation / Artifact Runtime，并由后端 API Worker 执行：
 
-- `GET /api/v1/agent-configs` / `POST /api/v1/agent-configs`：保存 Agent 中心配置，按用户、项目、集数隔离。
-- `GET /api/v1/agent-runs` / `POST /api/v1/agent-runs`：创建和查询文本 Agent 任务。
-- `POST /api/v1/agent-runs/:id/review`：用户确认、驳回或标记已写入。
+- Workflow 负责冻结节点、Skill 精确版本、输入契约、路由、重试和审批状态。
+- Invocation 负责模型渠道预检、任务执行、额度记录、质量门和失败恢复。
+- Artifact 保存不可变输入输出、媒体引用、审核结果和完整血缘；用户确认后再幂等写入项目、素材库、分镜或画布。
+- 生产环境必须设置 `WORKFLOW_WORKER_ENABLED=true`，并保证数据库及 `/app/data` 持久化。
 
-Agent Run 创建后由后端选择后台系统设置里的企业文本模型渠道，保存请求快照、原始输出、可解析 JSON 草案、审核结果和映射预览。成功状态停在 `needs_review`，用户确认后再写入资产库、分镜或视频生产包。
-
-当前版本不再保留本地 `codex exec` Runner。后续云端 Worker 完成后台队列、对象存储、质量门服务化、并发限制、租户权限和更细粒度额度扣费后，才能重新开放视频工作流入口。
+当前版本不再保留本地 `codex exec` Runner，旧 Agent Run 和 `/api/original-workflow*` 也不是正式生产入口。队列异常时应检查 API Worker、任务租约、模型渠道、用户额度和持久化目录，不要回退到用户本机目录或 CLI 工作流。
 
 ## Docker 健康检查与持久化
 

@@ -2,40 +2,15 @@
 
 ## Unreleased
 
-+ [调整] 彻底移除旧本地 Codex Workflow：删除 Codex CLI 执行器、旧 `/api/original-workflow*` 文件工作流、前端状态适配层及相关部署开关；Workflow、Skill、Invocation 和 Artifact 统一由后端 API Worker 执行，画布 Agent、Skill Registry 与 Dreamina / Jimeng CLI 保持独立可用。
-+ [优化] 项目 Workflow 中心改为管理员专用，普通用户隐藏入口并拦截直接页面访问。
-+ [优化] 项目剧本 Skill 结果改为自动批准并写入，移除二次审核弹窗，并允许用户在自动优化后继续手动修改剧本。
-+ [优化] Invocation 默认执行超时由 120 秒提高到 360 秒，减少长文本模型请求被过早终止。
-+ [修复] 修复提示词页在 Zustand selector 中返回新数组导致 React 无限更新和整页崩溃的问题，并补齐 Docker 构建安装依赖前缺失的 Bun 补丁目录。
-+ [验证] 完成提交前前后端上线冒烟：Go 全包、前端 839 项测试、TypeScript、ESLint、Next.js 与 Docker 生产镜像构建通过；独立容器健康检查、API 代理、数据卷重启持久化、公开素材路径及 12 项浏览器核心链路通过。
-+ [文档] 根据历史 release、tag 与 GitHub Actions 记录固化发布和上线操作手册，统一版本整理、提交后复测、镜像检查、Render 手工部署、持久化复验与回滚入口。
-+ [新增] 新增统一 Artifact 与 Invocation Runtime，独立 Skill 调用可冻结版本、预检契约、追踪质量门并在审核后幂等 Apply。
-+ [新增] 新增可版本化 Agent Registry 与顺序 Agent Plan Runtime，作为唯一画布总控的临时计划和历史兼容底座；继续冻结版本和额度，并通过统一 Invocation / Artifact 链逐步审核交接。
-+ [新增] 项目新增 Skill-only Workflow 中心，支持固定、标签和运行前手选路由、契约校验、版本发布、成本预览、审批、重试、取消及 Artifact 轨迹恢复；历史 Agent 节点只读。
-+ [新增] 新增内容标签分类、角色 / 场景 / 道具独立资产 Brief、三类资产成图、竖屏短剧与横屏中长剧分镜 9 个可独立发布 Skill；标准生产 Workflow 当前为 12 个 Skill 节点的 `2.3.0`，并行生成三类资产图片、按制作参数路由分镜版本，并在运行前选择剧本 Skill 精确版本。
-+ [新增] 新增项目 Skill 管理入口和 System → Project Draft 复制，支持创建者权限隔离、校验评测、发布与推荐分离、归档、停用及引用安全删除；Workflow、画布 Agent 与 API 共用同一 Skill Registry。
-+ [新增] 新增动态剧本 Skill `3.2.0` 可选版本与确定性 Workflow Adapter；运行预检冻结 Skill / Adapter 精确版本、内容哈希和规则快照，派生 Artifact 保留完整父引用且不改写上下游 Skill 能力。
-+ [新增] 生图工作台可直接调用已发布 Skill，统一完成 Artifact 输入匹配、版本/额度冻结、人工审核、提示词或 `asset_rendition` 图片写回、本地消费回执与素材保存，并保留精确 Invocation 追溯坐标。
-+ [新增] 画布节点可从悬浮工具栏或检查器直接调用已发布 Skill，批准后的文本 Artifact 与图片型 `asset_rendition` 会按类型创建带完整 Invocation 溯源的下游节点并建立连线，重放和刷新不会重复产物。
-+ [新增] 画布对话固定使用唯一“画布总控”，可基于受限 Skill Catalog 直接回答或生成经版本、步数和 Artifact 契约校验的 Temporary Plan，并通过统一 Agent Plan / Invocation / Artifact Runtime 逐步确认、审核和幂等写回最终产物。
-+ [优化] 正式视频 Workflow 已迁入统一 Invocation / Artifact Runtime，阶段支持精确 Skill 冻结、标准资产与媒体引用、完整产物集审核、幂等 Apply 和失败安全门，并保持现有工作台接口与刷新恢复体验。
-+ [优化] Invocation Worker 新增图片模型执行与内容哈希媒体归档，支持角色 / 场景 / 道具资产成图、失败重试和 Workflow 多上游 Artifact 聚合。
-+ [优化] Invocation Worker 统一使用已配置的 API 模型执行冻结任务，不再保留本地 Codex 分流路径。
-+ [优化] 将固定六阶段 Workflow Skill 中心泛化为可搜索、可版本化、可评测和可独立管理的 Skill Registry。
-+ [优化] 移除画布助手旧硬编码 Prompt Agent Skill Pack、岗位 Agent 下拉、工具注册表和独立执行状态；普通对话由画布总控直接回答，直接生图保持不变。
-+ [优化] 项目分集剧本优化改为直接调用兼容的已发布剧本 Skill，通过统一 Artifact / Invocation 审核链运行，并移除生产导航中的 Agent 中心入口。
-+ [修复] 修复 Workflow 新建时空 Skill 契约导致页面崩溃、默认选中不兼容 Skill、未保存草稿可误校验和编辑器弃用警告。
-+ [修复] 修复 Invocation 成功预检返回空集合时画布 Skill 抽屉读取 `null` 导致页面崩溃的问题，并统一空集合安全响应。
-+ [修复] 修复安全升级后的 `brace-expansion@5` 与 ESLint 传递依赖 `minimatch@3` API 不兼容导致全量 ESLint 崩溃的问题；保留安全版本并通过可复现的 Bun 依赖补丁兼容旧调用方式。
-+ [验证] Go 全包、前端 831 项测试、TypeScript 与 Next.js 生产构建通过；隔离浏览器完成资产成图、审核、Apply、生图工作台展示 / 保存和画布图片节点写回，测试图片仅用于协议验收，正式视觉质量待真实图片模型复测。
-+ [验证] 固定公交站剧本的 12 节点生产 Workflow 已通过模拟 API 执行验收，并完成版本冻结、Artifact 血缘、质量门、审核、计费、交付报告和刷新恢复；真实视觉效果保留人工验收。
-+ [新增] 管理后台将 AI 任务与算力流水合并为“AI 使用”，新增按北京时间今日、本周、本月统计实际净消耗及用户占比，并排除后台额度调整。
-+ [调整] 移除项目详情低频“素材引用”页签，素材缺口与旧版本提醒统一进入项目素材库，底层引用和生成链路保持不变。
-+ [优化] 模型算力点改为按业务单位计费：语言按调用次数、图片按实际张数、视频按生成秒数，并统一画布预估、后台单位提示和后端扣费口径。
-+ [优化] 六阶段 Workflow Skill 升级为 `3.0.1` 生产多文件包，完整加载领域规则、输出模板与示例，并在冻结任务中强制必需输入、参考图策略和 JSON Schema 质量门；已有官方内置绑定会新增并切换版本，自定义全局绑定保持不变。
-+ [修复] 打通星链云分集视频工作流并在预检阶段校验账号实际开放模型；修复工作流视频与尾帧未归属项目、未自动写入项目缓存的问题。
-+ [修复] 修复项目包媒体读取失败时可能返回半截 ZIP、画布旧版弹层兼容告警、缓存页重复导航与项目卡重复进入入口。
-+ [验证] 使用星链云 `sd2-720p-fast` 完成 5 秒 720p 竖屏真实视频生成、V1 回填、尾帧归档、项目缓存落盘和完整项目包下载，并逐页回归用户端与管理后台核心功能。
+## v0.2.98 - 2026-07-29
+
++ [新增] 上线统一 Artifact / Invocation Runtime、可版本化 Skill Registry 与 Skill-only Workflow，支持版本冻结、契约预检、质量门、审核、幂等 Apply、重试恢复和完整血缘。
++ [新增] 标准 AIGC 生产 Workflow 升级为 12 个 Skill 节点的 `2.3.0`，新增内容分类、角色 / 场景 / 道具 Brief 与成图、竖屏 / 横屏分镜路由，并支持动态剧本 Skill `3.2.0` 和确定性 Adapter。
++ [新增] 新增项目 Skill 生命周期管理、生图工作台与画布节点 Skill 调用、唯一画布总控及 Temporary Plan；导入独立 Seedance 提示词 Workflow Skill，并统一复用 Invocation / Artifact 执行链。
++ [优化] 正式视频 Workflow 与分集剧本优化迁入统一 Runtime；Invocation Worker 支持图片执行、媒体哈希归档和多上游聚合；项目 Workflow 中心收为管理员专用，即梦 CLI 登录迁至用户设置并支持打开验证页。
++ [调整] 彻底移除旧本地 Codex Workflow、Codex CLI 执行器及 `/api/original-workflow*`；API Worker 成为 Workflow、Skill、Invocation 的唯一执行路径，Dreamina / Jimeng CLI 保持为独立视频渠道。
++ [优化] 管理后台合并 AI 使用与算力流水，模型算力点按语言调用、图片张数和视频秒数计费；项目素材、缓存、剧本自动写入及工作流追溯链路同步收口。
++ [修复] 修复提示词页无限更新、Workflow / Invocation 空集合崩溃、依赖补丁与 Docker 构建问题；最终完成 Go、前端 810 项测试、TypeScript、Lint、安全审计、生产构建、Docker 容器及浏览器发布冒烟。
 
 ## v0.2.97 - 2026-07-25
 
