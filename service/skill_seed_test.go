@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -10,6 +11,34 @@ import (
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/repository"
 )
+
+func TestDynamicScriptRegistrySeedMatchesStandaloneWorkflowSkill(t *testing.T) {
+	source, err := os.ReadFile("../workflow-skills/script/01-seedance2-dynamic-script/SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	embedded, err := skillSeedFS.ReadFile("skill_seeds/script/dynamic-script-3.2.0.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(source, embedded) {
+		t.Fatal("dynamic script Registry seed drifted from its standalone Workflow Skill")
+	}
+}
+
+func TestProjectAgentSkillMatchesSeedancePromptWorkflowSource(t *testing.T) {
+	source, err := os.ReadFile("../skills/seedance-prompt-workflow/SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	installed, err := os.ReadFile("../.agents/skills/seedance-prompt-workflow/SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(source, installed) {
+		t.Fatal("installed project Agent Skill drifted from the Seedance prompt workflow source")
+	}
+}
 
 func TestEnsureSkillSeedsPublishesDynamicScriptAsOptionalVersion(t *testing.T) {
 	setupAITaskTestDB(t)

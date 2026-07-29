@@ -15,6 +15,14 @@
 - 自动检查已覆盖后端 Workflow Skill-only 种子、`catalog_plan` 契约、唯一总控种子、运行时无步骤阻断、画布决策校验、总控接线和 TypeScript 类型检查。
 - 人工验收：打开项目 Workflow 中心确认只能添加 Skill；在画布总控分别提出普通咨询和需要执行的目标，确认前者只有文本回答，后者出现可编辑临时计划；再完成预检、确认、逐步审核和使用，刷新后不得重复创建节点或回执。
 
+### Seedance 提示词工作流 Skill 独立文件
+
+- 已将现有 `seedance-prompt-workflow/SKILL.md` 原样提取到 `skills/seedance-prompt-workflow/SKILL.md`，保留全部阶段、CSV 合同、官方六段模板、生成包规划和质量门。
+- 已把同一文件按字节原样安装到项目 Agent Skill 目录 `.agents/skills/seedance-prompt-workflow/SKILL.md`；它继续按文件型工作流运行，不转换为 Artifact JSON，也不进入原子 Skill Registry。
+- `workflow-skills/script/01-seedance2-dynamic-script/SKILL.md` 已导入统一 Registry 的剧本阶段 `3.2.0`，Workflow、画布总控和 API 可按精确版本调用；自动测试会阻止独立源文件与 Registry 种子内容漂移。
+- 自动校验：标准 Skill 格式校验通过，提取文件与源文件字节级一致。
+- 人工验收：重新打开 Codex 项目后确认可发现 `seedance-prompt-workflow`；在目标工作流中加载该 `SKILL.md`，确认依然按原阶段顺序生成产物，不会转换为画布 Artifact 或四段提示词合同。再打开项目 Skill 管理页，确认“剧本整理”可选择 `3.2.0`。
+
 ### Workflow Skill 运行前版本、Adapter 与项目管理
 
 - 动态剧本已注册为可选 `skill-system-workflow-script@3.2.0`，与 `3.1.0` 共用稳定 Definition 和 `source_text → production_script` 契约；推荐版本保持不变，不会自动替换其他 Workflow 或已冻结运行。
