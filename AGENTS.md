@@ -88,6 +88,7 @@
 
 ## 发版本流程
 
+- 每次上线或发版本前先完整读取 `docs/release/README.md`，以该文件作为提交前后冒烟、版本整理、tag、推送、GitHub Actions、Render 手工部署、云端复验和回滚的唯一操作清单；流程变化时必须同步更新该文件。
 - 发版本时，先把 `CHANGELOG.md` 的 `Unreleased` 变更整理成新的版本记录，并保留空的 `Unreleased` 标题。
 - 按当前版本号提升一个版本，更新根目录 `VERSION`。
 - 后续重新封装或发布 Windows/macOS 桌面安装包时，也要先提升版本号，并同步更新 `web/package.json` 与 `web/desktop/app/package.json`，避免新安装包继续使用旧版本文件名。

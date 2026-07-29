@@ -1,5 +1,7 @@
 # Render 部署
 
+正式发版本、推送、GitHub 镜像检查、Render 手工部署、云端冒烟和回滚统一按照 [发布与上线操作手册](release/README.md) 执行。本文档只补充部署环境和桌面安装包细节。
+
 ## 部署步骤
 
 1. 将当前项目推送到你自己的 GitHub 仓库。
@@ -10,6 +12,8 @@
 部署完成后，打开 Render 分配的 `.onrender.com` 域名即可访问。
 
 ## 上线前主门禁：云端执行器
+
+> 本节的“云端执行器”只描述已停用的 `/original-workflow` 旧入口；当前项目 Workflow、Skill、Invocation 和 Worker 主链以 [创作工作流程](workflow.md) 为准。
 
 当前版本已彻底关闭浏览器侧和 Next API 内的 Codex CLI / 本地 Runner：
 
