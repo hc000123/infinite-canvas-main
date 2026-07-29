@@ -448,7 +448,7 @@ M8 起，前台追溯信息不新增数据库字段，统一放入已脱敏 JSON
 | `workflow_run_id`       | string | 工作流运行 ID                                                 |
 | `stage_id`              | string | 阶段 ID，例如 `stage1`、`stage2`、`stage3`                    |
 | `agent_kind`            | string | Agent 类型                                                    |
-| `executor`              | string | 冻结的执行器：`api` 或仅限本地开发的 `codex-cli`              |
+| `executor`              | string | 冻结的执行器；当前固定为 `api`                                |
 | `skill_id`              | string | 冻结的 Skill 稳定 ID                                          |
 | `skill_version_id`      | string | 冻结的 Skill 版本记录 ID                                      |
 | `skill_version`         | string | 冻结的 Skill 语义版本                                         |

@@ -4,6 +4,13 @@
 
 ## 当前版本验收清单
 
+### 本地 Codex Workflow 彻底移除
+
+- 已删除后端 Codex CLI 执行器、旧 `/api/original-workflow*` 文件工作流、前端本地 Workflow 状态 / 适配模块及相关环境变量；Workflow、Skill、Invocation 和 Artifact 统一由 API Worker 执行。
+- 画布 Agent、统一 Skill Registry、项目分集 Workflow、API Worker 和独立的 Dreamina / Jimeng CLI 视频渠道继续保留。
+- 下文提及 `codex-cli`、`local-runner` 或本地 Codex 验收的条目均为历史版本记录，不再代表当前可用能力或待验收路径。
+- 人工验收：项目剧本优化、分集 Workflow、画布 Skill 调用仍可走 API 完成；旧本地 Workflow API 返回不存在；部署配置中不再需要本地 Codex 相关选项。
+
 ### 即梦 CLI 用户自助登录与用量可见
 
 - 即梦 CLI 渠道的网页登录入口已从后台私有渠道配置移到用户“配置”弹窗；当默认视频模型属于 `jimeng-cli` 时，点击“登录即梦”会自动打开带验证码的即梦验证网页。
@@ -22,7 +29,7 @@
 ### 剧本优化自动写入
 
 - 项目剧本 Skill 生成 `production_script` 后会自动批准：已有分集直接写入优化剧本，不再弹出二次审核窗口；新导入剧本直接填入表单。
-- 自动写入后允许继续手动修改剧本，导入时不再因内容与原 Artifact 不一致而阻断。已有分集会先保存本地优化结果再同步视频工作流，同步失败不会丢失剧本。初次付费执行确认仍保留。
+- 自动写入后允许继续手动修改剧本，导入时不再因内容与原 Artifact 不一致而阻断。已有分集会直接保存优化结果，不再同步旧文件型 Workflow。初次付费执行确认仍保留。
 - 人工验收：分别优化已有分集和新导入剧本，确认结果直接写入、无审核弹窗，且手动修改后可正常保存或导入。
 
 ### Invocation 默认超时调整

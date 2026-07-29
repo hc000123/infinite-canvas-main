@@ -53,29 +53,3 @@ func TestLoadWorkflowWorkerConfig(t *testing.T) {
 		t.Fatalf("worker config=%#v", Cfg)
 	}
 }
-
-func TestProductionRejectsLocalCodexExecutor(t *testing.T) {
-	for _, item := range []struct{ key, value string }{{"APP_ENV", "production"}, {"GIN_MODE", "release"}, {"GO_ENV", "production"}, {"NODE_ENV", "production"}} {
-		t.Run(item.key, func(t *testing.T) {
-			t.Setenv("ADMIN_USERNAME", "release-admin")
-			t.Setenv("ADMIN_PASSWORD", "safe-admin-password")
-			t.Setenv("JWT_SECRET", "safe-jwt-secret")
-			t.Setenv(item.key, item.value)
-			t.Setenv("WORKFLOW_TEXT_EXECUTOR", "codex-cli")
-			t.Setenv("WORKFLOW_LOCAL_CODEX_ENABLED", "true")
-			if err := Load(); err == nil || !strings.Contains(err.Error(), "生产环境禁止 Codex CLI") {
-				t.Fatalf("err=%v", err)
-			}
-		})
-	}
-}
-
-func TestCodexExecutorRequiresExplicitEnable(t *testing.T) {
-	t.Setenv("ADMIN_PASSWORD", "safe-admin-password")
-	t.Setenv("JWT_SECRET", "safe-jwt-secret")
-	t.Setenv("WORKFLOW_TEXT_EXECUTOR", "codex-cli")
-	t.Setenv("WORKFLOW_LOCAL_CODEX_ENABLED", "false")
-	if err := Load(); err == nil || !strings.Contains(err.Error(), "显式开启") {
-		t.Fatalf("err=%v", err)
-	}
-}

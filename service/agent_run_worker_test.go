@@ -25,16 +25,12 @@ func TestAgentRunWorkerExecutesQueuedRun(t *testing.T) {
 	fixture.assertCreditLogs(t, run.ID, 1, 0)
 }
 
-func TestAgentRunWorkerResolvesEachFrozenExecutor(t *testing.T) {
+func TestAgentRunWorkerResolvesFrozenAPIExecutor(t *testing.T) {
 	api := workerRecordingExecutor{kind: AgentRunExecutorAPI}
-	codex := workerRecordingExecutor{kind: AgentRunExecutorCodexCLI}
-	worker := NewAgentRunWorker(AgentRunWorkerOptions{Executors: []AgentRunExecutor{api, codex}})
+	worker := NewAgentRunWorker(AgentRunWorkerOptions{Executors: []AgentRunExecutor{api}})
 
 	if resolved, ok := worker.executorFor(AgentRunExecutorAPI); !ok || resolved.Kind() != AgentRunExecutorAPI {
 		t.Fatalf("api resolved=%T ok=%v", resolved, ok)
-	}
-	if resolved, ok := worker.executorFor(AgentRunExecutorCodexCLI); !ok || resolved.Kind() != AgentRunExecutorCodexCLI {
-		t.Fatalf("codex resolved=%T ok=%v", resolved, ok)
 	}
 	if _, ok := worker.executorFor("unknown"); ok {
 		t.Fatal("unknown executor must not resolve")

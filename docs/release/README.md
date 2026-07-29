@@ -279,8 +279,6 @@ PROJECT_CACHE_DIR=/app/data/project-cache
 WORKFLOW_LOCAL_MEDIA_DIR=/app/data/workflow-media
 
 WORKFLOW_WORKER_ENABLED=true
-WORKFLOW_TEXT_EXECUTOR=api
-WORKFLOW_LOCAL_CODEX_ENABLED=false
 
 DREAMINA_HOME=/app/data/dreamina-home
 DREAMINA_OUTPUT_DIR=/app/data/jimeng-cli

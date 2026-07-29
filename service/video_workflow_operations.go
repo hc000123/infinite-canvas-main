@@ -58,12 +58,7 @@ func GetWorkflowWorkerHealth() (WorkflowWorkerHealth, error) {
 	if err != nil {
 		return WorkflowWorkerHealth{}, err
 	}
-	executorKind := currentAgentRunExecutorKind()
 	channelAvailable := workflowExecutorAvailable()
-	executorLabel := "后台 API"
-	if executorKind == AgentRunExecutorCodexCLI {
-		executorLabel = "本地 Codex 验证"
-	}
 	fresh := !heartbeat.IsZero() && currentTime.Sub(heartbeat) <= 30*time.Second
 	heartbeatText := ""
 	if !heartbeat.IsZero() {
@@ -79,8 +74,8 @@ func GetWorkflowWorkerHealth() (WorkflowWorkerHealth, error) {
 		QueueDepth:           stats.Queued,
 		RunningCount:         stats.Running,
 		StaleLeaseCount:      stats.StaleLeases,
-		Executor:             executorKind,
-		ExecutorLabel:        executorLabel,
+		Executor:             AgentRunExecutorAPI,
+		ExecutorLabel:        "后台 API",
 	}, nil
 }
 

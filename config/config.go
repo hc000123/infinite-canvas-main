@@ -27,11 +27,6 @@ type Config struct {
 	WorkflowWorkerUserConcurrency int      `env:"WORKFLOW_WORKER_USER_CONCURRENCY" envDefault:"1"`
 	WorkflowWorkerPollMS          int      `env:"WORKFLOW_WORKER_POLL_MS" envDefault:"2000"`
 	WorkflowWorkerLeaseSeconds    int      `env:"WORKFLOW_WORKER_LEASE_SECONDS" envDefault:"60"`
-	WorkflowTextExecutor          string   `env:"WORKFLOW_TEXT_EXECUTOR" envDefault:"api"`
-	WorkflowLocalCodexEnabled     bool     `env:"WORKFLOW_LOCAL_CODEX_ENABLED" envDefault:"false"`
-	WorkflowCodexBin              string   `env:"WORKFLOW_CODEX_BIN" envDefault:"codex"`
-	WorkflowCodexWorkdir          string   `env:"WORKFLOW_CODEX_WORKDIR" envDefault:"."`
-	WorkflowCodexModel            string   `env:"WORKFLOW_CODEX_MODEL"`
 	WorkflowLocalMediaDir         string   `env:"WORKFLOW_LOCAL_MEDIA_DIR" envDefault:"data/workflow-media"`
 	LinuxDoAuthorizeURL           string   `env:"LINUX_DO_AUTHORIZE_URL" envDefault:"https://connect.linux.do/oauth2/authorize"`
 	LinuxDoTokenURL               string   `env:"LINUX_DO_TOKEN_URL" envDefault:"https://connect.linux.do/oauth2/token"`
@@ -71,24 +66,6 @@ func Load() error {
 			return err
 		}
 		Cfg.JWTSecret = secret
-	}
-	Cfg.WorkflowTextExecutor = strings.ToLower(strings.TrimSpace(Cfg.WorkflowTextExecutor))
-	if Cfg.WorkflowTextExecutor != "api" && Cfg.WorkflowTextExecutor != "codex-cli" {
-		return errors.New("WORKFLOW_TEXT_EXECUTOR only supports api or codex-cli")
-	}
-	if Cfg.WorkflowTextExecutor == "codex-cli" && !Cfg.WorkflowLocalCodexEnabled {
-		return errors.New("Codex CLI 执行器必须显式开启 WORKFLOW_LOCAL_CODEX_ENABLED")
-	}
-	if isProductionMode() && (Cfg.WorkflowTextExecutor == "codex-cli" || Cfg.WorkflowLocalCodexEnabled) {
-		return errors.New("生产环境禁止 Codex CLI 执行器")
-	}
-	Cfg.WorkflowCodexBin = strings.TrimSpace(Cfg.WorkflowCodexBin)
-	if Cfg.WorkflowCodexBin == "" {
-		Cfg.WorkflowCodexBin = "codex"
-	}
-	Cfg.WorkflowCodexWorkdir = strings.TrimSpace(Cfg.WorkflowCodexWorkdir)
-	if Cfg.WorkflowCodexWorkdir == "" {
-		Cfg.WorkflowCodexWorkdir = "."
 	}
 	Cfg.WorkflowLocalMediaDir = strings.TrimSpace(Cfg.WorkflowLocalMediaDir)
 	if Cfg.WorkflowLocalMediaDir == "" {

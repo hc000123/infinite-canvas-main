@@ -136,38 +136,31 @@ func BuildUserAgentRun(userID string, input CreateAgentRunInput) (model.AgentRun
 	}
 	executorKind := strings.TrimSpace(input.Executor)
 	if executorKind == "" {
-		executorKind = agentRunExecutorKind(executionKind)
+		executorKind = AgentRunExecutorAPI
 	}
-	if executorKind != agentRunExecutorKind(executionKind) {
+	if executorKind != AgentRunExecutorAPI {
 		return model.AgentRun{}, safeMessageError{message: "任务执行器与当前运行模式不匹配"}
 	}
-	if !map[string]bool{"text_model": true, "image_model": executorKind == AgentRunExecutorAPI}[executionKind] {
+	if !map[string]bool{"text_model": true, "image_model": true}[executionKind] {
 		return model.AgentRun{}, safeMessageError{message: "任务模型执行器无效"}
 	}
 	resolved := resolvedAgentRunChannel{}
 	credits := 0
 	var err error
-	if executorKind == AgentRunExecutorAPI {
-		if input.FrozenCredits == nil {
-			resolved, credits, err = apiAgentRunExecutionForCapability(input, agentRunModelCapability(executionKind))
-		} else {
-			resolved, err = resolveAgentRunChannelForCapability(input, agentRunModelCapability(executionKind))
-			credits = *input.FrozenCredits
-			if credits < 0 {
-				err = safeMessageError{message: "冻结算力点无效"}
-			}
-		}
-		if err != nil {
-			return model.AgentRun{}, err
-		}
+	if input.FrozenCredits == nil {
+		resolved, credits, err = apiAgentRunExecutionForCapability(input, agentRunModelCapability(executionKind))
 	} else {
-		resolved.ModelName = codexAgentRunModel()
-		resolved.TargetModel = strings.TrimSpace(input.ModelPreference)
+		resolved, err = resolveAgentRunChannelForCapability(input, agentRunModelCapability(executionKind))
+		credits = *input.FrozenCredits
+		if credits < 0 {
+			err = safeMessageError{message: "冻结算力点无效"}
+		}
+	}
+	if err != nil {
+		return model.AgentRun{}, err
 	}
 	estimatedCredits := input.EstimatedCredits
-	if executorKind == AgentRunExecutorCodexCLI {
-		estimatedCredits = 0
-	} else if input.FrozenCredits == nil && estimatedCredits <= 0 {
+	if input.FrozenCredits == nil && estimatedCredits <= 0 {
 		estimatedCredits = credits
 	}
 	timeoutSeconds := normalizeAgentRunTimeout(input.TimeoutSeconds)

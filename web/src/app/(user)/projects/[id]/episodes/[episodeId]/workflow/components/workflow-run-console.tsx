@@ -28,7 +28,7 @@ export function WorkflowRunConsole(props: { agentRun: RemoteWorkflowRunDetail["a
                         <div className="mt-3 space-y-2 text-xs">
                             <InfoLine label="状态" value={stageStatusLabel(props.stage.status)} />
                             <InfoLine label="第几次" value={String(props.stage.attempt)} />
-                            <InfoLine label="预计算力点" value={props.agentRun?.executor === "codex-cli" ? "本地验证 · 0" : String(props.stage.estimatedCredits || "—")} />
+                            <InfoLine label="预计算力点" value={String(props.stage.estimatedCredits || "—")} />
                             <InfoLine label="Skill" value={props.agentRun?.skillVersion ? `${props.agentRun.skillVersion} · ${props.agentRun.skillContentHash.slice(0, 8)}` : "启动时冻结"} />
                             <InfoLine label="阶段 ID" value={props.stage.id ? props.stage.id.slice(-10) : "未创建"} />
                             <InfoLine label="Invocation" value={props.stage.invocationId ? props.stage.invocationId.slice(-10) : "未创建"} />

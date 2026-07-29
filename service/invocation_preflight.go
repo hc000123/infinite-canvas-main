@@ -463,29 +463,6 @@ func invocationConfirmationCodes(manifest SkillManifest, outputs []ArtifactOutpu
 }
 
 func resolveInvocationExecutionPolicy(request InvocationRequest, pkg SkillPackage, bindings []ResolvedArtifactBinding, requiresConfirmation bool) (InvocationExecutionPolicy, error) {
-	if pkg.Manifest.ExecutorKind == "text_model" && agentRunExecutorKind("text_model") == AgentRunExecutorCodexCLI {
-		modelName := codexAgentRunModel()
-		if override := strings.TrimSpace(request.ExecutionPolicyOverride.Model); override != "" && override != modelName {
-			return InvocationExecutionPolicy{ExecutorKind: pkg.Manifest.ExecutorKind, AgentExecutor: AgentRunExecutorCodexCLI, Model: modelName, FallbackAllowed: false}, errors.New("Codex CLI 模型由本地验证配置冻结")
-		}
-		if strings.TrimSpace(request.ExecutionPolicyOverride.ChannelID) != "" {
-			return InvocationExecutionPolicy{ExecutorKind: pkg.Manifest.ExecutorKind, AgentExecutor: AgentRunExecutorCodexCLI, Model: modelName, FallbackAllowed: false}, errors.New("Codex CLI 不接受模型渠道覆盖")
-		}
-		timeout, attempts := request.ExecutionPolicyOverride.TimeoutSeconds, request.ExecutionPolicyOverride.MaxAttempts
-		if timeout <= 0 {
-			timeout = defaultInvocationTimeoutSeconds
-		}
-		if attempts <= 0 {
-			attempts = 1
-		}
-		return InvocationExecutionPolicy{
-			ExecutorKind: pkg.Manifest.ExecutorKind, AgentExecutor: AgentRunExecutorCodexCLI, Model: modelName,
-			FallbackAllowed: false, RequiresConfirmation: requiresConfirmation,
-			Credits: 0, EstimatedCredits: 0, OutputCount: 1,
-			TimeoutSeconds: normalizeAgentRunTimeout(timeout), ConcurrencyLimit: normalizeAgentRunConcurrency(0),
-			AllowBatch: false, MaxAttempts: attempts, WritePolicy: "preview_only", RequiresConfirm: true,
-		}, nil
-	}
 	settings, err := repository.GetSettings()
 	if err != nil {
 		return InvocationExecutionPolicy{}, err

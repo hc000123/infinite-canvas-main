@@ -894,7 +894,7 @@ func assertInvocationCreditRefund(t *testing.T, invocationID string, runStatus m
 
 type invocationWrongExecutor struct{}
 
-func (invocationWrongExecutor) Kind() string                    { return AgentRunExecutorCodexCLI }
+func (invocationWrongExecutor) Kind() string                    { return "unsupported" }
 func (invocationWrongExecutor) Available(context.Context) error { return nil }
 func (invocationWrongExecutor) Call(context.Context, model.AgentRun) agentRunCallResult {
 	return agentRunCallResult{}

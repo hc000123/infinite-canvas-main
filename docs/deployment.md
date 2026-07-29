@@ -11,18 +11,14 @@
 
 部署完成后，打开 Render 分配的 `.onrender.com` 域名即可访问。
 
-## 上线前主门禁：云端执行器
+## Workflow 执行边界
 
-> 本节的“云端执行器”只描述已停用的 `/original-workflow` 旧入口；当前项目 Workflow、Skill、Invocation 和 Worker 主链以 [创作工作流程](workflow.md) 为准。
+当前项目 Workflow、Skill、Invocation 和 Artifact 统一由后端 API Worker 执行，具体架构以 [创作工作流程](workflow.md) 为准。
 
-当前版本已彻底关闭浏览器侧和 Next API 内的 Codex CLI / 本地 Runner：
-
-- `/original-workflow` 只显示“云端执行器尚未启用”，不提供本地执行入口。
-- `/api/original-workflow` 与 `/api/original-workflow/script-optimizer` 拒绝 `local-runner` 请求；云端 Worker 未接入时也返回同一不可用说明。
-- 生产镜像不安装 Codex CLI，不读取用户本机目录，也不会回退到 `codex exec` 或 `.workflow-cache`。
-- `ORIGINAL_WORKFLOW_EXECUTION_MODE=cloud-worker` 与 `ORIGINAL_WORKFLOW_FORCE_CLOUD_WORKER=true` 固化了部署意图，但安全边界由代码门禁保证，不依赖环境变量是否正确填写。
-
-这代表项目、素材、画布、图片和视频模型渠道可以独立上线，不代表三阶段视频工作流已经具备云端执行能力。后续重新开放该入口前，云端 Worker 必须补齐队列、模型调用、质量门服务化、审核后写入、对象存储、日志、停止任务、权限隔离和额度扣费。
+- 旧 `/api/original-workflow*` 本地文件工作流接口已删除；`/original-workflow` 仅保留到项目分集 Workflow 的兼容跳转。
+- 后端不再提供 Codex CLI / 本地 Runner 执行器，也不读取用户本机工作流目录或 `.workflow-cache`。
+- 部署无需设置 Workflow 执行模式或 Codex 路径、模型、开关等环境变量。
+- 生产镜像不安装 Codex CLI。Dreamina / Jimeng CLI 是独立、受控的视频渠道，不属于本地 Codex Workflow。
 
 ## 模型配置与节点路由
 
@@ -110,7 +106,6 @@ https://你的域名/api/uploaded-assets/...
 
 - `ADMIN_PASSWORD`
 - `JWT_SECRET`
-- `ORIGINAL_WORKFLOW_EXECUTION_MODE=cloud-worker`
 - `DREAMINA_HOME=/app/data/dreamina-home`
 - `DREAMINA_OUTPUT_DIR=/app/data/jimeng-cli`
 - 如改用 MySQL / PostgreSQL，还需要修改 `STORAGE_DRIVER` 和 `DATABASE_DSN`

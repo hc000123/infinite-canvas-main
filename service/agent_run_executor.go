@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -13,14 +14,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/basketikun/infinite-canvas/config"
 	"github.com/basketikun/infinite-canvas/model"
 )
 
-const (
-	AgentRunExecutorAPI      = "api"
-	AgentRunExecutorCodexCLI = "codex-cli"
-)
+const AgentRunExecutorAPI = "api"
 
 type AgentRunExecutor interface {
 	Kind() string
@@ -248,7 +245,7 @@ func buildAPIMultimodalRequest(requestJSON string, manifestJSON string) ([]byte,
 	if !ok || strings.TrimSpace(textContent) == "" {
 		return nil, errors.New("invalid user message")
 	}
-	parts := []any{map[string]any{"type": "text", "text": textContent + "\n\n" + codexImageContext(manifestJSON)}}
+	parts := []any{map[string]any{"type": "text", "text": textContent + "\n\n" + agentRunImageContext(manifestJSON)}}
 	for _, item := range manifest.Items {
 		mimeType := strings.TrimSpace(item.MIME)
 		if mimeType != "image/png" && mimeType != "image/jpeg" && mimeType != "image/webp" {
@@ -276,39 +273,33 @@ func stringValue(value any) string {
 	return text
 }
 
-func NewAgentRunExecutorFromConfig() (AgentRunExecutor, error) {
-	if currentAgentRunExecutorKind() == AgentRunExecutorCodexCLI {
-		executor := NewCodexAgentRunExecutor(CodexExecutorOptions{
-			Bin: config.Cfg.WorkflowCodexBin, Workdir: config.Cfg.WorkflowCodexWorkdir, Model: config.Cfg.WorkflowCodexModel,
-		})
-		return executor, executor.Available(context.Background())
+func agentRunImageContext(manifestJSON string) string {
+	var manifest struct {
+		Items []struct {
+			Label   string `json:"label"`
+			Kind    string `json:"kind"`
+			Version string `json:"version"`
+			SHA256  string `json:"sha256"`
+			Order   int    `json:"order"`
+		} `json:"items"`
 	}
+	if json.Unmarshal([]byte(manifestJSON), &manifest) != nil || len(manifest.Items) == 0 {
+		return ""
+	}
+	sort.SliceStable(manifest.Items, func(left, right int) bool { return manifest.Items[left].Order < manifest.Items[right].Order })
+	lines := []string{"[IMAGE REFERENCES]", "必须先逐张理解图片中的人物外观、空间关系、光线与关键道具，再结合文本生成结果；不得只根据文件名猜测。"}
+	for index, item := range manifest.Items {
+		lines = append(lines, fmt.Sprintf("@图%d：%s｜类型=%s｜版本=%s｜哈希=%s", index+1, item.Label, item.Kind, item.Version, item.SHA256))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func NewAgentRunExecutorFromConfig() (AgentRunExecutor, error) {
 	return NewAPIAgentRunExecutor(nil), nil
 }
 
 func NewAgentRunExecutorsFromConfig() ([]AgentRunExecutor, error) {
-	textExecutor, err := NewAgentRunExecutorFromConfig()
-	if err != nil {
-		return nil, err
-	}
-	if textExecutor.Kind() == AgentRunExecutorAPI {
-		return []AgentRunExecutor{textExecutor}, nil
-	}
-	return []AgentRunExecutor{textExecutor, NewAPIAgentRunExecutor(nil)}, nil
-}
-
-func currentAgentRunExecutorKind() string {
-	if strings.EqualFold(strings.TrimSpace(config.Cfg.WorkflowTextExecutor), AgentRunExecutorCodexCLI) && config.Cfg.WorkflowLocalCodexEnabled {
-		return AgentRunExecutorCodexCLI
-	}
-	return AgentRunExecutorAPI
-}
-
-func agentRunExecutorKind(executionKind string) string {
-	if strings.EqualFold(strings.TrimSpace(executionKind), "image_model") {
-		return AgentRunExecutorAPI
-	}
-	return currentAgentRunExecutorKind()
+	return []AgentRunExecutor{NewAPIAgentRunExecutor(nil)}, nil
 }
 
 func workflowExecutorAvailable() bool {
@@ -330,12 +321,4 @@ func apiAgentRunExecutionForCapability(input CreateAgentRunInput, capability str
 	}
 	credits, err := ModelCost(resolved.ModelName)
 	return resolved, credits, err
-}
-
-func codexAgentRunModel() string {
-	modelName := strings.TrimSpace(config.Cfg.WorkflowCodexModel)
-	if modelName == "" {
-		return "codex"
-	}
-	return modelName
 }

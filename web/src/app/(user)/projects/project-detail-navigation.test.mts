@@ -34,7 +34,7 @@ test("project script optimization writes automatically without a review UI", () 
     assert.doesNotMatch(page, /confirmExistingEpisodeResult|assertScriptReviewMatches|approveImportDraft/);
     assert.doesNotMatch(page, /批准并写入这版生产剧本/);
     assert.match(optimizeFlow, /updateEpisode\(episode\.id, \{ summary: result\.productionScript/);
-    assert.ok(optimizeFlow.indexOf("updateEpisode(episode.id") < optimizeFlow.indexOf("syncVideoWorkflowScript("), "optimized script must be stored before workflow sync");
+    assert.doesNotMatch(optimizeFlow, /syncVideoWorkflowScript|\/api\/original-workflow/);
 });
 
 test("project Agent center has an explicit return-to-project action", () => {

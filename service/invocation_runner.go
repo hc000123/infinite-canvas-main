@@ -247,9 +247,6 @@ func validFrozenInvocationExecutionPolicy(policy InvocationExecutionPolicy) bool
 		validOutput = policy.OutputCount > 0 && json.Unmarshal([]byte(policy.ImageRequestJSON), &request) == nil && request["model"] == policy.Model && request["n"] == float64(policy.OutputCount)
 	}
 	validExecutor := policy.AgentExecutor == AgentRunExecutorAPI && policy.ChannelID != ""
-	if policy.AgentExecutor == AgentRunExecutorCodexCLI {
-		validExecutor = policy.ExecutorKind == "text_model" && policy.ChannelID == ""
-	}
 	return validKind && validOutput && validExecutor && policy.Model != "" && !policy.FallbackAllowed &&
 		policy.Credits >= 0 && policy.EstimatedCredits >= 0 && policy.TimeoutSeconds == normalizeAgentRunTimeout(policy.TimeoutSeconds) &&
 		policy.ConcurrencyLimit == normalizeAgentRunConcurrency(policy.ConcurrencyLimit) && !policy.AllowBatch && policy.MaxAttempts > 0 &&

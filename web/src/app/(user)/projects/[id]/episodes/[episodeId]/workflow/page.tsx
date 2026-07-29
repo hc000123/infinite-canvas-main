@@ -68,10 +68,9 @@ export default function EpisodeWorkflowPage() {
 
     const startStage = (label: string, stageId: string, state: ReturnType<typeof useWorkflowStageActions>, options: { references?: WorkflowReferenceImage[]; context?: unknown; beforeStart?: () => void } = {}) => {
         const refs = options.references || [];
-        const local = workbench.health?.executor === "codex-cli";
         modal.confirm({
             title: `启动${label}？`,
-            content: `${refs.length ? `将冻结并理解 ${refs.length} 张参考图。` : "本次任务不附加参考图。"}${local ? "本地 Codex 验证不扣应用算力点。" : "线上任务将按实际模型计费。"}`,
+            content: `${refs.length ? `将冻结并理解 ${refs.length} 张参考图。` : "本次任务不附加参考图。"}线上任务将按实际模型计费。`,
             okText: "确认启动", cancelText: "取消",
             onOk: async () => {
                 if (!workbench.detail) return;

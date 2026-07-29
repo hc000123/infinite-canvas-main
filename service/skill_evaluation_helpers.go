@@ -88,9 +88,6 @@ func workflowSkillRunStage(stageKey string) string {
 }
 
 func workflowSkillEvaluationModel(executor AgentRunExecutor) string {
-	if executor.Kind() == AgentRunExecutorCodexCLI {
-		return codexAgentRunModel()
-	}
 	return "default"
 }
 

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
++ [调整] 彻底移除旧本地 Codex Workflow：删除 Codex CLI 执行器、旧 `/api/original-workflow*` 文件工作流、前端状态适配层及相关部署开关；Workflow、Skill、Invocation 和 Artifact 统一由后端 API Worker 执行，画布 Agent、Skill Registry 与 Dreamina / Jimeng CLI 保持独立可用。
 + [优化] 项目 Workflow 中心改为管理员专用，普通用户隐藏入口并拦截直接页面访问。
 + [优化] 项目剧本 Skill 结果改为自动批准并写入，移除二次审核弹窗，并允许用户在自动优化后继续手动修改剧本。
 + [优化] Invocation 默认执行超时由 120 秒提高到 360 秒，减少长文本模型请求被过早终止。
@@ -19,7 +20,7 @@
 + [新增] 画布对话固定使用唯一“画布总控”，可基于受限 Skill Catalog 直接回答或生成经版本、步数和 Artifact 契约校验的 Temporary Plan，并通过统一 Agent Plan / Invocation / Artifact Runtime 逐步确认、审核和幂等写回最终产物。
 + [优化] 正式视频 Workflow 已迁入统一 Invocation / Artifact Runtime，阶段支持精确 Skill 冻结、标准资产与媒体引用、完整产物集审核、幂等 Apply 和失败安全门，并保持现有工作台接口与刷新恢复体验。
 + [优化] Invocation Worker 新增图片模型执行与内容哈希媒体归档，支持角色 / 场景 / 道具资产成图、失败重试和 Workflow 多上游 Artifact 聚合。
-+ [优化] Invocation Worker 可按每个冻结任务的执行器类型分流；显式本地 Codex 开发模式下，文本节点使用 Codex CLI，图片节点仍使用配置的图片 API，生产配置继续保持 API-only。
++ [优化] Invocation Worker 统一使用已配置的 API 模型执行冻结任务，不再保留本地 Codex 分流路径。
 + [优化] 将固定六阶段 Workflow Skill 中心泛化为可搜索、可版本化、可评测和可独立管理的 Skill Registry。
 + [优化] 移除画布助手旧硬编码 Prompt Agent Skill Pack、岗位 Agent 下拉、工具注册表和独立执行状态；普通对话由画布总控直接回答，直接生图保持不变。
 + [优化] 项目分集剧本优化改为直接调用兼容的已发布剧本 Skill，通过统一 Artifact / Invocation 审核链运行，并移除生产导航中的 Agent 中心入口。
@@ -27,7 +28,7 @@
 + [修复] 修复 Invocation 成功预检返回空集合时画布 Skill 抽屉读取 `null` 导致页面崩溃的问题，并统一空集合安全响应。
 + [修复] 修复安全升级后的 `brace-expansion@5` 与 ESLint 传递依赖 `minimatch@3` API 不兼容导致全量 ESLint 崩溃的问题；保留安全版本并通过可复现的 Bun 依赖补丁兼容旧调用方式。
 + [验证] Go 全包、前端 831 项测试、TypeScript 与 Next.js 生产构建通过；隔离浏览器完成资产成图、审核、Apply、生图工作台展示 / 保存和画布图片节点写回，测试图片仅用于协议验收，正式视觉质量待真实图片模型复测。
-+ [验证] 固定公交站剧本的 12 节点生产 Workflow 已通过模拟混合执行验收：9 个文本节点分流至模拟 Codex、3 个成图节点分流至模拟图片 API，并完成版本冻结、Artifact 血缘、质量门、审核、计费、交付报告和刷新恢复；真实视觉效果保留人工验收。
++ [验证] 固定公交站剧本的 12 节点生产 Workflow 已通过模拟 API 执行验收，并完成版本冻结、Artifact 血缘、质量门、审核、计费、交付报告和刷新恢复；真实视觉效果保留人工验收。
 + [新增] 管理后台将 AI 任务与算力流水合并为“AI 使用”，新增按北京时间今日、本周、本月统计实际净消耗及用户占比，并排除后台额度调整。
 + [调整] 移除项目详情低频“素材引用”页签，素材缺口与旧版本提醒统一进入项目素材库，底层引用和生成链路保持不变。
 + [优化] 模型算力点改为按业务单位计费：语言按调用次数、图片按实际张数、视频按生成秒数，并统一画布预估、后台单位提示和后端扣费口径。

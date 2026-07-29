@@ -91,7 +91,7 @@ export type RemoteWorkflowRunDetail = {
     stages: RemoteWorkflowStageRun[];
     artifacts: RemoteWorkflowArtifact[];
     gates: RemoteWorkflowQualityGate[];
-    agentRuns: Array<Record<string, unknown> & { id: string; status: string; model: string; provider: string; errorMessage: string; executor: "api" | "codex-cli"; skillId: string; skillVersionId: string; skillVersion: string; skillContentHash: string }>;
+    agentRuns: Array<Record<string, unknown> & { id: string; status: string; model: string; provider: string; errorMessage: string; executor: "api"; skillId: string; skillVersionId: string; skillVersion: string; skillContentHash: string }>;
 };
 
 export type WorkflowWorkerHealth = {
@@ -104,7 +104,7 @@ export type WorkflowWorkerHealth = {
     queueDepth: number;
     runningCount: number;
     staleLeaseCount: number;
-    executor: "api" | "codex-cli";
+    executor: "api";
     executorLabel: string;
 };
 

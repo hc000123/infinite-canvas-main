@@ -6,36 +6,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/basketikun/infinite-canvas/config"
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/repository"
 )
 
 func TestSystemProductionWorkflowExecutesRoutedTwelveNodeProductionChain(t *testing.T) {
-	runSystemProductionWorkflowE2E(t, false)
+	runSystemProductionWorkflowE2E(t)
 }
 
-func TestSystemProductionWorkflowExecutesMixedCodexTextAndAPIImageChain(t *testing.T) {
-	runSystemProductionWorkflowE2E(t, true)
-}
-
-func runSystemProductionWorkflowE2E(t *testing.T, mixed bool) {
+func runSystemProductionWorkflowE2E(t *testing.T) {
 	t.Helper()
 	setupInvocationServiceTest(t)
 	setupSystemProductionWorkflowModels(t)
-	previousExecutor := config.Cfg.WorkflowTextExecutor
-	previousEnabled := config.Cfg.WorkflowLocalCodexEnabled
-	previousModel := config.Cfg.WorkflowCodexModel
-	t.Cleanup(func() {
-		config.Cfg.WorkflowTextExecutor = previousExecutor
-		config.Cfg.WorkflowLocalCodexEnabled = previousEnabled
-		config.Cfg.WorkflowCodexModel = previousModel
-	})
-	if mixed {
-		config.Cfg.WorkflowTextExecutor = AgentRunExecutorCodexCLI
-		config.Cfg.WorkflowLocalCodexEnabled = true
-		config.Cfg.WorkflowCodexModel = "codex-simulated"
-	}
 	stamp := now()
 	if _, err := repository.SaveUser(model.User{ID: "user-1", Username: "system-workflow-e2e", Credits: 100, Status: model.UserStatusActive, CreatedAt: stamp, UpdatedAt: stamp}); err != nil {
 		t.Fatal(err)
@@ -61,11 +43,7 @@ func runSystemProductionWorkflowE2E(t *testing.T, mixed bool) {
 	if err != nil || duplicate.Run.ID != preflight.Run.ID || duplicate.Revision.ID != preflight.Revision.ID {
 		t.Fatalf("idempotent preflight=%#v duplicate=%#v err=%v", preflight.Run, duplicate.Run, err)
 	}
-	wantEstimatedCredits := int64(18)
-	if mixed {
-		wantEstimatedCredits = 9
-	}
-	if !preflight.Preview.Executable || preflight.Run.EstimatedCredits != wantEstimatedCredits || len(preflight.Nodes) != 12 {
+	if !preflight.Preview.Executable || preflight.Run.EstimatedCredits != 18 || len(preflight.Nodes) != 12 {
 		t.Fatalf("preflight=%#v", preflight)
 	}
 	confirmed, err := ConfirmWorkflowExecution("user-1", preflight.Run.ID, WorkflowExecutionConfirmationInput{Revision: 1, Fingerprint: preflight.Run.ConfirmationFingerprint, RequirementCodes: preflight.ConfirmationRequirements})
@@ -89,12 +67,6 @@ func runSystemProductionWorkflowE2E(t *testing.T, mixed bool) {
 	}
 	apiExecutor := &workflowExecutionE2EExecutor{kind: AgentRunExecutorAPI, outputs: outputsBySkill}
 	workerOptions := AgentRunWorkerOptions{ID: "system-workflow-e2e", LeaseDuration: time.Minute, Executor: apiExecutor}
-	var codexExecutor *workflowExecutionE2EExecutor
-	if mixed {
-		codexExecutor = &workflowExecutionE2EExecutor{kind: AgentRunExecutorCodexCLI, outputs: outputsBySkill}
-		workerOptions.Executor = nil
-		workerOptions.Executors = []AgentRunExecutor{codexExecutor, apiExecutor}
-	}
 	worker := NewAgentRunWorker(workerOptions)
 	type expectedNode struct {
 		key, executorType, agentVersionID, skillVersionID, outputType string
@@ -155,8 +127,6 @@ func runSystemProductionWorkflowE2E(t *testing.T, mixed bool) {
 		wantCredits := 1
 		if want.outputType == "asset_rendition" {
 			wantCredits = 3
-		} else if mixed {
-			wantCredits = 0
 		}
 		if len(invocation.Attempts) != 1 || invocation.Attempts[0].CreditsReserved != wantCredits || invocation.Attempts[0].CreditsRefunded != 0 {
 			t.Fatalf("node=%s attempts=%#v", want.key, invocation.Attempts)
@@ -188,16 +158,8 @@ func runSystemProductionWorkflowE2E(t *testing.T, mixed bool) {
 		}
 	}
 	user, ok, err := repository.GetUserByID("user-1")
-	wantBalance, wantAPICalls, wantCodexCalls := 82, int32(12), int32(0)
-	if mixed {
-		wantBalance, wantAPICalls, wantCodexCalls = 91, 3, 9
-	}
-	actualCodexCalls := int32(0)
-	if codexExecutor != nil {
-		actualCodexCalls = codexExecutor.calls.Load()
-	}
-	if err != nil || !ok || user.Credits != wantBalance || apiExecutor.calls.Load() != wantAPICalls || actualCodexCalls != wantCodexCalls || len(invocationIDs) != 12 {
-		t.Fatalf("user=%#v apiCalls=%d codexCalls=%d invocations=%#v ok=%v err=%v", user, apiExecutor.calls.Load(), actualCodexCalls, invocationIDs, ok, err)
+	if err != nil || !ok || user.Credits != 82 || apiExecutor.calls.Load() != 12 || len(invocationIDs) != 12 {
+		t.Fatalf("user=%#v apiCalls=%d invocations=%#v ok=%v err=%v", user, apiExecutor.calls.Load(), invocationIDs, ok, err)
 	}
 }
 

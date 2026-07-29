@@ -14,8 +14,7 @@ import { useStoryboardStore } from "../../canvas/stores/use-storyboard-store";
 import { buildImportedEpisodeWriteInput, canvasEpisodeContextFromCreateBinding, canvasEpisodeContextFromEpisode, type CanvasCreateScriptBinding } from "../../canvas/utils/canvas-episode-context";
 import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../../canvas/utils/canvas-project-preset";
 import { episodeProductionName, type StructuredEpisodeScript } from "../../canvas/utils/script-management";
-import { useOriginalWorkflowStore } from "../../original-workflow/use-original-workflow-store";
-import { videoWorkflowEpisodeKey, videoWorkflowHref, videoWorkflowProjectSlug } from "../../original-workflow/video-workflow-routing";
+import { videoWorkflowHref } from "../../original-workflow/video-workflow-routing";
 import { canvasIdsForCreativeProject, unfiledCanvasProjects } from "../creative-projects";
 import { editableCanvasPreset } from "../project-canvas-preset";
 import { executeScriptInvocationToReview, preflightScriptInvocation } from "../script-invocation-runtime";
@@ -75,8 +74,6 @@ export default function CreativeProjectDetailPage() {
     const [bindingCanvasId, setBindingCanvasId] = useState("");
     const storyboardTableShots = useStoryboardStore((state) => state.tableShots);
     const shotGroups = useStoryboardStore((state) => state.shotGroups);
-    const workflowExecutionMode = useOriginalWorkflowStore((state) => state.executionMode);
-    const workflowRootPath = useOriginalWorkflowStore((state) => state.rootPath);
     const canvasIds = useMemo(() => (project ? canvasIdsForCreativeProject(project, canvases) : []), [canvases, project]);
     const projectCanvases = useMemo(() => canvases.filter((canvas) => canvasIds.includes(canvas.id)), [canvasIds, canvases]);
     const projectEpisodes = useMemo(() => episodes.filter((episode) => episode.projectId === projectId).sort((a, b) => a.order - b.order), [episodes, projectId]);
@@ -242,9 +239,8 @@ export default function CreativeProjectDetailPage() {
             const order = projectEpisodes.length + 1;
             const sourceSummary = optimizedImportDraft?.sourceScript && optimizedImportDraft.sourceScript.trim() !== scriptText ? optimizedImportDraft.sourceScript : undefined;
             addEpisode({ projectId: project.id, code: values.code, order, title, summary: scriptText, sourceSummary, structuredScript: optimizedImportDraft?.structuredScript, hook: "", turningPoint: "", cliffhanger: "" });
-            await syncVideoWorkflowScript(values.code, scriptText);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "同步视频工作流剧本失败");
+            message.error(error instanceof Error ? error.message : "导入本集剧本失败");
             return;
         } finally {
             setEpisodeImporting(false);
@@ -297,11 +293,6 @@ export default function CreativeProjectDetailPage() {
             if (!result) return;
             updateEpisode(episode.id, { summary: result.productionScript, sourceSummary: episode.sourceSummary || sourceScript, structuredScript: undefined });
             setScriptOptimizeErrors((state) => ({ ...state, [episode.id]: "" }));
-            try {
-                await syncVideoWorkflowScript(episode.code || `EP${String(episode.order).padStart(2, "0")}`, result.productionScript);
-            } catch (error) {
-                message.warning(`优化剧本已写入，但同步视频工作流失败：${error instanceof Error ? error.message : "未知错误"}`);
-            }
             message.success("已自动写入本集优化剧本，可继续手动调整。");
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "剧本优化失败";
@@ -362,20 +353,6 @@ export default function CreativeProjectDetailPage() {
             message.success("原剧本已更新，旧提取结果已清空");
         } catch (error) {
             message.warning(error instanceof Error ? error.message : "剧本保存失败");
-        }
-    };
-
-    const syncVideoWorkflowScript = async (code: string, content: string) => {
-        const episode = videoWorkflowEpisodeKey(code, project.id);
-        try {
-            const response = await fetch("/api/original-workflow", {
-                body: JSON.stringify({ action: "save-script", content, episode, executionMode: workflowExecutionMode, projectSlug: videoWorkflowProjectSlug(project.id), rootPath: workflowRootPath }),
-                headers: { "Content-Type": "application/json" },
-                method: "POST",
-            });
-            return response.ok;
-        } catch {
-            return false;
         }
     };
 
