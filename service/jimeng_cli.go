@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -265,8 +266,12 @@ func parseJimengLoginStartPayload(payload map[string]any) (JimengLoginStartResul
 }
 
 func parseJimengLoginStartText(body []byte) (JimengLoginStartResult, error) {
+	text := strings.TrimSpace(string(body))
+	if strings.Contains(text, "已复用当前本地 OAuth 登录态") || strings.Contains(strings.ToLower(text), "reused current local oauth login") {
+		return JimengLoginStartResult{LoginReady: true, Message: "即梦 CLI 已登录"}, nil
+	}
 	values := map[string]string{}
-	for _, line := range strings.Split(string(body), "\n") {
+	for _, line := range strings.Split(text, "\n") {
 		key, value, ok := strings.Cut(strings.TrimSpace(line), ":")
 		if !ok {
 			continue
@@ -529,6 +534,9 @@ func jimengCLIHome(ctx context.Context) string {
 }
 
 func jimengEnvironmentWithHome(environment []string, home string) []string {
+	if runtime.GOOS == "darwin" {
+		return environment
+	}
 	result := make([]string, 0, len(environment)+1)
 	for _, value := range environment {
 		if !strings.HasPrefix(value, "HOME=") {

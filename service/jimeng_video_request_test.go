@@ -7,6 +7,7 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -102,6 +103,9 @@ func TestPrepareJimengVideoCommandRejectsInvalidModeInputs(t *testing.T) {
 }
 
 func TestRunJimengCLIUsesDreaminaHome(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("macOS uses the login keychain and must preserve the real HOME")
+	}
 	home := filepath.Join(t.TempDir(), "dreamina-home")
 	t.Setenv("DREAMINA_HOME", home)
 	cli := filepath.Join(t.TempDir(), "dreamina")
@@ -118,6 +122,9 @@ func TestRunJimengCLIUsesDreaminaHome(t *testing.T) {
 }
 
 func TestRunJimengCLIUsesContextDreaminaHome(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("macOS uses the login keychain and must preserve the real HOME")
+	}
 	globalHome := filepath.Join(t.TempDir(), "global-home")
 	userHome := filepath.Join(t.TempDir(), "user-home")
 	t.Setenv("DREAMINA_HOME", globalHome)
@@ -131,6 +138,19 @@ func TestRunJimengCLIUsesContextDreaminaHome(t *testing.T) {
 	}
 	if string(output) != userHome {
 		t.Fatalf("HOME = %q, want per-user home %q", output, userHome)
+	}
+}
+
+func TestJimengEnvironmentPreservesMacOSHomeForLoginKeychain(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS keychain behavior")
+	}
+	environment := []string{"HOME=/Users/tester", "PATH=/usr/bin"}
+
+	result := jimengEnvironmentWithHome(environment, filepath.Join(t.TempDir(), "user-home"))
+
+	if strings.Join(result, "\n") != strings.Join(environment, "\n") {
+		t.Fatalf("environment = %#v, want real HOME preserved for macOS keychain", result)
 	}
 }
 

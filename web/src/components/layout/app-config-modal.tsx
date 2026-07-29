@@ -67,12 +67,25 @@ export function AppConfigModal() {
             message.warning("请先选择即梦视频模型");
             return;
         }
+        const verificationWindow = typeof window === "undefined" ? null : window.open("", "_blank");
+        if (verificationWindow) verificationWindow.opener = null;
         setIsStartingJimengLogin(true);
         try {
             const result = await startUserJimengLogin(videoModel);
             setJimengLogin(result);
-            message.success(result.loginReady ? result.message || "即梦 CLI 已登录" : "已获取即梦网页登录验证码");
+            const loginURL = result.verificationUriComplete || result.verificationUri || "";
+            if (result.loginReady) {
+                verificationWindow?.close();
+                message.success(result.message || "即梦 CLI 已登录");
+            } else if (loginURL && verificationWindow) {
+                verificationWindow.location.replace(loginURL);
+                message.success("已打开即梦验证网页");
+            } else {
+                verificationWindow?.close();
+                message.warning(loginURL ? "验证网页被浏览器拦截，请点击“重新打开验证页”" : "未获取到即梦验证链接");
+            }
         } catch (error) {
+            verificationWindow?.close();
             message.error(error instanceof Error ? error.message : "获取即梦验证码失败");
         } finally {
             setIsStartingJimengLogin(false);
@@ -155,7 +168,7 @@ export function AppConfigModal() {
                             title="即梦网页登录"
                             description={
                                 <div className="space-y-3">
-                                    <Typography.Text type="secondary">当前视频模型使用即梦 CLI。每个用户使用自己的即梦账号登录，后台仍会记录任务和用量。</Typography.Text>
+                                    <Typography.Text type="secondary">当前视频模型使用本机即梦 CLI 登录态。后台仍会记录任务和用量，并归属当前应用账号。</Typography.Text>
                                     {jimengLogin?.userCode ? (
                                         <Space size={12} wrap>
                                             <Typography.Text>
@@ -171,10 +184,10 @@ export function AppConfigModal() {
                                     {jimengLogin?.loginReady ? <Typography.Text type="success">{jimengLogin.message || "即梦 CLI 已登录"}</Typography.Text> : null}
                                     <Space wrap>
                                         <Button icon={<KeyRound size={16} />} loading={isStartingJimengLogin} onClick={() => void startJimengLogin()}>
-                                            获取验证码
+                                            登录即梦
                                         </Button>
                                         <Button icon={<ExternalLink size={16} />} type="primary" disabled={!jimengLoginURL} onClick={openJimengLoginURL}>
-                                            打开验证网页
+                                            重新打开验证页
                                         </Button>
                                         <Button icon={<CheckCircle2 size={16} />} loading={isCheckingJimengLogin} disabled={!jimengLogin?.deviceCode || jimengLogin.loginReady} onClick={() => void checkJimengLogin()}>
                                             完成验证

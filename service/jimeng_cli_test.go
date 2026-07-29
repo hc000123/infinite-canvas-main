@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -188,7 +189,7 @@ exit 1
 	if err != nil {
 		t.Fatalf("read home log: %v", err)
 	}
-	wantHome := JimengUserHomeDir(model.ModelChannel{}, "user-login")
+	wantHome := expectedJimengCLIHome("user-login")
 	wantLog := "start:" + wantHome + "\ncheck:" + wantHome
 	if strings.TrimSpace(string(home)) != wantLog {
 		t.Fatalf("HOME log = %q, want %q", strings.TrimSpace(string(home)), wantLog)
@@ -236,9 +237,17 @@ esac
 	if err != nil {
 		t.Fatalf("read home log: %v", err)
 	}
-	if strings.TrimSpace(string(home)) != JimengUserHomeDir(model.ModelChannel{}, "user-preflight") {
-		t.Fatalf("HOME = %q, want personal home %q", strings.TrimSpace(string(home)), JimengUserHomeDir(model.ModelChannel{}, "user-preflight"))
+	wantHome := expectedJimengCLIHome("user-preflight")
+	if strings.TrimSpace(string(home)) != wantHome {
+		t.Fatalf("HOME = %q, want %q", strings.TrimSpace(string(home)), wantHome)
 	}
+}
+
+func expectedJimengCLIHome(userID string) string {
+	if runtime.GOOS == "darwin" {
+		return os.Getenv("HOME")
+	}
+	return JimengUserHomeDir(model.ModelChannel{}, userID)
 }
 
 func TestParseJimengLoginStartResultReadsHeadlessTextOutput(t *testing.T) {
@@ -257,6 +266,16 @@ expires_at: 2026-07-07T15:55:10+08:00
 	}
 	if result.Interval != 1 {
 		t.Fatalf("interval = %d, want 1", result.Interval)
+	}
+}
+
+func TestParseJimengLoginStartResultRecognizesReusedLogin(t *testing.T) {
+	result, err := parseJimengLoginStartResult([]byte("已复用当前本地 OAuth 登录态。\n"))
+	if err != nil {
+		t.Fatalf("parseJimengLoginStartResult returned error: %v", err)
+	}
+	if !result.LoginReady || result.Message == "" {
+		t.Fatalf("result = %#v, want reused login ready", result)
 	}
 }
 

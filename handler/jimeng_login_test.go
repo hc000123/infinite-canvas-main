@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -48,7 +49,7 @@ func TestUserJimengLoginHandlersUseAuthenticatedUserHome(t *testing.T) {
 		t.Fatalf("check body = %s, want ready", checkRec.Body.String())
 	}
 
-	wantHome := service.JimengUserHomeDir(model.ModelChannel{}, user.ID)
+	wantHome := expectedJimengHandlerCLIHome(user.ID)
 	wantLog := "start:" + wantHome + "\ncheck:" + wantHome
 	if body, err := os.ReadFile(logPath); err != nil || strings.TrimSpace(string(body)) != wantLog {
 		t.Fatalf("home log = %q err=%v, want %q", strings.TrimSpace(string(body)), err, wantLog)
@@ -74,7 +75,7 @@ func TestAIVideoPreflightUsesAuthenticatedJimengHome(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"loginReady":true`) {
 		t.Fatalf("body = %s, want login-ready jimeng preflight", rec.Body.String())
 	}
-	wantHome := service.JimengUserHomeDir(model.ModelChannel{}, user.ID)
+	wantHome := expectedJimengHandlerCLIHome(user.ID)
 	if body, err := os.ReadFile(logPath); err != nil || strings.TrimSpace(string(body)) != "credit:"+wantHome {
 		t.Fatalf("home log = %q err=%v, want credit home %q", strings.TrimSpace(string(body)), err, wantHome)
 	}
@@ -107,7 +108,7 @@ func TestJimengVideoProxyUsesAuthenticatedUserHomeForSubmitAndDownload(t *testin
 		t.Fatalf("content status = %d body=%s", contentRec.Code, contentRec.Body.String())
 	}
 
-	wantHome := service.JimengUserHomeDir(model.ModelChannel{}, user.ID)
+	wantHome := expectedJimengHandlerCLIHome(user.ID)
 	wantLog := "submit:" + wantHome + "\nquery:" + wantHome
 	if body, err := os.ReadFile(logPath); err != nil || strings.TrimSpace(string(body)) != wantLog {
 		t.Fatalf("home log = %q err=%v, want %q", strings.TrimSpace(string(body)), err, wantLog)
@@ -162,6 +163,13 @@ func TestJimengVideoProxyKeepsAdminUsageDataWithUserCLIHome(t *testing.T) {
 	if usage.UserTotal != 1 || len(usage.Users) != 1 || usage.Users[0].UserID != user.ID || usage.Users[0].NetCredits != task.Credits {
 		t.Fatalf("usage = %#v, want jimeng user usage", usage)
 	}
+}
+
+func expectedJimengHandlerCLIHome(userID string) string {
+	if runtime.GOOS == "darwin" {
+		return os.Getenv("HOME")
+	}
+	return service.JimengUserHomeDir(model.ModelChannel{}, userID)
 }
 
 func writeJimengHomeLoggingCLI(t *testing.T, logPath string) string {
