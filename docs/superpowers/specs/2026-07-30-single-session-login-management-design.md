@@ -119,13 +119,13 @@
 6. 继续执行现有 IP 绑定规则。
 7. 将会话 ID 写入 `RequestMeta.SessionID`，必要时节流更新最后活跃时间。
 
-会话校验失败时返回统一 `{ code, data, msg }`，但使用可区分的业务状态码和安全化原因：
+会话校验失败时返回统一 `{ code, data, msg }`，并为现有整数 `code` 定义稳定常量：
 
-- `AUTH_SESSION_REPLACED`：账号已在其他设备登录。
-- `AUTH_SESSION_REVOKED`：账号已被管理员强制下线，可返回管理员填写的安全化原因。
-- `AUTH_SESSION_IDLE_EXPIRED`：登录状态因长时间未使用失效。
-- `AUTH_SESSION_EXPIRED`：登录状态已到最长有效期。
-- `AUTH_SESSION_INVALID`：其他无效或缺失会话。
+- `1001 / AUTH_SESSION_INVALID`：其他无效或缺失会话。
+- `1002 / AUTH_SESSION_REPLACED`：账号已在其他设备登录。
+- `1003 / AUTH_SESSION_REVOKED`：账号已被管理员强制下线，可在 `data.reason` 返回管理员填写的安全化原因。
+- `1004 / AUTH_SESSION_IDLE_EXPIRED`：登录状态因长时间未使用失效。
+- `1005 / AUTH_SESSION_EXPIRED`：登录状态已到最长有效期。
 
 前端请求层统一识别这些状态，清除内存及持久化 Token，保留按用户隔离的本地画布、项目和素材数据，并跳转登录页。登录页只显示必要原因，不显示操作者 ID、内部会话 ID或其他敏感信息。
 
