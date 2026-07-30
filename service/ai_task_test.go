@@ -17,19 +17,24 @@ func TestSanitizeAIJSONRedactsSecretsAndMedia(t *testing.T) {
 		"model": "test-model",
 		"api_key": "sk-secret",
 		"authorization": "Bearer token-secret",
+		"refresh_token": "refresh-secret",
+		"input_tokens": 12,
 		"image_url": {"url": "data:image/png;base64,AAAA"},
 		"preview": "blob:http://localhost/image",
 		"prompt": "保留普通提示词"
 	}`)
 
 	sanitized := SanitizeAIJSON(body, "application/json")
-	for _, forbidden := range []string{"sk-secret", "token-secret", "data:image", "base64,AAAA", "blob:http"} {
+	for _, forbidden := range []string{"sk-secret", "token-secret", "refresh-secret", "data:image", "base64,AAAA", "blob:http"} {
 		if strings.Contains(sanitized, forbidden) {
 			t.Fatalf("sanitized json still contains %q: %s", forbidden, sanitized)
 		}
 	}
 	if !strings.Contains(sanitized, "保留普通提示词") {
 		t.Fatalf("sanitized json dropped normal prompt: %s", sanitized)
+	}
+	if !strings.Contains(sanitized, `"input_tokens":12`) {
+		t.Fatalf("sanitized json dropped numeric usage: %s", sanitized)
 	}
 }
 
@@ -73,6 +78,41 @@ func TestSanitizeAIJSONKeepsTextEventStream(t *testing.T) {
 	}
 	if !strings.Contains(sanitized, "优化稿") {
 		t.Fatalf("text event stream content was not preserved: %s", sanitized)
+	}
+}
+
+func TestAITaskSuccessCompactsTextEventStream(t *testing.T) {
+	setupAITaskTestDB(t)
+	task, err := CreateAITask(CreateAITaskInput{UserID: "user-stream", TaskType: "chat", Model: "chat-model", Path: "/responses"})
+	if err != nil {
+		t.Fatalf("CreateAITask returned error: %v", err)
+	}
+	chunks := make([]string, 0, 42)
+	for range 20 {
+		chunks = append(chunks,
+			"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"优化\"}",
+			"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"稿\"}",
+		)
+	}
+	chunks = append(chunks,
+		"event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp-1\",\"status\":\"completed\",\"usage\":{\"input_tokens\":12,\"output_tokens\":40}}}",
+		"data: [DONE]",
+	)
+	raw := []byte(strings.Join(chunks, "\n\n"))
+	if err := MarkAITaskSucceeded(task.ID, raw, "text/event-stream; charset=utf-8"); err != nil {
+		t.Fatalf("MarkAITaskSucceeded returned error: %v", err)
+	}
+	saved, ok, err := repository.GetAITask(task.ID)
+	if err != nil || !ok {
+		t.Fatalf("GetAITask ok=%v err=%v", ok, err)
+	}
+	for _, required := range []string{`"outputText":"优化稿优化稿`, `"input_tokens":12`, `"eventCount":41`, `"done":true`} {
+		if !strings.Contains(saved.ResponseJSON, required) {
+			t.Fatalf("compact response missing %s: %s", required, saved.ResponseJSON)
+		}
+	}
+	if len(saved.ResponseJSON) >= len(raw)/2 {
+		t.Fatalf("compact response is too large: compact=%d raw=%d", len(saved.ResponseJSON), len(raw))
 	}
 }
 
@@ -391,6 +431,55 @@ func TestListAdminAITasksFiltersByTaskFields(t *testing.T) {
 	byName, err := ListAdminAITasks(model.AITaskQuery{User: "user-list-a-name", Page: 1, PageSize: 10})
 	if err != nil || byName.Total != 1 || len(byName.Items) != 1 || byName.Items[0].User.Username != "user-list-a-name" {
 		t.Fatalf("username list result=%#v err=%v", byName, err)
+	}
+}
+
+func TestListAdminAITasksOmitsPayloadsAndKeepsFrontendTrace(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, _ = saveAITaskTestUser("user-list-summary", 20)
+	task, err := CreateAITask(CreateAITaskInput{
+		UserID:        "user-list-summary",
+		TaskType:      "chat",
+		Model:         "chat-model",
+		Path:          "/chat/completions",
+		RequestBody:   []byte(`{"model":"chat-model","messages":[{"role":"user","content":"large request"}]}`),
+		ContentType:   "application/json",
+		FrontendTrace: `{"projectId":"project-summary","canvasId":"canvas-summary","nodeId":"node-summary"}`,
+	})
+	if err != nil {
+		t.Fatalf("CreateAITask returned error: %v", err)
+	}
+	task.ResponseJSON = `{"body":"` + strings.Repeat("large response ", 1000) + `"}`
+	if _, err := repository.SaveAITask(task); err != nil {
+		t.Fatalf("SaveAITask returned error: %v", err)
+	}
+	if _, err := RecordUserAITaskFrontendArtifact(task.ID, task.UserID, model.AITaskFrontendArtifact{AssetID: "asset-summary", CanvasID: "canvas-summary", NodeID: "node-summary"}); err != nil {
+		t.Fatalf("RecordUserAITaskFrontendArtifact returned error: %v", err)
+	}
+	repositoryItems, _, err := repository.ListAITasks(model.AITaskQuery{ExactUserID: task.UserID, Page: 1, PageSize: 10})
+	if err != nil || len(repositoryItems) != 1 {
+		t.Fatalf("repository list items=%d err=%v", len(repositoryItems), err)
+	}
+	if repositoryItems[0].RequestJSON != "" || repositoryItems[0].ResponseJSON != "" {
+		t.Fatalf("repository summary loaded payloads: request=%d response=%d", len(repositoryItems[0].RequestJSON), len(repositoryItems[0].ResponseJSON))
+	}
+
+	result, err := ListAdminAITasks(model.AITaskQuery{ExactUserID: task.UserID, Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListAdminAITasks returned error: %v", err)
+	}
+	if len(result.Items) != 1 {
+		t.Fatalf("items len = %d, want 1", len(result.Items))
+	}
+	item := result.Items[0]
+	if item.RequestJSON != "" || item.ResponseJSON != "" {
+		t.Fatalf("list leaked payloads: request=%d response=%d", len(item.RequestJSON), len(item.ResponseJSON))
+	}
+	if item.FrontendTrace.ProjectID != "project-summary" || item.FrontendTrace.CanvasID != "canvas-summary" || item.FrontendTrace.NodeID != "node-summary" {
+		t.Fatalf("frontend trace = %#v", item.FrontendTrace)
+	}
+	if len(item.FrontendArtifacts) != 1 || item.FrontendArtifacts[0].AssetID != "asset-summary" {
+		t.Fatalf("frontend artifacts = %#v", item.FrontendArtifacts)
 	}
 }
 

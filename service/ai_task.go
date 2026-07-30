@@ -34,6 +34,7 @@ type CreateAITaskInput struct {
 
 func CreateAITask(input CreateAITaskInput) (model.AITask, error) {
 	stamp := now()
+	frontendTrace := sanitizeFrontendTraceJSON(input.FrontendTrace)
 	task := model.AITask{
 		ID:          newID("aitask"),
 		UserID:      input.UserID,
@@ -50,6 +51,9 @@ func CreateAITask(input CreateAITaskInput) (model.AITask, error) {
 		CreatedAt:   stamp,
 		UpdatedAt:   stamp,
 	}
+	if len(frontendTrace) > 0 {
+		task.FrontendTraceJSON = marshalSanitized(frontendTrace)
+	}
 	return repository.SaveAITask(task)
 }
 
@@ -59,7 +63,7 @@ func MarkAITaskSucceeded(id string, responseBody []byte, contentType string) err
 		return err
 	}
 	task.Status = model.AITaskStatusSucceeded
-	task.ResponseJSON = preserveAITaskFrontendArtifacts(SanitizeAIJSON(responseBody, contentType), task.ResponseJSON)
+	task.ResponseJSON = preserveAITaskFrontendArtifacts(sanitizeAITaskResponse(responseBody, contentType), task.ResponseJSON)
 	task.ErrorMessage = ""
 	task.UpdatedAt = now()
 	_, err = repository.SaveAITask(task)
@@ -154,6 +158,8 @@ func ListAdminAITasks(q model.AITaskQuery) (model.AITaskList, error) {
 	}
 	for i := range tasks {
 		tasks[i] = hydrateAITaskFrontendLinks(tasks[i])
+		tasks[i].RequestJSON = ""
+		tasks[i].ResponseJSON = ""
 	}
 	users, err := repository.ListUserSummariesByIDs(func() []string {
 		ids := make([]string, 0, len(tasks))
@@ -220,6 +226,11 @@ func RecordUserAITaskFrontendArtifact(id string, userID string, artifact model.A
 	if artifact.AssetID == "" && artifact.NodeID == "" {
 		return model.AITask{}, safeMessageError{message: "缺少前台产物 ID"}
 	}
+	artifacts := frontendArtifactsFromJSON(task.FrontendArtifactsJSON)
+	if len(artifacts) == 0 {
+		artifacts = frontendArtifactsFromPayload(jsonObjectFromString(task.ResponseJSON))
+	}
+	task.FrontendArtifactsJSON = marshalSanitized(appendOrReplaceFrontendArtifact(artifacts, artifact))
 	task.ResponseJSON = mergeAITaskFrontendArtifact(task.ResponseJSON, artifact)
 	task.UpdatedAt = now()
 	task, err = repository.SaveAITask(task)
@@ -385,6 +396,106 @@ func SanitizeAIJSON(body []byte, contentType string) string {
 	return marshalSanitized(map[string]any{"body": sanitizeAIString(text)})
 }
 
+func sanitizeAITaskResponse(body []byte, contentType string) string {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err == nil && strings.EqualFold(mediaType, "text/event-stream") {
+		return summarizeAIEventStream(body)
+	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(contentType)), "text/event-stream") {
+		return summarizeAIEventStream(body)
+	}
+	return SanitizeAIJSON(body, contentType)
+}
+
+func summarizeAIEventStream(body []byte) string {
+	summary := map[string]any{}
+	eventTypes := map[string]int{}
+	eventCount, done := 0, false
+	var output strings.Builder
+	var usage any
+	var final any
+	var last any
+	normalized := strings.ReplaceAll(string(body), "\r\n", "\n")
+	for _, block := range strings.Split(normalized, "\n\n") {
+		eventName, dataLines := "", []string{}
+		for _, line := range strings.Split(block, "\n") {
+			switch {
+			case strings.HasPrefix(line, "event:"):
+				eventName = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+			case strings.HasPrefix(line, "data:"):
+				dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+			}
+		}
+		data := strings.TrimSpace(strings.Join(dataLines, "\n"))
+		if data == "" {
+			continue
+		}
+		if data == "[DONE]" {
+			done = true
+			continue
+		}
+		var payload any
+		if json.Unmarshal([]byte(data), &payload) != nil {
+			continue
+		}
+		eventCount++
+		last = sanitizeAIValue(payload, "")
+		record, _ := payload.(map[string]any)
+		if eventName == "" {
+			eventName = aiTaskStringValue(record, "type")
+		}
+		if eventName == "" {
+			eventName = "message"
+		}
+		eventTypes[eventName]++
+		appendAIStreamText(&output, record)
+		if value, ok := record["usage"]; ok && value != nil {
+			usage = sanitizeAIValue(value, "usage")
+		}
+		if response, ok := record["response"].(map[string]any); ok {
+			if value, exists := response["usage"]; exists && value != nil {
+				usage = sanitizeAIValue(value, "usage")
+			}
+		}
+		lowerName := strings.ToLower(eventName)
+		if strings.HasSuffix(lowerName, ".completed") || lowerName == "completed" {
+			final = last
+		}
+	}
+	stream := map[string]any{"rawBytes": len(body), "eventCount": eventCount, "done": done}
+	if len(eventTypes) > 0 {
+		stream["eventTypes"] = eventTypes
+	}
+	summary["_streamSummary"] = stream
+	if output.Len() > 0 {
+		summary["outputText"] = output.String()
+	}
+	if usage != nil {
+		summary["usage"] = usage
+	}
+	if final != nil {
+		summary["final"] = final
+	} else if last != nil {
+		summary["lastEvent"] = last
+	}
+	return marshalSanitized(summary)
+}
+
+func appendAIStreamText(output *strings.Builder, payload map[string]any) {
+	if delta, ok := payload["delta"].(string); ok {
+		output.WriteString(delta)
+		return
+	}
+	choices, _ := payload["choices"].([]any)
+	for _, choice := range choices {
+		record, _ := choice.(map[string]any)
+		delta, _ := record["delta"].(map[string]any)
+		if content, ok := delta["content"].(string); ok {
+			output.WriteString(content)
+		}
+	}
+}
+
 func sanitizeMultipartAIRequest(body []byte, contentType string) string {
 	_, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
@@ -414,6 +525,9 @@ func sanitizeMultipartAIRequest(body []byte, contentType string) string {
 }
 
 func sanitizeAIValue(value any, key string) any {
+	if isAITokenCount(key, value) {
+		return value
+	}
 	if isSensitiveAIKey(key) {
 		return redactedValue
 	}
@@ -434,6 +548,19 @@ func sanitizeAIValue(value any, key string) any {
 		return sanitizeAIString(typed)
 	default:
 		return value
+	}
+}
+
+func isAITokenCount(key string, value any) bool {
+	normalized := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(key), "-", "_"), " ", "_"))
+	if !strings.HasSuffix(normalized, "_tokens") {
+		return false
+	}
+	switch value.(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, json.Number:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -525,11 +652,35 @@ func preserveAITaskFrontendArtifacts(nextJSON string, previousJSON string) strin
 }
 
 func hydrateAITaskFrontendLinks(task model.AITask) model.AITask {
-	request := jsonObjectFromString(task.RequestJSON)
-	response := jsonObjectFromString(task.ResponseJSON)
-	task.FrontendTrace = frontendTraceFromPayload(request)
-	task.FrontendArtifacts = frontendArtifactsFromPayload(response)
+	task.FrontendTrace = frontendTraceFromJSON(task.FrontendTraceJSON)
+	if aitaskFrontendTraceEmpty(task.FrontendTrace) {
+		task.FrontendTrace = frontendTraceFromPayload(jsonObjectFromString(task.RequestJSON))
+	}
+	task.FrontendArtifacts = frontendArtifactsFromJSON(task.FrontendArtifactsJSON)
+	if len(task.FrontendArtifacts) == 0 {
+		task.FrontendArtifacts = frontendArtifactsFromPayload(jsonObjectFromString(task.ResponseJSON))
+	}
 	return task
+}
+
+func aitaskFrontendTraceEmpty(trace model.AITaskFrontendTrace) bool {
+	return trace.ProjectID == "" && trace.CanvasID == "" && trace.NodeID == "" && trace.AssetID == "" && trace.StoryboardGroupID == "" && trace.StoryboardShotID == "" && trace.ShotGroupID == "" && len(trace.ShotIDs) == 0 && trace.Source == ""
+}
+
+func frontendTraceFromJSON(value string) model.AITaskFrontendTrace {
+	var trace map[string]any
+	if json.Unmarshal([]byte(strings.TrimSpace(value)), &trace) != nil {
+		return model.AITaskFrontendTrace{}
+	}
+	return frontendTraceFromPayload(map[string]any{"_frontend_trace": trace})
+}
+
+func frontendArtifactsFromJSON(value string) []model.AITaskFrontendArtifact {
+	var items []any
+	if json.Unmarshal([]byte(strings.TrimSpace(value)), &items) != nil {
+		return nil
+	}
+	return frontendArtifactsFromPayload(map[string]any{"frontendArtifacts": items})
 }
 
 func sanitizeFrontendTraceJSON(traceJSON string) map[string]any {

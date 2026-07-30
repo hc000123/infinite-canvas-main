@@ -54,7 +54,7 @@ func ListAITasks(q model.AITaskQuery) ([]model.AITask, int64, error) {
 		return nil, 0, err
 	}
 	var tasks []model.AITask
-	err = tx.Order("created_at desc").Offset(q.Offset()).Limit(q.PageSize).Find(&tasks).Error
+	err = tx.Omit("request_json", "response_json").Order("created_at desc").Offset(q.Offset()).Limit(q.PageSize).Find(&tasks).Error
 	return tasks, total, err
 }
 
@@ -125,7 +125,7 @@ func applyAITaskFilters(tx *gorm.DB, q model.AITaskQuery) *gorm.DB {
 	}
 	if keyword := strings.TrimSpace(q.Keyword); keyword != "" {
 		like := "%" + keyword + "%"
-		tx = tx.Where("id LIKE ? OR user_id LIKE ? OR kind LIKE ? OR task_type LIKE ? OR action_type LIKE ? OR model LIKE ? OR provider LIKE ? OR upstream_task_id LIKE ? OR error_code LIKE ? OR error_message LIKE ? OR request_json LIKE ? OR response_json LIKE ?", like, like, like, like, like, like, like, like, like, like, like, like)
+		tx = tx.Where("id LIKE ? OR user_id LIKE ? OR kind LIKE ? OR task_type LIKE ? OR action_type LIKE ? OR model LIKE ? OR provider LIKE ? OR upstream_task_id LIKE ? OR error_code LIKE ? OR error_message LIKE ?", like, like, like, like, like, like, like, like, like, like)
 	}
 	return tx
 }
