@@ -6,6 +6,7 @@ import {
     type EnsureWorkflowRunRequest,
     type RemoteWorkflowEvent,
     type RemoteWorkflowRunDetail,
+	type WorkflowRunPoll,
     type RemoteWorkflowStageRun,
     type WorkflowApplyRequest,
     type WorkflowReviewRequest,
@@ -27,6 +28,11 @@ export function ensureWorkflowRun(input: EnsureWorkflowRunRequest) {
 
 export function getWorkflowRun(id: string) {
     return apiGet<RemoteWorkflowRunDetail>(workflowRunRequest.detail(id).path, undefined, token());
+}
+
+export function pollWorkflowRun(id: string, after = 0) {
+	const request = workflowRunRequest.poll(id, after);
+	return apiGet<WorkflowRunPoll>(request.path, request.params, token());
 }
 
 export async function listWorkflowSkillOptions(stageId: string, projectId: string) {

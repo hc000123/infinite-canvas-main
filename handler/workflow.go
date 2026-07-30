@@ -47,6 +47,21 @@ func WorkflowRun(w http.ResponseWriter, r *http.Request, id string) {
 	OK(w, result)
 }
 
+func WorkflowRunPoll(w http.ResponseWriter, r *http.Request, id string) {
+	user, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	after, _ := strconv.ParseUint(r.URL.Query().Get("after"), 10, 64)
+	result, err := service.GetWorkflowRunPoll(user.ID, id, after)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
 func StartWorkflowStage(w http.ResponseWriter, r *http.Request, workflowRunID string, stageID string) {
 	user, ok := service.UserFromContext(r.Context())
 	if !ok {

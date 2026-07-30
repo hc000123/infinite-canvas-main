@@ -36,3 +36,10 @@ test("resolves workflow choices through the generic skill registry", () => {
     assert.equal(workflowStageSkillCapability("asset-extraction"), "workflow.stage.art");
     assert.equal(workflowStageSkillCapability("shot-breakdown"), "workflow.stage.storyboard");
 });
+
+test("builds a compact workflow poll request", () => {
+    assert.deepEqual(workflowRunRequest.poll("run/1", 17), {
+        path: "/api/v1/workflow-runs/run%2F1/poll",
+        params: { after: 17 },
+    });
+});

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -69,6 +70,35 @@ func TestWorkflowRunDoesNotExposeAnotherUserRecord(t *testing.T) {
 	}
 	if strings.Contains(recorder.Body.String(), "scriptSnapshot") {
 		t.Fatalf("response leaked owner workflow: %s", recorder.Body.String())
+	}
+}
+
+func TestWorkflowRunPollReturnsIncrementalEventsAndRejectsForeignUser(t *testing.T) {
+	setupWorkflowHandlerTestDB(t)
+	detail, err := service.EnsureWorkflowRun("user-owner", service.EnsureWorkflowRunInput{ProjectID: "project-1", EpisodeID: "episode-1", ScriptSnapshot: "第一场", ScriptConfirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	database, err := repository.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := model.WorkflowEvent{UserID: "user-owner", WorkflowRunID: detail.Run.ID, Type: "stage.running", CreatedAt: detail.Run.UpdatedAt}
+	if err := database.Create(&event).Error; err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/workflow-runs/"+detail.Run.ID+"/poll?after="+strconv.FormatUint(event.ID-1, 10), nil)
+	request = request.WithContext(service.WithUser(context.Background(), model.AuthUser{ID: "user-owner", Role: model.UserRoleUser}))
+	recorder := httptest.NewRecorder()
+	WorkflowRunPoll(recorder, request, detail.Run.ID)
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"type":"stage.running"`) || !strings.Contains(recorder.Body.String(), `"nextAfter":`+strconv.FormatUint(event.ID, 10)) {
+		t.Fatalf("owner poll=%s", recorder.Body.String())
+	}
+	request = request.WithContext(service.WithUser(context.Background(), model.AuthUser{ID: "user-other", Role: model.UserRoleUser}))
+	recorder = httptest.NewRecorder()
+	WorkflowRunPoll(recorder, request, detail.Run.ID)
+	if !strings.Contains(recorder.Body.String(), `"code":1`) || strings.Contains(recorder.Body.String(), "scriptSnapshot") {
+		t.Fatalf("foreign poll=%s", recorder.Body.String())
 	}
 }
 

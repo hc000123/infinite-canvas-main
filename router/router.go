@@ -180,6 +180,9 @@ func New() *gin.Engine {
 	})
 	v1.POST("/workflow-runs", gin.WrapF(handler.EnsureWorkflowRun))
 	v1.GET("/skill-options", gin.WrapF(handler.SkillOptions))
+	v1.GET("/workflow-runs/:id/poll", func(c *gin.Context) {
+		handler.WorkflowRunPoll(c.Writer, c.Request, c.Param("id"))
+	})
 	v1.GET("/workflow-runs/:id", func(c *gin.Context) {
 		handler.WorkflowRun(c.Writer, c.Request, c.Param("id"))
 	})
