@@ -96,6 +96,8 @@ func DB() (*gorm.DB, error) {
 			&model.WorkflowMediaBatch{},
 			&model.WorkflowMediaItem{},
 			&model.Prompt{},
+			&model.AssetProject{},
+			&model.AssetFolder{},
 			&model.Asset{},
 			&model.Setting{},
 		)

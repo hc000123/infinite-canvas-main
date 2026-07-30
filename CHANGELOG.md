@@ -2,6 +2,8 @@
 
 ## Unreleased
 
++ [优化] 后台公共素材库改为独立素材项目文件管理器，支持多级文件夹、拖拽与批量直接上传、上传队列、批量整理及多集 / 全剧筛选，导入前不再要求填写完整素材表单。
+
 ## v0.2.98 - 2026-07-29
 
 + [新增] 上线统一 Artifact / Invocation Runtime、可版本化 Skill Registry 与 Skill-only Workflow，支持版本冻结、契约预检、质量门、审核、幂等 Apply、重试恢复和完整血缘。

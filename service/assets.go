@@ -27,6 +27,21 @@ type AssetUploadResult struct {
 	Filename string          `json:"filename"`
 }
 
+type AssetBatchUpdate struct {
+	IDs            []string  `json:"ids"`
+	ProjectID      string    `json:"projectId"`
+	FolderID       *string   `json:"folderId,omitempty"`
+	Category       *string   `json:"category,omitempty"`
+	Tags           *[]string `json:"tags,omitempty"`
+	EpisodeNumbers *[]string `json:"episodeNumbers,omitempty"`
+	AllEpisodes    *bool     `json:"allEpisodes,omitempty"`
+}
+
+type AssetBatchDelete struct {
+	IDs       []string `json:"ids"`
+	ProjectID string   `json:"projectId"`
+}
+
 func ListAssets(q model.Query) (model.AssetList, error) {
 	items, total, err := repository.ListAssets(q)
 	if err != nil {
@@ -40,6 +55,22 @@ func ListAssets(q model.Query) (model.AssetList, error) {
 }
 
 func SaveAsset(item model.Asset) (model.Asset, error) {
+	item.ProjectID = strings.TrimSpace(item.ProjectID)
+	item.FolderID = strings.TrimSpace(item.FolderID)
+	item.Title = strings.TrimSpace(item.Title)
+	if item.Title == "" {
+		return item, safeMessageError{message: "请输入素材名称"}
+	}
+	if err := validateAssetLocation(item.ProjectID, item.FolderID); err != nil {
+		return item, err
+	}
+	item.Tags = cleanAssetStrings(item.Tags)
+	item.EpisodeNumbers = cleanAssetStrings(item.EpisodeNumbers)
+	if item.AllEpisodes {
+		item.EpisodeNumbers = []string{}
+	} else if len(item.EpisodeNumbers) > 0 {
+		item.AllEpisodes = false
+	}
 	now := time.Now().Format(time.RFC3339)
 	if item.Type == "" {
 		item.Type = model.AssetTypeText
@@ -52,11 +83,127 @@ func SaveAsset(item model.Asset) (model.Asset, error) {
 	if item.CoverURL == "" {
 		item.CoverURL = assetCoverURL(item)
 	}
-	return repository.SaveAsset(item)
+	saved, err := repository.SaveAsset(item)
+	if err == nil {
+		err = repository.TouchAssetProject(item.ProjectID, now)
+	}
+	return saved, err
 }
 
 func DeleteAsset(id string) error {
-	return repository.DeleteAsset(id)
+	item, err := repository.GetAsset(id)
+	if err != nil {
+		return err
+	}
+	if err := repository.DeleteAsset(id); err != nil {
+		return err
+	}
+	if item.ProjectID != "" {
+		_ = repository.TouchAssetProject(item.ProjectID, time.Now().Format(time.RFC3339))
+	}
+	return cleanupUploadedAssetURL(item.URL)
+}
+
+func ImportAssetMedia(projectID string, folderID string, file multipart.File, header *multipart.FileHeader) (model.Asset, error) {
+	projectID = strings.TrimSpace(projectID)
+	folderID = strings.TrimSpace(folderID)
+	if err := validateAssetLocation(projectID, folderID); err != nil {
+		return model.Asset{}, err
+	}
+	upload, err := SaveAssetMedia(file, header)
+	if err != nil {
+		return model.Asset{}, err
+	}
+	title := strings.TrimSpace(strings.TrimSuffix(header.Filename, filepath.Ext(header.Filename)))
+	if title == "" {
+		title = "未命名素材"
+	}
+	item, err := SaveAsset(model.Asset{ProjectID: projectID, FolderID: folderID, Title: title, Type: upload.Type, URL: upload.URL, CoverURL: upload.CoverURL, Tags: []string{}, EpisodeNumbers: []string{}})
+	if err != nil {
+		_ = cleanupUploadedAssetURL(upload.URL)
+	}
+	return item, err
+}
+
+func BatchUpdateAssets(input AssetBatchUpdate) ([]model.Asset, error) {
+	input.ProjectID = strings.TrimSpace(input.ProjectID)
+	ids := cleanAssetStrings(input.IDs)
+	if input.ProjectID == "" || len(ids) == 0 {
+		return nil, safeMessageError{message: "请选择需要整理的素材"}
+	}
+	if input.FolderID != nil {
+		folderID := strings.TrimSpace(*input.FolderID)
+		input.FolderID = &folderID
+		if err := validateAssetLocation(input.ProjectID, folderID); err != nil {
+			return nil, err
+		}
+	}
+	items, err := repository.ListAssetsByIDs(input.ProjectID, ids)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) != len(ids) {
+		return nil, safeMessageError{message: "部分素材不存在或不属于当前项目"}
+	}
+	now := time.Now().Format(time.RFC3339)
+	for index := range items {
+		if input.FolderID != nil {
+			items[index].FolderID = *input.FolderID
+		}
+		if input.Category != nil {
+			items[index].Category = strings.TrimSpace(*input.Category)
+		}
+		if input.Tags != nil {
+			items[index].Tags = cleanAssetStrings(*input.Tags)
+		}
+		if input.EpisodeNumbers != nil {
+			items[index].EpisodeNumbers = cleanAssetStrings(*input.EpisodeNumbers)
+			items[index].AllEpisodes = false
+		}
+		if input.AllEpisodes != nil {
+			items[index].AllEpisodes = *input.AllEpisodes
+			if *input.AllEpisodes {
+				items[index].EpisodeNumbers = []string{}
+			}
+		}
+		items[index].UpdatedAt = now
+	}
+	if err := repository.SaveAssets(items); err != nil {
+		return nil, err
+	}
+	if err := repository.TouchAssetProject(input.ProjectID, now); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func BatchDeleteAssets(input AssetBatchDelete) error {
+	input.ProjectID = strings.TrimSpace(input.ProjectID)
+	ids := cleanAssetStrings(input.IDs)
+	if input.ProjectID == "" || len(ids) == 0 {
+		return safeMessageError{message: "请选择需要删除的素材"}
+	}
+	items, err := repository.DeleteAssets(input.ProjectID, ids)
+	if err != nil {
+		return safeMessageError{message: "部分素材不存在或不属于当前项目"}
+	}
+	if err := repository.TouchAssetProject(input.ProjectID, time.Now().Format(time.RFC3339)); err != nil {
+		return err
+	}
+	return cleanupUploadedAssets(items)
+}
+
+func cleanAssetStrings(items []string) []string {
+	seen := map[string]bool{}
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		value := strings.TrimSpace(item)
+		if value != "" && !seen[value] {
+			seen[value] = true
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func assetCoverURL(item model.Asset) string {

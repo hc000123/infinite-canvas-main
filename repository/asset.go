@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"strconv"
 
 	"github.com/basketikun/infinite-canvas/model"
 	"gorm.io/gorm"
@@ -82,14 +83,75 @@ func DeleteAsset(id string) error {
 	return db.Delete(&model.Asset{}, "id = ?", id).Error
 }
 
+// ListAssetsByIDs 返回项目内指定素材，供批量操作校验归属。
+func ListAssetsByIDs(projectID string, ids []string) ([]model.Asset, error) {
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	var items []model.Asset
+	err = db.Where("project_id = ? AND id IN ?", projectID, ids).Find(&items).Error
+	return items, err
+}
+
+func SaveAssets(items []model.Asset) error {
+	db, err := DB()
+	if err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		for i := range items {
+			if err := tx.Save(&items[i]).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func DeleteAssets(projectID string, ids []string) ([]model.Asset, error) {
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	var items []model.Asset
+	err = db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("project_id = ? AND id IN ?", projectID, ids).Find(&items).Error; err != nil {
+			return err
+		}
+		if len(items) != len(ids) {
+			return gorm.ErrRecordNotFound
+		}
+		return tx.Where("project_id = ? AND id IN ?", projectID, ids).Delete(&model.Asset{}).Error
+	})
+	return items, err
+}
+
 // applyAssetFilters 应用素材列表的搜索条件。
 func applyAssetFilters(tx *gorm.DB, q model.Query) *gorm.DB {
+	if q.ProjectID != "" {
+		tx = tx.Where("project_id = ?", q.ProjectID)
+	}
+	if q.FolderScope == "current" {
+		tx = tx.Where("folder_id = ?", q.FolderID)
+	}
 	if q.Keyword != "" {
 		like := "%" + q.Keyword + "%"
 		tx = tx.Where("title LIKE ? OR description LIKE ? OR content LIKE ?", like, like, like)
 	}
 	if isActiveAssetOption(q.Type) {
 		tx = tx.Where("type = ?", q.Type)
+	}
+	if q.Category != "" {
+		tx = tx.Where("category = ?", q.Category)
+	}
+	if q.EpisodeNumber != "" {
+		tx = tx.Where(assetJSONEpisodeContains(tx), q.EpisodeNumber)
+	}
+	if q.AllEpisodes != "" {
+		if value, err := strconv.ParseBool(q.AllEpisodes); err == nil {
+			tx = tx.Where("all_episodes = ?", value)
+		}
 	}
 	return applyAssetTagsFilter(tx, q.Tags)
 }
@@ -139,6 +201,17 @@ func assetJSONTagsContains(tx *gorm.DB) string {
 		return "jsonb_exists(tags::jsonb, ?)"
 	default:
 		return "EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)"
+	}
+}
+
+func assetJSONEpisodeContains(tx *gorm.DB) string {
+	switch tx.Dialector.Name() {
+	case "mysql":
+		return "JSON_CONTAINS(episode_numbers, JSON_QUOTE(?))"
+	case "postgres":
+		return "jsonb_exists(episode_numbers::jsonb, ?)"
+	default:
+		return "EXISTS (SELECT 1 FROM json_each(episode_numbers) WHERE value = ?)"
 	}
 }
 

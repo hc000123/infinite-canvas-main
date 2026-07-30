@@ -57,6 +57,8 @@
 - `workflow_media_batches`
 - `workflow_media_items`
 - `prompts`
+- `asset_projects`
+- `asset_folders`
 - `assets`
 - `settings`
 
@@ -213,6 +215,30 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 
 旧提示词缺少以上公司标准字段时，前端按 `kind=template`、`policy=optional`、`enabled=true` 解释，只作为可选模板展示，不会自动加入图片或视频提示词。
 
+### asset_projects
+
+后台公共素材库的独立项目，不绑定浏览器本地项目中心。
+
+| 字段         | 类型   | 说明             |
+| ------------ | ------ | ---------------- |
+| `id`         | string | 主键             |
+| `name`       | string | 唯一项目名称     |
+| `created_at` | string | 创建时间         |
+| `updated_at` | string | 项目最近变更时间 |
+
+### asset_folders
+
+素材项目内的多级文件夹。
+
+| 字段         | 类型   | 说明                                         |
+| ------------ | ------ | -------------------------------------------- |
+| `id`         | string | 主键                                         |
+| `project_id` | string | 所属素材项目                                 |
+| `parent_id`  | string | 上级文件夹；为空表示项目根目录               |
+| `name`       | string | 文件夹名称；同一项目、同一父目录下保持唯一   |
+| `created_at` | string | 创建时间                                     |
+| `updated_at` | string | 更新时间                                     |
+
 ### assets
 
 素材表。当前用于后台素材库。
@@ -220,6 +246,8 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 | 字段                      | 类型   | 说明                                              |
 | ------------------------- | ------ | ------------------------------------------------- |
 | `id`                      | string | 主键                                              |
+| `project_id`              | string | 所属后台素材项目                                  |
+| `folder_id`               | string | 所属文件夹；为空表示项目根目录                    |
 | `title`                   | string | 标题                                              |
 | `type`                    | string | 素材类型：`text`、`image`、`video`、`audio` 等    |
 | `cover_url`               | string | 封面图                                            |
@@ -228,6 +256,8 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 | `description`             | string | 描述                                              |
 | `content`                 | text   | 文本或 Markdown 内容                              |
 | `url`                     | string | 图片、视频等媒体地址                              |
+| `episode_numbers`         | json   | 适用集数，可同时标记多集                          |
+| `all_episodes`            | bool   | 是否全剧通用；为真时不保留具体集数                |
 | `volcengine_asset_id`     | string | 火山素材 Asset ID，可为空                         |
 | `volcengine_group_id`     | string | 火山素材组 ID，可为空                             |
 | `volcengine_project_name` | string | 火山 ProjectName，可为空                          |
