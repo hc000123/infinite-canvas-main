@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/basketikun/infinite-canvas/model"
+	"github.com/basketikun/infinite-canvas/repository"
 )
 
 func TestEnsureWorkflowRunIsIdempotent(t *testing.T) {
@@ -28,6 +29,57 @@ func TestEnsureWorkflowRunIsIdempotent(t *testing.T) {
 	}
 	if stage := workflowTestStage(first, WorkflowStageScriptAdaptation); stage.Status != model.WorkflowStageRunStatusApproved {
 		t.Fatalf("script stage=%#v", stage)
+	}
+}
+
+func TestGetWorkflowRunPollUsesInvocationHeadersAndEventCursor(t *testing.T) {
+	setupVideoWorkflowTest(t)
+	database, err := repository.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamp := now()
+	run := model.WorkflowRun{ID: "workflow-poll", UserID: "user-poll", ProjectID: "project-poll", EpisodeID: "episode-poll", WorkflowID: VideoWorkflowID, WorkflowVersion: VideoWorkflowVersion, ScriptHash: "script-poll", Status: model.WorkflowRunStatusActive, CreatedAt: stamp, UpdatedAt: stamp}
+	invocations := []model.InvocationRun{
+		{ID: "invocation-poll-running", UserID: run.UserID, Source: "workflow", Status: model.InvocationStatusRunning, LatestRevision: 1, LatestAttempt: 2, CreatedAt: stamp, UpdatedAt: stamp},
+		{ID: "invocation-poll-failed", UserID: run.UserID, Source: "workflow", Status: model.InvocationStatusFailed, LatestRevision: 1, LatestAttempt: 1, AggregateErrorSummary: "上游失败", CreatedAt: stamp, UpdatedAt: stamp},
+	}
+	stages := []model.WorkflowStageRun{
+		{ID: "stage-poll-running", UserID: run.UserID, WorkflowRunID: run.ID, StageID: WorkflowStageAssetExtraction, InvocationID: invocations[0].ID, Attempt: 1, Status: model.WorkflowStageRunStatusQueued, CreatedAt: stamp, UpdatedAt: stamp},
+		{ID: "stage-poll-failed", UserID: run.UserID, WorkflowRunID: run.ID, StageID: WorkflowStageShotBreakdown, InvocationID: invocations[1].ID, Attempt: 1, Status: model.WorkflowStageRunStatusQueued, CreatedAt: stamp, UpdatedAt: stamp},
+	}
+	events := []model.WorkflowEvent{{UserID: run.UserID, WorkflowRunID: run.ID, Type: "workflow.created", CreatedAt: stamp}, {UserID: run.UserID, WorkflowRunID: run.ID, Type: "stage.running", CreatedAt: stamp}}
+	if err := database.Create(&run).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Create(&invocations).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Create(&stages).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Create(&events).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	poll, err := GetWorkflowRunPoll(run.UserID, run.ID, events[0].ID)
+	if err != nil {
+		t.Fatalf("GetWorkflowRunPoll returned error: %v", err)
+	}
+	if poll.RunID != run.ID || poll.Status != model.WorkflowRunStatusActive || len(poll.Stages) != 2 {
+		t.Fatalf("poll = %#v", poll)
+	}
+	if poll.Stages[0].Status != model.WorkflowStageRunStatusRunning || poll.Stages[0].Attempt != 2 {
+		t.Fatalf("running stage = %#v", poll.Stages[0])
+	}
+	if poll.Stages[1].Status != model.WorkflowStageRunStatusFailed || poll.Stages[1].ErrorMessage != "上游失败" {
+		t.Fatalf("failed stage = %#v", poll.Stages[1])
+	}
+	if len(poll.Events) != 1 || poll.Events[0].ID != events[1].ID || poll.NextAfter != events[1].ID {
+		t.Fatalf("events=%#v nextAfter=%d", poll.Events, poll.NextAfter)
+	}
+	if _, err := GetWorkflowRunPoll("other-user", run.ID, 0); err == nil {
+		t.Fatal("foreign user read workflow poll")
 	}
 }
 

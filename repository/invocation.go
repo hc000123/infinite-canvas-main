@@ -1485,6 +1485,19 @@ func GetUserInvocation(userID, id string) (model.InvocationRun, bool, error) {
 	return item, result.RowsAffected == 1, result.Error
 }
 
+func ListUserInvocationsByIDs(userID string, ids []string) ([]model.InvocationRun, error) {
+	database, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return []model.InvocationRun{}, nil
+	}
+	var items []model.InvocationRun
+	err = database.Where("user_id = ? AND id IN ?", strings.TrimSpace(userID), ids).Find(&items).Error
+	return items, err
+}
+
 func GetInvocationAttempt(userID, invocationID string, attempt int) (model.InvocationAttempt, bool, error) {
 	database, err := DB()
 	if err != nil {
