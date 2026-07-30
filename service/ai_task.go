@@ -408,77 +408,9 @@ func sanitizeAITaskResponse(body []byte, contentType string) string {
 }
 
 func summarizeAIEventStream(body []byte) string {
-	summary := map[string]any{}
-	eventTypes := map[string]int{}
-	eventCount, done := 0, false
-	var output strings.Builder
-	var usage any
-	var final any
-	var last any
-	normalized := strings.ReplaceAll(string(body), "\r\n", "\n")
-	for _, block := range strings.Split(normalized, "\n\n") {
-		eventName, dataLines := "", []string{}
-		for _, line := range strings.Split(block, "\n") {
-			switch {
-			case strings.HasPrefix(line, "event:"):
-				eventName = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
-			case strings.HasPrefix(line, "data:"):
-				dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
-			}
-		}
-		data := strings.TrimSpace(strings.Join(dataLines, "\n"))
-		if data == "" {
-			continue
-		}
-		if data == "[DONE]" {
-			done = true
-			continue
-		}
-		var payload any
-		if json.Unmarshal([]byte(data), &payload) != nil {
-			continue
-		}
-		eventCount++
-		last = sanitizeAIValue(payload, "")
-		record, _ := payload.(map[string]any)
-		if eventName == "" {
-			eventName = aiTaskStringValue(record, "type")
-		}
-		if eventName == "" {
-			eventName = "message"
-		}
-		eventTypes[eventName]++
-		appendAIStreamText(&output, record)
-		if value, ok := record["usage"]; ok && value != nil {
-			usage = sanitizeAIValue(value, "usage")
-		}
-		if response, ok := record["response"].(map[string]any); ok {
-			if value, exists := response["usage"]; exists && value != nil {
-				usage = sanitizeAIValue(value, "usage")
-			}
-		}
-		lowerName := strings.ToLower(eventName)
-		if strings.HasSuffix(lowerName, ".completed") || lowerName == "completed" {
-			final = last
-		}
-	}
-	stream := map[string]any{"rawBytes": len(body), "eventCount": eventCount, "done": done}
-	if len(eventTypes) > 0 {
-		stream["eventTypes"] = eventTypes
-	}
-	summary["_streamSummary"] = stream
-	if output.Len() > 0 {
-		summary["outputText"] = output.String()
-	}
-	if usage != nil {
-		summary["usage"] = usage
-	}
-	if final != nil {
-		summary["final"] = final
-	} else if last != nil {
-		summary["lastEvent"] = last
-	}
-	return marshalSanitized(summary)
+	collector := NewAIEventStreamCollector()
+	_, _ = collector.Write(body)
+	return collector.ArchiveJSON()
 }
 
 func appendAIStreamText(output *strings.Builder, payload map[string]any) {
