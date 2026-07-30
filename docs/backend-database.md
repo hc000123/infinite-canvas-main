@@ -390,7 +390,7 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 | `video_url_expires_at` | number | 视频地址过期时间戳                                                           |
 | `error_code`           | string | 上游失败错误码                                                               |
 | `request_json`         | text   | 脱敏后的请求 JSON；不会保存 API Key、base64、blob URL 或文件内容             |
-| `response_json`        | text   | 脱敏后的响应 JSON；不会保存 base64 或 blob URL                               |
+| `response_json`        | text   | 脱敏后的响应 JSON；不会保存 base64 或 blob URL；SSE 只保存增量归档摘要         |
 | `error_message`        | text   | 失败原因                                                                     |
 | `finished_at`          | string | 结果内容成功下载或回填完成时间                                               |
 | `refunded_at`          | string | 失败/取消任务完成返还时间，用于避免重复返还                                  |
@@ -402,6 +402,7 @@ M8 起，前台追溯信息不新增数据库字段，统一放入已脱敏 JSON
 - `request_json._frontend_trace`：创建云端 AI 任务时由前端传入的追溯上下文，可能包含 `projectId`、`canvasId`、`nodeId`、`storyboardGroupId`、`storyboardShotId`、`shotGroupId`、`shotIds` 和 `source`。
 - `response_json.frontendArtifacts`：生成结果自动入库“我的素材”后反写的前台产物数组，可能包含 `assetId`、`canvasId`、`nodeId`、`projectId`、`storyboardGroupId`、`storyboardShotId`、`shotGroupId`、`shotIds`、`kind` 和 `createdAt`。
 - 上述 JSON 仍走统一脱敏逻辑，不保存 API Key、Authorization、token、secret、base64、`data:`、`blob:` 或 multipart 文件内容。
+- 成功的 `text/event-stream` 响应会边接收边转发并逐次刷新给浏览器，不在内存中缓存完整原始流；归档只保留 `rawBytes / eventCount / eventTypes / done`、合并后的 `outputText`、usage 和 final / last event。中途断流保存已有摘要并标记失败，不会在已开始的 SSE 后追加普通 JSON 错误响应。
 
 后台管理接口：
 

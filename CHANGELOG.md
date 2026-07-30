@@ -2,6 +2,9 @@
 
 ## Unreleased
 
++ [优化] Workflow 与 Invocation 改用轻量状态和事件游标增量轮询，仅在状态变化时刷新完整详情，并在终态自动停止。
++ [优化] AI 文本 SSE 改为边接收边转发、逐段刷新，同时只增量归档正文、usage、事件统计和最终事件，降低首包延迟与长响应内存占用。
+
 ## v0.2.98 - 2026-07-29
 
 + [新增] 上线统一 Artifact / Invocation Runtime、可版本化 Skill Registry 与 Skill-only Workflow，支持版本冻结、契约预检、质量门、审核、幂等 Apply、重试恢复和完整血缘。

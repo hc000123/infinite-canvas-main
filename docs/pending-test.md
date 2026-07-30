@@ -4,6 +4,15 @@
 
 ## 当前版本验收清单
 
+### 运行时轻量轮询与 SSE 真流式代理
+
+- Workflow 与 Invocation 新增兼容式 `/poll` 接口：完整详情、Artifact、质量门、审核、计费和 Apply 追溯接口保持不变；活动任务定时只读取轻量状态、最新 attempt 和游标后的增量事件。
+- Workflow 页面前台每 2 秒、隐藏页每 6 秒轮询；状态 / attempt / 错误变化时只刷新一次完整详情，没有活动阶段后停止。Agent 中心和画布总控的 Invocation 也在进入审核、成功、失败、取消等终态后停止轮询。
+- 文本 SSE 响应不再等上游完整结束后一次性返回，而是每次收到数据后立即写入并 Flush；服务端同时增量合并正文、usage、事件统计和 final / last event，AI 任务账本不保存完整原始 SSE。
+- SSE 中途断开时，已发送给浏览器的内容后面不会拼接 `{ code, data, msg }` 错误包；任务仍记录失败和已有紧凑摘要。非 SSE JSON、上游错误和图片下载归档继续使用原兼容路径。
+- 人工验收：运行一个可持续输出的文本模型任务，确认首段内容在任务结束前出现；后台 AI 任务详情能看到合并正文、usage 和事件统计。再切换页面前后台观察 2 秒 / 6 秒节奏，任务进入终态后确认网络面板不再持续请求 `/poll`。
+- 回归验收：分别执行非流式文本、生图 / 图片归档和一次 Workflow 阶段，确认响应、扣费、失败返还、审核、产物和完整详情均保持可用。
+
 ### 本地 Codex Workflow 彻底移除
 
 - 已删除后端 Codex CLI 执行器、旧 `/api/original-workflow*` 文件工作流、前端本地 Workflow 状态 / 适配模块及相关环境变量；Workflow、Skill、Invocation 和 Artifact 统一由 API Worker 执行。
