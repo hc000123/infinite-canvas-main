@@ -64,23 +64,31 @@ func createPendingLoginApproval(ctx context.Context, user model.User) (model.Log
 }
 
 func authenticatedLogin(ctx context.Context, user model.User, ipAllowed bool) (model.LoginResult, error) {
-	normalizeUserDefaults(&user)
-	user.LastLoginAt = now()
-	user.UpdatedAt = now()
-	saved, err := repository.SaveUser(user)
+	stamp := now()
+	saved, err := repository.UpdateUserLoginState(user.ID, stamp, stamp)
 	if err != nil {
 		return model.LoginResult{}, err
+	}
+	normalizeUserDefaults(&saved)
+	if saved.Status == model.UserStatusBan {
+		return model.LoginResult{}, safeMessageError{message: "账号已被禁用"}
+	}
+	if user.Password != "" && saved.Password != user.Password {
+		return model.LoginResult{}, safeMessageError{message: "账号安全信息已变更，请重新登录"}
 	}
 	boundIP := ""
 	if saved.Role == model.UserRoleUser && saved.IPApprovalEnabled {
 		boundIP = RequestMetaFromContext(ctx).IPAddress
 	}
-	session, err := newSessionWithIPPolicy(saved, boundIP, ipAllowed)
+	session, err := CreateLoginSession(ctx, saved, boundIP, ipAllowed)
 	if err != nil {
 		return model.LoginResult{}, err
 	}
 	meta := RequestMetaFromContext(ctx)
 	meta.IPAllowed = ipAllowed
+	if claims, parseErr := ParseToken(session.Token); parseErr == nil {
+		meta.SessionID = claims.SessionID
+	}
 	ctx = WithRequestMeta(ctx, meta)
 	RecordServerActivity(ctx, user.ID, model.ActivityActionLoginSucceeded, model.ActivityResultSuccess, "account", user.ID, user.Username, "登录成功", nil)
 	return model.LoginResult{Status: "authenticated", Session: session}, nil

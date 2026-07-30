@@ -26,6 +26,7 @@ type TokenClaims struct {
 	UserID    string         `json:"userId"`
 	Username  string         `json:"username"`
 	Role      model.UserRole `json:"role"`
+	SessionID string         `json:"sessionId"`
 	IPAddress string         `json:"ipAddress,omitempty"`
 	IPAllowed bool           `json:"ipAllowed"`
 	jwt.RegisteredClaims
@@ -61,7 +62,7 @@ func EnsureDefaultAdmin() error {
 	return err
 }
 
-func Register(username string, password string) (model.AuthSession, error) {
+func Register(ctx context.Context, username string, password string) (model.AuthSession, error) {
 	settings, err := repository.GetSettings()
 	if err != nil {
 		return model.AuthSession{}, err
@@ -100,7 +101,8 @@ func Register(username string, password string) (model.AuthSession, error) {
 	if err != nil {
 		return model.AuthSession{}, err
 	}
-	return newSession(user)
+	result, err := authenticatedLogin(ctx, user, true)
+	return result.Session, err
 }
 
 func Login(username string, password string) (model.AuthSession, error) {
@@ -191,7 +193,8 @@ func LoginWithLinuxDo(r *http.Request, code string, state string) (model.AuthSes
 	if err != nil {
 		return model.AuthSession{}, redirect, err
 	}
-	session, err := newSession(user)
+	result, err := authenticatedLogin(r.Context(), user, true)
+	session := result.Session
 	return session, redirect, err
 }
 
@@ -203,7 +206,28 @@ func ParseToken(tokenText string) (TokenClaims, error) {
 		}
 		return []byte(config.Cfg.JWTSecret), nil
 	})
-	if err != nil || !token.Valid {
+	if err != nil {
+		return TokenClaims{}, errors.New("登录状态无效")
+	}
+	if !token.Valid {
+		return TokenClaims{}, errors.New("登录状态无效")
+	}
+	return claims, nil
+}
+
+func ParseSessionToken(tokenText string) (TokenClaims, error) {
+	claims, err := ParseToken(tokenText)
+	if err == nil {
+		return claims, nil
+	}
+	claims = TokenClaims{}
+	token, err := jwt.ParseWithClaims(tokenText, &claims, func(token *jwt.Token) (any, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("登录状态无效")
+		}
+		return []byte(config.Cfg.JWTSecret), nil
+	}, jwt.WithoutClaimsValidation())
+	if err != nil || !token.Valid || claims.SessionID == "" {
 		return TokenClaims{}, errors.New("登录状态无效")
 	}
 	return claims, nil
@@ -214,21 +238,8 @@ func CurrentAuthUser(tokenText string) (model.AuthUser, bool) {
 }
 
 func CurrentAuthUserForRequest(tokenText string, ipAddress string) (model.AuthUser, bool) {
-	claims, err := ParseToken(tokenText)
-	if err != nil {
-		return model.AuthUser{}, false
-	}
-	user, ok, err := repository.GetUserByID(claims.UserID)
-	if err != nil || !ok {
-		return model.AuthUser{}, false
-	}
-	if user.Status == model.UserStatusBan {
-		return model.AuthUser{}, false
-	}
-	if claims.IPAddress != "" && strings.TrimSpace(ipAddress) != "" && claims.IPAddress != strings.TrimSpace(ipAddress) {
-		return model.AuthUser{}, false
-	}
-	return model.PublicUser(user), true
+	authenticated, failure := AuthenticateSession(tokenText, ipAddress)
+	return authenticated.User, failure == nil
 }
 
 func ListUsers(q model.Query) (model.UserList, error) {
@@ -239,6 +250,9 @@ func ListUsers(q model.Query) (model.UserList, error) {
 	for i := range users {
 		users[i].Password = ""
 		normalizeUserDefaults(&users[i])
+	}
+	if err := HydrateLoginSessionViews(users); err != nil {
+		return model.UserList{}, err
 	}
 	return model.UserList{Items: users, Total: int(total)}, nil
 }
@@ -257,6 +271,11 @@ func SaveAdminUser(actor model.AuthUser, user model.User, password string) (mode
 		}
 		if !ok || saved.Role != model.UserRoleUser {
 			return user, safeMessageError{message: "用户不存在或无权修改"}
+		}
+		if (password != "" || user.Status == model.UserStatusBan) && saved.ActiveSessionID != "" {
+			if err := RevokeSessionForAccountChange(context.Background(), saved.ID, "账号密码或状态已变更"); err != nil {
+				return user, err
+			}
 		}
 	}
 	user.Role = model.UserRoleUser
@@ -306,6 +325,7 @@ func saveUser(user model.User, password string) (model.User, error) {
 		}
 		user.LastLoginAt = saved.LastLoginAt
 		user.IPApprovalEnabled = saved.IPApprovalEnabled
+		user.ActiveSessionID = saved.ActiveSessionID
 	}
 	if password != "" {
 		hash, err := hashPassword(password)
@@ -574,6 +594,9 @@ func DeleteAdminUser(actor model.AuthUser, id string) error {
 	if !ok || user.Role != model.UserRoleUser {
 		return safeMessageError{message: "用户不存在或无权删除"}
 	}
+	if err := RevokeSessionForAccountChange(context.Background(), user.ID, "用户账号已删除"); err != nil {
+		return err
+	}
 	return repository.DeleteUser(id)
 }
 
@@ -581,43 +604,20 @@ func GuestUser() model.AuthUser {
 	return model.AuthUser{ID: "", Username: "guest", Role: model.UserRoleGuest}
 }
 
-func newSession(user model.User) (model.AuthSession, error) {
-	return newSessionWithIP(user, "")
-}
-
-func newSessionWithIP(user model.User, ipAddress string) (model.AuthSession, error) {
-	return newSessionWithIPPolicy(user, ipAddress, true)
-}
-
-func newSessionWithIPPolicy(user model.User, ipAddress string, ipAllowed bool) (model.AuthSession, error) {
-	token, err := newTokenWithIPPolicy(user, ipAddress, ipAllowed)
+func newTokenWithIPPolicy(user model.User, session model.LoginSession, ipAddress string, ipAllowed bool) (string, error) {
+	expiresAt, err := time.Parse(time.RFC3339, session.AbsoluteExpiresAt)
 	if err != nil {
-		return model.AuthSession{}, err
-	}
-	return model.AuthSession{Token: token, User: model.PublicUser(user)}, nil
-}
-
-func newToken(user model.User) (string, error) {
-	return newTokenWithIP(user, "")
-}
-
-func newTokenWithIP(user model.User, ipAddress string) (string, error) {
-	return newTokenWithIPPolicy(user, ipAddress, true)
-}
-
-func newTokenWithIPPolicy(user model.User, ipAddress string, ipAllowed bool) (string, error) {
-	expireHours := config.Cfg.JWTExpireHours
-	if expireHours <= 0 {
-		expireHours = 168
+		return "", err
 	}
 	claims := TokenClaims{
 		UserID:    user.ID,
 		Username:  user.Username,
 		Role:      user.Role,
+		SessionID: session.ID,
 		IPAddress: strings.TrimSpace(ipAddress),
 		IPAllowed: ipAllowed,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expireHours) * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Subject:   user.ID,
 		},

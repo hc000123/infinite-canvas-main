@@ -1,8 +1,8 @@
 "use client";
 
-import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, ThunderboltOutlined, UserAddOutlined, UserSwitchOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, KeyOutlined, LogoutOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, ThunderboltOutlined, UserAddOutlined, UserSwitchOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { Avatar, Button, Card, Col, Flex, Form, Input, InputNumber, Modal, Row, Select, Space, Tag, Tooltip, Typography } from "antd";
+import { Avatar, Button, Card, Col, Descriptions, Flex, Form, Input, InputNumber, Modal, Popover, Row, Select, Space, Tag, Tooltip, Typography } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 
@@ -14,13 +14,14 @@ import { useAdminAccounts } from "./use-admin-accounts";
 type AccountForm = AdminAccountUpdate & { password?: string };
 const roleOptions = Object.entries(adminRoleLabels).map(([value, label]) => ({ value, label }));
 const statusOptions = Object.entries(adminStatusLabels).map(([value, label]) => ({ value, label }));
+const formatSessionTime = (value?: string) => (value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss") : "-");
 
 export default function AdminAccountsPage() {
     const actorId = useUserStore((state) => state.user?.id || "");
     const [promotionOpen, setPromotionOpen] = useState(false);
     const [promotionKeyword, setPromotionKeyword] = useState("");
     const [promotionUserId, setPromotionUserId] = useState<string>();
-    const { accounts, promotionCandidates, total, filters, isLoading, candidateLoading, isChangingRole, updateFilters, refresh, createAccount, updateAccount, resetPassword, adjustCredits, changeRole, deleteAccount } = useAdminAccounts(
+    const { accounts, promotionCandidates, total, filters, isLoading, candidateLoading, isChangingRole, updateFilters, refresh, createAccount, updateAccount, resetPassword, adjustCredits, changeRole, deleteAccount, forceLogout } = useAdminAccounts(
         promotionOpen,
         promotionKeyword,
     );
@@ -30,6 +31,8 @@ export default function AdminAccountsPage() {
     const [deleting, setDeleting] = useState<AdminAccount | null>(null);
     const [creditTarget, setCreditTarget] = useState<AdminAccount | null>(null);
     const [demoting, setDemoting] = useState<AdminAccount | null>(null);
+    const [forceLogoutTarget, setForceLogoutTarget] = useState<AdminAccount | null>(null);
+    const [forceLogoutReason, setForceLogoutReason] = useState("");
     const [creditValue, setCreditValue] = useState(0);
     const [form] = Form.useForm<AccountForm>();
     const [passwordForm] = Form.useForm<{ password: string }>();
@@ -71,6 +74,34 @@ export default function AdminAccountsPage() {
         { title: "角色", dataIndex: "role", width: 130, render: (_, item) => <Tag color={item.role === "superadmin" ? "gold" : "blue"}>{adminRoleLabels[item.role]}</Tag> },
         { title: "状态", dataIndex: "status", width: 90, render: (_, item) => <Tag color={item.status === "active" ? "green" : "red"}>{adminStatusLabels[item.status]}</Tag> },
         {
+            title: "登录状态",
+            key: "loginStatus",
+            width: 100,
+            render: (_, item) => (
+                <Popover
+                    title="当前登录信息"
+                    content={
+                        <Descriptions
+                            size="small"
+                            column={1}
+                            items={[
+                                { key: "login", label: "登录时间", children: formatSessionTime(item.session?.createdAt) },
+                                { key: "active", label: "最后活跃", children: formatSessionTime(item.session?.lastActiveAt) },
+                                { key: "expires", label: "最长有效期", children: formatSessionTime(item.session?.absoluteExpiresAt) },
+                                { key: "ip", label: "登录 IP", children: item.session?.ipAddress || "-" },
+                                { key: "device", label: "设备", children: item.session?.deviceName || "-" },
+                            ]}
+                        />
+                    }
+                >
+                    <Tag className="cursor-pointer" color={item.session?.online ? "success" : "default"}>
+                        {item.session?.online ? "在线" : "离线"}
+                    </Tag>
+                </Popover>
+            ),
+        },
+        { title: "最后活跃", key: "lastActiveAt", width: 180, render: (_, item) => <Typography.Text type="secondary">{item.session?.lastActiveAt ? dayjs(item.session.lastActiveAt).format("YYYY-MM-DD HH:mm:ss") : "-"}</Typography.Text> },
+        {
             title: "算力余额",
             dataIndex: "credits",
             width: 120,
@@ -84,13 +115,18 @@ export default function AdminAccountsPage() {
         {
             title: "操作",
             key: "actions",
-            width: 166,
+            width: 198,
             align: "right",
             render: (_, item) => {
                 const protection = adminAccountProtection(item, actorId, activeSuperAdminCount);
                 const conversion = adminRoleConversion(item);
                 return (
                     <Space size={2}>
+                        {item.role === "admin" && item.session?.online ? (
+                            <Tooltip title="强制下线">
+                                <Button danger type="text" size="small" icon={<LogoutOutlined />} onClick={() => setForceLogoutTarget(item)} />
+                            </Tooltip>
+                        ) : null}
                         {conversion.visible ? (
                             <Tooltip title={conversion.label}>
                                 <Button type="text" size="small" icon={<UserSwitchOutlined />} onClick={() => setDemoting(item)} />
@@ -332,6 +368,31 @@ export default function AdminAccountsPage() {
                         <Input.Password autoComplete="new-password" />
                     </Form.Item>
                 </Form>
+            </Modal>
+
+            <Modal
+                rootClassName="studio-modal"
+                title="强制管理员下线"
+                open={Boolean(forceLogoutTarget)}
+                confirmLoading={isLoading}
+                okButtonProps={{ danger: true, disabled: forceLogoutReason.trim().length < 2 || forceLogoutReason.trim().length > 200 }}
+                onCancel={() => {
+                    setForceLogoutTarget(null);
+                    setForceLogoutReason("");
+                }}
+                onOk={async () => {
+                    if (!forceLogoutTarget) return;
+                    await forceLogout(forceLogoutTarget.id, forceLogoutReason);
+                    setForceLogoutTarget(null);
+                    setForceLogoutReason("");
+                }}
+                okText="确认下线"
+                cancelText="取消"
+            >
+                <Flex vertical gap={8}>
+                    <Typography.Text type="secondary">管理员会立即退出当前设备，超级管理员账号不能通过此功能下线。</Typography.Text>
+                    <Input.TextArea value={forceLogoutReason} maxLength={200} showCount rows={4} placeholder="请输入下线原因（2–200 个字符）" onChange={(event) => setForceLogoutReason(event.target.value)} />
+                </Flex>
             </Modal>
 
             <Modal

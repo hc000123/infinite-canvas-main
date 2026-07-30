@@ -22,6 +22,7 @@ func New() *gin.Engine {
 	})
 	api.POST("/auth/register", gin.WrapF(handler.Register))
 	api.POST("/auth/login", gin.WrapF(handler.Login))
+	api.POST("/auth/logout", middleware.UserAuth, gin.WrapF(handler.Logout))
 	api.GET("/auth/login-approval/status", gin.WrapF(handler.LoginApprovalStatus))
 	api.POST("/auth/login-approval/exchange", gin.WrapF(handler.ExchangeLoginApproval))
 	api.GET("/auth/me", middleware.OptionalAuth, gin.WrapF(handler.CurrentUser))
@@ -253,6 +254,8 @@ func New() *gin.Engine {
 	admin := api.Group("/admin", middleware.AdminAuth)
 	admin.GET("/users", gin.WrapF(handler.AdminUsers))
 	admin.GET("/users/:id", func(c *gin.Context) { handler.AdminUser(c.Writer, c.Request, c.Param("id")) })
+	admin.GET("/users/:id/session", func(c *gin.Context) { handler.AdminUserSession(c.Writer, c.Request, c.Param("id")) })
+	admin.POST("/users/:id/force-logout", func(c *gin.Context) { handler.AdminForceLogoutUser(c.Writer, c.Request, c.Param("id")) })
 	admin.GET("/users/:id/ai-tasks", func(c *gin.Context) { handler.AdminUserAITasks(c.Writer, c.Request, c.Param("id")) })
 	admin.GET("/users/:id/credit-logs", func(c *gin.Context) { handler.AdminUserCreditLogs(c.Writer, c.Request, c.Param("id")) })
 	admin.GET("/users/:id/activity-logs", func(c *gin.Context) { handler.AdminUserActivities(c.Writer, c.Request, c.Param("id")) })
@@ -314,6 +317,8 @@ func New() *gin.Engine {
 
 	superAdmin := api.Group("/admin", middleware.SuperAdminAuth)
 	superAdmin.GET("/admins", gin.WrapF(handler.AdminAccounts))
+	superAdmin.GET("/admins/:id/session", func(c *gin.Context) { handler.AdminAccountSession(c.Writer, c.Request, c.Param("id")) })
+	superAdmin.POST("/admins/:id/force-logout", func(c *gin.Context) { handler.AdminForceLogoutAccount(c.Writer, c.Request, c.Param("id")) })
 	superAdmin.POST("/admins", gin.WrapF(handler.CreateAdminAccount))
 	superAdmin.PATCH("/admins/:id", func(c *gin.Context) {
 		handler.UpdateAdminAccount(c.Writer, c.Request, c.Param("id"))

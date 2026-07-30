@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { adminLayoutStyle } from "@/lib/app-theme";
+import { subscribeAuthSessionInvalid } from "@/services/auth-session-events";
 import { useUserStore } from "@/stores/use-user-store";
 
 const baseAdminMenus = [
@@ -41,7 +42,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     const token = useUserStore((state) => state.token);
     const user = useUserStore((state) => state.user);
     const isReady = useUserStore((state) => state.isReady);
-    const logout = useUserStore((state) => state.clearSession);
+    const logout = useUserStore((state) => state.logout);
+    const clearSession = useUserStore((state) => state.clearSession);
     const [pendingMenuKey, setPendingMenuKey] = useState("");
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [authWaitExpired, setAuthWaitExpired] = useState(false);
@@ -59,36 +61,36 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           ? "/admin/admins"
           : pathname.startsWith("/admin/agents")
             ? "/admin/agents"
-          : pathname.startsWith("/admin/skills")
-            ? "/admin/skills"
-            : pathname.startsWith("/admin/settings")
-              ? "/admin/settings"
-              : pathname.startsWith("/admin/assets")
-                ? "/admin/assets"
-                : pathname.startsWith("/admin/prompts")
-                  ? "/admin/prompts"
-                  : pathname.startsWith("/admin/ai-tasks")
-                    ? "/admin/ai-tasks"
-                    : pathname.startsWith("/admin/users")
-                      ? "/admin/users"
-                      : "";
+            : pathname.startsWith("/admin/skills")
+              ? "/admin/skills"
+              : pathname.startsWith("/admin/settings")
+                ? "/admin/settings"
+                : pathname.startsWith("/admin/assets")
+                  ? "/admin/assets"
+                  : pathname.startsWith("/admin/prompts")
+                    ? "/admin/prompts"
+                    : pathname.startsWith("/admin/ai-tasks")
+                      ? "/admin/ai-tasks"
+                      : pathname.startsWith("/admin/users")
+                        ? "/admin/users"
+                        : "";
     const pageTitle = pathname.startsWith("/admin/login-approvals")
         ? "登录审批"
         : pathname.startsWith("/admin/admins")
           ? "管理员管理"
           : pathname.startsWith("/admin/agents")
             ? "Agent 中心"
-          : pathname.startsWith("/admin/skills")
-            ? "Skill 中心"
-            : pathname.startsWith("/admin/settings")
-              ? "系统设置"
-              : pathname.startsWith("/admin/assets")
-                ? "素材管理"
-                : pathname.startsWith("/admin/prompts")
-                  ? "提示词管理"
-                  : pathname.startsWith("/admin/ai-tasks")
-                    ? "AI 使用"
-                    : "用户管理";
+            : pathname.startsWith("/admin/skills")
+              ? "Skill 中心"
+              : pathname.startsWith("/admin/settings")
+                ? "系统设置"
+                : pathname.startsWith("/admin/assets")
+                  ? "素材管理"
+                  : pathname.startsWith("/admin/prompts")
+                    ? "提示词管理"
+                    : pathname.startsWith("/admin/ai-tasks")
+                      ? "AI 使用"
+                      : "用户管理";
 
     useEffect(() => {
         if (!isReady) return;
@@ -102,6 +104,17 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         }
         if (pathname.startsWith("/admin/admins") && user?.role !== "superadmin") router.replace("/admin/users");
     }, [isReady, pathname, router, token, user]);
+
+    useEffect(
+        () =>
+            subscribeAuthSessionInvalid((payload) => {
+                clearSession();
+                const params = new URLSearchParams({ redirect: pathname, reason: String(payload.code) });
+                if (payload.reason) params.set("detail", payload.reason);
+                router.replace(`/login?${params.toString()}`);
+            }),
+        [clearSession, pathname, router],
+    );
 
     useEffect(() => {
         adminMenus.forEach((item) => router.prefetch(item.key));
@@ -188,7 +201,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             <Button block icon={<HomeOutlined />} href="/projects">
                 前往项目
             </Button>
-            <Button block icon={<LogoutOutlined />} onClick={logout}>
+            <Button block icon={<LogoutOutlined />} onClick={() => void logout()}>
                 退出登录
             </Button>
         </Flex>

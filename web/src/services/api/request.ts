@@ -1,5 +1,7 @@
 import axios from "axios";
 
+import { emitAuthSessionInvalid } from "@/services/auth-session-events";
+
 export type ApiParams = Record<string, string | string[] | number | number[] | undefined>;
 
 type ApiResponse<T> = {
@@ -7,6 +9,16 @@ type ApiResponse<T> = {
     data: T;
     msg: string;
 };
+
+export class ApiError extends Error {
+    constructor(
+        message: string,
+        readonly code: number,
+        readonly data: unknown,
+    ) {
+        super(message);
+    }
+}
 
 export function compactApiParams(params: ApiParams) {
     return Object.fromEntries(Object.entries(params).filter(([, value]) => value !== "" && value !== undefined && (!Array.isArray(value) || value.length > 0))) as ApiParams;
@@ -115,7 +127,9 @@ async function apiRequest<T>(config: { url: string; method: "GET" | "POST" | "PA
 
     const payload = result as ApiResponse<T>;
     if (response.status < 200 || response.status >= 300 || payload.code !== 0) {
-        throw new Error(payload.msg || "请求失败");
+        const reason = payload.data && typeof payload.data === "object" && "reason" in payload.data ? String((payload.data as { reason?: unknown }).reason || "") : undefined;
+        if (payload.code >= 1001 && payload.code <= 1005) emitAuthSessionInvalid({ code: payload.code, message: payload.msg || "登录状态无效", reason });
+        throw new ApiError(payload.msg || "请求失败", payload.code, payload.data);
     }
 
     return payload.data;

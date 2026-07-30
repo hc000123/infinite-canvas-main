@@ -23,6 +23,10 @@ func Fail(w http.ResponseWriter, msg string) {
 	writeJSON(w, response{Code: 1, Data: nil, Msg: msg})
 }
 
+func FailCode(w http.ResponseWriter, code int, data any, msg string) {
+	writeJSON(w, response{Code: code, Data: data, Msg: msg})
+}
+
 func FailError(w http.ResponseWriter, err error) {
 	log.Printf("request failed: %v", err)
 	if safe, ok := err.(interface{ SafeMessage() string }); ok {

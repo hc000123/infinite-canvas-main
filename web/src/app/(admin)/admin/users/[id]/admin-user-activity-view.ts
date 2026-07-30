@@ -26,6 +26,11 @@ const labels: Record<string, string> = {
     "security.login_approval_approved": "批准异地登录",
     "security.login_approval_rejected": "拒绝异地登录",
     "security.admin_role_changed": "管理员角色变更",
+    "security.session_replaced": "新登录替换旧设备",
+    "security.session_force_logout": "管理员强制下线",
+    "security.session_idle_expired": "长时间未使用下线",
+    "security.session_absolute_expired": "登录达到最长时限",
+    "security.session_account_changed": "账号安全变更下线",
 };
 export function activityActionLabel(action: string) {
     return labels[action] || action || "未知操作";

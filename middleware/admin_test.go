@@ -1,18 +1,17 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/basketikun/infinite-canvas/config"
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/repository"
 	"github.com/basketikun/infinite-canvas/service"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 func TestAdminAndSuperAdminMiddlewareUseRoleHierarchy(t *testing.T) {
@@ -61,21 +60,11 @@ func saveMiddlewareUser(t *testing.T, id string, role model.UserRole) model.User
 
 func signedMiddlewareToken(t *testing.T, user model.User) string {
 	t.Helper()
-	claims := service.TokenClaims{
-		UserID:   user.ID,
-		Username: user.Username,
-		Role:     user.Role,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Subject:   user.ID,
-		},
-	}
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.Cfg.JWTSecret))
+	session, err := service.CreateLoginSession(context.Background(), user, "", true)
 	if err != nil {
-		t.Fatalf("SignedString: %v", err)
+		t.Fatalf("CreateLoginSession: %v", err)
 	}
-	return token
+	return session.Token
 }
 
 func assertMiddlewareStatus(t *testing.T, app http.Handler, path string, token string, want int) {
