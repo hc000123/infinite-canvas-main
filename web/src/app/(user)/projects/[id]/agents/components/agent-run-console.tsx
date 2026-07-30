@@ -8,7 +8,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { SkillOption } from "@/services/api/admin-skills";
 import type { AgentRegistryItem, AgentSkillRef } from "@/services/api/agent-registry";
 import { cancelAgentPlan, confirmAgentPlan, continueAgentPlan, createAgentPlan, fetchAgentPlan, preflightAgentPlan, type AgentPlanContinueResult, type AgentPlanDetail, type AgentPlanPreflightResult, type AgentPlanStepDetail } from "@/services/api/agent-plans";
-import { createArtifact, getArtifact, getInvocation, reviewInvocation, type ArtifactEnvelope } from "@/services/api/invocations";
+import { createArtifact, getArtifact, getInvocation, pollInvocation, reviewInvocation, type ArtifactEnvelope } from "@/services/api/invocations";
+import { invocationPollActive, invocationPollNeedsDetail } from "@/services/api/invocation-poll-state";
 import { agentPlanStatusLabel, buildAgentPlanRequest, buildSourceArtifactInput, canConfirmAgentPlan, canContinueAgentPlan, canPreflightAgentPlan, rebindAgentSkillRefs } from "../agent-center-utils";
 import { loadAgentRunSession, saveAgentRunSession } from "../agent-run-session";
 import { agentRunSessionStorage } from "../agent-run-session-storage";
@@ -53,12 +54,22 @@ export function AgentRunConsole({ item, projectId, initialEpisodeId, skillOption
     const planQuery = useQuery({ queryKey: ["agent-plan", planId], queryFn: () => fetchAgentPlan(planId), enabled: Boolean(planId), retry: false });
     const plan = planQuery.data;
     const activeInvocationId = lastContinue?.invocation?.run.id || plan?.steps.find((step) => step.step.status === "needs_review")?.step.invocationId || "";
-    const invocationQuery = useQuery({ queryKey: ["invocation-detail", activeInvocationId], queryFn: () => getInvocation(activeInvocationId), enabled: Boolean(activeInvocationId), retry: false, refetchInterval: activeInvocationId ? 3000 : false });
+    const invocationQuery = useQuery({ queryKey: ["invocation-detail", activeInvocationId], queryFn: () => getInvocation(activeInvocationId), enabled: Boolean(activeInvocationId), retry: false });
+    const invocationPollQuery = useQuery({
+        queryKey: ["invocation-poll", activeInvocationId],
+        queryFn: () => pollInvocation(activeInvocationId, Number.MAX_SAFE_INTEGER),
+        enabled: Boolean(activeInvocationId) && invocationPollActive(invocationQuery.data?.run.status),
+        retry: false,
+        refetchInterval: (query) => invocationPollActive(query.state.data?.run.status || invocationQuery.data?.run.status) ? 2_000 : false,
+    });
     const artifactQuery = useQuery({ queryKey: ["artifact-preview", artifactId], queryFn: () => getArtifact(artifactId), enabled: Boolean(artifactId), retry: false });
     useEffect(() => {
-        const error = planQuery.error || invocationQuery.error || artifactQuery.error;
+        if (invocationPollQuery.data && invocationPollNeedsDetail(invocationQuery.data, invocationPollQuery.data)) void invocationQuery.refetch();
+    }, [invocationPollQuery.data, invocationQuery.data, invocationQuery.refetch]);
+    useEffect(() => {
+        const error = planQuery.error || invocationQuery.error || invocationPollQuery.error || artifactQuery.error;
         if (error) message.error(errorText(error));
-    }, [artifactQuery.error, invocationQuery.error, message, planQuery.error]);
+    }, [artifactQuery.error, invocationPollQuery.error, invocationQuery.error, message, planQuery.error]);
 
     const packageValue = item?.recommendedPackage;
     const firstSkill = skillOptions.find((option) => option.skillVersionId === skillRefs[0]?.skillVersionId);
