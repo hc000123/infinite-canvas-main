@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,6 +22,110 @@ import (
 	"github.com/basketikun/infinite-canvas/repository"
 	"github.com/basketikun/infinite-canvas/service"
 )
+
+func TestCopyAIResponseStreamsSSEBeforeEOF(t *testing.T) {
+	upstream, upstreamWriter := io.Pipe()
+	writer := newObservingAIResponseWriter()
+	request := httptest.NewRequest(http.MethodPost, "https://example.invalid/v1/responses", nil)
+	done := make(chan struct{})
+	var archived []byte
+	go func() {
+		defer close(done)
+		copyAIResponseWithTransform(writer, request, func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"text/event-stream; charset=utf-8"}}, Body: upstream}, nil
+		}, nil, func(status int, contentType string) {
+			writer.Header().Set("X-Test-Started", contentType)
+		}, nil, func(_ int, payload []byte, contentType string) {
+			archived = append([]byte(nil), payload...)
+			if contentType != "application/json" {
+				t.Errorf("archive content type=%q", contentType)
+			}
+		})
+	}()
+	first := "event: response.output_text.delta\ndata: {\"delta\":\"首包\"}\n\n"
+	if _, err := upstreamWriter.Write([]byte(first)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-writer.flushed:
+		if writer.bodyString() != first {
+			t.Fatalf("first body=%q", writer.bodyString())
+		}
+	case <-time.After(300 * time.Millisecond):
+		_ = upstreamWriter.Close()
+		<-done
+		t.Fatal("first SSE event was buffered until upstream EOF")
+	}
+	_, _ = upstreamWriter.Write([]byte("event: response.completed\ndata: {\"response\":{\"usage\":{\"input_tokens\":2,\"output_tokens\":1}}}\n\ndata: [DONE]\n\n"))
+	_ = upstreamWriter.Close()
+	<-done
+	if !strings.Contains(string(archived), `"outputText":"首包"`) || strings.Contains(string(archived), `event: response.output_text.delta`) {
+		t.Fatalf("archive=%s", archived)
+	}
+	if writer.Header().Get("X-Test-Started") != "text/event-stream; charset=utf-8" {
+		t.Fatalf("start callback header=%q", writer.Header().Get("X-Test-Started"))
+	}
+}
+
+func TestCopyAIResponseDoesNotAppendJSONAfterStreamFailure(t *testing.T) {
+	writer := newObservingAIResponseWriter()
+	request := httptest.NewRequest(http.MethodPost, "https://example.invalid/v1/responses", nil)
+	failures, successes := 0, 0
+	copyAIResponseWithTransform(writer, request, func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"text/event-stream"}}, Body: io.NopCloser(&failingAIStreamReader{})}, nil
+	}, func(string, []byte) {
+		failures++
+	}, nil, nil, func(int, []byte, string) {
+		successes++
+	})
+	if failures != 1 || successes != 0 {
+		t.Fatalf("failures=%d successes=%d", failures, successes)
+	}
+	if body := writer.bodyString(); body != "data: {\"delta\":\"partial\"}\n\n" || strings.Contains(body, `"code":1`) {
+		t.Fatalf("stream body=%q", body)
+	}
+}
+
+type observingAIResponseWriter struct {
+	header  http.Header
+	body    bytes.Buffer
+	status  int
+	flushed chan struct{}
+	mu      sync.Mutex
+}
+
+func newObservingAIResponseWriter() *observingAIResponseWriter {
+	return &observingAIResponseWriter{header: http.Header{}, flushed: make(chan struct{}, 1)}
+}
+
+func (writer *observingAIResponseWriter) Header() http.Header    { return writer.header }
+func (writer *observingAIResponseWriter) WriteHeader(status int) { writer.status = status }
+func (writer *observingAIResponseWriter) Write(body []byte) (int, error) {
+	writer.mu.Lock()
+	defer writer.mu.Unlock()
+	return writer.body.Write(body)
+}
+func (writer *observingAIResponseWriter) Flush() {
+	select {
+	case writer.flushed <- struct{}{}:
+	default:
+	}
+}
+func (writer *observingAIResponseWriter) bodyString() string {
+	writer.mu.Lock()
+	defer writer.mu.Unlock()
+	return writer.body.String()
+}
+
+type failingAIStreamReader struct{ sent bool }
+
+func (reader *failingAIStreamReader) Read(body []byte) (int, error) {
+	if reader.sent {
+		return 0, errors.New("upstream stream interrupted")
+	}
+	reader.sent = true
+	return copy(body, "data: {\"delta\":\"partial\"}\n\n"), nil
+}
 
 func TestBuildArkVideoCreateRequestKeepsSeedanceControls(t *testing.T) {
 	source := []byte(`{
