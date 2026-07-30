@@ -2,6 +2,8 @@ import { apiGet, compactApiParams } from "@/services/api/request";
 
 export type AssetLibraryItem = {
     id: string;
+    projectId: string;
+    folderId: string;
     title: string;
     type: "text" | "image" | "video" | "audio";
     coverUrl: string;
@@ -10,6 +12,8 @@ export type AssetLibraryItem = {
     description: string;
     content: string;
     url: string;
+    episodeNumbers: string[];
+    allEpisodes: boolean;
     volcengineAssetId?: string;
     volcengineGroupId?: string;
     volcengineProjectName?: string;
@@ -30,6 +34,7 @@ export type AssetLibraryResponse = {
 
 export type AssetLibraryQuery = {
     keyword?: string;
+    projectId?: string;
     type?: string;
     tag?: string[];
     page?: number;

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"mime/multipart"
 	"net/textproto"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -45,6 +46,29 @@ func TestSaveAssetMediaUsesDetectedExtension(t *testing.T) {
 	}
 	if ext := filepath.Ext(result.URL); ext != ".jpg" {
 		t.Fatalf("uploaded URL extension = %q, want .jpg", ext)
+	}
+}
+
+func TestCleanupUploadedAssetURLOnlyRemovesLibraryFiles(t *testing.T) {
+	oldPublicAssetDir := config.Cfg.PublicAssetDir
+	config.Cfg.PublicAssetDir = t.TempDir()
+	t.Cleanup(func() { config.Cfg.PublicAssetDir = oldPublicAssetDir })
+
+	target := filepath.Join(config.Cfg.PublicAssetDir, "library", "image", "portrait.jpg")
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("image"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := cleanupUploadedAssetURL("/api/uploaded-assets/library/image/portrait.jpg"); err != nil {
+		t.Fatalf("cleanupUploadedAssetURL returned error: %v", err)
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("uploaded file still exists, stat error = %v", err)
+	}
+	if err := cleanupUploadedAssetURL("https://example.com/portrait.jpg"); err != nil {
+		t.Fatalf("external URL cleanup returned error: %v", err)
 	}
 }
 

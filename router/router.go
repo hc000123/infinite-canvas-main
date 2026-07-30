@@ -300,8 +300,32 @@ func New() *gin.Engine {
 		handler.AdminDeletePrompt(c.Writer, c.Request, c.Param("id"))
 	})
 	admin.GET("/assets", gin.WrapF(handler.AdminAssets))
+	admin.GET("/asset-projects", gin.WrapF(handler.AdminAssetProjects))
+	admin.POST("/asset-projects", func(c *gin.Context) {
+		handler.AdminSaveAssetProject(c.Writer, c.Request, "")
+	})
+	admin.PATCH("/asset-projects/:id", func(c *gin.Context) {
+		handler.AdminSaveAssetProject(c.Writer, c.Request, c.Param("id"))
+	})
+	admin.DELETE("/asset-projects/:id", func(c *gin.Context) {
+		handler.AdminDeleteAssetProject(c.Writer, c.Request, c.Param("id"))
+	})
+	admin.GET("/asset-projects/:id/folders", func(c *gin.Context) {
+		handler.AdminAssetFolders(c.Writer, c.Request, c.Param("id"))
+	})
+	admin.POST("/asset-projects/:id/folders", func(c *gin.Context) {
+		handler.AdminSaveAssetFolder(c.Writer, c.Request, c.Param("id"), "")
+	})
+	admin.PATCH("/asset-projects/:id/folders/:folderId", func(c *gin.Context) {
+		handler.AdminSaveAssetFolder(c.Writer, c.Request, c.Param("id"), c.Param("folderId"))
+	})
+	admin.DELETE("/asset-projects/:id/folders/:folderId", func(c *gin.Context) {
+		handler.AdminDeleteAssetFolder(c.Writer, c.Request, c.Param("id"), c.Param("folderId"))
+	})
 	admin.POST("/assets", gin.WrapF(handler.AdminSaveAsset))
 	admin.POST("/assets/upload", gin.WrapF(handler.AdminUploadAssetMedia))
+	admin.POST("/assets/batch-update", gin.WrapF(handler.AdminBatchUpdateAssets))
+	admin.POST("/assets/batch-delete", gin.WrapF(handler.AdminBatchDeleteAssets))
 	admin.POST("/assets/:id/volcengine-review", func(c *gin.Context) {
 		handler.AdminSubmitAssetVolcengineReview(c.Writer, c.Request, c.Param("id"))
 	})

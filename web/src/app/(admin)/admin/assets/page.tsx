@@ -1,444 +1,135 @@
 "use client";
 
-import { CopyOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, SafetyCertificateOutlined, SearchOutlined, SettingOutlined } from "@ant-design/icons";
-import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { App, Button, Card, Col, Flex, Form, Image, Input, Modal, Row, Select, Space, Tag, Tooltip, Typography } from "antd";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowLeft, FilePlus2, FolderPlus, UploadCloud } from "lucide-react";
+import { App, Breadcrumb, Button, Flex, Input, Modal, Select, Space, Typography } from "antd";
+import { useEffect, useRef, useState } from "react";
 
-import { useCopyText } from "@/hooks/use-copy-text";
-import { fetchAdminSettings, refreshAdminAssetVolcengineReview, submitAdminAssetVolcengineReview, type AdminAsset, type AdminSettings, uploadAdminAssetMedia } from "@/services/api/admin";
-import { summarizeVolcengineAssetConfig, VOLCENGINE_ASSET_CONFIG_NOTICE } from "@/services/volcengine-asset-config";
+import { refreshAdminAssetVolcengineReview, submitAdminAssetVolcengineReview, type AdminAsset, type AdminAssetProject } from "@/services/api/admin";
 import { useUserStore } from "@/stores/use-user-store";
+import { AssetBatchOrganizer } from "./components/asset-batch-organizer";
+import { AssetDetailDrawer } from "./components/asset-detail-drawer";
+import { AssetFileGrid } from "./components/asset-file-grid";
+import { AssetFolderTree, assetFolderPath } from "./components/asset-folder-tree";
+import { AssetProjectBrowser } from "./components/asset-project-browser";
+import { AssetUploadQueue } from "./components/asset-upload-queue";
+import { useAdminAssetProjects } from "./use-admin-asset-projects";
+import { useAdminAssetUpload } from "./use-admin-asset-upload";
 import { useAdminAssets } from "./use-admin-assets";
 
-type AssetFormValues = Partial<AdminAsset> & { tagText?: string };
-
-const typeOptions = [
-    { label: "全部类型", value: "" },
-    { label: "文本", value: "text" },
-    { label: "图片", value: "image" },
-    { label: "视频", value: "video" },
-    { label: "音频", value: "audio" },
-];
-
-const editTypeOptions = typeOptions.slice(1);
-
+const typeOptions = [{ label: "全部类型", value: "" }, { label: "图片", value: "image" }, { label: "视频", value: "video" }, { label: "音频", value: "audio" }, { label: "文本", value: "text" }];
 export default function AdminAssetsPage() {
     const { message } = App.useApp();
-    const { assets, tags, keyword, kind, tag, page, pageSize, total, isLoading, searchAssets, changeKind, changeTag, changePage, changePageSize, resetFilters, refreshAssets, saveAsset: saveAdminAsset, deleteAsset } = useAdminAssets();
-    const copyText = useCopyText();
     const token = useUserStore((state) => state.token);
-    const [form] = Form.useForm<AssetFormValues>();
-    const mediaInputRef = useRef<HTMLInputElement>(null);
-    const [keywordText, setKeywordText] = useState(keyword);
-    const [editingAsset, setEditingAsset] = useState<Partial<AdminAsset> | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [projectId, setProjectId] = useState("");
+    const [folderId, setFolderId] = useState("");
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [detailAsset, setDetailAsset] = useState<AdminAsset | null>(null);
-    const [deletingAsset, setDeletingAsset] = useState<AdminAsset | null>(null);
-    const [reviewSettings, setReviewSettings] = useState<AdminSettings | null>(null);
-    const [isReviewSettingsLoading, setIsReviewSettingsLoading] = useState(false);
-    const [isUploadingMedia, setIsUploadingMedia] = useState(false);
-    const [reviewingAssetId, setReviewingAssetId] = useState<string | null>(null);
-    const formType = Form.useWatch("type", form) || editingAsset?.type || "text";
-    const tagOptions = tags.map((item) => ({ label: item, value: item }));
-    const reviewEnabled = reviewSettings?.private.volcengineAsset.enabled === true;
-    const reviewSummary = summarizeVolcengineAssetConfig(reviewSettings?.private.volcengineAsset, { showDetails: Boolean(reviewSettings) });
-    const reviewStatusText = isReviewSettingsLoading ? "读取中" : reviewSettings ? reviewSummary.statusText : "未读取";
-    const reviewStatusColor = isReviewSettingsLoading || !reviewSettings ? "processing" : reviewSummary.statusColor;
+    const [uploadQueueOpen, setUploadQueueOpen] = useState(false);
+    const [textOpen, setTextOpen] = useState(false);
+    const [textTitle, setTextTitle] = useState("");
+    const [textContent, setTextContent] = useState("");
+    const [folderModalOpen, setFolderModalOpen] = useState(false);
+    const [folderName, setFolderName] = useState("");
+    const projects = useAdminAssetProjects(projectId);
+    const assets = useAdminAssets(projectId, folderId);
+    const uploads = useAdminAssetUpload();
+    const project = projects.projects.find((item) => item.id === projectId);
+    const path = assetFolderPath(projects.folders, folderId);
 
     useEffect(() => {
-        if (editingAsset) form.setFieldsValue({ ...editingAsset, tagText: editingAsset.tags?.join(", ") || "" });
-    }, [editingAsset, form]);
+        setSelectedIds([]);
+        setDetailAsset(null);
+    }, [folderId, projectId]);
 
-    useEffect(() => setKeywordText(keyword), [keyword]);
-
-    const loadReviewSettings = useCallback(async () => {
-        if (!token) return;
-        setIsReviewSettingsLoading(true);
-        try {
-            const settings = await fetchAdminSettings(token);
-            setReviewSettings(settings);
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "读取素材审核配置失败");
-        } finally {
-            setIsReviewSettingsLoading(false);
-        }
-    }, [message, token]);
-
-    useEffect(() => {
-        void loadReviewSettings();
-    }, [loadReviewSettings]);
-
-    const saveAsset = async () => {
-        const value = await form.validateFields();
-        const nextType = value.type || "text";
-        if (nextType !== "text" && !value.url?.trim()) {
-            message.error("请上传文件或填写素材 URL");
-            return;
-        }
-        await saveAdminAsset({
-            ...editingAsset,
-            ...value,
-            type: nextType,
-            coverUrl: value.coverUrl || (nextType === "image" ? value.url : ""),
-            content: nextType === "text" ? value.content : "",
-            url: nextType === "text" ? "" : value.url,
-            tags: (value.tagText || "")
-                .split(",")
-                .map((item) => item.trim())
-                .filter(Boolean),
-        });
-        setEditingAsset(null);
+    const openProject = (item: AdminAssetProject) => {
+        setProjectId(item.id);
+        setFolderId("");
     };
-
-    const uploadMedia = async (file?: File) => {
-        if (!file || !token) return;
-        setIsUploadingMedia(true);
+    const uploadFiles = (files: File[]) => {
+        if (!projectId || !files.length) return;
+        setUploadQueueOpen(true);
+        void uploads.enqueue(files, projectId, folderId);
+    };
+    const createFolder = async () => {
+        if (!folderName.trim()) return message.warning("请输入文件夹名称");
         try {
-            const result = await uploadAdminAssetMedia(token, file);
-            form.setFieldsValue({
-                type: result.type,
-                title: form.getFieldValue("title") || file.name.replace(/\.[^.]+$/, ""),
-                coverUrl: form.getFieldValue("coverUrl") || result.coverUrl,
-                url: result.url,
-            });
-            message.success("素材文件已上传");
+            await projects.saveFolder({ projectId, parentId: folderId, name: folderName.trim() });
+            setFolderName("");
+            setFolderModalOpen(false);
+            message.success("文件夹已创建");
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "上传失败");
-        } finally {
-            setIsUploadingMedia(false);
-            if (mediaInputRef.current) mediaInputRef.current.value = "";
+            message.error(error instanceof Error ? error.message : "创建文件夹失败");
         }
     };
-
-    const submitVolcengineReview = async (asset: AdminAsset) => {
-        if (!token) return;
-        if (!reviewEnabled) {
-            message.warning("请先到系统设置开启火山素材审核");
-            return;
-        }
-        setReviewingAssetId(asset.id);
+    const createText = async () => {
+        if (!textTitle.trim() || !textContent.trim()) return message.warning("请填写名称和文本内容");
         try {
-            await submitAdminAssetVolcengineReview(token, asset.id);
-            message.success("已提交火山加白");
-            await refreshAssets();
+            await assets.saveAsset({ projectId, folderId, type: "text", title: textTitle.trim(), content: textContent, coverUrl: "", url: "", category: "", description: "", tags: [], episodeNumbers: [], allEpisodes: false });
+            setTextTitle("");
+            setTextContent("");
+            setTextOpen(false);
+            message.success("文本素材已创建");
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "提交加白失败");
-        } finally {
-            setReviewingAssetId(null);
+            message.error(error instanceof Error ? error.message : "创建文本素材失败");
         }
     };
-
-    const refreshVolcengineReview = async (asset: AdminAsset) => {
-        if (!token) return;
-        setReviewingAssetId(asset.id);
-        try {
-            const updated = await refreshAdminAssetVolcengineReview(token, asset.id);
-            const statusText = `当前状态：${volcengineStatusLabel(updated.volcengineStatus)}${updated.volcengineError ? `：${updated.volcengineError}` : ""}`;
-            if (updated.volcengineStatus === "Failed") message.error(statusText);
-            else message.success(statusText);
-            await refreshAssets();
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "刷新审核状态失败");
-        } finally {
-            setReviewingAssetId(null);
-        }
+    const submitReview = async (asset: AdminAsset) => {
+        const updated = await submitAdminAssetVolcengineReview(token, asset.id);
+        setDetailAsset(updated);
+        await assets.refresh();
+    };
+    const refreshReview = async (asset: AdminAsset) => {
+        const updated = await refreshAdminAssetVolcengineReview(token, asset.id);
+        setDetailAsset(updated);
+        await assets.refresh();
     };
 
-    const columns: ProColumns<AdminAsset>[] = [
-        {
-            title: "封面",
-            dataIndex: "coverUrl",
-            width: 88,
-            render: (_, item) => <Image src={adminAssetCover(item)} alt={item.title} width={56} height={42} style={{ objectFit: "cover", borderRadius: 6 }} preview={{ mask: "放大" }} fallback="/logo.svg" />,
-        },
-        {
-            title: "标题",
-            dataIndex: "title",
-            width: 260,
-            render: (_, item) => (
-                <Typography.Link strong ellipsis style={{ maxWidth: 260, display: "block" }} onClick={() => setDetailAsset(item)}>
-                    {item.title}
-                </Typography.Link>
-            ),
-        },
-        {
-            title: "类型",
-            dataIndex: "type",
-            width: 112,
-            render: (_, item) => (
-                <Space size={4} wrap>
-                    <Tag>{assetTypeLabel(item.type)}</Tag>
-                    {item.type === "image" && item.volcengineStatus ? <Tag color={volcengineStatusColor(item.volcengineStatus)}>{volcengineStatusLabel(item.volcengineStatus)}</Tag> : null}
-                </Space>
-            ),
-        },
-        {
-            title: "标签",
-            dataIndex: "tags",
-            width: 180,
-            render: (_, item) => (
-                <Space size={[4, 4]} wrap>
-                    {(item.tags || []).slice(0, 3).map((tag) => (
-                        <Tag key={tag}>{tag}</Tag>
-                    ))}
-                </Space>
-            ),
-        },
-        {
-            title: "分类",
-            dataIndex: "category",
-            width: 120,
-            render: (_, item) => <Typography.Text type="secondary">{item.category || "未标注"}</Typography.Text>,
-        },
-        {
-            title: "操作",
-            key: "actions",
-            width: 152,
-            align: "right",
-            render: (_, item) => (
-                <Space size={4}>
-                    {item.type === "image" ? (
-                        item.volcengineAssetId ? (
-                            <Tooltip title="刷新审核状态">
-                                <Button type="text" size="small" loading={reviewingAssetId === item.id} icon={<ReloadOutlined />} onClick={() => void refreshVolcengineReview(item)} />
-                            </Tooltip>
-                        ) : (
-                            <Tooltip title={reviewEnabled ? "提交加白" : "请先开启素材审核"}>
-                                <Button type="text" size="small" disabled={!reviewEnabled} loading={reviewingAssetId === item.id} icon={<SafetyCertificateOutlined />} onClick={() => void submitVolcengineReview(item)} />
-                            </Tooltip>
-                        )
-                    ) : null}
-                    <Tooltip title="详情">
-                        <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => setDetailAsset(item)} />
-                    </Tooltip>
-                    <Tooltip title="编辑">
-                        <Button type="text" size="small" icon={<EditOutlined />} onClick={() => setEditingAsset(item)} />
-                    </Tooltip>
-                    <Tooltip title="删除">
-                        <Button danger type="text" size="small" icon={<DeleteOutlined />} onClick={() => setDeletingAsset(item)} />
-                    </Tooltip>
-                </Space>
-            ),
-        },
-    ];
+    if (!projectId || !project) return <AssetProjectBrowser projects={projects.projects} loading={projects.isLoading} onOpen={openProject} onSave={projects.saveProject} onDelete={projects.deleteProject} />;
 
     return (
-        <main style={{ padding: 24 }}>
-            <Flex vertical gap={16}>
-                <Card variant="borderless">
-                    <Flex justify="space-between" align="center" gap={16} wrap>
-                        <Flex vertical gap={4} style={{ minWidth: 280 }}>
-                            <Typography.Text strong>火山素材审核</Typography.Text>
-                            <Typography.Text type="secondary">{VOLCENGINE_ASSET_CONFIG_NOTICE} 加白配置填一次即可，素材管理页只负责提交和刷新审核。</Typography.Text>
-                        </Flex>
-                        <Space wrap>
-                            <Tag color={reviewStatusColor}>{reviewStatusText}</Tag>
-                            <Button icon={<SettingOutlined />} loading={isReviewSettingsLoading} href="/admin/settings">
-                                去系统设置
-                            </Button>
-                        </Space>
-                    </Flex>
-                </Card>
-                <Card variant="borderless">
-                    <Form layout="vertical">
-                        <Row gutter={16} align="bottom">
-                            <Col flex="360px">
-                                <Form.Item label="关键词">
-                                    <Input.Search value={keywordText} placeholder="搜索标题、内容或标签" allowClear enterButton={<SearchOutlined />} onSearch={() => searchAssets(keywordText)} onChange={(event) => setKeywordText(event.target.value)} />
-                                </Form.Item>
-                            </Col>
-                            <Col flex="180px">
-                                <Form.Item label="类型">
-                                    <Select value={kind} onChange={changeKind} options={typeOptions} />
-                                </Form.Item>
-                            </Col>
-                            <Col flex="220px">
-                                <Form.Item label="标签">
-                                    <Select mode="multiple" allowClear maxTagCount="responsive" value={tag} onChange={changeTag} options={tagOptions} placeholder="全部标签" />
-                                </Form.Item>
-                            </Col>
-                            <Col flex="none">
-                                <Form.Item>
-                                    <Space>
-                                        <Button
-                                            onClick={() => {
-                                                setKeywordText("");
-                                                resetFilters();
-                                            }}
-                                        >
-                                            重置
-                                        </Button>
-                                        <Button type="primary" icon={<ReloadOutlined />} onClick={() => searchAssets(keywordText)}>
-                                            查询
-                                        </Button>
-                                    </Space>
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                    </Form>
-                </Card>
-                <ProTable<AdminAsset>
-                    rowKey="id"
-                    columns={columns}
-                    dataSource={assets}
-                    loading={isLoading}
-                    search={false}
-                    defaultSize="middle"
-                    tableLayout="fixed"
-                    cardProps={{ variant: "borderless" }}
-                    headerTitle={
-                        <Space>
-                            <Typography.Text strong>素材列表</Typography.Text>
-                            <Tag>{total} 条</Tag>
-                        </Space>
-                    }
-                    options={{ density: true, setting: true, reload: () => void refreshAssets() }}
-                    toolBarRender={() => [
-                        <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => setEditingAsset({ type: "text", tags: [] })}>
-                            新增素材
-                        </Button>,
-                    ]}
-                    pagination={{
-                        current: page,
-                        pageSize,
-                        total,
-                        showSizeChanger: true,
-                        pageSizeOptions: [10, 20, 50, 100],
-                        showTotal: (value) => `共 ${value} 条`,
-                        onChange: (nextPage, nextPageSize) => (nextPageSize !== pageSize ? changePageSize(nextPageSize) : changePage(nextPage)),
-                    }}
-                />
-            </Flex>
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 lg:p-6">
+            <header className="mb-4">
+                <Flex justify="space-between" align="start" gap={16} wrap>
+                    <div className="min-w-0">
+                        <Button type="text" size="small" icon={<ArrowLeft className="size-4" />} className="!px-0" onClick={() => { setProjectId(""); setFolderId(""); }}>返回素材项目</Button>
+                        <Typography.Title level={3} ellipsis style={{ margin: "4px 0 2px" }}>{project.name}</Typography.Title>
+                        <Breadcrumb items={[{ title: <button type="button" onClick={() => setFolderId("")}>根目录</button> }, ...path.map((folder) => ({ title: <button type="button" onClick={() => setFolderId(folder.id)}>{folder.name}</button> }))]} />
+                    </div>
+                    <Space wrap>
+                        <Button icon={<FolderPlus className="size-4" />} onClick={() => setFolderModalOpen(true)}>新建文件夹</Button>
+                        <Button icon={<FilePlus2 className="size-4" />} onClick={() => setTextOpen(true)}>新建文本</Button>
+                        <Button type="primary" icon={<UploadCloud className="size-4" />} onClick={() => fileInputRef.current?.click()}>上传素材</Button>
+                    </Space>
+                </Flex>
+            </header>
 
-            <Modal rootClassName="studio-modal" title={editingAsset?.id ? "编辑素材" : "新增素材"} open={Boolean(editingAsset)} width={760} onCancel={() => setEditingAsset(null)} onOk={() => void saveAsset()} okText="保存" cancelText="取消" destroyOnHidden>
-                <Form form={form} layout="vertical" requiredMark={false}>
-                    <Form.Item name="type" label="类型" rules={[{ required: true, message: "请选择类型" }]}>
-                        <Select options={editTypeOptions} />
-                    </Form.Item>
-                    <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="coverUrl" label="封面 URL">
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="tagText" label="标签，用逗号分隔">
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="category" label="分类">
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="description" label="描述">
-                        <Input.TextArea rows={3} />
-                    </Form.Item>
-                    {formType === "text" ? (
-                        <Form.Item name="content" label="文本内容" rules={[{ required: true, message: "请输入文本内容" }]}>
-                            <Input.TextArea rows={6} />
-                        </Form.Item>
-                    ) : (
-                        <>
-                            <Form.Item label="上传文件">
-                                <Space.Compact style={{ width: "100%" }}>
-                                    <Button loading={isUploadingMedia} onClick={() => mediaInputRef.current?.click()}>
-                                        选择图片/视频/音频
-                                    </Button>
-                                    <Input value={form.getFieldValue("url") || ""} readOnly placeholder="上传后自动生成素材 URL" />
-                                </Space.Compact>
-                            </Form.Item>
-                            <Form.Item name="url" label={`${assetTypeLabel(formType)} URL`} rules={[{ required: true, message: "请上传文件或填写素材 URL" }]}>
-                                <Input />
-                            </Form.Item>
-                        </>
-                    )}
-                </Form>
-                <input ref={mediaInputRef} type="file" accept="image/*,video/*,audio/*" className="hidden" onChange={(event) => void uploadMedia(event.target.files?.[0])} />
-            </Modal>
+            <div className="mb-4 grid gap-2 md:grid-cols-2 xl:grid-cols-8">
+                <Input.Search allowClear className="xl:col-span-2" value={assets.keyword} placeholder="搜索名称、描述或文本内容" onChange={(event) => assets.setKeyword(event.target.value)} />
+                <Select value={assets.folderScope} options={[{ label: "当前文件夹", value: "current" }, { label: "整个项目", value: "project" }]} onChange={assets.setFolderScope} />
+                <Select value={assets.type} options={typeOptions} onChange={assets.setType} />
+                <Input allowClear value={assets.category} placeholder="筛选分类" onChange={(event) => assets.setCategory(event.target.value)} />
+                <Select mode="multiple" allowClear maxTagCount="responsive" value={assets.tags} options={assets.availableTags.map((tag) => ({ label: tag, value: tag }))} placeholder="全部标签" onChange={assets.setTags} />
+                <Input allowClear value={assets.episodeNumber} placeholder="筛选集数" onChange={(event) => assets.setEpisodeNumber(event.target.value)} />
+                <Select allowClear value={assets.allEpisodes || undefined} options={[{ label: "仅全剧通用", value: "true" }, { label: "非全剧素材", value: "false" }]} placeholder="全部范围" onChange={(value) => assets.setAllEpisodes(value || "")} />
+            </div>
 
-            <Modal rootClassName="studio-modal" title="素材详情" open={Boolean(detailAsset)} width={760} onCancel={() => setDetailAsset(null)} footer={<Button onClick={() => setDetailAsset(null)}>关闭</Button>}>
-                {detailAsset ? (
-                    <Flex vertical gap={14}>
-                        <Flex gap={14} align="start">
-                            <Image src={adminAssetCover(detailAsset)} alt={detailAsset.title} width={116} height={84} style={{ objectFit: "cover", borderRadius: 8 }} preview={{ mask: "放大" }} fallback="/logo.svg" />
-                            <Flex vertical gap={8} style={{ minWidth: 0 }}>
-                                <Typography.Title level={5} style={{ margin: 0 }}>
-                                    {detailAsset.title}
-                                </Typography.Title>
-                                <Space wrap>
-                                    <Tag>{assetTypeLabel(detailAsset.type)}</Tag>
-                                    {detailAsset.category ? <Tag>{detailAsset.category}</Tag> : null}
-                                    {detailAsset.type === "image" && detailAsset.volcengineStatus ? <Tag color={volcengineStatusColor(detailAsset.volcengineStatus)}>{volcengineStatusLabel(detailAsset.volcengineStatus)}</Tag> : null}
-                                    {(detailAsset.tags || []).map((tag) => (
-                                        <Tag key={tag}>{tag}</Tag>
-                                    ))}
-                                </Space>
-                            </Flex>
-                        </Flex>
-                        {detailAsset.description ? (
-                            <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
-                                {detailAsset.description}
-                            </Typography.Paragraph>
-                        ) : null}
-                        {detailAsset.type === "video" && detailAsset.url ? <video src={detailAsset.url} controls style={{ width: "100%", borderRadius: 8, background: "#000" }} /> : null}
-                        {detailAsset.type === "audio" && detailAsset.url ? <audio src={detailAsset.url} controls style={{ width: "100%" }} /> : null}
-                        {detailAsset.type === "image" && detailAsset.volcengineAssetId ? (
-                            <Card size="small">
-                                <Flex vertical gap={4}>
-                                    <Typography.Text copyable>Asset ID：{detailAsset.volcengineAssetId}</Typography.Text>
-                                    <Typography.Text type="secondary">
-                                        素材组：{detailAsset.volcengineGroupId || "-"} · 项目：{detailAsset.volcengineProjectName || "-"}
-                                    </Typography.Text>
-                                    {detailAsset.volcengineError ? <Typography.Text type="danger">失败原因：{detailAsset.volcengineError}</Typography.Text> : null}
-                                </Flex>
-                            </Card>
-                        ) : null}
-                        <Input.TextArea value={detailAsset.type === "text" ? detailAsset.content : detailAsset.url || detailAsset.coverUrl} rows={7} readOnly />
-                        <Button icon={<CopyOutlined />} onClick={() => copyText(detailAsset.type === "text" ? detailAsset.content : detailAsset.url || detailAsset.coverUrl)}>
-                            复制内容
-                        </Button>
-                    </Flex>
-                ) : null}
-            </Modal>
+            <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+                <AssetFolderTree project={project} folders={projects.folders} selectedId={folderId} onSelect={setFolderId} onSave={projects.saveFolder} onDelete={projects.deleteFolder} />
+                <div className="min-w-0 flex-1 overflow-y-auto">
+                    <AssetFileGrid assets={assets.assets} loading={assets.isLoading} selectedIds={selectedIds} page={assets.page} pageSize={assets.pageSize} total={assets.total} onPageChange={(page, pageSize) => { assets.setPage(page); if (pageSize !== assets.pageSize) assets.setPageSize(pageSize); }} onOpen={setDetailAsset} onSelectionChange={setSelectedIds} onDropFiles={uploadFiles} />
+                    <AssetBatchOrganizer folders={projects.folders} selectedIds={selectedIds} onClear={() => setSelectedIds([])} onUpdate={assets.batchUpdate} onDelete={assets.batchDelete} />
+                </div>
+            </div>
 
-            <Modal rootClassName="studio-modal"
-                title="删除素材"
-                open={Boolean(deletingAsset)}
-                onCancel={() => setDeletingAsset(null)}
-                onOk={async () => {
-                    if (!deletingAsset) return;
-                    await deleteAsset(deletingAsset.id);
-                    setDeletingAsset(null);
-                }}
-                okText="删除"
-                okButtonProps={{ danger: true }}
-                cancelText="取消"
-            >
-                确定删除「{deletingAsset?.title}」吗？删除后会从服务器素材库中移除。
+            <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,audio/*" className="hidden" onChange={(event) => { uploadFiles(Array.from(event.target.files || [])); event.target.value = ""; }} />
+            <AssetUploadQueue open={uploadQueueOpen} queue={uploads.queue} onClose={() => setUploadQueueOpen(false)} onRetry={(id) => void uploads.retry(id)} onClear={uploads.clearFinished} />
+            <AssetDetailDrawer asset={detailAsset} onClose={() => setDetailAsset(null)} onSave={assets.saveAsset} onDelete={assets.deleteAsset} onSubmitReview={submitReview} onRefreshReview={refreshReview} />
+
+            <Modal title="新建文件夹" open={folderModalOpen} okText="创建" cancelText="取消" onOk={() => void createFolder()} onCancel={() => setFolderModalOpen(false)} destroyOnHidden><Input autoFocus value={folderName} placeholder="文件夹名称" onPressEnter={() => void createFolder()} onChange={(event) => setFolderName(event.target.value)} /></Modal>
+            <Modal title="新建文本素材" open={textOpen} okText="创建" cancelText="取消" onOk={() => void createText()} onCancel={() => setTextOpen(false)} destroyOnHidden>
+                <Space direction="vertical" size={12} className="w-full"><Input value={textTitle} placeholder="名称" onChange={(event) => setTextTitle(event.target.value)} /><Input.TextArea value={textContent} rows={8} placeholder="文本内容" onChange={(event) => setTextContent(event.target.value)} /></Space>
             </Modal>
         </main>
     );
-}
-
-function assetTypeLabel(type: string) {
-    if (type === "image") return "图片";
-    if (type === "video") return "视频";
-    if (type === "audio") return "音频";
-    return "文本";
-}
-
-function volcengineStatusLabel(status?: string) {
-    if (status === "Active") return "已加白";
-    if (status === "Failed") return "审核失败";
-    if (status === "Processing") return "审核中";
-    return status || "未知";
-}
-
-function volcengineStatusColor(status?: string) {
-    if (status === "Active") return "success";
-    if (status === "Failed") return "error";
-    if (status === "Processing") return "processing";
-    return "default";
-}
-
-function adminAssetCover(asset: AdminAsset) {
-    if (asset.type === "image") return asset.coverUrl || asset.url || "/logo.svg";
-    return asset.coverUrl || "/logo.svg";
 }

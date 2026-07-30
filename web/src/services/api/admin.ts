@@ -336,6 +336,8 @@ export type AdminPromptQuery = {
 
 export type AdminAsset = {
     id: string;
+    projectId: string;
+    folderId: string;
     title: string;
     type: "text" | "image" | "video" | "audio";
     coverUrl: string;
@@ -344,6 +346,8 @@ export type AdminAsset = {
     description: string;
     content: string;
     url: string;
+    episodeNumbers: string[];
+    allEpisodes: boolean;
     volcengineAssetId?: string;
     volcengineGroupId?: string;
     volcengineProjectName?: string;
@@ -356,13 +360,31 @@ export type AdminAsset = {
     updatedAt: string;
 };
 
-export type AdminAssetUploadResult = {
-    type: AdminAsset["type"];
-    url: string;
-    coverUrl: string;
-    mimeType: string;
-    bytes: number;
-    filename: string;
+export type AdminAssetProject = {
+    id: string;
+    name: string;
+    assetCount: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type AdminAssetFolder = {
+    id: string;
+    projectId: string;
+    parentId: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type AdminAssetBatchUpdate = {
+    ids: string[];
+    projectId: string;
+    folderId?: string;
+    category?: string;
+    tags?: string[];
+    episodeNumbers?: string[];
+    allEpisodes?: boolean;
 };
 
 export type AdminAssetListResponse = {
@@ -391,6 +413,12 @@ export type AdminAssetQuery = {
     keyword?: string;
     type?: string;
     tag?: string[];
+    category?: string;
+    projectId?: string;
+    folderId?: string;
+    folderScope?: "current" | "project";
+    episodeNumber?: string;
+    allEpisodes?: string;
     page?: number;
     pageSize?: number;
 };
@@ -403,10 +431,47 @@ export async function saveAdminAsset(token: string, asset: Partial<AdminAsset>) 
     return apiPost<AdminAsset>("/api/admin/assets", asset, token);
 }
 
-export async function uploadAdminAssetMedia(token: string, file: File) {
+export async function fetchAdminAssetProjects(token: string) {
+    return apiGet<AdminAssetProject[]>("/api/admin/asset-projects", undefined, token);
+}
+
+export async function saveAdminAssetProject(token: string, project: Partial<AdminAssetProject>) {
+    if (project.id) return apiPatch<AdminAssetProject>(`/api/admin/asset-projects/${encodeURIComponent(project.id)}`, project, token);
+    return apiPost<AdminAssetProject>("/api/admin/asset-projects", project, token);
+}
+
+export async function deleteAdminAssetProject(token: string, id: string) {
+    return apiDelete<boolean>(`/api/admin/asset-projects/${encodeURIComponent(id)}`, token);
+}
+
+export async function fetchAdminAssetFolders(token: string, projectId: string) {
+    return apiGet<AdminAssetFolder[]>(`/api/admin/asset-projects/${encodeURIComponent(projectId)}/folders`, undefined, token);
+}
+
+export async function saveAdminAssetFolder(token: string, folder: Partial<AdminAssetFolder> & { projectId: string }) {
+    const base = `/api/admin/asset-projects/${encodeURIComponent(folder.projectId)}/folders`;
+    if (folder.id) return apiPatch<AdminAssetFolder>(`${base}/${encodeURIComponent(folder.id)}`, folder, token);
+    return apiPost<AdminAssetFolder>(base, folder, token);
+}
+
+export async function deleteAdminAssetFolder(token: string, projectId: string, folderId: string) {
+    return apiDelete<boolean>(`/api/admin/asset-projects/${encodeURIComponent(projectId)}/folders/${encodeURIComponent(folderId)}`, token);
+}
+
+export async function uploadAdminAssetMedia(token: string, projectId: string, folderId: string, file: File) {
     const form = new FormData();
     form.append("file", file);
-    return apiPostForm<AdminAssetUploadResult>("/api/admin/assets/upload", form, token);
+    form.append("projectId", projectId);
+    if (folderId) form.append("folderId", folderId);
+    return apiPostForm<AdminAsset>("/api/admin/assets/upload", form, token);
+}
+
+export async function batchUpdateAdminAssets(token: string, input: AdminAssetBatchUpdate) {
+    return apiPost<AdminAsset[]>("/api/admin/assets/batch-update", input, token);
+}
+
+export async function batchDeleteAdminAssets(token: string, projectId: string, ids: string[]) {
+    return apiPost<boolean>("/api/admin/assets/batch-delete", { projectId, ids }, token);
 }
 
 export async function submitAdminAssetVolcengineReview(token: string, id: string) {

@@ -12,6 +12,8 @@ const (
 // Asset 素材记录。
 type Asset struct {
 	ID                    string    `json:"id" gorm:"primaryKey"`
+	ProjectID             string    `json:"projectId" gorm:"index"`
+	FolderID              string    `json:"folderId" gorm:"index"`
 	Title                 string    `json:"title"`
 	Type                  AssetType `json:"type"`
 	CoverURL              string    `json:"coverUrl"`
@@ -20,6 +22,8 @@ type Asset struct {
 	Description           string    `json:"description"`
 	Content               string    `json:"content,omitempty"`
 	URL                   string    `json:"url,omitempty"`
+	EpisodeNumbers        []string  `json:"episodeNumbers" gorm:"serializer:json"`
+	AllEpisodes           bool      `json:"allEpisodes"`
 	VolcengineAssetID     string    `json:"volcengineAssetId,omitempty"`
 	VolcengineGroupID     string    `json:"volcengineGroupId,omitempty"`
 	VolcengineProjectName string    `json:"volcengineProjectName,omitempty"`
