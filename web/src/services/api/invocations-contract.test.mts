@@ -14,6 +14,7 @@ test("describes all shared Artifact and Invocation routes", () => {
     assert.deepEqual(invocationRequest.invocations(), { method: "GET", path: "/api/v1/invocations" });
     assert.deepEqual(invocationRequest.create(), { method: "POST", path: "/api/v1/invocations" });
     assert.deepEqual(invocationRequest.detail("inv/1 中"), { method: "GET", path: "/api/v1/invocations/inv%2F1%20%E4%B8%AD" });
+    assert.deepEqual(invocationRequest.poll("inv/1"), { method: "GET", path: "/api/v1/invocations/inv%2F1/poll" });
     assert.deepEqual(invocationRequest.repreflight("inv/1"), { method: "POST", path: "/api/v1/invocations/inv%2F1/repreflight" });
     assert.deepEqual(invocationRequest.confirm("inv/1"), { method: "POST", path: "/api/v1/invocations/inv%2F1/confirm" });
     assert.deepEqual(invocationRequest.cancel("inv/1"), { method: "POST", path: "/api/v1/invocations/inv%2F1/cancel" });
@@ -54,6 +55,7 @@ test("factory wires all routes to the correct authenticated adapters", async () 
     await client.createInvocation(invocation);
     await client.listInvocations({ project: "project-1", source: "direct", status: undefined, skillId: "", page: 3, pageSize: 20 });
     await client.getInvocation("inv/1 中");
+    await client.pollInvocation("inv/1", 17);
     await client.repreflightInvocation("inv/1", invocation);
     await client.confirmInvocation("inv/1", confirmation);
     await client.cancelInvocation("inv/1");
@@ -70,22 +72,23 @@ test("factory wires all routes to the correct authenticated adapters", async () 
         { helper: "POST", path: "/api/v1/invocations", body: invocation, token: "token-4" },
         { helper: "GET", path: "/api/v1/invocations", params: { project: "project-1", source: "direct", page: 3, pageSize: 20 }, token: "token-5" },
         { helper: "GET", path: "/api/v1/invocations/inv%2F1%20%E4%B8%AD", params: undefined, token: "token-6" },
-        { helper: "POST", path: "/api/v1/invocations/inv%2F1/repreflight", body: invocation, token: "token-7" },
-        { helper: "POST", path: "/api/v1/invocations/inv%2F1/confirm", body: confirmation, token: "token-8" },
-        { helper: "POST_EMPTY", path: "/api/v1/invocations/inv%2F1/cancel", token: "token-9" },
-        { helper: "POST_EMPTY", path: "/api/v1/invocations/inv%2F1/retry", token: "token-10" },
-        { helper: "POST", path: "/api/v1/invocations/inv%2F1/revalidate", body: correction, token: "token-11" },
-        { helper: "POST", path: "/api/v1/invocations/inv%2F1/review", body: review, token: "token-12" },
-        { helper: "POST", path: "/api/v1/invocations/inv%2F1/apply", body: apply, token: "token-13" },
-        { helper: "GET", path: "/api/v1/invocations/inv%2F1/events", params: { after: 17, limit: 25 }, token: "token-14" },
+        { helper: "GET", path: "/api/v1/invocations/inv%2F1/poll", params: { after: 17 }, token: "token-7" },
+        { helper: "POST", path: "/api/v1/invocations/inv%2F1/repreflight", body: invocation, token: "token-8" },
+        { helper: "POST", path: "/api/v1/invocations/inv%2F1/confirm", body: confirmation, token: "token-9" },
+        { helper: "POST_EMPTY", path: "/api/v1/invocations/inv%2F1/cancel", token: "token-10" },
+        { helper: "POST_EMPTY", path: "/api/v1/invocations/inv%2F1/retry", token: "token-11" },
+        { helper: "POST", path: "/api/v1/invocations/inv%2F1/revalidate", body: correction, token: "token-12" },
+        { helper: "POST", path: "/api/v1/invocations/inv%2F1/review", body: review, token: "token-13" },
+        { helper: "POST", path: "/api/v1/invocations/inv%2F1/apply", body: apply, token: "token-14" },
+        { helper: "GET", path: "/api/v1/invocations/inv%2F1/events", params: { after: 17, limit: 25 }, token: "token-15" },
     ]);
     assert.strictEqual(calls[0].body, artifact);
     assert.strictEqual(calls[3].body, invocation);
-    assert.strictEqual(calls[6].body, invocation);
-    assert.strictEqual(calls[7].body, confirmation);
-    assert.strictEqual(calls[10].body, correction);
-    assert.strictEqual(calls[11].body, review);
-    assert.strictEqual(calls[12].body, apply);
+    assert.strictEqual(calls[7].body, invocation);
+    assert.strictEqual(calls[8].body, confirmation);
+    assert.strictEqual(calls[11].body, correction);
+    assert.strictEqual(calls[12].body, review);
+    assert.strictEqual(calls[13].body, apply);
 });
 
 test("authenticated empty POST sends a zero-byte body", async () => {

@@ -177,6 +177,36 @@ func GetInvocationDetail(userID, invocationID string) (InvocationDetail, error) 
 	}, nil
 }
 
+func GetInvocationPoll(userID, invocationID string, after uint64) (InvocationPoll, error) {
+	userID, invocationID = strings.TrimSpace(userID), strings.TrimSpace(invocationID)
+	run, found, err := repository.GetUserInvocation(userID, invocationID)
+	if err != nil {
+		return InvocationPoll{}, err
+	}
+	if !found {
+		return InvocationPoll{}, repository.ErrInvocationNotFound
+	}
+	result := InvocationPoll{Run: invocationRunSummary(run), Events: []model.InvocationEvent{}, NextAfter: after}
+	if run.LatestAttempt > 0 {
+		attempt, found, err := repository.GetInvocationAttempt(userID, invocationID, run.LatestAttempt)
+		if err != nil {
+			return InvocationPoll{}, err
+		}
+		if found {
+			summary := invocationAttemptSummary(attempt)
+			result.Attempt = &summary
+		}
+	}
+	result.Events, err = repository.ListInvocationEvents(userID, invocationID, after, invocationDetailEventsLimit)
+	if err != nil {
+		return InvocationPoll{}, err
+	}
+	if len(result.Events) > 0 {
+		result.NextAfter = result.Events[len(result.Events)-1].ID
+	}
+	return result, nil
+}
+
 func SafeInvocationPreflight(snapshot InvocationPreflightSnapshot) InvocationPreflightResponse {
 	return InvocationPreflightResponse{
 		Run: invocationRunSummary(snapshot.Run), Revision: invocationRevisionSummary(snapshot.Revision),

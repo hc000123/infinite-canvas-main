@@ -12,6 +12,7 @@ export const {
     createInvocation,
     listInvocations,
     getInvocation,
+    pollInvocation,
     repreflightInvocation,
     confirmInvocation,
     cancelInvocation,

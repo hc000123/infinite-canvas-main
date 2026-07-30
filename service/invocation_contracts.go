@@ -304,6 +304,13 @@ type InvocationDetail struct {
 	ArtifactSetHash           string                          `json:"artifactSetHash"`
 }
 
+type InvocationPoll struct {
+	Run       InvocationRunSummary      `json:"run"`
+	Attempt   *InvocationAttemptSummary `json:"attempt,omitempty"`
+	Events    []model.InvocationEvent   `json:"events"`
+	NextAfter uint64                    `json:"nextAfter"`
+}
+
 type InvocationList struct {
 	Items    []InvocationRunSummary `json:"items"`
 	Total    int64                  `json:"total"`

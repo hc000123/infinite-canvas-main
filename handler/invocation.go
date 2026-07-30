@@ -49,6 +49,16 @@ func Invocation(w http.ResponseWriter, r *http.Request, id string) {
 	invocationResult(w, result, err)
 }
 
+func InvocationPoll(w http.ResponseWriter, r *http.Request, id string) {
+	user, ok := invocationUser(w, r)
+	if !ok {
+		return
+	}
+	after, _ := strconv.ParseUint(r.URL.Query().Get("after"), 10, 64)
+	result, err := service.GetInvocationPoll(user.ID, id, after)
+	invocationResult(w, result, err)
+}
+
 func RepreflightInvocation(w http.ResponseWriter, r *http.Request, id string) {
 	user, ok := invocationUser(w, r)
 	if !ok {
