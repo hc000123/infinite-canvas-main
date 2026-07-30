@@ -315,17 +315,24 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		})
 		return
 	}
-	copyResponse := copyAIResponse
+	responseTaskStatus := model.AITaskStatusCreated
+	copyResponse := copyAIResponseWithStart
 	if path == "/images/generations" || path == "/images/edits" {
-		copyResponse = func(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onSuccess ...func(int, []byte, string)) {
-			copyAIImageResponse(w, request, r.Context(), onFailure, onSuccess...)
+		copyResponse = func(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onResponseStart func(int, string), onSuccess ...func(int, []byte, string)) {
+			copyAIImageResponseWithStart(w, request, r.Context(), onFailure, onResponseStart, onSuccess...)
 		}
 	}
-	copyResponse(w, request, refundAndFailTask, func(_ int, payload []byte, responseContentType string) {
+	copyResponse(w, request, refundAndFailTask, func(_ int, responseContentType string) {
+		status := responseTaskStatus
+		if isAIEventStreamContentType(responseContentType) {
+			status = model.AITaskStatusRunning
+		}
+		writeAITaskHeaders(w, aiTask, consumeLogID, "", string(status))
+	}, func(_ int, payload []byte, responseContentType string) {
 		if err := service.MarkAITaskSucceeded(aiTask.ID, payload, responseContentType); err != nil {
 			log.Printf("AI proxy mark task succeeded failed: task=%s err=%v", aiTask.ID, err)
 		}
-		writeAITaskHeaders(w, aiTask, consumeLogID, "", string(model.AITaskStatusSucceeded))
+		responseTaskStatus = model.AITaskStatusSucceeded
 	})
 }
 
@@ -852,18 +859,26 @@ func doAIHTTPRequest(client *http.Client, request *http.Request) (*http.Response
 }
 
 func copyAIResponse(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onSuccess ...func(int, []byte, string)) {
-	copyAIResponseWithTransform(w, request, service.DoAIHTTPRequest, onFailure, nil, onSuccess...)
+	copyAIResponseWithStart(w, request, onFailure, nil, onSuccess...)
+}
+
+func copyAIResponseWithStart(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onResponseStart func(int, string), onSuccess ...func(int, []byte, string)) {
+	copyAIResponseWithTransform(w, request, service.DoAIHTTPRequest, onFailure, onResponseStart, nil, onSuccess...)
 }
 
 func copyAIImageResponse(w http.ResponseWriter, request *http.Request, ctx context.Context, onFailure func(string, []byte), onSuccess ...func(int, []byte, string)) {
-	copyAIResponseWithTransform(w, request, service.DoAIImageHTTPRequest, onFailure, func(payload []byte, _ string) ([]byte, error) {
+	copyAIImageResponseWithStart(w, request, ctx, onFailure, nil, onSuccess...)
+}
+
+func copyAIImageResponseWithStart(w http.ResponseWriter, request *http.Request, ctx context.Context, onFailure func(string, []byte), onResponseStart func(int, string), onSuccess ...func(int, []byte, string)) {
+	copyAIResponseWithTransform(w, request, service.DoAIImageHTTPRequest, onFailure, onResponseStart, func(payload []byte, _ string) ([]byte, error) {
 		return normalizeImageGenerationPayload(payload, func(rawURL string) ([]byte, string, error) {
 			return downloadGeneratedImage(ctx, rawURL)
 		})
 	}, onSuccess...)
 }
 
-func copyAIResponseWithTransform(w http.ResponseWriter, request *http.Request, doRequest func(*http.Request) (*http.Response, error), onFailure func(string, []byte), transform func([]byte, string) ([]byte, error), onSuccess ...func(int, []byte, string)) {
+func copyAIResponseWithTransform(w http.ResponseWriter, request *http.Request, doRequest func(*http.Request) (*http.Response, error), onFailure func(string, []byte), onResponseStart func(int, string), transform func([]byte, string) ([]byte, error), onSuccess ...func(int, []byte, string)) {
 	response, err := doRequest(request)
 	if err != nil {
 		log.Printf("AI proxy request failed: url=%s err=%v", safeLogRequestURL(request), err)
@@ -885,10 +900,39 @@ func copyAIResponseWithTransform(w http.ResponseWriter, request *http.Request, d
 		Fail(w, message)
 		return
 	}
+	contentType := response.Header.Get("Content-Type")
+	if transform == nil && isAIEventStreamContentType(contentType) {
+		copyAIResponseHeaders(w, response.Header)
+		if onResponseStart != nil {
+			onResponseStart(response.StatusCode, contentType)
+		}
+		w.WriteHeader(response.StatusCode)
+		collector := service.NewAIEventStreamCollector()
+		_, err := io.Copy(&aiEventStreamWriter{response: w, collector: collector}, response.Body)
+		if err != nil {
+			log.Printf("AI upstream stream interrupted: url=%s err=%v", safeLogRequestURL(request), err)
+			if onFailure != nil {
+				onFailure("AI 流式响应中断", []byte(collector.ArchiveJSON()))
+			}
+			return
+		}
+		if len(onSuccess) > 0 && onSuccess[0] != nil {
+			onSuccess[0](response.StatusCode, []byte(collector.ArchiveJSON()), "application/json")
+		}
+		return
+	}
 
-	payload, _ := io.ReadAll(response.Body)
+	payload, err := io.ReadAll(response.Body)
+	if err != nil {
+		log.Printf("AI upstream response read failed: url=%s err=%v", safeLogRequestURL(request), err)
+		if onFailure != nil {
+			onFailure("AI 接口请求失败", nil)
+		}
+		Fail(w, "AI 接口请求失败")
+		return
+	}
 	if transform != nil {
-		payload, err = transform(payload, response.Header.Get("Content-Type"))
+		payload, err = transform(payload, contentType)
 		if err != nil {
 			log.Printf("AI image archive failed: url=%s err=%v", safeLogRequestURL(request), err)
 			if onFailure != nil {
@@ -898,11 +942,37 @@ func copyAIResponseWithTransform(w http.ResponseWriter, request *http.Request, d
 			return
 		}
 		response.Header.Set("Content-Type", "application/json")
+		contentType = "application/json"
 	}
 	if len(onSuccess) > 0 && onSuccess[0] != nil {
-		onSuccess[0](response.StatusCode, payload, response.Header.Get("Content-Type"))
+		onSuccess[0](response.StatusCode, payload, contentType)
 	}
-	for key, values := range response.Header {
+	copyAIResponseHeaders(w, response.Header)
+	if onResponseStart != nil {
+		onResponseStart(response.StatusCode, contentType)
+	}
+	w.WriteHeader(response.StatusCode)
+	_, _ = w.Write(payload)
+}
+
+type aiEventStreamWriter struct {
+	response  http.ResponseWriter
+	collector *service.AIEventStreamCollector
+}
+
+func (writer *aiEventStreamWriter) Write(payload []byte) (int, error) {
+	written, err := writer.response.Write(payload)
+	if written > 0 {
+		_, _ = writer.collector.Write(payload[:written])
+		if flusher, ok := writer.response.(http.Flusher); ok {
+			flusher.Flush()
+		}
+	}
+	return written, err
+}
+
+func copyAIResponseHeaders(w http.ResponseWriter, headers http.Header) {
+	for key, values := range headers {
 		if strings.EqualFold(key, "Content-Length") {
 			continue
 		}
@@ -910,8 +980,14 @@ func copyAIResponseWithTransform(w http.ResponseWriter, request *http.Request, d
 			w.Header().Add(key, value)
 		}
 	}
-	w.WriteHeader(response.StatusCode)
-	_, _ = w.Write(payload)
+}
+
+func isAIEventStreamContentType(contentType string) bool {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err == nil {
+		return strings.EqualFold(mediaType, "text/event-stream")
+	}
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(contentType)), "text/event-stream")
 }
 
 func normalizeImageGenerationPayload(payload []byte, resolve func(string) ([]byte, string, error)) ([]byte, error) {
