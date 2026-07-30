@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { useScriptStore } from "@/app/(user)/canvas/stores/use-script-store";
@@ -8,11 +8,12 @@ import { buildEpisodeScriptSnapshot } from "@/app/(user)/canvas/utils/canvas-epi
 import { orderedScriptScenes } from "@/app/(user)/canvas/utils/script-management";
 import { useCreativeProjectStore } from "@/app/(user)/projects/use-creative-project-store";
 import { useVideoPackageStore } from "@/app/(user)/video/use-video-package-store";
-import { ensureWorkflowRun, getWorkflowRun, getWorkflowWorkerHealth, listWorkflowEvents, type RemoteWorkflowEvent, type RemoteWorkflowRunDetail, type WorkflowWorkerHealth } from "@/services/api/workflow-runs";
+import { ensureWorkflowRun, getWorkflowRun, pollWorkflowRun, type RemoteWorkflowEvent, type RemoteWorkflowRunDetail, type WorkflowRunPoll, type WorkflowWorkerHealth } from "@/services/api/workflow-runs";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
 import { normalizeWorkflowRouteState, workflowRouteSearch, type WorkflowStageKey } from "./workflow-route-state";
+import { appendWorkflowEvents, workflowPollNeedsDetail } from "./workflow-poll-state";
 import { summarizeWorkflowStages } from "./workflow-stage-summary";
 import type { WorkflowStageView } from "./workflow-view-types";
 
@@ -31,6 +32,10 @@ export function useWorkflowWorkbench(projectId: string, episodeId: string) {
     const [events, setEvents] = useState<RemoteWorkflowEvent[]>([]);
     const [remoteLoading, setRemoteLoading] = useState(false);
     const [remoteError, setRemoteError] = useState("");
+    const detailRef = useRef<RemoteWorkflowRunDetail | null>(null);
+    const eventCursorRef = useRef(0);
+    const pollPendingRef = useRef(false);
+    const detailRefreshPendingRef = useRef(false);
 
     const episodeScenes = useMemo(() => orderedScriptScenes(scenes, episodeId), [episodeId, scenes]);
     const scriptSnapshot = useMemo(() => (episode ? buildEpisodeScriptSnapshot(episode, episodeScenes) : ""), [episode, episodeScenes]);
@@ -44,20 +49,61 @@ export function useWorkflowWorkbench(projectId: string, episodeId: string) {
     );
     const selectedPackage = packages.find((item) => item.id === routeState.shot) || packages[0] || null;
 
-    const refreshRemote = useCallback(async (runId?: string) => {
+    const commitDetail = useCallback((nextDetail: RemoteWorkflowRunDetail) => {
+        detailRef.current = nextDetail;
+        setDetail(nextDetail);
+    }, []);
+
+    const applyPoll = useCallback((current: RemoteWorkflowRunDetail, poll: WorkflowRunPoll) => {
+        const stages = new Map(poll.stages.map((stage) => [stage.stageId, stage]));
+        commitDetail({
+            ...current,
+            run: { ...current.run, status: poll.status, updatedAt: poll.updatedAt },
+            stages: current.stages.map((stage) => {
+                const next = stages.get(stage.stageId);
+                return next ? { ...stage, status: next.status, attempt: next.attempt, errorMessage: next.errorMessage, updatedAt: next.updatedAt } : stage;
+            }),
+        });
+    }, [commitDetail]);
+
+    const refreshRemote = useCallback(async (runId?: string, initialDetail?: RemoteWorkflowRunDetail) => {
+        if (!runId) return;
         try {
-            const [nextHealth, nextDetail] = await Promise.all([getWorkflowWorkerHealth(), runId ? getWorkflowRun(runId) : Promise.resolve(null)]);
-            setHealth(nextHealth);
-            if (nextDetail) {
-                setDetail(nextDetail);
-                const nextEvents = await listWorkflowEvents(nextDetail.run.id, 0, 80);
-                setEvents(nextEvents);
-            }
+            const [nextDetail, poll] = await Promise.all([initialDetail ? Promise.resolve(initialDetail) : getWorkflowRun(runId), pollWorkflowRun(runId, 0)]);
+            commitDetail(nextDetail);
+            setHealth(poll.worker);
+            setEvents(poll.events);
+            eventCursorRef.current = poll.nextAfter;
+            detailRefreshPendingRef.current = false;
             setRemoteError("");
         } catch (error) {
             setRemoteError(error instanceof Error ? error.message : "工作流状态读取失败");
         }
-    }, []);
+    }, [commitDetail]);
+
+    const pollRemote = useCallback(async (runId: string) => {
+        const current = detailRef.current;
+        if (!current || pollPendingRef.current) return;
+        pollPendingRef.current = true;
+        try {
+            const poll = await pollWorkflowRun(runId, eventCursorRef.current);
+            setHealth(poll.worker);
+            setEvents((existing) => appendWorkflowEvents(existing, poll.events));
+            eventCursorRef.current = poll.nextAfter;
+            const needsDetail = detailRefreshPendingRef.current || workflowPollNeedsDetail(current, poll);
+            applyPoll(current, poll);
+            if (needsDetail) {
+                detailRefreshPendingRef.current = true;
+                commitDetail(await getWorkflowRun(runId));
+                detailRefreshPendingRef.current = false;
+            }
+            setRemoteError("");
+        } catch (error) {
+            setRemoteError(error instanceof Error ? error.message : "工作流状态读取失败");
+        } finally {
+            pollPendingRef.current = false;
+        }
+    }, [applyPoll, commitDetail]);
 
     useEffect(() => {
         if (!projectHydrated || !scriptsHydrated || !project || !episode || !scriptSnapshot.trim() || !token) return;
@@ -66,8 +112,7 @@ export function useWorkflowWorkbench(projectId: string, episodeId: string) {
         ensureWorkflowRun({ episodeId, projectId, scriptConfirmed: true, scriptSnapshot })
             .then(async (nextDetail) => {
                 if (cancelled) return;
-                setDetail(nextDetail);
-                await refreshRemote(nextDetail.run.id);
+                await refreshRemote(nextDetail.run.id, nextDetail);
             })
             .catch((error) => {
                 if (!cancelled) setRemoteError(error instanceof Error ? error.message : "工作流创建失败");
@@ -83,9 +128,18 @@ export function useWorkflowWorkbench(projectId: string, episodeId: string) {
     const hasActiveRemoteStage = detail?.stages.some((stage) => ["queued", "running", "cancel_requested"].includes(stage.status));
     useEffect(() => {
         if (!detail?.run.id || !hasActiveRemoteStage) return;
-        const timer = window.setInterval(() => void refreshRemote(detail.run.id), document.hidden ? 6000 : 2000);
-        return () => window.clearInterval(timer);
-    }, [detail?.run.id, hasActiveRemoteStage, refreshRemote]);
+        let cancelled = false;
+        let timer = 0;
+        const tick = async () => {
+            await pollRemote(detail.run.id);
+            if (!cancelled) timer = window.setTimeout(() => void tick(), document.hidden ? 6000 : 2000);
+        };
+        timer = window.setTimeout(() => void tick(), document.hidden ? 6000 : 2000);
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
+    }, [detail?.run.id, hasActiveRemoteStage, pollRemote]);
 
     useEffect(() => {
         const normalized = workflowRouteSearch(routeState);
