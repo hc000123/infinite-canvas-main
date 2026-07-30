@@ -6,6 +6,7 @@ import (
 
 	"github.com/basketikun/infinite-canvas/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var errCreditBalanceChanged = errors.New("credit balance changed")
@@ -116,13 +117,13 @@ func ChangeUserRole(input model.AdminRoleChangeInput) (model.User, error) {
 	var target model.User
 	err = db.Transaction(func(tx *gorm.DB) error {
 		var actor model.User
-		if err := tx.Where("id = ? AND role = ? AND status = ?", input.ActorID, model.UserRoleSuperAdmin, model.UserStatusActive).First(&actor).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND role = ? AND status = ?", input.ActorID, model.UserRoleSuperAdmin, model.UserStatusActive).First(&actor).Error; err != nil {
 			return err
 		}
 		if input.ActorID == input.TargetID {
 			return errors.New("不能修改自己的管理员角色")
 		}
-		if err := tx.Where("id = ? AND role = ?", input.TargetID, input.FromRole).First(&target).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND role = ?", input.TargetID, input.FromRole).First(&target).Error; err != nil {
 			return err
 		}
 		result := tx.Model(&model.User{}).Where("id = ? AND role = ?", input.TargetID, input.FromRole).Updates(map[string]any{"role": input.ToRole, "updated_at": input.UpdatedAt})
