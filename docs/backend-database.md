@@ -144,7 +144,7 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 | `updated_at`    | string | 更新时间                                             |
 | `ip_approval_enabled` | bool | 普通用户是否启用登录 IP 审批；管理员角色不受此限制 |
 
-`superadmin` 可管理管理员账号；普通 `admin` 只能管理 `user`。系统禁止超级管理员修改或删除自己，也禁止降级、禁用或删除最后一个有效超级管理员。只有 `superadmin` 调用 AI 时不校验或扣减 `credits`，任务仍保留本次折算用量；普通 `admin` 与 `user` 均持有并消耗真实余额。
+`superadmin` 可管理管理员账号；普通 `admin` 只能管理 `user`。超级管理员可执行 `user → admin` 和 `admin → user` 角色转换；转换事务只更新 `role` 与 `updated_at`，账号 ID、密码哈希、资料、算力余额、IP 策略以及关联的用量、流水、操作和登录记录全部保留，并在同一事务写入 `security.admin_role_changed` 安全审计。系统禁止超级管理员修改或删除自己，也禁止降级、禁用或删除最后一个有效超级管理员。只有 `superadmin` 调用 AI 时不校验或扣减 `credits`，任务仍保留本次折算用量；普通 `admin` 与 `user` 均持有并消耗真实余额。
 
 ### user_activity_logs
 
@@ -161,6 +161,8 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 | `user_agent` | 截断后的设备信息 |
 | `client_event_id` | 每用户幂等事件 ID；服务端事件使用内部 ID |
 | `created_at` | 发生时间 |
+
+角色转换审计归属发生转换的目标账号，`metadata` 记录 `actorId`、`fromRole` 和 `toRole`；请求 IP、会话和设备信息由服务端上下文写入。角色更新或审计写入失败时整个事务回滚。
 
 ### user_allowed_ips
 
