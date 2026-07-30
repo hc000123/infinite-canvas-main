@@ -105,6 +105,37 @@ func UpdatePrivilegedUser(actorID string, target model.User, removesActiveSuperA
 	return target, err
 }
 
+func ChangeUserRole(input model.AdminRoleChangeInput) (model.User, error) {
+	db, err := DB()
+	if err != nil {
+		return model.User{}, err
+	}
+	var target model.User
+	err = db.Transaction(func(tx *gorm.DB) error {
+		var actor model.User
+		if err := tx.Where("id = ? AND role = ? AND status = ?", input.ActorID, model.UserRoleSuperAdmin, model.UserStatusActive).First(&actor).Error; err != nil {
+			return err
+		}
+		if input.ActorID == input.TargetID {
+			return errors.New("不能修改自己的管理员角色")
+		}
+		if err := tx.Where("id = ? AND role = ?", input.TargetID, input.FromRole).First(&target).Error; err != nil {
+			return err
+		}
+		result := tx.Model(&model.User{}).Where("id = ? AND role = ?", input.TargetID, input.FromRole).Updates(map[string]any{"role": input.ToRole, "updated_at": input.UpdatedAt})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return errors.New("账号角色已变化，请刷新后重试")
+		}
+		target.Role = input.ToRole
+		target.UpdatedAt = input.UpdatedAt
+		return tx.Create(&input.Activity).Error
+	})
+	return target, err
+}
+
 func DeletePrivilegedUser(actorID string, targetID string) error {
 	db, err := DB()
 	if err != nil {

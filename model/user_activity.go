@@ -41,6 +41,7 @@ const (
 	ActivityActionCreditAdjusted   ActivityAction   = "credit.adjusted"
 	ActivityActionAdminCreated     ActivityAction   = "security.admin_created"
 	ActivityActionAdminUpdated     ActivityAction   = "security.admin_updated"
+	ActivityActionAdminRoleChanged ActivityAction   = "security.admin_role_changed"
 	ActivityActionAdminDeleted     ActivityAction   = "security.admin_deleted"
 	ActivityActionApprovalCreated  ActivityAction   = "security.login_approval_created"
 	ActivityActionApprovalApproved ActivityAction   = "security.login_approval_approved"

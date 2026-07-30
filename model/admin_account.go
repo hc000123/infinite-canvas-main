@@ -17,3 +17,16 @@ type AdminAccountUpdate struct {
 type AdminAccountPassword struct {
 	Password string `json:"password"`
 }
+
+type AdminRoleChangeRequest struct {
+	Role UserRole `json:"role"`
+}
+
+type AdminRoleChangeInput struct {
+	ActorID   string
+	TargetID  string
+	FromRole  UserRole
+	ToRole    UserRole
+	UpdatedAt string
+	Activity  UserActivityLog
+}
