@@ -1,6 +1,6 @@
 "use client";
 
-import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, ThunderboltOutlined, UserAddOutlined, UserSwitchOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
 import { Avatar, Button, Card, Col, Flex, Form, Input, InputNumber, Modal, Row, Select, Space, Tag, Tooltip, Typography } from "antd";
 import dayjs from "dayjs";
@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 
 import type { AdminAccount, AdminAccountUpdate } from "@/services/api/admin";
 import { useUserStore } from "@/stores/use-user-store";
-import { adminAccountProtection, adminCreditDelta, adminCreditView, adminRoleLabels, adminStatusLabels } from "./admin-account-view";
+import { adminAccountProtection, adminCreditDelta, adminCreditView, adminRoleChangeCopy, adminRoleConversion, adminRoleLabels, adminStatusLabels } from "./admin-account-view";
 import { useAdminAccounts } from "./use-admin-accounts";
 
 type AccountForm = AdminAccountUpdate & { password?: string };
@@ -17,16 +17,24 @@ const statusOptions = Object.entries(adminStatusLabels).map(([value, label]) => 
 
 export default function AdminAccountsPage() {
     const actorId = useUserStore((state) => state.user?.id || "");
-    const { accounts, total, filters, isLoading, updateFilters, refresh, createAccount, updateAccount, resetPassword, adjustCredits, deleteAccount } = useAdminAccounts();
+    const [promotionOpen, setPromotionOpen] = useState(false);
+    const [promotionKeyword, setPromotionKeyword] = useState("");
+    const [promotionUserId, setPromotionUserId] = useState<string>();
+    const { accounts, promotionCandidates, total, filters, isLoading, candidateLoading, isChangingRole, updateFilters, refresh, createAccount, updateAccount, resetPassword, adjustCredits, changeRole, deleteAccount } = useAdminAccounts(
+        promotionOpen,
+        promotionKeyword,
+    );
     const [keyword, setKeyword] = useState(filters.keyword || "");
     const [editing, setEditing] = useState<AdminAccount | "create" | null>(null);
     const [passwordTarget, setPasswordTarget] = useState<AdminAccount | null>(null);
     const [deleting, setDeleting] = useState<AdminAccount | null>(null);
     const [creditTarget, setCreditTarget] = useState<AdminAccount | null>(null);
+    const [demoting, setDemoting] = useState<AdminAccount | null>(null);
     const [creditValue, setCreditValue] = useState(0);
     const [form] = Form.useForm<AccountForm>();
     const [passwordForm] = Form.useForm<{ password: string }>();
     const activeSuperAdminCount = accounts.filter((item) => item.role === "superadmin" && item.status === "active").length;
+    const promotionUser = promotionCandidates.find((item) => item.id === promotionUserId);
 
     useEffect(() => {
         if (!editing) return;
@@ -80,8 +88,14 @@ export default function AdminAccountsPage() {
             align: "right",
             render: (_, item) => {
                 const protection = adminAccountProtection(item, actorId, activeSuperAdminCount);
+                const conversion = adminRoleConversion(item);
                 return (
                     <Space size={2}>
+                        {conversion.visible ? (
+                            <Tooltip title={conversion.label}>
+                                <Button type="text" size="small" icon={<UserSwitchOutlined />} onClick={() => setDemoting(item)} />
+                            </Tooltip>
+                        ) : null}
                         {adminCreditView(item).adjustable ? (
                             <Tooltip title="调整算力">
                                 <Button
@@ -163,6 +177,9 @@ export default function AdminAccountsPage() {
                     }
                     options={{ density: true, setting: true, reload: () => void refresh() }}
                     toolBarRender={() => [
+                        <Button key="promote" icon={<UserAddOutlined />} onClick={() => setPromotionOpen(true)}>
+                            提升现有用户
+                        </Button>,
                         <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => setEditing("create")}>
                             新增管理员
                         </Button>,
@@ -170,6 +187,45 @@ export default function AdminAccountsPage() {
                     pagination={{ current: filters.page, pageSize: filters.pageSize, total, showSizeChanger: true, onChange: (page, nextPageSize) => updateFilters({ page, pageSize: nextPageSize }) }}
                 />
             </Flex>
+
+            <Modal
+                rootClassName="studio-modal"
+                title={adminRoleChangeCopy("admin").title}
+                open={promotionOpen}
+                confirmLoading={isChangingRole}
+                onCancel={() => {
+                    setPromotionOpen(false);
+                    setPromotionKeyword("");
+                    setPromotionUserId(undefined);
+                }}
+                onOk={async () => {
+                    if (!promotionUserId) return;
+                    await changeRole(promotionUserId, "admin");
+                    setPromotionOpen(false);
+                    setPromotionKeyword("");
+                    setPromotionUserId(undefined);
+                }}
+                okButtonProps={{ disabled: !promotionUserId }}
+                okText="确认提升"
+                cancelText="取消"
+                destroyOnHidden
+            >
+                <Flex vertical gap={14}>
+                    <Select
+                        showSearch
+                        filterOption={false}
+                        value={promotionUserId}
+                        placeholder="搜索并选择普通用户"
+                        notFoundContent={candidateLoading ? "搜索中..." : "未找到普通用户"}
+                        options={promotionCandidates.map((item) => ({ value: item.id, label: `${item.displayName || item.username}（${item.username} · ${item.credits} 算力点）` }))}
+                        onSearch={setPromotionKeyword}
+                        onChange={setPromotionUserId}
+                        style={{ width: "100%" }}
+                    />
+                    {promotionUser ? <Typography.Text>当前算力余额：{promotionUser.credits}</Typography.Text> : null}
+                    <Typography.Text type="secondary">{adminRoleChangeCopy("admin").warning}</Typography.Text>
+                </Flex>
+            </Modal>
 
             <Modal rootClassName="studio-modal" title={editing === "create" ? "新增管理员" : "编辑管理员"} open={Boolean(editing)} width={680} onCancel={() => setEditing(null)} onOk={() => void save()} okText="保存" cancelText="取消" destroyOnHidden>
                 <Form form={form} layout="vertical" requiredMark={false}>
@@ -208,6 +264,26 @@ export default function AdminAccountsPage() {
                         </Col>
                     </Row>
                 </Form>
+            </Modal>
+
+            <Modal
+                rootClassName="studio-modal"
+                title={adminRoleChangeCopy("user").title}
+                open={Boolean(demoting)}
+                confirmLoading={isChangingRole}
+                onCancel={() => setDemoting(null)}
+                onOk={async () => {
+                    if (!demoting) return;
+                    await changeRole(demoting.id, "user");
+                    setDemoting(null);
+                }}
+                okText="确认降级"
+                cancelText="取消"
+            >
+                <Flex vertical gap={8}>
+                    <Typography.Text>确定将「{demoting?.displayName || demoting?.username}」降为普通用户吗？</Typography.Text>
+                    <Typography.Text type="secondary">{adminRoleChangeCopy("user").warning}</Typography.Text>
+                </Flex>
             </Modal>
 
             <Modal
