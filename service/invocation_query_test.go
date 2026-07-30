@@ -164,6 +164,50 @@ func TestSafeInvocationPreflightSerializesEmptyCollectionsAsArrays(t *testing.T)
 	}
 }
 
+func TestGetInvocationPollReturnsOnlyLatestAttemptAndIncrementalEvents(t *testing.T) {
+	setupAITaskTestDB(t)
+	database, err := repository.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := model.InvocationRun{ID: "invocation-poll", UserID: "user-poll", Source: "direct", Status: model.InvocationStatusRunning, LatestRevision: 1, LatestAttempt: 2, CreatedAt: now(), UpdatedAt: now()}
+	if err := database.Create(&run).Error; err != nil {
+		t.Fatal(err)
+	}
+	attempts := []model.InvocationAttempt{
+		{ID: "attempt-poll-1", UserID: run.UserID, InvocationID: run.ID, Revision: 1, Attempt: 1, Status: "failed", CreatedAt: now(), UpdatedAt: now()},
+		{ID: "attempt-poll-2", UserID: run.UserID, InvocationID: run.ID, Revision: 1, Attempt: 2, Status: "running", Model: "text-test", CreatedAt: now(), UpdatedAt: now()},
+	}
+	if err := database.Create(&attempts).Error; err != nil {
+		t.Fatal(err)
+	}
+	events := []model.InvocationEvent{
+		{UserID: run.UserID, InvocationID: run.ID, Type: "attempt.started", Level: "info", Revision: 1, Attempt: 1, CreatedAt: now()},
+		{UserID: run.UserID, InvocationID: run.ID, Type: "attempt.failed", Level: "error", Revision: 1, Attempt: 1, CreatedAt: now()},
+		{UserID: run.UserID, InvocationID: run.ID, Type: "attempt.started", Level: "info", Revision: 1, Attempt: 2, CreatedAt: now()},
+	}
+	if err := database.Create(&events).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	poll, err := GetInvocationPoll(run.UserID, run.ID, events[0].ID)
+	if err != nil {
+		t.Fatalf("GetInvocationPoll returned error: %v", err)
+	}
+	if poll.Run.ID != run.ID || poll.Run.Status != model.InvocationStatusRunning {
+		t.Fatalf("run = %#v", poll.Run)
+	}
+	if poll.Attempt == nil || poll.Attempt.Attempt != 2 || poll.Attempt.Model != "text-test" {
+		t.Fatalf("attempt = %#v", poll.Attempt)
+	}
+	if len(poll.Events) != 2 || poll.Events[0].ID != events[1].ID || poll.NextAfter != events[2].ID {
+		t.Fatalf("events=%#v nextAfter=%d", poll.Events, poll.NextAfter)
+	}
+	if _, err := GetInvocationPoll("other-user", run.ID, 0); err == nil {
+		t.Fatal("foreign user read invocation poll")
+	}
+}
+
 func assertInvocationDetailRefs(t *testing.T, detail InvocationDetail, revision, inputAttempt int, forbiddenOutputID string) {
 	t.Helper()
 	if detail.EventsHasMore || detail.EventsNextAfter != 0 || detail.EventsLimit != invocationDetailEventsLimit {

@@ -289,6 +289,13 @@ export type InvocationDetail = InvocationEventsPage & {
     artifactSetHash: string;
 };
 
+export type InvocationPoll = {
+    run: InvocationRunSummary;
+    attempt?: InvocationAttemptSummary;
+    events: InvocationEvent[];
+    nextAfter: number;
+};
+
 export type InvocationConfirmation = {
     requirementCodes: string[];
 };
@@ -343,6 +350,7 @@ export const invocationRequest = {
     invocations: () => ({ method: "GET", path: "/api/v1/invocations" } as const),
     create: () => ({ method: "POST", path: "/api/v1/invocations" } as const),
     detail: (id: string) => ({ method: "GET", path: invocationPath(id) } as const),
+    poll: (id: string) => ({ method: "GET", path: `${invocationPath(id)}/poll` } as const),
     repreflight: (id: string) => ({ method: "POST", path: `${invocationPath(id)}/repreflight` } as const),
     confirm: (id: string) => ({ method: "POST", path: `${invocationPath(id)}/confirm` } as const),
     cancel: (id: string) => ({ method: "POST", path: `${invocationPath(id)}/cancel` } as const),
@@ -361,6 +369,7 @@ export function createInvocationClient({ apiGet, apiPost, apiPostEmpty, token }:
         createInvocation: (input: InvocationRequest) => apiPost<InvocationPreflightResponse>(invocationRequest.create().path, input, token()),
         listInvocations: (query: InvocationQuery = {}) => apiGet<InvocationList>(invocationRequest.invocations().path, compactApiParams({ ...query }), token()),
         getInvocation: (id: string) => apiGet<InvocationDetail>(invocationRequest.detail(id).path, undefined, token()),
+        pollInvocation: (id: string, after = 0) => apiGet<InvocationPoll>(invocationRequest.poll(id).path, compactApiParams({ after }), token()),
         repreflightInvocation: (id: string, input: InvocationRequest) => apiPost<InvocationPreflightResponse>(invocationRequest.repreflight(id).path, input, token()),
         confirmInvocation: (id: string, input: InvocationConfirmation) => apiPost<InvocationLifecycleResponse>(invocationRequest.confirm(id).path, input, token()),
         cancelInvocation: (id: string) => apiPostEmpty<InvocationLifecycleResponse>(invocationRequest.cancel(id).path, token()),

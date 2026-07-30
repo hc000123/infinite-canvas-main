@@ -77,6 +77,37 @@ func TestInvocationCreateReturnsPreflightWithoutStartingAttempt(t *testing.T) {
 	}
 }
 
+func TestInvocationPollReturnsIncrementalStatusAndRejectsForeignUser(t *testing.T) {
+	setupWorkflowHandlerTestDB(t)
+	database, err := repository.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := model.InvocationRun{ID: "invocation-handler-poll", UserID: "user-poll", Source: "direct", Status: model.InvocationStatusRunning, LatestRevision: 1, LatestAttempt: 1, CreatedAt: "2026-07-30T00:00:00Z", UpdatedAt: "2026-07-30T00:00:01Z"}
+	if err := database.Create(&run).Error; err != nil {
+		t.Fatal(err)
+	}
+	attempt := model.InvocationAttempt{ID: "attempt-handler-poll", UserID: run.UserID, InvocationID: run.ID, Status: "running", Revision: 1, Attempt: 1, CreatedAt: run.CreatedAt, UpdatedAt: run.UpdatedAt}
+	if err := database.Create(&attempt).Error; err != nil {
+		t.Fatal(err)
+	}
+	events := []model.InvocationEvent{{UserID: run.UserID, InvocationID: run.ID, Type: "queued", CreatedAt: run.CreatedAt}, {UserID: run.UserID, InvocationID: run.ID, Type: "running", CreatedAt: run.UpdatedAt}}
+	if err := database.Create(&events).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	owner := invocationHandlerRequest(http.MethodGet, fmt.Sprintf("/api/v1/invocations/%s/poll?after=%d", run.ID, events[0].ID), "", run.UserID)
+	InvocationPoll(owner.recorder, owner.request, run.ID)
+	if owner.recorder.Code != http.StatusOK || !strings.Contains(owner.recorder.Body.String(), `"type":"running"`) || strings.Contains(owner.recorder.Body.String(), `"type":"queued"`) {
+		t.Fatalf("owner poll=%s", owner.recorder.Body.String())
+	}
+	foreign := invocationHandlerRequest(http.MethodGet, "/api/v1/invocations/"+run.ID+"/poll", "", "other-user")
+	InvocationPoll(foreign.recorder, foreign.request, run.ID)
+	if !strings.Contains(foreign.recorder.Body.String(), `"code":1`) {
+		t.Fatalf("foreign poll=%s", foreign.recorder.Body.String())
+	}
+}
+
 func TestInvocationCreateAcceptsClientSourcesAndRejectsInternalUnknownTrailingAndOversizedBodies(t *testing.T) {
 	setupWorkflowHandlerTestDB(t)
 	for _, source := range []string{"direct", "image", "canvas_chat"} {

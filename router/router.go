@@ -145,6 +145,9 @@ func New() *gin.Engine {
 	})
 	v1.POST("/invocations", gin.WrapF(handler.CreateInvocation))
 	v1.GET("/invocations", gin.WrapF(handler.Invocations))
+	v1.GET("/invocations/:id/poll", func(c *gin.Context) {
+		handler.InvocationPoll(c.Writer, c.Request, c.Param("id"))
+	})
 	v1.GET("/invocations/:id", func(c *gin.Context) {
 		handler.Invocation(c.Writer, c.Request, c.Param("id"))
 	})
