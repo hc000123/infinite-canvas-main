@@ -60,6 +60,22 @@ func UpdateAdminAccount(w http.ResponseWriter, r *http.Request, id string) {
 	OK(w, item)
 }
 
+func ChangeAdminAccountRole(w http.ResponseWriter, r *http.Request, id string) {
+	var request model.AdminRoleChangeRequest
+	_ = json.NewDecoder(r.Body).Decode(&request)
+	actor, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	item, err := service.ChangeAdminAccountRole(r.Context(), actor, id, request.Role)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, item)
+}
+
 func ResetAdminAccountPassword(w http.ResponseWriter, r *http.Request, id string) {
 	var request model.AdminAccountPassword
 	_ = json.NewDecoder(r.Body).Decode(&request)

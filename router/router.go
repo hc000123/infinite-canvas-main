@@ -312,6 +312,9 @@ func New() *gin.Engine {
 	superAdmin.PATCH("/admins/:id", func(c *gin.Context) {
 		handler.UpdateAdminAccount(c.Writer, c.Request, c.Param("id"))
 	})
+	superAdmin.POST("/admins/:id/role", func(c *gin.Context) {
+		handler.ChangeAdminAccountRole(c.Writer, c.Request, c.Param("id"))
+	})
 	superAdmin.POST("/admins/:id/password", func(c *gin.Context) {
 		handler.ResetAdminAccountPassword(c.Writer, c.Request, c.Param("id"))
 	})

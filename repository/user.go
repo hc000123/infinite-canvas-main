@@ -110,6 +110,9 @@ func ChangeUserRole(input model.AdminRoleChangeInput) (model.User, error) {
 	if err != nil {
 		return model.User{}, err
 	}
+	if input.Activity.ClientEventID == "" {
+		input.Activity.ClientEventID = "server:" + input.Activity.ID
+	}
 	var target model.User
 	err = db.Transaction(func(tx *gorm.DB) error {
 		var actor model.User

@@ -158,13 +158,18 @@ func TestProjectSkillRoutesRequireAuth(t *testing.T) {
 func TestSuperAdminRoutesRequireSuperAdmin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	app := New()
-	recorder := httptest.NewRecorder()
-	app.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/admins", nil))
-	if recorder.Code == http.StatusNotFound {
-		t.Fatal("superadmin administrator route is missing")
-	}
-	if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
-		t.Fatalf("administrator route did not reach superadmin auth: %s", recorder.Body.String())
+	for _, item := range []struct{ method, path string }{
+		{http.MethodGet, "/api/admin/admins"},
+		{http.MethodPost, "/api/admin/admins/user-1/role"},
+	} {
+		recorder := httptest.NewRecorder()
+		app.ServeHTTP(recorder, httptest.NewRequest(item.method, item.path, nil))
+		if recorder.Code == http.StatusNotFound {
+			t.Fatalf("superadmin administrator route is missing: %s %s", item.method, item.path)
+		}
+		if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+			t.Fatalf("administrator route did not reach superadmin auth: %s", recorder.Body.String())
+		}
 	}
 }
 
