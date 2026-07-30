@@ -25,6 +25,7 @@ const labels: Record<string, string> = {
     "security.login_approval_created": "发起异地登录审批",
     "security.login_approval_approved": "批准异地登录",
     "security.login_approval_rejected": "拒绝异地登录",
+    "security.admin_role_changed": "管理员角色变更",
 };
 export function activityActionLabel(action: string) {
     return labels[action] || action || "未知操作";

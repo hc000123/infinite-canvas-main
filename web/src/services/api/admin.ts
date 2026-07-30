@@ -57,6 +57,10 @@ export async function updateAdminAccount(token: string, id: string, input: Admin
     return apiPatch<AdminAccount>(`/api/admin/admins/${encodeURIComponent(id)}`, input, token);
 }
 
+export async function changeAdminAccountRole(token: string, id: string, role: "admin" | "user") {
+    return apiPost<AdminUser>(`/api/admin/admins/${encodeURIComponent(id)}/role`, { role }, token);
+}
+
 export async function resetAdminAccountPassword(token: string, id: string, password: string) {
     return apiPost<boolean>(`/api/admin/admins/${encodeURIComponent(id)}/password`, { password }, token);
 }
