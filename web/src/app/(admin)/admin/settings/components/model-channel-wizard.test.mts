@@ -86,6 +86,7 @@ test("settings page removes the legacy channel drawer and embedded model selecto
 test("wizard persistence accepts the publication snapshot without rereading stale form state", () => {
     assert.match(pageSource, /publicModelChannel\?: AdminSettings\["public"\]\["modelChannel"\]/);
     assert.match(pageSource, /options\.publicModelChannel \|\| values\.public\.modelChannel/);
+    assert.match(pageSource, /filterWizardPublicationSnapshot/);
     assert.match(pageSource, /finishChannelWizard\(channel, publicModelChannel\)/);
     assert.match(pageSource, /persistChannels\(nextChannels, \{ publicModelChannel \}\)/);
 });
@@ -95,12 +96,12 @@ test("wizard discovery keeps the existing channel index and normalized draft", (
     assert.match(pageSource, /fetchChannelModels\(token, \{ index: editingChannelIndex \?\? undefined, channel: normalizeChannel\(channel\) \}\)/);
 });
 
-test("video-capable OpenAI channels use read-only connectivity detection", () => {
-    assert.match(pageSource, /channelVerificationMode\(testChannel\)/);
-    assert.match(pageSource, /verificationMode === "connectivity"/);
+test("page delegates verification orchestration and copy to executable helpers", () => {
+    assert.match(pageSource, /channelVerificationCopy/);
+    assert.match(pageSource, /runChannelVerification/);
     assert.match(pageSource, /fetchChannelModels\(token, \{ index: testChannelIndex, channel \}\)/);
     assert.match(pageSource, /连接与鉴权可用；未创建视频任务/);
-    assert.match(pageSource, /只读模型列表，不创建视频任务/);
+    assert.match(pageSource, /channelVerificationCopy\(item\)\.tableLabel/);
 });
 
 test("settings page keeps provider presets and channel table operations", () => {

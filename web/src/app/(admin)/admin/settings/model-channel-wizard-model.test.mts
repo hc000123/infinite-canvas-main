@@ -4,8 +4,11 @@ import test from "node:test";
 import {
     applyWizardPublication,
     buildWizardChannel,
+    channelVerificationCopy,
     channelVerificationMode,
+    filterWizardPublicationSnapshot,
     normalizeWizardModels,
+    runChannelVerification,
 } from "./model-channel-wizard-model.ts";
 import type { AdminModelChannel, AdminPublicModelChannelSettings } from "../../../../services/api/admin.ts";
 
@@ -191,4 +194,93 @@ test("渠道检测模式根据协议和视频能力选择", () => {
     assert.equal(channelVerificationMode(channel({ protocol: "jimeng-cli" })), "preflight");
     assert.equal(channelVerificationMode(channel({ protocol: "xinglian-cloud" })), "preflight");
     assert.equal(channelVerificationMode(channel({ capabilities: ["text"] })), "model-test");
+});
+
+test("渠道检测文案覆盖三种模式并正确标记星链与 OpenAI 视频渠道", () => {
+    assert.deepEqual(channelVerificationCopy(channel({ protocol: "xinglian-cloud" })), {
+        tableLabel: "视频预检",
+        modalLabel: "视频预检",
+        actionLabel: "预检",
+        batchLabel: "批量预检",
+        description: "星链云只查询 API Key 对应账户余额，不创建视频任务或扣除额度。",
+    });
+    assert.deepEqual(channelVerificationCopy(channel({ capabilities: ["video"] })), {
+        tableLabel: "连接检测",
+        modalLabel: "连接检测",
+        actionLabel: "检测",
+        batchLabel: "批量检测",
+        description: "连接检测只读模型列表，不创建视频任务、不扣视频额度。",
+    });
+    assert.deepEqual(channelVerificationCopy(channel({ capabilities: ["text"] })), {
+        tableLabel: "模型测试",
+        modalLabel: "模型测试",
+        actionLabel: "测试",
+        batchLabel: "批量测试",
+        description: "测试会向选中模型发送一条 hi，用于确认渠道是否有响应。",
+    });
+});
+
+test("连接检测批量只连接一次且绝不测试模型", async () => {
+    let connectCalls = 0;
+    let testCalls = 0;
+
+    const result = await runChannelVerification(channel({ capabilities: ["video"] }), ["video-a", "video-b"], {
+        connect: async () => { connectCalls += 1; return "connected"; },
+        testModel: async (model) => { testCalls += 1; return model; },
+    });
+
+    assert.equal(connectCalls, 1);
+    assert.equal(testCalls, 0);
+    assert.deepEqual(result.map(({ model, status, message }) => ({ model, status, message })), [
+        { model: "video-a", status: "success", message: "connected" },
+        { model: "video-b", status: "success", message: "connected" },
+    ]);
+});
+
+test("视频预检与普通模型测试逐模型调用测试回调", async () => {
+    const tested: string[] = [];
+    let connectCalls = 0;
+    const actions = {
+        connect: async () => { connectCalls += 1; return "connected"; },
+        testModel: async (model: string) => { tested.push(model); return `${model}:ok`; },
+    };
+
+    const preflight = await runChannelVerification(channel({ protocol: "volcengine-ark" }), ["ark-a", "ark-b"], actions);
+    const modelTest = await runChannelVerification(channel({ capabilities: ["text"] }), ["text-a", "text-b"], actions);
+
+    assert.equal(connectCalls, 0);
+    assert.deepEqual(tested, ["ark-a", "ark-b", "text-a", "text-b"]);
+    assert.deepEqual([...preflight, ...modelTest].map(({ model, status, message }) => ({ model, status, message })), [
+        { model: "ark-a", status: "success", message: "ark-a:ok" },
+        { model: "ark-b", status: "success", message: "ark-b:ok" },
+        { model: "text-a", status: "success", message: "text-a:ok" },
+        { model: "text-b", status: "success", message: "text-b:ok" },
+    ]);
+});
+
+test("公开配置快照只过滤不可用模型和文本端点并保留 override 其余字段", () => {
+    const override = publication({
+        availableModels: ["text-a", "image-a", "video-a", "gone"],
+        modelCosts: [{ model: "gone", credits: 9 }],
+        modelTextEndpoints: [
+            { model: "text-a", endpointType: "responses" },
+            { model: "gone", endpointType: "chat_completions" },
+        ],
+        modelProtocols: [{ model: "text-a", protocol: "openai" }],
+        modelCapabilities: [{ model: "text-a", capabilities: ["text"] }],
+        modelSources: [{ model: "text-a", channelId: "channel-a", channelName: "Channel A", protocol: "openai" }],
+        defaultTextModel: "text-a",
+        defaultImageModel: "image-a",
+        defaultVideoModel: "video-a",
+        systemPrompt: "override prompt",
+        allowCustomChannel: false,
+    });
+
+    const result = filterWizardPublicationSnapshot(override, ["text-a", "image-a", "video-a"], ["text-a"]);
+
+    assert.deepEqual(result, {
+        ...override,
+        availableModels: ["text-a", "image-a", "video-a"],
+        modelTextEndpoints: [{ model: "text-a", endpointType: "responses" }],
+    });
 });

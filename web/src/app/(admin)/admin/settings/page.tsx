@@ -10,7 +10,7 @@ import { EditorView } from "@uiw/react-codemirror";
 import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind";
 import { ModelChannelWizard } from "./components/model-channel-wizard";
 import { ProviderPresetModal } from "./components/provider-preset-modal";
-import { channelVerificationMode } from "./model-channel-wizard-model";
+import { channelVerificationCopy, filterWizardPublicationSnapshot, runChannelVerification } from "./model-channel-wizard-model";
 import type { ModelChannelPresetResult } from "./model-channel-presets";
 import {
     fetchAdminSettings,
@@ -338,93 +338,59 @@ export default function AdminSettingsPage() {
     };
 
     const testChannel = testChannelIndex === null ? null : normalizeChannel(channels[testChannelIndex]);
-    const verificationMode = testChannel ? channelVerificationMode(testChannel) : "model-test";
+    const verificationCopy = channelVerificationCopy(testChannel || emptyChannel);
 
-    const verifyChannelConnectivity = async (models: string[]) => {
+    const verifyModelsOnline = async (models: string[]) => {
         if (testChannelIndex === null || !token) return;
         const channel = normalizeChannel(channels[testChannelIndex]);
-        setTestingModels((current) => uniqueModels([...current, ...models]));
-        const startedAt = performance.now();
+        const selectedModels = uniqueModels(models);
+        setTestingModels((current) => uniqueModels([...current, ...selectedModels]));
         try {
-            await fetchChannelModels(token, { index: testChannelIndex, channel });
-            const duration = `${((performance.now() - startedAt) / 1000).toFixed(2)}s`;
-            setTestResults((current) => {
-                const next = { ...current };
-                models.forEach((model) => { next[model] = { status: "success", duration, message: "连接与鉴权可用；未创建视频任务" }; });
-                return next;
+            const results = await runChannelVerification(channel, selectedModels, {
+                connect: async () => {
+                    await fetchChannelModels(token, { index: testChannelIndex, channel });
+                    return "连接与鉴权可用；未创建视频任务";
+                },
+                testModel: (model) => testChannelModel(token, { index: testChannelIndex, channel, model }),
             });
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "连接检测失败";
             setTestResults((current) => {
                 const next = { ...current };
-                models.forEach((model) => { next[model] = { status: "error", message: errorMessage }; });
+                results.forEach((result) => {
+                    next[result.model] = result.status === "success"
+                        ? { status: "success", duration: `${(result.durationMs / 1000).toFixed(2)}s`, message: result.message || "检测成功" }
+                        : { status: "error", message: result.error instanceof Error ? result.error.message : `${verificationCopy.actionLabel}失败` };
+                });
                 return next;
             });
         } finally {
-            const testedModels = new Set(models);
+            const testedModels = new Set(selectedModels);
             setTestingModels((current) => current.filter((item) => !testedModels.has(item)));
         }
     };
 
     const testModelOnline = async (model: string) => {
-        if (testChannelIndex === null) return;
-        if (!token) return;
-        if (verificationMode === "connectivity") {
-            await verifyChannelConnectivity([model]);
-            return;
-        }
-        const channel = normalizeChannel(channels[testChannelIndex]);
-        setTestingModels((current) => [...current, model]);
-        try {
-            const startedAt = performance.now();
-            const result = await testChannelModel(token, { index: testChannelIndex, channel, model });
-            setTestResults((current) => ({ ...current, [model]: { status: "success", duration: `${((performance.now() - startedAt) / 1000).toFixed(2)}s`, message: result } }));
-        } catch (error) {
-            setTestResults((current) => ({ ...current, [model]: { status: "error", message: error instanceof Error ? error.message : "测试失败" } }));
-        } finally {
-            setTestingModels((current) => current.filter((item) => item !== model));
-        }
+        await verifyModelsOnline([model]);
     };
 
     const batchTestModels = async () => {
-        if (verificationMode === "connectivity") {
-            await verifyChannelConnectivity(selectedTestModels);
-            return;
-        }
-        for (const model of selectedTestModels) {
-            await testModelOnline(model);
-        }
+        await verifyModelsOnline(selectedTestModels);
     };
 
     const testModels = visibleChannelModels(testChannel?.models || []).filter((model) => model.toLowerCase().includes(testKeyword.trim().toLowerCase()));
-    const verificationLabel = verificationMode === "connectivity" ? "连接检测" : verificationMode === "preflight" ? "视频预检" : "模型测试";
-    const verificationActionLabel = verificationMode === "connectivity" ? "检测" : verificationMode === "preflight" ? "预检" : "测试";
-    const verificationDescription = verificationMode === "connectivity"
-        ? "连接检测只读模型列表，不创建视频任务、不扣视频额度。"
-        : testChannel?.protocol === "volcengine-ark"
-          ? "企业 Ark / Seedance 只验证 API Key、Base URL 和模型到火山 Endpoint / EP 的映射，不创建视频任务或扣除额度。"
-          : testChannel?.protocol === "jimeng-cli"
-            ? "即梦 CLI 只检查 CLI 安装、登录态、输出目录和模型版本，不创建视频任务或扣除额度。"
-            : testChannel?.protocol === "xinglian-cloud"
-              ? "星链云只查询 API Key 对应账户余额，不创建视频任务或扣除额度。"
-              : "测试会向选中模型发送一条 hi，用于确认渠道是否有响应。";
 
     async function persistChannels(nextChannels: AdminModelChannel[], options: { silent?: boolean; publicModelChannel?: AdminSettings["public"]["modelChannel"] } = {}) {
         if (!token) return;
         const values = normalizeSettings(form.getFieldsValue(true) as AdminSettings);
         const nextChannelModels = collectChannelModels(nextChannels);
         const nextPublicModelChannel = options.publicModelChannel || values.public.modelChannel;
-        const availableModels = filterModels(nextPublicModelChannel.availableModels, nextChannelModels);
+        const nextPublicSnapshot = filterWizardPublicationSnapshot(
+            nextPublicModelChannel,
+            nextChannelModels,
+            filterModelsByCapability(nextPublicModelChannel.availableModels, nextChannels, "text"),
+        );
         const nextSettings = normalizeSettings({
             ...values,
-            public: {
-                ...values.public,
-                modelChannel: {
-                    ...nextPublicModelChannel,
-                    availableModels,
-                    modelTextEndpoints: normalizeModelTextEndpoints(nextPublicModelChannel.modelTextEndpoints, filterModelsByCapability(availableModels, nextChannels, "text")),
-                },
-            },
+            public: { ...values.public, modelChannel: nextPublicSnapshot },
             private: { ...values.private, channels: nextChannels },
         });
         const saved = normalizeSettings(await saveAdminSettings(token, nextSettings));
@@ -782,7 +748,7 @@ export default function AdminSettingsPage() {
                                             render: (_, item) => (
                                                 <Space size={4}>
                                                     <Button size="small" onClick={() => openTestDialog(item._index)}>
-                                                        测试
+                                                        {channelVerificationCopy(item).tableLabel}
                                                     </Button>
                                                     <Button size="small" onClick={() => openChannelWizard(item._index)}>
                                                         编辑
@@ -841,7 +807,7 @@ export default function AdminSettingsPage() {
                     rootClassName="studio-modal"
                     title={
                         <Space>
-                            {testChannel?.name || "渠道"} 渠道的{verificationLabel}
+                            {testChannel?.name || "渠道"} 渠道的{verificationCopy.modalLabel}
                             <Typography.Text type="secondary">共 {visibleChannelModels(testChannel?.models || []).length} 个模型</Typography.Text>
                         </Space>
                     }
@@ -852,14 +818,14 @@ export default function AdminSettingsPage() {
                         <Space>
                             <Button onClick={closeTestDialog}>取消</Button>
                             <Button type="primary" disabled={!selectedTestModels.length || testingModels.length > 0} onClick={() => void batchTestModels()}>
-                                批量{verificationActionLabel} {selectedTestModels.length} 个模型
+                                {verificationCopy.batchLabel} {selectedTestModels.length} 个模型
                             </Button>
                         </Space>
                     }
                     destroyOnHidden
                 >
                     <Flex vertical gap={12}>
-                        <Typography.Text type="secondary">{verificationDescription}</Typography.Text>
+                        <Typography.Text type="secondary">{verificationCopy.description}</Typography.Text>
                         <Input.Search placeholder="搜索模型..." allowClear value={testKeyword} onChange={(event) => setTestKeyword(event.target.value)} />
                         <Table
                             rowKey="model"
@@ -877,7 +843,7 @@ export default function AdminSettingsPage() {
                                     dataIndex: "model",
                                     width: 260,
                                     render: (value) => {
-                                        if (testingModels.includes(value)) return <Tag icon={<LoadingOutlined className="animate-spin" />}>{verificationActionLabel}中</Tag>;
+                                        if (testingModels.includes(value)) return <Tag icon={<LoadingOutlined className="animate-spin" />}>{verificationCopy.actionLabel}中</Tag>;
                                         const result = testResults[value];
                                         if (!result) return <Tag>未开始</Tag>;
                                         return result.status === "success" ? (
@@ -898,7 +864,7 @@ export default function AdminSettingsPage() {
                                     align: "right",
                                     render: (_, item) => (
                                         <Button size="small" loading={testingModels.includes(item.model)} onClick={() => void testModelOnline(item.model)}>
-                                            {verificationActionLabel}
+                                            {verificationCopy.actionLabel}
                                         </Button>
                                     ),
                                 },

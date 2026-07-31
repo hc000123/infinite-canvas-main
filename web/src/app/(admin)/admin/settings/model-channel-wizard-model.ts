@@ -129,6 +129,90 @@ export function channelVerificationMode(channel: AdminModelChannel) {
     return channel.capabilities.some((capability) => capability.trim().toLowerCase() === "video") ? "connectivity" as const : "model-test" as const;
 }
 
+export function channelVerificationCopy(channel: AdminModelChannel) {
+    const mode = channelVerificationMode(channel);
+    if (mode === "connectivity") {
+        return {
+            tableLabel: "连接检测",
+            modalLabel: "连接检测",
+            actionLabel: "检测",
+            batchLabel: "批量检测",
+            description: "连接检测只读模型列表，不创建视频任务、不扣视频额度。",
+        };
+    }
+    if (mode === "model-test") {
+        return {
+            tableLabel: "模型测试",
+            modalLabel: "模型测试",
+            actionLabel: "测试",
+            batchLabel: "批量测试",
+            description: "测试会向选中模型发送一条 hi，用于确认渠道是否有响应。",
+        };
+    }
+    const description = channel.protocol === "volcengine-ark"
+        ? "企业 Ark / Seedance 只验证 API Key、Base URL 和模型到火山 Endpoint / EP 的映射，不创建视频任务或扣除额度。"
+        : channel.protocol === "jimeng-cli"
+          ? "即梦 CLI 只检查 CLI 安装、登录态、输出目录和模型版本，不创建视频任务或扣除额度。"
+          : "星链云只查询 API Key 对应账户余额，不创建视频任务或扣除额度。";
+    return {
+        tableLabel: "视频预检",
+        modalLabel: "视频预检",
+        actionLabel: "预检",
+        batchLabel: "批量预检",
+        description,
+    };
+}
+
+export type ChannelVerificationRunResult = {
+    model: string;
+    status: "success" | "error";
+    message?: string;
+    error?: unknown;
+    durationMs: number;
+};
+
+export async function runChannelVerification(
+    channel: AdminModelChannel,
+    models: string[],
+    actions: { connect: () => Promise<string>; testModel: (model: string) => Promise<string> },
+): Promise<ChannelVerificationRunResult[]> {
+    const selectedModels = normalizeWizardModels(models);
+    if (!selectedModels.length) return [];
+    if (channelVerificationMode(channel) === "connectivity") {
+        const startedAt = performance.now();
+        try {
+            const message = await actions.connect();
+            const durationMs = performance.now() - startedAt;
+            return selectedModels.map((model) => ({ model, status: "success", message, durationMs }));
+        } catch (error) {
+            const durationMs = performance.now() - startedAt;
+            return selectedModels.map((model) => ({ model, status: "error", error, durationMs }));
+        }
+    }
+    const results: ChannelVerificationRunResult[] = [];
+    for (const model of selectedModels) {
+        const startedAt = performance.now();
+        try {
+            results.push({ model, status: "success", message: await actions.testModel(model), durationMs: performance.now() - startedAt });
+        } catch (error) {
+            results.push({ model, status: "error", error, durationMs: performance.now() - startedAt });
+        }
+    }
+    return results;
+}
+
+export function filterWizardPublicationSnapshot(current: AdminPublicModelChannelSettings, enabledChannelModels: string[], textModels: string[]): AdminPublicModelChannelSettings {
+    const enabledModels = new Set(normalizeWizardModels(enabledChannelModels));
+    const availableModels = normalizeWizardModels(current.availableModels).filter((model) => enabledModels.has(model));
+    const availableModelSet = new Set(availableModels);
+    const textModelSet = new Set(normalizeWizardModels(textModels));
+    return {
+        ...current,
+        availableModels,
+        modelTextEndpoints: current.modelTextEndpoints.filter((item) => availableModelSet.has(item.model) && textModelSet.has(item.model)),
+    };
+}
+
 function buildArkMappings(mappings: Partial<AdminModelChannel["endpointMappings"][number]>[]) {
     const result: AdminModelChannel["endpointMappings"] = [];
     const seen = new Set<string>();
