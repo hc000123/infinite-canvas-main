@@ -10,7 +10,7 @@ import { EditorView } from "@uiw/react-codemirror";
 import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind";
 import { ModelChannelWizard } from "./components/model-channel-wizard";
 import { ProviderPresetModal } from "./components/provider-preset-modal";
-import { channelVerificationCopy, filterWizardPublicationSnapshot, runChannelVerification } from "./model-channel-wizard-model";
+import { channelVerificationCopy, createChannelVerificationCoordinator, filterWizardPublicationSnapshot, runChannelVerification } from "./model-channel-wizard-model";
 import type { ModelChannelPresetResult } from "./model-channel-presets";
 import {
     fetchAdminSettings,
@@ -103,6 +103,7 @@ export default function AdminSettingsPage() {
     const [isProviderPresetOpen, setIsProviderPresetOpen] = useState(false);
     const [isApplyingProviderPreset, setIsApplyingProviderPreset] = useState(false);
     const enterpriseVideoFocusRef = useRef<HTMLDivElement>(null);
+    const verificationCoordinatorRef = useRef(createChannelVerificationCoordinator());
     const [testChannelIndex, setTestChannelIndex] = useState<number | null>(null);
     const [testKeyword, setTestKeyword] = useState("");
     const [selectedTestModels, setSelectedTestModels] = useState<string[]>([]);
@@ -313,6 +314,7 @@ export default function AdminSettingsPage() {
     }
 
     const openTestDialog = (index: number) => {
+        verificationCoordinatorRef.current.reset();
         const channel = normalizeChannel(channels[index]);
         if (channel.protocol !== "jimeng-cli" && !channel.baseUrl) {
             message.warning("请先填写接口地址");
@@ -330,6 +332,7 @@ export default function AdminSettingsPage() {
     };
 
     const closeTestDialog = () => {
+        verificationCoordinatorRef.current.reset();
         setTestChannelIndex(null);
         setTestKeyword("");
         setSelectedTestModels([]);
@@ -344,6 +347,12 @@ export default function AdminSettingsPage() {
         if (testChannelIndex === null || !token) return;
         const channel = normalizeChannel(channels[testChannelIndex]);
         const selectedModels = uniqueModels(models);
+        const request = verificationCoordinatorRef.current.begin(testChannelIndex, channel, selectedModels);
+        if (!request) return;
+        if (!verificationCoordinatorRef.current.isCurrent(request, testChannelIndex, channel.id)) {
+            verificationCoordinatorRef.current.finish(request);
+            return;
+        }
         setTestingModels((current) => uniqueModels([...current, ...selectedModels]));
         try {
             const results = await runChannelVerification(channel, selectedModels, {
@@ -353,6 +362,7 @@ export default function AdminSettingsPage() {
                 },
                 testModel: (model) => testChannelModel(token, { index: testChannelIndex, channel, model }),
             });
+            if (!verificationCoordinatorRef.current.isCurrent(request, testChannelIndex, channel.id)) return;
             setTestResults((current) => {
                 const next = { ...current };
                 results.forEach((result) => {
@@ -363,8 +373,11 @@ export default function AdminSettingsPage() {
                 return next;
             });
         } finally {
-            const testedModels = new Set(selectedModels);
-            setTestingModels((current) => current.filter((item) => !testedModels.has(item)));
+            if (verificationCoordinatorRef.current.isCurrent(request, testChannelIndex, channel.id)) {
+                const testedModels = new Set(selectedModels);
+                setTestingModels((current) => current.filter((item) => !testedModels.has(item)));
+            }
+            verificationCoordinatorRef.current.finish(request);
         }
     };
 
@@ -381,13 +394,8 @@ export default function AdminSettingsPage() {
     async function persistChannels(nextChannels: AdminModelChannel[], options: { silent?: boolean; publicModelChannel?: AdminSettings["public"]["modelChannel"] } = {}) {
         if (!token) return;
         const values = normalizeSettings(form.getFieldsValue(true) as AdminSettings);
-        const nextChannelModels = collectChannelModels(nextChannels);
         const nextPublicModelChannel = options.publicModelChannel || values.public.modelChannel;
-        const nextPublicSnapshot = filterWizardPublicationSnapshot(
-            nextPublicModelChannel,
-            nextChannelModels,
-            filterModelsByCapability(nextPublicModelChannel.availableModels, nextChannels, "text"),
-        );
+        const nextPublicSnapshot = filterWizardPublicationSnapshot(nextPublicModelChannel, nextChannels);
         const nextSettings = normalizeSettings({
             ...values,
             public: { ...values.public, modelChannel: nextPublicSnapshot },

@@ -201,15 +201,61 @@ export async function runChannelVerification(
     return results;
 }
 
-export function filterWizardPublicationSnapshot(current: AdminPublicModelChannelSettings, enabledChannelModels: string[], textModels: string[]): AdminPublicModelChannelSettings {
-    const enabledModels = new Set(normalizeWizardModels(enabledChannelModels));
-    const availableModels = normalizeWizardModels(current.availableModels).filter((model) => enabledModels.has(model));
+export type ChannelVerificationRequest = {
+    session: number;
+    requestId: number;
+    channelIndex: number;
+    channelId: string;
+    lockKeys: string[];
+};
+
+export function createChannelVerificationCoordinator() {
+    let session = 0;
+    let nextRequestId = 0;
+    const locks = new Map<string, number>();
+    const ownsLocks = (request: ChannelVerificationRequest) => request.lockKeys.every((key) => locks.get(key) === request.requestId);
+    return {
+        reset() {
+            session += 1;
+            locks.clear();
+        },
+        begin(channelIndex: number, channel: AdminModelChannel, models: string[]): ChannelVerificationRequest | null {
+            const selectedModels = normalizeWizardModels(models);
+            const lockNames = channelVerificationMode(channel) === "connectivity" ? ["connectivity"] : selectedModels.map((model) => `model:${model}`);
+            if (!lockNames.length) return null;
+            const lockKeys = lockNames.map((name) => `${channelIndex}:${channel.id}:${name}`);
+            if (lockKeys.some((key) => locks.has(key))) return null;
+            const request = { session, requestId: ++nextRequestId, channelIndex, channelId: channel.id, lockKeys };
+            lockKeys.forEach((key) => locks.set(key, request.requestId));
+            return request;
+        },
+        isCurrent(request: ChannelVerificationRequest, channelIndex: number, channelId: string) {
+            return request.session === session && request.channelIndex === channelIndex && request.channelId === channelId && ownsLocks(request);
+        },
+        finish(request: ChannelVerificationRequest) {
+            if (request.session !== session || !ownsLocks(request)) return false;
+            request.lockKeys.forEach((key) => {
+                if (locks.get(key) === request.requestId) locks.delete(key);
+            });
+            return true;
+        },
+    };
+}
+
+export function filterWizardPublicationSnapshot(current: AdminPublicModelChannelSettings, channels: AdminModelChannel[]): AdminPublicModelChannelSettings {
+    const enabledChannels = channels.filter((channel) => channel.enabled);
+    const servesModel = (channel: AdminModelChannel, model: string) => normalizeWizardModels(channel.models).includes(model);
+    const hasCapability = (model: string, capability: AiModelKind) => enabledChannels.some((channel) => servesModel(channel, model) && modelMatchesAiCapability(model, channel.capabilities, capability));
+    const availableModels = normalizeWizardModels(current.availableModels).filter((model) => enabledChannels.some((channel) => servesModel(channel, model)));
     const availableModelSet = new Set(availableModels);
-    const textModelSet = new Set(normalizeWizardModels(textModels));
+    const keepDefault = (model: string, capability: AiModelKind) => model && availableModelSet.has(model) && hasCapability(model, capability) ? model : "";
     return {
         ...current,
         availableModels,
-        modelTextEndpoints: current.modelTextEndpoints.filter((item) => availableModelSet.has(item.model) && textModelSet.has(item.model)),
+        modelTextEndpoints: current.modelTextEndpoints.filter((item) => availableModelSet.has(item.model) && hasCapability(item.model, "text")),
+        defaultTextModel: keepDefault(current.defaultTextModel, "text"),
+        defaultImageModel: keepDefault(current.defaultImageModel, "image"),
+        defaultVideoModel: keepDefault(current.defaultVideoModel, "video"),
     };
 }
 

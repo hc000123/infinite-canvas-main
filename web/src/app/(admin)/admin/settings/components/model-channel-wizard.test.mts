@@ -87,8 +87,22 @@ test("wizard persistence accepts the publication snapshot without rereading stal
     assert.match(pageSource, /publicModelChannel\?: AdminSettings\["public"\]\["modelChannel"\]/);
     assert.match(pageSource, /options\.publicModelChannel \|\| values\.public\.modelChannel/);
     assert.match(pageSource, /filterWizardPublicationSnapshot/);
+    assert.match(pageSource, /filterWizardPublicationSnapshot\([\s\S]*?nextPublicModelChannel,[\s\S]*?nextChannels/);
     assert.match(pageSource, /finishChannelWizard\(channel, publicModelChannel\)/);
     assert.match(pageSource, /persistChannels\(nextChannels, \{ publicModelChannel \}\)/);
+});
+
+test("page guards verification state with a session coordinator", () => {
+    assert.match(pageSource, /createChannelVerificationCoordinator/);
+    assert.match(pageSource, /verificationCoordinatorRef/);
+    assert.ok((pageSource.match(/verificationCoordinatorRef\.current\.reset\(\)/g) || []).length >= 2);
+    assert.match(pageSource, /verificationCoordinatorRef\.current\.begin/);
+    assert.match(pageSource, /verificationCoordinatorRef\.current\.isCurrent/);
+    assert.match(pageSource, /verificationCoordinatorRef\.current\.finish/);
+    const beginAt = pageSource.indexOf("verificationCoordinatorRef.current.begin");
+    const firstGuardAt = pageSource.indexOf("verificationCoordinatorRef.current.isCurrent", beginAt);
+    const setTestingAt = pageSource.indexOf("setTestingModels", beginAt);
+    assert.ok(beginAt >= 0 && firstGuardAt > beginAt && setTestingAt > firstGuardAt);
 });
 
 test("wizard discovery keeps the existing channel index and normalized draft", () => {

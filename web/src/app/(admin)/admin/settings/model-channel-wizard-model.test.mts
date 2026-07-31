@@ -6,6 +6,7 @@ import {
     buildWizardChannel,
     channelVerificationCopy,
     channelVerificationMode,
+    createChannelVerificationCoordinator,
     filterWizardPublicationSnapshot,
     normalizeWizardModels,
     runChannelVerification,
@@ -276,11 +277,80 @@ test("公开配置快照只过滤不可用模型和文本端点并保留 overrid
         allowCustomChannel: false,
     });
 
-    const result = filterWizardPublicationSnapshot(override, ["text-a", "image-a", "video-a"], ["text-a"]);
+    let result: AdminPublicModelChannelSettings | undefined;
+    assert.doesNotThrow(() => {
+        result = filterWizardPublicationSnapshot(override, [channel({
+            models: ["text-a", "image-a", "video-a"],
+            capabilities: ["text", "image", "video"],
+        })]);
+    });
 
     assert.deepEqual(result, {
         ...override,
         availableModels: ["text-a", "image-a", "video-a"],
         modelTextEndpoints: [{ model: "text-a", endpointType: "responses" }],
     });
+});
+
+test("删除唯一渠道会清空公开模型、文本端点与三类默认模型", () => {
+    const result = filterWizardPublicationSnapshot(publication({
+        availableModels: ["text-a", "image-a", "video-a"],
+        modelCosts: [{ model: "video-a", credits: 8 }],
+        modelTextEndpoints: [{ model: "text-a", endpointType: "responses" }],
+        defaultTextModel: "text-a",
+        defaultImageModel: "image-a",
+        defaultVideoModel: "video-a",
+    }), []);
+
+    assert.deepEqual(result.availableModels, []);
+    assert.deepEqual(result.modelTextEndpoints, []);
+    assert.equal(result.defaultTextModel, "");
+    assert.equal(result.defaultImageModel, "");
+    assert.equal(result.defaultVideoModel, "");
+    assert.deepEqual(result.modelCosts, [{ model: "video-a", credits: 8 }]);
+});
+
+test("同名模型只剩 image 来源时清理文本默认并保留图片默认", () => {
+    let result: AdminPublicModelChannelSettings | undefined;
+    assert.doesNotThrow(() => {
+        result = filterWizardPublicationSnapshot(publication({
+            availableModels: ["shared-model"],
+            modelTextEndpoints: [{ model: "shared-model", endpointType: "responses" }],
+            defaultTextModel: "shared-model",
+            defaultImageModel: "shared-model",
+        }), [channel({ id: "image-only", models: ["shared-model"], capabilities: ["image"] })]);
+    });
+
+    assert.deepEqual(result?.availableModels, ["shared-model"]);
+    assert.deepEqual(result?.modelTextEndpoints, []);
+    assert.equal(result?.defaultTextModel, "");
+    assert.equal(result?.defaultImageModel, "shared-model");
+});
+
+test("检测协调器隔离重置前后的同名请求", () => {
+    const coordinator = createChannelVerificationCoordinator();
+    const videoChannel = channel({ id: "video-channel", capabilities: ["video"] });
+    const requestA = coordinator.begin(0, videoChannel, ["video-a"]);
+    assert.ok(requestA);
+    assert.equal(coordinator.begin(0, videoChannel, ["video-a"]), null);
+
+    coordinator.reset();
+    assert.equal(coordinator.isCurrent(requestA, 0, videoChannel.id), false);
+    const requestB = coordinator.begin(0, videoChannel, ["video-a"]);
+    assert.ok(requestB);
+    assert.equal(coordinator.finish(requestA), false);
+    assert.equal(coordinator.begin(0, videoChannel, ["video-b"]), null);
+    assert.equal(coordinator.isCurrent(requestB, 0, videoChannel.id), true);
+});
+
+test("检测协调器按渠道锁连接检测并按模型锁其他检测", () => {
+    const coordinator = createChannelVerificationCoordinator();
+    const videoChannel = channel({ id: "video-channel", capabilities: ["video"] });
+    assert.ok(coordinator.begin(0, videoChannel, ["video-a"]));
+    assert.equal(coordinator.begin(0, videoChannel, ["video-b"]), null);
+
+    const textChannel = channel({ id: "text-channel", capabilities: ["text"] });
+    assert.ok(coordinator.begin(1, textChannel, ["text-a"]));
+    assert.equal(coordinator.begin(1, textChannel, ["text-a"]), null);
+    assert.ok(coordinator.begin(1, textChannel, ["text-b"]));
 });
