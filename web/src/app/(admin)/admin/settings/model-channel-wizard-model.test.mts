@@ -106,6 +106,45 @@ test("Jimeng 渠道强制清空 baseUrl 和 apiKey", () => {
     assert.equal(result.apiKey, "");
 });
 
+test("专用视频协议将文本草稿能力收敛为 video 并清理文本公开项", () => {
+    for (const protocol of ["jimeng-cli", "xinglian-cloud"] as const) {
+        const previous = channel({ protocol: "openai", models: ["shared-model"], capabilities: ["text"] });
+        const next = buildWizardChannel(previous, {
+            ...previous,
+            protocol,
+            models: ["shared-model"],
+            capabilities: ["text", "image", "video_query"],
+        });
+        const prospective = buildWizardProspectiveChannel(previous, {
+            protocol,
+            baseUrl: protocol === "xinglian-cloud" ? "https://video.example.com/v1" : "",
+            apiKey: protocol === "xinglian-cloud" ? "video-key" : "",
+            models: ["shared-model"],
+            capabilities: ["text"],
+            enabled: true,
+        });
+
+        assert.deepEqual(next.capabilities, ["video"], `${protocol} saved draft capabilities`);
+        assert.deepEqual(prospective.capabilities, ["video"], `${protocol} prospective draft capabilities`);
+
+        const result = applyWizardPublication(
+            publication({
+                availableModels: ["shared-model"],
+                defaultTextModel: "shared-model",
+                modelTextEndpoints: [{ model: "shared-model", endpointType: "responses" }],
+            }),
+            previous,
+            next,
+            [],
+            { publishedModels: [], defaultTextModel: "shared-model", defaultImageModel: "", defaultVideoModel: "", modelTextEndpoints: [{ model: "shared-model", endpointType: "responses" }] },
+        );
+
+        assert.deepEqual(result.availableModels, [], `${protocol} must not auto-publish the switched model`);
+        assert.equal(result.defaultTextModel, "", `${protocol} text default`);
+        assert.deepEqual(result.modelTextEndpoints, [], `${protocol} text endpoints`);
+    }
+});
+
 test("Ark 手动模型缺少 Endpoint / EP 时失败，完整映射生成模型和首个 endpointId", () => {
     const arkDraftMissingEP = channel({ protocol: "volcengine-ark", models: ["manual-seedance"], endpointMappings: [{ model: "manual-seedance", endpointId: "" }] });
     assert.throws(() => buildWizardChannel(undefined, arkDraftMissingEP), /manual-seedance.*Endpoint \/ EP/);

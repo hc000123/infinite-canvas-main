@@ -4,9 +4,9 @@
 
 **Goal:** 在不改变现有模型渠道结构和运行时调用链的前提下，用四步向导简化管理员渠道配置，并让普通用户看清模型来源和算力点。
 
-**Architecture:** 管理端继续编辑现有 `AdminModelChannel`，通过纯函数完成模型清洗、火山 EP 校验和公开模型合并，再由页面调用现有 `/api/admin/settings` 保存；普通用户继续从 `/api/settings` 读取原模型名称，只把已有来源和费用元数据补充到选择器展示。所有视频检测复用现有模型列表、Ark 鉴权、即梦 CLI 和星链云余额预检，不创建视频任务。
+**Architecture:** 管理端继续编辑现有 `AdminModelChannel`，通过纯函数完成模型清洗、火山 EP 校验和公开模型合并，再由页面调用现有 `/api/admin/settings` 保存；Go 设置服务只负责私有渠道规范化、密钥恢复和公开元数据派生，不改动运行时路由与供应商调用链。普通用户继续从 `/api/settings` 读取原模型名称，只把已有来源和费用元数据补充到选择器展示。所有视频检测复用现有模型列表、Ark 鉴权、即梦 CLI 和星链云余额预检，不创建视频任务。
 
-**Tech Stack:** Next.js App Router、React 19、TypeScript、Ant Design 6、Zustand、Node.js `node:test`、Go 现有设置服务（只回归、不修改）
+**Tech Stack:** Next.js App Router、React 19、TypeScript、Ant Design 6、Zustand、Node.js `node:test`、Go 现有设置服务（仅设置规范化与公开元数据，不改运行时调用链）
 
 ---
 

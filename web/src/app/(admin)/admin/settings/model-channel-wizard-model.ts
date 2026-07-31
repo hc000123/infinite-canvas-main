@@ -46,6 +46,14 @@ export function normalizeWizardModels(values: readonly string[] = []) {
     });
 }
 
+export function dedicatedVideoProtocol(protocol: AdminModelChannel["protocol"]) {
+    return protocol === "jimeng-cli" || protocol === "xinglian-cloud";
+}
+
+export function protocolScopedWizardCapabilities(protocol: AdminModelChannel["protocol"], capabilities: readonly string[] = []) {
+    return dedicatedVideoProtocol(protocol) ? ["video"] : normalizeWizardModels(capabilities);
+}
+
 export function buildWizardChannel(existing: AdminModelChannel | undefined, draft: WizardChannelDraft): AdminModelChannel {
     const protocol = draft.protocol ?? existing?.protocol ?? emptyChannel.protocol;
     const requestedModels = normalizeWizardModels([...(draft.models ?? existing?.models ?? []), ...(draft.discoveredModels || []), ...(draft.manualModels || [])]);
@@ -67,7 +75,7 @@ export function buildWizardChannel(existing: AdminModelChannel | undefined, draf
         endpointId: protocol === "volcengine-ark" ? endpointMappings[0]?.endpointId || "" : "",
         endpointMappings,
         models: protocol === "volcengine-ark" ? endpointMappings.map((item) => item.model) : requestedModels,
-        capabilities: normalizeWizardModels(draft.capabilities ?? existing?.capabilities ?? emptyChannel.capabilities),
+        capabilities: protocolScopedWizardCapabilities(protocol, draft.capabilities ?? existing?.capabilities ?? emptyChannel.capabilities),
         environment: normalizeEnvironment(draft.environment ?? existing?.environment),
         weight: Math.max(1, Number(draft.weight ?? existing?.weight ?? emptyChannel.weight) || 1),
         enabled: draft.enabled ?? existing?.enabled ?? emptyChannel.enabled,
@@ -88,7 +96,7 @@ export function buildWizardProspectiveChannel(
         baseUrl: protocol === "jimeng-cli" ? "" : (draft.baseUrl ?? base.baseUrl).trim(),
         apiKey: protocol === "jimeng-cli" ? "" : keepSecret(base.apiKey, draft.apiKey),
         models: normalizeWizardModels(draft.models ?? base.models),
-        capabilities: normalizeWizardModels(draft.capabilities ?? base.capabilities),
+        capabilities: protocolScopedWizardCapabilities(protocol, draft.capabilities ?? base.capabilities),
         enabled: draft.enabled ?? base.enabled,
     };
 }

@@ -357,7 +357,7 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 		if !IsVolcengineArkProtocol(channel.Protocol) {
 			for _, modelName := range channel.Models {
 				modelName = strings.TrimSpace(modelName)
-				if normalizeModelProtocol(channel.Protocol) == modelProtocolOpenAI {
+				if contributesMetadata && normalizeModelProtocol(channel.Protocol) == modelProtocolOpenAI {
 					openAIModels[modelName] = true
 				}
 				if contributesMetadata {
@@ -378,8 +378,9 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 				return
 			}
 			for _, modelName := range normalizedModels {
-				setModelProtocol(modelName, modelProtocolVolcengineArk, true)
-				setModelCapabilities(modelName, channel.Capabilities)
+				visibleModelName := normalizeVisibleArkModelName(modelName)
+				setModelProtocol(visibleModelName, modelProtocolVolcengineArk, true)
+				setModelCapabilities(visibleModelName, channel.Capabilities)
 			}
 		}
 		appendEndpointModels(channel.EndpointID, channel.Models)
@@ -432,13 +433,36 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 		}
 	}
 	public.ModelTextEndpoints = normalizeModelTextEndpoints(nextTextEndpoints, modelNamesWithCapability(public.AvailableModels, modelCapabilities, "text"))
-	if models := resolveModels(public.DefaultVideoModel); len(models) > 0 {
-		public.DefaultVideoModel = models[0]
+	resolveDefault := func(modelName string, capability string) string {
+		models := resolveModels(modelName)
+		if len(models) == 0 {
+			return ""
+		}
+		modelName = models[0]
+		capabilities, hasMetadata := modelCapabilities[modelName]
+		protocol := normalizeModelProtocol(modelProtocols[modelName])
+		if hasMetadata && (protocol == modelProtocolJimengCLI || protocol == modelProtocolXinglianCloud) && !containsNormalizedString(capabilities, capability) {
+			return ""
+		}
+		return modelName
 	}
+	public.DefaultTextModel = resolveDefault(public.DefaultTextModel, "text")
+	public.DefaultImageModel = resolveDefault(public.DefaultImageModel, "image")
+	public.DefaultVideoModel = resolveDefault(public.DefaultVideoModel, "video")
 	public.ModelProtocols = normalizePublicModelProtocols(modelProtocols, public)
 	public.ModelCapabilities = normalizePublicModelCapabilities(modelCapabilities, public)
 	public.ModelSources = normalizePublicModelSources(channels, public)
 	return public
+}
+
+func containsNormalizedString(items []string, target string) bool {
+	target = strings.TrimSpace(strings.ToLower(target))
+	for _, item := range items {
+		if strings.TrimSpace(strings.ToLower(item)) == target {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizePublicModelProtocols(modelProtocols map[string]string, public model.PublicModelChannelSetting) []model.ModelProtocolType {
@@ -878,15 +902,12 @@ func stableModelChannelID(channel model.ModelChannel) string {
 }
 
 func normalizeModelChannelCapabilities(capabilities []string, protocol string) []string {
+	if IsJimengCLIProtocol(protocol) || IsXinglianCloudProtocol(protocol) {
+		return []string{"video"}
+	}
 	if len(capabilities) == 0 {
 		if IsVolcengineArkProtocol(protocol) {
 			return []string{"text", "video"}
-		}
-		if IsJimengCLIProtocol(protocol) {
-			return []string{"video", "video_query", "preflight", "cli_workflow"}
-		}
-		if IsXinglianCloudProtocol(protocol) {
-			return []string{"video", "video_query", "preflight"}
 		}
 		return []string{"text", "image"}
 	}

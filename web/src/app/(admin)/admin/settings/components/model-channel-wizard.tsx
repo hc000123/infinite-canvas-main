@@ -9,7 +9,7 @@ import type { AiModelKind } from "@/lib/ai-model-kind";
 import type { AdminModelChannel, AdminModelTextEndpoint, AdminPublicModelChannelSettings } from "@/services/api/admin";
 
 import { isRoutableModelChannel, modelChannelHasCapability } from "../model-channel-publication";
-import { applyWizardPublication, buildWizardChannel, buildWizardProspectiveChannel, createModelDiscoveryCoordinator, modelDiscoveryCandidates, normalizeWizardModels, runModelDiscoveryRequest, type WizardChannelDraft, type WizardPublicSelection } from "../model-channel-wizard-model";
+import { applyWizardPublication, buildWizardChannel, buildWizardProspectiveChannel, createModelDiscoveryCoordinator, dedicatedVideoProtocol, modelDiscoveryCandidates, normalizeWizardModels, protocolScopedWizardCapabilities, runModelDiscoveryRequest, type WizardChannelDraft, type WizardPublicSelection } from "../model-channel-wizard-model";
 
 type ModelChannelWizardProps = {
     open: boolean;
@@ -176,18 +176,45 @@ export function ModelChannelWizard({
     const selectProtocol = (nextProtocol: AdminModelChannel["protocol"]) => {
         if (nextProtocol === protocol) return;
         invalidateDiscovery();
+        const currentValues = form.getFieldsValue(true);
+        let connectionPatch: Partial<WizardFormValues> = {};
         if (protocol === "jimeng-cli") {
-            cliConnectionDraftRef.current = pickCliConnection(form.getFieldsValue(true));
-            form.setFieldsValue({ protocol: nextProtocol, ...emptyCliConnection(), ...apiConnectionDraftRef.current });
+            cliConnectionDraftRef.current = pickCliConnection(currentValues);
+            connectionPatch = { ...emptyCliConnection(), ...apiConnectionDraftRef.current };
         } else if (nextProtocol === "jimeng-cli") {
             apiConnectionDraftRef.current = { baseUrl: form.getFieldValue("baseUrl") || "", apiKey: form.getFieldValue("apiKey") || "" };
-            form.setFieldsValue({ protocol: nextProtocol, baseUrl: "", apiKey: "", ...cliConnectionDraftRef.current });
-        } else {
-            form.setFieldValue("protocol", nextProtocol);
+            connectionPatch = { baseUrl: "", apiKey: "", ...cliConnectionDraftRef.current };
         }
-        if (nextProtocol === "volcengine-ark" && !(form.getFieldValue("endpointMappings") || []).length) {
-            form.setFieldValue("endpointMappings", [{ model: "", endpointId: "" }]);
-        }
+        const nextValues = {
+            ...currentValues,
+            ...connectionPatch,
+            protocol: nextProtocol,
+            capabilities: protocolScopedWizardCapabilities(nextProtocol, currentValues.capabilities),
+            endpointMappings: nextProtocol === "volcengine-ark" && !(currentValues.endpointMappings || []).length ? [{ model: "", endpointId: "" }] : currentValues.endpointMappings,
+        };
+        const nextChannel = buildWizardProspectiveChannel(baseChannel, {
+            protocol: nextProtocol,
+            baseUrl: nextValues.baseUrl,
+            apiKey: nextValues.apiKey,
+            models: getChannelModels(nextValues),
+            capabilities: nextValues.capabilities,
+            enabled: nextValues.enabled,
+        });
+        const nextPublication = applyWizardPublication(publicModelChannel, existingChannel, nextChannel, siblingChannels, {
+            publishedModels: [],
+            defaultTextModel: currentValues.defaultTextModel || "",
+            defaultImageModel: currentValues.defaultImageModel || "",
+            defaultVideoModel: currentValues.defaultVideoModel || "",
+            modelTextEndpoints: currentValues.modelTextEndpoints || [],
+        });
+        form.setFieldsValue({
+            ...nextValues,
+            publishedModels: [],
+            defaultTextModel: nextPublication.defaultTextModel,
+            defaultImageModel: nextPublication.defaultImageModel,
+            defaultVideoModel: nextPublication.defaultVideoModel,
+            modelTextEndpoints: nextChannel.capabilities.includes("text") ? textEndpointsFor(nextChannel.models, nextPublication.modelTextEndpoints) : [],
+        });
     };
 
     const preparePublication = () => {
@@ -353,7 +380,7 @@ export function ModelChannelWizard({
                         <Row gutter={16}>
                             <Col span={24}>
                                 <Form.Item name="capabilities" label="渠道能力" rules={[{ required: true, message: "请选择至少一项渠道能力" }]}>
-                                    <Select mode="multiple" options={capabilityOptions} placeholder="选择这个渠道能够处理的任务" />
+                                    <Select mode="multiple" disabled={dedicatedVideoProtocol(protocol)} options={dedicatedVideoProtocol(protocol) ? capabilityOptions.filter((item) => item.value === "video") : capabilityOptions} placeholder="选择这个渠道能够处理的任务" />
                                 </Form.Item>
                             </Col>
                             <Col span={24}>
