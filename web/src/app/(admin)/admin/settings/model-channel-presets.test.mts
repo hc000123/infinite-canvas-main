@@ -120,15 +120,19 @@ test("splits legacy Comfly models by capability and disables the mixed channel",
     assert.equal(result.settings.private.channels.find((item) => item.id === "comfly-text")?.apiKey, "********");
 });
 
-test("reconciles public models from enabled channels", () => {
+test("keeps publication explicit while removing models that no enabled channel serves", () => {
     const settings = emptySettings();
-    settings.public.modelChannel.availableModels = ["stale-model"];
-    settings.private.channels = [channel({ id: "disabled", models: ["stale-model"], enabled: false })];
+    settings.public.modelChannel.availableModels = ["kept-model", "stale-model"];
+    settings.private.channels = [
+        channel({ id: "kept", models: ["kept-model"], enabled: true }),
+        channel({ id: "disabled", models: ["stale-model"], enabled: false }),
+    ];
 
     const result = applyModelChannelPreset(settings, "xinglian", { apiKey: "key" });
 
-    assert.equal(result.settings.public.modelChannel.availableModels.includes("stale-model"), false);
-    assert.deepEqual(result.settings.public.modelChannel.availableModels, XINGLIAN_MODELS);
+    assert.deepEqual(result.settings.public.modelChannel.availableModels, ["kept-model"]);
+    assert.equal(result.settings.public.modelChannel.availableModels.includes("sd2-720p-fast"), false);
+    assert.deepEqual(result.summary.publishedModels, ["kept-model"]);
 });
 
 test("requires credentials for a new provider but accepts saved masked credentials", () => {
@@ -151,5 +155,5 @@ test("creates a generic OpenAI-compatible channel from explicit capability and m
     assert.equal(saved.protocol, "openai");
     assert.deepEqual(saved.capabilities, ["video", "video_query"]);
     assert.deepEqual(saved.models, ["video-one", "video-two"]);
-    assert.equal(result.settings.public.modelChannel.availableModels.includes("video-one"), true);
+    assert.equal(result.settings.public.modelChannel.availableModels.includes("video-one"), false);
 });

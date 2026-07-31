@@ -208,10 +208,8 @@ function findChannelIndex(channels: AdminModelChannel[], id: string, fallback: (
 }
 
 function reconcilePublicModels(settings: AdminSettings) {
-    const enabledModels = uniqueValues(settings.private.channels.filter((item) => item.enabled).flatMap((item) => item.models || []));
-    const enabled = new Set(enabledModels);
-    const current = settings.public.modelChannel.availableModels.filter((item) => enabled.has(item));
-    settings.public.modelChannel.availableModels = uniqueValues([...current, ...enabledModels]);
+    const enabled = new Set(uniqueValues(settings.private.channels.filter((item) => item.enabled).flatMap((item) => item.models || [])));
+    settings.public.modelChannel.availableModels = uniqueValues(settings.public.modelChannel.availableModels.filter((item) => enabled.has(item)));
 }
 
 function credential(...values: Array<string | undefined>) {
