@@ -15,6 +15,7 @@ import {
     finishAuthoritativeSettingsOperation,
     modelDiscoveryCandidates,
     normalizeWizardModels,
+    persistAuthoritativeSettingsMutation,
     runModelDiscoveryRequest,
     switchWizardProtocolCapabilities,
     syncConfiguredModelsFromAuthoritativeSettings,
@@ -837,6 +838,78 @@ test("权威设置生产边界串行持久化，写入和刷新不会重叠执�
     assert.equal(await runSecondWrite, false);
     assert.equal(await runRefresh, true);
     assert.deepEqual(events, ["write-1-start", "write-1-commit", "write-2-start", "write-2-commit", "refresh-start"]);
+});
+
+test("快速删除两个渠道会在执行时基于最新权威设置合并两个意图", async () => {
+    const coordinator = createAuthoritativeSettingsCoordinator();
+    const firstGate = deferred<void>();
+    let persisted = settingsWithChannels([channel({ id: "a" }), channel({ id: "b" }), channel({ id: "c" })]);
+    const events: string[] = [];
+    const remove = (id: string, gate?: Promise<void>) => syncConfiguredModelsFromAuthoritativeSettings(
+        coordinator,
+        () => persistAuthoritativeSettingsMutation(
+            async () => {
+                events.push(`${id}-load`);
+                if (gate) await gate;
+                return structuredClone(persisted);
+            },
+            async (next) => {
+                events.push(`${id}-save`);
+                persisted = next;
+                return next;
+            },
+            (latest) => ({ ...latest, private: { ...latest.private, channels: latest.private.channels.filter((item) => item.id !== id) } }),
+        ),
+        () => {},
+        undefined,
+        { kind: "delete" },
+    );
+
+    const removeA = remove("a", firstGate.promise);
+    const removeB = remove("b");
+    const staleSnapshot = syncConfiguredModelsFromAuthoritativeSettings(coordinator, async () => {
+        events.push("stale-snapshot-start");
+        return settingsWithChannels([]);
+    }, () => {}, undefined, { kind: "snapshot" });
+    await assert.rejects(staleSnapshot, /设置正在读取或保存/);
+    await Promise.resolve();
+    assert.deepEqual(events, ["a-load"]);
+    firstGate.resolve();
+    assert.equal(await removeA, false);
+    assert.equal(await removeB, true);
+    assert.deepEqual(persisted.private.channels.map((item) => item.id), ["c"]);
+    assert.deepEqual(events, ["a-load", "a-save", "b-load", "b-save"]);
+});
+
+test("卸载会跳过未启动的旧保存，重挂载读取仍等待旧在途请求", async () => {
+    const oldCoordinator = createAuthoritativeSettingsCoordinator();
+    const inFlight = deferred<AdminSettings>();
+    const remountedLoad = deferred<AdminSettings>();
+    const events: string[] = [];
+    const runInFlight = syncConfiguredModelsFromAuthoritativeSettings(oldCoordinator, async () => {
+        events.push("old-in-flight-start");
+        return inFlight.promise;
+    }, () => {});
+    await Promise.resolve();
+    assert.deepEqual(events, ["old-in-flight-start"]);
+    const runQueuedOldSave = syncConfiguredModelsFromAuthoritativeSettings(oldCoordinator, async () => {
+        events.push("old-queued-save-start");
+        return settingsWithChannels([]);
+    }, () => {});
+    oldCoordinator.reset();
+    const newCoordinator = createAuthoritativeSettingsCoordinator();
+    const runRemountedLoad = syncConfiguredModelsFromAuthoritativeSettings(newCoordinator, async () => {
+        events.push("remounted-load-start");
+        return remountedLoad.promise;
+    }, () => {});
+
+    inFlight.resolve(settingsWithChannels([]));
+    assert.equal(await runInFlight, false);
+    assert.equal(await runQueuedOldSave, false);
+    await Promise.resolve();
+    assert.deepEqual(events, ["old-in-flight-start", "remounted-load-start"]);
+    remountedLoad.resolve(settingsWithChannels([]));
+    assert.equal(await runRemountedLoad, true);
 });
 
 function deferred<T>() {

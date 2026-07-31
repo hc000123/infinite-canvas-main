@@ -298,37 +298,54 @@ export function configuredModelsFromSettings(settings: AdminSettings) {
     ]);
 }
 
+type AuthoritativeSettingsRequest = { generation: number; session: number };
+type AuthoritativeSettingsOperationKind = "queue" | "read" | "snapshot" | "delete";
+const settingsBusyMessage = "设置正在读取或保存，请稍后再试";
+let authoritativeExecutionTail = Promise.resolve();
+let queuedDeletes = 0;
+
+async function runAuthoritativeSettingsExclusive<T>(operation: () => Promise<T>, isValid: () => boolean, kind: AuthoritativeSettingsOperationKind) {
+    const previous = authoritativeExecutionTail;
+    let release!: () => void;
+    authoritativeExecutionTail = new Promise<void>((resolve) => { release = resolve; });
+    if (kind === "delete") queuedDeletes += 1;
+    await previous;
+    try {
+        if (!isValid()) return { executed: false as const };
+        return { executed: true as const, value: await operation() };
+    } finally {
+        if (kind === "delete") queuedDeletes -= 1;
+        release();
+    }
+}
+
 export function createAuthoritativeSettingsCoordinator() {
     let generation = 0;
-    let active: { request: number; setPending?: (pending: boolean) => void } | undefined;
-    let executionTail = Promise.resolve();
+    let session = 0;
+    let active: { request: AuthoritativeSettingsRequest; setPending?: (pending: boolean) => void } | undefined;
     return {
+        assertCanBegin(kind: AuthoritativeSettingsOperationKind) {
+            if (kind === "snapshot" && queuedDeletes > 0) throw new Error(settingsBusyMessage);
+        },
         begin(setPending?: (pending: boolean) => void) {
             active?.setPending?.(false);
-            const request = ++generation;
+            const request = { generation: ++generation, session };
             active = { request, setPending };
             setPending?.(true);
             return request;
         },
-        isCurrent: (request: number) => request === generation,
-        async runExclusive<T>(operation: () => Promise<T>) {
-            const previous = executionTail;
-            let release!: () => void;
-            executionTail = new Promise<void>((resolve) => { release = resolve; });
-            await previous;
-            try {
-                return await operation();
-            } finally {
-                release();
-            }
+        isCurrent: (request: AuthoritativeSettingsRequest) => request.generation === generation && request.session === session,
+        runExclusive<T>(request: AuthoritativeSettingsRequest, operation: () => Promise<T>, kind: AuthoritativeSettingsOperationKind) {
+            return runAuthoritativeSettingsExclusive(operation, () => request.session === session, kind);
         },
-        finish(request: number) {
-            if (request !== generation || active?.request !== request) return;
+        finish(request: AuthoritativeSettingsRequest) {
+            if (request.generation !== generation || request.session !== session || active?.request !== request) return;
             active.setPending?.(false);
             active = undefined;
         },
         reset() {
             generation += 1;
+            session += 1;
             active = undefined;
         },
     };
@@ -339,10 +356,15 @@ export async function syncConfiguredModelsFromAuthoritativeSettings(
     loadSettings: () => Promise<AdminSettings>,
     applySettings: (models: string[], settings: AdminSettings) => void,
     setPending?: (pending: boolean) => void,
+    options: { kind?: AuthoritativeSettingsOperationKind } = {},
 ) {
+    const kind = options.kind || "queue";
+    coordinator.assertCanBegin(kind);
     const request = coordinator.begin(setPending);
     try {
-        const settings = await coordinator.runExclusive(loadSettings);
+        const result = await coordinator.runExclusive(request, loadSettings, kind);
+        if (!result.executed) return false;
+        const settings = result.value;
         if (!coordinator.isCurrent(request)) return false;
         applySettings(configuredModelsFromSettings(settings), settings);
         return true;
@@ -352,6 +374,14 @@ export async function syncConfiguredModelsFromAuthoritativeSettings(
     } finally {
         coordinator.finish(request);
     }
+}
+
+export async function persistAuthoritativeSettingsMutation(
+    loadSettings: () => Promise<AdminSettings>,
+    saveSettings: (settings: AdminSettings) => Promise<AdminSettings>,
+    mutate: (settings: AdminSettings) => AdminSettings,
+) {
+    return saveSettings(mutate(await loadSettings()));
 }
 
 export async function finishAuthoritativeSettingsOperation(

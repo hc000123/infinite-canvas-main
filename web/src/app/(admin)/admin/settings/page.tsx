@@ -11,7 +11,7 @@ import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind"
 import { ModelChannelWizard } from "./components/model-channel-wizard";
 import { ProviderPresetModal } from "./components/provider-preset-modal";
 import { sanitizeModelChannelPublication } from "./model-channel-publication";
-import { channelVerificationCopy, createAuthoritativeSettingsCoordinator, createChannelVerificationCoordinator, filterWizardPublicationSnapshot, finishAuthoritativeSettingsOperation, runChannelVerification, syncConfiguredModelsFromAuthoritativeSettings } from "./model-channel-wizard-model";
+import { channelVerificationCopy, createAuthoritativeSettingsCoordinator, createChannelVerificationCoordinator, filterWizardPublicationSnapshot, finishAuthoritativeSettingsOperation, persistAuthoritativeSettingsMutation, runChannelVerification, syncConfiguredModelsFromAuthoritativeSettings } from "./model-channel-wizard-model";
 import type { ModelChannelPresetResult } from "./model-channel-presets";
 import {
     fetchAdminSettings,
@@ -113,6 +113,7 @@ export default function AdminSettingsPage() {
     const [testResults, setTestResults] = useState<Record<string, { status: "success" | "error"; duration?: string; message: string }>>({});
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isDeletingChannel, setIsDeletingChannel] = useState(false);
     const [isEnterpriseVideoFocus, setIsEnterpriseVideoFocus] = useState(false);
     const [modelCosts, setModelCosts] = useState<AdminModelCost[]>([]);
     const [configuredModels, setConfiguredModels] = useState<string[]>([]);
@@ -134,7 +135,7 @@ export default function AdminSettingsPage() {
     const publicConfigWarnings = useMemo(() => buildPublicConfigWarnings(publicModelChannel, channels), [channels, publicModelChannel]);
     const privateConfigWarnings = useMemo(() => buildPrivateConfigWarnings(channels, privateVolcengineAsset), [channels, privateVolcengineAsset]);
     const activeWarnings = activeTab === "public" ? publicConfigWarnings : privateConfigWarnings;
-    const isSettingsBusy = isLoading || isSaving || isApplyingProviderPreset || isSavingChannelWizard;
+    const isSettingsBusy = isLoading || isSaving || isApplyingProviderPreset || isSavingChannelWizard || isDeletingChannel;
 
     const loadSettings = useCallback(async () => {
         if (!token) return;
@@ -153,6 +154,7 @@ export default function AdminSettingsPage() {
                     });
                 },
                 setIsLoading,
+                { kind: "read" },
             );
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取设置失败");
@@ -198,7 +200,7 @@ export default function AdminSettingsPage() {
                     private: JSON.stringify(merged.private, null, 2),
                 });
                 message.success("已保存");
-            }, setIsSaving);
+            }, setIsSaving, { kind: "snapshot" });
         } catch (error) {
             message.error(error instanceof Error ? error.message : "保存失败");
         }
@@ -218,7 +220,7 @@ export default function AdminSettingsPage() {
                 setJsonText({ public: JSON.stringify(merged.public, null, 2), private: JSON.stringify(merged.private, null, 2) });
                 setIsProviderPresetOpen(false);
                 message.success("厂商预设已一次配置完成");
-            }, setIsApplyingProviderPreset);
+            }, setIsApplyingProviderPreset, { kind: "snapshot" });
         } catch (error) {
             message.error(error instanceof Error ? error.message : "厂商预设保存失败");
         }
@@ -382,6 +384,36 @@ export default function AdminSettingsPage() {
 
     const testModels = visibleChannelModels(testChannel?.models || []).filter((model) => model.toLowerCase().includes(testKeyword.trim().toLowerCase()));
 
+    async function deleteChannel(channelID: string) {
+        if (!token) return;
+        try {
+            await syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, () => persistAuthoritativeSettingsMutation(
+                async () => normalizeSettings(await fetchAdminSettings(token)),
+                async (latest) => {
+                    const saved = normalizeSettings(await saveAdminSettings(token, latest));
+                    return mergePrivateSecrets(latest, saved);
+                },
+                (latest) => {
+                    const nextChannels = latest.private.channels.filter((item) => item.id !== channelID);
+                    return normalizeSettings({
+                        ...latest,
+                        public: { ...latest.public, modelChannel: filterWizardPublicationSnapshot(latest.public.modelChannel, nextChannels) },
+                        private: { ...latest.private, channels: nextChannels },
+                    });
+                },
+            ), (models, merged) => {
+                setConfiguredModels(models);
+                setChannels(merged.private.channels);
+                setModelCosts(merged.public.modelChannel.modelCosts);
+                form.setFieldsValue(merged);
+                setJsonText({ public: JSON.stringify(merged.public, null, 2), private: JSON.stringify(merged.private, null, 2) });
+                message.success("已保存");
+            }, setIsDeletingChannel, { kind: "delete" });
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "保存失败");
+        }
+    }
+
     async function persistChannels(nextChannels: AdminModelChannel[], options: { silent?: boolean; publicModelChannel?: AdminSettings["public"]["modelChannel"]; setPending?: (pending: boolean) => void } = {}) {
         if (!token) return false;
         const values = normalizeSettings(form.getFieldsValue(true) as AdminSettings);
@@ -405,7 +437,7 @@ export default function AdminSettingsPage() {
                 private: JSON.stringify(merged.private, null, 2),
             });
             if (!options.silent) message.success("已保存");
-        }, options.setPending);
+        }, options.setPending, { kind: "snapshot" });
     }
 
     return (
@@ -761,11 +793,7 @@ export default function AdminSettingsPage() {
                                                         icon={<DeleteOutlined />}
                                                         disabled={isSettingsBusy}
                                                         onClick={() => {
-                                                            const nextChannels = [...channels];
-                                                            nextChannels.splice(item._index, 1);
-                                                            void persistChannels(nextChannels).catch((error) => {
-                                                                message.error(error instanceof Error ? error.message : "保存失败");
-                                                            });
+                                                            void deleteChannel(item.id);
                                                         }}
                                                     />
                                                 </Space>

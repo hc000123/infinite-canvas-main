@@ -162,8 +162,7 @@ test("settings page keeps provider presets and channel table operations", () => 
     assert.match(pageSource, /<ProviderPresetModal/);
     assert.match(pageSource, /openTestDialog\(item\._index\)/);
     assert.match(pageSource, /openChannelWizard\(item\._index\)/);
-    assert.match(pageSource, /persistChannels\(nextChannels\)/);
     assert.match(pageSource, /DeleteOutlined/);
-    assert.match(pageSource, /persistChannels\(nextChannels\)\.catch/);
+    assert.match(pageSource, /deleteChannel\(item\.id\)/);
     assert.match(pageSource, /message\.error\(error instanceof Error \? error\.message : "保存失败"\)/);
 });
