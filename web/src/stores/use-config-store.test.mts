@@ -60,6 +60,28 @@ test("falls back to backend channel when public model channel is unavailable", (
     assert.equal(result.videoProtocol, "volcengine-ark");
 });
 
+test("keeps public model credit costs in the effective config", () => {
+    const modelCosts = [{ model: "video-one", credits: 18 }];
+    const result = resolveEffectiveConfig(
+        { ...defaultConfig, videoModel: "video-one" },
+        {
+            availableModels: ["video-one"],
+            modelCosts,
+            modelTextEndpoints: [],
+            modelCapabilities: [{ model: "video-one", capabilities: ["video"] }],
+            modelSources: [{ model: "video-one", channelId: "a", channelName: "渠道 A", protocol: "openai" }],
+            defaultModel: "video-one",
+            defaultImageModel: "",
+            defaultVideoModel: "video-one",
+            defaultTextModel: "",
+            systemPrompt: "",
+            allowCustomChannel: false,
+        },
+    );
+
+    assert.deepEqual(result.modelCosts, modelCosts);
+});
+
 test("drops stale local seedance selection while keeping backend video models visible", () => {
     const result = resolveEffectiveConfig(
         { ...defaultConfig, channelMode: "remote", seedanceModel: "chat_fast_video", videoModel: "chat_fast_video" },

@@ -9,7 +9,7 @@ import { classifyAiModels, type AiModelKind } from "../lib/ai-model-kind.ts";
 import { localForageStorage } from "../lib/localforage-storage.ts";
 import { normalizeSeedanceImageRoleMode, normalizeVideoReferenceMode, type SeedanceImageRoleMode, type VideoReferenceMode } from "../services/api/video-reference.ts";
 import { apiGet } from "../services/api/request.ts";
-import type { AdminModelCapability, AdminModelProtocol, AdminModelSource, AdminModelTextEndpoint, AdminPublicSettings } from "../services/api/admin.ts";
+import type { AdminModelCapability, AdminModelCost, AdminModelProtocol, AdminModelSource, AdminModelTextEndpoint, AdminPublicSettings } from "../services/api/admin.ts";
 import { resolveAllowedVideoProtocol } from "../services/api/ai-channel-boundary.ts";
 
 export { classifyAiModels };
@@ -48,6 +48,7 @@ export type AiConfig = {
     imageModels: string[];
     videoModels: string[];
     textModels: string[];
+    modelCosts: AdminModelCost[];
     modelProtocols: AdminModelProtocol[];
     modelCapabilities: AdminModelCapability[];
     modelSources: AdminModelSource[];
@@ -95,6 +96,7 @@ export const defaultConfig: AiConfig = {
     imageModels: [],
     videoModels: [],
     textModels: [],
+    modelCosts: [],
     modelProtocols: [],
     modelCapabilities: [],
     modelSources: [],
@@ -132,13 +134,14 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
     const channelMode = "remote";
     const localVideoProtocol = resolveAllowedVideoProtocol("local", config.videoProtocol);
     if (!modelChannel) {
-        return { ...config, channelMode, videoProtocol: localVideoProtocol, videoModel: config.videoModel, modelProtocols: config.modelProtocols || [], modelSources: config.modelSources || [] };
+        return { ...config, channelMode, videoProtocol: localVideoProtocol, videoModel: config.videoModel, modelCosts: config.modelCosts || [], modelProtocols: config.modelProtocols || [], modelSources: config.modelSources || [] };
     }
+    const modelCosts = modelChannel.modelCosts || [];
     const modelProtocols = modelChannel.modelProtocols || [];
     const models = uniqueModels(modelChannel.availableModels.map(normalizeVisibleRemoteVideoModel).filter(Boolean));
     const modelCapabilities = normalizeModelCapabilities(modelChannel.modelCapabilities || [], models);
     const modelSources = normalizeModelSources(modelChannel.modelSources || [], models);
-    const catalogConfig = { ...config, models, modelCapabilities, modelProtocols, modelSources };
+    const catalogConfig = { ...config, models, modelCosts, modelCapabilities, modelProtocols, modelSources };
     const catalogVideoModels = modelsForCapability(catalogConfig, "video");
     const catalogImageModels = modelsForCapability(catalogConfig, "image");
     const catalogTextModels = modelsForCapability(catalogConfig, "text");
@@ -166,6 +169,7 @@ export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPubl
         imageModels,
         videoModels,
         textModels,
+        modelCosts,
         modelProtocols,
         modelCapabilities,
         modelSources,
@@ -247,6 +251,7 @@ export const useConfigStore = create<ConfigStore>()(
                         imageModels: Array.isArray(config.imageModels) && config.imageModels.length ? config.imageModels : classifiedModels.imageModels,
                         videoModels: Array.isArray(config.videoModels) && config.videoModels.length ? config.videoModels : classifiedModels.videoModels,
                         textModels: Array.isArray(config.textModels) && config.textModels.length ? config.textModels : classifiedModels.textModels,
+                        modelCosts: Array.isArray(config.modelCosts) ? config.modelCosts : [],
                         modelProtocols: Array.isArray(config.modelProtocols) ? config.modelProtocols : [],
                         modelCapabilities: Array.isArray(config.modelCapabilities) ? config.modelCapabilities : [],
                         modelSources: Array.isArray(config.modelSources) ? config.modelSources : [],
