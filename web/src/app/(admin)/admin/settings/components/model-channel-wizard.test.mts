@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("./model-channel-wizard.tsx", import.meta.url), "utf8");
+const pageSource = readFileSync(new URL("../page.tsx", import.meta.url), "utf8");
 
 test("channel wizard exposes four named steps", () => {
     ["选择渠道类型", "连接信息", "配置模型", "确认使用范围"].forEach((label) => assert.match(source, new RegExp(label)));
@@ -66,4 +67,46 @@ test("protocol scoped drafts do not retain mutually exclusive connection fields"
     assert.match(source, /apiConnectionDraftRef/);
     assert.match(source, /cliConnectionDraftRef/);
     assert.match(source, /scopeDraftToProtocol/);
+});
+
+test("settings page connects create and edit actions to the channel wizard", () => {
+    assert.match(pageSource, /import \{ ModelChannelWizard \} from "\.\/components\/model-channel-wizard"/);
+    assert.match(pageSource, /<ModelChannelWizard/);
+    assert.match(pageSource, /onClick=\{\(\) => openChannelWizard\(null\)\}/);
+    assert.match(pageSource, /onClick=\{\(\) => openChannelWizard\(item\._index\)\}/);
+});
+
+test("settings page removes the legacy channel drawer and embedded model selector", () => {
+    assert.doesNotMatch(pageSource, /\bDrawer\b/);
+    assert.doesNotMatch(pageSource, /channelForm/);
+    assert.doesNotMatch(pageSource, /isModelSelectorOpen/);
+    assert.doesNotMatch(pageSource, /channelAutoSave/);
+});
+
+test("wizard persistence accepts the publication snapshot without rereading stale form state", () => {
+    assert.match(pageSource, /publicModelChannel\?: AdminSettings\["public"\]\["modelChannel"\]/);
+    assert.match(pageSource, /options\.publicModelChannel \|\| values\.public\.modelChannel/);
+    assert.match(pageSource, /finishChannelWizard\(channel, publicModelChannel\)/);
+    assert.match(pageSource, /persistChannels\(nextChannels, \{ publicModelChannel \}\)/);
+});
+
+test("wizard discovery keeps the existing channel index and normalized draft", () => {
+    assert.match(pageSource, /onDiscoverModels/);
+    assert.match(pageSource, /fetchChannelModels\(token, \{ index: editingChannelIndex \?\? undefined, channel: normalizeChannel\(channel\) \}\)/);
+});
+
+test("video-capable OpenAI channels use read-only connectivity detection", () => {
+    assert.match(pageSource, /channelVerificationMode\(testChannel\)/);
+    assert.match(pageSource, /verificationMode === "connectivity"/);
+    assert.match(pageSource, /fetchChannelModels\(token, \{ index: testChannelIndex, channel \}\)/);
+    assert.match(pageSource, /连接与鉴权可用；未创建视频任务/);
+    assert.match(pageSource, /只读模型列表，不创建视频任务/);
+});
+
+test("settings page keeps provider presets and channel table operations", () => {
+    assert.match(pageSource, /<ProviderPresetModal/);
+    assert.match(pageSource, /openTestDialog\(item\._index\)/);
+    assert.match(pageSource, /openChannelWizard\(item\._index\)/);
+    assert.match(pageSource, /persistChannels\(nextChannels\)/);
+    assert.match(pageSource, /DeleteOutlined/);
 });
