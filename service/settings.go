@@ -330,6 +330,7 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 	public.DefaultModel = ""
 	endpointModels := map[string][]string{}
 	openAIModels := map[string]bool{}
+	arkModels := map[string]bool{}
 	modelProtocols := map[string]string{}
 	modelCapabilities := map[string][]string{}
 	setModelProtocol := func(modelName string, protocol string, overwrite bool) {
@@ -367,6 +368,11 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 			}
 			continue
 		}
+		for _, modelName := range channel.Models {
+			if modelName = strings.TrimSpace(modelName); modelName != "" {
+				arkModels[modelName] = true
+			}
+		}
 		appendEndpointModels := func(endpointID string, models []string) {
 			endpointID = strings.TrimSpace(endpointID)
 			if endpointID == "" {
@@ -396,8 +402,10 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 		if openAIModels[modelName] {
 			return []string{modelName}
 		}
-		if normalized := normalizeVisibleArkModelName(modelName); normalized != "" {
-			return []string{normalized}
+		if arkModels[modelName] {
+			if normalized := normalizeVisibleArkModelName(modelName); normalized != "" {
+				return []string{normalized}
+			}
 		}
 		if modelName == "" {
 			return nil

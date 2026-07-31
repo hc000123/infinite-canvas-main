@@ -445,6 +445,37 @@ func TestPublicSettingsLetsEnabledArkVisibleNameWinOverDisabledOrUnroutableOpenA
 	}
 }
 
+func TestPublicSettingsKeepsArkLikeOpenAINameWithoutAnyArkChannel(t *testing.T) {
+	for _, openAIChannel := range []model.ModelChannel{
+		{
+			ID: "disabled-openai", Protocol: string(model.ModelProtocolOpenAI), Name: "Disabled OpenAI",
+			BaseURL: "https://disabled.example.com/v1", APIKey: "disabled-key", Models: []string{"doubao-seedance-2-0-260128"}, Capabilities: []string{"video"}, Enabled: false,
+		},
+		{
+			ID: "unroutable-openai", Protocol: string(model.ModelProtocolOpenAI), Name: "Unroutable OpenAI",
+			BaseURL: "https://unroutable.example.com/v1", Models: []string{"doubao-seedance-2-0-260128"}, Capabilities: []string{"video"}, Enabled: true,
+		},
+	} {
+		t.Run(openAIChannel.ID, func(t *testing.T) {
+			public := normalizePublicModelChannelWithPrivate(model.PublicModelChannelSetting{
+				AvailableModels:   []string{"doubao-seedance-2-0-260128"},
+				DefaultVideoModel: "doubao-seedance-2-0-260128",
+				ModelCosts:        []model.ModelCost{{Model: "doubao-seedance-2-0-260128", Credits: 300}},
+			}, []model.ModelChannel{openAIChannel})
+
+			if !reflect.DeepEqual(public.AvailableModels, []string{"doubao-seedance-2-0-260128"}) || public.DefaultVideoModel != "doubao-seedance-2-0-260128" {
+				t.Fatalf("visible models = %#v default = %q, want original OpenAI model name", public.AvailableModels, public.DefaultVideoModel)
+			}
+			if !reflect.DeepEqual(public.ModelCosts, []model.ModelCost{{Model: "doubao-seedance-2-0-260128", Credits: 300}}) {
+				t.Fatalf("model costs = %#v, want original OpenAI model cost", public.ModelCosts)
+			}
+			if len(public.ModelProtocols) != 0 || len(public.ModelCapabilities) != 0 || len(public.ModelSources) != 0 {
+				t.Fatalf("unroutable OpenAI metadata = protocols %#v capabilities %#v sources %#v, want empty", public.ModelProtocols, public.ModelCapabilities, public.ModelSources)
+			}
+		})
+	}
+}
+
 func TestPublicSettingsKeepsOpenAICompatibleSeedanceModelName(t *testing.T) {
 	setupAITaskTestDB(t)
 	_, err := repository.SaveSettings(model.Settings{
