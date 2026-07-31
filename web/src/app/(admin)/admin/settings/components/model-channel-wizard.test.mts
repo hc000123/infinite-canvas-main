@@ -94,7 +94,8 @@ test("protocol scoped drafts do not retain mutually exclusive connection fields"
 
 test("dedicated video protocol switches constrain capabilities and clear stale publication", () => {
     const selectProtocol = source.slice(source.indexOf("const selectProtocol ="), source.indexOf("const preparePublication ="));
-    assert.match(selectProtocol, /protocolScopedWizardCapabilities/);
+    assert.match(source, /capabilityDraftsRef/);
+    assert.match(selectProtocol, /switchWizardProtocolCapabilities/);
     assert.match(selectProtocol, /publishedModels:\s*\[\]/);
     assert.match(selectProtocol, /applyWizardPublication/);
     assert.match(source, /dedicatedVideoProtocol/);

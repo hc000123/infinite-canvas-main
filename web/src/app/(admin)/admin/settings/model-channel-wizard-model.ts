@@ -54,6 +54,22 @@ export function protocolScopedWizardCapabilities(protocol: AdminModelChannel["pr
     return dedicatedVideoProtocol(protocol) ? ["video"] : normalizeWizardModels(capabilities);
 }
 
+export type WizardProtocolCapabilityDrafts = Partial<Record<AdminModelChannel["protocol"], string[]>>;
+
+export function switchWizardProtocolCapabilities(
+    drafts: WizardProtocolCapabilityDrafts,
+    currentProtocol: AdminModelChannel["protocol"],
+    nextProtocol: AdminModelChannel["protocol"],
+    currentCapabilities: readonly string[] = [],
+) {
+    const nextDrafts = { ...drafts };
+    if (!dedicatedVideoProtocol(currentProtocol)) nextDrafts[currentProtocol] = normalizeWizardModels(currentCapabilities);
+    return {
+        drafts: nextDrafts,
+        capabilities: protocolScopedWizardCapabilities(nextProtocol, nextDrafts[nextProtocol] ?? currentCapabilities),
+    };
+}
+
 export function buildWizardChannel(existing: AdminModelChannel | undefined, draft: WizardChannelDraft): AdminModelChannel {
     const protocol = draft.protocol ?? existing?.protocol ?? emptyChannel.protocol;
     const requestedModels = normalizeWizardModels([...(draft.models ?? existing?.models ?? []), ...(draft.discoveredModels || []), ...(draft.manualModels || [])]);

@@ -14,6 +14,7 @@ import {
     modelDiscoveryCandidates,
     normalizeWizardModels,
     runModelDiscoveryRequest,
+    switchWizardProtocolCapabilities,
     syncConfiguredModelsFromAuthoritativeSettings,
     runChannelVerification,
 } from "./model-channel-wizard-model.ts";
@@ -142,6 +143,17 @@ test("专用视频协议将文本草稿能力收敛为 video 并清理文本公�
         assert.deepEqual(result.availableModels, [], `${protocol} must not auto-publish the switched model`);
         assert.equal(result.defaultTextModel, "", `${protocol} text default`);
         assert.deepEqual(result.modelTextEndpoints, [], `${protocol} text endpoints`);
+    }
+});
+
+test("从专用视频协议返回时恢复原 OpenAI 和 Ark 能力草稿", () => {
+    for (const editableProtocol of ["openai", "volcengine-ark"] as const) {
+        const originalCapabilities = editableProtocol === "openai" ? ["text", "image"] : ["text", "video"];
+        const dedicated = switchWizardProtocolCapabilities({}, editableProtocol, "jimeng-cli", originalCapabilities);
+        assert.deepEqual(dedicated.capabilities, ["video"]);
+
+        const restored = switchWizardProtocolCapabilities(dedicated.drafts, "jimeng-cli", editableProtocol, dedicated.capabilities);
+        assert.deepEqual(restored.capabilities, originalCapabilities, `${editableProtocol} capability draft`);
     }
 });
 

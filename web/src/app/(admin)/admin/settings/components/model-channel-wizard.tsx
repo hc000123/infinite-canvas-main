@@ -9,7 +9,7 @@ import type { AiModelKind } from "@/lib/ai-model-kind";
 import type { AdminModelChannel, AdminModelTextEndpoint, AdminPublicModelChannelSettings } from "@/services/api/admin";
 
 import { isRoutableModelChannel, modelChannelHasCapability } from "../model-channel-publication";
-import { applyWizardPublication, buildWizardChannel, buildWizardProspectiveChannel, createModelDiscoveryCoordinator, dedicatedVideoProtocol, modelDiscoveryCandidates, normalizeWizardModels, protocolScopedWizardCapabilities, runModelDiscoveryRequest, type WizardChannelDraft, type WizardPublicSelection } from "../model-channel-wizard-model";
+import { applyWizardPublication, buildWizardChannel, buildWizardProspectiveChannel, createModelDiscoveryCoordinator, dedicatedVideoProtocol, modelDiscoveryCandidates, normalizeWizardModels, runModelDiscoveryRequest, switchWizardProtocolCapabilities, type WizardChannelDraft, type WizardProtocolCapabilityDrafts, type WizardPublicSelection } from "../model-channel-wizard-model";
 
 type ModelChannelWizardProps = {
     open: boolean;
@@ -68,6 +68,7 @@ export function ModelChannelWizard({
     const discoveryCoordinatorRef = useRef(createModelDiscoveryCoordinator());
     const apiConnectionDraftRef = useRef({ baseUrl: "", apiKey: "" });
     const cliConnectionDraftRef = useRef(emptyCliConnection());
+    const capabilityDraftsRef = useRef<WizardProtocolCapabilityDrafts>({});
     const initializationInputRef = useRef({ existingChannel, initialChannel, publicModelChannel });
     initializationInputRef.current = { existingChannel, initialChannel, publicModelChannel };
     const baseChannel = existingChannel || initialChannel;
@@ -143,6 +144,7 @@ export function ModelChannelWizard({
         const publishedModels = models.filter((model) => initialPublication.availableModels.includes(model));
         apiConnectionDraftRef.current = channel.protocol === "jimeng-cli" ? { baseUrl: "", apiKey: "" } : { baseUrl: channel.baseUrl, apiKey: "" };
         cliConnectionDraftRef.current = channel.protocol === "jimeng-cli" ? pickCliConnection(channel) : emptyCliConnection();
+        capabilityDraftsRef.current = dedicatedVideoProtocol(channel.protocol) ? {} : { [channel.protocol]: normalizeWizardModels(channel.capabilities) };
         form.resetFields();
         form.setFieldsValue({
             ...channel,
@@ -185,11 +187,13 @@ export function ModelChannelWizard({
             apiConnectionDraftRef.current = { baseUrl: form.getFieldValue("baseUrl") || "", apiKey: form.getFieldValue("apiKey") || "" };
             connectionPatch = { baseUrl: "", apiKey: "", ...cliConnectionDraftRef.current };
         }
+        const capabilitySwitch = switchWizardProtocolCapabilities(capabilityDraftsRef.current, protocol, nextProtocol, currentValues.capabilities);
+        capabilityDraftsRef.current = capabilitySwitch.drafts;
         const nextValues = {
             ...currentValues,
             ...connectionPatch,
             protocol: nextProtocol,
-            capabilities: protocolScopedWizardCapabilities(nextProtocol, currentValues.capabilities),
+            capabilities: capabilitySwitch.capabilities,
             endpointMappings: nextProtocol === "volcengine-ark" && !(currentValues.endpointMappings || []).length ? [{ model: "", endpointId: "" }] : currentValues.endpointMappings,
         };
         const nextChannel = buildWizardProspectiveChannel(baseChannel, {
