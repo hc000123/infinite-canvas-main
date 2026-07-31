@@ -49,10 +49,7 @@ export function buildWizardChannel(existing: AdminModelChannel | undefined, draf
     const merged = { ...emptyChannel, ...existing, ...draft };
     const protocol = merged.protocol;
     const requestedModels = normalizeWizardModels([...(draft.models ?? existing?.models ?? []), ...(draft.discoveredModels || []), ...(draft.manualModels || [])]);
-    const models = protocol === "volcengine-ark"
-        ? normalizeWizardModels([...(draft.endpointMappings ?? existing?.endpointMappings ?? []).map((item) => item.model || ""), ...requestedModels])
-        : requestedModels;
-    const endpointMappings = protocol === "volcengine-ark" ? buildArkMappings(models, draft.endpointMappings ?? existing?.endpointMappings ?? []) : [];
+    const endpointMappings = protocol === "volcengine-ark" ? buildArkMappings(draft.endpointMappings ?? existing?.endpointMappings ?? []) : [];
     const apiKey = protocol === "jimeng-cli" ? "" : keepSecret(existing?.apiKey, draft.apiKey);
 
     const result: AdminModelChannel = {
@@ -67,7 +64,7 @@ export function buildWizardChannel(existing: AdminModelChannel | undefined, draf
         outputDir: (merged.outputDir || "").trim(),
         endpointId: protocol === "volcengine-ark" ? endpointMappings[0]?.endpointId || "" : "",
         endpointMappings,
-        models: protocol === "volcengine-ark" ? endpointMappings.map((item) => item.model) : models,
+        models: protocol === "volcengine-ark" ? endpointMappings.map((item) => item.model) : requestedModels,
         capabilities: normalizeWizardModels(merged.capabilities || []),
         environment: merged.environment === "prod" || merged.environment === "test" ? merged.environment : "dev",
         timeoutSeconds: Math.max(0, Number(merged.timeoutSeconds) || 0),
@@ -104,13 +101,14 @@ export function applyWizardPublication(
         .some((channel) => modelMatchesAiCapability(model, channel.capabilities, capability));
     const textModels = availableModels.filter((model) => hasCapability(model, "text"));
     const requestedEndpoints = new Map(normalizeTextEndpoints(selection.modelTextEndpoints));
-    const modelTextEndpoints = current.modelTextEndpoints
+    const currentEndpoints = new Map(current.modelTextEndpoints
         .map((item) => ({ model: item.model.trim(), endpointType: item.endpointType }))
         .filter((item, index, items) => item.model && textModels.includes(item.model) && items.findIndex((candidate) => candidate.model === item.model) === index)
-        .map((item) => ({ ...item, endpointType: requestedEndpoints.get(item.model) || item.endpointType }));
-    textModels.filter((model) => selectedModels.has(model) && !modelTextEndpoints.some((item) => item.model === model)).forEach((model) => {
-        modelTextEndpoints.push({ model, endpointType: requestedEndpoints.get(model) || "chat_completions" });
-    });
+        .map((item) => [item.model, item.endpointType] as const));
+    const modelTextEndpoints = textModels.map((model) => ({
+        model,
+        endpointType: selectedModels.has(model) ? requestedEndpoints.get(model) || "chat_completions" : requestedEndpoints.get(model) || currentEndpoints.get(model) || "chat_completions",
+    }));
     const defaultTextModel = resolveDefault(selection.defaultTextModel, current.defaultTextModel, availableModels, hasCapability, "text");
 
     return {
@@ -129,17 +127,18 @@ export function channelVerificationMode(channel: AdminModelChannel) {
     return channel.capabilities.some((capability) => capability.trim().toLowerCase() === "video") ? "connectivity" as const : "model-test" as const;
 }
 
-function buildArkMappings(models: string[], mappings: Partial<AdminModelChannel["endpointMappings"][number]>[]) {
-    const entries = new Map<string, string>();
+function buildArkMappings(mappings: Partial<AdminModelChannel["endpointMappings"][number]>[]) {
+    const result: AdminModelChannel["endpointMappings"] = [];
+    const seen = new Set<string>();
     mappings.forEach((item) => {
         const model = item.model?.trim() || "";
-        if (model && !entries.has(model)) entries.set(model, item.endpointId?.trim() || "");
-    });
-    return models.map((model) => {
-        const endpointId = entries.get(model) || "";
+        if (!model || seen.has(model)) return;
+        seen.add(model);
+        const endpointId = item.endpointId?.trim() || "";
         if (!endpointId) throw new Error(`${model} 缺少 Endpoint / EP`);
-        return { model, endpointId };
+        result.push({ model, endpointId });
     });
+    return result;
 }
 
 function keepSecret(existing: string | undefined, draft: string | undefined) {

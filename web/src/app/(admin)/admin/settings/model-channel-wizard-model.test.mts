@@ -81,6 +81,18 @@ test("Ark 手动模型缺少 Endpoint / EP 时失败，完整映射生成模型�
 
     const mappingOnly = buildWizardChannel(undefined, channel({ protocol: "volcengine-ark", models: [], endpointMappings: [{ model: "mapping-model", endpointId: "ep-mapping" }] }));
     assert.deepEqual(mappingOnly.models, ["mapping-model"]);
+
+    const mappingTruth = buildWizardChannel(undefined, channel({
+        protocol: "volcengine-ark",
+        models: ["stale-model"],
+        endpointMappings: [{ model: "", endpointId: "ignored" }, { model: "ark-model", endpointId: " ep-good " }, { model: "ark-model", endpointId: "" }],
+    }));
+    assert.deepEqual(mappingTruth.endpointMappings, [{ model: "ark-model", endpointId: "ep-good" }]);
+    assert.deepEqual(mappingTruth.models, ["ark-model"]);
+    assert.throws(() => buildWizardChannel(undefined, channel({
+        protocol: "volcengine-ark",
+        endpointMappings: [{ model: "strict-model", endpointId: "" }, { model: "strict-model", endpointId: "ep-later" }],
+    })), /strict-model.*Endpoint \/ EP/);
 });
 
 test("显式公开更新模型、默认项和文本端点，同时保留费用", () => {
@@ -115,6 +127,31 @@ test("显式公开更新模型、默认项和文本端点，同时保留费用",
     assert.equal(result.defaultTextModel, "new-model");
     assert.equal(result.defaultModel, "legacy-model");
     assert.deepEqual(result.modelCosts, [{ model: "shared-model", credits: 2 }]);
+});
+
+test("无关 sibling 的公开文本模型缺少端点记录时补 chat_completions", () => {
+    const result = applyWizardPublication(
+        publication({ availableModels: ["sibling-text"] }),
+        undefined,
+        channel({ id: "new", models: ["new-text"] }),
+        [channel({ id: "sibling", models: ["sibling-text"] })],
+        { publishedModels: [], defaultTextModel: "", defaultImageModel: "", defaultVideoModel: "", modelTextEndpoints: [] },
+    );
+
+    assert.deepEqual(result.modelTextEndpoints, [{ model: "sibling-text", endpointType: "chat_completions" }]);
+});
+
+test("本次明确公开的文本模型未指定端点时重置为 chat_completions", () => {
+    const selected = channel({ id: "edited", models: ["selected-text"] });
+    const result = applyWizardPublication(
+        publication({ availableModels: ["selected-text"], modelTextEndpoints: [{ model: "selected-text", endpointType: "responses" }] }),
+        selected,
+        selected,
+        [],
+        { publishedModels: ["selected-text"], defaultTextModel: "", defaultImageModel: "", defaultVideoModel: "", modelTextEndpoints: [] },
+    );
+
+    assert.deepEqual(result.modelTextEndpoints, [{ model: "selected-text", endpointType: "chat_completions" }]);
 });
 
 test("渠道检测模式根据协议和视频能力选择", () => {
