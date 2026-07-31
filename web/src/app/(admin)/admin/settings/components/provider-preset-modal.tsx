@@ -121,7 +121,7 @@ export function ProviderPresetModal({ open, settings, saving, onCancel, onApply 
 
 function PresetFields({ presetId, hasSavedKey }: { presetId: ModelChannelPresetId; hasSavedKey: boolean }) {
     if (presetId === "jimeng") {
-        return <Alert showIcon type="success" title="无需 API Key" description="将自动配置五个即梦模型。保存后在渠道编辑中完成一次网页授权即可。" />;
+        return <Alert showIcon type="success" title="无需 API Key" description="将自动配置五个即梦模型。普通用户在个人配置中完成即梦网页登录。" />;
     }
     if (presetId === "openai-compatible") {
         return (

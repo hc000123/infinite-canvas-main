@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("./model-channel-wizard.tsx", import.meta.url), "utf8");
+const presetModalSource = readFileSync(new URL("./provider-preset-modal.tsx", import.meta.url), "utf8");
 const pageSource = readFileSync(new URL("../page.tsx", import.meta.url), "utf8");
 
 test("channel wizard exposes four named steps", () => {
@@ -18,6 +19,8 @@ test("model step supports manual names and Ark endpoint mappings", () => {
 
 test("Jimeng copy keeps personal login outside admin setup", () => {
     assert.match(source, /管理员只检查 CLI 环境，用户仍在个人配置中完成即梦网页登录/);
+    assert.match(presetModalSource, /普通用户在个人配置中完成即梦网页登录/);
+    assert.doesNotMatch(presetModalSource, /渠道编辑中完成一次网页授权/);
 });
 
 test("publication is explicit", () => {
@@ -30,6 +33,14 @@ test("wizard initialization uses a stable snapshot and explicitly invalidates di
     assert.match(source, /initializedKeyRef\.current === initializationKey/);
     assert.match(source, /invalidateDiscovery/);
     assert.match(source, /setDiscovering\(false\)/);
+});
+
+test("wizard wires discovery coordination to the live connection draft", () => {
+    assert.match(source, /createModelDiscoveryCoordinator/);
+    assert.match(source, /discoveryCoordinatorRef\.current\.sync/);
+    assert.match(source, /setDiscoveredModels\(\[\]\)/);
+    assert.match(source, /discoveryCoordinatorRef\.current\.begin/);
+    assert.ok((source.match(/discoveryCoordinatorRef\.current\.isCurrent/g) || []).length >= 3);
 });
 
 test("closing the wizard immediately resets the visible step", () => {

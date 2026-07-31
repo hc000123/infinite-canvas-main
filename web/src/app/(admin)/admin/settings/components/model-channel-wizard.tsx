@@ -9,7 +9,7 @@ import type { AiModelKind } from "@/lib/ai-model-kind";
 import type { AdminModelChannel, AdminModelTextEndpoint, AdminPublicModelChannelSettings } from "@/services/api/admin";
 
 import { isRoutableModelChannel, modelChannelHasCapability } from "../model-channel-publication";
-import { applyWizardPublication, buildWizardChannel, buildWizardProspectiveChannel, normalizeWizardModels, type WizardChannelDraft, type WizardPublicSelection } from "../model-channel-wizard-model";
+import { applyWizardPublication, buildWizardChannel, buildWizardProspectiveChannel, createModelDiscoveryCoordinator, normalizeWizardModels, type WizardChannelDraft, type WizardPublicSelection } from "../model-channel-wizard-model";
 
 type ModelChannelWizardProps = {
     open: boolean;
@@ -65,7 +65,7 @@ export function ModelChannelWizard({
     const [initializedKey, setInitializedKey] = useState("");
     const submittingRef = useRef(false);
     const initializedKeyRef = useRef("");
-    const discoverySequenceRef = useRef(0);
+    const discoveryCoordinatorRef = useRef(createModelDiscoveryCoordinator());
     const apiConnectionDraftRef = useRef({ baseUrl: "", apiKey: "" });
     const cliConnectionDraftRef = useRef(emptyCliConnection());
     const initializationInputRef = useRef({ existingChannel, initialChannel, publicModelChannel });
@@ -74,6 +74,12 @@ export function ModelChannelWizard({
     const protocol = (Form.useWatch("protocol", form) || initialChannel.protocol) as AdminModelChannel["protocol"];
     const baseUrl = Form.useWatch("baseUrl", form) ?? baseChannel.baseUrl;
     const apiKey = Form.useWatch("apiKey", form) ?? "";
+    const cliPath = Form.useWatch("cliPath", form) ?? baseChannel.cliPath;
+    const workDir = Form.useWatch("workDir", form) ?? baseChannel.workDir;
+    const outputDir = Form.useWatch("outputDir", form) ?? baseChannel.outputDir;
+    const timeoutSeconds = Form.useWatch("timeoutSeconds", form) ?? baseChannel.timeoutSeconds;
+    const sessionId = Form.useWatch("sessionId", form) ?? baseChannel.sessionId;
+    const concurrencyLimit = Form.useWatch("concurrencyLimit", form) ?? baseChannel.concurrencyLimit;
     const selectedModels = Form.useWatch("models", form) || [];
     const endpointMappings = Form.useWatch("endpointMappings", form) || [];
     const capabilities = Form.useWatch("capabilities", form) || [];
@@ -98,9 +104,21 @@ export function ModelChannelWizard({
     const defaultVideoOptions = useMemo(() => defaultOptionsForCapability(projectedPublication.availableModels, projectedChannels, "video"), [projectedChannels, projectedPublication.availableModels]);
     const hasSavedKey = Boolean(existingChannel?.apiKey.trim());
     const initializationKey = wizardInitializationKey(existingChannel, initialChannel, publicModelChannel);
+    const discoveryDraft = useMemo(() => buildDiscoveryChannel(baseChannel, scopeDraftToProtocol({
+        ...form.getFieldsValue(true),
+        protocol,
+        baseUrl,
+        apiKey,
+        cliPath,
+        workDir,
+        outputDir,
+        timeoutSeconds,
+        sessionId,
+        concurrencyLimit,
+    })), [apiKey, baseChannel, baseUrl, cliPath, concurrencyLimit, form, outputDir, protocol, sessionId, timeoutSeconds, workDir]);
     const busy = saving || submitting;
     const invalidateDiscovery = useCallback(() => {
-        discoverySequenceRef.current += 1;
+        discoveryCoordinatorRef.current.reset();
         setDiscovering(false);
     }, []);
 
@@ -139,6 +157,13 @@ export function ModelChannelWizard({
     }, [form, initializationKey, invalidateDiscovery, open]);
 
     useEffect(() => {
+        if (!open || initializedKey !== initializationKey) return;
+        if (!discoveryCoordinatorRef.current.sync(discoveryDraft)) return;
+        setDiscoveredModels([]);
+        setDiscovering(false);
+    }, [discoveryDraft, initializationKey, initializedKey, open]);
+
+    useEffect(() => {
         if (!open || step !== 3 || initializedKey !== initializationKey) return;
         clearInvalidDefault(form, "defaultTextModel", defaultTextOptions);
         clearInvalidDefault(form, "defaultImageModel", defaultImageOptions);
@@ -147,6 +172,8 @@ export function ModelChannelWizard({
 
     const selectProtocol = (nextProtocol: AdminModelChannel["protocol"]) => {
         if (nextProtocol === protocol) return;
+        invalidateDiscovery();
+        setDiscoveredModels([]);
         if (protocol === "jimeng-cli") {
             cliConnectionDraftRef.current = pickCliConnection(form.getFieldsValue(true));
             form.setFieldsValue({ protocol: nextProtocol, ...emptyCliConnection(), ...apiConnectionDraftRef.current });
@@ -190,17 +217,17 @@ export function ModelChannelWizard({
             return;
         }
         const draft = buildDiscoveryChannel(existingChannel || initialChannel, scopeDraftToProtocol(form.getFieldsValue(true)));
-        const sequence = ++discoverySequenceRef.current;
+        const request = discoveryCoordinatorRef.current.begin(draft);
         setDiscovering(true);
         try {
             const result = normalizeWizardModels(await onDiscoverModels(draft));
-            if (sequence !== discoverySequenceRef.current) return;
+            if (!discoveryCoordinatorRef.current.isCurrent(request, buildDiscoveryChannel(existingChannel || initialChannel, scopeDraftToProtocol(form.getFieldsValue(true))))) return;
             setDiscoveredModels(result);
             message.success(`已发现 ${result.length} 个模型，请按需选择`);
         } catch (error) {
-            if (sequence === discoverySequenceRef.current) message.error(safeErrorMessage(error, [draft.apiKey, form.getFieldValue("apiKey") || ""]));
+            if (discoveryCoordinatorRef.current.isCurrent(request, buildDiscoveryChannel(existingChannel || initialChannel, scopeDraftToProtocol(form.getFieldsValue(true))))) message.error(safeErrorMessage(error, [draft.apiKey, form.getFieldValue("apiKey") || ""]));
         } finally {
-            if (sequence === discoverySequenceRef.current) setDiscovering(false);
+            if (discoveryCoordinatorRef.current.isCurrent(request, buildDiscoveryChannel(existingChannel || initialChannel, scopeDraftToProtocol(form.getFieldsValue(true))))) setDiscovering(false);
         }
     };
 
@@ -238,21 +265,31 @@ export function ModelChannelWizard({
             closable={!busy}
             maskClosable={!busy}
             keyboard={!busy}
-            onCancel={() => { if (!busy) onCancel(); }}
+            onCancel={() => { if (!busy) { invalidateDiscovery(); onCancel(); } }}
             destroyOnHidden
             styles={{ body: { maxHeight: "calc(100dvh - 190px)", overflowY: "auto" } }}
             footer={
                 <Flex justify="space-between" align="center">
-                    <Button onClick={onCancel} disabled={busy}>取消</Button>
+                    <Button onClick={() => { invalidateDiscovery(); onCancel(); }} disabled={busy}>取消</Button>
                     <Space>
-                        {step > 0 ? <Button onClick={() => setStep((current) => current - 1)} disabled={busy}>上一步</Button> : null}
+                        {step > 0 ? <Button onClick={() => { invalidateDiscovery(); setStep((current) => current - 1); }} disabled={busy}>上一步</Button> : null}
                         {step < 3 ? <Button type="primary" disabled={busy} onClick={() => void nextStep()}>下一步</Button> : <Button type="primary" loading={busy} disabled={busy} onClick={() => void finish()}>保存渠道</Button>}
                     </Space>
                 </Flex>
             }
         >
             <Steps current={step} size="small" responsive items={wizardSteps.map((title) => ({ title }))} style={{ marginBottom: 24 }} />
-            <Form form={form} layout="vertical" requiredMark={false}>
+            <Form
+                form={form}
+                layout="vertical"
+                requiredMark={false}
+                onValuesChange={(_, values) => {
+                    const draft = buildDiscoveryChannel(existingChannel || initialChannel, scopeDraftToProtocol(values));
+                    if (!discoveryCoordinatorRef.current.sync(draft)) return;
+                    setDiscoveredModels([]);
+                    setDiscovering(false);
+                }}
+            >
                 <Form.Item name="protocol" hidden rules={[{ required: true }]}><Input /></Form.Item>
                 <div style={{ display: step === 0 ? "block" : "none" }}>
                     <Typography.Title level={5} style={{ marginTop: 0 }}>这个渠道如何连接模型？</Typography.Title>

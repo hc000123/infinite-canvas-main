@@ -225,6 +225,44 @@ export type ChannelVerificationRequest = {
     lockKeys: string[];
 };
 
+export type ModelDiscoveryRequest = {
+    session: number;
+    requestId: number;
+};
+
+export function createModelDiscoveryCoordinator() {
+    let session = 0;
+    let nextRequestId = 0;
+    let latestRequestId = 0;
+    let connectionKey = "";
+    const sync = (channel: AdminModelChannel) => {
+        const nextKey = modelDiscoveryConnectionKey(channel);
+        if (nextKey === connectionKey) return false;
+        session += 1;
+        latestRequestId = 0;
+        connectionKey = nextKey;
+        return true;
+    };
+    return {
+        reset() {
+            session += 1;
+            latestRequestId = 0;
+            connectionKey = "";
+        },
+        sync,
+        begin(channel: AdminModelChannel): ModelDiscoveryRequest {
+            sync(channel);
+            latestRequestId = ++nextRequestId;
+            return { session, requestId: latestRequestId };
+        },
+        isCurrent(request: ModelDiscoveryRequest, channel: AdminModelChannel) {
+            return request.session === session
+                && request.requestId === latestRequestId
+                && connectionKey === modelDiscoveryConnectionKey(channel);
+        },
+    };
+}
+
 export function createChannelVerificationCoordinator() {
     let session = 0;
     let nextRequestId = 0;
@@ -256,6 +294,20 @@ export function createChannelVerificationCoordinator() {
             return true;
         },
     };
+}
+
+function modelDiscoveryConnectionKey(channel: AdminModelChannel) {
+    return JSON.stringify({
+        protocol: channel.protocol,
+        baseUrl: channel.baseUrl.trim(),
+        apiKey: channel.apiKey.trim(),
+        cliPath: channel.cliPath.trim(),
+        workDir: channel.workDir.trim(),
+        outputDir: channel.outputDir.trim(),
+        timeoutSeconds: channel.timeoutSeconds,
+        sessionId: channel.sessionId,
+        concurrencyLimit: channel.concurrencyLimit,
+    });
 }
 
 export function filterWizardPublicationSnapshot(current: AdminPublicModelChannelSettings, channels: AdminModelChannel[]): AdminPublicModelChannelSettings {

@@ -8,6 +8,7 @@ import {
     channelVerificationCopy,
     channelVerificationMode,
     createChannelVerificationCoordinator,
+    createModelDiscoveryCoordinator,
     filterWizardPublicationSnapshot,
     normalizeWizardModels,
     runChannelVerification,
@@ -460,4 +461,40 @@ test("检测协调器按渠道锁连接检测并按模型锁其他检测", () =>
     assert.ok(coordinator.begin(1, textChannel, ["text-a"]));
     assert.equal(coordinator.begin(1, textChannel, ["text-a"]), null);
     assert.ok(coordinator.begin(1, textChannel, ["text-b"]));
+});
+
+test("模型发现请求绑定开始时的协议和连接草稿", () => {
+    const drafts = [
+        channel({ protocol: "volcengine-ark" }),
+        channel({ baseUrl: "https://other.example.com" }),
+        channel({ apiKey: "other-key" }),
+        channel({ protocol: "jimeng-cli", baseUrl: "", apiKey: "", cliPath: "/other/dreamina", sessionId: 2 }),
+    ];
+
+    drafts.forEach((changedDraft) => {
+        const coordinator = createModelDiscoveryCoordinator();
+        const original = channel();
+        coordinator.sync(original);
+        const request = coordinator.begin(original);
+
+        assert.equal(coordinator.sync(changedDraft), true);
+        assert.equal(coordinator.isCurrent(request, changedDraft), false);
+    });
+});
+
+test("模型发现协调器隔离关闭重开和后发请求，稳定草稿可正常完成", () => {
+    const coordinator = createModelDiscoveryCoordinator();
+    const draft = channel();
+    coordinator.sync(draft);
+    const requestA = coordinator.begin(draft);
+    const requestB = coordinator.begin(draft);
+
+    assert.equal(coordinator.isCurrent(requestA, draft), false);
+    assert.equal(coordinator.isCurrent(requestB, draft), true);
+
+    coordinator.reset();
+    assert.equal(coordinator.isCurrent(requestB, draft), false);
+    coordinator.sync(draft);
+    const requestC = coordinator.begin(draft);
+    assert.equal(coordinator.isCurrent(requestC, draft), true);
 });

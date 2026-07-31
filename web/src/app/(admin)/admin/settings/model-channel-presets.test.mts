@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyModelChannelPreset, XINGLIAN_MODELS } from "./model-channel-presets.ts";
+import { applyModelChannelPreset, MODEL_CHANNEL_PRESETS, XINGLIAN_MODELS } from "./model-channel-presets.ts";
 
 function emptySettings() {
     return {
@@ -107,6 +107,15 @@ test("keeps Jimeng advanced runtime settings", () => {
     assert.equal(saved?.workDir, "/custom/work");
     assert.equal(saved?.timeoutSeconds, 420);
     assert.equal(saved?.sessionId, 7);
+});
+
+test("Jimeng 预设明确由普通用户在个人配置完成网页登录", () => {
+    const description = MODEL_CHANNEL_PRESETS.find((item) => item.id === "jimeng")?.description || "";
+
+    assert.match(description, /普通用户/);
+    assert.match(description, /个人配置/);
+    assert.match(description, /网页登录/);
+    assert.doesNotMatch(description, /渠道编辑/);
 });
 
 test("splits legacy Comfly models by capability and disables the mixed channel", () => {
