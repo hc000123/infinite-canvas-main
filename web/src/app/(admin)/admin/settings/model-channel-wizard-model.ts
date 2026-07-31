@@ -144,7 +144,7 @@ export function applyWizardPublication(
         .some((channel) => modelChannelHasCapability(channel, capability));
     const textModels = availableModels.filter((model) => hasCapability(model, "text"));
     const requestedEndpoints = new Map(normalizeTextEndpoints(selection.modelTextEndpoints));
-    const currentEndpoints = new Map(current.modelTextEndpoints
+    const currentEndpoints = new Map((current.modelTextEndpoints || [])
         .map((item) => ({ model: item.model.trim(), endpointType: item.endpointType }))
         .filter((item, index, items) => item.model && textModels.includes(item.model) && items.findIndex((candidate) => candidate.model === item.model) === index)
         .map((item) => [item.model, item.endpointType] as const));

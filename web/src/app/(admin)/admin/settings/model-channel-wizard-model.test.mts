@@ -236,6 +236,21 @@ test("无关 sibling 的公开文本模型缺少端点记录时补 chat_completi
     assert.deepEqual(result.modelTextEndpoints, [{ model: "sibling-text", endpointType: "chat_completions" }]);
 });
 
+test("公开配置文本端点尚未就绪时按空列表处理", () => {
+    const current = publication({ availableModels: ["text-model"] });
+    delete (current as Partial<AdminPublicModelChannelSettings>).modelTextEndpoints;
+
+    const result = applyWizardPublication(
+        current,
+        undefined,
+        channel({ models: ["text-model"] }),
+        [],
+        { publishedModels: [], defaultTextModel: "", defaultImageModel: "", defaultVideoModel: "", modelTextEndpoints: [] },
+    );
+
+    assert.deepEqual(result.modelTextEndpoints, [{ model: "text-model", endpointType: "chat_completions" }]);
+});
+
 test("本次明确公开的文本模型未指定端点时重置为 chat_completions", () => {
     const selected = channel({ id: "edited", models: ["selected-text"] });
     const result = applyWizardPublication(
