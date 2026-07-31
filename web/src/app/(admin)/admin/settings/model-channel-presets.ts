@@ -1,4 +1,5 @@
 import type { AdminModelChannel, AdminSettings } from "../../../../services/api/admin.ts";
+import { sanitizeModelChannelPublication } from "./model-channel-publication.ts";
 
 export type ModelChannelPresetId = "volcengine" | "xinglian" | "jimeng" | "comfly" | "openai-compatible";
 export type ModelChannelPresetInput = {
@@ -28,8 +29,8 @@ export const COMFLY_VIDEO_MODELS = ["veo3.1-fast", "veo3.1"] as const;
 
 export const MODEL_CHANNEL_PRESETS: readonly ModelChannelPresetDefinition[] = [
     { id: "volcengine", name: "火山 Ark", description: "Seedance 企业 API；只需 Key 和 EP。", tag: "视频" },
-    { id: "xinglian", name: "星链云", description: "一次开放 9 个 SD2 视频模型。", tag: "视频" },
-    { id: "jimeng", name: "即梦 CLI", description: "自动配置五模式，随后完成网页授权。", tag: "本地 CLI" },
+    { id: "xinglian", name: "星链云", description: "一次配置 9 个 SD2 视频模型到私有渠道。", tag: "视频" },
+    { id: "jimeng", name: "即梦 CLI", description: "自动配置五个模型；普通用户需在个人配置完成即梦网页登录。", tag: "本地 CLI" },
     { id: "comfly", name: "Comfly", description: "一次 Key 自动拆分文本、图片和视频渠道。", tag: "整包" },
     { id: "openai-compatible", name: "通用中转", description: "适用于其他 OpenAI 兼容服务。", tag: "自定义" },
 ];
@@ -42,7 +43,7 @@ export function applyModelChannelPreset(settings: AdminSettings, presetId: Model
     if (presetId === "jimeng") applyJimeng(next, summary);
     if (presetId === "comfly") applyComfly(next, input, summary);
     if (presetId === "openai-compatible") applyOpenAICompatible(next, input, summary);
-    reconcilePublicModels(next);
+    next.public.modelChannel = sanitizeModelChannelPublication(next.public.modelChannel, next.private.channels);
     summary.publishedModels = [...next.public.modelChannel.availableModels];
     return { settings: next, summary };
 }
@@ -205,13 +206,6 @@ function upsertChannel(settings: AdminSettings, index: number, channel: AdminMod
 function findChannelIndex(channels: AdminModelChannel[], id: string, fallback: (channel: AdminModelChannel) => boolean) {
     const exact = channels.findIndex((item) => item.id === id);
     return exact >= 0 ? exact : channels.findIndex(fallback);
-}
-
-function reconcilePublicModels(settings: AdminSettings) {
-    const enabledModels = uniqueValues(settings.private.channels.filter((item) => item.enabled).flatMap((item) => item.models || []));
-    const enabled = new Set(enabledModels);
-    const current = settings.public.modelChannel.availableModels.filter((item) => enabled.has(item));
-    settings.public.modelChannel.availableModels = uniqueValues([...current, ...enabledModels]);
 }
 
 function credential(...values: Array<string | undefined>) {

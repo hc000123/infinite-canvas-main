@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { classifyAiModels, defaultConfig, resolveEffectiveConfig, resolveSeedanceRequestModel, textModelEndpointType } from "./use-config-store.ts";
+import { classifyAiModels, defaultConfig, resolveEffectiveConfig, resolveSeedanceRequestModel, textModelEndpointType, useConfigStore } from "./use-config-store.ts";
 
 test("classifies nano banana models as image models", () => {
     const result = classifyAiModels(["nano-banana-pro", "nano-banana-2", "gemini-3.1-pro-preview"]);
@@ -58,6 +58,78 @@ test("falls back to backend channel when public model channel is unavailable", (
 
     assert.equal(result.channelMode, "remote");
     assert.equal(result.videoProtocol, "volcengine-ark");
+});
+
+test("keeps public model credit costs in the effective config", () => {
+    const modelCosts = [{ model: "video-one", credits: 18 }];
+    const result = resolveEffectiveConfig(
+        { ...defaultConfig, videoModel: "video-one" },
+        {
+            availableModels: ["video-one"],
+            modelCosts,
+            modelTextEndpoints: [],
+            modelCapabilities: [{ model: "video-one", capabilities: ["video"] }],
+            modelSources: [{ model: "video-one", channelId: "a", channelName: "渠道 A", protocol: "openai" }],
+            defaultModel: "video-one",
+            defaultImageModel: "",
+            defaultVideoModel: "video-one",
+            defaultTextModel: "",
+            systemPrompt: "",
+            allowCustomChannel: false,
+        },
+    );
+
+    assert.deepEqual(result.modelCosts, modelCosts);
+});
+
+test("keeps sources with the same channel id and different protocols", () => {
+    const modelSources = [
+        { model: "video-one", channelId: "channel-a", channelName: "渠道 A", protocol: "openai" as const },
+        { model: "video-one", channelId: "channel-a", channelName: "渠道 A", protocol: "jimeng-cli" as const },
+    ];
+    const result = resolveEffectiveConfig(
+        { ...defaultConfig, videoModel: "video-one" },
+        {
+            availableModels: ["video-one"],
+            modelCosts: [],
+            modelTextEndpoints: [],
+            modelCapabilities: [{ model: "video-one", capabilities: ["video"] }],
+            modelSources,
+            defaultModel: "video-one",
+            defaultImageModel: "",
+            defaultVideoModel: "video-one",
+            defaultTextModel: "",
+            systemPrompt: "",
+            allowCustomChannel: false,
+        },
+    );
+
+    assert.deepEqual(result.modelSources, modelSources);
+});
+
+test("defaults model costs when rehydrating a legacy persisted config", async () => {
+    const previousConfig = useConfigStore.getState().config;
+    const previousOptions = useConfigStore.persist.getOptions();
+    useConfigStore.persist.setOptions({
+        storage: {
+            getItem: async () => ({
+                state: {
+                    ...useConfigStore.getState(),
+                    config: { ...defaultConfig, modelCosts: undefined as never },
+                },
+            }),
+            setItem: async () => undefined,
+            removeItem: async () => undefined,
+        },
+    });
+
+    try {
+        await useConfigStore.persist.rehydrate();
+        assert.deepEqual(useConfigStore.getState().config.modelCosts, []);
+    } finally {
+        useConfigStore.persist.setOptions(previousOptions);
+        useConfigStore.setState({ config: previousConfig });
+    }
 });
 
 test("drops stale local seedance selection while keeping backend video models visible", () => {

@@ -36,7 +36,17 @@ export function ModelPicker({ config, value, onChange, className, fullWidth = fa
     const [selectedSourceKey, setSelectedSourceKey] = useState("");
     const modelOptions = useMemo(() => resolveModelOptions(config, modelType), [config, modelType]);
     const current = normalizePickerValue(config, modelType, value, modelOptions);
-    const options = useMemo(() => buildModelPickerOptions({ models: modelOptions, value: current }), [modelOptions, current]);
+    const options = useMemo(
+        () =>
+            buildModelPickerOptions({
+                models: modelOptions,
+                value: current,
+                modelSources: config.modelSources,
+                modelCosts: config.modelCosts,
+                modelCapabilities: config.modelCapabilities,
+            }),
+        [modelOptions, current, config.modelSources, config.modelCosts, config.modelCapabilities],
+    );
     const sourceOptions = useMemo(() => resolveModelSourceOptions(config, modelOptions), [config, modelOptions]);
     const activeSource = useMemo(() => resolveActiveModelSource(sourceOptions, current, selectedSourceKey), [current, selectedSourceKey, sourceOptions]);
     const currentSourceLabel = useMemo(() => resolveCurrentModelSourceLabel(sourceOptions, current, activeSource, selectedSourceKey), [activeSource, current, selectedSourceKey, sourceOptions]);
@@ -164,7 +174,8 @@ export function ModelPicker({ config, value, onChange, className, fullWidth = fa
                                             <ModelOptionButton
                                                 key={option.value}
                                                 model={option.value}
-                                                sourceLabel={resolveModelSourceOptionLabel(option.value, sourceOptions, activeSource)}
+                                                sourceLabel={activeSource ? resolveModelSourceOptionLabel(option.value, sourceOptions, activeSource) : option.sourceLabel}
+                                                costLabel={option.costLabel}
                                                 active={option.value === current}
                                                 onSelect={() => selectModel(option.value)}
                                             />
@@ -312,7 +323,7 @@ function ModelSourceButton({ source, active, onSelect }: { source: ModelSourceOp
     );
 }
 
-function ModelOptionButton({ model, sourceLabel, active, onSelect }: { model: string; sourceLabel: string; active: boolean; onSelect: () => void }) {
+function ModelOptionButton({ model, sourceLabel, costLabel, active, onSelect }: { model: string; sourceLabel: string; costLabel: string; active: boolean; onSelect: () => void }) {
     return (
         <button
             type="button"
@@ -325,7 +336,15 @@ function ModelOptionButton({ model, sourceLabel, active, onSelect }: { model: st
             <ModelIcon model={model} />
             <span className="min-w-0 flex-1">
                 <span className="block truncate">{model}</span>
-                <span className="block truncate text-xs text-[var(--studio-text-muted)]">{sourceLabel}</span>
+                <span className="flex min-w-0 items-center gap-1.5 text-xs text-[var(--studio-text-muted)]">
+                    <span className="min-w-0 flex-1 truncate">{sourceLabel}</span>
+                    {costLabel ? (
+                        <>
+                            <span aria-hidden className="shrink-0 opacity-60">·</span>
+                            <span className="shrink-0">{costLabel}</span>
+                        </>
+                    ) : null}
+                </span>
             </span>
             {active ? <Check className="size-4 shrink-0 text-[var(--studio-accent)]" /> : null}
         </button>

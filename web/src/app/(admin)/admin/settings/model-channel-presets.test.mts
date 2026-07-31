@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyModelChannelPreset, XINGLIAN_MODELS } from "./model-channel-presets.ts";
+import { applyModelChannelPreset, MODEL_CHANNEL_PRESETS, XINGLIAN_MODELS } from "./model-channel-presets.ts";
 
 function emptySettings() {
     return {
@@ -58,6 +58,8 @@ test("applies all Xinglian models idempotently without changing billing or defau
     const initial = emptySettings();
     initial.public.modelChannel.defaultVideoModel = "existing-video";
     initial.public.modelChannel.modelCosts = [{ model: "sd2-720p-mini", credits: 18 }];
+    initial.public.modelChannel.availableModels = ["existing-video"];
+    initial.private.channels = [channel({ id: "existing-video", models: ["existing-video"], capabilities: ["video"] })];
     const first = applyModelChannelPreset(initial, "xinglian", { apiKey: "new-key" });
     const second = applyModelChannelPreset(first.settings, "xinglian", { apiKey: "" });
     const channels = second.settings.private.channels.filter((item) => item.id === "xinglian-cloud");
@@ -107,6 +109,15 @@ test("keeps Jimeng advanced runtime settings", () => {
     assert.equal(saved?.sessionId, 7);
 });
 
+test("Jimeng 预设明确由普通用户在个人配置完成网页登录", () => {
+    const description = MODEL_CHANNEL_PRESETS.find((item) => item.id === "jimeng")?.description || "";
+
+    assert.match(description, /普通用户/);
+    assert.match(description, /个人配置/);
+    assert.match(description, /网页登录/);
+    assert.doesNotMatch(description, /渠道编辑/);
+});
+
 test("splits legacy Comfly models by capability and disables the mixed channel", () => {
     const settings = emptySettings();
     settings.private.channels = [channel({ id: "comfly", name: "中转 comfly", baseUrl: "https://ai.comfly.org", models: ["gpt-5.5", "gpt-image-2-all", "veo3.1"], capabilities: ["text", "image"] })];
@@ -120,15 +131,19 @@ test("splits legacy Comfly models by capability and disables the mixed channel",
     assert.equal(result.settings.private.channels.find((item) => item.id === "comfly-text")?.apiKey, "********");
 });
 
-test("reconciles public models from enabled channels", () => {
+test("keeps publication explicit while removing models that no enabled channel serves", () => {
     const settings = emptySettings();
-    settings.public.modelChannel.availableModels = ["stale-model"];
-    settings.private.channels = [channel({ id: "disabled", models: ["stale-model"], enabled: false })];
+    settings.public.modelChannel.availableModels = ["kept-model", "stale-model"];
+    settings.private.channels = [
+        channel({ id: "kept", models: ["kept-model"], enabled: true }),
+        channel({ id: "disabled", models: ["stale-model"], enabled: false }),
+    ];
 
     const result = applyModelChannelPreset(settings, "xinglian", { apiKey: "key" });
 
-    assert.equal(result.settings.public.modelChannel.availableModels.includes("stale-model"), false);
-    assert.deepEqual(result.settings.public.modelChannel.availableModels, XINGLIAN_MODELS);
+    assert.deepEqual(result.settings.public.modelChannel.availableModels, ["kept-model"]);
+    assert.equal(result.settings.public.modelChannel.availableModels.includes("sd2-720p-fast"), false);
+    assert.deepEqual(result.summary.publishedModels, ["kept-model"]);
 });
 
 test("requires credentials for a new provider but accepts saved masked credentials", () => {
@@ -151,5 +166,61 @@ test("creates a generic OpenAI-compatible channel from explicit capability and m
     assert.equal(saved.protocol, "openai");
     assert.deepEqual(saved.capabilities, ["video", "video_query"]);
     assert.deepEqual(saved.models, ["video-one", "video-two"]);
-    assert.equal(result.settings.public.modelChannel.availableModels.includes("video-one"), true);
+    assert.equal(result.settings.public.modelChannel.availableModels.includes("video-one"), false);
+});
+
+test("replacing an Ark preset removes stale publication defaults and text endpoints", () => {
+    const settings = emptySettings();
+    settings.public.modelChannel.availableModels = ["old-ark-model"];
+    settings.public.modelChannel.modelTextEndpoints = [{ model: "old-ark-model", endpointType: "responses" }];
+    settings.public.modelChannel.defaultModel = "old-ark-model";
+    settings.public.modelChannel.defaultTextModel = "old-ark-model";
+    settings.public.modelChannel.defaultImageModel = "old-ark-model";
+    settings.public.modelChannel.defaultVideoModel = "old-ark-model";
+    settings.private.channels = [channel({
+        id: "volcengine-seedance",
+        protocol: "volcengine-ark",
+        baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+        models: ["old-ark-model"],
+        capabilities: ["text", "image", "video"],
+        endpointId: "ep-old",
+        endpointMappings: [{ model: "old-ark-model", endpointId: "ep-old" }],
+    })];
+
+    const result = applyModelChannelPreset(settings, "volcengine", { endpointId: "ep-new" });
+
+    assert.deepEqual(result.settings.public.modelChannel.availableModels, []);
+    assert.deepEqual(result.settings.public.modelChannel.modelTextEndpoints, []);
+    assert.equal(result.settings.public.modelChannel.defaultModel, "");
+    assert.equal(result.settings.public.modelChannel.defaultTextModel, "");
+    assert.equal(result.settings.public.modelChannel.defaultImageModel, "");
+    assert.equal(result.settings.public.modelChannel.defaultVideoModel, "");
+});
+
+test("changing a generic relay from text to image clears only invalid text publication", () => {
+    const settings = emptySettings();
+    settings.public.modelChannel.availableModels = ["shared-model"];
+    settings.public.modelChannel.modelTextEndpoints = [{ model: "shared-model", endpointType: "responses" }];
+    settings.public.modelChannel.defaultTextModel = "shared-model";
+    settings.public.modelChannel.defaultImageModel = "shared-model";
+    settings.private.channels = [channel({
+        id: "openai-shared-relay",
+        name: "Shared Relay",
+        baseUrl: "https://relay.example.com/v1",
+        apiKey: "saved-key",
+        models: ["shared-model"],
+        capabilities: ["text"],
+    })];
+
+    const result = applyModelChannelPreset(settings, "openai-compatible", {
+        name: "Shared Relay",
+        baseUrl: "https://relay.example.com/v1",
+        capability: "image",
+        models: ["shared-model"],
+    });
+
+    assert.deepEqual(result.settings.public.modelChannel.availableModels, ["shared-model"]);
+    assert.deepEqual(result.settings.public.modelChannel.modelTextEndpoints, []);
+    assert.equal(result.settings.public.modelChannel.defaultTextModel, "");
+    assert.equal(result.settings.public.modelChannel.defaultImageModel, "shared-model");
 });

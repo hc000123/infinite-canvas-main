@@ -1,15 +1,22 @@
+import type { AdminModelCapability, AdminModelCost, AdminModelSource } from "../services/api/admin.ts";
+
 export type ModelProviderKey = "openai" | "anthropic" | "google" | "xai" | "deepseek" | "zhipu" | "other";
 
 export type ModelPickerOption = {
     value: string;
     provider: ModelProviderKey;
     providerLabel: string;
+    sourceLabel: string;
+    costLabel: string;
     searchText: string;
 };
 
-type BuildModelPickerOptionsInput = {
+export type BuildModelPickerOptionsInput = {
     models: string[];
     value?: string;
+    modelSources?: AdminModelSource[];
+    modelCosts?: AdminModelCost[];
+    modelCapabilities?: AdminModelCapability[];
 };
 
 const providerRules: Array<{ key: ModelProviderKey; label: string; aliases: string[] }> = [
@@ -21,15 +28,23 @@ const providerRules: Array<{ key: ModelProviderKey; label: string; aliases: stri
     { key: "zhipu", label: "智谱", aliases: ["zhipu", "glm"] },
 ];
 
-export function buildModelPickerOptions({ models, value }: BuildModelPickerOptionsInput) {
+export function buildModelPickerOptions({ models, value, modelSources = [], modelCosts = [], modelCapabilities = [] }: BuildModelPickerOptionsInput): ModelPickerOption[] {
     const values = uniqueModels([value, ...models]);
     return values.map((model) => {
         const provider = resolveModelProvider(model);
+        const sources = modelSources.filter((item) => item.model.trim() === model);
+        const uniqueSources = uniqueModelSources(sources);
+        const sourceLabel = uniqueSources.length > 1 ? `${uniqueSources.length} 个渠道` : uniqueSources[0]?.channelName.trim() || (uniqueSources[0] ? modelProtocolLabel(uniqueSources[0].protocol) : provider.label);
+        const cost = modelCosts.find((item) => item.model.trim() === model);
+        const capabilities = modelCapabilities.find((item) => item.model.trim() === model)?.capabilities.map((item) => item.trim().toLowerCase()) || [];
+        const costUnit = capabilities.includes("video") ? "秒" : capabilities.includes("image") ? "张" : "次";
         return {
             value: model,
             provider: provider.key,
             providerLabel: provider.label,
-            searchText: [model, provider.label, ...provider.aliases].join(" ").toLowerCase(),
+            sourceLabel,
+            costLabel: cost ? `${cost.credits} 算力点/${costUnit}` : "",
+            searchText: [model, provider.label, ...provider.aliases, ...sources.flatMap((source) => [source.channelName, source.protocol, modelProtocolLabel(source.protocol)])].join(" ").toLowerCase(),
         };
     });
 }
@@ -60,6 +75,23 @@ export function resolveModelProvider(model: string) {
     const name = model.toLowerCase();
     const provider = providerRules.find((item) => item.aliases.some((alias) => name.includes(alias)));
     return provider || { key: "other" as const, label: "其他", aliases: [] };
+}
+
+function uniqueModelSources(sources: AdminModelSource[]) {
+    const seen = new Set<string>();
+    return sources.filter((source) => {
+        const key = `${source.channelId.trim() || source.channelName.trim()}:${source.protocol}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+function modelProtocolLabel(protocol: AdminModelSource["protocol"]) {
+    if (protocol === "volcengine-ark") return "火山 Ark";
+    if (protocol === "jimeng-cli") return "即梦 CLI";
+    if (protocol === "xinglian-cloud") return "星链云 SD2";
+    return "OpenAI 兼容";
 }
 
 function uniqueModels(models: Array<string | undefined>) {

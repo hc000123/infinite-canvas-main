@@ -1,15 +1,17 @@
 "use client";
 
-import { CheckCircleOutlined, DeleteOutlined, FormatPainterOutlined, LoadingOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, SearchOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, DeleteOutlined, FormatPainterOutlined, LoadingOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
 import { json } from "@codemirror/lang-json";
-import { Alert, App, Button, Card, Checkbox, Col, Drawer, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Select, Space, Switch, Table, Tabs, Tag, Typography, type FormInstance } from "antd";
-import type { InputRef } from "antd";
+import { Alert, App, Button, Card, Col, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Select, Space, Switch, Table, Tabs, Tag, Typography, type FormInstance } from "antd";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorView } from "@uiw/react-codemirror";
 
 import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind";
+import { ModelChannelWizard } from "./components/model-channel-wizard";
 import { ProviderPresetModal } from "./components/provider-preset-modal";
+import { sanitizeModelChannelPublication } from "./model-channel-publication";
+import { channelVerificationCopy, createAuthoritativeSettingsCoordinator, createChannelVerificationCoordinator, filterWizardPublicationSnapshot, finishAuthoritativeSettingsOperation, persistAuthoritativeSettingsMutation, runChannelVerification, syncConfiguredModelsFromAuthoritativeSettings } from "./model-channel-wizard-model";
 import type { ModelChannelPresetResult } from "./model-channel-presets";
 import {
     fetchAdminSettings,
@@ -82,13 +84,9 @@ const emptyChannel: AdminModelChannel = {
     remark: "",
 };
 const savedSecretExtra = "已保存的密钥不会在刷新后回显明文；留空保存会继续使用后台已保存的密钥，只在输入新值时替换。";
-const xinglianVideoModels = ["sd2-720p-fast", "sd2-720p", "sd2-720p-sh", "sd2-720p-mini", "sd2-1080p-mini", "sd2-1080p-fast", "sd2-1080p", "sd2-720p-ax-fast", "sd2-720p-ax"];
 
 type SettingsTabKey = "public" | "private";
 type EditorMode = "visual" | "json";
-type ModelSelectTabKey = "new" | "current";
-type AutoSaveStatus = "idle" | "saving" | "saved" | "error";
-type ChannelFormValues = AdminModelChannel & { endpointId?: string };
 type ChannelTableItem = AdminModelChannel & { _index: number; _rowKey: string };
 
 export default function AdminSettingsPage() {
@@ -99,34 +97,26 @@ export default function AdminSettingsPage() {
     const [editorMode, setEditorMode] = useState<Record<SettingsTabKey, EditorMode>>({ public: "visual", private: "visual" });
     const [jsonText, setJsonText] = useState<Record<SettingsTabKey, string>>({ public: "", private: "" });
     const [channels, setChannels] = useState<AdminModelChannel[]>([]);
-    const [channelForm] = Form.useForm<ChannelFormValues>();
+    const [isChannelWizardOpen, setIsChannelWizardOpen] = useState(false);
     const [editingChannelIndex, setEditingChannelIndex] = useState<number | null>(null);
-    const [isChannelDrawerOpen, setIsChannelDrawerOpen] = useState(false);
+    const [wizardInitialChannel, setWizardInitialChannel] = useState<AdminModelChannel>(emptyChannel);
+    const [isSavingChannelWizard, setIsSavingChannelWizard] = useState(false);
     const [isProviderPresetOpen, setIsProviderPresetOpen] = useState(false);
     const [isApplyingProviderPreset, setIsApplyingProviderPreset] = useState(false);
-    const [channelAutoSaveStatus, setChannelAutoSaveStatus] = useState<AutoSaveStatus>("idle");
-    const channelAutoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const channelAutoSaveSeqRef = useRef(0);
-    const modelSelectSearchInputRef = useRef<InputRef>(null);
-    const modelSelectChannelDraftRef = useRef<ChannelFormValues | null>(null);
     const enterpriseVideoFocusRef = useRef<HTMLDivElement>(null);
+    const verificationCoordinatorRef = useRef(createChannelVerificationCoordinator());
+    const authoritativeSettingsCoordinatorRef = useRef(createAuthoritativeSettingsCoordinator());
     const [testChannelIndex, setTestChannelIndex] = useState<number | null>(null);
     const [testKeyword, setTestKeyword] = useState("");
     const [selectedTestModels, setSelectedTestModels] = useState<string[]>([]);
     const [testingModels, setTestingModels] = useState<string[]>([]);
     const [testResults, setTestResults] = useState<Record<string, { status: "success" | "error"; duration?: string; message: string }>>({});
-    const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
-    const [modelSelectSource, setModelSelectSource] = useState<string[]>([]);
-    const [modelSelectExisting, setModelSelectExisting] = useState<string[]>([]);
-    const [modelSelectSelected, setModelSelectSelected] = useState<string[]>([]);
-    const [modelSelectKeyword, setModelSelectKeyword] = useState("");
-    const [modelSelectTab, setModelSelectTab] = useState<ModelSelectTabKey>("new");
-    const [isFetchingChannelModels, setIsFetchingChannelModels] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isDeletingChannel, setIsDeletingChannel] = useState(false);
     const [isEnterpriseVideoFocus, setIsEnterpriseVideoFocus] = useState(false);
     const [modelCosts, setModelCosts] = useState<AdminModelCost[]>([]);
-    const [knownModels, setKnownModels] = useState<string[]>([]);
+    const [configuredModels, setConfiguredModels] = useState<string[]>([]);
     const watchedPublicModels = Form.useWatch(["public", "modelChannel", "availableModels"], form);
     const watchedModelTextEndpoints = Form.useWatch(["public", "modelChannel", "modelTextEndpoints"], form);
     const publicModels = useMemo(() => watchedPublicModels || [], [watchedPublicModels]);
@@ -142,42 +132,38 @@ export default function AdminSettingsPage() {
     const activeMode = editorMode[activeTab];
     const activeJsonText = jsonText[activeTab];
     const jsonError = activeMode === "json" ? getJsonError(activeJsonText) : "";
-    const modelSelectGroups = useMemo(() => buildModelSelectGroups(modelSelectSource, modelSelectExisting), [modelSelectSource, modelSelectExisting]);
-    const activeModelSelectModels = useMemo(() => {
-        const keyword = modelSelectKeyword.trim().toLowerCase();
-        return modelSelectGroups[modelSelectTab].filter((model) => model.toLowerCase().includes(keyword));
-    }, [modelSelectGroups, modelSelectKeyword, modelSelectTab]);
-    const activeSelectedCount = activeModelSelectModels.filter((model) => modelSelectSelected.includes(model)).length;
-    const channelProtocol = Form.useWatch("protocol", channelForm);
-    const channelAPIKey = Form.useWatch("apiKey", channelForm);
-    const hasSavedChannelAPIKey = editingChannelIndex !== null && Boolean(channels[editingChannelIndex]?.apiKey);
-    const hasNewChannelAPIKey = Boolean(channelAPIKey && !isMaskedAPIKey(channelAPIKey));
     const publicConfigWarnings = useMemo(() => buildPublicConfigWarnings(publicModelChannel, channels), [channels, publicModelChannel]);
     const privateConfigWarnings = useMemo(() => buildPrivateConfigWarnings(channels, privateVolcengineAsset), [channels, privateVolcengineAsset]);
     const activeWarnings = activeTab === "public" ? publicConfigWarnings : privateConfigWarnings;
+    const isSettingsBusy = isLoading || isSaving || isApplyingProviderPreset || isSavingChannelWizard || isDeletingChannel;
 
     const loadSettings = useCallback(async () => {
         if (!token) return;
-        setIsLoading(true);
         try {
-            const data = normalizeSettings(await fetchAdminSettings(token));
-            form.setFieldsValue(data);
-            setChannels(data.private.channels);
-            setModelCosts(data.public.modelChannel.modelCosts);
-            setKnownModels(collectKnownModels(data));
-            setJsonText({
-                public: JSON.stringify(data.public, null, 2),
-                private: JSON.stringify(data.private, null, 2),
-            });
+            await syncConfiguredModelsFromAuthoritativeSettings(
+                authoritativeSettingsCoordinatorRef.current,
+                async () => normalizeSettings(await fetchAdminSettings(token)),
+                (models, data) => {
+                    setConfiguredModels(models);
+                    form.setFieldsValue(data);
+                    setChannels(data.private.channels);
+                    setModelCosts(data.public.modelChannel.modelCosts);
+                    setJsonText({
+                        public: JSON.stringify(data.public, null, 2),
+                        private: JSON.stringify(data.private, null, 2),
+                    });
+                },
+                setIsLoading,
+                { kind: "read" },
+            );
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取设置失败");
-        } finally {
-            setIsLoading(false);
         }
     }, [form, message, token]);
 
     useEffect(() => {
         void loadSettings();
+        return () => authoritativeSettingsCoordinatorRef.current.reset();
     }, [loadSettings]);
 
     useEffect(() => {
@@ -190,12 +176,6 @@ export default function AdminSettingsPage() {
         return () => window.clearTimeout(timer);
     }, []);
 
-    useEffect(() => {
-        if (!isModelSelectorOpen) return;
-        const timer = window.setTimeout(() => modelSelectSearchInputRef.current?.focus({ cursor: "all" }), 80);
-        return () => window.clearTimeout(timer);
-    }, [isModelSelectorOpen]);
-
     const changeTab = (nextTab: SettingsTabKey) => {
         setActiveTab(nextTab);
     };
@@ -206,43 +186,43 @@ export default function AdminSettingsPage() {
         if (!values) {
             return;
         }
-        setIsSaving(true);
         try {
-            const saved = normalizeSettings(await saveAdminSettings(token, values));
-            const merged = mergePrivateSecrets(values, saved);
-            form.setFieldsValue(merged);
-            setChannels(merged.private.channels);
-            setModelCosts(merged.public.modelChannel.modelCosts);
-            rememberKnownModels(merged);
-            setJsonText({
-                public: JSON.stringify(merged.public, null, 2),
-                private: JSON.stringify(merged.private, null, 2),
-            });
-            message.success("已保存");
+            await syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
+                const saved = normalizeSettings(await saveAdminSettings(token, values));
+                return mergePrivateSecrets(values, saved);
+            }, (models, merged) => {
+                setConfiguredModels(models);
+                form.setFieldsValue(merged);
+                setChannels(merged.private.channels);
+                setModelCosts(merged.public.modelChannel.modelCosts);
+                setJsonText({
+                    public: JSON.stringify(merged.public, null, 2),
+                    private: JSON.stringify(merged.private, null, 2),
+                });
+                message.success("已保存");
+            }, setIsSaving, { kind: "snapshot" });
         } catch (error) {
             message.error(error instanceof Error ? error.message : "保存失败");
-        } finally {
-            setIsSaving(false);
         }
     };
 
     const applyProviderPreset = async (result: ModelChannelPresetResult) => {
         if (!token) return;
-        setIsApplyingProviderPreset(true);
         try {
-            const saved = normalizeSettings(await saveAdminSettings(token, result.settings));
-            const merged = mergePrivateSecrets(result.settings, saved);
-            form.setFieldsValue(merged);
-            setChannels(merged.private.channels);
-            setModelCosts(merged.public.modelChannel.modelCosts);
-            rememberKnownModels(merged);
-            setJsonText({ public: JSON.stringify(merged.public, null, 2), private: JSON.stringify(merged.private, null, 2) });
-            setIsProviderPresetOpen(false);
-            message.success("厂商预设已一次配置完成");
+            await syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
+                const saved = normalizeSettings(await saveAdminSettings(token, result.settings));
+                return mergePrivateSecrets(result.settings, saved);
+            }, (models, merged) => {
+                setConfiguredModels(models);
+                form.setFieldsValue(merged);
+                setChannels(merged.private.channels);
+                setModelCosts(merged.public.modelChannel.modelCosts);
+                setJsonText({ public: JSON.stringify(merged.public, null, 2), private: JSON.stringify(merged.private, null, 2) });
+                setIsProviderPresetOpen(false);
+                message.success("厂商预设已一次配置完成");
+            }, setIsApplyingProviderPreset, { kind: "snapshot" });
         } catch (error) {
             message.error(error instanceof Error ? error.message : "厂商预设保存失败");
-        } finally {
-            setIsApplyingProviderPreset(false);
         }
     };
 
@@ -263,7 +243,6 @@ export default function AdminSettingsPage() {
         form.setFieldsValue({ [tab]: parsed } as Partial<AdminSettings>);
         if (tab === "private") setChannels((parsed as AdminSettings["private"]).channels);
         if (tab === "public") setModelCosts((parsed as AdminSettings["public"]).modelChannel.modelCosts);
-        rememberKnownModels({ ...normalizeSettings(form.getFieldsValue(true) as AdminSettings), [tab]: parsed });
         setEditorMode((current) => ({ ...current, [tab]: nextMode }));
     };
 
@@ -280,24 +259,21 @@ export default function AdminSettingsPage() {
         }));
     };
 
-    const openChannelDrawer = (index: number | null) => {
+    const openChannelWizard = (index: number | null, initialChannel?: AdminModelChannel) => {
+        const channel = index === null ? initialChannel || emptyChannel : channels[index];
         setEditingChannelIndex(index);
-        setIsChannelDrawerOpen(true);
-        const channel = index === null ? emptyChannel : normalizeChannel(channels[index]);
-        channelForm.setFieldsValue({ ...channel, apiKey: "", endpointId: channel.endpointId || arkEndpointFromModels(channel.models), models: visibleChannelModels(channel.models), endpointMappings: channelEndpointMappingFields(channel) });
-        rememberModels(channel.models);
+        setWizardInitialChannel(channel);
+        setIsChannelWizardOpen(true);
     };
 
     const openEnterpriseVideoChannel = () => {
         const arkIndex = channels.findIndex((channel) => normalizeChannel(channel).protocol === "volcengine-ark");
         if (arkIndex >= 0) {
-            openChannelDrawer(arkIndex);
+            openChannelWizard(arkIndex);
             return;
         }
-        setEditingChannelIndex(null);
-        setIsChannelDrawerOpen(true);
         const model = defaultArkLocalModelName();
-        channelForm.setFieldsValue({
+        openChannelWizard(null, {
             ...emptyChannel,
             name: "企业 Ark / Seedance",
             protocol: "volcengine-ark",
@@ -307,148 +283,31 @@ export default function AdminSettingsPage() {
             capabilities: ["text", "video", "video_query", "asset_review", "preflight"],
             environment: "prod",
         });
-        rememberModels([model]);
     };
 
-    const resetChannelDrawer = () => {
-        setIsChannelDrawerOpen(false);
+    const closeChannelWizard = () => {
+        setIsChannelWizardOpen(false);
         setEditingChannelIndex(null);
-        setChannelAutoSaveStatus("idle");
-        channelForm.resetFields();
     };
 
-    const closeChannelDrawer = () => {
-        const hasPendingAutoSave = Boolean(channelAutoSaveTimerRef.current);
-        if (channelAutoSaveTimerRef.current) clearTimeout(channelAutoSaveTimerRef.current);
-        channelAutoSaveTimerRef.current = null;
-        if (!hasPendingAutoSave) {
-            resetChannelDrawer();
-            return;
-        }
-        setChannelAutoSaveStatus("saving");
-        void saveChannel(true)
-            .catch(() => setChannelAutoSaveStatus("error"))
-            .finally(resetChannelDrawer);
-    };
-
-    const saveChannel = async (silent = false) => {
-        const values = await channelForm.validateFields();
-        const existingChannel = editingChannelIndex === null ? undefined : channels[editingChannelIndex];
-        const endpointMappings = values.protocol === "volcengine-ark" ? normalizeEndpointMappings(values.endpointMappings, values.models, values.endpointId || existingChannel?.endpointId || arkEndpointFromModels(existingChannel?.models)) : [];
-        const endpointId = values.protocol === "volcengine-ark" ? endpointMappings[0]?.endpointId || normalizeEndpointModel(values.endpointId) || existingChannel?.endpointId || arkEndpointFromModels(existingChannel?.models) : "";
-        const channel = normalizeChannel({
-            ...existingChannel,
-            ...values,
-            apiKey: values.apiKey || existingChannel?.apiKey || "",
-            endpointId,
-            endpointMappings,
-            models: values.protocol === "volcengine-ark" ? endpointMappings.map((item) => item.model) : values.models || [],
-        });
-        rememberModels(channel.models);
+    const finishChannelWizard = async (channel: AdminModelChannel, publicModelChannel: AdminSettings["public"]["modelChannel"]) => {
+        const normalizedChannel = normalizeChannel(channel);
         const nextChannels = [...channels];
-        if (editingChannelIndex === null) nextChannels.push(channel);
-        else nextChannels[editingChannelIndex] = channel;
-        await persistChannels(nextChannels, { silent });
-        if (editingChannelIndex === null) setEditingChannelIndex(nextChannels.length - 1);
+        if (editingChannelIndex === null) nextChannels.push(normalizedChannel);
+        else nextChannels[editingChannelIndex] = normalizedChannel;
+        await finishAuthoritativeSettingsOperation(
+            () => persistChannels(nextChannels, { publicModelChannel, setPending: setIsSavingChannelWizard }),
+            closeChannelWizard,
+        );
     };
 
-    const scheduleChannelAutoSave = () => {
-        if (!isChannelDrawerOpen) return;
-        if (channelAutoSaveTimerRef.current) clearTimeout(channelAutoSaveTimerRef.current);
-        setChannelAutoSaveStatus("idle");
-        channelAutoSaveTimerRef.current = setTimeout(() => {
-            channelAutoSaveTimerRef.current = null;
-            const seq = channelAutoSaveSeqRef.current + 1;
-            channelAutoSaveSeqRef.current = seq;
-            setChannelAutoSaveStatus("saving");
-            void saveChannel(true)
-                .then(() => {
-                    if (channelAutoSaveSeqRef.current === seq) setChannelAutoSaveStatus("saved");
-                })
-                .catch(() => {
-                    if (channelAutoSaveSeqRef.current === seq) setChannelAutoSaveStatus("error");
-                });
-        }, 900);
+    const discoverChannelModels = async (channel: AdminModelChannel) => {
+        if (!token) return [];
+        return cleanChannelModels(await fetchChannelModels(token, { index: editingChannelIndex ?? undefined, channel: normalizeChannel(channel) }));
     };
-
-    const fetchChannelModelList = async () => {
-        if (!token) return;
-        const channel = normalizeChannel(modelSelectChannelDraftRef.current || (channelForm.getFieldsValue(true) as ChannelFormValues));
-        if (channel.protocol !== "jimeng-cli" && !channel?.baseUrl) {
-            message.warning("请先填写接口地址");
-            return;
-        }
-        if (channel.protocol !== "jimeng-cli" && editingChannelIndex === null && !channel?.apiKey) {
-            message.warning("请先填写 API Key");
-            return;
-        }
-        setIsFetchingChannelModels(true);
-        try {
-            const channelModels = cleanChannelModels(await fetchChannelModels(token, { index: editingChannelIndex ?? undefined, channel }));
-            const current = isModelSelectorOpen ? cleanChannelModels(modelSelectSelected) : cleanChannelModels(channelForm.getFieldValue("models") || []);
-            rememberModels(channelModels);
-            setModelSelectExisting(current);
-            setModelSelectSource(uniqueModels(channelModels));
-            setModelSelectSelected(uniqueModels([...current, ...channelModels]));
-            setModelSelectKeyword("");
-            setModelSelectTab("new");
-            setIsModelSelectorOpen(true);
-            message.success(`已获取 ${channelModels.length} 个模型，请选择后确认`);
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "读取模型失败");
-        } finally {
-            setIsFetchingChannelModels(false);
-        }
-    };
-
-    const openChannelModelSelector = (sourceModels?: string[]) => {
-        modelSelectChannelDraftRef.current = channelForm.getFieldsValue(true) as ChannelFormValues;
-        const current = cleanChannelModels(channelForm.getFieldValue("models") || []);
-        const source = cleanChannelModels(sourceModels !== undefined ? sourceModels : [...knownModels, ...current]);
-        setModelSelectExisting(current);
-        setModelSelectSource(source);
-        setModelSelectSelected(sourceModels ? uniqueModels([...current, ...source]) : current);
-        setModelSelectKeyword("");
-        setModelSelectTab(sourceModels ? "new" : "current");
-        setIsModelSelectorOpen(true);
-    };
-
-    const closeChannelModelSelector = () => {
-        setIsModelSelectorOpen(false);
-        setModelSelectKeyword("");
-        modelSelectChannelDraftRef.current = null;
-    };
-
-    const confirmChannelModelSelector = () => {
-        const models = cleanChannelModels(modelSelectSelected);
-        channelForm.setFieldValue("models", models);
-        rememberModels(models);
-        scheduleChannelAutoSave();
-        closeChannelModelSelector();
-    };
-
-    const toggleSelectedModel = (model: string, checked: boolean) => {
-        setModelSelectSelected((current) => (checked ? uniqueModels([...current, model]) : current.filter((item) => item !== model)));
-    };
-
-    const selectActiveModels = () => {
-        setModelSelectSelected((current) => uniqueModels([...current, ...activeModelSelectModels]));
-    };
-
-    const clearActiveModels = () => {
-        const active = new Set(activeModelSelectModels);
-        setModelSelectSelected((current) => current.filter((model) => !active.has(model)));
-    };
-
-    function rememberModels(models: string[]) {
-        setKnownModels((current) => cleanChannelModels([...current, ...models]));
-    }
-
-    function rememberKnownModels(settings: AdminSettings) {
-        rememberModels(collectKnownModels(settings));
-    }
 
     const openTestDialog = (index: number) => {
+        verificationCoordinatorRef.current.reset();
         const channel = normalizeChannel(channels[index]);
         if (channel.protocol !== "jimeng-cli" && !channel.baseUrl) {
             message.warning("请先填写接口地址");
@@ -466,6 +325,7 @@ export default function AdminSettingsPage() {
     };
 
     const closeTestDialog = () => {
+        verificationCoordinatorRef.current.reset();
         setTestChannelIndex(null);
         setTestKeyword("");
         setSelectedTestModels([]);
@@ -473,54 +333,111 @@ export default function AdminSettingsPage() {
         setTestResults({});
     };
 
-    const testModelOnline = async (model: string) => {
-        if (testChannelIndex === null) return;
-        if (!token) return;
+    const testChannel = testChannelIndex === null ? null : normalizeChannel(channels[testChannelIndex]);
+    const verificationCopy = channelVerificationCopy(testChannel || emptyChannel);
+
+    const verifyModelsOnline = async (models: string[]) => {
+        if (testChannelIndex === null || !token) return;
         const channel = normalizeChannel(channels[testChannelIndex]);
-        setTestingModels((current) => [...current, model]);
-        try {
-            const startedAt = performance.now();
-            const result = await testChannelModel(token, { index: testChannelIndex, channel, model, endpointType: modelTextEndpointType(modelTextEndpoints, model) });
-            setTestResults((current) => ({ ...current, [model]: { status: "success", duration: `${((performance.now() - startedAt) / 1000).toFixed(2)}s`, message: result } }));
-        } catch (error) {
-            setTestResults((current) => ({ ...current, [model]: { status: "error", message: error instanceof Error ? error.message : "测试失败" } }));
-        } finally {
-            setTestingModels((current) => current.filter((item) => item !== model));
+        const selectedModels = uniqueModels(models);
+        const request = verificationCoordinatorRef.current.begin(testChannelIndex, channel, selectedModels);
+        if (!request) return;
+        if (!verificationCoordinatorRef.current.isCurrent(request, testChannelIndex, channel.id)) {
+            verificationCoordinatorRef.current.finish(request);
+            return;
         }
+        setTestingModels((current) => uniqueModels([...current, ...selectedModels]));
+        try {
+            const results = await runChannelVerification(channel, selectedModels, {
+                connect: async () => {
+                    await fetchChannelModels(token, { index: testChannelIndex, channel });
+                    return "连接与鉴权可用；未创建视频任务";
+                },
+                testModel: (model) => testChannelModel(token, { index: testChannelIndex, channel, model, endpointType: modelTextEndpointType(modelTextEndpoints, model) }),
+            });
+            if (!verificationCoordinatorRef.current.isCurrent(request, testChannelIndex, channel.id)) return;
+            setTestResults((current) => {
+                const next = { ...current };
+                results.forEach((result) => {
+                    next[result.model] = result.status === "success"
+                        ? { status: "success", duration: `${(result.durationMs / 1000).toFixed(2)}s`, message: result.message || "检测成功" }
+                        : { status: "error", message: result.error instanceof Error ? result.error.message : `${verificationCopy.actionLabel}失败` };
+                });
+                return next;
+            });
+        } finally {
+            if (verificationCoordinatorRef.current.isCurrent(request, testChannelIndex, channel.id)) {
+                const testedModels = new Set(selectedModels);
+                setTestingModels((current) => current.filter((item) => !testedModels.has(item)));
+            }
+            verificationCoordinatorRef.current.finish(request);
+        }
+    };
+
+    const testModelOnline = async (model: string) => {
+        await verifyModelsOnline([model]);
     };
 
     const batchTestModels = async () => {
-        for (const model of selectedTestModels) {
-            await testModelOnline(model);
-        }
+        await verifyModelsOnline(selectedTestModels);
     };
 
-    const testChannel = testChannelIndex === null ? null : normalizeChannel(channels[testChannelIndex]);
     const testModels = visibleChannelModels(testChannel?.models || []).filter((model) => model.toLowerCase().includes(testKeyword.trim().toLowerCase()));
-    const isTestingArkChannel = testChannel?.protocol === "volcengine-ark";
-    const isTestingJimengChannel = testChannel?.protocol === "jimeng-cli";
-    const isTestingXinglianChannel = testChannel?.protocol === "xinglian-cloud";
 
-    async function persistChannels(nextChannels: AdminModelChannel[], options: { silent?: boolean } = {}) {
+    async function deleteChannel(channelID: string) {
         if (!token) return;
+        try {
+            await syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, () => persistAuthoritativeSettingsMutation(
+                async () => normalizeSettings(await fetchAdminSettings(token)),
+                async (latest) => {
+                    const saved = normalizeSettings(await saveAdminSettings(token, latest));
+                    return mergePrivateSecrets(latest, saved);
+                },
+                (latest) => {
+                    const nextChannels = latest.private.channels.filter((item) => item.id !== channelID);
+                    return normalizeSettings({
+                        ...latest,
+                        public: { ...latest.public, modelChannel: filterWizardPublicationSnapshot(latest.public.modelChannel, nextChannels) },
+                        private: { ...latest.private, channels: nextChannels },
+                    });
+                },
+            ), (models, merged) => {
+                setConfiguredModels(models);
+                setChannels(merged.private.channels);
+                setModelCosts(merged.public.modelChannel.modelCosts);
+                form.setFieldsValue(merged);
+                setJsonText({ public: JSON.stringify(merged.public, null, 2), private: JSON.stringify(merged.private, null, 2) });
+                message.success("已保存");
+            }, setIsDeletingChannel, { kind: "delete" });
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "保存失败");
+        }
+    }
+
+    async function persistChannels(nextChannels: AdminModelChannel[], options: { silent?: boolean; publicModelChannel?: AdminSettings["public"]["modelChannel"]; setPending?: (pending: boolean) => void } = {}) {
+        if (!token) return false;
         const values = normalizeSettings(form.getFieldsValue(true) as AdminSettings);
-        const nextChannelModels = collectChannelModels(nextChannels);
+        const nextPublicModelChannel = options.publicModelChannel || values.public.modelChannel;
+        const nextPublicSnapshot = filterWizardPublicationSnapshot(nextPublicModelChannel, nextChannels);
         const nextSettings = normalizeSettings({
             ...values,
-            public: { ...values.public, modelChannel: { ...values.public.modelChannel, availableModels: filterModels(values.public.modelChannel.availableModels, nextChannelModels) } },
+            public: { ...values.public, modelChannel: nextPublicSnapshot },
             private: { ...values.private, channels: nextChannels },
         });
-        const saved = normalizeSettings(await saveAdminSettings(token, nextSettings));
-        const merged = mergePrivateSecrets(nextSettings, saved);
-        setChannels(merged.private.channels);
-        setModelCosts(merged.public.modelChannel.modelCosts);
-        rememberKnownModels(merged);
-        form.setFieldsValue(merged);
-        setJsonText({
-            public: JSON.stringify(merged.public, null, 2),
-            private: JSON.stringify(merged.private, null, 2),
-        });
-        if (!options.silent) message.success("已保存");
+        return syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
+            const saved = normalizeSettings(await saveAdminSettings(token, nextSettings));
+            return mergePrivateSecrets(nextSettings, saved);
+        }, (models, merged) => {
+            setConfiguredModels(models);
+            setChannels(merged.private.channels);
+            setModelCosts(merged.public.modelChannel.modelCosts);
+            form.setFieldsValue(merged);
+            setJsonText({
+                public: JSON.stringify(merged.public, null, 2),
+                private: JSON.stringify(merged.private, null, 2),
+            });
+            if (!options.silent) message.success("已保存");
+        }, options.setPending, { kind: "snapshot" });
     }
 
     return (
@@ -537,10 +454,10 @@ export default function AdminSettingsPage() {
                             ]}
                         />
                         <Space>
-                            <Button icon={<ReloadOutlined />} loading={isLoading} onClick={() => void loadSettings()}>
+                            <Button icon={<ReloadOutlined />} loading={isLoading} disabled={isSettingsBusy && !isLoading} onClick={() => void loadSettings()}>
                                 刷新
                             </Button>
-                            <Button type="primary" icon={<SaveOutlined />} loading={isSaving} onClick={() => void saveSettings()}>
+                            <Button type="primary" icon={<SaveOutlined />} loading={isSaving} disabled={isSettingsBusy && !isSaving} onClick={() => void saveSettings()}>
                                 保存设置
                             </Button>
                         </Space>
@@ -786,10 +703,10 @@ export default function AdminSettingsPage() {
                                     ) : null}
                                 </div>
                                 <Space wrap>
-                                    <Button type="primary" icon={<FormatPainterOutlined />} onClick={() => setIsProviderPresetOpen(true)}>
+                                    <Button type="primary" icon={<FormatPainterOutlined />} disabled={isSettingsBusy} onClick={() => setIsProviderPresetOpen(true)}>
                                         一键配置厂商
                                     </Button>
-                                    <Button icon={<PlusOutlined />} onClick={() => openChannelDrawer(null)}>
+                                    <Button icon={<PlusOutlined />} disabled={isSettingsBusy} onClick={() => openChannelWizard(null)}>
                                         手动新增渠道
                                     </Button>
                                 </Space>
@@ -865,19 +782,18 @@ export default function AdminSettingsPage() {
                                             render: (_, item) => (
                                                 <Space size={4}>
                                                     <Button size="small" onClick={() => openTestDialog(item._index)}>
-                                                        测试
+                                                        {channelVerificationCopy(item).tableLabel}
                                                     </Button>
-                                                    <Button size="small" onClick={() => openChannelDrawer(item._index)}>
+                                                    <Button size="small" disabled={isSettingsBusy} onClick={() => openChannelWizard(item._index)}>
                                                         编辑
                                                     </Button>
                                                     <Button
                                                         danger
                                                         size="small"
                                                         icon={<DeleteOutlined />}
+                                                        disabled={isSettingsBusy}
                                                         onClick={() => {
-                                                            const nextChannels = [...channels];
-                                                            nextChannels.splice(item._index, 1);
-                                                            void persistChannels(nextChannels);
+                                                            void deleteChannel(item.id);
                                                         }}
                                                     />
                                                 </Space>
@@ -908,297 +824,23 @@ export default function AdminSettingsPage() {
                     onCancel={() => setIsProviderPresetOpen(false)}
                     onApply={applyProviderPreset}
                 />
-                <Drawer
-                    rootClassName="studio-modal"
-                    title={editingChannelIndex === null ? "新增渠道" : "编辑渠道"}
-                    open={isChannelDrawerOpen}
-                    size={isModelSelectorOpen ? 760 : 560}
-                    onClose={closeChannelDrawer}
-                    extra={
-                        <Space size={12}>
-                            <Typography.Text type={channelAutoSaveStatus === "error" ? "danger" : "secondary"} className="text-xs">
-                                {channelAutoSaveStatus === "saving" ? "保存中..." : channelAutoSaveStatus === "saved" ? "已保存" : channelAutoSaveStatus === "error" ? "保存失败" : "修改会自动保存"}
-                            </Typography.Text>
-                            <Button onClick={closeChannelDrawer}>完成</Button>
-                        </Space>
-                    }
-                    destroyOnHidden
-                >
-                    {isModelSelectorOpen ? (
-                        <Flex vertical gap={16}>
-                            <Flex justify="space-between" align="center" gap={12}>
-                                <Space size={12}>
-                                    <Typography.Title level={5} style={{ margin: 0 }}>
-                                        选择渠道模型
-                                    </Typography.Title>
-                                    <Typography.Text type="secondary">
-                                        已选择 {modelSelectSelected.length} / {uniqueModels([...modelSelectSource, ...modelSelectExisting]).length}
-                                    </Typography.Text>
-                                </Space>
-                                <Space>
-                                    <Button onClick={closeChannelModelSelector}>返回编辑</Button>
-                                    <Button type="primary" onClick={confirmChannelModelSelector}>
-                                        确定
-                                    </Button>
-                                </Space>
-                            </Flex>
-                            <Input
-                                ref={modelSelectSearchInputRef}
-                                allowClear
-                                prefix={<SearchOutlined />}
-                                placeholder="输入关键词搜索模型"
-                                size="large"
-                                value={modelSelectKeyword}
-                                onChange={(event) => setModelSelectKeyword(event.target.value)}
-                                onMouseDown={(event) => event.currentTarget.focus()}
-                            />
-                            <Flex justify="flex-end">
-                                <Button icon={<ReloadOutlined />} loading={isFetchingChannelModels} onClick={() => void fetchChannelModelList()}>
-                                    拉取模型列表
-                                </Button>
-                            </Flex>
-                            <Tabs
-                                activeKey={modelSelectTab}
-                                onChange={(key) => setModelSelectTab(key as ModelSelectTabKey)}
-                                items={[
-                                    { key: "new", label: `新获取的模型 (${modelSelectGroups.new.length})` },
-                                    { key: "current", label: `已有的模型 (${modelSelectGroups.current.length})` },
-                                ]}
-                            />
-                            <Flex justify="space-between" align="center" gap={12} wrap>
-                                <Typography.Text type="secondary">
-                                    当前列表已选择 {activeSelectedCount} / {activeModelSelectModels.length}
-                                </Typography.Text>
-                                <Space size={8}>
-                                    <Button size="small" disabled={!activeModelSelectModels.length || activeSelectedCount === activeModelSelectModels.length} onClick={selectActiveModels}>
-                                        全选当前列表
-                                    </Button>
-                                    <Button size="small" disabled={!activeSelectedCount} onClick={clearActiveModels}>
-                                        取消当前列表
-                                    </Button>
-                                </Space>
-                            </Flex>
-                            <div style={{ maxHeight: "calc(100vh - 360px)", overflowY: "auto", borderTop: "1px solid var(--ant-color-border-secondary)", paddingTop: 12 }}>
-                                {activeModelSelectModels.length ? (
-                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", columnGap: 24, rowGap: 12 }}>
-                                        {activeModelSelectModels.map((model) => (
-                                            <Checkbox key={model} checked={modelSelectSelected.includes(model)} onChange={(event) => toggleSelectedModel(model, event.target.checked)}>
-                                                <Typography.Text style={{ wordBreak: "break-all" }}>{model}</Typography.Text>
-                                            </Checkbox>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div style={{ padding: "48px 0", textAlign: "center" }}>
-                                        <Typography.Text type="secondary">没有匹配的模型</Typography.Text>
-                                    </div>
-                                )}
-                            </div>
-                        </Flex>
-                    ) : (
-                        <Form form={channelForm} layout="vertical" requiredMark={false} initialValues={emptyChannel} onValuesChange={scheduleChannelAutoSave}>
-                            <Row gutter={16}>
-                                <Col span={12}>
-                                    <Form.Item name="id" label="渠道 ID" extra="Agent 可绑定这个 ID；留空保存时自动生成。">
-                                        <Input placeholder="例如 text-openai-main" />
-                                    </Form.Item>
-                                </Col>
-                                <Col span={12}>
-                                    <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: "请输入渠道名称" }]}>
-                                        <Input />
-                                    </Form.Item>
-                                </Col>
-                                <Col span={12}>
-                                    <Form.Item name="protocol" label="协议">
-                                        <Select
-                                            options={[
-                                                { label: "OpenAI 兼容", value: "openai" },
-                                                { label: "火山方舟 Ark", value: "volcengine-ark" },
-                                                { label: "即梦 CLI", value: "jimeng-cli" },
-                                                { label: "星链云 SD2", value: "xinglian-cloud" },
-                                            ]}
-                                        />
-                                    </Form.Item>
-                                </Col>
-                                <Col span={12}>
-                                    <Form.Item name="weight" label="权重">
-                                        <InputNumber min={1} step={1} className="!w-full" />
-                                    </Form.Item>
-                                </Col>
-                                <Col span={12}>
-                                    <Form.Item name="enabled" label="启用" valuePropName="checked">
-                                        <Switch />
-                                    </Form.Item>
-                                </Col>
-                                <Col span={12}>
-                                    <Form.Item name="environment" label="环境">
-                                        <Select
-                                            options={[
-                                                { label: "开发 dev", value: "dev" },
-                                                { label: "测试 test", value: "test" },
-                                                { label: "正式 prod", value: "prod" },
-                                            ]}
-                                        />
-                                    </Form.Item>
-                                </Col>
-                                <Col span={12}>
-                                    <Form.Item name="capabilities" label="渠道能力">
-                                        <Select
-                                            mode="multiple"
-                                            options={[
-                                                { label: "文本 Agent", value: "text" },
-                                                { label: "图片生成", value: "image" },
-                                                { label: "视频生成", value: "video" },
-                                                { label: "视频任务查询", value: "video_query" },
-                                                { label: "素材加白 / 预检", value: "asset_review" },
-                                                { label: "企业预检", value: "preflight" },
-                                                { label: "CLI Worker", value: "cli_workflow" },
-                                            ]}
-                                        />
-                                    </Form.Item>
-                                </Col>
-                                {channelProtocol === "jimeng-cli" ? (
-                                    <>
-                                        <Col span={24}>
-                                            <Form.Item name="cliPath" label="CLI 路径" extra="留空时使用 PATH 里的 dreamina；也可以填写 /Users/.../.local/bin/dreamina。">
-                                                <Input placeholder="dreamina" />
-                                            </Form.Item>
-                                        </Col>
-                                        <Col span={12}>
-                                            <Form.Item name="outputDir" label="输出目录" extra="留空时使用后端 data/jimeng-cli。">
-                                                <Input placeholder="data/jimeng-cli" />
-                                            </Form.Item>
-                                        </Col>
-                                        <Col span={12}>
-                                            <Form.Item name="workDir" label="工作目录">
-                                                <Input placeholder="留空使用后端当前目录" />
-                                            </Form.Item>
-                                        </Col>
-                                        <Col span={8}>
-                                            <Form.Item name="sessionId" label="会话 ID">
-                                                <InputNumber min={0} precision={0} className="!w-full" />
-                                            </Form.Item>
-                                        </Col>
-                                        <Col span={8}>
-                                            <Form.Item name="timeoutSeconds" label="超时秒数">
-                                                <InputNumber min={0} precision={0} className="!w-full" placeholder="默认 300" />
-                                            </Form.Item>
-                                        </Col>
-                                        <Col span={8}>
-                                            <Form.Item name="concurrencyLimit" label="并发限制">
-                                                <InputNumber min={1} precision={0} className="!w-full" />
-                                            </Form.Item>
-                                        </Col>
-                                        <Col span={24}>
-                                            <Alert
-                                                type="info"
-                                                showIcon
-                                                title="即梦用户登录"
-                                                description={
-                                                    <Typography.Text type="secondary">
-                                                        管理员只配置 CLI 路径、输出目录、模型和算力成本；用户在个人配置中自行完成即梦网页登录。生成请求仍经过后台任务系统，管理员可在用量统计和 AI
-                                                        任务里查看用户、模型、状态和算力流水。
-                                                    </Typography.Text>
-                                                }
-                                            />
-                                        </Col>
-                                    </>
-                                ) : (
-                                    <Col span={24}>
-                                        <Form.Item
-                                            name="baseUrl"
-                                            label="接口地址"
-                                            extra={channelProtocol === "xinglian-cloud" ? "填写 https://www.vjimeng.vip/v1；后端会自动调用 SD2 提交和查询路径。" : undefined}
-                                            rules={[{ required: true, message: "请输入接口地址" }]}
-                                        >
-                                            <Input placeholder={channelProtocol === "xinglian-cloud" ? "https://www.vjimeng.vip/v1" : undefined} />
-                                        </Form.Item>
-                                    </Col>
-                                )}
-                                {channelProtocol === "volcengine-ark" ? (
-                                    <Col span={24}>
-                                        <Card size="small" title="Seedance 模型映射">
-                                            <Form.List name="endpointMappings">
-                                                {(fields, { add, remove }) => (
-                                                    <Flex vertical gap={10}>
-                                                        <Flex justify="space-between" align="center" gap={12}>
-                                                            <Typography.Text type="secondary" className="text-xs">
-                                                                一个本地模型名称对应一个火山 EP；前端选择模型名，后台真实请求使用对应 EP。
-                                                            </Typography.Text>
-                                                            <Button size="small" icon={<PlusOutlined />} onClick={() => add({ model: "", endpointId: "" })}>
-                                                                添加选项
-                                                            </Button>
-                                                        </Flex>
-                                                        {fields.map((field, index) => (
-                                                            <Row key={field.key} gutter={8} align="top">
-                                                                <Col span={10}>
-                                                                    <Form.Item name={[field.name, "model"]} label={index === 0 ? "本地模型名称" : ""} rules={[{ required: true, message: "请输入本地模型名称" }]}>
-                                                                        <Input placeholder="doubao-seedance-2-0-fast" />
-                                                                    </Form.Item>
-                                                                </Col>
-                                                                <Col span={12}>
-                                                                    <Form.Item name={[field.name, "endpointId"]} label={index === 0 ? "火山 Endpoint / EP" : ""} rules={[{ required: true, message: "请输入火山 Endpoint / EP" }]}>
-                                                                        <Input placeholder="ep-xxxxxxxxxxxxxxxx" />
-                                                                    </Form.Item>
-                                                                </Col>
-                                                                <Col span={2}>
-                                                                    <Button aria-label="删除映射" disabled={fields.length <= 1} danger icon={<DeleteOutlined />} style={{ marginTop: index === 0 ? 30 : 0 }} onClick={() => remove(field.name)} />
-                                                                </Col>
-                                                            </Row>
-                                                        ))}
-                                                    </Flex>
-                                                )}
-                                            </Form.List>
-                                        </Card>
-                                    </Col>
-                                ) : null}
-                                {channelProtocol === "jimeng-cli" ? null : (
-                                    <Col span={24}>
-                                        <Form.Item
-                                            name="apiKey"
-                                            label={
-                                                <Space size={8}>
-                                                    API Key
-                                                    <Tag color={hasNewChannelAPIKey ? "processing" : hasSavedChannelAPIKey ? "success" : "default"}>{hasNewChannelAPIKey ? "本次已输入新 Key" : hasSavedChannelAPIKey ? "已保存，留空不修改" : "未填写"}</Tag>
-                                                </Space>
-                                            }
-                                            extra={hasSavedChannelAPIKey && !hasNewChannelAPIKey ? "输入框留空会继续沿用后台已保存的 API Key；输入新值后会自动保存并覆盖。" : undefined}
-                                            rules={editingChannelIndex === null ? [{ required: true, message: "请输入 API Key" }] : []}
-                                        >
-                                            <Input.Password placeholder={hasSavedChannelAPIKey ? "已保存，输入新 Key 才会覆盖" : "请输入 API Key"} />
-                                        </Form.Item>
-                                    </Col>
-                                )}
-                                {channelProtocol === "volcengine-ark" ? null : (
-                                    <Col span={24}>
-                                        <Form.Item label="渠道可用模型" extra="模型名称是节点调用的唯一标识；同名模型可用于同协议备用渠道，但不能同时配置到不同协议。">
-                                            <Space.Compact style={{ width: "100%" }}>
-                                                <Form.Item name="models" noStyle>
-                                                    <Select
-                                                        mode="tags"
-                                                        maxTagCount="responsive"
-                                                        tokenSeparators={[",", "\n"]}
-                                                        options={(channelProtocol === "xinglian-cloud" ? [...xinglianVideoModels, ...knownModels] : knownModels).map((model) => ({ label: model, value: model }))}
-                                                    />
-                                                </Form.Item>
-                                                <Button onClick={() => openChannelModelSelector()}>选择模型</Button>
-                                            </Space.Compact>
-                                        </Form.Item>
-                                    </Col>
-                                )}
-                                <Col span={24}>
-                                    <Form.Item name="remark" label="备注">
-                                        <Input.TextArea rows={3} />
-                                    </Form.Item>
-                                </Col>
-                            </Row>
-                        </Form>
-                    )}
-                </Drawer>
+                <ModelChannelWizard
+                    open={isChannelWizardOpen}
+                    initialChannel={wizardInitialChannel}
+                    existingChannel={editingChannelIndex === null ? undefined : channels[editingChannelIndex]}
+                    siblingChannels={channels.filter((_, index) => index !== editingChannelIndex)}
+                    publicModelChannel={publicModelChannel}
+                    configuredModels={configuredModels}
+                    saving={isSavingChannelWizard}
+                    onCancel={closeChannelWizard}
+                    onDiscoverModels={discoverChannelModels}
+                    onFinish={(channel, publicModelChannel) => finishChannelWizard(channel, publicModelChannel)}
+                />
                 <Modal
                     rootClassName="studio-modal"
                     title={
                         <Space>
-                            {testChannel?.name || "渠道"} 渠道的{isTestingArkChannel || isTestingJimengChannel || isTestingXinglianChannel ? "视频预检" : "模型测试"}
+                            {testChannel?.name || "渠道"} 渠道的{verificationCopy.modalLabel}
                             <Typography.Text type="secondary">共 {visibleChannelModels(testChannel?.models || []).length} 个模型</Typography.Text>
                         </Space>
                     }
@@ -1209,22 +851,14 @@ export default function AdminSettingsPage() {
                         <Space>
                             <Button onClick={closeTestDialog}>取消</Button>
                             <Button type="primary" disabled={!selectedTestModels.length || testingModels.length > 0} onClick={() => void batchTestModels()}>
-                                {isTestingArkChannel || isTestingJimengChannel || isTestingXinglianChannel ? "批量预检" : "批量测试"} {selectedTestModels.length} 个模型
+                                {verificationCopy.batchLabel} {selectedTestModels.length} 个模型
                             </Button>
                         </Space>
                     }
                     destroyOnHidden
                 >
                     <Flex vertical gap={12}>
-                        <Typography.Text type="secondary">
-                            {isTestingArkChannel
-                                ? "企业 Ark / Seedance 只验证 API Key、Base URL 和模型到火山 Endpoint / EP 的映射，不创建视频任务或扣除额度。"
-                                : isTestingJimengChannel
-                                  ? "即梦 CLI 只检查 CLI 安装、登录态、输出目录和模型版本，不创建视频任务或扣除额度。"
-                                  : isTestingXinglianChannel
-                                    ? "星链云只查询 API Key 对应账户余额，不创建视频任务或扣除额度。"
-                                    : "测试会向选中模型发送一条 hi，用于确认渠道是否有响应。"}
-                        </Typography.Text>
+                        <Typography.Text type="secondary">{verificationCopy.description}</Typography.Text>
                         <Input.Search placeholder="搜索模型..." allowClear value={testKeyword} onChange={(event) => setTestKeyword(event.target.value)} />
                         <Table
                             rowKey="model"
@@ -1242,13 +876,14 @@ export default function AdminSettingsPage() {
                                     dataIndex: "model",
                                     width: 260,
                                     render: (value) => {
-                                        if (testingModels.includes(value)) return <Tag icon={<LoadingOutlined className="animate-spin" />}>测试中</Tag>;
+                                        if (testingModels.includes(value)) return <Tag icon={<LoadingOutlined className="animate-spin" />}>{verificationCopy.actionLabel}中</Tag>;
                                         const result = testResults[value];
                                         if (!result) return <Tag>未开始</Tag>;
                                         return result.status === "success" ? (
                                             <Space size={6} wrap>
                                                 <Tag color="success">成功</Tag>
                                                 <Typography.Text type="secondary">请求时长: {result.duration}</Typography.Text>
+                                                <Typography.Text type="secondary">{result.message}</Typography.Text>
                                             </Space>
                                         ) : (
                                             <Typography.Text type="danger">{result.message}</Typography.Text>
@@ -1262,7 +897,7 @@ export default function AdminSettingsPage() {
                                     align: "right",
                                     render: (_, item) => (
                                         <Button size="small" loading={testingModels.includes(item.model)} onClick={() => void testModelOnline(item.model)}>
-                                            {isTestingArkChannel || isTestingJimengChannel ? "预检" : "测试"}
+                                            {verificationCopy.actionLabel}
                                         </Button>
                                     ),
                                 },
@@ -1423,22 +1058,12 @@ function channelEndpointMappings(channel: Partial<AdminModelChannel>) {
     return normalizeEndpointMappings(channel.endpointMappings, channel.models, normalizeEndpointModel(channel.endpointId) || arkEndpointFromModels(channel.models));
 }
 
-function channelEndpointMappingFields(channel: Partial<AdminModelChannel>) {
-    const mappings = channelEndpointMappings(channel);
-    if (mappings.length) return mappings;
-    return [{ model: "", endpointId: "" }];
-}
-
 function normalizeEndpointModel(value?: string) {
     return (value || "").trim();
 }
 
 function isEndpointModel(value?: string) {
     return normalizeEndpointModel(value).toLowerCase().startsWith("ep-");
-}
-
-function isMaskedAPIKey(value?: string) {
-    return (value || "").trim() === "********";
 }
 
 function arkEndpointFromModels(models: string[] = []) {
@@ -1546,27 +1171,8 @@ function modelCapabilitiesByChannel(channels: AdminModelChannel[]) {
     return capabilitiesByModel;
 }
 
-function collectKnownModels(settings: AdminSettings) {
-    return cleanChannelModels([...(settings.public.modelChannel.availableModels || []), ...(settings.public.modelChannel.modelCosts || []).map((item) => item.model), ...settings.private.channels.flatMap((channel) => channel.models || [])]);
-}
-
-function buildModelSelectGroups(sourceModels: string[], existingModels: string[]): Record<ModelSelectTabKey, string[]> {
-    const source = cleanChannelModels(sourceModels);
-    const existing = cleanChannelModels(existingModels);
-    const existingSet = new Set(existing);
-    return {
-        new: source.filter((model) => !existingSet.has(model)),
-        current: existing,
-    };
-}
-
 function uniqueModels(models: string[]) {
     return Array.from(new Set(models.filter(Boolean)));
-}
-
-function filterModels(models: string[], options: string[]) {
-    const optionSet = new Set(options);
-    return uniqueModels(models).filter((model) => optionSet.has(model));
 }
 
 function modelSummary(models: string[]) {
@@ -1653,9 +1259,7 @@ async function collectSettings(form: FormInstance<AdminSettings>, editorMode: Re
         }
         values.private = privateSetting;
     }
-    values.public.modelChannel.availableModels = filterModels(values.public.modelChannel.availableModels, collectChannelModels(values.private.channels));
-    values.public.modelChannel.modelTextEndpoints = normalizeModelTextEndpoints(values.public.modelChannel.modelTextEndpoints, filterModelsByCapability(values.public.modelChannel.availableModels, values.private.channels, "text"));
-    values.public.modelChannel.defaultModel = "";
+    values.public.modelChannel = sanitizeModelChannelPublication(values.public.modelChannel, values.private.channels);
     return normalizeSettings(values);
 }
 

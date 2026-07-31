@@ -111,7 +111,7 @@ export default function AdminAssetsPage() {
                 <Input allowClear value={assets.category} placeholder="筛选分类" onChange={(event) => assets.setCategory(event.target.value)} />
                 <Select mode="multiple" allowClear maxTagCount="responsive" value={assets.tags} options={assets.availableTags.map((tag) => ({ label: tag, value: tag }))} placeholder="全部标签" onChange={assets.setTags} />
                 <Input allowClear value={assets.episodeNumber} placeholder="筛选集数" onChange={(event) => assets.setEpisodeNumber(event.target.value)} />
-                <Select allowClear value={assets.allEpisodes || undefined} options={[{ label: "仅全剧通用", value: "true" }, { label: "非全剧素材", value: "false" }]} placeholder="全部范围" onChange={(value) => assets.setAllEpisodes(value || "")} />
+                <Select allowClear value={assets.allEpisodes || undefined} options={[{ label: "仅全剧通用", value: "true" }, { label: "非全剧素材", value: "false" }]} placeholder="全部集数" onChange={(value) => assets.setAllEpisodes(value || "")} />
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">

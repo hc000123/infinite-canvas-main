@@ -69,7 +69,12 @@ export function ProviderPresetModal({ open, settings, saving, onCancel, onApply 
             }
         >
             <Flex vertical gap={20}>
-                <Alert showIcon type="info" title="选择厂商后，只填写无法预置的凭证" description="协议、地址、模型、能力和环境会一次写入；重复应用只更新原渠道，不会修改默认模型或费用。" />
+                <Alert
+                    showIcon
+                    type="info"
+                    title="先建立私有渠道，再决定公开哪些模型"
+                    description="协议、地址、模型、能力和环境会写入现有渠道；新模型不会自动开放给前台，请随后到公开配置选择系统可用模型和默认模型。"
+                />
                 <Row gutter={[12, 12]}>
                     {MODEL_CHANNEL_PRESETS.map((preset) => {
                         const selected = preset.id === presetId;
@@ -116,7 +121,7 @@ export function ProviderPresetModal({ open, settings, saving, onCancel, onApply 
 
 function PresetFields({ presetId, hasSavedKey }: { presetId: ModelChannelPresetId; hasSavedKey: boolean }) {
     if (presetId === "jimeng") {
-        return <Alert showIcon type="success" title="无需 API Key" description="将自动配置五个即梦模型。保存后在渠道编辑中完成一次网页授权即可。" />;
+        return <Alert showIcon type="success" title="无需 API Key" description="将自动配置五个即梦模型。普通用户在个人配置中完成即梦网页登录。" />;
     }
     if (presetId === "openai-compatible") {
         return (

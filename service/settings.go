@@ -45,14 +45,19 @@ func SaveSettings(settings model.Settings) (model.Settings, error) {
 	if err != nil {
 		return model.Settings{}, err
 	}
+	if hasDuplicateSavedChannelIDForSecretRestore(settings.Private.Channels, saved.Private.Channels) {
+		return model.Settings{}, safeMessageError{message: "无法确定模型渠道密钥，请为渠道保留唯一 ID 或输入新 API Key"}
+	}
+	normalizedSaved := normalizeSettings(saved)
+	if err := keepPrivateAPIKeys(&settings, normalizedSaved); err != nil {
+		return model.Settings{}, err
+	}
+	keepPrivateAuthSecrets(&settings, normalizedSaved)
+	keepPrivateVolcengineAssetSecrets(&settings, normalizedSaved)
 	settings = normalizeSettings(settings)
 	if err := validateModelProtocolConflicts(settings.Private.Channels); err != nil {
 		return model.Settings{}, err
 	}
-	normalizedSaved := normalizeSettings(saved)
-	keepPrivateAPIKeys(&settings, normalizedSaved)
-	keepPrivateAuthSecrets(&settings, normalizedSaved)
-	keepPrivateVolcengineAssetSecrets(&settings, normalizedSaved)
 	result, err := repository.SaveSettings(settings, now())
 	if err == nil {
 		RefreshPromptSyncScheduler()
@@ -329,6 +334,7 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 	public.DefaultModel = ""
 	endpointModels := map[string][]string{}
 	openAIModels := map[string]bool{}
+	arkModels := map[string]bool{}
 	modelProtocols := map[string]string{}
 	modelCapabilities := map[string][]string{}
 	setModelProtocol := func(modelName string, protocol string, overwrite bool) {
@@ -352,16 +358,24 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 	}
 	for _, channel := range channels {
 		channel = normalizeModelChannel(channel)
+		contributesMetadata := modelChannelContributesPublicMetadata(channel)
 		if !IsVolcengineArkProtocol(channel.Protocol) {
 			for _, modelName := range channel.Models {
 				modelName = strings.TrimSpace(modelName)
-				if normalizeModelProtocol(channel.Protocol) == modelProtocolOpenAI {
+				if contributesMetadata && normalizeModelProtocol(channel.Protocol) == modelProtocolOpenAI {
 					openAIModels[modelName] = true
 				}
-				setModelProtocol(modelName, channel.Protocol, false)
-				setModelCapabilities(modelName, channel.Capabilities)
+				if contributesMetadata {
+					setModelProtocol(modelName, channel.Protocol, false)
+					setModelCapabilities(modelName, channel.Capabilities)
+				}
 			}
 			continue
+		}
+		for _, modelName := range channel.Models {
+			if modelName = strings.TrimSpace(modelName); modelName != "" {
+				arkModels[modelName] = true
+			}
 		}
 		appendEndpointModels := func(endpointID string, models []string) {
 			endpointID = strings.TrimSpace(endpointID)
@@ -370,9 +384,13 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 			}
 			normalizedModels := uniqueModelNames(models)
 			endpointModels[endpointID] = uniqueModelNames(append(endpointModels[endpointID], normalizedModels...))
+			if !contributesMetadata {
+				return
+			}
 			for _, modelName := range normalizedModels {
-				setModelProtocol(modelName, modelProtocolVolcengineArk, true)
-				setModelCapabilities(modelName, channel.Capabilities)
+				visibleModelName := normalizeVisibleArkModelName(modelName)
+				setModelProtocol(visibleModelName, modelProtocolVolcengineArk, true)
+				setModelCapabilities(visibleModelName, channel.Capabilities)
 			}
 		}
 		appendEndpointModels(channel.EndpointID, channel.Models)
@@ -388,8 +406,10 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 		if openAIModels[modelName] {
 			return []string{modelName}
 		}
-		if normalized := normalizeVisibleArkModelName(modelName); normalized != "" {
-			return []string{normalized}
+		if arkModels[modelName] {
+			if normalized := normalizeVisibleArkModelName(modelName); normalized != "" {
+				return []string{normalized}
+			}
 		}
 		if modelName == "" {
 			return nil
@@ -424,14 +444,37 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 			nextTextEndpoints = append(nextTextEndpoints, model.ModelTextEndpointType{Model: modelName, EndpointType: normalizeTextEndpointType(item.EndpointType, modelName)})
 		}
 	}
-	public.ModelTextEndpoints = normalizeModelTextEndpoints(nextTextEndpoints, public.AvailableModels)
-	if models := resolveModels(public.DefaultVideoModel); len(models) > 0 {
-		public.DefaultVideoModel = models[0]
+	public.ModelTextEndpoints = normalizeModelTextEndpoints(nextTextEndpoints, modelNamesWithCapability(public.AvailableModels, modelCapabilities, "text"))
+	resolveDefault := func(modelName string, capability string) string {
+		models := resolveModels(modelName)
+		if len(models) == 0 {
+			return ""
+		}
+		modelName = models[0]
+		capabilities, hasMetadata := modelCapabilities[modelName]
+		protocol := normalizeModelProtocol(modelProtocols[modelName])
+		if hasMetadata && (protocol == modelProtocolJimengCLI || protocol == modelProtocolXinglianCloud) && !containsNormalizedString(capabilities, capability) {
+			return ""
+		}
+		return modelName
 	}
+	public.DefaultTextModel = resolveDefault(public.DefaultTextModel, "text")
+	public.DefaultImageModel = resolveDefault(public.DefaultImageModel, "image")
+	public.DefaultVideoModel = resolveDefault(public.DefaultVideoModel, "video")
 	public.ModelProtocols = normalizePublicModelProtocols(modelProtocols, public)
 	public.ModelCapabilities = normalizePublicModelCapabilities(modelCapabilities, public)
 	public.ModelSources = normalizePublicModelSources(channels, public)
 	return public
+}
+
+func containsNormalizedString(items []string, target string) bool {
+	target = strings.TrimSpace(strings.ToLower(target))
+	for _, item := range items {
+		if strings.TrimSpace(strings.ToLower(item)) == target {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizePublicModelProtocols(modelProtocols map[string]string, public model.PublicModelChannelSetting) []model.ModelProtocolType {
@@ -439,7 +482,11 @@ func normalizePublicModelProtocols(modelProtocols map[string]string, public mode
 	models = uniqueModelNames(append(models, public.DefaultImageModel, public.DefaultVideoModel, public.DefaultTextModel))
 	result := make([]model.ModelProtocolType, 0, len(models))
 	for _, modelName := range models {
-		protocol := normalizeModelProtocol(modelProtocols[modelName])
+		rawProtocol, ok := modelProtocols[modelName]
+		if !ok {
+			continue
+		}
+		protocol := normalizeModelProtocol(rawProtocol)
 		if protocol == "" {
 			continue
 		}
@@ -475,10 +522,7 @@ func normalizePublicModelSources(channels []model.ModelChannel, public model.Pub
 	seen := map[string]bool{}
 	for _, channel := range channels {
 		channel = normalizeModelChannel(channel)
-		if !channel.Enabled {
-			continue
-		}
-		if !IsJimengCLIProtocol(channel.Protocol) && (strings.TrimSpace(channel.BaseURL) == "" || strings.TrimSpace(channel.APIKey) == "") {
+		if !modelChannelContributesPublicMetadata(channel) {
 			continue
 		}
 		channelName := strings.TrimSpace(channel.Name)
@@ -506,6 +550,10 @@ func normalizePublicModelSources(channels []model.ModelChannel, public model.Pub
 	return result
 }
 
+func modelChannelContributesPublicMetadata(channel model.ModelChannel) bool {
+	return channel.Enabled && (IsJimengCLIProtocol(channel.Protocol) || (strings.TrimSpace(channel.BaseURL) != "" && strings.TrimSpace(channel.APIKey) != ""))
+}
+
 func visibleModelNameForSource(channel model.ModelChannel, modelName string) string {
 	modelName = strings.TrimSpace(modelName)
 	if modelName == "" || strings.HasPrefix(strings.ToLower(modelName), "ep-") {
@@ -527,7 +575,7 @@ func normalizeModelTextEndpoints(items []model.ModelTextEndpointType, availableM
 	seen := map[string]bool{}
 	for _, item := range items {
 		modelName := strings.TrimSpace(item.Model)
-		if modelName == "" || seen[modelName] || (len(available) > 0 && !available[modelName]) {
+		if modelName == "" || seen[modelName] || !available[modelName] {
 			continue
 		}
 		seen[modelName] = true
@@ -539,6 +587,20 @@ func normalizeModelTextEndpoints(items []model.ModelTextEndpointType, availableM
 		}
 		seen[modelName] = true
 		result = append(result, model.ModelTextEndpointType{Model: modelName, EndpointType: defaultTextEndpointType(modelName)})
+	}
+	return result
+}
+
+func modelNamesWithCapability(modelNames []string, capabilitiesByModel map[string][]string, capability string) []string {
+	capability = strings.TrimSpace(strings.ToLower(capability))
+	result := []string{}
+	for _, modelName := range uniqueModelNames(modelNames) {
+		for _, item := range capabilitiesByModel[modelName] {
+			if strings.TrimSpace(strings.ToLower(item)) == capability {
+				result = append(result, modelName)
+				break
+			}
+		}
 	}
 	return result
 }
@@ -589,14 +651,27 @@ func normalizePrivateSetting(setting model.PrivateSetting) model.PrivateSetting 
 	}
 	setting.PromptSync = normalizePromptSyncSetting(setting.PromptSync)
 	setting.VolcengineAsset = normalizeVolcengineAssetSetting(setting.VolcengineAsset)
-	seenChannelIDs := map[string]int{}
 	for i := range setting.Channels {
 		setting.Channels[i] = normalizeModelChannel(setting.Channels[i])
-		id := setting.Channels[i].ID
-		if seenChannelIDs[id] > 0 {
-			setting.Channels[i].ID = fmt.Sprintf("%s-%d", id, seenChannelIDs[id]+1)
+	}
+	reservedChannelIDs := map[string]int{}
+	for _, channel := range setting.Channels {
+		reservedChannelIDs[channel.ID]++
+	}
+	usedChannelIDs := map[string]bool{}
+	for i := range setting.Channels {
+		baseID := setting.Channels[i].ID
+		reservedChannelIDs[baseID]--
+		candidate := baseID
+		for suffix := 2; usedChannelIDs[candidate]; suffix++ {
+			candidate = fmt.Sprintf("%s-%d", baseID, suffix)
+			for reservedChannelIDs[candidate] > 0 {
+				suffix++
+				candidate = fmt.Sprintf("%s-%d", baseID, suffix)
+			}
 		}
-		seenChannelIDs[id]++
+		setting.Channels[i].ID = candidate
+		usedChannelIDs[candidate] = true
 	}
 	return setting
 }
@@ -615,40 +690,45 @@ func hidePrivateAPIKeys(settings model.Settings) model.Settings {
 	return settings
 }
 
-func keepPrivateAPIKeys(settings *model.Settings, saved model.Settings) {
+func keepPrivateAPIKeys(settings *model.Settings, saved model.Settings) error {
 	for i := range settings.Private.Channels {
+		if IsJimengCLIProtocol(settings.Private.Channels[i].Protocol) {
+			settings.Private.Channels[i].APIKey = ""
+			continue
+		}
 		if apiKey := strings.TrimSpace(settings.Private.Channels[i].APIKey); apiKey != "" && !isMaskedAPIKey(apiKey) {
 			continue
 		}
 		settings.Private.Channels[i].APIKey = ""
-		if channel, ok := findSavedChannel(settings.Private.Channels[i], saved.Private.Channels, i); ok {
-			settings.Private.Channels[i].APIKey = channel.APIKey
-			continue
+		channel, ok, ambiguous := findSavedChannelForSecretRestore(settings.Private.Channels[i], saved.Private.Channels)
+		if ambiguous {
+			return safeMessageError{message: "无法确定模型渠道密钥，请为渠道保留唯一 ID 或输入新 API Key"}
 		}
-		settings.Private.Channels[i].APIKey = providerAPIKey(settings.Private.Channels[i], saved.Private.Channels)
+		if ok {
+			settings.Private.Channels[i].APIKey = channel.APIKey
+		}
 	}
+	return nil
 }
 
-func providerAPIKey(channel model.ModelChannel, saved []model.ModelChannel) string {
-	baseURL := strings.TrimRight(strings.TrimSpace(channel.BaseURL), "/")
-	if baseURL == "" {
-		return ""
-	}
-	apiKey := ""
-	for _, item := range saved {
-		if normalizeModelProtocol(item.Protocol) != normalizeModelProtocol(channel.Protocol) || strings.TrimRight(strings.TrimSpace(item.BaseURL), "/") != baseURL {
+func hasDuplicateSavedChannelIDForSecretRestore(channels, saved []model.ModelChannel) bool {
+	for _, channel := range channels {
+		apiKey := strings.TrimSpace(channel.APIKey)
+		channelID := strings.TrimSpace(channel.ID)
+		if IsJimengCLIProtocol(channel.Protocol) || (apiKey != "" && !isMaskedAPIKey(apiKey)) || channelID == "" {
 			continue
 		}
-		candidate := strings.TrimSpace(item.APIKey)
-		if candidate == "" {
-			continue
+		matches := 0
+		for _, item := range saved {
+			if strings.TrimSpace(item.ID) == channelID {
+				matches++
+			}
 		}
-		if apiKey != "" && apiKey != candidate {
-			return ""
+		if matches > 1 {
+			return true
 		}
-		apiKey = candidate
 	}
-	return apiKey
+	return false
 }
 
 func isMaskedAPIKey(value string) bool {
@@ -656,16 +736,16 @@ func isMaskedAPIKey(value string) bool {
 }
 
 func keepPrivateAuthSecrets(settings *model.Settings, saved model.Settings) {
-	if strings.TrimSpace(settings.Private.Auth.LinuxDo.ClientSecret) == "" {
+	if value := strings.TrimSpace(settings.Private.Auth.LinuxDo.ClientSecret); value == "" || isMaskedAPIKey(value) {
 		settings.Private.Auth.LinuxDo.ClientSecret = saved.Private.Auth.LinuxDo.ClientSecret
 	}
 }
 
 func keepPrivateVolcengineAssetSecrets(settings *model.Settings, saved model.Settings) {
-	if strings.TrimSpace(settings.Private.VolcengineAsset.AccessKey) == "" {
+	if value := strings.TrimSpace(settings.Private.VolcengineAsset.AccessKey); value == "" || isMaskedAPIKey(value) {
 		settings.Private.VolcengineAsset.AccessKey = saved.Private.VolcengineAsset.AccessKey
 	}
-	if strings.TrimSpace(settings.Private.VolcengineAsset.SecretKey) == "" {
+	if value := strings.TrimSpace(settings.Private.VolcengineAsset.SecretKey); value == "" || isMaskedAPIKey(value) {
 		settings.Private.VolcengineAsset.SecretKey = saved.Private.VolcengineAsset.SecretKey
 	}
 }
@@ -686,6 +766,42 @@ func normalizeVolcengineAssetSetting(setting model.VolcengineAssetSetting) model
 	setting.AssetGroupID = strings.TrimSpace(setting.AssetGroupID)
 	setting.PublicAssetBaseURL = strings.TrimRight(strings.TrimSpace(setting.PublicAssetBaseURL), "/")
 	return setting
+}
+
+func findSavedChannelForSecretRestore(channel model.ModelChannel, saved []model.ModelChannel) (model.ModelChannel, bool, bool) {
+	channelID := strings.TrimSpace(channel.ID)
+	if channelID != "" {
+		matches := []model.ModelChannel{}
+		for _, item := range saved {
+			if strings.TrimSpace(item.ID) == channelID {
+				matches = append(matches, item)
+			}
+		}
+		if len(matches) != 1 {
+			return model.ModelChannel{}, false, len(matches) > 1
+		}
+		if normalizeModelProtocol(matches[0].Protocol) != normalizeModelProtocol(channel.Protocol) {
+			return model.ModelChannel{}, false, true
+		}
+		return matches[0], true, false
+	}
+	matches := []model.ModelChannel{}
+	identityMatches := 0
+	name := strings.TrimSpace(channel.Name)
+	baseURL := strings.TrimRight(strings.TrimSpace(channel.BaseURL), "/")
+	for _, item := range saved {
+		if strings.TrimSpace(item.Name) != name || strings.TrimRight(strings.TrimSpace(item.BaseURL), "/") != baseURL {
+			continue
+		}
+		identityMatches++
+		if normalizeModelProtocol(item.Protocol) == normalizeModelProtocol(channel.Protocol) {
+			matches = append(matches, item)
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0], true, false
+	}
+	return model.ModelChannel{}, false, len(matches) > 1 || identityMatches > 0
 }
 
 func findSavedChannel(channel model.ModelChannel, saved []model.ModelChannel, index int) (model.ModelChannel, bool) {
@@ -852,15 +968,12 @@ func stableModelChannelID(channel model.ModelChannel) string {
 }
 
 func normalizeModelChannelCapabilities(capabilities []string, protocol string) []string {
+	if IsJimengCLIProtocol(protocol) || IsXinglianCloudProtocol(protocol) {
+		return []string{"video"}
+	}
 	if len(capabilities) == 0 {
 		if IsVolcengineArkProtocol(protocol) {
 			return []string{"text", "video"}
-		}
-		if IsJimengCLIProtocol(protocol) {
-			return []string{"video", "video_query", "preflight", "cli_workflow"}
-		}
-		if IsXinglianCloudProtocol(protocol) {
-			return []string{"video", "video_query", "preflight"}
 		}
 		return []string{"text", "image"}
 	}
