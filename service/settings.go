@@ -46,8 +46,9 @@ func SaveSettings(settings model.Settings) (model.Settings, error) {
 		return model.Settings{}, err
 	}
 	normalizedSaved := normalizeSettings(saved)
-	settings.Private = normalizePrivateSetting(settings.Private)
-	keepPrivateAPIKeys(&settings, normalizedSaved)
+	if err := keepPrivateAPIKeys(&settings, normalizedSaved); err != nil {
+		return model.Settings{}, err
+	}
 	keepPrivateAuthSecrets(&settings, normalizedSaved)
 	keepPrivateVolcengineAssetSecrets(&settings, normalizedSaved)
 	settings = normalizeSettings(settings)
@@ -673,18 +674,28 @@ func hidePrivateAPIKeys(settings model.Settings) model.Settings {
 	return settings
 }
 
-func keepPrivateAPIKeys(settings *model.Settings, saved model.Settings) {
+func keepPrivateAPIKeys(settings *model.Settings, saved model.Settings) error {
 	for i := range settings.Private.Channels {
 		if apiKey := strings.TrimSpace(settings.Private.Channels[i].APIKey); apiKey != "" && !isMaskedAPIKey(apiKey) {
 			continue
 		}
 		settings.Private.Channels[i].APIKey = ""
-		if channel, ok := findSavedChannel(settings.Private.Channels[i], saved.Private.Channels, i); ok {
+		if IsJimengCLIProtocol(settings.Private.Channels[i].Protocol) {
+			continue
+		}
+		channel, ok, ambiguous := findSavedChannelForSecretRestore(settings.Private.Channels[i], saved.Private.Channels)
+		if ambiguous {
+			return safeMessageError{message: "无法确定模型渠道密钥，请为渠道保留唯一 ID 或输入新 API Key"}
+		}
+		if ok {
 			settings.Private.Channels[i].APIKey = channel.APIKey
 			continue
 		}
-		settings.Private.Channels[i].APIKey = providerAPIKey(settings.Private.Channels[i], saved.Private.Channels)
+		if strings.TrimSpace(settings.Private.Channels[i].ID) != "" {
+			settings.Private.Channels[i].APIKey = providerAPIKey(settings.Private.Channels[i], saved.Private.Channels)
+		}
 	}
+	return nil
 }
 
 func providerAPIKey(channel model.ModelChannel, saved []model.ModelChannel) string {
@@ -714,16 +725,16 @@ func isMaskedAPIKey(value string) bool {
 }
 
 func keepPrivateAuthSecrets(settings *model.Settings, saved model.Settings) {
-	if strings.TrimSpace(settings.Private.Auth.LinuxDo.ClientSecret) == "" {
+	if value := strings.TrimSpace(settings.Private.Auth.LinuxDo.ClientSecret); value == "" || isMaskedAPIKey(value) {
 		settings.Private.Auth.LinuxDo.ClientSecret = saved.Private.Auth.LinuxDo.ClientSecret
 	}
 }
 
 func keepPrivateVolcengineAssetSecrets(settings *model.Settings, saved model.Settings) {
-	if strings.TrimSpace(settings.Private.VolcengineAsset.AccessKey) == "" {
+	if value := strings.TrimSpace(settings.Private.VolcengineAsset.AccessKey); value == "" || isMaskedAPIKey(value) {
 		settings.Private.VolcengineAsset.AccessKey = saved.Private.VolcengineAsset.AccessKey
 	}
-	if strings.TrimSpace(settings.Private.VolcengineAsset.SecretKey) == "" {
+	if value := strings.TrimSpace(settings.Private.VolcengineAsset.SecretKey); value == "" || isMaskedAPIKey(value) {
 		settings.Private.VolcengineAsset.SecretKey = saved.Private.VolcengineAsset.SecretKey
 	}
 }
@@ -744,6 +755,30 @@ func normalizeVolcengineAssetSetting(setting model.VolcengineAssetSetting) model
 	setting.AssetGroupID = strings.TrimSpace(setting.AssetGroupID)
 	setting.PublicAssetBaseURL = strings.TrimRight(strings.TrimSpace(setting.PublicAssetBaseURL), "/")
 	return setting
+}
+
+func findSavedChannelForSecretRestore(channel model.ModelChannel, saved []model.ModelChannel) (model.ModelChannel, bool, bool) {
+	channelID := strings.TrimSpace(channel.ID)
+	if channelID != "" {
+		for _, item := range saved {
+			if strings.TrimSpace(item.ID) == channelID {
+				return item, true, false
+			}
+		}
+		return model.ModelChannel{}, false, false
+	}
+	matches := []model.ModelChannel{}
+	name := strings.TrimSpace(channel.Name)
+	baseURL := strings.TrimRight(strings.TrimSpace(channel.BaseURL), "/")
+	for _, item := range saved {
+		if strings.TrimSpace(item.Name) == name && strings.TrimRight(strings.TrimSpace(item.BaseURL), "/") == baseURL {
+			matches = append(matches, item)
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0], true, false
+	}
+	return model.ModelChannel{}, false, len(matches) > 1
 }
 
 func findSavedChannel(channel model.ModelChannel, saved []model.ModelChannel, index int) (model.ModelChannel, bool) {

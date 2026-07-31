@@ -8,6 +8,7 @@ import {
     channelVerificationCopy,
     channelVerificationMode,
     createChannelVerificationCoordinator,
+    createAuthoritativeSettingsCoordinator,
     createModelDiscoveryCoordinator,
     configuredModelsFromSettings,
     filterWizardPublicationSnapshot,
@@ -658,9 +659,10 @@ test("异步发现集成只让当前请求写入局部候选和状态", async ()
 });
 
 test("基础候选只跟随权威保存响应，取消和保存失败不泄漏草稿，删除后可收缩", async () => {
+    const coordinator = createAuthoritativeSettingsCoordinator();
     let configuredModels: string[] = [];
     const saved = settingsWithChannels([channel({ models: ["saved-model"] })]);
-    await syncConfiguredModelsFromAuthoritativeSettings(async () => saved, (models) => { configuredModels = models; });
+    await syncConfiguredModelsFromAuthoritativeSettings(coordinator, async () => saved, (models) => { configuredModels = models; });
     assert.deepEqual(configuredModels, ["saved-model"]);
 
     const cancelledDraft = channel({ models: ["cancelled-draft-model"] });
@@ -668,16 +670,71 @@ test("基础候选只跟随权威保存响应，取消和保存失败不泄漏�
     assert.deepEqual(configuredModels, ["saved-model"]);
 
     await assert.rejects(
-        syncConfiguredModelsFromAuthoritativeSettings(async () => { throw new Error("save failed"); }, (models) => { configuredModels = models; }),
+        syncConfiguredModelsFromAuthoritativeSettings(coordinator, async () => { throw new Error("save failed"); }, (models) => { configuredModels = models; }),
         /save failed/,
     );
     assert.deepEqual(configuredModels, ["saved-model"]);
 
     const afterDelete = settingsWithChannels([]);
     afterDelete.public.modelChannel.modelCosts = [{ model: "saved-model", credits: 10 }];
-    await syncConfiguredModelsFromAuthoritativeSettings(async () => afterDelete, (models) => { configuredModels = models; });
+    await syncConfiguredModelsFromAuthoritativeSettings(coordinator, async () => afterDelete, (models) => { configuredModels = models; });
     assert.deepEqual(configuredModels, []);
     assert.deepEqual(configuredModelsFromSettings(afterDelete), []);
+});
+
+test("权威设置只允许最新操作更新模型和页面状态", async () => {
+    const coordinator = createAuthoritativeSettingsCoordinator();
+    const oldLoad = deferred<AdminSettings>();
+    const newSave = deferred<AdminSettings>();
+    let configuredModels: string[] = [];
+    let pageModels: string[] = [];
+    const runOldLoad = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => oldLoad.promise, (models, settings) => {
+        configuredModels = models;
+        pageModels = configuredModelsFromSettings(settings);
+    });
+    const runNewSave = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => newSave.promise, (models, settings) => {
+        configuredModels = models;
+        pageModels = configuredModelsFromSettings(settings);
+    });
+
+    newSave.resolve(settingsWithChannels([channel({ models: ["saved-new"] })]));
+    assert.equal(await runNewSave, true);
+    oldLoad.resolve(settingsWithChannels([channel({ models: ["loaded-old"] })]));
+    assert.equal(await runOldLoad, false);
+    assert.deepEqual(configuredModels, ["saved-new"]);
+    assert.deepEqual(pageModels, ["saved-new"]);
+});
+
+test("新读取取代旧读取，且最新失败后旧响应仍然作废", async () => {
+    const coordinator = createAuthoritativeSettingsCoordinator();
+    const oldLoad = deferred<AdminSettings>();
+    const newLoad = deferred<AdminSettings>();
+    let configuredModels: string[] = [];
+    const apply = (models: string[]) => { configuredModels = models; };
+    const runOldLoad = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => oldLoad.promise, apply);
+    const runNewLoad = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => newLoad.promise, apply);
+    newLoad.resolve(settingsWithChannels([channel({ models: ["new-load"] })]));
+    assert.equal(await runNewLoad, true);
+    oldLoad.resolve(settingsWithChannels([channel({ models: ["old-load"] })]));
+    assert.equal(await runOldLoad, false);
+    assert.deepEqual(configuredModels, ["new-load"]);
+
+    const staleLoad = deferred<AdminSettings>();
+    const failedNewest = deferred<AdminSettings>();
+    const runStaleLoad = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => staleLoad.promise, apply);
+    const runFailedNewest = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => failedNewest.promise, apply);
+    failedNewest.reject(new Error("newest failed"));
+    await assert.rejects(runFailedNewest, /newest failed/);
+    staleLoad.resolve(settingsWithChannels([channel({ models: ["stale-after-error"] })]));
+    assert.equal(await runStaleLoad, false);
+    assert.deepEqual(configuredModels, ["new-load"]);
+
+    const unmountedLoad = deferred<AdminSettings>();
+    const runUnmountedLoad = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => unmountedLoad.promise, apply);
+    coordinator.reset();
+    unmountedLoad.resolve(settingsWithChannels([channel({ models: ["after-unmount"] })]));
+    assert.equal(await runUnmountedLoad, false);
+    assert.deepEqual(configuredModels, ["new-load"]);
 });
 
 function deferred<T>() {

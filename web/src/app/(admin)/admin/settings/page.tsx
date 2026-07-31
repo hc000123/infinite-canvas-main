@@ -11,7 +11,7 @@ import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind"
 import { ModelChannelWizard } from "./components/model-channel-wizard";
 import { ProviderPresetModal } from "./components/provider-preset-modal";
 import { sanitizeModelChannelPublication } from "./model-channel-publication";
-import { channelVerificationCopy, createChannelVerificationCoordinator, filterWizardPublicationSnapshot, runChannelVerification, syncConfiguredModelsFromAuthoritativeSettings } from "./model-channel-wizard-model";
+import { channelVerificationCopy, createAuthoritativeSettingsCoordinator, createChannelVerificationCoordinator, filterWizardPublicationSnapshot, runChannelVerification, syncConfiguredModelsFromAuthoritativeSettings } from "./model-channel-wizard-model";
 import type { ModelChannelPresetResult } from "./model-channel-presets";
 import {
     fetchAdminSettings,
@@ -105,6 +105,7 @@ export default function AdminSettingsPage() {
     const [isApplyingProviderPreset, setIsApplyingProviderPreset] = useState(false);
     const enterpriseVideoFocusRef = useRef<HTMLDivElement>(null);
     const verificationCoordinatorRef = useRef(createChannelVerificationCoordinator());
+    const authoritativeSettingsCoordinatorRef = useRef(createAuthoritativeSettingsCoordinator());
     const [testChannelIndex, setTestChannelIndex] = useState<number | null>(null);
     const [testKeyword, setTestKeyword] = useState("");
     const [selectedTestModels, setSelectedTestModels] = useState<string[]>([]);
@@ -138,17 +139,20 @@ export default function AdminSettingsPage() {
         if (!token) return;
         setIsLoading(true);
         try {
-            const data = await syncConfiguredModelsFromAuthoritativeSettings(
+            await syncConfiguredModelsFromAuthoritativeSettings(
+                authoritativeSettingsCoordinatorRef.current,
                 async () => normalizeSettings(await fetchAdminSettings(token)),
-                setConfiguredModels,
+                (models, data) => {
+                    setConfiguredModels(models);
+                    form.setFieldsValue(data);
+                    setChannels(data.private.channels);
+                    setModelCosts(data.public.modelChannel.modelCosts);
+                    setJsonText({
+                        public: JSON.stringify(data.public, null, 2),
+                        private: JSON.stringify(data.private, null, 2),
+                    });
+                },
             );
-            form.setFieldsValue(data);
-            setChannels(data.private.channels);
-            setModelCosts(data.public.modelChannel.modelCosts);
-            setJsonText({
-                public: JSON.stringify(data.public, null, 2),
-                private: JSON.stringify(data.private, null, 2),
-            });
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取设置失败");
         } finally {
@@ -158,6 +162,7 @@ export default function AdminSettingsPage() {
 
     useEffect(() => {
         void loadSettings();
+        return () => authoritativeSettingsCoordinatorRef.current.reset();
     }, [loadSettings]);
 
     useEffect(() => {
@@ -182,18 +187,20 @@ export default function AdminSettingsPage() {
         }
         setIsSaving(true);
         try {
-            const merged = await syncConfiguredModelsFromAuthoritativeSettings(async () => {
+            await syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
                 const saved = normalizeSettings(await saveAdminSettings(token, values));
                 return mergePrivateSecrets(values, saved);
-            }, setConfiguredModels);
-            form.setFieldsValue(merged);
-            setChannels(merged.private.channels);
-            setModelCosts(merged.public.modelChannel.modelCosts);
-            setJsonText({
-                public: JSON.stringify(merged.public, null, 2),
-                private: JSON.stringify(merged.private, null, 2),
+            }, (models, merged) => {
+                setConfiguredModels(models);
+                form.setFieldsValue(merged);
+                setChannels(merged.private.channels);
+                setModelCosts(merged.public.modelChannel.modelCosts);
+                setJsonText({
+                    public: JSON.stringify(merged.public, null, 2),
+                    private: JSON.stringify(merged.private, null, 2),
+                });
+                message.success("已保存");
             });
-            message.success("已保存");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "保存失败");
         } finally {
@@ -205,16 +212,18 @@ export default function AdminSettingsPage() {
         if (!token) return;
         setIsApplyingProviderPreset(true);
         try {
-            const merged = await syncConfiguredModelsFromAuthoritativeSettings(async () => {
+            await syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
                 const saved = normalizeSettings(await saveAdminSettings(token, result.settings));
                 return mergePrivateSecrets(result.settings, saved);
-            }, setConfiguredModels);
-            form.setFieldsValue(merged);
-            setChannels(merged.private.channels);
-            setModelCosts(merged.public.modelChannel.modelCosts);
-            setJsonText({ public: JSON.stringify(merged.public, null, 2), private: JSON.stringify(merged.private, null, 2) });
-            setIsProviderPresetOpen(false);
-            message.success("厂商预设已一次配置完成");
+            }, (models, merged) => {
+                setConfiguredModels(models);
+                form.setFieldsValue(merged);
+                setChannels(merged.private.channels);
+                setModelCosts(merged.public.modelChannel.modelCosts);
+                setJsonText({ public: JSON.stringify(merged.public, null, 2), private: JSON.stringify(merged.private, null, 2) });
+                setIsProviderPresetOpen(false);
+                message.success("厂商预设已一次配置完成");
+            });
         } catch (error) {
             message.error(error instanceof Error ? error.message : "厂商预设保存失败");
         } finally {
@@ -393,18 +402,20 @@ export default function AdminSettingsPage() {
             public: { ...values.public, modelChannel: nextPublicSnapshot },
             private: { ...values.private, channels: nextChannels },
         });
-        const merged = await syncConfiguredModelsFromAuthoritativeSettings(async () => {
+        await syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
             const saved = normalizeSettings(await saveAdminSettings(token, nextSettings));
             return mergePrivateSecrets(nextSettings, saved);
-        }, setConfiguredModels);
-        setChannels(merged.private.channels);
-        setModelCosts(merged.public.modelChannel.modelCosts);
-        form.setFieldsValue(merged);
-        setJsonText({
-            public: JSON.stringify(merged.public, null, 2),
-            private: JSON.stringify(merged.private, null, 2),
+        }, (models, merged) => {
+            setConfiguredModels(models);
+            setChannels(merged.private.channels);
+            setModelCosts(merged.public.modelChannel.modelCosts);
+            form.setFieldsValue(merged);
+            setJsonText({
+                public: JSON.stringify(merged.public, null, 2),
+                private: JSON.stringify(merged.private, null, 2),
+            });
+            if (!options.silent) message.success("已保存");
         });
-        if (!options.silent) message.success("已保存");
     }
 
     return (

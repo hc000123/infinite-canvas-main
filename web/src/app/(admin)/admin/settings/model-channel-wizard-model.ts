@@ -298,13 +298,30 @@ export function configuredModelsFromSettings(settings: AdminSettings) {
     ]);
 }
 
+export function createAuthoritativeSettingsCoordinator() {
+    let generation = 0;
+    return {
+        begin: () => ++generation,
+        isCurrent: (request: number) => request === generation,
+        reset: () => { generation += 1; },
+    };
+}
+
 export async function syncConfiguredModelsFromAuthoritativeSettings(
+    coordinator: ReturnType<typeof createAuthoritativeSettingsCoordinator>,
     loadSettings: () => Promise<AdminSettings>,
-    setConfiguredModels: (models: string[]) => void,
+    applySettings: (models: string[], settings: AdminSettings) => void,
 ) {
-    const settings = await loadSettings();
-    setConfiguredModels(configuredModelsFromSettings(settings));
-    return settings;
+    const request = coordinator.begin();
+    try {
+        const settings = await loadSettings();
+        if (!coordinator.isCurrent(request)) return false;
+        applySettings(configuredModelsFromSettings(settings), settings);
+        return true;
+    } catch (error) {
+        if (!coordinator.isCurrent(request)) return false;
+        throw error;
+    }
 }
 
 export async function runModelDiscoveryRequest(

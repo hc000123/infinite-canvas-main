@@ -23,6 +23,104 @@ func TestFindSavedChannelIgnoresNegativeIndex(t *testing.T) {
 	}
 }
 
+func TestKeepPrivateAPIKeysRestoresSecretsByStableChannelID(t *testing.T) {
+	saved := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
+		{ID: "first", Name: "Duplicate", Protocol: "openai", BaseURL: "https://same.example.com", APIKey: "key-first"},
+		{ID: "second", Name: "Duplicate", Protocol: "openai", BaseURL: "https://same.example.com", APIKey: "key-second"},
+	}}}
+	input := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
+		{ID: "second", Name: "Renamed", Protocol: "openai", BaseURL: "https://edited.example.com", APIKey: maskedAPIKey},
+		{ID: "first", Name: "Duplicate", Protocol: "openai", BaseURL: "https://same.example.com"},
+	}}}
+
+	if err := keepPrivateAPIKeys(&input, saved); err != nil {
+		t.Fatalf("keepPrivateAPIKeys returned error: %v", err)
+	}
+
+	if input.Private.Channels[0].APIKey != "key-second" {
+		t.Fatalf("edited/reordered second channel api key = %q, want key-second", input.Private.Channels[0].APIKey)
+	}
+	if input.Private.Channels[1].APIKey != "key-first" {
+		t.Fatalf("reordered first channel api key = %q, want key-first", input.Private.Channels[1].APIKey)
+	}
+}
+
+func TestKeepPrivateAPIKeysDoesNotGuessAmbiguousLegacyOrIndexMatch(t *testing.T) {
+	saved := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
+		{ID: "first", Name: "Duplicate", Protocol: "openai", BaseURL: "https://same.example.com", APIKey: "key-first"},
+		{ID: "second", Name: "Duplicate", Protocol: "openai", BaseURL: "https://same.example.com", APIKey: "key-second"},
+	}}}
+	ambiguous := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{{Name: "Duplicate", Protocol: "openai", BaseURL: "https://same.example.com", APIKey: maskedAPIKey}}}}
+	if err := keepPrivateAPIKeys(&ambiguous, saved); err == nil {
+		t.Fatal("keepPrivateAPIKeys returned nil error for ambiguous legacy identity")
+	}
+	if ambiguous.Private.Channels[0].APIKey != "" {
+		t.Fatalf("ambiguous legacy api key = %q, want empty", ambiguous.Private.Channels[0].APIKey)
+	}
+
+	unrelated := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{{ID: "new", Name: "New", Protocol: "openai", BaseURL: "https://new.example.com", APIKey: maskedAPIKey}}}}
+	if err := keepPrivateAPIKeys(&unrelated, saved); err != nil {
+		t.Fatalf("keepPrivateAPIKeys returned error for unrelated channel: %v", err)
+	}
+	if unrelated.Private.Channels[0].APIKey != "" {
+		t.Fatalf("unrelated channel api key = %q, want empty", unrelated.Private.Channels[0].APIKey)
+	}
+}
+
+func TestKeepPrivateAPIKeysLeavesJimengNoSecretChannelEmpty(t *testing.T) {
+	saved := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
+		{ID: "first", Name: "Jimeng", Protocol: modelProtocolJimengCLI},
+		{ID: "second", Name: "Jimeng", Protocol: modelProtocolJimengCLI},
+	}}}
+	input := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{{Name: "Jimeng", Protocol: modelProtocolJimengCLI, APIKey: maskedAPIKey}}}}
+
+	if err := keepPrivateAPIKeys(&input, saved); err != nil {
+		t.Fatalf("keepPrivateAPIKeys returned error for Jimeng: %v", err)
+	}
+	if input.Private.Channels[0].APIKey != "" {
+		t.Fatalf("Jimeng api key = %q, want empty", input.Private.Channels[0].APIKey)
+	}
+}
+
+func TestSaveSettingsRejectsAmbiguousLegacyChannelSecret(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
+		{ID: "first", Name: "Duplicate", Protocol: "openai", BaseURL: "https://same.example.com", APIKey: "key-first"},
+		{ID: "second", Name: "Duplicate", Protocol: "openai", BaseURL: "https://same.example.com", APIKey: "key-second"},
+	}}}, now())
+	if err != nil {
+		t.Fatalf("seed settings: %v", err)
+	}
+
+	_, err = SaveSettings(model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{{
+		Name: "Duplicate", Protocol: "openai", BaseURL: "https://same.example.com", APIKey: maskedAPIKey,
+	}}}})
+	if err == nil || !strings.Contains(err.Error(), "无法确定模型渠道密钥") {
+		t.Fatalf("SaveSettings error = %v, want ambiguous secret error", err)
+	}
+}
+
+func TestKeepPrivateNonChannelSecretsTreatsMaskAsKeep(t *testing.T) {
+	saved := model.Settings{Private: model.PrivateSetting{
+		Auth:            model.PrivateAuthSetting{LinuxDo: model.PrivateLinuxDoAuthSetting{ClientSecret: "auth-secret"}},
+		VolcengineAsset: model.VolcengineAssetSetting{AccessKey: "access-secret", SecretKey: "volc-secret"},
+	}}
+	input := model.Settings{Private: model.PrivateSetting{
+		Auth:            model.PrivateAuthSetting{LinuxDo: model.PrivateLinuxDoAuthSetting{ClientSecret: maskedAPIKey}},
+		VolcengineAsset: model.VolcengineAssetSetting{AccessKey: maskedAPIKey, SecretKey: maskedAPIKey},
+	}}
+
+	keepPrivateAuthSecrets(&input, saved)
+	keepPrivateVolcengineAssetSecrets(&input, saved)
+
+	if input.Private.Auth.LinuxDo.ClientSecret != "auth-secret" {
+		t.Fatalf("auth secret = %q, want saved secret", input.Private.Auth.LinuxDo.ClientSecret)
+	}
+	if input.Private.VolcengineAsset.AccessKey != "access-secret" || input.Private.VolcengineAsset.SecretKey != "volc-secret" {
+		t.Fatalf("volcengine secrets = %q/%q, want saved secrets", input.Private.VolcengineAsset.AccessKey, input.Private.VolcengineAsset.SecretKey)
+	}
+}
+
 func TestAdminSettingsMasksSavedChannelAPIKey(t *testing.T) {
 	setupAITaskTestDB(t)
 	saveSettingsForBoundaryTest(t, true, "sk-real-admin")
