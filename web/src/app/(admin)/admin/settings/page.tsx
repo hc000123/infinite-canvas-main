@@ -114,7 +114,7 @@ export default function AdminSettingsPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [isEnterpriseVideoFocus, setIsEnterpriseVideoFocus] = useState(false);
     const [modelCosts, setModelCosts] = useState<AdminModelCost[]>([]);
-    const [knownModels, setKnownModels] = useState<string[]>([]);
+    const [configuredModels, setConfiguredModels] = useState<string[]>([]);
     const watchedPublicModels = Form.useWatch(["public", "modelChannel", "availableModels"], form);
     const watchedModelTextEndpoints = Form.useWatch(["public", "modelChannel", "modelTextEndpoints"], form);
     const publicModels = useMemo(() => watchedPublicModels || [], [watchedPublicModels]);
@@ -142,7 +142,7 @@ export default function AdminSettingsPage() {
             form.setFieldsValue(data);
             setChannels(data.private.channels);
             setModelCosts(data.public.modelChannel.modelCosts);
-            setKnownModels(collectKnownModels(data));
+            setConfiguredModels(collectKnownModels(data));
             setJsonText({
                 public: JSON.stringify(data.public, null, 2),
                 private: JSON.stringify(data.private, null, 2),
@@ -185,7 +185,7 @@ export default function AdminSettingsPage() {
             form.setFieldsValue(merged);
             setChannels(merged.private.channels);
             setModelCosts(merged.public.modelChannel.modelCosts);
-            rememberKnownModels(merged);
+            rememberConfiguredModels(merged);
             setJsonText({
                 public: JSON.stringify(merged.public, null, 2),
                 private: JSON.stringify(merged.private, null, 2),
@@ -207,7 +207,7 @@ export default function AdminSettingsPage() {
             form.setFieldsValue(merged);
             setChannels(merged.private.channels);
             setModelCosts(merged.public.modelChannel.modelCosts);
-            rememberKnownModels(merged);
+            rememberConfiguredModels(merged);
             setJsonText({ public: JSON.stringify(merged.public, null, 2), private: JSON.stringify(merged.private, null, 2) });
             setIsProviderPresetOpen(false);
             message.success("厂商预设已一次配置完成");
@@ -235,7 +235,7 @@ export default function AdminSettingsPage() {
         form.setFieldsValue({ [tab]: parsed } as Partial<AdminSettings>);
         if (tab === "private") setChannels((parsed as AdminSettings["private"]).channels);
         if (tab === "public") setModelCosts((parsed as AdminSettings["public"]).modelChannel.modelCosts);
-        rememberKnownModels({ ...normalizeSettings(form.getFieldsValue(true) as AdminSettings), [tab]: parsed });
+        rememberConfiguredModels({ ...normalizeSettings(form.getFieldsValue(true) as AdminSettings), [tab]: parsed });
         setEditorMode((current) => ({ ...current, [tab]: nextMode }));
     };
 
@@ -257,7 +257,7 @@ export default function AdminSettingsPage() {
         setEditingChannelIndex(index);
         setWizardInitialChannel(channel);
         setIsChannelWizardOpen(true);
-        rememberModels(channel.models);
+        rememberConfiguredChannelModels(channel.models);
     };
 
     const openEnterpriseVideoChannel = () => {
@@ -286,7 +286,7 @@ export default function AdminSettingsPage() {
 
     const finishChannelWizard = async (channel: AdminModelChannel, publicModelChannel: AdminSettings["public"]["modelChannel"]) => {
         const normalizedChannel = normalizeChannel(channel);
-        rememberModels(normalizedChannel.models);
+        rememberConfiguredChannelModels(normalizedChannel.models);
         const nextChannels = [...channels];
         if (editingChannelIndex === null) nextChannels.push(normalizedChannel);
         else nextChannels[editingChannelIndex] = normalizedChannel;
@@ -301,17 +301,15 @@ export default function AdminSettingsPage() {
 
     const discoverChannelModels = async (channel: AdminModelChannel) => {
         if (!token) return [];
-        const models = cleanChannelModels(await fetchChannelModels(token, { index: editingChannelIndex ?? undefined, channel: normalizeChannel(channel) }));
-        rememberModels(models);
-        return models;
+        return cleanChannelModels(await fetchChannelModels(token, { index: editingChannelIndex ?? undefined, channel: normalizeChannel(channel) }));
     };
 
-    function rememberModels(models: string[]) {
-        setKnownModels((current) => cleanChannelModels([...current, ...models]));
+    function rememberConfiguredChannelModels(models: string[]) {
+        setConfiguredModels((current) => cleanChannelModels([...current, ...models]));
     }
 
-    function rememberKnownModels(settings: AdminSettings) {
-        rememberModels(collectKnownModels(settings));
+    function rememberConfiguredModels(settings: AdminSettings) {
+        rememberConfiguredChannelModels(collectKnownModels(settings));
     }
 
     const openTestDialog = (index: number) => {
@@ -406,7 +404,7 @@ export default function AdminSettingsPage() {
         const merged = mergePrivateSecrets(nextSettings, saved);
         setChannels(merged.private.channels);
         setModelCosts(merged.public.modelChannel.modelCosts);
-        rememberKnownModels(merged);
+        rememberConfiguredModels(merged);
         form.setFieldsValue(merged);
         setJsonText({
             public: JSON.stringify(merged.public, null, 2),
@@ -806,7 +804,7 @@ export default function AdminSettingsPage() {
                     existingChannel={editingChannelIndex === null ? undefined : channels[editingChannelIndex]}
                     siblingChannels={channels.filter((_, index) => index !== editingChannelIndex)}
                     publicModelChannel={publicModelChannel}
-                    knownModels={knownModels}
+                    configuredModels={configuredModels}
                     saving={isSavingChannelWizard}
                     onCancel={closeChannelWizard}
                     onDiscoverModels={discoverChannelModels}

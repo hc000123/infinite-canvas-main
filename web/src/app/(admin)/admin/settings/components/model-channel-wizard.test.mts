@@ -33,14 +33,15 @@ test("wizard initialization uses a stable snapshot and explicitly invalidates di
     assert.match(source, /initializedKeyRef\.current === initializationKey/);
     assert.match(source, /invalidateDiscovery/);
     assert.match(source, /setDiscovering\(false\)/);
+    const invalidation = source.match(/const invalidateDiscovery = useCallback\(\(\) => \{([\s\S]*?)\n\s*}, \[\]\);/)?.[1] || "";
+    assert.match(invalidation, /setDiscoveredModels\(\[\]\)/);
 });
 
 test("wizard wires discovery coordination to the live connection draft", () => {
     assert.match(source, /createModelDiscoveryCoordinator/);
     assert.match(source, /discoveryCoordinatorRef\.current\.sync/);
     assert.match(source, /setDiscoveredModels\(\[\]\)/);
-    assert.match(source, /discoveryCoordinatorRef\.current\.begin/);
-    assert.ok((source.match(/discoveryCoordinatorRef\.current\.isCurrent/g) || []).length >= 3);
+    assert.match(source, /runModelDiscoveryRequest\(discoveryCoordinatorRef\.current/);
 });
 
 test("closing the wizard immediately resets the visible step", () => {
@@ -126,6 +127,10 @@ test("page guards verification state with a session coordinator", () => {
 test("wizard discovery keeps the existing channel index and normalized draft", () => {
     assert.match(pageSource, /onDiscoverModels/);
     assert.match(pageSource, /fetchChannelModels\(token, \{ index: editingChannelIndex \?\? undefined, channel: normalizeChannel\(channel\) \}\)/);
+    const callback = pageSource.match(/const discoverChannelModels = async[\s\S]*?\n\s*};/)?.[0] || "";
+    assert.doesNotMatch(callback, /rememberModels|setKnownModels/);
+    assert.match(source, /modelDiscoveryCandidates\(configuredModels, discoveredModels\)/);
+    assert.doesNotMatch(pageSource, /\brememberKnownModels\b/);
 });
 
 test("page delegates verification orchestration and copy to executable helpers", () => {

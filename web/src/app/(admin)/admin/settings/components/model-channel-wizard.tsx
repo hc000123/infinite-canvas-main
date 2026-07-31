@@ -9,7 +9,7 @@ import type { AiModelKind } from "@/lib/ai-model-kind";
 import type { AdminModelChannel, AdminModelTextEndpoint, AdminPublicModelChannelSettings } from "@/services/api/admin";
 
 import { isRoutableModelChannel, modelChannelHasCapability } from "../model-channel-publication";
-import { applyWizardPublication, buildWizardChannel, buildWizardProspectiveChannel, createModelDiscoveryCoordinator, normalizeWizardModels, type WizardChannelDraft, type WizardPublicSelection } from "../model-channel-wizard-model";
+import { applyWizardPublication, buildWizardChannel, buildWizardProspectiveChannel, createModelDiscoveryCoordinator, modelDiscoveryCandidates, normalizeWizardModels, runModelDiscoveryRequest, type WizardChannelDraft, type WizardPublicSelection } from "../model-channel-wizard-model";
 
 type ModelChannelWizardProps = {
     open: boolean;
@@ -17,7 +17,7 @@ type ModelChannelWizardProps = {
     existingChannel?: AdminModelChannel;
     siblingChannels: AdminModelChannel[];
     publicModelChannel: AdminPublicModelChannelSettings;
-    knownModels: string[];
+    configuredModels: string[];
     saving: boolean;
     onCancel: () => void;
     onDiscoverModels: (draft: AdminModelChannel) => Promise<string[]>;
@@ -49,7 +49,7 @@ export function ModelChannelWizard({
     existingChannel,
     siblingChannels,
     publicModelChannel,
-    knownModels,
+    configuredModels,
     saving,
     onCancel,
     onDiscoverModels,
@@ -85,7 +85,7 @@ export function ModelChannelWizard({
     const capabilities = Form.useWatch("capabilities", form) || [];
     const publishedModels = Form.useWatch("publishedModels", form) || [];
     const enabled = Form.useWatch("enabled", form) ?? baseChannel.enabled;
-    const candidateModels = useMemo(() => normalizeWizardModels([...knownModels, ...discoveredModels]), [discoveredModels, knownModels]);
+    const candidateModels = useMemo(() => modelDiscoveryCandidates(configuredModels, discoveredModels), [configuredModels, discoveredModels]);
     const channelModels = useMemo(
         () => (protocol === "volcengine-ark" ? normalizeWizardModels(endpointMappings.map((item) => item?.model || "")) : normalizeWizardModels(selectedModels)),
         [endpointMappings, protocol, selectedModels],
@@ -119,6 +119,7 @@ export function ModelChannelWizard({
     const busy = saving || submitting;
     const invalidateDiscovery = useCallback(() => {
         discoveryCoordinatorRef.current.reset();
+        setDiscoveredModels([]);
         setDiscovering(false);
     }, []);
 
@@ -173,7 +174,6 @@ export function ModelChannelWizard({
     const selectProtocol = (nextProtocol: AdminModelChannel["protocol"]) => {
         if (nextProtocol === protocol) return;
         invalidateDiscovery();
-        setDiscoveredModels([]);
         if (protocol === "jimeng-cli") {
             cliConnectionDraftRef.current = pickCliConnection(form.getFieldsValue(true));
             form.setFieldsValue({ protocol: nextProtocol, ...emptyCliConnection(), ...apiConnectionDraftRef.current });
@@ -217,18 +217,14 @@ export function ModelChannelWizard({
             return;
         }
         const draft = buildDiscoveryChannel(existingChannel || initialChannel, scopeDraftToProtocol(form.getFieldsValue(true)));
-        const request = discoveryCoordinatorRef.current.begin(draft);
-        setDiscovering(true);
-        try {
-            const result = normalizeWizardModels(await onDiscoverModels(draft));
-            if (!discoveryCoordinatorRef.current.isCurrent(request, buildDiscoveryChannel(existingChannel || initialChannel, scopeDraftToProtocol(form.getFieldsValue(true))))) return;
-            setDiscoveredModels(result);
-            message.success(`已发现 ${result.length} 个模型，请按需选择`);
-        } catch (error) {
-            if (discoveryCoordinatorRef.current.isCurrent(request, buildDiscoveryChannel(existingChannel || initialChannel, scopeDraftToProtocol(form.getFieldsValue(true))))) message.error(safeErrorMessage(error, [draft.apiKey, form.getFieldValue("apiKey") || ""]));
-        } finally {
-            if (discoveryCoordinatorRef.current.isCurrent(request, buildDiscoveryChannel(existingChannel || initialChannel, scopeDraftToProtocol(form.getFieldsValue(true))))) setDiscovering(false);
-        }
+        await runModelDiscoveryRequest(discoveryCoordinatorRef.current, draft, {
+            discover: onDiscoverModels,
+            getCurrentDraft: () => buildDiscoveryChannel(existingChannel || initialChannel, scopeDraftToProtocol(form.getFieldsValue(true))),
+            setDiscoveredModels,
+            setLoading: setDiscovering,
+            onSuccess: (result) => message.success(`已发现 ${result.length} 个模型，请按需选择`),
+            onError: (error) => message.error(safeErrorMessage(error, [draft.apiKey, form.getFieldValue("apiKey") || ""])),
+        });
     };
 
     const finish = async () => {

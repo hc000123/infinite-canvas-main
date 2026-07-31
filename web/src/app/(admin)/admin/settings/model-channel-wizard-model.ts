@@ -263,6 +263,36 @@ export function createModelDiscoveryCoordinator() {
     };
 }
 
+export function modelDiscoveryCandidates(configuredModels: string[], discoveredModels: string[]) {
+    return normalizeWizardModels([...configuredModels, ...discoveredModels]);
+}
+
+export async function runModelDiscoveryRequest(
+    coordinator: ReturnType<typeof createModelDiscoveryCoordinator>,
+    draft: AdminModelChannel,
+    actions: {
+        discover: (draft: AdminModelChannel) => Promise<string[]>;
+        getCurrentDraft: () => AdminModelChannel;
+        setDiscoveredModels: (models: string[]) => void;
+        setLoading: (loading: boolean) => void;
+        onSuccess?: (models: string[]) => void;
+        onError?: (error: unknown) => void;
+    },
+) {
+    const request = coordinator.begin(draft);
+    actions.setLoading(true);
+    try {
+        const result = normalizeWizardModels(await actions.discover(draft));
+        if (!coordinator.isCurrent(request, actions.getCurrentDraft())) return;
+        actions.setDiscoveredModels(result);
+        actions.onSuccess?.(result);
+    } catch (error) {
+        if (coordinator.isCurrent(request, actions.getCurrentDraft())) actions.onError?.(error);
+    } finally {
+        if (coordinator.isCurrent(request, actions.getCurrentDraft())) actions.setLoading(false);
+    }
+}
+
 export function createChannelVerificationCoordinator() {
     let session = 0;
     let nextRequestId = 0;

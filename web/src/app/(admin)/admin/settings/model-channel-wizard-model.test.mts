@@ -10,7 +10,9 @@ import {
     createChannelVerificationCoordinator,
     createModelDiscoveryCoordinator,
     filterWizardPublicationSnapshot,
+    modelDiscoveryCandidates,
     normalizeWizardModels,
+    runModelDiscoveryRequest,
     runChannelVerification,
 } from "./model-channel-wizard-model.ts";
 import type { AdminModelChannel, AdminPublicModelChannelSettings } from "../../../../services/api/admin.ts";
@@ -498,3 +500,111 @@ test("模型发现协调器隔离关闭重开和后发请求，稳定草稿可�
     const requestC = coordinator.begin(draft);
     assert.equal(coordinator.isCurrent(requestC, draft), true);
 });
+
+test("异步发现集成只让当前请求写入局部候选和状态", async () => {
+    const coordinator = createModelDiscoveryCoordinator();
+    const configuredModels = ["configured-model"];
+    const selectedModels = ["manual-model"];
+    const original = channel();
+    const changed = channel({ baseUrl: "https://changed.example.com" });
+    let currentDraft = original;
+    let discoveredModels = ["previous-discovery"];
+    let loading = false;
+    const errors: string[] = [];
+    const stale = deferred<string[]>();
+    const runStale = runModelDiscoveryRequest(coordinator, original, {
+        discover: () => stale.promise,
+        getCurrentDraft: () => currentDraft,
+        setDiscoveredModels: (models) => { discoveredModels = models; },
+        setLoading: (value) => { loading = value; },
+        onError: (error) => { errors.push(String(error)); },
+    });
+
+    assert.equal(loading, true);
+    currentDraft = changed;
+    if (coordinator.sync(changed)) {
+        discoveredModels = [];
+        loading = false;
+    }
+    stale.resolve(["stale-model"]);
+    await runStale;
+
+    assert.deepEqual(modelDiscoveryCandidates(configuredModels, discoveredModels), ["configured-model"]);
+    assert.equal(loading, false);
+    assert.deepEqual(errors, []);
+
+    currentDraft = original;
+    coordinator.sync(original);
+    const staleError = deferred<string[]>();
+    const runStaleError = runModelDiscoveryRequest(coordinator, original, {
+        discover: () => staleError.promise,
+        getCurrentDraft: () => currentDraft,
+        setDiscoveredModels: (models) => { discoveredModels = models; },
+        setLoading: (value) => { loading = value; },
+        onError: (error) => { errors.push(String(error)); },
+    });
+    currentDraft = changed;
+    coordinator.sync(changed);
+    discoveredModels = [];
+    loading = false;
+    staleError.reject(new Error("stale error"));
+    await runStaleError;
+    assert.deepEqual(errors, []);
+
+    currentDraft = original;
+    coordinator.sync(original);
+    discoveredModels = ["completed-before-close"];
+    const closing = deferred<string[]>();
+    const runClosing = runModelDiscoveryRequest(coordinator, original, {
+        discover: () => closing.promise,
+        getCurrentDraft: () => currentDraft,
+        setDiscoveredModels: (models) => { discoveredModels = models; },
+        setLoading: (value) => { loading = value; },
+        onError: (error) => { errors.push(String(error)); },
+    });
+    coordinator.reset();
+    discoveredModels = [];
+    loading = false;
+    closing.resolve(["returned-after-close"]);
+    await runClosing;
+    assert.deepEqual(modelDiscoveryCandidates(configuredModels, discoveredModels), ["configured-model"]);
+    assert.equal(loading, false);
+    assert.deepEqual(errors, []);
+
+    currentDraft = original;
+    coordinator.sync(original);
+    const first = deferred<string[]>();
+    const second = deferred<string[]>();
+    const runFirst = runModelDiscoveryRequest(coordinator, original, {
+        discover: () => first.promise,
+        getCurrentDraft: () => currentDraft,
+        setDiscoveredModels: (models) => { discoveredModels = models; },
+        setLoading: (value) => { loading = value; },
+    });
+    const runSecond = runModelDiscoveryRequest(coordinator, original, {
+        discover: () => second.promise,
+        getCurrentDraft: () => currentDraft,
+        setDiscoveredModels: (models) => { discoveredModels = models; },
+        setLoading: (value) => { loading = value; },
+    });
+    first.resolve(["first-model"]);
+    await runFirst;
+    assert.deepEqual(discoveredModels, []);
+    assert.equal(loading, true);
+    second.resolve(["second-model"]);
+    await runSecond;
+    assert.deepEqual(modelDiscoveryCandidates(configuredModels, discoveredModels), ["configured-model", "second-model"]);
+    assert.deepEqual(configuredModels, ["configured-model"]);
+    assert.deepEqual(selectedModels, ["manual-model"]);
+    assert.equal(loading, false);
+});
+
+function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+    });
+    return { promise, resolve, reject };
+}
