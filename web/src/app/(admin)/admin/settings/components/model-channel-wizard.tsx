@@ -61,6 +61,7 @@ export function ModelChannelWizard({
     const [discoveredModels, setDiscoveredModels] = useState<string[]>([]);
     const [discovering, setDiscovering] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [initializedKey, setInitializedKey] = useState("");
     const submittingRef = useRef(false);
     const initializedKeyRef = useRef("");
     const discoverySequenceRef = useRef(0);
@@ -102,6 +103,8 @@ export function ModelChannelWizard({
     useEffect(() => {
         if (!open) {
             initializedKeyRef.current = "";
+            setInitializedKey("");
+            setStep(0);
             invalidateDiscovery();
             return;
         }
@@ -126,16 +129,17 @@ export function ModelChannelWizard({
             defaultVideoModel: initialPublication.defaultVideoModel,
             modelTextEndpoints: textEndpointsFor(models, initialPublication.modelTextEndpoints),
         });
+        setInitializedKey(initializationKey);
         setStep(0);
         setDiscoveredModels([]);
     }, [form, initializationKey, invalidateDiscovery, open]);
 
     useEffect(() => {
-        if (!open || step !== 3) return;
+        if (!open || step !== 3 || initializedKey !== initializationKey) return;
         clearInvalidDefault(form, "defaultTextModel", defaultTextOptions);
         clearInvalidDefault(form, "defaultImageModel", defaultImageOptions);
         clearInvalidDefault(form, "defaultVideoModel", defaultVideoOptions);
-    }, [defaultImageOptions, defaultTextOptions, defaultVideoOptions, form, open, step]);
+    }, [defaultImageOptions, defaultTextOptions, defaultVideoOptions, form, initializationKey, initializedKey, open, step]);
 
     const selectProtocol = (nextProtocol: AdminModelChannel["protocol"]) => {
         if (nextProtocol === protocol) return;

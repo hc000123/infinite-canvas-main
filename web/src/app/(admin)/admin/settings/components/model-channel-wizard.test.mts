@@ -31,6 +31,20 @@ test("wizard initialization uses a stable snapshot and explicitly invalidates di
     assert.match(source, /setDiscovering\(false\)/);
 });
 
+test("closing the wizard immediately resets the visible step", () => {
+    const closeBranch = source.match(/if \(!open\) \{([\s\S]*?)\n\s*return;\n\s*\}/)?.[1] || "";
+    assert.match(closeBranch, /setStep\(0\)/);
+    assert.match(closeBranch, /setInitializedKey\(""\)/);
+});
+
+test("default cleanup waits for a render initialized from the current snapshot", () => {
+    assert.match(source, /const \[initializedKey, setInitializedKey\] = useState\(""\)/);
+    assert.match(source, /initializedKey !== initializationKey/);
+    const fieldsInitializedAt = source.indexOf("form.setFieldsValue");
+    const renderReadyAt = source.indexOf("setInitializedKey(initializationKey)");
+    assert.ok(fieldsInitializedAt >= 0 && renderReadyAt > fieldsInitializedAt);
+});
+
 test("finish has a synchronous local submission lock", () => {
     assert.match(source, /const \[submitting, setSubmitting\] = useState\(false\)/);
     assert.match(source, /submittingRef\.current/);
