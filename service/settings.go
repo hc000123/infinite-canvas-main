@@ -45,6 +45,9 @@ func SaveSettings(settings model.Settings) (model.Settings, error) {
 	if err != nil {
 		return model.Settings{}, err
 	}
+	if hasDuplicateSavedChannelIDForSecretRestore(settings.Private.Channels, saved.Private.Channels) {
+		return model.Settings{}, safeMessageError{message: "无法确定模型渠道密钥，请为渠道保留唯一 ID 或输入新 API Key"}
+	}
 	normalizedSaved := normalizeSettings(saved)
 	if err := keepPrivateAPIKeys(&settings, normalizedSaved); err != nil {
 		return model.Settings{}, err
@@ -648,14 +651,27 @@ func normalizePrivateSetting(setting model.PrivateSetting) model.PrivateSetting 
 	}
 	setting.PromptSync = normalizePromptSyncSetting(setting.PromptSync)
 	setting.VolcengineAsset = normalizeVolcengineAssetSetting(setting.VolcengineAsset)
-	seenChannelIDs := map[string]int{}
 	for i := range setting.Channels {
 		setting.Channels[i] = normalizeModelChannel(setting.Channels[i])
-		id := setting.Channels[i].ID
-		if seenChannelIDs[id] > 0 {
-			setting.Channels[i].ID = fmt.Sprintf("%s-%d", id, seenChannelIDs[id]+1)
+	}
+	reservedChannelIDs := map[string]int{}
+	for _, channel := range setting.Channels {
+		reservedChannelIDs[channel.ID]++
+	}
+	usedChannelIDs := map[string]bool{}
+	for i := range setting.Channels {
+		baseID := setting.Channels[i].ID
+		reservedChannelIDs[baseID]--
+		candidate := baseID
+		for suffix := 2; usedChannelIDs[candidate]; suffix++ {
+			candidate = fmt.Sprintf("%s-%d", baseID, suffix)
+			for reservedChannelIDs[candidate] > 0 {
+				suffix++
+				candidate = fmt.Sprintf("%s-%d", baseID, suffix)
+			}
 		}
-		seenChannelIDs[id]++
+		setting.Channels[i].ID = candidate
+		usedChannelIDs[candidate] = true
 	}
 	return setting
 }
@@ -693,6 +709,26 @@ func keepPrivateAPIKeys(settings *model.Settings, saved model.Settings) error {
 		}
 	}
 	return nil
+}
+
+func hasDuplicateSavedChannelIDForSecretRestore(channels, saved []model.ModelChannel) bool {
+	for _, channel := range channels {
+		apiKey := strings.TrimSpace(channel.APIKey)
+		channelID := strings.TrimSpace(channel.ID)
+		if IsJimengCLIProtocol(channel.Protocol) || (apiKey != "" && !isMaskedAPIKey(apiKey)) || channelID == "" {
+			continue
+		}
+		matches := 0
+		for _, item := range saved {
+			if strings.TrimSpace(item.ID) == channelID {
+				matches++
+			}
+		}
+		if matches > 1 {
+			return true
+		}
+	}
+	return false
 }
 
 func isMaskedAPIKey(value string) bool {
@@ -735,25 +771,37 @@ func normalizeVolcengineAssetSetting(setting model.VolcengineAssetSetting) model
 func findSavedChannelForSecretRestore(channel model.ModelChannel, saved []model.ModelChannel) (model.ModelChannel, bool, bool) {
 	channelID := strings.TrimSpace(channel.ID)
 	if channelID != "" {
+		matches := []model.ModelChannel{}
 		for _, item := range saved {
 			if strings.TrimSpace(item.ID) == channelID {
-				return item, true, false
+				matches = append(matches, item)
 			}
 		}
-		return model.ModelChannel{}, false, false
+		if len(matches) != 1 {
+			return model.ModelChannel{}, false, len(matches) > 1
+		}
+		if normalizeModelProtocol(matches[0].Protocol) != normalizeModelProtocol(channel.Protocol) {
+			return model.ModelChannel{}, false, true
+		}
+		return matches[0], true, false
 	}
 	matches := []model.ModelChannel{}
+	identityMatches := 0
 	name := strings.TrimSpace(channel.Name)
 	baseURL := strings.TrimRight(strings.TrimSpace(channel.BaseURL), "/")
 	for _, item := range saved {
-		if strings.TrimSpace(item.Name) == name && strings.TrimRight(strings.TrimSpace(item.BaseURL), "/") == baseURL {
+		if strings.TrimSpace(item.Name) != name || strings.TrimRight(strings.TrimSpace(item.BaseURL), "/") != baseURL {
+			continue
+		}
+		identityMatches++
+		if normalizeModelProtocol(item.Protocol) == normalizeModelProtocol(channel.Protocol) {
 			matches = append(matches, item)
 		}
 	}
 	if len(matches) == 1 {
 		return matches[0], true, false
 	}
-	return model.ModelChannel{}, false, len(matches) > 1
+	return model.ModelChannel{}, false, len(matches) > 1 || identityMatches > 0
 }
 
 func findSavedChannel(channel model.ModelChannel, saved []model.ModelChannel, index int) (model.ModelChannel, bool) {

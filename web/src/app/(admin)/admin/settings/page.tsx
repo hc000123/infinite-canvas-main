@@ -134,6 +134,7 @@ export default function AdminSettingsPage() {
     const publicConfigWarnings = useMemo(() => buildPublicConfigWarnings(publicModelChannel, channels), [channels, publicModelChannel]);
     const privateConfigWarnings = useMemo(() => buildPrivateConfigWarnings(channels, privateVolcengineAsset), [channels, privateVolcengineAsset]);
     const activeWarnings = activeTab === "public" ? publicConfigWarnings : privateConfigWarnings;
+    const isSettingsBusy = isLoading || isSaving || isApplyingProviderPreset || isSavingChannelWizard;
 
     const loadSettings = useCallback(async () => {
         if (!token) return;
@@ -421,10 +422,10 @@ export default function AdminSettingsPage() {
                             ]}
                         />
                         <Space>
-                            <Button icon={<ReloadOutlined />} loading={isLoading} onClick={() => void loadSettings()}>
+                            <Button icon={<ReloadOutlined />} loading={isLoading} disabled={isSettingsBusy && !isLoading} onClick={() => void loadSettings()}>
                                 刷新
                             </Button>
-                            <Button type="primary" icon={<SaveOutlined />} loading={isSaving} onClick={() => void saveSettings()}>
+                            <Button type="primary" icon={<SaveOutlined />} loading={isSaving} disabled={isSettingsBusy && !isSaving} onClick={() => void saveSettings()}>
                                 保存设置
                             </Button>
                         </Space>
@@ -670,10 +671,10 @@ export default function AdminSettingsPage() {
                                     ) : null}
                                 </div>
                                 <Space wrap>
-                                    <Button type="primary" icon={<FormatPainterOutlined />} onClick={() => setIsProviderPresetOpen(true)}>
+                                    <Button type="primary" icon={<FormatPainterOutlined />} disabled={isSettingsBusy} onClick={() => setIsProviderPresetOpen(true)}>
                                         一键配置厂商
                                     </Button>
-                                    <Button icon={<PlusOutlined />} onClick={() => openChannelWizard(null)}>
+                                    <Button icon={<PlusOutlined />} disabled={isSettingsBusy} onClick={() => openChannelWizard(null)}>
                                         手动新增渠道
                                     </Button>
                                 </Space>
@@ -751,17 +752,20 @@ export default function AdminSettingsPage() {
                                                     <Button size="small" onClick={() => openTestDialog(item._index)}>
                                                         {channelVerificationCopy(item).tableLabel}
                                                     </Button>
-                                                    <Button size="small" onClick={() => openChannelWizard(item._index)}>
+                                                    <Button size="small" disabled={isSettingsBusy} onClick={() => openChannelWizard(item._index)}>
                                                         编辑
                                                     </Button>
                                                     <Button
                                                         danger
                                                         size="small"
                                                         icon={<DeleteOutlined />}
+                                                        disabled={isSettingsBusy}
                                                         onClick={() => {
                                                             const nextChannels = [...channels];
                                                             nextChannels.splice(item._index, 1);
-                                                            void persistChannels(nextChannels);
+                                                            void persistChannels(nextChannels).catch((error) => {
+                                                                message.error(error instanceof Error ? error.message : "保存失败");
+                                                            });
                                                         }}
                                                     />
                                                 </Space>

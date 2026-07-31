@@ -301,6 +301,7 @@ export function configuredModelsFromSettings(settings: AdminSettings) {
 export function createAuthoritativeSettingsCoordinator() {
     let generation = 0;
     let active: { request: number; setPending?: (pending: boolean) => void } | undefined;
+    let executionTail = Promise.resolve();
     return {
         begin(setPending?: (pending: boolean) => void) {
             active?.setPending?.(false);
@@ -310,6 +311,17 @@ export function createAuthoritativeSettingsCoordinator() {
             return request;
         },
         isCurrent: (request: number) => request === generation,
+        async runExclusive<T>(operation: () => Promise<T>) {
+            const previous = executionTail;
+            let release!: () => void;
+            executionTail = new Promise<void>((resolve) => { release = resolve; });
+            await previous;
+            try {
+                return await operation();
+            } finally {
+                release();
+            }
+        },
         finish(request: number) {
             if (request !== generation || active?.request !== request) return;
             active.setPending?.(false);
@@ -330,7 +342,7 @@ export async function syncConfiguredModelsFromAuthoritativeSettings(
 ) {
     const request = coordinator.begin(setPending);
     try {
-        const settings = await loadSettings();
+        const settings = await coordinator.runExclusive(loadSettings);
         if (!coordinator.isCurrent(request)) return false;
         applySettings(configuredModelsFromSettings(settings), settings);
         return true;

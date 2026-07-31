@@ -698,10 +698,10 @@ test("权威设置只允许最新操作更新模型和页面状态", async () =>
         pageModels = configuredModelsFromSettings(settings);
     });
 
-    newSave.resolve(settingsWithChannels([channel({ models: ["saved-new"] })]));
-    assert.equal(await runNewSave, true);
     oldLoad.resolve(settingsWithChannels([channel({ models: ["loaded-old"] })]));
     assert.equal(await runOldLoad, false);
+    newSave.resolve(settingsWithChannels([channel({ models: ["saved-new"] })]));
+    assert.equal(await runNewSave, true);
     assert.deepEqual(configuredModels, ["saved-new"]);
     assert.deepEqual(pageModels, ["saved-new"]);
 });
@@ -714,20 +714,20 @@ test("新读取取代旧读取，且最新失败后旧响应仍然作废", async
     const apply = (models: string[]) => { configuredModels = models; };
     const runOldLoad = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => oldLoad.promise, apply);
     const runNewLoad = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => newLoad.promise, apply);
-    newLoad.resolve(settingsWithChannels([channel({ models: ["new-load"] })]));
-    assert.equal(await runNewLoad, true);
     oldLoad.resolve(settingsWithChannels([channel({ models: ["old-load"] })]));
     assert.equal(await runOldLoad, false);
+    newLoad.resolve(settingsWithChannels([channel({ models: ["new-load"] })]));
+    assert.equal(await runNewLoad, true);
     assert.deepEqual(configuredModels, ["new-load"]);
 
     const staleLoad = deferred<AdminSettings>();
     const failedNewest = deferred<AdminSettings>();
     const runStaleLoad = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => staleLoad.promise, apply);
     const runFailedNewest = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => failedNewest.promise, apply);
-    failedNewest.reject(new Error("newest failed"));
-    await assert.rejects(runFailedNewest, /newest failed/);
     staleLoad.resolve(settingsWithChannels([channel({ models: ["stale-after-error"] })]));
     assert.equal(await runStaleLoad, false);
+    failedNewest.reject(new Error("newest failed"));
+    await assert.rejects(runFailedNewest, /newest failed/);
     assert.deepEqual(configuredModels, ["new-load"]);
 
     const unmountedLoad = deferred<AdminSettings>();
@@ -797,12 +797,46 @@ test("被新设置操作取代的向导保存不完成或关闭向导", async ()
 
     const runNewerLoad = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => newerLoad.promise, () => {});
     assert.deepEqual(wizardPending, [true, false]);
-    newerLoad.resolve(settingsWithChannels([]));
-    assert.equal(await runNewerLoad, true);
     wizardSave.resolve(settingsWithChannels([channel({ models: ["stale-wizard"] })]));
     assert.equal(await runWizardSave, false);
+    newerLoad.resolve(settingsWithChannels([]));
+    assert.equal(await runNewerLoad, true);
     assert.equal(wizardOpen, true);
     assert.deepEqual(wizardPending, [true, false]);
+});
+
+test("权威设置生产边界串行持久化，写入和刷新不会重叠执行", async () => {
+    const coordinator = createAuthoritativeSettingsCoordinator();
+    const firstWrite = deferred<AdminSettings>();
+    const secondWrite = deferred<AdminSettings>();
+    const refresh = deferred<AdminSettings>();
+    const events: string[] = [];
+    const runFirstWrite = syncConfiguredModelsFromAuthoritativeSettings(coordinator, async () => {
+        events.push("write-1-start");
+        const result = await firstWrite.promise;
+        events.push("write-1-commit");
+        return result;
+    }, () => {});
+    const runSecondWrite = syncConfiguredModelsFromAuthoritativeSettings(coordinator, async () => {
+        events.push("write-2-start");
+        const result = await secondWrite.promise;
+        events.push("write-2-commit");
+        return result;
+    }, () => {});
+    const runRefresh = syncConfiguredModelsFromAuthoritativeSettings(coordinator, async () => {
+        events.push("refresh-start");
+        return refresh.promise;
+    }, () => {});
+
+    await Promise.resolve();
+    assert.deepEqual(events, ["write-1-start"]);
+    secondWrite.resolve(settingsWithChannels([]));
+    refresh.resolve(settingsWithChannels([]));
+    firstWrite.resolve(settingsWithChannels([]));
+    assert.equal(await runFirstWrite, false);
+    assert.equal(await runSecondWrite, false);
+    assert.equal(await runRefresh, true);
+    assert.deepEqual(events, ["write-1-start", "write-1-commit", "write-2-start", "write-2-commit", "refresh-start"]);
 });
 
 function deferred<T>() {

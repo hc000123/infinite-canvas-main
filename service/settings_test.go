@@ -45,7 +45,7 @@ func TestKeepPrivateAPIKeysRestoresSecretsByStableChannelID(t *testing.T) {
 	}
 }
 
-func TestKeepPrivateAPIKeysDoesNotGuessAmbiguousLegacyOrIndexMatch(t *testing.T) {
+func TestKeepPrivateAPIKeysRejectsAmbiguousLegacyAndLeavesUnmatchedIDEmpty(t *testing.T) {
 	saved := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
 		{ID: "first", Name: "Duplicate", Protocol: "openai", BaseURL: "https://same.example.com", APIKey: "key-first"},
 		{ID: "second", Name: "Duplicate", Protocol: "openai", BaseURL: "https://same.example.com", APIKey: "key-second"},
@@ -64,6 +64,65 @@ func TestKeepPrivateAPIKeysDoesNotGuessAmbiguousLegacyOrIndexMatch(t *testing.T)
 	}
 	if unrelated.Private.Channels[0].APIKey != "" {
 		t.Fatalf("unrelated channel api key = %q, want empty", unrelated.Private.Channels[0].APIKey)
+	}
+}
+
+func TestKeepPrivateAPIKeysRequiresMatchingProtocol(t *testing.T) {
+	saved := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{{
+		ID: "shared", Name: "Shared", Protocol: modelProtocolOpenAI, BaseURL: "https://same.example.com", APIKey: "openai-key",
+	}}}}
+	for _, channel := range []model.ModelChannel{
+		{ID: "shared", Name: "Shared", Protocol: modelProtocolVolcengineArk, BaseURL: "https://same.example.com", APIKey: maskedAPIKey},
+		{Name: "Shared", Protocol: modelProtocolXinglianCloud, BaseURL: "https://same.example.com"},
+	} {
+		input := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{channel}}}
+		if err := keepPrivateAPIKeys(&input, saved); err == nil {
+			t.Fatalf("keepPrivateAPIKeys returned nil error for cross-protocol %s restore", channel.Protocol)
+		}
+		if input.Private.Channels[0].APIKey != "" {
+			t.Fatalf("cross-protocol %s api key = %q, want empty", channel.Protocol, input.Private.Channels[0].APIKey)
+		}
+	}
+}
+
+func TestKeepPrivateAPIKeysRejectsDuplicateSavedID(t *testing.T) {
+	saved := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
+		{ID: "duplicate", Protocol: modelProtocolOpenAI, APIKey: "first-key"},
+		{ID: "duplicate", Protocol: modelProtocolOpenAI, APIKey: "second-key"},
+	}}}
+	input := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{{ID: "duplicate", Protocol: modelProtocolOpenAI, APIKey: maskedAPIKey}}}}
+
+	if err := keepPrivateAPIKeys(&input, saved); err == nil {
+		t.Fatal("keepPrivateAPIKeys returned nil error for duplicate saved ID")
+	}
+	if input.Private.Channels[0].APIKey != "" {
+		t.Fatalf("duplicate saved ID api key = %q, want empty", input.Private.Channels[0].APIKey)
+	}
+}
+
+func TestSaveSettingsRejectsDuplicateRawSavedID(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
+		{ID: "duplicate", Protocol: modelProtocolOpenAI, APIKey: "first-key"},
+		{ID: "duplicate", Protocol: modelProtocolOpenAI, APIKey: "second-key"},
+	}}}, now())
+	if err != nil {
+		t.Fatalf("seed settings: %v", err)
+	}
+
+	_, err = SaveSettings(model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{{ID: "duplicate", Protocol: modelProtocolOpenAI, APIKey: maskedAPIKey}}}})
+	if err == nil || !strings.Contains(err.Error(), "无法确定模型渠道密钥") {
+		t.Fatalf("SaveSettings error = %v, want duplicate saved ID error", err)
+	}
+}
+
+func TestNormalizePrivateSettingAllocatesGloballyUniqueChannelIDs(t *testing.T) {
+	result := normalizePrivateSetting(model.PrivateSetting{Channels: []model.ModelChannel{{ID: "a"}, {ID: "a"}, {ID: "a-2"}}})
+	want := []string{"a", "a-3", "a-2"}
+	for i, channel := range result.Channels {
+		if channel.ID != want[i] {
+			t.Fatalf("channel %d ID = %q, want %q", i, channel.ID, want[i])
+		}
 	}
 }
 
@@ -336,7 +395,7 @@ func TestKeepPrivateAPIKeysRequiresExactMatchForNonEmptyChannelID(t *testing.T) 
 	}
 }
 
-func TestKeepPrivateAPIKeysRejectsAmbiguousProviderCredentials(t *testing.T) {
+func TestKeepPrivateAPIKeysRestoresExactIDsOnlyOnSharedProvider(t *testing.T) {
 	input := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
 		{ID: "primary", Name: "Primary", Protocol: "openai", BaseURL: "https://relay.example.com", APIKey: maskedAPIKey},
 		{ID: "backup", Name: "Backup", Protocol: "openai", BaseURL: "https://relay.example.com", APIKey: maskedAPIKey},
@@ -347,10 +406,15 @@ func TestKeepPrivateAPIKeysRejectsAmbiguousProviderCredentials(t *testing.T) {
 		{ID: "backup", Name: "Backup", Protocol: "openai", BaseURL: "https://relay.example.com", APIKey: "key-two"},
 	}}}
 
-	keepPrivateAPIKeys(&input, saved)
+	if err := keepPrivateAPIKeys(&input, saved); err != nil {
+		t.Fatalf("keepPrivateAPIKeys returned error: %v", err)
+	}
 
+	if input.Private.Channels[0].APIKey != "key-one" || input.Private.Channels[1].APIKey != "key-two" {
+		t.Fatalf("exact ID api keys = %q/%q, want key-one/key-two", input.Private.Channels[0].APIKey, input.Private.Channels[1].APIKey)
+	}
 	if input.Private.Channels[2].APIKey != "" {
-		t.Fatalf("ambiguous provider api key = %q, want empty", input.Private.Channels[2].APIKey)
+		t.Fatalf("unmatched shared-provider api key = %q, want empty", input.Private.Channels[2].APIKey)
 	}
 }
 
