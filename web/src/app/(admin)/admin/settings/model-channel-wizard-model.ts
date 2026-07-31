@@ -342,6 +342,15 @@ export async function syncConfiguredModelsFromAuthoritativeSettings(
     }
 }
 
+export async function finishAuthoritativeSettingsOperation(
+    operation: () => Promise<boolean>,
+    onCurrent: () => void,
+) {
+    const current = await operation();
+    if (current) onCurrent();
+    return current;
+}
+
 export async function runModelDiscoveryRequest(
     coordinator: ReturnType<typeof createModelDiscoveryCoordinator>,
     draft: AdminModelChannel,

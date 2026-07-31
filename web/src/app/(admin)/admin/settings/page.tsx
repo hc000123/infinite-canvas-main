@@ -11,7 +11,7 @@ import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind"
 import { ModelChannelWizard } from "./components/model-channel-wizard";
 import { ProviderPresetModal } from "./components/provider-preset-modal";
 import { sanitizeModelChannelPublication } from "./model-channel-publication";
-import { channelVerificationCopy, createAuthoritativeSettingsCoordinator, createChannelVerificationCoordinator, filterWizardPublicationSnapshot, runChannelVerification, syncConfiguredModelsFromAuthoritativeSettings } from "./model-channel-wizard-model";
+import { channelVerificationCopy, createAuthoritativeSettingsCoordinator, createChannelVerificationCoordinator, filterWizardPublicationSnapshot, finishAuthoritativeSettingsOperation, runChannelVerification, syncConfiguredModelsFromAuthoritativeSettings } from "./model-channel-wizard-model";
 import type { ModelChannelPresetResult } from "./model-channel-presets";
 import {
     fetchAdminSettings,
@@ -292,13 +292,10 @@ export default function AdminSettingsPage() {
         const nextChannels = [...channels];
         if (editingChannelIndex === null) nextChannels.push(normalizedChannel);
         else nextChannels[editingChannelIndex] = normalizedChannel;
-        setIsSavingChannelWizard(true);
-        try {
-            await persistChannels(nextChannels, { publicModelChannel });
-            closeChannelWizard();
-        } finally {
-            setIsSavingChannelWizard(false);
-        }
+        await finishAuthoritativeSettingsOperation(
+            () => persistChannels(nextChannels, { publicModelChannel, setPending: setIsSavingChannelWizard }),
+            closeChannelWizard,
+        );
     };
 
     const discoverChannelModels = async (channel: AdminModelChannel) => {
@@ -384,8 +381,8 @@ export default function AdminSettingsPage() {
 
     const testModels = visibleChannelModels(testChannel?.models || []).filter((model) => model.toLowerCase().includes(testKeyword.trim().toLowerCase()));
 
-    async function persistChannels(nextChannels: AdminModelChannel[], options: { silent?: boolean; publicModelChannel?: AdminSettings["public"]["modelChannel"] } = {}) {
-        if (!token) return;
+    async function persistChannels(nextChannels: AdminModelChannel[], options: { silent?: boolean; publicModelChannel?: AdminSettings["public"]["modelChannel"]; setPending?: (pending: boolean) => void } = {}) {
+        if (!token) return false;
         const values = normalizeSettings(form.getFieldsValue(true) as AdminSettings);
         const nextPublicModelChannel = options.publicModelChannel || values.public.modelChannel;
         const nextPublicSnapshot = filterWizardPublicationSnapshot(nextPublicModelChannel, nextChannels);
@@ -394,7 +391,7 @@ export default function AdminSettingsPage() {
             public: { ...values.public, modelChannel: nextPublicSnapshot },
             private: { ...values.private, channels: nextChannels },
         });
-        await syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
+        return syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
             const saved = normalizeSettings(await saveAdminSettings(token, nextSettings));
             return mergePrivateSecrets(nextSettings, saved);
         }, (models, merged) => {
@@ -407,7 +404,7 @@ export default function AdminSettingsPage() {
                 private: JSON.stringify(merged.private, null, 2),
             });
             if (!options.silent) message.success("已保存");
-        });
+        }, options.setPending);
     }
 
     return (

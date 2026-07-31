@@ -12,6 +12,7 @@ import {
     createModelDiscoveryCoordinator,
     configuredModelsFromSettings,
     filterWizardPublicationSnapshot,
+    finishAuthoritativeSettingsOperation,
     modelDiscoveryCandidates,
     normalizeWizardModels,
     runModelDiscoveryRequest,
@@ -780,6 +781,28 @@ test("权威设置协调器只由最新读取、保存或预设请求收口 pend
     unmounted.resolve(settingsWithChannels([]));
     assert.equal(await runUnmounted, false);
     assert.deepEqual(unmountedPending, [true]);
+});
+
+test("被新设置操作取代的向导保存不完成或关闭向导", async () => {
+    const coordinator = createAuthoritativeSettingsCoordinator();
+    const wizardSave = deferred<AdminSettings>();
+    const newerLoad = deferred<AdminSettings>();
+    const wizardPending: boolean[] = [];
+    let wizardOpen = true;
+    const runWizardSave = finishAuthoritativeSettingsOperation(
+        () => syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => wizardSave.promise, () => {}, (value) => wizardPending.push(value)),
+        () => { wizardOpen = false; },
+    );
+    assert.deepEqual(wizardPending, [true]);
+
+    const runNewerLoad = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => newerLoad.promise, () => {});
+    assert.deepEqual(wizardPending, [true, false]);
+    newerLoad.resolve(settingsWithChannels([]));
+    assert.equal(await runNewerLoad, true);
+    wizardSave.resolve(settingsWithChannels([channel({ models: ["stale-wizard"] })]));
+    assert.equal(await runWizardSave, false);
+    assert.equal(wizardOpen, true);
+    assert.deepEqual(wizardPending, [true, false]);
 });
 
 function deferred<T>() {

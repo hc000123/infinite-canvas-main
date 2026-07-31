@@ -121,7 +121,9 @@ test("wizard persistence accepts the publication snapshot without rereading stal
     assert.match(pageSource, /filterWizardPublicationSnapshot/);
     assert.match(pageSource, /filterWizardPublicationSnapshot\([\s\S]*?nextPublicModelChannel,[\s\S]*?nextChannels/);
     assert.match(pageSource, /finishChannelWizard\(channel, publicModelChannel\)/);
-    assert.match(pageSource, /persistChannels\(nextChannels, \{ publicModelChannel \}\)/);
+    assert.match(pageSource, /persistChannels\(nextChannels, \{ publicModelChannel, setPending: setIsSavingChannelWizard \}\)/);
+    assert.match(pageSource, /finishAuthoritativeSettingsOperation/);
+    assert.match(pageSource, /setPending:\s*setIsSavingChannelWizard/);
 });
 
 test("page guards verification state with a session coordinator", () => {
