@@ -3,7 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 
 import type { SkillAdminItem, SkillOwnerType } from "@/services/api/admin-skills.ts";
-import { canPublishSkill, filterSkillItems, nextPatchVersion } from "./skill-view.ts";
+import { canPublishSkill, filterSkillItems, nextDraftVersion, nextPatchVersion } from "./skill-view.ts";
 
 function skillItem(id: string, ownerType: SkillOwnerType, capabilities: string[], inputArtifactTypes: string[], outputArtifactTypes: string[], projectTags: string[]): SkillAdminItem {
     return {
@@ -46,10 +46,16 @@ test("increments semantic patch version", () => {
     assert.equal(nextPatchVersion("2.4.9"), "2.4.10");
 });
 
+test("starts an empty Skill definition at version 1.0.0", () => {
+    assert.equal(nextDraftVersion(), "1.0.0");
+    assert.equal(nextDraftVersion("2.4.9"), "2.4.10");
+});
+
 test("skill center is generic and exposes manifest filters", () => {
     const page = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
     for (const text of ["Skill 中心", "Capability", "输入 Artifact", "输出 Artifact", "所有者", "项目标签"]) {
         assert.ok(page.includes(text), `missing ${text}`);
     }
     assert.equal(page.includes("workflowSkillStageNumbers"), false);
+    assert.equal(page.includes('disabled={!detailQuery.data}'), false);
 });

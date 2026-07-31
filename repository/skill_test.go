@@ -103,3 +103,45 @@ func TestCreateSkillEvaluationUpdatesVersionSummary(t *testing.T) {
 		t.Fatalf("stored=%+v ok=%v err=%v", stored, ok, err)
 	}
 }
+
+func TestListSkillRegistryRelationsInBatches(t *testing.T) {
+	setupRepositoryTestDB(t)
+	for _, skill := range []model.SkillDefinition{{ID: "skill-1", Name: "一", OwnerType: model.SkillOwnerSystem}, {ID: "skill-2", Name: "二", OwnerType: model.SkillOwnerSystem}} {
+		if err := CreateSkillDefinition(skill); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, version := range []model.SkillVersion{
+		{ID: "version-1", SkillID: "skill-1", Version: "1.0.0", Status: model.SkillVersionDraft, CreatedAt: "1"},
+		{ID: "version-2", SkillID: "skill-2", Version: "1.0.0", Status: model.SkillVersionPublished, CreatedAt: "2"},
+	} {
+		if err := CreateSkillVersion(version); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := CreateSkillEvaluation(model.SkillEvaluation{ID: "evaluation-1", SkillVersionID: "version-1", CreatedAt: "1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateSkillAuditLog(model.SkillAuditLog{ID: "audit-1", SkillVersionID: "version-2", CreatedAt: "1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{ID: "binding-1", StageKey: "script", Scope: model.WorkflowStageSkillScopeGlobal, SkillVersionID: "version-2"}); err != nil {
+		t.Fatal(err)
+	}
+	versions, err := ListSkillVersionsBySkillIDs([]string{"skill-1", "skill-2"})
+	if err != nil || len(versions) != 2 {
+		t.Fatalf("versions=%+v err=%v", versions, err)
+	}
+	evaluations, err := ListSkillEvaluationsByVersionIDs([]string{"version-1", "version-2"})
+	if err != nil || len(evaluations) != 1 || evaluations[0].ID != "evaluation-1" {
+		t.Fatalf("evaluations=%+v err=%v", evaluations, err)
+	}
+	audits, err := ListSkillAuditLogsByVersionIDs([]string{"version-1", "version-2"})
+	if err != nil || len(audits) != 1 || audits[0].ID != "audit-1" {
+		t.Fatalf("audits=%+v err=%v", audits, err)
+	}
+	bindings, err := ListWorkflowStageSkillBindingsByVersionIDs([]string{"version-1", "version-2"})
+	if err != nil || len(bindings) != 1 || bindings[0].ID != "binding-1" {
+		t.Fatalf("bindings=%+v err=%v", bindings, err)
+	}
+}

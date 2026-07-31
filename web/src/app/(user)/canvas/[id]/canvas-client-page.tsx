@@ -86,7 +86,8 @@ function InfiniteCanvasPage() {
         createProject,
         createEpisodeChildCanvas,
         creativeProject,
-        canvasProjects,
+        canCreateChildCanvas,
+        childCanvases,
         currentProject,
         deleteProjects,
         effectiveConfig,
@@ -604,7 +605,7 @@ function InfiniteCanvasPage() {
             viewport,
         });
     const createAndOpenCanvas = useCallback(() => {
-        if (currentProject?.canvasRole === "main") {
+        if (canCreateChildCanvas && currentProject) {
             try {
                 const childId = createEpisodeChildCanvas(currentProject.id, "");
                 if (currentProject.projectId) attachCanvasToCreativeProject(currentProject.projectId, childId);
@@ -616,14 +617,11 @@ function InfiniteCanvasPage() {
         }
         if (currentProject?.canvasRole === "child") return message.warning("子画布不能继续创建下一级画布");
         createAndOpenProject();
-    }, [attachCanvasToCreativeProject, createAndOpenProject, createEpisodeChildCanvas, currentProject, message, navigateCanvasPage]);
+    }, [attachCanvasToCreativeProject, canCreateChildCanvas, createAndOpenProject, createEpisodeChildCanvas, currentProject, message, navigateCanvasPage]);
     const returnFromCanvas = useCallback(() => {
         if (currentProject?.parentCanvasId) return navigateCanvasPage(`/canvas/${currentProject.parentCanvasId}`);
         returnToParent();
     }, [currentProject, navigateCanvasPage, returnToParent]);
-    const mainCanvasId = currentProject?.canvasRole === "main" ? currentProject.id : currentProject?.parentCanvasId || "";
-    const childCanvases = canvasProjects.filter((canvas) => canvas.parentCanvasId === mainCanvasId).map((canvas) => ({ id: canvas.id, title: canvas.title }));
-
     useCanvasGlobalPointerEvents({
         clearSelectionBox,
         finishConnection,
@@ -892,9 +890,9 @@ function InfiniteCanvasPage() {
             <section className="relative min-w-0 flex-1 overflow-hidden">
                 <CanvasTopBar
                     title={currentProject?.title || "未命名画布"}
-                    episodeProductionLabel={currentProject?.canvasRole === "child" ? "子画布" : currentProject?.canvasRole === "main" ? `主画布 · ${episodeProductionLabel}` : episodeProductionLabel}
+                    episodeProductionLabel={currentProject?.canvasRole === "child" ? "子画布" : canCreateChildCanvas ? `主画布 · ${episodeProductionLabel}` : episodeProductionLabel}
                     hasEpisode={Boolean(currentProject?.episodeId)}
-                    canCreateChildCanvas={currentProject?.canvasRole === "main"}
+                    canCreateChildCanvas={canCreateChildCanvas}
                     childCanvases={childCanvases}
                     titleDraft={titleDraft}
                     isTitleEditing={titleEditing}
@@ -997,7 +995,7 @@ function InfiniteCanvasPage() {
                         showImageInfo={showImageInfo}
                         submittingReviewNodeId={submittingReviewNodeId}
                         toggleBatchExpanded={toggleBatchExpanded}
-                        viewport={viewport}
+                        scale={viewport.k}
                         visibleNodes={visibleNodes}
                         workspaceProjectId={workspaceProjectId}
                     />

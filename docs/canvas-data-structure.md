@@ -1209,7 +1209,7 @@ type ImageBrief = {
 - M6.9.4 起，由本集生图需求创建的图片配置节点还会写入 `agentRunId / agentConfigId / agentConfigVersion`，并继续带上 `assetBreakdownItemId / episodeId / episodeTitle / sourceType / finalPrompt`。创建配置节点只写画布节点，不自动触发图片生成。
 - 图片生成成功后，自动入库素材的 `metadata.generation` 会补充 `briefId / briefSnapshot / finalPrompt / referenceAssets / sourceType / sourceId`，并回写 Brief 的 `resultAssetIds`。
 - M6.9.4 起，自动入库素材的 `metadata.generation` 也会保留 `assetBreakdownItemId / agentRunId / agentConfigId / agentConfigVersion / episodeId / episodeTitle`；如果结果素材来自本集生图需求，会同步回写需求 `assetIds / status`。
-- M8 起，自动入库素材的 `metadata.generation` 会同步记录 `aiTaskId / upstreamTaskId / aiTaskStatus / aiTaskCredits / creditLogId / creditsRefunded / refundedAt / finishedAt`。如果素材来自画布视频，还会继续保留 `taskId / storyboardGroupId / storyboardShotId / shotGroupId / shotIds`，并把入库后的 `assetId` 反写到后端 `ai_tasks.response_json.frontendArtifacts`，供后台 AI 任务日志反查。
+- M8 起，自动入库素材的 `metadata.generation` 会同步记录 `aiTaskId / upstreamTaskId / aiTaskStatus / aiTaskCredits / creditLogId / creditsRefunded / refundedAt / finishedAt`。如果素材来自画布视频，还会继续保留 `taskId / storyboardGroupId / storyboardShotId / shotGroupId / shotIds`，并把入库后的 `assetId` 反写到后端 `ai_tasks.response_json.frontendArtifacts` 和小型 `frontend_artifacts_json` 摘要，供详情追溯与轻量任务列表反查。
 - 如果 Brief 来源是资产拆解条目，生成结果 assetId 会写回 `AssetBreakdownItem.assetIds`，状态更新为 `generated`。
 - 如果 Brief 来源是设定库，生成结果可同步写入 `ProductionBibleItem.assetRefs`。
 - M6.7.1 不新增图片生成接口，不接真实 LLM，不自动扣费；真实生图仍由用户通过现有图片生成配置节点触发。

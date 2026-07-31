@@ -43,6 +43,10 @@ export function nextPatchVersion(value: string) {
     return `${match[1]}.${match[2]}.${Number(match[3]) + 1}`;
 }
 
+export function nextDraftVersion(sourceVersion?: string) {
+    return sourceVersion ? nextPatchVersion(sourceVersion) : "1.0.0";
+}
+
 export function shortSkillHash(value: string) {
     return value ? `${value.slice(0, 8)}…${value.slice(-4)}` : "未生成";
 }
@@ -51,5 +55,6 @@ export function resolveRecommendationLabel(item: SkillAdminItem, version?: Skill
     if (!version) return "未选择版本";
     if (version.id === item.skill.recommendedVersionId) return "当前推荐版";
     if (version.status === "draft") return "草稿候选版";
+    if (version.status === "archived") return "已停用";
     return "可切换推荐版";
 }

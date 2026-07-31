@@ -1,6 +1,6 @@
 "use client";
 
-import type { Dispatch, MouseEvent, MutableRefObject, SetStateAction } from "react";
+import { memo, type Dispatch, type MouseEvent, type MutableRefObject, type SetStateAction } from "react";
 
 import type { AiConfig } from "@/stores/use-config-store";
 import { buildCanvasConnectedMedia } from "../utils/canvas-connected-media";
@@ -8,7 +8,7 @@ import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions
 import { serializePromptDocument, type CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import { getNodeProductionPackageId, type CanvasProductionPackageSummary } from "../utils/canvas-production-packages";
 import { getInputSummary, productionNodeBadge } from "../utils/canvas-page-helpers";
-import type { CanvasConnection, CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata, ContextMenuState, SelectionBox, ViewportTransform } from "../types";
+import type { CanvasConnection, CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata, ContextMenuState, SelectionBox } from "../types";
 import type { CanvasNodeHoverToolbarActions } from "./canvas-node-hover-toolbar";
 import { buildNodeGenerationInputs, type NodeGenerationInput } from "./canvas-node-generation";
 import { CanvasConfigNodePanel } from "./canvas-config-node-panel";
@@ -45,7 +45,7 @@ type Props = {
     selectionBox: SelectionBox | null;
     showImageInfo: boolean;
     submittingReviewNodeId: string | null;
-    viewport: ViewportTransform;
+    scale: number;
     visibleNodes: CanvasNodeData[];
     workspaceProjectId: string;
     handleConfigNodeChange: (nodeId: string, patch: Partial<CanvasNodeMetadata>) => void;
@@ -72,7 +72,7 @@ type Props = {
     toggleBatchExpanded: (nodeId: string) => void;
 };
 
-export function CanvasNodesLayer({
+export const CanvasNodesLayer = memo(function CanvasNodesLayer({
     activeNodeId,
     canvasAiConfig,
     activeProductionPackageId,
@@ -102,7 +102,7 @@ export function CanvasNodesLayer({
     selectionBox,
     showImageInfo,
     submittingReviewNodeId,
-    viewport,
+    scale,
     visibleNodes,
     workspaceProjectId,
     handleConfigNodeChange,
@@ -134,7 +134,7 @@ export function CanvasNodesLayer({
                 <CanvasNode
                     key={node.id}
                     data={node}
-                    scale={viewport.k}
+                    scale={scale}
                     isSelected={selectedNodeIds.has(node.id)}
                     isRelated={relatedNodeIds.has(node.id)}
                     isFocusRelated={activeNodeId === node.id || activeTimelineNodeIds.has(node.id)}
@@ -256,4 +256,4 @@ export function CanvasNodesLayer({
             ))}
         </>
     );
-}
+});

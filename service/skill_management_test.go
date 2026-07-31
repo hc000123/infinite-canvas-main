@@ -118,3 +118,38 @@ func TestRegularUserCannotMutateSystemSkill(t *testing.T) {
 		t.Fatalf("seed restore overwrote managed state: skill=%+v version=%+v", skill, version)
 	}
 }
+
+func TestVisibleSkillListDoesNotExposeManagementRelations(t *testing.T) {
+	setupInvocationServiceTest(t)
+	if err := EnsureSkillSeeds(); err != nil {
+		t.Fatal(err)
+	}
+	versionID := "skill-version-system-workflow-script-3.2.0"
+	stamp := now()
+	if err := repository.CreateSkillEvaluation(model.SkillEvaluation{ID: "evaluation-secret", SkillVersionID: versionID, ProjectID: "project-secret", ResultJSON: `{"secret":true}`, CreatedAt: stamp}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.CreateSkillAuditLog(model.SkillAuditLog{ID: "audit-secret", SkillVersionID: versionID, Action: "secret", CreatedAt: stamp}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.SaveWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{ID: "binding-secret", StageKey: "secret", Scope: model.WorkflowStageSkillScopeProject, ScopeID: "project-secret", SkillVersionID: versionID}); err != nil {
+		t.Fatal(err)
+	}
+
+	items, err := ListVisibleSkillItems("user-1", "project-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, item := range items {
+		if item.Skill.ID == "skill-system-workflow-script" {
+			found = true
+			if len(item.Evaluations) != 0 || len(item.Audits) != 0 || len(item.Bindings) != 0 {
+				t.Fatalf("management relations leaked to regular user: %+v", item)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("visible system skill was not returned")
+	}
+}

@@ -45,3 +45,25 @@ test("initializes the script node only for a newly created episode main canvas",
     assert.deepEqual(useCanvasStore.getState().projects.find((canvas) => canvas.id === emptyMainCanvasId)?.nodes, []);
     useCanvasStore.setState({ projects: [] });
 });
+
+test("does not promote a second untyped episode canvas to another main canvas", () => {
+    const project = (id: string, createdAt: string) => ({
+        id,
+        projectId: "project-1",
+        episodeId: "episode-1",
+        title: id,
+        createdAt,
+        updatedAt: createdAt,
+        nodes: [],
+        connections: [],
+        chatSessions: [],
+        activeChatId: null,
+        backgroundMode: "lines" as const,
+        showImageInfo: false,
+        viewport: { x: 0, y: 0, k: 1 },
+    });
+    useCanvasStore.setState({ projects: [project("later", "2"), project("earlier", "1")] });
+    assert.throws(() => useCanvasStore.getState().createEpisodeChildCanvas("later", "错误子画布"), /只有分集主画布/);
+    assert.doesNotThrow(() => useCanvasStore.getState().createEpisodeChildCanvas("earlier", "正确子画布"));
+    useCanvasStore.setState({ projects: [] });
+});

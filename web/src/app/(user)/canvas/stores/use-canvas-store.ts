@@ -8,6 +8,7 @@ import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, Viewport
 import type { CanvasEpisodeContext } from "../utils/canvas-episode-context";
 import type { CanvasProjectPreset } from "../utils/canvas-project-preset";
 import { createEpisodeMainCanvasScriptNode } from "../utils/episode-main-canvas-script-node.ts";
+import { canCreateEpisodeChildCanvas, episodeMainCanvas } from "../utils/episode-canvas-hierarchy.ts";
 
 export type CanvasProject = {
     id: string;
@@ -123,12 +124,12 @@ export const useCanvasStore = create<CanvasStore>()(
                 return id;
             },
             ensureEpisodeMainCanvas: ({ projectId, title, preset, episodeContext }) => {
-                const existing = get().projects.find((canvas) => canvas.projectId === projectId && canvas.episodeId === episodeContext.episodeId && canvas.canvasRole === "main");
+                const existing = episodeMainCanvas(get().projects, projectId, episodeContext.episodeId);
                 if (existing) {
                     set((state) => ({
                         projects: state.projects.map((canvas) =>
                             canvas.id === existing.id
-                                ? { ...canvas, title, preset, episodeTitle: episodeContext.episodeTitle, scriptId: episodeContext.scriptId, scriptSnapshot: episodeContext.scriptSnapshot, updatedAt: new Date().toISOString() }
+                                ? { ...canvas, title, preset, episodeTitle: episodeContext.episodeTitle, scriptId: episodeContext.scriptId, scriptSnapshot: episodeContext.scriptSnapshot, canvasRole: "main", parentCanvasId: undefined, updatedAt: new Date().toISOString() }
                                 : canvas,
                         ),
                     }));
@@ -165,7 +166,9 @@ export const useCanvasStore = create<CanvasStore>()(
                 return id;
             },
             createEpisodeChildCanvas: (mainCanvasId, title) => {
-                const parent = get().projects.find((canvas) => canvas.id === mainCanvasId && canvas.canvasRole === "main" && canvas.projectId && canvas.episodeId);
+                const projects = get().projects;
+                const candidate = projects.find((canvas) => canvas.id === mainCanvasId);
+                const parent = canCreateEpisodeChildCanvas(candidate, projects) ? candidate : undefined;
                 if (!parent) throw new Error("只有分集主画布可以新建子画布");
                 const now = new Date().toISOString();
                 const id = nanoid();
@@ -176,7 +179,7 @@ export const useCanvasStore = create<CanvasStore>()(
                             ...parent,
                             id,
                             title: title.trim() || `${parent.title}-子画布-${childCount + 1}`,
-                            canvasRole: "child",
+                            canvasRole: "child" as const,
                             parentCanvasId: parent.id,
                             createdAt: now,
                             updatedAt: now,
@@ -187,7 +190,7 @@ export const useCanvasStore = create<CanvasStore>()(
                             viewport: initialViewport,
                         },
                         ...state.projects,
-                    ],
+                    ].map((canvas) => (canvas.id === parent.id ? { ...canvas, canvasRole: "main" as const, parentCanvasId: undefined, updatedAt: now } : canvas)),
                 }));
                 return id;
             },

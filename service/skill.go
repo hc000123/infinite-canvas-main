@@ -60,53 +60,85 @@ type SkillOption struct {
 }
 
 func ListSkillAdminItems() ([]SkillAdminItem, error) {
-	if err := EnsureSkillSeeds(); err != nil {
-		return nil, err
-	}
 	skills, err := repository.ListSkillDefinitions()
 	if err != nil {
 		return nil, err
 	}
-	allBindings, err := repository.ListWorkflowStageSkillBindings("")
+	return listSkillAdminItems(skills, true)
+}
+
+func listSkillAdminItems(skills []model.SkillDefinition, includeManagementRelations bool) ([]SkillAdminItem, error) {
+	skillIDs := make([]string, 0, len(skills))
+	for _, skill := range skills {
+		skillIDs = append(skillIDs, skill.ID)
+	}
+	allVersions, err := repository.ListSkillVersionsBySkillIDs(skillIDs)
 	if err != nil {
 		return nil, err
 	}
+	versionIDs := make([]string, 0, len(allVersions))
+	versionsBySkill := make(map[string][]model.SkillVersion, len(skills))
+	versionByID := make(map[string]model.SkillVersion, len(allVersions))
+	versionSkillID := make(map[string]string, len(allVersions))
+	for _, version := range allVersions {
+		versionIDs = append(versionIDs, version.ID)
+		versionsBySkill[version.SkillID] = append(versionsBySkill[version.SkillID], version)
+		versionByID[version.ID] = version
+		versionSkillID[version.ID] = version.SkillID
+	}
+	evaluationsByVersion := make(map[string][]model.SkillEvaluation, len(versionIDs))
+	auditsBySkill := make(map[string][]model.SkillAuditLog, len(skills))
+	bindingsBySkill := make(map[string][]model.WorkflowStageSkillBinding, len(skills))
+	if includeManagementRelations {
+		allBindings, err := repository.ListWorkflowStageSkillBindingsByVersionIDs(versionIDs)
+		if err != nil {
+			return nil, err
+		}
+		allEvaluations, err := repository.ListSkillEvaluationsByVersionIDs(versionIDs)
+		if err != nil {
+			return nil, err
+		}
+		for _, evaluation := range allEvaluations {
+			if len(evaluationsByVersion[evaluation.SkillVersionID]) < 50 {
+				evaluationsByVersion[evaluation.SkillVersionID] = append(evaluationsByVersion[evaluation.SkillVersionID], evaluation)
+			}
+		}
+		allAudits, err := repository.ListSkillAuditLogsByVersionIDs(versionIDs)
+		if err != nil {
+			return nil, err
+		}
+		for _, audit := range allAudits {
+			if skillID := versionSkillID[audit.SkillVersionID]; skillID != "" && len(auditsBySkill[skillID]) < 100 {
+				auditsBySkill[skillID] = append(auditsBySkill[skillID], audit)
+			}
+		}
+		for _, binding := range allBindings {
+			if skillID := versionSkillID[binding.SkillVersionID]; skillID != "" {
+				bindingsBySkill[skillID] = append(bindingsBySkill[skillID], binding)
+			}
+		}
+	}
 	items := make([]SkillAdminItem, 0, len(skills))
 	for _, skill := range skills {
-		versions, err := repository.ListSkillVersions(skill.ID)
-		if err != nil {
-			return nil, err
+		versions := versionsBySkill[skill.ID]
+		if versions == nil {
+			versions = []model.SkillVersion{}
 		}
-		versionIDs := make([]string, 0, len(versions))
 		evaluations := []model.SkillEvaluation{}
 		for _, version := range versions {
-			versionIDs = append(versionIDs, version.ID)
-			versionEvaluations, err := repository.ListSkillEvaluations(version.ID)
-			if err != nil {
-				return nil, err
-			}
-			evaluations = append(evaluations, versionEvaluations...)
+			evaluations = append(evaluations, evaluationsByVersion[version.ID]...)
 		}
-		audits, err := repository.ListSkillAuditLogs(versionIDs)
-		if err != nil {
-			return nil, err
+		bindings := bindingsBySkill[skill.ID]
+		if bindings == nil {
+			bindings = []model.WorkflowStageSkillBinding{}
 		}
-		idSet := make(map[string]bool, len(versionIDs))
-		for _, id := range versionIDs {
-			idSet[id] = true
-		}
-		bindings := []model.WorkflowStageSkillBinding{}
-		for _, binding := range allBindings {
-			if idSet[binding.SkillVersionID] {
-				bindings = append(bindings, binding)
-			}
+		audits := auditsBySkill[skill.ID]
+		if audits == nil {
+			audits = []model.SkillAuditLog{}
 		}
 		var recommendedPackage *SkillPackage
 		if skill.RecommendedVersionID != "" {
-			version, ok, err := repository.GetSkillVersion(skill.RecommendedVersionID)
-			if err != nil {
-				return nil, err
-			}
+			version, ok := versionByID[skill.RecommendedVersionID]
 			if ok {
 				packageValue, err := DecodeSkillPackage(version)
 				if err != nil {
@@ -311,23 +343,30 @@ func RecommendPublishedSkillVersion(adminID, skillID, versionID string) (Resolve
 }
 
 func ListSkillOptions(userID, projectID string, filter SkillOptionFilter) ([]SkillOption, error) {
-	if err := EnsureSkillSeeds(); err != nil {
-		return nil, err
-	}
 	skills, err := repository.ListVisibleSkillDefinitions(userID, projectID)
 	if err != nil {
 		return nil, err
+	}
+	skillIDs := make([]string, 0, len(skills))
+	for _, skill := range skills {
+		if skill.Enabled {
+			skillIDs = append(skillIDs, skill.ID)
+		}
+	}
+	versions, err := repository.ListSkillVersionsBySkillIDs(skillIDs)
+	if err != nil {
+		return nil, err
+	}
+	versionsBySkill := make(map[string][]model.SkillVersion, len(skillIDs))
+	for _, version := range versions {
+		versionsBySkill[version.SkillID] = append(versionsBySkill[version.SkillID], version)
 	}
 	items := []SkillOption{}
 	for _, skill := range skills {
 		if !skill.Enabled {
 			continue
 		}
-		versions, err := repository.ListSkillVersions(skill.ID)
-		if err != nil {
-			return nil, err
-		}
-		for _, version := range versions {
+		for _, version := range versionsBySkill[skill.ID] {
 			if version.Status != model.SkillVersionPublished {
 				continue
 			}
