@@ -12,6 +12,7 @@ import {
     runChannelVerification,
 } from "./model-channel-wizard-model.ts";
 import type { AdminModelChannel, AdminPublicModelChannelSettings } from "../../../../services/api/admin.ts";
+import { sanitizeModelChannelPublication } from "./model-channel-publication.ts";
 
 const channel = (value: Partial<AdminModelChannel> = {}): AdminModelChannel => ({
     id: "channel-a",
@@ -159,7 +160,7 @@ test("显式公开更新模型、默认项和文本端点，同时保留费用",
         { model: "new-model", endpointType: "responses" },
     ]);
     assert.equal(result.defaultTextModel, "new-model");
-    assert.equal(result.defaultModel, "legacy-model");
+    assert.equal(result.defaultModel, "");
     assert.deepEqual(result.modelCosts, [{ model: "shared-model", credits: 2 }]);
 });
 
@@ -297,6 +298,7 @@ test("删除唯一渠道会清空公开模型、文本端点与三类默认模�
         availableModels: ["text-a", "image-a", "video-a"],
         modelCosts: [{ model: "video-a", credits: 8 }],
         modelTextEndpoints: [{ model: "text-a", endpointType: "responses" }],
+        defaultModel: "legacy-model",
         defaultTextModel: "text-a",
         defaultImageModel: "image-a",
         defaultVideoModel: "video-a",
@@ -307,7 +309,59 @@ test("删除唯一渠道会清空公开模型、文本端点与三类默认模�
     assert.equal(result.defaultTextModel, "");
     assert.equal(result.defaultImageModel, "");
     assert.equal(result.defaultVideoModel, "");
+    assert.equal(result.defaultModel, "");
     assert.deepEqual(result.modelCosts, [{ model: "video-a", credits: 8 }]);
+});
+
+test("普通保存的显式空公开集合会清空所有默认模型和历史文本端点", () => {
+    const result = sanitizeModelChannelPublication(publication({
+        availableModels: [],
+        modelTextEndpoints: [{ model: "legacy-text", endpointType: "responses" }],
+        defaultModel: "legacy-text",
+        defaultTextModel: "legacy-text",
+        defaultImageModel: "legacy-image",
+        defaultVideoModel: "legacy-video",
+    }), [channel({ models: ["legacy-text", "legacy-image", "legacy-video"], capabilities: ["text", "image", "video"] })]);
+
+    assert.deepEqual(result.availableModels, []);
+    assert.deepEqual(result.modelTextEndpoints, []);
+    assert.equal(result.defaultModel, "");
+    assert.equal(result.defaultTextModel, "");
+    assert.equal(result.defaultImageModel, "");
+    assert.equal(result.defaultVideoModel, "");
+});
+
+test("同名 sibling 仍提供 text 能力时保留文本默认和端点", () => {
+    const result = sanitizeModelChannelPublication(publication({
+        availableModels: ["shared-model"],
+        modelTextEndpoints: [{ model: "shared-model", endpointType: "responses" }],
+        defaultTextModel: "shared-model",
+        defaultImageModel: "shared-model",
+    }), [
+        channel({ id: "image-channel", models: ["shared-model"], capabilities: ["image"] }),
+        channel({ id: "text-sibling", models: ["shared-model"], capabilities: ["text"] }),
+    ]);
+
+    assert.deepEqual(result.modelTextEndpoints, [{ model: "shared-model", endpointType: "responses" }]);
+    assert.equal(result.defaultTextModel, "shared-model");
+    assert.equal(result.defaultImageModel, "shared-model");
+});
+
+test("公开清洗忽略缺少连接凭证的渠道但保留即梦 CLI", () => {
+    const result = sanitizeModelChannelPublication(publication({
+        availableModels: ["unroutable-text", "seedance2.0fast"],
+        modelTextEndpoints: [{ model: "unroutable-text", endpointType: "responses" }],
+        defaultTextModel: "unroutable-text",
+        defaultVideoModel: "seedance2.0fast",
+    }), [
+        channel({ id: "missing-key", apiKey: "", models: ["unroutable-text"], capabilities: ["text"] }),
+        channel({ id: "jimeng", protocol: "jimeng-cli", baseUrl: "", apiKey: "", models: ["seedance2.0fast"], capabilities: ["video"] }),
+    ]);
+
+    assert.deepEqual(result.availableModels, ["seedance2.0fast"]);
+    assert.deepEqual(result.modelTextEndpoints, []);
+    assert.equal(result.defaultTextModel, "");
+    assert.equal(result.defaultVideoModel, "seedance2.0fast");
 });
 
 test("同名模型只剩 image 来源时清理文本默认并保留图片默认", () => {

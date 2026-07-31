@@ -1,5 +1,6 @@
 import { modelMatchesAiCapability, type AiModelKind } from "../../../../lib/ai-model-kind.ts";
 import type { AdminModelChannel, AdminModelTextEndpoint, AdminPublicModelChannelSettings } from "../../../../services/api/admin.ts";
+import { sanitizeModelChannelPublication } from "./model-channel-publication.ts";
 
 export type WizardPublicSelection = {
     publishedModels: string[];
@@ -113,15 +114,14 @@ export function applyWizardPublication(
     }));
     const defaultTextModel = resolveDefault(selection.defaultTextModel, current.defaultTextModel, availableModels, hasCapability, "text");
 
-    return {
+    return sanitizeModelChannelPublication({
         ...current,
         availableModels,
         modelTextEndpoints,
-        defaultModel: current.defaultModel,
         defaultTextModel,
         defaultImageModel: resolveDefault(selection.defaultImageModel, current.defaultImageModel, availableModels, hasCapability, "image"),
         defaultVideoModel: resolveDefault(selection.defaultVideoModel, current.defaultVideoModel, availableModels, hasCapability, "video"),
-    };
+    }, [...siblingChannels, nextChannel]);
 }
 
 export function channelVerificationMode(channel: AdminModelChannel) {
@@ -243,20 +243,7 @@ export function createChannelVerificationCoordinator() {
 }
 
 export function filterWizardPublicationSnapshot(current: AdminPublicModelChannelSettings, channels: AdminModelChannel[]): AdminPublicModelChannelSettings {
-    const enabledChannels = channels.filter((channel) => channel.enabled);
-    const servesModel = (channel: AdminModelChannel, model: string) => normalizeWizardModels(channel.models).includes(model);
-    const hasCapability = (model: string, capability: AiModelKind) => enabledChannels.some((channel) => servesModel(channel, model) && modelMatchesAiCapability(model, channel.capabilities, capability));
-    const availableModels = normalizeWizardModels(current.availableModels).filter((model) => enabledChannels.some((channel) => servesModel(channel, model)));
-    const availableModelSet = new Set(availableModels);
-    const keepDefault = (model: string, capability: AiModelKind) => model && availableModelSet.has(model) && hasCapability(model, capability) ? model : "";
-    return {
-        ...current,
-        availableModels,
-        modelTextEndpoints: current.modelTextEndpoints.filter((item) => availableModelSet.has(item.model) && hasCapability(item.model, "text")),
-        defaultTextModel: keepDefault(current.defaultTextModel, "text"),
-        defaultImageModel: keepDefault(current.defaultImageModel, "image"),
-        defaultVideoModel: keepDefault(current.defaultVideoModel, "video"),
-    };
+    return sanitizeModelChannelPublication(current, channels);
 }
 
 function buildArkMappings(mappings: Partial<AdminModelChannel["endpointMappings"][number]>[]) {

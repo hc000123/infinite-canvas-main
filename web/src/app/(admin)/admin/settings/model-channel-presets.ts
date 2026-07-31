@@ -1,4 +1,5 @@
 import type { AdminModelChannel, AdminSettings } from "../../../../services/api/admin.ts";
+import { sanitizeModelChannelPublication } from "./model-channel-publication.ts";
 
 export type ModelChannelPresetId = "volcengine" | "xinglian" | "jimeng" | "comfly" | "openai-compatible";
 export type ModelChannelPresetInput = {
@@ -42,7 +43,7 @@ export function applyModelChannelPreset(settings: AdminSettings, presetId: Model
     if (presetId === "jimeng") applyJimeng(next, summary);
     if (presetId === "comfly") applyComfly(next, input, summary);
     if (presetId === "openai-compatible") applyOpenAICompatible(next, input, summary);
-    reconcilePublicModels(next);
+    next.public.modelChannel = sanitizeModelChannelPublication(next.public.modelChannel, next.private.channels);
     summary.publishedModels = [...next.public.modelChannel.availableModels];
     return { settings: next, summary };
 }
@@ -205,11 +206,6 @@ function upsertChannel(settings: AdminSettings, index: number, channel: AdminMod
 function findChannelIndex(channels: AdminModelChannel[], id: string, fallback: (channel: AdminModelChannel) => boolean) {
     const exact = channels.findIndex((item) => item.id === id);
     return exact >= 0 ? exact : channels.findIndex(fallback);
-}
-
-function reconcilePublicModels(settings: AdminSettings) {
-    const enabled = new Set(uniqueValues(settings.private.channels.filter((item) => item.enabled).flatMap((item) => item.models || [])));
-    settings.public.modelChannel.availableModels = uniqueValues(settings.public.modelChannel.availableModels.filter((item) => enabled.has(item)));
 }
 
 function credential(...values: Array<string | undefined>) {

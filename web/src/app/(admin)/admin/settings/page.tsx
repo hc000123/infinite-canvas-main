@@ -10,6 +10,7 @@ import { EditorView } from "@uiw/react-codemirror";
 import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind";
 import { ModelChannelWizard } from "./components/model-channel-wizard";
 import { ProviderPresetModal } from "./components/provider-preset-modal";
+import { sanitizeModelChannelPublication } from "./model-channel-publication";
 import { channelVerificationCopy, createChannelVerificationCoordinator, filterWizardPublicationSnapshot, runChannelVerification } from "./model-channel-wizard-model";
 import type { ModelChannelPresetResult } from "./model-channel-presets";
 import {
@@ -1154,11 +1155,6 @@ function uniqueModels(models: string[]) {
     return Array.from(new Set(models.filter(Boolean)));
 }
 
-function filterModels(models: string[], options: string[]) {
-    const optionSet = new Set(options);
-    return uniqueModels(models).filter((model) => optionSet.has(model));
-}
-
 function modelSummary(models: string[]) {
     const visibleModels = visibleChannelModels(models);
     if (!visibleModels.length) return "未配置模型";
@@ -1243,9 +1239,7 @@ async function collectSettings(form: FormInstance<AdminSettings>, editorMode: Re
         }
         values.private = privateSetting;
     }
-    values.public.modelChannel.availableModels = filterModels(values.public.modelChannel.availableModels, collectChannelModels(values.private.channels));
-    values.public.modelChannel.modelTextEndpoints = normalizeModelTextEndpoints(values.public.modelChannel.modelTextEndpoints, filterModelsByCapability(values.public.modelChannel.availableModels, values.private.channels, "text"));
-    values.public.modelChannel.defaultModel = "";
+    values.public.modelChannel = sanitizeModelChannelPublication(values.public.modelChannel, values.private.channels);
     return normalizeSettings(values);
 }
 
