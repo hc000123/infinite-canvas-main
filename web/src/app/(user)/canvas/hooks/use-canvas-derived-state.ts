@@ -1,4 +1,4 @@
-import { useMemo, type RefObject } from "react";
+import { useMemo, useRef, type RefObject } from "react";
 
 import type { Asset } from "@/stores/use-asset-store";
 import { buildFrameReferencesByVideoId } from "../utils/canvas-page-helpers";
@@ -31,11 +31,15 @@ export function useCanvasDerivedState({
     size: { width: number; height: number };
     viewport: ViewportTransform;
 }) {
+    const visibleNodesRef = useRef<CanvasNodeData[]>([]);
     const visibleNodes = useMemo(() => {
         const rect = containerRef.current?.getBoundingClientRect();
         const bounds = canvasViewportBounds(viewport, { width: rect?.width || size.width, height: rect?.height || size.height }, 280);
-
-        return nodes.filter((node) => !isHiddenBatchChild(node, nodes, collapsingBatchIds) && canvasNodeIntersectsBounds(node, bounds));
+        const next = nodes.filter((node) => !isHiddenBatchChild(node, nodes, collapsingBatchIds) && canvasNodeIntersectsBounds(node, bounds));
+        const previous = visibleNodesRef.current;
+        if (next.length === previous.length && next.every((node, index) => node === previous[index])) return previous;
+        visibleNodesRef.current = next;
+        return next;
     }, [collapsingBatchIds, containerRef, nodes, size.height, size.width, viewport.k, viewport.x, viewport.y]);
 
     const frameReferencesByVideoId = useMemo(() => buildFrameReferencesByVideoId(nodes, connections), [connections, nodes]);

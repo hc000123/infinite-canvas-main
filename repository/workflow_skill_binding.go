@@ -82,3 +82,16 @@ func ListWorkflowStageSkillBindings(stageKey string) ([]model.WorkflowStageSkill
 	err = query.Find(&items).Error
 	return items, err
 }
+
+func ListWorkflowStageSkillBindingsByVersionIDs(versionIDs []string) ([]model.WorkflowStageSkillBinding, error) {
+	if len(versionIDs) == 0 {
+		return []model.WorkflowStageSkillBinding{}, nil
+	}
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	items := []model.WorkflowStageSkillBinding{}
+	err = db.Where("skill_version_id IN ?", versionIDs).Order("scope asc, scope_id asc").Find(&items).Error
+	return items, err
+}

@@ -116,6 +116,7 @@ export function ProjectEpisodeBoard({
             <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--studio-border-subtle)] px-4 py-4 sm:px-8">
                 <nav aria-label="项目详情视图" className="order-1 flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-4">
                     <ProjectDetailNavButton active={activeTab === "episodes"} icon={ListChecks} label="分集" onClick={() => onTabChange("episodes")} />
+                    <ProjectDetailNavButton active={activeTab === "canvas"} icon={Maximize2} label="项目画布" onClick={() => onTabChange("canvas")} />
                     {isAdmin && (
                         <button
                             type="button"
@@ -668,7 +669,7 @@ function ProjectCanvasList({
             <div className="flex flex-wrap items-end justify-between gap-4">
                 <div>
                     <h2 className="text-2xl font-semibold tracking-normal text-[var(--studio-text-primary)]">画布列表</h2>
-                    <p className="mt-1 text-sm text-[var(--studio-text-secondary)]">查看当前项目下已经创建和生成过的画布。</p>
+                    <p className="mt-1 text-sm text-[var(--studio-text-secondary)]">查看当前项目下所有画布，包括未绑定分集的旧画布和本集子画布。</p>
                 </div>
                 <div className="flex flex-wrap gap-3">
                     {unboundCanvases.length ? (
@@ -709,6 +710,7 @@ function ProjectCanvasList({
 function ProjectCanvasCard({ canvas, onEditPreset }: { canvas: CanvasProject; onEditPreset: (canvasId: string) => void }) {
     const videoCount = canvas.nodes.filter((node) => node.type === "video").length;
     const imageCount = canvas.nodes.filter((node) => node.type === "image").length;
+    const roleLabel = canvas.canvasRole === "child" ? "子画布" : canvas.episodeId ? "主画布" : "未绑定分集";
     return (
         <article className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
             <div className="flex items-start justify-between gap-3">
@@ -716,7 +718,10 @@ function ProjectCanvasCard({ canvas, onEditPreset }: { canvas: CanvasProject; on
                     <h3 className="break-words text-lg font-semibold leading-6 text-[var(--studio-text-primary)]">{canvas.title}</h3>
                     <p className="mt-1 text-sm text-[var(--studio-text-muted)]">{canvasEpisodeLabel(canvas)}</p>
                 </div>
-                <Tag className="studio-tag">{canvas.nodes.length} 节点</Tag>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                    <Tag className="studio-tag">{roleLabel}</Tag>
+                    <Tag className="studio-tag">{canvas.nodes.length} 节点</Tag>
+                </div>
             </div>
             <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
                 <CanvasCardStat label="图片" value={imageCount} />

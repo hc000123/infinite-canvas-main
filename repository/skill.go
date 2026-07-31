@@ -122,6 +122,19 @@ func ListSkillVersions(skillID string) ([]model.SkillVersion, error) {
 	return items, err
 }
 
+func ListSkillVersionsBySkillIDs(skillIDs []string) ([]model.SkillVersion, error) {
+	if len(skillIDs) == 0 {
+		return []model.SkillVersion{}, nil
+	}
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	items := []model.SkillVersion{}
+	err = db.Where("skill_id IN ?", skillIDs).Order("skill_id asc, created_at desc").Find(&items).Error
+	return items, err
+}
+
 func PublishSkillVersionWithAudit(version model.SkillVersion, audit model.SkillAuditLog) error {
 	db, err := DB()
 	if err != nil {
@@ -203,6 +216,30 @@ func ListSkillEvaluations(versionID string) ([]model.SkillEvaluation, error) {
 	return items, err
 }
 
+func ListSkillEvaluationsByVersionIDs(versionIDs []string) ([]model.SkillEvaluation, error) {
+	if len(versionIDs) == 0 {
+		return []model.SkillEvaluation{}, nil
+	}
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	items := []model.SkillEvaluation{}
+	if db.Dialector.Name() == "mysql" {
+		err = db.Where("skill_version_id IN ?", versionIDs).
+			Order("skill_version_id asc, created_at desc, id desc").Find(&items).Error
+		return items, err
+	}
+	ranked := db.Model(&model.SkillEvaluation{}).
+		Select("skill_evaluations.*, ROW_NUMBER() OVER (PARTITION BY skill_version_id ORDER BY created_at DESC, id DESC) AS relation_rank").
+		Where("skill_version_id IN ?", versionIDs)
+	err = db.Table("(?) AS ranked_skill_evaluations", ranked).
+		Where("relation_rank <= ?", 50).
+		Order("skill_version_id asc, created_at desc, id desc").
+		Find(&items).Error
+	return items, err
+}
+
 func HasPassingSkillEvaluation(versionID, contentHash string) (bool, error) {
 	db, err := DB()
 	if err != nil {
@@ -246,6 +283,31 @@ func ListSkillAuditLogs(skillVersionIDs []string) ([]model.SkillAuditLog, error)
 	}
 	var items []model.SkillAuditLog
 	err = db.Where("skill_version_id IN ?", skillVersionIDs).Order("created_at desc").Limit(100).Find(&items).Error
+	return items, err
+}
+
+func ListSkillAuditLogsByVersionIDs(skillVersionIDs []string) ([]model.SkillAuditLog, error) {
+	if len(skillVersionIDs) == 0 {
+		return []model.SkillAuditLog{}, nil
+	}
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	items := []model.SkillAuditLog{}
+	if db.Dialector.Name() == "mysql" {
+		err = db.Where("skill_version_id IN ?", skillVersionIDs).
+			Order("created_at desc, id desc").Find(&items).Error
+		return items, err
+	}
+	ranked := db.Table("skill_audit_logs AS audits").
+		Select("audits.*, ROW_NUMBER() OVER (PARTITION BY versions.skill_id ORDER BY audits.created_at DESC, audits.id DESC) AS relation_rank").
+		Joins("JOIN skill_versions AS versions ON versions.id = audits.skill_version_id").
+		Where("audits.skill_version_id IN ?", skillVersionIDs)
+	err = db.Table("(?) AS ranked_skill_audits", ranked).
+		Where("relation_rank <= ?", 100).
+		Order("created_at desc, id desc").
+		Find(&items).Error
 	return items, err
 }
 

@@ -10,6 +10,8 @@ import { useCanvasStore } from "../stores/use-canvas-store";
 import { useGenerationQueueStore } from "../stores/use-generation-queue-store";
 import { useStoryboardStore } from "../stores/use-storyboard-store";
 import { useCreativeProjectStore } from "../../projects/use-creative-project-store";
+import { useShallow } from "zustand/react/shallow";
+import { episodeMainCanvas } from "../utils/episode-canvas-hierarchy";
 
 export function useCanvasWorkspaceStores(canvasId: string) {
     const effectiveConfig = useEffectiveConfig();
@@ -43,7 +45,17 @@ export function useCanvasWorkspaceStores(canvasId: string) {
     const renameProject = useCanvasStore((state) => state.renameProject);
     const deleteProjects = useCanvasStore((state) => state.deleteProjects);
     const currentProject = useCanvasStore((state) => state.projects.find((project) => project.id === canvasId));
-    const canvasProjects = useCanvasStore((state) => state.projects);
+    const episodeMainCanvasId = useCanvasStore((state) => {
+        const current = state.projects.find((project) => project.id === canvasId);
+        if (!current?.projectId || !current.episodeId) return "";
+        return episodeMainCanvas(state.projects, current.projectId, current.episodeId)?.id || "";
+    });
+    const childCanvasProjects = useCanvasStore(useShallow((state) => {
+        const current = state.projects.find((project) => project.id === canvasId);
+        const resolvedMain = current?.projectId && current.episodeId ? episodeMainCanvas(state.projects, current.projectId, current.episodeId) : undefined;
+        const mainCanvasId = current?.canvasRole === "child" ? current.parentCanvasId : current && resolvedMain?.id === current.id ? current.id : "";
+        return mainCanvasId ? state.projects.filter((project) => project.parentCanvasId === mainCanvasId) : [];
+    }));
     const creativeProject = useCreativeProjectStore((state) => state.projects.find((project) => project.id === currentProject?.projectId));
     const attachCanvasToCreativeProject = useCreativeProjectStore((state) => state.attachCanvas);
     const ensureUnfiledProject = useCreativeProjectStore((state) => state.ensureUnfiledProject);
@@ -61,7 +73,8 @@ export function useCanvasWorkspaceStores(canvasId: string) {
         createEpisodeChildCanvas,
         creativeProject,
         currentProject,
-        canvasProjects,
+        canCreateChildCanvas: Boolean(currentProject?.projectId && currentProject.episodeId && currentProject.id === episodeMainCanvasId),
+        childCanvases: childCanvasProjects.map((canvas) => ({ id: canvas.id, title: canvas.title })),
         deleteProjects,
         effectiveConfig,
         ensureProjectFolder,

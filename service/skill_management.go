@@ -9,35 +9,29 @@ import (
 )
 
 func ListVisibleSkillItems(userID, projectID string) ([]SkillAdminItem, error) {
-	items, err := ListSkillAdminItems()
+	skills, err := repository.ListVisibleSkillDefinitions(userID, projectID)
 	if err != nil {
 		return nil, err
 	}
-	visible := make([]SkillAdminItem, 0, len(items))
-	for _, item := range items {
-		if skillVisibleTo(item.Skill, userID, projectID) {
-			visible = append(visible, item)
-		}
-	}
-	return visible, nil
+	return listSkillAdminItems(skills, false)
 }
 
 func ListManagedSkillItems(userID, projectID string, isAdmin bool) ([]SkillAdminItem, error) {
 	if !isAdmin {
 		return ListVisibleSkillItems(userID, projectID)
 	}
-	items, err := ListSkillAdminItems()
+	skills, err := repository.ListSkillDefinitions()
 	if err != nil {
 		return nil, err
 	}
 	projectID = strings.TrimSpace(projectID)
-	visible := make([]SkillAdminItem, 0, len(items))
-	for _, item := range items {
-		if item.Skill.OwnerType == model.SkillOwnerSystem || (item.Skill.OwnerType == model.SkillOwnerProject && item.Skill.OwnerProjectID == projectID) {
-			visible = append(visible, item)
+	visible := make([]model.SkillDefinition, 0, len(skills))
+	for _, skill := range skills {
+		if skill.OwnerType == model.SkillOwnerSystem || (skill.OwnerType == model.SkillOwnerProject && skill.OwnerProjectID == projectID) {
+			visible = append(visible, skill)
 		}
 	}
-	return visible, nil
+	return listSkillAdminItems(visible, true)
 }
 
 func GetVisibleSkillVersionPackage(userID, versionID string) (model.SkillVersion, SkillPackage, error) {

@@ -26,6 +26,17 @@ test("nodes and connections share viewport visibility helpers", () => {
     assert.match(page, /viewportSize=\{size\}/);
 });
 
+test("node rendering keeps stable inputs while panning inside the same visible set", () => {
+    const page = readCanvasFile("../[id]/canvas-client-page.tsx");
+    const derived = readCanvasFile("../hooks/use-canvas-derived-state.ts");
+    const nodesLayer = readCanvasFile("../components/canvas-nodes-layer.tsx");
+
+    assert.match(derived, /visibleNodesRef/);
+    assert.match(nodesLayer, /memo\(function CanvasNodesLayer/);
+    assert.match(page, /scale=\{viewport\.k\}/);
+    assert.doesNotMatch(nodesLayer, /viewport: ViewportTransform/);
+});
+
 test("config nodes reuse one generation input topology index", () => {
     const actions = readCanvasFile("../hooks/use-canvas-config-node-actions.ts");
 

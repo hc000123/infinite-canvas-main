@@ -12,6 +12,7 @@ import { useCanvasStore } from "../../canvas/stores/use-canvas-store";
 import { useScriptStore } from "../../canvas/stores/use-script-store";
 import { useStoryboardStore } from "../../canvas/stores/use-storyboard-store";
 import { buildImportedEpisodeWriteInput, canvasEpisodeContextFromCreateBinding, canvasEpisodeContextFromEpisode, type CanvasCreateScriptBinding } from "../../canvas/utils/canvas-episode-context";
+import { episodeMainCanvas } from "../../canvas/utils/episode-canvas-hierarchy";
 import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../../canvas/utils/canvas-project-preset";
 import { episodeProductionName, type StructuredEpisodeScript } from "../../canvas/utils/script-management";
 import { videoWorkflowHref } from "../../original-workflow/video-workflow-routing";
@@ -98,7 +99,7 @@ export default function CreativeProjectDetailPage() {
         () =>
             projectEpisodes.map((episode): ProjectEpisodeBoardRow => {
                 const episodeCanvases = projectCanvases.filter((canvas) => canvas.episodeId === episode.id);
-                const mainCanvas = episodeCanvases.find((canvas) => canvas.canvasRole === "main");
+                const mainCanvas = episodeMainCanvas(episodeCanvases, projectId, episode.id);
                 const episodeTableShots = storyboardTableShots.filter((shot) => shot.projectId === projectId && shot.episodeId === episode.id);
                 const episodeShotGroups = shotGroups.filter((group) => group.projectId === projectId && group.episodeId === episode.id);
                 const finishedGroups = episodeShotGroups.filter((group) => group.status === "done" || group.resultAssetIds.length);
@@ -188,7 +189,7 @@ export default function CreativeProjectDetailPage() {
         if (!editingEpisodeTitle) return;
         if (!title) return message.warning("请填写分集标题");
         updateEpisode(editingEpisodeTitle.id, { title });
-        const mainCanvas = projectCanvases.find((canvas) => canvas.episodeId === editingEpisodeTitle.id && canvas.canvasRole === "main");
+        const mainCanvas = episodeMainCanvas(projectCanvases, projectId, editingEpisodeTitle.id);
         if (mainCanvas) renameCanvas(mainCanvas.id, episodeProductionName(editingEpisodeTitle.code, title));
         setEditingEpisodeTitleId("");
         setEpisodeTitleDraft("");

@@ -13,6 +13,21 @@ test("one main canvas owns one-level children", () => {
         episodeChildCanvases([child, main], "main").map((item) => item.id),
         ["child"],
     );
-    assert.equal(canCreateEpisodeChildCanvas(main), true);
-    assert.equal(canCreateEpisodeChildCanvas(child), false);
+    assert.equal(canCreateEpisodeChildCanvas(main, [child, main]), true);
+    assert.equal(canCreateEpisodeChildCanvas(child, [child, main]), false);
+});
+
+test("only the earliest untyped episode canvas is the fallback main canvas", () => {
+    const later = { ...base, id: "later", title: "后创建", createdAt: "2" } as any;
+    const earlier = { ...base, id: "earlier", title: "先创建", createdAt: "1" } as any;
+    const projects = [later, earlier];
+    assert.equal(episodeMainCanvas(projects, "p1", "e1")?.id, "earlier");
+    assert.equal(canCreateEpisodeChildCanvas(earlier, projects), true);
+    assert.equal(canCreateEpisodeChildCanvas(later, projects), false);
+});
+
+test("an explicit main canvas takes priority over untyped canvases", () => {
+    const untyped = { ...base, id: "untyped", title: "普通画布", createdAt: "0" } as any;
+    assert.equal(episodeMainCanvas([untyped, main], "p1", "e1")?.id, "main");
+    assert.equal(canCreateEpisodeChildCanvas(untyped, [untyped, main]), false);
 });

@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost, apiPut } from "@/services/api/request";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "@/services/api/request";
 
 export type SkillOwnerType = "system" | "project";
 export type SkillVersionStatus = "draft" | "published" | "archived";
@@ -165,6 +165,14 @@ export function createAdminSkillVersion(token: string, skillId: string, input: S
 
 export function updateAdminSkillVersion(token: string, id: string, input: SkillDraftInput) {
     return apiPatch<SkillVersion>(`${base}/skill-versions/${encodeURIComponent(id)}`, input, token);
+}
+
+export function deleteAdminSkillVersion(token: string, id: string) {
+    return apiDelete<void>(`/api/v1/skill-versions/${encodeURIComponent(id)}`, token);
+}
+
+export function archiveAdminSkillVersion(token: string, id: string) {
+    return apiPost<SkillVersion>(`/api/v1/skill-versions/${encodeURIComponent(id)}/archive`, {}, token);
 }
 
 export function validateAdminSkillVersion(token: string, id: string) {

@@ -20,7 +20,7 @@
 
 ## Artifact 与 Invocation Runtime 接口
 
-下列 14 个接口均位于 `/api/v1`，必须携带 `Authorization: Bearer <token>`，并且只能读写 JWT 用户自己的 Artifact 和 Invocation。所有 JSON 写入请求都使用严格字段解码和大小上限；未知字段、`null`、追加 JSON 或超限请求会失败。
+下列 15 个接口均位于 `/api/v1`，必须携带 `Authorization: Bearer <token>`，并且只能读写 JWT 用户自己的 Artifact 和 Invocation。所有 JSON 写入请求都使用严格字段解码和大小上限；未知字段、`null`、追加 JSON 或超限请求会失败。
 
 ### Artifact（3 个）
 
@@ -30,13 +30,14 @@
 | `GET /artifacts` | 查询参数：`project`、`episode`、`type`、`producerInvocation`、`approvalState`、`page`、`pageSize`。 | 返回所有者范围内的 `{ items, total, page, pageSize }`，列表项为 Artifact envelope。 |
 | `GET /artifacts/:id` | 路径参数是 Artifact ID。 | 返回用户可见的 Artifact envelope；跨用户 ID 按不存在处理。 |
 
-### Invocation（11 个）
+### Invocation（12 个）
 
 | 接口 | 请求 | 安全响应 |
 | ---- | ---- | ---- |
 | `POST /invocations` | 客户端只接受 `source: "direct" | "image" | "canvas_chat"`；`workflow` 和 `agent_plan` 只能由服务端调度器创建。可用 `skillVersionId` 准确锁定已发布版本，或用 Skill / Capability 条件解析；同时提交项目/分集、预期输出类型、带内容哈希的 `inputArtifactRefs`、`parameters`、`idempotencyKey` 和可选执行策略覆盖。 | 返回安全 Preflight DTO：`run`、版本摘要、冻结输入引用、执行策略摘要、路由摘要、确认要求和阻断原因；不返回请求哈希、完整 Skill/Schema 快照、渠道 ID/Key、原始输出或内部错误。 |
 | `GET /invocations` | 查询参数：`project`、`episode`、`skillId`、`source`、`status`、`page`、`pageSize`。 | 返回 `{ items, total, page, pageSize }` 和安全的 run 摘要。 |
 | `GET /invocations/:id` | 路径参数是 Invocation ID。 | 返回 run、revision/attempt 安全摘要、权威 Artifact refs/输出 envelope、gates、reviews、Apply 摘要、最新事件页和 `artifactSetHash`；不暴露 AgentRun ID、raw/structured output、内部 Trace 快照、Apply 回执/错误或密钥。 |
+| `GET /invocations/:id/poll` | 轻量轮询；`after` 是上次响应的 `nextAfter`，初次可用 `0`。 | 只返回安全 run 摘要、最新 attempt 摘要、游标后的最多 100 条事件和 `nextAfter`；不读取 revision、Artifact、质量门、审核或 Apply 详情。客户端仅在状态指纹变化时刷新一次完整详情，进入终态后停止轮询。 |
 | `POST /invocations/:id/repreflight` | 仅允许 blocked 或执行目标失效的客户端 Invocation 追加新预检；`source` 必须与原 run 完全一致，不可改变已冻结项目/分集边界。 | 返回新的安全 Preflight DTO，旧 revision/attempt 保留。 |
 | `POST /invocations/:id/confirm` | `{ "requirementCodes": [...] }`，必须与当前 revision 冻结集合精确一致。 | 原子创建一个 attempt 和 AgentRun，返回安全 lifecycle DTO；重放同一确认不会重复入队。 |
 | `POST /invocations/:id/cancel` | **Body 必须是 0 字节**；`{}`、空白或其他内容都会被拒绝。 | 返回取消后的安全 lifecycle DTO；取消和完成竞态在事务内收口。 |
@@ -110,6 +111,7 @@ Skill 路由支持 `fixed`、`tag_route` 和 `manual_before_run`；候选不兼�
 | ---- | ---- |
 | `POST /workflow-runs` | 按项目、分集、工作流版本和剧本哈希幂等创建运行记录 |
 | `GET /workflow-runs/:id` | 返回最新阶段、Invocation Artifact-set 投影、质量门和底层任务摘要；阶段包含 `invocationId`，产物包含 `artifactSetHash` 与 `artifactIds` |
+| `GET /workflow-runs/:id/poll` | 轻量返回 Workflow 状态、最新阶段状态 / attempt / 聚合错误、游标后的最多 100 条事件、`nextAfter` 和 Worker 健康；不读取 Artifact、质量门、审核、Apply 或 Agent Run 详情。页面只在状态指纹变化时刷新一次完整详情，并在没有活动阶段后停止轮询 |
 | `GET /skill-options` | 按项目、Capability 和输入 / 输出 Artifact 类型返回可见的已发布 Skill 版本 |
 | `POST /workflow-runs/:id/stages/:stageId/start` | 校验标准 Artifact 依赖，通过统一 Preflight / Confirm 创建 `source=workflow` Invocation 并异步入队；可用 `skillVersionId` 精确冻结本次版本 |
 | `POST /workflow-runs/:id/media-batches` | 为美术或分镜阶段创建绑定启动幂等键的一次性参考图批次 |
