@@ -45,14 +45,15 @@ func SaveSettings(settings model.Settings) (model.Settings, error) {
 	if err != nil {
 		return model.Settings{}, err
 	}
+	normalizedSaved := normalizeSettings(saved)
+	settings.Private = normalizePrivateSetting(settings.Private)
+	keepPrivateAPIKeys(&settings, normalizedSaved)
+	keepPrivateAuthSecrets(&settings, normalizedSaved)
+	keepPrivateVolcengineAssetSecrets(&settings, normalizedSaved)
 	settings = normalizeSettings(settings)
 	if err := validateModelProtocolConflicts(settings.Private.Channels); err != nil {
 		return model.Settings{}, err
 	}
-	normalizedSaved := normalizeSettings(saved)
-	keepPrivateAPIKeys(&settings, normalizedSaved)
-	keepPrivateAuthSecrets(&settings, normalizedSaved)
-	keepPrivateVolcengineAssetSecrets(&settings, normalizedSaved)
 	result, err := repository.SaveSettings(settings, now())
 	if err == nil {
 		RefreshPromptSyncScheduler()

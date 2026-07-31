@@ -64,6 +64,43 @@ func TestSaveSettingsKeepsSavedChannelAPIKeyWhenMaskSubmitted(t *testing.T) {
 	}
 }
 
+func TestSaveSettingsKeepsTextEndpointWhenEmptyAPIKeyKeepsSavedSecret(t *testing.T) {
+	setupAITaskTestDB(t)
+	settings := model.Settings{
+		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{
+			AvailableModels: []string{"custom-text"},
+			ModelTextEndpoints: []model.ModelTextEndpointType{{
+				Model:        "custom-text",
+				EndpointType: textEndpointResponses,
+			}},
+		}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{{
+			ID: "saved-text", Protocol: string(model.ModelProtocolOpenAI), Name: "Saved Text", BaseURL: "https://text.example.com", APIKey: "sk-real-empty-submit", Models: []string{"custom-text"}, Capabilities: []string{"text"}, Enabled: true,
+		}}},
+	}
+	if _, err := SaveSettings(settings); err != nil {
+		t.Fatalf("initial SaveSettings returned error: %v", err)
+	}
+
+	settings.Private.Channels[0].APIKey = ""
+	result, err := SaveSettings(settings)
+	if err != nil {
+		t.Fatalf("SaveSettings with empty api key returned error: %v", err)
+	}
+	wantEndpoints := []model.ModelTextEndpointType{{Model: "custom-text", EndpointType: textEndpointResponses}}
+	if !reflect.DeepEqual(result.Public.ModelChannel.ModelTextEndpoints, wantEndpoints) {
+		t.Fatalf("model text endpoints = %#v, want %#v", result.Public.ModelChannel.ModelTextEndpoints, wantEndpoints)
+	}
+
+	saved, err := repository.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings returned error: %v", err)
+	}
+	if saved.Private.Channels[0].APIKey != "sk-real-empty-submit" {
+		t.Fatalf("saved api key = %q, want original real key", saved.Private.Channels[0].APIKey)
+	}
+}
+
 func TestSaveSettingsKeepsTextEndpointsOnlyForPublishedTextModels(t *testing.T) {
 	setupAITaskTestDB(t)
 	settings, err := SaveSettings(model.Settings{
