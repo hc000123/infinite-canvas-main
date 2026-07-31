@@ -480,7 +480,7 @@ export default function AdminSettingsPage() {
         setTestingModels((current) => [...current, model]);
         try {
             const startedAt = performance.now();
-            const result = await testChannelModel(token, { index: testChannelIndex, channel, model });
+            const result = await testChannelModel(token, { index: testChannelIndex, channel, model, endpointType: modelTextEndpointType(modelTextEndpoints, model) });
             setTestResults((current) => ({ ...current, [model]: { status: "success", duration: `${((performance.now() - startedAt) / 1000).toFixed(2)}s`, message: result } }));
         } catch (error) {
             setTestResults((current) => ({ ...current, [model]: { status: "error", message: error instanceof Error ? error.message : "测试失败" } }));

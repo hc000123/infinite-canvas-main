@@ -89,12 +89,12 @@ func AdminChannelModels(index *int, channel model.ModelChannel) ([]string, error
 	return fetchAdminChannelModels(resolved)
 }
 
-func AdminTestChannelModel(index *int, channel model.ModelChannel, modelName string) (string, error) {
+func AdminTestChannelModel(index *int, channel model.ModelChannel, modelName string, endpointType string) (string, error) {
 	resolved, err := resolveAdminChannel(index, channel)
 	if err != nil {
 		return "", err
 	}
-	return testAdminChannelModel(resolved, modelName)
+	return testAdminChannelModel(resolved, modelName, endpointType)
 }
 
 type ModelChannelPreflightResult struct {
@@ -1047,7 +1047,7 @@ func fetchAdminChannelModels(channel model.ModelChannel) ([]string, error) {
 	return result, nil
 }
 
-func testAdminChannelModel(channel model.ModelChannel, modelName string) (string, error) {
+func testAdminChannelModel(channel model.ModelChannel, modelName string, endpointType string) (string, error) {
 	if strings.TrimSpace(modelName) == "" {
 		return "", errors.New("缺少模型名称")
 	}
@@ -1081,14 +1081,22 @@ func testAdminChannelModel(channel model.ModelChannel, modelName string) (string
 		}
 		return fmt.Sprintf("星链云余额预检通过；模型 %s 可用", modelName), nil
 	}
-	body, _ := json.Marshal(map[string]any{
-		"model": modelName,
-		"messages": []map[string]string{{
-			"role":    "user",
-			"content": "hi",
-		}},
-	})
-	request, err := http.NewRequest(http.MethodPost, BuildModelChannelURL(channel, "/chat/completions"), strings.NewReader(string(body)))
+	isImageGeneration := adminChannelTestUsesImageGenerations(channel, modelName)
+	endpointType = normalizeTextEndpointType(endpointType, modelName)
+	path := "/chat/completions"
+	payload := map[string]any{
+		"model":    modelName,
+		"messages": []map[string]string{{"role": "user", "content": "hi"}},
+	}
+	if isImageGeneration {
+		path = "/images/generations"
+		payload = map[string]any{"model": modelName, "prompt": "hi", "n": 1, "response_format": "b64_json"}
+	} else if endpointType == textEndpointResponses {
+		path = "/responses"
+		payload = map[string]any{"model": modelName, "input": "hi"}
+	}
+	body, _ := json.Marshal(payload)
+	request, err := http.NewRequest(http.MethodPost, BuildModelChannelURL(channel, path), strings.NewReader(string(body)))
 	if err != nil {
 		return "", err
 	}
@@ -1103,18 +1111,56 @@ func testAdminChannelModel(channel model.ModelChannel, modelName string) (string
 	if response.StatusCode >= http.StatusBadRequest {
 		return "", readAdminChannelError(responseBody, response.StatusCode, "测试失败")
 	}
-	var payload struct {
+	if isImageGeneration {
+		return "图片生成接口响应正常", nil
+	}
+	var result struct {
+		OutputText string `json:"output_text"`
+		Output     []struct {
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"output"`
 		Choices []struct {
 			Message struct {
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
 	}
-	_ = json.Unmarshal(responseBody, &payload)
-	if len(payload.Choices) > 0 && strings.TrimSpace(payload.Choices[0].Message.Content) != "" {
-		return payload.Choices[0].Message.Content, nil
+	_ = json.Unmarshal(responseBody, &result)
+	if strings.TrimSpace(result.OutputText) != "" {
+		return result.OutputText, nil
+	}
+	for _, output := range result.Output {
+		for _, content := range output.Content {
+			if strings.TrimSpace(content.Text) != "" {
+				return content.Text, nil
+			}
+		}
+	}
+	if len(result.Choices) > 0 && strings.TrimSpace(result.Choices[0].Message.Content) != "" {
+		return result.Choices[0].Message.Content, nil
 	}
 	return "ok", nil
+}
+
+func adminChannelTestUsesImageGenerations(channel model.ModelChannel, modelName string) bool {
+	if !modelChannelSupportsCapability(channel, "image") {
+		return false
+	}
+	name := strings.ToLower(strings.TrimSpace(modelName))
+	if strings.Contains(name, "gemini") {
+		return false
+	}
+	if !modelChannelSupportsCapability(channel, "text") {
+		return true
+	}
+	for _, keyword := range []string{"gpt-image", "imagen", "seedream", "banana", "dall-e", "dalle", "flux", "sdxl", "stable-diffusion", "midjourney"} {
+		if strings.Contains(name, keyword) {
+			return true
+		}
+	}
+	return false
 }
 
 func testArkChannelAuth(channel model.ModelChannel) error {

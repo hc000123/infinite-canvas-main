@@ -115,7 +115,7 @@ func TestXinglianModelPreflightRejectsUnavailableModel(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	_, err := testAdminChannelModel(model.ModelChannel{Protocol: string(model.ModelProtocolXinglianCloud), BaseURL: upstream.URL + "/v1", APIKey: "test-key"}, "sd2-720p-mini")
+	_, err := testAdminChannelModel(model.ModelChannel{Protocol: string(model.ModelProtocolXinglianCloud), BaseURL: upstream.URL + "/v1", APIKey: "test-key"}, "sd2-720p-mini", "")
 	if err == nil || !strings.Contains(err.Error(), "当前账户不可用") {
 		t.Fatalf("error = %v, want unavailable model message", err)
 	}

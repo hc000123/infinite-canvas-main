@@ -9,9 +9,10 @@ import (
 )
 
 type adminChannelActionRequest struct {
-	Index   *int               `json:"index"`
-	Channel model.ModelChannel `json:"channel"`
-	Model   string             `json:"model"`
+	Index        *int               `json:"index"`
+	Channel      model.ModelChannel `json:"channel"`
+	Model        string             `json:"model"`
+	EndpointType string             `json:"endpointType"`
 }
 
 type userJimengLoginRequest struct {
@@ -62,7 +63,7 @@ func AdminChannelModels(w http.ResponseWriter, r *http.Request) {
 func AdminTestChannelModel(w http.ResponseWriter, r *http.Request) {
 	var request adminChannelActionRequest
 	_ = json.NewDecoder(r.Body).Decode(&request)
-	result, err := service.AdminTestChannelModel(request.Index, request.Channel, request.Model)
+	result, err := service.AdminTestChannelModel(request.Index, request.Channel, request.Model, request.EndpointType)
 	if err != nil {
 		FailError(w, err)
 		return

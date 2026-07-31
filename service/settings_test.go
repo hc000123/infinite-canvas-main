@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -492,12 +493,84 @@ func TestAdminTestArkChannelModelChecksEnterpriseAPIAuth(t *testing.T) {
 		Models:           []string{"doubao-seedance-2-0"},
 		Weight:           1,
 		Enabled:          true,
-	}, "doubao-seedance-2-0")
+	}, "doubao-seedance-2-0", "")
 	if err != nil {
 		t.Fatalf("AdminTestChannelModel returned error: %v", err)
 	}
 	if !strings.Contains(result, "企业 API 鉴权通过") || !strings.Contains(result, "ep-test") {
 		t.Fatalf("result = %q, want enterprise auth success with endpoint", result)
+	}
+}
+
+func TestAdminTestChannelModelUsesResponsesEndpointForResponsesModel(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("path = %s, want /v1/responses", r.URL.Path)
+		}
+		var body struct {
+			Model string `json:"model"`
+			Input string `json:"input"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Model != "responses-only-model" || body.Input != "hi" {
+			t.Fatalf("body = %#v, want Responses model and input", body)
+		}
+		_, _ = w.Write([]byte(`{"output_text":"pong"}`))
+	}))
+	defer upstream.Close()
+
+	result, err := AdminTestChannelModel(nil, model.ModelChannel{
+		Protocol: string(model.ModelProtocolOpenAI),
+		Name:     "openai",
+		BaseURL:  upstream.URL,
+		APIKey:   "test-key",
+		Models:   []string{"responses-only-model"},
+		Enabled:  true,
+	}, "responses-only-model", textEndpointResponses)
+	if err != nil {
+		t.Fatalf("AdminTestChannelModel returned error: %v", err)
+	}
+	if result != "pong" {
+		t.Fatalf("result = %q, want pong", result)
+	}
+}
+
+func TestAdminTestChannelModelUsesImageGenerationsForImageChannel(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/images/generations" {
+			t.Fatalf("path = %s, want /v1/images/generations", r.URL.Path)
+		}
+		var body struct {
+			Model  string `json:"model"`
+			Prompt string `json:"prompt"`
+			N      int    `json:"n"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Model != "gpt-image-2-2k" || body.Prompt != "hi" || body.N != 1 {
+			t.Fatalf("body = %#v, want image generation probe", body)
+		}
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"test-image"}]}`))
+	}))
+	defer upstream.Close()
+
+	result, err := AdminTestChannelModel(nil, model.ModelChannel{
+		Protocol:     string(model.ModelProtocolOpenAI),
+		Name:         "启科AI(图片)",
+		BaseURL:      upstream.URL,
+		APIKey:       "test-key",
+		Models:       []string{"gpt-image-2-2k"},
+		Capabilities: []string{"image", "text"},
+		Enabled:      true,
+	}, "gpt-image-2-2k", "")
+	if err != nil {
+		t.Fatalf("AdminTestChannelModel returned error: %v", err)
+	}
+	if result != "图片生成接口响应正常" {
+		t.Fatalf("result = %q, want image endpoint success", result)
 	}
 }
 
@@ -517,7 +590,7 @@ func TestAdminTestArkChannelModelReportsEnterpriseAPIAuthFailure(t *testing.T) {
 		Models:           []string{"doubao-seedance-2-0"},
 		Weight:           1,
 		Enabled:          true,
-	}, "doubao-seedance-2-0")
+	}, "doubao-seedance-2-0", "")
 	if err == nil || !strings.Contains(err.Error(), "The API key doesn't exist") {
 		t.Fatalf("error = %v, want enterprise auth failure", err)
 	}
@@ -551,7 +624,7 @@ esac
 		CLIPath:  cli,
 		Models:   []string{"seedance2.0fast"},
 		Enabled:  true,
-	}, "seedance2.0fast")
+	}, "seedance2.0fast", "")
 	if err != nil {
 		t.Fatalf("AdminTestChannelModel returned error: %v", err)
 	}
