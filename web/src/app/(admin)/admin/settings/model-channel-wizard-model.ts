@@ -1,6 +1,6 @@
-import { modelMatchesAiCapability, type AiModelKind } from "../../../../lib/ai-model-kind.ts";
+import type { AiModelKind } from "../../../../lib/ai-model-kind.ts";
 import type { AdminModelChannel, AdminModelTextEndpoint, AdminPublicModelChannelSettings } from "../../../../services/api/admin.ts";
-import { sanitizeModelChannelPublication } from "./model-channel-publication.ts";
+import { isRoutableModelChannel, modelChannelHasCapability, sanitizeModelChannelPublication } from "./model-channel-publication.ts";
 
 export type WizardPublicSelection = {
     publishedModels: string[];
@@ -107,7 +107,7 @@ export function applyWizardPublication(
     const previousModels = normalizeWizardModels(previousChannel?.models || []);
     const nextModels = nextChannel.enabled ? normalizeWizardModels(nextChannel.models) : [];
     const selectedModels = new Set(normalizeWizardModels(selection.publishedModels).filter((model) => nextModels.includes(model)));
-    const siblings = siblingChannels.filter((channel) => channel.enabled);
+    const siblings = siblingChannels.filter(isRoutableModelChannel);
     const availableModels = normalizeWizardModels(current.availableModels).filter((model) => {
         if (!previousModels.includes(model)) return true;
         return selectedModels.has(model) || siblings.some((channel) => normalizeWizardModels(channel.models).includes(model));
@@ -116,8 +116,8 @@ export function applyWizardPublication(
         if (!availableModels.includes(model)) availableModels.push(model);
     });
     const hasCapability = (model: string, capability: AiModelKind) => [...siblings, nextChannel]
-        .filter((channel) => channel.enabled && normalizeWizardModels(channel.models).includes(model))
-        .some((channel) => modelMatchesAiCapability(model, channel.capabilities, capability));
+        .filter((channel) => isRoutableModelChannel(channel) && normalizeWizardModels(channel.models).includes(model))
+        .some((channel) => modelChannelHasCapability(channel, capability));
     const textModels = availableModels.filter((model) => hasCapability(model, "text"));
     const requestedEndpoints = new Map(normalizeTextEndpoints(selection.modelTextEndpoints));
     const currentEndpoints = new Map(current.modelTextEndpoints

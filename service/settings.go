@@ -430,7 +430,7 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 			nextTextEndpoints = append(nextTextEndpoints, model.ModelTextEndpointType{Model: modelName, EndpointType: normalizeTextEndpointType(item.EndpointType, modelName)})
 		}
 	}
-	public.ModelTextEndpoints = normalizeModelTextEndpoints(nextTextEndpoints, public.AvailableModels)
+	public.ModelTextEndpoints = normalizeModelTextEndpoints(nextTextEndpoints, modelNamesWithCapability(public.AvailableModels, modelCapabilities, "text"))
 	if models := resolveModels(public.DefaultVideoModel); len(models) > 0 {
 		public.DefaultVideoModel = models[0]
 	}
@@ -538,7 +538,7 @@ func normalizeModelTextEndpoints(items []model.ModelTextEndpointType, availableM
 	seen := map[string]bool{}
 	for _, item := range items {
 		modelName := strings.TrimSpace(item.Model)
-		if modelName == "" || seen[modelName] || (len(available) > 0 && !available[modelName]) {
+		if modelName == "" || seen[modelName] || !available[modelName] {
 			continue
 		}
 		seen[modelName] = true
@@ -550,6 +550,20 @@ func normalizeModelTextEndpoints(items []model.ModelTextEndpointType, availableM
 		}
 		seen[modelName] = true
 		result = append(result, model.ModelTextEndpointType{Model: modelName, EndpointType: defaultTextEndpointType(modelName)})
+	}
+	return result
+}
+
+func modelNamesWithCapability(modelNames []string, capabilitiesByModel map[string][]string, capability string) []string {
+	capability = strings.TrimSpace(strings.ToLower(capability))
+	result := []string{}
+	for _, modelName := range uniqueModelNames(modelNames) {
+		for _, item := range capabilitiesByModel[modelName] {
+			if strings.TrimSpace(strings.ToLower(item)) == capability {
+				result = append(result, modelName)
+				break
+			}
+		}
 	}
 	return result
 }

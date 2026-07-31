@@ -57,7 +57,8 @@ test("finish has a synchronous local submission lock", () => {
 test("default model options follow explicit publication and capability", () => {
     assert.match(source, /Form\.useWatch\("publishedModels"/);
     assert.match(source, /applyWizardPublication/);
-    assert.match(source, /modelMatchesAiCapability/);
+    assert.match(source, /isRoutableModelChannel/);
+    assert.match(source, /modelChannelHasCapability/);
     assert.match(source, /defaultTextOptions/);
     assert.match(source, /defaultImageOptions/);
     assert.match(source, /defaultVideoOptions/);

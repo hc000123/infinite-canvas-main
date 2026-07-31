@@ -371,6 +371,21 @@ test("同名 sibling 仍提供 text 能力时保留文本默认和端点", () =>
     assert.equal(result.defaultImageModel, "shared-model");
 });
 
+test("启用但不可路由的 sibling 不应阻止取消公开模型", () => {
+    const edited = channel({ id: "edited", models: ["shared-model"], capabilities: ["text"] });
+    const result = applyWizardPublication(
+        publication({ availableModels: ["shared-model"], defaultTextModel: "shared-model", modelTextEndpoints: [{ model: "shared-model", endpointType: "responses" }] }),
+        edited,
+        edited,
+        [channel({ id: "unroutable", apiKey: "", models: ["shared-model"], capabilities: ["text"] })],
+        { publishedModels: [], defaultTextModel: "", defaultImageModel: "", defaultVideoModel: "", modelTextEndpoints: [] },
+    );
+
+    assert.deepEqual(result.availableModels, []);
+    assert.deepEqual(result.modelTextEndpoints, []);
+    assert.equal(result.defaultTextModel, "");
+});
+
 test("公开清洗忽略缺少连接凭证的渠道但保留即梦 CLI", () => {
     const result = sanitizeModelChannelPublication(publication({
         availableModels: ["unroutable-text", "seedance2.0fast"],
@@ -403,6 +418,20 @@ test("同名模型只剩 image 来源时清理文本默认并保留图片默认"
     assert.deepEqual(result?.modelTextEndpoints, []);
     assert.equal(result?.defaultTextModel, "");
     assert.equal(result?.defaultImageModel, "shared-model");
+});
+
+test("显式多能力渠道为自定义模型保留对应默认项和文本端点", () => {
+    const result = sanitizeModelChannelPublication(publication({
+        availableModels: ["custom-v1"],
+        modelTextEndpoints: [{ model: "custom-v1", endpointType: "responses" }],
+        defaultTextModel: "custom-v1",
+        defaultImageModel: "custom-v1",
+    }), [channel({ models: ["custom-v1"], capabilities: ["text", "image"] })]);
+
+    assert.deepEqual(result.availableModels, ["custom-v1"]);
+    assert.deepEqual(result.modelTextEndpoints, [{ model: "custom-v1", endpointType: "responses" }]);
+    assert.equal(result.defaultTextModel, "custom-v1");
+    assert.equal(result.defaultImageModel, "custom-v1");
 });
 
 test("检测协调器隔离重置前后的同名请求", () => {

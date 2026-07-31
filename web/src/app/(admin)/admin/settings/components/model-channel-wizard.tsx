@@ -5,9 +5,10 @@ import { Alert, App, AutoComplete, Button, Card, Col, Collapse, Flex, Form, Inpu
 import type { FormInstance } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind";
+import type { AiModelKind } from "@/lib/ai-model-kind";
 import type { AdminModelChannel, AdminModelTextEndpoint, AdminPublicModelChannelSettings } from "@/services/api/admin";
 
+import { isRoutableModelChannel, modelChannelHasCapability } from "../model-channel-publication";
 import { applyWizardPublication, buildWizardChannel, buildWizardProspectiveChannel, normalizeWizardModels, type WizardChannelDraft, type WizardPublicSelection } from "../model-channel-wizard-model";
 
 type ModelChannelWizardProps = {
@@ -479,7 +480,7 @@ function wizardInitializationKey(existingChannel: AdminModelChannel | undefined,
 
 function defaultOptionsForCapability(models: string[], channels: AdminModelChannel[], capability: AiModelKind) {
     return normalizeWizardModels(models)
-        .filter((model) => channels.some((channel) => channel.enabled && normalizeWizardModels(channel.models).includes(model) && modelMatchesAiCapability(model, channel.capabilities, capability)))
+        .filter((model) => channels.some((channel) => isRoutableModelChannel(channel) && normalizeWizardModels(channel.models).includes(model) && modelChannelHasCapability(channel, capability)))
         .map(toOption);
 }
 

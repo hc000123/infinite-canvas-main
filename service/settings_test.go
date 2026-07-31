@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -60,6 +61,55 @@ func TestSaveSettingsKeepsSavedChannelAPIKeyWhenMaskSubmitted(t *testing.T) {
 	}
 	if saved.Private.Channels[0].Remark != "updated" {
 		t.Fatalf("remark = %q, want updated", saved.Private.Channels[0].Remark)
+	}
+}
+
+func TestSaveSettingsKeepsTextEndpointsOnlyForPublishedTextModels(t *testing.T) {
+	setupAITaskTestDB(t)
+	settings, err := SaveSettings(model.Settings{
+		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{
+			AvailableModels: []string{"custom-text", "custom-image", "custom-video"},
+			ModelTextEndpoints: []model.ModelTextEndpointType{{
+				Model:        "custom-text",
+				EndpointType: textEndpointResponses,
+			}},
+		}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{
+			{ID: "text", Protocol: string(model.ModelProtocolOpenAI), Name: "Text", BaseURL: "https://text.example.com", APIKey: "sk-text", Models: []string{"custom-text"}, Capabilities: []string{"text"}, Enabled: true},
+			{ID: "image", Protocol: string(model.ModelProtocolOpenAI), Name: "Image", BaseURL: "https://image.example.com", APIKey: "sk-image", Models: []string{"custom-image"}, Capabilities: []string{"image"}, Enabled: true},
+			{ID: "video", Protocol: string(model.ModelProtocolOpenAI), Name: "Video", BaseURL: "https://video.example.com", APIKey: "sk-video", Models: []string{"custom-video"}, Capabilities: []string{"video"}, Enabled: true},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+
+	want := []model.ModelTextEndpointType{{Model: "custom-text", EndpointType: textEndpointResponses}}
+	if !reflect.DeepEqual(settings.Public.ModelChannel.ModelTextEndpoints, want) {
+		t.Fatalf("model text endpoints = %#v, want %#v", settings.Public.ModelChannel.ModelTextEndpoints, want)
+	}
+}
+
+func TestSaveSettingsClearsTextEndpointsWhenNoPublishedTextModel(t *testing.T) {
+	setupAITaskTestDB(t)
+	settings, err := SaveSettings(model.Settings{
+		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{
+			AvailableModels: []string{"custom-image", "custom-video"},
+			ModelTextEndpoints: []model.ModelTextEndpointType{{
+				Model:        "legacy-text",
+				EndpointType: textEndpointResponses,
+			}},
+		}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{
+			{ID: "image", Protocol: string(model.ModelProtocolOpenAI), Name: "Image", BaseURL: "https://image.example.com", APIKey: "sk-image", Models: []string{"custom-image"}, Capabilities: []string{"image"}, Enabled: true},
+			{ID: "video", Protocol: string(model.ModelProtocolOpenAI), Name: "Video", BaseURL: "https://video.example.com", APIKey: "sk-video", Models: []string{"custom-video"}, Capabilities: []string{"video"}, Enabled: true},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+	if len(settings.Public.ModelChannel.ModelTextEndpoints) != 0 {
+		t.Fatalf("model text endpoints = %#v, want empty", settings.Public.ModelChannel.ModelTextEndpoints)
 	}
 }
 
@@ -215,7 +265,7 @@ func TestPublicSettingsReplacesArkEndpointWithModelName(t *testing.T) {
 	}
 }
 
-func TestPublicSettingsKeepsDisabledArkEndpointNormalizationWithoutMetadata(t *testing.T) {
+func TestPublicSettingsKeepsDisabledArkModelNormalizationWithoutMetadata(t *testing.T) {
 	setupAITaskTestDB(t)
 	_, err := repository.SaveSettings(model.Settings{
 		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{
@@ -254,8 +304,8 @@ func TestPublicSettingsKeepsDisabledArkEndpointNormalizationWithoutMetadata(t *t
 	if len(settings.ModelChannel.ModelCosts) != 1 || settings.ModelChannel.ModelCosts[0] != (model.ModelCost{Model: "doubao-seedance-2-0", Credits: 300}) {
 		t.Fatalf("model costs = %#v, want disabled ark endpoint normalized", settings.ModelChannel.ModelCosts)
 	}
-	if len(settings.ModelChannel.ModelTextEndpoints) != 1 || settings.ModelChannel.ModelTextEndpoints[0] != (model.ModelTextEndpointType{Model: "doubao-seedance-2-0", EndpointType: textEndpointResponses}) {
-		t.Fatalf("model text endpoints = %#v, want disabled ark endpoint normalized", settings.ModelChannel.ModelTextEndpoints)
+	if len(settings.ModelChannel.ModelTextEndpoints) != 0 {
+		t.Fatalf("model text endpoints = %#v, want empty without a routable text capability", settings.ModelChannel.ModelTextEndpoints)
 	}
 	if len(settings.ModelChannel.ModelProtocols) != 0 || len(settings.ModelChannel.ModelCapabilities) != 0 || len(settings.ModelChannel.ModelSources) != 0 {
 		t.Fatalf("disabled ark metadata = protocols %#v, capabilities %#v, sources %#v; want empty", settings.ModelChannel.ModelProtocols, settings.ModelChannel.ModelCapabilities, settings.ModelChannel.ModelSources)
