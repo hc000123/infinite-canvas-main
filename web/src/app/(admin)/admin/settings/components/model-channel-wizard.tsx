@@ -2,8 +2,10 @@
 
 import { CheckCircleFilled, DeleteOutlined, PlusOutlined, ReloadOutlined, SettingOutlined } from "@ant-design/icons";
 import { Alert, App, AutoComplete, Button, Card, Col, Collapse, Flex, Form, Input, InputNumber, Modal, Row, Select, Space, Steps, Switch, Tag, Typography, theme } from "antd";
-import { useEffect, useMemo, useRef, useState } from "react";
+import type { FormInstance } from "antd";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind";
 import type { AdminModelChannel, AdminModelTextEndpoint, AdminPublicModelChannelSettings } from "@/services/api/admin";
 
 import { applyWizardPublication, buildWizardChannel, normalizeWizardModels, type WizardChannelDraft, type WizardPublicSelection } from "../model-channel-wizard-model";
@@ -58,50 +60,94 @@ export function ModelChannelWizard({
     const [step, setStep] = useState(0);
     const [discoveredModels, setDiscoveredModels] = useState<string[]>([]);
     const [discovering, setDiscovering] = useState(false);
-    const wasOpenRef = useRef(false);
+    const [submitting, setSubmitting] = useState(false);
+    const submittingRef = useRef(false);
+    const initializedKeyRef = useRef("");
     const discoverySequenceRef = useRef(0);
+    const apiConnectionDraftRef = useRef({ baseUrl: "", apiKey: "" });
+    const cliConnectionDraftRef = useRef(emptyCliConnection());
+    const initializationInputRef = useRef({ existingChannel, initialChannel, publicModelChannel });
+    initializationInputRef.current = { existingChannel, initialChannel, publicModelChannel };
     const protocol = (Form.useWatch("protocol", form) || initialChannel.protocol) as AdminModelChannel["protocol"];
     const selectedModels = Form.useWatch("models", form) || [];
     const endpointMappings = Form.useWatch("endpointMappings", form) || [];
     const capabilities = Form.useWatch("capabilities", form) || [];
+    const publishedModels = Form.useWatch("publishedModels", form) || [];
+    const enabled = Form.useWatch("enabled", form) ?? (existingChannel || initialChannel).enabled;
     const candidateModels = useMemo(() => normalizeWizardModels([...knownModels, ...discoveredModels]), [discoveredModels, knownModels]);
     const channelModels = useMemo(
         () => (protocol === "volcengine-ark" ? normalizeWizardModels(endpointMappings.map((item) => item?.model || "")) : normalizeWizardModels(selectedModels)),
         [endpointMappings, protocol, selectedModels],
     );
-    const defaultModelOptions = useMemo(() => normalizeWizardModels([...publicModelChannel.availableModels, ...channelModels]).map(toOption), [channelModels, publicModelChannel.availableModels]);
+    const prospectiveChannel = useMemo(() => ({ ...(existingChannel || initialChannel), protocol, models: channelModels, capabilities, enabled }), [capabilities, channelModels, enabled, existingChannel, initialChannel, protocol]);
+    const projectedPublication = useMemo(() => applyWizardPublication(publicModelChannel, existingChannel, prospectiveChannel, siblingChannels, {
+        publishedModels,
+        defaultTextModel: "",
+        defaultImageModel: "",
+        defaultVideoModel: "",
+        modelTextEndpoints: [],
+    }), [existingChannel, prospectiveChannel, publicModelChannel, publishedModels, siblingChannels]);
+    const projectedChannels = useMemo(() => [...siblingChannels, prospectiveChannel], [prospectiveChannel, siblingChannels]);
+    const defaultTextOptions = useMemo(() => defaultOptionsForCapability(projectedPublication.availableModels, projectedChannels, "text"), [projectedChannels, projectedPublication.availableModels]);
+    const defaultImageOptions = useMemo(() => defaultOptionsForCapability(projectedPublication.availableModels, projectedChannels, "image"), [projectedChannels, projectedPublication.availableModels]);
+    const defaultVideoOptions = useMemo(() => defaultOptionsForCapability(projectedPublication.availableModels, projectedChannels, "video"), [projectedChannels, projectedPublication.availableModels]);
     const hasSavedKey = Boolean(existingChannel?.apiKey.trim());
+    const initializationKey = wizardInitializationKey(existingChannel, initialChannel, publicModelChannel);
+    const busy = saving || submitting;
+    const invalidateDiscovery = useCallback(() => {
+        discoverySequenceRef.current += 1;
+        setDiscovering(false);
+    }, []);
 
     useEffect(() => {
-        discoverySequenceRef.current += 1;
         if (!open) {
-            wasOpenRef.current = false;
-            setDiscovering(false);
+            initializedKeyRef.current = "";
+            invalidateDiscovery();
             return;
         }
-        if (wasOpenRef.current) return;
-        wasOpenRef.current = true;
-        const channel = existingChannel || initialChannel;
+        if (initializedKeyRef.current === initializationKey) return;
+        initializedKeyRef.current = initializationKey;
+        invalidateDiscovery();
+        const initializationInput = initializationInputRef.current;
+        const channel = initializationInput.existingChannel || initializationInput.initialChannel;
+        const initialPublication = initializationInput.publicModelChannel;
         const models = normalizeWizardModels(channel.models);
-        const publishedModels = models.filter((model) => publicModelChannel.availableModels.includes(model));
+        const publishedModels = models.filter((model) => initialPublication.availableModels.includes(model));
+        apiConnectionDraftRef.current = channel.protocol === "jimeng-cli" ? { baseUrl: "", apiKey: "" } : { baseUrl: channel.baseUrl, apiKey: "" };
+        cliConnectionDraftRef.current = channel.protocol === "jimeng-cli" ? pickCliConnection(channel) : emptyCliConnection();
         form.resetFields();
         form.setFieldsValue({
             ...channel,
             apiKey: "",
             endpointMappings: channel.protocol === "volcengine-ark" && !channel.endpointMappings.length ? [{ model: "", endpointId: "" }] : channel.endpointMappings,
             publishedModels,
-            defaultTextModel: publicModelChannel.defaultTextModel,
-            defaultImageModel: publicModelChannel.defaultImageModel,
-            defaultVideoModel: publicModelChannel.defaultVideoModel,
-            modelTextEndpoints: textEndpointsFor(models, publicModelChannel.modelTextEndpoints),
+            defaultTextModel: initialPublication.defaultTextModel,
+            defaultImageModel: initialPublication.defaultImageModel,
+            defaultVideoModel: initialPublication.defaultVideoModel,
+            modelTextEndpoints: textEndpointsFor(models, initialPublication.modelTextEndpoints),
         });
         setStep(0);
         setDiscoveredModels([]);
-        setDiscovering(false);
-    }, [existingChannel, form, initialChannel, open, publicModelChannel]);
+    }, [form, initializationKey, invalidateDiscovery, open]);
+
+    useEffect(() => {
+        if (!open || step !== 3) return;
+        clearInvalidDefault(form, "defaultTextModel", defaultTextOptions);
+        clearInvalidDefault(form, "defaultImageModel", defaultImageOptions);
+        clearInvalidDefault(form, "defaultVideoModel", defaultVideoOptions);
+    }, [defaultImageOptions, defaultTextOptions, defaultVideoOptions, form, open, step]);
 
     const selectProtocol = (nextProtocol: AdminModelChannel["protocol"]) => {
-        form.setFieldValue("protocol", nextProtocol);
+        if (nextProtocol === protocol) return;
+        if (protocol === "jimeng-cli") {
+            cliConnectionDraftRef.current = pickCliConnection(form.getFieldsValue(true));
+            form.setFieldsValue({ protocol: nextProtocol, ...emptyCliConnection(), ...apiConnectionDraftRef.current });
+        } else if (nextProtocol === "jimeng-cli") {
+            apiConnectionDraftRef.current = { baseUrl: form.getFieldValue("baseUrl") || "", apiKey: form.getFieldValue("apiKey") || "" };
+            form.setFieldsValue({ protocol: nextProtocol, baseUrl: "", apiKey: "", ...cliConnectionDraftRef.current });
+        } else {
+            form.setFieldValue("protocol", nextProtocol);
+        }
         if (nextProtocol === "volcengine-ark" && !(form.getFieldValue("endpointMappings") || []).length) {
             form.setFieldValue("endpointMappings", [{ model: "", endpointId: "" }]);
         }
@@ -115,6 +161,7 @@ export function ModelChannelWizard({
     };
 
     const nextStep = async () => {
+        if (busy) return;
         try {
             if (step === 0) await form.validateFields(["protocol"]);
             if (step === 1) await form.validateFields(connectionFieldNames(protocol));
@@ -134,7 +181,7 @@ export function ModelChannelWizard({
         } catch {
             return;
         }
-        const draft = buildDiscoveryChannel(existingChannel || initialChannel, form.getFieldsValue(true));
+        const draft = buildDiscoveryChannel(existingChannel || initialChannel, scopeDraftToProtocol(form.getFieldsValue(true)));
         const sequence = ++discoverySequenceRef.current;
         setDiscovering(true);
         try {
@@ -150,9 +197,12 @@ export function ModelChannelWizard({
     };
 
     const finish = async () => {
+        if (saving || submittingRef.current) return;
+        submittingRef.current = true;
+        setSubmitting(true);
         try {
             const values = await form.validateFields();
-            const channel = buildWizardChannel(existingChannel, values);
+            const channel = buildWizardChannel(existingChannel, scopeDraftToProtocol(values));
             const selection: WizardPublicSelection = {
                 publishedModels: values.publishedModels || [],
                 defaultTextModel: values.defaultTextModel || "",
@@ -165,6 +215,9 @@ export function ModelChannelWizard({
         } catch (error) {
             if (error && typeof error === "object" && "errorFields" in error) return;
             message.error(safeErrorMessage(error, [existingChannel?.apiKey || "", form.getFieldValue("apiKey") || ""]));
+        } finally {
+            submittingRef.current = false;
+            setSubmitting(false);
         }
     };
 
@@ -174,15 +227,18 @@ export function ModelChannelWizard({
             title={existingChannel ? "编辑模型渠道" : "新增模型渠道"}
             open={open}
             width={920}
-            onCancel={onCancel}
+            closable={!busy}
+            maskClosable={!busy}
+            keyboard={!busy}
+            onCancel={() => { if (!busy) onCancel(); }}
             destroyOnHidden
             styles={{ body: { maxHeight: "calc(100dvh - 190px)", overflowY: "auto" } }}
             footer={
                 <Flex justify="space-between" align="center">
-                    <Button onClick={onCancel} disabled={saving}>取消</Button>
+                    <Button onClick={onCancel} disabled={busy}>取消</Button>
                     <Space>
-                        {step > 0 ? <Button onClick={() => setStep((current) => current - 1)} disabled={saving}>上一步</Button> : null}
-                        {step < 3 ? <Button type="primary" onClick={() => void nextStep()}>下一步</Button> : <Button type="primary" loading={saving} onClick={() => void finish()}>保存渠道</Button>}
+                        {step > 0 ? <Button onClick={() => setStep((current) => current - 1)} disabled={busy}>上一步</Button> : null}
+                        {step < 3 ? <Button type="primary" disabled={busy} onClick={() => void nextStep()}>下一步</Button> : <Button type="primary" loading={busy} disabled={busy} onClick={() => void finish()}>保存渠道</Button>}
                     </Space>
                 </Flex>
             }
@@ -266,9 +322,9 @@ export function ModelChannelWizard({
                         {capabilities.includes("text") ? <TextEndpointFields models={channelModels} /> : null}
                         <Card size="small" title="系统默认模型（可选）">
                             <Row gutter={12}>
-                                <Col xs={24} md={8}><DefaultModelField name="defaultTextModel" label="默认文本模型" options={defaultModelOptions} /></Col>
-                                <Col xs={24} md={8}><DefaultModelField name="defaultImageModel" label="默认图片模型" options={defaultModelOptions} /></Col>
-                                <Col xs={24} md={8}><DefaultModelField name="defaultVideoModel" label="默认视频模型" options={defaultModelOptions} /></Col>
+                                <Col xs={24} md={8}><DefaultModelField name="defaultTextModel" label="默认文本模型" options={defaultTextOptions} /></Col>
+                                <Col xs={24} md={8}><DefaultModelField name="defaultImageModel" label="默认图片模型" options={defaultImageOptions} /></Col>
+                                <Col xs={24} md={8}><DefaultModelField name="defaultVideoModel" label="默认视频模型" options={defaultVideoOptions} /></Col>
                             </Row>
                         </Card>
                     </Flex>
@@ -398,6 +454,58 @@ function TextEndpointFields({ models }: { models: string[] }) {
 
 function DefaultModelField({ name, label, options }: { name: "defaultTextModel" | "defaultImageModel" | "defaultVideoModel"; label: string; options: { label: string; value: string }[] }) {
     return <Form.Item name={name} label={label} style={{ marginBottom: 0 }}><Select allowClear showSearch optionFilterProp="label" options={options} /></Form.Item>;
+}
+
+function wizardInitializationKey(existingChannel: AdminModelChannel | undefined, initialChannel: AdminModelChannel, publication: AdminPublicModelChannelSettings) {
+    return JSON.stringify({
+        mode: existingChannel ? "edit" : "create",
+        channel: existingChannel || initialChannel,
+        publication: {
+            availableModels: publication.availableModels,
+            modelTextEndpoints: publication.modelTextEndpoints,
+            defaultTextModel: publication.defaultTextModel,
+            defaultImageModel: publication.defaultImageModel,
+            defaultVideoModel: publication.defaultVideoModel,
+        },
+    });
+}
+
+function defaultOptionsForCapability(models: string[], channels: AdminModelChannel[], capability: AiModelKind) {
+    return normalizeWizardModels(models)
+        .filter((model) => channels.some((channel) => channel.enabled && normalizeWizardModels(channel.models).includes(model) && modelMatchesAiCapability(model, channel.capabilities, capability)))
+        .map(toOption);
+}
+
+function clearInvalidDefault(form: FormInstance<WizardFormValues>, field: "defaultTextModel" | "defaultImageModel" | "defaultVideoModel", options: { value: string }[]) {
+    const value = form.getFieldValue(field);
+    if (value && !options.some((option) => option.value === value)) form.setFieldValue(field, "");
+}
+
+function emptyCliConnection() {
+    return { cliPath: "", workDir: "", outputDir: "", sessionId: 0, timeoutSeconds: 0, concurrencyLimit: 1 };
+}
+
+function pickCliConnection(values: Partial<AdminModelChannel>) {
+    return {
+        cliPath: values.cliPath || "",
+        workDir: values.workDir || "",
+        outputDir: values.outputDir || "",
+        sessionId: Math.max(0, Number(values.sessionId) || 0),
+        timeoutSeconds: Math.max(0, Number(values.timeoutSeconds) || 0),
+        concurrencyLimit: Math.max(1, Number(values.concurrencyLimit) || 1),
+    };
+}
+
+function scopeDraftToProtocol(values: WizardFormValues): WizardFormValues {
+    const protocol = values.protocol || "openai";
+    if (protocol === "jimeng-cli") return { ...values, protocol, baseUrl: "", apiKey: "", endpointId: "", endpointMappings: [] };
+    return {
+        ...values,
+        protocol,
+        ...emptyCliConnection(),
+        endpointId: protocol === "volcengine-ark" ? values.endpointId : "",
+        endpointMappings: protocol === "volcengine-ark" ? values.endpointMappings : [],
+    };
 }
 
 function connectionFieldNames(protocol: AdminModelChannel["protocol"]): (keyof WizardFormValues)[] {

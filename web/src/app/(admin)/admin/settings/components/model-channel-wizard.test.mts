@@ -22,3 +22,34 @@ test("Jimeng copy keeps personal login outside admin setup", () => {
 test("publication is explicit", () => {
     assert.match(source, /保存渠道不会自动公开，只有这里选中的模型会加入系统可用模型/);
 });
+
+test("wizard initialization uses a stable snapshot and explicitly invalidates discovery", () => {
+    assert.match(source, /const initializationKey = wizardInitializationKey/);
+    assert.match(source, /initializedKeyRef/);
+    assert.match(source, /initializedKeyRef\.current === initializationKey/);
+    assert.match(source, /invalidateDiscovery/);
+    assert.match(source, /setDiscovering\(false\)/);
+});
+
+test("finish has a synchronous local submission lock", () => {
+    assert.match(source, /const \[submitting, setSubmitting\] = useState\(false\)/);
+    assert.match(source, /submittingRef\.current/);
+    assert.match(source, /const busy = saving \|\| submitting/);
+    assert.match(source, /if \(saving \|\| submittingRef\.current\) return/);
+    assert.match(source, /finally[\s\S]*submittingRef\.current = false[\s\S]*setSubmitting\(false\)/);
+});
+
+test("default model options follow explicit publication and capability", () => {
+    assert.match(source, /Form\.useWatch\("publishedModels"/);
+    assert.match(source, /applyWizardPublication/);
+    assert.match(source, /modelMatchesAiCapability/);
+    assert.match(source, /defaultTextOptions/);
+    assert.match(source, /defaultImageOptions/);
+    assert.match(source, /defaultVideoOptions/);
+});
+
+test("protocol scoped drafts do not retain mutually exclusive connection fields", () => {
+    assert.match(source, /apiConnectionDraftRef/);
+    assert.match(source, /cliConnectionDraftRef/);
+    assert.match(source, /scopeDraftToProtocol/);
+});
