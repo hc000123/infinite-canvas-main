@@ -123,6 +123,8 @@ export function ModelChannelWizard({
         setDiscovering(false);
     }, []);
 
+    useEffect(() => () => discoveryCoordinatorRef.current.reset(), []);
+
     useEffect(() => {
         if (!open) {
             initializedKeyRef.current = "";

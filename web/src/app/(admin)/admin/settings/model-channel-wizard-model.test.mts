@@ -9,13 +9,15 @@ import {
     channelVerificationMode,
     createChannelVerificationCoordinator,
     createModelDiscoveryCoordinator,
+    configuredModelsFromSettings,
     filterWizardPublicationSnapshot,
     modelDiscoveryCandidates,
     normalizeWizardModels,
     runModelDiscoveryRequest,
+    syncConfiguredModelsFromAuthoritativeSettings,
     runChannelVerification,
 } from "./model-channel-wizard-model.ts";
-import type { AdminModelChannel, AdminPublicModelChannelSettings } from "../../../../services/api/admin.ts";
+import type { AdminModelChannel, AdminPublicModelChannelSettings, AdminSettings } from "../../../../services/api/admin.ts";
 import { sanitizeModelChannelPublication } from "./model-channel-publication.ts";
 
 const channel = (value: Partial<AdminModelChannel> = {}): AdminModelChannel => ({
@@ -554,14 +556,18 @@ test("异步发现集成只让当前请求写入局部候选和状态", async ()
     currentDraft = original;
     coordinator.sync(original);
     discoveredModels = ["completed-before-close"];
+    let cleanedUp = false;
+    let writesAfterCleanup = 0;
     const closing = deferred<string[]>();
     const runClosing = runModelDiscoveryRequest(coordinator, original, {
         discover: () => closing.promise,
         getCurrentDraft: () => currentDraft,
-        setDiscoveredModels: (models) => { discoveredModels = models; },
-        setLoading: (value) => { loading = value; },
-        onError: (error) => { errors.push(String(error)); },
+        setDiscoveredModels: (models) => { if (cleanedUp) writesAfterCleanup += 1; discoveredModels = models; },
+        setLoading: (value) => { if (cleanedUp) writesAfterCleanup += 1; loading = value; },
+        onSuccess: () => { if (cleanedUp) writesAfterCleanup += 1; },
+        onError: (error) => { if (cleanedUp) writesAfterCleanup += 1; errors.push(String(error)); },
     });
+    cleanedUp = true;
     coordinator.reset();
     discoveredModels = [];
     loading = false;
@@ -570,6 +576,7 @@ test("异步发现集成只让当前请求写入局部候选和状态", async ()
     assert.deepEqual(modelDiscoveryCandidates(configuredModels, discoveredModels), ["configured-model"]);
     assert.equal(loading, false);
     assert.deepEqual(errors, []);
+    assert.equal(writesAfterCleanup, 0);
 
     currentDraft = original;
     coordinator.sync(original);
@@ -599,6 +606,29 @@ test("异步发现集成只让当前请求写入局部候选和状态", async ()
     assert.equal(loading, false);
 });
 
+test("基础候选只跟随权威保存响应，取消和保存失败不泄漏草稿，删除后可收缩", async () => {
+    let configuredModels: string[] = [];
+    const saved = settingsWithChannels([channel({ models: ["saved-model"] })]);
+    await syncConfiguredModelsFromAuthoritativeSettings(async () => saved, (models) => { configuredModels = models; });
+    assert.deepEqual(configuredModels, ["saved-model"]);
+
+    const cancelledDraft = channel({ models: ["cancelled-draft-model"] });
+    assert.deepEqual(modelDiscoveryCandidates(configuredModels, cancelledDraft.models), ["saved-model", "cancelled-draft-model"]);
+    assert.deepEqual(configuredModels, ["saved-model"]);
+
+    await assert.rejects(
+        syncConfiguredModelsFromAuthoritativeSettings(async () => { throw new Error("save failed"); }, (models) => { configuredModels = models; }),
+        /save failed/,
+    );
+    assert.deepEqual(configuredModels, ["saved-model"]);
+
+    const afterDelete = settingsWithChannels([]);
+    afterDelete.public.modelChannel.modelCosts = [{ model: "saved-model", credits: 10 }];
+    await syncConfiguredModelsFromAuthoritativeSettings(async () => afterDelete, (models) => { configuredModels = models; });
+    assert.deepEqual(configuredModels, []);
+    assert.deepEqual(configuredModelsFromSettings(afterDelete), []);
+});
+
 function deferred<T>() {
     let resolve!: (value: T) => void;
     let reject!: (reason?: unknown) => void;
@@ -607,4 +637,30 @@ function deferred<T>() {
         reject = rejectPromise;
     });
     return { promise, resolve, reject };
+}
+
+function settingsWithChannels(channels: AdminModelChannel[]): AdminSettings {
+    return {
+        public: {
+            modelChannel: {
+                availableModels: [],
+                modelCosts: [],
+                modelTextEndpoints: [],
+                defaultModel: "",
+                defaultImageModel: "",
+                defaultVideoModel: "",
+                defaultTextModel: "",
+                systemPrompt: "",
+                allowCustomChannel: false,
+            },
+            auth: { allowRegister: true },
+            volcengineAsset: { enabled: false },
+        },
+        private: {
+            channels,
+            promptSync: { enabled: false, cron: "*/5 * * * *" },
+            auth: {},
+            volcengineAsset: { enabled: false, accessKey: "", secretKey: "", accessKeyConfigured: false, secretKeyConfigured: false, projectName: "default", region: "cn-beijing", assetGroupId: "", publicAssetBaseUrl: "" },
+        },
+    };
 }

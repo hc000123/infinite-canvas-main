@@ -1,5 +1,5 @@
 import type { AiModelKind } from "../../../../lib/ai-model-kind.ts";
-import type { AdminModelChannel, AdminModelTextEndpoint, AdminPublicModelChannelSettings } from "../../../../services/api/admin.ts";
+import type { AdminModelChannel, AdminModelTextEndpoint, AdminPublicModelChannelSettings, AdminSettings } from "../../../../services/api/admin.ts";
 import { isRoutableModelChannel, modelChannelHasCapability, sanitizeModelChannelPublication } from "./model-channel-publication.ts";
 
 export type WizardPublicSelection = {
@@ -265,6 +265,22 @@ export function createModelDiscoveryCoordinator() {
 
 export function modelDiscoveryCandidates(configuredModels: string[], discoveredModels: string[]) {
     return normalizeWizardModels([...configuredModels, ...discoveredModels]);
+}
+
+export function configuredModelsFromSettings(settings: AdminSettings) {
+    return normalizeWizardModels([
+        ...(settings.public.modelChannel.availableModels || []),
+        ...settings.private.channels.flatMap((channel) => channel.models || []),
+    ]);
+}
+
+export async function syncConfiguredModelsFromAuthoritativeSettings(
+    loadSettings: () => Promise<AdminSettings>,
+    setConfiguredModels: (models: string[]) => void,
+) {
+    const settings = await loadSettings();
+    setConfiguredModels(configuredModelsFromSettings(settings));
+    return settings;
 }
 
 export async function runModelDiscoveryRequest(

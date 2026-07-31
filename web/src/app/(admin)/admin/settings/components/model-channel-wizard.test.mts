@@ -50,6 +50,10 @@ test("closing the wizard immediately resets the visible step", () => {
     assert.match(closeBranch, /setInitializedKey\(""\)/);
 });
 
+test("wizard unmount cleanup invalidates active discovery", () => {
+    assert.match(source, /useEffect\(\(\) => \(\) => discoveryCoordinatorRef\.current\.reset\(\), \[\]\)/);
+});
+
 test("default cleanup waits for a render initialized from the current snapshot", () => {
     assert.match(source, /const \[initializedKey, setInitializedKey\] = useState\(""\)/);
     assert.match(source, /initializedKey !== initializationKey/);
@@ -131,6 +135,8 @@ test("wizard discovery keeps the existing channel index and normalized draft", (
     assert.doesNotMatch(callback, /rememberModels|setKnownModels/);
     assert.match(source, /modelDiscoveryCandidates\(configuredModels, discoveredModels\)/);
     assert.doesNotMatch(pageSource, /\brememberKnownModels\b/);
+    assert.doesNotMatch(pageSource, /rememberConfiguredChannelModels/);
+    assert.match(pageSource, /syncConfiguredModelsFromAuthoritativeSettings/);
 });
 
 test("page delegates verification orchestration and copy to executable helpers", () => {

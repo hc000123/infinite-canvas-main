@@ -11,7 +11,7 @@ import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind"
 import { ModelChannelWizard } from "./components/model-channel-wizard";
 import { ProviderPresetModal } from "./components/provider-preset-modal";
 import { sanitizeModelChannelPublication } from "./model-channel-publication";
-import { channelVerificationCopy, createChannelVerificationCoordinator, filterWizardPublicationSnapshot, runChannelVerification } from "./model-channel-wizard-model";
+import { channelVerificationCopy, createChannelVerificationCoordinator, filterWizardPublicationSnapshot, runChannelVerification, syncConfiguredModelsFromAuthoritativeSettings } from "./model-channel-wizard-model";
 import type { ModelChannelPresetResult } from "./model-channel-presets";
 import {
     fetchAdminSettings,
@@ -138,11 +138,13 @@ export default function AdminSettingsPage() {
         if (!token) return;
         setIsLoading(true);
         try {
-            const data = normalizeSettings(await fetchAdminSettings(token));
+            const data = await syncConfiguredModelsFromAuthoritativeSettings(
+                async () => normalizeSettings(await fetchAdminSettings(token)),
+                setConfiguredModels,
+            );
             form.setFieldsValue(data);
             setChannels(data.private.channels);
             setModelCosts(data.public.modelChannel.modelCosts);
-            setConfiguredModels(collectKnownModels(data));
             setJsonText({
                 public: JSON.stringify(data.public, null, 2),
                 private: JSON.stringify(data.private, null, 2),
@@ -180,12 +182,13 @@ export default function AdminSettingsPage() {
         }
         setIsSaving(true);
         try {
-            const saved = normalizeSettings(await saveAdminSettings(token, values));
-            const merged = mergePrivateSecrets(values, saved);
+            const merged = await syncConfiguredModelsFromAuthoritativeSettings(async () => {
+                const saved = normalizeSettings(await saveAdminSettings(token, values));
+                return mergePrivateSecrets(values, saved);
+            }, setConfiguredModels);
             form.setFieldsValue(merged);
             setChannels(merged.private.channels);
             setModelCosts(merged.public.modelChannel.modelCosts);
-            rememberConfiguredModels(merged);
             setJsonText({
                 public: JSON.stringify(merged.public, null, 2),
                 private: JSON.stringify(merged.private, null, 2),
@@ -202,12 +205,13 @@ export default function AdminSettingsPage() {
         if (!token) return;
         setIsApplyingProviderPreset(true);
         try {
-            const saved = normalizeSettings(await saveAdminSettings(token, result.settings));
-            const merged = mergePrivateSecrets(result.settings, saved);
+            const merged = await syncConfiguredModelsFromAuthoritativeSettings(async () => {
+                const saved = normalizeSettings(await saveAdminSettings(token, result.settings));
+                return mergePrivateSecrets(result.settings, saved);
+            }, setConfiguredModels);
             form.setFieldsValue(merged);
             setChannels(merged.private.channels);
             setModelCosts(merged.public.modelChannel.modelCosts);
-            rememberConfiguredModels(merged);
             setJsonText({ public: JSON.stringify(merged.public, null, 2), private: JSON.stringify(merged.private, null, 2) });
             setIsProviderPresetOpen(false);
             message.success("厂商预设已一次配置完成");
@@ -235,7 +239,6 @@ export default function AdminSettingsPage() {
         form.setFieldsValue({ [tab]: parsed } as Partial<AdminSettings>);
         if (tab === "private") setChannels((parsed as AdminSettings["private"]).channels);
         if (tab === "public") setModelCosts((parsed as AdminSettings["public"]).modelChannel.modelCosts);
-        rememberConfiguredModels({ ...normalizeSettings(form.getFieldsValue(true) as AdminSettings), [tab]: parsed });
         setEditorMode((current) => ({ ...current, [tab]: nextMode }));
     };
 
@@ -257,7 +260,6 @@ export default function AdminSettingsPage() {
         setEditingChannelIndex(index);
         setWizardInitialChannel(channel);
         setIsChannelWizardOpen(true);
-        rememberConfiguredChannelModels(channel.models);
     };
 
     const openEnterpriseVideoChannel = () => {
@@ -286,7 +288,6 @@ export default function AdminSettingsPage() {
 
     const finishChannelWizard = async (channel: AdminModelChannel, publicModelChannel: AdminSettings["public"]["modelChannel"]) => {
         const normalizedChannel = normalizeChannel(channel);
-        rememberConfiguredChannelModels(normalizedChannel.models);
         const nextChannels = [...channels];
         if (editingChannelIndex === null) nextChannels.push(normalizedChannel);
         else nextChannels[editingChannelIndex] = normalizedChannel;
@@ -303,14 +304,6 @@ export default function AdminSettingsPage() {
         if (!token) return [];
         return cleanChannelModels(await fetchChannelModels(token, { index: editingChannelIndex ?? undefined, channel: normalizeChannel(channel) }));
     };
-
-    function rememberConfiguredChannelModels(models: string[]) {
-        setConfiguredModels((current) => cleanChannelModels([...current, ...models]));
-    }
-
-    function rememberConfiguredModels(settings: AdminSettings) {
-        rememberConfiguredChannelModels(collectKnownModels(settings));
-    }
 
     const openTestDialog = (index: number) => {
         verificationCoordinatorRef.current.reset();
@@ -400,11 +393,12 @@ export default function AdminSettingsPage() {
             public: { ...values.public, modelChannel: nextPublicSnapshot },
             private: { ...values.private, channels: nextChannels },
         });
-        const saved = normalizeSettings(await saveAdminSettings(token, nextSettings));
-        const merged = mergePrivateSecrets(nextSettings, saved);
+        const merged = await syncConfiguredModelsFromAuthoritativeSettings(async () => {
+            const saved = normalizeSettings(await saveAdminSettings(token, nextSettings));
+            return mergePrivateSecrets(nextSettings, saved);
+        }, setConfiguredModels);
         setChannels(merged.private.channels);
         setModelCosts(merged.public.modelChannel.modelCosts);
-        rememberConfiguredModels(merged);
         form.setFieldsValue(merged);
         setJsonText({
             public: JSON.stringify(merged.public, null, 2),
@@ -1143,10 +1137,6 @@ function modelCapabilitiesByChannel(channels: AdminModelChannel[]) {
         });
     });
     return capabilitiesByModel;
-}
-
-function collectKnownModels(settings: AdminSettings) {
-    return cleanChannelModels([...(settings.public.modelChannel.availableModels || []), ...(settings.public.modelChannel.modelCosts || []).map((item) => item.model), ...settings.private.channels.flatMap((channel) => channel.models || [])]);
 }
 
 function uniqueModels(models: string[]) {
