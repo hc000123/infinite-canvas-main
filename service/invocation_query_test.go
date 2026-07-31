@@ -63,7 +63,7 @@ func TestInvocationDetailAuthoritativeRefsFollowLatestRevision(t *testing.T) {
 	}
 	if _, err := SaveSettings(model.Settings{
 		Public:  model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{AvailableModels: []string{"text-test"}, DefaultTextModel: "text-test"}},
-		Private: model.PrivateSetting{Channels: []model.ModelChannel{{ID: "detail-replacement", Protocol: string(model.ModelProtocolOpenAI), Name: "replacement", BaseURL: "https://example.invalid/v1", Models: []string{"text-test"}, Capabilities: []string{"text"}, Enabled: true}}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{{ID: "detail-replacement", Protocol: string(model.ModelProtocolOpenAI), Name: "replacement", BaseURL: "https://example.invalid/v1", APIKey: "test-detail-replacement-key", Models: []string{"text-test"}, Capabilities: []string{"text"}, Enabled: true}}},
 	}); err != nil {
 		t.Fatal(err)
 	}
