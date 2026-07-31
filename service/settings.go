@@ -676,48 +676,23 @@ func hidePrivateAPIKeys(settings model.Settings) model.Settings {
 
 func keepPrivateAPIKeys(settings *model.Settings, saved model.Settings) error {
 	for i := range settings.Private.Channels {
+		if IsJimengCLIProtocol(settings.Private.Channels[i].Protocol) {
+			settings.Private.Channels[i].APIKey = ""
+			continue
+		}
 		if apiKey := strings.TrimSpace(settings.Private.Channels[i].APIKey); apiKey != "" && !isMaskedAPIKey(apiKey) {
 			continue
 		}
 		settings.Private.Channels[i].APIKey = ""
-		if IsJimengCLIProtocol(settings.Private.Channels[i].Protocol) {
-			continue
-		}
 		channel, ok, ambiguous := findSavedChannelForSecretRestore(settings.Private.Channels[i], saved.Private.Channels)
 		if ambiguous {
 			return safeMessageError{message: "无法确定模型渠道密钥，请为渠道保留唯一 ID 或输入新 API Key"}
 		}
 		if ok {
 			settings.Private.Channels[i].APIKey = channel.APIKey
-			continue
-		}
-		if strings.TrimSpace(settings.Private.Channels[i].ID) != "" {
-			settings.Private.Channels[i].APIKey = providerAPIKey(settings.Private.Channels[i], saved.Private.Channels)
 		}
 	}
 	return nil
-}
-
-func providerAPIKey(channel model.ModelChannel, saved []model.ModelChannel) string {
-	baseURL := strings.TrimRight(strings.TrimSpace(channel.BaseURL), "/")
-	if baseURL == "" {
-		return ""
-	}
-	apiKey := ""
-	for _, item := range saved {
-		if normalizeModelProtocol(item.Protocol) != normalizeModelProtocol(channel.Protocol) || strings.TrimRight(strings.TrimSpace(item.BaseURL), "/") != baseURL {
-			continue
-		}
-		candidate := strings.TrimSpace(item.APIKey)
-		if candidate == "" {
-			continue
-		}
-		if apiKey != "" && apiKey != candidate {
-			return ""
-		}
-		apiKey = candidate
-	}
-	return apiKey
 }
 
 func isMaskedAPIKey(value string) bool {

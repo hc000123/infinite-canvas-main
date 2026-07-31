@@ -737,6 +737,51 @@ test("新读取取代旧读取，且最新失败后旧响应仍然作废", async
     assert.deepEqual(configuredModels, ["new-load"]);
 });
 
+test("权威设置协调器只由最新读取、保存或预设请求收口 pending 状态", async () => {
+    const coordinator = createAuthoritativeSettingsCoordinator();
+    const oldLoad = deferred<AdminSettings>();
+    const oldSave = deferred<AdminSettings>();
+    const newestPreset = deferred<AdminSettings>();
+    const loadPending: boolean[] = [];
+    const savePending: boolean[] = [];
+    const presetPending: boolean[] = [];
+    const apply = () => {};
+
+    const runLoad = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => oldLoad.promise, apply, (value) => loadPending.push(value));
+    assert.deepEqual(loadPending, [true]);
+    const runSave = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => oldSave.promise, apply, (value) => savePending.push(value));
+    assert.deepEqual(loadPending, [true, false]);
+    assert.deepEqual(savePending, [true]);
+    const runPreset = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => newestPreset.promise, apply, (value) => presetPending.push(value));
+    assert.deepEqual(savePending, [true, false]);
+    assert.deepEqual(presetPending, [true]);
+
+    oldLoad.resolve(settingsWithChannels([]));
+    oldSave.resolve(settingsWithChannels([]));
+    assert.equal(await runLoad, false);
+    assert.equal(await runSave, false);
+    assert.deepEqual(loadPending, [true, false]);
+    assert.deepEqual(savePending, [true, false]);
+    newestPreset.resolve(settingsWithChannels([]));
+    assert.equal(await runPreset, true);
+    assert.deepEqual(presetPending, [true, false]);
+
+    const failed = deferred<AdminSettings>();
+    const failedPending: boolean[] = [];
+    const runFailed = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => failed.promise, apply, (value) => failedPending.push(value));
+    failed.reject(new Error("save failed"));
+    await assert.rejects(runFailed, /save failed/);
+    assert.deepEqual(failedPending, [true, false]);
+
+    const unmounted = deferred<AdminSettings>();
+    const unmountedPending: boolean[] = [];
+    const runUnmounted = syncConfiguredModelsFromAuthoritativeSettings(coordinator, () => unmounted.promise, apply, (value) => unmountedPending.push(value));
+    coordinator.reset();
+    unmounted.resolve(settingsWithChannels([]));
+    assert.equal(await runUnmounted, false);
+    assert.deepEqual(unmountedPending, [true]);
+});
+
 function deferred<T>() {
     let resolve!: (value: T) => void;
     let reject!: (reason?: unknown) => void;

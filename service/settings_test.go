@@ -82,6 +82,19 @@ func TestKeepPrivateAPIKeysLeavesJimengNoSecretChannelEmpty(t *testing.T) {
 	}
 }
 
+func TestKeepPrivateAPIKeysClearsRealJimengSecret(t *testing.T) {
+	input := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{{
+		ID: "jimeng", Name: "Jimeng", Protocol: modelProtocolJimengCLI, APIKey: "must-not-survive",
+	}}}}
+
+	if err := keepPrivateAPIKeys(&input, model.Settings{}); err != nil {
+		t.Fatalf("keepPrivateAPIKeys returned error: %v", err)
+	}
+	if input.Private.Channels[0].APIKey != "" {
+		t.Fatalf("Jimeng api key = %q, want empty", input.Private.Channels[0].APIKey)
+	}
+}
+
 func TestSaveSettingsRejectsAmbiguousLegacyChannelSecret(t *testing.T) {
 	setupAITaskTestDB(t)
 	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
@@ -299,7 +312,7 @@ func TestSaveSettingsConstrainsDedicatedVideoProtocolCapabilities(t *testing.T) 
 	}
 }
 
-func TestKeepPrivateAPIKeysSharesOneUnambiguousProviderCredential(t *testing.T) {
+func TestKeepPrivateAPIKeysRequiresExactMatchForNonEmptyChannelID(t *testing.T) {
 	input := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
 		{ID: "comfly", Name: "中转 comfly", Protocol: "openai", BaseURL: "https://ai.comfly.org", APIKey: maskedAPIKey},
 		{ID: "comfly-text", Name: "Comfly 文本", Protocol: "openai", BaseURL: "https://ai.comfly.org", APIKey: maskedAPIKey},
@@ -309,11 +322,16 @@ func TestKeepPrivateAPIKeysSharesOneUnambiguousProviderCredential(t *testing.T) 
 		{ID: "comfly", Name: "中转 comfly", Protocol: "openai", BaseURL: "https://ai.comfly.org", APIKey: "provider-key"},
 	}}}
 
-	keepPrivateAPIKeys(&input, saved)
+	if err := keepPrivateAPIKeys(&input, saved); err != nil {
+		t.Fatalf("keepPrivateAPIKeys returned error: %v", err)
+	}
 
-	for _, channel := range input.Private.Channels {
-		if channel.APIKey != "provider-key" {
-			t.Fatalf("channel %s api key = %q, want shared provider key", channel.ID, channel.APIKey)
+	if input.Private.Channels[0].APIKey != "provider-key" {
+		t.Fatalf("exact channel api key = %q, want provider-key", input.Private.Channels[0].APIKey)
+	}
+	for _, channel := range input.Private.Channels[1:] {
+		if channel.APIKey != "" {
+			t.Fatalf("unmatched channel %s api key = %q, want empty", channel.ID, channel.APIKey)
 		}
 	}
 }

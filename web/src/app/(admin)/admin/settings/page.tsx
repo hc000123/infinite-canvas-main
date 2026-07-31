@@ -137,7 +137,6 @@ export default function AdminSettingsPage() {
 
     const loadSettings = useCallback(async () => {
         if (!token) return;
-        setIsLoading(true);
         try {
             await syncConfiguredModelsFromAuthoritativeSettings(
                 authoritativeSettingsCoordinatorRef.current,
@@ -152,11 +151,10 @@ export default function AdminSettingsPage() {
                         private: JSON.stringify(data.private, null, 2),
                     });
                 },
+                setIsLoading,
             );
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取设置失败");
-        } finally {
-            setIsLoading(false);
         }
     }, [form, message, token]);
 
@@ -185,7 +183,6 @@ export default function AdminSettingsPage() {
         if (!values) {
             return;
         }
-        setIsSaving(true);
         try {
             await syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
                 const saved = normalizeSettings(await saveAdminSettings(token, values));
@@ -200,17 +197,14 @@ export default function AdminSettingsPage() {
                     private: JSON.stringify(merged.private, null, 2),
                 });
                 message.success("已保存");
-            });
+            }, setIsSaving);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "保存失败");
-        } finally {
-            setIsSaving(false);
         }
     };
 
     const applyProviderPreset = async (result: ModelChannelPresetResult) => {
         if (!token) return;
-        setIsApplyingProviderPreset(true);
         try {
             await syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
                 const saved = normalizeSettings(await saveAdminSettings(token, result.settings));
@@ -223,11 +217,9 @@ export default function AdminSettingsPage() {
                 setJsonText({ public: JSON.stringify(merged.public, null, 2), private: JSON.stringify(merged.private, null, 2) });
                 setIsProviderPresetOpen(false);
                 message.success("厂商预设已一次配置完成");
-            });
+            }, setIsApplyingProviderPreset);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "厂商预设保存失败");
-        } finally {
-            setIsApplyingProviderPreset(false);
         }
     };
 
