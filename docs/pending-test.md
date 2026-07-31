@@ -17,7 +17,14 @@
 - 普通用户 `/api/settings` 的 `modelProtocols`、`modelCapabilities` 和 `modelSources` 统一只由已启用且可路由渠道生成；停用或缺少 Base URL / API Key 的渠道不再污染同名模型元数据，同名的可用 sibling 渠道仍保留协议、能力和来源；即梦 CLI 继续按无 Base URL / API Key 的现有方式处理。
 - 停用或缺少密钥的 OpenAI 渠道不再阻止同名 Ark 模型归一为可见名称；禁用 Ark 端点参与历史公开模型解析的既有行为保持不变。
 - 人工重点回归：编辑既有 Ark 时不得丢失 `id` / key / weight / EP；即梦由管理员不登录、普通用户在个人配置完成网页登录，厂商预设不得再引导管理员到渠道编辑中授权；星链与 OpenAI 专用运行时行为不变；手动未知模型分别验证公开 / 不公开；同协议同名多渠道的权重与 fallback；在第 4 步停止后关闭重开、切换渠道或默认值时不得被清空；模型发现中修改协议、地址或密钥应立即清理旧候选和 loading，关闭重开或再次发现后旧结果不得污染；快速双击不得重复提交；删除渠道后必须清理非法默认值。
-- 当前实现仍在 `codex/model-channel-ui-adaptation` 隔离分支，尚未合入 main；需等待主线提交 settings/page endpointType 改动后手工同步，再做页面验收。
+- 当前实现已在 `codex/model-channel-api-acceptance` 专用验收分支同步主线 endpointType 改造，仍未合入 main，供实际页面与原有渠道数据验收。
+
+### 文本与图片模型渠道测试
+
+- 后台渠道的“模型测试”会携带该模型当前配置的文本接口类型：Responses 模型请求 `/responses`，普通模型继续请求 `/chat/completions`。
+- Responses 测试请求使用 `input` 参数，并能读取 `output_text` 或 `output[].content[].text` 返回内容。
+- GPT Image 等图片模型优先按模型类型识别，即使所在渠道同时标记了 `image` 和 `text`，也会使用 `/images/generations` 发起生图测试；Gemini 图片模型继续使用已有 Chat Completions 适配。
+- 人工验收：分别测试一个 Responses 文本模型和 `gpt-image-2-2k`；确认前者请求 `/responses`，后者请求 `/images/generations`，且都不再出现 “This model is not supported on the Chat Completions endpoint”。图片测试会实际生成 1 张测试图，可能产生服务商费用。
 
 ### 后台素材项目文件管理器
 

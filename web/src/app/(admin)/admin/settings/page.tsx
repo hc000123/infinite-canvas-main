@@ -353,7 +353,7 @@ export default function AdminSettingsPage() {
                     await fetchChannelModels(token, { index: testChannelIndex, channel });
                     return "连接与鉴权可用；未创建视频任务";
                 },
-                testModel: (model) => testChannelModel(token, { index: testChannelIndex, channel, model }),
+                testModel: (model) => testChannelModel(token, { index: testChannelIndex, channel, model, endpointType: modelTextEndpointType(modelTextEndpoints, model) }),
             });
             if (!verificationCoordinatorRef.current.isCurrent(request, testChannelIndex, channel.id)) return;
             setTestResults((current) => {
