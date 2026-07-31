@@ -352,17 +352,17 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 	}
 	for _, channel := range channels {
 		channel = normalizeModelChannel(channel)
-		if !modelChannelContributesPublicMetadata(channel) {
-			continue
-		}
+		contributesMetadata := modelChannelContributesPublicMetadata(channel)
 		if !IsVolcengineArkProtocol(channel.Protocol) {
 			for _, modelName := range channel.Models {
 				modelName = strings.TrimSpace(modelName)
 				if normalizeModelProtocol(channel.Protocol) == modelProtocolOpenAI {
 					openAIModels[modelName] = true
 				}
-				setModelProtocol(modelName, channel.Protocol, false)
-				setModelCapabilities(modelName, channel.Capabilities)
+				if contributesMetadata {
+					setModelProtocol(modelName, channel.Protocol, false)
+					setModelCapabilities(modelName, channel.Capabilities)
+				}
 			}
 			continue
 		}
@@ -373,6 +373,9 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 			}
 			normalizedModels := uniqueModelNames(models)
 			endpointModels[endpointID] = uniqueModelNames(append(endpointModels[endpointID], normalizedModels...))
+			if !contributesMetadata {
+				return
+			}
 			for _, modelName := range normalizedModels {
 				setModelProtocol(modelName, modelProtocolVolcengineArk, true)
 				setModelCapabilities(modelName, channel.Capabilities)
@@ -442,7 +445,11 @@ func normalizePublicModelProtocols(modelProtocols map[string]string, public mode
 	models = uniqueModelNames(append(models, public.DefaultImageModel, public.DefaultVideoModel, public.DefaultTextModel))
 	result := make([]model.ModelProtocolType, 0, len(models))
 	for _, modelName := range models {
-		protocol := normalizeModelProtocol(modelProtocols[modelName])
+		rawProtocol, ok := modelProtocols[modelName]
+		if !ok {
+			continue
+		}
+		protocol := normalizeModelProtocol(rawProtocol)
 		if protocol == "" {
 			continue
 		}

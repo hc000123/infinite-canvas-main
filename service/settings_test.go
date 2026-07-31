@@ -215,6 +215,53 @@ func TestPublicSettingsReplacesArkEndpointWithModelName(t *testing.T) {
 	}
 }
 
+func TestPublicSettingsKeepsDisabledArkEndpointNormalizationWithoutMetadata(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{
+		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{
+			AvailableModels:   []string{"ep-disabled-video"},
+			DefaultVideoModel: "ep-disabled-video",
+			ModelCosts:        []model.ModelCost{{Model: "ep-disabled-video", Credits: 300}},
+			ModelTextEndpoints: []model.ModelTextEndpointType{{
+				Model:        "ep-disabled-video",
+				EndpointType: textEndpointResponses,
+			}},
+		}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{{
+			Protocol:   string(model.ModelProtocolVolcengineArk),
+			Name:       "disabled-ark",
+			BaseURL:    "https://ark.example.com/api/v3",
+			APIKey:     "ark-test",
+			EndpointID: "ep-disabled-video",
+			Models:     []string{"doubao-seedance-2-0"},
+			Enabled:    false,
+		}}},
+	}, now())
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+
+	settings, err := PublicSettings()
+	if err != nil {
+		t.Fatalf("PublicSettings returned error: %v", err)
+	}
+	if len(settings.ModelChannel.AvailableModels) != 1 || settings.ModelChannel.AvailableModels[0] != "doubao-seedance-2-0" {
+		t.Fatalf("available models = %#v, want disabled ark endpoint normalized", settings.ModelChannel.AvailableModels)
+	}
+	if settings.ModelChannel.DefaultVideoModel != "doubao-seedance-2-0" {
+		t.Fatalf("default video model = %q, want disabled ark endpoint normalized", settings.ModelChannel.DefaultVideoModel)
+	}
+	if len(settings.ModelChannel.ModelCosts) != 1 || settings.ModelChannel.ModelCosts[0] != (model.ModelCost{Model: "doubao-seedance-2-0", Credits: 300}) {
+		t.Fatalf("model costs = %#v, want disabled ark endpoint normalized", settings.ModelChannel.ModelCosts)
+	}
+	if len(settings.ModelChannel.ModelTextEndpoints) != 1 || settings.ModelChannel.ModelTextEndpoints[0] != (model.ModelTextEndpointType{Model: "doubao-seedance-2-0", EndpointType: textEndpointResponses}) {
+		t.Fatalf("model text endpoints = %#v, want disabled ark endpoint normalized", settings.ModelChannel.ModelTextEndpoints)
+	}
+	if len(settings.ModelChannel.ModelProtocols) != 0 || len(settings.ModelChannel.ModelCapabilities) != 0 || len(settings.ModelChannel.ModelSources) != 0 {
+		t.Fatalf("disabled ark metadata = protocols %#v, capabilities %#v, sources %#v; want empty", settings.ModelChannel.ModelProtocols, settings.ModelChannel.ModelCapabilities, settings.ModelChannel.ModelSources)
+	}
+}
+
 func TestPublicSettingsKeepsOpenAICompatibleSeedanceModelName(t *testing.T) {
 	setupAITaskTestDB(t)
 	_, err := repository.SaveSettings(model.Settings{
