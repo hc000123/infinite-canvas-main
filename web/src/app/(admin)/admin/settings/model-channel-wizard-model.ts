@@ -46,36 +46,38 @@ export function normalizeWizardModels(values: readonly string[] = []) {
 }
 
 export function buildWizardChannel(existing: AdminModelChannel | undefined, draft: WizardChannelDraft): AdminModelChannel {
-    const merged = { ...emptyChannel, ...existing, ...draft };
-    const protocol = merged.protocol;
+    const protocol = draft.protocol ?? existing?.protocol ?? emptyChannel.protocol;
     const requestedModels = normalizeWizardModels([...(draft.models ?? existing?.models ?? []), ...(draft.discoveredModels || []), ...(draft.manualModels || [])]);
     const endpointMappings = protocol === "volcengine-ark" ? buildArkMappings(draft.endpointMappings ?? existing?.endpointMappings ?? []) : [];
     const apiKey = protocol === "jimeng-cli" ? "" : keepSecret(existing?.apiKey, draft.apiKey);
 
     const result: AdminModelChannel = {
-        ...merged,
-        id: (draft.id || existing?.id || "").trim(),
+        id: draft.id?.trim() || existing?.id?.trim() || emptyChannel.id,
         protocol,
-        name: (merged.name || "").trim(),
-        baseUrl: protocol === "jimeng-cli" ? "" : (merged.baseUrl || "").trim(),
+        name: (draft.name ?? existing?.name ?? emptyChannel.name).trim(),
+        baseUrl: protocol === "jimeng-cli" ? "" : (draft.baseUrl ?? existing?.baseUrl ?? emptyChannel.baseUrl).trim(),
         apiKey,
-        cliPath: (merged.cliPath || "").trim(),
-        workDir: (merged.workDir || "").trim(),
-        outputDir: (merged.outputDir || "").trim(),
+        cliPath: (draft.cliPath ?? existing?.cliPath ?? emptyChannel.cliPath).trim(),
+        workDir: (draft.workDir ?? existing?.workDir ?? emptyChannel.workDir).trim(),
+        outputDir: (draft.outputDir ?? existing?.outputDir ?? emptyChannel.outputDir).trim(),
+        timeoutSeconds: Math.max(0, Number(draft.timeoutSeconds ?? existing?.timeoutSeconds ?? emptyChannel.timeoutSeconds) || 0),
+        sessionId: Math.max(0, Number(draft.sessionId ?? existing?.sessionId ?? emptyChannel.sessionId) || 0),
+        concurrencyLimit: Math.max(1, Number(draft.concurrencyLimit ?? existing?.concurrencyLimit ?? emptyChannel.concurrencyLimit) || 1),
         endpointId: protocol === "volcengine-ark" ? endpointMappings[0]?.endpointId || "" : "",
         endpointMappings,
         models: protocol === "volcengine-ark" ? endpointMappings.map((item) => item.model) : requestedModels,
-        capabilities: normalizeWizardModels(merged.capabilities || []),
-        environment: merged.environment === "prod" || merged.environment === "test" ? merged.environment : "dev",
-        timeoutSeconds: Math.max(0, Number(merged.timeoutSeconds) || 0),
-        sessionId: Math.max(0, Number(merged.sessionId) || 0),
-        concurrencyLimit: Math.max(1, Number(merged.concurrencyLimit) || 1),
-        weight: Math.max(1, Number(merged.weight) || 1),
-        enabled: merged.enabled !== false,
-        remark: merged.remark || "",
+        capabilities: normalizeWizardModels(draft.capabilities ?? existing?.capabilities ?? emptyChannel.capabilities),
+        environment: normalizeEnvironment(draft.environment ?? existing?.environment),
+        weight: Math.max(1, Number(draft.weight ?? existing?.weight ?? emptyChannel.weight) || 1),
+        enabled: draft.enabled ?? existing?.enabled ?? emptyChannel.enabled,
+        remark: draft.remark ?? existing?.remark ?? emptyChannel.remark,
     };
     if (!result.models.length) throw new Error("请配置至少一个模型");
     return result;
+}
+
+function normalizeEnvironment(value: AdminModelChannel["environment"] | undefined) {
+    return value === "test" || value === "prod" ? value : "dev";
 }
 
 export function applyWizardPublication(

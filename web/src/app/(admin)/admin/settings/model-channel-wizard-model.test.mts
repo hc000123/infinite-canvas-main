@@ -51,7 +51,7 @@ test("发现模型和手动模型会修剪、忽略空项并稳定去重", () =>
 
 test("编辑渠道保留 id、掩码密钥、权重和备注，手动模型保持原名称", () => {
     const result = buildWizardChannel(channel({ id: "saved-id", apiKey: "saved-secret", weight: 5, remark: "existing" }), {
-        id: "",
+        id: "   ",
         apiKey: "********",
         models: [" Manual.Model ", "Manual.Model"],
         weight: 7,
@@ -63,6 +63,36 @@ test("编辑渠道保留 id、掩码密钥、权重和备注，手动模型保�
     assert.equal(result.weight, 7);
     assert.equal(result.remark, "draft remark");
     assert.deepEqual(result.models, ["Manual.Model"]);
+});
+
+test("显式 undefined 协议回退到现有协议或 openai", () => {
+    const existingResult = buildWizardChannel(channel({ protocol: "xinglian-cloud", models: ["video-model"] }), { protocol: undefined, models: ["video-model"] });
+    const newResult = buildWizardChannel(undefined, { protocol: undefined, models: ["text-model"] });
+
+    assert.equal(existingResult.protocol, "xinglian-cloud");
+    assert.equal(newResult.protocol, "openai");
+});
+
+test("渠道结果仅包含 AdminModelChannel 契约字段", () => {
+    const draft = {
+        models: ["text-model"],
+        discoveredModels: ["discovered-model"],
+        manualModels: ["manual-model"],
+        publishedModels: ["text-model"],
+        defaultTextModel: "text-model",
+        defaultImageModel: "",
+        defaultVideoModel: "",
+        modelTextEndpoints: [{ model: "text-model", endpointType: "responses" }],
+    } as unknown as Parameters<typeof buildWizardChannel>[1];
+
+    assert.deepEqual(Object.keys(buildWizardChannel(undefined, draft)).sort(), Object.keys(channel()).sort());
+});
+
+test("Jimeng 渠道强制清空 baseUrl 和 apiKey", () => {
+    const result = buildWizardChannel(undefined, channel({ protocol: "jimeng-cli", baseUrl: "https://should-clear.example.com", apiKey: "should-clear", models: ["jimeng-video"] }));
+
+    assert.equal(result.baseUrl, "");
+    assert.equal(result.apiKey, "");
 });
 
 test("Ark 手动模型缺少 Endpoint / EP 时失败，完整映射生成模型和首个 endpointId", () => {
