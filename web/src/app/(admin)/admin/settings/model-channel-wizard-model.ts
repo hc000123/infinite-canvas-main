@@ -77,6 +77,22 @@ export function buildWizardChannel(existing: AdminModelChannel | undefined, draf
     return result;
 }
 
+export function buildWizardProspectiveChannel(
+    base: AdminModelChannel,
+    draft: Pick<WizardChannelDraft, "protocol" | "baseUrl" | "apiKey" | "models" | "capabilities" | "enabled">,
+): AdminModelChannel {
+    const protocol = draft.protocol ?? base.protocol;
+    return {
+        ...base,
+        protocol,
+        baseUrl: protocol === "jimeng-cli" ? "" : (draft.baseUrl ?? base.baseUrl).trim(),
+        apiKey: protocol === "jimeng-cli" ? "" : keepSecret(base.apiKey, draft.apiKey),
+        models: normalizeWizardModels(draft.models ?? base.models),
+        capabilities: normalizeWizardModels(draft.capabilities ?? base.capabilities),
+        enabled: draft.enabled ?? base.enabled,
+    };
+}
+
 function normalizeEnvironment(value: AdminModelChannel["environment"] | undefined) {
     return value === "test" || value === "prod" ? value : "dev";
 }

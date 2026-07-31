@@ -4,6 +4,7 @@ import test from "node:test";
 import {
     applyWizardPublication,
     buildWizardChannel,
+    buildWizardProspectiveChannel,
     channelVerificationCopy,
     channelVerificationMode,
     createChannelVerificationCoordinator,
@@ -187,6 +188,29 @@ test("本次明确公开的文本模型未指定端点时重置为 chat_completi
     );
 
     assert.deepEqual(result.modelTextEndpoints, [{ model: "selected-text", endpointType: "chat_completions" }]);
+});
+
+test("新建非 Jimeng 渠道的实时预览使用当前连接草稿并保留公开模型与默认项", () => {
+    const prospective = buildWizardProspectiveChannel(channel({ id: "", baseUrl: "", apiKey: "", models: [] }), {
+        protocol: "openai",
+        baseUrl: "https://draft.example.com/v1",
+        apiKey: "draft-key",
+        models: ["draft-text"],
+        capabilities: ["text"],
+        enabled: true,
+    });
+
+    const result = applyWizardPublication(publication(), undefined, prospective, [], {
+        publishedModels: ["draft-text"],
+        defaultTextModel: "draft-text",
+        defaultImageModel: "",
+        defaultVideoModel: "",
+        modelTextEndpoints: [{ model: "draft-text", endpointType: "responses" }],
+    });
+
+    assert.deepEqual(result.availableModels, ["draft-text"]);
+    assert.equal(result.defaultTextModel, "draft-text");
+    assert.deepEqual(result.modelTextEndpoints, [{ model: "draft-text", endpointType: "responses" }]);
 });
 
 test("渠道检测模式根据协议和视频能力选择", () => {

@@ -63,6 +63,12 @@ test("default model options follow explicit publication and capability", () => {
     assert.match(source, /defaultVideoOptions/);
 });
 
+test("prospective publication uses the current connection draft", () => {
+    assert.match(source, /buildWizardProspectiveChannel/);
+    assert.match(source, /Form\.useWatch\("baseUrl"/);
+    assert.match(source, /Form\.useWatch\("apiKey"/);
+});
+
 test("protocol scoped drafts do not retain mutually exclusive connection fields", () => {
     assert.match(source, /apiConnectionDraftRef/);
     assert.match(source, /cliConnectionDraftRef/);

@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind";
 import type { AdminModelChannel, AdminModelTextEndpoint, AdminPublicModelChannelSettings } from "@/services/api/admin";
 
-import { applyWizardPublication, buildWizardChannel, normalizeWizardModels, type WizardChannelDraft, type WizardPublicSelection } from "../model-channel-wizard-model";
+import { applyWizardPublication, buildWizardChannel, buildWizardProspectiveChannel, normalizeWizardModels, type WizardChannelDraft, type WizardPublicSelection } from "../model-channel-wizard-model";
 
 type ModelChannelWizardProps = {
     open: boolean;
@@ -69,18 +69,21 @@ export function ModelChannelWizard({
     const cliConnectionDraftRef = useRef(emptyCliConnection());
     const initializationInputRef = useRef({ existingChannel, initialChannel, publicModelChannel });
     initializationInputRef.current = { existingChannel, initialChannel, publicModelChannel };
+    const baseChannel = existingChannel || initialChannel;
     const protocol = (Form.useWatch("protocol", form) || initialChannel.protocol) as AdminModelChannel["protocol"];
+    const baseUrl = Form.useWatch("baseUrl", form) ?? baseChannel.baseUrl;
+    const apiKey = Form.useWatch("apiKey", form) ?? "";
     const selectedModels = Form.useWatch("models", form) || [];
     const endpointMappings = Form.useWatch("endpointMappings", form) || [];
     const capabilities = Form.useWatch("capabilities", form) || [];
     const publishedModels = Form.useWatch("publishedModels", form) || [];
-    const enabled = Form.useWatch("enabled", form) ?? (existingChannel || initialChannel).enabled;
+    const enabled = Form.useWatch("enabled", form) ?? baseChannel.enabled;
     const candidateModels = useMemo(() => normalizeWizardModels([...knownModels, ...discoveredModels]), [discoveredModels, knownModels]);
     const channelModels = useMemo(
         () => (protocol === "volcengine-ark" ? normalizeWizardModels(endpointMappings.map((item) => item?.model || "")) : normalizeWizardModels(selectedModels)),
         [endpointMappings, protocol, selectedModels],
     );
-    const prospectiveChannel = useMemo(() => ({ ...(existingChannel || initialChannel), protocol, models: channelModels, capabilities, enabled }), [capabilities, channelModels, enabled, existingChannel, initialChannel, protocol]);
+    const prospectiveChannel = useMemo(() => buildWizardProspectiveChannel(baseChannel, { protocol, baseUrl, apiKey, models: channelModels, capabilities, enabled }), [apiKey, baseChannel, baseUrl, capabilities, channelModels, enabled, protocol]);
     const projectedPublication = useMemo(() => applyWizardPublication(publicModelChannel, existingChannel, prospectiveChannel, siblingChannels, {
         publishedModels,
         defaultTextModel: "",
