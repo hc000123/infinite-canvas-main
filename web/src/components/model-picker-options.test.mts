@@ -95,3 +95,26 @@ test("model options deduplicate repeated sources by channel and protocol", () =>
 
     assert.equal(option.sourceLabel, "渠道 A");
 });
+
+test("model options use a friendly protocol label when the channel name is empty", () => {
+    const [option] = buildModelPickerOptions({
+        models: ["custom-model"],
+        modelSources: [{ model: "custom-model", channelId: "channel-a", channelName: "", protocol: "jimeng-cli" }],
+    });
+
+    assert.equal(option.sourceLabel, "即梦 CLI");
+});
+
+test("model options count the same channel id on different protocols as separate sources", () => {
+    const [option] = buildModelPickerOptions({
+        models: ["custom-model"],
+        modelSources: [
+            { model: "custom-model", channelId: "channel-a", channelName: "渠道 A", protocol: "openai" },
+            { model: "custom-model", channelId: "channel-a", channelName: "渠道 A", protocol: "jimeng-cli" },
+        ],
+    });
+
+    assert.equal(option.sourceLabel, "2 个渠道");
+    assert.match(option.searchText, /openai 兼容/);
+    assert.match(option.searchText, /即梦 cli/);
+});

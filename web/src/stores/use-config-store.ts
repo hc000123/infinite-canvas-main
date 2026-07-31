@@ -361,7 +361,7 @@ function normalizeModelSources(items: AdminModelSource[], models: string[]) {
             protocol: item.protocol,
         }))
         .filter((item) => {
-            const key = `${item.channelId || item.channelName}:${item.model}`;
+            const key = `${item.model}:${item.channelId || item.channelName}:${item.protocol}`;
             if (!item.model || !availableModels.has(item.model) || seen.has(key)) return false;
             seen.add(key);
             return true;
