@@ -402,6 +402,65 @@ func TestPublicSettingsExposesModelSources(t *testing.T) {
 	}
 }
 
+func TestPublicSettingsIgnoresDisabledAndUnroutableChannelsInModelMetadata(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{
+		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{
+			AvailableModels:   []string{"shared-model"},
+			DefaultImageModel: "shared-model",
+			DefaultTextModel:  "shared-model",
+		}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{
+			{
+				ID:           "disabled-text",
+				Protocol:     string(model.ModelProtocolOpenAI),
+				Name:         "已停用文本渠道",
+				BaseURL:      "https://disabled.example.com",
+				APIKey:       "sk-disabled",
+				Models:       []string{"shared-model"},
+				Capabilities: []string{"text"},
+				Enabled:      false,
+			},
+			{
+				ID:           "unroutable-text",
+				Protocol:     string(model.ModelProtocolOpenAI),
+				Name:         "缺少密钥的文本渠道",
+				BaseURL:      "https://unroutable.example.com",
+				Models:       []string{"shared-model"},
+				Capabilities: []string{"text"},
+				Enabled:      true,
+			},
+			{
+				ID:           "enabled-image",
+				Protocol:     string(model.ModelProtocolXinglianCloud),
+				Name:         "启用图片渠道",
+				BaseURL:      "https://image.example.com",
+				APIKey:       "sk-image",
+				Models:       []string{"shared-model"},
+				Capabilities: []string{"image"},
+				Enabled:      true,
+			},
+		}},
+	}, now())
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+
+	settings, err := PublicSettings()
+	if err != nil {
+		t.Fatalf("PublicSettings returned error: %v", err)
+	}
+	if len(settings.ModelChannel.ModelProtocols) != 1 || settings.ModelChannel.ModelProtocols[0] != (model.ModelProtocolType{Model: "shared-model", Protocol: string(model.ModelProtocolXinglianCloud)}) {
+		t.Fatalf("model protocols = %#v, want enabled image channel only", settings.ModelChannel.ModelProtocols)
+	}
+	if len(settings.ModelChannel.ModelCapabilities) != 1 || len(settings.ModelChannel.ModelCapabilities[0].Capabilities) != 1 || settings.ModelChannel.ModelCapabilities[0].Capabilities[0] != "image" {
+		t.Fatalf("model capabilities = %#v, want image only", settings.ModelChannel.ModelCapabilities)
+	}
+	if len(settings.ModelChannel.ModelSources) != 1 || settings.ModelChannel.ModelSources[0].ChannelID != "enabled-image" {
+		t.Fatalf("model sources = %#v, want enabled image channel only", settings.ModelChannel.ModelSources)
+	}
+}
+
 func TestPublicSettingsExposesJimengCLIProtocolAndCapabilities(t *testing.T) {
 	setupAITaskTestDB(t)
 	_, err := repository.SaveSettings(model.Settings{

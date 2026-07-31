@@ -352,6 +352,9 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 	}
 	for _, channel := range channels {
 		channel = normalizeModelChannel(channel)
+		if !modelChannelContributesPublicMetadata(channel) {
+			continue
+		}
 		if !IsVolcengineArkProtocol(channel.Protocol) {
 			for _, modelName := range channel.Models {
 				modelName = strings.TrimSpace(modelName)
@@ -475,10 +478,7 @@ func normalizePublicModelSources(channels []model.ModelChannel, public model.Pub
 	seen := map[string]bool{}
 	for _, channel := range channels {
 		channel = normalizeModelChannel(channel)
-		if !channel.Enabled {
-			continue
-		}
-		if !IsJimengCLIProtocol(channel.Protocol) && (strings.TrimSpace(channel.BaseURL) == "" || strings.TrimSpace(channel.APIKey) == "") {
+		if !modelChannelContributesPublicMetadata(channel) {
 			continue
 		}
 		channelName := strings.TrimSpace(channel.Name)
@@ -504,6 +504,10 @@ func normalizePublicModelSources(channels []model.ModelChannel, public model.Pub
 		}
 	}
 	return result
+}
+
+func modelChannelContributesPublicMetadata(channel model.ModelChannel) bool {
+	return channel.Enabled && (IsJimengCLIProtocol(channel.Protocol) || (strings.TrimSpace(channel.BaseURL) != "" && strings.TrimSpace(channel.APIKey) != ""))
 }
 
 func visibleModelNameForSource(channel model.ModelChannel, modelName string) string {

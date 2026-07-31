@@ -11,6 +11,7 @@
 - 新增模型不会自动公开，只有明确选择后才会进入 `available`；画布、图片、视频三类默认值仍保存原模型名。
 - 视频 OpenAI 连通性检查只读取模型列表；Ark 鉴权、即梦 CLI 与星链余额继续走既有预检，均不创建视频任务。
 - 用户侧模型选择器显示来源、来源数量和算力点单位，画布节点保存的模型值仍为原模型名。
+- 普通用户 `/api/settings` 的 `modelProtocols`、`modelCapabilities` 和 `modelSources` 统一只由已启用且可路由渠道生成；停用或缺少 Base URL / API Key 的渠道不再污染同名模型元数据，同名的可用 sibling 渠道仍保留协议、能力和来源；即梦 CLI 继续按无 Base URL / API Key 的现有方式处理。
 - 人工重点回归：编辑既有 Ark 时不得丢失 `id` / key / weight / EP；即梦由管理员不登录、用户个人登录；星链与 OpenAI 专用运行时行为不变；手动未知模型分别验证公开 / 不公开；同协议同名多渠道的权重与 fallback；在第 4 步停止后关闭重开、切换渠道或默认值时不得被清空；检测中关闭再打开其他渠道时旧结果不得污染；快速双击不得重复提交；删除渠道后必须清理非法默认值。
 - 当前实现仍在 `codex/model-channel-ui-adaptation` 隔离分支，尚未合入 main；需等待主线提交 settings/page endpointType 改动后手工同步，再做页面验收。
 
