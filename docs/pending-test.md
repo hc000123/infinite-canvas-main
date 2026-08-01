@@ -35,6 +35,9 @@
 - 后台渠道的“模型测试”会携带该模型当前配置的文本接口类型：Responses 模型请求 `/responses`，普通模型继续请求 `/chat/completions`。
 - Responses 测试请求使用 `input` 参数，并能读取 `output_text` 或 `output[].content[].text` 返回内容。
 - GPT Image 等图片模型优先按模型类型识别，即使所在渠道同时标记了 `image` 和 `text`，也会使用 `/images/generations` 发起生图测试；Gemini 图片模型继续使用已有 Chat Completions 适配。
+- 已修复后台设置页读取后把 Responses 配置回退成 Chat Completions 的阻断：`modelTextEndpoints` 作为自定义表格维护的未注册表单字段，现使用保留模式监听；已补充回归测试，防止刷新页面后再次丢失接口类型。
+- 本地隔离浏览器真实复验通过：刷新 `/admin/settings` 后 `qa-responses` 显示 `Responses (/responses)`；依次点击 `qa-responses`、`qa-chat` 和 `gpt-image-2-2k` 的“模型测试”，假上游分别收到 `/v1/responses`（`input`）、`/v1/chat/completions`（`messages`）和 `/v1/images/generations`（`prompt`、`n=1`），三项页面结果均成功且未调用外部付费模型。
+- 修复后前端全量 894/894、TypeScript 和 oxlint 均通过；oxlint 仅保留既有 warning。开发页面仍有一条 Ant Design `maskClosable` 废弃属性 warning，不阻断本次上线。
 - 人工验收：分别测试一个 Responses 文本模型和 `gpt-image-2-2k`；确认前者请求 `/responses`，后者请求 `/images/generations`，且都不再出现 “This model is not supported on the Chat Completions endpoint”。图片测试会实际生成 1 张测试图，可能产生服务商费用。
 
 ### 后台素材项目文件管理器

@@ -118,7 +118,7 @@ export default function AdminSettingsPage() {
     const [modelCosts, setModelCosts] = useState<AdminModelCost[]>([]);
     const [configuredModels, setConfiguredModels] = useState<string[]>([]);
     const watchedPublicModels = Form.useWatch(["public", "modelChannel", "availableModels"], form);
-    const watchedModelTextEndpoints = Form.useWatch(["public", "modelChannel", "modelTextEndpoints"], form);
+    const watchedModelTextEndpoints = Form.useWatch(["public", "modelChannel", "modelTextEndpoints"], { form, preserve: true });
     const publicModels = useMemo(() => watchedPublicModels || [], [watchedPublicModels]);
     const publicModelChannel = Form.useWatch(["public", "modelChannel"], form) || emptySettings.public.modelChannel;
     const privateVolcengineAsset = Form.useWatch(["private", "volcengineAsset"], form) || emptySettings.private.volcengineAsset;

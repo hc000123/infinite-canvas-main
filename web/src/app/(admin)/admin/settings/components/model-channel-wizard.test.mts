@@ -108,6 +108,13 @@ test("settings page connects create and edit actions to the channel wizard", () 
     assert.match(pageSource, /onClick=\{\(\) => openChannelWizard\(item\._index\)\}/);
 });
 
+test("settings page preserves the unregistered text endpoint mapping while watching it", () => {
+    assert.match(
+        pageSource,
+        /Form\.useWatch\(\["public", "modelChannel", "modelTextEndpoints"\],\s*\{\s*form,\s*preserve:\s*true\s*\}\s*\)/,
+    );
+});
+
 test("settings page removes the legacy channel drawer and embedded model selector", () => {
     assert.doesNotMatch(pageSource, /\bDrawer\b/);
     assert.doesNotMatch(pageSource, /channelForm/);
