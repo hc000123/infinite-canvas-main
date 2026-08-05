@@ -33,7 +33,7 @@ var workflowStageTemplateLabels = map[string][2]string{
 }
 
 var registeredSkillStageTemplates = buildSkillStageTemplateRegistry()
-var currentSkillStageTemplateVersions = buildCurrentSkillStageTemplateVersions(registeredSkillStageTemplates)
+var currentSkillStageTemplateVersions = buildCurrentSkillStageTemplateVersions()
 
 func buildSkillStageTemplateRegistry() []SkillStageTemplate {
 	result := make([]SkillStageTemplate, 0, len(systemSkillSeedStageKeys)+len(capabilitySkillSeeds()))
@@ -68,10 +68,13 @@ func buildSkillStageTemplateRegistry() []SkillStageTemplate {
 	return result
 }
 
-func buildCurrentSkillStageTemplateVersions(templates []SkillStageTemplate) map[string]string {
-	result := make(map[string]string, len(templates))
-	for _, template := range templates {
-		result[template.Key] = template.TemplateVersion
+func buildCurrentSkillStageTemplateVersions() map[string]string {
+	result := make(map[string]string, len(systemSkillSeedStageKeys)+len(capabilitySkillSeeds()))
+	for _, key := range systemSkillSeedStageKeys {
+		result[key] = currentSkillStageTemplateVersion
+	}
+	for _, seed := range capabilitySkillSeeds() {
+		result[seed.Key] = currentSkillStageTemplateVersion
 	}
 	return result
 }
@@ -87,11 +90,13 @@ func freezeSkillStageTemplate(template SkillStageTemplate) (SkillStageTemplate, 
 
 func ListSkillStageTemplates() []SkillStageTemplate {
 	result := make([]SkillStageTemplate, 0, len(currentSkillStageTemplateVersions))
+	seen := map[string]bool{}
 	for _, template := range registeredSkillStageTemplates {
-		if currentSkillStageTemplateVersions[template.Key] != template.TemplateVersion {
+		if seen[template.Key] || currentSkillStageTemplateVersions[template.Key] == "" {
 			continue
 		}
-		frozen, err := freezeSkillStageTemplate(template)
+		seen[template.Key] = true
+		frozen, err := resolveSkillStageTemplateVersion(template.Key, currentSkillStageTemplateVersions[template.Key])
 		if err == nil {
 			result = append(result, frozen)
 		}
@@ -101,20 +106,27 @@ func ListSkillStageTemplates() []SkillStageTemplate {
 
 func ResolveSkillStageTemplate(key string) (SkillStageTemplate, error) {
 	key = strings.ToLower(strings.TrimSpace(key))
-	for _, item := range ListSkillStageTemplates() {
-		if item.Key == key {
-			return item, nil
-		}
+	version := currentSkillStageTemplateVersions[key]
+	if version != "" {
+		return resolveSkillStageTemplateVersion(key, version)
 	}
 	return SkillStageTemplate{}, safeMessageError{message: "Skill 所属阶段不存在"}
 }
 
 func resolveSkillStageTemplateVersion(key, version string) (SkillStageTemplate, error) {
 	key, version = strings.ToLower(strings.TrimSpace(key)), strings.TrimSpace(version)
+	var matched *SkillStageTemplate
 	for _, item := range registeredSkillStageTemplates {
 		if item.Key == key && item.TemplateVersion == version {
-			return freezeSkillStageTemplate(item)
+			if matched != nil {
+				return SkillStageTemplate{}, safeMessageError{message: "Skill 阶段模板版本重复注册"}
+			}
+			copyValue := item
+			matched = &copyValue
 		}
+	}
+	if matched != nil {
+		return freezeSkillStageTemplate(*matched)
 	}
 	return SkillStageTemplate{}, safeMessageError{message: "Skill 冻结阶段模板精确版本未注册"}
 }
@@ -125,7 +137,7 @@ type importedSkillStageMetadata struct {
 	FixedAdapter         WorkflowAdapterRef `json:"fixedAdapter"`
 }
 
-func ResolveImportedSkillStageSnapshot(version model.SkillVersion) (SkillStageTemplate, error) {
+func ResolveImportedSkillStageSnapshot(version model.SkillVersion, frozenPackages ...SkillPackage) (SkillStageTemplate, error) {
 	if version.SourceKind != "folder_import" {
 		return SkillStageTemplate{}, safeMessageError{message: "Skill 版本不是文件夹导入快照"}
 	}
@@ -145,7 +157,41 @@ func ResolveImportedSkillStageSnapshot(version model.SkillVersion) (SkillStageTe
 		return SkillStageTemplate{}, safeMessageError{message: "Skill 冻结 Adapter 精确版本或哈希已失效"}
 	}
 	template.FixedAdapter = snapshot.FixedAdapter
+	var packageValue SkillPackage
+	if len(frozenPackages) == 1 {
+		packageValue = frozenPackages[0]
+	} else if len(frozenPackages) == 0 {
+		packageValue, err = DecodeSkillPackage(version)
+	} else {
+		err = safeMessageError{message: "Skill 冻结 SkillPackage 参数无效"}
+	}
+	if err != nil {
+		return SkillStageTemplate{}, err
+	}
+	if !importedSkillStageMatchesPackage(template, packageValue) {
+		return SkillStageTemplate{}, safeMessageError{message: "Skill 导入阶段快照与冻结 SkillPackage 不一致"}
+	}
 	return template, nil
+}
+
+func importedSkillStageMatchesPackage(template SkillStageTemplate, packageValue SkillPackage) bool {
+	if packageValue.Manifest.ExecutorKind != template.ExecutorKind || !containsSkillToken(packageValue.Manifest.Capabilities, template.Capability) || !sameSkillTokens(packageValue.Manifest.InputArtifactTypes, template.InputTypes) || len(packageValue.Manifest.OutputArtifactTypes) != 1 || packageValue.Manifest.OutputArtifactTypes[0] != template.OutputType || len(packageValue.OutputContract.ArtifactOutputs) != 1 {
+		return false
+	}
+	output := packageValue.OutputContract.ArtifactOutputs[0]
+	return output.ArtifactType == template.OutputType && output.Min == template.OutputMin && output.Max == template.OutputMax
+}
+
+func sameSkillTokens(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for _, value := range left {
+		if !containsSkillToken(right, value) {
+			return false
+		}
+	}
+	return true
 }
 
 func BuildImportedSkillPackage(key string, files map[string]string) (SkillPackage, error) {

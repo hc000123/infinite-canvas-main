@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -59,5 +60,18 @@ func TestSkillStageTemplatesBuildInvocablePackages(t *testing.T) {
 func TestResolveSkillStageTemplateRejectsUnknownStage(t *testing.T) {
 	if _, err := ResolveSkillStageTemplate("unknown-stage"); err == nil {
 		t.Fatal("unknown stage accepted")
+	}
+}
+
+func TestResolveSkillStageTemplateVersionRejectsDuplicateRegistration(t *testing.T) {
+	originalTemplates := registeredSkillStageTemplates
+	t.Cleanup(func() { registeredSkillStageTemplates = originalTemplates })
+	current, err := ResolveSkillStageTemplate(WorkflowSkillStageScript)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registeredSkillStageTemplates = append(registeredSkillStageTemplates, current)
+	if _, err := resolveSkillStageTemplateVersion(current.Key, current.TemplateVersion); err == nil || !strings.Contains(err.Error(), "重复") {
+		t.Fatalf("duplicate registration err=%v", err)
 	}
 }

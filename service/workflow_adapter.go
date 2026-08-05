@@ -80,7 +80,7 @@ func registeredWorkflowAdapters() []WorkflowAdapterDefinition {
 	for _, template := range registeredSkillStageTemplates {
 		definition, err := normalizeWorkflowAdapterDefinition(stageWorkflowAdapter(template))
 		if err != nil {
-			return nil
+			continue
 		}
 		result = append(result, definition)
 	}

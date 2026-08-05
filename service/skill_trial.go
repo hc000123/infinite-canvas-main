@@ -33,16 +33,16 @@ func TrialSkill(userID, versionID string, input SkillTrialInput) (SkillTrialResu
 	if err != nil || !ok {
 		return SkillTrialResult{}, safeMessageError{message: "Skill 版本不存在"}
 	}
-	var template SkillStageTemplate
-	if version.SourceKind == "folder_import" {
-		template, err = ResolveImportedSkillStageSnapshot(version)
-	} else {
-		template, err = ResolveSkillStageTemplate(skill.StageKey)
-	}
+	packageValue, err := DecodeSkillPackage(version)
 	if err != nil {
 		return SkillTrialResult{}, err
 	}
-	packageValue, err := DecodeSkillPackage(version)
+	var template SkillStageTemplate
+	if version.SourceKind == "folder_import" {
+		template, err = ResolveImportedSkillStageSnapshot(version, packageValue)
+	} else {
+		template, err = ResolveSkillStageTemplate(skill.StageKey)
+	}
 	if err != nil {
 		return SkillTrialResult{}, err
 	}

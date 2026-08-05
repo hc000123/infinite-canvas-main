@@ -76,6 +76,26 @@ func TestImportOwnedSkillFolderVersionInheritsStageAndRejectsDuplicateContent(t 
 	}
 }
 
+func TestUpdateSkillDraftRejectsFolderImportWithoutChangingSourceSnapshot(t *testing.T) {
+	setupInvocationServiceTest(t)
+	snapshot, _ := ParseSkillFolder("script", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# Frozen")}})
+	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = UpdateSkillDraft(created.Version.ID, SkillDraftInput{Version: created.Version.Version, Package: created.Package})
+	if err == nil || !strings.Contains(err.Error(), "文件夹导入") {
+		t.Fatalf("update err=%v", err)
+	}
+	reloaded, ok, err := repository.GetSkillVersion(created.Version.ID)
+	if err != nil || !ok {
+		t.Fatalf("reload ok=%v err=%v", ok, err)
+	}
+	if reloaded.SourceKind != created.Version.SourceKind || reloaded.SourceHash != created.Version.SourceHash || string(reloaded.SourceArchiveBlob) != string(created.Version.SourceArchiveBlob) || reloaded.SourceFileIndexJSON != created.Version.SourceFileIndexJSON || reloaded.ImportMetadataJSON != created.Version.ImportMetadataJSON {
+		t.Fatalf("source snapshot changed: before=%+v after=%+v", created.Version, reloaded)
+	}
+}
+
 func TestProjectSkillManagementEnforcesOwnerAndLifecycle(t *testing.T) {
 	setupInvocationServiceTest(t)
 	pkg := validSkillTestPackage()

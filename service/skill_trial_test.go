@@ -82,7 +82,7 @@ func TestTrialImportedSkillUsesHistoricalTemplateAfterRegistryUpgrade(t *testing
 	upgraded := currentTemplate
 	upgraded.TemplateVersion = "2.0.0"
 	upgraded.FixedAdapter = WorkflowAdapterRef{AdapterID: "stage-script-normalize", AdapterVersion: "2.0.0", TransformKind: "stage-script-normalize-v2"}
-	registeredSkillStageTemplates = append(append([]SkillStageTemplate(nil), registeredSkillStageTemplates...), upgraded)
+	registeredSkillStageTemplates = append([]SkillStageTemplate{upgraded}, registeredSkillStageTemplates...)
 	currentSkillStageTemplateVersions = cloneStringMap(currentSkillStageTemplateVersions)
 	currentSkillStageTemplateVersions[WorkflowSkillStageScript] = upgraded.TemplateVersion
 	workflowAdapterTransformRegistry = cloneWorkflowAdapterTransforms(workflowAdapterTransformRegistry)
@@ -102,6 +102,28 @@ func TestTrialImportedSkillUsesHistoricalTemplateAfterRegistryUpgrade(t *testing
 	resolved, err := ResolveImportedSkillStageSnapshot(created.Version)
 	if err != nil || resolved.TemplateVersion != "1.0.0" || resolved.FixedAdapter.AdapterVersion != "1.0.0" || resolved.FixedAdapter.TransformKind == upgraded.FixedAdapter.TransformKind || resolved.FixedAdapter.ContentHash == listed.FixedAdapter.ContentHash {
 		t.Fatalf("historical template=%+v err=%v", resolved, err)
+	}
+}
+
+func TestTrialImportedSkillRejectsStageSnapshotFromDifferentValidPackage(t *testing.T) {
+	setupInvocationServiceTest(t)
+	scriptSnapshot, _ := ParseSkillFolder("script", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# Script")}})
+	script, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Snapshot: scriptSnapshot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artSnapshot, _ := ParseSkillFolder("art", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# Art")}})
+	art, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageArt, Snapshot: artSnapshot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tampered := script.Version
+	tampered.ImportMetadataJSON = art.Version.ImportMetadataJSON
+	if err := repository.SaveSkillVersion(tampered); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TrialSkill("admin-1", script.Version.ID, SkillTrialInput{InputText: "原稿", ConfirmAPICost: true}); err == nil || !strings.Contains(err.Error(), "SkillPackage") {
+		t.Fatalf("cross-package snapshot err=%v", err)
 	}
 }
 

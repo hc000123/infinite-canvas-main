@@ -232,6 +232,9 @@ func UpdateSkillDraft(versionID string, input SkillDraftInput) (model.SkillVersi
 	if version.Status != model.SkillVersionDraft {
 		return version, safeMessageError{message: "已发布版本不可修改"}
 	}
+	if version.SourceKind == "folder_import" {
+		return version, safeMessageError{message: "文件夹导入 Skill 版本不可通过通用草稿编辑修改，请导入新版本"}
+	}
 	versionName, packageValue, err := normalizeSkillDraftInput(input)
 	if err != nil {
 		return version, err

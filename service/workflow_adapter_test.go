@@ -55,6 +55,31 @@ func TestWorkflowAdapterCannotOverrideRegisteredTransform(t *testing.T) {
 	}
 }
 
+func TestInvalidHistoricalAdapterDoesNotPoisonRegisteredVersions(t *testing.T) {
+	setupInvocationServiceTest(t)
+	originalTemplates := registeredSkillStageTemplates
+	t.Cleanup(func() { registeredSkillStageTemplates = originalTemplates })
+	current, err := ResolveSkillStageTemplate(WorkflowSkillStageScript)
+	if err != nil {
+		t.Fatal(err)
+	}
+	broken := current
+	broken.TemplateVersion = "2.0.0"
+	broken.FixedAdapter = WorkflowAdapterRef{AdapterID: "stage-script-normalize", AdapterVersion: "2.0.0", TransformKind: "missing-script-transform-v2"}
+	registeredSkillStageTemplates = append([]SkillStageTemplate{broken}, registeredSkillStageTemplates...)
+	legacy, err := ResolveWorkflowAdapter(WorkflowAdapterRef{AdapterID: "production-script-envelope", AdapterVersion: "1.0.0"})
+	if err != nil || legacy.ID == "" {
+		t.Fatalf("legacy=%+v err=%v", legacy, err)
+	}
+	v1, err := ResolveWorkflowAdapter(current.FixedAdapter)
+	if err != nil || v1.Version != "1.0.0" {
+		t.Fatalf("v1=%+v err=%v", v1, err)
+	}
+	if _, err := ResolveWorkflowAdapter(broken.FixedAdapter); err == nil {
+		t.Fatal("broken v2 adapter resolved")
+	}
+}
+
 func TestWorkflowAdapterRejectsWrongInputContract(t *testing.T) {
 	setupInvocationServiceTest(t)
 	adapter, err := ResolveWorkflowAdapter(WorkflowAdapterRef{AdapterID: "production-script-envelope", AdapterVersion: "1.0.0"})
